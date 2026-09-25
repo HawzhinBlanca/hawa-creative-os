@@ -995,10 +995,12 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     className="action-btn deliver-btn"
                     onClick={handleDeliver}
                     disabled={busy || !detail?.latestApproval || nextAction?.primaryButton !== 'deliver'}
-                    title="Start the approved delivery to Drive, Sheets and the requester (FR-046, FR-078)"
+                    title={selectedTask.status === 'PUBLISH_RECONCILIATION'
+                      ? 'Retry the unconfirmed Sheets row using the recorded publication'
+                      : 'Start the approved delivery to Drive, Sheets and the requester (FR-046, FR-078)'}
                   >
                     <span className="btn-icon" aria-hidden="true">🚀</span>
-                    <span>Deliver Approved Files</span>
+                    <span>{selectedTask.status === 'PUBLISH_RECONCILIATION' ? 'Retry Sheet Sync' : 'Deliver Approved Files'}</span>
                   </button>
                   {(detail?.requestId || selectedTask.requestId) && selectedTask.status === 'APPROVED' && (
                     <p className="capture-availability" role="note">

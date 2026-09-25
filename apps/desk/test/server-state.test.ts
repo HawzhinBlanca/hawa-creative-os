@@ -259,6 +259,16 @@ describe('the Work queue follows the event stream', () => {
 });
 
 describe('approve and request revision are mutations', () => {
+  it('offers a request-owned Sheet retry only when Core reports the reconciliation status', async () => {
+    const stream = new FakeStream('connected');
+    fakeCore([{ id: 't1', title: 'Members evening poster', status: 'PUBLISH_RECONCILIATION',
+      requestId: '11111111-1111-4111-8111-111111111111', revision: 1, approved: true }]);
+    const { view } = await renderWork(stream);
+    expect(view.text()).toContain('Sheets row is not confirmed');
+    expect(view.text()).toContain('Retry Sheet Sync');
+    expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(false);
+  });
+
   it('shows a request-owned approval as recorded while delivery remains unavailable', async () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([{ ...approvable('t1', 'Members evening poster'),

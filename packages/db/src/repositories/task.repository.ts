@@ -64,12 +64,14 @@ export const TASK_STATES: readonly TaskState[] = TASK_DB_STATES;
 /**
  * The database states the list shows under the given API statuses: every state whose API status is
  * one of them. Built from the state-to-status mapping rather than toDbTaskState, so a filter matches
- * exactly the tasks the list would label with that status (OPERATOR_REQUIRED takes failed_retryable
- * too). A word the API never reports is a filter that matches nothing, not an error.
+ * the tasks the list may label with that status (OPERATOR_REQUIRED takes failed_retryable too).
+ * PUBLISH_RECONCILIATION shares the publishing state; the page/count query checks its current
+ * publication receipt when that status alone is requested. An unknown word matches nothing.
  */
 export function dbStatesForApiStatuses(statuses: readonly string[]): TaskState[] {
   const wanted = new Set(statuses.map((s) => String(s || '').trim().toUpperCase()).filter(Boolean));
-  return TASK_STATES.filter((state) => wanted.has(API_STATUS_OF_DB_STATE[state]));
+  return TASK_STATES.filter((state) => wanted.has(API_STATUS_OF_DB_STATE[state]) ||
+    (state === 'publishing' && wanted.has('PUBLISH_RECONCILIATION')));
 }
 
 /** Where a task page starts: the last row of the page before it, in list order. */
@@ -116,6 +118,8 @@ export interface TaskPageParams {
   clientId?: string | null;
   /** Only tasks in these states; an empty list matches nothing. Undefined means every state. */
   states?: readonly TaskState[];
+  /** Distinguish the two API statuses backed by the publishing database state. */
+  publishingStatus?: 'reconciliation' | 'ordinary';
   /** Text to find in the title, the description, the client's name or the task id. */
   search?: string | null;
 }
@@ -130,6 +134,7 @@ export interface TaskListRow {
   tenant_id: string;
   client_id: string | null;
   project_id: string | null;
+  request_id: string | null;
   state: TaskState;
   priority: number;
   title: string;
@@ -162,6 +167,8 @@ export interface TaskListRow {
   rev_version: number | null;
   rev_sha256: string | null;
   rev_created_at: Date | null;
+  delivery_error_class: string | null;
+  delivery_executor: string | null;
 }
 
 export interface TaskPage {
@@ -217,7 +224,20 @@ const fold = (expr: RawBuilder<unknown>) => sql`translate(lower(${expr}), ${FOLD
 function taskListFilter(params: TaskPageParams) {
   const conditions = [sql`t.tenant_id = ${params.tenantId}::uuid`, sql`t.deleted_at IS NULL`];
   if (params.clientId) conditions.push(sql`t.client_id = ${params.clientId}::uuid`);
-  if (params.states) conditions.push(sql`t.state = ANY(${[...params.states]}::hawa.task_state[])`);
+  if (params.states) {
+    const states = [...params.states];
+    const sheetRetry = sql`(t.request_id IS NOT NULL AND EXISTS (
+      SELECT 1 FROM hawa.publications p WHERE p.tenant_id = t.tenant_id AND p.task_id = t.id
+        AND p.executor = 'restate' AND p.error_class = 'SHEET_UNCONFIRMED'
+        AND p.id = (SELECT p2.id FROM hawa.publications p2
+          WHERE p2.tenant_id = t.tenant_id AND p2.task_id = t.id
+          ORDER BY p2.created_at DESC LIMIT 1)))`;
+    conditions.push(params.publishingStatus === 'reconciliation' && states.includes('publishing')
+      ? sql`(t.state = ANY(${states}::hawa.task_state[]) AND (t.state <> 'publishing' OR ${sheetRetry}))`
+      : params.publishingStatus === 'ordinary' && states.includes('publishing')
+        ? sql`(t.state = ANY(${states}::hawa.task_state[]) AND (t.state <> 'publishing' OR NOT ${sheetRetry}))`
+        : sql`t.state = ANY(${states}::hawa.task_state[])`);
+  }
   if (params.search && params.search.trim()) {
     const pattern = searchPattern(params.search);
     conditions.push(sql`(
@@ -264,7 +284,7 @@ export function buildTaskPageQuery(params: TaskPageParams) {
   const offset = params.cursor ? 0 : Math.max(0, Math.floor(Number(params.offset) || 0));
   // One row more than the page shows tells whether an older page exists.
   return sql<TaskListRow>`
-    SELECT t.id, t.tenant_id, t.client_id, t.project_id, t.state, t.priority, t.title, t.description, t.version,
+    SELECT t.id, t.tenant_id, t.client_id, t.project_id, t.request_id, t.state, t.priority, t.title, t.description, t.version,
       t.current_design_revision_id, t.created_at, t.updated_at,
       to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at,
       c.name AS client_name,
@@ -280,9 +300,10 @@ export function buildTaskPageQuery(params: TaskPageParams) {
       q.status AS qc_status, q.critical_pass AS qc_critical_pass, q.report AS qc_report,
       a.id AS approval_id, a.created_at AS approval_created_at, a.role AS approval_role, a.decided_by AS approval_actor_id,
       b.canva_design_id, b.edit_url AS canva_edit_url,
-      r.id AS rev_id, r.revision AS rev_version, r.source_sha256 AS rev_sha256, r.created_at AS rev_created_at
+      r.id AS rev_id, r.revision AS rev_version, r.source_sha256 AS rev_sha256, r.created_at AS rev_created_at,
+      p.error_class AS delivery_error_class, p.executor AS delivery_executor
     FROM (
-      SELECT t.id, t.tenant_id, t.client_id, t.project_id, t.state, t.priority, t.title, t.description, t.version,
+      SELECT t.id, t.tenant_id, t.client_id, t.project_id, t.request_id, t.state, t.priority, t.title, t.description, t.version,
         t.current_design_revision_id, t.created_at, t.updated_at
       FROM hawa.tasks t
       WHERE ${sql.join(conditions, sql` AND `)}
@@ -324,6 +345,12 @@ export function buildTaskPageQuery(params: TaskPageParams) {
       LIMIT 1
     ) b ON true
     LEFT JOIN hawa.design_revisions r ON r.id = t.current_design_revision_id
+    LEFT JOIN LATERAL (
+      SELECT p.error_class, p.executor FROM hawa.publications p
+      WHERE p.tenant_id = t.tenant_id AND p.task_id = t.id
+        AND t.request_id IS NOT NULL AND t.state = 'publishing'
+      ORDER BY p.created_at DESC LIMIT 1
+    ) p ON true
     ORDER BY t.created_at DESC, t.id DESC`;
 }
 

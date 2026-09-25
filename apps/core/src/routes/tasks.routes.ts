@@ -74,7 +74,12 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     // `statuses` (comma-separated API statuses, as the Desk's filters send them) matches exactly the
     // tasks the list labels with one of them. `status` keeps its old mapping for existing callers.
     let states: TaskState[] | undefined;
-    if (statusList !== undefined) states = dbStatesForApiStatuses(String(statusList).split(','));
+    const requestedStatuses = statusList !== undefined ? String(statusList).split(',') : status ? [status] : [];
+    const publishingStatus = requestedStatuses.includes('PUBLISH_RECONCILIATION') &&
+      !requestedStatuses.includes('PUBLISHING') ? 'reconciliation' as const
+      : requestedStatuses.includes('PUBLISHING') && !requestedStatuses.includes('PUBLISH_RECONCILIATION')
+        ? 'ordinary' as const : undefined;
+    if (statusList !== undefined) states = dbStatesForApiStatuses(requestedStatuses);
     else if (status) {
       // One word of the vocabulary; an unknown one used to list the new requests ('received').
       if (!isTaskApiStatus(status) && !isTaskDbState(status)) {
@@ -88,7 +93,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
         const page = await withRlsContext(
           db,
           { tenantId, userId: auth.userId, role: auth.role },
-          (trx) => listTaskPage(trx, { tenantId, limit, cursor, offset, clientId: clientId || null, states, search })
+          (trx) => listTaskPage(trx, { tenantId, limit, cursor, offset, clientId: clientId || null,
+            states, publishingStatus, search })
         );
 
         const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : String(value));
@@ -138,7 +144,10 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             tenantId: t.tenant_id,
             clientId: t.client_id,
             projectId: t.project_id,
-            status: toApiTaskStatus(t.state || 'received'),
+            requestId: t.request_id || null,
+            status: t.request_id && t.state === 'publishing' &&
+              t.delivery_executor === 'restate' && t.delivery_error_class === 'SHEET_UNCONFIRMED'
+              ? 'PUBLISH_RECONCILIATION' : toApiTaskStatus(t.state || 'received'),
             state: t.state,
             priority: t.priority,
             title: t.title,
@@ -455,12 +464,18 @@ export function registerTasksRoutes(ctx: RouteContext): void {
               WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.published'
               ORDER BY aggregate_version DESC LIMIT 1`.execute(trx)).rows[0];
 
-            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent };
+            const publication = dbTask.request_id && dbTask.state === 'publishing'
+              ? await trx.selectFrom('publications').select(['executor', 'error_class'])
+                .where('tenant_id', '=', tenantId).where('task_id', '=', taskId)
+                .orderBy('created_at', 'desc').executeTakeFirst()
+              : null;
+
+            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, publication };
           }
         );
 
         if (queryRes && queryRes.dbTask) {
-          const { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent } = queryRes;
+          const { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, publication } = queryRes;
           const payload = createdEv?.data?.payload || createdEv?.data?.body || (createdEv?.data as any) || {};
 
           const headlineEn = payload.headlineEn || payload.body?.headlineEn || dbTask.title;
@@ -549,7 +564,9 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             clientId: dbTask.client_id,
             requestId: dbTask.request_id || null,
             projectId: dbTask.project_id,
-            status: toApiTaskStatus(dbTask.state || 'received'),
+            status: dbTask.request_id && dbTask.state === 'publishing' &&
+              publication?.executor === 'restate' && publication.error_class === 'SHEET_UNCONFIRMED'
+              ? 'PUBLISH_RECONCILIATION' : toApiTaskStatus(dbTask.state || 'received'),
             state: dbTask.state,
             priority: dbTask.priority,
             title: dbTask.title,

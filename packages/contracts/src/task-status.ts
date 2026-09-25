@@ -66,8 +66,9 @@ export const API_STATUS_OF_DB_STATE: Readonly<Record<TaskDbState, TaskApiStatus>
 
 /**
  * The database state each API status is stored as. PUBLISH_RECONCILIATION (the files are in Drive,
- * the Sheets row is not confirmed) has no state of its own and is stored as `publishing`, so a task
- * read back from the database reports PUBLISHING until the row is retried.
+ * the Sheets row is not confirmed) has no state of its own and is stored as `publishing`. A
+ * request-owned task read joins the latest publication error to distinguish this retryable state;
+ * a plain state-only conversion remains PUBLISHING.
  */
 export const DB_STATE_OF_API_STATUS: Readonly<Record<TaskApiStatus, TaskDbState>> = {
   RECEIVED: 'received',

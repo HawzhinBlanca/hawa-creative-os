@@ -175,6 +175,43 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(final).toMatchObject({ stage: 'delivered', taskState: 'complete', rev: 7 });
   });
 
+  it('shows a request-owned Sheet failure as a staffed retry and completes only the next versioned run', async () => {
+    const { requestId, taskId, approval, store, start } = await approvedForDelivery();
+    const first = await projectLifecycleDeliveryStart(db, store, start);
+    const pendingSheet = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
+      approvalId: approval.approvalId, deliveryId: first.delivery.deliveryId, run: 1,
+      outcome: { outcome: 'delivered', uncertain: [], archived: true, sheetsConfirmed: false, filesSent: 1 },
+      expectedRev: 4, rev: 5, key: `${requestId}:5:deliveryFinished:${first.delivery.deliveryId}` });
+    expect(pendingSheet).toMatchObject({ stage: 'delivering', taskState: 'publishing', rev: 5 });
+    const desk = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+    const pendingTask = await desk.request(`/v1/tasks/${taskId}`);
+    expect(pendingTask.status).toBe(200);
+    expect(await pendingTask.json()).toMatchObject({ status: 'PUBLISH_RECONCILIATION', requestId });
+    const storedPublication = await withRlsContext(db, scope, (trx) => trx.selectFrom('publications')
+      .select(['executor', 'error_class']).where('task_id', '=', taskId).executeTakeFirst());
+    expect(storedPublication).toMatchObject({ executor: 'restate', error_class: 'SHEET_UNCONFIRMED' });
+    const reconciliationQueue = await desk.request('/v1/tasks?statuses=PUBLISH_RECONCILIATION');
+    expect(reconciliationQueue.status).toBe(200);
+    const queued = await reconciliationQueue.json() as { items: Array<{ id: string; requestId: string; status: string }>; total: number };
+    expect(queued).toMatchObject({ total: 1, items: [expect.objectContaining({
+      id: taskId, requestId, status: 'PUBLISH_RECONCILIATION' })] });
+    const publishingQueue = await desk.request('/v1/tasks?statuses=PUBLISHING');
+    expect((await publishingQueue.json() as { items: Array<{ id: string }> }).items.map((item) => item.id))
+      .not.toContain(taskId);
+    const nextAction = randomUUID();
+    const second = await projectLifecycleDeliveryStart(db, store, { ...start, actionId: nextAction,
+      expectedRev: 5, rev: 6, key: `${requestId}:6:officeDecision:desk:${nextAction}` });
+    expect(second.delivery).toMatchObject({ run: 2, requestRev: 6 });
+    expect(second.delivery.deliveryId).toMatch(/:archive:2$/);
+    const finished = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
+      approvalId: approval.approvalId, deliveryId: second.delivery.deliveryId, run: 2,
+      outcome: { outcome: 'delivered', uncertain: [], archived: true, sheetsConfirmed: true, filesSent: 1 },
+      expectedRev: 6, rev: 7, key: `${requestId}:7:deliveryFinished:${second.delivery.deliveryId}` });
+    expect(finished).toMatchObject({ stage: 'delivered', taskState: 'complete', rev: 7 });
+    const finalTask = await desk.request(`/v1/tasks/${taskId}`);
+    expect(await finalTask.json()).toMatchObject({ status: 'COMPLETE', requestId });
+  });
+
   it('refuses approval before the gateway when the latest critical QA failed', async () => {
     const { requestId, taskId, revisionId } = await reviewableRequest();
     const failedQcId = randomUUID();

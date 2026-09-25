@@ -861,6 +861,8 @@ CREATE TABLE publications (
   UNIQUE (tenant_id, publication_key),
   UNIQUE (tenant_id, id)
 );
+CREATE INDEX publications_tenant_task_created_idx
+  ON publications (tenant_id, task_id, created_at DESC);
 
 CREATE TABLE drive_refs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
