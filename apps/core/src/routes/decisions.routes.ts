@@ -93,6 +93,13 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     if (!resolvedRev) return problem(c, 404, 'Revision Not Found', `Revision ${revisionId} does not exist`);
 
     const body = await c.req.json().catch(() => ({}));
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return problem(c, 400, 'Invalid Decision Body', 'Review decision must be a JSON object');
+    }
+    const actionId = c.req.header('Idempotency-Key');
+    if (actionId && !isValidUuid(actionId)) {
+      return problem(c, 422, 'Invalid Action Identifier', 'Idempotency-Key must be a UUID for a review decision');
+    }
     const rawAction = (body.action || body.status || body.decision || body.outcome || '').toLowerCase().trim();
     const decisionMapping: Record<string, 'approved' | 'revision_requested' | 'rejected' | 'escalated'> = {
       approve: 'approved',
@@ -120,6 +127,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     const isRejected = dbDecision === 'rejected';
     const isEscalated = dbDecision === 'escalated';
     const decisionType = dbDecision;
+    const storedDecision = isApproved ? 'approved' : isRejected ? 'rejected' : 'revision_requested';
 
     // Actor authority check (FR-043): Strictly derive reviewer role from authenticated server records.
     // Client role assertions (x-user-role header, body.role) are STRICTLY IGNORED in production mode!
@@ -137,8 +145,47 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     }
 
     // Client approver scope check (FR-043): client_approver can only review designs for their assigned client
-    if (effectiveRole === 'client_approver' && (auth as any).clientId && task?.clientId && (auth as any).clientId !== task.clientId) {
-      return problem(c, 403, 'Forbidden', `Actor is not authorized to review designs for client '${task.clientId}'`);
+    const targetClientId = task?.clientId || dbTask?.client_id;
+    if (effectiveRole === 'client_approver' && (!(auth as any).clientId || !targetClientId || (auth as any).clientId !== targetClientId)) {
+      return problem(c, 403, 'Forbidden', `Actor is not authorized to review designs for client '${targetClientId || 'unresolved'}'`);
+    }
+
+    const actorUserId = auth.userId || '00000000-0000-4000-b000-000000000001';
+    const nonce = actionId ? `desk:${actionId}` : undefined;
+    const requestFingerprint = nonce
+      ? crypto.createHash('sha256').update(JSON.stringify({ taskId, revisionId, actorUserId, body })).digest('hex')
+      : undefined;
+    const replay = (row: any) => {
+      const saved = row.decision_payload && typeof row.decision_payload === 'object' ? row.decision_payload : {};
+      return c.json({
+        decisionId: row.id,
+        taskId,
+        designRevisionId: row.design_revision_id,
+        decision: row.decision,
+        sourceHash: saved.sourceHash ?? null,
+        qcReportHash: saved.qcReportHash ?? null,
+        exportHashes: saved.exportHashes ?? [],
+        pinnedExports: saved.pinnedExports ?? [],
+        actor: { userId: row.decided_by, role: saved.approverRole, verifiedServerSide: true },
+        decidedAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+        replayed: true,
+      }, 200);
+    };
+    if (nonce) {
+      // The fast path handles a response lost after commit, even when the task has since advanced.
+      // The repository repeats this check under the task lock for concurrent attempts.
+      const prior = await withRlsContext(db, { tenantId, userId: actorUserId, role: auth.role },
+        (trx) => trx.selectFrom('approvals').selectAll()
+          .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).where('nonce', '=', nonce)
+          .executeTakeFirst());
+      if (prior) {
+        const saved = prior.decision_payload as Record<string, unknown>;
+        if (prior.design_revision_id !== revisionId || prior.decision !== storedDecision || prior.decided_by !== actorUserId
+          || saved?.requestFingerprint !== requestFingerprint) {
+          return problem(c, 409, 'Action Key Conflict', 'Idempotency-Key was already used for a different decision');
+        }
+        return replay(prior);
+      }
     }
 
     // A design the client asked to change is replaced by its revision (a separate task). Approving
@@ -158,7 +205,6 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     }
 
     // Strictly server-derived actor identity
-    const actorUserId = auth.userId || '00000000-0000-4000-b000-000000000001';
     const actorDisplayName = auth.displayName || (auth.role === 'administrator' ? 'Administrator' : auth.role === 'art_director' ? 'Art Director' : 'Primary Operator');
     const actorRole: any = effectiveRole;
 
@@ -297,10 +343,11 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
             tenantId,
             taskId,
             revisionId: resolvedRev.id || revisionId,
-            decision: isApproved ? 'approved' : (isRejected ? 'rejected' : 'revision_requested'),
+            decision: storedDecision,
             decidedBy: actorUserId,
             reason: body.revisionRequest?.comment || body.reason || (isApproved ? 'Approved by operator' : (isRejected ? 'Rejected by operator' : 'Revision requested')),
             expectedTaskVersion: body.expectedTaskVersion,
+            nonce,
             decisionPayload: {
               tenantId,
               clientId: task?.clientId || defaultClientId,
@@ -318,6 +365,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
               requiredFormats: task?.requiredFormats || ['png'],
               approverId: actorUserId,
               approverRole: actorRole,
+              ...(requestFingerprint ? { requestFingerprint } : {}),
               approvedAt: new Date().toISOString(),
               ...(rtlVisualReviewHash !== null ? { rtlVisualReview: {
                 confirmed: true, reviewerId: actorUserId, qcRunId: effectiveQcRunId,
@@ -330,7 +378,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         );
       } catch (err: any) {
         log.error('[core:approvals:create] DB approval error:', err);
-        if (err.message?.includes('Cannot approve stale revision') || err.message?.includes('Cannot approve task') || err.message?.includes('already approved') || err.message?.includes('Concurrent modification')) {
+        if (err.message?.includes('Cannot approve stale revision') || err.message?.includes('Cannot approve task') || err.message?.includes('already approved') || err.message?.includes('Concurrent modification') || err.message?.includes('Idempotency key')) {
           return problem(c, 409, 'Conflict', err.message);
         }
         if (err.message?.includes('Canva approval') || err.message?.includes('Canva QA')) {
@@ -342,6 +390,8 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         return problem(c, 503, 'Durable Storage Unavailable', `Failed to record approval in durable storage: ${err.message}`);
       }
     }
+
+    if (dbApproval?.replayed) return replay(dbApproval);
 
     const decision: any = {
       decisionId: dbApproval?.id || crypto.randomUUID(),

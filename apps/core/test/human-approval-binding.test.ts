@@ -393,6 +393,102 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect((await op2Res.json()).detail).toContain('Concurrent modification detected');
   });
 
+  it('replays the same Desk action after a lost response without another approval or version', async () => {
+    const task = await createTestTask();
+    const revisionId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId, document: { id: 'retry-draft', nodes: [{ id: 'title', type: 'text', text: 'Reviewed' }] } }),
+    })).status).toBe(201);
+    await passQa(task.id, revisionId);
+    const actionId = crypto.randomUUID();
+    const pinnedExportIds = [exports.add(task.id)];
+    const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': actionId,
+      Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}` };
+    const body = { action: 'approve', pinnedExportIds };
+    const decide = (payload: unknown) => app.request(`/tasks/${task.id}/revisions/${revisionId}/decisions`, {
+      method: 'POST', headers, body: JSON.stringify(payload),
+    });
+    const first = await decide(body);
+    expect(first.status).toBe(201);
+    const decisionId = (await first.json()).decisionId;
+    const version = (await (await app.request(`/tasks/${task.id}`)).json()).version;
+    const retry = await decide(body);
+    expect(retry.status).toBe(200);
+    expect((await retry.json()).decisionId).toBe(decisionId);
+    expect((await (await app.request(`/tasks/${task.id}`)).json()).version).toBe(version);
+    const approvals = await withRlsContext(testDb,
+      { tenantId: defaultTenantId, userId: operatorUserId, role: 'art_director' },
+      (trx) => trx.selectFrom('approvals').select('id').where('task_id', '=', task.id).execute());
+    expect(approvals.map((row) => row.id)).toEqual([decisionId]);
+    expect((await decide({ ...body, reason: 'Different action' })).status).toBe(409);
+  });
+
+  it('serializes simultaneous revision requests with one Desk action key', async () => {
+    const task = await createTestTask();
+    const revisionId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId, document: { id: 'change-draft', nodes: [{ id: 'title', type: 'text', text: 'Change me' }] } }),
+    })).status).toBe(201);
+    const beforeVersion = (await (await app.request(`/tasks/${task.id}`)).json()).version;
+    const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID(),
+      Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}` };
+    const send = () => app.request(`/tasks/${task.id}/revisions/${revisionId}/decisions`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ action: 'revision_requested', revisionRequest: { comment: 'Adjust spacing' } }),
+    });
+    const [a, b] = await Promise.all([send(), send()]);
+    expect([a.status, b.status].sort()).toEqual([200, 201]);
+    expect((await a.json()).decisionId).toBe((await b.json()).decisionId);
+    const current = await (await app.request(`/tasks/${task.id}`)).json();
+    expect(current.version).toBe(beforeVersion + 1);
+    const approvals = await withRlsContext(testDb,
+      { tenantId: defaultTenantId, userId: operatorUserId, role: 'art_director' },
+      (trx) => trx.selectFrom('approvals').select(['id', 'decision']).where('task_id', '=', task.id).execute());
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0].decision).toBe('revision_requested');
+  });
+
+  it('refuses a malformed keyed decision before writing an approval', async () => {
+    const task = await createTestTask();
+    const revisionId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId, document: { id: 'invalid-draft', nodes: [{ id: 'title', type: 'text', text: 'Draft' }] } }),
+    })).status).toBe(201);
+    const path = `/tasks/${task.id}/revisions/${revisionId}/decisions`;
+    const invalidKey = await app.request(path, { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'not-a-uuid' },
+      body: JSON.stringify({ action: 'revision_requested' }) });
+    expect(invalidKey.status).toBe(422);
+    const invalidBody = await app.request(path, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: 'null' });
+    expect(invalidBody.status).toBe(400);
+    const approvals = await withRlsContext(testDb,
+      { tenantId: defaultTenantId, userId: operatorUserId, role: 'art_director' },
+      (trx) => trx.selectFrom('approvals').select('id').where('task_id', '=', task.id).execute());
+    expect(approvals).toHaveLength(0);
+  });
+
+  it('replays an escalated action using its recorded revision-request decision', async () => {
+    const task = await createTestTask();
+    const revisionId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId, document: { id: 'escalation-draft', nodes: [{ id: 'title', type: 'text', text: 'Draft' }] } }),
+    })).status).toBe(201);
+    const input = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID(),
+      Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}` }, body: JSON.stringify({ action: 'escalate' }) };
+    const path = `/tasks/${task.id}/revisions/${revisionId}/decisions`;
+    const first = await app.request(path, input);
+    expect(first.status).toBe(201);
+    const firstId = (await first.json()).decisionId;
+    const retry = await app.request(path, input);
+    expect(retry.status).toBe(200);
+    expect((await retry.json()).decisionId).toBe(firstId);
+  });
+
   it('refuses a chat approval action when no recorded revision exists', async () => {
     const task = await createTestTask();
     const headers = {

@@ -286,6 +286,28 @@ export class RevisionRepository {
         throw new Error(`Task ${params.taskId} not found`);
       }
 
+      // A retry may arrive after the first decision committed but before the Desk got its answer.
+      // Check under the task lock: concurrent attempts with the same action key then serialize here.
+      if (params.nonce) {
+        const fingerprint = params.decisionPayload?.requestFingerprint;
+        if (typeof fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(fingerprint)) {
+          throw new Error('A keyed approval requires a request fingerprint');
+        }
+        const prior = await dbClient.selectFrom('approvals').selectAll()
+          .where('tenant_id', '=', params.tenantId)
+          .where('task_id', '=', params.taskId)
+          .where('nonce', '=', params.nonce)
+          .executeTakeFirst();
+        if (prior) {
+          const priorFingerprint = (prior.decision_payload as Record<string, unknown>)?.requestFingerprint;
+          if (prior.design_revision_id !== params.revisionId || prior.decision !== params.decision
+            || prior.decided_by !== params.decidedBy || priorFingerprint !== fingerprint) {
+            throw new Error('Idempotency key was already used for a different decision');
+          }
+          return { ...prior, replayed: true as const };
+        }
+      }
+
       // Optimistic concurrency fencing (CV-15, R05)
       if (params.expectedTaskVersion !== undefined && Number(task.version) !== Number(params.expectedTaskVersion)) {
         throw new Error(
@@ -517,7 +539,7 @@ export class RevisionRepository {
         })
         .execute();
 
-      return approval;
+      return { ...approval, replayed: false as const };
     };
 
     if (trx) {

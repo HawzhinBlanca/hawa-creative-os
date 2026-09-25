@@ -52,11 +52,13 @@ describe('the approval pins stored exports the reviewer selects', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await apiClient.tasks.recordDecision('task-1', 'rev-1', { action: 'approve', pinnedExportIds: [stored[0].id] });
+    const actionId = '33333333-3333-4333-8333-333333333333';
+    await apiClient.tasks.recordDecision('task-1', 'rev-1', { action: 'approve', pinnedExportIds: [stored[0].id] }, actionId);
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/v1/tasks/task-1/revisions/rev-1/decisions');
     expect(new Headers(init!.headers as Record<string, string>).get('Authorization')).toBe('Bearer reviewer-token');
+    expect(new Headers(init!.headers as Record<string, string>).get('Idempotency-Key')).toBe(actionId);
     expect(JSON.parse(String(init!.body))).toEqual({ action: 'approve', pinnedExportIds: [stored[0].id] });
   });
 });

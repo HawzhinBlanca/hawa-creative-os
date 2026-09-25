@@ -483,10 +483,12 @@ class HawaApiClient {
     recordDecision: async <T = any>(
       taskId: string,
       revisionId: string,
-      payload: DecisionPayload
+      payload: DecisionPayload,
+      actionId?: string
     ): Promise<T> => {
       return this.request<T>(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
         method: 'POST',
+        ...(actionId ? { headers: { 'Idempotency-Key': actionId } } : {}),
         body: JSON.stringify(payload),
       });
     },
