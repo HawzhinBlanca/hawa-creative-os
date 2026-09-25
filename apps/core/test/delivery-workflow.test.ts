@@ -56,12 +56,15 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     publish: vi.fn(async (_ctx: unknown, req: any) => ({
       ok: true,
       value: {
+        publicationId: randomUUID(), publicationKey: req.publicationKey,
+        driveFolderId: req.destination.productionRootFolderId,
         state: 'complete',
         driveFiles: req.files.map((f: any) => ({
           artifactId: f.artifactId, fileId: `drv_${f.artifactId.slice(0, 8)}`, name: f.filename, mimeType: f.mimeType,
           expectedSha256: f.sha256, observedSize: f.byteSize, verified: true, folderId: 'kaae-folder',
         })),
-        sheet: { spreadsheetId: 'kaae-sheet', sheetId: 0, rowNumber: 12, expectedHash: 'h', observedHash: 'h', synced: true },
+        sheet: { spreadsheetId: req.destination.spreadsheetId, sheetId: 0, rowKey: req.taskId,
+          rowNumber: 12, expectedHash: req.packageHash, observedHash: req.packageHash, synced: true },
       },
     })),
   });

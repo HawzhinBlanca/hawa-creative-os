@@ -628,11 +628,14 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     const starts: string[] = [];
     object.startDelivery = (input) => { starts.push(input.deliveryId); };
     const publisher = { publish: vi.fn(async (_ctx: unknown, request: any) => ({ ok: true, value: {
+      publicationId: randomUUID(), publicationKey: request.publicationKey,
+      driveFolderId: request.destination.productionRootFolderId,
       state: 'complete',
       driveFiles: request.files.map((file: any) => ({ artifactId: file.artifactId,
         fileId: `drv_${file.artifactId.slice(0, 8)}`, name: file.filename, mimeType: file.mimeType,
         expectedSha256: file.sha256, observedSize: file.byteSize, verified: true, folderId: 'kaae-owned-folder' })),
-      sheet: { spreadsheetId: 'kaae-owned-sheet', sheetId: 0, rowNumber: 12,
+      sheet: { spreadsheetId: request.destination.spreadsheetId, sheetId: 0,
+        rowKey: request.taskId, rowNumber: 12,
         expectedHash: request.packageHash, observedHash: request.packageHash, synced: true },
     } })) };
     const deliveryInternal = createAppWithClientFixtures({ db, deliverableStore: store,

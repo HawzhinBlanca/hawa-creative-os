@@ -62,12 +62,14 @@ describe('Task 3: Elimination of Duplicate Paths', () => {
       const publish = vi.fn(async (_ctx: unknown, req: any) => ({
         ok: true,
         value: {
-          publicationId: `pub_${req.publicationKey}`, state: 'complete',
+          publicationId: randomUUID(), publicationKey: req.publicationKey,
+          driveFolderId: req.destination.productionRootFolderId, state: 'complete',
           driveFiles: req.files.map((f: any) => ({
-            fileId: `file_${f.artifactId}`, artifactId: f.artifactId, name: f.filename, mimeType: f.mimeType,
+            fileId: `file_${f.artifactId}`, folderId: req.destination.productionRootFolderId,
+            artifactId: f.artifactId, name: f.filename, mimeType: f.mimeType,
             expectedSha256: f.sha256, observedSize: f.byteSize, verified: true, webViewLink: 'https://drive.example/f',
           })),
-          sheet: { spreadsheetId: 'sheet', sheetId: 0, rowKey: req.taskId, rowNumber: 2, expectedHash: req.packageHash, observedHash: req.packageHash, synced: true, rowUrl: 'https://sheets.example/r' },
+          sheet: { spreadsheetId: req.destination.spreadsheetId, sheetId: 0, rowKey: req.taskId, rowNumber: 2, expectedHash: req.packageHash, observedHash: req.packageHash, synced: true, rowUrl: 'https://sheets.example/r' },
           detail: { verified: true, filesUploaded: req.files.length },
         },
       }));

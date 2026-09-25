@@ -36,6 +36,7 @@ import { isValidUuid, TaskStoreUnavailableError } from '../core-helpers.js';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { loadPinnedDeliverables, type DeliverableStore } from './pinned-deliverables.js';
+import { validatePublicationReceipt } from './publication-receipt-validation.js';
 import { pendingChangeOf } from './pending-change.js';
 import type { ClientDnaResolver } from './client-dna-resolver.js';
 import type { TaskReader } from './task-reader.js';
@@ -844,6 +845,13 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         publishResult.value.driveFiles?.some((file: { verified?: boolean }) => !file.verified)) {
       return holdArchive({ status: 409, code: 'DRIVE_VERIFICATION_FAILED',
         message: 'Drive has not verified every approved file; reconcile the publication before requester delivery' });
+    }
+    const receiptCheck = validatePublicationReceipt(publishResult.value, {
+      publicationKey, taskId, packageHash: deliverables.packageHash, spreadsheetId, files,
+    });
+    if (!receiptCheck.ok) {
+      return holdArchive({ status: 409, code: 'PUBLICATION_RECEIPT_INVALID',
+        message: `${receiptCheck.reason}; reconcile the provider result before requester delivery` });
     }
     // The chaos suite kills Core here: the files are in Drive, and nothing of it is recorded yet.
     await chaosPoint('core.delivery.after-drive', { taskId, mode: workflowMode ? 'workflow' : 'core' });

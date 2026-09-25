@@ -198,6 +198,50 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     }
   });
 
+  it.each([
+    ['empty Drive receipt', (receipt: any) => { receipt.driveFiles = []; }],
+    ['changed Drive checksum', (receipt: any) => { receipt.driveFiles[0].expectedSha256 = '0'.repeat(64); }],
+    ['extra Drive receipt', (receipt: any) => { receipt.driveFiles.push({ ...receipt.driveFiles[0], artifactId: crypto.randomUUID() }); }],
+    ['wrong Sheet task identity', (receipt: any) => { receipt.sheet.rowKey = crypto.randomUUID(); }],
+    ['Sheet without row identity', (receipt: any) => { delete receipt.sheet.rowNumber; }],
+    ['non-boolean Sheet sync', (receipt: any) => { receipt.sheet.synced = 'true'; }],
+    ['emulated success', (receipt: any) => { receipt.emulated = true; }],
+  ])('refuses a publisher claiming completion with %s', async (_case, alter) => {
+    const exports = memoryExportStore();
+    const publisher = { publish: vi.fn(async (_ctx: unknown, request: any) => {
+      const receipt: any = {
+        publicationId: crypto.randomUUID(), publicationKey: request.publicationKey,
+        driveFolderId: request.destination.productionRootFolderId, state: 'complete',
+        driveFiles: request.files.map((file: any) => ({ artifactId: file.artifactId,
+          fileId: `fake_${file.artifactId}`, folderId: request.destination.productionRootFolderId,
+          name: file.filename, mimeType: file.mimeType, expectedSha256: file.sha256,
+          observedSize: file.byteSize, verified: true })),
+        sheet: { spreadsheetId: request.destination.spreadsheetId, sheetId: 0, rowKey: request.taskId,
+          rowNumber: 7, expectedHash: request.packageHash, observedHash: request.packageHash, synced: true },
+        detail: { verified: true, filesUploaded: request.files.length },
+      };
+      alter(receipt);
+      return { ok: true, value: receipt };
+    }) };
+    const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true },
+      deliverableStore: exports.store, publisher: publisher as any });
+    const { task, rev, approval } = await createApprovedTaskWithExport(app, exports);
+    const response = await app.request(`/v1/tasks/${task.id}/publish-omnichannel`, {
+      method: 'POST', headers: operatorHeaders,
+      body: JSON.stringify({ designRevisionId: rev.id, approvalId: approval.decisionId }),
+    });
+    expect(response.status).toBe(409);
+    const stored = await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, async (trx) => ({
+      task: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].state,
+      pub: (await sql<{ state: string; error_class: string }>`SELECT state, error_class FROM hawa.publications WHERE task_id = ${task.id}::uuid`.execute(trx)).rows[0],
+      refs: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.drive_refs WHERE publication_id IN
+        (SELECT id FROM hawa.publications WHERE task_id = ${task.id}::uuid)`.execute(trx)).rows[0].n,
+      notifications: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands
+        WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n,
+    }));
+    expect(stored).toEqual({ task: 'publishing', pub: { state: 'pending', error_class: 'ARCHIVE_UNCONFIRMED' }, refs: 0, notifications: 0 });
+  });
+
   it('holds requester delivery after a lost Drive reply, then reconciles the same reserved file', async () => {
     const drive = await startFakeDrive();
     const previous = {
