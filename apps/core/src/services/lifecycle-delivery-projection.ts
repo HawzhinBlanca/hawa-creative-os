@@ -150,6 +150,42 @@ export interface LifecycleDeliveryFinishResult {
   stage: 'approved' | 'delivering' | 'delivered'; taskState: 'approved' | 'publishing' | 'complete'; rev: number;
 }
 
+/** The worker's booleans are a report, not the evidence that may close the request. */
+async function assertStoredDeliveryReceipts(
+  trx: Kysely<Database>, tenantId: string, taskId: string,
+  publication: { id: string; package_manifest: Record<string, unknown>; package_sha256: string },
+  outcome: DeliveryOutcome,
+): Promise<void> {
+  if (!outcome.archived && !outcome.sheetsConfirmed) return;
+  const recorded = await new PublicationRepository(trx).getPublicationWithRefs(publication.id, tenantId, trx);
+  if (!recorded) throw new Error('Delivery receipts are unavailable; retry the same report');
+  if (outcome.archived) {
+    const files = publication.package_manifest?.files;
+    const expected = Array.isArray(files) ? files : [];
+    const verified = recorded.driveRefs.filter((ref) => ref.status === 'verified');
+    const expectedKeys = expected.map((file: unknown) => {
+      if (!file || typeof file !== 'object') return null;
+      const item = file as Record<string, unknown>;
+      return typeof item.sha256 === 'string' && /^[0-9a-f]{64}$/.test(item.sha256) &&
+        Number.isInteger(item.size) && Number(item.size) > 0
+        ? `${item.sha256}:${item.size}` : null;
+    }).sort();
+    const verifiedKeys = verified.map((ref) => ref.expected_sha256 && ref.verified_at &&
+      ref.file_id && ref.folder_id && Number(ref.observed_size) > 0
+      ? `${ref.expected_sha256}:${ref.observed_size}` : null).sort();
+    if (expected.length === 0 || expectedKeys.length !== verifiedKeys.length ||
+        expectedKeys.some((key, index) => key === null || key !== verifiedKeys[index])) {
+      throw new Error('Verified Drive receipts do not match the approved delivery package; retry the same report');
+    }
+  }
+  if (outcome.sheetsConfirmed && !recorded.sheetSyncs.some((row) =>
+    row.status === 'synced' && row.task_id === taskId && row.row_key === taskId &&
+    row.expected_hash === publication.package_sha256 && row.observed_hash === publication.package_sha256 &&
+    Number(row.row_number) > 0 && row.synced_at !== null)) {
+    throw new Error('A matching confirmed Sheet receipt is unavailable; retry the same report');
+  }
+}
+
 /** Apply the single Delivery outcome without letting the legacy finished route move an owned task. */
 export async function projectLifecycleDeliveryFinish(db: Kysely<Database>, input: LifecycleDeliveryFinish): Promise<LifecycleDeliveryFinishResult> {
   if (input.rev !== input.expectedRev + 1 || input.expectedRev < 4 || !Number.isInteger(input.run) || input.run < 1) {
@@ -174,7 +210,7 @@ export async function projectLifecycleDeliveryFinish(db: Kysely<Database>, input
     }
     const publicationKey = `pub_key_${input.taskId}_${input.approvalId}`;
     const pub = (await sql<{ id: string; executor: string; executor_run: number; executor_finished_run: number;
-      package_manifest: Record<string, unknown> }>`SELECT id, executor, executor_run, executor_finished_run, package_manifest
+      package_manifest: Record<string, unknown>; package_sha256: string }>`SELECT id, executor, executor_run, executor_finished_run, package_manifest, package_sha256
       FROM hawa.publications WHERE tenant_id = ${input.tenantId}::uuid AND publication_key = ${publicationKey} FOR UPDATE`.execute(trx)).rows[0];
     if (!pub || pub.executor !== 'restate' || Number(pub.executor_run) !== input.run ||
         Number(pub.executor_finished_run) >= input.run ||
@@ -186,6 +222,7 @@ export async function projectLifecycleDeliveryFinish(db: Kysely<Database>, input
     if (task?.request_id !== input.requestId || task.state !== 'publishing') {
       throw new LifecycleProjectionConflict('WRONG_STAGE', 'The owned task is no longer publishing');
     }
+    await assertStoredDeliveryReceipts(trx, input.tenantId, input.taskId, pub, input.outcome);
     const expectedFiles = Array.isArray(pub.package_manifest?.files) ? pub.package_manifest.files.length : 0;
     const requesterConfirmed = input.outcome.outcome === 'delivered' && input.outcome.uncertain.length === 0 &&
       expectedFiles > 0 && input.outcome.filesSent === expectedFiles;
@@ -199,7 +236,9 @@ export async function projectLifecycleDeliveryFinish(db: Kysely<Database>, input
       await new PublicationRepository(trx).markComplete({ tenantId: input.tenantId,
         publicationId: pub.id, taskId: input.taskId }, trx);
       stage = 'delivered'; taskState = 'complete';
-    } else if (input.outcome.outcome === 'uncertain' ||
+    } else if ((input.outcome.filesSent > 0 && (!input.outcome.archived || !requesterConfirmed)) ||
+        input.outcome.uncertain.length > 0 ||
+        input.outcome.outcome === 'uncertain' ||
         (input.outcome.outcome === 'failed' && /TELEGRAM|REQUESTER_CHAT|DELIVERABLE_FILES/.test(input.outcome.reason || ''))) {
       errorClass = 'REQUESTER_SEND_UNCONFIRMED';
     } else if (!input.outcome.archived) {

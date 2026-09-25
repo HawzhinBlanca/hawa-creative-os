@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { CanvaBindingRepository, createDb, sql, withRlsContext } from '@hawa/db';
+import { CanvaBindingRepository, PublicationRepository, createDb, sql, withRlsContext } from '@hawa/db';
 import { parseOfficeApprovalProof } from '@hawa/domain';
 import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
@@ -111,10 +111,58 @@ async function approvedForDelivery() {
   return { requestId, taskId, revisionId, approval, artifactId, store, start };
 }
 
+async function recordClaimedReceipts(taskId: string, options: { sheet?: boolean; wrongDriveHash?: boolean; wrongSheetHash?: boolean } = {}) {
+  await withRlsContext(db, scope, async (trx) => {
+    const publication = await trx.selectFrom('publications')
+      .select(['id', 'package_manifest', 'package_sha256']).where('tenant_id', '=', tenantId)
+      .where('task_id', '=', taskId).executeTakeFirstOrThrow();
+    const repo = new PublicationRepository(trx);
+    const files = publication.package_manifest.files as Array<{ name: string; sha256: string; size: number }>;
+    const existing = await repo.getPublicationWithRefs(publication.id, tenantId, trx);
+    for (const file of files.filter((item) => !existing?.driveRefs.some((ref) => ref.file_name === item.name))) {
+      await repo.recordDriveRef({ tenantId, publicationId: publication.id,
+        sharedDriveId: 'fixture-drive', folderId: `folder-${taskId}`, fileId: randomUUID(),
+        fileName: file.name, mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        expectedSha256: options.wrongDriveHash ? '0'.repeat(64) : file.sha256,
+        observedSize: file.size, status: 'verified' }, trx);
+    }
+    if (options.sheet) await repo.recordSheetSync({ tenantId, publicationId: publication.id,
+      spreadsheetId: 'fixture-sheet', sheetId: 0, taskId, rowKey: taskId, rowNumber: 1,
+      expectedHash: publication.package_sha256,
+      observedHash: options.wrongSheetHash ? '0'.repeat(64) : publication.package_sha256,
+      status: 'synced' }, trx);
+  });
+}
+
 describe('authenticated Desk to private lifecycle office decision', () => {
+  it('refuses a delivered report until the stored Drive and Sheet receipts match the claimed package', async () => {
+    const { requestId, taskId, approval, store, start } = await approvedForDelivery();
+    const claim = await projectLifecycleDeliveryStart(db, store, start);
+    const finish = { requestId, tenantId, taskId, approvalId: approval.approvalId,
+      deliveryId: claim.delivery.deliveryId, run: 1,
+      outcome: { outcome: 'delivered' as const, uncertain: [], archived: true, sheetsConfirmed: true, filesSent: 1 },
+      expectedRev: 4, rev: 5, key: `${requestId}:5:deliveryFinished:${claim.delivery.deliveryId}` };
+    await expect(projectLifecycleDeliveryFinish(db, finish)).rejects.toThrow(/Drive receipts/);
+    await recordClaimedReceipts(taskId, { wrongDriveHash: true });
+    await expect(projectLifecycleDeliveryFinish(db, finish)).rejects.toThrow(/Drive receipts/);
+    await withRlsContext(db, scope, async (trx) => {
+      const publication = await trx.selectFrom('publications').select(['id', 'package_manifest'])
+        .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).executeTakeFirstOrThrow();
+      const file = (publication.package_manifest.files as Array<{ sha256: string }>)[0]!;
+      await trx.updateTable('drive_refs').set({ expected_sha256: file.sha256 })
+        .where('tenant_id', '=', tenantId).where('publication_id', '=', publication.id).execute();
+    });
+    await expect(projectLifecycleDeliveryFinish(db, finish)).rejects.toThrow(/Sheet receipt/);
+    await recordClaimedReceipts(taskId, { sheet: true, wrongSheetHash: true });
+    await expect(projectLifecycleDeliveryFinish(db, finish)).rejects.toThrow(/Sheet receipt/);
+    await recordClaimedReceipts(taskId, { sheet: true });
+    expect(await projectLifecycleDeliveryFinish(db, finish)).toMatchObject({ stage: 'delivered', taskState: 'complete' });
+  });
+
   it('keeps uncertain requester sends unresolved and refuses a second workflow run', async () => {
     const { requestId, taskId, approval, store, start } = await approvedForDelivery();
     const claim = await projectLifecycleDeliveryStart(db, store, start);
+    await recordClaimedReceipts(taskId, { sheet: true });
     expect(await projectLifecycleDeliveryStart(db, { ...store, read: async () => { throw new Error('store away'); } }, start)).toEqual(claim);
     await expect(projectLifecycleDeliveryStart(db, store, { ...start, reason: 'changed' }))
       .rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
@@ -143,6 +191,23 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(rows.publication).toMatchObject({ error_class: 'REQUESTER_SEND_UNCONFIRMED', executor_finished_run: 1 });
   });
 
+  it('does not reopen delivery when a requester file was sent before archive failed', async () => {
+    const { requestId, taskId, approval, store, start } = await approvedForDelivery();
+    const claim = await projectLifecycleDeliveryStart(db, store, start);
+    const result = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
+      approvalId: approval.approvalId, deliveryId: claim.delivery.deliveryId, run: 1,
+      outcome: { outcome: 'chat_only', uncertain: [], archived: false, sheetsConfirmed: false, filesSent: 1 },
+      expectedRev: 4, rev: 5, key: `${requestId}:5:deliveryFinished:${claim.delivery.deliveryId}` });
+    expect(result).toMatchObject({ stage: 'delivering', taskState: 'publishing' });
+    const nextAction = randomUUID();
+    await expect(projectLifecycleDeliveryStart(db, store, { ...start, actionId: nextAction,
+      expectedRev: 5, rev: 6, key: `${requestId}:6:officeDecision:desk:${nextAction}` }))
+      .rejects.toMatchObject({ code: 'WRONG_STAGE' });
+    const publication = await withRlsContext(db, scope, (trx) => trx.selectFrom('publications')
+      .select('error_class').where('task_id', '=', taskId).executeTakeFirst());
+    expect(publication?.error_class).toBe('REQUESTER_SEND_UNCONFIRMED');
+  });
+
   it('rechecks approved bytes before claim and retries a missing archive under a new request revision', async () => {
     const { requestId, taskId, approval, store, start } = await approvedForDelivery();
     await expect(projectLifecycleDeliveryStart(db, { ...store,
@@ -156,7 +221,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(before.publication).toBeUndefined();
     const first = await projectLifecycleDeliveryStart(db, store, start);
     const chatOnly = { outcome: 'chat_only' as const, uncertain: [], archived: false,
-      sheetsConfirmed: false, filesSent: 1 };
+      sheetsConfirmed: false, filesSent: 0 };
     const firstFinish = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
       approvalId: approval.approvalId, deliveryId: first.delivery.deliveryId,
       run: 1, outcome: chatOnly, expectedRev: 4, rev: 5,
@@ -165,6 +230,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     const nextAction = randomUUID();
     const second = await projectLifecycleDeliveryStart(db, store, { ...start, actionId: nextAction,
       expectedRev: 5, rev: 6, key: `${requestId}:6:officeDecision:desk:${nextAction}` });
+    await recordClaimedReceipts(taskId, { sheet: true });
     expect(second.delivery).toMatchObject({ run: 2, requestRev: 6 });
     expect(second.delivery.deliveryId).toMatch(/:archive:2$/);
     const final = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
@@ -178,6 +244,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
   it('shows a request-owned Sheet failure as a staffed retry and completes only the next versioned run', async () => {
     const { requestId, taskId, approval, store, start } = await approvedForDelivery();
     const first = await projectLifecycleDeliveryStart(db, store, start);
+    await recordClaimedReceipts(taskId);
     const pendingSheet = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
       approvalId: approval.approvalId, deliveryId: first.delivery.deliveryId, run: 1,
       outcome: { outcome: 'delivered', uncertain: [], archived: true, sheetsConfirmed: false, filesSent: 1 },
@@ -201,6 +268,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     const nextAction = randomUUID();
     const second = await projectLifecycleDeliveryStart(db, store, { ...start, actionId: nextAction,
       expectedRev: 5, rev: 6, key: `${requestId}:6:officeDecision:desk:${nextAction}` });
+    await recordClaimedReceipts(taskId, { sheet: true });
     expect(second.delivery).toMatchObject({ run: 2, requestRev: 6 });
     expect(second.delivery.deliveryId).toMatch(/:archive:2$/);
     const finished = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
@@ -499,7 +567,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
         fileId: `drv_${file.artifactId.slice(0, 8)}`, name: file.filename, mimeType: file.mimeType,
         expectedSha256: file.sha256, observedSize: file.byteSize, verified: true, folderId: 'kaae-owned-folder' })),
       sheet: { spreadsheetId: 'kaae-owned-sheet', sheetId: 0, rowNumber: 12,
-        expectedHash: 'h', observedHash: 'h', synced: true },
+        expectedHash: request.packageHash, observedHash: request.packageHash, synced: true },
     } })) };
     const deliveryInternal = createAppWithClientFixtures({ db, deliverableStore: store,
       publisher, testAuth: { roleHeader: true } } as any);
