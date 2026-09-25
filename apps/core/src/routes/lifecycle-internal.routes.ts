@@ -26,7 +26,7 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
-import { LifecycleProjectionConflict, projectLifecycleOpen } from '../services/lifecycle-projection.js';
+import { LifecycleProjectionConflict, projectLifecycleDesignOutcome, projectLifecycleOpen } from '../services/lifecycle-projection.js';
 import type { ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
 
@@ -80,6 +80,20 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
       !Array.isArray(d.exactCopy) || d.exactCopy.length > 500 || JSON.stringify(d.exactCopy).length > 100_000 ||
       !(d.clientId === null || (typeof d.clientId === 'string' && UUID.test(d.clientId))) ||
       (d.autoGenerate !== undefined && typeof d.autoGenerate !== 'boolean')) return null;
+  const variant = d.variant;
+  if (variant !== undefined && (!variant || typeof variant !== 'object' ||
+      !Number.isInteger((variant as any).width) || !Number.isInteger((variant as any).height) ||
+      (variant as any).width < 640 || (variant as any).width > 2400 ||
+      (variant as any).height < 640 || (variant as any).height > 2400)) return null;
+  if (d.designStudio !== undefined && typeof d.designStudio !== 'boolean') return null;
+  const options = d.studioOptions;
+  if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options) ||
+      JSON.stringify(options).length > 2000 ||
+      (Object.keys(options).some((key) => !['tier', 'imagery', 'previews', 'holdForSelection'].includes(key))) ||
+      ((options as any).tier !== undefined && !['fast', 'quality'].includes((options as any).tier)) ||
+      ((options as any).imagery !== undefined && !['none', 'abstract', 'photographic'].includes((options as any).imagery)) ||
+      ((options as any).previews !== undefined && (!Number.isInteger((options as any).previews) || (options as any).previews < 1 || (options as any).previews > 4)) ||
+      ((options as any).holdForSelection !== undefined && typeof (options as any).holdForSelection !== 'boolean'))) return null;
   // Select the contract explicitly. A worker payload cannot choose the database principal, tenant,
   // outbox owner or a second source through spare JSON fields.
   return {
@@ -88,6 +102,9 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
     designInstructions: d.designInstructions as string, exactCopy: d.exactCopy as unknown[],
     clientId: d.clientId as string | null,
     ...(d.autoGenerate !== undefined ? { autoGenerate: d.autoGenerate as boolean } : {}),
+    ...(variant ? { variant: variant as { width: number; height: number } } : {}),
+    ...(d.designStudio !== undefined ? { designStudio: d.designStudio as boolean } : {}),
+    ...(options ? { studioOptions: options as ChatIntake['studioOptions'] } : {}),
   };
 }
 
@@ -209,6 +226,44 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
       }
       log.error(`[core:internal] lifecycle open ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The projection did not commit; retry with the same key');
+    }
+  });
+
+  internal('/lifecycle/:requestId/design-outcome', async (c) => {
+    const requestId = c.req.param('requestId') ?? '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const report = op?.report && typeof op.report === 'object' && !Array.isArray(op.report)
+      ? op.report as Record<string, unknown> : null;
+    const runId = op?.runId;
+    const taskId = op?.taskId;
+    const clean = (value: unknown) => typeof value === 'string' && /^[A-Z0-9_]{1,64}$/.test(value);
+    if (!UUID.test(requestId) || body?.v !== 1 || body.expectedRev !== 1 || body.rev !== 2 ||
+        op?.kind !== 'recordOutcome' || typeof taskId !== 'string' || !UUID.test(taskId) ||
+        runId !== `dr-${taskId}` || body.key !== `${requestId}:2:designFinished:${runId}` ||
+        !report || !clean(report.status) ||
+        (report.code !== undefined && !clean(report.code)) ||
+        (report.designId !== undefined && (typeof report.designId !== 'string' || !/^[A-Za-z0-9_-]{4,64}$/.test(report.designId))) ||
+        (report.detail !== undefined && (typeof report.detail !== 'string' || report.detail.length > 500)) ||
+        (report.runId !== undefined && (typeof report.runId !== 'string' || report.runId.length > 100)) ||
+        (report.notifyRequester !== undefined && typeof report.notifyRequester !== 'boolean')) {
+      return problem(c, 400, 'Invalid design outcome projection', 'Expected one versioned recordOutcome operation for the current round-zero design');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleDesignOutcome(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID, taskId: taskId as string, runId: runId as string,
+        expectedRev: 1, rev: 2, key: body.key as string,
+        report: report as unknown as Parameters<typeof projectLifecycleDesignOutcome>[1]['report'],
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] lifecycle design outcome ${requestId} failed:`, error instanceof Error ? error.message : error);
       return problem(c, 503, 'Lifecycle Projection Unavailable', 'The projection did not commit; retry with the same key');
     }
   });

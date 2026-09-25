@@ -1,7 +1,6 @@
 /**
- * First RequestLifecycle handler (ADR-034, Phase 2.3). It can open a manual Telegram request with
- * one Core projection and a fenced acknowledgement. ChatInbox does not route here yet. Automatic
- * design, questions, office decisions and delivery remain closed until their handlers are ready.
+ * RequestLifecycle's first two revisions (ADR-034, Phase 2.3): open and terminal design outcome.
+ * ChatInbox does not route here yet; the cutover remains closed until decisions and delivery exist.
  * Once bound, the service name stays in every worker build for blue/green drain compatibility.
  */
 import { createHash } from 'node:crypto';
@@ -10,10 +9,14 @@ import type { OutboundMessage } from '@hawa/contracts';
 import { withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, type CoreInternal } from './delivery.js';
 import { TelegramSenderApi } from './telegram-sender.js';
+import { DesignRunApi, type DesignRunInput } from './design-run.js';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROJECT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30_000, maxRetryDuration: 30 * 60_000 };
+// A DesignRun has already ended when it sends this event. Keep its sole outcome pending through a
+// Core outage; a bounded step here could abandon the only report of paid work.
+const OUTCOME_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30_000 };
 
 export interface OpenManualEvent {
   v: 1;
@@ -49,6 +52,39 @@ export interface ManualLifecycleState {
 
 export interface OpenManualResult { accepted: true; taskId: string; stage: 'manual'; rev: 1 }
 
+export interface OpenAutomaticEvent extends Omit<OpenManualEvent, 'draft'> {
+  draft: Omit<OpenManualEvent['draft'], 'autoGenerate'> & {
+    autoGenerate: true;
+    variant?: { width: number; height: number };
+    designStudio?: boolean;
+    studioOptions?: DesignRunInput['studioOptions'];
+  };
+}
+
+export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'stage' | 'rev'> {
+  stage: 'designing' | 'in_review' | 'manual';
+  rev: 1 | 2;
+  runId: string;
+  designInput: DesignRunInput;
+  outcome?: { eventId: string; sha256: string; status: string; revisionId?: string;
+    message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string } };
+}
+
+export interface AutomaticOpenContext {
+  key: string;
+  get(name: string): Promise<ManualLifecycleState | AutomaticLifecycleState | null>;
+  run<T>(name: string, action: () => Promise<T>): Promise<T>;
+  set(name: string, value: ManualLifecycleState | AutomaticLifecycleState): void;
+  send(message: OutboundMessage): void;
+  startDesign(input: DesignRunInput): void;
+}
+
+export interface DesignFinishedEvent {
+  v: 1; eventId: string; requestId: string; runId: string; round: 0; taskId: string;
+  report: { status: string; designId?: string; code?: string; runId?: string;
+    parity?: string; parityError?: string; detail?: string; notifyRequester?: boolean };
+}
+
 export interface OpenContext {
   key: string;
   get(name: string): Promise<ManualLifecycleState | null>;
@@ -63,10 +99,10 @@ function canonical(value: unknown): string {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
 }
 
-const hashOf = (event: OpenManualEvent) => createHash('sha256').update(canonical(event)).digest('hex');
+const hashOf = (event: unknown) => createHash('sha256').update(canonical(event)).digest('hex');
 const invalid = (reason: string) => new restate.TerminalError(`LIFECYCLE_OPEN_REFUSED: ${reason}`, { errorCode: 409 });
 
-function sendAcknowledgement(ctx: OpenContext, state: ManualLifecycleState): void {
+function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>, state: ManualLifecycleState): void {
   ctx.send({
     v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
     text: 'Request received. An art director will review it.', class: 'critical',
@@ -109,25 +145,173 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
   return { accepted: true, taskId: state.taskId, stage: 'manual', rev: 1 };
 }
 
+function sendAutomaticAcknowledgement(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
+  ctx.send({ v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
+    text: 'Request received. I am preparing a draft for art director review.', class: 'critical',
+    tenantId: state.tenantId, taskId: state.taskId });
+}
+
+/** The persisted Core projection, not the untrusted open event, supplies the run's execution policy. */
+export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: CoreInternal, event: OpenAutomaticEvent) {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      event.eventId !== `open:${event.requestId}` || event.tenantId !== DEFAULT_TENANT_ID ||
+      !/^-?\d{1,20}$/.test(event.chatId) || event.draft?.platform !== 'telegram' ||
+      event.draft?.sourceEventId !== `lc-${event.requestId}-r0` ||
+      event.draft?.sourceChannelId !== event.chatId || event.draft?.autoGenerate !== true ||
+      !event.draft.clientId || !UUID.test(event.draft.clientId)) {
+    throw invalid('automatic round-zero request has an invalid owner, source or client');
+  }
+  const fingerprint = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (prior) {
+    if (prior.requestId !== event.requestId || prior.openEventId !== event.eventId ||
+        prior.openSha256 !== fingerprint) {
+      throw invalid('this request was opened with different content');
+    }
+    if (!('runId' in prior)) {
+      sendAcknowledgement(ctx, prior);
+      return { accepted: true as const, taskId: prior.taskId, stage: 'manual' as const, rev: 1 as const };
+    }
+    sendAutomaticAcknowledgement(ctx, prior);
+    if (prior.rev === 1) ctx.startDesign(prior.designInput);
+    return { accepted: true as const, taskId: prior.taskId, stage: prior.stage, rev: prior.rev };
+  }
+  const projected = await ctx.run('project:1', () => core.post<{
+    v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean;
+    design?: { clientId: string; rawText: string; sourcePlatform: string;
+      variant?: { width: number; height: number }; designStudio: boolean; studioOptions?: DesignRunInput['studioOptions'] };
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
+    { v: 1, expectedRev: 0, rev: 1, key: `${event.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: event.draft }] }));
+  if (projected?.v !== 1 || !UUID.test(projected.taskId) || projected.rev !== 1) {
+    throw new Error('Core did not return an automatic design projection; do not start the run');
+  }
+  if (projected.stage === 'manual' && projected.autoGenerate === false) {
+    const manual: ManualLifecycleState = {
+      v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
+      owner: 'restate', stage: 'manual', rev: 1, taskId: projected.taskId,
+      openEventId: event.eventId, openSha256: fingerprint,
+    };
+    ctx.set('lc', manual);
+    sendAcknowledgement(ctx, manual);
+    return { accepted: true as const, taskId: manual.taskId, stage: 'manual' as const, rev: 1 as const };
+  }
+  if (projected.stage !== 'designing' || projected.autoGenerate !== true ||
+      !projected.design || projected.design.clientId !== event.draft.clientId) {
+    throw new Error('Core returned an inconsistent automatic design projection; do not start the run');
+  }
+  const runId = `dr-${projected.taskId}`;
+  const designInput: DesignRunInput = {
+    v: 1, lifecycle: { requestId: event.requestId, round: 0, runId },
+    taskId: projected.taskId, tenantId: event.tenantId, clientId: projected.design.clientId,
+    rawText: projected.design.rawText, sourcePlatform: projected.design.sourcePlatform,
+    idempotencyKey: `lifecycle:${event.requestId}:${projected.taskId}`, canvaAutoGenerate: true,
+    ...(projected.design.variant ? { canvaVariant: projected.design.variant } : {}),
+    designStudio: projected.design.designStudio,
+    ...(projected.design.studioOptions ? { studioOptions: projected.design.studioOptions } : {}),
+  };
+  const state: AutomaticLifecycleState = {
+    v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
+    owner: 'restate', stage: 'designing', rev: 1, taskId: projected.taskId,
+    openEventId: event.eventId, openSha256: fingerprint, runId, designInput,
+  };
+  ctx.set('lc', state);
+  sendAutomaticAcknowledgement(ctx, state);
+  ctx.startDesign(designInput);
+  return { accepted: true as const, taskId: state.taskId, stage: state.stage, rev: state.rev };
+}
+
+export async function recordDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal, event: DesignFinishedEvent) {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      !UUID.test(event.taskId) || event.runId !== `dr-${event.taskId}` ||
+      event.eventId !== `dr-finished:${event.runId}` || event.round !== 0 ||
+      !event.report || typeof event.report.status !== 'string') throw invalid('invalid design finish identity');
+  const prior = await ctx.get('lc');
+  if (!prior || !('runId' in prior) || prior.requestId !== event.requestId ||
+      prior.taskId !== event.taskId || prior.runId !== event.runId) return { ignored: true as const };
+  const fingerprint = hashOf(event);
+  if (prior.rev === 2) {
+    if (prior.outcome?.eventId !== event.eventId || prior.outcome.sha256 !== fingerprint) {
+      throw invalid('the design outcome was already recorded with different content');
+    }
+    sendDesignOutcome(ctx, prior);
+    return { ignored: false as const, stage: prior.stage, rev: prior.rev };
+  }
+  if (prior.stage !== 'designing') throw invalid('request is not designing');
+  const projected = await ctx.run('project:2', () => core.post<{
+    v: 1; requestId: string; taskId: string; rev: 2; stage: 'in_review' | 'manual';
+    status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
+    officeAlert?: { chatId: string; text: string };
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/design-outcome`, {
+    v: 1, expectedRev: 1, rev: 2, key: `${event.requestId}:2:designFinished:${event.runId}`,
+    ops: [{ kind: 'recordOutcome', taskId: event.taskId, runId: event.runId, report: event.report }],
+  }));
+  if (projected?.v !== 1 || projected.requestId !== event.requestId ||
+      projected.taskId !== event.taskId || projected.rev !== 2 ||
+      !['in_review', 'manual'].includes(projected.stage)) {
+    throw new Error('Core did not return a valid design outcome projection');
+  }
+  const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: 2,
+    outcome: { eventId: event.eventId, sha256: fingerprint, status: projected.status,
+      ...(projected.revisionId ? { revisionId: projected.revisionId } : {}),
+      ...(projected.message ? { message: projected.message } : {}),
+      ...(projected.officeAlert ? { officeAlert: projected.officeAlert } : {}),
+    },
+  };
+  ctx.set('lc', next);
+  sendDesignOutcome(ctx, next);
+  return { ignored: false as const, stage: next.stage, rev: next.rev };
+}
+
+function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
+  const message = state.outcome?.message;
+  if (message) ctx.send({ v: 1, key: `${state.requestId}:2:design-outcome`, chatId: state.chatId,
+    kind: 'text', text: message.text, parseMode: message.parseMode, class: 'critical',
+    tenantId: state.tenantId, taskId: state.taskId });
+  const alert = state.outcome?.officeAlert;
+  if (alert) ctx.send({ v: 1, key: `${state.requestId}:2:office-alert`, chatId: alert.chatId,
+    kind: 'text', text: alert.text, class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+}
+
 export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv()) {
   return restate.object({
     name: 'RequestLifecycle',
     handlers: {
       open: restate.handlers.object.exclusive(
         { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
-        async (ctx: restate.ObjectContext, event: OpenManualEvent): Promise<OpenManualResult> =>
+        async (ctx: restate.ObjectContext, event: OpenManualEvent | OpenAutomaticEvent) =>
           withInvocationLogContext(ctx, { requestId: event?.requestId, tenantId: event?.tenantId }, () =>
-            openManualRequest({
+            event?.draft?.autoGenerate === true ? openAutomaticRequest({
+              key: ctx.key,
+              get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+              run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
+              set: (name, value) => ctx.set(name, value),
+              send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+                .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+              startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
+            }, core, event as OpenAutomaticEvent) : openManualRequest({
               key: ctx.key,
               get: (name) => ctx.get<ManualLifecycleState>(name),
               run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
               set: (name, value) => ctx.set(name, value),
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
                 .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
-            }, core, event)),
+            }, core, event as OpenManualEvent)),
       ),
-      get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ManualLifecycleState | null> =>
-        (await ctx.get<ManualLifecycleState>('lc')) ?? null),
+      designFinished: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: DesignFinishedEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordDesignFinished({
+            key: ctx.key,
+            get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+              .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+            startDesign: () => { throw new Error('designFinished cannot start a new run'); },
+          }, core, event)),
+      ),
+      get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ManualLifecycleState | AutomaticLifecycleState | null> =>
+        (await ctx.get<ManualLifecycleState | AutomaticLifecycleState>('lc')) ?? null),
     },
     options: {
       ingressPrivate: true,
@@ -136,3 +320,6 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
     },
   });
 }
+
+/** Stable client definition shared by DesignRun and the worker endpoint. */
+export const RequestLifecycleApi = createRequestLifecycle();

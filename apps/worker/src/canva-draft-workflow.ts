@@ -3,6 +3,13 @@ import type { WorkflowInput, WorkflowOutput } from './workflow.js';
 import type { OutcomeRecorder } from './outcome-without-core.js';
 import { log, requestIdHeaders } from './logging.js';
 
+/** The one-way outcome channel of a RequestLifecycle-owned DesignRun. */
+export interface LifecycleOutcomeReporter {
+  requestId: string;
+  report(outcome: { status: string; designId?: string; code?: string; runId?: string;
+    parity?: string; parityError?: string; detail?: string; notifyRequester?: boolean }): void;
+}
+
 /**
  * A failure that retrying can never fix (rejected request, scope mismatch). The Restate
  * adapter in index.ts converts it into a TerminalError so the engine stops retrying.
@@ -248,7 +255,8 @@ export async function runCanvaDraft(
   input: WorkflowInput,
   ctx: WorkflowDurableContext,
   fetcher: typeof fetch = fetch,
-  recordOutcome?: OutcomeRecorder
+  recordOutcome?: OutcomeRecorder,
+  lifecycle?: LifecycleOutcomeReporter
 ): Promise<WorkflowOutput> {
   const output = (status: string, documentId?: string): WorkflowOutput =>
     ({ taskId: input.taskId, status, documentId, qcPassed: false, auditEventsCount: 0, executedSteps: [], replayedSteps: [] });
@@ -329,11 +337,15 @@ export async function runCanvaDraft(
       ...(extra.detail ? { detail: extra.detail } : {}),
       ...(extra.notifyRequester === false ? { notifyRequester: false } : {}),
     };
-    try {
-      await reportOutcome(ctx, call, 'canva-notify-' + status.toLowerCase(), report);
-    } catch (error) {
-      if (!stepGaveUp(error)) throw error;
-      await recordWithoutCore(status, report);
+    if (lifecycle) {
+      lifecycle.report(report);
+    } else {
+      try {
+        await reportOutcome(ctx, call, 'canva-notify-' + status.toLowerCase(), report);
+      } catch (error) {
+        if (!stepGaveUp(error)) throw error;
+        await recordWithoutCore(status, report);
+      }
     }
     return output(status, designId);
   };
@@ -366,9 +378,13 @@ export async function runCanvaDraft(
   // A future DesignRun needs an owner-aware report path; the legacy status endpoint cannot record
   // this outcome, and retrying the invocation cannot change the owner. Check before the scope
   // mismatch handler so even a malformed direct invocation sends no legacy outcome.
-  if (task.requestId) {
+  if (task.requestId && (!lifecycle || task.requestId !== lifecycle.requestId)) {
     log.warn(`[worker] Task ${input.taskId}: direct legacy workflow refused; RequestLifecycle owns ${task.requestId}.`);
     return output('LIFECYCLE_OWNED');
+  }
+  if (lifecycle && !task.requestId) {
+    log.warn(`[worker] Task ${input.taskId}: DesignRun refused a task with no matching RequestLifecycle owner.`);
+    return output('LIFECYCLE_OWNER_MISMATCH');
   }
   // A mismatch is final: retrying replays the same journalled answer. It used to be thrown outside
   // any step, as an ordinary error, so Restate retried the invocation without end and the requester,
