@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-25T08:12:13+03:00",
+  "generatedAt": "2026-09-25T08:29:14+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "0df10af0c550009d6c75b818af5cbbfc5a07fa1c",
+    "commit": "ce56d69bfb8b108d1f7c7e5fe631f0ac91fcb687",
     "treeClean": true,
-    "commitTimestamp": "2026-09-25T08:12:13+03:00",
+    "commitTimestamp": "2026-09-25T08:29:14+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
-    "targetVersion": "022_publication_executor",
-    "latestMigrationFile": "022_publication_executor.sql",
-    "totalMigrations": 22
+    "targetVersion": "023_request_lifecycle_projection",
+    "latestMigrationFile": "023_request_lifecycle_projection.sql",
+    "totalMigrations": 23
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "82a18678b9a04e68e5db2bf2c22fc9347d2e812781c2c47803184b256724860e"
+  "sha256": "cc81299b6beb997b034f6ce2f8031862d44626909dd498aab8d52aa145db498f"
 }
