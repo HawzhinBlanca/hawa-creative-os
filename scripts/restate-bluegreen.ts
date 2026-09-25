@@ -181,7 +181,7 @@ export type RegisterOutcome =
  * binds against); checked even when GET /services is short. Every service ever hosted stays here:
  * ChatInbox since Phase 2.1; Delivery and TelegramSender since Phase 2.2.
  */
-export const WORKER_SERVICES = ['TaskWorkflow', 'TaskService', 'ChatInbox', 'Delivery', 'TelegramSender', 'RequestLifecycle', 'DesignRun'] as const;
+export const WORKER_SERVICES = ['TaskWorkflow', 'TaskService', 'ChatInbox', 'Delivery', 'TelegramSender', 'RequestLifecycle', 'DesignRun', 'OfficeDecisionGateway'] as const;
 
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
 

@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { isAuthorizedReviewerRole, type PinnedExport } from '@hawa/domain';
 import { withRlsContext, sql } from '@hawa/db';
-import { HumanApprovalManager } from '@hawa/integrations';
+import { HumanApprovalManager, signLifecycleOfficeEvent } from '@hawa/integrations';
 import type { Context } from 'hono';
 import type { AuthContext, RouteContext } from './types.js';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
@@ -66,8 +66,69 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       );
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
-    if (dbTask?.request_id) return problem(c, 409, 'LIFECYCLE_OWNED',
-      'Review this request through RequestLifecycle; the legacy Desk decision cannot record it');
+    if (dbTask?.request_id) {
+      // A signed-in Desk reviewer can request a change through the one public gateway. The gateway
+      // calls the private RequestLifecycle object; Core never writes the owned approval directly.
+      const actionId = c.req.header('Idempotency-Key');
+      if (!actionId || !isValidUuid(actionId)) return problem(c, 422, 'Action Key Required',
+        'A request-owned office decision needs a UUID Idempotency-Key for safe retry');
+      const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+      const revisionRequest = body?.revisionRequest && typeof body.revisionRequest === 'object' && !Array.isArray(body.revisionRequest)
+        ? body.revisionRequest as Record<string, unknown> : null;
+      if (!body || Array.isArray(body) || body.action !== 'revision_requested' ||
+          Object.keys(body).some((key) => key !== 'action' && key !== 'revisionRequest') ||
+          !revisionRequest || Object.keys(revisionRequest).some((key) => key !== 'comment') ||
+          typeof revisionRequest.comment !== 'string' || !revisionRequest.comment.trim() ||
+          revisionRequest.comment.length > 2000) {
+        return problem(c, 422, 'Unsupported Lifecycle Decision',
+          'This request currently accepts a revision request with one reason through Hawa Desk');
+      }
+      const officeRole = (auth.role || '').toLowerCase().trim();
+      if (!['art_director', 'creative_director', 'office_admin', 'administrator'].includes(officeRole)) {
+        return problem(c, 403, 'Forbidden', 'This lifecycle revision needs an authorized office reviewer');
+      }
+      const requestId = dbTask.request_id as string;
+      const current = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, async (trx) =>
+        trx.selectFrom('requests').select(['owner'])
+          .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst());
+      if (!current || current.owner !== 'restate') {
+        return problem(c, 409, 'Lifecycle Owner Mismatch',
+          'This task does not have an active request owner');
+      }
+      // Do not pre-reject rev 3 or a later draft: a response lost after the original commit must
+      // still reach RequestLifecycle, whose stored event hash decides whether this is an exact replay.
+      const ingress = (process.env.RESTATE_INGRESS_URL || '').trim().replace(/\/+$/, '');
+      const secret = (process.env.HAWA_WORKER_TOKEN || '').trim();
+      if (!ingress || !secret) return problem(c, 503, 'Lifecycle Decision Unavailable',
+        'The decision gateway is not configured; retry this action later');
+      const event = { v: 1 as const, eventId: `desk:${actionId}`, requestId, taskId, revisionId,
+        actionId, expectedRev: 2 as const, kind: 'revise' as const,
+        actor: { userId: auth.userId, role: officeRole }, reason: revisionRequest.comment.trim() };
+      const signature = signLifecycleOfficeEvent(secret, event);
+      try {
+        const response = await fetch(`${ingress}/OfficeDecisionGateway/decide`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ v: 1, event, signature }), signal: AbortSignal.timeout(15_000),
+        });
+        const result = await response.json().catch(() => null) as Record<string, unknown> | null;
+        if (response.ok && result?.accepted === true && result.requestId === requestId &&
+            result.taskId === taskId && result.revisionId === revisionId && result.actionId === actionId &&
+            isValidUuid(result.approvalId as string) && result.rev === 3 && result.stage === 'manual') {
+          return c.json({ decisionId: result.approvalId, taskId, designRevisionId: revisionId,
+            decision: 'revision_requested', actor: { userId: auth.userId, role: officeRole, verifiedServerSide: true },
+            requestId, requestRev: 3 }, 201);
+        }
+        if (response.ok && result?.accepted === false) return problem(c, 409, 'Stale Lifecycle Decision',
+          'The request is no longer reviewing this draft; refresh the task');
+        if (response.status === 400 || response.status === 409) return problem(c, 409, 'Lifecycle Action Conflict',
+          'This action key or draft no longer matches; refresh the task');
+        log.warn(`[core:approval] Lifecycle gateway HTTP ${response.status} for request ${requestId}`);
+      } catch (error) {
+        log.warn(`[core:approval] Lifecycle gateway did not answer for request ${requestId}:`, error);
+      }
+      return problem(c, 503, 'Lifecycle Decision Uncertain',
+        'The decision may have committed. Retry with the same action key; no second decision will be created');
+    }
 
     let resolvedRev: any = null;
     let dbRev: any = null;

@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
+import { signLifecycleOfficeEvent } from '@hawa/integrations';
 import { recordOfficeRevision, type AutomaticLifecycleState, type AutomaticOpenContext,
   type ManualLifecycleState, type OfficeRevisionEvent } from '../src/lifecycle/request-lifecycle.js';
+import { checkSignedOfficeDecision } from '../src/lifecycle/office-decision-gateway.js';
 
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const clientId = 'c1000000-0000-4000-8000-000000000002';
@@ -47,6 +49,16 @@ function setup() {
 }
 
 describe('RequestLifecycle office revision', () => {
+  it('admits only an intact, signed office event at the public gateway', () => {
+    const { event } = setup();
+    const secret = ['office', 'gateway', 'fixture'].join('-');
+    const signed = { v: 1 as const, event, signature: signLifecycleOfficeEvent(secret, event) };
+    expect(checkSignedOfficeDecision(signed, secret)).toBe('ok');
+    expect(checkSignedOfficeDecision({ ...signed, event: { ...event, reason: 'Tampered' } }, secret)).toBe('unauthorized');
+    expect(checkSignedOfficeDecision(signed, 'other-secret')).toBe('unauthorized');
+    expect(checkSignedOfficeDecision({ ...signed, event: { ...event, eventId: 'wrong' } }, secret)).toBe('invalid');
+    expect(checkSignedOfficeDecision(signed, '')).toBe('unauthorized');
+  });
   it('reuses the same revision receipt after a lost Core answer and a crash after state save', async () => {
     const { ctx, event } = setup();
     const approvalId = randomUUID();

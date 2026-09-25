@@ -169,10 +169,10 @@ describe('one write owner for lifecycle-owned designs', () => {
     const reviewPath = `/v1/tasks/${taskId}/revisions/${revisionId}/decisions`;
     const director = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
     const decision = await director.request(reviewPath, { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'revise', reason: 'Needs correction' }) });
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() },
+      body: JSON.stringify({ action: 'approve' }) });
     expect({ status: decision.status, body: await decision.json() }).toMatchObject({
-      status: 409, body: { title: 'LIFECYCLE_OWNED' },
+      status: 422, body: { title: 'Unsupported Lifecycle Decision' },
     });
     expect(await post(`/v1/tasks/${taskId}/publish`)).toMatchObject({
       status: 409, body: { title: 'LIFECYCLE_OWNED' },

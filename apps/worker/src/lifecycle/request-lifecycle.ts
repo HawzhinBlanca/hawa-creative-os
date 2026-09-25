@@ -1,5 +1,6 @@
 /**
- * RequestLifecycle's first two revisions (ADR-034, Phase 2.3): open and terminal design outcome.
+ * RequestLifecycle's first three revisions (ADR-034, Phase 2.3): open, terminal design outcome,
+ * and a first office revision request.
  * ChatInbox does not route here yet; the cutover remains closed until decisions and delivery exist.
  * Once bound, the service name stays in every worker build for blue/green drain compatibility.
  */
