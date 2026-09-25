@@ -220,15 +220,21 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     const actionId = randomUUID();
     const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': actionId };
     const path = `/v1/tasks/${taskId}/revisions/${revisionId}/decisions`;
-    const body = { action: 'approve', reason: 'Approved after checking the export', pinnedExportIds: [] as string[] };
     const bytes = Buffer.from('The checked editable deck bytes for this isolated office review fixture.');
+    const pngBytes = Buffer.from('The selected PNG bytes for this isolated RTL sign-off fixture.');
     const artifactId = randomUUID();
+    const pngArtifactId = randomUUID();
     const sha256 = createHash('sha256').update(bytes).digest('hex');
+    const pngSha256 = createHash('sha256').update(pngBytes).digest('hex');
+    const body = { action: 'approve', reason: 'Approved after checking the export',
+      pinnedExportIds: [artifactId, pngArtifactId],
+      rtlVisualReview: { confirmed: true as const, exportSha256: sha256 } };
     const report = { exportArtifactId: artifactId, exportSha256: sha256, captureVersion: '200',
-      rtlVisualReviewRequired: false };
+      rtlVisualReviewRequired: true };
     const reportHash = createHash('sha256').update(JSON.stringify(report)).digest('hex');
     const qcRunId = randomUUID();
     const operationId = randomUUID();
+    const pngOperationId = randomUUID();
     await withRlsContext(db, scope, async (trx) => {
       const binding = await trx.selectFrom('canva_bindings').select(['canva_design_id', 'version'])
         .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).executeTakeFirstOrThrow();
@@ -243,6 +249,15 @@ describe('authenticated Desk to private lifecycle office decision', () => {
         (id, tenant_id, task_id, client_id, operation_id, format, sha256, content)
         VALUES (${artifactId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid,
           ${operationId}::uuid, 'pptx', ${sha256}, ${bytes})`.execute(trx);
+      await sql`INSERT INTO hawa.canva_remote_operations
+        (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata)
+        VALUES (${pngOperationId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, ${userId}, ${'approval-png-' + actionId},
+          ${pngSha256}, 'export', 'retrieved', ${binding.canva_design_id}, ${binding.version},
+          ${JSON.stringify({ format: 'png', designUpdatedAt: '200' })}::jsonb)`.execute(trx);
+      await sql`INSERT INTO hawa.canva_export_bytes
+        (id, tenant_id, task_id, client_id, operation_id, format, sha256, content)
+        VALUES (${pngArtifactId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid,
+          ${pngOperationId}::uuid, 'png', ${pngSha256}, ${pngBytes})`.execute(trx);
       await sql`INSERT INTO hawa.qc_runs
         (id, tenant_id, task_id, design_revision_id, qc_profile_id, attempt, status, critical_pass,
           report, report_sha256, started_at)
@@ -250,14 +265,18 @@ describe('authenticated Desk to private lifecycle office decision', () => {
           ${firstQc.qc_profile_id}::uuid, 2, 'passed', true, ${JSON.stringify(report)}::jsonb, ${reportHash},
           clock_timestamp() + interval '1 minute')`.execute(trx);
     });
-    body.pinnedExportIds = [artifactId];
     const store = { captureEvidenceRequired: true,
-      find: async (_tenant: string, _user: string, _task: string, ids: string[]) => ids.includes(artifactId)
-        ? [{ artifactId, format: 'pptx' as const, sha256, byteSize: bytes.length }] : [],
-      read: async () => bytes,
+      find: async (_tenant: string, _user: string, _task: string, ids: string[]) => [
+        { artifactId, format: 'pptx' as const, sha256, byteSize: bytes.length },
+        { artifactId: pngArtifactId, format: 'png' as const, sha256: pngSha256, byteSize: pngBytes.length },
+      ].filter((item) => ids.includes(item.artifactId)),
+      read: async (_tenant: string, _user: string, _task: string, id: string) =>
+        id === artifactId ? bytes : id === pngArtifactId ? pngBytes : null,
     };
     expect(parseOfficeApprovalProof({ qcRunId, qcReportHash: reportHash,
-      pinnedExports: [{ artifactId, format: 'pptx', sha256, byteSize: bytes.length }] })).not.toBeNull();
+      pinnedExports: [{ artifactId, format: 'pptx', sha256, byteSize: bytes.length },
+        { artifactId: pngArtifactId, format: 'png', sha256: pngSha256, byteSize: pngBytes.length }],
+      rtlVisualReview: body.rtlVisualReview })).not.toBeNull();
     let loseFirstAnswer = false;
     const transport = vi.fn(async (url: string, init?: RequestInit) => {
       expect(url).toBe('http://restate.fixture:8080/OfficeDecisionGateway/decide');
@@ -280,6 +299,12 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect((await operator.request(path, { method: 'POST', headers, body: JSON.stringify(body) })).status).toBe(403);
     expect((await director.request(path, { method: 'POST', headers,
       body: JSON.stringify({ ...body, pinnedExportIds: [] }) })).status).toBe(422);
+    expect((await director.request(path, { method: 'POST', headers,
+      body: JSON.stringify({ ...body, pinnedExportIds: [artifactId] }) })).status).toBe(412);
+    expect((await director.request(path, { method: 'POST', headers,
+      body: JSON.stringify({ ...body, rtlVisualReview: undefined }) })).status).toBe(412);
+    expect((await director.request(path, { method: 'POST', headers,
+      body: JSON.stringify({ ...body, rtlVisualReview: { confirmed: true, exportSha256: pngSha256 } }) })).status).toBe(412);
     expect(transport).not.toHaveBeenCalled();
     loseFirstAnswer = true;
     const uncertain = await director.request(path, { method: 'POST', headers, body: JSON.stringify(body) });
@@ -304,7 +329,10 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(rows.request).toMatchObject({ stage: 'approved', rev: '3' });
     expect(rows.task?.state).toBe('approved');
     expect(rows.approvals).toMatchObject([{ id: result.decisionId, decision: 'approved', qc_run_id: qcRunId,
-      decision_payload: { pinnedExports: [{ artifactId, sha256, byteSize: bytes.length }] } }]);
+      decision_payload: { pinnedExports: [{ artifactId, sha256, byteSize: bytes.length },
+        { artifactId: pngArtifactId, sha256: pngSha256, byteSize: pngBytes.length }],
+        officeApprovalProof: { rtlVisualReview: body.rtlVisualReview },
+        rtlVisualReview: { confirmed: true, qcRunId, exportSha256: sha256, reviewerId: userId } } }]);
     expect(rows.receipts.map((row) => Number(row.rev)).sort()).toEqual([1, 2, 3]);
     expect(transport).toHaveBeenCalledTimes(2);
   });
