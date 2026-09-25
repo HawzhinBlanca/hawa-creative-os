@@ -24,7 +24,7 @@ The isolated state assertion passed after the resend: one claim, one prepare, tw
 
 This demonstrates the actual Restate journal and lifecycle handlers replaying a killed delivery **at the final projection boundary** without a second synthetic send. It does not prove an independent PostgreSQL crash, a crash during Drive or Telegram's own external acceptance window, real provider idempotency/read-back, a clean-host Restate restore, or a requester receipt. The fixture's final Core write is an idempotent file, not the production PostgreSQL projection. R09 and the G2 end-to-end gate remain **in progress**; flags remain off.
 
-The first exact sealed suite after the drill (`38e0955`) found an unrelated clock-dependent reminder test: 419 files/3,142 tests passed and one test failed. Source `091ec57` made that fixture's cutoff relative to its stored send time; its focused file passed 6 tests and the corrected source suite passed 419 files/3,137 tests, with 4 files/48 tests skipped. The failure and correction are recorded in `R01_EVIDENCE.md`; an exact sealed rerun follows this evidence checkpoint.
+The first exact sealed suite after the drill (`38e0955`) found an unrelated clock-dependent reminder test: 419 files/3,142 tests passed and one test failed. Source `091ec57` made that fixture's cutoff relative to its stored send time; its focused file passed 6 tests and the corrected source suite passed 419 files/3,137 tests, with 4 files/48 tests skipped. The failure and correction are recorded in `R01_EVIDENCE.md`; the subsequent exact seal `fd79219` passed 420 files/3,143 tests (4 files/48 skipped).
 
 ## Reproduction outline
 
