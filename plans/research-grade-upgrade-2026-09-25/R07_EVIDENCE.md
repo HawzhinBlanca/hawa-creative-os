@@ -74,6 +74,8 @@ This does not implement request-level questions, late answers, reminders, office
 
 **Remaining:** ChatInbox still routes every chat through legacy intake and no production caller opens RequestLifecycle. Questions, answer/change rounds, office/requester decisions, delivery, reminders, restore drills, active-redrive identity, live provider receipts and complete task wire-schema reconciliation remain open. The manual office revision path still needs a versioned `draftCaptured` event. R07/R08 remain **in progress** and R09 remains planned; no production flag is enabled.
 
+**2026-09-25 addendum (source `f58c67b`):** The earlier remaining list describes the stage above. The first request-owned office approval and delivery claim/report are now locally wired; R08 and R09 are **in progress**. ChatInbox cutover, later question/change rounds, real delivery receipts, process-kill replay and clean-host restore remain open. See `R08_EVIDENCE.md` and `R09_EVIDENCE.md`.
+
 ## Tenth pass — revision-3 office request state and projection
 
 **Source:** `cc55fcd` (2026-09-25). `RequestLifecycle` now has its first private office decision: a reviewer requests changes to the current round-zero draft. The object validates request/task/revision identity and a restricted office role, then receives a versioned, hash-bound Core projection. Core commits the approval, task state/event, request revision and replay receipt together. A duplicate design-finished report after this decision is recognized as the already stored revision-2 outcome. Local PostgreSQL and journal tests passed, followed by the source suite **416 files / 3,114 tests**, with **4 files / 48 tests skipped**. Detail and limits are in `R08_EVIDENCE.md` fifth pass.

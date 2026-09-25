@@ -25,4 +25,4 @@ Approval and delivery are distinct effects. One owner and one expected-revision 
 
 ## Admission limits
 
-This ADR is a contract for the next slice, not proof that delivery is implemented. Do not enable lifecycle chat flags until a real PostgreSQL/Restate kill-and-replay drill, byte read-back of Drive files, Sheet-row reconciliation, requester send evidence and clean-host restore pass on the candidate image.
+The local implementation landed at source `f58c67b`: the authenticated Desk action, signed gateway, private RequestLifecycle claim/report, and versioned PostgreSQL projections pass synthetic integration tests. This is not production admission. Do not enable lifecycle chat flags until a real PostgreSQL/Restate kill-and-replay drill, byte read-back of Drive files, Sheet-row reconciliation, requester send evidence, operator resolution for uncertain sends, and clean-host restore pass on the candidate image. R09 evidence records the exact local checks and limits.
