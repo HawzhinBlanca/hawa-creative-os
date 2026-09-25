@@ -65,13 +65,14 @@ export const TASK_STATES: readonly TaskState[] = TASK_DB_STATES;
  * The database states the list shows under the given API statuses: every state whose API status is
  * one of them. Built from the state-to-status mapping rather than toDbTaskState, so a filter matches
  * the tasks the list may label with that status (OPERATOR_REQUIRED takes failed_retryable too).
- * The two reconciliation statuses share the publishing state; the page/count query checks the
+ * The reconciliation statuses share the publishing state; the page/count query checks the
  * latest publication error when either is requested. An unknown word matches nothing.
  */
 export function dbStatesForApiStatuses(statuses: readonly string[]): TaskState[] {
   const wanted = new Set(statuses.map((s) => String(s || '').trim().toUpperCase()).filter(Boolean));
   return TASK_STATES.filter((state) => wanted.has(API_STATUS_OF_DB_STATE[state]) ||
-    (state === 'publishing' && (wanted.has('PUBLISH_RECONCILIATION') || wanted.has('ARCHIVE_RECONCILIATION'))));
+    (state === 'publishing' && (wanted.has('PUBLISH_RECONCILIATION') || wanted.has('ARCHIVE_RECONCILIATION') ||
+      wanted.has('REQUESTER_SEND_RECONCILIATION'))));
 }
 
 /** Where a task page starts: the last row of the page before it, in list order. */
@@ -119,7 +120,7 @@ export interface TaskPageParams {
   /** Only tasks in these states; an empty list matches nothing. Undefined means every state. */
   states?: readonly TaskState[];
   /** The publication substates requested by the API filter, for rows stored as publishing. */
-  publishingStatuses?: readonly ('archive' | 'sheet' | 'ordinary')[];
+  publishingStatuses?: readonly ('archive' | 'sheet' | 'requester_send' | 'ordinary')[];
   /** Text to find in the title, the description, the client's name or the task id. */
   search?: string | null;
 }
@@ -229,6 +230,7 @@ function taskListFilter(params: TaskPageParams) {
     const publicationStatus = sql`COALESCE((SELECT CASE
       WHEN p.error_class = 'ARCHIVE_UNCONFIRMED' THEN 'archive'
       WHEN p.error_class = 'SHEET_UNCONFIRMED' THEN 'sheet'
+      WHEN p.error_class = 'REQUESTER_SEND_UNCONFIRMED' THEN 'requester_send'
       ELSE 'ordinary' END
       FROM hawa.publications p WHERE p.tenant_id = t.tenant_id AND p.task_id = t.id
       ORDER BY p.created_at DESC LIMIT 1), 'ordinary')`;

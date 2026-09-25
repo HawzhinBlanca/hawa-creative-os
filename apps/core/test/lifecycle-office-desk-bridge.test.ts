@@ -256,6 +256,20 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(rows.request).toMatchObject({ stage: 'delivering', rev: '5' });
     expect(rows.task?.state).toBe('publishing');
     expect(rows.publication).toMatchObject({ error_class: 'REQUESTER_SEND_UNCONFIRMED', executor_finished_run: 1 });
+    const desk = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+    const taskDetail = await desk.request(`/v1/tasks/${taskId}`);
+    expect(taskDetail.status).toBe(200);
+    expect(await taskDetail.json()).toMatchObject({ status: 'REQUESTER_SEND_RECONCILIATION' });
+    const queue = await desk.request('/v1/tasks?statuses=REQUESTER_SEND_RECONCILIATION');
+    expect(queue.status).toBe(200);
+    expect(await queue.json()).toMatchObject({ total: 1, items: [expect.objectContaining({ id: taskId,
+      status: 'REQUESTER_SEND_RECONCILIATION' })] });
+    const sheetQueue = await desk.request('/v1/tasks?statuses=PUBLISH_RECONCILIATION');
+    expect((await sheetQueue.json() as { items: Array<{ id: string }> }).items.map((item) => item.id))
+      .not.toContain(taskId);
+    const state = await desk.request(`/v1/tasks/${taskId}/publication-state`);
+    expect(await state.json()).toMatchObject({ state: 'requester_send_reconciliation',
+      status: 'REQUESTER_SEND_RECONCILIATION' });
   });
 
   it('does not reopen delivery when a requester file was sent before archive failed', async () => {

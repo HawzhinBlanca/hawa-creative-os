@@ -175,6 +175,10 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       if (change === null) return problem(c, 503, 'Database Unavailable', 'Whether the client asked for a change could not be checked; try again');
       if (change) return problem(c, 409, 'Changed At The Client\'s Request', `${pendingChangeWords(change)} The approved version was not delivered.`);
       const status = (task?.status || '').toLowerCase();
+      if (status === 'requester_send_reconciliation') {
+        return problem(c, 409, 'Requester Delivery Needs Review',
+          'A previous Telegram send may have reached the requester. An operator must inspect the send evidence before any new delivery action');
+      }
       if (status === 'complete') {
         const stored = await storedCompletePublication(task, taskId);
         if (stored) return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: stored.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
@@ -328,7 +332,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const notificationStatus = notificationCmd ? notificationCmd.state : 'not_enqueued';
 
     let actionableRecovery = 'Publication, sheet sync, and notification completed successfully.';
-    let state: 'unstarted' | 'drive_complete' | 'archive_reconciliation' | 'publish_reconciliation' | 'complete' | 'failed' = 'complete';
+    let state: 'unstarted' | 'drive_complete' | 'archive_reconciliation' | 'publish_reconciliation' | 'requester_send_reconciliation' | 'complete' | 'failed' = 'complete';
 
     if (pubRecord?.error_class === 'ARCHIVE_UNCONFIRMED') {
       state = 'archive_reconciliation';
@@ -336,8 +340,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         ? 'This task was cancelled while the Drive outcome was unresolved. Do not retry requester delivery. An operator must inspect the reserved Drive file identity and apply the office retention policy.'
         : 'Drive may already contain the approved files, but the archive is not verified. Restore Google access if needed, then use Recheck Drive Archive. The same reserved file ID is checked before requester delivery; a continuing conflict needs an operator to inspect Drive.';
     } else if (pubRecord?.executor === 'restate' && pubRecord.error_class === 'REQUESTER_SEND_UNCONFIRMED') {
-      state = 'publish_reconciliation';
-      actionableRecovery = 'The archive and Sheet row may be ready, but delivery to the requester was not confirmed. Review the Telegram send evidence before resolving this delivery.';
+      state = 'requester_send_reconciliation';
+      actionableRecovery = 'Requester delivery did not complete or could not be confirmed. An operator must inspect the Telegram chat and send records before resolving it; do not retry delivery or Sheet sync.';
     } else if (!hasDriveFiles) {
       state = 'unstarted';
       actionableRecovery = 'No publication has been initiated. Trigger POST /tasks/:taskId/publish to deliver assets.';

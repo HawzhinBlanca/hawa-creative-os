@@ -146,6 +146,12 @@ export const STATUS_VIEWS: Readonly<Record<TaskApiStatus, View>> = {
     primaryButton: 'deliver',
     group: 'needs_action',
   },
+  REQUESTER_SEND_RECONCILIATION: {
+    pillClass: 'pill-action',
+    message: 'Requester delivery did not complete or could not be confirmed. Check the Telegram chat and send records with an operator before resolving it. Do not retry delivery.',
+    primaryButton: 'none',
+    group: 'needs_action',
+  },
   COMPLETE: {
     pillClass: 'pill-complete',
     message: 'Task is marked complete. Check its delivery receipt and audit history for destination evidence.',

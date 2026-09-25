@@ -259,6 +259,19 @@ describe('the Work queue follows the event stream', () => {
 });
 
 describe('approve and request revision are mutations', () => {
+  it('holds an uncertain Telegram send for staff without offering Sheet or delivery retry', async () => {
+    const stream = new FakeStream('connected');
+    const core = fakeCore([{ id: 't1', title: 'Members evening poster', status: 'REQUESTER_SEND_RECONCILIATION',
+      requestId: '11111111-1111-4111-8111-111111111111', revision: 1, approved: true }]);
+    const { view } = await renderWork(stream);
+    expect(view.text()).toContain('Requester delivery did not complete or could not be confirmed');
+    expect(view.text()).toContain('Check Telegram Delivery');
+    expect(view.text()).not.toContain('Retry Sheet Sync');
+    expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(true);
+    await click(view.container.querySelector('#btn-deliver-approved'));
+    expect(core.calls.filter((call) => call.method === 'POST' && call.path.endsWith('/publish'))).toHaveLength(0);
+  });
+
   it('offers a request-owned Sheet retry only when Core reports the reconciliation status', async () => {
     const stream = new FakeStream('connected');
     fakeCore([{ id: 't1', title: 'Members evening poster', status: 'PUBLISH_RECONCILIATION',

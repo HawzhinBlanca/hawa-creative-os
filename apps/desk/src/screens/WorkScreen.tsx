@@ -995,14 +995,17 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     className="action-btn deliver-btn"
                     onClick={handleDeliver}
                     disabled={busy || !detail?.latestApproval || nextAction?.primaryButton !== 'deliver'}
-                    title={selectedTask.status === 'PUBLISH_RECONCILIATION'
+                    title={selectedTask.status === 'REQUESTER_SEND_RECONCILIATION'
+                      ? 'Requester send is uncertain. An operator must check Telegram and delivery records before any retry.'
+                      : selectedTask.status === 'PUBLISH_RECONCILIATION'
                       ? 'Retry the unconfirmed Sheets row using the recorded publication'
                       : selectedTask.status === 'ARCHIVE_RECONCILIATION'
                         ? 'Recheck the recorded Drive file identity before requester delivery'
                         : 'Start the approved delivery to Drive, Sheets and the requester (FR-046, FR-078)'}
                   >
                     <span className="btn-icon" aria-hidden="true">🚀</span>
-                    <span>{selectedTask.status === 'PUBLISH_RECONCILIATION' ? 'Retry Sheet Sync'
+                    <span>{selectedTask.status === 'REQUESTER_SEND_RECONCILIATION' ? 'Check Telegram Delivery'
+                      : selectedTask.status === 'PUBLISH_RECONCILIATION' ? 'Retry Sheet Sync'
                       : selectedTask.status === 'ARCHIVE_RECONCILIATION' ? 'Recheck Drive Archive' : 'Deliver Approved Files'}</span>
                   </button>
                   {(detail?.requestId || selectedTask.requestId) && selectedTask.status === 'APPROVED' && (

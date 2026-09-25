@@ -80,6 +80,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           ...(requestedStatuses.includes('PUBLISHING') ? ['ordinary' as const] : []),
           ...(requestedStatuses.includes('ARCHIVE_RECONCILIATION') ? ['archive' as const] : []),
           ...(requestedStatuses.includes('PUBLISH_RECONCILIATION') ? ['sheet' as const] : []),
+          ...(requestedStatuses.includes('REQUESTER_SEND_RECONCILIATION') ? ['requester_send' as const] : []),
         ]) : undefined;
     if (statusList !== undefined) states = dbStatesForApiStatuses(requestedStatuses);
     else if (status) {
