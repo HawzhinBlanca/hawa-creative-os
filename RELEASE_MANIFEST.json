@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-25T16:02:34+03:00",
+  "generatedAt": "2026-09-25T16:17:35+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "cace73bd680cfcd967504d66ea25909bd551d1c7",
+    "commit": "78eb6031d139020d3fa9f7f736a360a6f7f8098b",
     "treeClean": true,
-    "commitTimestamp": "2026-09-25T16:02:34+03:00",
+    "commitTimestamp": "2026-09-25T16:17:35+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
@@ -41,7 +41,7 @@
       "sourceFileHashes": {
         "apps/core/src/app.ts": "003275fd13f76804dab53c8dca8713636976f5854c7d5818bd9124e6b9f2c6e7",
         "apps/core/src/index.ts": "6950c3318ab08ddfd7e455bd09c460262572a82e7767dd2afd8e39448635a2e5",
-        "packages/integrations/src/google-publisher.ts": "d12ab8f8a7abc206b2c4ef91de81b45f5f951b3d683254383844c19f8dd97ce1"
+        "packages/integrations/src/google-publisher.ts": "31291d53fa1592ad9be90ed13f858c6b3b37f4f9d765cfe941a80ce4d20a57fe"
       }
     },
     "desk": {
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "e9adbb314d368a381dfb01f063ace9a24493d0c7ee747e960409f9f7116b5e8b"
+  "sha256": "6d1824a6619e134f277f4025d8df1eb99fd559f34716505e56bc4c437182ff52"
 }
