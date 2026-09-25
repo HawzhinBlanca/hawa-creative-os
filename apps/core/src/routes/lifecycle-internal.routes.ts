@@ -21,13 +21,14 @@
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, type DeliveryOutcome } from '@hawa/contracts';
 import { parseCompleteRevisionRequest, parseOfficeApprovalProof } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
 import { LifecycleProjectionConflict, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen } from '../services/lifecycle-projection.js';
+import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
 import type { ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
 
@@ -313,6 +314,76 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
       log.error(`[core:internal] lifecycle office revision ${requestId} failed:`, error instanceof Error ? error.message : error);
       return problem(c, 503, 'Lifecycle Projection Unavailable', 'The office decision did not commit; retry with the same key');
+    }
+  });
+
+  internal('/lifecycle/:requestId/delivery-start', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const actor = op?.actor && typeof op.actor === 'object' && !Array.isArray(op.actor)
+      ? op.actor as Record<string, unknown> : null;
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    if (!UUID.test(requestId) || body?.v !== 1 || !Number.isInteger(expectedRev) || expectedRev < 3 ||
+        rev !== expectedRev + 1 || op?.kind !== 'startDelivery' ||
+        !UUID.test(String(op.taskId || '')) || !UUID.test(String(op.revisionId || '')) ||
+        !UUID.test(String(op.approvalId || '')) || !UUID.test(String(op.actionId || '')) ||
+        body.key !== `${requestId}:${rev}:officeDecision:desk:${op.actionId}` ||
+        !actor || !UUID.test(String(actor.userId || '')) || typeof actor.role !== 'string' ||
+        typeof op.reason !== 'string' || !op.reason.trim() || op.reason.length > 2000) {
+      return problem(c, 400, 'Invalid delivery start', 'Expected one versioned request-owned delivery action');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleDeliveryStart(db, ctx.deliverableStore, {
+        requestId, tenantId: DEFAULT_TENANT_ID, taskId: op.taskId as string,
+        revisionId: op.revisionId as string, approvalId: op.approvalId as string,
+        actionId: op.actionId as string,
+        actor: { userId: actor.userId as string, role: actor.role }, reason: op.reason.trim(),
+        expectedRev, rev, key: body.key as string,
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) return c.json({ status: 409, code: error.code,
+        detail: error.message }, 409);
+      log.error(`[core:internal] lifecycle delivery start ${requestId} failed:`, error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The delivery start did not commit; retry with the same key');
+    }
+  });
+
+  internal('/lifecycle/:requestId/delivery-finished', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const outcome = op?.outcome as DeliveryOutcome | undefined;
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    if (!UUID.test(requestId) || body?.v !== 1 || !Number.isInteger(expectedRev) || expectedRev < 4 ||
+        rev !== expectedRev + 1 || op?.kind !== 'finishDelivery' ||
+        !UUID.test(String(op.taskId || '')) || !UUID.test(String(op.approvalId || '')) ||
+        typeof op.deliveryId !== 'string' || !Number.isInteger(op.run) || Number(op.run) < 1 ||
+        body.key !== `${requestId}:${rev}:deliveryFinished:${op.deliveryId}` ||
+        !outcome || !['delivered', 'chat_only', 'uncertain', 'failed'].includes(outcome.outcome) ||
+        !Array.isArray(outcome.uncertain) || outcome.uncertain.length > 50 ||
+        outcome.uncertain.some((item) => typeof item !== 'string' || item.length > 500) ||
+        typeof outcome.archived !== 'boolean' || typeof outcome.sheetsConfirmed !== 'boolean' ||
+        !Number.isInteger(outcome.filesSent) || outcome.filesSent < 0 ||
+        (outcome.reason !== undefined && (typeof outcome.reason !== 'string' || outcome.reason.length > 2000))) {
+      return problem(c, 400, 'Invalid delivery result', 'Expected one versioned workflow outcome');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleDeliveryFinish(db, { requestId, tenantId: DEFAULT_TENANT_ID,
+        taskId: op.taskId as string, approvalId: op.approvalId as string,
+        deliveryId: op.deliveryId as string, run: op.run as number, outcome,
+        expectedRev, rev, key: body.key as string });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) return c.json({ status: 409, code: error.code,
+        detail: error.message }, 409);
+      log.error(`[core:internal] lifecycle delivery result ${requestId} failed:`, error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The delivery result did not commit; retry with the same key');
     }
   });
 }

@@ -294,10 +294,12 @@ paths:
     post:
       tags: [Tasks]
       operationId: publishTask
+      description: Request-owned tasks require an authorized office reviewer, a UUID Idempotency-Key, and the current approvalId. The action starts a versioned delivery; completion is reported only after archive, Sheet row, and requester send are confirmed.
       parameters:
         - {$ref: '#/components/parameters/TaskId'}
         - {$ref: '#/components/parameters/IdempotencyKey'}
       responses:
+        '200': {description: A retried request-owned action has completed or requires an explicit new delivery action after archive failure}
         '202': {description: Publication started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
         default: {$ref: '#/components/responses/Problem'}
   /v1/tasks/{taskId}/feedback:

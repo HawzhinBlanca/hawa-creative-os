@@ -175,7 +175,7 @@ describe('one write owner for lifecycle-owned designs', () => {
       status: 422, body: { title: 'Unsupported Lifecycle Decision' },
     });
     expect(await post(`/v1/tasks/${taskId}/publish`)).toMatchObject({
-      status: 409, body: { title: 'LIFECYCLE_OWNED' },
+      status: 422, body: { title: 'Action Key Required' },
     });
     expect(await post(`/v1/tasks/${taskId}/publish-omnichannel`)).toMatchObject({
       status: 409, body: { title: 'LIFECYCLE_OWNED' },
@@ -185,7 +185,7 @@ describe('one write owner for lifecycle-owned designs', () => {
       body: JSON.stringify({ taskId, tenantId }),
     });
     expect({ status: prepare.status, body: await prepare.json() }).toMatchObject({
-      status: 409, body: { code: 'LIFECYCLE_OWNED' },
+      status: 409, body: { code: 'LIFECYCLE_DELIVERY_NOT_CURRENT' },
     });
     await expect(withRlsContext(db, scope, (trx) => new RevisionRepository(trx).recordApproval({
       tenantId, taskId, revisionId, decision: 'revision_requested', decidedBy: userId,

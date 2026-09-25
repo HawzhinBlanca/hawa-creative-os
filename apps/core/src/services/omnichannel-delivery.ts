@@ -69,6 +69,8 @@ export interface DeliveryOptions {
   designRevisionId?: string;
   approvalId?: string;
   mode?: 'legacy' | 'workflow';
+  /** Worker-only proof that RequestLifecycle claimed this exact publication/run. */
+  lifecycle?: { requestId: string; requestRev: number; deliveryId: string; run: number };
 }
 
 /** What the publish route is told when it hands a delivery to the Delivery workflow. */
@@ -338,8 +340,34 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       throw err;
     }
     if (!task) return { ok: false, status: 404, message: 'Task Not Found' };
-    if (task.requestId) return { ok: false, status: 409, code: 'LIFECYCLE_OWNED',
+    const ownedDelivery = Boolean(task.requestId && workflowMode &&
+      deliveryOptions?.lifecycle?.requestId === task.requestId);
+    if (task.requestId && !ownedDelivery) return { ok: false, status: 409, code: 'LIFECYCLE_OWNED',
       message: `RequestLifecycle owns task ${taskId}; Core delivery cannot send it` };
+    if (ownedDelivery) {
+      if (!db || !publicationRepo || !Number.isInteger(deliveryOptions?.lifecycle?.requestRev) ||
+          !Number.isInteger(deliveryOptions?.lifecycle?.run) || !deliveryOptions?.approvalId) {
+        return { ok: false, status: 409, code: 'INVALID_LIFECYCLE_DELIVERY',
+          message: 'A matching claimed request revision and publication run are required' };
+      }
+      const claim = await withRlsContext(db, { tenantId: tenantOf(task), userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => ({
+        request: await trx.selectFrom('requests').select(['rev', 'stage', 'current_task_id'])
+          .where('tenant_id', '=', tenantOf(task)).where('request_id', '=', task.requestId!).executeTakeFirst(),
+        publication: await publicationRepo.findByKey(`pub_key_${taskId}_${deliveryOptions.approvalId}`, tenantOf(task), trx),
+      }));
+      if (Number(claim.request?.rev) !== deliveryOptions.lifecycle!.requestRev ||
+          claim.request?.stage !== 'delivering' || claim.request.current_task_id !== taskId ||
+          claim.publication?.executor !== 'restate' ||
+          Number(claim.publication.executor_run) !== deliveryOptions.lifecycle!.run ||
+          Number(claim.publication.executor_finished_run) >= deliveryOptions.lifecycle!.run ||
+          deliveryWorkflowId(taskId, deliveryOptions.approvalId, deliveryOptions.lifecycle!.run) !== deliveryOptions.lifecycle!.deliveryId) {
+        return { ok: false, status: 409, code: 'LIFECYCLE_DELIVERY_NOT_CURRENT',
+          message: 'This workflow run is not the request owner\'s current delivery claim' };
+      }
+      const change = await pendingChangeOf(db, tenantOf(task), taskId);
+      if (change) return { ok: false, status: 409, code: 'CLIENT_CHANGE_PENDING',
+        message: 'A client-requested change blocks this approved package' };
+    }
     if (workflowMode) {
       // The workflow's own run only: a task delivered already, or taken back, is not delivered again.
       const state = String(task.state || task.status || '').toLowerCase();
@@ -369,6 +397,14 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     );
     if (!deliverables.ok) {
       return { ok: false, status: 422, title: 'Nothing Approved To Deliver', code: deliverables.code, message: deliverables.message };
+    }
+    if (ownedDelivery && db && publicationRepo) {
+      const recorded = await withRlsContext(db, { tenantId: tenantOf(task), userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+        publicationRepo.findByKey(`pub_key_${taskId}_${approval.approvalId}`, tenantOf(task), trx));
+      if (!recorded || recorded.package_sha256 !== deliverables.packageHash) {
+        return { ok: false, status: 409, code: 'LIFECYCLE_PACKAGE_CHANGED',
+          message: 'The approved package no longer matches its claimed publication' };
+      }
     }
 
     const isDeliverApprovedStored = deliveryOptions?.policy === 'deliver_approved_stored';
@@ -1042,7 +1078,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
 
     type Claim = { kind: 'complete'; publicationId: string } | { kind: 'running'; run: number } | { kind: 'started'; run: number; from: string }
-      | { kind: 'wrong_state'; state: string } | { kind: 'core' };
+      | { kind: 'wrong_state'; state: string } | { kind: 'core' } | { kind: 'send_unconfirmed' };
     let held: Awaited<ReturnType<typeof withSessionAdvisoryLock<Claim>>>;
     try {
       held = await withSessionAdvisoryLock(db, `publish:${taskId}`, () =>
@@ -1065,14 +1101,15 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
               initialState: 'pending',
             }, trx);
           }
-          const pub = (await sql<{ id: string; state: string; executor: string; executor_run: number; executor_finished_run: number }>`
-            SELECT id, state::text AS state, executor, executor_run, executor_finished_run FROM hawa.publications
+          const pub = (await sql<{ id: string; state: string; executor: string; executor_run: number; executor_finished_run: number; error_class: string | null }>`
+            SELECT id, state::text AS state, executor, executor_run, executor_finished_run, error_class FROM hawa.publications
             WHERE tenant_id = ${tenantId}::uuid AND publication_key = ${publicationKey} FOR UPDATE`.execute(trx)).rows[0];
           if (pub.state === 'complete') return { kind: 'complete', publicationId: String(pub.id) };
           // Core's own delivery started this publication (before the chat was on the list): it may
           // have sent the files through the outbox already, so it stays Core's. One owner per fact.
           if (pub.executor === 'core' && !created) return { kind: 'core' };
           if (pub.executor === 'restate' && pub.executor_run > pub.executor_finished_run) return { kind: 'running', run: pub.executor_run };
+          if (pub.error_class === 'REQUESTER_SEND_UNCONFIRMED') return { kind: 'send_unconfirmed' };
           const current = await taskRepo.findById(taskId, tenantId, trx);
           const state = String(current?.state || '');
           if (state === 'approved') {
@@ -1100,6 +1137,10 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     if (claim.kind === 'complete') return { ok: true, complete: true, publicationId: claim.publicationId };
     if (claim.kind === 'core') {
       return { ok: false, status: 409, code: DELIVERY_OWNED_BY_CORE, message: `The delivery of task ${taskId} was started by Core; it is finished there` };
+    }
+    if (claim.kind === 'send_unconfirmed') {
+      return { ok: false, status: 409, code: 'REQUESTER_SEND_UNCONFIRMED',
+        message: 'A previous Telegram send was refused or uncertain. Review its send evidence before starting another delivery' };
     }
     if (claim.kind === 'wrong_state') {
       return { ok: false, status: 409, code: 'NOT_APPROVED', message: `Task ${taskId} is in status '${claim.state}', not 'approved'` };
@@ -1177,12 +1218,14 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
    * The Delivery workflow's prepare step: Core's own delivery in workflow mode (deliverOmnichannel),
    * for this publication only. The tenant is the task's; a request naming another is refused.
    */
-  async function prepareWorkflowDelivery(taskId: string, request: { tenantId: string; approvalId: string; revisionId?: string; policy?: string }) {
+  async function prepareWorkflowDelivery(taskId: string, request: { tenantId: string; approvalId: string; revisionId?: string;
+    policy?: string; lifecycle?: DeliveryOptions['lifecycle'] }) {
     return deliverOmnichannel(taskId, { type: 'workflow', id: 'delivery-workflow' }, 'Delivered by the Delivery workflow', false, {
       mode: 'workflow',
       approvalId: request.approvalId,
       designRevisionId: request.revisionId,
       policy: request.policy,
+      lifecycle: request.lifecycle,
     });
   }
 

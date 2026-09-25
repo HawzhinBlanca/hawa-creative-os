@@ -1,15 +1,15 @@
 /**
- * RequestLifecycle's first three revisions (ADR-034, Phase 2.3): open, terminal design outcome,
- * and a first office review decision.
- * ChatInbox does not route here yet; the cutover remains closed until decisions and delivery exist.
+ * RequestLifecycle's versioned request owner (ADR-034, Phase 2.3): open, terminal design outcome,
+ * office review, a delivery claim, and its final outcome.
+ * ChatInbox cutover remains controlled by the request lifecycle flag.
  * Once bound, the service name stays in every worker build for blue/green drain compatibility.
  */
 import { createHash } from 'node:crypto';
 import * as restate from '@restatedev/restate-sdk';
-import type { OutboundMessage } from '@hawa/contracts';
+import type { DeliveryInput, DeliveryOutcome, OutboundMessage } from '@hawa/contracts';
 import { parseCompleteRevisionRequest, parseOfficeApprovalProof, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
-import { coreInternalFromEnv, type CoreInternal } from './delivery.js';
+import { coreInternalFromEnv, DeliveryApi, type CoreInternal } from './delivery.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { DesignRunApi, type DesignRunInput } from './design-run.js';
 
@@ -64,14 +64,16 @@ export interface OpenAutomaticEvent extends Omit<OpenManualEvent, 'draft'> {
 }
 
 export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'stage' | 'rev'> {
-  stage: 'designing' | 'in_review' | 'manual' | 'approved';
-  rev: 1 | 2 | 3;
+  stage: 'designing' | 'in_review' | 'manual' | 'approved' | 'delivering' | 'delivered';
+  rev: number;
   runId: string;
   designInput: DesignRunInput;
   outcome?: { eventId: string; sha256: string; status: string; revisionId?: string;
     message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string } };
   officeRevision?: { eventId: string; sha256: string; actionId: string; revisionId: string; approvalId: string;
     kind?: 'revise' | 'approve' };
+  delivery?: { startEventId: string; startSha256: string; actionId: string; input: DeliveryInput;
+    finishEventId?: string; finishSha256?: string; finishResult?: DeliveryFinishedReply };
 }
 
 export interface OfficeRevisionEvent {
@@ -89,6 +91,27 @@ export type OfficeRevisionReply =
       approvalId: string; stage: 'manual' | 'approved'; rev: 3 }
   | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
 
+export interface OfficeDeliveryStartEvent {
+  v: 1; kind: 'deliver'; eventId: string; requestId: string; taskId: string;
+  revisionId: string; approvalId: string; actionId: string; expectedRev: number;
+  actor: { userId: string; role: string }; reason: string;
+}
+
+export type OfficeDeliveryStartReply =
+  | { accepted: true; requestId: string; taskId: string; approvalId: string; actionId: string;
+      deliveryId: string; stage: 'delivering' | 'delivered' | 'approved'; rev: number }
+  | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
+
+export interface DeliveryFinishedEvent {
+  v: 1; eventId: string; requestId: string; taskId: string; approvalId: string;
+  deliveryId: string; run: number; expectedRev: number; outcome: DeliveryOutcome;
+}
+
+export interface DeliveryFinishedReply {
+  accepted: true; requestId: string; taskId: string; approvalId: string;
+  deliveryId: string; stage: 'approved' | 'delivering' | 'delivered'; taskState: string; rev: number;
+}
+
 export interface AutomaticOpenContext {
   key: string;
   get(name: string): Promise<ManualLifecycleState | AutomaticLifecycleState | null>;
@@ -96,6 +119,7 @@ export interface AutomaticOpenContext {
   set(name: string, value: ManualLifecycleState | AutomaticLifecycleState): void;
   send(message: OutboundMessage): void;
   startDesign(input: DesignRunInput): void;
+  startDelivery?(input: DeliveryInput): void;
 }
 
 export interface DesignFinishedEvent {
@@ -343,6 +367,116 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
     actionId: event.actionId, approvalId: projected.approvalId, stage: expectedStage, rev: 3 };
 }
 
+/** A signed office action claims a publication in Core before the workflow can prepare any effect. */
+export async function recordOfficeDeliveryStart(ctx: AutomaticOpenContext, core: CoreInternal,
+  event: OfficeDeliveryStartEvent): Promise<OfficeDeliveryStartReply> {
+  if (event?.v !== 1 || event.kind !== 'deliver' || ctx.key !== event.requestId ||
+      !UUID.test(event.requestId) || !UUID.test(event.taskId) || !UUID.test(event.revisionId) ||
+      !UUID.test(event.approvalId) || !UUID.test(event.actionId) ||
+      event.eventId !== `desk:${event.actionId}` || !Number.isInteger(event.expectedRev) ||
+      event.expectedRev < 3 || !UUID.test(event.actor?.userId || '') ||
+      !['art_director', 'creative_director', 'office_admin', 'administrator'].includes(event.actor?.role) ||
+      typeof event.reason !== 'string' || !event.reason.trim() || event.reason.length > 2000) {
+    throw invalid('invalid signed delivery action');
+  }
+  const sha256 = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (!prior || !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.delivery?.startEventId === event.eventId) {
+    if (prior.delivery.startSha256 !== sha256) throw invalid('this delivery action was recorded with different content');
+    if (!prior.delivery.finishResult) ctx.startDelivery?.(prior.delivery.input);
+    return { accepted: true, requestId: prior.requestId, taskId: prior.taskId,
+      approvalId: prior.delivery.input.approvalId, actionId: prior.delivery.actionId,
+      deliveryId: prior.delivery.input.deliveryId,
+      stage: prior.stage as 'approved' | 'delivering' | 'delivered', rev: prior.rev };
+  }
+  if (prior.rev !== event.expectedRev || !['approved', 'delivering'].includes(prior.stage)) {
+    return { accepted: false, code: 'WRONG_STAGE' };
+  }
+  if (prior.taskId !== event.taskId || prior.officeRevision?.revisionId !== event.revisionId ||
+      prior.officeRevision.approvalId !== event.approvalId || prior.officeRevision.kind !== 'approve') {
+    return { accepted: false, code: 'NOT_CURRENT_DRAFT' };
+  }
+  if (!ctx.startDelivery) throw new Error('RequestLifecycle has no Delivery workflow client');
+  const nextRev = prior.rev + 1;
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+    v: 1; requestId: string; taskId: string; approvalId: string; actionId: string;
+    stage: 'delivering'; rev: number; delivery: DeliveryInput;
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/delivery-start`, {
+    v: 1, expectedRev: prior.rev, rev: nextRev,
+    key: `${event.requestId}:${nextRev}:officeDecision:${event.eventId}`,
+    ops: [{ kind: 'startDelivery', taskId: event.taskId, revisionId: event.revisionId,
+      approvalId: event.approvalId, actionId: event.actionId, actor: event.actor,
+      reason: event.reason.trim() }],
+  }));
+  if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
+      projected.approvalId !== event.approvalId || projected.actionId !== event.actionId ||
+      projected.stage !== 'delivering' || projected.rev !== nextRev ||
+      projected.delivery?.requestId !== event.requestId || projected.delivery.taskId !== event.taskId ||
+      projected.delivery.approvalId !== event.approvalId || projected.delivery.revisionId !== event.revisionId ||
+      projected.delivery.reportTo !== 'lifecycle' || projected.delivery.requestRev !== nextRev) {
+    throw new Error('Core did not return a valid request-owned delivery claim');
+  }
+  const next: AutomaticLifecycleState = { ...prior, stage: 'delivering', rev: nextRev,
+    delivery: { startEventId: event.eventId, startSha256: sha256, actionId: event.actionId,
+      input: projected.delivery } };
+  ctx.set('lc', next);
+  ctx.startDelivery(projected.delivery);
+  return { accepted: true, requestId: event.requestId, taskId: event.taskId,
+    approvalId: event.approvalId, actionId: event.actionId,
+    deliveryId: projected.delivery.deliveryId, stage: 'delivering', rev: nextRev };
+}
+
+/** The workflow reports only to its private request owner; Core applies a versioned final projection. */
+export async function recordDeliveryFinished(ctx: AutomaticOpenContext, core: CoreInternal,
+  event: DeliveryFinishedEvent): Promise<DeliveryFinishedReply> {
+  if (event?.v !== 1 || ctx.key !== event.requestId || !UUID.test(event.requestId) ||
+      !UUID.test(event.taskId) || !UUID.test(event.approvalId) ||
+      event.eventId !== `delivery:${event.deliveryId}` || !Number.isInteger(event.run) || event.run < 1 ||
+      !Number.isInteger(event.expectedRev) || event.expectedRev < 4 ||
+      !['delivered', 'chat_only', 'uncertain', 'failed'].includes(event.outcome?.outcome) ||
+      !Array.isArray(event.outcome.uncertain)) {
+    throw invalid('invalid delivery-finished event');
+  }
+  const sha256 = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (!prior || !('runId' in prior) || !prior.delivery) throw invalid('this request has no delivery to finish');
+  if (prior.delivery.finishEventId === event.eventId) {
+    if (prior.delivery.finishSha256 !== sha256 || !prior.delivery.finishResult) {
+      throw invalid('the delivery result was recorded with different content');
+    }
+    return prior.delivery.finishResult;
+  }
+  if (prior.stage !== 'delivering' || prior.rev !== event.expectedRev ||
+      prior.taskId !== event.taskId || prior.delivery.input.deliveryId !== event.deliveryId ||
+      prior.delivery.input.approvalId !== event.approvalId || prior.delivery.input.run !== event.run) {
+    throw invalid('the current request is not delivering this workflow run');
+  }
+  const nextRev = prior.rev + 1;
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+    v: 1; requestId: string; taskId: string; approvalId: string; deliveryId: string;
+    stage: 'approved' | 'delivering' | 'delivered'; taskState: string; rev: number;
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/delivery-finished`, {
+    v: 1, expectedRev: prior.rev, rev: nextRev,
+    key: `${event.requestId}:${nextRev}:deliveryFinished:${event.deliveryId}`,
+    ops: [{ kind: 'finishDelivery', taskId: event.taskId, approvalId: event.approvalId,
+      deliveryId: event.deliveryId, run: event.run, outcome: event.outcome }],
+  }));
+  if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
+      projected.approvalId !== event.approvalId || projected.deliveryId !== event.deliveryId ||
+      projected.rev !== nextRev || !['approved', 'delivering', 'delivered'].includes(projected.stage)) {
+    throw new Error('Core did not return a valid request-owned delivery result');
+  }
+  const reply: DeliveryFinishedReply = { accepted: true, requestId: event.requestId, taskId: event.taskId,
+    approvalId: event.approvalId, deliveryId: event.deliveryId,
+    stage: projected.stage, taskState: projected.taskState, rev: nextRev };
+  const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: nextRev,
+    delivery: { ...prior.delivery, finishEventId: event.eventId, finishSha256: sha256,
+      finishResult: reply } };
+  ctx.set('lc', next);
+  return reply;
+}
+
 function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
   const message = state.outcome?.message;
   if (message) ctx.send({ v: 1, key: `${state.requestId}:2:design-outcome`, chatId: state.chatId,
@@ -393,14 +527,32 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
       ),
       officeDecision: restate.handlers.object.exclusive(
         { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
-        async (ctx: restate.ObjectContext, event: OfficeRevisionEvent) =>
-          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordOfficeRevision({
+        async (ctx: restate.ObjectContext, event: OfficeRevisionEvent | OfficeDeliveryStartEvent) =>
+          withInvocationLogContext<OfficeDeliveryStartReply | OfficeRevisionReply>(ctx, { requestId: event?.requestId }, () => {
+            const handlers: AutomaticOpenContext = {
             key: ctx.key,
             get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
             run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
             set: (name, value) => ctx.set(name, value),
             send: () => { throw new Error('officeDecision cannot send from this transition'); },
             startDesign: () => { throw new Error('officeDecision cannot start a run from this transition'); },
+            startDelivery: (input) => ctx.workflowSendClient(DeliveryApi, input.deliveryId).run(input),
+            };
+            return event?.kind === 'deliver'
+              ? recordOfficeDeliveryStart(handlers, core, event)
+              : recordOfficeRevision(handlers, core, event as OfficeRevisionEvent);
+          }),
+      ),
+      deliveryFinished: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: DeliveryFinishedEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordDeliveryFinished({
+            key: ctx.key,
+            get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: () => { throw new Error('deliveryFinished cannot send from this transition'); },
+            startDesign: () => { throw new Error('deliveryFinished cannot start a design run'); },
           }, core, event)),
       ),
       get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ManualLifecycleState | AutomaticLifecycleState | null> =>

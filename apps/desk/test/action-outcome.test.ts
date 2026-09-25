@@ -30,6 +30,9 @@ describe('the Work screen reports what Approve and Deliver actually did (2026-09
       'Files delivered to Drive, but the Sheets row is not confirmed: row not found. Deliver again to retry the row.'
     );
     expect(describeDelivery({ status: 'PENDING' }, 'PUBLISHING').text).toBe('Publication requested. Check the task for verified delivery status.');
+    expect(describeDelivery({ status: 'DELIVERY_RETRY_REQUIRED' }, 'APPROVED').text).toBe(
+      'The archive did not complete. Review the task and start a new delivery action.'
+    );
     const unrefreshed = describeDelivery({ status: 'COMPLETE' }, undefined);
     expect(unrefreshed).toEqual({ tone: 'success', text: 'Delivery complete. Refresh the page to see the latest status.' });
     expect(describeApproval('rev-1', 'dec-1', true)).toEqual({ tone: 'success', text: 'Approved Revision rev-1. Decision ID: dec-1.' });

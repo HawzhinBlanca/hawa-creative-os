@@ -2,27 +2,35 @@ import * as restate from '@restatedev/restate-sdk';
 import { verifyLifecycleOfficeEvent } from '@hawa/integrations';
 import { parseCompleteRevisionRequest, parseOfficeApprovalProof } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
-import { RequestLifecycleApi, type OfficeRevisionEvent, type OfficeRevisionReply } from './request-lifecycle.js';
+import { RequestLifecycleApi, type OfficeDeliveryStartEvent, type OfficeDeliveryStartReply,
+  type OfficeRevisionEvent, type OfficeRevisionReply } from './request-lifecycle.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface SignedOfficeDecision {
   v: 1;
-  event: OfficeRevisionEvent;
+  event: OfficeRevisionEvent | OfficeDeliveryStartEvent;
   signature: string;
 }
 
 /** Only signed review decisions are exposed; the request object itself remains ingress-private. */
 export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: string): 'ok' | 'invalid' | 'unauthorized' {
   if (input?.v !== 1 || !input.event || typeof input.event !== 'object' || Array.isArray(input.event) ||
-      input.event.v !== 1 || !['revise', 'approve'].includes(input.event.kind) || input.event.expectedRev !== 2 ||
+      input.event.v !== 1 || !['revise', 'approve', 'deliver'].includes(input.event.kind) ||
+      (input.event.kind === 'deliver'
+        ? (!Number.isInteger(input.event.expectedRev) || input.event.expectedRev < 3 ||
+          !UUID.test(input.event.approvalId) ||
+          Object.keys(input.event).some((key) => !['v', 'kind', 'eventId', 'requestId', 'taskId',
+            'revisionId', 'approvalId', 'actionId', 'expectedRev', 'actor', 'reason'].includes(key)) ||
+          !['art_director', 'creative_director', 'office_admin', 'administrator'].includes(input.event.actor?.role))
+        : input.event.expectedRev !== 2) ||
       !UUID.test(input.event.requestId) || !UUID.test(input.event.taskId) ||
       !UUID.test(input.event.revisionId) || !UUID.test(input.event.actionId) ||
       input.event.eventId !== `desk:${input.event.actionId}` ||
       !input.event.actor || !UUID.test(input.event.actor.userId) ||
       typeof input.event.actor.role !== 'string' || typeof input.event.reason !== 'string' ||
       !input.event.reason.trim() || input.event.reason.length > 2000 ||
-      (input.event.revisionRequest !== undefined &&
+      (input.event.kind !== 'deliver' && input.event.revisionRequest !== undefined &&
         (!parseCompleteRevisionRequest(input.event.revisionRequest) ||
           input.event.revisionRequest.comment.trim() !== input.event.reason.trim())) ||
       (input.event.kind === 'approve' && (!parseOfficeApprovalProof(input.event.approvalProof) ||
@@ -36,7 +44,7 @@ export function createOfficeDecisionGateway(secret = process.env.HAWA_WORKER_TOK
   return restate.service({
     name: 'OfficeDecisionGateway',
     handlers: {
-      decide: async (ctx: restate.Context, input: SignedOfficeDecision): Promise<OfficeRevisionReply> =>
+      decide: async (ctx: restate.Context, input: SignedOfficeDecision): Promise<OfficeRevisionReply | OfficeDeliveryStartReply> =>
         withInvocationLogContext(ctx, { requestId: input?.event?.requestId }, async () => {
           // Journal the authentication verdict so a credential rotation cannot change a replayed
           // invocation after it was already accepted. A rejected event makes no object call.

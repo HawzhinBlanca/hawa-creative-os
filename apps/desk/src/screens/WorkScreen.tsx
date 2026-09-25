@@ -520,18 +520,23 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
 
   // Primary Action 5: Deliver approved files (FR-078, CV-16, H02)
   const handleDeliver = async () => {
-    if (!selectedTask) return;
-    if (selectedTask.requestId) {
-      showToast('Delivery for this request is waiting for the durable request workflow.', 'info');
-      return;
-    }
+    const approval = detail?.latestApproval;
+    if (!selectedTask || !detail || !approval) return;
     const taskId = selectedTask.id;
+    const requestOwned = Boolean(detail.requestId || selectedTask.requestId);
     setActionLoading(true);
     let delivery: unknown;
+    let reservation: ReservedDecisionAction | null = null;
+    let actionKey = '';
     try {
-      delivery = await apiClient.tasks.publish(taskId, {
-        destination: 'google_drive',
-      });
+      if (requestOwned) {
+        actionKey = JSON.stringify([sessionUser?.id, taskId, approval.decisionId, 'deliver']);
+        reservation = await reserveDecisionAction(actionKey);
+      }
+      delivery = await apiClient.tasks.publish(taskId,
+        { destination: 'google_drive', ...(requestOwned ? { approvalId: approval.decisionId } : {}) },
+        reservation?.actionId);
+      if (reservation) completeDecisionAction(actionKey, reservation);
     } catch (err: any) {
       showToast(`Delivery failed: ${err.message || 'Server error'}`, 'error');
       setActionLoading(false);
@@ -989,17 +994,15 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     id="btn-deliver-approved"
                     className="action-btn deliver-btn"
                     onClick={handleDeliver}
-                    disabled={busy || !detail || Boolean(selectedTask.requestId) || !selectedTask.latestApproval || nextAction?.primaryButton !== 'deliver'}
-                    title={selectedTask.requestId
-                      ? 'Delivery for this request is waiting for the durable request workflow'
-                      : 'Publish approved files to Google Drive and Google Sheets (FR-046, FR-078)'}
+                    disabled={busy || !detail?.latestApproval || nextAction?.primaryButton !== 'deliver'}
+                    title="Start the approved delivery to Drive, Sheets and the requester (FR-046, FR-078)"
                   >
                     <span className="btn-icon" aria-hidden="true">🚀</span>
                     <span>Deliver Approved Files</span>
                   </button>
-                  {selectedTask.requestId && selectedTask.status === 'APPROVED' && (
+                  {(detail?.requestId || selectedTask.requestId) && selectedTask.status === 'APPROVED' && (
                     <p className="capture-availability" role="note">
-                      Approval is recorded. Delivery for this request is waiting for the durable request workflow.
+                      Approval is recorded. Delivery starts separately and remains pending until the archive and requester send are confirmed.
                     </p>
                   )}
                 </div>

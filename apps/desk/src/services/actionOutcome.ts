@@ -62,6 +62,9 @@ export function describeDelivery(delivery: unknown, refreshedStatus: string | un
       text: `Files delivered to Drive, but the Sheets row is not confirmed: ${String(d.sheetProblem || 'no reason reported')}. Deliver again to retry the row.${refreshNote}`,
     };
   }
+  if (d.status === 'DELIVERY_RETRY_REQUIRED') {
+    return { tone: 'info', text: `The archive did not complete. Review the task and start a new delivery action.${refreshNote}` };
+  }
   return { tone: 'info', text: `Publication requested. Check the task for verified delivery status.${refreshNote}` };
 }
 

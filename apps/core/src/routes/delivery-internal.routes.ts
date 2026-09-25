@@ -15,8 +15,8 @@ import { log } from '../logging.js';
  *   archive and the Sheets row (both idempotent through the publication key), then what the requester
  *   is sent. Asked again after a lost answer, it adopts the Drive files it already wrote.
  * - POST /v1/internal/tasks/:taskId/delivery-finished: the workflow's report, which moves the task
- *   (COMPLETE, PUBLISH_RECONCILIATION or back to APPROVED) once. In slice 2.3 the report goes to
- *   RequestLifecycle instead.
+ *   (COMPLETE, PUBLISH_RECONCILIATION or back to APPROVED) once for legacy runs. Request-owned
+ *   runs report to RequestLifecycle, which applies one versioned Core projection.
  *
  * They are registered straight on the app, not through registerRoute, because they take one
  * credential only: the worker's own HAWA_WORKER_TOKEN, a service principal (PHASE2_DESIGN.md 1.2
@@ -63,12 +63,20 @@ export function registerDeliveryInternalRoutes(ctx: RouteContext): void {
     }
     const taskTenant = task?.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
     if (!task || taskTenant !== tenantId) return failed(c, 404, 'TASK_NOT_FOUND', `Task ${taskId} is not in tenant ${tenantId}`);
+    const requestId = c.req.param('requestId') || '';
+    if (task.requestId ? requestId !== task.requestId || !Number.isInteger(body?.requestRev) ||
+        !Number.isInteger(body?.run) || typeof body?.deliveryId !== 'string'
+      : requestId !== taskId || body?.requestRev !== undefined) {
+      return failed(c, 409, 'LIFECYCLE_DELIVERY_NOT_CURRENT', 'The workflow input does not match this task\'s owner');
+    }
 
     const result = await prepareWorkflowDelivery(taskId, {
       tenantId,
       approvalId,
       revisionId: typeof body?.revisionId === 'string' ? body.revisionId : undefined,
       policy: typeof body?.policy === 'string' ? body.policy : undefined,
+      ...(task.requestId ? { lifecycle: { requestId, requestRev: Number(body.requestRev),
+        deliveryId: String(body.deliveryId), run: Number(body.run) } } : {}),
     });
     if (result?.ok && result.prepared) return c.json(result.prepared, 200);
     const status = Number(result?.status) || 500;

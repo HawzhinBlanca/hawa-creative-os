@@ -276,8 +276,8 @@ describe('approve and request revision are mutations', () => {
     core.answerDecision(json({ decisionId: 'd1' }, 201));
     await advance(500);
     expect(view.text()).toContain('Delivery will need a separate workflow action.');
-    expect(view.text()).toContain('Approval is recorded. Delivery for this request is waiting for the durable request workflow.');
-    expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(true);
+    expect(view.text()).toContain('Approval is recorded. Delivery starts separately');
+    expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(false);
     expect(core.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/publish'))).toHaveLength(0);
   });
 

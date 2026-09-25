@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat } from '@hawa/contracts';
 import { withRlsContext, toApiTaskStatus } from '@hawa/db';
-import { buildOutboundReviewDispatch } from '@hawa/integrations';
+import { buildOutboundReviewDispatch, signLifecycleOfficeEvent } from '@hawa/integrations';
 import type { Context } from 'hono';
 import type { AuthContext, RouteContext } from './types.js';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
@@ -66,8 +66,77 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const taskId = c.req.param('taskId');
     const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
-    if (task.requestId) return problem(c, 409, 'LIFECYCLE_OWNED',
-      'Deliver this request through RequestLifecycle; the legacy publisher cannot send it');
+    if (task.requestId) {
+      const actionId = c.req.header('Idempotency-Key');
+      if (!actionId || !isValidUuid(actionId)) return problem(c, 422, 'Action Key Required',
+        'Request-owned delivery needs a UUID Idempotency-Key for safe retry');
+      const officeRole = (auth.role || '').toLowerCase().trim();
+      if (!['art_director', 'creative_director', 'office_admin', 'administrator'].includes(officeRole)) {
+        return problem(c, 403, 'Forbidden', 'An authorized office reviewer must start request-owned delivery');
+      }
+      const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+      if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['destination', 'approvalId'].includes(key)) ||
+          (body.destination !== undefined && body.destination !== 'google_drive') ||
+          (body.approvalId !== undefined && !isValidUuid(String(body.approvalId)))) {
+        return problem(c, 422, 'Invalid Delivery Request', 'Deliver the current approval to Google Drive with one stable action key');
+      }
+      if (!db || !taskRepo || !publicationRepo) return problem(c, 503, 'Database Unavailable',
+        'Request-owned delivery requires the persistent request ledger');
+      const tenantId = auth.tenantId || DEFAULT_TENANT_ID;
+      const requestId = task.requestId;
+      const current = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, async (trx) => {
+        const request = await trx.selectFrom('requests').select(['rev', 'owner', 'stage', 'current_task_id'])
+          .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+        const approval = await trx.selectFrom('approvals').select(['id', 'design_revision_id'])
+          .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).where('decision', '=', 'approved')
+          .orderBy('created_at', 'desc').executeTakeFirst();
+        const receipts = await trx.selectFrom('lifecycle_projections').select(['rev', 'result'])
+          .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
+          .where('idempotency_key', 'like', `${requestId}:%:officeDecision:desk:${actionId}`)
+          .orderBy('rev', 'desc').executeTakeFirst();
+        return { request, approval, receipts };
+      });
+      if (!current.request || current.request.owner !== 'restate' || current.request.current_task_id !== taskId ||
+          !current.approval) {
+        return problem(c, 409, 'Lifecycle Owner Mismatch', 'This task has no current request-owned approval');
+      }
+      const approvalId = String(body.approvalId || current.approval.id);
+      if (approvalId !== current.approval.id) return problem(c, 409, 'Approval Changed', 'The requested approval is not current');
+      const expectedRev = current.receipts ? Number(current.receipts.rev) - 1 : Number(current.request.rev);
+      const ingress = (process.env.RESTATE_INGRESS_URL || '').trim().replace(/\/+$/, '');
+      const secret = (process.env.HAWA_WORKER_TOKEN || '').trim();
+      if (!ingress || !secret) return problem(c, 503, 'Lifecycle Delivery Unavailable',
+        'The signed delivery gateway is not configured; retry this action later');
+      const event = { v: 1 as const, kind: 'deliver' as const, eventId: `desk:${actionId}`,
+        requestId, taskId, revisionId: current.approval.design_revision_id, approvalId, actionId,
+        expectedRev, actor: { userId: auth.userId, role: officeRole }, reason: 'Deliver approved files' };
+      const signature = signLifecycleOfficeEvent(secret, event);
+      try {
+        const response = await fetch(`${ingress}/OfficeDecisionGateway/decide`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ v: 1, event, signature }), signal: AbortSignal.timeout(15_000),
+        });
+        const result = await response.json().catch(() => null) as Record<string, unknown> | null;
+        if (response.ok && result?.accepted === true && result.requestId === requestId &&
+            result.taskId === taskId && result.approvalId === approvalId && result.actionId === actionId &&
+            typeof result.deliveryId === 'string' && Number.isInteger(result.rev) && Number(result.rev) >= 4) {
+          const status = result.stage === 'delivered' ? 'COMPLETE'
+            : result.stage === 'approved' ? 'DELIVERY_RETRY_REQUIRED' : 'PUBLISHING';
+          return c.json({ taskId, requestId, deliveryId: result.deliveryId, workflowId: result.deliveryId,
+            executor: 'restate', status,
+            requestRev: result.rev, acceptedAt: new Date().toISOString() }, result.stage === 'delivering' ? 202 : 200);
+        }
+        if (response.ok && result?.accepted === false) return problem(c, 409, 'Stale Lifecycle Delivery',
+          'The request is no longer approved for this delivery; refresh the task');
+        if (response.status === 400 || response.status === 409) return problem(c, 409, 'Lifecycle Action Conflict',
+          'This action key, approval or request revision no longer matches; refresh the task');
+        log.warn(`[core:publish] Lifecycle gateway HTTP ${response.status} for request ${requestId}`);
+      } catch (error) {
+        log.warn(`[core:publish] Lifecycle gateway did not answer for request ${requestId}:`, error);
+      }
+      return problem(c, 503, 'Lifecycle Delivery Uncertain',
+        'Delivery may have started. Retry with the same action key; no second workflow will be created');
+    }
 
     const body = await c.req.json().catch(() => ({}));
     const policy = body.policy || 'current_task';

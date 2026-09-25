@@ -63,7 +63,7 @@ export type SendResult =
 /** The Delivery workflow's input. Its key is `deliveryId`. */
 export interface DeliveryInput {
   v: 1;
-  /** The request the delivery belongs to. Until RequestLifecycle exists (slice 2.3) it is the task id. */
+  /** The request owner; legacy runs use the task id. */
   requestId: string;
   deliveryId: string;
   tenantId: string;
@@ -72,8 +72,12 @@ export interface DeliveryInput {
   revisionId: string;
   chatId: string | null;
   officeChatId: string | null;
-  /** 'core' posts to Core. 'lifecycle' is reserved for slice 2.3 and refused until its service is registered. */
+  /** 'core' posts to Core; 'lifecycle' reports through the private request owner. */
   reportTo: 'lifecycle' | 'core';
+  /** Request revision that claimed a lifecycle-owned publication; absent for legacy runs. */
+  requestRev?: number;
+  /** Core's domain-separated signature over the complete lifecycle-owned workflow claim. */
+  claimSignature?: string;
   /** Which run of this publication's delivery this is (1 for the first; later ones retry the archive). */
   run?: number;
   /** The Desk's delivery policy ('deliver_approved_stored' delivers an approval a later edit invalidated). */

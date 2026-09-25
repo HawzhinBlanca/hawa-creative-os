@@ -496,9 +496,10 @@ class HawaApiClient {
       });
     },
 
-    publish: async <T = any>(taskId: string, body?: { destination?: string; policy?: string }): Promise<T> => {
+    publish: async <T = any>(taskId: string, body?: { destination?: string; policy?: string; approvalId?: string }, actionId?: string): Promise<T> => {
       return this.request<T>(`/tasks/${taskId}/publish`, {
         method: 'POST',
+        ...(actionId ? { headers: { 'Idempotency-Key': actionId } } : {}),
         body: JSON.stringify(body || {}),
       });
     },

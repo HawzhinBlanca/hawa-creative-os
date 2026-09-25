@@ -349,6 +349,10 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     const publicationState = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
     expect(publicationState).toMatchObject({ state: 'publish_reconciliation' });
     expect(publicationState.actionableRecovery).toContain('delivery to the requester was not confirmed');
+    const retry = await deliver(app, taskId);
+    expect(retry.status).toBe(409);
+    expect((await retry.json()).detail).toContain('previous Telegram send');
+    expect(restateIngress.starts).toHaveLength(1);
     const stored = await withRlsContext(db, operator, async (trx) => {
       const pub = await new PublicationRepository(db).findByTaskId(taskId, tenantId, trx);
       return pub ? (await new PublicationRepository(db).getPublicationWithRefs(pub.id, tenantId, trx)) : null;
@@ -377,6 +381,9 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect((await publications(taskId)).map((p) => [p.state, p.executor_finished_run])).toEqual([['drive_complete', 1]]);
     const publicationState = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
     expect(publicationState).toMatchObject({ state: 'publish_reconciliation' });
+    const retry = await deliver(app, taskId);
+    expect(retry.status).toBe(409);
+    expect(restateIngress.starts).toHaveLength(1);
   });
 
   it('a run whose report never reached Core is recorded from its output on the next press', async () => {

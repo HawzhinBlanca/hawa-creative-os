@@ -3,9 +3,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CanvaBindingRepository, createDb, sql, withRlsContext } from '@hawa/db';
 import { parseOfficeApprovalProof } from '@hawa/domain';
 import { createApp } from '../src/app.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
+import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../src/services/lifecycle-delivery-projection.js';
 import { checkSignedOfficeDecision, type SignedOfficeDecision } from '../../worker/src/lifecycle/office-decision-gateway.js';
-import { recordOfficeRevision, type AutomaticLifecycleState, type AutomaticOpenContext } from '../../worker/src/lifecycle/request-lifecycle.js';
+import { recordDeliveryFinished, recordOfficeDeliveryStart, recordOfficeRevision,
+  type AutomaticLifecycleState, type AutomaticOpenContext } from '../../worker/src/lifecycle/request-lifecycle.js';
+import { runDelivery } from '../../worker/src/lifecycle/delivery.js';
 
 const db = createDb(process.env.TEST_DATABASE_URL!);
 const tenantId = '00000000-0000-4000-a000-000000000001';
@@ -58,7 +62,119 @@ async function reviewableRequest() {
   return { requestId, taskId, revisionId: designed.revisionId!, chatId, runId };
 }
 
+async function approvedForDelivery() {
+  const { requestId, taskId, revisionId } = await reviewableRequest();
+  const bytes = Buffer.from(`Checked deck ${randomUUID()}`);
+  const artifactId = randomUUID();
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  const qcRunId = randomUUID();
+  const report = { exportArtifactId: artifactId, exportSha256: sha256, captureVersion: '300' };
+  const reportHash = createHash('sha256').update(JSON.stringify(report)).digest('hex');
+  await withRlsContext(db, scope, async (trx) => {
+    const binding = await trx.selectFrom('canva_bindings').select(['canva_design_id', 'version'])
+      .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).executeTakeFirstOrThrow();
+    const firstQc = await trx.selectFrom('qc_runs').select('qc_profile_id')
+      .where('tenant_id', '=', tenantId).where('design_revision_id', '=', revisionId).executeTakeFirstOrThrow();
+    const operationId = randomUUID();
+    await sql`INSERT INTO hawa.canva_remote_operations
+      (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata)
+      VALUES (${operationId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, ${userId},
+        ${`deliver-${operationId}`}, ${sha256}, 'export', 'retrieved', ${binding.canva_design_id}, ${binding.version},
+        ${JSON.stringify({ format: 'pptx', designUpdatedAt: '300' })}::jsonb)`.execute(trx);
+    await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content)
+      VALUES (${artifactId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid,
+        ${operationId}::uuid, 'pptx', ${sha256}, ${bytes})`.execute(trx);
+    await sql`INSERT INTO hawa.qc_runs
+      (id, tenant_id, task_id, design_revision_id, qc_profile_id, attempt, status, critical_pass,
+        report, report_sha256, started_at)
+      VALUES (${qcRunId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${revisionId}::uuid,
+        ${firstQc.qc_profile_id}::uuid, 2, 'passed', true, ${JSON.stringify(report)}::jsonb, ${reportHash},
+        clock_timestamp() + interval '1 minute')`.execute(trx);
+  });
+  const actionId = randomUUID();
+  const approval = await projectLifecycleOfficeDecision(db, { requestId, tenantId, taskId, revisionId,
+    actionId, actor: { userId, role: 'art_director' }, reason: 'Checked export',
+    decision: 'approved', expectedRev: 2, rev: 3,
+    key: `${requestId}:3:officeDecision:desk:${actionId}`,
+    deskRequestFingerprint: 'b'.repeat(64),
+    approvalProof: { qcRunId, qcReportHash: reportHash,
+      pinnedExports: [{ artifactId, format: 'pptx', sha256, byteSize: bytes.length }] },
+  });
+  const store = { captureEvidenceRequired: true,
+    read: async (_tenant: string, _user: string, _task: string, id: string) => id === artifactId ? bytes : null,
+    find: async () => [{ artifactId, format: 'pptx' as const, sha256, byteSize: bytes.length }],
+  };
+  const deliverAction = randomUUID();
+  const start = { requestId, tenantId, taskId, revisionId, approvalId: approval.approvalId,
+    actionId: deliverAction, actor: { userId, role: 'art_director' }, reason: 'Deliver approved files',
+    expectedRev: 3, rev: 4, key: `${requestId}:4:officeDecision:desk:${deliverAction}` };
+  return { requestId, taskId, revisionId, approval, artifactId, store, start };
+}
+
 describe('authenticated Desk to private lifecycle office decision', () => {
+  it('keeps uncertain requester sends unresolved and refuses a second workflow run', async () => {
+    const { requestId, taskId, approval, store, start } = await approvedForDelivery();
+    const claim = await projectLifecycleDeliveryStart(db, store, start);
+    expect(await projectLifecycleDeliveryStart(db, { ...store, read: async () => { throw new Error('store away'); } }, start)).toEqual(claim);
+    await expect(projectLifecycleDeliveryStart(db, store, { ...start, reason: 'changed' }))
+      .rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    const outcome = { outcome: 'uncertain' as const, uncertain: ['approved file'],
+      archived: true, sheetsConfirmed: true, filesSent: 0 };
+    const finish = { requestId, tenantId, taskId, approvalId: approval.approvalId,
+      deliveryId: claim.delivery.deliveryId, run: 1, outcome, expectedRev: 4, rev: 5,
+      key: `${requestId}:5:deliveryFinished:${claim.delivery.deliveryId}` };
+    expect(await projectLifecycleDeliveryFinish(db, finish)).toMatchObject({
+      stage: 'delivering', taskState: 'publishing', rev: 5 });
+    expect(await projectLifecycleDeliveryFinish(db, finish)).toMatchObject({ stage: 'delivering' });
+    await expect(projectLifecycleDeliveryFinish(db, { ...finish, outcome: { ...outcome, filesSent: 1 } }))
+      .rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    const nextAction = randomUUID();
+    await expect(projectLifecycleDeliveryStart(db, store, { ...start, actionId: nextAction,
+      expectedRev: 5, rev: 6, key: `${requestId}:6:officeDecision:desk:${nextAction}` }))
+      .rejects.toMatchObject({ code: 'WRONG_STAGE' });
+    const rows = await withRlsContext(db, scope, async (trx) => ({
+      request: await trx.selectFrom('requests').select(['stage', 'rev']).where('request_id', '=', requestId).executeTakeFirst(),
+      task: await trx.selectFrom('tasks').select('state').where('id', '=', taskId).executeTakeFirst(),
+      publication: await trx.selectFrom('publications').select(['error_class', 'executor_finished_run'])
+        .where('task_id', '=', taskId).executeTakeFirst(),
+    }));
+    expect(rows.request).toMatchObject({ stage: 'delivering', rev: '5' });
+    expect(rows.task?.state).toBe('publishing');
+    expect(rows.publication).toMatchObject({ error_class: 'REQUESTER_SEND_UNCONFIRMED', executor_finished_run: 1 });
+  });
+
+  it('rechecks approved bytes before claim and retries a missing archive under a new request revision', async () => {
+    const { requestId, taskId, approval, store, start } = await approvedForDelivery();
+    await expect(projectLifecycleDeliveryStart(db, { ...store,
+      read: async () => Buffer.from('changed approved export') }, start))
+      .rejects.toMatchObject({ code: 'APPROVAL_EVIDENCE_CHANGED' });
+    const before = await withRlsContext(db, scope, async (trx) => ({
+      request: await trx.selectFrom('requests').select('rev').where('request_id', '=', requestId).executeTakeFirst(),
+      publication: await trx.selectFrom('publications').select('id').where('task_id', '=', taskId).executeTakeFirst(),
+    }));
+    expect(before.request?.rev).toBe('3');
+    expect(before.publication).toBeUndefined();
+    const first = await projectLifecycleDeliveryStart(db, store, start);
+    const chatOnly = { outcome: 'chat_only' as const, uncertain: [], archived: false,
+      sheetsConfirmed: false, filesSent: 1 };
+    const firstFinish = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
+      approvalId: approval.approvalId, deliveryId: first.delivery.deliveryId,
+      run: 1, outcome: chatOnly, expectedRev: 4, rev: 5,
+      key: `${requestId}:5:deliveryFinished:${first.delivery.deliveryId}` });
+    expect(firstFinish).toMatchObject({ stage: 'approved', taskState: 'approved', rev: 5 });
+    const nextAction = randomUUID();
+    const second = await projectLifecycleDeliveryStart(db, store, { ...start, actionId: nextAction,
+      expectedRev: 5, rev: 6, key: `${requestId}:6:officeDecision:desk:${nextAction}` });
+    expect(second.delivery).toMatchObject({ run: 2, requestRev: 6 });
+    expect(second.delivery.deliveryId).toMatch(/:archive:2$/);
+    const final = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
+      approvalId: approval.approvalId, deliveryId: second.delivery.deliveryId,
+      run: 2, outcome: { outcome: 'delivered', uncertain: [], archived: true,
+        sheetsConfirmed: true, filesSent: 1 }, expectedRev: 6, rev: 7,
+      key: `${requestId}:7:deliveryFinished:${second.delivery.deliveryId}` });
+    expect(final).toMatchObject({ stage: 'delivered', taskState: 'complete', rev: 7 });
+  });
+
   it('refuses approval before the gateway when the latest critical QA failed', async () => {
     const { requestId, taskId, revisionId } = await reviewableRequest();
     const failedQcId = randomUUID();
@@ -335,5 +451,117 @@ describe('authenticated Desk to private lifecycle office decision', () => {
         rtlVisualReview: { confirmed: true, qcRunId, exportSha256: sha256, reviewerId: userId } } }]);
     expect(rows.receipts.map((row) => Number(row.rev)).sort()).toEqual([1, 2, 3]);
     expect(transport).toHaveBeenCalledTimes(2);
+
+    // The same approved task starts delivery through a second signed office action. Core claims
+    // the publication and request revision together; the object starts only that workflow key.
+    const starts: string[] = [];
+    object.startDelivery = (input) => { starts.push(input.deliveryId); };
+    const publisher = { publish: vi.fn(async (_ctx: unknown, request: any) => ({ ok: true, value: {
+      state: 'complete',
+      driveFiles: request.files.map((file: any) => ({ artifactId: file.artifactId,
+        fileId: `drv_${file.artifactId.slice(0, 8)}`, name: file.filename, mimeType: file.mimeType,
+        expectedSha256: file.sha256, observedSize: file.byteSize, verified: true, folderId: 'kaae-owned-folder' })),
+      sheet: { spreadsheetId: 'kaae-owned-sheet', sheetId: 0, rowNumber: 12,
+        expectedHash: 'h', observedHash: 'h', synced: true },
+    } })) };
+    const deliveryInternal = createAppWithClientFixtures({ db, deliverableStore: store,
+      publisher, testAuth: { roleHeader: true } } as any);
+    await (deliveryInternal as any).clientDnaHydrated;
+    const dnaHeaders = { 'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}` };
+    const currentDna = await (await deliveryInternal.request(`/v1/clients/${clientId}/dna`, { headers: dnaHeaders })).json();
+    const savedDna = await deliveryInternal.request(`/v1/clients/${clientId}/dna`, {
+      method: 'POST', headers: dnaHeaders,
+      body: JSON.stringify({ ...currentDna, destinations: { ...(currentDna.destinations || {}),
+        productionFolderId: 'kaae-owned-folder', spreadsheetId: 'kaae-owned-sheet' } }),
+    });
+    expect([200, 201]).toContain(savedDna.status);
+    const deliveryCore = { post: async <T>(path: string, payload: unknown): Promise<T> => {
+      const answer = await deliveryInternal.request(`/v1${path}`, { method: 'POST',
+        headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload) });
+      if (!answer.ok) throw new Error(`Core delivery projection HTTP ${answer.status}: ${await answer.text()}`);
+      return answer.json() as Promise<T>;
+    } };
+    let loseDeliveryAnswer = true;
+    const deliveryTransport = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe('http://restate.fixture:8080/OfficeDecisionGateway/decide');
+      const envelope = JSON.parse(String(init?.body)) as SignedOfficeDecision;
+      expect(checkSignedOfficeDecision(envelope, secret)).toBe('ok');
+      if (envelope.event.kind !== 'deliver') return Response.json({ detail: 'wrong event' }, { status: 400 });
+      const result = await recordOfficeDeliveryStart(object, deliveryCore, envelope.event);
+      if (loseDeliveryAnswer) { loseDeliveryAnswer = false; throw new Error('Delivery answer lost after commit'); }
+      return Response.json(result);
+    });
+    vi.stubGlobal('fetch', deliveryTransport);
+    const deliveryActionId = randomUUID();
+    const deliveryPath = `/v1/tasks/${taskId}/publish`;
+    const deliveryHeaders = { 'Content-Type': 'application/json', 'Idempotency-Key': deliveryActionId };
+    const deliveryBody = { destination: 'google_drive', approvalId: result.decisionId };
+    expect((await operator.request(deliveryPath, { method: 'POST', headers: deliveryHeaders,
+      body: JSON.stringify(deliveryBody) })).status).toBe(403);
+    const lost = await director.request(deliveryPath, { method: 'POST', headers: deliveryHeaders,
+      body: JSON.stringify(deliveryBody) });
+    expect(lost.status, await lost.text()).toBe(503);
+    const resumed = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+    const retry = await resumed.request(deliveryPath, { method: 'POST', headers: deliveryHeaders,
+      body: JSON.stringify(deliveryBody) });
+    expect(retry.status, await retry.text()).toBe(202);
+    expect(starts).toHaveLength(2);
+    expect(new Set(starts).size).toBe(1);
+    expect(state.stage).toBe('delivering');
+    const claimed = await withRlsContext(db, scope, async (trx) => ({
+      request: await trx.selectFrom('requests').select(['stage', 'rev']).where('request_id', '=', requestId).executeTakeFirst(),
+      task: await trx.selectFrom('tasks').select(['state']).where('id', '=', taskId).executeTakeFirst(),
+      publication: await trx.selectFrom('publications').select(['executor', 'executor_run', 'executor_finished_run'])
+        .where('task_id', '=', taskId).executeTakeFirst(),
+    }));
+    expect(claimed.request).toMatchObject({ stage: 'delivering', rev: '4' });
+    expect(claimed.task?.state).toBe('publishing');
+    expect(claimed.publication).toMatchObject({ executor: 'restate', executor_run: 1, executor_finished_run: 0 });
+    const delivery = state.delivery!.input;
+    await expect(runDelivery({
+      run: async () => { throw new Error('no prepare should run'); },
+      send: async () => { throw new Error('no send should run'); },
+      reportLifecycle: async () => { throw new Error('no report should run'); },
+    }, deliveryCore, { ...delivery, chatId: '1234567' })).rejects.toThrow('INVALID_LIFECYCLE_DELIVERY_CLAIM');
+    const invalidPrepare = await deliveryInternal.request(
+      `/v1/internal/lifecycle/${requestId}/deliveries/${delivery.approvalId}/prepare`, {
+        method: 'POST', headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, tenantId, deliveryId: delivery.deliveryId, run: 1 }),
+      });
+    expect(invalidPrepare.status).toBe(409);
+    const sent: string[] = [];
+    const delivered = await runDelivery({
+      run: (_name, action) => action(),
+      send: async (message) => { sent.push(message.kind); return { outcome: 'sent', messageId: String(sent.length) }; },
+      reportLifecycle: async (_input, outcome) => recordDeliveryFinished(object, deliveryCore, {
+        v: 1, eventId: `delivery:${delivery.deliveryId}`, requestId, taskId,
+        approvalId: result.decisionId as string, deliveryId: delivery.deliveryId,
+        run: 1, expectedRev: 4, outcome,
+      }),
+    }, deliveryCore, delivery);
+    expect(delivered).toMatchObject({ outcome: 'delivered', archived: true, sheetsConfirmed: true, filesSent: 2 });
+    expect(sent).toEqual(['document', 'document', 'text']);
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+    const finishedEvent = { v: 1 as const, eventId: `delivery:${delivery.deliveryId}`,
+      requestId, taskId, approvalId: result.decisionId as string, deliveryId: delivery.deliveryId,
+      run: 1, expectedRev: 4, outcome: delivered };
+    const finished = await recordDeliveryFinished(object, deliveryCore, finishedEvent);
+    expect(finished).toMatchObject({ stage: 'delivered', taskState: 'complete', rev: 5 });
+    expect(await recordDeliveryFinished(object, deliveryCore, finishedEvent)).toEqual(finished);
+    await expect(recordDeliveryFinished(object, deliveryCore, { ...finishedEvent,
+      outcome: { ...delivered, filesSent: 1 } })).rejects.toThrow(/different content/);
+    const completed = await withRlsContext(db, scope, async (trx) => ({
+      request: await trx.selectFrom('requests').select(['stage', 'rev']).where('request_id', '=', requestId).executeTakeFirst(),
+      task: await trx.selectFrom('tasks').select(['state']).where('id', '=', taskId).executeTakeFirst(),
+      publication: await trx.selectFrom('publications').select(['state', 'executor_finished_run'])
+        .where('task_id', '=', taskId).executeTakeFirst(),
+      revisions: await trx.selectFrom('lifecycle_projections').select('rev').where('request_id', '=', requestId).execute(),
+    }));
+    expect(completed.request).toMatchObject({ stage: 'delivered', rev: '5' });
+    expect(completed.task?.state).toBe('complete');
+    expect(completed.publication).toMatchObject({ state: 'complete', executor_finished_run: 1 });
+    expect(completed.revisions.map((row) => Number(row.rev)).sort()).toEqual([1, 2, 3, 4, 5]);
   });
 });
