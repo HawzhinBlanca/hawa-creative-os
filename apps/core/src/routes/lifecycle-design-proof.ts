@@ -1,12 +1,46 @@
-/** Guard every Canva/Studio write for a Restate-owned task before provider or database effects. */
+/** Guard direct task and Canva writes against a persisted RequestLifecycle owner. */
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { lifecycleDesignProofPayload } from '@hawa/contracts';
+import { lifecycleDesignProofPayload, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { withRlsContext } from '@hawa/db';
 import type { AuthContext, RouteContext } from './types.js';
 import { serviceTokenOf } from './lifecycle-internal.routes.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA256 = /^[0-9a-f]{64}$/i;
+
+async function persistedOwner(ctx: RouteContext, auth: AuthContext, taskId: string) {
+  return withRlsContext(ctx.db!, {
+    tenantId: auth.tenantId!, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator',
+  }, async (trx) => {
+    const task = await trx.selectFrom('tasks').select('request_id')
+      .where('tenant_id', '=', auth.tenantId!).where('id', '=', taskId).executeTakeFirst();
+    if (!task?.request_id) return { requestId: null, request: null };
+    const request = await trx.selectFrom('requests').select(['owner', 'stage', 'current_task_id'])
+      .where('tenant_id', '=', auth.tenantId!).where('request_id', '=', task.request_id).executeTakeFirst();
+    return { requestId: task.request_id, request };
+  });
+}
+
+/** Legacy task controls and design endpoints never start a request-owned run. A manual revision is office recovery. */
+export async function rejectLegacyTaskDesignWrite(
+  ctx: RouteContext, c: any, auth: AuthContext, allowManualRevision = false,
+): Promise<Response | null> {
+  const taskId = c.req.param('taskId');
+  if (!ctx.db || !taskId || !UUID.test(taskId)) return null;
+  if (!auth.tenantId || !auth.userId) return ctx.problem(c, 503, 'Database Required');
+  let owner: Awaited<ReturnType<typeof persistedOwner>>;
+  try { owner = await persistedOwner(ctx, auth, taskId); }
+  catch { return ctx.problem(c, 503, 'Durable Storage Unavailable', 'Task could not be read from the database; try again'); }
+  if (!owner.requestId) return null;
+  if (allowManualRevision && owner.request?.owner === 'restate' &&
+      owner.request.stage === 'manual' && owner.request.current_task_id === taskId) {
+    if (['administrator', 'art_director', 'creative_director', 'operator', 'designer']
+      .includes(auth.role || '')) return null;
+    return ctx.problem(c, 403, 'Manual Revision Forbidden', 'An office designer or operator is required');
+  }
+  return ctx.problem(c, 409, 'LIFECYCLE_OWNED',
+    'RequestLifecycle owns this task; use its current request and office action');
+}
 
 export async function rejectUnownedLifecycleDesignWrite(
   ctx: RouteContext, c: any, auth: AuthContext,
@@ -18,16 +52,9 @@ export async function rejectUnownedLifecycleDesignWrite(
   if (!taskPath.startsWith(`/tasks/${taskId}/canva/`) &&
       taskPath !== `/tasks/${taskId}/canva-binding`) return null;
   if (!ctx.db || !auth.tenantId || !auth.userId) return ctx.problem(c, 503, 'Database Required');
-  const owner = await withRlsContext(ctx.db, {
-    tenantId: auth.tenantId, userId: auth.userId, role: auth.role || 'operator',
-  }, async (trx) => {
-    const task = await trx.selectFrom('tasks').select('request_id')
-      .where('tenant_id', '=', auth.tenantId!).where('id', '=', taskId).executeTakeFirst();
-    if (!task?.request_id) return { requestId: null, request: null };
-    const request = await trx.selectFrom('requests').select(['owner', 'stage', 'current_task_id'])
-      .where('tenant_id', '=', auth.tenantId!).where('request_id', '=', task.request_id).executeTakeFirst();
-    return { requestId: task.request_id, request };
-  });
+  let owner: Awaited<ReturnType<typeof persistedOwner>>;
+  try { owner = await persistedOwner(ctx, auth, taskId); }
+  catch { return ctx.problem(c, 503, 'Durable Storage Unavailable', 'Task could not be read from the database; try again'); }
   if (!owner.requestId) return null;
   const requestId = c.req.header('X-Hawa-Lifecycle-Request-Id') || '';
   const runId = c.req.header('X-Hawa-Lifecycle-Run-Id') || '';

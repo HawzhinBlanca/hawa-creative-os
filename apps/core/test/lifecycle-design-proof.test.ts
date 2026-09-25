@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createDb, withRlsContext } from '@hawa/db';
+import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { lifecycleDesignProofHeaders } from '../../worker/src/lifecycle/design-proof.js';
+import { createRedrive } from '../src/services/redrive.js';
 
 const db = createDb(process.env.TEST_DATABASE_URL!);
 const tenantId = '00000000-0000-4000-a000-000000000001';
@@ -43,8 +44,8 @@ function proof(requestId: string, taskId: string, runId: string, path: string) {
   return lifecycleDesignProofHeaders({ taskId, requestId, runId, method: 'POST', path }, token);
 }
 
-async function post(path: string, headers: Record<string, string> = {}) {
-  const response = await app.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: '{}' });
+async function post(path: string, headers: Record<string, string> = {}, body: unknown = {}) {
+  const response = await app.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
   return { status: response.status, body: await response.json() as { title?: string } };
 }
 
@@ -102,5 +103,91 @@ describe('one write owner for lifecycle-owned designs', () => {
     expect(await post(`/v1/tasks/${task.task.id}/canva/generate`)).toMatchObject({
       status: 422, body: { title: 'REQUEST_KEY_REQUIRED' },
     });
+  });
+
+  it('refuses legacy task design routes while the request is designing, then permits a manual revision draft', async () => {
+    const { requestId, taskId } = await ownedTask();
+    const base = `/v1/tasks/${taskId}`;
+    for (const path of [`${base}/route`, `${base}/briefs`, `${base}/generate`, `${base}/revisions`]) {
+      expect(await post(path)).toMatchObject({ status: 409, body: { title: 'LIFECYCLE_OWNED' } });
+    }
+    const [briefs, revisionsBefore] = await withRlsContext(db, scope, (trx) => Promise.all([
+      trx.selectFrom('design_briefs').select('id').where('task_id', '=', taskId).execute(),
+      trx.selectFrom('design_revisions').select('id').where('task_id', '=', taskId).execute(),
+    ]));
+    expect([briefs, revisionsBefore]).toEqual([[], []]);
+    await withRlsContext(db, scope, async (trx) => {
+      await trx.updateTable('requests').set({ stage: 'manual', rev: 2 })
+        .where('request_id', '=', requestId).execute();
+    });
+    for (const path of [`${base}/route`, `${base}/briefs`, `${base}/generate`]) {
+      expect(await post(path)).toMatchObject({ status: 409, body: { title: 'LIFECYCLE_OWNED' } });
+    }
+    expect(await post(`${base}/revisions`)).toMatchObject({
+      status: 400, body: { title: 'Invalid Design Nodes' },
+    });
+    expect(await post(`${base}/revisions`, {}, {
+      nodes: [{ id: 'headline', type: 'text', text: 'Office supplied copy' }],
+    })).toMatchObject({ status: 201 });
+    const reviewer = createApp({ db, testAuth: { principal: { role: 'reviewer', userId } } });
+    const reviewerResult = await reviewer.request(`${base}/revisions`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nodes: [{ id: 'headline-2', type: 'text', text: 'Unapproved copy' }] }),
+    });
+    expect(reviewerResult.status).toBe(403);
+    const [request, revisions] = await withRlsContext(db, scope, async (trx) => Promise.all([
+      trx.selectFrom('requests').select('stage').where('request_id', '=', requestId).executeTakeFirst(),
+      trx.selectFrom('design_revisions').select('id').where('task_id', '=', taskId).execute(),
+    ]));
+    expect(request?.stage).toBe('manual');
+    expect(revisions).toHaveLength(1);
+  });
+
+  it('keeps task control and redrive actions out of a lifecycle-owned request', async () => {
+    const { taskId } = await ownedTask();
+    const before = await withRlsContext(db, scope, (trx) => trx.selectFrom('tasks')
+      .select(['state', 'version']).where('id', '=', taskId).executeTakeFirstOrThrow());
+    for (const action of ['pause', 'resume', 'cancel', 'retry', 'redrive']) {
+      expect(await post(`/v1/tasks/${taskId}/${action}`)).toMatchObject({
+        status: 409, body: { title: 'LIFECYCLE_OWNED' },
+      });
+    }
+    const after = await withRlsContext(db, scope, (trx) => trx.selectFrom('tasks')
+      .select(['state', 'version']).where('id', '=', taskId).executeTakeFirstOrThrow());
+    expect(after).toEqual(before);
+  });
+
+  it('does not let an older round task accept a manual revision', async () => {
+    const { requestId, taskId } = await ownedTask();
+    const successor = await persistChatIntake(db, { platform: 'telegram', sourceEventId: randomUUID(),
+      sourceChannelId: String(82_000_000 + Math.floor(Math.random() * 8_000_000)),
+      rawText: 'Later round', title: 'Later round', designInstructions: '',
+      exactCopy: ['Later round'], clientId, autoGenerate: false });
+    await withRlsContext(db, scope, async (trx) => {
+      await trx.updateTable('requests').set({ stage: 'manual', rev: 2,
+        current_task_id: successor.task.id }).where('request_id', '=', requestId).execute();
+    });
+    expect(await post(`/v1/tasks/${taskId}/revisions`, {}, {
+      nodes: [{ id: 'headline', type: 'text', text: 'Stale round' }],
+    })).toMatchObject({ status: 409, body: { title: 'LIFECYCLE_OWNED' } });
+  });
+
+  it('refuses a direct redrive service call and an unauthenticated task control', async () => {
+    const { taskId } = await ownedTask();
+    const redrive = createRedrive({ db, probeModelProvider: async () => 'healthy' } as Parameters<typeof createRedrive>[0]);
+    expect(await redrive.redriveTask(taskId)).toMatchObject({
+      ok: false, code: 'LIFECYCLE_OWNED',
+    });
+    await withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.canva_design_plans
+      (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, status)
+      VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid,
+        ${userId}, ${`failed-plan-${taskId}`}, 'fixture-hash', '{}'::jsonb, 'failed')`.execute(trx));
+    expect(await redrive.sweepFailedTasks(tenantId)).toMatchObject({ swept: 0, redriven: 0 });
+    const anonymous = createApp({ db });
+    const response = await anonymous.request(`/v1/tasks/${taskId}/pause`, { method: 'POST' });
+    expect(response.status).toBe(401);
+    const outbox = await withRlsContext(db, scope, (trx) => trx.selectFrom('outbox_commands')
+      .select('id').where('aggregate_id', '=', taskId).where('command_type', '=', 'task.dispatch').execute());
+    expect(outbox).toEqual([]);
   });
 });

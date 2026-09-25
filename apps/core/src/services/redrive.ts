@@ -51,7 +51,7 @@ export function createRedrive(deps: RedriveDeps) {
     // 1. Fetch task details from DB
     const taskData = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
       const row = await sql<any>`
-        SELECT t.id, t.tenant_id, t.client_id, t.title, t.description, t.state,
+        SELECT t.id, t.tenant_id, t.client_id, t.title, t.description, t.state, t.request_id,
                (SELECT o.payload FROM hawa.outbox_commands o WHERE o.aggregate_id = t.id AND o.command_type = 'task.created' ORDER BY o.created_at DESC LIMIT 1) as payload
         FROM hawa.tasks t
         WHERE t.id = ${taskId}::uuid`.execute(trx);
@@ -60,6 +60,11 @@ export function createRedrive(deps: RedriveDeps) {
 
     if (!taskData) {
       return { ok: false, code: 'TASK_NOT_FOUND', message: `Task ${taskId} not found` };
+    }
+
+    if (taskData.request_id) {
+      return { ok: false, code: 'LIFECYCLE_OWNED',
+        message: 'This request is managed by RequestLifecycle; use its office redrive action' };
     }
 
     if (!taskData.client_id) {
@@ -379,6 +384,7 @@ export function createRedrive(deps: RedriveDeps) {
         WHERE p.tenant_id = ${tenantId}::uuid
           AND p.status IN ('failed', 'uncertain')
           AND b.id IS NULL
+          AND t.request_id IS NULL
           AND t.client_id IS NOT NULL
           AND t.title NOT LIKE '[TEST]%'
           AND (

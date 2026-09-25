@@ -6,6 +6,7 @@ import type { RouteContext } from './types.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { createRedrive } from '../services/redrive.js';
+import { rejectLegacyTaskDesignWrite } from './lifecycle-design-proof.js';
 
 /**
  * The task controls (architecture programme 1.3, SPLIT_PLAN.md G6), moved unchanged from app.ts:
@@ -26,6 +27,9 @@ export function registerControlsRoutes(ctx: RouteContext): void {
   const controlTask = (control: 'pause' | 'resume' | 'cancel' | 'retry') => async (c: any) => {
     const taskId = c.req.param('taskId');
     const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    const lifecycleRefusal = await rejectLegacyTaskDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
     let task = await readCurrentTask(taskId);
@@ -95,11 +99,14 @@ export function registerControlsRoutes(ctx: RouteContext): void {
   registerRoute('post', '/tasks/:taskId/redrive', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    const lifecycleRefusal = await rejectLegacyTaskDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
     const taskId = c.req.param('taskId');
     // 404 for a task nobody knows, 503 when Postgres cannot be read (the `:control` catch-all answered these).
     if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
     try {
       const result = await redriveTask(taskId, undefined, { id: auth.userId || 'operator', role: auth.role || 'operator' });
+      if (!result.ok && (result as any).code === 'LIFECYCLE_OWNED') return problem(c, 409, 'LIFECYCLE_OWNED', (result as any).message || '');
       if (!result.ok && (result as any).code === 'CLIENT_REQUIRED') return problem(c, 422, 'CLIENT_REQUIRED', (result as any).message || '');
       if (!result.ok && (result as any).code === 'TASK_NOT_FOUND') return problem(c, 404, 'TASK_NOT_FOUND', (result as any).message || '');
       return c.json(result, result.ok ? 200 : 500);

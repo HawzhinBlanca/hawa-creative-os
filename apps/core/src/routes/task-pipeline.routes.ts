@@ -10,6 +10,7 @@ import { manifestFromOperations } from '../services/generated-manifest.js';
 import { inlineTemplateCopyMissing, COPY_REQUIRED_DETAIL } from '../core-helpers.js';
 import { DEFAULT_CLIENT_ID } from '../core-context.js';
 import { readTaskBrief } from '../services/brief-reader.js';
+import { rejectLegacyTaskDesignWrite } from './lifecycle-design-proof.js';
 
 /**
  * Routing a task to a client, its brief and generating its design (architecture programme 1.3, G7).
@@ -41,6 +42,8 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to route task');
     }
+    const lifecycleRefusal = await rejectLegacyTaskDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
     const taskId = c.req.param('taskId');
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
     let task = await readCurrentTask(taskId);
@@ -129,6 +132,9 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
   registerRoute('post', '/tasks/:taskId/briefs', async (c: any) => {
     const taskId = c.req.param('taskId');
     const auth = verifyRequestAuth(c);
+    if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    const lifecycleRefusal = await rejectLegacyTaskDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
     let task = await readCurrentTask(taskId);
@@ -235,6 +241,8 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
     const taskId = c.req.param('taskId');
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    const lifecycleRefusal = await rejectLegacyTaskDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
 
     let task = await readCurrentTask(taskId);
