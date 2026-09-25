@@ -29,7 +29,7 @@ NOW="$(date -u +%Y%m%dT%H%M%SZ)"; START_TS="$(date -u +%FT%TZ)"; START_S="$(date
 SCRATCH_SUFFIX="$(printf '%s' "${HAWA_SCRATCH_DB_SUFFIX:-$$}" | tr -cd 'a-z0-9' | cut -c1-16)"; SCRATCH_SUFFIX="${SCRATCH_SUFFIX:-$$}"
 DDB="hawa_drill_$(printf '%s' "$NOW" | tr '[:upper:]' '[:lower:]')_${SCRATCH_SUFFIX}"
 WORK="$DRILL_ROOT/$NOW"; DB_CREATED=0
-DUMP_NAME=""; TARGET=""; BLOBS_CHECKED=""; MISSING=""; ROWS=""; WITHOUT_ROW=""
+DUMP_NAME=""; TARGET=""; BLOBS_CHECKED=""; MISSING=""; ROWS=""; WITHOUT_ROW=""; RESTATE_ARCHIVE=""; RESTATE_CHECK="off"
 
 notify() { # Telegram, operator chat; values read at call time, never logged
   # `|| true`: under set -e and pipefail a missing file or line would end the script here, with the
@@ -42,10 +42,11 @@ notify() { # Telegram, operator chat; values read at call time, never logged
 # only from this script's own variables (numbers, file names it chose), never from file contents.
 jnum() { if [[ "$1" =~ ^[0-9]+$ ]]; then echo "$1"; else echo "NULL"; fi; }
 record() {
-  local status="$1" detail="${2:-}" rto=$(( $(date +%s) - START_S )) target="NULL" dump
+  local status="$1" detail="${2:-}" rto=$(( $(date +%s) - START_S )) target="NULL" dump restate
   detail="$(printf '%s' "$detail" | tr -cd 'A-Za-z0-9 ._:/()=-' | cut -c1-300)"
   # The dump's name comes from a glob over the archive folder: kept to the characters a name has.
   dump="$(printf '%s' "$DUMP_NAME" | tr -cd 'A-Za-z0-9._-' | cut -c1-100)"
+  restate="$(printf '%s' "$RESTATE_ARCHIVE" | tr -cd 'A-Za-z0-9._-' | cut -c1-100)"
   if [[ "$TARGET" =~ ^[0-9T:Z-]+$ ]]; then target="'${TARGET}'::timestamptz"; fi
   docker exec -i "$PG" psql -U hawa_owner -d "$LIVE_DB" -v ON_ERROR_STOP=1 -q >/dev/null <<SQL || echo "WARNING: could not record the drill in hawa.backup_drills" >&2
 INSERT INTO hawa.backup_drills (tenant_id, started_at, completed_at, target_timestamp, rpo_seconds, rto_seconds, status, evidence, performed_by)
@@ -53,7 +54,7 @@ VALUES ('00000000-0000-4000-a000-000000000001', '${START_TS}', now(), ${target},
   extract(epoch FROM ('${START_TS}'::timestamptz - ${target}))::bigint, ${rto}, '${status}',
   jsonb_build_object('drill_type', 'data_and_blobs', 'dump', '${dump}', 'blobs_checked', $(jnum "$BLOBS_CHECKED"),
     'rows', $(jnum "$ROWS"), 'missing', $(jnum "$MISSING"), 'referenced_without_row', $(jnum "$WITHOUT_ROW"),
-    'rto_seconds', ${rto}, 'detail', '${detail}'),
+    'rto_seconds', ${rto}, 'restate_archive', '${restate}', 'restate_check', '${RESTATE_CHECK}', 'detail', '${detail}'),
   '00000000-0000-4000-b000-000000000001');
 SQL
 }
@@ -140,6 +141,18 @@ ROWS="$(num rows)"; BLOBS_CHECKED="$(num checked)"; MISSING="$(num missing)"; CO
 WITHOUT_ROW="$(num referencedWithoutRow)"
 [[ "$RC" == 0 && "$MISSING" == 0 && "$CORRUPT" == 0 ]] \
   || fail "the store check found missing=${MISSING} corrupt=${CORRUPT} of ${ROWS} file rows in ${DUMP_NAME}"
+
+# Re-read the stored Restate ciphertext on a later day, independently of the backup's own immediate
+# round-trip. This is archive integrity only; a clean-host Restate start and replay remain R10 gates.
+if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]]; then
+  RESTATE_MANIFEST="$( { ls -1t "$ARCHIVE_DEST"/restate_*.json 2>/dev/null || true; } | head -1)"
+  [[ -n "$RESTATE_MANIFEST" ]] || fail "no Restate volume archive manifest exists"
+  RESTATE_ARCHIVE="$(basename "$RESTATE_MANIFEST")"
+  HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" \
+    python3 "$ROOT/infra/backup/restate_nightly.py" --verify-archive "$RESTATE_MANIFEST" \
+    || fail "the stored Restate volume archive failed independent verification"
+  RESTATE_CHECK="verified_archive"
+fi
 
 record passed "rows=${ROWS} needed=${NEEDED}"
 echo "✓ restore drill: ${DUMP_NAME} restored, ${BLOBS_CHECKED} of ${ROWS} file rows checked, missing=${MISSING}, in $(( $(date +%s) - START_S )) s"

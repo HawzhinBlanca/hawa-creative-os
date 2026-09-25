@@ -242,6 +242,18 @@ if [[ -d "$ARCHIVE_DEST" && "$ARCHIVE_DEST" != gs://* ]]; then
   fi
 fi
 
+# R10: the Restate journal lives in a different volume from PostgreSQL and the file store. Opt in
+# only after its immutable helper image, key and isolated restore rehearsal are configured. A failed
+# Restate copy fails the night before any file-store garbage collection or OK receipt.
+RESTATE_STATUS="off"
+if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]]; then
+  [[ "$ARCHIVE_DEST" != gs://* ]] || fail "Restate volume backup needs a local encrypted archive destination"
+  HAWA_BACKUP_ARCHIVE_DEST="$ARCHIVE_DEST" HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" \
+    python3 "$ROOT/infra/backup/restate_nightly.py" --apply \
+    || fail "Restate volume backup failed; the database/file copy may be valid, but the night is incomplete"
+  RESTATE_STATUS="archived"
+fi
+
 # The collector, only now: a file is deleted only after tonight's dump and its files are archived.
 # A failure is reported and does not fail the backup, which is already complete. With a gs://
 # destination the files are not archived at all, so nothing may be deleted: the disk copy is the only one.
@@ -265,5 +277,5 @@ elif [[ "$HAS_STORE" == t && "${HAWA_BLOB_GC:-on}" != off ]]; then
   fi
 fi
 
-echo "$(date -u +%FT%TZ) OK ${STAMP} bytes=${SIZE} tasks=${REST} events=${EVENTS} sha256=$(cat "$OUT.sha256" | cut -c1-16) dump_s=${DUMP_S} blobs=${BLOB_COUNT} blob_bytes=${BLOB_BYTES} new_blobs=${NEW_BLOBS} refs_without_row=${REFS_WITHOUT_ROW} gc_deleted=${GC_DELETED}" >> "$LOG"
+echo "$(date -u +%FT%TZ) OK ${STAMP} bytes=${SIZE} tasks=${REST} events=${EVENTS} sha256=$(cat "$OUT.sha256" | cut -c1-16) dump_s=${DUMP_S} blobs=${BLOB_COUNT} blob_bytes=${BLOB_BYTES} new_blobs=${NEW_BLOBS} refs_without_row=${REFS_WITHOUT_ROW} restate=${RESTATE_STATUS} gc_deleted=${GC_DELETED}" >> "$LOG"
 echo "✓ backup ${OUT/$ROOT\//} (${SIZE} bytes), restore verified: tasks=${REST} events=${EVENTS}, files=${BLOB_COUNT} (${NEW_BLOBS} new), archived to ${ARCHIVE_DEST}"
