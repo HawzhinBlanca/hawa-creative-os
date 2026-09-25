@@ -1,8 +1,10 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, sql, withRlsContext } from '@hawa/db';
+import { createDb, sql, withRlsContext, withSessionAdvisoryLock } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
+import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 if (url && !/^\/hawa_(repair|tr_)/.test(new URL(url).pathname)) throw new Error('Disposable hawa_repair database required');
@@ -210,6 +212,75 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
       expect(response.status).toBe(422);
       expect((await response.json()).title).toBe('Nothing Approved To Deliver');
     }
+  });
+
+  it('rechecks approval under the publication lock when capture commits after the first lookup', async () => {
+    const { taskId } = await draftWithTimedOutCheck();
+    const setupApp = createApp({ db, canvaOptions } as any);
+    const checked = await deskCheck(setupApp, taskId);
+    const revisionId = (await (await setupApp.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect((await decide(setupApp, taskId, revisionId, 'approved', [checked.artifact.id])).status).toBe(201);
+
+    const stored = canvaDeliverableStore(new CanvaConnectService(db, canvaOptions));
+    const publisher = { publish: vi.fn(async () => ({ ok: false as const,
+      error: { code: 'TEST_PUBLISH_CALLED', message: 'The stale approval reached the publisher' } })) };
+    let inserted = false;
+    const app = createAppWithClientFixtures({
+      db, canvaOptions, publisher,
+      deliverableStore: {
+        ...stored,
+        read: async (...args: Parameters<typeof stored.read>) => {
+          const bytes = await stored.read(...args);
+          if (!inserted) {
+            inserted = true;
+            const operationId = randomUUID();
+            const image = Buffer.from('capture committed after approval lookup, before the publication lock');
+            await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, async (trx) => {
+              await sql`INSERT INTO hawa.canva_remote_operations
+                (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
+                VALUES (${operationId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${worker.actorId}, ${'race-' + randomUUID()},
+                  'race-capture', 'export', 'retrieved', ${designId}, 1, '{"format":"png"}'::jsonb, clock_timestamp(), clock_timestamp())`.execute(trx);
+              await sql`INSERT INTO hawa.canva_export_bytes
+                (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, created_at)
+                VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operationId}::uuid,
+                  'png', ${createHash('sha256').update(image).digest('hex')}, ${image}, clock_timestamp())`.execute(trx);
+            });
+          }
+          return bytes;
+        },
+      },
+      telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) },
+    } as any);
+    const response = await app.request(`/tasks/${taskId}/publish`, {
+      method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'current_task' }),
+    });
+    expect(inserted).toBe(true);
+    expect(response.status).toBe(422);
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
+
+  it('keeps a completed export retriable while publication owns the task lock', async () => {
+    const { taskId, app } = await draftWithTimedOutCheck();
+    const started = await app.request(`/tasks/${taskId}/canva/exports`, {
+      method: 'POST', headers: { ...deskHeaders, 'Idempotency-Key': 'locked-capture-' + randomUUID().slice(0, 8) },
+      body: JSON.stringify({ format: 'pptx', expectedVersion: 1 }),
+    });
+    expect(started.status).toBe(202);
+    const operationId = (await started.json()).operationId;
+    const held = await withSessionAdvisoryLock(db, `publish:${taskId}`, async () => {
+      const response = await app.request(`/tasks/${taskId}/canva/exports/${operationId}/resume`, { method: 'POST', headers: deskHeaders });
+      const count = await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, async (trx) =>
+        (await sql<{ count: string }>`SELECT count(*)::text AS count FROM hawa.canva_export_bytes WHERE tenant_id=${tenantId}::uuid AND operation_id=${operationId}::uuid`.execute(trx)).rows[0].count);
+      return { status: response.status, body: await response.json(), count };
+    });
+    expect(held.acquired).toBe(true);
+    if (!held.acquired) return;
+    expect(held.value.status).toBe(503);
+    expect(held.value.body.title).toBe('PUBLICATION_IN_PROGRESS');
+    expect(held.value.count).toBe('0');
+    const resumed = await app.request(`/tasks/${taskId}/canva/exports/${operationId}/resume`, { method: 'POST', headers: deskHeaders });
+    expect(resumed.status).toBe(200);
+    expect((await resumed.json()).status).toBe('retrieved');
   });
 
   it('after "Request Revision", a capture whose check fails is recorded as the new revision but cannot be approved', async () => {

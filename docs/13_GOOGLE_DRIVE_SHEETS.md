@@ -55,6 +55,17 @@ Names are human-friendly; IDs are authoritative.
 
 A notification failure does not undo valid publication.
 
+For a task with a Canva approval, Core reads the selected bytes before taking its per-task
+publication lock, then rechecks that same approval after taking the lock and before changing task
+state or calling Google. A completed Canva export takes the same lock while it commits its bytes and
+retrieval status; if delivery holds the lock, the export stays submitted for retry. The capture
+transaction also locks the task row and stamps the actual insertion time, so a capture committed
+after approval is visible to the freshness check. The legacy Delivery workflow repeats this check
+under the lock when claiming a run, and its preparation repeats it before provider effects. This
+serializes **locally committed** captures with publication. An edit made only in Canva, without a
+new capture, is not yet observable by this database guard; live provider-version checking and an
+end-to-end race drill remain release work under R17.
+
 ## 5. Idempotency
 
 File identity:

@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T14:49:50Z",
+  "generatedAt": "2026-09-25T15:03:51Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -564,8 +564,8 @@
     },
     {
       "path": "docs/13_GOOGLE_DRIVE_SHEETS.md",
-      "sha256": "09aa2a69c978fc80cd14a1c370ec022cce475702f4dafa19a3975c0f63f69676",
-      "bytes": 9893
+      "sha256": "e9263a5d9c329c9428e5449082c8079623cd90846d662581c8c5bb5c03393899",
+      "bytes": 10820
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
@@ -824,8 +824,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R17_EVIDENCE.md",
-      "sha256": "4b3066e14e217d67d9b36156e711e0df7150193a960f3dfd9c36f81fc56dacac",
-      "bytes": 7501
+      "sha256": "7bdeedf13624e61db4ec3fdea5b0a9e6fc756c78deabf12a1a61de330623e998",
+      "bytes": 9660
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R18_EVIDENCE.md",
@@ -854,8 +854,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "4d6054aff05b6b17fac4f4d74d02085fce0bc5b6cdc9260d900634c58e3b6309",
-      "bytes": 129325
+      "sha256": "3a03ea2aaf9e1ee627cd7461dc74e3b6275aa113befe9824dafce2b698d09124",
+      "bytes": 130004
     },
     {
       "path": "plans/user-stories.csv",

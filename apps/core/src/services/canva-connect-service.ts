@@ -1,6 +1,6 @@
 import { checkCanvaPptx } from '@hawa/qa';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
-import { sql, withRlsContext, CanvaBindingRepository, type BlobStore, type Database, type Kysely } from '@hawa/db';
+import { sql, withRlsContext, withSessionAdvisoryLock, CanvaBindingRepository, type BlobStore, type Database, type Kysely } from '@hawa/db';
 import { blobStoreFor, putToStore } from './blob-store-context.js';
 import { CanvaConnectClient, CanvaCapturePipeline, CanvaHttpError, canvaRequestNeverSent } from '@hawa/integrations';
 
@@ -543,13 +543,22 @@ export class CanvaConnectService {
           await this.tx(s,db => sql`UPDATE hawa.canva_remote_operations SET status='stale',updated_at=now() WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
           return { operationId:id,status:'stale',qaStatus:'not_run' };
         }
-        await this.tx(s, async db => {
+        // A publisher rechecks approval after taking this same session lock and keeps it through
+        // provider effects. Capture must commit both bytes and operation status while it owns the
+        // lock; otherwise a newer export can appear after that recheck and still be delivered.
+        const held = await withSessionAdvisoryLock(this.db, `publish:${taskId}`, () => this.tx(s, async db => {
+          const task = (await sql<any>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+          if (!task || task.client_id !== row.client_id) fail(409,'CANVA_CLIENT_CHANGED','Client changed during export');
           const locked = (await sql<any>`SELECT * FROM hawa.canva_bindings WHERE id=${binding.id}::uuid AND tenant_id=${s.tenantId}::uuid FOR UPDATE`.execute(db)).rows[0];
           if (!locked || locked.version !== row.binding_version || locked.status !== 'bound' || locked.client_id !== row.client_id) fail(409,'CANVA_BINDING_STALE','Binding changed during export');
-          await sql`INSERT INTO hawa.canva_export_bytes(id,tenant_id,task_id,client_id,operation_id,format,sha256,content,content_check)
-            VALUES (${randomUUID()}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${row.client_id}::uuid,${id}::uuid,${row.metadata.format === 'png' ? 'png' : row.metadata.format==='pptx'?'pptx':'pdf_standard'},${hash(bytes)},${bytes},${contentCheck?JSON.stringify(contentCheck):null}::jsonb) ON CONFLICT (operation_id) DO NOTHING`.execute(db);
+          await sql`INSERT INTO hawa.canva_export_bytes(id,tenant_id,task_id,client_id,operation_id,format,sha256,content,content_check,created_at)
+            VALUES (${randomUUID()}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${row.client_id}::uuid,${id}::uuid,${row.metadata.format === 'png' ? 'png' : row.metadata.format==='pptx'?'pptx':'pdf_standard'},${hash(bytes)},${bytes},${contentCheck?JSON.stringify(contentCheck):null}::jsonb,clock_timestamp()) ON CONFLICT (operation_id) DO NOTHING`.execute(db);
           await sql`UPDATE hawa.canva_remote_operations SET status='retrieved',updated_at=now() WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db);
-        }); row.status='retrieved';
+        }));
+        // Leave the remote operation submitted so a later resume can commit the downloaded bytes.
+        // A 503 is retryable by the stranded-operation sweeper; a 409 would incorrectly fail it.
+        if (!held.acquired) fail(503,'PUBLICATION_IN_PROGRESS','Delivery is publishing this task; resume the Canva capture shortly');
+        row.status='retrieved';
       }
     }
     const artifact = row.status === 'retrieved' ? await this.tx(s,async db => (await sql<any>`SELECT id,format,sha256,content_check,octet_length(content) AS byte_size FROM hawa.canva_export_bytes WHERE operation_id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db)).rows[0]) : null;

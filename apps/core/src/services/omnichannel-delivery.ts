@@ -493,6 +493,17 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     });
 
     const doPublish = async () => {
+      // The first lookup and byte read happen before this lock. A capture can commit in that
+      // interval, so the publisher must recheck the same approval while capture commits are fenced
+      // by publish:${taskId}. This is before a task transition or any provider effect.
+      if (db) {
+        const current = await findApprovalForDelivery(deliveryTenantId, taskId, task,
+          approval.designRevisionId, { approvalId: approval.approvalId, allowInvalidated: isDeliverApprovedStored });
+        if (!current || current.approvalId !== approval.approvalId) {
+          return { ok: false, status: 422, title: 'Nothing Approved To Deliver',
+            code: 'NO_APPROVAL', message: NO_APPROVAL_TO_DELIVER };
+        }
+      }
       // One executor per publication (slice 2.2). Read under the publish lock, which the publish route
       // also takes when it hands a delivery to the workflow, so the answer cannot change under us.
       let priorPublication = false;
@@ -1140,11 +1151,15 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
 
     type Claim = { kind: 'complete'; publicationId: string } | { kind: 'running'; run: number } | { kind: 'started'; run: number; from: string }
-      | { kind: 'wrong_state'; state: string } | { kind: 'core' } | { kind: 'send_unconfirmed' };
+      | { kind: 'wrong_state'; state: string } | { kind: 'core' } | { kind: 'send_unconfirmed' } | { kind: 'approval_changed' };
     let held: Awaited<ReturnType<typeof withSessionAdvisoryLock<Claim>>>;
     try {
-      held = await withSessionAdvisoryLock(db, `publish:${taskId}`, () =>
-        withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx): Promise<Claim> => {
+      held = await withSessionAdvisoryLock(db, `publish:${taskId}`, async () => {
+        const current = await findApprovalForDelivery(tenantId, taskId, task, approval.designRevisionId, {
+          approvalId: approval.approvalId, allowInvalidated: request.policy === 'deliver_approved_stored',
+        });
+        if (!current || current.approvalId !== approval.approvalId) return { kind: 'approval_changed' } as const;
+        return withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx): Promise<Claim> => {
           let created = false;
           const existing = await publicationRepo.findByKey(publicationKey, tenantId, trx);
           // Core's own delivery queued these files for the requester (a chat-only delivery writes no
@@ -1186,8 +1201,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
           await sql`UPDATE hawa.publications SET executor = 'restate', executor_run = ${run}, updated_at = now()
             WHERE tenant_id = ${tenantId}::uuid AND id = ${pub.id}::uuid`.execute(trx);
           return { kind: 'started', run, from: state };
-        })
-      );
+        });
+      });
     } catch (err) {
       log.error('[core:publish:workflow] Could not hand the delivery to the Delivery workflow:', err);
       return { ok: false, status: 503, code: 'DATABASE_UNAVAILABLE', message: 'The delivery could not be recorded; nothing was started. Try again' };
@@ -1196,6 +1211,9 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       return { ok: false, status: 409, code: 'PUBLICATION_IN_PROGRESS', message: 'A delivery of this task is running right now; try again in a moment' };
     }
     const claim = held.value;
+    if (claim.kind === 'approval_changed') {
+      return { ok: false, status: 422, code: 'NO_APPROVAL', message: NO_APPROVAL_TO_DELIVER };
+    }
     if (claim.kind === 'complete') return { ok: true, complete: true, publicationId: claim.publicationId };
     if (claim.kind === 'core') {
       return { ok: false, status: 409, code: DELIVERY_OWNED_BY_CORE, message: `The delivery of task ${taskId} was started by Core; it is finished there` };
