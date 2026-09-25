@@ -413,7 +413,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const healthRes = await app.request('/v1/integrations/health');
     expect(healthRes.status).toBe(200);
     const health = await healthRes.json();
-    expect(health.items.length).toBe(6);
+    expect(health.items.length).toBe(7);
     for (const item of health.items) {
       expect(item.state).not.toBe('healthy');
       expect(item.reachability).toBe('unknown');

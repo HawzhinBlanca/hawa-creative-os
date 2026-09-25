@@ -21,9 +21,10 @@ describe('the production entrypoint', () => {
   });
 
   it('starts Telegram polling unless the worker polls', () => {
-    expect(productionAppOptions({})).toMatchObject({ enableTelegramPolling: true, enableDraftReminders: true, enableCanvaSweeper: true });
+    expect(productionAppOptions({})).toMatchObject({ enableTelegramPolling: true, enableBillingProbeSchedule: false, enableDraftReminders: true, enableCanvaSweeper: true });
     expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: 'core' }).enableTelegramPolling).toBe(true);
     expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: 'worker' }).enableTelegramPolling).toBe(false);
     expect(productionAppOptions({ HAWA_DRAFT_REMINDERS: 'off' }).enableDraftReminders).toBe(false);
+    expect(productionAppOptions({ HAWA_BILLING_PROBE_ENABLED: 'on' }).enableBillingProbeSchedule).toBe(true);
   });
 });

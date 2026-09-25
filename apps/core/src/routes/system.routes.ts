@@ -36,6 +36,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
     ensureSessionLoaded,
     bearerTokenOf,
     streamTickets,
+    paidModelHealth,
   } = ctx;
 
   const maskKey = (key?: string) => {
@@ -374,7 +375,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   // Integrations Health
-  registerRoute('get', '/integrations/health', (c: any) => {
+  registerRoute('get', '/integrations/health', async (c: any) => {
     const hasTelegram = Boolean(process.env.TELEGRAM_BOT_TOKEN);
     const hasWaha = Boolean(process.env.WAHA_API_KEY || process.env.WAHA_BASE_URL);
     const hasDrive = Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_DRIVE_FOLDER_ID);
@@ -383,8 +384,8 @@ export function registerSystemRoutes(ctx: RouteContext) {
 
     const canvaBreaker = globalCanvaCircuitBreaker?.getSnapshot();
     const observedAt = new Date().toISOString();
-    // This endpoint reads configuration and local switches only. It does not call the providers,
-    // inspect a real export, or perform a paid probe; those facts must remain unknown here.
+    // Other adapters have only local configuration/switch evidence. The model item uses a stored
+    // paid observation; reading this endpoint never makes a provider call.
     const reported = (integrationId: string, kind: string, configured: boolean | null, blocked?: string) => ({
       integrationId,
       kind,
@@ -401,8 +402,30 @@ export function registerSystemRoutes(ctx: RouteContext) {
           : 'Verify this adapter with a scoped real operation before relying on it.',
     });
 
+    const model = await paidModelHealth();
+    const configuredModel = Boolean(process.env.OPENAI_API_KEY);
+    const reachedModel = ['connected', 'unauthorized', 'billing_exhausted', 'rate_limited', 'http_error'].includes(model.status);
+    const modelItem = {
+      integrationId: 'int_openai_model', kind: 'model_provider',
+      state: model.status === 'connected' ? 'paid_verified' : model.status === 'unverified' ? 'configured' : model.status,
+      configured: configuredModel,
+      reachability: reachedModel ? 'reachable' : model.status === 'unreachable' ? 'unreachable' : 'unknown',
+      paidVerification: model.status === 'connected' ? 'paid_verified' : model.status === 'stale' ? 'stale'
+        : model.status === 'unknown' ? 'unknown'
+        : model.status === 'unverified' || model.status === 'unconfigured' ? 'not_run' : 'failed',
+      lastVerifiedAt: model.status === 'connected' ? model.at : null,
+      lastObservedAt: model.at,
+      checkedAt: observedAt,
+      nextAction: model.status === 'connected' ? 'Monitor the next scheduled paid probe.'
+        : model.status === 'unconfigured' ? 'Configure the model provider before using it.'
+          : model.status === 'unverified' ? 'Enable and run the paid probe before relying on model health.'
+            : model.status === 'stale' ? 'Check why the scheduled paid probe stopped running.'
+              : 'Inspect the provider failure and retry a scoped paid probe.',
+    };
+
     return c.json({
       items: [
+        modelItem,
         reported('int_canva_studio', 'canva_native_studio', null, canvaBreaker?.state === 'OPEN' ? 'degraded' : undefined),
         reported('int_telegram', 'telegram', hasTelegram, channelKillSwitches?.telegram ? 'kill_switch_active' : undefined),
         reported('int_waha', 'waha', hasWaha, channelKillSwitches?.waha ? 'quarantined' : undefined),

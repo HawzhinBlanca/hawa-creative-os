@@ -86,6 +86,7 @@ import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.
 import { isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
 import { telegramPollerOf } from './services/telegram-poller-owner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
+import { evaluatePaidModelHealth, isBillableChatCompletion, paidModelConfigFingerprint, readLatestPaidModelObservation, recordPaidModelObservation, type PaidModelHealth, type PaidModelProbeResult } from './services/paid-model-health.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
 import { remindUnansweredDrafts } from './services/draft-reminders.js';
 import { createStreamTicketStore } from './services/stream-tickets.js';
@@ -538,25 +539,22 @@ export function createApp(options?: CreateAppOptions) {
   // Honest Health & Readiness Probes (CV-20, FR-064, FR-073, R1/F10) - Zero hardcoded health!
   let lastVerifiedProgressAt = new Date().toISOString();
 
-  // Active, scheduled paid billing probe (R1/F10)
-  // Executes a minimal paid completion call (gpt-4o-mini, max_tokens: 1) every 3 minutes.
-  // Real billing exhaustion (429 credit_balance_exhausted / insufficient_quota) and auth errors (401/403)
-  // flip health to billing_exhausted / unauthorized and trigger operator alerts.
+  // The scheduled call records its result in Postgres. Health never turns a configured key or a
+  // result from another key/model into proof that the current model can take paid traffic.
   interface PaidProbeState {
-    at: number;
-    status: string;
-    detail?: any;
     lastAlertSentAt?: number;
     lastAlertMessageId?: string;
   }
-  let lastPaidProbe: PaidProbeState = { at: 0, status: 'unverified' };
+  let lastPaidProbe: PaidProbeState = {};
 
-  const executePaidModelProbe = async (): Promise<{ status: string; detail?: any }> => {
+  const executePaidModelProbe = async (): Promise<{ status: PaidModelProbeResult | 'unconfigured' | 'unverified'; configSha256?: string }> => {
     const key = process.env.OPENAI_API_KEY;
     if (!key) return { status: 'unconfigured' };
     if (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule) {
       return { status: 'unverified' };
     }
+    const model = process.env.OPENAI_MODEL || resolveModel('text');
+    const configSha256 = paidModelConfigFingerprint(key, model);
 
     try {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -566,18 +564,17 @@ export function createApp(options?: CreateAppOptions) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || resolveModel('text'),
+          model,
           messages: [{ role: 'user', content: 'ping' }],
-          // One token proves the key and the credit. A reasoning model stops at the limit, which the
-          // handler below counts as connected.
+          // A successful response proves this configured model accepted a billable request.
+          // A provider error, including an output-limit error, is not a successful probe.
           max_completion_tokens: 1,
         }),
         signal: AbortSignal.timeout(7000),
       });
 
       if (res.status === 401 || res.status === 403) {
-        const errJson: any = await res.json().catch(() => ({}));
-        return { status: 'unauthorized', detail: errJson?.error || { message: `HTTP ${res.status}` } };
+        return { status: 'unauthorized', configSha256 };
       } else if (res.status === 429) {
         const errJson: any = await res.json().catch(() => ({}));
         const code = errJson?.error?.code;
@@ -585,31 +582,28 @@ export function createApp(options?: CreateAppOptions) {
         const isBilling = code === 'credit_balance_exhausted' || type === 'insufficient_quota';
         return {
           status: isBilling ? 'billing_exhausted' : 'rate_limited',
-          detail: errJson?.error || { message: 'Rate limit or billing exhaustion' },
+          configSha256,
         };
       } else if (res.ok) {
-        return { status: 'connected' };
+        const body: unknown = await res.json().catch(() => null);
+        return { status: isBillableChatCompletion(body) ? 'connected' : 'http_error', configSha256 };
       } else {
-        const errJson: any = await res.json().catch(() => ({}));
-        if (errJson?.error?.message?.includes('max_tokens or model output limit was reached')) {
-          return { status: 'connected' };
-        }
-        return { status: `http_${res.status}`, detail: errJson?.error || { message: `HTTP ${res.status}` } };
+        return { status: 'http_error', configSha256 };
       }
-    } catch (err: any) {
-      return { status: 'unreachable', detail: { message: err?.message || 'Network error' } };
+    } catch {
+      return { status: 'unreachable', configSha256 };
     }
   };
 
-  const checkAndAlertBilling = async (probeResult: { status: string; detail?: any }) => {
-    lastPaidProbe = {
-      at: Date.now(),
-      status: probeResult.status,
-      detail: probeResult.detail,
-      lastAlertSentAt: lastPaidProbe.lastAlertSentAt,
-      lastAlertMessageId: lastPaidProbe.lastAlertMessageId,
-    };
-    lastVerifiedProgressAt = new Date().toISOString();
+  const checkAndAlertBilling = async (probeResult: { status: PaidModelProbeResult | 'unconfigured' | 'unverified'; configSha256?: string }) => {
+    if (db && probeResult.configSha256 && probeResult.status !== 'unconfigured' && probeResult.status !== 'unverified') {
+      try {
+        await recordPaidModelObservation(db, DEFAULT_TENANT_ID, SYSTEM_AUTOMATION_USER_ID, probeResult.configSha256, probeResult.status);
+        lastVerifiedProgressAt = new Date().toISOString();
+      } catch (err) {
+        log.error('[HealthProbe] Paid observation write failed:', err);
+      }
+    }
 
     if (probeResult.status === 'billing_exhausted' || probeResult.status === 'unauthorized') {
       const now = Date.now();
@@ -635,18 +629,20 @@ export function createApp(options?: CreateAppOptions) {
     }
   };
 
-  const probeModelProvider = async (): Promise<string> => {
+  const paidModelHealth = async (): Promise<PaidModelHealth> => {
     const key = process.env.OPENAI_API_KEY;
-    if (!key) return 'unconfigured';
-    if (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule) {
-      return 'unverified';
+    const configSha256 = key ? paidModelConfigFingerprint(key, process.env.OPENAI_MODEL || resolveModel('text')) : null;
+    const enabled = !(options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule);
+    if (!configSha256 || !enabled || !db) return evaluatePaidModelHealth(null, configSha256, enabled, 2 * billingProbeMs);
+    try {
+      const observation = await readLatestPaidModelObservation(db, DEFAULT_TENANT_ID, SYSTEM_AUTOMATION_USER_ID);
+      return evaluatePaidModelHealth(observation, configSha256, enabled, 2 * billingProbeMs);
+    } catch (err) {
+      log.error('[HealthProbe] Paid observation read failed:', err);
+      return { status: 'unknown', observedStatus: null, at: null, schemaVersion: null };
     }
-
-    // Health reports the scheduled probe's last result and never pays for one itself: Docker checks
-    // /health every 10 s, and an inline probe on a stale result made the 3-minute schedule a floor.
-    if (lastPaidProbe.at && Date.now() - lastPaidProbe.at > 2 * billingProbeMs) return 'stale';
-    return lastPaidProbe.status;
   };
+  const probeModelProvider = async (): Promise<string> => (await paidModelHealth()).status;
 
   // The paid billing probe runs on a schedule only: HAWA_BILLING_PROBE_MINUTES, default 30, never
   // under 5. It ran every 3 minutes with up to 100 output tokens on gpt-6-astra from 2026-09-16:
@@ -654,7 +650,7 @@ export function createApp(options?: CreateAppOptions) {
   // already fails with INSUFFICIENT_QUOTA and tells the requester; this only warns the owner early.
   const billingProbeMs = Math.max(5, Number(process.env.HAWA_BILLING_PROBE_MINUTES) || 30) * 60_000;
   if (options?.enableBillingProbeSchedule && !options?.skipPaidModelProbe) {
-    setTimeout(async () => {
+    const initialProbeTimer = setTimeout(async () => {
       try {
         const res = await executePaidModelProbe();
         await checkAndAlertBilling(res);
@@ -662,7 +658,8 @@ export function createApp(options?: CreateAppOptions) {
         log.error('[HealthProbe] Initial probe failed:', err);
       }
     }, 2000);
-    setInterval(async () => {
+    initialProbeTimer.unref();
+    const recurringProbeTimer = setInterval(async () => {
       try {
         const res = await executePaidModelProbe();
         await checkAndAlertBilling(res);
@@ -670,6 +667,7 @@ export function createApp(options?: CreateAppOptions) {
         log.error('[HealthProbe] Scheduled probe failed:', err);
       }
     }, billingProbeMs);
+    recurringProbeTimer.unref();
   }
 
   // The bot credential is probed with getMe at most every five minutes: a revoked or stale token
@@ -727,7 +725,8 @@ export function createApp(options?: CreateAppOptions) {
       diskStatus = 'read_only';
     }
 
-    const modelProviderStatus = await probeModelProvider();
+    const modelHealth = await paidModelHealth();
+    const modelProviderStatus = modelHealth.status;
     const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
     // Degraded rather than unhealthy: the worker waits for a healthy core before it starts, and
     // Restate can only register the worker once it is running.
@@ -768,8 +767,10 @@ export function createApp(options?: CreateAppOptions) {
     const cutoutStatus = await healthCutouts.health();
     const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
     const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || (isProduction && canvaStatus === 'unverified') || channelKillSwitches.telegram || channelKillSwitches.waha
-      || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable' || modelProviderStatus === 'billing_exhausted'
-      || (isProduction && (modelProviderStatus === 'unverified' || modelProviderStatus === 'stale'))
+      || (isProduction && modelProviderStatus !== 'connected')
+      || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable'
+      || modelProviderStatus === 'billing_exhausted' || modelProviderStatus === 'rate_limited'
+      || modelProviderStatus === 'http_error'
       || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded'
       || restateStatus === 'unregistered' || restateStatus === 'unreachable'
       || funnelStatus === 'stalled' || (Boolean(db) && funnelStatus === 'unknown')
@@ -787,9 +788,11 @@ export function createApp(options?: CreateAppOptions) {
       },
       lastVerifiedProgressAt,
       lastPaidProbe: {
-        at: lastPaidProbe.at ? new Date(lastPaidProbe.at).toISOString() : null,
-        status: lastPaidProbe.status,
-        detail: lastPaidProbe.detail || null,
+        at: modelHealth.at,
+        status: modelHealth.status,
+        observedStatus: modelHealth.observedStatus,
+        schemaVersion: modelHealth.schemaVersion,
+        detail: null,
         lastAlertMessageId: lastPaidProbe.lastAlertMessageId || null,
         everyMinutes: billingProbeMs / 60_000,
       },
@@ -965,6 +968,7 @@ export function createApp(options?: CreateAppOptions) {
       requesterChatOf, deliveryExecutorOfTask, startWorkflowDelivery, prepareWorkflowDelivery, finishWorkflowDelivery,
     },
     probeModelProvider,
+    paidModelHealth,
     honestHealthHandler,
     handleDecommissionedFigmaRoute,
     ensureSessionLoaded,

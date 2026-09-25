@@ -30,6 +30,7 @@ import type {
 import type { CreativeDirectorRunner } from '@hawa/creative';
 import type { SyntheticTrafficDaemon } from '@hawa/testkit';
 import type { EvaluationRunner } from '@hawa/evals';
+import type { PaidModelHealth } from './services/paid-model-health.js';
 import type { AuthContext, ClientDnaSnapshot } from './routes/types.js';
 import type { CreateAppOptions } from './core-helpers.js';
 import type { CanvaConnectService } from './services/canva-connect-service.js';
@@ -115,6 +116,7 @@ export interface CoreContext {
     | 'requesterChatOf' | 'deliveryExecutorOfTask' | 'startWorkflowDelivery' | 'prepareWorkflowDelivery' | 'finishWorkflowDelivery'>;
   /** The model provider's last known health, for the failed-task sweep (health probes stay in app.ts). */
   probeModelProvider: () => Promise<string>;
+  paidModelHealth: () => Promise<PaidModelHealth>;
   honestHealthHandler: (c: any) => Promise<Response>;
   handleDecommissionedFigmaRoute: (c: any) => Response;
   ensureSessionLoaded?: (token?: string) => Promise<void>;

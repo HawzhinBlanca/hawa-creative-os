@@ -6,11 +6,12 @@ import { read, reasonOf } from '../services/statusReport.js';
 interface IntegrationHealth {
   integrationId: string;
   kind: string;
-  state: 'configured' | 'unconfigured' | 'unknown' | 'degraded' | 'kill_switch_active' | 'quarantined' | 'stale' | 'paid_verified';
+  state: 'configured' | 'unconfigured' | 'unknown' | 'degraded' | 'kill_switch_active' | 'quarantined' | 'stale' | 'paid_verified' | 'billing_exhausted' | 'unauthorized' | 'rate_limited' | 'unreachable' | 'http_error';
   configured: boolean | null;
   reachability: 'unknown' | 'reachable' | 'unreachable';
-  paidVerification: 'not_run' | 'verified' | 'failed' | 'stale';
+  paidVerification: 'not_run' | 'paid_verified' | 'failed' | 'stale' | 'unknown';
   lastVerifiedAt: string | null;
+  lastObservedAt?: string | null;
   checkedAt: string;
   nextAction: string;
 }
@@ -624,7 +625,7 @@ export const OpsScreen: React.FC = () => {
                 <span className={`dot ${item.state === 'paid_verified' ? '' : 'warn'}`}></span>
                 <b>{item.kind.toUpperCase().replace('_', ' ')} ({item.integrationId})</b>
                 <p>Setup: {item.configured === null ? 'unknown' : item.configured ? 'configured' : 'missing'} · Reachability: {item.reachability} · Paid verification: {item.paidVerification.replace('_', ' ')} · Local state: {item.state}</p>
-                <p>Next: {item.nextAction} · Configuration observed {item.checkedAt.substring(11, 19)} UTC{item.lastVerifiedAt ? ` · Last verified ${item.lastVerifiedAt}` : ''}</p>
+                <p>Next: {item.nextAction} · Configuration observed {item.checkedAt.substring(11, 19)} UTC{item.lastObservedAt ? ` · Last probe ${item.lastObservedAt}` : item.lastVerifiedAt ? ` · Last verified ${item.lastVerifiedAt}` : ''}</p>
               </div>
             ))
           ) : (

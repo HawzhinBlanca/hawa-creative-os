@@ -13,6 +13,8 @@ import { telegramPollerOf } from './services/telegram-poller-owner.js';
 export function productionAppOptions(env: Record<string, string | undefined> = process.env): CreateAppOptions {
   return {
     enableTelegramPolling: telegramPollerOf(env) === 'core',
+    // Paid verification has a real recurring cost, so the operator opts in explicitly.
+    enableBillingProbeSchedule: env.HAWA_BILLING_PROBE_ENABLED === 'on',
     enableDraftReminders: env.HAWA_DRAFT_REMINDERS !== 'off',
     enableCanvaSweeper: true,
   };
