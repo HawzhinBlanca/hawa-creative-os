@@ -853,17 +853,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     // to be marked COMPLETE regardless, and forced to COMPLETE even when the transition was refused.
     const sheetsConfirmed = publishResult.value.state === 'complete';
     const finalStatus = sheetsConfirmed ? 'COMPLETE' : 'PUBLISH_RECONCILIATION';
-    if (!workflowMode && task.status !== finalStatus) {
-      const finishTrans = sm.transition(
-        finalStatus,
-        actor as any,
-        sheetsConfirmed ? reason : `Files delivered; Sheets row not confirmed: ${publishResult.value.detail?.sheetProblem || 'unknown reason'}`
-      );
-      if (!finishTrans.ok) {
-        return { ok: false, status: 409, message: finishTrans.error.message };
-      }
-      task.status = finalStatus;
-      events.get(taskId)?.push(finishTrans.value);
+    if (!workflowMode && task.status !== finalStatus && !sm.canTransitionTo(finalStatus)) {
+      return { ok: false, status: 409, message: `Illegal transition from ${task.status} to ${finalStatus}` };
     }
 
     // The requester is told once the approved files are verified in Drive, and receives the files
@@ -872,8 +863,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     // or a row Google did not confirm, left the requester unnotified for good. The Sheets outcome
     // travels in the payload and is reported separately; the task still becomes COMPLETE only when
     // the row is confirmed. The key is the publication's, so the retry that later confirms the row
-    // does not notify twice. The notification is written in its own transaction, so a refused
-    // completion transition can no longer take it down with it.
+    // does not notify twice. Its durable command is committed with the receipts and task state;
+    // the worker's later Telegram send remains independent of the publication transaction.
     const notification = await import('./delivery-notification.js');
     const notifyKey = notification.deliveredNotificationKey(taskId, publicationKey);
     const outboxPayload = notification.buildDeliveredNotificationPayload({
@@ -897,50 +888,13 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       files,
     });
 
-    // A task made in Desk has no chat to tell; writing the command anyway only dead-lettered it. The
-    // workflow sends the files itself (TelegramSender), so nothing goes to the outbox for it.
-    if (workflowMode) {
-      // Nothing to write to the outbox.
-    } else if (outboxPayload && !outboxPayload.chatId) {
-      log.info(`[core:omnichannel:notify] Task ${taskId} has no requesting chat; no delivery message is sent.`);
-    } else if (outboxPayload && outboxRepo && db && isValidUuid(taskId)) {
-      try {
-        await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-          if (await outboxRepo.findByIdempotencyKey(pubTenantId, notifyKey, trx)) return;
-          await outboxRepo.enqueue({
-            tenantId: pubTenantId,
-            aggregateType: 'task',
-            aggregateId: taskId,
-            commandType: 'notify.published',
-            idempotencyKey: notifyKey,
-            payload: outboxPayload as unknown as Record<string, unknown>,
-          }, trx);
-        });
-      } catch (err) {
-        log.error('[core:omnichannel:notify] Could not write the delivery notification to the outbox:', err);
-      }
+    // A task made in Desk has no chat to tell. The workflow owns its Telegram send and does not
+    // enqueue here. Core's own delivery must durably record provider receipts before a requester
+    // command can become visible, and completion cannot precede either write.
+    if (db && isValidUuid(taskId) && (!publicationRepo || !dbPub || (!workflowMode && outboxPayload?.chatId && !outboxRepo))) {
+      return holdArchive({ status: 503, code: 'RECEIPTS_NOT_RECORDED',
+        message: 'The Drive and Sheets receipts could not be recorded; requester delivery remains held' });
     }
-
-    if (!workflowMode && sheetsConfirmed && taskRepo && db && isValidUuid(taskId)) {
-      try {
-        const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
-        await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-          await taskRepo.transitionState({
-            taskId,
-            tenantId,
-            toState: 'complete',
-            actorType: 'workflow',
-            actorId: 'publisher',
-            reason: reason || 'Omnichannel publication completed',
-            data: { publicationKey },
-          }, trx);
-        });
-      } catch (err) {
-        log.error('[core:omnichannel:complete] DB transition error:', err);
-      }
-    }
-
-    // Persist per-file drive refs and sheet sync in PostgreSQL ledger (Task R06)
     if (publicationRepo && db && isValidUuid(taskId) && dbPub) {
       try {
         await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
@@ -992,12 +946,38 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
               taskId,
             }, trx);
           }
+          if (!workflowMode && outboxPayload?.chatId && outboxRepo &&
+              !(await outboxRepo.findByIdempotencyKey(pubTenantId, notifyKey, trx))) {
+            await outboxRepo.enqueue({
+              tenantId: pubTenantId,
+              aggregateType: 'task',
+              aggregateId: taskId,
+              commandType: 'notify.published',
+              idempotencyKey: notifyKey,
+              payload: outboxPayload as unknown as Record<string, unknown>,
+            }, trx);
+          }
         });
       } catch (err) {
-        log.error('[core:omnichannel:receipts] Error persisting drive/sheet receipts:', err);
-        // The workflow asks again, and Drive adopts the files it already holds: nothing is uploaded twice.
-        if (workflowMode) return { ok: false, status: 503, code: 'RECEIPTS_NOT_RECORDED', message: 'The Drive and Sheets receipts could not be recorded; try again' };
+        log.error('[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:', err);
+        // The first transaction rolled back. Keep the task pending, and retry the same reserved
+        // Drive IDs only after recording that its external archive outcome needs reconciliation.
+        return holdArchive({ status: 503, code: 'RECEIPTS_NOT_RECORDED',
+          message: 'The Drive and Sheets receipts could not be recorded; requester delivery remains held' });
       }
+    }
+
+    if (!workflowMode && task.status !== finalStatus) {
+      const finishTrans = sm.transition(
+        finalStatus,
+        actor as any,
+        sheetsConfirmed ? reason : `Files delivered; Sheets row not confirmed: ${publishResult.value.detail?.sheetProblem || 'unknown reason'}`
+      );
+      if (finishTrans.ok) events.get(taskId)?.push(finishTrans.value);
+      task.status = finalStatus;
+    }
+    if (!workflowMode && outboxPayload && !outboxPayload.chatId) {
+      log.info(`[core:omnichannel:notify] Task ${taskId} has no requesting chat; no delivery message is sent.`);
     }
 
     if (workflowMode) {

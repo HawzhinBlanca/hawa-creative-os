@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T13:57:49Z",
+  "generatedAt": "2026-09-25T14:10:12Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -564,8 +564,8 @@
     },
     {
       "path": "docs/13_GOOGLE_DRIVE_SHEETS.md",
-      "sha256": "4c583c472190bc98db8ae76fcbf18ad4656e10e0861118a2c1bf091c342c9033",
-      "bytes": 6735
+      "sha256": "b5a1c1e563b5a82f8a03f10a1f06067bb8d6cf10409e76dc860288c3fd0ea745",
+      "bytes": 7594
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
@@ -789,8 +789,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_EVIDENCE.md",
-      "sha256": "712ffbf2f41a86b8b64bcbb3c6495f733e612c72beaac5ce2a981b673b57be60",
-      "bytes": 21298
+      "sha256": "0bfc3d13f9bed561fb01d051598910632cd3b8088573edf1f7e9cceb59375cf8",
+      "bytes": 23777
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_RESTATE_DELIVERY_KILL_DRILL.md",
@@ -839,8 +839,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/REALITY_CHECK_2026-09-25.md",
-      "sha256": "a4ebb7c29ec235f5e601a9c62909fc122eb082ebcfbee4c535307eb5dd57a881",
-      "bytes": 26555
+      "sha256": "55884599db06c971cb6b3302d4db047e1b67f1597fb897fb9a528d646551ea12",
+      "bytes": 27331
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
@@ -854,8 +854,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "94a0fee8d447d5c051dc863427408edddeebfe0dcb45170831b90aa77680c798",
-      "bytes": 125628
+      "sha256": "40a6a7a0fc98d37ef0a72153722bb9a065735c0ef4149e5d1e3151c21bd4590e",
+      "bytes": 126686
     },
     {
       "path": "plans/user-stories.csv",

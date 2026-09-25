@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, sql, withRlsContext, PublicationRepository, type Kysely, type Database } from '@hawa/db';
+import { createDb, sql, withRlsContext, OutboxRepository, PublicationRepository, type Kysely, type Database } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
@@ -219,6 +219,56 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     // -------------------------------------------------------------------------
     // 6. DESK DELIVERY: Trigger publication to Google Drive and Google Sheets
     // -------------------------------------------------------------------------
+    // A provider can accept the upload while Core's receipt transaction fails. That first
+    // attempt must leave no complete task or requester command; the next press reconciles it.
+    const originalRecord = PublicationRepository.prototype.recordDriveRef;
+    const recordRef = vi.spyOn(PublicationRepository.prototype, 'recordDriveRef')
+      .mockImplementationOnce(async () => { throw new Error('injected receipt write failure'); })
+      .mockImplementation(originalRecord);
+    let failedDeliver: Response;
+    try {
+      failedDeliver = await app.request(`/tasks/${taskId}/publish`, {
+        method: 'POST', headers, body: JSON.stringify({ policy: 'current_task' }),
+      });
+    } finally {
+      recordRef.mockRestore();
+    }
+    expect(failedDeliver.status).toBe(503);
+    expect((await failedDeliver.json()).detail).toMatch(/receipts could not be recorded/i);
+    const held = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => ({
+      taskState: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${taskId}::uuid`.execute(trx)).rows[0].state,
+      publication: (await sql<{ state: string; error_class: string }>`SELECT state, error_class FROM hawa.publications WHERE task_id = ${taskId}::uuid`.execute(trx)).rows[0],
+      driveRefs: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.drive_refs WHERE publication_id IN
+        (SELECT id FROM hawa.publications WHERE task_id = ${taskId}::uuid)`.execute(trx)).rows[0].n,
+      requesterCommands: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands
+        WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n,
+    }));
+    expect(held).toEqual({ taskState: 'publishing', publication: { state: 'pending', error_class: 'ARCHIVE_UNCONFIRMED' }, driveRefs: 0, requesterCommands: 0 });
+    expect((await (await app.request(`/tasks/${taskId}`, { headers })).json()).status).toBe('ARCHIVE_RECONCILIATION');
+
+    const originalEnqueue = OutboxRepository.prototype.enqueue;
+    const enqueue = vi.spyOn(OutboxRepository.prototype, 'enqueue')
+      .mockImplementationOnce(async () => { throw new Error('injected outbox commit failure'); })
+      .mockImplementation(originalEnqueue);
+    let failedNotificationCommit: Response;
+    try {
+      failedNotificationCommit = await app.request(`/tasks/${taskId}/publish`, {
+        method: 'POST', headers, body: JSON.stringify({ policy: 'current_task' }),
+      });
+    } finally {
+      enqueue.mockRestore();
+    }
+    expect(failedNotificationCommit.status).toBe(503);
+    const rolledBack = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => ({
+      taskState: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${taskId}::uuid`.execute(trx)).rows[0].state,
+      publication: (await sql<{ state: string; error_class: string }>`SELECT state, error_class FROM hawa.publications WHERE task_id = ${taskId}::uuid`.execute(trx)).rows[0],
+      driveRefs: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.drive_refs WHERE publication_id IN
+        (SELECT id FROM hawa.publications WHERE task_id = ${taskId}::uuid)`.execute(trx)).rows[0].n,
+      requesterCommands: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands
+        WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n,
+    }));
+    expect(rolledBack).toEqual(held);
+
     const deliverRes = await app.request(`/tasks/${taskId}/publish`, {
       method: 'POST',
       headers,
