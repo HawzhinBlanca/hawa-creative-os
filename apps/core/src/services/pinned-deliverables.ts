@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { PackageFile } from '@hawa/contracts';
 import type { PinnedExport } from '@hawa/domain';
-import type { CanvaConnectService } from './canva-connect-service.js';
+import type { CanvaConnectService, CanvaPublicationVersionCheck } from './canva-connect-service.js';
 
 /**
  * What a publication delivers: the stored Canva exports the reviewer pinned when approving, sent
@@ -16,6 +16,8 @@ export interface DeliverableStore {
   find(tenantId: string, userId: string, taskId: string, artifactIds: string[]): Promise<PinnedExport[]>;
   /** The stored bytes of one export, or null when the store does not hold it. */
   read(tenantId: string, userId: string, taskId: string, artifactId: string): Promise<Uint8Array | null>;
+  /** Required when captureEvidenceRequired: live source check before any publication effect. */
+  verifyCurrentSource?(input: { tenantId: string; taskId: string; approvalId: string; artifactIds: string[] }): Promise<CanvaPublicationVersionCheck>;
 }
 
 /** A store that holds nothing: without durable Canva storage no export can be pinned or delivered. */
@@ -44,6 +46,9 @@ export function canvaDeliverableStore(service: CanvaConnectService): Deliverable
     },
     async read(tenantId, userId, taskId, artifactId) {
       return service.exportBytes({ tenantId, actorId: userId }, taskId, artifactId);
+    },
+    verifyCurrentSource(input) {
+      return service.verifyApprovedDesignVersion(input);
     },
   };
 }

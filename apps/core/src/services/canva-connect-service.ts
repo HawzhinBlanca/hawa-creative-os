@@ -1,10 +1,14 @@
 import { checkCanvaPptx } from '@hawa/qa';
+import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { sql, withRlsContext, withSessionAdvisoryLock, CanvaBindingRepository, type BlobStore, type Database, type Kysely } from '@hawa/db';
 import { blobStoreFor, putToStore } from './blob-store-context.js';
 import { CanvaConnectClient, CanvaCapturePipeline, CanvaHttpError, canvaRequestNeverSent } from '@hawa/integrations';
 
 type Scope = { tenantId: string; actorId: string; role?: string };
+export type CanvaPublicationVersionCheck =
+  | { ok: true; capturedVersion: string; observedVersion: string }
+  | { ok: false; code: 'CANVA_CAPTURE_UNVERIFIED' | 'CANVA_DESIGN_CHANGED' | 'CANVA_DESIGN_CHECK_UNAVAILABLE'; message: string; retryable: boolean };
 export class CanvaFlowError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) { super(message); }
 }
@@ -619,6 +623,64 @@ export class CanvaConnectService {
     const row = await this.tx(s,async db => (await sql<any>`SELECT content FROM hawa.canva_export_bytes
       WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid`.execute(db)).rows[0]);
     return row?.content ? Buffer.from(row.content) : null;
+  }
+  /**
+   * A publication-time, read-only check of the working Canva design against the exact QC-linked
+   * capture. It catches edits not yet exported into Hawa. Canva's REST updated_at has one-second
+   * precision, so an equal value is supporting evidence, not proof of byte-identical design state.
+   */
+  async verifyApprovedDesignVersion(input: {
+    tenantId: string; taskId: string; approvalId: string; artifactIds: string[];
+  }): Promise<CanvaPublicationVersionCheck> {
+    const unverified: CanvaPublicationVersionCheck = { ok: false, code: 'CANVA_CAPTURE_UNVERIFIED',
+      message: 'The approval has no complete QC-linked Canva capture version; capture and approve the design again', retryable: false };
+    if (!input.artifactIds.length || new Set(input.artifactIds).size !== input.artifactIds.length) return unverified;
+    let proof: { designId: string; actorId: string; version: string } | null;
+    try {
+      proof = await this.tx({ tenantId: input.tenantId, actorId: SYSTEM_AUTOMATION_USER_ID }, async db => {
+        const approval = (await sql<{ checked_id: string | null; version: string | null; binding_id: string | null; binding_version: number | null }>`
+          SELECT q.report->>'exportArtifactId' AS checked_id, q.report->>'captureVersion' AS version,
+            a.decision_payload->>'canvaBindingId' AS binding_id,
+            (a.decision_payload->>'canvaBindingVersion')::integer AS binding_version
+          FROM hawa.approvals a LEFT JOIN hawa.qc_runs q ON q.id = a.qc_run_id AND q.tenant_id = a.tenant_id
+          WHERE a.tenant_id = ${input.tenantId}::uuid AND a.task_id = ${input.taskId}::uuid
+            AND a.id = ${input.approvalId}::uuid AND a.decision = 'approved'`.execute(db)).rows[0];
+        if (!approval?.checked_id || !approval.version || !approval.binding_id || !Number.isInteger(approval.binding_version)
+          || !input.artifactIds.includes(approval.checked_id)) return null;
+        const binding = (await sql<{ design_id: string; version: number }>`SELECT canva_design_id AS design_id, version
+          FROM hawa.canva_bindings WHERE tenant_id = ${input.tenantId}::uuid AND task_id = ${input.taskId}::uuid
+            AND id = ${approval.binding_id}::uuid AND status = 'bound'`.execute(db)).rows[0];
+        if (!binding || Number(binding.version) !== Number(approval.binding_version)) return null;
+        const rows = (await sql<{ id: string; actor_id: string; design_id: string; binding_version: number; capture_version: string | null }>`
+          SELECT b.id, o.actor_id, o.design_id, o.binding_version,
+            o.metadata->>'designUpdatedAt' AS capture_version
+          FROM hawa.canva_export_bytes b JOIN hawa.canva_remote_operations o
+            ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
+          WHERE b.tenant_id = ${input.tenantId}::uuid AND b.task_id = ${input.taskId}::uuid
+            AND b.id = ANY(${input.artifactIds}::uuid[])`.execute(db)).rows;
+        if (rows.length !== input.artifactIds.length || rows.some(row =>
+          row.design_id !== binding.design_id || Number(row.binding_version) !== Number(binding.version)
+          || row.capture_version !== approval.version)) return null;
+        const checked = rows.find(row => row.id === approval.checked_id);
+        return checked ? { designId: binding.design_id, actorId: checked.actor_id, version: approval.version } : null;
+      });
+    } catch {
+      return { ok: false, code: 'CANVA_DESIGN_CHECK_UNAVAILABLE',
+        message: 'The approved Canva capture could not be checked in storage; retry before publication', retryable: true };
+    }
+    if (!proof) return unverified;
+    try {
+      const client = await this.authorizedClient({ tenantId: input.tenantId, actorId: proof.actorId });
+      const { design } = await client.getDesign(proof.designId);
+      if (design.id !== proof.designId || String(design.updated_at) !== proof.version) {
+        return { ok: false, code: 'CANVA_DESIGN_CHANGED',
+          message: 'Canva reports that the design changed after its approved capture; capture, check and approve it again', retryable: false };
+      }
+      return { ok: true, capturedVersion: proof.version, observedVersion: String(design.updated_at) };
+    } catch {
+      return { ok: false, code: 'CANVA_DESIGN_CHECK_UNAVAILABLE',
+        message: 'Canva could not confirm the approved design version; retry or reconnect before publication', retryable: true };
+    }
   }
 }
 export async function downloadCanvaExport(value: string, customFetch: typeof fetch = fetch): Promise<Buffer> {

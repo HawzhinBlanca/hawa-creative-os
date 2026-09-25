@@ -1,3 +1,4 @@
+import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, OutboxRepository, PublicationRepository, sql, withRlsContext } from '@hawa/db';
@@ -76,7 +77,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
   const core = (publisher: Publisher = archivingPublisher()) => createAppWithClientFixtures({
     testAuth: { roleHeader: true },
     db,
-    deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)),
+    deliverableStore: syntheticUnchangedCanvaVersion(canvaDeliverableStore(new CanvaConnectService(db))),
     publisher,
     telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) },
   } as any);

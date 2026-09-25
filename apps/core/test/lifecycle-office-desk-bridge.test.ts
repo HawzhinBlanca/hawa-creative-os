@@ -102,6 +102,7 @@ async function approvedForDelivery() {
       pinnedExports: [{ artifactId, format: 'pptx', sha256, byteSize: bytes.length }] },
   });
   const store = { captureEvidenceRequired: true,
+    verifyCurrentSource: async () => ({ ok: true as const, capturedVersion: '200', observedVersion: '200' }),
     read: async (_tenant: string, _user: string, _task: string, id: string) => id === artifactId ? bytes : null,
     find: async () => [{ artifactId, format: 'pptx' as const, sha256, byteSize: bytes.length }],
   };
@@ -553,6 +554,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
           clock_timestamp() + interval '1 minute')`.execute(trx);
     });
     const store = { captureEvidenceRequired: true,
+      verifyCurrentSource: async () => ({ ok: true as const, capturedVersion: '200', observedVersion: '200' }),
       find: async (_tenant: string, _user: string, _task: string, ids: string[]) => [
         { artifactId, format: 'pptx' as const, sha256, byteSize: bytes.length },
         { artifactId: pngArtifactId, format: 'png' as const, sha256: pngSha256, byteSize: pngBytes.length },

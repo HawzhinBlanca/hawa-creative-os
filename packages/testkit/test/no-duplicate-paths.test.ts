@@ -1,3 +1,4 @@
+import { syntheticUnchangedCanvaVersion } from '../../../apps/core/test/fixtures/synthetic-canva-version.js';
 import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -75,7 +76,7 @@ describe('Task 3: Elimination of Duplicate Paths', () => {
       }));
       const core = () => createAppWithClientFixtures({
         db, testAuth: { roleHeader: true }, publisher: { publish } as any,
-        deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)),
+        deliverableStore: syntheticUnchangedCanvaVersion(canvaDeliverableStore(new CanvaConnectService(db))),
         telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) } as any,
       });
       const app = core();

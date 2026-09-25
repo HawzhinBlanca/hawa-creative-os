@@ -1,3 +1,4 @@
+import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
@@ -26,7 +27,7 @@ describe.skipIf(!url)('review of 2026-09-24: the old design while the requester\
     const app = createApp({
       testAuth: { roleHeader: true },
       db,
-      deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)),
+      deliverableStore: syntheticUnchangedCanvaVersion(canvaDeliverableStore(new CanvaConnectService(db))),
       publisher,
       telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) },
     } as any);

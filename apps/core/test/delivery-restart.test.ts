@@ -1,3 +1,4 @@
+import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
@@ -23,7 +24,7 @@ describe.skipIf(!url)('review of 2026-09-24: approval and delivery across a Core
   const core = () => createApp({
     testAuth: { roleHeader: true },
     db,
-    deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)),
+    deliverableStore: syntheticUnchangedCanvaVersion(canvaDeliverableStore(new CanvaConnectService(db))),
     publisher: { publish: vi.fn(async () => ({ ok: false, error: { code: 'CREDENTIALS_MISSING', message: 'Google Workspace credentials not configured' } })) },
     telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) },
   } as any);

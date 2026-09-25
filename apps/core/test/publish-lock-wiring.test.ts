@@ -1,3 +1,4 @@
+import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
@@ -87,7 +88,7 @@ describe('delivery through Core holds the per-task publish lock', () => {
     });
     const process_ = () => createAppWithClientFixtures({
       db, testAuth: { roleHeader: true }, publisher: { publish },
-      deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)),
+      deliverableStore: syntheticUnchangedCanvaVersion(canvaDeliverableStore(new CanvaConnectService(db))),
       telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) } as any,
     });
     // Two Core processes over one database: the advisory lock is what stands between them (Core no

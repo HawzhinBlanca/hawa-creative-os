@@ -226,6 +226,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
           taskId: dbRev.task_id,
           document: dbRev.neutral_manifest,
           sourceSha256: dbRev.source_sha256,
+          studio: dbRev.studio,
           status: dbRev.status,
         };
       }
@@ -363,6 +364,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     let effectiveQcReportHash: string | null = null;
     let effectiveQcRunId: string | null = null;
     let rtlVisualReviewHash: string | null = null;
+    let verifiedCanvaBinding: { id: string; version: number; canva_design_id: string; status: string } | null = null;
 
     if (isApproved) {
       const docNodes = resolvedRev.document?.nodes;
@@ -426,14 +428,25 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         );
       }
 
-      // Stale or revoked Canva binding verification (Server Authoritative)
-      const serverBindingStatus = task?.canvaBinding?.status;
-      const clientBindingStatus = body.canvaBindingStatus || body.canvaBinding?.status;
-      const effectiveBindingStatus = (serverBindingStatus && serverBindingStatus !== 'bound')
-        ? serverBindingStatus
-        : (clientBindingStatus || serverBindingStatus);
-      if (effectiveBindingStatus && effectiveBindingStatus !== 'bound') {
-        return problem(c, 422, 'Stale Canva Binding', `Cannot approve design revision with Canva binding in status '${effectiveBindingStatus}'`);
+      // The task reader does not include the binding. The old payload therefore recorded null IDs
+      // even though the approval repository checked a real Canva binding under its task lock.
+      // Read the server row here; a caller-supplied binding status cannot certify this evidence.
+      if (db && resolvedRev.studio === 'canva') {
+        try {
+          verifiedCanvaBinding = await withRlsContext(db, { tenantId, userId: actorUserId, role: actorRole }, async trx =>
+            (await sql<{ id: string; version: number; canva_design_id: string; status: string }>`
+              SELECT id, version, canva_design_id, status FROM hawa.canva_bindings
+              WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid`.execute(trx)).rows[0] ?? null);
+        } catch (err) {
+          log.error('[core:approvals:binding_lookup] DB binding lookup error:', err);
+          return problem(c, 503, 'Database Unavailable', 'Canva binding could not be verified before approval');
+        }
+        if ((verifiedCanvaBinding && verifiedCanvaBinding.status !== 'bound') ||
+            (!verifiedCanvaBinding && deliverableStore.captureEvidenceRequired === true)) {
+          return problem(c, 422, 'Stale Canva Binding', 'Capture the current bound Canva design before approval');
+        }
+      } else if (!db && task?.canvaBinding?.status && task.canvaBinding.status !== 'bound') {
+        return problem(c, 422, 'Stale Canva Binding', 'Capture the current bound Canva design before approval');
       }
 
       // What an approval ships is the exports pinned below, checked against the store. A capture set
@@ -494,9 +507,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
               clientId: task?.clientId || defaultClientId,
               taskId,
               revisionId: resolvedRev.id || revisionId,
-              canvaBindingId: task?.canvaBinding?.id || task?.canvaBinding?.bindingId || null,
-              canvaBindingVersion: task?.canvaBinding?.version || null,
-              canvaDesignId: task?.canvaBinding?.canvaDesignId || null,
+              canvaBindingId: verifiedCanvaBinding?.id || task?.canvaBinding?.id || task?.canvaBinding?.bindingId || null,
+              canvaBindingVersion: verifiedCanvaBinding?.version || task?.canvaBinding?.version || null,
+              canvaDesignId: verifiedCanvaBinding?.canva_design_id || task?.canvaBinding?.canvaDesignId || null,
               sourceHash,
               exportHashes: (pinnedExports || []).map((e) => e.sha256),
               captureEvidenceRequired: deliverableStore.captureEvidenceRequired === true,

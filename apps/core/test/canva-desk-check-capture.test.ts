@@ -25,12 +25,17 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
   const kaae = 'c1000000-0000-4000-8000-000000000002';
   let designId = '';
   let pptx = Buffer.alloc(0);
+  let providerUpdatedAt = 200;
+  let providerReadUnavailable = false;
   const remote = vi.fn(async (input: any, init: any = {}) => {
     const u = String(input);
     if (u.endsWith('/oauth/token')) return Response.json({ access_token: 'token-' + randomUUID(), refresh_token: 'refresh-' + randomUUID(), expires_in: 3600 });
     if (u.endsWith('/imports') && init.method === 'POST') return Response.json({ job: { id: 'import_' + designId, status: 'in_progress' } });
     if (u.includes('/imports/')) return Response.json({ job: { id: 'import_' + designId, status: 'success', result: { designs: [{ id: designId, urls: { edit_url: 'https://www.canva.com/d/x', view_url: 'https://www.canva.com/d/y' } }] } } });
-    if (u.includes('/designs/')) return Response.json({ design: { id: designId, created_at: 100, updated_at: 200, page_count: 1, urls: { edit_url: 'https://www.canva.com/api/design/x/edit', view_url: 'https://www.canva.com/d/y' } } });
+    if (u.includes('/designs/')) {
+      if (providerReadUnavailable) throw new Error('Canva design read unavailable');
+      return Response.json({ design: { id: designId, created_at: 100, updated_at: providerUpdatedAt, page_count: 1, urls: { edit_url: 'https://www.canva.com/api/design/x/edit', view_url: 'https://www.canva.com/d/y' } } });
+    }
     if (u.endsWith('/exports') && init.method === 'POST') return Response.json({ job: { id: 'export_' + designId, status: 'in_progress' } });
     if (u.includes('/exports/')) return Response.json({ job: { id: 'export_' + designId, status: 'success', urls: ['https://export-download.canva.com/check.pptx'] } });
     if (u.startsWith('https://export-download.canva.com/')) return new Response(new Uint8Array(pptx));
@@ -53,6 +58,8 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
   const draftWithTimedOutCheck = async () => {
     const taskId = randomUUID();
     designId = 'DA' + randomUUID().replaceAll('-', '');
+    providerUpdatedAt = 200;
+    providerReadUnavailable = false;
     await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, (trx) =>
       sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
         VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'Desk check capture', 'x', 'received', 3, 1, now(), now())`.execute(trx));
@@ -281,6 +288,46 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
     const resumed = await app.request(`/tasks/${taskId}/canva/exports/${operationId}/resume`, { method: 'POST', headers: deskHeaders });
     expect(resumed.status).toBe(200);
     expect((await resumed.json()).status).toBe('retrieved');
+  });
+
+  it('refuses an uncaptured Canva edit observed after approval before any publisher effect', async () => {
+    const { taskId, app: setupApp } = await draftWithTimedOutCheck();
+    const checked = await deskCheck(setupApp, taskId);
+    const revisionId = (await (await setupApp.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect((await decide(setupApp, taskId, revisionId, 'approved', [checked.artifact.id])).status).toBe(201);
+    const proof = await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, async trx =>
+      (await sql<any>`SELECT a.id, a.decision_payload, a.qc_run_id, q.report FROM hawa.approvals a
+        LEFT JOIN hawa.qc_runs q ON q.id = a.qc_run_id AND q.tenant_id = a.tenant_id
+        WHERE a.tenant_id = ${tenantId}::uuid AND a.task_id = ${taskId}::uuid AND a.decision = 'approved'`.execute(trx)).rows[0]);
+    expect(proof.report).toMatchObject({ exportArtifactId: checked.artifact.id, captureVersion: '200' });
+    expect(proof.decision_payload).toMatchObject({ canvaBindingId: expect.any(String), canvaBindingVersion: 1 });
+    expect(await new CanvaConnectService(db, canvaOptions).verifyApprovedDesignVersion({
+      tenantId, taskId, approvalId: proof.id, artifactIds: [checked.artifact.id],
+    })).toMatchObject({ ok: true, capturedVersion: '200', observedVersion: '200' });
+
+    providerUpdatedAt = 201;
+    const publisher = { publish: vi.fn(async () => ({ ok: false as const,
+      error: { code: 'TEST_PUBLISH_CALLED', message: 'The stale Canva design reached the publisher' } })) };
+    const app = createAppWithClientFixtures({ db, canvaOptions, publisher,
+      telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) },
+    } as any);
+    const response = await app.request(`/tasks/${taskId}/publish`, {
+      method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'current_task' }),
+    });
+    expect(publisher.publish).not.toHaveBeenCalled();
+    const body = await response.json();
+    expect(body).toMatchObject({ status: 409, title: 'Conflict' });
+    expect(body.detail).toMatch(/design changed after its approved capture/i);
+    expect(response.status).toBe(409);
+
+    providerUpdatedAt = 200;
+    providerReadUnavailable = true;
+    const unavailable = await app.request(`/tasks/${taskId}/publish`, {
+      method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'current_task' }),
+    });
+    expect(unavailable.status).toBe(503);
+    expect((await unavailable.json()).detail).toMatch(/could not confirm the approved design version/i);
+    expect(publisher.publish).not.toHaveBeenCalled();
   });
 
   it('after "Request Revision", a capture whose check fails is recorded as the new revision but cannot be approved', async () => {

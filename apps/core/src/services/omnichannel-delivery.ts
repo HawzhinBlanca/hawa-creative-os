@@ -222,6 +222,28 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     }
   }
 
+  async function currentCanvaSourceForDelivery(
+    tenantId: string, taskId: string,
+    approval: { approvalId: string; pinnedExports?: PinnedExport[] }
+  ): Promise<{ status: number; code: string; message: string } | null> {
+    if (!deliverableStore.captureEvidenceRequired) return null;
+    if (!deliverableStore.verifyCurrentSource) {
+      return { status: 503, code: 'CANVA_DESIGN_CHECK_UNAVAILABLE',
+        message: 'The captured export store cannot check the current Canva design; delivery is held' };
+    }
+    try {
+      const checked = await deliverableStore.verifyCurrentSource({ tenantId, taskId,
+        approvalId: approval.approvalId,
+        artifactIds: approval.pinnedExports?.map(pin => pin.artifactId) ?? [] });
+      if (checked.ok) return null;
+      return { status: checked.retryable ? 503 : checked.code === 'CANVA_DESIGN_CHANGED' ? 409 : 422,
+        code: checked.code, message: checked.message };
+    } catch {
+      return { status: 503, code: 'CANVA_DESIGN_CHECK_UNAVAILABLE',
+        message: 'Canva design version could not be checked; delivery is held for retry' };
+    }
+  }
+
   /**
    * A task delivered by another Core process (or before a restart) has its receipt in that process's
    * memory, but its publication in Postgres: Deliver pressed again answers with that. The route used
@@ -503,6 +525,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
           return { ok: false, status: 422, title: 'Nothing Approved To Deliver',
             code: 'NO_APPROVAL', message: NO_APPROVAL_TO_DELIVER };
         }
+        const sourceProblem = await currentCanvaSourceForDelivery(deliveryTenantId, taskId, current);
+        if (sourceProblem) return { ok: false, ...sourceProblem };
       }
       // One executor per publication (slice 2.2). Read under the publish lock, which the publish route
       // also takes when it hands a delivery to the workflow, so the answer cannot change under us.
@@ -1151,7 +1175,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
 
     type Claim = { kind: 'complete'; publicationId: string } | { kind: 'running'; run: number } | { kind: 'started'; run: number; from: string }
-      | { kind: 'wrong_state'; state: string } | { kind: 'core' } | { kind: 'send_unconfirmed' } | { kind: 'approval_changed' };
+      | { kind: 'wrong_state'; state: string } | { kind: 'core' } | { kind: 'send_unconfirmed' }
+      | { kind: 'approval_changed' } | { kind: 'source_changed'; problem: { status: number; code: string; message: string } };
     let held: Awaited<ReturnType<typeof withSessionAdvisoryLock<Claim>>>;
     try {
       held = await withSessionAdvisoryLock(db, `publish:${taskId}`, async () => {
@@ -1159,6 +1184,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
           approvalId: approval.approvalId, allowInvalidated: request.policy === 'deliver_approved_stored',
         });
         if (!current || current.approvalId !== approval.approvalId) return { kind: 'approval_changed' } as const;
+        const sourceProblem = await currentCanvaSourceForDelivery(tenantId, taskId, current);
+        if (sourceProblem) return { kind: 'source_changed', problem: sourceProblem } as const;
         return withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx): Promise<Claim> => {
           let created = false;
           const existing = await publicationRepo.findByKey(publicationKey, tenantId, trx);
@@ -1214,6 +1241,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     if (claim.kind === 'approval_changed') {
       return { ok: false, status: 422, code: 'NO_APPROVAL', message: NO_APPROVAL_TO_DELIVER };
     }
+    if (claim.kind === 'source_changed') return { ok: false, ...claim.problem };
     if (claim.kind === 'complete') return { ok: true, complete: true, publicationId: claim.publicationId };
     if (claim.kind === 'core') {
       return { ok: false, status: 409, code: DELIVERY_OWNED_BY_CORE, message: `The delivery of task ${taskId} was started by Core; it is finished there` };

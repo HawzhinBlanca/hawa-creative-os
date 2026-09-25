@@ -1,3 +1,4 @@
+import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext, OutboxRepository, PublicationRepository, type Kysely, type Database } from '@hawa/db';
@@ -41,7 +42,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     };
 
     const canvaService = new CanvaConnectService(db);
-    const deliverableStore = canvaDeliverableStore(canvaService);
+    const deliverableStore = syntheticUnchangedCanvaVersion(canvaDeliverableStore(canvaService));
 
     const app = createAppWithClientFixtures({ testAuth: { roleHeader: true }, 
       db,
@@ -402,7 +403,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
 
   it('fails closed when exported copy is corrupted: records failed QC run and refuses approval (HTTP 412)', async () => {
     const canvaService = new CanvaConnectService(db);
-    const deliverableStore = canvaDeliverableStore(canvaService);
+    const deliverableStore = syntheticUnchangedCanvaVersion(canvaDeliverableStore(canvaService));
     const app = createAppWithClientFixtures({ testAuth: { roleHeader: true }, 
       db,
       deliverableStore,
