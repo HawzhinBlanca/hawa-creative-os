@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T19:54:08Z",
+  "generatedAt": "2026-09-25T19:58:19Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -839,8 +839,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R10_EVIDENCE.md",
-      "sha256": "3f2cabe21eb14d3faf8e7d899906f54790ebaac8006f195ee75812d22b8cf98b",
-      "bytes": 3345
+      "sha256": "29669f65b0405916428fbb938b8ef71a7a89a6209978a2ccd1646c0b8f9a9fb2",
+      "bytes": 4114
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R11_EVIDENCE.md",
@@ -889,8 +889,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/REALITY_CHECK_2026-09-25.md",
-      "sha256": "382691529514a8af6b98268227c01212e7ab14734af8e3e3c85421bfb26af3fe",
-      "bytes": 36802
+      "sha256": "b7c4a381e56758f4b9dbbca4dbb7518f59c4baa95048e5e1aefc2690471319f7",
+      "bytes": 37329
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",

@@ -15,3 +15,7 @@ The disposable local PostgreSQL databases were rebuilt because a previous migrat
 ## Remaining R10 acceptance work
 
 This change pins legacy slice-2.2 delivery. It does not complete ChatInbox routing of an old request through a flag transition, including callback updates and late answers; it currently refuses a lifecycle projection that tries to claim a Core predecessor. No deployed canary, Restate backup/restore, clean-host recovery, real provider receipt, or full rollback drill was performed. `R10` stays in progress, and both production design flags stay off. These local checks do not establish a 10/10 production system.
+
+## Sealed source checkpoint
+
+Source and evidence commit `5a101e944700c4d5940e451516e22bf8404c0437` was sealed by `e78238f860873c05d11b6ed7e0564ec6d67a3770` with source-candidate manifest SHA-256 `bcf2966e2c7b5fd040800d04417130911e8d5945e7b30bd21a0e51c04e1d2a7b`. The clean exact-candidate suite passed **422 files / 3,227 tests**, with **4 files / 48 tests skipped**. The manifest verifier passed; six release-gate refusal controls passed separately; blueprint validation passed **779 checks / 0 warnings / 0 failures**. The admission assessor returned `UNQUALIFIED_ENGINEERING`, with Gates A–H each `NOT_RUN_DEPLOYMENT_REQUIRED`. The manifest records migration 031, unbuilt components and both design flags off. This is a source checkpoint, not a deployed release.
