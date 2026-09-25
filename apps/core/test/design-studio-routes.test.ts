@@ -305,7 +305,10 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       const data = await res.json();
       expect(data.uncertainCallsCount).toBe(1);
       expect(data.totalUsdEstimate).toBeNull();
-      expect(data.calls.find((call: any) => call.status === 'uncertain')).toMatchObject({ usdEstimate: null });
+      expect(data.calls.find((call: any) => call.status === 'uncertain')).toMatchObject({
+        usdEstimate: null, callOrdinal: null, logicalCallSha256: null,
+        provider: 'openai', errorCode: 'UNCERTAIN_ACCEPTANCE',
+      });
     });
 
     it('GET /v1/tasks/:taskId/canva/studio/:runId returns 404 for unknown run', async () => {

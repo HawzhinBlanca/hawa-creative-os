@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { StageContext, CandidateState } from '../types.js';
+import { isModelCallHoldError, type StageContext, type CandidateState } from '../types.js';
 import { FORBIDDEN_ART_WORDS, renderMotifPng, type ProceduralMotifType } from '@hawa/creative';
 import { log } from '../../../logging.js';
 
@@ -73,6 +73,7 @@ export async function runArtStage(
           ...(artResult.receipt.fallbackReason ? { fallbackReason: artResult.receipt.fallbackReason } : {}),
         };
       } catch (err: any) {
+        if (isModelCallHoldError(err)) throw err;
         // Degradation ladder rung 2: fallback to procedural motif. Logged because the ladder is
         // otherwise invisible — a design quietly shipping a procedural motif instead of generated
         // art looks like a design decision rather than a failed image call.

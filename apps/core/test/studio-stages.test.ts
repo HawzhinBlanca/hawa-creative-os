@@ -424,6 +424,25 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     expect(generateArt).not.toHaveBeenCalled();
   });
 
+  it('4c. art stage stops when image acceptance is unknown instead of shipping a procedural fallback', async () => {
+    const ctx = createMockContext(vi.fn());
+    const unknown = Object.assign(new Error('provider reply lost'), {
+      code: 'IMAGE_ACCEPTANCE_UNKNOWN', isUncertain: true,
+    });
+    ctx.artProvider = { generateArt: vi.fn().mockRejectedValue(unknown) } as any;
+    const layout = createMockLayout();
+    layout.art = { source: 'generated', prompt: 'Abstract blue gradient',
+      box: { x: 0, y: 0, width: 1080, height: 1350 }, opacity: 0.2,
+      calmRegion: { x: 100, y: 200, width: 880, height: 900 } };
+    const candidate: CandidateState = {
+      id: randomUUID(), ordinal: 0, concept: { artStrategy: 'generated' } as any,
+      layouts: [layout], currentLayout: layout, critiques: [], status: 'draft',
+    };
+    await expect(runArtStage(ctx, [candidate])).rejects.toBe(unknown);
+    expect(candidate.artPng).toBeUndefined();
+    expect(candidate.artProvenance).toBeUndefined();
+  });
+
   it('5. render stage: local render produces preview PNG, composite PNG, and metrics', async () => {
     const ctx = createMockContext(vi.fn());
     const layout = createMockLayout(1080, 1350);

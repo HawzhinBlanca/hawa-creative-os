@@ -605,6 +605,10 @@ export interface DesignStudioCallsTable {
   provider: string;
   model: string;
   requested_model: string;
+  /** Null only for pre-ADR-049 calls and content-keyed parity calls. */
+  call_ordinal: number | null;
+  /** SHA-256 of the logical call identity; null only on historical rows. */
+  logical_call_sha256: string | null;
   response_id: string | null;
   input_tokens: Generated<number>;
   cached_input_tokens: Generated<number>;

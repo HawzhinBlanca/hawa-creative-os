@@ -217,9 +217,17 @@ export function registerDesignStudioRoutes(
           .reduce((acc, call) => acc + Number(call.usd_estimate ?? 0), 0),
         // Which model answered each call, as the provider reported it (the ledger's `model`).
         calls: calls.map((call) => ({
+          id: call.id,
+          callOrdinal: call.call_ordinal,
+          logicalCallSha256: call.logical_call_sha256,
           stage: call.stage,
+          provider: call.provider,
           model: call.model,
+          responseId: call.response_id,
           status: call.status,
+          errorCode: call.error_code,
+          startedAt: call.started_at,
+          finishedAt: call.finished_at,
           usdEstimate: call.status === 'uncertain' ? null : Number(call.usd_estimate ?? 0),
         })),
       });

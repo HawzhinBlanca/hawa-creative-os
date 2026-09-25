@@ -71,6 +71,17 @@ export interface RecordCallStartParams {
   provider: string;
   model: string;
   requestedModel: string;
+  /** Per-run sequence number for generation; parity checks use a content-only identity. */
+  callOrdinal: number | null;
+  logicalCallSha256: string;
+}
+
+export class ModelCallAdmissionConflictError extends Error {
+  readonly code = 'MODEL_CALL_ADMISSION_CONFLICT';
+  constructor() {
+    super('This logical Studio model call was already admitted by another process.');
+    this.name = 'ModelCallAdmissionConflictError';
+  }
 }
 
 export interface FinalizeCallParams {
@@ -506,6 +517,12 @@ export class DesignStudioRepository {
    * This guarantees that any initiated spend is journaled prior to network dispatch.
    */
   async recordCallStart(params: RecordCallStartParams, trx?: Kysely<Database>) {
+    if (params.callOrdinal !== null && (!Number.isSafeInteger(params.callOrdinal) || params.callOrdinal < 1)) {
+      throw new TypeError('Studio call ordinal must be a positive safe integer.');
+    }
+    if (!/^[0-9a-f]{64}$/.test(params.logicalCallSha256)) {
+      throw new TypeError('Studio logical call identity must be a SHA-256 digest.');
+    }
     return this.withClient(trx, params.tenantId, async (client) => {
       const [row] = await client
         .insertInto('design_studio_calls')
@@ -517,10 +534,14 @@ export class DesignStudioRepository {
           provider: params.provider,
           model: params.model,
           requested_model: params.requestedModel,
+          call_ordinal: params.callOrdinal,
+          logical_call_sha256: params.logicalCallSha256,
           status: 'uncertain',
         })
+        .onConflict((oc) => oc.doNothing())
         .returningAll()
         .execute();
+      if (!row) throw new ModelCallAdmissionConflictError();
       return row;
     });
   }
@@ -643,4 +664,3 @@ export class DesignStudioRepository {
     });
   }
 }
-

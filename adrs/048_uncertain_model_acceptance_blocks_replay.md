@@ -19,6 +19,8 @@ An active run also refuses to repeat its current stage when its ledger already c
 
 The handler that classifies provider failures encloses only the provider request. A successful paid reply is finalized before the run's budget write; failure of that later accounting write must not reclassify the ledger row as a free provider error. If finalization itself fails, the pre-dispatch row remains unresolved and resume stays held. This favors truthful cost and a manual hold over automatic replay.
 
+The hold must propagate through every Studio degradation path. An uncertain generated-art result cannot be replaced by a procedural motif in the same run; critique, revision, canary and judging cannot swallow it and advance the stage. The active run stays at its current stage for reconciliation. ADR-049 adds a separate database admission identity to prevent two Core processes from starting the same logical call.
+
 ## Consequences and limits
 
 - A dropped transport can reduce automatic availability. It cannot silently cause a second Studio OpenAI charge.

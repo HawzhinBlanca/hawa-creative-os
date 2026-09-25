@@ -123,6 +123,44 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
     expect(finalized[0].usdEstimate).toBeGreaterThan(0);
   });
 
+  it('does not dispatch a second model request when the logical call reservation collides', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers(),
+      json: async () => ({ id: 'chatcmpl_once', model: 'gpt-6-astra',
+        choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: '{"ok":true}' } }],
+        usage: { prompt_tokens: 100, completion_tokens: 10 } }) });
+    const clientId = 'c1000000-0000-4000-8000-000000000002';
+    const s = { tenantId: randomUUID(), actorId: randomUUID(), role: 'operator' };
+    const { reference, logo } = await resolveClientDesignReference({} as any, s, clientId);
+    const run = { id: randomUUID(), task_id: randomUUID(), client_id: clientId, tier: 'premium',
+      request: JSON.stringify({ width: 1080, height: 1350, copyBlocks: [{ text: 'A', script: 'latin' }], instructions: 'x',
+        clientId, referenceHash: createHash('sha256').update(JSON.stringify(reference)).digest('hex'),
+        logoSha256: createHash('sha256').update(logo).digest('hex') }), stages: {} };
+    const admitted: any[] = [];
+    const repo = {
+      recordCallStart: async (p: any) => {
+        admitted.push(p);
+        if (admitted.length > 1) throw Object.assign(new Error('already admitted'), { code: 'MODEL_CALL_ADMISSION_CONFLICT' });
+      },
+      finalizeCall: async () => undefined,
+      updateRunStatus: async () => undefined,
+    };
+    const makeContext = async () => {
+      const svc = new DesignStudioService({} as any, undefined, { fetcher: fetcher as any, apiKey: 'test-key' });
+      (svc as any).repo = repo;
+      return (svc as any).createStageContext(s, run, 'laying_out',
+        { maxUsd: 2, maxCalls: 24, spentUsd: 0, calls: 0 }, async () => {});
+    };
+    const [first, second] = await Promise.all([makeContext(), makeContext()]);
+    const request = { prompt: 'same paid work', schema: { type: 'object' }, model: 'gpt-6-astra' };
+    const reordered = { model: 'gpt-6-astra', schema: { type: 'object' }, prompt: 'same paid work' };
+    const results = await Promise.allSettled([first.client.completeJson(request), second.client.completeJson(reordered)]);
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(admitted).toHaveLength(2);
+    expect(admitted[0].callOrdinal).toBe(1);
+    expect(admitted[0].logicalCallSha256).toBe(admitted[1].logicalCallSha256);
+  });
+
   it('refuses to resume a run with an unresolved model call', async () => {
     const svc = new DesignStudioService({} as any);
     const s = { tenantId: randomUUID(), actorId: randomUUID(), role: 'operator' };

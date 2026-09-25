@@ -91,6 +91,8 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
         provider: 'anthropic',
         model: 'claude-fable-5-1',
         requestedModel: 'claude-fable-5-1',
+        callOrdinal: 1,
+        logicalCallSha256: createHash('sha256').update(callIdA).digest('hex'),
       });
 
       await repoTrx.recordFeedback({
@@ -146,6 +148,31 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       const feedback = await trx.selectFrom('design_feedback').selectAll().where('task_id', '=', taskA).execute();
       expect(feedback).toHaveLength(0);
     });
+  });
+
+  it('admits only one cross-Core reservation for the same next paid call', async () => {
+    const taskId = await createTask(tenantA, clientA);
+    const runId = randomUUID();
+    await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA,
+      actorId: 'test_user', requestKey: `admission-${runId}`,
+      requestHash: createHash('sha256').update(runId).digest('hex'),
+      request: { prompt: 'admission race' }, tier: 'premium' });
+    const peerDb = createDb(url!);
+    const peer = new DesignStudioRepository(peerDb);
+    const call = (id: string, digest: string) => ({ id, runId, tenantId: tenantA,
+      stage: 'briefing', provider: 'openai', model: 'model-test', requestedModel: 'model-test',
+      callOrdinal: 1, logicalCallSha256: digest });
+    try {
+      const results = await Promise.allSettled([
+        repo.recordCallStart(call(randomUUID(), 'a'.repeat(64))),
+        peer.recordCallStart(call(randomUUID(), 'b'.repeat(64))),
+      ]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      expect(await repo.getCallsForRun(runId, tenantA)).toHaveLength(1);
+    } finally {
+      await peerDb.destroy();
+    }
   });
 
   it('rejects deletion or mutation of completed run via immutability trigger', async () => {
@@ -226,6 +253,8 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
         provider: 'anthropic',
         model: 'claude-fable-5-1',
         requestedModel: 'claude-fable-5-1',
+        callOrdinal: 1,
+        logicalCallSha256: createHash('sha256').update(callId).digest('hex'),
       });
 
       const pendingCall = (await repoTrx.getCallsForRun(runId, tenantA))[0];

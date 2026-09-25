@@ -18,7 +18,7 @@ import {
   isStoryFormat,
   getSafeZoneBox,
 } from '@hawa/creative';
-import { StudioBudgetExhaustedError, type StageContext } from '../types.js';
+import { StudioBudgetExhaustedError, isModelCallHoldError, type StageContext } from '../types.js';
 import { buildP0SystemPrompt } from '../prompts.js';
 import { normalizeCandidateLayout } from './layouts.stage.js';
 import { REVISION_SCHEMA } from './revise.stage.js';
@@ -422,7 +422,7 @@ export async function runDirectedEditStage(
       // A call that failed in transport is not a refusal: it is not asked again here (the client has
       // already retried what a retry can fix, and a timed-out call may still be billed), and the
       // caller must not read it as a change the design cannot take.
-      if (err instanceof StudioBudgetExhaustedError || isModelTransportError(err)) throw err;
+      if (err instanceof StudioBudgetExhaustedError || isModelCallHoldError(err) || isModelTransportError(err)) throw err;
       lastError = (err as Error)?.message || String(err);
       feedback = lastError;
     }
@@ -898,7 +898,7 @@ export async function analyseRequest(
       frustrated: data?.frustrated === true,
     };
   } catch (err) {
-    if (err instanceof StudioBudgetExhaustedError) throw err;
+    if (err instanceof StudioBudgetExhaustedError || isModelCallHoldError(err)) throw err;
     return { asks: [], targets: ['all'], styleTargets: ['all'], frustrated: false };
   }
 }

@@ -12,6 +12,13 @@ export class StudioBudgetExhaustedError extends Error {
   }
 }
 
+/** A provider may have accepted a paid call even though this process has no usable answer. */
+export function isModelCallHoldError(err: unknown): boolean {
+  return !!err && typeof err === 'object' &&
+    ('isUncertain' in err && err.isUncertain === true ||
+      'code' in err && err.code === 'MODEL_CALL_ADMISSION_CONFLICT');
+}
+
 export interface CreativeBriefRole {
   copyIndex: number;
   role: 'eyebrow' | 'title' | 'subtitle' | 'body' | 'date' | 'venue' | 'cta' | 'footer' | 'other';

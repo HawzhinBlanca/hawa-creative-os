@@ -404,14 +404,16 @@ describe('a failed model call during an edit is not paid for three times over', 
     return { ...h, res };
   };
 
-  it('a timeout fails the run with the reason instead of designing afresh', async () => {
-    const { res, inserted, writes, completeJson, run } = await failedEdit(new OpenAiModelTimeoutError(180000));
-    expect(res).toMatchObject({ status: 'failed', code: 'MODEL_UNAVAILABLE' });
+  it('a timeout holds the run for reconciliation instead of designing afresh', async () => {
+    const { service, run, inserted, writes, completeJson } = harness({
+      callError: (schema) => schema === 'DirectedEdit' ? new OpenAiModelTimeoutError(180000) : undefined,
+    });
+    await service.resume(scope, run.task_id, run.id);
+    await expect(service.resume(scope, run.task_id, run.id)).rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
     expect(inserted.map((c) => c.ordinal)).toEqual([0]);
     // Asked once: a timed-out call is not asked again.
     expect(editPrompts(completeJson)).toHaveLength(1);
-    expect(writes.at(-1)).toMatchObject({ status: 'failed' });
-    expect(writes.at(-1).diagnostic).toMatch(/model call failed \(OpenAiModelTimeoutError: .*\). It was not designed afresh/);
+    expect(writes.some((write) => write.status === 'failed')).toBe(false);
     expect(JSON.parse(run.stages).directedFailed).toBeUndefined();
   });
 

@@ -600,7 +600,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     expect(result.diagnostic).toContain('BUDGET_EXHAUSTED');
   });
 
-  it('5. degradation ladder Rung 4 fallback calls the planner when studio stages fail unrecoverably', async () => {
+  it('5. a lost layout-model reply holds the run instead of paying for a fallback design', async () => {
     const taskId = await createTask();
     const baseFetch = createMockFetch();
 
@@ -620,20 +620,8 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       return baseFetch(url, init);
     });
 
-    const fallbackPlanId = randomUUID();
-    const planBytes = Buffer.from('fallback-plan-content');
-    const planSha = createHash('sha256').update(planBytes).digest('hex');
-
     const mockPlanner = {
-      generate: vi.fn().mockImplementation(async () => {
-        await sql`INSERT INTO hawa.canva_design_plans(
-          id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, status, result, source_content, source_sha256
-        ) VALUES(
-          ${fallbackPlanId}::uuid, ${scope.tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, ${scope.actorId},
-          ${'plan-' + fallbackPlanId}, 'reqhash', '{}'::jsonb, 'planned', '{}'::jsonb, ${planBytes}, ${planSha}
-        )`.execute(db);
-        return { planId: fallbackPlanId, status: 'planned', message: 'Fallback plan created' };
-      }),
+      generate: vi.fn(),
     } as unknown as CanvaDesignPlanner;
 
     const service = new DesignStudioService(db, undefined, {
@@ -655,12 +643,16 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     await service.resume(scope, taskId, run.id);
     // Advance to laying_out
     await service.resume(scope, taskId, run.id);
-    // Laying_out fails -> triggers Rung 4 fallback
-    const step = await service.resume(scope, taskId, run.id);
-
-    expect(step.status).toBe('degraded');
-    expect(step.message).toContain('Rung 4 studio fallback');
-    expect(mockPlanner.generate).toHaveBeenCalledTimes(1);
+    // The dropped reply may have been accepted and billed; no second design starts.
+    await expect(service.resume(scope, taskId, run.id)).rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
+    expect(mockPlanner.generate).not.toHaveBeenCalled();
+    const held = await withRlsContext(db, scope, (tx) =>
+      sql<any>`SELECT status FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(tx));
+    expect(held.rows[0].status).toBe('laying_out');
+    const calls = await withRlsContext(db, scope, (tx) =>
+      sql<any>`SELECT status FROM hawa.design_studio_calls WHERE run_id=${run.id}::uuid AND stage='laying_out'`.execute(tx));
+    expect(calls.rows.some((call: any) => call.status === 'uncertain')).toBe(true);
+    await service.abandon(scope, taskId, run.id, 'test cleanup');
   }, 25000);
 
   it('5b. when DESIGN_PIPELINE_V3=on, studio stage failure marks run as failed and NEVER calls single-shot planner fallback', async () => {

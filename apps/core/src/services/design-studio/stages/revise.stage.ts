@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { StudioBudgetExhaustedError, type StageContext, type CandidateState } from '../types.js';
+import { StudioBudgetExhaustedError, isModelCallHoldError, type StageContext, type CandidateState } from '../types.js';
 import type { StudioLayoutV2 } from '@hawa/creative';
 import { validateLayoutV2, type LayoutValidationContext, renderLayoutV2Async, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP5Prompt } from '../prompts.js';
@@ -160,7 +160,7 @@ export async function runReviseStage(
         cand.diagnostics.push(`Revised layout failed validation: ${validation.message || validation.code}`);
       }
     } catch (err: any) {
-      if (err instanceof StudioBudgetExhaustedError) {
+      if (err instanceof StudioBudgetExhaustedError || isModelCallHoldError(err)) {
         throw err;
       }
       // If revision model call fails, keep current candidate layout intact and record diagnostic

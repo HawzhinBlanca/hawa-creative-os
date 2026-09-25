@@ -75,7 +75,7 @@ const runStages = (run: { stages?: unknown }): Record<string, any> => {
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
 import { runsPipelineV3, PICTURE_ONLY_DIRECTIVE } from '../chat-intake.js';
-import { StudioBudgetExhaustedError, type StageContext, type CandidateState, type CreativeBrief, type Concept, type ReferencePack, type CopyBlock, type ParityResult, type ContentPhoto } from './types.js';
+import { StudioBudgetExhaustedError, isModelCallHoldError, type StageContext, type CandidateState, type CreativeBrief, type Concept, type ReferencePack, type CopyBlock, type ParityResult, type ContentPhoto } from './types.js';
 import {
   runBriefStage,
   runConceptsStage,
@@ -100,6 +100,16 @@ import {
 export type Scope = { tenantId: string; actorId: string; role?: string; clientId?: string };
 
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+
+/** Stable object-key order for the digest only; provider requests keep their original shape. */
+const canonicalCallJson = (value: unknown): string => {
+  const serialized = JSON.stringify(value, (_key, child) =>
+    child && typeof child === 'object' && !Array.isArray(child)
+      ? Object.fromEntries(Object.keys(child).sort().map((key) => [key, child[key]]))
+      : child);
+  if (!serialized) throw new TypeError('Studio model call input cannot be serialized.');
+  return serialized;
+};
 
 type StudioFontProfile = { latin: string[]; arabic: string[] };
 
@@ -853,6 +863,31 @@ export class DesignStudioService {
 
     const baseArtProvider = new OpenAiImageProvider(apiKey, fetchFn);
 
+    // PostgreSQL admits one logical call identity before transport. The ordinal fences two Core
+    // processes that read the same run budget; parity is content-keyed because a transferred run's
+    // budget is immutable and a changed Canva export must remain independently checkable.
+    const admitCall = async (call: {
+      id: string; stage: string; provider: string; model: string; input: unknown;
+    }) => {
+      const callOrdinal = currentStageName === 'parity' ? null : currentBudget.calls + 1;
+      const logicalCallSha256 = hash(canonicalCallJson({
+        version: 1, runId: run.id, stage: call.stage, provider: call.provider,
+        model: call.model, callOrdinal, input: call.input,
+      }));
+      await this.repo.recordCallStart({
+        id: call.id,
+        runId: run.id,
+        tenantId: s.tenantId,
+        stage: call.stage,
+        provider: call.provider,
+        model: call.model,
+        requestedModel: call.model,
+        callOrdinal,
+        logicalCallSha256,
+      });
+      currentBudget.calls++;
+    };
+
     // Instrument client with ledger hooks and budget checks
     const ledgerClient: any = {
       calculateCost: baseClient.calculateCost.bind(baseClient),
@@ -869,16 +904,7 @@ export class DesignStudioService {
         const model = params.model || baseClient.primaryModel || resolveModel('text');
 
         // Ledger insert-before-dispatch
-        await this.repo.recordCallStart({
-          id: callId,
-          runId: run.id,
-          tenantId: s.tenantId,
-          stage: currentStageName,
-          provider: 'openai',
-          model,
-          requestedModel: model,
-        });
-        currentBudget.calls++;
+        await admitCall({ id: callId, stage: currentStageName, provider: 'openai', model, input: params });
 
         let result: Awaited<ReturnType<typeof baseClient.completeJson<T>>>;
         try {
@@ -926,16 +952,7 @@ export class DesignStudioService {
         const callId = randomUUID();
         const model = params.model || baseClient.primaryModel || resolveModel('text');
 
-        await this.repo.recordCallStart({
-          id: callId,
-          runId: run.id,
-          tenantId: s.tenantId,
-          stage: currentStageName,
-          provider: 'openai',
-          model,
-          requestedModel: model,
-        });
-        currentBudget.calls++;
+        await admitCall({ id: callId, stage: currentStageName, provider: 'openai', model, input: params });
 
         let result: Awaited<ReturnType<typeof baseClient.createStructuredCompletion<T>>>;
         try {
@@ -986,16 +1003,8 @@ export class DesignStudioService {
         // request agree. An invalid setting throws here, and the art stage falls back to a motif.
         const settings = resolveImageSettings();
         const callId = randomUUID();
-        await this.repo.recordCallStart({
-          id: callId,
-          runId: run.id,
-          tenantId: s.tenantId,
-          stage: 'art',
-          provider: settings.provider,
-          model: settings.model,
-          requestedModel: settings.model,
-        });
-        currentBudget.calls++;
+        await admitCall({ id: callId, stage: 'art', provider: settings.provider, model: settings.model,
+          input: { ...params, settings } });
 
         let result: Awaited<ReturnType<typeof baseArtProvider.generateArt>>;
         try {
@@ -1444,6 +1453,7 @@ export class DesignStudioService {
               return { runId, status: 'qa', stage: 'edit', winnerCandidateId: stages.directed.candidateId, spentUsd: budget.spentUsd };
             } catch (caught) {
               const err = caught as Error;
+              if (isModelCallHoldError(caught)) throw caught;
               if (caught instanceof StudioBudgetExhaustedError) throw caught;
               if (caught instanceof DirectedEditRefusal) {
                 // Nothing asked for is within the edit's means, or the design's photos are missing: a
@@ -1631,6 +1641,7 @@ export class DesignStudioService {
               }
               stages.critique = { completed: true, pipeline: 'v3', candidateId: candidate.id };
             } catch (err) {
+              if (isModelCallHoldError(err)) throw err;
               if (err instanceof StudioBudgetExhaustedError) throw err;
               // The critique informs the Desk; refinement critiques for itself. A missing one is
               // recorded, not fatal.
@@ -1651,6 +1662,7 @@ export class DesignStudioService {
           try {
             critiquedCandidates = await runCritiqueStage(ctx, brief, candidateStates);
           } catch (err) {
+            if (isModelCallHoldError(err)) throw err;
             // Rung 3: Critic unavailable -> skip critique, note judge unavailable
             await this.repo.updateRunStatus(runId, s.tenantId, 'revising', {
               judgeStatus: 'SKIPPED',
@@ -1750,6 +1762,7 @@ export class DesignStudioService {
                 });
               }
             } catch (err) {
+              if (isModelCallHoldError(err)) throw err;
               if (err instanceof StudioBudgetExhaustedError) throw err;
               // The unrefined candidate still stands; the run records why it was not refined.
               stages.revise = { completed: false, pipeline: 'v3', error: err instanceof Error ? err.message : String(err) };
@@ -1815,6 +1828,7 @@ export class DesignStudioService {
           try {
             tournamentResult = await runTournamentStage(ctx, brief, candidateStates);
           } catch (err) {
+            if (isModelCallHoldError(err)) throw err;
             // Rung 3: Judge unavailable -> rank by deterministic metrics
             const sorted = [...candidateStates].sort(
               (a, b) => (b.metrics?.alignmentScore || 0) - (a.metrics?.alignmentScore || 0)
@@ -1867,6 +1881,7 @@ export class DesignStudioService {
               verdict: canaryResult as any,
             });
           } catch (err) {
+            if (isModelCallHoldError(err)) throw err;
             canaryPassed = false;
           }
 
@@ -2115,6 +2130,11 @@ export class DesignStudioService {
           return { runId, status: run.status };
       }
     } catch (err: any) {
+      if (isModelCallHoldError(err)) {
+        throw new CanvaFlowError(409, err?.code === 'MODEL_CALL_ADMISSION_CONFLICT'
+          ? 'MODEL_CALL_ADMISSION_CONFLICT' : 'MODEL_CALL_UNCERTAIN',
+          'A Studio model call may have been accepted or another process already admitted it. Reconcile the call before continuing this run.');
+      }
       // Not a failure: the run waits at its stage for the design it revises, and a later resume
       // makes the edit.
       if (err instanceof CanvaFlowError && err.code === 'PARENT_STILL_RUNNING') throw err;
@@ -2188,6 +2208,7 @@ export class DesignStudioService {
     try {
       reread = await runBriefStage(ctx, { lateReference: true });
     } catch (err: any) {
+      if (isModelCallHoldError(err)) throw err;
       // The stored brief still designs the request, so an extra call that failed must not fail the
       // run. Nothing is recorded, which leaves one more attempt at the next stage before layouts.
       log.error(
@@ -2289,6 +2310,7 @@ export class DesignStudioService {
     try {
       outcome = await runJudgeStageV3(ctx, candidateStates);
     } catch (err) {
+      if (isModelCallHoldError(err)) throw err;
       if (err instanceof StudioBudgetExhaustedError) throw err;
       // Judge unavailable: the higher composite stands, and the run says so.
       const message = err instanceof Error ? err.message : String(err);
