@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T00:13:03Z",
+  "generatedAt": "2026-09-25T00:24:40Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 285,
+  "fileCount": 286,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "8467d30ccc216e705c3aa67238d58084fb33c2f0c8b40e2cb088b7b4c25cac6d",
+      "sha256": "0b6a91751c423741bd9248bdd1faab629ceeb5b3825a80ec89138e549bbad83d",
       "bytes": 3973
     },
     {
@@ -748,14 +748,19 @@
       "bytes": 2105
     },
     {
+      "path": "plans/research-grade-upgrade-2026-09-25/R17_EVIDENCE.md",
+      "sha256": "5932c8c78a77b5e54249ddec6669dbdae06eda35f7876c1045428235cf625bd6",
+      "bytes": 2165
+    },
+    {
       "path": "plans/research-grade-upgrade-2026-09-25/R18_EVIDENCE.md",
-      "sha256": "d1c5b2e8fb82f627ffd9b6e895a6e1b70b00a32442f1cb9ee2fba0757f53720d",
-      "bytes": 2028
+      "sha256": "f06367244b2fb8b9998c17dabe44472861ccd0bcdc95fca328c7a6e94dc0ed8c",
+      "bytes": 2007
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
-      "sha256": "fa13c744b1bb0ccfee1e19dbac190ee8050a0d1fbb7e002c835f2b1df9947e0b",
-      "bytes": 9353
+      "sha256": "b694b0747b89e572a32f1d6ec991bb0347f172491788642d5c9c6b0a4273981d",
+      "bytes": 9357
     },
     {
       "path": "plans/risk-register.csv",
@@ -764,8 +769,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "42e711a0c1a0ccfac625448305c66eb940e41f8a2cddc3856f3200ec20c4026f",
-      "bytes": 80324
+      "sha256": "000b7d91b69ca47c33f0f31cd85ecb2cad2198afccce4fc74c132a37dad3cde4",
+      "bytes": 81151
     },
     {
       "path": "plans/user-stories.csv",
