@@ -50,6 +50,18 @@ DO $$ BEGIN
   IF to_regclass('hawa.review_comments') IS NOT NULL THEN
     REVOKE UPDATE, DELETE ON hawa.review_comments FROM hawa_app;
   END IF;
+  -- Migration 023 creates these after first initialization. If grants are replayed later, preserve
+  -- their narrow runtime rights: request ownership may never be reassigned by generic table DML,
+  -- and projection receipts are append-only.
+  IF to_regclass('hawa.requests') IS NOT NULL THEN
+    REVOKE ALL ON hawa.requests FROM hawa_app;
+    GRANT SELECT, INSERT ON hawa.requests TO hawa_app;
+    GRANT UPDATE (stage, rev, current_task_id, draft_sent_at, question_asked_at, updated_at) ON hawa.requests TO hawa_app;
+  END IF;
+  IF to_regclass('hawa.lifecycle_projections') IS NOT NULL THEN
+    REVOKE ALL ON hawa.lifecycle_projections FROM hawa_app;
+    GRANT SELECT, INSERT ON hawa.lifecycle_projections TO hawa_app;
+  END IF;
 END $$;
 REVOKE UPDATE, DELETE ON hawa.design_revisions FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.approvals FROM hawa_app;

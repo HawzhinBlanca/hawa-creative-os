@@ -47,6 +47,8 @@ export interface CreateTaskAggregateParams {
   metadata?: Record<string, unknown>;
   payload?: Record<string, unknown>;
   enqueueOutbox?: boolean;
+  /** A lifecycle-owned task records its creation without making it claimable by the legacy worker. */
+  outboxState?: 'pending' | 'recorded';
 }
 
 /**
@@ -558,7 +560,10 @@ export class TaskRepository {
               priority: task.priority,
               requestHash: incomingHash,
             }),
-            state: 'pending',
+            state: params.outboxState === 'recorded' ? 'delivered' : 'pending',
+            ...(params.outboxState === 'recorded'
+              ? { delivered_at: new Date(), last_error: 'OWNED_BY_LIFECYCLE' }
+              : {}),
           })
           .execute();
       }

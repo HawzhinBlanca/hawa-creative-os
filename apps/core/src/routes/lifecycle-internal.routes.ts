@@ -26,6 +26,8 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
+import { LifecycleProjectionConflict, projectLifecycleOpen } from '../services/lifecycle-projection.js';
+import type { ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
@@ -65,6 +67,29 @@ const chatOf = (u: UpdateLike): string => parkedUpdateChat(u) ?? '';
 
 const isUpdate = (u: unknown): u is UpdateLike =>
   Boolean(u) && typeof u === 'object' && Number.isSafeInteger((u as UpdateLike).update_id) && (u as UpdateLike).update_id > 0;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function openDraft(value: unknown, requestId: string): ChatIntake | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const d = value as Record<string, unknown>;
+  if (d.platform !== 'telegram' || d.sourceEventId !== `lc-${requestId}-r0` ||
+      typeof d.sourceChannelId !== 'string' || !/^-?\d{1,20}$/.test(d.sourceChannelId) ||
+      typeof d.rawText !== 'string' || !d.rawText.trim() || d.rawText.length > 100_000 ||
+      typeof d.title !== 'string' || !d.title.trim() || d.title.length > 500 ||
+      typeof d.designInstructions !== 'string' || d.designInstructions.length > 100_000 ||
+      !Array.isArray(d.exactCopy) || d.exactCopy.length > 500 || JSON.stringify(d.exactCopy).length > 100_000 ||
+      !(d.clientId === null || (typeof d.clientId === 'string' && UUID.test(d.clientId))) ||
+      (d.autoGenerate !== undefined && typeof d.autoGenerate !== 'boolean')) return null;
+  // Select the contract explicitly. A worker payload cannot choose the database principal, tenant,
+  // outbox owner or a second source through spare JSON fields.
+  return {
+    platform: 'telegram', sourceEventId: d.sourceEventId as string, sourceChannelId: d.sourceChannelId as string,
+    rawText: d.rawText as string, title: d.title as string,
+    designInstructions: d.designInstructions as string, exactCopy: d.exactCopy as unknown[],
+    clientId: d.clientId as string | null,
+    ...(d.autoGenerate !== undefined ? { autoGenerate: d.autoGenerate as boolean } : {}),
+  };
+}
 
 export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
   const { app, db, problem, verifyRequestAuth, channelKillSwitches } = ctx;
@@ -157,5 +182,34 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       return problem(c, 503, 'Database Unavailable', 'The dead letter could not be stored; ask again');
     }
   });
-}
 
+  // Phase 2.3's first projection. Its caller is the future RequestLifecycle handler, never a
+  // browser. It is safe to expose before cutover: only the worker credential can reach it, and no
+  // current ChatInbox path emits a lifecycle open. One transaction pins task/outbox ownership.
+  internal('/lifecycle/:requestId/project', async (c) => {
+    const requestId = c.req.param('requestId') ?? '';
+    const body = await readBody(c);
+    const ops = body?.ops;
+    const first = Array.isArray(ops) && ops.length === 1 ? ops[0] as Record<string, unknown> : null;
+    const draft = first?.kind === 'createRequest' ? openDraft(first.draft, requestId) : null;
+    if (!UUID.test(requestId) || body?.v !== 1 || body.expectedRev !== 0 || body.rev !== 1 ||
+        body.key !== `${requestId}:1:open` || !draft) {
+      return problem(c, 400, 'Invalid lifecycle projection', 'Expected one versioned createRequest operation with a stable round-zero source');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleOpen(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID, expectedRev: 0, rev: 1,
+        key: body.key as string, draft,
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] lifecycle open ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The projection did not commit; retry with the same key');
+    }
+  });
+}

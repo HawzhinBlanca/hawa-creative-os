@@ -68,6 +68,7 @@ export type TaskState = TaskDbState;
 export interface TasksTable {
   id: Generated<string>;
   tenant_id: string;
+  request_id: Generated<string | null>;
   client_id: string | null;
   project_id: string | null;
   source_message_id: string | null;
@@ -230,6 +231,32 @@ export interface OutboxCommandsTable {
   last_error: string | null;
   created_at: Generated<Date>;
   delivered_at: Date | null;
+}
+
+export interface RequestsTable {
+  request_id: string;
+  tenant_id: string;
+  root_task_id: string;
+  current_task_id: string;
+  parent_request_id: string | null;
+  owner: 'core' | 'restate';
+  stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'delivering' | 'delivered' | 'expired' | 'cancelled';
+  rev: number;
+  chat_id: string | null;
+  draft_sent_at: Date | null;
+  question_asked_at: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface LifecycleProjectionsTable {
+  tenant_id: string;
+  request_id: string;
+  rev: number;
+  idempotency_key: string;
+  payload_sha256: string;
+  result: Record<string, unknown>;
+  applied_at: Generated<Date>;
 }
 
 export interface PublicationsTable {
@@ -648,6 +675,8 @@ export interface Database {
   projects: ProjectsTable;
   client_channels: ClientChannelsTable;
   tasks: TasksTable;
+  requests: RequestsTable;
+  lifecycle_projections: LifecycleProjectionsTable;
   task_events: TaskEventsTable;
   inbox_events: InboxEventsTable;
   message_events: MessageEventsTable;
@@ -679,5 +708,3 @@ export interface Database {
   design_studio_calls: DesignStudioCallsTable;
   design_feedback: DesignFeedbackTable;
 }
-
-
