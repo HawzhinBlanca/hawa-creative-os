@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { deliveryBaseId } from '@hawa/contracts';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CanvaBindingRepository, PublicationRepository, createDb, sql, withRlsContext } from '@hawa/db';
 import { parseOfficeApprovalProof } from '@hawa/domain';
@@ -227,7 +228,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
   });
 
   it('keeps uncertain requester sends unresolved and refuses a second workflow run', async () => {
-    const { requestId, taskId, approval, store, start } = await approvedForDelivery();
+    const { requestId, taskId, approval, artifactId, store, start } = await approvedForDelivery();
     const claim = await projectLifecycleDeliveryStart(db, store, start);
     await recordClaimedReceipts(taskId, { sheet: true });
     expect(await projectLifecycleDeliveryStart(db, { ...store, read: async () => { throw new Error('store away'); } }, start)).toEqual(claim);
@@ -256,6 +257,15 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(rows.request).toMatchObject({ stage: 'delivering', rev: '5' });
     expect(rows.task?.state).toBe('publishing');
     expect(rows.publication).toMatchObject({ error_class: 'REQUESTER_SEND_UNCONFIRMED', executor_finished_run: 1 });
+    const markKey = `lc:${deliveryBaseId(taskId, approval.approvalId)}:file:${artifactId}:send`;
+    await withRlsContext(db, scope, async (trx) => {
+      for (const outcome of ['attempted', 'uncertain']) {
+        await sql`INSERT INTO hawa.inbox_events
+          (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
+          VALUES (${tenantId}::uuid, 'telegram_delivery', ${markKey}, ${`telegram_document_${outcome}`},
+            ${JSON.stringify({ outcome })}::jsonb, ${`${markKey}:${outcome}`}, true, clock_timestamp())`.execute(trx);
+      }
+    });
     const desk = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
     const taskDetail = await desk.request(`/v1/tasks/${taskId}`);
     expect(taskDetail.status).toBe(200);
@@ -270,6 +280,15 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     const state = await desk.request(`/v1/tasks/${taskId}/publication-state`);
     expect(await state.json()).toMatchObject({ state: 'requester_send_reconciliation',
       status: 'REQUESTER_SEND_RECONCILIATION' });
+    const evidence = await desk.request(`/v1/tasks/${taskId}/requester-send-evidence`);
+    expect(evidence.status).toBe(200);
+    expect(await evidence.json()).toMatchObject({ taskId, requestId, requestRev: 5,
+      publicationId: expect.any(String), providerReceipt: 'not_available',
+      files: [expect.objectContaining({ artifactId, outcome: 'uncertain', attemptCount: 1 })],
+      notice: expect.objectContaining({ outcome: 'not_attempted' }) });
+    const viewer = createApp({ db, testAuth: { principal: { role: 'viewer', userId } } });
+    expect((await viewer.request(`/v1/tasks/${taskId}/requester-send-evidence`)).status).toBe(403);
+    expect((await desk.request(`/v1/tasks/${randomUUID()}/requester-send-evidence`)).status).toBe(404);
   });
 
   it('does not reopen delivery when a requester file was sent before archive failed', async () => {

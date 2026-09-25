@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T16:00:34Z",
+  "generatedAt": "2026-09-25T16:11:27Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -294,8 +294,8 @@
     },
     {
       "path": "adrs/045_requester_send_reconciliation_status.md",
-      "sha256": "f9df37bc1f3e7b82cb372718b2abd5d1895e9278c23b87e3fa757db7b2c969b4",
-      "bytes": 2344
+      "sha256": "ab6bbee586aed2be0ae080b58c9878a7190433737107feb186396745df01512d",
+      "bytes": 2853
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -569,8 +569,8 @@
     },
     {
       "path": "docs/13_GOOGLE_DRIVE_SHEETS.md",
-      "sha256": "d6e13f809735cdc6d4b2d4ccbcf301b2e415e83c864542a27d7926a876090d03",
-      "bytes": 11340
+      "sha256": "6907d0fa8b17e5a4679666e41291c54b2da0ba058e1dd43ba910d766b3dab51e",
+      "bytes": 11755
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
@@ -794,8 +794,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_EVIDENCE.md",
-      "sha256": "2431e8af4865438f3fcf57440aa0c1c0991db274bef1fab3ec271fc14b7efa05",
-      "bytes": 32098
+      "sha256": "0bba7bf23ef289b322a3536de5d99cd1ca6e8256a503579e6ebc5d46cee42cd9",
+      "bytes": 33944
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_RESTATE_DELIVERY_KILL_DRILL.md",
@@ -859,8 +859,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "62bd1078f2cc1a45990e24d81ea367f7a3335e61cd0d3e8085d92cbf6d954b0e",
-      "bytes": 132327
+      "sha256": "546e4ee1db6bcc643139fe5bd3b64d761bbd4e17848a6a0fe5152244d806204e",
+      "bytes": 132972
     },
     {
       "path": "plans/user-stories.csv",

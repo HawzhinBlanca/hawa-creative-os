@@ -79,6 +79,7 @@ GET /api/tasks/:taskId/files/:sha256
 GET /api/tasks/:taskId/outbox
 GET /api/tasks/:taskId/publication-receipt
 GET /api/tasks/:taskId/publication-state
+GET /api/tasks/:taskId/requester-send-evidence
 GET /api/tasks/:taskId/review-desk
 GET /api/tasks/:taskId/revisions/:revisionId
 GET /api/tasks/:taskId/revisions/diff
@@ -151,6 +152,7 @@ GET /api/v1/tasks/:taskId/files/:sha256
 GET /api/v1/tasks/:taskId/outbox
 GET /api/v1/tasks/:taskId/publication-receipt
 GET /api/v1/tasks/:taskId/publication-state
+GET /api/v1/tasks/:taskId/requester-send-evidence
 GET /api/v1/tasks/:taskId/review-desk
 GET /api/v1/tasks/:taskId/revisions/:revisionId
 GET /api/v1/tasks/:taskId/revisions/diff
@@ -227,6 +229,7 @@ GET /tasks/:taskId/files/:sha256
 GET /tasks/:taskId/outbox
 GET /tasks/:taskId/publication-receipt
 GET /tasks/:taskId/publication-state
+GET /tasks/:taskId/requester-send-evidence
 GET /tasks/:taskId/review-desk
 GET /tasks/:taskId/revisions/:revisionId
 GET /tasks/:taskId/revisions/diff
@@ -304,6 +307,7 @@ GET /v1/tasks/:taskId/files/:sha256
 GET /v1/tasks/:taskId/outbox
 GET /v1/tasks/:taskId/publication-receipt
 GET /v1/tasks/:taskId/publication-state
+GET /v1/tasks/:taskId/requester-send-evidence
 GET /v1/tasks/:taskId/review-desk
 GET /v1/tasks/:taskId/revisions/:revisionId
 GET /v1/tasks/:taskId/revisions/diff

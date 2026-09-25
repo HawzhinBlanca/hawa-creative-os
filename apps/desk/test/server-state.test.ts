@@ -70,6 +70,16 @@ function fakeCore(initial: FakeTask[], opts: { role?: string } = {}) {
       return t ? json(asTask(t)) : json({ title: 'Not Found' }, 404);
     }
     if (/^\/v1\/tasks\/[^/]+\/timeline$/.test(c.path)) return json({ events: [] });
+    const requesterSend = /^\/v1\/tasks\/([^/]+)\/requester-send-evidence$/.exec(c.path);
+    if (requesterSend && c.method === 'GET') {
+      const t = tasks.find((task) => task.id === requesterSend[1]);
+      if (t?.status !== 'REQUESTER_SEND_RECONCILIATION') return json({ title: 'No Uncertain Requester Send' }, 409);
+      return json({ taskId: t.id, requestId: t.requestId, requestRev: 5, publicationId: 'p1',
+        approvalId: 'd1', requesterChatId: '123456789', providerReceipt: 'not_available',
+        files: [{ artifactId: 'a1', filename: 'approved-export.pptx', sha256: 'ab'.repeat(32),
+          sendKey: 'send-file-a1', outcome: 'uncertain', attemptCount: 1, lastMarkAt: '2026-09-25T10:00:00.000Z' }],
+        notice: { sendKey: 'send-notice', outcome: 'not_attempted', attemptCount: 0, lastMarkAt: null } });
+    }
     if (/^\/v1\/tasks\/[^/]+\/canva$/.test(c.path)) {
       return json({ artifacts: [{ id: 'a1', format: 'png', sha256: 'cd'.repeat(32), byte_size: 1000 }] });
     }
@@ -266,6 +276,9 @@ describe('approve and request revision are mutations', () => {
     const { view } = await renderWork(stream);
     expect(view.text()).toContain('Requester delivery did not complete or could not be confirmed');
     expect(view.text()).toContain('Check Telegram Delivery');
+    expect(view.text()).toContain('approved-export.pptx');
+    expect(view.text()).toContain('May have arrived; requester receipt unknown');
+    expect(view.text()).toContain('Telegram requester receipt: unavailable');
     expect(view.text()).not.toContain('Retry Sheet Sync');
     expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(true);
     await click(view.container.querySelector('#btn-deliver-approved'));

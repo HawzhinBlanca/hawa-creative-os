@@ -9,6 +9,7 @@ import { isValidUuid, COPY_REQUIRED_DETAIL } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { pendingChangeWords } from '../services/pending-change.js';
 import { readPublicationReceipt } from '../services/publication-receipt.js';
+import { readRequesterSendEvidence } from '../services/requester-send-evidence.js';
 import { DELIVERY_OWNED_BY_CORE } from '../services/omnichannel-delivery.js';
 
 /**
@@ -377,6 +378,30 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       },
       actionableRecovery,
     });
+  });
+
+  // R09: show the stored Telegram attempt marks for one unresolved request-owned publication.
+  // A mark is local evidence of a sender attempt, never a requester-read receipt.
+  registerRoute('get', '/tasks/:taskId/requester-send-evidence', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.tenantId || !auth.userId) return problem(c, 401, 'Authentication Required');
+    if (!['operator', 'administrator', 'art_director', 'creative_director', 'office_admin'].includes(auth.role)) {
+      return problem(c, 403, 'Office Role Required', 'Only authorized office staff may inspect requester send evidence');
+    }
+    const taskId = c.req.param('taskId');
+    if (!isValidUuid(taskId)) return problem(c, 404, 'Task Not Found');
+    if (!db) return problem(c, 503, 'Database Unavailable', 'Requester send evidence is held in the database');
+    try {
+      const result = await readRequesterSendEvidence(db, { tenantId: auth.tenantId,
+        userId: auth.userId, role: auth.role, taskId });
+      if (result.kind === 'not_found') return problem(c, 404, 'Task Not Found');
+      if (result.kind === 'wrong_state') return problem(c, 409, 'No Uncertain Requester Send',
+        'This task has no current unresolved request-owned Telegram delivery');
+      return c.json(result.evidence);
+    } catch (err) {
+      log.error('[core:requester-send-evidence] Could not read send marks:', err);
+      return problem(c, 503, 'Send Evidence Unavailable', 'The Telegram send records could not be read safely');
+    }
   });
 
   // --- Two-Way Outbound Review Dispatch (FR-014, FR-081) ---

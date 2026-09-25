@@ -3,6 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
 import { StudioPanel } from '../components/StudioPanel.js';
 import { AskLedgerPanel } from '../components/AskLedger.js';
+import { RequesterSendEvidencePanel } from '../components/RequesterSendEvidencePanel.js';
 import { VectorInspector } from '../components/VectorInspector.js';
 import { SubmittedCopy } from '../components/SubmittedCopy.js';
 import { apiClient, ApiError, type DecisionPayload, type TaskListParams, type TaskListResponse, type TaskTimelineEvent } from '../api/client.js';
@@ -1014,6 +1015,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     </p>
                   )}
                 </div>
+                {selectedTask.status === 'REQUESTER_SEND_RECONCILIATION' &&
+                  <RequesterSendEvidencePanel key={`requester-send-${selectedTask.id}`} taskId={selectedTask.id} />}
                 {!selectedTask.latestRevisionId && (
                   <p className="capture-availability" role="note">
                     Request Revision and approval need a recorded design revision; this task has none yet.

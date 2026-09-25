@@ -15,10 +15,12 @@ Add the read-only API status `REQUESTER_SEND_RECONCILIATION` for a `publishing` 
 
 This status does not settle a send, release a send mark, or claim a Telegram receipt. A later audited operator resolution must separately bind evidence and expected request revision before any replay or completion. No production flag changes here.
 
+The operator read is scoped to the current tenant, request, task and approval. It joins the approved publication file IDs to TelegramSender's exact stable send keys and reports each latest local mark, attempt count and recorded time. The Desk shows this read-only evidence under the reconciliation state. These marks show what the worker recorded; they are not proof that the requester received or opened a message. Other roles and tasks cannot use the endpoint to inspect this chat.
+
 ## Why
 
 An uncertain external effect requires a different human decision from a missing Sheet row. Distinct status and disabled retry prevent the UI from inviting an action that the lifecycle owner correctly refuses, while preserving existing fail-closed sender behavior.
 
 ## Verification
 
-Contract, PostgreSQL task-detail and queue, publication-state, and Desk behavior tests must show the distinct status. A Sheet-only failure remains retryable and an ordinary publishing task remains in progress. The exact-tree release gate and traceability evidence are recorded in R09.
+Contract, PostgreSQL task-detail and queue, publication-state, sender-mark inspection, and Desk behavior tests must show the distinct status. A Sheet-only failure remains retryable and an ordinary publishing task remains in progress. The exact-tree release gate and traceability evidence are recorded in R09.

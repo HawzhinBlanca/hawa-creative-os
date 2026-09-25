@@ -96,6 +96,25 @@ export interface TaskTimelineEvent {
   occurredAt?: string;
 }
 
+export interface RequesterSendStep {
+  sendKey: string;
+  outcome: 'not_attempted' | 'attempted' | 'sent' | 'uncertain' | 'failed' | 'released';
+  attemptCount: number;
+  lastMarkAt: string | null;
+}
+
+export interface RequesterSendEvidence {
+  taskId: string;
+  requestId: string;
+  requestRev: number;
+  publicationId: string;
+  approvalId: string;
+  requesterChatId: string | null;
+  providerReceipt: 'not_available';
+  files: Array<RequesterSendStep & { artifactId: string; filename: string; sha256: string }>;
+  notice: RequesterSendStep;
+}
+
 /** A one-use ticket that opens the event stream (Core: POST /auth/stream-ticket, ADR-037). */
 export interface StreamTicket {
   ticket: string;
@@ -462,6 +481,9 @@ class HawaApiClient {
     /** The task's recorded events, oldest first as Core stores them (History & Audit). */
     timeline: (taskId: string) =>
       this.request<{ events: TaskTimelineEvent[] }>(`/tasks/${encodeURIComponent(taskId)}/timeline`),
+
+    requesterSendEvidence: (taskId: string) =>
+      this.request<RequesterSendEvidence>(`/tasks/${encodeURIComponent(taskId)}/requester-send-evidence`),
 
     create: async <T = any>(body: any): Promise<T> => {
       return this.request<T>('/tasks', {
