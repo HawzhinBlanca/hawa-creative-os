@@ -5,6 +5,13 @@ import {
   isAcknowledgement,
 } from '../src/services/telegram-classifier.js';
 
+const allowedEgress = { egressDecision: {
+  clientId: 'c1000000-0000-4000-8000-000000000002',
+  dataClass: 'client_message' as const,
+  mode: 'approved_providers' as const,
+  allowedProviders: ['openai'],
+} };
+
 describe('telegram-classifier: Intent & Instruction-Only Detection', () => {
   const activeTask = {
     id: '5f94e0e3-4934-4490-9c1f-44147a0e66b6',
@@ -128,11 +135,25 @@ By Invitation Only`;
   });
 
   describe('classifyInboundTelegramMessage with model & fallback', () => {
+    it('keeps an unresolved client message local even when a model key exists', async () => {
+      const fetcher = vi.fn(async () => { throw new Error('Unscoped text must not leave the office'); });
+      const input = { messageText: 'please make the title gold', recentTask: activeTask };
+      const noDecision = await classifyInboundTelegramMessage(input, { apiKey: 'test-key', fetcher });
+      const localOnly = await classifyInboundTelegramMessage(input, { apiKey: 'test-key', fetcher,
+        egressDecision: { ...allowedEgress.egressDecision, mode: 'local_only' } });
+      const wrongProvider = await classifyInboundTelegramMessage(input, { apiKey: 'test-key', fetcher,
+        egressDecision: { ...allowedEgress.egressDecision, allowedProviders: ['anthropic'] } });
+      expect([noDecision.kind, localOnly.kind, wrongProvider.kind]).toEqual(['feedback', 'feedback', 'feedback']);
+      expect([noDecision.isInstructionOnly, localOnly.isInstructionOnly, wrongProvider.isInstructionOnly])
+        .toEqual([true, true, true]);
+      expect(fetcher).not.toHaveBeenCalled();
+    });
+
     it('keeps an empty explicit copy section as a new task without a paid model call', async () => {
       const fetcher = vi.fn(async () => { throw new Error('The classifier must not call a provider'); });
       const classified = await classifyInboundTelegramMessage(
         { messageText: 'تکایە پۆستێک بۆ فاستپەی دروست بکە\nدەق:', recentTask: null },
-        { apiKey: 'test-key', fetcher },
+        { ...allowedEgress, apiKey: 'test-key', fetcher },
       );
       expect(classified).toMatchObject({ kind: 'new_brief', isInstructionOnly: false });
       expect(fetcher).not.toHaveBeenCalled();
@@ -167,7 +188,7 @@ By Invitation Only`;
           messageText: 'the background is simple and solid, i want some kind of gradient or texture',
           recentTask: activeTask,
         },
-        { apiKey: 'test-key', fetcher: mockFetch }
+        { ...allowedEgress, apiKey: 'test-key', fetcher: mockFetch }
       );
 
       expect(res.intent).toBe('revision_feedback');
@@ -217,7 +238,7 @@ By Invitation Only`;
             previewImageBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
           },
         },
-        { apiKey: 'test-key', fetcher: mockFetch }
+        { ...allowedEgress, apiKey: 'test-key', fetcher: mockFetch }
       );
 
       expect(res.kind).toBe('feedback');
@@ -236,7 +257,7 @@ By Invitation Only`;
         )
       );
       // A doubtful "thanks" or greeting is answered as one, not questioned.
-      const chatter = await classifyInboundTelegramMessage({ messageText: 'hawa', recentTask: activeTask }, { apiKey: 'test-key', fetcher: answering('other') });
+      const chatter = await classifyInboundTelegramMessage({ messageText: 'hawa', recentTask: activeTask }, { ...allowedEgress, apiKey: 'test-key', fetcher: answering('other') });
       expect(chatter.needsClarification).toBe(false);
       const mockFetch = vi.fn(async () =>
         new Response(
@@ -265,7 +286,7 @@ By Invitation Only`;
           messageText: 'new design please',
           recentTask: activeTask,
         },
-        { apiKey: 'test-key', fetcher: mockFetch }
+        { ...allowedEgress, apiKey: 'test-key', fetcher: mockFetch }
       );
 
       expect(res.needsClarification).toBe(true);
@@ -283,7 +304,7 @@ By Invitation Only`;
           messageText: 'can you make it look better more high end and professional',
           recentTask: activeTask,
         },
-        { apiKey: 'test-key', fetcher: mockFetch }
+        { ...allowedEgress, apiKey: 'test-key', fetcher: mockFetch }
       );
 
       expect(res.intent).toBe('revision_feedback');
@@ -306,7 +327,7 @@ describe('telegram-classifier: thanks and praise under a draft start nothing pai
   for (const text of thanks) {
     it(`"${text}" in reply to a draft is 'other', with no model call`, async () => {
       const fetcher = vi.fn();
-      const res = await classifyInboundTelegramMessage({ messageText: text, recentTask: draft, hasReplyTo: true }, { apiKey: 'test-key', fetcher });
+      const res = await classifyInboundTelegramMessage({ messageText: text, recentTask: draft, hasReplyTo: true }, { ...allowedEgress, apiKey: 'test-key', fetcher });
       expect(res.kind).toBe('other');
       expect(res.needsClarification).toBeFalsy();
       expect(fetcher).not.toHaveBeenCalled();
@@ -327,7 +348,7 @@ describe('telegram-classifier: thanks and praise under a draft start nothing pai
     it(`asks, after ${how}, whether praise in reply to a draft is a change, and never starts one`, async () => {
       const res = await classifyInboundTelegramMessage(
         { messageText: 'great work, the client will love this one', recentTask: draft, hasReplyTo: true },
-        { apiKey: 'test-key', fetcher }
+        { ...allowedEgress, apiKey: 'test-key', fetcher }
       );
       expect(fetcher).toHaveBeenCalled();
       expect(['feedback', 'new_brief', 'standing_rule']).not.toContain(res.kind);
@@ -337,7 +358,7 @@ describe('telegram-classifier: thanks and praise under a draft start nothing pai
 
     it(`still revises, after ${how}, a reply that asks for a change`, async () => {
       for (const messageText of ['move the logo left', 'the title font is wrong', 'use the navy background instead', 'ڕەنگەکە تۆختر بکە']) {
-        const res = await classifyInboundTelegramMessage({ messageText, recentTask: draft, hasReplyTo: true }, { apiKey: 'test-key', fetcher });
+        const res = await classifyInboundTelegramMessage({ messageText, recentTask: draft, hasReplyTo: true }, { ...allowedEgress, apiKey: 'test-key', fetcher });
         expect(res.kind).toBe('feedback');
         expect(res.needsClarification).toBeFalsy();
       }
@@ -362,13 +383,13 @@ describe('telegram-classifier: a model-stated rule needs the words of one', () =
     );
 
   it('drops a rule the model restated from a one-off change or brief', async () => {
-    const change = await classifyInboundTelegramMessage({ messageText: 'make the title gold', recentTask: draft }, { apiKey: 'test-key', fetcher: answering('feedback', 'Make titles gold.') });
+    const change = await classifyInboundTelegramMessage({ messageText: 'make the title gold', recentTask: draft }, { ...allowedEgress, apiKey: 'test-key', fetcher: answering('feedback', 'Make titles gold.') });
     expect(change.kind).toBe('feedback');
     expect(change.standingRule).toBeUndefined();
-    const brief = await classifyInboundTelegramMessage({ messageText: 'KAAE open day, gold titles', recentTask: draft }, { apiKey: 'test-key', fetcher: answering('new_brief', 'Use gold titles.') });
+    const brief = await classifyInboundTelegramMessage({ messageText: 'KAAE open day, gold titles', recentTask: draft }, { ...allowedEgress, apiKey: 'test-key', fetcher: answering('new_brief', 'Use gold titles.') });
     expect(brief.standingRule).toBeUndefined();
     // With no design to change, a one-off change is a brief, not a rule.
-    const noDraft = await classifyInboundTelegramMessage({ messageText: 'make the title gold', recentTask: null }, { apiKey: 'test-key', fetcher: answering('feedback', 'Make titles gold.') });
+    const noDraft = await classifyInboundTelegramMessage({ messageText: 'make the title gold', recentTask: null }, { ...allowedEgress, apiKey: 'test-key', fetcher: answering('feedback', 'Make titles gold.') });
     expect(noDraft.kind).toBe('new_brief');
     expect(noDraft.standingRule).toBeUndefined();
   });
@@ -376,10 +397,10 @@ describe('telegram-classifier: a model-stated rule needs the words of one', () =
   it('keeps it when the message says "from now on", and always for a standing rule', async () => {
     const both = await classifyInboundTelegramMessage(
       { messageText: 'make the title gold, and from now on always use gold titles', recentTask: draft },
-      { apiKey: 'test-key', fetcher: answering('feedback', 'Use gold titles.') }
+      { ...allowedEgress, apiKey: 'test-key', fetcher: answering('feedback', 'Use gold titles.') }
     );
     expect(both.standingRule).toBe('Use gold titles.');
-    const rule = await classifyInboundTelegramMessage({ messageText: 'for all KAAE designs, gold titles please', recentTask: draft }, { apiKey: 'test-key', fetcher: answering('standing_rule', 'Use gold titles.') });
+    const rule = await classifyInboundTelegramMessage({ messageText: 'for all KAAE designs, gold titles please', recentTask: draft }, { ...allowedEgress, apiKey: 'test-key', fetcher: answering('standing_rule', 'Use gold titles.') });
     expect(rule.kind).toBe('standing_rule');
     expect(rule.standingRule).toBe('Use gold titles.');
   });

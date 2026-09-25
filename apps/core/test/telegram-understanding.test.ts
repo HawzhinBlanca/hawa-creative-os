@@ -230,16 +230,15 @@ describe.skipIf(!url)('the bot understands what the office sends', () => {
     expect((await send({ text: 'KAAE forum\n---\nJanuary 5, 2027\nDuhok' })).status).toBe(201);
     const original = fetch;
     process.env.OPENAI_API_KEY = ['classifier', 'fixture'].join('-');
-    let answer = { kind: 'new_brief', confidence: 0.55 };
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ...answer, reason: 'r', isInstructionOnly: false, documentKind: 'design_piece', directive: '', standingRule: '' }) } }] }), { status: 200 })) as any;
+    const external = vi.fn(async () => { throw new Error('Unscoped client text must not leave the office'); });
+    globalThis.fetch = external as any;
     try {
       expect((await send({ text: 'Quality week' })).body.status).toBe('CLARIFICATION_REQUIRED');
-      answer = { kind: 'new_brief', confidence: 0.95 };
       const next = await send({ text: 'Another poster: Eid Mubarak' });
       expect(next.status).toBe(201);
       expect(JSON.stringify(next.body.task)).toMatch(/Eid Mubarak/);
       expect(JSON.stringify(next.body.task)).not.toMatch(/Quality week/);
+      expect(external).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = original;
       delete process.env.OPENAI_API_KEY;
@@ -252,8 +251,8 @@ describe.skipIf(!url)('the bot understands what the office sends', () => {
     expect(brief.status).toBe(201);
     const original = fetch;
     process.env.OPENAI_API_KEY = ['classifier', 'fixture'].join('-');
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ kind: 'new_brief', confidence: 0.55, reason: 'unsure', isInstructionOnly: false, documentKind: 'design_piece', directive: '', standingRule: '' }) } }] }), { status: 200 })) as any;
+    const external = vi.fn(async () => { throw new Error('Unscoped client text must not leave the office'); });
+    globalThis.fetch = external as any;
     try {
       const unsure = await send({ text: 'Accreditation results day' });
       expect(unsure.body.status).toBe('CLARIFICATION_REQUIRED');
@@ -261,6 +260,7 @@ describe.skipIf(!url)('the bot understands what the office sends', () => {
       const answered = await send({ text: 'new' });
       expect(answered.status).toBe(201);
       expect(JSON.stringify(answered.body.task.brief?.exactCopy || answered.body.task)).toMatch(/Accreditation results day/);
+      expect(external).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = original;
       delete process.env.OPENAI_API_KEY;
