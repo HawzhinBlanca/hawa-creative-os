@@ -142,16 +142,16 @@ WITHOUT_ROW="$(num referencedWithoutRow)"
 [[ "$RC" == 0 && "$MISSING" == 0 && "$CORRUPT" == 0 ]] \
   || fail "the store check found missing=${MISSING} corrupt=${CORRUPT} of ${ROWS} file rows in ${DUMP_NAME}"
 
-# Re-read the stored Restate ciphertext on a later day, independently of the backup's own immediate
-# round-trip. This is archive integrity only; a clean-host Restate start and replay remain R10 gates.
+# Re-read the exact Restate ciphertext paired with the selected dump on a later day. A newer
+# unrelated Restate archive cannot satisfy this night. A clean-host start and replay remain R10 gates.
 if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]]; then
-  RESTATE_MANIFEST="$( { ls -1t "$ARCHIVE_DEST"/restate_*.json 2>/dev/null || true; } | head -1)"
-  [[ -n "$RESTATE_MANIFEST" ]] || fail "no Restate volume archive manifest exists"
-  RESTATE_ARCHIVE="$(basename "$RESTATE_MANIFEST")"
+  RESTATE_PAIR="$ARCHIVE_DEST/hawa_${STAMP}.restate.json"
+  [[ -f "$RESTATE_PAIR" ]] || fail "the selected dump has no same-night Restate pair"
+  RESTATE_ARCHIVE="$(basename "$RESTATE_PAIR")"
   HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" \
-    python3 "$ROOT/infra/backup/restate_nightly.py" --verify-archive "$RESTATE_MANIFEST" \
-    || fail "the stored Restate volume archive failed independent verification"
-  RESTATE_CHECK="verified_archive"
+    python3 "$ROOT/infra/backup/restate_nightly.py" --verify-pair "$RESTATE_PAIR" \
+    || fail "the selected dump's Restate pair failed independent verification"
+  RESTATE_CHECK="verified_pair"
 fi
 
 record passed "rows=${ROWS} needed=${NEEDED}"

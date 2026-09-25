@@ -28,6 +28,7 @@ from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[2]
 PINNED_IMAGE = re.compile(r"^\S+@sha256:[0-9a-f]{64}$")
+STAMP = re.compile(r"^[0-9]{8}T[0-9]{6}Z$")
 
 
 class BackupError(RuntimeError):
@@ -58,14 +59,97 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def manifest_mac(facts: dict, key_file: Path) -> str:
-    """Authenticate the archive metadata and ciphertext hash with a separate derived key."""
+def metadata_mac(facts: dict, key_file: Path, purpose: bytes) -> str:
+    """Authenticate archive metadata with a purpose-separated key from the office passphrase."""
     passphrase = key_file.read_bytes().splitlines()
     if not passphrase or not passphrase[0]:
         raise BackupError("Restate archive key file is empty")
-    key = hashlib.pbkdf2_hmac("sha256", passphrase[0], b"hawa/restate/manifest-v2", 100_000)
+    key = hashlib.pbkdf2_hmac("sha256", passphrase[0], purpose, 100_000)
     message = json.dumps(facts, sort_keys=True, separators=(",", ":")).encode()
     return hmac.new(key, message, hashlib.sha256).hexdigest()
+
+
+def manifest_mac(facts: dict, key_file: Path) -> str:
+    return metadata_mac(facts, key_file, b"hawa/restate/manifest-v2")
+
+
+def pair_mac(facts: dict, key_file: Path) -> str:
+    return metadata_mac(facts, key_file, b"hawa/restate/nightly-pair-v1")
+
+
+def pair_inputs(archive_dir: Path, stamp: str) -> dict:
+    """Validate the same-night database/file half before pausing live Restate intake."""
+    if not STAMP.fullmatch(stamp):
+        raise BackupError("nightly snapshot stamp is invalid")
+    dump = archive_dir / f"hawa_{stamp}.dump.enc"
+    blob_manifest = archive_dir / f"hawa_{stamp}.blobs"
+    sidecar = archive_dir / f"hawa_{stamp}.dump.enc.sha256"
+    if not dump.is_file() or not blob_manifest.is_file() or not sidecar.is_file():
+        raise BackupError("same-night encrypted dump, blob manifest or checksum is missing")
+    dump_hash = sha256(dump)
+    recorded_hash = sidecar.read_text().split()
+    if len(recorded_hash) != 1 or recorded_hash[0] != dump_hash:
+        raise BackupError("same-night encrypted dump checksum differs from its sidecar")
+    return {"dumpName": dump.name, "dumpSha256": dump_hash,
+            "blobManifestName": blob_manifest.name, "blobManifestSha256": sha256(blob_manifest)}
+
+
+def publish_pair(archive_dir: Path, stamp: str, inputs: dict, restate_manifest: Path, key_file: Path) -> Path:
+    name = f"hawa_{stamp}.restate.json"
+    final = archive_dir / name
+    part = archive_dir / f"{name}.part"
+    if final.exists() or part.exists():
+        raise BackupError("a same-night Restate pair already exists")
+    restate = json.loads(restate_manifest.read_text())
+    facts = {"schemaVersion": 1, "snapshotStamp": stamp, **inputs,
+             "restateManifestName": restate_manifest.name,
+             "restateManifestSha256": sha256(restate_manifest),
+             "restateCapturedAt": restate["capturedAt"], "crossStoreAtomic": False}
+    facts["pairMac"] = pair_mac(facts, key_file)
+    try:
+        part.write_text(json.dumps(facts, indent=2) + "\n")
+        os.chmod(part, 0o600)
+        os.replace(part, final)
+    finally:
+        part.unlink(missing_ok=True)
+    return final
+
+
+def verify_pair(pair: Path, key_file: Path) -> dict:
+    """Verify the exact archived dump, blob manifest and Restate volume selected as one night."""
+    match = re.fullmatch(r"hawa_([0-9]{8}T[0-9]{6}Z)\.restate\.json", pair.name)
+    if not match:
+        raise BackupError("not a same-night Restate pair name")
+    try:
+        facts = json.loads(pair.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BackupError("same-night Restate pair is unreadable") from exc
+    if not isinstance(facts, dict) or facts.get("schemaVersion") != 1 or facts.get("snapshotStamp") != match.group(1):
+        raise BackupError("same-night Restate pair version or stamp is invalid")
+    if not key_file.is_file():
+        raise BackupError("same-night Restate pair key is missing")
+    declared = facts.get("pairMac")
+    authenticated = {key: value for key, value in facts.items() if key != "pairMac"}
+    if not isinstance(declared, str) or not hmac.compare_digest(declared, pair_mac(authenticated, key_file)):
+        raise BackupError("same-night Restate pair authentication failed")
+    stamp = match.group(1)
+    if facts.get("dumpName") != f"hawa_{stamp}.dump.enc" or facts.get("blobManifestName") != f"hawa_{stamp}.blobs":
+        raise BackupError("same-night Restate pair names do not match its dump stamp")
+    restate_name = facts.get("restateManifestName")
+    if not isinstance(restate_name, str) or not re.fullmatch(r"restate_[0-9]{8}T[0-9]{6}Z\.json", restate_name):
+        raise BackupError("same-night Restate manifest name is invalid")
+    for name_field, hash_field in (("dumpName", "dumpSha256"), ("blobManifestName", "blobManifestSha256"),
+                                   ("restateManifestName", "restateManifestSha256")):
+        recorded_hash = facts.get(hash_field)
+        if not isinstance(recorded_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", recorded_hash):
+            raise BackupError(f"same-night archive hash is invalid: {hash_field}")
+        path = pair.parent / facts[name_field]
+        if not path.is_file() or sha256(path) != recorded_hash:
+            raise BackupError(f"same-night archive differs from pair: {name_field}")
+    restate = verify_archive(pair.parent / restate_name, key_file)
+    if restate["capturedAt"] != facts.get("restateCapturedAt") or facts.get("crossStoreAtomic") is not False:
+        raise BackupError("same-night Restate capture metadata differs from pair")
+    return facts
 
 
 def inspect_tar(path: Path, node_name: str) -> int:
@@ -102,7 +186,7 @@ def verify_archive(manifest: Path, key_file: Path) -> dict:
         facts = json.loads(manifest.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise BackupError("Restate backup manifest is unreadable") from exc
-    if facts.get("schemaVersion") != 2 or facts.get("encrypted") is not True:
+    if not isinstance(facts, dict) or facts.get("schemaVersion") != 2 or facts.get("encrypted") is not True:
         raise BackupError("Restate backup manifest version or encryption is invalid")
     if not key_file.is_file():
         raise BackupError("Restate archive decryption key is missing")
@@ -299,7 +383,7 @@ class RestateBackup:
             raise BackupError(f"encrypted Restate archive did not round-trip: {stderr[:200]}")
         return digest.hexdigest()
 
-    def apply(self) -> Path:
+    def apply(self, pair_stamp: str | None = None) -> Path:
         c = self.c
         if not c.archive_dir.is_dir():
             raise BackupError("archive destination must already exist; no implicit off-host location")
@@ -310,9 +394,13 @@ class RestateBackup:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as exc:
                 raise BackupError("another Restate volume backup owns the archive lock") from exc
-            return self._apply_locked()
+            return self._apply_locked(pair_stamp)
 
-    def _apply_locked(self) -> Path:
+    def _apply_locked(self, pair_stamp: str | None = None) -> Path:
+        pair = pair_inputs(self.c.archive_dir, pair_stamp) if pair_stamp is not None else None
+        if pair_stamp is not None and any((self.c.archive_dir / f"hawa_{pair_stamp}.restate.json{suffix}").exists()
+                                          for suffix in ("", ".part")):
+            raise BackupError("a same-night Restate pair already exists")
         facts = self.preflight()
         c = self.c
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -368,6 +456,14 @@ class RestateBackup:
             os.replace(part, final)
             os.replace(manifest_part, manifest)
             published = True
+            if pair is not None:
+                try:
+                    current_pair = pair_inputs(c.archive_dir, pair_stamp)
+                except BackupError as exc:
+                    raise BackupError("same-night database or blob input changed during Restate capture") from exc
+                if current_pair != pair:
+                    raise BackupError("same-night database or blob input changed during Restate capture")
+                publish_pair(c.archive_dir, pair_stamp, pair, manifest, c.key_file)
             return manifest
         finally:
             # A failed restart leaves intake paused; the operator must recover Restate first.
@@ -395,7 +491,11 @@ def main() -> int:
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--apply", action="store_true", help="pause intake and cold-copy the production Restate volume")
     action.add_argument("--verify-archive", type=Path, help="re-read and decrypt a stored archive without contacting production")
+    action.add_argument("--verify-pair", type=Path, help="verify the exact database, blobs and Restate archives paired to one night")
+    parser.add_argument("--pair-stamp", help="bind --apply to the same-night database dump and blob manifest")
     args = parser.parse_args()
+    if args.pair_stamp and not args.apply:
+        parser.error("--pair-stamp requires --apply")
     config = Config(compose_file=ROOT / "infra/docker/docker-compose.prod.yml",
                     compose_env=ROOT / "infra/docker/.env",
                     archive_dir=Path(os.environ.get("HAWA_BACKUP_ARCHIVE_DEST", str(Path.home() / ".hawa/snapshots_archive"))),
@@ -403,12 +503,16 @@ def main() -> int:
                     helper_image=os.environ.get("HAWA_RESTATE_BACKUP_HELPER_IMAGE", ""))
     backup = RestateBackup(config)
     try:
-        if args.verify_archive:
+        if args.verify_pair:
+            facts = verify_pair(args.verify_pair, config.key_file)
+            print(json.dumps({"status": "verified_pair", "dumpName": facts["dumpName"],
+                              "restateManifestName": facts["restateManifestName"]}))
+        elif args.verify_archive:
             facts = verify_archive(args.verify_archive, config.key_file)
             print(json.dumps({"status": "verified_archive", "regularFiles": facts["regularFiles"],
                               "nodeName": facts["nodeName"], "capturedAt": facts["capturedAt"]}))
         elif args.apply:
-            print(f"Restate backup published: {backup.apply()}")
+            print(f"Restate backup published: {backup.apply(args.pair_stamp)}")
         else:
             print(json.dumps({"status": "ready", "target": "single-node Restate", **backup.preflight()}))
         return 0

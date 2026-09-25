@@ -219,7 +219,20 @@ fi
 # unencrypted, into the archive destination, which is off this machine: never again.
 bash "$ROOT/infra/ops/disk_cleanup.sh" --backups >/dev/null 2>&1 || echo "WARNING: disk_cleanup.sh --backups did not finish" >&2
 
-# Prune archive destination after all new and moved files have arrived
+# R10: the Restate journal lives in a different volume from PostgreSQL and the file store. Opt in
+# only after its immutable helper image, key and isolated restore rehearsal are configured. A failed
+# Restate copy fails the night before any file-store garbage collection or OK receipt.
+RESTATE_STATUS="off"
+if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]]; then
+  [[ "$ARCHIVE_DEST" != gs://* ]] || fail "Restate volume backup needs a local encrypted archive destination"
+  HAWA_BACKUP_ARCHIVE_DEST="$ARCHIVE_DEST" HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" \
+    python3 "$ROOT/infra/backup/restate_nightly.py" --apply --pair-stamp "$STAMP" \
+    || fail "Restate volume backup failed; the database/file copy may be valid, but the night is incomplete"
+  RESTATE_STATUS="paired_archive"
+fi
+
+# Retire older database/file snapshots only after every opted-in member of this night's
+# recovery set has published. A failed Restate capture must preserve the older usable archive.
 if [[ -d "$ARCHIVE_DEST" && "$ARCHIVE_DEST" != gs://* ]]; then
   for ext in dump enc sql; do
     { ls -1t "$ARCHIVE_DEST"/hawa_*."$ext" 2>/dev/null || true; } | tail -n +$((ARCHIVE_KEEP + 1)) | while read -r old; do
@@ -240,18 +253,6 @@ if [[ -d "$ARCHIVE_DEST" && "$ARCHIVE_DEST" != gs://* ]]; then
     done
     awk -F'\t' 'NR==FNR { k[$1] = 1; next } ($2 in k)' "$WORK/keep_packs" "$INDEX" > "$INDEX.new" && mv -f "$INDEX.new" "$INDEX"
   fi
-fi
-
-# R10: the Restate journal lives in a different volume from PostgreSQL and the file store. Opt in
-# only after its immutable helper image, key and isolated restore rehearsal are configured. A failed
-# Restate copy fails the night before any file-store garbage collection or OK receipt.
-RESTATE_STATUS="off"
-if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]]; then
-  [[ "$ARCHIVE_DEST" != gs://* ]] || fail "Restate volume backup needs a local encrypted archive destination"
-  HAWA_BACKUP_ARCHIVE_DEST="$ARCHIVE_DEST" HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" \
-    python3 "$ROOT/infra/backup/restate_nightly.py" --apply \
-    || fail "Restate volume backup failed; the database/file copy may be valid, but the night is incomplete"
-  RESTATE_STATUS="archived"
 fi
 
 # The collector, only now: a file is deleted only after tonight's dump and its files are archived.

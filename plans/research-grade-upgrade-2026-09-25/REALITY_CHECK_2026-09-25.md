@@ -83,6 +83,8 @@ The formal seven-stage release script still has no remote tracking branch and ha
 
 ## What failed or remains unproved
 
+- ADR-055 now binds an opted-in Restate archive to the exact nightly encrypted dump and blob manifest, and the monthly drill rejects an unpaired newest dump even if a newer unrelated Restate archive exists. Retention waits for pair publication, so failed capture preserves older archived sets. Local Python **15** and isolated PostgreSQL/blob **11** controls pass. Production paired capture, Restate retention, clean-host replay and cross-store reconciliation remain unproved; R10 and the release admission remain open. See `R10_EVIDENCE.md`.
+
 - The formal seven-stage release script passed stages 1–5 and its production database isolation check, then **stopped in stage 6** because this branch has no remote tracking branch. Its stage 7 was not run. The separately executed full suite does not turn that gate green. Log: `/private/tmp/hawdesign-rg-20260925-final-gate.log` on this host.
 - No inspected deployment receipt ties this candidate to a running immutable image. All product admission Gates A–H therefore remain `NOT_RUN_DEPLOYMENT_REQUIRED` under `scripts/release_admission_verdict.ts`.
 - No independently authorized, sealed 200-case corpus and no blinded human ratings were supplied. Creative superiority, language quality and model promotion remain unmeasured. The 100-task office pilot test uses synthetic in-memory export bytes; it is **not** a production pilot.

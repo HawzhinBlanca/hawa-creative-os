@@ -206,6 +206,37 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !toolsBuilt)('nightly backu
     expect((await scratchDatabases()).filter((d) => d.startsWith('hawa_drill_'))).toEqual([]);
   }, 180_000);
 
+  it('the opted-in drill refuses an unpaired dump even when a newer Restate manifest exists', async () => {
+    const unrelated = path.join(dirs.archive, 'restate_20990101T000000Z.json');
+    fs.writeFileSync(unrelated, '{}');
+    try {
+      const r = await run('infra/backup/restore_drill.sh', [], { HAWA_RESTATE_BACKUP_ENABLED: 'on' });
+      expect(r.code).toBe(1);
+      expect(r.out).toMatch(/selected dump has no same-night Restate pair/);
+      const last = (await owner.query(`SELECT status, evidence FROM hawa.backup_drills WHERE evidence->>'drill_type' = 'data_and_blobs' ORDER BY completed_at DESC LIMIT 1`)).rows[0];
+      expect(last.status).toBe('failed');
+      expect(last.evidence.dump).toBe(`hawa_${stampOf(lastOk())}.dump.enc`);
+      expect((await scratchDatabases()).filter((d) => d.startsWith('hawa_drill_'))).toEqual([]);
+    } finally {
+      fs.unlinkSync(unrelated);
+    }
+  }, 180_000);
+
+  it('a failed Restate capture preserves the previous archived recovery set', async () => {
+    const previous = fs.readdirSync(dirs.archive).filter((n) => n.endsWith('.dump.enc')).sort();
+    expect(previous.length).toBeGreaterThan(1);
+    const r = await run('infra/backup/nightly_backup.sh', [], {
+      HAWA_RESTATE_BACKUP_ENABLED: 'on', HAWA_BACKUP_ARCHIVE_KEEP: '1',
+    });
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/Restate volume backup failed/);
+    const after = fs.readdirSync(dirs.archive).filter((n) => n.endsWith('.dump.enc'));
+    for (const dump of previous) {
+      expect(after).toContain(dump);
+      expect(fs.existsSync(path.join(dirs.archive, dump.replace('.dump.enc', '.blobs')))).toBe(true);
+    }
+  }, 180_000);
+
   it('the restore drill fails, and records the failure, when a pack it needs is gone', async () => {
     const aside = path.join(t, 'aside');
     fs.mkdirSync(aside);
