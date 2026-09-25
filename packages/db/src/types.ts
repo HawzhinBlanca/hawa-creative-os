@@ -69,6 +69,7 @@ export interface TasksTable {
   id: Generated<string>;
   tenant_id: string;
   request_id: Generated<string | null>;
+  delivery_executor_pin: Generated<'core' | 'restate'>;
   client_id: string | null;
   project_id: string | null;
   source_message_id: string | null;

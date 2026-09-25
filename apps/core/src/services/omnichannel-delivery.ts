@@ -294,7 +294,9 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
   /**
    * Who delivers the task: 'restate' when any of its publications is the Delivery workflow's (slice
    * 2.2); 'core' when Core's own delivery has started one, or has queued the requester's files in the
-   * outbox (a chat-only delivery can do that with no publication row); null when nothing has started.
+   * outbox (a chat-only delivery can do that with no publication row). Before the first effect the
+   * task's immutable creation-time pin decides. Historical Restate publications override the
+   * migrated task default of core.
    * Throws when Postgres cannot be read: the caller must not guess, since either path acting on the
    * other's delivery would send the files a second time.
    */
@@ -306,7 +308,11 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
         ORDER BY (executor = 'restate') DESC, created_at DESC LIMIT 1`.execute(trx)).rows[0];
       if (row) return row.executor;
-      return (await coreQueuedFiles(trx, tenantId, taskId)) ? 'core' : null;
+      if (await coreQueuedFiles(trx, tenantId, taskId)) return 'core';
+      const taskPin = (await sql<{ delivery_executor_pin: 'core' | 'restate' }>`
+        SELECT delivery_executor_pin FROM hawa.tasks
+        WHERE tenant_id = ${tenantId}::uuid AND id = ${taskId}::uuid`.execute(trx)).rows[0];
+      return taskPin?.delivery_executor_pin ?? null;
     });
   }
 
@@ -538,7 +544,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
           const recorded = await withRlsContext(db, { tenantId: ownerTenant, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
             publicationRepo.findByKey(publicationKey, ownerTenant, trx));
           priorPublication = Boolean(recorded);
-          owner = recorded?.executor ?? null;
+          owner = recorded?.executor ?? await deliveryExecutorOfTask(task, taskId);
         } catch (err) {
           log.error('[core:omnichannel] Could not read who delivers this publication:', err);
           return { ok: false, status: 503, title: 'Database Unavailable', code: 'DATABASE_UNAVAILABLE', message: 'Who delivers this publication could not be read; try again' };
@@ -1189,6 +1195,11 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         return withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx): Promise<Claim> => {
           let created = false;
           const existing = await publicationRepo.findByKey(publicationKey, tenantId, trx);
+          if (!existing) {
+            const pin = (await sql<{ delivery_executor_pin: string }>`SELECT delivery_executor_pin FROM hawa.tasks
+              WHERE tenant_id = ${tenantId}::uuid AND id = ${taskId}::uuid`.execute(trx)).rows[0]?.delivery_executor_pin;
+            if (pin !== 'restate') return { kind: 'core' };
+          }
           // Core's own delivery queued these files for the requester (a chat-only delivery writes no
           // publication first): it stays Core's, or the requester would get them twice.
           if ((!existing || existing.executor === 'core') && await coreQueuedFiles(trx, tenantId, taskId, publicationKey)) return { kind: 'core' };

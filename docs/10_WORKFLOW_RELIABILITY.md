@@ -157,6 +157,12 @@ The OpenAI probe is opt-in through `HAWA_BILLING_PROBE_ENABLED=on`; `HAWA_BILLIN
 
 The design funnel is evaluated per automatic task. A successful draft in the same period cannot hide an overdue task without its Canva binding. Recent or manual-only requests without drafts are still in progress. The monitor reports the oldest overdue task and task-weighted p50/p95 durations for each completed stage, with sample counts and nulls when no stage has completed. Reading health is side-effect-free; any operator paging must use a separate deduplicated sender.
 
+### Legacy delivery cutover pin (2026-09-25, ADR-052)
+
+Chat enrolment for the legacy Delivery workflow is sampled when a Telegram task is created and saved as its immutable `delivery_executor_pin`. Existing tasks migrate to `core`. A revision, question answer, reformat or reference task inherits the scoped predecessor's pin. Idempotent intake replay returns the original task and pin. The publish route and both effect claim paths use the stored choice; an already-started publication or queued send keeps its recorded executor. A lifecycle-owned projection records Restate ownership separately and refuses to claim a Core-pinned predecessor. Changing `HAWA_LIFECYCLE_CHATS` must never change an existing task's executor at Deliver.
+
+This local rule has database-backed tests. Full ChatInbox handoff of old requests, deployed canary rollback, Restate backup and clean-host restore remain R10 acceptance work.
+
 ## 11. Availability design
 
 The first office deployment can use one core server, but it must include:

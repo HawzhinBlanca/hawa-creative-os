@@ -49,6 +49,8 @@ export interface CreateTaskAggregateParams {
   enqueueOutbox?: boolean;
   /** A lifecycle-owned task records its creation without making it claimable by the legacy worker. */
   outboxState?: 'pending' | 'recorded';
+  /** Immutable at task creation; an enrolled chat cannot switch an existing task at Deliver. */
+  deliveryExecutorPin?: 'core' | 'restate';
 }
 
 /**
@@ -529,6 +531,7 @@ export class TaskRepository {
           title: params.title,
           description: params.description || '',
           state: 'received',
+          delivery_executor_pin: params.deliveryExecutorPin || 'core',
           task_type: params.taskType || null,
           language: params.language || null,
           direction: params.direction || null,
@@ -562,6 +565,7 @@ export class TaskRepository {
             clientId: task.client_id,
             state: task.state,
             priority: task.priority,
+            deliveryExecutorPin: task.delivery_executor_pin,
             metadata: params.metadata || {},
             payload: params.payload || {},
             ...(params.payload || {}),
@@ -586,6 +590,7 @@ export class TaskRepository {
               title: task.title,
               clientId: task.client_id,
               priority: task.priority,
+              deliveryExecutorPin: task.delivery_executor_pin,
               requestHash: incomingHash,
             }),
             state: params.outboxState === 'recorded' ? 'delivered' : 'pending',

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, publicationAwareTaskStatus, isTaskDbState } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus, isTaskDbState } from '@hawa/contracts';
 import { withRlsContext, toApiTaskStatus } from '@hawa/db';
 import { buildOutboundReviewDispatch, signLifecycleOfficeEvent } from '@hawa/integrations';
 import type { Context } from 'hono';
@@ -160,18 +160,14 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       return problem(c, 409, 'Conflict', `Approval ID mismatch: requested approval '${requestedApprovalId}' does not match active approval.`);
     }
 
-    // Slice 2.2 (PHASE2_DESIGN.md section 3, ADR-034): a task whose chat is on HAWA_LIFECYCLE_CHATS
-    // when Deliver is pressed is delivered by the Restate Delivery workflow, and so is every later
-    // press for a publication the workflow already owns, even once its chat is taken off the list.
-    // A delivery Core's own path started stays Core's: it may have sent the files already. With the
-    // list empty nothing here changes: a publication the workflow owns is still refused by Core's own
-    // delivery, under its lock, if the read below could not tell.
+    // ADR-052: the executor was pinned at task creation. A later chat-flag change cannot switch an
+    // approved legacy task. A delivery already started keeps its recorded publication/effect owner.
     const executor = await deliveryExecutorOfTask(task, taskId).catch((err: unknown) => {
       log.warn('[core:publish] Could not read who delivers this task; Core\'s own delivery checks again under its lock:', err);
       return undefined;
     });
-    const requesterChat = executor === 'restate' || (executor === null && process.env.HAWA_LIFECYCLE_CHATS) ? await requesterChatOf(task, taskId) : null;
-    const byWorkflow = executor === 'restate' || (executor === null && lifecycleOwnsChat(requesterChat));
+    const requesterChat = executor === 'restate' ? await requesterChatOf(task, taskId) : null;
+    const byWorkflow = executor === 'restate';
     let started: Awaited<ReturnType<typeof startWorkflowDelivery>> | null = null;
     if (byWorkflow) {
       const change = await changeBlockingDelivery(task, taskId);

@@ -28,12 +28,19 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
 
   const channel = () => String(7_000_000_000 + Math.floor(Math.random() * 999_999_999));
 
-  const request = async (title: string, studioOptions?: Record<string, unknown>) =>
-    (
+  const request = async (title: string, studioOptions?: Record<string, unknown>) => {
+    const predecessorId = studioOptions?.parentTaskId;
+    const sourceChannelId = typeof predecessorId === 'string'
+      ? await withRlsContext(db, scope, async (trx) => (await sql<{ chat: string }>`
+          SELECT o.payload->>'sourceChannelId' AS chat FROM hawa.outbox_commands o
+          WHERE o.tenant_id = ${tenantId}::uuid AND o.aggregate_id = ${predecessorId}::uuid
+            AND o.command_type = 'task.created'`.execute(trx)).rows[0].chat)
+      : channel();
+    return (
       await persistChatIntake(db, {
         platform: 'telegram',
         sourceEventId: randomUUID(),
-        sourceChannelId: channel(),
+        sourceChannelId,
         clientId: kaae,
         title,
         rawText: 'KAAE members evening\n---\nDecember 4, 2026\nErbil',
@@ -43,6 +50,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
         ...(studioOptions ? { studioOptions } : {}),
       } as any)
     ).task.id as string;
+  };
 
   /** A Canva draft as the bridge records it: revision (planner manifest: 1200x1697) and a passing QC run. */
   const draft = async (taskId: string, headline = 'KAAE members evening') => {
