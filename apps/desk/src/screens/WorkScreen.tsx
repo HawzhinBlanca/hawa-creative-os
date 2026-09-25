@@ -9,6 +9,7 @@ import { apiClient, ApiError, type TaskListParams, type TaskListResponse, type T
 import { captureForReview } from '../services/canvaCapture.js';
 import { read, reasonOf, type Reading } from '../services/statusReport.js';
 import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
+import { reserveDecisionAction, completeDecisionAction, type ReservedDecisionAction } from '../services/decisionActionId.js';
 import { queueEntryChanged, readTaskDetail } from '../services/taskDetail.js';
 import { approvalRoleBlocker, describeApproval, describeDelivery, roleLabel } from '../services/actionOutcome.js';
 import { approveButtonState, inQueueFilter, queueFilterStatuses, taskStatusView, type QueueFilter } from '../services/taskStatus.js';
@@ -138,16 +139,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // Show temporary toast. Each toast owns the timer: an older toast's timer cleared a newer one
   // after a fraction of its time, so a failure shown right after a success vanished unread.
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // Keep a click's action ID after a network error. Retrying the same decision gives Core the same
-  // key; changing the revision, selected exports or notes creates a new action.
-  const decisionActionKeys = useRef(new Map<string, string>());
-  const decisionAction = (key: string) => {
-    const prior = decisionActionKeys.current.get(key);
-    if (prior) return prior;
-    const actionId = crypto.randomUUID();
-    decisionActionKeys.current.set(key, actionId);
-    return actionId;
-  };
+  const decisionStarting = useRef(false);
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'info', durationMs = 3500) => {
     setToastMessage({ text, type });
     clearTimeout(toastTimer.current);
@@ -388,13 +380,13 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // not record, and the notes stay until Core has them. A mutation (ADR-037): the button shows it is
   // pending, and the task's status on screen is Core's, read again after Core answered.
   const requestRevision = useMutation({
-    mutationFn: (input: { taskId: string; revisionId: string; comment: string; actionId: string; actionKey: string }) =>
+    mutationFn: (input: { taskId: string; revisionId: string; comment: string; actionKey: string; reservation: ReservedDecisionAction }) =>
       apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
         action: 'revision_requested',
         revisionRequest: { comment: input.comment },
-      }, input.actionId),
+      }, input.reservation.actionId),
     onSuccess: async (decisionRes, input) => {
-      decisionActionKeys.current.delete(input.actionKey);
+      completeDecisionAction(input.actionKey, input.reservation);
       setIsRevisionModalOpen(false);
       setRevisionNotes('');
       // Core recorded the request; a failed read after it is not a failed request.
@@ -409,17 +401,21 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     onError: (err: Error) => showToast(`Revision request failed: ${err.message || 'Server error'}. Your notes are kept.`, 'error'),
   });
 
-  const handleSendRevisionRequest = () => {
-    if (!selectedTask || !revisionNotes.trim()) return;
+  const handleSendRevisionRequest = async () => {
+    if (!selectedTask || !revisionNotes.trim() || decisionStarting.current) return;
     const revisionId = selectedTask.latestRevisionId;
     if (!revisionId) {
       showToast('Nothing sent: this task has no design revision to request changes on. Your notes are kept.', 'error');
       return;
     }
     const comment = revisionNotes.trim();
-    const actionKey = JSON.stringify([selectedTask.id, revisionId, 'revision_requested', comment]);
-    requestRevision.mutate({ taskId: selectedTask.id, revisionId, comment, actionKey,
-      actionId: decisionAction(actionKey) });
+    const actionKey = JSON.stringify([sessionUser?.id, selectedTask.id, revisionId, 'revision_requested', comment]);
+    decisionStarting.current = true;
+    try {
+      const reservation = await reserveDecisionAction(actionKey);
+      requestRevision.mutate({ taskId: selectedTask.id, revisionId, comment, actionKey, reservation });
+    } catch (err) { showToast(`Revision request could not start: ${reasonOf(err)}`, 'error'); }
+    finally { decisionStarting.current = false; }
   };
 
   // Primary Action 4: Approve captured files (FR-078, CV-15, H02, H03). The modal lists the exports
@@ -443,15 +439,15 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // never set to approved beforehand: Core can refuse (a stale revision, a role, a pin), and approval
   // starts delivery on the server.
   const approve = useMutation({
-    mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[]; rtlVisualReview?: { confirmed: true; exportSha256: string }; actionId: string; actionKey: string }) =>
+    mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[]; rtlVisualReview?: { confirmed: true; exportSha256: string }; actionKey: string; reservation: ReservedDecisionAction }) =>
       apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
         action: 'approve',
         reason: 'Approved by art director',
         pinnedExportIds: input.pinnedExportIds,
         ...(input.rtlVisualReview ? { rtlVisualReview: input.rtlVisualReview } : {}),
-      }, input.actionId),
+      }, input.reservation.actionId),
     onSuccess: async (decisionRes, input) => {
-      decisionActionKeys.current.delete(input.actionKey);
+      completeDecisionAction(input.actionKey, input.reservation);
       // Core recorded the approval; a failed read after it is not a failed approval.
       const refreshedTask = await readTaskAgain(input.taskId);
       setIsApprovalModalOpen(false);
@@ -461,7 +457,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     onError: (err: Error) => showToast(`Approval failed: ${err.message || 'Server error'}`, 'error'),
   });
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
+    if (decisionStarting.current) return;
     if (!selectedTask || !selectedTask.latestRevisionId) {
       showToast('No active design revision to approve.', 'error');
       return;
@@ -479,11 +476,16 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       showToast('Inspect and select the final PNG, then confirm Kurdish/Arabic visual review.', 'error');
       return;
     }
-    const actionKey = JSON.stringify([selectedTask.id, selectedTask.latestRevisionId, 'approve',
+    const actionKey = JSON.stringify([sessionUser?.id, selectedTask.id, selectedTask.latestRevisionId, 'approve',
       [...pinnedExportIds].sort(), rtlRequired ? checkedHash : null]);
-    approve.mutate({ taskId: selectedTask.id, revisionId: selectedTask.latestRevisionId, pinnedExportIds,
-      actionKey, actionId: decisionAction(actionKey),
-      ...(rtlRequired ? { rtlVisualReview: { confirmed: true, exportSha256: checkedHash! } } : {}) });
+    decisionStarting.current = true;
+    try {
+      const reservation = await reserveDecisionAction(actionKey);
+      approve.mutate({ taskId: selectedTask.id, revisionId: selectedTask.latestRevisionId, pinnedExportIds,
+        actionKey, reservation,
+        ...(rtlRequired ? { rtlVisualReview: { confirmed: true, exportSha256: checkedHash! } } : {}) });
+    } catch (err) { showToast(`Approval could not start: ${reasonOf(err)}`, 'error'); }
+    finally { decisionStarting.current = false; }
   };
 
   // Every action button waits while one runs.

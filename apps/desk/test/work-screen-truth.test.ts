@@ -132,6 +132,7 @@ describe('Request Revision (WorkScreen handleSendRevisionRequest)', () => {
       // A task with no design revision yet: a failed draft, a paused question, a Desk-made request.
       selectedTask: { id: 't1', title: 'KAAE evening', status: 'OPERATOR_REQUIRED' },
       revisionNotes: 'Make the Kurdish headline bigger and move the logo left',
+      decisionStarting: { current: false },
       setActionLoading: () => {},
       apiClient: { tasks: { recordDecision, get: vi.fn(async () => ({ id: 't1', status: 'OPERATOR_REQUIRED' })) } },
       setTasks: () => {},
