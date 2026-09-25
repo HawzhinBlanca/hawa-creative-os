@@ -300,6 +300,21 @@ export interface DriveRefsTable {
   created_at: Generated<Date>;
 }
 
+export interface DriveUploadReservationsTable {
+  id: Generated<string>;
+  tenant_id: string;
+  publication_id: string;
+  artifact_id: string;
+  task_id: string;
+  package_sha256: string;
+  folder_id: string;
+  file_name: string;
+  mime_type: string;
+  expected_sha256: string;
+  drive_file_id: string;
+  created_at: Generated<Date>;
+}
+
 export interface SheetSyncsTable {
   id: Generated<string>;
   tenant_id: string;
@@ -688,6 +703,7 @@ export interface Database {
   outbox_commands: OutboxCommandsTable;
   outbox: OutboxCommandsTable;
   publications: PublicationsTable;
+  drive_upload_reservations: DriveUploadReservationsTable;
   drive_refs: DriveRefsTable;
   sheet_syncs: SheetSyncsTable;
   feedback_events: FeedbackEventsTable;

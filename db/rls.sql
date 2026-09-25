@@ -164,6 +164,15 @@ CREATE POLICY rule_evidence_write ON rule_evidence FOR ALL USING (
   EXISTS (SELECT 1 FROM client_rules r WHERE r.id=rule_evidence.rule_id AND can_write_client(r.tenant_id,r.client_id))
 );
 
+ALTER TABLE drive_upload_reservations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE drive_upload_reservations FORCE ROW LEVEL SECURITY;
+CREATE POLICY drive_upload_reservations_operator_select ON drive_upload_reservations FOR SELECT USING (
+  tenant_id=current_tenant_id() AND (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[]))
+);
+CREATE POLICY drive_upload_reservations_operator_insert ON drive_upload_reservations FOR INSERT WITH CHECK (
+  tenant_id=current_tenant_id() AND (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[]))
+);
+
 ALTER TABLE drive_refs ENABLE ROW LEVEL SECURITY; ALTER TABLE drive_refs FORCE ROW LEVEL SECURITY;
 CREATE POLICY drive_refs_select ON drive_refs FOR SELECT USING (
   tenant_id=current_tenant_id() AND EXISTS (

@@ -48,6 +48,10 @@ export async function startFakeDriveServer(): Promise<FakeDriveServer> {
     };
 
     try {
+      if (method === 'GET' && pathname === '/drive/v3/files/generateIds') {
+        return sendJson(200, { ids: [`drive_file_${fileIdCounter++}_${Date.now()}`], space: 'drive' });
+      }
+
       // 1. Google Drive Multipart Upload: POST /drive/v3/files?uploadType=multipart
       if (method === 'POST' && pathname === '/drive/v3/files' && fullUrl.searchParams.get('uploadType') === 'multipart') {
         const bodyStr = bodyBuffer.toString('utf8');
@@ -92,7 +96,8 @@ export async function startFakeDriveServer(): Promise<FakeDriveServer> {
           }
         }
 
-        const fileId = `drive_file_${fileIdCounter++}_${Date.now()}`;
+        const fileId = metadata.id || `drive_file_${fileIdCounter++}_${Date.now()}`;
+        if (files.has(fileId)) return sendJson(409, { error: { code: 409 } });
         const sha256Checksum = crypto.createHash('sha256').update(fileContentBuffer).digest('hex');
         const stored: StoredDriveFile = {
           id: fileId,
@@ -138,8 +143,9 @@ export async function startFakeDriveServer(): Promise<FakeDriveServer> {
             size: file.size,
             mimeType: file.mimeType,
             webViewLink: file.webViewLink,
-            properties: file.properties,
-            sha256Checksum: file.sha256Checksum,
+          properties: file.properties,
+          parents: file.parents,
+          sha256Checksum: file.sha256Checksum,
           });
         }
         return sendJson(200, { files: matching });
@@ -158,6 +164,8 @@ export async function startFakeDriveServer(): Promise<FakeDriveServer> {
             mimeType: file.mimeType,
             webViewLink: file.webViewLink,
             sha256Checksum: file.sha256Checksum,
+            properties: file.properties,
+            parents: file.parents,
           });
         }
         // Could be folder verification

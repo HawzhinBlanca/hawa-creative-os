@@ -36,13 +36,13 @@ describe('Static Schema Invariant & Snapshot Verification (Dry-Run Invariant Sui
     expect(snapshotBundle).toContain('INSERT INTO');
   });
 
-  it('verifies exact schema invariant counts: 53 tables, 11 enums, 24 RLS policies', async () => {
+  it('verifies exact schema invariant counts: 54 tables, 11 enums, 26 RLS policies', async () => {
     const result = await checkDatabaseSchema();
 
     expect(result.valid).toBe(true);
-    expect(result.tableCount).toBe(53);
+    expect(result.tableCount).toBe(54);
     expect(result.enumsCount).toBe(11);
-    expect(result.policiesCount).toBe(24);
+    expect(result.policiesCount).toBe(26);
   });
 
   it('simulates a clean-host restore drill and proves 100% schema and security parity', () => {
@@ -67,9 +67,9 @@ describe('Static Schema Invariant & Snapshot Verification (Dry-Run Invariant Sui
     simulatedCleanHost.policies = [...parsedSchema.policies, ...parsedRls.policies];
 
     // 3. Verify post-restore integrity
-    expect(simulatedCleanHost.tables).toHaveLength(53);
+    expect(simulatedCleanHost.tables).toHaveLength(54);
     expect(simulatedCleanHost.enums).toHaveLength(11);
-    expect(simulatedCleanHost.policies).toHaveLength(24);
+    expect(simulatedCleanHost.policies).toHaveLength(26);
 
     // Multi-tenant core tables must be present
     expect(simulatedCleanHost.tables).toContain('tasks');
@@ -80,10 +80,11 @@ describe('Static Schema Invariant & Snapshot Verification (Dry-Run Invariant Sui
     expect(simulatedCleanHost.tables).toContain('outbox_commands');
     // Migration 020 keeps what its duplicate sweep removed from inbox_events.
     expect(simulatedCleanHost.tables).toContain('inbox_event_duplicates');
+    expect(simulatedCleanHost.tables).toContain('drive_upload_reservations');
 
     // Multi-tenant isolation policies must be present
     expect(simulatedCleanHost.policies).toContain('tasks_select');
     expect(simulatedCleanHost.policies).toContain('tasks_write');
+    expect(simulatedCleanHost.policies).toContain('drive_upload_reservations_operator_insert');
   });
 });
-

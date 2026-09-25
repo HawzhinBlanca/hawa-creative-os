@@ -21,7 +21,27 @@ export interface GooglePublisherConfig {
   driveApiBaseUrl?: string;
   driveUploadBaseUrl?: string;
   sheetsApiBaseUrl?: string;
+  uploadIdentityStore?: DriveUploadIdentityStore;
 }
+
+export interface DriveUploadIdentity {
+  tenantId: string;
+  publicationKey: string;
+  taskId: string;
+  artifactId: string;
+  packageHash: string;
+  folderId: string;
+  filename: string;
+  mimeType: string;
+  sha256: string;
+}
+
+export interface DriveUploadIdentityStore {
+  /** The allocator runs outside a database transaction; the winning ID is committed before upload. */
+  reserve(identity: DriveUploadIdentity, allocate: () => Promise<string>): Promise<string>;
+}
+
+export class DriveUploadIdentityConflict extends Error {}
 
 const DRIVE_LOOKUP_TIMEOUT_MS = 10_000;
 const DRIVE_UPLOAD_TIMEOUT_MS = 120_000;
@@ -336,6 +356,16 @@ export class GooglePublisher implements Publisher {
     }
   }
 
+  private async generateUploadId(token: string): Promise<string> {
+    const url = `${this.driveApiBaseUrl}/drive/v3/files/generateIds?count=1&space=drive&type=files`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(DRIVE_LOOKUP_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`Drive ID reservation answered HTTP ${res.status}`);
+    const data = await res.json() as { ids?: unknown };
+    const id = Array.isArray(data?.ids) ? data.ids[0] : undefined;
+    if (typeof id !== 'string' || !id) throw new Error('Drive ID reservation returned no file ID');
+    return id;
+  }
+
   async publish(ctx: RequestContext, request: PublishRequest): Promise<Result<PublicationReceipt, AppError>> {
     const active = this.inFlight.get(request.publicationKey);
     if (active) {
@@ -502,8 +532,27 @@ export class GooglePublisher implements Publisher {
       }
 
       if (!uploadedFileId) {
+        let reservedId: string | undefined;
+        if (this.config.uploadIdentityStore) {
+          try {
+            reservedId = await this.config.uploadIdentityStore.reserve({
+              tenantId: ctx.tenantId, publicationKey: request.publicationKey, taskId: request.taskId,
+              artifactId: file.artifactId, packageHash: request.packageHash, folderId: driveFolderId,
+              filename: file.filename, mimeType: file.mimeType, sha256: file.sha256,
+            }, () => this.generateUploadId(token));
+            if (!reservedId) throw new Error('No durable Drive file ID was returned');
+          } catch (error: unknown) {
+            return { ok: false, error: {
+              code: error instanceof DriveUploadIdentityConflict ? 'DRIVE_ARTIFACT_CONFLICT' : 'DRIVE_RESERVATION_FAILED',
+              message: `Could not reserve a durable Drive file ID for ${file.filename}; nothing was uploaded`,
+              retryable: !(error instanceof DriveUploadIdentityConflict),
+              safeAction: 'Check the publication reservation and retry only after reconciliation',
+            } as AppError };
+          }
+        }
         const boundary = `-------HawaBoundary${crypto.randomBytes(16).toString('hex')}`;
           const metadata = JSON.stringify({
+            ...(reservedId ? { id: reservedId } : {}),
             name: file.filename,
             parents: [driveFolderId],
             mimeType: file.mimeType,
@@ -522,7 +571,7 @@ export class GooglePublisher implements Publisher {
           ]);
 
           // Execute upload
-          const uploadUrl = `${this.driveUploadBaseUrl}/drive/v3/files?uploadType=multipart`;
+          const uploadUrl = `${this.driveUploadBaseUrl}/drive/v3/files?uploadType=multipart&supportsAllDrives=true`;
           const uploadRes = await fetch(uploadUrl, {
             method: 'POST',
             headers: {
@@ -533,7 +582,7 @@ export class GooglePublisher implements Publisher {
             signal: AbortSignal.timeout(DRIVE_UPLOAD_TIMEOUT_MS),
           });
 
-          if (!uploadRes.ok) {
+          if (!uploadRes.ok && !(uploadRes.status === 409 && reservedId)) {
             const errText = await uploadRes.text();
             return {
               ok: false,
@@ -544,7 +593,7 @@ export class GooglePublisher implements Publisher {
             };
           }
 
-          const uploadData = await uploadRes.json() as any;
+          const uploadData = uploadRes.ok ? await uploadRes.json() as any : { id: reservedId };
           uploadedFileId = uploadData.id;
           if (!uploadedFileId) {
             return {
@@ -555,9 +604,16 @@ export class GooglePublisher implements Publisher {
               } as any,
             };
           }
+          if (reservedId && uploadedFileId !== reservedId) {
+            return { ok: false, error: {
+              code: 'DRIVE_UPLOAD_FAILED',
+              message: `Google Drive returned a different file ID for ${file.filename}; publication needs reconciliation`,
+              retryable: false,
+            } as AppError };
+          }
 
           // Step 6: Independent Readback from Google Drive to verify real persistence
-          const readbackUrl = `${this.driveApiBaseUrl}/drive/v3/files/${uploadedFileId}?fields=id,name,size,mimeType,webViewLink,sha256Checksum`;
+          const readbackUrl = `${this.driveApiBaseUrl}/drive/v3/files/${uploadedFileId}?fields=id,name,size,mimeType,webViewLink,sha256Checksum,properties,parents&supportsAllDrives=true`;
           const readbackRes = await fetch(readbackUrl, {
             headers: { 'Authorization': `Bearer ${token}` },
             signal: AbortSignal.timeout(DRIVE_LOOKUP_TIMEOUT_MS),
@@ -574,6 +630,18 @@ export class GooglePublisher implements Publisher {
           }
 
           readbackData = await readbackRes.json() as any;
+          if (reservedId && (
+            readbackData?.properties?.taskId !== request.taskId ||
+            readbackData?.properties?.artifactId !== file.artifactId ||
+            readbackData?.properties?.packageHash !== request.packageHash ||
+            !Array.isArray(readbackData?.parents) || !readbackData.parents.includes(driveFolderId)
+          )) {
+            return { ok: false, error: {
+              code: 'DRIVE_READBACK_FAILED',
+              message: `Reserved Drive file ${uploadedFileId} has different publication identity or folder`,
+              retryable: false,
+            } as AppError };
+          }
           webViewLink = readbackData.webViewLink || `https://drive.google.com/file/d/${uploadedFileId}/view`;
         }
 

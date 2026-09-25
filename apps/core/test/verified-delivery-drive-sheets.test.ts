@@ -34,6 +34,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
   // Tracking server calls
   const receivedDriveUploads: any[] = [];
   const receivedDriveReadbacks: string[] = [];
+  const driveMetadata = new Map<string, { name: string; mimeType: string; parents: string[]; properties: Record<string, string> }>();
   const receivedSheetAppends: any[] = [];
   const receivedSheetUpdates: any[] = [];
   const receivedSheetReadbacks: string[] = [];
@@ -49,12 +50,27 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
     mockServer = http.createServer((req, res) => {
       const url = req.url || '';
 
+      if (req.method === 'GET' && url.includes('/drive/v3/files/generateIds')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ids: [`gdrive_verified_file_${crypto.randomUUID()}`], space: 'drive' }));
+        return;
+      }
+
       // 1. Google Drive Multipart Upload
       if (req.method === 'POST' && url.includes('/drive/v3/files') && url.includes('uploadType=multipart')) {
         let body = Buffer.alloc(0);
         req.on('data', (chunk) => { body = Buffer.concat([body, chunk]); });
         req.on('end', () => {
-          const fileId = `gdrive_verified_file_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+          const boundary = /boundary=([^;]+)/.exec(String(req.headers['content-type']))?.[1];
+          const metadataPart = boundary ? body.toString('latin1').split(`--${boundary}`)[1] : '';
+          const metadata = JSON.parse(metadataPart.slice(metadataPart.indexOf('{'), metadataPart.lastIndexOf('}') + 1));
+          const fileId = metadata.id || `gdrive_verified_file_${crypto.randomUUID()}`;
+          if (driveMetadata.has(fileId)) {
+            res.writeHead(409, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { code: 409 } }));
+            return;
+          }
+          driveMetadata.set(fileId, metadata);
           receivedDriveUploads.push({
             authHeader: req.headers.authorization,
             contentType: req.headers['content-type'],
@@ -92,6 +108,8 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
           mimeType: 'image/png',
           size: String(testFileBytes.length),
           sha256Checksum: testFileSha256,
+          properties: driveMetadata.get(fileId)?.properties,
+          parents: driveMetadata.get(fileId)?.parents,
           webViewLink: `https://drive.google.com/file/d/${fileId}/view`,
         }));
         return;

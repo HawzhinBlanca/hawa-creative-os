@@ -579,7 +579,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       const files = deliverables.files;
 
       const ctx: RequestContext = {
-        tenantId: 'tenant-default',
+        tenantId: tenantOf(task),
         taskId,
         actor: actor as any,
         correlationId: crypto.randomUUID(),

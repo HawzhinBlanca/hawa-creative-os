@@ -66,6 +66,7 @@ END $$;
 REVOKE UPDATE, DELETE ON hawa.design_revisions FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.approvals FROM hawa_app;
 REVOKE UPDATE, DELETE ON hawa.publications FROM hawa_app;
+REVOKE UPDATE, DELETE ON hawa.drive_upload_reservations FROM hawa_app;
 
 -- Three of the tables above are not append-only in use: a row moves through states. The REVOKEs
 -- took UPDATE away entirely, so a database built from an empty data directory (this file is its

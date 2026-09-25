@@ -864,6 +864,25 @@ CREATE TABLE publications (
 CREATE INDEX publications_tenant_task_created_idx
   ON publications (tenant_id, task_id, created_at DESC);
 
+-- ADR-044: a provider-generated ID is committed before any file upload.
+CREATE TABLE drive_upload_reservations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  publication_id uuid NOT NULL,
+  artifact_id uuid NOT NULL,
+  task_id uuid NOT NULL,
+  package_sha256 text NOT NULL,
+  folder_id text NOT NULL,
+  file_name text NOT NULL,
+  mime_type text NOT NULL,
+  expected_sha256 text NOT NULL,
+  drive_file_id text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  FOREIGN KEY (tenant_id, publication_id) REFERENCES publications(tenant_id, id),
+  UNIQUE (publication_id, artifact_id),
+  UNIQUE (drive_file_id)
+);
+
 CREATE TABLE drive_refs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

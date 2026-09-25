@@ -16,7 +16,7 @@ import { checkSchemaUpgrades, describeMissingUpgrades, expectedUpgrades } from '
 const appUrl = process.env.TEST_DATABASE_URL;
 const ownerUrl = process.env.TEST_DATABASE_OWNER_URL;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const LAST = '026_publication_task_reconciliation_index.sql';
+const LAST = '027_drive_upload_reservations.sql';
 // The upgrade that grants the app role its read of hawa.schema_upgrades (schema-check.ts): when the
 // read is denied, it and every later upgrade count as missing.
 const GRANTING = '020_inbox_event_dedupe.sql';

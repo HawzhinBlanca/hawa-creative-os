@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../src/services/lifecycle-delivery-projection.js';
+import { PostgresDriveUploadIdentityStore } from '../src/services/drive-upload-reservation.js';
 import { checkSignedOfficeDecision, type SignedOfficeDecision } from '../../worker/src/lifecycle/office-decision-gateway.js';
 import { recordDeliveryFinished, recordOfficeDeliveryStart, recordOfficeRevision,
   type AutomaticLifecycleState, type AutomaticOpenContext } from '../../worker/src/lifecycle/request-lifecycle.js';
@@ -135,6 +136,38 @@ async function recordClaimedReceipts(taskId: string, options: { sheet?: boolean;
 }
 
 describe('authenticated Desk to private lifecycle office decision', () => {
+  it('commits one Drive upload ID across concurrent database handles before either can upload', async () => {
+    const { taskId, artifactId, approval, store, start } = await approvedForDelivery();
+    await projectLifecycleDeliveryStart(db, store, start);
+    const publication = await withRlsContext(db, scope, (trx) => trx.selectFrom('publications')
+      .select(['id', 'package_sha256', 'package_manifest'])
+      .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).executeTakeFirstOrThrow());
+    const packaged = (publication.package_manifest.files as Array<{ name: string; sha256: string }>)[0]!;
+    const identity = { tenantId, publicationKey: `pub_key_${taskId}_${approval.approvalId}`,
+      taskId, artifactId, packageHash: publication.package_sha256, folderId: `folder-${taskId}`,
+      filename: packaged.name, mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      sha256: packaged.sha256 };
+    const otherDb = createDb(process.env.TEST_DATABASE_URL!);
+    try {
+      const first = new PostgresDriveUploadIdentityStore(db);
+      const second = new PostgresDriveUploadIdentityStore(otherDb);
+      const [a, b] = await Promise.all([
+        first.reserve(identity, async () => `generated-${randomUUID()}`),
+        second.reserve(identity, async () => `generated-${randomUUID()}`),
+      ]);
+      expect(a).toBe(b);
+      const rows = await withRlsContext(db, scope, (trx) => sql<{ drive_file_id: string }>`
+        SELECT drive_file_id FROM hawa.drive_upload_reservations
+        WHERE tenant_id = ${tenantId}::uuid AND publication_id = ${publication.id}::uuid`.execute(trx));
+      expect(rows.rows.map((row) => row.drive_file_id)).toEqual([a]);
+      expect(await second.reserve(identity, async () => { throw new Error('should not allocate on retry'); })).toBe(a);
+      await expect(first.reserve({ ...identity, sha256: 'f'.repeat(64) }, async () => 'never-used'))
+        .rejects.toThrow('different bytes or destination');
+    } finally {
+      await otherDb.destroy();
+    }
+  });
+
   it('refuses a delivered report until the stored Drive and Sheet receipts match the claimed package', async () => {
     const { requestId, taskId, approval, store, start } = await approvedForDelivery();
     const claim = await projectLifecycleDeliveryStart(db, store, start);

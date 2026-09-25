@@ -109,6 +109,7 @@ import { createTaskReader } from './services/task-reader.js';
 import { createClientDnaResolver } from './services/client-dna-resolver.js';
 import { noDatabaseStore } from './services/no-database-store.js';
 import { createOmnichannelDelivery } from './services/omnichannel-delivery.js';
+import { PostgresDriveUploadIdentityStore } from './services/drive-upload-reservation.js';
 
 // What app.ts exported before its helpers moved to core-helpers.ts; tests and scripts import them from here.
 export { canonicalJson, computeDnaHash, isValidUuid, inlineTemplateCopyMissing, qaReportSha256, secretsEqual, probeDatabase, evaluateCanvaExportQc };
@@ -205,7 +206,9 @@ export function createApp(options?: CreateAppOptions) {
   // Domain singletons
   const creativeDirector = new CreativeDirectorRunner();
   const qaEngine: QAEngine = options?.qaEngine || new DeterministicQAEngine();
-  const publisher = options?.publisher || new GooglePublisher();
+  const publisher = options?.publisher || new GooglePublisher({
+    uploadIdentityStore: db ? new PostgresDriveUploadIdentityStore(db) : undefined,
+  });
   const modelGateway = new ResilientModelGateway();
   const evalRunner = new EvaluationRunner(modelGateway);
   // Zero seed probes: every SLO data point must come from a probe that actually ran.
