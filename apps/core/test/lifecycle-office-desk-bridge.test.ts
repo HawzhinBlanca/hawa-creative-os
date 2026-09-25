@@ -98,12 +98,17 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     const operator = createApp({ db, testAuth: { principal: { role: 'operator', userId } } });
     const actionId = randomUUID();
     const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': actionId };
-    const body = { action: 'revision_requested', revisionRequest: { comment: 'Correct the venue' } };
+    const feedback = { scope: 'copy', category: 'factual_error', targetNodes: ['venue'],
+      priority: 'high', isReusableFeedback: false, comment: 'Correct the venue' };
+    const body = { action: 'revision_requested', revisionRequest: feedback };
     const missingKey = await director.request(path, { method: 'POST',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     expect(missingKey.status).toBe(422);
     const denied = await operator.request(path, { method: 'POST', headers, body: JSON.stringify(body) });
     expect(denied.status).toBe(403);
+    const incomplete = await director.request(path, { method: 'POST', headers,
+      body: JSON.stringify({ action: 'revision_requested', revisionRequest: { comment: feedback.comment } }) });
+    expect(incomplete.status).toBe(422);
     expect(transport).not.toHaveBeenCalled();
 
     loseFirstAnswer = true;
@@ -116,15 +121,16 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(result).toMatchObject({ decisionId: expect.any(String), requestId, requestRev: 3,
       actor: { userId, role: 'art_director', verifiedServerSide: true } });
     const changed = await restartedCore.request(path, { method: 'POST', headers,
-      body: JSON.stringify({ ...body, revisionRequest: { comment: 'Different venue' } }) });
+      body: JSON.stringify({ ...body, revisionRequest: { ...feedback, scope: 'layout' } }) });
     expect(changed.status).toBe(409);
     const rows = await withRlsContext(db, scope, async (trx) => ({
       request: await trx.selectFrom('requests').select(['stage', 'rev']).where('request_id', '=', requestId).executeTakeFirst(),
-      approvals: await trx.selectFrom('approvals').select(['id', 'decided_by']).where('task_id', '=', taskId).execute(),
+      approvals: await trx.selectFrom('approvals').select(['id', 'decided_by', 'decision_payload']).where('task_id', '=', taskId).execute(),
       receipts: await trx.selectFrom('lifecycle_projections').select('rev').where('request_id', '=', requestId).execute(),
     }));
     expect(rows.request).toMatchObject({ stage: 'manual', rev: '3' });
-    expect(rows.approvals).toEqual([{ id: result.decisionId, decided_by: userId }]);
+    expect(rows.approvals).toMatchObject([{ id: result.decisionId, decided_by: userId,
+      decision_payload: { revisionRequest: feedback } }]);
     expect(rows.receipts.map((row) => Number(row.rev)).sort()).toEqual([1, 2, 3]);
     expect(transport).toHaveBeenCalledTimes(3);
   });

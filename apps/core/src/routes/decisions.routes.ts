@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { isAuthorizedReviewerRole, type PinnedExport } from '@hawa/domain';
+import { isAuthorizedReviewerRole, parseCompleteRevisionRequest, type PinnedExport } from '@hawa/domain';
 import { withRlsContext, sql } from '@hawa/db';
 import { HumanApprovalManager, signLifecycleOfficeEvent } from '@hawa/integrations';
 import type { Context } from 'hono';
@@ -73,15 +73,12 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       if (!actionId || !isValidUuid(actionId)) return problem(c, 422, 'Action Key Required',
         'A request-owned office decision needs a UUID Idempotency-Key for safe retry');
       const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
-      const revisionRequest = body?.revisionRequest && typeof body.revisionRequest === 'object' && !Array.isArray(body.revisionRequest)
-        ? body.revisionRequest as Record<string, unknown> : null;
+      const revisionRequest = parseCompleteRevisionRequest(body?.revisionRequest);
       if (!body || Array.isArray(body) || body.action !== 'revision_requested' ||
           Object.keys(body).some((key) => key !== 'action' && key !== 'revisionRequest') ||
-          !revisionRequest || Object.keys(revisionRequest).some((key) => key !== 'comment') ||
-          typeof revisionRequest.comment !== 'string' || !revisionRequest.comment.trim() ||
-          revisionRequest.comment.length > 2000) {
+          !revisionRequest) {
         return problem(c, 422, 'Unsupported Lifecycle Decision',
-          'This request currently accepts a revision request with one reason through Hawa Desk');
+          'This request needs scope, category, target nodes, priority, reuse choice and a comment');
       }
       const officeRole = (auth.role || '').toLowerCase().trim();
       if (!['art_director', 'creative_director', 'office_admin', 'administrator'].includes(officeRole)) {
@@ -103,7 +100,8 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         'The decision gateway is not configured; retry this action later');
       const event = { v: 1 as const, eventId: `desk:${actionId}`, requestId, taskId, revisionId,
         actionId, expectedRev: 2 as const, kind: 'revise' as const,
-        actor: { userId: auth.userId, role: officeRole }, reason: revisionRequest.comment.trim() };
+        actor: { userId: auth.userId, role: officeRole }, reason: revisionRequest.comment,
+        revisionRequest };
       const signature = signLifecycleOfficeEvent(secret, event);
       try {
         const response = await fetch(`${ingress}/OfficeDecisionGateway/decide`, {

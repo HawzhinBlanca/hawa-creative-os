@@ -2166,8 +2166,13 @@ input, select, textarea {
   padding: 24px;
   max-width: 500px;
   width: 100%;
+  max-height: min(90vh, 800px);
+  overflow-y: auto;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
+
+.hawa-revision-label { display: block; margin: 10px 0 5px; font-size: 13px; font-weight: 600; }
+.hawa-revision-reuse { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0; font-size: 13px; }
 
 .hawa-textarea {
   width: 100%;

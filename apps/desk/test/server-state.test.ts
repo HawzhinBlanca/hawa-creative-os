@@ -343,12 +343,26 @@ describe('approve and request revision are mutations', () => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(notes, 'Make the Kurdish headline larger');
       notes.dispatchEvent(new Event('input', { bubbles: true }));
     });
+    for (const [id, value] of [['revision-scope', 'typography'],
+      ['revision-category', 'aesthetic_preference'], ['revision-priority', 'high']]) {
+      const select = view.container.querySelector(`#${id}`) as HTMLSelectElement;
+      await React.act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, value);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+    const targets = view.container.querySelector('#revision-targets') as HTMLInputElement;
+    await React.act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(targets, 'headline');
+      targets.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     await click(byText(view.container, 'button', 'Submit Revision Request'));
     await advance(100);
 
     expect(core.calls.find((c) => c.method === 'POST' && c.path.endsWith('/decisions'))?.body).toMatchObject({
       action: 'revision_requested',
-      revisionRequest: { comment: 'Make the Kurdish headline larger' },
+      revisionRequest: { scope: 'typography', category: 'aesthetic_preference', targetNodes: ['headline'],
+        priority: 'high', isReusableFeedback: false, comment: 'Make the Kurdish headline larger' },
     });
     expect(byText(view.container, 'button', 'Sending request…')?.hasAttribute('disabled')).toBe(true);
     expect(status()).toBe('NEEDS APPROVAL');

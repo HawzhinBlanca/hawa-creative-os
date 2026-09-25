@@ -22,6 +22,7 @@ import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { parseCompleteRevisionRequest } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
@@ -277,6 +278,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const actor = op?.actor && typeof op.actor === 'object' && !Array.isArray(op.actor)
       ? op.actor as Record<string, unknown> : null;
     const actionId = op?.actionId;
+    const revisionRequest = op?.revisionRequest === undefined ? undefined : parseCompleteRevisionRequest(op.revisionRequest);
     if (!UUID.test(requestId) || body?.v !== 1 || body.expectedRev !== 2 || body.rev !== 3 ||
         op?.kind !== 'recordOfficeRevision' || typeof op.taskId !== 'string' || !UUID.test(op.taskId) ||
         typeof op.revisionId !== 'string' || !UUID.test(op.revisionId) ||
@@ -284,7 +286,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         body.key !== `${requestId}:3:officeDecision:desk:${actionId}` ||
         !actor || typeof actor.userId !== 'string' || !UUID.test(actor.userId) ||
         typeof actor.role !== 'string' || actor.role.length > 60 ||
-        typeof op.reason !== 'string' || !op.reason.trim() || op.reason.length > 2000) {
+        typeof op.reason !== 'string' || !op.reason.trim() || op.reason.length > 2000 ||
+        (op.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== op.reason.trim()))) {
       return problem(c, 400, 'Invalid office decision', 'Expected one versioned revision request for the current draft and an attributed office actor');
     }
     if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
@@ -294,6 +297,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         revisionId: op.revisionId as string, actionId: actionId as string,
         actor: { userId: actor.userId as string, role: actor.role as string },
         reason: (op.reason as string).trim(), expectedRev: 2, rev: 3, key: body.key as string,
+        ...(revisionRequest ? { revisionRequest } : {}),
       });
       return c.json({ v: 1, ...result }, 200);
     } catch (error) {

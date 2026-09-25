@@ -36,6 +36,27 @@ export interface StructuredRevisionRequest {
   }>;
 }
 
+/** Complete, bounded review instructions for a lifecycle-owned revision. Legacy records may be partial. */
+export function parseCompleteRevisionRequest(input: unknown): StructuredRevisionRequest | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const value = input as Record<string, unknown>;
+  const keys = ['scope', 'category', 'targetNodes', 'priority', 'isReusableFeedback', 'comment'];
+  if (Object.keys(value).some((key) => !keys.includes(key))) return null;
+  if (!['full_design', 'typography', 'layout', 'color', 'assets', 'copy'].includes(String(value.scope)) ||
+      !['factual_error', 'brand_violation', 'aesthetic_preference', 'legal_compliance', 'technical_defect'].includes(String(value.category)) ||
+      !['low', 'medium', 'high', 'critical'].includes(String(value.priority)) ||
+      typeof value.isReusableFeedback !== 'boolean' ||
+      typeof value.comment !== 'string' || !value.comment.trim() || value.comment.length > 2000 ||
+      !Array.isArray(value.targetNodes) || value.targetNodes.length > 32 ||
+      value.targetNodes.some((node) => typeof node !== 'string' || !node.trim() || node.length > 128)) return null;
+  const targets = (value.targetNodes as string[]).map((node) => node.trim());
+  if (new Set(targets).size !== targets.length || (value.scope !== 'full_design' && targets.length === 0)) return null;
+  return { scope: value.scope as StructuredRevisionRequest['scope'],
+    category: value.category as StructuredRevisionRequest['category'], targetNodes: targets,
+    priority: value.priority as StructuredRevisionRequest['priority'],
+    isReusableFeedback: value.isReusableFeedback, comment: value.comment.trim() };
+}
+
 export interface ApprovalActor {
   userId: UUID;
   displayName: string;

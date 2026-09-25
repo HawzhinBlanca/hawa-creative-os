@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
+import { parseCompleteRevisionRequest, type StructuredRevisionRequest } from '@hawa/domain';
 import { IdempotencyConflictError, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
 import { bridgeCanvaDraftRevision, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
@@ -39,6 +40,7 @@ export class LifecycleProjectionConflict extends Error {
 export interface OfficeRevisionProjection {
   requestId: string; tenantId: string; taskId: string; revisionId: string;
   actionId: string; actor: { userId: string; role: string }; reason: string;
+  revisionRequest?: StructuredRevisionRequest;
   expectedRev: 2; rev: 3; key: string;
 }
 
@@ -52,6 +54,10 @@ const OFFICE_REVISION_ROLES = new Set(['art_director', 'creative_director', 'acc
 /** First request-owned office decision. The request and approval/audit rows commit as one revision. */
 export async function projectLifecycleOfficeRevision(db: Kysely<Database>, input: OfficeRevisionProjection): Promise<OfficeRevisionResult> {
   const { requestId, tenantId, taskId, revisionId, actionId, actor, reason, key } = input;
+  const revisionRequest = input.revisionRequest === undefined ? undefined : parseCompleteRevisionRequest(input.revisionRequest);
+  if (input.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== reason)) {
+    throw new LifecycleProjectionConflict('WRONG_STAGE', 'Structured revision feedback is invalid or differs from the reason');
+  }
   const hash = createHash('sha256').update(canonical(input)).digest('hex');
   return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
     await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
@@ -90,7 +96,7 @@ export async function projectLifecycleOfficeRevision(db: Kysely<Database>, input
       reason, nonce: `desk:${actionId}`, lifecycleRequestId: requestId,
       expectedTaskVersion: Number(task.version),
       decisionPayload: { lifecycleRequestId: requestId, approverRole: actor.role,
-        actionId, requestFingerprint: hash },
+        actionId, requestFingerprint: hash, ...(revisionRequest ? { revisionRequest } : {}) },
     }, trx);
     const changed = await trx.updateTable('requests').set({ stage: 'manual', rev: 3, updated_at: new Date() })
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', 2)

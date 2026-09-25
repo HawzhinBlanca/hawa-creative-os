@@ -5,7 +5,7 @@ import { StudioPanel } from '../components/StudioPanel.js';
 import { AskLedgerPanel } from '../components/AskLedger.js';
 import { VectorInspector } from '../components/VectorInspector.js';
 import { SubmittedCopy } from '../components/SubmittedCopy.js';
-import { apiClient, ApiError, type TaskListParams, type TaskListResponse, type TaskTimelineEvent } from '../api/client.js';
+import { apiClient, ApiError, type DecisionPayload, type TaskListParams, type TaskListResponse, type TaskTimelineEvent } from '../api/client.js';
 import { captureForReview } from '../services/canvaCapture.js';
 import { read, reasonOf, type Reading } from '../services/statusReport.js';
 import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
@@ -128,6 +128,11 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // Modals & In-Flight State
   const [isRevisionModalOpen, setIsRevisionModalOpen] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState('');
+  const [revisionScope, setRevisionScope] = useState<NonNullable<DecisionPayload['revisionRequest']>['scope'] | ''>('');
+  const [revisionCategory, setRevisionCategory] = useState<NonNullable<DecisionPayload['revisionRequest']>['category'] | ''>('');
+  const [revisionTargets, setRevisionTargets] = useState('');
+  const [revisionPriority, setRevisionPriority] = useState<NonNullable<DecisionPayload['revisionRequest']>['priority'] | ''>('');
+  const [revisionReusable, setRevisionReusable] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
   // The stored exports the reviewer can pin to the approval; delivery sends exactly the pinned files.
   const [approvalExports, setApprovalExports] = useState<Reading<StoredExport[]>>({ state: 'loading' });
@@ -380,15 +385,20 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // not record, and the notes stay until Core has them. A mutation (ADR-037): the button shows it is
   // pending, and the task's status on screen is Core's, read again after Core answered.
   const requestRevision = useMutation({
-    mutationFn: (input: { taskId: string; revisionId: string; comment: string; actionKey: string; reservation: ReservedDecisionAction }) =>
+    mutationFn: (input: { taskId: string; revisionId: string; feedback: NonNullable<DecisionPayload['revisionRequest']>; actionKey: string; reservation: ReservedDecisionAction }) =>
       apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
         action: 'revision_requested',
-        revisionRequest: { comment: input.comment },
+        revisionRequest: input.feedback,
       }, input.reservation.actionId),
     onSuccess: async (decisionRes, input) => {
       completeDecisionAction(input.actionKey, input.reservation);
       setIsRevisionModalOpen(false);
       setRevisionNotes('');
+      setRevisionTargets('');
+      setRevisionScope('');
+      setRevisionCategory('');
+      setRevisionPriority('');
+      setRevisionReusable(false);
       // Core recorded the request; a failed read after it is not a failed request.
       const refreshedTask = await readTaskAgain(input.taskId);
       showToast(
@@ -408,12 +418,23 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       showToast('Nothing sent: this task has no design revision to request changes on. Your notes are kept.', 'error');
       return;
     }
-    const comment = revisionNotes.trim();
-    const actionKey = JSON.stringify([sessionUser?.id, selectedTask.id, revisionId, 'revision_requested', comment]);
+    if (!revisionScope || !revisionCategory || !revisionPriority) {
+      showToast('Choose the scope, category and priority before sending this revision request.', 'error');
+      return;
+    }
+    const targetNodes = revisionTargets.split(',').map((node) => node.trim()).filter(Boolean);
+    if ((revisionScope !== 'full_design' && targetNodes.length === 0) || targetNodes.length > 32 ||
+        targetNodes.some((node) => node.length > 128) || new Set(targetNodes).size !== targetNodes.length) {
+      showToast('Name each target once (up to 32); a focused revision needs at least one target.', 'error');
+      return;
+    }
+    const feedback = { scope: revisionScope, category: revisionCategory, targetNodes,
+      priority: revisionPriority, isReusableFeedback: revisionReusable, comment: revisionNotes.trim() };
+    const actionKey = JSON.stringify([sessionUser?.id, selectedTask.id, revisionId, 'revision_requested', feedback]);
     decisionStarting.current = true;
     try {
       const reservation = await reserveDecisionAction(actionKey);
-      requestRevision.mutate({ taskId: selectedTask.id, revisionId, comment, actionKey, reservation });
+      requestRevision.mutate({ taskId: selectedTask.id, revisionId, feedback, actionKey, reservation });
     } catch (err) { showToast(`Revision request could not start: ${reasonOf(err)}`, 'error'); }
     finally { decisionStarting.current = false; }
   };
@@ -1285,13 +1306,44 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               the changes is recorded.
             </p>
 
+            <label className="hawa-revision-label" htmlFor="revision-scope">Scope</label>
+            <select id="revision-scope" className="hawa-select" value={revisionScope} onChange={(e) => setRevisionScope(e.target.value as typeof revisionScope)} autoFocus>
+              <option value="">Choose scope</option>
+              <option value="full_design">Full design</option><option value="typography">Typography</option>
+              <option value="layout">Layout</option><option value="color">Color</option>
+              <option value="assets">Assets</option><option value="copy">Copy</option>
+            </select>
+            <label className="hawa-revision-label" htmlFor="revision-category">Category</label>
+            <select id="revision-category" className="hawa-select" value={revisionCategory} onChange={(e) => setRevisionCategory(e.target.value as typeof revisionCategory)}>
+              <option value="">Choose category</option>
+              <option value="aesthetic_preference">Aesthetic preference</option>
+              <option value="factual_error">Factual error</option><option value="brand_violation">Brand violation</option>
+              <option value="legal_compliance">Legal or compliance</option><option value="technical_defect">Technical defect</option>
+            </select>
+            <label className="hawa-revision-label" htmlFor="revision-targets">Target node IDs (comma separated; leave empty for full design)</label>
+            <input id="revision-targets" className="hawa-select" value={revisionTargets} maxLength={4096}
+              onChange={(e) => setRevisionTargets(e.target.value)} placeholder="headline, logo" />
+            <label className="hawa-revision-label" htmlFor="revision-priority">Priority</label>
+            <select id="revision-priority" className="hawa-select" value={revisionPriority} onChange={(e) => setRevisionPriority(e.target.value as typeof revisionPriority)}>
+              <option value="">Choose priority</option>
+              <option value="low">Low</option><option value="medium">Medium</option>
+              <option value="high">High</option><option value="critical">Critical</option>
+            </select>
+            <label className="hawa-revision-reuse" htmlFor="revision-reusable">
+              <input id="revision-reusable" type="checkbox" checked={revisionReusable}
+                onChange={(e) => setRevisionReusable(e.target.checked)} />
+              Suggest this feedback for future work (requires separate human rule approval)
+            </label>
+
+            <label className="hawa-revision-label" htmlFor="revision-comment">Requested change</label>
             <textarea
+              id="revision-comment"
               className="hawa-textarea"
               rows={4}
+              maxLength={2000}
               placeholder="e.g. Increase Kurdish headline size by 4px and verify the logo top-right RTL clearance..."
               value={revisionNotes}
               onChange={(e) => setRevisionNotes(e.target.value)}
-              autoFocus
             />
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
@@ -1301,7 +1353,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               <button
                 className="btn primary"
                 onClick={handleSendRevisionRequest}
-                disabled={!revisionNotes.trim() || busy}
+                disabled={!revisionNotes.trim() || !revisionScope || !revisionCategory || !revisionPriority || busy}
               >
                 {requestRevision.isPending ? 'Sending request…' : 'Submit Revision Request'}
               </button>

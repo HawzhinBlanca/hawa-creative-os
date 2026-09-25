@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto';
 import * as restate from '@restatedev/restate-sdk';
 import type { OutboundMessage } from '@hawa/contracts';
+import { parseCompleteRevisionRequest, type StructuredRevisionRequest } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, type CoreInternal } from './delivery.js';
 import { TelegramSenderApi } from './telegram-sender.js';
@@ -76,6 +77,8 @@ export interface OfficeRevisionEvent {
   v: 1; eventId: string; requestId: string; taskId: string; revisionId: string;
   actionId: string; expectedRev: 2; kind: 'revise';
   actor: { userId: string; role: string }; reason: string;
+  /** Optional only for signed decisions already in flight before the structured-feedback rollout. */
+  revisionRequest?: StructuredRevisionRequest;
 }
 
 export type OfficeRevisionReply =
@@ -284,7 +287,10 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
       event.eventId !== `desk:${event.actionId}` || event.kind !== 'revise' ||
       event.expectedRev !== 2 || !event.actor || !UUID.test(event.actor.userId) ||
       !OFFICE_ROLES.has(event.actor.role) || typeof event.reason !== 'string' ||
-      !event.reason.trim() || event.reason.length > 2000) {
+      !event.reason.trim() || event.reason.length > 2000 ||
+      (event.revisionRequest !== undefined &&
+        (!parseCompleteRevisionRequest(event.revisionRequest) ||
+          event.revisionRequest.comment.trim() !== event.reason.trim()))) {
     throw invalid('invalid office revision identity, reviewer or audit reason');
   }
   const fingerprint = hashOf(event);
@@ -309,7 +315,8 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
     v: 1, expectedRev: 2, rev: 3,
     key: `${event.requestId}:3:officeDecision:${event.eventId}`,
     ops: [{ kind: 'recordOfficeRevision', taskId: event.taskId, revisionId: event.revisionId,
-      actionId: event.actionId, actor: event.actor, reason: event.reason.trim() }],
+      actionId: event.actionId, actor: event.actor, reason: event.reason.trim(),
+      ...(event.revisionRequest ? { revisionRequest: parseCompleteRevisionRequest(event.revisionRequest) } : {}) }],
   }));
   if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
       projected.revisionId !== event.revisionId || projected.actionId !== event.actionId ||

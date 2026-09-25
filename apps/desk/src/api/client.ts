@@ -74,8 +74,11 @@ export interface DecisionPayload {
   /** Reviewer inspected the selected final PNG where Canva's PPTX has no readable RTL flag. */
   rtlVisualReview?: { confirmed: true; exportSha256: string };
   revisionRequest?: {
-    scope?: string;
-    category?: string;
+    scope?: 'full_design' | 'typography' | 'layout' | 'color' | 'assets' | 'copy';
+    category?: 'factual_error' | 'brand_violation' | 'aesthetic_preference' | 'legal_compliance' | 'technical_defect';
+    targetNodes?: string[];
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+    isReusableFeedback?: boolean;
     comment?: string;
   };
 }

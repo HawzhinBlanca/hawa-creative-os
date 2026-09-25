@@ -1,5 +1,6 @@
 import * as restate from '@restatedev/restate-sdk';
 import { verifyLifecycleOfficeEvent } from '@hawa/integrations';
+import { parseCompleteRevisionRequest } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
 import { RequestLifecycleApi, type OfficeRevisionEvent, type OfficeRevisionReply } from './request-lifecycle.js';
 
@@ -20,7 +21,10 @@ export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: s
       input.event.eventId !== `desk:${input.event.actionId}` ||
       !input.event.actor || !UUID.test(input.event.actor.userId) ||
       typeof input.event.actor.role !== 'string' || typeof input.event.reason !== 'string' ||
-      !input.event.reason.trim() || input.event.reason.length > 2000) return 'invalid';
+      !input.event.reason.trim() || input.event.reason.length > 2000 ||
+      (input.event.revisionRequest !== undefined &&
+        (!parseCompleteRevisionRequest(input.event.revisionRequest) ||
+          input.event.revisionRequest.comment.trim() !== input.event.reason.trim()))) return 'invalid';
   return verifyLifecycleOfficeEvent(secret, input.event, input.signature) ? 'ok' : 'unauthorized';
 }
 

@@ -44,7 +44,9 @@ function setup() {
   };
   const event: OfficeRevisionEvent = { v: 1, eventId: `desk:${actionId}`, requestId,
     taskId, revisionId, actionId, expectedRev: 2, kind: 'revise',
-    actor: { userId: randomUUID(), role: 'art_director' }, reason: 'Correct the venue' };
+    actor: { userId: randomUUID(), role: 'art_director' }, reason: 'Correct the venue',
+    revisionRequest: { scope: 'copy', category: 'factual_error', targetNodes: ['venue'],
+      priority: 'high', isReusableFeedback: false, comment: 'Correct the venue' } };
   return { ctx: new Context(requestId, state), event };
 }
 
@@ -54,9 +56,15 @@ describe('RequestLifecycle office revision', () => {
     const secret = ['office', 'gateway', 'fixture'].join('-');
     const signed = { v: 1 as const, event, signature: signLifecycleOfficeEvent(secret, event) };
     expect(checkSignedOfficeDecision(signed, secret)).toBe('ok');
-    expect(checkSignedOfficeDecision({ ...signed, event: { ...event, reason: 'Tampered' } }, secret)).toBe('unauthorized');
+    expect(checkSignedOfficeDecision({ ...signed, event: { ...event, reason: 'Tampered',
+      revisionRequest: { ...event.revisionRequest!, comment: 'Tampered' } } }, secret)).toBe('unauthorized');
+    expect(checkSignedOfficeDecision({ ...signed, event: { ...event,
+      revisionRequest: { ...event.revisionRequest!, priority: 'critical' } } }, secret)).toBe('unauthorized');
     expect(checkSignedOfficeDecision(signed, 'other-secret')).toBe('unauthorized');
     expect(checkSignedOfficeDecision({ ...signed, event: { ...event, eventId: 'wrong' } }, secret)).toBe('invalid');
+    const malformed = { ...event, revisionRequest: { ...event.revisionRequest!, targetNodes: [] } };
+    expect(checkSignedOfficeDecision({ v: 1, event: malformed,
+      signature: signLifecycleOfficeEvent(secret, malformed) }, secret)).toBe('invalid');
     expect(checkSignedOfficeDecision(signed, '')).toBe('unauthorized');
   });
   it('reuses the same revision receipt after a lost Core answer and a crash after state save', async () => {
@@ -78,7 +86,11 @@ describe('RequestLifecycle office revision', () => {
     expect(core.post).toHaveBeenCalledTimes(2);
     expect(core.post.mock.calls[0]).toEqual(core.post.mock.calls[1]);
     expect(core.post.mock.calls[0][0]).toBe(`/internal/lifecycle/${event.requestId}/office-decision`);
+    expect(core.post.mock.calls[0][1]).toMatchObject({ ops: [{ revisionRequest: event.revisionRequest }] });
     await expect(recordOfficeRevision(ctx, core, { ...event, reason: 'Different reason' }))
+      .rejects.toThrow('invalid office revision');
+    await expect(recordOfficeRevision(ctx, core, { ...event,
+      revisionRequest: { ...event.revisionRequest!, priority: 'critical' } }))
       .rejects.toThrow('different content');
   });
 
