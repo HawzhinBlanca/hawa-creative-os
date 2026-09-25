@@ -47,23 +47,37 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
   });
 
   return {
-    async intake(update: TelegramUpdateLike, mode: IntakeMode): Promise<IntakeAnswer> {
+    async intake(update: TelegramUpdateLike, mode: IntakeMode, requestId?: string): Promise<IntakeAnswer> {
       let res: Response;
       try {
         res = await doFetch(`${base}/v1/internal/telegram/intake`, {
           method: 'POST',
           headers: headers(update),
-          body: JSON.stringify({ v: 1, update, mode }),
+          body: JSON.stringify({ v: 1, update, mode, ...(requestId ? { requestId } : {}) }),
           signal: AbortSignal.timeout(options.timeoutMs ?? 8 * 60_000),
         });
       } catch (err) {
         if (isTimeout(err)) return { kind: 'retry', reason: `intake did not answer within ${Math.round((options.timeoutMs ?? 480_000) / 1000)} s` };
         throw new Error(`Core is unreachable, update ${update.update_id} waits: ${errorText(err)}`);
       }
-      const body = (await res.json().catch(() => ({}))) as { intakeStatus?: number; code?: string; duplicate?: boolean; title?: string };
+      const body = (await res.json().catch(() => ({}))) as {
+        intakeStatus?: number; code?: string; duplicate?: boolean; title?: string;
+        lifecycleAction?: string; requestId?: string; newTaskId?: string;
+        round?: number; directive?: string; priorTaskId?: string; rawText?: string;
+      };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
-        if (!retryable(status)) return { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true };
+        if (!retryable(status)) {
+          const base: Extract<IntakeAnswer, { kind: 'done' }> = { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true };
+          if (body.lifecycleAction === 'requester-revision' && body.requestId && body.newTaskId &&
+              typeof body.round === 'number' && body.directive && body.priorTaskId) {
+            return { ...base, lifecycleAction: 'requester-revision',
+              requestId: body.requestId, newTaskId: body.newTaskId, round: body.round,
+              directive: body.directive, priorTaskId: body.priorTaskId,
+              ...(body.rawText !== undefined ? { rawText: body.rawText } : {}) };
+          }
+          return base;
+        }
         if (body.code && WAIT_CODES.has(body.code)) throw new Error(`intake waits: ${body.code} (HTTP ${status})`);
         return { kind: 'retry', reason: `intake answered HTTP ${status}` };
       }

@@ -26,6 +26,7 @@
 import * as restate from '@restatedev/restate-sdk';
 import { withInvocationLogContext, log } from '../logging.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
+import type { RequesterDecisionEvent } from './request-lifecycle.js';
 
 /** Fields are only ever added, and only as optional (PHASE2_DESIGN.md section 4). */
 export interface HandleUpdateInput {
@@ -39,12 +40,16 @@ export type IntakeMode = 'legacy' | 'lifecycle';
 
 /** What Core's intake answered, as journaled. */
 export type IntakeAnswer =
-  | { kind: 'done'; intakeStatus: number; duplicate?: boolean }
+  | { kind: 'done'; intakeStatus: number; duplicate?: boolean;
+      /** When mode=lifecycle and Core routed the update as a requester revision. */
+      lifecycleAction?: 'requester-revision';
+      requestId?: string; newTaskId?: string; round?: number; directive?: string;
+      priorTaskId?: string; rawText?: string; }
   | { kind: 'retry'; reason: string };
 
 /** The Core calls ChatInbox makes (core-client.ts). A thrown error means "wait and try again". */
 export interface ChatInboxCore {
-  intake(update: TelegramUpdateLike, mode: IntakeMode): Promise<IntakeAnswer>;
+  intake(update: TelegramUpdateLike, mode: IntakeMode, requestId?: string): Promise<IntakeAnswer>;
   park(update: TelegramUpdateLike, reason: string): Promise<void>;
 }
 
@@ -61,6 +66,11 @@ export interface InboxContext {
   sleep(ms: number): Promise<void>;
   set(name: string, value: unknown): void;
   now(): Promise<number>;
+  /**
+   * Fire-and-forget a requester decision to RequestLifecycle via Restate's objectSendClient.
+   * Only available in the real VO context; tests may stub this as a no-op.
+   */
+  sendLifecycleDecision(requestId: string, event: RequesterDecisionEvent & { newTaskId: string }): void;
 }
 
 export interface ChatInboxView {
@@ -71,6 +81,8 @@ export interface ChatInboxView {
   at: number;
   /** Set once when the first RequestLifecycle-owned request opens for this chat. Never reverts. */
   mode?: IntakeMode;
+  /** The requestId of the lifecycle request that claimed this chat (stored alongside mode). */
+  requestId?: string;
 }
 
 export interface HandleUpdateResult {
@@ -85,12 +97,13 @@ const retryDelayMs = (k: number) => 2000 * 2 ** k;
 
 export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, core: ChatInboxCore): Promise<HandleUpdateResult> {
   const update = input.update;
-  // Read the per-chat mode from Restate state, journaled so a replay on the other colour agrees.
-  // In 2.1 the stored mode is always undefined (legacy); RequestLifecycle.open sets it to
-  // 'lifecycle' via the setMode handler before the first lifecycle update arrives.
-  const mode = await ctx.run<IntakeMode>('mode', async () => {
+  // Read the per-chat mode and requestId from Restate state, journaled so a replay agrees.
+  // In 2.1 mode is always undefined (legacy); RequestLifecycle.open sets it to 'lifecycle'
+  // via setMode before the first lifecycle update arrives.
+  const { mode, requestId: lifecycleRequestId } = await ctx.run<{ mode: IntakeMode; requestId?: string }>('mode', async () => {
     const view = await ctx.get<ChatInboxView>('inbox');
-    return (view?.mode === 'lifecycle') ? 'lifecycle' : 'legacy';
+    if (view?.mode === 'lifecycle') return { mode: 'lifecycle', requestId: view.requestId };
+    return { mode: 'legacy' };
   });
 
   const reasons: string[] = [];
@@ -98,7 +111,7 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
   for (let k = 0; k < INTAKE_ATTEMPTS && !done; k++) {
     // Lines are written inside the step, so a replay of the journal does not write them again.
     const answer = await ctx.run(`intake-${k}`, async () => {
-      const a = await core.intake(update, mode);
+      const a = await core.intake(update, mode, lifecycleRequestId);
       if (a.kind === 'retry') log.warn(`[chat-inbox] update ${update.update_id} attempt ${k + 1}/${INTAKE_ATTEMPTS} failed: ${a.reason}`);
       else if (a.intakeStatus >= 400) log.warn(`[chat-inbox] update ${update.update_id} refused by intake with HTTP ${a.intakeStatus}`);
       return a;
@@ -113,6 +126,23 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
 
   const at = await ctx.now();
   if (done) {
+    // In lifecycle mode, if Core recognised the update as a requester revision decision, fire the
+    // lifecycle handler so RequestLifecycle can advance its state machine. Idempotency key:
+    // chatinbox:revision:<update_id> — stable, unique per update, replay-safe.
+    if (done.lifecycleAction === 'requester-revision' &&
+        done.requestId && done.newTaskId && done.round !== undefined && done.directive && done.priorTaskId) {
+      const lcEvent: RequesterDecisionEvent & { newTaskId: string } = {
+        v: 1,
+        eventId: `chatinbox:revision:${update.update_id}`,
+        requestId: done.requestId,
+        round: done.round,
+        directive: done.directive,
+        priorTaskId: done.priorTaskId,
+        newTaskId: done.newTaskId,
+        ...(done.rawText !== undefined ? { rawText: done.rawText as string } : {}),
+      };
+      ctx.sendLifecycleDecision(done.requestId, lcEvent);
+    }
     ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'handled', lastIntakeStatus: done.intakeStatus, at } satisfies ChatInboxView);
     return { outcome: 'handled', intakeStatus: done.intakeStatus, attempts: reasons.length + 1 };
   }
@@ -132,12 +162,24 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
 const WAIT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30_000 };
 
 function inboxContext(ctx: restate.ObjectContext): InboxContext {
+  // Lazy import to break the potential circular reference at module-load time.
+  // RequestLifecycleApi is used only at runtime when sendLifecycleDecision is called.
   return {
     get: (name) => ctx.get(name),
     run: (name, action) => ctx.run(name, action, WAIT_RETRY),
     sleep: (ms) => ctx.sleep(ms),
     set: (name, value) => ctx.set(name, value),
     now: () => ctx.date.now(),
+    sendLifecycleDecision: (requestId, event) => {
+      // Dynamic import avoids the circular dep at module level; the API object is a stable singleton.
+      import('./request-lifecycle.js').then(({ RequestLifecycleApi }) => {
+        ctx.objectSendClient(RequestLifecycleApi, requestId)
+          .requesterDecision(event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
+      }).catch((err) => {
+        // This is fire-and-forget; a failure here is logged but must not crash handleUpdate.
+        log.error('[chat-inbox] failed to send lifecycle decision to RequestLifecycle:', err instanceof Error ? err.message : String(err));
+      });
+    },
   };
 }
 
@@ -162,7 +204,8 @@ export async function setMode(
   if (prior?.mode === 'lifecycle') {
     return { mode: 'lifecycle', requestId };
   }
-  // Preserve all existing fields, add or upgrade the mode.
+  // Preserve all existing fields, add or upgrade the mode. Also store requestId so lifecycle
+  // intake can look up the request without a DB query on the critical path.
   const next: ChatInboxView = {
     v: 1,
     lastUpdateId: prior?.lastUpdateId ?? 0,
@@ -170,6 +213,7 @@ export async function setMode(
     ...(prior?.lastIntakeStatus !== undefined ? { lastIntakeStatus: prior.lastIntakeStatus } : {}),
     at: prior?.at ?? Date.now(),
     mode: 'lifecycle',
+    requestId,
   };
   ctx.set('inbox', next);
   return { mode: 'lifecycle', requestId };

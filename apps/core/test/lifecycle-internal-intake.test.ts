@@ -68,8 +68,8 @@ const tasksInChat = async (chat: number) =>
     trx.selectFrom('outbox_commands').select(['aggregate_id', 'payload']).where('command_type', '=', 'task.created').execute()
   )).filter((r: any) => String(r.payload?.sourceChannelId) === String(chat));
 
-const intake = async (app: any, update: unknown, mode?: string) => {
-  const res = await app.request('/v1/internal/telegram/intake', { method: 'POST', headers: worker, body: JSON.stringify({ v: 1, update, ...(mode ? { mode } : { mode: 'legacy' }) }) });
+const intake = async (app: any, update: unknown, mode?: string, requestId?: string) => {
+  const res = await app.request('/v1/internal/telegram/intake', { method: 'POST', headers: worker, body: JSON.stringify({ v: 1, update, ...(mode ? { mode } : { mode: 'legacy' }), ...(requestId ? { requestId } : {}) }) });
   return { status: res.status, body: await res.json().catch(() => ({})) };
 };
 
@@ -103,13 +103,71 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
-  it('answers NOT_CONFIGURED without the webhook secret, and refuses a mode it does not have', async () => {
+  it('accepts lifecycle mode and falls through to legacy intake when no manual request matches', async () => {
+    // lifecycle is now a supported mode (Phase 2.3 Q/A loop).
+    // When no lifecycle request is in manual stage for the chat, it falls through to legacy intake.
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const update = brief(updateId(), chat);
+    const app = createApp({ db } as any);
+    const result = await intake(app, update, 'lifecycle');
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({ kind: 'handled', intakeStatus: 201 });
+    // A mode we have never heard of is still refused.
+    expect((await intake(app, { message: {} })).status).toBe(400);
+  });
+
+  it('routes a requester revision directive to the open lifecycle request (Q/A loop)', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    // Generate a valid UUID (version 4 pattern that satisfies the route's UUID regex).
+    const rnd = () => Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
+    const uuid = `${rnd()}${rnd()}-${rnd()}-4${rnd().slice(1)}-a${rnd().slice(1)}-${rnd()}${rnd()}${rnd()}`;
+    const app = createApp({ db } as any);
+
+    // 1) Seed a lifecycle request in manual stage directly in the DB, simulating that
+    //    RequestLifecycle.open already ran.
+    //    We do this by first creating a task via legacy intake, then inserting the lifecycle rows.
+    const seedUpdate = brief(updateId(), chat);
+    const firstIntake = await intake(app, seedUpdate);
+    expect(firstIntake.body.intakeStatus).toBe(201);
+    const priorTaskId = firstIntake.body.taskIds?.[0];
+    expect(priorTaskId).toBeDefined();
+
+    // Insert the lifecycle request row at manual stage, rev=3 (simulating two prior projections).
+    await withRlsContext(db, scope, async (trx) => {
+      await sql`
+        INSERT INTO hawa.requests (request_id, tenant_id, root_task_id, current_task_id, parent_request_id, owner, stage, rev, chat_id, draft_sent_at, question_asked_at)
+        VALUES (${uuid}::uuid, ${tenantId}::uuid, ${priorTaskId}, ${priorTaskId}, null, 'restate', 'manual', 3, ${String(chat)}, null, null)
+      `.execute(trx);
+    });
+
+    // 2) Send the requester's directive update in lifecycle mode.
+    const directiveUpdate = {
+      update_id: updateId(),
+      message: { message_id: 9999, from: { id: OFFICE, is_bot: false, first_name: 'Owner' },
+        chat: { id: chat, type: 'private' }, date: 1790000001, text: 'Please make the background blue' },
+    };
+    const result = await intake(app, directiveUpdate, 'lifecycle', uuid);
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({
+      kind: 'handled', intakeStatus: 200,
+      lifecycleAction: 'requester-revision',
+      requestId: uuid, round: 1, priorTaskId,
+    });
+    expect(result.body.newTaskId).toBeDefined();
+    expect(result.body.directive).toBe('Please make the background blue');
+  });
+
+  it('answers NOT_CONFIGURED without the webhook secret', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const app = createApp({ db } as any);
-    expect((await intake(app, brief(updateId(), chatId()), 'lifecycle')).status).toBe(400);
-    expect((await intake(app, { message: {} })).status).toBe(400);
     vi.stubEnv('TELEGRAM_WEBHOOK_SECRET', '');
     expect((await intake(app, brief(updateId(), chatId()))).body).toMatchObject({ intakeStatus: 503, code: 'NOT_CONFIGURED' });
+    // lifecycle mode also gets NOT_CONFIGURED when webhook secret is absent.
+    expect((await intake(app, brief(updateId(), chatId()), 'lifecycle')).body).toMatchObject({ intakeStatus: 503, code: 'NOT_CONFIGURED' });
   });
 
   it('passes intake\'s deliberate refusal on as final (a sender outside the allowlist in production)', async () => {

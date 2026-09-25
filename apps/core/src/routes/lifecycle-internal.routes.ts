@@ -27,7 +27,7 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
-import { LifecycleProjectionConflict, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen } from '../services/lifecycle-projection.js';
+import { LifecycleProjectionConflict, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
 import type { ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
@@ -135,10 +135,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const body = await readBody(c);
     const update = body?.update;
     if (!isUpdate(update)) return problem(c, 400, 'Invalid update', 'The body must carry a Telegram update with a positive update_id');
-    // 2.3 adds the lifecycle's decide mode; until then this route knows today's intake only, and an
-    // older Core refuses a mode it does not have instead of treating it as legacy.
+    // 2.3 adds the lifecycle's decide mode. An older Core that does not have it refuses the mode
+    // so the worker falls back to legacy rather than routing silently wrong.
     const mode = body?.mode ?? 'legacy';
-    if (mode !== 'legacy') return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" only, not "${String(mode)}"`);
+    if (mode !== 'legacy' && mode !== 'lifecycle') {
+      return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
+    }
 
     const handled = (intakeStatus: number, extra: Record<string, unknown> = {}) =>
       c.json({ v: 1, kind: 'handled', intakeStatus, ...extra }, 200);
@@ -149,6 +151,80 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // switch, as it waited in Telegram when Core polled. Asked here so the answer is not a retry.
     if (await intakeRefused(channelKillSwitches, 'telegram')) return handled(503, { code: 'INTAKE_PAUSED' });
 
+    // --- lifecycle mode: route requester answers back to the open lifecycle request ---
+    if (mode === 'lifecycle') {
+      const requestId = typeof body?.requestId === 'string' && UUID.test(body.requestId) ? body.requestId : null;
+      if (!requestId || !db) {
+        // No requestId or no DB: treat as legacy (best-effort; the worker should always pass requestId).
+        log.warn(`[core:internal] lifecycle intake for update ${update.update_id} missing requestId or db; falling back to legacy`);
+      } else {
+        // Extract the directive text from the Telegram update.
+        const msg = (update as Record<string, unknown>).message;
+        const cbq = (update as Record<string, unknown>).callback_query;
+        const rawText: string = (() => {
+          if (cbq && typeof cbq === 'object') {
+            const d = (cbq as Record<string, unknown>).data;
+            return typeof d === 'string' ? d : '';
+          }
+          if (msg && typeof msg === 'object') {
+            const t = (msg as Record<string, unknown>).text;
+            return typeof t === 'string' ? t : '';
+          }
+          return '';
+        })();
+        const chatId: string = chatOf(update);
+        if (rawText.trim() && chatId) {
+          try {
+            // Find the open lifecycle request for this chat at manual stage.
+            const TENANT = DEFAULT_TENANT_ID;
+            const openRequest = await withRlsContext(db, { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+              (await sql<{ request_id: string; rev: number; current_task_id: string; client_id: string | null }>`
+                SELECT r.request_id, r.rev, r.current_task_id,
+                  (SELECT t.client_id::text FROM hawa.tasks t WHERE t.tenant_id = r.tenant_id AND t.id = r.current_task_id LIMIT 1) AS client_id
+                FROM hawa.requests r
+                WHERE r.tenant_id = ${TENANT}::uuid AND r.chat_id = ${chatId}
+                  AND r.owner = 'restate' AND r.stage = 'manual' AND r.request_id = ${requestId}
+                LIMIT 1`.execute(trx)).rows[0]);
+            if (openRequest) {
+              const expectedRev = Number(openRequest.rev);
+              const nextRev = expectedRev + 1;
+              // Derive the round from the revision number: first office-revise lands at rev=3;
+              // subsequent revisions increment by 2 each time (office+requester), so round = (rev - 1) / 2.
+              const round = Math.floor((expectedRev - 1) / 2);
+              if (round >= 1) {
+                const directive = rawText.trim();
+                const sourceEventId = `lc-${requestId}-r${round}-u${update.update_id}`;
+                const key = `${requestId}:${nextRev}:requesterRevisionIntake:u${update.update_id}`;
+                const projected = await projectLifecycleRequesterRevisionWithIntake(db, {
+                  requestId, tenantId: TENANT, priorTaskId: openRequest.current_task_id,
+                  round, directive, sourceEventId, sourceChannelId: chatId,
+                  rawText: directive, clientId: openRequest.client_id,
+                  expectedRev, rev: nextRev, key,
+                });
+                await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
+                return handled(200, {
+                  lifecycleAction: 'requester-revision',
+                  requestId, newTaskId: projected.newTaskId,
+                  round: projected.round, directive: projected.directive,
+                  priorTaskId: openRequest.current_task_id, rawText: directive,
+                });
+              }
+            }
+            // Not in manual stage or no open request → fall through to legacy intake.
+          } catch (err) {
+            if (err instanceof LifecycleProjectionConflict) {
+              log.warn(`[core:internal] lifecycle intake conflict for ${requestId}: ${err.code} ${err.message}`);
+              // Treat projection conflicts as a handled non-retryable result (409-like).
+              return handled(409, { code: err.code, detail: err.message });
+            }
+            if ((err as { status?: number })?.status === 503) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+            throw err; // unexpected; let Restate retry
+          }
+        }
+      }
+    }
+
+    // --- legacy mode (or lifecycle fallback to legacy when not in manual stage) ---
     // Today's intake, in this process, as the Core poller handed updates to it (app.ts).
     const res = await app.request('/api/webhooks/telegram?generate=true', {
       method: 'POST',
@@ -241,22 +317,26 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const runId = op?.runId;
     const taskId = op?.taskId;
     const clean = (value: unknown) => typeof value === 'string' && /^[A-Z0-9_]{1,64}$/.test(value);
-    if (!UUID.test(requestId) || body?.v !== 1 || body.expectedRev !== 1 || body.rev !== 2 ||
+    // Flexible rev: first round is expectedRev=1, rev=2; revision rounds are (1+2k)→(2+2k).
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    if (!UUID.test(requestId) || body?.v !== 1 ||
+        !Number.isInteger(expectedRev) || expectedRev < 1 || rev !== expectedRev + 1 ||
         op?.kind !== 'recordOutcome' || typeof taskId !== 'string' || !UUID.test(taskId) ||
-        runId !== `dr-${taskId}` || body.key !== `${requestId}:2:designFinished:${runId}` ||
+        runId !== `dr-${taskId}` || body.key !== `${requestId}:${rev}:designFinished:${runId}` ||
         !report || !clean(report.status) ||
         (report.code !== undefined && !clean(report.code)) ||
         (report.designId !== undefined && (typeof report.designId !== 'string' || !/^[A-Za-z0-9_-]{4,64}$/.test(report.designId))) ||
         (report.detail !== undefined && (typeof report.detail !== 'string' || report.detail.length > 500)) ||
         (report.runId !== undefined && (typeof report.runId !== 'string' || report.runId.length > 100)) ||
         (report.notifyRequester !== undefined && typeof report.notifyRequester !== 'boolean')) {
-      return problem(c, 400, 'Invalid design outcome projection', 'Expected one versioned recordOutcome operation for the current round-zero design');
+      return problem(c, 400, 'Invalid design outcome projection', 'Expected one versioned recordOutcome operation for the current design round');
     }
     if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
     try {
       const result = await projectLifecycleDesignOutcome(db, {
         requestId, tenantId: DEFAULT_TENANT_ID, taskId: taskId as string, runId: runId as string,
-        expectedRev: 1, rev: 2, key: body.key as string,
+        expectedRev, rev, key: body.key as string,
         report: report as unknown as Parameters<typeof projectLifecycleDesignOutcome>[1]['report'],
       });
       return c.json({ v: 1, ...result }, 200);
@@ -270,8 +350,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     }
   });
 
-  // The first versioned office transition records the decision, task transition, request revision
-  // and replay receipt in one transaction. Approval also carries exact checked-export proof.
+  // The versioned office transition records the decision, task transition, request revision
+  // and replay receipt in one transaction. Works across all revision rounds (expectedRev ≥ 2).
   internal('/lifecycle/:requestId/office-decision', async (c) => {
     const requestId = c.req.param('requestId') ?? '';
     const body = await readBody(c);
@@ -282,11 +362,15 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const revisionRequest = op?.revisionRequest === undefined ? undefined : parseCompleteRevisionRequest(op.revisionRequest);
     const approvalProof = op?.approvalProof === undefined ? undefined : parseOfficeApprovalProof(op.approvalProof);
     const isApproval = op?.kind === 'recordOfficeApproval';
-    if (!UUID.test(requestId) || body?.v !== 1 || body.expectedRev !== 2 || body.rev !== 3 ||
+    // Flexible rev: first office decision is expectedRev=2, rev=3; later rounds follow the same +1 pattern.
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    if (!UUID.test(requestId) || body?.v !== 1 ||
+        !Number.isInteger(expectedRev) || expectedRev < 2 || rev !== expectedRev + 1 ||
         (!isApproval && op?.kind !== 'recordOfficeRevision') || typeof op.taskId !== 'string' || !UUID.test(op.taskId) ||
         typeof op.revisionId !== 'string' || !UUID.test(op.revisionId) ||
         typeof actionId !== 'string' || !UUID.test(actionId) ||
-        body.key !== `${requestId}:3:officeDecision:desk:${actionId}` ||
+        body.key !== `${requestId}:${rev}:officeDecision:desk:${actionId}` ||
         !actor || typeof actor.userId !== 'string' || !UUID.test(actor.userId) ||
         typeof actor.role !== 'string' || actor.role.length > 60 ||
         typeof op.reason !== 'string' || !op.reason.trim() || op.reason.length > 2000 ||
@@ -301,7 +385,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         requestId, tenantId: DEFAULT_TENANT_ID, taskId: op.taskId as string,
         revisionId: op.revisionId as string, actionId: actionId as string,
         actor: { userId: actor.userId as string, role: actor.role as string },
-        reason: (op.reason as string).trim(), expectedRev: 2, rev: 3, key: body.key as string,
+        reason: (op.reason as string).trim(), expectedRev, rev, key: body.key as string,
         ...(revisionRequest ? { revisionRequest } : {}),
         ...(approvalProof ? { decision: 'approved', approvalProof,
           deskRequestFingerprint: op.deskRequestFingerprint as string } : {}),
@@ -349,6 +433,42 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         detail: error.message }, 409);
       log.error(`[core:internal] lifecycle delivery start ${requestId} failed:`, error);
       return problem(c, 503, 'Lifecycle Projection Unavailable', 'The delivery start did not commit; retry with the same key');
+    }
+  });
+
+  // Requester sends their revision directive after the office marks "revise": manual → designing.
+  // The worker must intake the new task first (lc-<requestId>-r<round> source event) and pass its id.
+  internal('/lifecycle/:requestId/requester-revision', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    const round = Number(op?.round);
+    if (!UUID.test(requestId) || body?.v !== 1 ||
+        !Number.isInteger(expectedRev) || expectedRev < 3 || rev !== expectedRev + 1 ||
+        op?.kind !== 'requesterRevision' ||
+        !UUID.test(String(op.priorTaskId || '')) || !UUID.test(String(op.newTaskId || '')) ||
+        !Number.isInteger(round) || round < 1 ||
+        typeof op.directive !== 'string' || !String(op.directive).trim() || String(op.directive).length > 5000 ||
+        body.key !== `${requestId}:${rev}:requesterRevision:r${round}`) {
+      return problem(c, 400, 'Invalid requester revision', 'Expected one versioned requesterRevision for a manual-stage request');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleRequesterRevision(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID,
+        priorTaskId: op.priorTaskId as string, newTaskId: op.newTaskId as string,
+        round, directive: String(op.directive).trim(), expectedRev, rev, key: body.key as string,
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] lifecycle requester revision ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The requester revision did not commit; retry with the same key');
     }
   });
 

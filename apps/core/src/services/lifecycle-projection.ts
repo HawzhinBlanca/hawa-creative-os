@@ -44,20 +44,30 @@ export interface OfficeDecisionProjection {
   decision?: 'revision_requested' | 'approved';
   approvalProof?: OfficeApprovalProof;
   deskRequestFingerprint?: string;
-  expectedRev: 2; rev: 3; key: string;
+  /** expectedRev ≥ 2: first decision is at 2→3; subsequent rounds are at (2+2k)→(3+2k). */
+  expectedRev: number; rev: number; key: string;
 }
 
 export interface OfficeDecisionResult {
   requestId: string; taskId: string; revisionId: string; actionId: string;
-  approvalId: string; taskState: string; rev: 3; stage: 'manual' | 'approved';
+  approvalId: string; taskState: string; rev: number; stage: 'manual' | 'approved';
 }
 
 const OFFICE_REVISION_ROLES = new Set(['art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
 const OFFICE_APPROVAL_ROLES = new Set(['art_director', 'creative_director', 'office_admin', 'administrator']);
 
-/** First request-owned office decision. The request and approval/audit rows commit as one revision. */
+/**
+ * Request-owned office decision (revision-request or proof-bound approval). Works across all
+ * revision rounds: first office decision is at expectedRev=2→rev=3; second is at (2+2k)→(3+2k).
+ * The route validates that expectedRev and rev match the request's current revision before
+ * calling here, so the projection only needs to confirm the advisory-lock read agrees.
+ */
 export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input: OfficeDecisionProjection): Promise<OfficeDecisionResult> {
   const { requestId, tenantId, taskId, revisionId, actionId, actor, reason, key } = input;
+  const { expectedRev, rev } = input;
+  if (!Number.isInteger(expectedRev) || expectedRev < 2 || !Number.isInteger(rev) || rev !== expectedRev + 1) {
+    throw new LifecycleProjectionConflict('STALE_REVISION', 'The office decision has an invalid revision pair');
+  }
   const decision = input.decision || 'revision_requested';
   const revisionRequest = input.revisionRequest === undefined ? undefined : parseCompleteRevisionRequest(input.revisionRequest);
   if ((input.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== reason)) ||
@@ -69,7 +79,7 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
   return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
     await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
     const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
-      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', 3).executeTakeFirst();
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', rev).executeTakeFirst();
     if (receipt) {
       if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
         throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'This office revision has different content or action identity');
@@ -78,8 +88,8 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
     }
     const request = await trx.selectFrom('requests').selectAll()
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
-    if (!request || Number(request.rev) !== 2) {
-      throw new LifecycleProjectionConflict('STALE_REVISION', 'The request is not at expected revision 2');
+    if (!request || Number(request.rev) !== expectedRev) {
+      throw new LifecycleProjectionConflict('STALE_REVISION', `The request is not at expected revision ${expectedRev}`);
     }
     if (request.owner !== 'restate' || request.stage !== 'in_review') {
       throw new LifecycleProjectionConflict('WRONG_STAGE', 'Only an in-review request may receive this decision');
@@ -125,16 +135,16 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
       throw error;
     }
     const stage = decision === 'approved' ? 'approved' : 'manual';
-    const changed = await trx.updateTable('requests').set({ stage, rev: 3, updated_at: new Date() })
-      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', 2)
+    const changed = await trx.updateTable('requests').set({ stage, rev, updated_at: new Date() })
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'The request changed during office revision');
     const taskState = (await trx.selectFrom('tasks').select('state')
       .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirstOrThrow()).state;
     const result: OfficeDecisionResult = { requestId, taskId, revisionId, actionId,
-      approvalId: approval.id, taskState, rev: 3, stage };
+      approvalId: approval.id, taskState, rev, stage };
     await trx.insertInto('lifecycle_projections').values({
-      tenant_id: tenantId, request_id: requestId, rev: 3, idempotency_key: key,
+      tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,
       payload_sha256: hash, result: result as unknown as Record<string, unknown>,
     }).execute();
     return result;
@@ -221,24 +231,33 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
 
 export interface DesignOutcomeProjection {
   requestId: string; tenantId: string; taskId: string; runId: string;
-  expectedRev: 1; rev: 2; key: string;
+  /** expectedRev ≥ 1: first run is 1→2; revision runs are (1+2k)→(2+2k). */
+  expectedRev: number; rev: number; key: string;
   report: { status: string; designId?: string; code?: string; detail?: string; runId?: string; notifyRequester?: boolean };
 }
 
 export interface DesignOutcomeResult {
-  requestId: string; taskId: string; rev: 2; stage: 'in_review' | 'manual';
+  requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual';
   status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
   officeAlert?: { chatId: string; text: string };
 }
 
-/** A terminal design outcome and its Desk revision share the request's revision transaction. */
+/**
+ * A terminal design outcome and its Desk revision share the request's revision transaction.
+ * Works across all rounds: first design is at expectedRev=1→rev=2; revision rounds are at
+ * (1+2k)→(2+2k). The route validates the rev pair before calling here.
+ */
 export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input: DesignOutcomeProjection): Promise<DesignOutcomeResult> {
   const { requestId, tenantId, taskId, key, report } = input;
+  const { expectedRev, rev } = input;
+  if (!Number.isInteger(expectedRev) || expectedRev < 1 || !Number.isInteger(rev) || rev !== expectedRev + 1) {
+    throw new LifecycleProjectionConflict('STALE_REVISION', 'The design outcome has an invalid revision pair');
+  }
   const hash = createHash('sha256').update(canonical(input)).digest('hex');
   return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
     await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
     const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
-      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', 2).executeTakeFirst();
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', rev).executeTakeFirst();
     if (receipt) {
       if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
         throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The design projection has different content or key');
@@ -247,8 +266,8 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
     }
     const request = await trx.selectFrom('requests').selectAll()
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
-    if (!request || Number(request.rev) !== 1) {
-      throw new LifecycleProjectionConflict('STALE_REVISION', `Request is not at expected revision 1`);
+    if (!request || Number(request.rev) !== expectedRev) {
+      throw new LifecycleProjectionConflict('STALE_REVISION', `Request is not at expected revision ${expectedRev}`);
     }
     if (request.owner !== 'restate' || request.stage !== 'designing' || request.current_task_id !== taskId) {
       throw new LifecycleProjectionConflict('WRONG_STAGE', 'This request is not designing the named task');
@@ -293,8 +312,8 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       });
     }
     const stage = hasDraft ? 'in_review' : 'manual';
-    const changed = await trx.updateTable('requests').set({ stage, rev: 2, updated_at: new Date() })
-      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', 1)
+    const changed = await trx.updateTable('requests').set({ stage, rev, updated_at: new Date() })
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during outcome projection');
     const composed = report.notifyRequester === false ? undefined : composeCanvaStatusMessage({
@@ -309,13 +328,214 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       ? composed.text.replace('The office has been alerted and will follow up with you here.',
           'A person needs to review it in Hawa Desk and follow up with you here.')
       : composed?.text;
-    const result: DesignOutcomeResult = { requestId, taskId, rev: 2, stage, status,
+    const result: DesignOutcomeResult = { requestId, taskId, rev, stage, status,
       ...(revisionId ? { revisionId } : {}),
       ...(messageText ? { message: { text: messageText, parseMode: 'HTML' as const } } : {}),
       ...(officeAlert ? { officeAlert } : {}),
     };
     await trx.insertInto('lifecycle_projections').values({
-      tenant_id: tenantId, request_id: requestId, rev: 2, idempotency_key: key,
+      tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,
+      payload_sha256: hash, result: result as unknown as Record<string, unknown>,
+    }).execute();
+    return result;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Revision-round projection: requester submits their directive; manual → designing
+// ---------------------------------------------------------------------------
+
+export interface RequesterRevisionProjection {
+  requestId: string; tenantId: string;
+  /** The task whose revision the office requested: validated as current_task_id. */
+  priorTaskId: string;
+  /**
+   * New design-round task that was intake-persisted with sourceEventId `lc-<requestId>-r<round>` and
+   * lifecycleOwner 'restate'. Sent by the worker after it calls Core /internal/telegram/intake.
+   */
+  newTaskId: string;
+  /** Round index ≥ 1 (first revision = 1). */
+  round: number;
+  directive: string;
+  /** expectedRev is the request's current rev (manual stage, post-office-revise). rev = expectedRev + 1. */
+  expectedRev: number; rev: number; key: string;
+}
+
+export interface RequesterRevisionResult {
+  requestId: string; priorTaskId: string; newTaskId: string; round: number;
+  rev: number; stage: 'designing'; runId: string;
+}
+
+/**
+ * Moves a manual-stage request back to `designing` when the requester sends their revision
+ * directive. Creates the new round's task ownership, then advances the request row.
+ * expectedRev ≥ 3 (always after at least one office revise); rev = expectedRev + 1.
+ */
+export async function projectLifecycleRequesterRevision(
+  db: Kysely<Database>,
+  input: RequesterRevisionProjection,
+): Promise<RequesterRevisionResult> {
+  const { requestId, tenantId, priorTaskId, newTaskId, round, directive, key } = input;
+  const { expectedRev, rev } = input;
+  if (!Number.isInteger(expectedRev) || expectedRev < 3 || !Number.isInteger(rev) || rev !== expectedRev + 1 ||
+      !Number.isInteger(round) || round < 1 || typeof directive !== 'string' || !directive.trim()) {
+    throw new LifecycleProjectionConflict('STALE_REVISION', 'The requester revision has an invalid revision pair or round');
+  }
+  const hash = createHash('sha256').update(canonical(input)).digest('hex');
+  const runId = `dr-${newTaskId}`;
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
+    const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', rev).executeTakeFirst();
+    if (receipt) {
+      if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'This requester revision has different content or key');
+      }
+      return receipt.result as unknown as RequesterRevisionResult;
+    }
+    const request = await trx.selectFrom('requests').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+    if (!request || Number(request.rev) !== expectedRev) {
+      throw new LifecycleProjectionConflict('STALE_REVISION', `Request is not at expected revision ${expectedRev}`);
+    }
+    if (request.owner !== 'restate' || request.stage !== 'manual') {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'Only a manual-stage request may accept a requester revision directive');
+    }
+    if (request.current_task_id !== priorTaskId) {
+      throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The directive names an older request task');
+    }
+    // The new task must have been created by intake with the lifecycle source key and restate owner.
+    const newTask = await trx.selectFrom('tasks').select(['id', 'request_id'])
+      .where('tenant_id', '=', tenantId).where('id', '=', newTaskId).executeTakeFirst();
+    if (!newTask) throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The new round task does not exist');
+    const creation = await trx.selectFrom('outbox_commands').select(['state', 'payload'])
+      .where('tenant_id', '=', tenantId).where('aggregate_id', '=', newTaskId)
+      .where('command_type', '=', 'task.created').executeTakeFirst();
+    if (creation?.state !== 'delivered' || creation.payload.lifecycleOwner !== 'restate' || newTask.request_id !== null) {
+      throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The new round task is not exclusively available for this lifecycle');
+    }
+    // Claim the new task and advance the request to designing.
+    const claimed = await trx.updateTable('tasks').set({ request_id: requestId })
+      .where('tenant_id', '=', tenantId).where('id', '=', newTaskId).where('request_id', 'is', null)
+      .returning('id').executeTakeFirst();
+    if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The new round task acquired another request owner');
+    const changed = await trx.updateTable('requests')
+      .set({ stage: 'designing', rev, current_task_id: newTaskId, updated_at: new Date() })
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
+      .returning('request_id').executeTakeFirst();
+    if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during requester revision');
+    const result: RequesterRevisionResult = { requestId, priorTaskId, newTaskId, round, rev, stage: 'designing', runId };
+    await trx.insertInto('lifecycle_projections').values({
+      tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,
+      payload_sha256: hash, result: result as unknown as Record<string, unknown>,
+    }).execute();
+    return result;
+  });
+}
+
+/** Input for the combined lifecycle intake + requester-revision projection (Q/A loop). */
+export interface RequesterRevisionWithIntakeProjection {
+  requestId: string;
+  tenantId: string;
+  /** The task the request is currently on (must match request.current_task_id). */
+  priorTaskId: string;
+  /** Revision round ≥ 1 (same increment the Restate worker uses). */
+  round: number;
+  /** Source event key from the Telegram update that carried the directive. */
+  directive: string;
+  /** Source event id for the new task (must be unique, e.g. "lc-<requestId>-r<round>-u<updateId>"). */
+  sourceEventId: string;
+  /** The Telegram chat the update came from; must match request.chat_id. */
+  sourceChannelId: string;
+  /** Raw text of the directive (the requester's message). */
+  rawText: string;
+  /** The client the prior task belongs to (carried forward to the new task). */
+  clientId: string | null;
+  /** Current request revision (manual stage). rev = expectedRev + 1. */
+  expectedRev: number;
+  rev: number;
+  key: string;
+}
+
+export interface RequesterRevisionWithIntakeResult extends RequesterRevisionResult {
+  /** The directive text as trimmed. */
+  directive: string;
+}
+
+/**
+ * Lifecycle Q/A loop: persists the requester's revision task from an incoming Telegram update,
+ * then advances the request from manual → designing in one transaction. Used by the lifecycle
+ * intake mode so Core can fully handle the update without a separate Restate VO round-trip.
+ */
+export async function projectLifecycleRequesterRevisionWithIntake(
+  db: Kysely<Database>,
+  input: RequesterRevisionWithIntakeProjection,
+): Promise<RequesterRevisionWithIntakeResult> {
+  const { requestId, tenantId, priorTaskId, round, directive, sourceEventId, sourceChannelId, rawText, clientId, key } = input;
+  const { expectedRev, rev } = input;
+  if (!Number.isInteger(expectedRev) || expectedRev < 3 || !Number.isInteger(rev) || rev !== expectedRev + 1 ||
+      !Number.isInteger(round) || round < 1 || typeof directive !== 'string' || !directive.trim()) {
+    throw new LifecycleProjectionConflict('STALE_REVISION', 'Invalid revision pair or round for lifecycle requester revision with intake');
+  }
+  const hash = createHash('sha256').update(canonical(input)).digest('hex');
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
+    // Idempotent receipt: if Core already ran this projection, return the cached result.
+    const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', rev).executeTakeFirst();
+    if (receipt) {
+      if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'This requester revision has different content or key');
+      }
+      return receipt.result as unknown as RequesterRevisionWithIntakeResult;
+    }
+    // Validate the request is in the expected state.
+    const request = await trx.selectFrom('requests').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+    if (!request || Number(request.rev) !== expectedRev) {
+      throw new LifecycleProjectionConflict('STALE_REVISION', `Request is not at expected revision ${expectedRev}`);
+    }
+    if (request.owner !== 'restate' || request.stage !== 'manual') {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'Only a manual-stage request may accept a requester revision directive');
+    }
+    if (request.current_task_id !== priorTaskId) {
+      throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The directive names an older request task');
+    }
+    if (request.chat_id !== sourceChannelId) {
+      throw new LifecycleProjectionConflict('WRONG_CHAT', 'The update chat does not match the request');
+    }
+    // Persist the new task via chat-intake with lifecycleOwner: 'restate'.
+    const draft: ChatIntake = {
+      platform: 'telegram', sourceEventId, sourceChannelId,
+      rawText, title: directive.trim().slice(0, 200),
+      designInstructions: directive.trim(), exactCopy: [], clientId,
+    };
+    let persisted: Awaited<ReturnType<typeof persistChatIntake>>;
+    try {
+      persisted = await persistChatIntake(trx, { ...draft, tenantId }, { outboxState: 'recorded' });
+    } catch (error) {
+      if (error instanceof IdempotencyConflictError) {
+        throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The source event already belongs to a different executor');
+      }
+      throw error;
+    }
+    const newTaskId = String(persisted.task.id);
+    const runId = `dr-${newTaskId}`;
+    // Claim the new task and advance the request.
+    const claimed = await trx.updateTable('tasks').set({ request_id: requestId })
+      .where('tenant_id', '=', tenantId).where('id', '=', newTaskId).where('request_id', 'is', null)
+      .returning('id').executeTakeFirst();
+    if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The new task acquired another request owner');
+    const changed = await trx.updateTable('requests')
+      .set({ stage: 'designing', rev, current_task_id: newTaskId, updated_at: new Date() })
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
+      .returning('request_id').executeTakeFirst();
+    if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during requester revision with intake');
+    const result: RequesterRevisionWithIntakeResult = {
+      requestId, priorTaskId, newTaskId, round, rev, stage: 'designing', runId, directive: directive.trim(),
+    };
+    await trx.insertInto('lifecycle_projections').values({
+      tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,
       payload_sha256: hash, result: result as unknown as Record<string, unknown>,
     }).execute();
     return result;

@@ -18,6 +18,7 @@ class FakeContext implements InboxContext {
   sleeps: number[] = [];
   state = new Map<string, unknown>();
   runs: string[] = [];
+  lifecycleDecisions: Array<{ requestId: string; event: unknown }> = [];
   constructor(readonly key = '555') {}
   async get<T>(name: string): Promise<T | null> {
     return (this.state.get(name) as T) ?? null;
@@ -38,6 +39,9 @@ class FakeContext implements InboxContext {
     this.state.set(name, value);
   }
   async now() { return 1_790_000_000_000; }
+  sendLifecycleDecision(requestId: string, event: unknown) {
+    this.lifecycleDecisions.push({ requestId, event });
+  }
 }
 
 const update = { update_id: 4242, message: { message_id: 1, date: 1, chat: { id: 555, type: 'private' }, from: { id: 9, is_bot: false, first_name: 'R' }, text: 'a brief' } };
@@ -65,10 +69,10 @@ describe('ChatInbox.handleUpdate', () => {
     const c = core([async () => ({ kind: 'done', intakeStatus: 201 })]);
     expect(await handleUpdate(ctx, input, c)).toMatchObject({ outcome: 'handled', intakeStatus: 201 });
     expect(c.intake).toHaveBeenCalledTimes(1);
-    expect(c.intake.mock.calls[0]).toEqual([update, 'legacy']);
+    expect(c.intake.mock.calls[0]).toEqual([update, 'legacy', undefined]);
     expect(c.park).not.toHaveBeenCalled();
-    // The one read of the mode is journaled, so a replay on another colour agrees with it.
-    expect(ctx.journal.get('mode')).toBe('legacy');
+    // The mode journal stores an object now; a replay on another colour reads the same journaled value.
+    expect(ctx.journal.get('mode')).toMatchObject({ mode: 'legacy' });
   });
 
   it('a deliberate refusal (4xx) is final: no retry, no dead letter', async () => {
@@ -217,10 +221,11 @@ describe('ChatInbox.setMode', () => {
   it('handleUpdate reads lifecycle mode from stored ChatInboxView on a new invocation', async () => {
     const ctx = new FakeContext();
     // Simulate: a prior setMode stored 'lifecycle' in the inbox state
-    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0, mode: 'lifecycle' } satisfies ChatInboxView);
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0, mode: 'lifecycle', requestId: 'req-x' } satisfies ChatInboxView);
     const c = core([async () => ({ kind: 'done', intakeStatus: 201 })]);
     await handleUpdate(ctx, input, c);
-    expect(ctx.journal.get('mode')).toBe('lifecycle');
+    // The mode journal now stores { mode, requestId } to support lifecycle routing.
+    expect(ctx.journal.get('mode')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x' });
     // Core's intake should have been called with mode='lifecycle'
     expect(c.intake.mock.calls[0][1]).toBe('lifecycle');
   });
