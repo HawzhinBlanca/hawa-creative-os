@@ -9,6 +9,7 @@ import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from '../s
 import { composeDesignerHandoff, type AskRecord } from '../services/requester-actions.js';
 import { createOfficeAlerts } from '../services/office-alerts.js';
 import { createAskHistory } from '../services/ask-history.js';
+import { rejectUnownedLifecycleDesignWrite } from './lifecycle-design-proof.js';
 
 /**
  * The Canva outcome routes (architecture programme 1.3, SPLIT_PLAN.md G4), moved unchanged from
@@ -44,6 +45,8 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
       return problem(c, 403, 'Canva Binding Forbidden');
     }
     if (!db || !taskRepo) return problem(c, 503, 'Database Required', 'Canva bindings require durable storage');
+    const lifecycleRefusal = await rejectUnownedLifecycleDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
     const body = await c.req.json().catch(() => null);
     let designId: string;
     try { designId = validateCanvaDesignUrl(body?.editUrl); }

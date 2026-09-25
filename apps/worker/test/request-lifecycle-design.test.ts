@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OutboundMessage } from '@hawa/contracts';
 import { DurableStepJournal } from '../src/durable-context.js';
+import { lifecycleDesignProofHeaders } from '../src/lifecycle/design-proof.js';
 import { runOwnedDesign, validDesignRun, type DesignRunInput } from '../src/lifecycle/design-run.js';
 import { openAutomaticRequest, recordDesignFinished, type AutomaticLifecycleState,
   type AutomaticOpenContext, type DesignFinishedEvent, type ManualLifecycleState,
@@ -128,6 +129,7 @@ describe('request-owned automatic design', () => {
 
   it('reports an owned run to RequestLifecycle without posting the legacy outcome', async () => {
     vi.stubEnv('HAWA_BEARER_TOKEN', 'test-only');
+    vi.stubEnv('HAWA_WORKER_TOKEN', ['worker', 'design', 'proof', 'fixture'].join('_'));
     const taskId = randomUUID(); const requestId = randomUUID();
     const input: DesignRunInput = { v: 1, lifecycle: { requestId, round: 0, runId: `dr-${taskId}` },
       taskId, tenantId, clientId, rawText: 'Autumn workshop', sourcePlatform: 'telegram',
@@ -139,6 +141,10 @@ describe('request-owned automatic design', () => {
     const result = await runOwnedDesign(input, input.lifecycle.runId, new DurableStepJournal(), report, remote);
     expect(result.status).toBe('DESIGN_REJECTED');
     expect(remote).toHaveBeenCalledTimes(2);
+    expect(remote.mock.calls[1][1].headers).toMatchObject(lifecycleDesignProofHeaders({
+      taskId, requestId, runId: input.lifecycle.runId, method: 'POST',
+      path: `/v1/tasks/${taskId}/canva/generate`,
+    }));
     expect(remote.mock.calls.some((call) => String(call[0]).includes('/notifications/'))).toBe(false);
     expect(report).toHaveBeenCalledWith(expect.objectContaining({ status: 'DESIGN_REJECTED', code: 'COPY_UNSUPPORTED' }));
   });

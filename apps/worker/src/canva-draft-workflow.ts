@@ -2,10 +2,12 @@ import type { WorkflowDurableContext } from './durable-context.js';
 import type { WorkflowInput, WorkflowOutput } from './workflow.js';
 import type { OutcomeRecorder } from './outcome-without-core.js';
 import { log, requestIdHeaders } from './logging.js';
+import { lifecycleDesignProofHeaders } from './lifecycle/design-proof.js';
 
 /** The one-way outcome channel of a RequestLifecycle-owned DesignRun. */
 export interface LifecycleOutcomeReporter {
   requestId: string;
+  runId: string;
   report(outcome: { status: string; designId?: string; code?: string; runId?: string;
     parity?: string; parityError?: string; detail?: string; notifyRequester?: boolean }): void;
 }
@@ -122,15 +124,22 @@ export function resolveCanvaVariant(input: Pick<WorkflowInput, 'canvaVariant'>):
 type CoreCall = (path: string, body?: unknown, key?: string) => Promise<any>;
 
 /** The worker's authenticated line to Core for one task. */
-function coreClient(input: Pick<WorkflowInput, 'taskId'>, fetcher: typeof fetch): CoreCall {
+function coreClient(input: Pick<WorkflowInput, 'taskId'>, fetcher: typeof fetch, lifecycle?: Pick<LifecycleOutcomeReporter, 'requestId' | 'runId'>): CoreCall {
   const base = process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001';
   const token = process.env.HAWA_BEARER_TOKEN;
   if (!token) throw new Error('Worker Core credential is not configured');
   return async (path: string, body?: unknown, key?: string) => {
-    const res = await fetcher(base + '/v1/tasks/' + encodeURIComponent(input.taskId) + path, {
-      method: body === undefined ? 'GET' : 'POST',
+    const method = body === undefined ? 'GET' : 'POST';
+    const pathname = '/v1/tasks/' + encodeURIComponent(input.taskId) + path;
+    const res = await fetcher(base + pathname, {
+      method,
       // Core logs the call under the request this invocation belongs to (logging.ts).
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}), ...requestIdHeaders() },
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json',
+        ...(key ? { 'Idempotency-Key': key } : {}), ...requestIdHeaders(),
+        ...(method === 'POST' && lifecycle ? lifecycleDesignProofHeaders({
+          taskId: input.taskId, requestId: lifecycle.requestId, runId: lifecycle.runId, method, path: pathname,
+        }) : {}),
+      },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(300000),
     });
@@ -260,7 +269,7 @@ export async function runCanvaDraft(
 ): Promise<WorkflowOutput> {
   const output = (status: string, documentId?: string): WorkflowOutput =>
     ({ taskId: input.taskId, status, documentId, qcPassed: false, auditEventsCount: 0, executedSteps: [], replayedSteps: [] });
-  const call = coreClient(input, fetcher);
+  const call = coreClient(input, fetcher, lifecycle);
   // A re-drive is a new run of the same task: its keys must not collide with the first run's, or
   // Core would hand back the first run's (failed) answer instead of starting again.
   const runKey = Number.isInteger(input.redriveAttempt) && (input.redriveAttempt as number) > 0

@@ -10,6 +10,7 @@ import { isSha256Hex } from '@hawa/contracts';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { blobStoreFor, storedFileLost } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
+import { rejectUnownedLifecycleDesignWrite } from './lifecycle-design-proof.js';
 
 /**
  * A candidate picture's address. With its hash in the path it is immutable (a revision renders a new
@@ -73,6 +74,9 @@ export function registerDesignStudioRoutes(
         return ctx.problem(c, 422, 'Invalid Identifier', `Use a valid ${name} identifier`);
       }
     }
+
+    const lifecycleRefusal = await rejectUnownedLifecycleDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
 
     try {
       // The actor is the user's id, a uuid: studio runs, calls and Canva connections are keyed by it.
@@ -440,4 +444,3 @@ export function registerDesignStudioRoutes(
   ctx.registerRoute('post', '/tasks/:taskId/canva/parity-check', protect(handleParityCheck));
   ctx.registerRoute('post', '/tasks/:taskId/canva/studio/:runId/parity', protect(handleParityCheck));
 }
-

@@ -5,6 +5,7 @@ import { CanvaDesignPlanner } from '../services/canva-design-planner.js';
 import { withRlsContext } from '@hawa/db';
 import { TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
 import { log } from '../logging.js';
+import { rejectUnownedLifecycleDesignWrite } from './lifecycle-design-proof.js';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
   const service = ctx.db ? new CanvaConnectService(ctx.db,options) : null;
@@ -18,6 +19,8 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
     for (const name of ['taskId','operationId','artifactId']) {
       const value=c.req.param(name); if (value && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return ctx.problem(c,422,'Invalid Identifier','Use a valid task or operation identifier');
     }
+    const lifecycleRefusal = await rejectUnownedLifecycleDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
     // The role travels with the actor: the service lets an art director or administrator act on
     // another actor's import or source for the task, and the role never reached it (2026-09-24).
     try { return await fn(c,{tenantId:auth.tenantId,actorId:auth.userId,role:auth.role},service); }

@@ -31,7 +31,9 @@ export async function runOwnedDesign(
   if (!validDesignRun(input, key)) {
     throw new restate.TerminalError('DESIGN_RUN_REFUSED: invalid request, task or workflow identity', { errorCode: 409 });
   }
-  return runCanvaDraft(input, ctx, fetcher, undefined, { requestId: input.lifecycle.requestId, report });
+  return runCanvaDraft(input, ctx, fetcher, undefined, {
+    requestId: input.lifecycle.requestId, runId: input.lifecycle.runId, report,
+  });
 }
 
 function durableContext(ctx: restate.WorkflowContext, taskId: string): WorkflowDurableContext {
