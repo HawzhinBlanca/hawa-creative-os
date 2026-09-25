@@ -1,6 +1,6 @@
 # R20 — Model egress and execution-truth slice
 
-**Date:** 2026-09-25. **Status:** in progress. **Source:** `3364a21` on `codex/research-grade-design-system`. **Requirements exercised:** FR-056, FR-065, FR-066, FR-067, NFR-007. Linked contracts: `docs/07_MODEL_REGISTRY_AND_EVALUATION.md`, `docs/14_SECURITY_THREAT_MODEL.md`, `MASTER_SPEC.md`.
+**Date:** 2026-09-25. **Status:** in progress. **Source:** `3364a21`; evidence `b95914f`; source-candidate seal `2bdc493` on `codex/research-grade-design-system`. **Requirements exercised:** FR-056, FR-065, FR-066, FR-067, NFR-007. Linked contracts: `docs/07_MODEL_REGISTRY_AND_EVALUATION.md`, `docs/14_SECURITY_THREAT_MODEL.md`, `MASTER_SPEC.md`.
 
 ## Failure and change
 
@@ -14,7 +14,7 @@ The repository egress linter scans `apps/*/src` and `packages/*/src`, detects li
 
 - Initial focused negative run: **3 failed / 1 passed**; it showed the fabricated cloud result, empty allowlist escape and fabricated local model calls. The full suite then found and rejected a test-only production branch; that branch was removed.
 - Focused controls passed **4 files / 24 tests**, including the no-test-backdoor control. The full suite passed **408 files / 3,073 tests** with **4 files / 48 tests skipped**. After that full run, the commit security hook required only a fake-key construction change in a test; the two affected gateway test files were rerun and passed **17 tests**. No production code changed after the full run.
-- Application and script TypeScript checks passed. Egress lint passed with **9 named existing exceptions**. Blueprint validation passed **739 checks / 0 warnings / 0 failures** after manifest refresh. The commit security scan passed.
+- Application and script TypeScript checks passed. Egress lint passed with **9 named existing exceptions**. Blueprint validation passed **741 checks / 0 warnings / 0 failures** on the evidence tree after manifest refresh. The commit security scan passed. The clean source-candidate release manifest generated from `b95914f` was committed in `2bdc493` and verified on the clean tree; its components remain labeled `unbuilt`.
 - Network-negative tests spy on `fetch` for policy-governed text, image metadata and audio metadata. They show zero external requests through `ResilientModelGateway`; they are **not** a seeded end-to-end task with real photo and voice ingestion.
 
 ## Admission limits and next proof

@@ -1,6 +1,6 @@
 # Research-grade upgrade: current-candidate reality check
 
-**Date:** 2026-09-25. **Branch:** `codex/research-grade-design-system`. **Latest source candidate:** `3364a21` (R20 execution-truth slice; evidence in `R20_EVIDENCE.md`). **Verdict:** engineering work is progressing; **Hawdesign is not qualified as 10/10**. The R16 source `4add30c` remains a sealed, passing checkpoint.
+**Date:** 2026-09-25. **Branch:** `codex/research-grade-design-system`. **Latest source candidate:** `3364a21` (R20 execution-truth slice; evidence `b95914f`, seal `2bdc493`). **Verdict:** engineering work is progressing; **Hawdesign is not qualified as 10/10**. The R16 source `4add30c` remains a sealed, passing checkpoint.
 
 ## What has been demonstrated
 
