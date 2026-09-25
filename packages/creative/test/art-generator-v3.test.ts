@@ -33,9 +33,36 @@ describe('P04 — Art Layer Conditioned on Layout (gpt-image-2.5-sunburst & Calm
     const prompt = deriveConditionedArtPrompt(layoutWithArt);
     expect(prompt).toContain('1:1 square');
     expect(prompt).toContain('#0C2340');
-    expect(prompt).toContain('calmRegion' in layoutWithArt.art! ? 'calm, dark' : '');
+    expect(prompt).toContain('calm with low visual detail');
     expect(prompt).toContain('No text of any kind');
     expect(prompt).toContain('no people, no faces');
+  });
+
+  it('uses each client layout’s own art direction and colors in prompt and procedural fallback', async () => {
+    const forColor = (background: string): StudioLayoutV2 => ({
+      ...layoutWithArt,
+      background: { color: background },
+      shapes: [],
+      text: layoutWithArt.text.map((block) => ({ ...block, color: '#FFFFFF', accentColor: undefined })),
+      art: { ...layoutWithArt.art!, prompt: 'Soft organic botanical shapes', motif: 'thin-rules', scrim: { color: background, opacityStart: 0.7, opacityEnd: 0.9, direction: 'vertical' } },
+    });
+    const green = forColor('#123828');
+    const purple = forColor('#30204A');
+    const prompt = deriveConditionedArtPrompt(green);
+    expect(prompt).toContain('Soft organic botanical shapes');
+    expect(prompt).toContain('#123828');
+    expect(prompt).not.toMatch(/academic|institutional|deep dark navy|#0A1628|#C5A059/i);
+
+    const fetchFn = vi.fn(async () => ({ ok: false, status: 503, text: async () => 'unavailable' })) as unknown as typeof fetch;
+    const clientLogo = new PNG({ width: 8, height: 8 });
+    clientLogo.data.fill(255);
+    const logoDataUri = `data:image/png;base64,${PNG.sync.write(clientLogo).toString('base64')}`;
+    const options = { openaiApiKey: 'test-key', fetchFn, renderOptions: { logoDataUri } };
+    const greenResult = await generateConditionedArtLayer(green, options);
+    const purpleResult = await generateConditionedArtLayer(purple, options);
+    expect(greenResult.status).toBe('degraded_procedural_motif');
+    expect(purpleResult.status).toBe('degraded_procedural_motif');
+    expect(greenResult.artBuffer).not.toEqual(purpleResult.artBuffer);
   });
 
   it('measures luminance and variance accurately over synthetic calm and bright outer regions', () => {

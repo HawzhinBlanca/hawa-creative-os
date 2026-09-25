@@ -181,9 +181,20 @@ export function canvasBoxToArtPixels(box: Box, artBox: Box, art: { width: number
   };
 }
 
-/**
- * Derives an art generation prompt conditioned on the layout architecture.
- */
+/** Colors already admitted into this layout; no hidden house-brand palette. */
+export function artPaletteForLayout(layout: StudioLayoutV2): Hex[] {
+  const colors = [
+    layout.background.color,
+    layout.art?.scrim?.color,
+    ...layout.shapes.flatMap((shape) => [shape.color, shape.strokeColor]),
+    ...layout.text.flatMap((block) => [block.color, block.accentColor]),
+  ];
+  const palette = [...new Set(colors.filter((color): color is Hex => typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)))].slice(0, 8);
+  if (!palette.length) throw new Error('ART_PALETTE_REQUIRED: layout contains no valid client colors');
+  return palette;
+}
+
+/** Derives art instructions from this layout without imposing one client's visual style. */
 export function deriveConditionedArtPrompt(layout: StudioLayoutV2): string {
   if (!layout.art) {
     throw new Error('Cannot derive art prompt for layout without art layer configuration');
@@ -193,20 +204,15 @@ export function deriveConditionedArtPrompt(layout: StudioLayoutV2): string {
   // The art fills its own box, not the canvas, so the frame is described from the box.
   const { aspectDesc } = artFrameForBox(layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height });
 
-  // Gather unique colors from background, panels, and rules
-  const colorSet = new Set<string>([layout.background.color]);
-  for (const s of layout.shapes) {
-    if (s.color) colorSet.add(s.color);
-  }
-  const paletteStr = Array.from(colorSet).join(', ');
+  const paletteStr = artPaletteForLayout(layout).join(', ');
 
-  const calmDesc = `Keep the central typography zone (normalized x: ${Number((calm.x / layout.width).toFixed(2))}, y: ${Number((calm.y / layout.height).toFixed(2))}, w: ${Number((calm.width / layout.width).toFixed(2))}, h: ${Number((calm.height / layout.height).toFixed(2))}) exceptionally calm, dark, and low-contrast with minimal texture, so overlaid text has flawless legibility.`;
+  const calmDesc = `Keep the reserved typography zone (normalized x: ${Number((calm.x / layout.width).toFixed(2))}, y: ${Number((calm.y / layout.height).toFixed(2))}, w: ${Number((calm.width / layout.width).toFixed(2))}, h: ${Number((calm.height / layout.height).toFixed(2))}) calm with low visual detail, so overlaid text remains legible.`;
 
-  const concept = layout.art.prompt || 'Abstract institutional architectural lines and subtle luxury gradient textures';
+  const concept = layout.art.prompt || 'Abstract visual texture supporting the composition';
 
   const p7Suffix = `Strict Negative Constraints: No text of any kind, no typography, no letters, no words, no numbers, no logos, no emblems, no seals, no flags, no coats of arms, no people, no faces, no hands, no watermarks, no borders.`;
 
-  return `${concept}. Clean modern academic aesthetic in ${aspectDesc} format. Palette restricted to ${paletteStr} with deep dark navy tones and subtle accents. ${calmDesc} Confine any visual texture and subtle architectural geometry to the outer perimeter and corners. ${p7Suffix}`;
+  return `${concept}. Compose text-free background art in ${aspectDesc} format. Use only these layout colors: ${paletteStr}. ${calmDesc} Place the most active detail outside that reserved zone. ${p7Suffix}`;
 }
 
 /**
@@ -296,7 +302,7 @@ export async function generateConditionedArtLayer(
       // not the whole canvas.
       width: Math.round(box.width),
       height: Math.round(box.height),
-      palette: ['#0A1628', '#C5A059', '#1E3A5F'],
+      palette: artPaletteForLayout(layout),
       // Drawn at full strength, the same rule the production art stage follows: the layer's
       // opacity is applied once, by the render and by the deck. Baking it in here as well made the
       // degraded motif twice as faint as the layout asked for, in the preview and in Canva alike.
