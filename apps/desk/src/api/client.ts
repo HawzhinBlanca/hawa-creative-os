@@ -101,6 +101,7 @@ export interface RequesterSendStep {
   outcome: 'not_attempted' | 'attempted' | 'sent' | 'uncertain' | 'failed' | 'released';
   attemptCount: number;
   lastMarkAt: string | null;
+  messageId: string | null;
 }
 
 export interface RequesterSendEvidence {

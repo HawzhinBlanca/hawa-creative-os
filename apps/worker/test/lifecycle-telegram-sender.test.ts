@@ -76,7 +76,21 @@ describe('TelegramSender: one attempt, classified', () => {
     expect(await sendAttempt(depsWith(bridge), m)).toEqual({ outcome: 'sent', messageId: '41' });
     expect(calls).toHaveLength(1);
     expect(await markOf(m.key)).toBe('sent');
+    expect(await asAutomation((trx) => readSendMark(trx, tenantId, markIdOf(m.key), SEND_STEP)))
+      .toMatchObject({ outcome: 'sent', messageId: '41' });
   });
+
+  it.each([undefined, '0', 'not-a-message-id'])(
+    'a success response without a valid message id (%s) remains uncertain', async (messageId) => {
+      const { bridge, calls } = scriptedBridge([{ success: true, ...(messageId ? { messageId } : {}) }]);
+      const m = text();
+      expect(await sendAttempt(depsWith(bridge), m)).toMatchObject({ outcome: 'uncertain', error: 'TELEGRAM_RECEIPT_INVALID' });
+      expect(await markOf(m.key)).toBe('uncertain');
+      expect(calls).toHaveLength(1);
+      expect((await sendAttempt(depsWith(bridge), m)).outcome).toBe('uncertain');
+      expect(calls).toHaveLength(1);
+    },
+  );
 
   it("429: marks it failed and asks Restate to try again after Telegram's retry_after", async () => {
     const { bridge } = scriptedBridge([{ success: false, error: 'TELEGRAM_DOCUMENT_REJECTED_429', retryAfterSeconds: 3 }]);
@@ -150,6 +164,14 @@ describe('TelegramSender: marks already present', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('reuses a recorded Bot API message id without another send', async () => {
+    const { bridge, calls } = scriptedBridge([{ success: true, messageId: '99' }]);
+    const m = text();
+    await asAutomation((trx) => writeSendMark(trx, tenantId, markIdOf(m.key), SEND_STEP, 'message', 'sent', '87'));
+    expect(await sendAttempt(depsWith(bridge), m)).toEqual({ outcome: 'sent', messageId: '87' });
+    expect(calls).toHaveLength(0);
+  });
+
   it.each(['attempted', 'uncertain'] as const)('%s (it may have arrived): answers uncertain and never sends it again', async (prior) => {
     const { bridge, calls } = scriptedBridge([{ success: true, messageId: '1' }]);
     const m = text();
@@ -207,6 +229,24 @@ describe('TelegramSender: marks already present', () => {
     expect(await sendAttempt({ ...depsWith(bridge), db: restarting }, m)).toEqual({ outcome: 'sent', messageId: '5' });
     expect(calls).toHaveLength(1);
     expect(await markOf(m.key)).toBe('sent');
+  });
+
+  it('does not claim delivery when the sent mark remains unwritten after retries', async () => {
+    const { bridge, calls } = scriptedBridge([{ success: true, messageId: '91' }]);
+    const m = text();
+    let transactions = 0;
+    const broken = {
+      isTransaction: false,
+      transaction() {
+        transactions++;
+        if (transactions >= 3) return { execute: async () => { throw new Error('Postgres write unavailable'); } };
+        return db.transaction();
+      },
+    } as unknown as Kysely<Database>;
+    expect(await sendAttempt({ ...depsWith(bridge), db: broken, markRetryDelaysMs: [1] }, m))
+      .toEqual({ outcome: 'uncertain', error: 'SEND_MARK_UNCONFIRMED' });
+    expect(await markOf(m.key)).toBe('attempted');
+    expect(calls).toHaveLength(1);
   });
 });
 

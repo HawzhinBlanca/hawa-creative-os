@@ -764,7 +764,11 @@ export class TelegramBridgeDaemon {
             signal: AbortSignal.timeout(15000),
           });
           const retryBody = await retryRes.json().catch(() => null) as any;
-          if (retryRes.ok && retryBody?.ok === true && Number.isSafeInteger(retryBody.result?.message_id)) {
+          if (retryRes.ok && retryBody?.ok === true) {
+            if (!Number.isSafeInteger(retryBody.result?.message_id) || retryBody.result.message_id <= 0 ||
+                String(retryBody.result?.chat?.id) !== String(chatId)) {
+              return { success: false, error: 'TELEGRAM_RECEIPT_INVALID' };
+            }
             this.recordSentMessage({chatId, text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
             return { success: true, messageId: String(retryBody.result.message_id) };
           }
@@ -1187,4 +1191,3 @@ export class TelegramBridgeDaemon {
 
 export const TelegramBridge = TelegramBridgeDaemon;
 export type TelegramBridge = TelegramBridgeDaemon;
-

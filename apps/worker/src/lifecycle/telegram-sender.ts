@@ -41,6 +41,7 @@ import {
   type SendStepKind,
   type TelegramSender as TelegramBridgeLike,
   type TelegramSendResult,
+  validTelegramMessageId,
 } from '../delivery-notification.js';
 import { log, withInvocationLogContext } from '../logging.js';
 
@@ -100,14 +101,15 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
     if (!deps.db) throw new Error('DATABASE_NOT_CONFIGURED: a critical Telegram message is fenced by send marks in Postgres');
     return withRlsContext(deps.db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, fn);
   };
-  const mark = (outcome: SendMarkOutcome) => inTenant((trx) => writeSendMark(trx, tenantId, markId, SEND_STEP, stepKind(m), outcome));
+  const mark = (outcome: SendMarkOutcome, messageId?: string) =>
+    inTenant((trx) => writeSendMark(trx, tenantId, markId, SEND_STEP, stepKind(m), outcome, messageId));
 
   if (critical) {
-    const prior = (await inTenant((trx) => readSendMark(trx, tenantId, markId, SEND_STEP)))?.outcome;
-    if (prior === 'sent') return { outcome: 'sent' };
+    const prior = await inTenant((trx) => readSendMark(trx, tenantId, markId, SEND_STEP));
+    if (prior?.outcome === 'sent') return { outcome: 'sent', ...(prior.messageId ? { messageId: prior.messageId } : {}) };
     // It may have arrived: never sent twice, whatever else happens. Only an administrator's release
     // (after looking in the chat) frees it.
-    if (prior === 'attempted' || prior === 'uncertain') return { outcome: 'uncertain', error: `PREVIOUS_ATTEMPT_UNCONFIRMED: an earlier attempt at ${m.key} may have reached the chat` };
+    if (prior?.outcome === 'attempted' || prior?.outcome === 'uncertain') return { outcome: 'uncertain', error: `PREVIOUS_ATTEMPT_UNCONFIRMED: an earlier attempt at ${m.key} may have reached the chat` };
   }
 
   const botToken = deps.botToken();
@@ -151,27 +153,29 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
   // journaled by Restate once this returns. It is asked for a little while (a Postgres restart takes
   // seconds), because a message left at 'attempted' answers uncertain to anyone who asks for it later
   // (a Delivery run that retries the archive), which would alert the office about a file that arrived.
-  const record = async (outcome: SendMarkOutcome) => {
-    if (!critical) return;
+  const record = async (outcome: SendMarkOutcome, messageId?: string): Promise<boolean> => {
+    if (!critical) return true;
     const delays = deps.markRetryDelaysMs ?? [500, 1000, 2000, 4000, 8000];
     for (let attempt = 0; ; attempt++) {
       try {
-        await mark(outcome);
-        return;
+        await mark(outcome, messageId);
+        return true;
       } catch (err) {
         if (attempt >= delays.length) {
           log.warn(`[TelegramSender] Could not record ${m.key} as ${outcome}; it stays 'attempted' on record:`, err instanceof Error ? err.message : err);
-          return;
+          return false;
         }
         await new Promise((r) => setTimeout(r, delays[attempt]));
       }
     }
   };
-  if (res.success) {
-    await record('sent');
-    return { outcome: 'sent', ...(res.messageId ? { messageId: res.messageId } : {}) };
+  if (res.success && validTelegramMessageId(res.messageId)) {
+    if (!await record('sent', res.messageId)) {
+      return { outcome: 'uncertain', error: 'SEND_MARK_UNCONFIRMED' };
+    }
+    return { outcome: 'sent', messageId: res.messageId };
   }
-  const error = res.error || 'TELEGRAM_SEND_FAILED';
+  const error = res.success ? 'TELEGRAM_RECEIPT_INVALID' : res.error || 'TELEGRAM_SEND_FAILED';
   if (UNCERTAIN.test(error)) {
     await record('uncertain');
     return { outcome: 'uncertain', error };

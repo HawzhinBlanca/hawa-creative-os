@@ -27,9 +27,12 @@ export function RequesterSendEvidencePanel({ taskId }: { taskId: string }) {
       <ul>{query.data.files.map((file) => <li key={file.artifactId}>
         <strong>{file.filename}</strong>: {OUTCOME_WORDS[file.outcome]}.
         {' '}Recorded attempts: {file.attemptCount}.
+        {file.messageId && <> Bot API message ID: <code>{file.messageId}</code>.</>}
         {file.lastMarkAt && <> Last mark: <time dateTime={file.lastMarkAt}>{file.lastMarkAt}</time>.</>}
       </li>)}</ul>
-      <p>Delivery notice: {OUTCOME_WORDS[query.data.notice.outcome]}.</p>
+      <p>Delivery notice: {OUTCOME_WORDS[query.data.notice.outcome]}.
+        {query.data.notice.messageId && <> Bot API message ID: <code>{query.data.notice.messageId}</code>.</>}
+      </p>
       <p>Telegram requester receipt: unavailable.</p>
     </>}
     <button className="btn" type="button" onClick={() => void query.refetch()} disabled={query.isFetching}>

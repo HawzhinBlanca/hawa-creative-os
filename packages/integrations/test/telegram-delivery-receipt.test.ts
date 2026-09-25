@@ -26,6 +26,21 @@ describe('Telegram outbound receipts',()=>{
     expect(await bridge.dispatchOutboundMessage(123,{text:'Status'})).toEqual({success:false,error:'TELEGRAM_DELIVERY_UNCERTAIN'});
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it.each([
+    { message_id: 42, chat: { id: 999 } },
+    { message_id: 0, chat: { id: 123 } },
+    { message_id: 42 },
+  ])('rejects a malformed plain-text fallback receipt after a parse failure', async (result) => {
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ ok: false, error_code: 400,
+        description: "Bad Request: can't parse entities" }, { status: 400 }))
+      .mockResolvedValueOnce(Response.json({ ok: true, result }));
+    const bridge = new TelegramBridgeDaemon({ botToken: 'test' });
+    expect(await bridge.dispatchOutboundMessage(123, { text: '<b>Status</b>', parse_mode: 'HTML' }))
+      .toEqual({ success: false, error: 'TELEGRAM_RECEIPT_INVALID' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(bridge.getSentMessages()).toHaveLength(0);
+  });
   it('distinguishes pre-connection network errors from ambiguous delivery outcomes', async () => {
     const connError = new TypeError('fetch failed');
     (connError as any).cause = { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 149.154.167.220:443' };

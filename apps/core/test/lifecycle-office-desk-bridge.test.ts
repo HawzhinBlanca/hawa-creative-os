@@ -234,15 +234,15 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(await projectLifecycleDeliveryStart(db, { ...store, read: async () => { throw new Error('store away'); } }, start)).toEqual(claim);
     await expect(projectLifecycleDeliveryStart(db, store, { ...start, reason: 'changed' }))
       .rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
-    const outcome = { outcome: 'uncertain' as const, uncertain: ['approved file'],
-      archived: true, sheetsConfirmed: true, filesSent: 0 };
+    const outcome = { outcome: 'uncertain' as const, uncertain: ['delivery notice'],
+      archived: true, sheetsConfirmed: true, filesSent: 1 };
     const finish = { requestId, tenantId, taskId, approvalId: approval.approvalId,
       deliveryId: claim.delivery.deliveryId, run: 1, outcome, expectedRev: 4, rev: 5,
       key: `${requestId}:5:deliveryFinished:${claim.delivery.deliveryId}` };
     expect(await projectLifecycleDeliveryFinish(db, finish)).toMatchObject({
       stage: 'delivering', taskState: 'publishing', rev: 5 });
     expect(await projectLifecycleDeliveryFinish(db, finish)).toMatchObject({ stage: 'delivering' });
-    await expect(projectLifecycleDeliveryFinish(db, { ...finish, outcome: { ...outcome, filesSent: 1 } }))
+    await expect(projectLifecycleDeliveryFinish(db, { ...finish, outcome: { ...outcome, filesSent: 0 } }))
       .rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
     const nextAction = randomUUID();
     await expect(projectLifecycleDeliveryStart(db, store, { ...start, actionId: nextAction,
@@ -257,13 +257,22 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(rows.request).toMatchObject({ stage: 'delivering', rev: '5' });
     expect(rows.task?.state).toBe('publishing');
     expect(rows.publication).toMatchObject({ error_class: 'REQUESTER_SEND_UNCONFIRMED', executor_finished_run: 1 });
-    const markKey = `lc:${deliveryBaseId(taskId, approval.approvalId)}:file:${artifactId}:send`;
+    const baseKey = deliveryBaseId(taskId, approval.approvalId);
+    const markKey = `lc:${baseKey}:file:${artifactId}:send`;
+    const noticeMarkKey = `lc:${baseKey}:notice:send`;
     await withRlsContext(db, scope, async (trx) => {
-      for (const outcome of ['attempted', 'uncertain']) {
+      for (const outcome of ['attempted', 'sent']) {
         await sql`INSERT INTO hawa.inbox_events
           (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
           VALUES (${tenantId}::uuid, 'telegram_delivery', ${markKey}, ${`telegram_document_${outcome}`},
-            ${JSON.stringify({ outcome })}::jsonb, ${`${markKey}:${outcome}`}, true, clock_timestamp())`.execute(trx);
+            ${JSON.stringify({ outcome, ...(outcome === 'sent' ? { messageId: '87' } : {}) })}::jsonb,
+            ${`${markKey}:${outcome}`}, true, clock_timestamp())`.execute(trx);
+      }
+      for (const outcome of ['attempted', 'uncertain']) {
+        await sql`INSERT INTO hawa.inbox_events
+          (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
+          VALUES (${tenantId}::uuid, 'telegram_delivery', ${noticeMarkKey}, ${`telegram_message_${outcome}`},
+            ${JSON.stringify({ outcome })}::jsonb, ${`${noticeMarkKey}:${outcome}`}, true, clock_timestamp())`.execute(trx);
       }
     });
     const desk = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
@@ -284,8 +293,8 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(evidence.status).toBe(200);
     expect(await evidence.json()).toMatchObject({ taskId, requestId, requestRev: 5,
       publicationId: expect.any(String), providerReceipt: 'not_available',
-      files: [expect.objectContaining({ artifactId, outcome: 'uncertain', attemptCount: 1 })],
-      notice: expect.objectContaining({ outcome: 'not_attempted' }) });
+      files: [expect.objectContaining({ artifactId, outcome: 'sent', attemptCount: 1, messageId: '87' })],
+      notice: expect.objectContaining({ outcome: 'uncertain', attemptCount: 1, messageId: null }) });
     const viewer = createApp({ db, testAuth: { principal: { role: 'viewer', userId } } });
     expect((await viewer.request(`/v1/tasks/${taskId}/requester-send-evidence`)).status).toBe(403);
     expect((await desk.request(`/v1/tasks/${randomUUID()}/requester-send-evidence`)).status).toBe(404);
