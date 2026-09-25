@@ -1,6 +1,6 @@
 # R20 — Model egress and execution-truth slices
 
-**Date:** 2026-09-25. **Status:** in progress. **Sources:** gateway/guard `3364a21` (evidence `b95914f`, seal `2bdc493`); voice boundary `4f7dd8e` on `codex/research-grade-design-system`. **Requirements exercised:** FR-056, FR-065, FR-066, FR-067, NFR-007. Linked contracts: `docs/07_MODEL_REGISTRY_AND_EVALUATION.md`, `docs/14_SECURITY_THREAT_MODEL.md`, `MASTER_SPEC.md`.
+**Date:** 2026-09-25. **Status:** in progress. **Sources:** gateway/guard `3364a21` (evidence `b95914f`, seal `2bdc493`); voice boundary `4f7dd8e` (evidence `5817db6`, seal `2577153`) on `codex/research-grade-design-system`. **Requirements exercised:** FR-056, FR-065, FR-066, FR-067, NFR-007. Linked contracts: `docs/07_MODEL_REGISTRY_AND_EVALUATION.md`, `docs/14_SECURITY_THREAT_MODEL.md`, `MASTER_SPEC.md`.
 
 ## Failure and change
 
@@ -24,5 +24,7 @@ The `KurdishVoiceTranscriber` sent audio to OpenAI whenever a key was present, b
 The standalone `/assets/transcribe-brief` route has no locked client scope, so uploaded audio returns 412 before the adapter. Telegram intake with actual audio and no verified policy records the update as held, asks the sender for the full brief as text and creates no partial task from a caption. A caption on a message whose audio was not available can still be processed as text, but is no longer reported as a voice transcript. This deliberately reduces automatic voice capability until scope resolution is wired in; it prevents an unknown client's spoken instructions from being silently omitted or sent externally.
 
 One Core route test initially imported a stale built integrations package, even though the adapter's direct source test passed. After rebuilding `@hawa/integrations`, the route-level red test reproduced the 200 response and the new 412 control passed. The first rebuilt full run found two historical tests that relied on fabricated cloud output: failover and a claimed 95% uncredentialed tournament. Failover now uses an explicit fake Anthropic HTTP response; the uncredentialed tournament records failure and remains admission-ineligible. The final rebuilt-package full suite passed **408 files / 3,076 tests**, with **4 files / 48 tests skipped**. `pnpm typecheck` passed source, scripts and included test types; egress lint passed with 9 existing exceptions; pack validation passed **741 / 0 / 0**. Focused voice/Core controls passed **3 files / 17 tests**.
+
+The clean source-candidate manifest generated from evidence commit `5817db6` was sealed in `2577153` and verified. It identifies source and unbuilt components; it is not a deployed-image receipt.
 
 R20 remains **in progress**. No production caller yet supplies a trusted database-resolved voice decision, so actual voice notes require a text resend. The model gateway, planner, image, evaluation and voice paths still lack one verified scope/data-class/budget decision; the nine direct-call exceptions and unknown paid-call accounting remain. A seeded local-only text/photo/voice task and live network-deny drill have not run. No production flag or deployment changed.
