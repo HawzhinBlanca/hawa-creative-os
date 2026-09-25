@@ -140,7 +140,7 @@ describe('the Core client ChatInbox uses', () => {
     expect(calls[0].url).toBe('http://core:3001/v1/internal/telegram/intake');
     expect(calls[0].init.headers.Authorization).toBe(`Bearer ${token}`);
     expect(calls[0].init.headers['x-request-id']).toBe('tg-4242');
-    expect(JSON.parse(calls[0].init.body)).toEqual({ v: 1, update, mode: 'legacy' });
+    expect(JSON.parse(calls[0].init.body)).toEqual({ v: 1, update, mode: 'legacy', routesDecisions: true });
   });
 
   it('classifies intake\'s answers: final, retryable, and waits', async () => {
@@ -256,6 +256,27 @@ describe('ChatInbox routes intake\'s decisions (slice 2.3)', () => {
     expect(ctx.routed).toEqual([{ to: 'TelegramSender/555/send', key: 'clarify:555:4242', body: message }]);
   });
 
+  it('every answer other than clarify clears the waiting question (PHASE2_DESIGN.md 2.2 step 3), whatever state intake sent back', async () => {
+    const now = 1_790_000_000_000;
+    const waiting = { rawText: 'make it gold', askedAt: now - 1000, updateId: 1 };
+    const cases = [
+      { kind: 'requester', requestId: 'r-1', taskId: 't-1', action: 'ok', callbackQueryId: 'cb-9', actorId: '9' },
+      { kind: 'answer', requestId: 'r-1', questionId: 'q:t-1', answer: { option: 1 }, callbackQueryId: 'cb-9' },
+      { kind: 'handled', messages: [] },
+      null,
+    ];
+    for (const decision of cases) {
+      const ctx = new RoutingContext();
+      ctx.state.set('chat', { v: 1, pendingClarification: waiting, albumsAcked: { a: now - 1000 } });
+      // An intake that left the question in the state it sent back (an older Core, a command).
+      const answer = decision
+        ? decided(decision, { pendingClarification: waiting, albumsAcked: { a: now - 1000 } })
+        : async () => ({ kind: 'done', intakeStatus: 200, chat: { pendingClarification: waiting, albumsAcked: { a: now - 1000 } } });
+      await handleUpdate(ctx, input, core([answer]), flagged);
+      expect(ctx.state.get('chat'), String(decision?.kind ?? 'no decision')).toEqual({ v: 1, albumsAcked: { a: now - 1000 } });
+    }
+  });
+
   it('a worker killed after intake decided routes the same sends with the same keys (Restate keeps the first)', async () => {
     const ctx = new RoutingContext();
     const c = core([decided({ kind: 'change', requestId: 'r-1', replyToTaskId: 't-1', directive: 'bigger' })]);
@@ -274,6 +295,9 @@ describe('ChatInbox routes intake\'s decisions (slice 2.3)', () => {
       return Response.json({ v: 1, kind: 'decision', intakeStatus: 200, decision, chat: { albumsAcked: { a: 1 } } });
     }) as any });
     expect(await c.intake(update, 'lifecycle', { albumsAcked: { a: 1 } })).toEqual({ kind: 'done', intakeStatus: 200, decision, chat: { albumsAcked: { a: 1 } } });
-    expect(calls[0]).toEqual({ v: 1, update, mode: 'lifecycle', chat: { albumsAcked: { a: 1 } } });
+    // It says it routes decisions: Core routes them itself only for a ChatInbox built before 2.3C.
+    expect(calls[0]).toEqual({ v: 1, update, mode: 'lifecycle', chat: { albumsAcked: { a: 1 } }, routesDecisions: true });
+    await c.intake(update, 'legacy');
+    expect(calls[1]).toEqual({ v: 1, update, mode: 'legacy', routesDecisions: true });
   });
 });

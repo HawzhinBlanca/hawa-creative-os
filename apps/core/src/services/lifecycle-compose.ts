@@ -268,6 +268,10 @@ export async function recordOutcomeIn(run: ComposeRun, task: ComposeTask, op: Ex
           v: 1, key: `${run.requestId}:${run.rev}:outcome:photo`, chatId: chat, kind: 'photo', class: 'critical', tenantId: run.tenantId, taskId,
           exportRef: { tenantId: run.tenantId, taskId, artifactId: png.id, sha256: png.sha256 },
           caption: `🎨 Canva draft · Task ID: ${taskId}\nReply to this image with any change you want.`,
+          // A TelegramSender built before 'photo' (reached only after a worker rollback) sends every kind
+          // but a document as `text`: with the caption here it sends the words, which carry the task id
+          // a reply is matched by, instead of an empty message Telegram refuses.
+          text: `🎨 Canva draft · Task ID: ${taskId}\nReply to this image with any change you want.`,
         });
       }
     }

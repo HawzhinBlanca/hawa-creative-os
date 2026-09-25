@@ -123,6 +123,9 @@ describe.skipIf(!url)('the lifecycle projection composes what the legacy path se
     const photo = messagesOf(answer).find((m) => m.kind === 'photo');
     expect(photo).toMatchObject({ class: 'critical', exportRef: { tenantId: TENANT, taskId, artifactId: ids.id } });
     expect(photo!.caption).toContain(`Task ID: ${taskId}`);
+    // A TelegramSender built before 'photo' (a worker rolled back) sends any kind but a document as
+    // `text`: it carries the caption, so the requester still gets the words they reply to.
+    expect(photo!.text).toBe(photo!.caption);
     expect(JSON.stringify(photo)).not.toContain(png.toString('base64'));
   });
 

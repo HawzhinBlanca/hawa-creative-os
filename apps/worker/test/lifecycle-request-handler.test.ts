@@ -113,6 +113,23 @@ describe('RequestLifecycle: a request from its brief to a draft, reminders and e
   });
 });
 
+describe('RequestLifecycle: a requester\'s event that changes nothing is answered (review of 2.3C)', () => {
+  it('a second answer\'s button is answered and a stale typed answer is told why; nothing is projected for either', async () => {
+    const w = new LifecycleWorld();
+    const requestId = await questionAnswered(w);
+    const projected = w.core.applied.length;
+    await w.invoke('answer', requestId, { v: 1, eventId: `tg:${CHAT}:700051`, questionId: `q-${requestId}-t0`, answer: { option: 1 }, callbackQueryId: 'cbq-2', actorId: 'telegram:42' });
+    await w.invoke('answer', requestId, { v: 1, eventId: `tg:${CHAT}:700052`, questionId: `q-${requestId}-t0`, answer: { text: 'the red one' }, actorId: 'telegram:42' });
+    await w.deliver();
+    expect(w.core.applied).toHaveLength(projected);
+    const told = w.telegram.filter((m) => m.key === 'cb:cbq-2' || m.key === `ignored:tg:${CHAT}:700052`);
+    expect(told.map((m) => [m.kind, m.class, m.chatId])).toEqual([['callback_answer', 'courtesy', CHAT], ['text', 'courtesy', CHAT]]);
+    expect(told[0].text).toMatch(/already answered/i);
+    expect(told[1].text).toMatch(/not waiting for an answer/i);
+    expect(w.failures).toEqual([]);
+  });
+});
+
 describe('RequestLifecycle: crashed after any journal entry and replayed, the outcome is the same', () => {
   for (const [name, scenario] of [['draft, reminders, expiry', draftToExpiry], ['question answered days later', questionAnswered]] as const) {
     it(`${name}: every invocation, every entry, and inside every projection step`, async () => {

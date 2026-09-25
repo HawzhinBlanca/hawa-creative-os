@@ -46,6 +46,16 @@ export async function restartWorkerWith(colour: Service, env: { lifecycleChats?:
   compose(['up', '-d', '--no-build', '--wait', '--wait-timeout', '180', colour], { timeoutMs: 5 * 60_000 });
 }
 
+/**
+ * Moves the Telegram poller (PHASE2_DESIGN.md 2.1, its rollback): recreates Core and the worker
+ * colour with HAWA_TELEGRAM_POLLER=`poller`. Both pollers share the Postgres offset row, so the new
+ * one goes on where the other stopped.
+ */
+export async function switchPoller(poller: 'core' | 'worker', colour: Service): Promise<void> {
+  process.env.CHAOS_TELEGRAM_POLLER = poller;
+  compose(['up', '-d', '--no-build', '--wait', '--wait-timeout', '180', 'core', colour], { timeoutMs: 5 * 60_000 });
+}
+
 export interface LifecycleRequest {
   requestId: string;
   updateId: number;

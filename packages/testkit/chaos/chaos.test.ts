@@ -19,7 +19,7 @@ import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, query, res
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema, KAAE_CLIENT_ID } from './driver/provision.js';
 import {
   checkLifecycle, lifecycleBrief, lifecycleChat, lifecycleChatList, lifecycleView, liveColour, messagesWith, replyToDraft, requestsOfChat,
-  restartWorkerWith, roundTasks, tap, waitDraftSent, type LifecycleRequest,
+  restartWorkerWith, roundTasks, switchPoller, tap, waitDraftSent, type LifecycleRequest,
 } from './driver/lifecycle.js';
 import {
   OFFICE_CHAT, approve, briefText, briefToDraft, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
@@ -681,6 +681,37 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         ...await checkLifecycle(chat, { stage: 'in_review', rounds: 2, drafts: 2, ledgerSince, updateIds: [request.updateId, changeUpdate, legacyUpdate] }),
         { name: 'the new brief after un-flagging is a legacy task (no request) run by TaskWorkflow', ok: legacy.request_id === null && (await restateQuery(`SELECT status FROM sys_invocation WHERE target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${legacy.id}'`)).some((r: any) => r.status === 'completed'), detail: JSON.stringify(legacy) },
         { name: 'the unflagged chat alongside took the legacy path (no request row)', ok: Boolean(otherTask) && (await requestsOfChat(other)).length === 0 && (await query(sql`SELECT 1 FROM hawa.tasks WHERE id = ${otherTask?.id ?? '00000000-0000-0000-0000-000000000000'}::uuid AND request_id IS NULL`)).length === 1, detail: `other chat task ${otherTask?.id} (update ${otherUpdate})` },
+      ],
+    };
+  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  // Review of 2.3C: the 2.1 rollback (HAWA_TELEGRAM_POLLER=core) once lifecycle requests exist. Core's
+  // own poller reads the requester's button on a lifecycle draft and routes it to the request itself,
+  // through Restate's ingress with the keys ChatInbox uses; it used to be refused 409 (final for the
+  // poller) and the requester heard nothing. The poller goes back to the worker afterwards.
+  scenario('L3.R6', 'rolled back to Core\'s poller: a button on a lifecycle draft is routed by Core through Restate\'s ingress', async (chat, events) => {
+    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+    const request = await lifecycleBrief(chat, `L3R6-${chat}`, events);
+    const colour = await liveColour();
+    await switchPoller('core', colour);
+    events.push(`rolled back: Core polls Telegram (Core and ${colour} recreated)`);
+    let okUpdate = 0;
+    try {
+      okUpdate = await tap(chat, `rq:ok:${request.taskId}`);
+      events.push(`tapped rq:ok (update ${okUpdate}), read by Core's poller`);
+      await waitUntil('the requester\'s sign-off answered', async () => (await messagesWith(chat, 'you approved this design')).length > 0, 180_000, 1000);
+    } finally {
+      await switchPoller('worker', colour);
+      events.push('the worker polls again');
+    }
+    const r = { request, ledgerSince, okUpdate };
+    return {
+      delivered: false, skipRequestChecks: true,
+      after: async () => [
+        // The button never reached a ChatInbox: only the brief's update is checked there.
+        ...(await lifecycleOkChecks(chat, r, { updateIds: [request.updateId] })()),
+        { name: 'the button reached RequestLifecycle once, under the key ChatInbox would use', ok: (await restateQuery(`SELECT id FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${request.requestId}' AND target_handler_name = 'requesterDecision' AND idempotency_key = 'tg:${chat}:${okUpdate}'`)).length === 1, detail: `tg:${chat}:${okUpdate}` },
+        { name: 'no ChatInbox invocation for the button (Core polled it)', ok: (await restateQuery(`SELECT id FROM sys_invocation WHERE target_service_name = 'ChatInbox' AND idempotency_key = 'tg-${okUpdate}'`)).length === 0, detail: `tg-${okUpdate}` },
       ],
     };
   }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });

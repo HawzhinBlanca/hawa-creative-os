@@ -252,6 +252,7 @@ Quiescence now leaves out `scheduled` invocations (a reminder or expiry days ahe
 | L3.R1.S5K13 | Telegram 429 (`retry_after` 3) on the draft message |
 | L3.R1.S6K5 | worker killed while Core is held at `core.intake.after-decision` for `rq:ok` |
 | L3.R5 | a flagged and an unflagged chat send at once (each its own path); the flagged chat is then taken off the workers' list (worker restarted): a reply to its lifecycle draft is still routed to its request, and its next brief is a legacy task run by `TaskWorkflow` |
+| L3.R6 | rollback to Core's poller (`HAWA_TELEGRAM_POLLER=core`, Core and the worker recreated) with a lifecycle draft in the chat: `rq:ok` is read by Core's poller and routed by Core itself through Restate's ingress under the key ChatInbox uses (`tg:<chat>:<update>`); the sign-off reaches the requester once; the poller goes back to the worker |
 | L3.R2.D1 | silent requester, reminder scale 0.0001 (worker restarted with it): Restate killed after the day-1 reminder was scheduled, the worker after it fired, Core before day 5; one reminder per day, then `expired` |
 | L3.R3.K1 | change, question, answer (`rq:a1`); worker killed at `worker.rl.after-project` for the answer |
 | L3.R3.K2 | the same; Core killed at `core.project.after-commit` for the answer round's outcome |
@@ -267,6 +268,11 @@ answered after 612 ms while chat A's 30 s download ran). Two earlier runs found 
 the fake planner did not answer a change round's prompt (every change and answer round ended
 `failed_operator`), and the "each message once" check took two rounds' draft pictures (the fake Canva's
 same bytes, different captions) for one message sent twice.
+
+Run after the review fixes of part C (2026-09-25, `--poller worker --only` the 19 L3.R* scenarios, 713 s
+after the build, peak 729 MiB; no `unmatched` model call): every invariant held. L3.R1.0 14 s; S1K1 14 s;
+S2K4 19 s; S2K5 18 s; S3K6 15 s; S3K7b 15 s; S4K8 17 s; S5K7b 18 s; S5K11 19 s; S5K12 18 s; S5K13 15 s;
+S6K5 20 s; L3.R5 35 s; L3.R6 19 s; L3.R2.D1 141 s; L3.R3.K1 29 s; L3.R3.K2 29 s; L3.R3.D 37 s; L3.R2.D2 140 s.
 
 R3's question is simulated, because the fixtures cover no studio stage: the driver records the change
 round's `NEEDS_CLARIFICATION` studio run (what the edit stage writes) and hands `RequestLifecycle` the run's

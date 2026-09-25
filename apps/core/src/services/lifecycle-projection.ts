@@ -212,7 +212,11 @@ async function createRequest(run: Run, op: Extract<ProjectionOp, { op: 'createRe
     headlineEn: draft.headlineEn, headlineCkb: draft.headlineCkb, copyEn: draft.copyEn, copyCkb: draft.copyCkb,
     designInstructions: String(draft.designInstructions ?? ''),
     exactCopy: draft.exactCopy,
-    autoGenerate: draft.autoGenerate === true,
+    // Only a scoped request with copy is designed automatically (ingestChatCampaignTask's rule): the
+    // saved flag counts against the sender's daily allowance, and a draft from an intake that did not
+    // apply the rule must not use it up for a request nobody designs.
+    autoGenerate: draft.autoGenerate === true && Boolean(draft.clientId) && draft.isInstructionOnly !== true,
+    ...(draft.isInstructionOnly === true ? { isInstructionOnly: true } : {}),
     ...(draft.variant ? { variant: draft.variant } : {}),
     ...(typeof draft.designStudio === 'boolean' ? { designStudio: draft.designStudio } : {}),
     ...(draft.studioOptions ? { studioOptions: draft.studioOptions as never } : {}),

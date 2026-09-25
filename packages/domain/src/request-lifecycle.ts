@@ -23,6 +23,7 @@ import {
   designRunId,
   deliveryWorkflowId,
   isLifecycleStage,
+  type AnswerEvent,
   type CanvaStatusReport,
   type DraftIntake,
   type LifecycleEvent,
@@ -39,6 +40,7 @@ import {
   type ProjectionRequest,
   type ProjectionResponse,
   type RemindEvent,
+  type RequesterDecisionEvent,
   type ExpireEvent,
   type RetryProjectionEvent,
 } from '@hawa/contracts';
@@ -211,8 +213,33 @@ export type LifecycleEffect =
   /** Core did not take a design outcome: the worker tells the requester and the office itself. */
   | { type: 'outcomeUnrecorded'; requestId: string; taskId: string; runId: string; status: string; chatId: string | null };
 
+/**
+ * Why a requester's answer, button or change changed nothing, when they should be told (review of
+ * 2.3C): a tapped button left unanswered keeps spinning, and a typed answer or change that vanished
+ * leaves the requester waiting for a design nobody is making. The worker composes the words.
+ */
+export type RequesterNoticeWhy =
+  | 'not_waiting'      // the question was answered already, or no question waits
+  | 'still_designing'  // the design is still being made
+  | 'answer_first'     // a question about the design waits for its answer
+  | 'with_office'      // the art director has the design
+  | 'approved'         // approved, being delivered
+  | 'delivered'
+  | 'cancelled'
+  | 'size_asked';      // that size was asked for already
+
+export interface RequesterNotice {
+  why: RequesterNoticeWhy;
+  chatId: string;
+  tenantId: string;
+  /** The event it answers: a typed notice is keyed `ignored:<eventId>`. */
+  eventId: string;
+  /** A tapped button: answered (key `cb:<id>`), not a message. */
+  callbackQueryId?: string;
+}
+
 export type Plan =
-  | { ignored: true; reason: string; reply?: unknown }
+  | { ignored: true; reason: string; reply?: unknown; notice?: RequesterNotice }
   | { ignored: false; ops: ProjectionOp[]; stage?: LifecycleStage };
 
 /** Core's answer to the projection, or 'unavailable' when the step gave up waiting for Core. */
@@ -255,10 +282,33 @@ interface Rule {
   unavailable?: (f: Fold, sent: DeferredProjection) => void;
 }
 
-type Decision = { ignored: true; reason: string; reply?: unknown } | ({ ignored: false } & Rule);
+type Decision = { ignored: true; reason: string; reply?: unknown; notice?: RequesterNotice } | ({ ignored: false } & Rule);
 type DeferredProjection = NonNullable<NonNullable<LifecycleStateV1['outcomeDeferred']>['projection']>;
 
 const ignore = (reason: string, reply?: unknown): Decision => ({ ignored: true, reason, ...(reply !== undefined ? { reply } : {}) });
+
+/** Ignored, and the requester told why (a request with a chat only). */
+function ignoreAndTell(s: LifecycleStateV1, ev: AnswerEvent | RequesterDecisionEvent, reason: string, why: RequesterNoticeWhy): Decision {
+  if (!s.chatId) return ignore(reason);
+  return {
+    ignored: true, reason,
+    notice: { why, chatId: s.chatId, tenantId: s.tenantId, eventId: ev.eventId, ...(ev.callbackQueryId ? { callbackQueryId: ev.callbackQueryId } : {}) },
+  };
+}
+
+/** Why a requester's decision cannot be taken in this stage. */
+function whyNotNow(stage: LifecycleStage): RequesterNoticeWhy {
+  switch (stage) {
+    case 'designing': return 'still_designing';
+    case 'awaiting_answer': return 'answer_first';
+    case 'manual': return 'with_office';
+    case 'approved':
+    case 'delivering': return 'approved';
+    case 'delivered': return 'delivered';
+    case 'cancelled': return 'cancelled';
+    default: return 'still_designing';
+  }
+}
 const refuse = (code: OfficeDecisionRefusal, message: string): Decision => ignore(`office decision refused: ${code}`, { accepted: false, code, message } satisfies OfficeDecisionResult);
 
 function currentRound(s: LifecycleStateV1): LifecycleRound | undefined {
@@ -612,8 +662,8 @@ function decide(s: LifecycleStateV1 | undefined, ev: LifecycleEvent): Decision {
 
     case 'answer': {
       const q = s.question;
-      if (s.stage !== 'awaiting_answer' || !q) return ignore('no question is waiting');
-      if (ev.questionId !== q.id) return ignore(`stale question ${ev.questionId}`);
+      if (s.stage !== 'awaiting_answer' || !q) return ignoreAndTell(s, ev, 'no question is waiting', 'not_waiting');
+      if (ev.questionId !== q.id) return ignoreAndTell(s, ev, `stale question ${ev.questionId}`, 'not_waiting');
       const chosen = ev.answer.option && q.options[ev.answer.option - 1];
       const directive = (ev.answer.text?.trim() || chosen || '').trim();
       return {
@@ -637,10 +687,10 @@ function decide(s: LifecycleStateV1 | undefined, ev: LifecycleEvent): Decision {
       const draft = s.draft;
       const isCurrent = s.stage === 'in_review' && Boolean(draft) && ev.taskId === draft!.taskId && !openChangeRound(s);
       if (ev.kind === 'size') {
-        if (!['in_review', 'approved', 'delivered'].includes(s.stage)) return ignore(`a size cannot be asked for while the request is ${s.stage}`);
+        if (!['in_review', 'approved', 'delivered'].includes(s.stage)) return ignoreAndTell(s, ev, `a size cannot be asked for while the request is ${s.stage}`, whyNotNow(s.stage));
         const action = ev.sizeAction;
         if (!action) return ignore('a size decision names no size');
-        if (s.sizes[action]) return ignore(`size ${action} was asked for already`);
+        if (s.sizes[action]) return ignoreAndTell(s, ev, `size ${action} was asked for already`, 'size_asked');
         return {
           ignored: false,
           ops: [{ op: 'recordRequesterAction', taskId: ev.taskId, action: 'size', current: true, sizeAction: action, actorId: ev.actorId, ...(ev.callbackQueryId ? { callbackQueryId: ev.callbackQueryId } : {}) }],
@@ -664,7 +714,7 @@ function decide(s: LifecycleStateV1 | undefined, ev: LifecycleEvent): Decision {
         };
       }
       if (ev.kind === 'dsg') {
-        if (s.stage !== 'in_review' && s.stage !== 'expired') return ignore(`a designer cannot be asked for while the request is ${s.stage}`);
+        if (s.stage !== 'in_review' && s.stage !== 'expired') return ignoreAndTell(s, ev, `a designer cannot be asked for while the request is ${s.stage}`, whyNotNow(s.stage));
         return {
           ignored: false,
           stage: 'manual',
@@ -679,7 +729,7 @@ function decide(s: LifecycleStateV1 | undefined, ev: LifecycleEvent): Decision {
       }
       // ok, chg, change: on the current draft they act; on another one Core only says why not.
       if (!isCurrent) {
-        if (!draft || s.stage === 'cancelled' || s.stage === 'delivered') return ignore(`no draft to act on while the request is ${s.stage}`);
+        if (!draft || s.stage === 'cancelled' || s.stage === 'delivered') return ignoreAndTell(s, ev, `no draft to act on while the request is ${s.stage}`, whyNotNow(s.stage));
         return {
           ignored: false,
           ops: [{ op: 'recordRequesterAction', taskId: ev.taskId, action: ev.kind, current: false, actorId: ev.actorId, ...(ev.callbackQueryId ? { callbackQueryId: ev.callbackQueryId } : {}) }],

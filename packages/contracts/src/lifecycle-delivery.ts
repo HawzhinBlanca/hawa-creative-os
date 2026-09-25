@@ -41,7 +41,9 @@ export interface OutboundMessage {
    * 'callback_answer' (slice 2.3): the answer to a tapped button, `text` shown as its toast. Always
    * courtesy: Telegram refuses a late answer, which is harmless.
    * 'photo' (slice 2.3): a stored PNG export (exportRef) shown as a picture, `caption` under it: the
-   * draft the requester replies to. A build that does not know it sends the caption as text.
+   * draft the requester replies to. Core also puts the caption in `text`: a sender built before
+   * 'photo' sends every kind but a document as `text` (so, without it, an empty message Telegram
+   * refuses), and with it sends the caption's words instead of the picture.
    */
   kind: 'text' | 'document' | 'callback_answer' | 'photo';
   text?: string;

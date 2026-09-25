@@ -398,6 +398,44 @@ describe('requesterDecision', () => {
   });
 });
 
+describe('a requester\'s event that changes nothing is answered, not dropped (review of 2.3C)', () => {
+  const answerEv = (questionId: string, extra: Record<string, unknown> = {}): LifecycleEvent =>
+    ({ type: 'answer', v: 1, eventId: `tg:${CHAT}:${questionId}:${JSON.stringify(extra)}`, questionId, answer: { option: 1 }, actorId: 'x', ...extra }) as LifecycleEvent;
+  const noticeOf = (s: LifecycleStateV1 | undefined, ev: LifecycleEvent) => (plan(s, ev, T0) as Ignoring & { notice?: unknown }).notice;
+
+  it('an answer to a question that no longer waits: a button is answered, a typed answer gets a message', () => {
+    const tapped = answerEv('q-1', { callbackQueryId: 'cbq-late' });
+    expect(noticeOf(inReview(), tapped)).toEqual({ why: 'not_waiting', chatId: CHAT, tenantId: TENANT, eventId: tapped.eventId, callbackQueryId: 'cbq-late' });
+    const typed = answerEv('q-old');
+    expect(noticeOf(awaiting(), typed)).toEqual({ why: 'not_waiting', chatId: CHAT, tenantId: TENANT, eventId: typed.eventId });
+    // The second answer to one question: the first started the next round.
+    const next = step(awaiting(), answerEv('q-1', { callbackQueryId: 'cbq-1' })).applied.next;
+    expect(noticeOf(next, answerEv('q-1', { callbackQueryId: 'cbq-2' }))).toMatchObject({ why: 'not_waiting', callbackQueryId: 'cbq-2' });
+  });
+
+  it('a designer, a size or a change the stage does not take says why', () => {
+    expect(noticeOf(opened(), requester('dsg', TASK0, { callbackQueryId: 'c1' }))).toMatchObject({ why: 'still_designing', callbackQueryId: 'c1' });
+    expect(noticeOf(awaiting(), requester('dsg', TASK0, { callbackQueryId: 'c2' }))).toMatchObject({ why: 'answer_first' });
+    const manual = step(draftSent(), requester('dsg', TASK0)).applied.next;
+    expect(noticeOf(manual, requester('dsg', TASK0, { callbackQueryId: 'c3' }))).toMatchObject({ why: 'with_office' });
+    expect(noticeOf(approved(), requester('dsg', TASK0, { callbackQueryId: 'c4' }))).toMatchObject({ why: 'approved' });
+    expect(noticeOf(opened(), requester('size', TASK0, { sizeAction: 'sst', callbackQueryId: 'c5' }))).toMatchObject({ why: 'still_designing' });
+    const sized = step(draftSent(), requester('size', TASK0, { sizeAction: 'sst' }), { recordRequesterAction: { messages: [], childDraft: { title: 't', rawText: 'x', clientId: CLIENT, designInstructions: '', exactCopy: [], autoGenerate: true } } }).applied.next;
+    expect(noticeOf(sized, requester('size', TASK0, { sizeAction: 'sst', callbackQueryId: 'c6' }))).toMatchObject({ why: 'size_asked', callbackQueryId: 'c6' });
+    const cancelled = step(draftSent(), { type: 'cancel', v: 1, eventId: 'cancel-1', by: 'office' } as LifecycleEvent).applied.next;
+    const change = requester('change', TASK0, { directive: 'bigger' });
+    expect(noticeOf(cancelled, change)).toEqual({ why: 'cancelled', chatId: CHAT, tenantId: TENANT, eventId: change.eventId });
+  });
+
+  it('nothing is said for an event seen before, one with no chat, or an event that is not the requester\'s', () => {
+    const tapped = answerEv('q-1', { callbackQueryId: 'cbq-1' });
+    const next = step(awaiting(), tapped).applied.next;
+    expect(noticeOf(next, tapped)).toBeUndefined();
+    expect(noticeOf(undefined, answerEv('q-1', { callbackQueryId: 'cbq-9' }))).toBeUndefined();
+    expect(noticeOf(inReview(), remind('draft', 1, TASK1, 0))).toBeUndefined();
+  });
+});
+
 describe('messageSent and reminders', () => {
   it('draft sent: recorded, the day-1 reminder at the next office moment after 24 h, the expiry at 14 days', () => {
     const s = inReview();

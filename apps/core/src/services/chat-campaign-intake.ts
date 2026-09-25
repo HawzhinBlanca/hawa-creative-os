@@ -340,11 +340,16 @@ function buildChatCampaignIntake(ctx: CoreContext) {
    */
   async function draftChatRequest(input: ChatRequestInput & { autoGenerate: boolean }): Promise<DraftIntake> {
     const r = await readChatRequest(input);
+    const clientId = durableClientOf(r.clientId);
     return {
-      title: r.title, rawText: input.rawText, clientId: durableClientOf(r.clientId),
+      title: r.title, rawText: input.rawText, clientId,
       ...(r.headlineEn ? { headlineEn: r.headlineEn } : {}), ...(r.headlineCkb ? { headlineCkb: r.headlineCkb } : {}),
       ...(r.copyEn ? { copyEn: r.copyEn } : {}), ...(r.copyCkb ? { copyCkb: r.copyCkb } : {}),
-      designInstructions: r.clientInstructions, exactCopy: r.exactCopy, autoGenerate: input.autoGenerate,
+      // As ingestChatCampaignTask saves it: automatic drafting needs a scoped client and copy. A request
+      // saved with autoGenerate counts against the sender's daily allowance of automatic drafts, so an
+      // unscoped brief marked so used it up for nothing and a later brief naming a client was refused.
+      designInstructions: r.clientInstructions, exactCopy: r.exactCopy, autoGenerate: Boolean(input.autoGenerate && clientId && !input.isInstructionOnly),
+      ...(input.isInstructionOnly ? { isInstructionOnly: true } : {}),
       variant: { width: r.variantWidth, height: r.variantHeight },
       ...(input.senderName ? { senderName: input.senderName.slice(0, 200) } : {}),
     };

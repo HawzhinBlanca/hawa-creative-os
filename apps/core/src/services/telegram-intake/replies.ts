@@ -19,7 +19,7 @@ import { createTelegramUpdateState } from './update-state.js';
 import { createTelegramQuestions, type PendingQuestion } from './questions.js';
 import type { TelegramMediaReading } from './media.js';
 import {
-  answerDecision, clearSessionClarification, courtesyText, decideSession, lifecycleMode, lifecycleOwnerOf, lifecycleTargetWithoutInbox,
+  answerDecision, clearSessionClarification, courtesyText, decideSession, lifecycleMode, lifecycleOwnerOf,
   sessionClarification, type TaskOwner,
 } from './decide-mode.js';
 
@@ -160,7 +160,6 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
         log.warn('[Core] Could not tell whether the replied-to design is the request lifecycle\'s:', err);
         return problem(c, 503, 'Database unavailable', 'The owner of the replied-to design could not be read; retry');
       }
-      if (replyOwner && !decideSession()) return lifecycleTargetWithoutInbox(c, String(replyTarget.id), replyOwner.requestId);
       if (replyOwner && referenceImageBase64) {
         return answerDecision(c, { kind: 'handled', messages: [courtesyText(sourceChannelId, `lc-picture:${sourceChannelId}:${sourceEventId}`, LIFECYCLE_PICTURE_NOTICE, 'HTML')] });
       }

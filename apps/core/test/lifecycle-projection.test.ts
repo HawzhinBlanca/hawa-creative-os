@@ -189,7 +189,9 @@ describe.skipIf(!url)('POST /v1/internal/lifecycle/:requestId/project', () => {
   it('a request opened without a client, or over the daily cap, is the office\'s (stage manual)', async () => {
     const { answer } = await opened(newChat(), { clientId: null });
     expect(answer.stage).toBe('manual');
-    expect(answer.results[0]).toMatchObject({ autoGenerate: true, stage: 'manual' });
+    // Saved as the legacy path saves it: not an automatic draft, so it does not count against the
+    // sender's daily allowance (review of 2.3C).
+    expect(answer.results[0]).toMatchObject({ autoGenerate: false, stage: 'manual' });
   });
 
   it('refuses what it cannot do yet instead of guessing: an op of a later part, photos, a reference image', async () => {

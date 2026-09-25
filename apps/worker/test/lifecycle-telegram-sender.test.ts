@@ -260,7 +260,9 @@ describe('TelegramSender: the draft as a photo (slice 2.3)', () => {
       return { success: true, messageId: '77' };
     };
     const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
-    const m: OutboundMessage = { ...doc(bytes), kind: 'photo', key: `lc-test:${randomUUID()}:outcome:photo`, caption: 'Canva draft · Task ID: t', filename: undefined };
+    const m: OutboundMessage = { ...doc(bytes), kind: 'photo', key: `lc-test:${randomUUID()}:outcome:photo`, caption: 'Canva draft · Task ID: t', filename: undefined,
+      // Core puts the caption in `text` too, for a sender built before 'photo'; this one sends the picture.
+      text: 'Canva draft · Task ID: t' };
     const deps = depsWith(bridge, { [m.exportRef!.artifactId]: bytes });
     expect(await sendAttempt(deps, m)).toEqual({ outcome: 'sent', messageId: '77' });
     expect(calls).toEqual([{ chatId: m.chatId, bytes: bytes.length, caption: 'Canva draft · Task ID: t', markup: undefined }]);

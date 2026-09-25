@@ -27,7 +27,7 @@ import {
 } from '../requester-actions.js';
 import { createTelegramQuestions, type TaskCreatedPayload } from './questions.js';
 import { createTelegramUpdateState } from './update-state.js';
-import { answerDecision, decideSession, lifecycleOwnerOf, lifecycleTargetWithoutInbox } from './decide-mode.js';
+import { answerDecision, lifecycleOwnerOf } from './decide-mode.js';
 
 export type TelegramRequesterActions = ReturnType<typeof createTelegramRequesterActions>;
 
@@ -86,9 +86,17 @@ export function createTelegramRequesterActions(
     const chosen = answerIndex(rq.action);
     // A button of a request the lifecycle owns is its to act on (PHASE2_DESIGN.md 2.3), whatever
     // the chat's flag says now: routed, never acted on here as well.
-    const owner = await lifecycleOwnerOf(db, rq.taskId);
+    // A read that fails is a 503 the poller retries (as replies.ts and changes.ts answer it), not a
+    // thrown 500 on every button while the database is away.
+    let owner: Awaited<ReturnType<typeof lifecycleOwnerOf>>;
+    try {
+      owner = await lifecycleOwnerOf(db, rq.taskId);
+    } catch (err) {
+      log.warn('[TelegramIngress] Could not tell whether the button\'s design is the request lifecycle\'s:', err);
+      await answer('This is not available right now. Please try again in a minute.', true);
+      return problem(c, 503, 'Database Unavailable', 'The owner of the design could not be read; retry');
+    }
     if (owner) {
-      if (!decideSession()) return lifecycleTargetWithoutInbox(c, rq.taskId, owner.requestId);
       if (chosen !== undefined) {
         return answerDecision(c, { kind: 'answer', requestId: owner.requestId, questionId: questionIdOf(rq.taskId), answer: { option: chosen + 1 }, callbackQueryId: cb.id });
       }

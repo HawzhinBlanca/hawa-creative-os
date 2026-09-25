@@ -20,7 +20,7 @@ import { createOfficeAlerts } from '../office-alerts.js';
 import { createAskHistory } from '../ask-history.js';
 import { createTelegramUpdateState } from './update-state.js';
 import { LIFECYCLE_PICTURE_NOTICE, type TelegramReplyReading } from './replies.js';
-import { answerDecision, courtesyText, decideSession, lifecycleOwnerOf, lifecycleTargetWithoutInbox } from './decide-mode.js';
+import { answerDecision, courtesyText, lifecycleOwnerOf } from './decide-mode.js';
 
 export type TelegramChanges = ReturnType<typeof createTelegramChanges>;
 
@@ -67,7 +67,6 @@ export function createTelegramChanges(deps: Pick<CoreContext, 'db' | 'events' | 
         return problem(c, 503, 'Database unavailable', 'The owner of the design could not be read; retry');
       }
       if (owner) {
-        if (!decideSession()) return lifecycleTargetWithoutInbox(c, String(feedbackTargetTask.id), owner.requestId);
         if (referenceImageBase64) {
           return answerDecision(c, { kind: 'handled', messages: [courtesyText(sourceChannelId, `lc-picture:${sourceChannelId}:${sourceEventId}`, LIFECYCLE_PICTURE_NOTICE, 'HTML')] });
         }

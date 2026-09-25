@@ -14,14 +14,16 @@
  *
  * Everything else (rules, commands, greetings, pictures and requests of Core's own) is handled as
  * before and answered `handled`. The session is an AsyncLocalStorage store, so the stages of intake
- * read it where they decide, without a parameter threaded through every one of them; an update that
- * reaches the webhook without a session (Core's own poller, a real webhook) has no decide mode.
+ * read it where they decide, without a parameter threaded through every one of them. An update that
+ * reaches the webhook without one (Core's own poller, a real webhook) runs in a legacy session the
+ * webhook opens, and a decision made in it is routed by Core itself (lifecycle-forward.ts).
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import crypto from 'node:crypto';
 import type { Context } from 'hono';
 import { SYSTEM_AUTOMATION_USER_ID, type ChatIntakeState, type IntakeDecision, type LifecycleMessage, type PendingClarification } from '@hawa/contracts';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
+import type { RoutableUpdate } from '@hawa/domain';
 import { isValidUuid } from '../../core-helpers.js';
 import { DEFAULT_TENANT_ID } from '../../core-context.js';
 
@@ -36,6 +38,8 @@ export interface IntakeDecideSession {
   decision?: IntakeDecision;
   /** Why a lifecycle chat's update was read on Core's own path (logged, and answered to the worker). */
   legacyBecause?: string;
+  /** The update as the webhook read it: what Core routes itself when its caller does not route. */
+  update?: RoutableUpdate;
 }
 
 const storage = new AsyncLocalStorage<IntakeDecideSession>();
@@ -66,14 +70,16 @@ export function answerDecision(c: Context, decision: IntakeDecision): Response {
 }
 
 /**
- * The answer to an update that targets a lifecycle request when there is no ChatInbox to route to
- * (Core's own poller or a webhook): refused, and said in the log, rather than acted on behind the
- * lifecycle's back. 409 is final for Core's poller.
+ * The answer to an update that targets a lifecycle request when no one can route it: no ChatInbox
+ * asked, and Core has no Restate ingress to route it through itself (lifecycle-forward.ts). Refused
+ * rather than acted on behind the lifecycle's back; the requester has been told. 409 is final for
+ * Core's poller.
  */
-export function lifecycleTargetWithoutInbox(c: Context, taskId: string, requestId: string): Response {
+export function lifecycleTargetUnrouted(c: Context, decision: IntakeDecision): Response {
+  const requestId = 'requestId' in decision ? decision.requestId : undefined;
   return c.json({
-    type: 'https://hawa.design/errors/409', title: 'Lifecycle Owned', status: 409, code: 'LIFECYCLE_OWNED', requestId,
-    detail: `Task ${taskId} belongs to a request the lifecycle owns; its updates are read through the worker's ChatInbox (HAWA_TELEGRAM_POLLER=worker)`,
+    type: 'https://hawa.design/errors/409', title: 'Lifecycle Owned', status: 409, code: 'LIFECYCLE_OWNED', ...(requestId ? { requestId } : {}),
+    detail: 'The update targets a request the lifecycle owns, and Core cannot reach Restate to route it (RESTATE_INGRESS_URL is not set)',
   }, 409);
 }
 

@@ -78,6 +78,11 @@ export interface DraftIntake {
   photoFileIds?: string[];
   /** Who sent it, as Telegram names them: the acknowledgement's client line for a client it does not know. */
   senderName?: string;
+  /**
+   * The message held only instructions or styling, no copy (the classifier's isInstructionOnly): saved
+   * for the art director, never designed automatically, and left out of album and reference merges.
+   */
+  isInstructionOnly?: boolean;
 }
 
 /** A "new request or a change?" question ChatInbox keeps until the sender answers it. */
@@ -109,6 +114,20 @@ export type IntakeDecision =
 export interface ChatIntakeState {
   pendingClarification?: PendingClarification;
   albumsAcked?: Record<string, number>;
+}
+
+/**
+ * POST /v1/internal/telegram/intake's body (slice 2.1, extended in 2.3; fields only added, optional).
+ * `routesDecisions`: the caller routes a decision itself (a ChatInbox from slice 2.3 part C on). A
+ * caller without it (a ChatInbox built before) reads any 200 as done, so Core routes the decision
+ * itself through Restate's ingress and answers `handled`.
+ */
+export interface IntakeRequestBody {
+  v: 1;
+  update: { update_id: number; [kind: string]: unknown };
+  mode?: 'legacy' | 'lifecycle';
+  chat?: ChatIntakeState;
+  routesDecisions?: boolean;
 }
 
 /**

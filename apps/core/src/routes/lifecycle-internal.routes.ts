@@ -3,6 +3,8 @@
  * PHASE2_DESIGN.md section 2.8). Slice 2.1 adds the two calls the worker's ChatInbox makes:
  *
  *   POST /v1/internal/telegram/intake  {v, update, mode: 'legacy'}  → {v, kind: 'handled', intakeStatus, …}
+ *     (slice 2.3 adds mode 'lifecycle', the chat's state, and `routesDecisions` from a ChatInbox that
+ *     routes; the answer may then be {v, kind: 'decision', decision, chat?})
  *   POST /v1/internal/telegram/park    {v, update, reason, notifySender?} → {v, parked, alreadyParked}
  *
  * Intake is a thin wrapper around today's Telegram intake (routes/telegram-webhook.routes.ts): the
@@ -21,12 +23,13 @@
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID, type ChatIntakeState, type IntakeAnswerBody, type PendingClarification } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, type ChatIntakeState, type IntakeAnswerBody, type IntakeDecision, type PendingClarification } from '@hawa/contracts';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
 import { readDecisionRecord, runWithDecideSession, writeDecisionRecord, type IntakeDecideSession, type IntakeMode } from '../services/telegram-intake/decide-mode.js';
+import { routeForCaller } from '../services/telegram-intake/lifecycle-forward.js';
 import type { RouteContext } from './types.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
@@ -122,6 +125,18 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const handled = (intakeStatus: number, extra: Record<string, unknown> = {}) =>
       c.json({ v: 1, kind: 'handled', intakeStatus, ...extra }, 200);
     const chat = chatOf(update);
+    // A ChatInbox from slice 2.3 part C on says it routes decisions (`routesDecisions`; mode
+    // 'lifecycle' is only ever asked by one). An older one reads a decision as "done" and routes
+    // nothing, so for it Core routes the decision itself, through Restate's ingress with the keys
+    // ChatInbox would use, and answers `handled` (review of 2.3C).
+    const callerRoutes = mode === 'lifecycle' || body?.routesDecisions === true;
+    const routedByCore = async (decision: IntakeDecision): Promise<Response> => {
+      const routed = await routeForCaller(ctx.telegramBridge, chat, update, decision);
+      if (routed.outcome === 'routed') return handled(200, { routedByCore: decision.kind });
+      // Retryable for the older client: counted, and parked (the office alerted) after its attempts.
+      if (routed.outcome === 'retry') return handled(503, { code: 'LIFECYCLE_UNREACHABLE' });
+      return handled(409, { code: 'LIFECYCLE_OWNED' });
+    };
 
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (!secret) return handled(503, { code: 'NOT_CONFIGURED', detail: 'TELEGRAM_WEBHOOK_SECRET is not configured' });
@@ -138,6 +153,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       });
       if (recorded === undefined) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
       if (recorded) {
+        if (!callerRoutes) return routedByCore(recorded.decision);
         return c.json({ v: 1, kind: 'decision', intakeStatus: 200, decision: recorded.decision, replayed: true, ...(recorded.chat ? { chat: recorded.chat } : {}) } satisfies IntakeAnswerBody, 200);
       }
     }
@@ -150,6 +166,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret, ...requestIdHeaders() },
       body: JSON.stringify(update),
     }));
+    // "Clarify sets the waiting question; every other decision clears it" (PHASE2_DESIGN.md 2.2): a
+    // button, an answer or a command after the question means the requester moved on, and a later
+    // "new" or "revise" must not reach back to words sent an hour ago.
+    if (session.decision?.kind !== 'clarify') delete session.chat.pendingClarification;
     const chatState = mode === 'lifecycle' ? { chat: session.chat } : {};
     if (session.legacyBecause) log.info(`[core:internal] update ${update.update_id} of lifecycle chat ${chat} read on Core's own path: ${session.legacyBecause}`);
 
@@ -165,6 +185,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         }
       }
       await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat, status: 200, decision: session.decision.kind });
+      if (!callerRoutes) return routedByCore(session.decision);
       return c.json({ v: 1, kind: 'decision', intakeStatus: 200, decision: session.decision, ...chatState } satisfies IntakeAnswerBody, 200);
     }
     const answer = (await res.json().catch(() => ({}))) as { duplicate?: boolean; title?: string; task?: { id?: string }; tasks?: Array<{ id?: string }> };

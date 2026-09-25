@@ -42,7 +42,7 @@ import {
   type OutboundMessage,
   type RequesterDecisionEvent,
 } from '@hawa/contracts';
-import { requestIdFor } from '@hawa/domain';
+import { routedSendsOf } from '@hawa/domain';
 import { withInvocationLogContext, log } from '../logging.js';
 import { chatKey, type TelegramUpdateLike } from './telegram-poller.js';
 import { TelegramSenderApi } from './telegram-sender.js';
@@ -119,17 +119,9 @@ export interface HandleUpdateOptions {
 export const CHAT_STATE_KEY = 'chat';
 /** Albums are answered once; one older than this is forgotten (Telegram sends an album within seconds). */
 export const ALBUM_MEMORY_MS = 15 * 60_000;
-const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 
 /** Only a real chat (a Telegram id) can hold lifecycle requests: Core opens one for a numeric chat only. */
 const isChatId = (chat: string) => /^-?\d{1,20}$/.test(chat);
-
-/** Who sent the update or pressed the button, for the lifecycle's record. */
-function senderOf(update: TelegramUpdateLike): string {
-  const u = update as { callback_query?: { from?: { id?: unknown } }; message?: { from?: { id?: unknown } } };
-  const id = u.callback_query?.from?.id ?? u.message?.from?.id;
-  return id === undefined || id === null ? '' : String(id);
-}
 
 /** The chat's state as kept, with albums older than ALBUM_MEMORY_MS forgotten. */
 export function prunedChatState(raw: unknown, now: number): ChatInboxState {
@@ -144,49 +136,17 @@ export function prunedChatState(raw: unknown, now: number): ChatInboxState {
 
 /**
  * Routes one decision, in order: the requests it opens or the events it hands to a request, then the
- * messages it carries. Keys are the update's (`tg:<chat>:<update>`) or the request's open key, so a
- * replayed invocation (or a second one for the same update) routes nothing twice.
+ * messages it carries (routedSendsOf in @hawa/domain, which Core also uses when it routes an update
+ * itself). Keys are the update's (`tg:<chat>:<update>`) or the request's open key, so a replayed
+ * invocation (or a second one for the same update) routes nothing twice.
  */
 export function routeDecision(routes: InboxRoutes, chat: string, update: TelegramUpdateLike, decision: IntakeDecision): void {
-  const updateId = update.update_id;
-  const eventId = `tg:${chat}:${updateId}`;
-  const actorId = senderOf(update);
-  switch (decision.kind) {
-    case 'new_request':
-      for (const r of decision.requests) {
-        const requestId = requestIdFor(chat, updateId, r.index);
-        routes.open(requestId, {
-          v: 1, eventId: `open:${requestId}`, requestId, tenantId: decision.tenantId ?? DEFAULT_TENANT_ID, chatId: chat,
-          origin: { kind: 'telegram', chatId: chat, updateId }, draft: r.draft,
-        }, `open:${requestId}`);
-      }
-      break;
-    case 'answer':
-      routes.answer(decision.requestId, {
-        v: 1, eventId, questionId: decision.questionId, answer: decision.answer, actorId,
-        ...(decision.callbackQueryId ? { callbackQueryId: decision.callbackQueryId } : {}),
-      }, eventId);
-      break;
-    case 'requester': {
-      const size = decision.action === 'sst' || decision.action === 'ssq' || decision.action === 'sls';
-      routes.requesterDecision(decision.requestId, {
-        v: 1, eventId, taskId: decision.taskId, kind: size ? 'size' : (decision.action as 'ok' | 'chg' | 'dsg'), actorId: decision.actorId || actorId,
-        ...(size ? { sizeAction: decision.action } : {}),
-        ...(decision.callbackQueryId ? { callbackQueryId: decision.callbackQueryId } : {}),
-      }, eventId);
-      break;
-    }
-    case 'change':
-      routes.requesterDecision(decision.requestId, {
-        v: 1, eventId, taskId: decision.replyToTaskId, kind: 'change', directive: decision.directive, actorId,
-        ...(decision.photoFileIds?.length ? { photoFileIds: decision.photoFileIds } : {}),
-      }, eventId);
-      break;
-    default:
-      break;
+  for (const send of routedSendsOf(chat, update, decision)) {
+    if (send.service === 'TelegramSender') routes.send(send.payload);
+    else if (send.handler === 'open') routes.open(send.key, send.payload, send.idempotencyKey);
+    else if (send.handler === 'answer') routes.answer(send.key, send.payload, send.idempotencyKey);
+    else routes.requesterDecision(send.key, send.payload, send.idempotencyKey);
   }
-  const messages = 'messages' in decision && Array.isArray(decision.messages) ? decision.messages : [];
-  for (const m of messages) if (m?.key && m.chatId) routes.send({ ...m, v: 1 });
 }
 
 export const INTAKE_ATTEMPTS = 5;
@@ -226,8 +186,14 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
   const at = await ctx.now();
   if (done) {
     // The chat's state after the update, as intake left it (lifecycle mode only).
-    if (mode === 'lifecycle' && done.chat) ctx.set(CHAT_STATE_KEY, prunedChatState({ ...done.chat, v: 1 }, at));
     const decision = done.decision;
+    // Clarify sets the waiting question; every other answer clears it (PHASE2_DESIGN.md 2.2 step 3),
+    // whatever state intake sent back: the requester moved on, and a later "new" or "revise" must not
+    // reach back to words sent before.
+    if (mode === 'lifecycle' && done.chat) {
+      const { pendingClarification, ...rest } = done.chat;
+      ctx.set(CHAT_STATE_KEY, prunedChatState({ ...rest, ...(decision?.kind === 'clarify' && pendingClarification ? { pendingClarification } : {}), v: 1 }, at));
+    }
     if (decision && decision.kind === 'park') {
       await parkUpdate(ctx, core, update, decision.reason);
       ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at } satisfies ChatInboxView);

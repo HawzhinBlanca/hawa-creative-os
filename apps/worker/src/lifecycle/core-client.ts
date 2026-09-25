@@ -15,7 +15,7 @@
  *    longer than `timeoutMs` counts as this update's retryable failure.
  * "Wait" is a thrown error: Restate retries the step and does not journal it.
  */
-import type { ChatIntakeState, IntakeAnswerBody } from '@hawa/contracts';
+import type { ChatIntakeState, IntakeAnswerBody, IntakeRequestBody } from '@hawa/contracts';
 import type { ChatInboxCore, IntakeAnswer, IntakeMode } from './chat-inbox.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
 
@@ -54,7 +54,8 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         res = await doFetch(`${base}/v1/internal/telegram/intake`, {
           method: 'POST',
           headers: headers(update),
-          body: JSON.stringify({ v: 1, update, mode, ...(chat ? { chat } : {}) }),
+          // routesDecisions: this ChatInbox routes what intake decides (Core routes it for one that does not).
+          body: JSON.stringify({ v: 1, update, mode, ...(chat ? { chat } : {}), routesDecisions: true } satisfies IntakeRequestBody),
           signal: AbortSignal.timeout(options.timeoutMs ?? 8 * 60_000),
         });
       } catch (err) {

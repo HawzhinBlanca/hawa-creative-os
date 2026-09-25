@@ -63,6 +63,8 @@ import {
   LifecycleEventUnreadableError,
   type LifecycleEffect,
   type ProjectionOutcome,
+  type RequesterNotice,
+  type RequesterNoticeWhy,
 } from '@hawa/domain';
 import { chaosPoint } from '@hawa/observability';
 import { composeOutcomeUnrecordedAlert, composeOutcomeUnrecordedMessage } from '../delivery-notification.js';
@@ -190,6 +192,50 @@ function officeAlert(config: LifecycleConfig, key: string, lines: string[], s: {
   };
 }
 
+/** What the requester is told when an answer, button or change of theirs changed nothing (review of 2.3C). */
+const NOTICE_WORDS: Record<RequesterNoticeWhy, { toast: string; text: string }> = {
+  not_waiting: {
+    toast: 'This question was already answered.',
+    text: 'ℹ️ This design is not waiting for an answer any more. To change it, reply to the newest draft with what to change.',
+  },
+  still_designing: {
+    toast: 'Your design is still being made.',
+    text: '⏳ Your design is still being made. Reply to the draft with your change once it arrives.',
+  },
+  answer_first: {
+    toast: 'Please answer the question about this design first.',
+    text: '❓ Please answer the question about this design first: tap one of its options or reply to it.',
+  },
+  with_office: {
+    toast: 'The art director is working on this design.',
+    text: '🧑‍🎨 The art director is working on this design and will send it to you here.',
+  },
+  approved: {
+    toast: 'This design is already approved.',
+    text: '✅ This design is already approved. Send a new message for a new request.',
+  },
+  delivered: {
+    toast: 'This design was already delivered.',
+    text: '✅ This design was already delivered. Send a new message for a new request.',
+  },
+  cancelled: {
+    toast: 'This request was cancelled.',
+    text: 'This request was cancelled. Send a new message for a new request.',
+  },
+  size_asked: {
+    toast: 'That size was already asked for.',
+    text: 'That size was already asked for; it will arrive in this chat.',
+  },
+};
+
+/** The notice as a message: a tapped button is answered (its toast), a typed message is replied to. */
+export function requesterNoticeMessage(n: RequesterNotice): OutboundMessage {
+  const words = NOTICE_WORDS[n.why] ?? NOTICE_WORDS.still_designing;
+  return n.callbackQueryId
+    ? { v: 1, key: `cb:${n.callbackQueryId}`, chatId: n.chatId, kind: 'callback_answer', callbackQueryId: n.callbackQueryId, text: words.toast, class: 'courtesy', tenantId: n.tenantId }
+    : { v: 1, key: `ignored:${n.eventId}`, chatId: n.chatId, kind: 'text', text: words.text, class: 'courtesy', tenantId: n.tenantId };
+}
+
 function sendMessage(ctx: restate.ObjectContext, m: OutboundMessage | LifecycleMessage | null): void {
   if (!m || !m.chatId || !m.key) return;
   ctx.objectSendClient(TelegramSenderApi, String(m.chatId)).send({ ...m, v: 1 } as OutboundMessage, restate.rpc.sendOpts({ idempotencyKey: m.key }));
@@ -255,6 +301,9 @@ async function handle(ctx: restate.ObjectContext, type: LifecycleEventType, payl
   const first = plan(s, ev, now);
   if (first.ignored) {
     log.info(`[RequestLifecycle] ${requestId} ${type} ${ev.eventId} changes nothing: ${first.reason}`);
+    // The requester is told (a tapped button answered, a typed message replied to), keyed by the
+    // event, so a replayed invocation sends nothing twice. The state is not touched.
+    if (first.notice) sendMessage(ctx, requesterNoticeMessage(first.notice));
     return first.reply ?? null;
   }
   if (type === 'open' && (ev as OpenEvent).requestId !== requestId) {
@@ -284,7 +333,10 @@ async function handle(ctx: restate.ObjectContext, type: LifecycleEventType, payl
         `The lifecycle took Postgres's revision and went on with ${type}. Nothing already sent is sent again. Check the request in the Desk.`,
       ], taskOf));
       const again = plan(s, ev, now);
-      if (again.ignored) return again.reply ?? null;
+      if (again.ignored) {
+        if (again.notice) sendMessage(ctx, requesterNoticeMessage(again.notice));
+        return again.reply ?? null;
+      }
       current = again;
       continue;
     }
