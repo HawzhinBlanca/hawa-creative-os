@@ -328,4 +328,30 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !toolsBuilt)('nightly backu
     expect(drill.out).toMatch(/missing=0/);
     expect(drill.code).toBe(0);
   }, 180_000);
+
+  it('keeps an existing paired recovery set when Restate opt-in is later off', async () => {
+    const pairedDump = fs.readdirSync(dirs.archive).find((n) => /^hawa_\d{8}T\d{6}Z\.dump\.enc$/.test(n));
+    expect(pairedDump).toBeDefined();
+    const stamp = /^hawa_(\d{8}T\d{6}Z)\.dump\.enc$/.exec(pairedDump!)![1];
+    const fixture = `import sys, json\nfrom pathlib import Path\nsys.path.insert(0, sys.argv[4])\nfrom restate_nightly import manifest_mac, pair_inputs, publish_pair, sha256\narchive, key, stamp = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]\nmanifest = archive / f'restate_{stamp}.json'\nmanifest.with_suffix('.tar.enc').write_bytes(b'synthetic retention-only ciphertext')\nfacts = {'schemaVersion': 2, 'encrypted': True, 'nodeName': 'hawa-restate-prod-1', 'capturedAt': stamp, 'encryptedSha256': sha256(manifest.with_suffix('.tar.enc')), 'crossStoreAtomic': False}\nfacts['manifestMac'] = manifest_mac(facts, key)\nmanifest.write_text(json.dumps(facts))\npublish_pair(archive, stamp, pair_inputs(archive, stamp), manifest, key)\n`;
+    const made = spawnSync('python3', ['-c', fixture, dirs.archive, keyfile, stamp, path.join(repo, 'infra/backup')], { encoding: 'utf8' });
+    expect(made.status).toBe(0);
+    const pair = path.join(dirs.archive, `hawa_${stamp}.restate.json`);
+    expect(fs.existsSync(pair)).toBe(true);
+
+    const r = await run('infra/backup/nightly_backup.sh', [], { HAWA_BACKUP_ARCHIVE_KEEP: '1' });
+    expect(r.code).toBe(0);
+    expect(fs.existsSync(path.join(dirs.archive, pairedDump!))).toBe(true);
+    expect(fs.existsSync(pair)).toBe(true);
+    expect(fs.existsSync(path.join(dirs.archive, `hawa_${stampOf(lastOk())}.dump.enc`))).toBe(true);
+    expect(log().some((line) => line.includes('RESTATE-RETENTION') && line.includes('"keepPaired"'))).toBe(true);
+
+    const before = fs.readdirSync(dirs.archive).sort();
+    const noKey = await run('infra/backup/nightly_backup.sh', [], {
+      HAWA_BACKUP_ARCHIVE_KEEP: '1', HAWA_BACKUP_ARCHIVE_KEYFILE: '',
+    });
+    expect(noKey.code).toBe(1);
+    expect(noKey.out).toMatch(/paired recovery archive needs a readable nonempty key before any dump is copied/);
+    expect(fs.readdirSync(dirs.archive).sort()).toEqual(before);
+  }, 180_000);
 });

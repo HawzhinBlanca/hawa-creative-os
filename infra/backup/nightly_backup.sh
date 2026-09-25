@@ -72,8 +72,17 @@ find "$DIR" -maxdepth 1 -name '.work_*' -mmin +120 -exec rm -rf {} + 2>/dev/null
 # keeps is ARCHIVE_KEEP nights old, and every file it references must still be packed or on disk when
 # it is restored: so the grace must be longer than the retention (15 days against 14 nightly copies).
 [[ "$ARCHIVE_KEEP" =~ ^[0-9]+$ && "$GRACE_DAYS" =~ ^[0-9]+$ ]] || fail "HAWA_BACKUP_ARCHIVE_KEEP and HAWA_BLOB_GRACE_DAYS must be whole numbers"
+(( ARCHIVE_KEEP >= 1 )) || fail "HAWA_BACKUP_ARCHIVE_KEEP must retain at least one archive"
 (( ARCHIVE_KEEP < GRACE_DAYS )) \
   || fail "HAWA_BACKUP_ARCHIVE_KEEP (${ARCHIVE_KEEP}) must be less than HAWA_BLOB_GRACE_DAYS (${GRACE_DAYS}): the oldest kept dump would reference files the collector may already have deleted"
+if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]]; then
+  [[ "$ARCHIVE_DEST" != gs://* ]] || fail "Restate volume backup needs a local encrypted archive destination"
+fi
+if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]] || \
+   { [[ "$ARCHIVE_DEST" != gs://* ]] && compgen -G "$ARCHIVE_DEST/hawa_*.restate.json" >/dev/null; }; then
+  [[ -n "$ARCHIVE_KEYFILE" && -r "$ARCHIVE_KEYFILE" && -s "$ARCHIVE_KEYFILE" ]] \
+    || fail "paired recovery archive needs a readable nonempty key before any dump is copied"
+fi
 
 docker exec "$PG" pg_isready -U hawa_owner -d "$DB" >/dev/null 2>&1 || fail "postgres container not ready"
 # zstd with long-distance matching: the dump repeats the same images many times, so it is about an
@@ -224,7 +233,6 @@ bash "$ROOT/infra/ops/disk_cleanup.sh" --backups >/dev/null 2>&1 || echo "WARNIN
 # Restate copy fails the night before any file-store garbage collection or OK receipt.
 RESTATE_STATUS="off"
 if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]]; then
-  [[ "$ARCHIVE_DEST" != gs://* ]] || fail "Restate volume backup needs a local encrypted archive destination"
   HAWA_BACKUP_ARCHIVE_DEST="$ARCHIVE_DEST" HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" \
     python3 "$ROOT/infra/backup/restate_nightly.py" --apply --pair-stamp "$STAMP" \
     || fail "Restate volume backup failed; the database/file copy may be valid, but the night is incomplete"
@@ -234,7 +242,18 @@ fi
 # Retire older database/file snapshots only after every opted-in member of this night's
 # recovery set has published. A failed Restate capture must preserve the older usable archive.
 if [[ -d "$ARCHIVE_DEST" && "$ARCHIVE_DEST" != gs://* ]]; then
-  for ext in dump enc sql; do
+  # Once this archive contains pairs, keep pruning by complete recovery set even if the opt-in
+  # switch is later turned off. Losing the key fails closed rather than discarding old paired dumps.
+  if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]] || compgen -G "$ARCHIVE_DEST/hawa_*.restate.json" >/dev/null; then
+    RESTATE_PRUNE="$(HAWA_BACKUP_ARCHIVE_DEST="$ARCHIVE_DEST" HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" \
+      python3 "$ROOT/infra/backup/restate_retention.py" --apply --keep "$ARCHIVE_KEEP")" \
+      || fail "paired recovery-set retention did not finish; inspect the archive before retrying"
+    echo "$(date -u +%FT%TZ) RESTATE-RETENTION ${RESTATE_PRUNE}" >> "$LOG"
+    ARCHIVE_EXTS=(dump sql)
+  else
+    ARCHIVE_EXTS=(dump enc sql)
+  fi
+  for ext in "${ARCHIVE_EXTS[@]}"; do
     { ls -1t "$ARCHIVE_DEST"/hawa_*."$ext" 2>/dev/null || true; } | tail -n +$((ARCHIVE_KEEP + 1)) | while read -r old; do
       rm -f "$old" "$old.sha256"
     done

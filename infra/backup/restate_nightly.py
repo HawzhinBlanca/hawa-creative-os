@@ -115,8 +115,8 @@ def publish_pair(archive_dir: Path, stamp: str, inputs: dict, restate_manifest: 
     return final
 
 
-def verify_pair(pair: Path, key_file: Path) -> dict:
-    """Verify the exact archived dump, blob manifest and Restate volume selected as one night."""
+def read_pair_metadata(pair: Path, key_file: Path) -> dict:
+    """Authenticate a pair and validate its names without reading large archived bytes."""
     match = re.fullmatch(r"hawa_([0-9]{8}T[0-9]{6}Z)\.restate\.json", pair.name)
     if not match:
         raise BackupError("not a same-night Restate pair name")
@@ -143,6 +143,18 @@ def verify_pair(pair: Path, key_file: Path) -> dict:
         recorded_hash = facts.get(hash_field)
         if not isinstance(recorded_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", recorded_hash):
             raise BackupError(f"same-night archive hash is invalid: {hash_field}")
+    if not isinstance(facts.get("restateCapturedAt"), str) or facts.get("crossStoreAtomic") is not False:
+        raise BackupError("same-night Restate pair capture metadata is invalid")
+    return facts
+
+
+def verify_pair(pair: Path, key_file: Path) -> dict:
+    """Verify the exact archived dump, blob manifest and Restate volume selected as one night."""
+    facts = read_pair_metadata(pair, key_file)
+    restate_name = facts["restateManifestName"]
+    for name_field, hash_field in (("dumpName", "dumpSha256"), ("blobManifestName", "blobManifestSha256"),
+                                   ("restateManifestName", "restateManifestSha256")):
+        recorded_hash = facts[hash_field]
         path = pair.parent / facts[name_field]
         if not path.is_file() or sha256(path) != recorded_hash:
             raise BackupError(f"same-night archive differs from pair: {name_field}")
@@ -178,8 +190,8 @@ def inspect_tar(path: Path, node_name: str) -> int:
     return files
 
 
-def verify_archive(manifest: Path, key_file: Path) -> dict:
-    """Independent later read of the stored ciphertext; still not a running-node restore drill."""
+def read_archive_metadata(manifest: Path, key_file: Path) -> dict:
+    """Authenticate archive facts and ciphertext hash without decrypting the volume."""
     if not re.fullmatch(r"restate_[0-9]{8}T[0-9]{6}Z\.json", manifest.name):
         raise BackupError("not a Restate backup manifest name")
     try:
@@ -202,6 +214,14 @@ def verify_archive(manifest: Path, key_file: Path) -> dict:
         raise BackupError("Restate archive or decryption key is missing")
     if sha256(archive) != facts.get("encryptedSha256"):
         raise BackupError("encrypted Restate archive hash differs from manifest")
+    return facts
+
+
+def verify_archive(manifest: Path, key_file: Path) -> dict:
+    """Independent later read of the stored ciphertext; still not a running-node restore drill."""
+    facts = read_archive_metadata(manifest, key_file)
+    archive = manifest.with_suffix(".tar.enc")
+    node = facts["nodeName"]
     with tempfile.TemporaryDirectory(prefix="hawa-restate-verify-") as work:
         plain = Path(work) / "restate.tar"
         try:
