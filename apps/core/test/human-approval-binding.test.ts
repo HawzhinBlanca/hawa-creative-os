@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import { createDb } from '@hawa/db';
+import { CanvaBindingRepository, createDb, withRlsContext } from '@hawa/db';
 import crypto from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
@@ -100,14 +100,57 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
     expect(deskData.taskId).toBe(task.id);
     expect(deskData.revisionId).toBe(revId);
-    expect(deskData.canvaEditUrl).toContain('canva.com/design/');
-    expect(deskData.canvaEditUrl).toContain('return_url=');
-    expect(deskData.capturedFiles.length).toBeGreaterThan(0);
+    expect(deskData).toMatchObject({
+      canvaStatus: 'not_configured', canvaDesignId: null, canvaEditUrl: null,
+      captureStatus: 'not_captured', capturedFiles: [], capturedArtifactSetHash: null,
+    });
     expect(deskData.exactCopy.some((c: any) => c.text.includes('بانگهێشتنامەی فەرمی'))).toBe(true);
     expect(deskData.exactCopy.some((c: any) => c.isKurdishRtl === true)).toBe(true);
-    expect(deskData.brandReferences.officialLogoSha256).toBeDefined();
+    expect(deskData.brandReferences).toMatchObject({
+      status: 'not_configured', officialLogoSha256: null, brandColors: [], approvedFonts: [],
+    });
+    expect(JSON.stringify(deskData)).not.toContain('canva-design-kaae-001');
+    expect(JSON.stringify(deskData)).not.toContain('sha256_mock_capture_set');
     // No QA ran on this revision, so the evidence says so instead of reporting a pass.
     expect(deskData.qaEvidence).toMatchObject({ status: 'not_run', criticalPass: null, qcReportHash: null, qcRunId: null });
+  });
+
+  it('shows a stored bound Canva design without inventing a capture for it', async () => {
+    const task = await createTestTask();
+    const designId = `DA-${crypto.randomUUID()}`;
+    const binding = await withRlsContext(testDb, { tenantId: defaultTenantId, userId: operatorUserId, role: 'operator' },
+      (trx) => new CanvaBindingRepository(trx).createBinding({
+        tenantId: defaultTenantId, taskId: task.id, clientId: task.clientId,
+        canvaDesignId: designId, editUrl: `https://www.canva.com/design/${designId}/edit`,
+      }, trx));
+    const res = await app.request(`/tasks/${task.id}/review-desk`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}` },
+    });
+    expect(res.status).toBe(200);
+    const desk = await res.json();
+    expect(desk.canvaStatus).toBe('recorded');
+    expect(desk.canvaDesignId).toBe(designId);
+    expect(desk.canvaEditUrl).toContain(encodeURIComponent(designId));
+    expect(desk).toMatchObject({ captureStatus: 'not_captured', captureArtifactCount: 0, capturedFiles: [], capturedArtifactSetHash: null });
+
+    const revId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId: revId, document: { id: 'captured-design', nodes: [{ id: 'title', type: 'text', text: 'Approved copy', role: 'headline' }] } }),
+    })).status).toBe(201);
+    await withRlsContext(testDb, { tenantId: defaultTenantId, userId: operatorUserId, role: 'operator' },
+      (trx) => new CanvaBindingRepository(trx).captureArtifactSet({
+        tenantId: defaultTenantId, bindingId: binding.id, taskId: task.id, clientId: task.clientId,
+        canvaDesignId: designId, expectedVersion: binding.version, parentRevisionId: revId,
+        capturedArtifactSetHash: 'a'.repeat(64),
+        artifacts: [{ format: 'png', storageKey: 'private/capture.png', sha256: 'b'.repeat(64), byteSize: 1024 }],
+        semanticCoverage: { textNodesCount: 1, imageFillsCount: 0, hasLogo: true, isComplete: true },
+        authActor: { actorType: 'operator', actorId: operatorUserId },
+      }));
+    const captured = await (await app.request(`/tasks/${task.id}/review-desk?revisionId=${revId}`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}` },
+    })).json();
+    expect(captured).toMatchObject({ captureStatus: 'recorded_metadata_only', captureArtifactCount: 1,
+      capturedFiles: [], capturedArtifactSetHash: 'a'.repeat(64) });
   });
 
   it('2. Enforces real role authorization on review decisions (FR-043)', async () => {

@@ -429,24 +429,45 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
             ORDER BY started_at DESC LIMIT 1`.execute(trx)).rows[0])
       : undefined;
 
+    const binding = isValidUuid(taskId)
+      ? await withRlsContext(db, { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId, role: auth.role }, async (trx) =>
+          (await sql<{ canva_design_id: string }>`SELECT canva_design_id FROM hawa.canva_bindings
+            WHERE tenant_id = ${auth.tenantId || DEFAULT_TENANT_ID}::uuid AND task_id = ${taskId}::uuid AND status = 'bound'
+            ORDER BY updated_at DESC LIMIT 1`.execute(trx)).rows[0])
+      : undefined;
+    const canvaDesignId = typeof binding?.canva_design_id === 'string' && binding.canva_design_id.trim()
+      ? binding.canva_design_id.trim() : null;
+    // Capture rows have source hashes but not the pinned export IDs/preview URLs this inspection
+    // contract needs. Show their existence and count, while withholding a fake reviewable file.
+    const capture = isValidUuid(taskId) && isValidUuid(revId)
+      ? await withRlsContext(db, { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId, role: auth.role }, async (trx) =>
+          (await sql<{ captured_artifact_set_hash: string; artifacts: unknown }>`
+            SELECT captured_artifact_set_hash, artifacts FROM hawa.canva_capture_sets
+            WHERE tenant_id = ${auth.tenantId || DEFAULT_TENANT_ID}::uuid AND task_id = ${taskId}::uuid
+              AND parent_revision_id = ${revId}::uuid
+            ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0])
+      : undefined;
+    let capturedArtifacts: unknown = capture?.artifacts;
+    if (typeof capturedArtifacts === 'string') {
+      try { capturedArtifacts = JSON.parse(capturedArtifacts); }
+      catch { capturedArtifacts = null; }
+    }
+    const captureArtifactCount = Array.isArray(capturedArtifacts) ? capturedArtifacts.length : 0;
+    const hasCaptureRecord = Boolean(capture && /^[0-9a-f]{64}$/i.test(capture.captured_artifact_set_hash) &&
+      captureArtifactCount > 0);
     const deskInspection = humanApprovalManager.buildReviewDeskInspection({
       taskId,
       revisionId: revId,
       designTitle: task.title || 'Design Task',
-      canvaDesignId: task.canvaDesignId || 'canva-design-kaae-001',
-      canvaEditUrl: `https://www.canva.com/design/${task.canvaDesignId || 'canva-design-kaae-001'}/edit?return_url=https%3A%2F%2Fdesk.hawa.agency%2Ftasks%2F${taskId}`,
-      capturedFiles: task.latestCaptureSet?.artifacts || [
-        {
-          artifactId: crypto.randomUUID(),
-          relativePath: 'renders/1x1/banner.png',
-          mimeType: 'image/png',
-          byteSize: 102400,
-          sha256: 'sha256_render_1x1',
-          aspectRatio: '1:1',
-          previewUrl: `/staged-exports/banner-1x1.png`,
-        },
-      ],
-      capturedArtifactSetHash: task.latestCaptureSet?.capturedArtifactSetHash || 'sha256_mock_capture_set',
+      canvaStatus: canvaDesignId ? 'recorded' : 'not_configured',
+      canvaDesignId,
+      canvaEditUrl: canvaDesignId
+        ? `https://www.canva.com/design/${encodeURIComponent(canvaDesignId)}/edit?return_url=https%3A%2F%2Fdesk.hawa.agency%2Ftasks%2F${taskId}`
+        : null,
+      captureStatus: hasCaptureRecord ? 'recorded_metadata_only' : 'not_captured',
+      captureArtifactCount: hasCaptureRecord ? captureArtifactCount : 0,
+      capturedFiles: [],
+      capturedArtifactSetHash: hasCaptureRecord ? capture!.captured_artifact_set_hash : null,
       exactCopy: (rev?.document?.nodes || [])
         .filter((n: any) => n.type === 'text')
         .map((n: any) => ({
@@ -456,10 +477,13 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
           isKurdishRtl: /[\u0600-\u06FF]/.test(n.text || ''),
         })),
       brandReferences: {
-        clientId: task.clientId || '00000000-0000-4000-a000-000000000002',
-        officialLogoSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-        brandColors: ['#003366', '#D4AF37', '#F5F5F5'],
-        approvedFonts: ['Cairo-Bold', 'NotoNaskhArabic-Regular'],
+        // This endpoint has no revision-bound, approved BrandKit record to read yet. The client ID
+        // identifies scope; it is not evidence for an official logo, palette or font approval.
+        status: 'not_configured',
+        clientId: task.clientId || null,
+        officialLogoSha256: null,
+        brandColors: [],
+        approvedFonts: [],
       },
       // Without a QA report the evidence says not run; it used to show a passed, critical-pass report
       // with a random run id and the hash 'verified_qc_pass'.

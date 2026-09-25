@@ -97,8 +97,11 @@ export interface ReviewDeskInspection {
   taskId: UUID;
   revisionId: UUID;
   designTitle: string;
-  canvaDesignId: string;
-  canvaEditUrl: string;
+  canvaStatus: 'recorded' | 'not_configured';
+  canvaDesignId: string | null;
+  canvaEditUrl: string | null;
+  captureStatus: 'captured' | 'recorded_metadata_only' | 'not_captured';
+  captureArtifactCount: number;
   capturedFiles: Array<{
     artifactId: UUID;
     relativePath: string;
@@ -109,7 +112,7 @@ export interface ReviewDeskInspection {
     previewUrl: string;
     stagedPath?: string;
   }>;
-  capturedArtifactSetHash: SHA256;
+  capturedArtifactSetHash: SHA256 | null;
   exactCopy: Array<{
     nodeId: string;
     role: string;
@@ -117,8 +120,9 @@ export interface ReviewDeskInspection {
     isKurdishRtl: boolean;
   }>;
   brandReferences: {
-    clientId: UUID;
-    officialLogoSha256: SHA256;
+    status: 'verified' | 'not_configured';
+    clientId: UUID | null;
+    officialLogoSha256: SHA256 | null;
     brandColors: string[];
     approvedFonts: string[];
   };
