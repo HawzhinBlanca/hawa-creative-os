@@ -28,3 +28,13 @@ Full record: `PHASE3_EVIDENCE.md`. Run on a restore of the nightly dump `hawa_20
 ## Gate on the merged branch
 
 - `pnpm build`: 0. Full suite (`HAWA_TEST_WORKERS=3`): 405 files passed, 1 failed, 4 skipped; 3,050 tests passed, 1 failed, 49 skipped. The one failure is `r11-release-gate` test 1, which needs the release manifest the lead writes at release.
+
+## Lead's follow-up: tonight's nightly and the test residue (2026-09-25 03:45-04:10)
+
+- Nightly 20260925T003003Z: OK, restore verified (tasks 1,612, events 2,090), dump 48,338,598 B in 3 s. The first night with the file store: `blobs=0 new_blobs=0 refs_without_row=186 gc_deleted=0`.
+- The production store is empty for an ordinary reason. Tonight's dump was restored into a scratch database on the test server (`hawa_scratch_blobcheck_*`, dropped afterwards; no SQL on production). It holds 0 tasks, 0 studio candidates, 0 plans and 0 task files created after release A was deployed (2026-09-24 12:35Z), so nothing has been written yet. The 186 references without a row are hashes of bytes still held in their rows; the production copy (backfill) gives them rows.
+- The test residue that blocks release B's keys, identified on the same copy by non-personal fields only:
+  - 11 tasks titled `[TEST] Studio Task` (the fixture title; matched by hash against the test sources), created 2026-09-14 21:36:36-21:37:24Z, requested by fixture principal `…b000-000000000010`, with no source message. 10 are `received` and 1 is `human_review`, so they are open in the office's queue. They have 11 studio runs (keys `key-<uuid>`) and 6 Canva plans, including plan `31118789-…` whose 21-byte source blocks `canva_plan_source_blob_fk`.
+  - Task `23b71a0c-…` (21:38:17Z, request key `studio-live-golden-01-…`, a 40-character title) is a deliberate live studio proof, not test residue.
+  - 2 tasks from 2026-09-13 have titles beginning "test". They look like hand-typed trial requests; they were not classified and are left alone.
+- **Owner decision:** retire the 11 `[TEST] Studio Task` tasks, their runs and plans (cancel and soft-delete them through Core, with an audit reason). Nothing has been changed.
