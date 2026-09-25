@@ -296,7 +296,8 @@ export class CanvaConnectService {
       // Exports are limited to the design currently bound, as exportsById limits them.
       const operations=(await sql<any>`SELECT id,kind,status,design_id,remote_job_id,metadata->>'method' AS method,created_at FROM hawa.canva_remote_operations
         WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid ORDER BY created_at DESC LIMIT 20`.execute(db)).rows;
-      const artifacts=binding ? (await sql<any>`SELECT b.id,b.operation_id,b.format,b.sha256,b.content_check,octet_length(b.content) AS byte_size FROM hawa.canva_export_bytes b
+      const artifacts=binding ? (await sql<any>`SELECT b.id,b.operation_id,b.format,b.sha256,b.content_check,octet_length(b.content) AS byte_size,
+          o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
         JOIN hawa.canva_remote_operations o ON o.id=b.operation_id AND o.tenant_id=b.tenant_id
         WHERE b.tenant_id=${s.tenantId}::uuid AND b.task_id=${taskId}::uuid AND o.status='retrieved'
           AND o.design_id=${binding.canva_design_id} AND o.binding_version=${binding.version}

@@ -131,10 +131,12 @@ export async function resolveQcProfileId(trx: Kysely<Database>, tenantId: string
 
 /** A stored Canva export as the QC evaluator reads it. */
 export interface ExportRow {
+  id: string;
   sha256: string;
   format: string;
   content: Buffer;
   content_check: unknown;
+  capture_version: string | null;
 }
 
 export interface CanvaQcEvaluation {
@@ -203,6 +205,9 @@ export async function recordCheckedExportQc(
   evaluateQc: BridgeDeps['evaluateQc'],
   p: { tenantId: string; taskId: string; fallbackCopy?: string[]; actorId?: string | null; rework?: boolean }
 ): Promise<ExportQcResult> {
+  // Approval locks this task before choosing the latest QC run. Hold the same lock while recording a
+  // recapture so a concurrent approval cannot commit against a run that has just been superseded.
+  await sql`SELECT id FROM hawa.tasks WHERE tenant_id = ${p.tenantId}::uuid AND id = ${p.taskId}::uuid FOR UPDATE`.execute(trx);
   const task = await new TaskRepository(trx).findById(p.taskId, p.tenantId, trx);
   let revisionId = task?.current_design_revision_id;
   if (!task || !revisionId) return { recorded: false, reason: 'NO_REVISION' };
@@ -219,7 +224,7 @@ export async function recordCheckedExportQc(
     throw new Error('An approved Canva task has no current revision approval; the capture cannot be accepted as the same revision');
   }
   const changedSince = reworkedSince || priorApproval?.created_at || null;
-  const exportRow = (await sql<ExportRow>`SELECT b.sha256, b.format, b.content, b.content_check FROM hawa.canva_export_bytes b
+  const exportRow = (await sql<ExportRow>`SELECT b.id, b.sha256, b.format, b.content, b.content_check, o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
     JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
     JOIN hawa.canva_bindings g ON g.tenant_id = b.tenant_id AND g.task_id = b.task_id AND g.status = 'bound'
       AND g.canva_design_id = o.design_id AND g.version = o.binding_version
@@ -232,6 +237,8 @@ export async function recordCheckedExportQc(
     WHERE tenant_id = ${p.tenantId}::uuid AND task_id = ${p.taskId}::uuid AND status NOT IN ('failed','abandoned')
     ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.copy;
   const qc = evaluateQc(exportRow, copy || p.fallbackCopy);
+  qc.qaReport.exportArtifactId = exportRow.id;
+  qc.qaReport.captureVersion = exportRow.capture_version;
   let transition: OutcomeTransition | undefined;
   if (changedSince) {
     // The move is recorded as an event first, as the bridge does; createRevision then points the
@@ -291,9 +298,12 @@ export async function bridgeCanvaDraftRevision(trx: Kysely<Database>, deps: Brid
   const manifest = (await sql<{ manifest: ({ nodes?: unknown[]; copy?: string[] } & Record<string, unknown>) | null }>`SELECT result->'manifest' AS manifest FROM hawa.canva_design_plans
     WHERE tenant_id = ${p.tenantId}::uuid AND task_id = ${p.taskId}::uuid AND status NOT IN ('failed','abandoned')
     ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.manifest;
-  const exportRow = (await sql<ExportRow>`SELECT sha256, format, content, content_check FROM hawa.canva_export_bytes
-    WHERE tenant_id = ${p.tenantId}::uuid AND task_id = ${p.taskId}::uuid AND format = 'pptx'
-    ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
+  const exportRow = (await sql<ExportRow>`SELECT b.id, b.sha256, b.format, b.content, b.content_check, o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
+    JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
+    JOIN hawa.canva_bindings g ON g.tenant_id = b.tenant_id AND g.task_id = b.task_id AND g.status = 'bound'
+      AND g.canva_design_id = o.design_id AND g.version = o.binding_version
+    WHERE b.tenant_id = ${p.tenantId}::uuid AND b.task_id = ${p.taskId}::uuid AND b.format = 'pptx'
+    ORDER BY b.created_at DESC LIMIT 1`.execute(trx)).rows[0];
   const candidateLayouts = (await sql<{ layouts: Array<{ shapes?: unknown[] }> | null }>`SELECT c.layouts FROM hawa.design_studio_candidates c
     JOIN hawa.design_studio_runs r ON r.id = c.run_id
     WHERE r.tenant_id = ${p.tenantId}::uuid AND r.task_id = ${p.taskId}::uuid AND c.status = 'winner'
@@ -338,6 +348,10 @@ export async function bridgeCanvaDraftRevision(trx: Kysely<Database>, deps: Brid
 
   const profileId = await resolveQcProfileId(trx, p.tenantId);
   const qc = withWorkerCheckFailure(deps.evaluateQc(exportRow, manifest?.copy || p.fallbackCopy), p.status);
+  if (exportRow) {
+    qc.qaReport.exportArtifactId = exportRow.id;
+    qc.qaReport.captureVersion = exportRow.capture_version;
+  }
   await trx.insertInto('qc_runs').values({
     tenant_id: p.tenantId,
     task_id: p.taskId,

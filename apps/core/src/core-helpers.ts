@@ -174,6 +174,9 @@ export interface CanvaQcEvaluationResult {
     checks: Array<{ name: string; passed: boolean; details?: any; observedFonts?: string[] }>;
     exportSha256: string | null;
     exportFormat: string | null;
+    /** Added when a stored Canva export is linked to a revision's QC run. */
+    exportArtifactId?: string;
+    captureVersion?: string | null;
     verifiedAt: string;
   };
   criticalPass: boolean;

@@ -95,6 +95,8 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
     const resumed = await deskCheck(app, taskId);
     expect(resumed.status).toBe('retrieved');
     expect(resumed.artifact.content_check).toMatchObject({ copyPass: true, fontPass: true });
+    const captureState = await (await app.request(`/tasks/${taskId}/canva`, { headers: deskHeaders })).json();
+    expect(captureState.artifacts.find((item: any) => item.id === resumed.artifact.id)?.capture_version).toBe('200');
 
     const runs = await qcRuns(taskId);
     expect(runs.map((r: any) => ({ attempt: r.attempt, status: r.status, fromCapture: r.export_sha === resumed.artifact.sha256 })))
@@ -118,6 +120,45 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
     expect((await decide(app, taskId, first, 'approved')).status).toBe(409);
     const approved = await decide(app, taskId, detail.latestRevisionId, 'approved', [resumed.artifact.id]);
     expect(approved.status).toBe(201);
+  });
+
+  it('refuses an older capture when approving the newly checked revision', async () => {
+    const { taskId, app } = await draftWithTimedOutCheck();
+    const older = await deskCheck(app, taskId);
+    const firstRevision = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect((await decide(app, taskId, firstRevision, 'revision_requested')).status).toBe(201);
+    const newer = await deskCheck(app, taskId);
+    const currentRevision = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect(currentRevision).not.toBe(firstRevision);
+    expect(older.artifact.id).not.toBe(newer.artifact.id);
+
+    const refused = await decide(app, taskId, currentRevision, 'approved', [older.artifact.id]);
+    expect(refused.status).toBe(422);
+    expect((await refused.json()).detail).toMatch(/capture|revision|QA/i);
+    expect((await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).status).toBe('AWAITING_APPROVAL');
+  });
+
+  it('refuses an image from a different Canva design version even with the checked deck selected', async () => {
+    const { taskId, app } = await draftWithTimedOutCheck();
+    const checked = await deskCheck(app, taskId);
+    const revisionId = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    const olderImageId = randomUUID();
+    const operationId = randomUUID();
+    const image = Buffer.from('older image capture from another Canva design version');
+    await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, async (trx) => {
+      await sql`INSERT INTO hawa.canva_remote_operations
+        (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata)
+        VALUES (${operationId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${worker.actorId}, ${'old-image-' + randomUUID()},
+          'older-image', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format: 'png', designUpdatedAt: 199 })}::jsonb)`.execute(trx);
+      await sql`INSERT INTO hawa.canva_export_bytes
+        (id, tenant_id, task_id, client_id, operation_id, format, sha256, content)
+        VALUES (${olderImageId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operationId}::uuid,
+          'png', ${createHash('sha256').update(image).digest('hex')}, ${image})`.execute(trx);
+    });
+
+    const refused = await decide(app, taskId, revisionId, 'approved', [checked.artifact.id, olderImageId]);
+    expect(refused.status).toBe(422);
+    expect((await refused.json()).detail).toMatch(/another capture/);
   });
 
   it('a new checked Canva capture after approval invalidates that approval before delivery', async () => {

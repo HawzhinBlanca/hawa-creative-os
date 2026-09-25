@@ -261,9 +261,13 @@ export function createRedrive(deps: RedriveDeps) {
       const currentTask = await taskRepo?.findById(taskId, tenantId, trx);
       if (revisionRepo && !currentTask?.current_design_revision_id) {
         const revisionId = crypto.randomUUID();
-        const exportRow = (await sql<any>`SELECT sha256, format, content, content_check FROM hawa.canva_export_bytes
-          WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND format = 'pptx'
-          ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
+        const exportRow = (await sql<any>`SELECT b.id, b.sha256, b.format, b.content, b.content_check,
+            o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
+          JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
+          JOIN hawa.canva_bindings g ON g.tenant_id = b.tenant_id AND g.task_id = b.task_id AND g.status = 'bound'
+            AND g.canva_design_id = o.design_id AND g.version = o.binding_version
+          WHERE b.tenant_id = ${tenantId}::uuid AND b.task_id = ${taskId}::uuid AND b.format = 'pptx'
+          ORDER BY b.created_at DESC LIMIT 1`.execute(trx)).rows[0];
         const planRow = (await sql<any>`SELECT result->'manifest' AS manifest FROM hawa.canva_design_plans
           WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND status NOT IN ('failed','abandoned')
           ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.manifest;
@@ -309,6 +313,10 @@ export function createRedrive(deps: RedriveDeps) {
         const profileId = await redriveOutcome.resolveQcProfileId(trx, tenantId);
 
         const qcEval = evaluateCanvaExportQc(exportRow, planRow?.copy || taskData.exactCopy);
+        if (exportRow) {
+          qcEval.qaReport.exportArtifactId = exportRow.id;
+          qcEval.qaReport.captureVersion = exportRow.capture_version;
+        }
         await trx.insertInto('qc_runs').values({
           tenant_id: tenantId as any,
           task_id: taskId as any,

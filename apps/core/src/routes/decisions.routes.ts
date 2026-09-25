@@ -298,6 +298,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
               canvaDesignId: task?.canvaBinding?.canvaDesignId || null,
               sourceHash,
               exportHashes: (pinnedExports || []).map((e) => e.sha256),
+              captureEvidenceRequired: deliverableStore.captureEvidenceRequired === true,
               qcRunId: effectiveQcRunId,
               qcReportHash,
               qcProfile: task?.latestQAReport?.profile || 'standard',
@@ -314,6 +315,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         log.error('[core:approvals:create] DB approval error:', err);
         if (err.message?.includes('Cannot approve stale revision') || err.message?.includes('Cannot approve task') || err.message?.includes('already approved') || err.message?.includes('Concurrent modification')) {
           return problem(c, 409, 'Conflict', err.message);
+        }
+        if (err.message?.includes('Canva approval') || err.message?.includes('Canva QA')) {
+          return problem(c, 422, 'Capture Does Not Match Review', err.message);
         }
         if (err.message?.includes('Precondition failed') || err.message?.includes('QA run')) {
           return problem(c, 412, 'Precondition Failed', err.message);

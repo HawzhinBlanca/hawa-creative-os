@@ -10,6 +10,8 @@ import type { CanvaConnectService } from './canva-connect-service.js';
  * publisher uploaded zero-filled placeholders of those sizes.
  */
 export interface DeliverableStore {
+  /** Server-owned marker: this store reads immutable Canva export rows. */
+  captureEvidenceRequired?: boolean;
   /** Retrieved exports of the task with these ids; ids the store does not hold are left out. */
   find(tenantId: string, userId: string, taskId: string, artifactIds: string[]): Promise<PinnedExport[]>;
   /** The stored bytes of one export, or null when the store does not hold it. */
@@ -33,6 +35,7 @@ export function deliverableFormat(format: string): PinnedExport['format'] {
 
 export function canvaDeliverableStore(service: CanvaConnectService): DeliverableStore {
   return {
+    captureEvidenceRequired: true,
     async find(tenantId, userId, taskId, artifactIds) {
       const rows = artifactIds.length > 0
         ? await service.exportsById({ tenantId, actorId: userId }, taskId, artifactIds)

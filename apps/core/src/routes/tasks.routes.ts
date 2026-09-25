@@ -505,6 +505,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
               contrastCompliant: report?.contrastCompliant ?? null,
               fontCoverage: report?.fontCoverage ?? null,
               copyFidelity: report?.copyFidelity ?? null,
+              exportArtifactId: typeof report?.exportArtifactId === 'string' ? report.exportArtifactId : null,
+              captureVersion: typeof report?.captureVersion === 'string' ? report.captureVersion : null,
               errors: report?.errors || [],
             };
           }

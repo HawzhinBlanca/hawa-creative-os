@@ -32,6 +32,7 @@ describe.skipIf(!url)('review of 2026-09-24: approval and delivery across a Core
     const taskId = randomUUID();
     const designId = `canva_hunt_${randomUUID().slice(0, 8)}`;
     const pngId = randomUUID();
+    const checkedId = randomUUID();
     const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(randomUUID())]);
     const deck = Buffer.from(`PPTX_${randomUUID()}`);
     await withRlsContext(db, operator, async (trx) => {
@@ -42,10 +43,10 @@ describe.skipIf(!url)('review of 2026-09-24: approval and delivery across a Core
           ${JSON.stringify({ payload: { sourcePlatform: 'telegram', sourceChannelId: String(60000000 + Math.floor(Math.random() * 9000000)), copyEn: 'x' } })}::jsonb, now())`.execute(trx);
       await sql`INSERT INTO hawa.canva_bindings (id, tenant_id, task_id, client_id, canva_design_id, edit_url, status, version, created_at, updated_at)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${designId}, ${`https://www.canva.com/design/${designId}/edit`}, 'bound', 1, now(), now())`.execute(trx);
-      for (const [format, bytes, id] of [['png', png, pngId], ['pptx', deck, randomUUID()]] as const) {
+      for (const [format, bytes, id] of [['png', png, pngId], ['pptx', deck, checkedId]] as const) {
         const op = randomUUID();
         await sql`INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
-          VALUES (${op}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operator.userId}, ${'req_' + randomUUID().slice(0, 8)}, 'h', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format })}::jsonb, now(), now())`.execute(trx);
+          VALUES (${op}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operator.userId}, ${'req_' + randomUUID().slice(0, 8)}, 'h', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format, designUpdatedAt: 200 })}::jsonb, now(), now())`.execute(trx);
         await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
           VALUES (${id}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${op}::uuid, ${format}, ${createHash('sha256').update(bytes).digest('hex')}, ${bytes},
             ${JSON.stringify({ copyPass: true, fontPass: true, rtlPass: true, status: 'passed' })}::jsonb, now())`.execute(trx);
@@ -56,7 +57,7 @@ describe.skipIf(!url)('review of 2026-09-24: approval and delivery across a Core
     })).status).toBe(200);
     const detail = await (await before.request(`/tasks/${taskId}`, { headers })).json();
     const approve = await before.request(`/tasks/${taskId}/revisions/${detail.latestRevisionId}/decisions`, {
-      method: 'POST', headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' }, body: JSON.stringify({ decision: 'approved', pinnedExportIds: [pngId] }),
+      method: 'POST', headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' }, body: JSON.stringify({ decision: 'approved', pinnedExportIds: [pngId, checkedId] }),
     });
     expect(approve.status).toBe(201);
     return taskId;

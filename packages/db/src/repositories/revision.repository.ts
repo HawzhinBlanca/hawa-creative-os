@@ -1,4 +1,4 @@
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import crypto from 'node:crypto';
 import type { Database } from '../types.js';
 import { currentTraceId } from '../trace-context.js';
@@ -329,6 +329,52 @@ export class RevisionRepository {
           throw new Error(
             `Precondition failed: Revision ${params.revisionId} cannot be approved without a verified, passing critical QA run`
           );
+        }
+        const report = qcRun.report as Record<string, unknown> | null;
+        if (revision.studio === 'canva' && (report?.exportArtifactId || params.decisionPayload?.captureEvidenceRequired === true)) {
+          // The approval and its evidence are checked while the task row is locked. A pin from an
+          // older export of this same design and binding is not evidence for the latest QC run.
+          const checkedId = report?.exportArtifactId;
+          const checkedHash = report?.exportSha256;
+          const captureVersion = report?.captureVersion;
+          const pins = params.decisionPayload?.pinnedExports;
+          if (typeof checkedId !== 'string' || typeof checkedHash !== 'string'
+            || (typeof captureVersion !== 'string' && typeof captureVersion !== 'number')
+            || String(captureVersion).trim() === ''
+            || !Array.isArray(pins) || pins.length === 0) {
+            throw new Error('Canva approval requires a QC-linked capture and explicit stored exports');
+          }
+          const pinned = pins as Array<{ artifactId?: unknown; sha256?: unknown; byteSize?: unknown }>;
+          const ids = pinned.map((pin) => pin.artifactId);
+          if (ids.some((id) => typeof id !== 'string') || !ids.includes(checkedId)) {
+            throw new Error('Canva approval pins must include the export checked by the latest QA run');
+          }
+          const rows = (await sql<{
+            id: string; sha256: string; byte_size: number; format: string;
+            design_id: string; binding_version: number; capture_version: string | null;
+          }>`SELECT b.id, b.sha256, octet_length(b.content) AS byte_size, b.format,
+                o.design_id, o.binding_version, o.metadata->>'designUpdatedAt' AS capture_version
+              FROM hawa.canva_export_bytes b
+              JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
+              WHERE b.tenant_id = ${params.tenantId}::uuid AND b.task_id = ${params.taskId}::uuid
+                AND b.id = ANY(${ids}::uuid[])`.execute(dbClient)).rows;
+          const byId = new Map(rows.map((row) => [row.id, row]));
+          const checked = byId.get(checkedId);
+          if (!checked || checked.format !== 'pptx' || checked.sha256 !== checkedHash
+            || checked.capture_version !== String(captureVersion)
+            || (revision.source_sha256 && revision.source_sha256 !== checkedHash && Number(qcRun.attempt) === 1)) {
+            throw new Error('Canva QA evidence does not match the checked export of this revision');
+          }
+          const binding = (await sql<{ canva_design_id: string; version: number }>`SELECT canva_design_id, version FROM hawa.canva_bindings
+            WHERE tenant_id = ${params.tenantId}::uuid AND task_id = ${params.taskId}::uuid AND status = 'bound'`.execute(dbClient)).rows[0];
+          if (!binding || pinned.some((pin) => {
+            const row = byId.get(String(pin.artifactId));
+            return !row || row.sha256 !== pin.sha256 || Number(row.byte_size) !== Number(pin.byteSize)
+              || row.design_id !== binding.canva_design_id || Number(row.binding_version) !== Number(binding.version)
+              || row.capture_version !== String(captureVersion);
+          })) {
+            throw new Error('Canva approval pins contain an export from another capture or revision');
+          }
         }
       }
 

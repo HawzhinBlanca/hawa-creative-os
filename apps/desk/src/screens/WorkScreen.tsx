@@ -75,6 +75,8 @@ export interface LiveTask {
     safeMargins: boolean | null;
     contrastCompliant: boolean | null;
     fontCoverage: boolean;
+    exportArtifactId?: string | null;
+    captureVersion?: string | null;
     errors?: string[];
   };
 }
@@ -416,7 +418,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       return Array.isArray(state?.artifacts) ? (state.artifacts as StoredExport[]) : [];
     });
     setApprovalExports(reading);
-    if (reading.state === 'known') setPinnedExportIds(defaultPins(reading.value));
+    if (reading.state === 'known') setPinnedExportIds(defaultPins(reading.value, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion : undefined));
   };
 
   // A mutation (ADR-037): pending until Core answers and the task is read again. The cached status is
@@ -445,7 +447,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       return;
     }
     const exportsForApproval = approvalExports.state === 'known' ? approvalExports.value : [];
-    const blocker = approvalRoleBlocker(sessionUser?.role) || approvalBlocker(approvalExports.state, exportsForApproval, pinnedExportIds);
+    const blocker = approvalRoleBlocker(sessionUser?.role) || approvalBlocker(approvalExports.state, exportsForApproval, pinnedExportIds, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId ?? null : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion ?? null : undefined);
     if (blocker) {
       showToast(blocker, 'error');
       return;
@@ -1294,7 +1296,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
             <fieldset style={{ border: 0, padding: 0, margin: '0 0 14px' }}>
               <legend style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Files to deliver</legend>
               <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 6px' }}>
-                Delivery sends exactly the selected exports, byte for byte, and nothing else.
+                Delivery sends exactly the selected exports, byte for byte. The PPTX checked by QA must stay selected for a Canva design.
               </p>
               {approvalExports.state === 'known' &&
                 approvalExports.value.map((e) => (
@@ -1307,9 +1309,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     <span style={{ fontFamily: 'monospace' }}>{describeExport(e)}</span>
                   </label>
                 ))}
-              {approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds) && (
+              {approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId ?? null : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion ?? null : undefined) && (
                 <p role="status" style={{ fontSize: 12, color: '#b91c1c', margin: '4px 0 0' }}>
-                  {approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds)}
+                  {approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId ?? null : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion ?? null : undefined)}
                   {approvalExports.state === 'unknown' ? ` (${approvalExports.reason})` : ''}
                 </p>
               )}
@@ -1337,7 +1339,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 disabled={
                   busy ||
                   Boolean(approvalRoleBlocker(sessionUser?.role)) ||
-                  Boolean(approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds))
+                  Boolean(approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId ?? null : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion ?? null : undefined))
                 }
               >
                 {approve.isPending ? 'Approving…' : 'Confirm Approval & Release'}

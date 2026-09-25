@@ -96,7 +96,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
         INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
         VALUES (${opId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${operatorUserId},
                 ${'req_' + randomUUID().slice(0, 8)}, 'hash_req', 'export', 'retrieved', ${designId}, 1,
-                ${JSON.stringify({ format: 'pptx' })}::jsonb, now(), now())
+                ${JSON.stringify({ format: 'pptx', designUpdatedAt: 200 })}::jsonb, now(), now())
       `.execute(trx);
 
       // Stored export bytes
@@ -160,6 +160,8 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(taskDetail.latestRevisionId).toBe(revId);
     expect(taskDetail.qaReport).toBeDefined();
     expect(taskDetail.qaReport.passed).toBe(true);
+    expect(taskDetail.qaReport.exportArtifactId).toBe(exportId);
+    expect(taskDetail.qaReport.captureVersion).toBe('200');
     expect(taskDetail.latestRevision).toBeDefined();
     expect(taskDetail.latestRevision.id).toBe(revId);
     expect(taskDetail.latestRevision.sha256).toBe(exportSha256);
@@ -382,7 +384,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
         INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
         VALUES (${opId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${operatorUserId},
                 ${'req_' + randomUUID().slice(0, 8)}, 'hash_req', 'export', 'retrieved', ${designId}, 1,
-                ${JSON.stringify({ format: 'pptx' })}::jsonb, now(), now())
+                ${JSON.stringify({ format: 'pptx', designUpdatedAt: 200 })}::jsonb, now(), now())
       `.execute(trx);
 
       await sql`
