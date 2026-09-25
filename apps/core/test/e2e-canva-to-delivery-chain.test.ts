@@ -5,6 +5,7 @@ import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { OutboxConsumer } from '../../worker/src/outbox-consumer.js';
+import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 describe('E2E Canva-to-Delivery Closed Loop', () => {
   let db: Kysely<Database>;
@@ -80,7 +81,8 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     const designId = `canva_test_design_${randomUUID().slice(0, 8)}`;
     const opId = randomUUID();
     const exportId = randomUUID();
-    const exportContent = Buffer.from('PNG_CANVA_TEST_EXPORT_BINARY_IMAGE_BYTES_12345');
+    const checked = await checkedCanvaExportFixture('We are pleased to announce full institutional accreditation.');
+    const exportContent = checked.bytes;
     const exportSha256 = createHash('sha256').update(exportContent).digest('hex');
 
     await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
@@ -104,7 +106,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
         INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
         VALUES (${exportId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${opId}::uuid,
                 'pptx', ${exportSha256}, ${exportContent},
-                ${JSON.stringify({ copyPass: true, fontPass: true, rtlPass: true, status: 'passed' })}::jsonb, now())
+                ${JSON.stringify(checked.contentCheck)}::jsonb, now())
       `.execute(trx);
     });
 
@@ -369,7 +371,8 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     const designId = `canva_corrupt_${randomUUID().slice(0, 8)}`;
     const opId = randomUUID();
     const exportId = randomUUID();
-    const exportContent = Buffer.from('PNG_CORRUPTED_EXPORT_CONTENT_LONGER_THAN_32_BYTES_12345');
+    const checked = await checkedCanvaExportFixture('Corrupted hallucinated slogan');
+    const exportContent = checked.bytes;
     const exportSha256 = createHash('sha256').update(exportContent).digest('hex');
 
     // Store export bytes with corrupted copy check failure
@@ -395,6 +398,8 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
                   copyPass: false,
                   fontPass: true,
                   status: 'failed',
+                  expectedCopy: ['We are pleased to announce full institutional accreditation.'],
+                  requiredFont: 'Verdana',
                   offendingObjects: [{ text: 'Corrupted hallucinated slogan', reason: 'Mismatch with source copy' }],
                 })}::jsonb, now())
       `.execute(trx);
@@ -426,7 +431,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(dbQc.critical_pass).toBe(false);
     expect(dbQc.status).toBe('failed');
     expect(dbQc.report?.errors?.length).toBeGreaterThan(0);
-    expect(dbQc.report.errors[0]).toContain('Copy mismatch');
+    expect(dbQc.report.errors[0]).toMatch(/copy.*match/i);
 
     // Desk API: verify task details show changes requested / failed QC
     const taskGetRes = await app.request(`/tasks/${taskId}`, { headers });

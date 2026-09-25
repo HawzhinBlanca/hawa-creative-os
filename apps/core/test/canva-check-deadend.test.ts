@@ -4,6 +4,7 @@ import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
+import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
@@ -64,7 +65,8 @@ describe.skipIf(!url)('HUNT: a draft whose automatic check ran out of time', () 
     expect(report.status).toBe(200);
 
     // A moment later the export is retrieved (resume, or the office's capture) and its check passes.
-    const checkedId = await storeExport(taskId, designId, 'pptx', Buffer.from(`PPTX_${randomUUID()}`), { copyPass: true, fontPass: true, rtlPass: true, status: 'passed' });
+    const checked = await checkedCanvaExportFixture('x');
+    const checkedId = await storeExport(taskId, designId, 'pptx', checked.bytes, checked.contentCheck);
 
     // Every route the office has: re-drive (answers ALREADY_BOUND), a repeated "ready" report
     // (REVISION_EXISTS), then approval with both the PNG and its checked editable source pinned.

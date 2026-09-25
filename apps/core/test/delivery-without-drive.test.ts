@@ -4,6 +4,7 @@ import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
+import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
@@ -59,12 +60,12 @@ describe.skipIf(!url)('an approved design when Drive cannot be written', () => {
     // revision and its QC run as production does.
     await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
       const deckOp = randomUUID();
-      const deck = Buffer.from(`PPTX_${randomUUID()}`);
+      const { bytes: deck, contentCheck } = await checkedCanvaExportFixture('x');
       await sql`INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
         VALUES (${deckOp}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operatorUserId}, ${'req_' + randomUUID().slice(0, 8)}, 'h', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format: 'pptx', designUpdatedAt: 200 })}::jsonb, now(), now())`.execute(trx);
       await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
         VALUES (${checkedId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${deckOp}::uuid, 'pptx', ${createHash('sha256').update(deck).digest('hex')}, ${deck},
-          ${JSON.stringify({ copyPass: true, fontPass: true, rtlPass: true, status: 'passed' })}::jsonb, now())`.execute(trx);
+          ${JSON.stringify(contentCheck)}::jsonb, now())`.execute(trx);
     });
     const ready = await app.request(`/tasks/${taskId}/notifications/canva-status`, {
       method: 'POST', headers, body: JSON.stringify({ status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId, notifyRequester: false }),

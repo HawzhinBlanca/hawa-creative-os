@@ -529,10 +529,10 @@ export class CanvaConnectService {
           const manifest=source?.manifest;
           const sentBlocks=studioSentBlocks(manifest);
           if(sentBlocks){
-            contentCheck=checkCanvaPptx(bytes,manifest.copy,{fontsByIndex:sentBlocks.map(t=>t.fontFamily),roles:sentBlocks.map(t=>t.role||'body')});
+            contentCheck={...checkCanvaPptx(bytes,manifest.copy,{fontsByIndex:sentBlocks.map(t=>t.fontFamily),roles:sentBlocks.map(t=>t.role||'body')}),expectedCopy:manifest.copy};
           }else{
             if(!manifest?.copy||!manifest.reference?.rules?.fontFamily)fail(422,'SOURCE_REQUIRED','No saved copy and brand font are available for this task');
-            contentCheck=checkCanvaPptx(bytes,manifest.copy,manifest.reference.rules.fontFamily,{scriptFonts:manifest.reference.rules.scriptFonts});
+            contentCheck={...checkCanvaPptx(bytes,manifest.copy,manifest.reference.rules.fontFamily,{scriptFonts:manifest.reference.rules.scriptFonts}),expectedCopy:manifest.copy};
           }
         }else{
           const validated=validator.validateArtifactBytes(bytes,row.metadata.format==='png'?'png':'pdf_standard');

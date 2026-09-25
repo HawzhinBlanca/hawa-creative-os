@@ -4,6 +4,7 @@ import { createDb, sql, withRlsContext } from '@hawa/db';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
+import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 /**
  * Two deliveries of the same task at the same instant must reach the publisher once.
@@ -22,7 +23,7 @@ async function approvedTask(db: any, app: any, headers: Record<string, string>) 
   const taskId = randomUUID();
   const designId = `lock_design_${randomUUID().slice(0, 8)}`;
   const exportId = randomUUID();
-  const content = Buffer.from(`export bytes ${taskId}`);
+  const { bytes: content, contentCheck } = await checkedCanvaExportFixture('Lock wiring');
   const sha = createHash('sha256').update(content).digest('hex');
   await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
     await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
@@ -37,7 +38,7 @@ async function approvedTask(db: any, app: any, headers: Record<string, string>) 
       VALUES (${opId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${operatorUserId}, ${'req_' + randomUUID().slice(0, 8)}, 'hash', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format: 'pptx', designUpdatedAt: 200 })}::jsonb, now(), now())`.execute(trx);
     await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
       VALUES (${exportId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${opId}::uuid, 'pptx', ${sha}, ${content},
-        ${JSON.stringify({ copyPass: true, fontPass: true, rtlPass: true, status: 'passed' })}::jsonb, now())`.execute(trx);
+        ${JSON.stringify(contentCheck)}::jsonb, now())`.execute(trx);
   });
   const status = await app.request(`/tasks/${taskId}/notifications/canva-status`, {
     method: 'POST', headers, body: JSON.stringify({ status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId }),

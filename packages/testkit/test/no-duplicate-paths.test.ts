@@ -8,6 +8,7 @@ import { createApp } from '../../../apps/core/src/app.js';
 import { createAppWithClientFixtures } from '../../../apps/core/test/fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../../../apps/core/src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../../../apps/core/src/services/canva-connect-service.js';
+import { checkedCanvaExportFixture } from '../src/canva-export-fixture.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '../../..');
@@ -21,7 +22,7 @@ async function approvedTask(db: ReturnType<typeof createDb>, app: ReturnType<typ
   const taskId = randomUUID();
   const designId = `dup_design_${randomUUID().slice(0, 8)}`;
   const exportId = randomUUID();
-  const content = Buffer.from(`export bytes ${taskId}`);
+  const { bytes: content, contentCheck } = await checkedCanvaExportFixture('One delivery path');
   await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
     await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
       VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaaeClientId}::uuid, 'One delivery path', 'publish goes through the delivery service', 'received', 3, 1, now(), now())`.execute(trx);
@@ -35,7 +36,7 @@ async function approvedTask(db: ReturnType<typeof createDb>, app: ReturnType<typ
       VALUES (${opId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${operatorUserId}, ${'req_' + randomUUID().slice(0, 8)}, 'hash', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format: 'pptx', designUpdatedAt: 200 })}::jsonb, now(), now())`.execute(trx);
     await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
       VALUES (${exportId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${opId}::uuid, 'pptx', ${createHash('sha256').update(content).digest('hex')}, ${content},
-        ${JSON.stringify({ copyPass: true, fontPass: true, rtlPass: true, status: 'passed' })}::jsonb, now())`.execute(trx);
+        ${JSON.stringify(contentCheck)}::jsonb, now())`.execute(trx);
   });
   const ready = await app.request(`/tasks/${taskId}/notifications/canva-status`, {
     method: 'POST', headers, body: JSON.stringify({ status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId }),

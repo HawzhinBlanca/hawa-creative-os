@@ -218,18 +218,50 @@ export function evaluateCanvaExportQc(
     };
   }
 
-  // If check is missing and bytes are PPTX, attempt real checkCanvaPptx
-  let resolvedCheck = contentCheck;
-  if (!resolvedCheck && exportRow.format === 'pptx' && exportRow.content && expectedCopy && expectedCopy.length > 0) {
-    try {
-      resolvedCheck = checkCanvaPptx(
-        exportRow.content instanceof Uint8Array ? exportRow.content : new Uint8Array(exportRow.content),
-        expectedCopy,
-        requiredFont || 'Verdana'
-      );
-    } catch (err: any) {
-      errors.push(`PPTX slide check failed: ${err.message || String(err)}`);
+  const bytes = exportRow.content instanceof Uint8Array ? exportRow.content : undefined;
+  const actualSha256 = bytes && crypto.createHash('sha256').update(bytes).digest('hex');
+  // Manual Desk recaptures can have no design-plan row. In that case the source copy saved with the
+  // capture's inspection is the expected text. A current approved/plan copy always takes priority.
+  const copyToCheck = expectedCopy?.length ? expectedCopy : contentCheck?.expectedCopy;
+  if (exportRow.format !== 'pptx' || !bytes?.length ||
+      !Array.isArray(copyToCheck) || !copyToCheck.length ||
+      !copyToCheck.every((part: unknown) => typeof part === 'string') ||
+      !/^[0-9a-f]{64}$/.test(exportRow.sha256 || '') ||
+      actualSha256 !== exportRow.sha256) {
+    errors.push('Canva PPTX export bytes, expected copy, or stored SHA-256 are missing or inconsistent');
+    return {
+      status: 'failed', criticalPass: false,
+      qaReport: {
+        status: 'failed', criticalPass: false, passed: false,
+        bidiIsolation: false, fontCoverage: false, copyFidelity: false,
+        contrastCompliant: null, safeMargins: null, errors,
+        checks: [
+          { name: 'exportRetrieved', passed: Boolean(bytes?.length) },
+          { name: 'artifactIntegrity', passed: false },
+          { name: 'copyPass', passed: false },
+          { name: 'fontPass', passed: false },
+        ],
+        exportSha256: exportRow.sha256 || null,
+        exportFormat: exportRow.format || null,
+        verifiedAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  // A stored content_check is a receipt from capture, not an authority over later bytes. Re-read
+  // the pinned PPTX with its captured font policy and current approved copy on every QC run.
+  let resolvedCheck: ReturnType<typeof checkCanvaPptx> | null = null;
+  try {
+    const perBlockFonts = contentCheck?.fontsByIndex;
+    if (perBlockFonts && (!Array.isArray(perBlockFonts) || !perBlockFonts.every((face: unknown) => typeof face === 'string'))) {
+      throw new Error('Invalid captured font policy');
     }
+    resolvedCheck = checkCanvaPptx(bytes, copyToCheck,
+      perBlockFonts ? { fontsByIndex: perBlockFonts, scriptFonts: contentCheck?.scriptFonts || undefined }
+        : (requiredFont || contentCheck?.requiredFont || 'Verdana'),
+      perBlockFonts ? {} : { scriptFonts: contentCheck?.scriptFonts || undefined });
+  } catch (err: any) {
+    errors.push(`PPTX slide check failed: ${err.message || String(err)}`);
   }
 
   if (!resolvedCheck) {
@@ -268,7 +300,8 @@ export function evaluateCanvaExportQc(
   const rtlPass = resolvedCheck.rtlPass === true
     || (resolvedCheck.rtlPass === false && resolvedCheck.source === 'canva_exported_pptx'
       && Number(resolvedCheck.arabicTextObjectCount) > 0 && Number(resolvedCheck.rtlTextObjectCount) === 0);
-  const checkStatus = resolvedCheck.status !== 'failed';
+  const checkStatus = contentCheck?.status !== 'failed' && contentCheck?.copyPass !== false &&
+    contentCheck?.fontPass !== false && contentCheck?.rtlPass !== false;
   const criticalPass = copyPass && fontPass && rtlPass && checkStatus;
   const status: 'passed' | 'failed' = criticalPass ? 'passed' : 'failed';
 
@@ -289,6 +322,7 @@ export function evaluateCanvaExportQc(
   if (!rtlPass) {
     errors.push('RTL text direction violation detected in exported design');
   }
+  if (!checkStatus) errors.push('The capture-time content check recorded a failure');
 
   return {
     status,

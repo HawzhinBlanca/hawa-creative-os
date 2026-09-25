@@ -4,6 +4,7 @@ import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
+import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
@@ -34,7 +35,7 @@ describe.skipIf(!url)('review of 2026-09-24: approval and delivery across a Core
     const pngId = randomUUID();
     const checkedId = randomUUID();
     const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(randomUUID())]);
-    const deck = Buffer.from(`PPTX_${randomUUID()}`);
+    const { bytes: deck, contentCheck } = await checkedCanvaExportFixture('x');
     await withRlsContext(db, operator, async (trx) => {
       await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
         VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'HUNT restart', 'x', 'received', 3, 1, now(), now())`.execute(trx);
@@ -49,7 +50,7 @@ describe.skipIf(!url)('review of 2026-09-24: approval and delivery across a Core
           VALUES (${op}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operator.userId}, ${'req_' + randomUUID().slice(0, 8)}, 'h', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format, designUpdatedAt: 200 })}::jsonb, now(), now())`.execute(trx);
         await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
           VALUES (${id}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${op}::uuid, ${format}, ${createHash('sha256').update(bytes).digest('hex')}, ${bytes},
-            ${JSON.stringify({ copyPass: true, fontPass: true, rtlPass: true, status: 'passed' })}::jsonb, now())`.execute(trx);
+            ${format === 'pptx' ? JSON.stringify(contentCheck) : null}::jsonb, now())`.execute(trx);
       }
     });
     expect((await before.request(`/tasks/${taskId}/notifications/canva-status`, {

@@ -6,6 +6,7 @@ import { persistChatIntake } from '../src/services/chat-intake.js';
 import { askLedger } from '../src/services/ask-ledger.js';
 import { resolveQcProfileId } from '../src/services/canva-task-outcome.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
+import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 /**
  * Bug hunt (2026-09-24): what Core tells the Desk about a real request, and what the Desk lets an
@@ -44,8 +45,9 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
     ).task.id as string;
 
   /** A Canva draft as the bridge records it: revision (planner manifest: 1200x1697) and a passing QC run. */
-  const draft = async (taskId: string, headline = 'KAAE members evening') =>
-    withRlsContext(db, scope, async (trx) => {
+  const draft = async (taskId: string, headline = 'KAAE members evening') => {
+    const checked = await checkedCanvaExportFixture(headline);
+    return withRlsContext(db, scope, async (trx) => {
       const revision = await new RevisionRepository(db).createRevision(
         {
           tenantId,
@@ -65,9 +67,10 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
         trx
       );
       const qc = evaluateCanvaExportQc({
-        sha256: 'a'.repeat(64),
+        sha256: createHash('sha256').update(checked.bytes).digest('hex'),
         format: 'pptx',
-        content_check: { copyPass: true, fontPass: true, rtlPass: true, status: 'passed', observedFonts: ['Verdana'] },
+        content: checked.bytes,
+        content_check: checked.contentCheck,
       });
       await trx
         .insertInto('qc_runs')
@@ -84,6 +87,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
         .execute();
       return { revisionId: revision.id as string, qc };
     });
+  };
 
   const approve = (app: any, taskId: string, revisionId: string) =>
     app.request(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
