@@ -460,11 +460,21 @@ export class RevisionRepository {
         .execute();
 
       // 6. Update task state
+      // Count the newly recorded request while the task row is locked. The third repair request
+      // needs an operator, and this transition belongs in the same transaction as the approval.
+      const revisionRequestCount = params.decision === 'revision_requested'
+        ? Number((await dbClient.selectFrom('approvals')
+            .select((eb) => eb.fn.countAll<string>().as('count'))
+            .where('tenant_id', '=', params.tenantId)
+            .where('task_id', '=', params.taskId)
+            .where('decision', '=', 'revision_requested')
+            .executeTakeFirstOrThrow()).count)
+        : 0;
       const nextTaskState = params.decision === 'approved'
         ? 'approved'
         : params.decision === 'rejected'
         ? 'rejected'
-        : 'revision_requested';
+        : revisionRequestCount > 2 ? 'failed_operator' : 'revision_requested';
       const nextTaskVersion = Number(task.version) + 1;
       await dbClient
         .updateTable('tasks')

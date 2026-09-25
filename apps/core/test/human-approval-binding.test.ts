@@ -368,6 +368,14 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       }),
     });
     expect(op1Res.status).toBe(201);
+    const afterDecision = await (await app.request(`/tasks/${task.id}`)).json();
+    expect(afterDecision.version).toBe(version + 1);
+    const decisionEvents = await withRlsContext(testDb,
+      { tenantId: defaultTenantId, userId: operatorUserId, role: 'art_director' },
+      (trx) => trx.selectFrom('task_events').select(['event_type', 'aggregate_version'])
+        .where('task_id', '=', task.id).where('aggregate_version', '>', version).execute());
+    expect(decisionEvents.map((event) => ({ ...event, aggregate_version: Number(event.aggregate_version) })))
+      .toEqual([{ event_type: 'design.approved', aggregate_version: version + 1 }]);
 
     // Operator 2 sends a concurrent approval with the same, now stale, version -> Fails with 409
     const op2Res = await app.request(`/tasks/${task.id}/revisions/${revId}/decisions`, {

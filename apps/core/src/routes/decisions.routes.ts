@@ -379,38 +379,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       }
     }
 
-    if (taskRepo && db) {
-      try {
-        await withRlsContext(
-          db,
-          { tenantId, userId: actorUserId, role: auth.role || 'operator' },
-          async (trx) => {
-            const targetDbState = isApproved
-              ? 'approved'
-              : isRejected
-              ? 'rejected'
-              : ((task?.repairCount || 0) > 2 ? 'failed_operator' : 'revision_requested');
-
-            await taskRepo.transitionState({
-              taskId,
-              tenantId,
-              toState: targetDbState,
-              actorType: 'user',
-              actorId: actorUserId,
-              reason: body.revisionRequest?.comment || body.reason || (isApproved ? 'Human approved in Desk' : (isRejected ? 'Human rejected in Desk' : 'Revision requested')),
-              data: {
-                revisionId: resolvedRev.id || revisionId,
-                decisionId: decision.decisionId,
-                sourceHash,
-                qcReportHash,
-              },
-            }, trx);
-          }
-        );
-      } catch (err: any) {
-        log.error('[core:approvals:transition] DB state transition error:', err);
-      }
-    }
+    // recordApproval commits the approval, task state/version, revision status and immutable event in
+    // one transaction. A second transition here used to advance the version twice and append a
+    // duplicate state event; its failure was then silently swallowed after returning success.
 
     broadcast(decision.decision === 'approved' ? 'task:approved' : decision.decision === 'rejected' ? 'task:rejected' : 'task:revision_requested', {
       taskId,
