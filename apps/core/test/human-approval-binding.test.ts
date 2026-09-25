@@ -413,7 +413,13 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect(first.status).toBe(201);
     const decisionId = (await first.json()).decisionId;
     const version = (await (await app.request(`/tasks/${task.id}`)).json()).version;
-    const retry = await decide(body);
+    // A fresh Core process has no route-local memory of the first HTTP response.
+    const restartedCore = createAppWithClientFixtures({ db: testDb,
+      testAuth: { principal: { role: 'art_director' }, roleHeader: true },
+      deliverableStore: exports.store, qaEngine: passingQa as never });
+    const retry = await restartedCore.request(`/tasks/${task.id}/revisions/${revisionId}/decisions`, {
+      method: 'POST', headers, body: JSON.stringify(body),
+    });
     expect(retry.status).toBe(200);
     expect((await retry.json()).decisionId).toBe(decisionId);
     expect((await (await app.request(`/tasks/${task.id}`)).json()).version).toBe(version);
