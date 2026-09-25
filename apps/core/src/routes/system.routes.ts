@@ -508,6 +508,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
     const allTasks = taskRows.map((t) => ({
       id: t.id,
       status: publicationAwareTaskStatus(t.state, { errorClass: t.delivery_error_class }),
+      publicationErrorClass: t.delivery_error_class,
       clientId: t.client_id || undefined,
       latestRevisionId: t.current_design_revision_id || undefined,
       updatedAt: t.updated_at instanceof Date ? t.updated_at.toISOString() : String(t.updated_at),

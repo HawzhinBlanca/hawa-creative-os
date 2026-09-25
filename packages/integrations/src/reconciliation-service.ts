@@ -3,6 +3,7 @@ import type { UUID } from '@hawa/contracts';
 export interface TaskRecord {
   id: string;
   status: string;
+  publicationErrorClass?: string | null;
   clientId?: string;
   latestRevisionId?: string;
   packageHash?: string;
@@ -92,9 +93,9 @@ export class ReconciliationService {
     let inSyncCount = 0;
 
     for (const task of tasks) {
-      if (task.status === 'ARCHIVE_RECONCILIATION') {
+      if (task.status === 'ARCHIVE_RECONCILIATION' || task.publicationErrorClass === 'ARCHIVE_UNCONFIRMED') {
         anomalies.push({ taskId: task.id, kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity: 'high',
-          description: `Task ${task.id} has an unresolved Drive outcome. Core cannot prove whether the file exists until the reserved identity is rechecked against Drive.`,
+          description: `Task ${task.id} (${task.status}) has an unresolved Drive outcome. Core cannot prove whether the file exists until the reserved identity is rechecked against Drive.`,
           detectedAt: timestamp });
         continue;
       }

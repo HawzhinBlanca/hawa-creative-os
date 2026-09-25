@@ -319,8 +319,49 @@ export class PublicationRepository {
   ) {
     const runner = async (dbClient: Kysely<Database>) => {
       const now = new Date();
+      // The publication lock is acquired before the task lock in all delivery paths. Refuse a
+      // mismatched task or a late completion after cancellation instead of rewriting task truth.
+      const existing = await dbClient
+        .selectFrom('publications')
+        .selectAll()
+        .where('id', '=', params.publicationId)
+        .where('tenant_id', '=', params.tenantId)
+        .where('task_id', '=', params.taskId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      const task = await dbClient
+        .selectFrom('tasks')
+        .select(['version', 'state', 'completed_at'])
+        .where('id', '=', params.taskId)
+        .where('tenant_id', '=', params.tenantId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      if (existing.state === 'complete') {
+        if (task.state !== 'complete') throw new Error(`Publication ${params.publicationId} is complete but task ${params.taskId} is ${task.state}`);
+        return existing;
+      }
+      // Workflow finish already changed the task to complete in this transaction. Core's own
+      // delivery reaches here while publishing. Any other state means a concurrent decision won.
+      if (task.state !== 'publishing' && task.state !== 'complete') {
+        throw new Error(`Task ${params.taskId} is ${task.state}; publication completion requires publishing or complete`);
+      }
 
-      // 1. Update publication
+      const updatedTask = await dbClient
+        .updateTable('tasks')
+        .set({
+          state: 'complete',
+          version: Number(task.version) + 1,
+          completed_at: task.completed_at || now,
+          updated_at: now,
+        })
+        .where('id', '=', params.taskId)
+        .where('tenant_id', '=', params.tenantId)
+        .where('state', '=', task.state)
+        .where('version', '=', task.version)
+        .returning('id')
+        .executeTakeFirst();
+      if (!updatedTask) throw new Error(`Task ${params.taskId} changed while its publication was completing`);
+
       const pub = await dbClient
         .updateTable('publications')
         .set({
@@ -332,29 +373,13 @@ export class PublicationRepository {
         })
         .where('id', '=', params.publicationId)
         .where('tenant_id', '=', params.tenantId)
+        .where('task_id', '=', params.taskId)
+        .where('state', '=', existing.state)
         .returningAll()
-        .executeTakeFirstOrThrow();
+        .executeTakeFirst();
+      if (!pub) throw new Error(`Publication ${params.publicationId} changed while completing`);
 
-      // 2. Update task state
-      const task = await dbClient
-        .selectFrom('tasks')
-        .select(['version', 'state'])
-        .where('id', '=', params.taskId)
-        .where('tenant_id', '=', params.tenantId)
-        .executeTakeFirstOrThrow();
-
-      await dbClient
-        .updateTable('tasks')
-        .set({
-          state: 'complete',
-          version: Number(task.version) + 1,
-          updated_at: now,
-        })
-        .where('id', '=', params.taskId)
-        .where('tenant_id', '=', params.tenantId)
-        .execute();
-
-      // 3. Append task_events
+      // Append a versioned publication event in the same transaction.
       await dbClient
         .insertInto('task_events')
         .values({

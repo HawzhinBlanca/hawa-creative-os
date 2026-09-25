@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createDb, sql, withRlsContext } from '@hawa/db';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { createDb, PublicationRepository, TaskRepository, sql, withRlsContext } from '@hawa/db';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -138,6 +138,64 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     expect(againBody.publicationReceipt.driveFiles.map((f: { fileId: string }) => f.fileId))
       .toEqual(fresh.body.publicationReceipt.driveFiles.map((f: { fileId: string }) => f.fileId));
     for (const other of delivered) expect(other.body.publicationReceipt.publicationId).toBe(fresh.body.publicationReceipt.publicationId);
+
+    // A repeated repository completion is also idempotent, including its task event/version.
+    await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, async (trx) => {
+      const publicationId = String(fresh.body.publicationReceipt.publicationId);
+      const before = (await sql<{ version: number }>`SELECT version FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].version;
+      await new PublicationRepository(testDb).markComplete({ tenantId: task.tenantId, taskId: task.id, publicationId }, trx);
+      const after = (await sql<{ version: number }>`SELECT version FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].version;
+      expect(after).toBe(before);
+      await expect(new PublicationRepository(testDb).markComplete({ tenantId: task.tenantId,
+        taskId: crypto.randomUUID(), publicationId }, trx)).rejects.toThrow();
+    });
+  });
+
+  it('does not complete a task cancelled after the Drive upload but before receipt commit', async () => {
+    const exports = memoryExportStore();
+    const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true }, deliverableStore: exports.store });
+    const { task, rev, approval } = await createApprovedTaskWithExport(app, exports);
+    const original = PublicationRepository.prototype.recordDriveRef;
+    const record = vi.spyOn(PublicationRepository.prototype, 'recordDriveRef').mockImplementationOnce(async (params, trx) => {
+      await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, (cancelTrx) =>
+        new TaskRepository(testDb).transitionState({ taskId: task.id, tenantId: task.tenantId,
+          fromState: 'publishing', toState: 'cancelled', actorType: 'user', actorId: '00000000-0000-4000-b000-000000000001',
+          reason: 'Requester cancelled while Drive was finishing' }, cancelTrx));
+      return original.call(new PublicationRepository(testDb), params, trx);
+    });
+    try {
+      const response = await app.request(`/v1/tasks/${task.id}/publish-omnichannel`, {
+        method: 'POST', headers: operatorHeaders,
+        body: JSON.stringify({ designRevisionId: rev.id, approvalId: approval.decisionId }),
+      });
+      expect(response.status).toBe(503);
+      const state = await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, async (trx) => ({
+        task: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].state,
+        publication: (await sql<{ state: string; error_class: string }>`SELECT state, error_class FROM hawa.publications WHERE task_id = ${task.id}::uuid`.execute(trx)).rows[0],
+        driveRefs: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.drive_refs WHERE publication_id IN
+          (SELECT id FROM hawa.publications WHERE task_id = ${task.id}::uuid)`.execute(trx)).rows[0].n,
+        notifications: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands
+          WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n,
+      }));
+      expect(state).toEqual({ task: 'cancelled', publication: { state: 'pending', error_class: 'ARCHIVE_UNCONFIRMED' }, driveRefs: 0, notifications: 0 });
+      const publicationState = await (await app.request(`/v1/tasks/${task.id}/publication-state`, { headers: operatorHeaders })).json();
+      expect(publicationState).toMatchObject({ status: 'CANCELLED', state: 'archive_reconciliation',
+        notification: { status: 'not_enqueued' } });
+      expect(publicationState.actionableRecovery).toMatch(/do not retry requester delivery/i);
+      const audit = await (await app.request('/v1/operations/reconciliation/run', {
+        method: 'POST', headers: operatorHeaders, body: '{}',
+      })).json();
+      expect(audit.anomalies).toEqual(expect.arrayContaining([expect.objectContaining({
+        taskId: task.id, kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity: 'high',
+      })]));
+      const repeated = await app.request(`/v1/tasks/${task.id}/publish-omnichannel`, {
+        method: 'POST', headers: operatorHeaders,
+        body: JSON.stringify({ designRevisionId: rev.id, approvalId: approval.decisionId }),
+      });
+      expect(repeated.status).toBe(409);
+    } finally {
+      record.mockRestore();
+    }
   });
 
   it('holds requester delivery after a lost Drive reply, then reconciles the same reserved file', async () => {

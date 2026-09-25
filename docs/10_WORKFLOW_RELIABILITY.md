@@ -104,6 +104,8 @@ Cancellation stops future work but does not erase evidence or blindly undo succe
 - publication state;
 - any manual reconciliation required.
 
+If cancellation commits while Drive upload is finishing, publication completion must check the task's current state and expected revision inside the receipt transaction. It must preserve the cancellation and withhold requester delivery. Because the file may already exist in Drive, the publication records an unconfirmed archive for audit and staffed retention review; a cancelled task must not be offered an automatic delivery retry.
+
 ## 9. Recovery drills
 
 Inject at least:

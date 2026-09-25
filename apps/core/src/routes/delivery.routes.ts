@@ -332,7 +332,9 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
 
     if (pubRecord?.error_class === 'ARCHIVE_UNCONFIRMED') {
       state = 'archive_reconciliation';
-      actionableRecovery = 'Drive may already contain the approved files, but the archive is not verified. Restore Google access if needed, then use Recheck Drive Archive. The same reserved file ID is checked before requester delivery; a continuing conflict needs an operator to inspect Drive.';
+      actionableRecovery = storedState === 'cancelled'
+        ? 'This task was cancelled while the Drive outcome was unresolved. Do not retry requester delivery. An operator must inspect the reserved Drive file identity and apply the office retention policy.'
+        : 'Drive may already contain the approved files, but the archive is not verified. Restore Google access if needed, then use Recheck Drive Archive. The same reserved file ID is checked before requester delivery; a continuing conflict needs an operator to inspect Drive.';
     } else if (pubRecord?.executor === 'restate' && pubRecord.error_class === 'REQUESTER_SEND_UNCONFIRMED') {
       state = 'publish_reconciliation';
       actionableRecovery = 'The archive and Sheet row may be ready, but delivery to the requester was not confirmed. Review the Telegram send evidence before resolving this delivery.';
