@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, OutboxRepository, sql, withRlsContext } from '@hawa/db';
+import { createDb, OutboxRepository, PublicationRepository, sql, withRlsContext } from '@hawa/db';
 import type { DeliveryInput, DeliveryOutcome, OutboundMessage, SendResult } from '@hawa/contracts';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
@@ -329,7 +329,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect(await taskState(taskId)).toBe('complete');
   });
 
-  it('a file Telegram may not have taken: sent once, the office alerted once, and the task still completes', async () => {
+  it('a file Telegram may not have taken: sent once, the office alerted once, and completion waits for resolution', async () => {
     const restateIngress = fakeRestate();
     const telegram = fakeTelegram((chatId, kind, filename) => (kind === 'document' && filename?.endsWith('.pptx') ? { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' } : { success: true }));
     const app = core();
@@ -345,7 +345,38 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     const alerts = telegram.received.filter((r) => r.chatId === OFFICE);
     expect(alerts).toHaveLength(1);
     expect(alerts[0].text).toContain(taskId);
-    expect(await taskState(taskId)).toBe('complete');
+    expect(await taskState(taskId)).toBe('publishing');
+    const publicationState = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
+    expect(publicationState).toMatchObject({ state: 'publish_reconciliation' });
+    expect(publicationState.actionableRecovery).toContain('delivery to the requester was not confirmed');
+    const stored = await withRlsContext(db, operator, async (trx) => {
+      const pub = await new PublicationRepository(db).findByTaskId(taskId, tenantId, trx);
+      return pub ? (await new PublicationRepository(db).getPublicationWithRefs(pub.id, tenantId, trx)) : null;
+    });
+    const file = stored?.driveRefs[0];
+    expect(file?.status).toBe('verified');
+    await expect(withRlsContext(db, operator, (trx) => new PublicationRepository(db).recordDriveRef({
+      tenantId, publicationId: String(stored?.publication.id), fileId: String(file?.file_id),
+      sharedDriveId: String(file?.shared_drive_id), folderId: String(file?.folder_id),
+      fileName: String(file?.file_name), mimeType: String(file?.mime_type),
+      expectedSha256: 'f'.repeat(64), observedSize: Number(file?.observed_size), status: 'verified',
+    }, trx))).rejects.toThrow(/conflicts with its stored publication receipt/);
+  });
+
+  it('a refused Telegram file cannot complete an archived publication with a confirmed Sheet row', async () => {
+    const restateIngress = fakeRestate();
+    const telegram = fakeTelegram((_chatId, kind, filename) =>
+      kind === 'document' && filename?.endsWith('.pptx') ? { success: false, error: 'TELEGRAM_DOCUMENT_REJECTED_403' } : { success: true });
+    const app = core();
+    const { taskId, chat } = await approvedTask(app);
+    process.env.HAWA_LIFECYCLE_CHATS = chat;
+    await deliver(app, taskId);
+    const outcome = await worker(app, telegram)(restateIngress.starts[0]);
+    expect(outcome).toMatchObject({ outcome: 'failed', archived: true, sheetsConfirmed: true, filesSent: 1 });
+    expect(await taskState(taskId)).toBe('publishing');
+    expect((await publications(taskId)).map((p) => [p.state, p.executor_finished_run])).toEqual([['drive_complete', 1]]);
+    const publicationState = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
+    expect(publicationState).toMatchObject({ state: 'publish_reconciliation' });
   });
 
   it('a run whose report never reached Core is recorded from its output on the next press', async () => {

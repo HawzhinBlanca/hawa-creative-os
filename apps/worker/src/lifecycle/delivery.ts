@@ -144,8 +144,11 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
       if (notice.outcome === 'uncertain') uncertain.push('delivery notice');
       else if (notice.outcome === 'refused') refused.push(`delivery notice (${notice.error})`);
     }
-  } else if (prepared && !chatId && prepared.chatOnly) {
-    failure = 'NO_REQUESTER_CHAT: the Drive archive was not written and the task has no chat to send the files to';
+  } else if (prepared && !chatId) {
+    failure = 'NO_REQUESTER_CHAT: the task has no chat to receive the approved files';
+  }
+  if (prepared && prepared.files.length === 0) {
+    failure = 'NO_DELIVERABLE_FILES: Core prepared no approved files for the requester';
   }
 
   const outcome: DeliveryOutcome = {

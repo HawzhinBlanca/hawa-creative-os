@@ -260,7 +260,10 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     let actionableRecovery = 'Publication, sheet sync, and notification completed successfully.';
     let state: 'unstarted' | 'drive_complete' | 'publish_reconciliation' | 'complete' | 'failed' = 'complete';
 
-    if (!hasDriveFiles) {
+    if (pubRecord?.executor === 'restate' && pubRecord.error_class === 'REQUESTER_SEND_UNCONFIRMED') {
+      state = 'publish_reconciliation';
+      actionableRecovery = 'The archive and Sheet row may be ready, but delivery to the requester was not confirmed. Review the Telegram send evidence before resolving this delivery.';
+    } else if (!hasDriveFiles) {
       state = 'unstarted';
       actionableRecovery = 'No publication has been initiated. Trigger POST /tasks/:taskId/publish to deliver assets.';
     } else if (!sheetSynced) {

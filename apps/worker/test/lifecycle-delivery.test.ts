@@ -117,6 +117,16 @@ describe('Delivery workflow', () => {
     expect(alerts[0].text).toContain(i.taskId);
   });
 
+  it('never calls an archive-only result delivered when no requester chat or approved file can be sent', async () => {
+    for (const change of [{ chatId: null }, { files: [] }]) {
+      const i = input({ chatId: null });
+      const h = harness({ prepare: async () => prepared(i.taskId, 1, change) });
+      const outcome = await runDelivery(h.ctx, h.core, i);
+      expect(outcome).toMatchObject({ outcome: 'failed', archived: true, sheetsConfirmed: true, filesSent: 0 });
+      expect(h.posts.at(-1)?.body.outcome).toEqual(outcome);
+    }
+  });
+
   it('Core refuses the prepare step for good: nothing is sent to the requester, the office is told, and Core hears failed', async () => {
     const i = input();
     const h = harness({ prepare: async () => { throw new restate.TerminalError('Core answered HTTP 409 NOT_PUBLISHING', { errorCode: 409 }); } });

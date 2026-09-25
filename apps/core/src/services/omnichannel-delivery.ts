@@ -1206,8 +1206,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     let result: { ok: true; status: 'applied' | 'replayed'; taskState: string } | { ok: false; status: number; code: string; message: string };
     try {
       result = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-        const pub = (await sql<{ id: string; executor: string; executor_run: number; executor_finished_run: number }>`
-          SELECT id, executor, executor_run, executor_finished_run FROM hawa.publications
+        const pub = (await sql<{ id: string; executor: string; executor_run: number; executor_finished_run: number; package_manifest: Record<string, unknown> }>`
+          SELECT id, executor, executor_run, executor_finished_run, package_manifest FROM hawa.publications
           WHERE tenant_id = ${tenantId}::uuid AND publication_key = ${publicationKey} FOR UPDATE`.execute(trx)).rows[0];
         if (!pub) return { ok: false as const, status: 404, code: 'PUBLICATION_NOT_FOUND', message: `No publication ${publicationKey}` };
         if (pub.executor !== 'restate') return { ok: false as const, status: 409, code: 'NOT_OWNED_BY_WORKFLOW', message: `Publication ${publicationKey} is Core's` };
@@ -1220,7 +1220,10 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         let next = state;
         // Only a task still being delivered moves: one delivered or taken back meanwhile stays as it is.
         if (state === 'publishing') {
-          if (outcome.archived && outcome.sheetsConfirmed) {
+          const expectedFiles = Array.isArray(pub.package_manifest?.files) ? pub.package_manifest.files.length : 0;
+          const requesterConfirmed = outcome.outcome === 'delivered' && outcome.uncertain.length === 0 &&
+            expectedFiles > 0 && outcome.filesSent === expectedFiles;
+          if (outcome.archived && outcome.sheetsConfirmed && requesterConfirmed) {
             await taskRepo.transitionState({
               taskId, tenantId, fromState: 'publishing', toState: 'complete', actorType: 'workflow', actorId: 'delivery-workflow',
               reason: 'Delivered by the Delivery workflow', data: { publicationKey, deliveryId: report.deliveryId, outcome: outcome.outcome },
@@ -1236,7 +1239,13 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
             next = 'approved';
           }
         }
-        await sql`UPDATE hawa.publications SET executor_finished_run = ${report.run}, updated_at = now()
+        const sendProblem = outcome.archived && outcome.sheetsConfirmed && next !== 'complete'
+          ? 'REQUESTER_SEND_UNCONFIRMED' : null;
+        const sendDetail = sendProblem ? JSON.stringify({ deliveryId: report.deliveryId,
+          outcome: outcome.outcome, uncertain: outcome.uncertain, filesSent: outcome.filesSent,
+          reason: outcome.reason ?? null }).slice(0, 1000) : null;
+        await sql`UPDATE hawa.publications SET executor_finished_run = ${report.run},
+          error_class = ${sendProblem}, error_detail = ${sendDetail}, updated_at = now()
           WHERE tenant_id = ${tenantId}::uuid AND id = ${pub.id}::uuid`.execute(trx);
         return { ok: true as const, status: 'applied' as const, taskState: next };
       });

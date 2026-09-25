@@ -188,8 +188,21 @@ export class PublicationRepository {
           verified_at: params.verifiedAt || (params.status === 'verified' ? new Date() : null),
           status: params.status,
         })
+        // Core may repeat the prepare step after its answer is lost. Adopt the same verified file
+        // without creating a second receipt; a reused Drive id with different bytes or destination
+        // is a conflict, never evidence that the approved package was archived.
+        .onConflict((oc) => oc.columns(['publication_id', 'file_id']).doUpdateSet({
+          status: sql`CASE WHEN drive_refs.status = 'verified' THEN 'verified' ELSE excluded.status END`,
+          verified_at: sql`COALESCE(drive_refs.verified_at, excluded.verified_at)`,
+        } as any).where(sql<boolean>`drive_refs.tenant_id = excluded.tenant_id
+          AND drive_refs.folder_id = excluded.folder_id
+          AND drive_refs.file_name = excluded.file_name
+          AND drive_refs.mime_type = excluded.mime_type
+          AND drive_refs.expected_sha256 IS NOT DISTINCT FROM excluded.expected_sha256
+          AND drive_refs.observed_size IS NOT DISTINCT FROM excluded.observed_size`))
         .returningAll()
-        .executeTakeFirstOrThrow();
+        .executeTakeFirst();
+      if (!driveRef) throw new Error(`Drive file ${params.fileId} conflicts with its stored publication receipt`);
 
       // Update publication state to drive_complete if not already complete
       await dbClient
@@ -200,6 +213,7 @@ export class PublicationRepository {
         })
         .where('id', '=', params.publicationId)
         .where('tenant_id', '=', params.tenantId)
+        .where('state', '!=', 'complete')
         .execute();
 
       return driveRef;
