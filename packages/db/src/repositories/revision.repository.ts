@@ -357,6 +357,7 @@ export class RevisionRepository {
         .where('tenant_id', '=', params.tenantId)
         .orderBy('started_at', 'desc')
         .executeTakeFirst();
+      let approvedCanvaBinding: { id: string; canva_design_id: string; version: number } | null = null;
 
       if (params.decision === 'approved') {
         if (!qcRun || qcRun.status !== 'passed' || !qcRun.critical_pass) {
@@ -416,7 +417,7 @@ export class RevisionRepository {
             || (revision.source_sha256 && revision.source_sha256 !== checkedHash && Number(qcRun.attempt) === 1)) {
             throw new Error('Canva QA evidence does not match the checked export of this revision');
           }
-          const binding = (await sql<{ canva_design_id: string; version: number }>`SELECT canva_design_id, version FROM hawa.canva_bindings
+          const binding = (await sql<{ id: string; canva_design_id: string; version: number }>`SELECT id, canva_design_id, version FROM hawa.canva_bindings
             WHERE tenant_id = ${params.tenantId}::uuid AND task_id = ${params.taskId}::uuid AND status = 'bound'`.execute(dbClient)).rows[0];
           if (!binding || pinned.some((pin) => {
             const row = byId.get(String(pin.artifactId));
@@ -426,6 +427,7 @@ export class RevisionRepository {
           })) {
             throw new Error('Canva approval pins contain an export from another capture or revision');
           }
+          approvedCanvaBinding = binding;
         }
       }
 
@@ -468,7 +470,16 @@ export class RevisionRepository {
           decision: params.decision,
           decided_by: params.decidedBy,
           reason: params.reason || null,
-          decision_payload: params.decisionPayload || {},
+          // The task-locked repository is the final authority for capture identity. Both Desk and
+          // request-owned lifecycle approvals receive the same immutable server binding proof.
+          decision_payload: {
+            ...(params.decisionPayload || {}),
+            ...(approvedCanvaBinding ? {
+              canvaBindingId: approvedCanvaBinding.id,
+              canvaBindingVersion: approvedCanvaBinding.version,
+              canvaDesignId: approvedCanvaBinding.canva_design_id,
+            } : {}),
+          },
           nonce,
         })
         .returningAll()

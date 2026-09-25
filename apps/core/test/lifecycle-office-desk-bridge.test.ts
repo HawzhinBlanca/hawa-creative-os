@@ -618,7 +618,9 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(rows.request).toMatchObject({ stage: 'approved', rev: '3' });
     expect(rows.task?.state).toBe('approved');
     expect(rows.approvals).toMatchObject([{ id: result.decisionId, decision: 'approved', qc_run_id: qcRunId,
-      decision_payload: { pinnedExports: [{ artifactId, sha256, byteSize: bytes.length },
+      decision_payload: { canvaBindingId: expect.any(String), canvaBindingVersion: 1,
+        canvaDesignId: expect.any(String),
+        pinnedExports: [{ artifactId, sha256, byteSize: bytes.length },
         { artifactId: pngArtifactId, sha256: pngSha256, byteSize: pngBytes.length }],
         officeApprovalProof: { rtlVisualReview: body.rtlVisualReview },
         rtlVisualReview: { confirmed: true, qcRunId, exportSha256: sha256, reviewerId: userId } } }]);
