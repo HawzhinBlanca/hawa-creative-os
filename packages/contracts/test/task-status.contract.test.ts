@@ -106,6 +106,10 @@ describe('Task.schema.json and OpenAPI', () => {
     const schema = JSON.parse(read('schemas/Task.schema.json'));
     expect(schema.properties.state.enum).toEqual([...TASK_DB_STATES]);
     expect(schema.properties.status.enum).toEqual([...TASK_API_STATUSES]);
+    expect(schema.properties.requestId.oneOf).toEqual([
+      { type: 'string', format: 'uuid' },
+      { type: 'null' },
+    ]);
   });
 
   it('every task-status enum in openapi.yaml is the module\'s, and the check fails when one gains a word', () => {
