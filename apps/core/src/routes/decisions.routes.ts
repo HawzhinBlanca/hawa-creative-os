@@ -545,7 +545,13 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
 
     const body = await c.req.json().catch(() => ({}));
     const actionRevisionId = body.revisionId;
-    const currentRevisionId = task.latestRevisionId || 'rev-1';
+    const currentRevisionId = task.latestRevisionId;
+    if (!currentRevisionId || !isValidUuid(currentRevisionId)) {
+      return problem(c, 412, 'Recorded Revision Required', 'Chat review requires a recorded revision before any action can be accepted');
+    }
+    if (!isValidUuid(actionRevisionId)) {
+      return problem(c, 422, 'Invalid Revision Identifier', 'Chat action must name a recorded revision ID');
+    }
 
     const actorRole = (auth.role || 'operator').toLowerCase().trim();
     const chatActor = {
@@ -568,6 +574,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       return problem(c, 409, 'Conflict', actionRes.error.message);
     }
 
-    return c.json(actionRes.value, 200);
+    // This check does not write a decision to PostgreSQL or signal the durable review workflow.
+    // Do not acknowledge it as an approval until the chat action is connected to that transaction.
+    return problem(c, 501, 'Chat Decision Unavailable',
+      'Chat action was validated but approval was not recorded; use the Desk decision endpoint');
   });
 }

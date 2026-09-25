@@ -385,6 +385,53 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     expect((await op2Res.json()).detail).toContain('Concurrent modification detected');
   });
 
+  it('refuses a chat approval action when no recorded revision exists', async () => {
+    const task = await createTestTask();
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+    };
+    const fakeRevision = await app.request(`/tasks/${task.id}/chat-approval-action`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ revisionId: 'rev-1', decision: 'approved' }),
+    });
+    expect(fakeRevision.status).toBe(412);
+    expect((await fakeRevision.json()).detail).toContain('recorded revision');
+
+    const missingRevision = await app.request(`/tasks/${task.id}/chat-approval-action`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ decision: 'approved' }),
+    });
+    expect(missingRevision.status).toBe(412);
+  });
+
+  it('does not claim a validated chat button recorded an approval', async () => {
+    const task = await createTestTask();
+    const revisionId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId, document: { id: 'chat-draft', nodes: [{ id: 'title', type: 'text', text: 'Draft' }] } }),
+    })).status).toBe(201);
+    const invalid = await app.request(`/tasks/${task.id}/chat-approval-action`, {
+      method: 'POST', headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+      },
+      body: JSON.stringify({ revisionId: 'rev-1', decision: 'approved' }),
+    });
+    expect(invalid.status).toBe(422);
+    const response = await app.request(`/tasks/${task.id}/chat-approval-action`, {
+      method: 'POST', headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+      },
+      body: JSON.stringify({ revisionId, decision: 'approved' }),
+    });
+    expect(response.status).toBe(501);
+    expect((await response.json()).detail).toContain('not recorded');
+    expect((await (await app.request(`/tasks/${task.id}`)).json()).latestApproval).toBeUndefined();
+  });
+
   it('6. Rejects stale two-way chat approval actions when task has advanced (Stale Chat Action)', async () => {
     const task = await createTestTask();
     const rev1 = crypto.randomUUID();
