@@ -775,11 +775,27 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     });
 
     if (!publishResult.ok) {
+      // A Drive error is not proof that no file reached Drive: an upload can commit before its
+      // response is lost, and an earlier file in this package may already be there. Keep the
+      // publication pending and let the same key reconcile it before any requester notification.
+      if (String(publishResult.error.code).startsWith('DRIVE_')) {
+        return {
+          ok: false as const,
+          status: publishResult.error.retryable === false ? 409 : 503,
+          code: publishResult.error.code,
+          message: `${publishResult.error.message}. Check the Drive publication before sending the approved files`,
+        };
+      }
       return failBeforeDrive({
         status: publishResult.error.code === 'INVALID_DESTINATION' ? 400 : 422,
         code: publishResult.error.code,
         message: publishResult.error.message,
       });
+    }
+    if (publishResult.value.state === 'failed' ||
+        publishResult.value.driveFiles?.some((file: { verified?: boolean }) => !file.verified)) {
+      return { ok: false as const, status: 409, code: 'DRIVE_VERIFICATION_FAILED',
+        message: 'Drive has not verified every approved file; reconcile the publication before requester delivery' };
     }
     // The chaos suite kills Core here: the files are in Drive, and nothing of it is recorded yet.
     await chaosPoint('core.delivery.after-drive', { taskId, mode: workflowMode ? 'workflow' : 'core' });

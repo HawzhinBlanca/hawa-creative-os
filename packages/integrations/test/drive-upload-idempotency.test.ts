@@ -90,7 +90,10 @@ describe('Drive delivery: one logical delivery, one file', () => {
     const store = sharedReservations();
     const req = request([file('approved poster bytes')]);
     fake.fault.dropUploadReply = 1;
-    await expect(reservedProcess(store).publish(ctx, req)).rejects.toThrow();
+    const first = await reservedProcess(store).publish(ctx, req);
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.error).toMatchObject({ code: 'DRIVE_UPLOAD_UNCERTAIN', retryable: true });
     expect(fake.files).toHaveLength(1);
     fake.fault.hideSearches = 1;
 
@@ -101,6 +104,45 @@ describe('Drive delivery: one logical delivery, one file', () => {
     expect(fake.uploadsReceived).toBe(2);
     expect(fake.generatedIdsIssued).toBe(1);
     expect(fake.files).toHaveLength(1);
+  });
+
+  it('does not call an uploaded file absent when its independent readback is unavailable', async () => {
+    const store = sharedReservations();
+    const req = request([file('approved poster bytes')]);
+    fake.fault.readbackStatus = 503;
+    const first = await reservedProcess(store).publish(ctx, req);
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.error.code).toBe('DRIVE_READBACK_FAILED');
+    expect(fake.files).toHaveLength(1);
+    fake.fault.readbackStatus = 0;
+    fake.fault.hideSearches = 1;
+
+    const retry = await reservedProcess(store).publish(ctx, req);
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    expect(retry.value.driveFiles[0]).toMatchObject({ fileId: fake.files[0].id, verified: true });
+    expect(fake.files).toHaveLength(1);
+    expect(fake.generatedIdsIssued).toBe(1);
+  });
+
+  it('never caches an unverified upload as a successful publication', async () => {
+    const store = sharedReservations();
+    const publisher = reservedProcess(store);
+    const req = request([file('approved poster bytes')]);
+    fake.fault.readbackChecksum = 'f'.repeat(64);
+    const first = await publisher.publish(ctx, req);
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.error.code).toBe('DRIVE_VERIFICATION_FAILED');
+    expect(fake.files).toHaveLength(1);
+    fake.fault.readbackChecksum = undefined;
+
+    const retry = await publisher.publish(ctx, req);
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    expect(retry.value.driveFiles[0]).toMatchObject({ fileId: fake.files[0].id, verified: true });
+    expect(fake.uploadsReceived).toBe(1);
   });
 
   it('refuses a conflicting reserved file on retry even when Drive search is delayed', async () => {
@@ -146,14 +188,10 @@ describe('Drive delivery: one logical delivery, one file', () => {
   it('an upload whose reply was lost is found by the next process, not repeated', async () => {
     const f = file('approved poster bytes');
     fake.fault.dropUploadReply = 1;
-    let firstOutcome: 'threw' | 'failed' | 'ok' = 'ok';
-    try {
-      const first = await freshProcess().publish(ctx, request([f]));
-      firstOutcome = first.ok ? 'ok' : 'failed';
-    } catch {
-      firstOutcome = 'threw';
-    }
-    expect(firstOutcome).not.toBe('ok');
+    const first = await freshProcess().publish(ctx, request([f]));
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.error).toMatchObject({ code: 'DRIVE_UPLOAD_UNCERTAIN', retryable: false });
     expect(fake.files).toHaveLength(1); // Drive kept the file although nobody was told
 
     const second = await freshProcess().publish(ctx, request([f]));

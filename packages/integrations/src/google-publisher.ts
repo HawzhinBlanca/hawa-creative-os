@@ -572,35 +572,64 @@ export class GooglePublisher implements Publisher {
 
           // Execute upload
           const uploadUrl = `${this.driveUploadBaseUrl}/drive/v3/files?uploadType=multipart&supportsAllDrives=true`;
-          const uploadRes = await fetch(uploadUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': `multipart/related; boundary=${boundary}`,
-            },
-            body: multipartBody,
-            signal: AbortSignal.timeout(DRIVE_UPLOAD_TIMEOUT_MS),
-          });
+          let uploadRes: Response;
+          try {
+            uploadRes = await fetch(uploadUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': `multipart/related; boundary=${boundary}`,
+              },
+              body: multipartBody,
+              signal: AbortSignal.timeout(DRIVE_UPLOAD_TIMEOUT_MS),
+            });
+          } catch {
+            return { ok: false, error: {
+              code: 'DRIVE_UPLOAD_UNCERTAIN',
+              message: `Google Drive did not answer the upload for ${file.filename}; the file may already exist`,
+              retryable: Boolean(reservedId),
+              safeAction: reservedId
+                ? 'Retry with the same publication key and reserved file ID; verify Drive before notifying the requester'
+                : 'Reconcile the file in Drive before retrying; this publisher has no durable file ID',
+            } };
+          }
 
           if (!uploadRes.ok && !(uploadRes.status === 409 && reservedId)) {
-            const errText = await uploadRes.text();
+            const errText = await uploadRes.text().catch(() => '(response body unavailable)');
+            const uncertain = uploadRes.status === 408 || uploadRes.status === 429 || uploadRes.status >= 500;
             return {
               ok: false,
               error: {
-                code: 'DRIVE_UPLOAD_FAILED',
+                code: uncertain ? 'DRIVE_UPLOAD_UNCERTAIN' : 'DRIVE_UPLOAD_FAILED',
                 message: `Google Drive upload failed for ${file.filename}: HTTP ${uploadRes.status} ${errText}`,
+                retryable: uncertain && Boolean(reservedId),
+                safeAction: uncertain
+                  ? 'Reconcile the reserved file ID in Drive before notifying the requester'
+                  : 'Check the Drive rejection and publication state before retrying',
               } as any,
             };
           }
 
-          const uploadData = uploadRes.ok ? await uploadRes.json() as any : { id: reservedId };
-          uploadedFileId = uploadData.id;
+          let uploadData: any;
+          try {
+            uploadData = uploadRes.ok ? await uploadRes.json() : { id: reservedId };
+          } catch {
+            return { ok: false, error: {
+              code: 'DRIVE_UPLOAD_UNCERTAIN',
+              message: `Google Drive replied to the upload for ${file.filename}, but the file ID could not be read`,
+              retryable: Boolean(reservedId),
+              safeAction: 'Reconcile the reserved file ID in Drive before notifying the requester',
+            } };
+          }
+          uploadedFileId = uploadData?.id;
           if (!uploadedFileId) {
             return {
               ok: false,
               error: {
-                code: 'DRIVE_UPLOAD_FAILED',
+                code: 'DRIVE_UPLOAD_UNCERTAIN',
                 message: `Google Drive upload succeeded but no file ID was returned for ${file.filename}`,
+                retryable: Boolean(reservedId),
+                safeAction: 'Reconcile the reserved file ID in Drive before notifying the requester',
               } as any,
             };
           }
@@ -609,15 +638,26 @@ export class GooglePublisher implements Publisher {
               code: 'DRIVE_UPLOAD_FAILED',
               message: `Google Drive returned a different file ID for ${file.filename}; publication needs reconciliation`,
               retryable: false,
+              safeAction: 'Inspect both Drive file IDs and reconcile the publication before requester delivery',
             } as AppError };
           }
 
           // Step 6: Independent Readback from Google Drive to verify real persistence
           const readbackUrl = `${this.driveApiBaseUrl}/drive/v3/files/${uploadedFileId}?fields=id,name,size,mimeType,webViewLink,sha256Checksum,properties,parents&supportsAllDrives=true`;
-          const readbackRes = await fetch(readbackUrl, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            signal: AbortSignal.timeout(DRIVE_LOOKUP_TIMEOUT_MS),
-          });
+          let readbackRes: Response;
+          try {
+            readbackRes = await fetch(readbackUrl, {
+              headers: { 'Authorization': `Bearer ${token}` },
+              signal: AbortSignal.timeout(DRIVE_LOOKUP_TIMEOUT_MS),
+            });
+          } catch {
+            return { ok: false, error: {
+              code: 'DRIVE_READBACK_FAILED',
+              message: `Google Drive stored file ${uploadedFileId}, but independent readback did not answer`,
+              retryable: Boolean(reservedId),
+              safeAction: 'Reconcile the stored file in Drive before notifying the requester',
+            } };
+          }
 
           if (!readbackRes.ok) {
             return {
@@ -625,11 +665,22 @@ export class GooglePublisher implements Publisher {
               error: {
                 code: 'DRIVE_READBACK_FAILED',
                 message: `Independent readback from Google Drive failed for file ${uploadedFileId}: HTTP ${readbackRes.status}`,
+                retryable: Boolean(reservedId),
+                safeAction: 'Reconcile the stored file in Drive before notifying the requester',
               } as any,
             };
           }
 
-          readbackData = await readbackRes.json() as any;
+          try {
+            readbackData = await readbackRes.json() as any;
+          } catch {
+            return { ok: false, error: {
+              code: 'DRIVE_READBACK_FAILED',
+              message: `Independent readback returned an unreadable response for file ${uploadedFileId}`,
+              retryable: Boolean(reservedId),
+              safeAction: 'Reconcile the stored file in Drive before notifying the requester',
+            } };
+          }
           if (reservedId && (
             readbackData?.properties?.taskId !== request.taskId ||
             readbackData?.properties?.artifactId !== file.artifactId ||
@@ -640,6 +691,7 @@ export class GooglePublisher implements Publisher {
               code: 'DRIVE_READBACK_FAILED',
               message: `Reserved Drive file ${uploadedFileId} has different publication identity or folder`,
               retryable: false,
+              safeAction: 'Inspect the reserved Drive file identity and folder before requester delivery',
             } as AppError };
           }
           webViewLink = readbackData.webViewLink || `https://drive.google.com/file/d/${uploadedFileId}/view`;
@@ -674,31 +726,12 @@ export class GooglePublisher implements Publisher {
       });
 
       if (!fileVerified) {
-        const receipt: PublicationReceipt = {
-          publicationId,
-          publicationKey: request.publicationKey,
-          driveFolderId,
-          driveFiles,
-          sheet: {
-            spreadsheetId: request.destination.spreadsheetId || '',
-            sheetId: request.destination.sheetId || 0,
-            rowKey: request.taskId,
-            rowNumber: undefined,
-            expectedHash: request.packageHash,
-            observedHash: request.packageHash,
-            synced: false,
-          },
-          completedAt: new Date().toISOString(),
-          state: 'failed',
-          detail: {
-            verified: false,
-            filesUploaded: driveFiles.length,
-            error: `Remote readback verification failed for ${file.filename}: checksum or metadata mismatch`,
-          },
-          emulated: false,
-        };
-        this.inMemoryLedger.set(request.publicationKey, receipt);
-        return { ok: true, value: receipt };
+        return { ok: false, error: {
+          code: 'DRIVE_VERIFICATION_FAILED',
+          message: `Remote readback verification failed for ${file.filename}: checksum or metadata mismatch`,
+          retryable: false,
+          safeAction: 'Inspect the Drive file and reconcile its identity and bytes before requester delivery',
+        } };
       }
     }
 

@@ -16,7 +16,7 @@ export interface FakeDrive {
   uploadsReceived: number;
   generatedIdsIssued: number;
   /** dropUploadReply: keep the file but cut the connection. searchStatus/searchBody: break the lookup. uploadDelayMs: slow uploads. */
-  fault: { dropUploadReply: number; searchStatus: number; searchBody: string | undefined; uploadDelayMs: number; hideSearches: number };
+  fault: { dropUploadReply: number; searchStatus: number; searchBody: string | undefined; uploadDelayMs: number; hideSearches: number; readbackStatus: number; readbackChecksum: string | undefined };
   reset(): void;
   close(): Promise<void>;
 }
@@ -30,12 +30,12 @@ const view = (f: StoredFile) => ({
 export async function startFakeDrive(): Promise<FakeDrive> {
   const state: FakeDrive = {
     base: '', files: [], uploadsReceived: 0, generatedIdsIssued: 0,
-    fault: { dropUploadReply: 0, searchStatus: 0, searchBody: undefined, uploadDelayMs: 0, hideSearches: 0 },
+    fault: { dropUploadReply: 0, searchStatus: 0, searchBody: undefined, uploadDelayMs: 0, hideSearches: 0, readbackStatus: 0, readbackChecksum: undefined },
     reset() {
       state.files.length = 0;
       state.uploadsReceived = 0;
       state.generatedIdsIssued = 0;
-      Object.assign(state.fault, { dropUploadReply: 0, searchStatus: 0, searchBody: undefined, uploadDelayMs: 0, hideSearches: 0 });
+      Object.assign(state.fault, { dropUploadReply: 0, searchStatus: 0, searchBody: undefined, uploadDelayMs: 0, hideSearches: 0, readbackStatus: 0, readbackChecksum: undefined });
     },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
@@ -96,8 +96,10 @@ export async function startFakeDrive(): Promise<FakeDrive> {
 
       const byId = /^\/drive\/v3\/files\/([^/]+)$/.exec(url.pathname);
       if (req.method === 'GET' && byId) {
+        if (state.fault.readbackStatus) return send(state.fault.readbackStatus, { error: { code: state.fault.readbackStatus } });
         const f = state.files.find((x) => x.id === byId[1]);
-        return f ? send(200, view(f)) : send(404, { error: { code: 404 } });
+        return f ? send(200, { ...view(f), ...(state.fault.readbackChecksum ? { sha256Checksum: state.fault.readbackChecksum } : {}) })
+          : send(404, { error: { code: 404 } });
       }
 
       if (req.method === 'GET' && url.pathname.includes('/values/')) return send(200, { values: [] });

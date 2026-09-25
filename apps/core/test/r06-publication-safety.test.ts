@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createDb } from '@hawa/db';
+import { createDb, sql, withRlsContext } from '@hawa/db';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,6 +8,7 @@ import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { GooglePublisher } from '@hawa/integrations';
 import { startFakeDriveServer, type FakeDriveServer } from '../../../packages/integrations/test/fake-drive-server.js';
+import { startFakeDrive } from '../../../packages/integrations/test/fake-drive.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
 
@@ -137,6 +138,56 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     expect(againBody.publicationReceipt.driveFiles.map((f: { fileId: string }) => f.fileId))
       .toEqual(fresh.body.publicationReceipt.driveFiles.map((f: { fileId: string }) => f.fileId));
     for (const other of delivered) expect(other.body.publicationReceipt.publicationId).toBe(fresh.body.publicationReceipt.publicationId);
+  });
+
+  it('holds requester delivery after a lost Drive reply, then reconciles the same reserved file', async () => {
+    const drive = await startFakeDrive();
+    const previous = {
+      api: process.env.GOOGLE_DRIVE_API_BASE_URL,
+      upload: process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL,
+      sheets: process.env.GOOGLE_SHEETS_API_BASE_URL,
+    };
+    try {
+      process.env.GOOGLE_DRIVE_API_BASE_URL = drive.base;
+      process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL = drive.base;
+      process.env.GOOGLE_SHEETS_API_BASE_URL = drive.base;
+      const exports = memoryExportStore();
+      const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true }, deliverableStore: exports.store });
+      const { task, rev, approval } = await createApprovedTaskWithExport(app, exports);
+      const payload = JSON.stringify({ designRevisionId: rev.id, approvalId: approval.decisionId });
+      const deliver = () => app.request(`/v1/tasks/${task.id}/publish-omnichannel`,
+        { method: 'POST', headers: operatorHeaders, body: payload });
+
+      drive.fault.dropUploadReply = 1;
+      const uncertain = await deliver();
+      expect(uncertain.status).toBe(503);
+      expect(await uncertain.json()).toMatchObject({ title: 'Publish Error' });
+      expect(drive.files).toHaveLength(1);
+
+      const before = await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' },
+        async (trx) => ({
+          state: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].state,
+          notifications: (await sql<{ count: number }>`SELECT count(*)::int AS count FROM hawa.outbox_commands WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].count,
+        }));
+      expect(before).toEqual({ state: 'publishing', notifications: 0 });
+
+      drive.fault.hideSearches = 1;
+      const retried = await deliver();
+      expect(retried.status).toBe(202);
+      const body = await retried.json();
+      expect(body.status).toBe('PUBLISH_RECONCILIATION'); // fake Drive cannot confirm a Sheet row
+      expect(body.publicationReceipt.driveFiles[0]).toMatchObject({ fileId: drive.files[0].id, verified: true });
+      expect(drive.generatedIdsIssued).toBe(1);
+      expect(drive.files).toHaveLength(1);
+    } finally {
+      if (previous.api === undefined) delete process.env.GOOGLE_DRIVE_API_BASE_URL;
+      else process.env.GOOGLE_DRIVE_API_BASE_URL = previous.api;
+      if (previous.upload === undefined) delete process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL;
+      else process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL = previous.upload;
+      if (previous.sheets === undefined) delete process.env.GOOGLE_SHEETS_API_BASE_URL;
+      else process.env.GOOGLE_SHEETS_API_BASE_URL = previous.sheets;
+      await drive.close();
+    }
   });
 
   it('2. Both API routes (/publish and /publish-omnichannel) use unified publication ledger', async () => {
