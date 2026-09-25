@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
+import { openManualRequest, type ManualLifecycleState, type OpenManualEvent } from '../../worker/src/lifecycle/request-lifecycle.js';
+import type { OutboundMessage } from '@hawa/contracts';
 
 /** The first request projection must be atomic across task, outbox ownership and replay receipt. */
 const db = createDb(process.env.TEST_DATABASE_URL!);
@@ -100,4 +102,43 @@ describe('first RequestLifecycle projection', () => {
     expect(rows.command?.state).toBe('pending');
     expect(rows.request).toBeUndefined();
   });
+
+  it('worker open survives a lost Core response and sends one fenced acknowledgement', async () => {
+    const { requestId, body } = projection();
+    const draft = body.ops[0].draft;
+    const event: OpenManualEvent = {
+      v: 1, eventId: `open:${requestId}`, requestId, tenantId, chatId: draft.sourceChannelId,
+      draft: { ...draft, platform: 'telegram', clientId: null, autoGenerate: false },
+    };
+    let state: ManualLifecycleState | null = null;
+    const sent: OutboundMessage[] = [];
+    const ctx = {
+      key: requestId,
+      get: async () => state,
+      run: async <T>(_name: string, action: () => Promise<T>) => action(),
+      set: (_name: string, value: ManualLifecycleState) => { state = value; },
+      send: (message: OutboundMessage) => { sent.push(message); },
+    };
+    let loseFirstResponse = true;
+    const core = { post: async <T>(path: string, payload: unknown): Promise<T> => {
+      const response = await createApp({ db } as any).request(`/v1${path}`, {
+        method: 'POST', headers: workerHeaders(), body: JSON.stringify(payload),
+      });
+      const answer = await response.json() as T;
+      if (loseFirstResponse) { loseFirstResponse = false; throw new Error('Core committed but the HTTP response was lost'); }
+      if (!response.ok) throw new Error(`Core refused HTTP ${response.status}`);
+      return answer;
+    } };
+    await expect(openManualRequest(ctx, core, event)).rejects.toThrow('response was lost');
+    expect(state).toBeNull();
+    const result = await openManualRequest(ctx, core, event);
+    expect(result).toMatchObject({ accepted: true, stage: 'manual' });
+    expect(sent).toEqual([expect.objectContaining({ key: `${requestId}:1:ack`, taskId: result.taskId, class: 'critical' })]);
+    const receipts = await withRlsContext(db, scope, (trx) => trx.selectFrom('lifecycle_projections').select('rev').where('request_id', '=', requestId).execute());
+    expect(receipts).toHaveLength(1);
+  });
 });
+
+function workerHeaders() {
+  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+}

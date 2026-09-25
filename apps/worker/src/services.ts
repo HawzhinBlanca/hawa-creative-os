@@ -7,4 +7,4 @@
  * packages/testkit/test/worker-services.test.ts keeps scripts/restate-bluegreen.ts's WORKER_SERVICES
  * equal to it.
  */
-export const WORKER_SERVICE_NAMES = ['TaskWorkflow', 'TaskService', 'ChatInbox', 'Delivery', 'TelegramSender'] as const;
+export const WORKER_SERVICE_NAMES = ['TaskWorkflow', 'TaskService', 'ChatInbox', 'Delivery', 'TelegramSender', 'RequestLifecycle'] as const;

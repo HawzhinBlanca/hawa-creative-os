@@ -32,6 +32,7 @@ import { runCanvaDraft } from './canva-draft-workflow.js';
 import { outcomeRecorder } from './outcome-without-core.js';
 import { createTelegramSender, telegramSenderDepsFromEnv } from './lifecycle/telegram-sender.js';
 import { createDeliveryWorkflow } from './lifecycle/delivery.js';
+import { createRequestLifecycle } from './lifecycle/request-lifecycle.js';
 export * from './workflow.js';
 export * from './canva-draft-workflow.js';
 export * from './outbox-consumer.js';
@@ -127,6 +128,7 @@ const taskWorkflow = restate.workflow({
 // service is never removed from this build once bound (scripts/restate-bluegreen.ts WORKER_SERVICES).
 const telegramSender = createTelegramSender(telegramSenderDepsFromEnv(sharedDb));
 const delivery = createDeliveryWorkflow();
+const requestLifecycle = createRequestLifecycle();
 
 // ChatInbox calls Core's internal intake with its own credential (HAWA_WORKER_TOKEN), never the
 // operator's bearer. Without it an update waits in its chat until the worker is configured.
@@ -136,7 +138,7 @@ if (process.env.HAWA_WORKER_TOKEN?.trim()) {
 
 // Every service any build ever hosted stays bound (services.ts). A build that binds another set
 // would strand what Restate still routes to the old one, so it does not start.
-const boundServices = [taskService, taskWorkflow, chatInbox, delivery, telegramSender];
+const boundServices = [taskService, taskWorkflow, chatInbox, delivery, telegramSender, requestLifecycle];
 const boundNames = boundServices.map((s) => s.name).sort();
 if (boundNames.join(',') !== [...WORKER_SERVICE_NAMES].sort().join(',')) {
   log.fatal(`[${SERVICE_NAME}] FATAL this build binds ${boundNames.join(', ')} but hosts ${WORKER_SERVICE_NAMES.join(', ')} (services.ts); not serving`);
@@ -150,6 +152,7 @@ const restateHandler = restate
   .bind(chatInbox)
   .bind(delivery)
   .bind(telegramSender)
+  .bind(requestLifecycle)
   .http1Handler();
 
 let outboxConsumer: OutboxConsumer | null = null;
