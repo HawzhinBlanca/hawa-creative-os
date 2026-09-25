@@ -52,6 +52,56 @@ const telegramWebhook = (app: ReturnType<typeof createApp>) =>
   });
 
 describe('the kill switches survive a restart', () => {
+  it('refuses a non-office principal before changing the persisted switch', async () => {
+    const client = createApp({ db, testAuth: { principal: { role: 'client' } } } as any);
+    const refused = await client.request('/v1/ingress/channels/telegram/toggle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: false }),
+    });
+    expect(refused.status).toBe(403);
+    expect(await channels(createApp({ db } as any))).toMatchObject({ telegram: true });
+  });
+
+  it('a backup-style conditional release refuses a newer operator decision, even if still paused', async () => {
+    const firstCore = createApp({ db } as any);
+    const paused = await toggle(firstCore, 'telegram', false);
+    const firstTag = ((await paused.json()) as { changeTag: string }).changeTag;
+    expect(firstTag).toMatch(/^[0-9a-f-]{36}$/);
+
+    const operatorCore = createApp({ db } as any);
+    const rethrown = await toggle(operatorCore, 'telegram', false);
+    const newerTag = ((await rethrown.json()) as { changeTag: string }).changeTag;
+    expect(newerTag).not.toBe(firstTag);
+
+    const staleRelease = await firstCore.request('/v1/ingress/channels/telegram/toggle', {
+      method: 'POST', headers: operator, body: JSON.stringify({ enabled: true, expectedChangeTag: firstTag }),
+    });
+    expect(staleRelease.status).toBe(409);
+    expect((await switchRow('telegram'))?.state).toBe('disabled');
+    expect(await channels(createApp({ db } as any))).toMatchObject({ telegram: false });
+
+    const validRelease = await firstCore.request('/v1/ingress/channels/telegram/toggle', {
+      method: 'POST', headers: operator, body: JSON.stringify({ enabled: true, expectedChangeTag: newerTag }),
+    });
+    expect(validRelease.status).toBe(200);
+    expect(((await validRelease.json()) as { changeTag: string }).changeTag).not.toBe(newerTag);
+    expect(await channels(createApp({ db } as any))).toMatchObject({ telegram: true });
+  });
+
+  it('only one of two Core instances with separate database handles can consume a switch revision', async () => {
+    const paused = await toggle(createApp({ db } as any), 'telegram', false);
+    const changeTag = ((await paused.json()) as { changeTag: string }).changeTag;
+    const body = JSON.stringify({ enabled: true, expectedChangeTag: changeTag });
+    const otherDb = createDb(process.env.TEST_DATABASE_URL!);
+    try {
+      const attempts = await Promise.all([createApp({ db } as any), createApp({ db: otherDb } as any)].map((app) =>
+        app.request('/v1/ingress/channels/telegram/toggle', { method: 'POST', headers: operator, body })));
+      expect(attempts.map((response) => response.status).sort()).toEqual([200, 409]);
+      expect(await channels(createApp({ db } as any))).toMatchObject({ telegram: true });
+    } finally {
+      await otherDb.destroy();
+    }
+  });
+
   it('Telegram, thrown with the ingress toggle: a new Core reports it, refuses the webhook and pauses the poller', async () => {
     const before = createApp({ db } as any);
     const thrown = await toggle(before, 'telegram', false);

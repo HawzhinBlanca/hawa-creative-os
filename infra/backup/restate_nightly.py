@@ -158,11 +158,13 @@ class Runner:
 
 CORE_CONTROL = r"""
 const action = process.argv[1];
+const expectedChangeTag = process.argv[2];
 const token = process.env.HAWA_ART_DIRECTOR_KEY || process.env.HAWA_BEARER_TOKEN;
 if (!token) throw new Error('Core has no operator credential for the backup switch');
 const base = 'http://127.0.0.1:3001/v1';
 const url = action === 'status' ? '/ingress/status' : '/ingress/channels/telegram/toggle';
-const init = action === 'status' ? {} : {method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({enabled:action==='release'})};
+const payload = {enabled:action==='release', ...(expectedChangeTag ? {expectedChangeTag} : {})};
+const init = action === 'status' ? {} : {method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(payload)};
 const response = await fetch(base + url, {...init,signal:AbortSignal.timeout(5000)});
 if (!response.ok) throw new Error('Core switch API answered HTTP ' + response.status);
 const result = await response.json();
@@ -195,8 +197,11 @@ class RestateBackup:
     def compose(self, *args: str) -> str:
         return self.r.run(["docker", "compose", "-f", str(self.c.compose_file), "--env-file", str(self.c.compose_env), *args])
 
-    def core(self, action: str) -> dict:
-        raw = self.r.run(["docker", "exec", self.c.core_container, "node", "-e", CORE_CONTROL, action])
+    def core(self, action: str, expected_change_tag: str | None = None) -> dict:
+        args = ["docker", "exec", self.c.core_container, "node", "-e", CORE_CONTROL, action]
+        if expected_change_tag:
+            args.append(expected_change_tag)
+        raw = self.r.run(args)
         try:
             value = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -215,12 +220,18 @@ class RestateBackup:
             raise BackupError("Core and PostgreSQL disagree about the Telegram intake switch")
         return value
 
-    def set_telegram(self, enabled: bool) -> None:
-        answer = self.core("release" if enabled else "pause")
+    def set_telegram(self, enabled: bool, expected_change_tag: str | None = None) -> str:
+        if enabled and not expected_change_tag:
+            raise BackupError("Restate backup cannot release intake without its pause revision")
+        answer = self.core("release" if enabled else "pause", expected_change_tag)
         if answer.get("enabled") is not enabled or answer.get("killSwitchActive") is not (not enabled):
             raise BackupError("Core did not confirm the persisted Telegram switch")
+        change_tag = answer.get("changeTag")
+        if not isinstance(change_tag, str) or not re.fullmatch(r"[0-9a-f-]{36}", change_tag):
+            raise BackupError("Core did not return the persisted switch revision")
         if self.telegram_enabled() is not enabled:
             raise BackupError("Telegram switch readback did not match the requested state")
+        return change_tag
 
     def preflight(self) -> dict:
         c = self.c
@@ -314,12 +325,13 @@ class RestateBackup:
             raise BackupError("a Restate backup with this timestamp already exists")
         was_enabled = facts["telegramEnabled"]
         paused_by_us = False
+        pause_change_tag: str | None = None
         stopped = False
         recovered = False
         published = False
         try:
             if was_enabled:
-                self.set_telegram(False)
+                pause_change_tag = self.set_telegram(False)
                 paused_by_us = True
             running_at_stop = self.drain()
             stopped = True
@@ -341,7 +353,7 @@ class RestateBackup:
             stopped = False
             recovered = True
             if paused_by_us:
-                self.set_telegram(True)
+                self.set_telegram(True, pause_change_tag)
                 paused_by_us = False
             metadata = {"schemaVersion": 2, "capturedAt": captured_at,
                         "serviceRecoveredAt": datetime.now(timezone.utc).isoformat(),
@@ -368,7 +380,7 @@ class RestateBackup:
                     print(f"CRITICAL: Restate restart failed; Telegram intake remains paused: {exc}", file=sys.stderr)
             if paused_by_us and recovered:
                 try:
-                    self.set_telegram(True)
+                    self.set_telegram(True, pause_change_tag)
                 except Exception as exc:
                     print(f"CRITICAL: Restate is healthy but Telegram intake remains paused: {exc}", file=sys.stderr)
             for path in (part, manifest_part):

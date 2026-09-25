@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T20:20:14Z",
+  "generatedAt": "2026-09-25T20:33:12Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 315,
+  "fileCount": 316,
   "files": [
     {
       "path": ".dockerignore",
@@ -334,8 +334,13 @@
     },
     {
       "path": "adrs/053_guarded_single_node_restate_backup.md",
-      "sha256": "62e97ccd0e37f36a3d6892770f779e0476abce383b1ca50efc026316029e7c96",
-      "bytes": 3306
+      "sha256": "0dcf132c2eb4af65dce810b94777e4792156c8fa44fc6aed94c18f21cbe7c6b5",
+      "bytes": 3568
+    },
+    {
+      "path": "adrs/054_fenced_intake_switch_release.md",
+      "sha256": "6b8f8e313c31b8e3df467c2bb582f0539814918dbb6958117e375fda661f2660",
+      "bytes": 2441
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -844,8 +849,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R10_EVIDENCE.md",
-      "sha256": "a45ee7103658267cdd7bca13e0fffc1dd60220a62180b18f7fec163e6ea6ff65",
-      "bytes": 7824
+      "sha256": "acad204bff952f8c13bf9c6f74cdd8b94bf4834db5c0bb6c6924273f8e1623d2",
+      "bytes": 9368
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R11_EVIDENCE.md",
@@ -894,8 +899,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/REALITY_CHECK_2026-09-25.md",
-      "sha256": "30b17a6b36548159126990723d7b449f6b3b057210da1e6de6dfb962bc50a0c4",
-      "bytes": 38153
+      "sha256": "98d7adcf66c1369d7ed74524645618e06fa28f4aba00e2c8548d14ca5c860062",
+      "bytes": 38221
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
@@ -909,8 +914,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "cbb5a241c72cba030d6288e874c20ac9a090b0d4f1f0a97c2566077b37c23443",
-      "bytes": 157229
+      "sha256": "b0b8a33d321d8a0675f6345c937ae109818def72bd341c343080db0364ca5981",
+      "bytes": 158793
     },
     {
       "path": "plans/user-stories.csv",
@@ -989,8 +994,8 @@
     },
     {
       "path": "runbooks/10_backup_restore.md",
-      "sha256": "027842e695b179a81ed88fa0fea33a62c8c81c3796b44ff5622d2606e5e8c32d",
-      "bytes": 9151
+      "sha256": "0b1843cd0535c8adbbb238a7f3662a5146b22c767b593d5ca384dab967ae99c7",
+      "bytes": 9217
     },
     {
       "path": "runbooks/11_upgrade.md",

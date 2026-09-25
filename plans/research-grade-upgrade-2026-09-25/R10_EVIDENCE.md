@@ -30,6 +30,14 @@ The broad source suite, excluding the manifest-dependent release-gate file, pass
 
 **Blocking safety gap:** Core's kill-switch API has no expected-revision conditional release. A concurrent operator toggle during a backup could be overwritten. The new backup flag remains off and the runbook prohibits unattended enablement until this is fenced. The monthly Restate check verifies stored bytes, not a booted/restored node. R10 remains **in progress**; no 10/10 or production recovery claim follows from this slice.
 
+This paragraph records the ADR-053 checkpoint. The ADR-054 local slice below addresses the switch race; clean-host recovery and production qualification remain open.
+
 ## Sealed Restate-backup checkpoint
 
 Source and evidence commit `bc3f0b3f8b9badff78487e4faf1bb1d89be2e0d6` was sealed by `ed8b31ab9faee3086c7a5bf63f024adaafc08147` with source-candidate manifest SHA-256 `20596534010acbf68d022cefe1cb651c179442eb38624ddfe80c67c079f6e229`. The exact clean suite passed **422 files / 3,227 tests**, with **4 files / 48 tests skipped**. The Python failure-path suite passed **8 tests**; the existing backup integration passed **9 tests**. Workspace/test typecheck, lint, the zero-secret scan, blueprint **781/0/0**, release-manifest verification, six release-gate controls and the corrupted-manifest refusal drill passed. The assessor returned `UNQUALIFIED_ENGINEERING`; Gates A–H each returned `NOT_RUN_DEPLOYMENT_REQUIRED`. The manifest still records unbuilt components and both design flags off. This is a local engineering checkpoint, not deployed recovery evidence.
+
+## Conditional intake-switch release (ADR-054; 2026-09-25)
+
+The ADR-053 checkpoint's concurrent-operator safety gap was real: its post-restart toggle blindly enabled Telegram. ADR-054 gives every persisted switch write a fresh opaque `changeTag` and lets a conditional toggle update the row only when that exact tag is still current. The backup retains the tag returned by its own pause and supplies it to release. A newer operator toggle, even one that keeps the channel paused, changes the tag; the backup's release conflicts and publishes no success manifest. Existing switch rows acquire a tag on their next ordinary write. A pending unsaved local switch decision also blocks a conditional write.
+
+Disposable PostgreSQL tests passed **1 file / 16 tests**, including a non-office principal refused before write, stale-release refusal, and two Core instances using separate database handles that race to consume one revision. The backup's local failure-path suite passed **9 tests**, including an operator rethrow during archive capture. Workspace/test TypeScript passed. This is a local concurrency proof; no production switch transition, full volume restore, paired snapshot set, off-host durability or measured RPO/RTO was performed. The unattended flag remains off pending an isolated clean-host rehearsal and operational qualification, and R10 remains **in progress**.

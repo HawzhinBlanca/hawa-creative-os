@@ -14,11 +14,19 @@ from restate_nightly import BackupError, Config, RestateBackup, Runner, inspect_
 
 
 class FakeDocker(Runner):
-    def __init__(self, fail_archive: bool = False, originally_enabled: bool = True, fail_health: bool = False):
+    def __init__(self, fail_archive: bool = False, originally_enabled: bool = True,
+                 fail_health: bool = False, operator_rethrows: bool = False):
         self.fail_archive = fail_archive
         self.fail_health = fail_health
+        self.operator_rethrows = operator_rethrows
         self.enabled = originally_enabled
+        self.revision = 0
+        self.change_tag = "00000000-0000-4000-a000-000000000000"
         self.calls: list[str] = []
+
+    def advance_revision(self) -> None:
+        self.revision += 1
+        self.change_tag = f"00000000-0000-4000-a000-{self.revision:012d}"
 
     def run(self, args: list[str]) -> str:
         if args[0] == "openssl":
@@ -39,13 +47,19 @@ class FakeDocker(Runner):
         if args[:2] == ["docker", "exec"]:
             if args[3] == "psql":
                 return "t" if self.enabled else "f"
-            if args[-1] in ("status", "pause", "release"):
-                if args[-1] == "pause":
+            action = args[-2] if len(args) >= 8 and args[-2] == "release" else args[-1]
+            if action in ("status", "pause", "release"):
+                if action == "pause":
                     self.enabled = False
-                elif args[-1] == "release":
+                    self.advance_revision()
+                elif action == "release":
+                    if args[-1] != self.change_tag:
+                        raise BackupError("Core switch API answered HTTP 409")
                     self.enabled = True
+                    self.advance_revision()
                 return json.dumps({"channels": {"telegram": self.enabled},
-                                   "enabled": self.enabled, "killSwitchActive": not self.enabled})
+                                   "enabled": self.enabled, "killSwitchActive": not self.enabled,
+                                   "changeTag": self.change_tag})
             return "0"  # sys_invocation running count
         raise AssertionError(args)
 
@@ -61,6 +75,8 @@ class FakeDocker(Runner):
             item = tarfile.TarInfo("./hawa-restate-prod-1/partition/journal")
             item.size = len(payload)
             out.addfile(item, io.BytesIO(payload))
+        if self.operator_rethrows:
+            self.advance_revision()  # another Core records a newer office decision while backup runs
 
 
 class RestateBackupTest(unittest.TestCase):
@@ -114,7 +130,15 @@ class RestateBackupTest(unittest.TestCase):
         with self.assertRaises(BackupError):
             RestateBackup(self.config(), already_paused, sleep=lambda _: None).apply()
         self.assertFalse(already_paused.enabled)
-        self.assertFalse(any(c.endswith("release") for c in already_paused.calls))
+        self.assertFalse(any(" release " in c for c in already_paused.calls))
+
+    def test_newer_operator_switch_decision_blocks_backup_release(self) -> None:
+        fake = FakeDocker(operator_rethrows=True)
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaisesRegex(BackupError, "HTTP 409"):
+                RestateBackup(self.config(), fake, sleep=lambda _: None).apply()
+        self.assertFalse(fake.enabled)
+        self.assertFalse([path for path in self.archive.iterdir() if path.name != ".restate-backup.lock"])
 
     def test_stale_core_switch_is_refused_before_stopping_restate(self) -> None:
         class DisagreeingDocker(FakeDocker):

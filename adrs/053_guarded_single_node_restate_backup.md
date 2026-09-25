@@ -21,3 +21,5 @@ The backup records the Restate image ID, node name, volume, Compose-file digest 
 - This single-node volume method must not be reused for a multi-node Restate cluster.
 - Local archive and failure-path tests prove the command's safeguards, not a production backup schedule, off-host durability, compatible-version restore or complete R10 cutover.
 - The existing kill-switch API has no expected-revision compare-and-set. A concurrent operator toggle during backup could be overwritten by this command's release. Do not enable unattended production runs until the switch has a fenced maintenance lease or equivalent conditional release.
+
+**2026-09-25 amendment:** ADR-054 adds an atomic `changeTag` conditional release and the backup now uses it. The risk above describes this decision's first local checkpoint, not the amended source. Production rehearsal and clean-host qualification remain open.
