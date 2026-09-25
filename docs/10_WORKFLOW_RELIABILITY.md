@@ -63,12 +63,14 @@ An uncertain request-owned Telegram send is never an automatic retry. Under ADR-
 
 For outbound Telegram messages, a provider 5xx or HTTP success without a valid API result is an unknown external effect, including when it occurs on a formatting fallback. Do not classify it as a definite failure and repeat the send. A definite pre-connection failure or explicit 429 may retry under the existing per-message send mark and backoff policy.
 
-- **Transient:** network, 429, provider 5xx, lock contention — bounded exponential retry with jitter.
+The legacy outbox also requires a positive Bot API message ID and a committed `sent` mark before it completes a new Telegram message or approved-file notification. It retries a failed *local mark write* for a bounded period, then leaves the command uncertain and the earlier `attempted` mark in place. A later outbox requeue cannot repeat that send. Historical `sent` marks without IDs remain non-replayable and must not be upgraded to a fabricated receipt.
+
+- **Transient:** definite pre-connection failure, 429, safe idempotent provider operations, lock contention — bounded exponential retry with jitter.
 - **Capacity:** GPU queue/full, provider quota — durable wait or evaluated fallback.
 - **Invalid input:** schema, missing asset, exact-copy conflict — no blind retry; request correction.
 - **Policy:** client egress or permission denial — fail closed.
 - **Permanent external:** revoked Drive permission, removed model — operator action.
-- **Unknown:** one conservative retry where safe, then operator review.
+- **Unknown:** reconcile first; retry only when the operation is provably safe, otherwise operator review.
 
 ## 6. Timeouts and budgets
 

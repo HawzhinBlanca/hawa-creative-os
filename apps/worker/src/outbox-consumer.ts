@@ -34,6 +34,7 @@ import {
   type SendStepKind,
   type TelegramSender,
   type TelegramSendResult,
+  validTelegramMessageId,
 } from './delivery-notification.js';
 
 export interface OutboxCommandRecord {
@@ -122,7 +123,7 @@ export type OutboxCommandHandler = (
 ) => Promise<void>;
 
 /** A Telegram answer that may follow a send that arrived: the send is never repeated automatically. */
-const UNCERTAIN_SEND = /DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID/;
+const UNCERTAIN_SEND = /DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID|TELEGRAM_(?:DOCUMENT_)?REJECTED_5\d\d/;
 
 export interface OutboxConsumerOptions {
   tenantId?: string;
@@ -141,6 +142,8 @@ export interface OutboxConsumerOptions {
   telegramSender?: (botToken: string) => TelegramSender;
   /** Reads a delivered export's stored bytes. Defaults to hawa.canva_export_bytes. */
   readExportBytes?: ExportBytesReader;
+  /** Waits between attempts to persist a confirmed Telegram message ID after the provider answered. */
+  markRetryDelaysMs?: number[];
   /** The office chat alerted about dead-lettered requests. Undefined reads the first TELEGRAM_ALLOWED_USERS entry. */
   officeAlertChatId?: string | null;
   /** Transport to Core for `task.outcome`. Defaults to fetch. */
@@ -377,7 +380,8 @@ export class OutboxConsumer {
     const before = prior.get(step);
     if (before === 'sent') return 'skipped';
     if (before === 'uncertain') return 'uncertain';
-    const mark = (outcome: SendMarkOutcome) => scope.inTenant((trx) => writeSendMark(trx, cmd.tenant_id, cmd.id, step, kind, outcome));
+    const mark = (outcome: SendMarkOutcome, messageId?: string) => scope.inTenant((trx) =>
+      writeSendMark(trx, cmd.tenant_id, cmd.id, step, kind, outcome, messageId));
     const unrecorded = (outcome: SendMarkOutcome) => (err: unknown) =>
       log.warn(
         `[OutboxConsumer] Could not record the ${kind} ${step} of command ${cmd.id} as ${outcome}; a later attempt will treat it as uncertain and not send it again:`,
@@ -396,11 +400,25 @@ export class OutboxConsumer {
     }
     // The chaos suite kills the worker here: sent, and only 'attempted' on record.
     await chaosPoint('worker.sender.after-telegram', { commandId: cmd.id, commandType: cmd.command_type, step, kind });
-    if (res.success) {
-      await mark('sent').catch(unrecorded('sent'));
-      return 'sent';
+    if (res.success && validTelegramMessageId(res.messageId)) {
+      // Telegram may have accepted the send even if Postgres briefly disappears. Retry only the
+      // local receipt write; if it stays unavailable, the earlier attempted mark prevents a replay.
+      const delays = this.options.markRetryDelaysMs ?? [500, 1000, 2000, 4000, 8000];
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await mark('sent', res.messageId);
+          return 'sent';
+        } catch (err) {
+          if (attempt >= delays.length) {
+            unrecorded('sent')(err);
+            return 'uncertain';
+          }
+          await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+        }
+      }
     }
-    const error = res.error || (kind === 'document' ? 'TELEGRAM_DOCUMENT_FAILED' : 'TELEGRAM_SEND_FAILED');
+    const error = res.success ? 'TELEGRAM_RECEIPT_INVALID' :
+      res.error || (kind === 'document' ? 'TELEGRAM_DOCUMENT_FAILED' : 'TELEGRAM_SEND_FAILED');
     if (UNCERTAIN_SEND.test(error)) {
       await mark('uncertain').catch(unrecorded('uncertain'));
       return 'uncertain';

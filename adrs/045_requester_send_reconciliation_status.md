@@ -21,6 +21,8 @@ A later sender hardening pass stores a positive Bot API `message_id` in a succes
 
 A later ambiguity audit also treats Telegram 5xx responses and HTTP success without a definite Bot API result as uncertain for text, document and photo sends. Only a definite parse-entity rejection permits a plain-text or plain-caption fallback. An ambiguous fallback response remains uncertain. This enforces the original no-blind-replay decision across all outbound formats; staff must reconcile instead of relying on a transport retry that could duplicate an accepted message.
 
+The legacy outbox sender follows the same rule for newly sent messages and approved files. It requires a positive Bot API message ID, stores that ID in the append-only `sent` mark, and only completes its command after that mark commits. If a successful provider answer is malformed or the final mark cannot be written after bounded local retries, the command stays uncertain under its earlier `attempted` mark. A raw 5xx rejection returned by an older/custom bridge also remains uncertain. Existing historical `sent` marks without message IDs still prevent replay; no provider receipt is invented for them. This extends the rule to legacy notifications while their original executor remains active during cutover.
+
 ## Why
 
 An uncertain external effect requires a different human decision from a missing Sheet row. Distinct status and disabled retry prevent the UI from inviting an action that the lifecycle owner correctly refuses, while preserving existing fail-closed sender behavior.
