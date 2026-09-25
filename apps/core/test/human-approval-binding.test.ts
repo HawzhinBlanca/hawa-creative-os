@@ -128,10 +128,17 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     });
     expect(res.status).toBe(200);
     const desk = await res.json();
+    expect(desk.revisionId).toBeNull();
     expect(desk.canvaStatus).toBe('recorded');
     expect(desk.canvaDesignId).toBe(designId);
-    expect(desk.canvaEditUrl).toContain(encodeURIComponent(designId));
+    expect(desk.canvaEditUrl).toBe(`https://www.canva.com/design/${designId}/edit`);
     expect(desk).toMatchObject({ captureStatus: 'not_captured', captureArtifactCount: 0, capturedFiles: [], capturedArtifactSetHash: null });
+    expect((await app.request(`/tasks/${task.id}/review-desk?revisionId=rev-1`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}` },
+    })).status).toBe(422);
+    expect((await app.request(`/tasks/${task.id}/review-desk?revisionId=${crypto.randomUUID()}`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}` },
+    })).status).toBe(404);
 
     const revId = crypto.randomUUID();
     expect((await app.request(`/tasks/${task.id}/revisions`, { method: 'POST', headers: { 'Content-Type': 'application/json' },

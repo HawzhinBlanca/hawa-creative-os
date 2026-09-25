@@ -416,20 +416,25 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     const task = await resolveTaskWithFallback(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
 
-    const revId = c.req.query('revisionId') || task.latestRevisionId || 'rev-1';
+    const requestedRevisionId = c.req.query('revisionId');
+    if (requestedRevisionId && !isValidUuid(requestedRevisionId)) {
+      return problem(c, 422, 'Invalid Revision Identifier', 'Use a recorded revision ID');
+    }
+    const revId = requestedRevisionId || task.latestRevisionId || null;
     // The revision's copy as Postgres holds it; revisions are no longer kept in memory.
     if (!db || !revisionRepo) return problem(c, 503, 'Database Unavailable', 'Design revisions are only held in the database');
-    const rev = isValidUuid(revId)
+    const rev = revId && isValidUuid(revId)
       ? await withRlsContext(db, { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId, role: auth.role }, async (trx) => {
           const row = await revisionRepo.findRevisionById(revId, auth.tenantId || DEFAULT_TENANT_ID, trx);
           return row && row.task_id === taskId ? { document: row.neutral_manifest as { nodes?: unknown[] } } : undefined;
         })
       : undefined;
+    if (revId && !rev) return problem(c, 404, 'Revision Not Found', 'This task has no such recorded revision');
     // The QA evidence is the revision's newest QC run as Postgres holds it, with the hash it stored.
     // It was the report kept on this process's copy of the task: another Core showed "not run".
-    const qcRun = isValidUuid(revId) && isValidUuid(taskId)
+    const qcRun = revId && isValidUuid(revId) && isValidUuid(taskId)
       ? await withRlsContext(db, { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId, role: auth.role }, async (trx) =>
-          (await sql<{ id: string; status: string; critical_pass: boolean | null; report: { findings?: unknown[] } | null; report_sha256: string | null }>`
+          (await sql<{ id: string; status: string; critical_pass: boolean | null; report: { findings?: unknown[]; glyphCoveragePass?: unknown; unobservedLayersCount?: unknown } | null; report_sha256: string | null }>`
             SELECT id, status, critical_pass, report, report_sha256 FROM hawa.qc_runs
             WHERE tenant_id = ${auth.tenantId || DEFAULT_TENANT_ID}::uuid AND task_id = ${taskId}::uuid AND design_revision_id = ${revId}::uuid
             ORDER BY started_at DESC LIMIT 1`.execute(trx)).rows[0])
@@ -437,15 +442,24 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
 
     const binding = isValidUuid(taskId)
       ? await withRlsContext(db, { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId, role: auth.role }, async (trx) =>
-          (await sql<{ canva_design_id: string }>`SELECT canva_design_id FROM hawa.canva_bindings
+          (await sql<{ canva_design_id: string; edit_url: string | null }>`SELECT canva_design_id, edit_url FROM hawa.canva_bindings
             WHERE tenant_id = ${auth.tenantId || DEFAULT_TENANT_ID}::uuid AND task_id = ${taskId}::uuid AND status = 'bound'
             ORDER BY updated_at DESC LIMIT 1`.execute(trx)).rows[0])
       : undefined;
     const canvaDesignId = typeof binding?.canva_design_id === 'string' && binding.canva_design_id.trim()
       ? binding.canva_design_id.trim() : null;
+    let canvaEditUrl: string | null = null;
+    if (canvaDesignId && binding?.edit_url) {
+      try {
+        const recorded = new URL(binding.edit_url);
+        if (recorded.origin === 'https://www.canva.com' && (recorded.pathname.startsWith('/design/') || recorded.pathname.startsWith('/d/'))) {
+          canvaEditUrl = recorded.toString();
+        }
+      } catch { /* An invalid stored link is missing evidence, not a link to invent. */ }
+    }
     // Capture rows have source hashes but not the pinned export IDs/preview URLs this inspection
     // contract needs. Show their existence and count, while withholding a fake reviewable file.
-    const capture = isValidUuid(taskId) && isValidUuid(revId)
+    const capture = isValidUuid(taskId) && revId && isValidUuid(revId)
       ? await withRlsContext(db, { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId, role: auth.role }, async (trx) =>
           (await sql<{ captured_artifact_set_hash: string; artifacts: unknown }>`
             SELECT captured_artifact_set_hash, artifacts FROM hawa.canva_capture_sets
@@ -467,9 +481,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       designTitle: task.title || 'Design Task',
       canvaStatus: canvaDesignId ? 'recorded' : 'not_configured',
       canvaDesignId,
-      canvaEditUrl: canvaDesignId
-        ? `https://www.canva.com/design/${encodeURIComponent(canvaDesignId)}/edit?return_url=https%3A%2F%2Fdesk.hawa.agency%2Ftasks%2F${taskId}`
-        : null,
+      canvaEditUrl,
       captureStatus: hasCaptureRecord ? 'recorded_metadata_only' : 'not_captured',
       captureArtifactCount: hasCaptureRecord ? captureArtifactCount : 0,
       capturedFiles: [],
@@ -500,8 +512,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
             criticalPass: typeof qcRun.critical_pass === 'boolean' ? qcRun.critical_pass : null,
             qcReportHash: qcRun.report_sha256,
             findingsCount: Array.isArray(qcRun.report?.findings) ? qcRun.report.findings.length : 0,
-            glyphCoveragePass: true,
-            unobservedLayersCount: 0,
+            glyphCoveragePass: typeof qcRun.report?.glyphCoveragePass === 'boolean' ? qcRun.report.glyphCoveragePass : null,
+            unobservedLayersCount: Number.isSafeInteger(qcRun.report?.unobservedLayersCount) && Number(qcRun.report?.unobservedLayersCount) >= 0
+              ? Number(qcRun.report?.unobservedLayersCount) : null,
           }
         : {
             qcRunId: null,
@@ -512,7 +525,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
             glyphCoveragePass: null,
             unobservedLayersCount: null,
           },
-      revisionDiff: (task as any).latestDiff,
+      revisionDiff: revId ? (task as any).latestDiff : undefined,
     });
 
     return c.json(deskInspection, 200);

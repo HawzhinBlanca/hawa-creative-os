@@ -84,7 +84,7 @@ export class HumanApprovalManager {
    */
   buildReviewDeskInspection(params: {
     taskId: UUID;
-    revisionId: UUID;
+    revisionId: UUID | null;
     designTitle: string;
     canvaStatus: 'recorded' | 'not_configured';
     canvaDesignId: string | null;
@@ -132,7 +132,7 @@ export class HumanApprovalManager {
       removedElements: string[];
     };
   }): ReviewDeskInspection {
-    const activeApproval = this.approvalsByRevision.get(params.revisionId);
+    const activeApproval = params.revisionId ? this.approvalsByRevision.get(params.revisionId) : undefined;
 
     return {
       taskId: params.taskId,

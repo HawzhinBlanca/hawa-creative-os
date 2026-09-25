@@ -95,7 +95,7 @@ export interface ApprovalBindingRecord {
 
 export interface ReviewDeskInspection {
   taskId: UUID;
-  revisionId: UUID;
+  revisionId: UUID | null;
   designTitle: string;
   canvaStatus: 'recorded' | 'not_configured';
   canvaDesignId: string | null;
