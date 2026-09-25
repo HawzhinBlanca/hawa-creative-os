@@ -59,6 +59,8 @@ A Restate durable call wraps only operations with stable serialization and repla
 
 ## 5. Retry classes
 
+An uncertain request-owned Telegram send is never an automatic retry. Under ADR-046, an office administrator may record that every approved file and notice is visible in the immutable requester chat, using one message ID per item and an expected request revision. Core verifies the local marks and archived Drive/Sheet receipts and commits one audited settlement; inconclusive cases remain open. This is staff observation, not a requester read receipt or proof of exactly-once Telegram transport.
+
 - **Transient:** network, 429, provider 5xx, lock contention — bounded exponential retry with jitter.
 - **Capacity:** GPU queue/full, provider quota — durable wait or evaluated fallback.
 - **Invalid input:** schema, missing asset, exact-copy conflict — no blind retry; request correction.

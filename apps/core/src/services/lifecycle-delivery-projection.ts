@@ -153,7 +153,7 @@ export interface LifecycleDeliveryFinishResult {
 }
 
 /** The worker's booleans are a report, not the evidence that may close the request. */
-async function assertStoredDeliveryReceipts(
+export async function assertStoredDeliveryReceipts(
   trx: Kysely<Database>, tenantId: string, taskId: string,
   publication: { id: string; package_manifest: Record<string, unknown>; package_sha256: string },
   outcome: DeliveryOutcome,

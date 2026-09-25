@@ -1016,7 +1016,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   )}
                 </div>
                 {selectedTask.status === 'REQUESTER_SEND_RECONCILIATION' &&
-                  <RequesterSendEvidencePanel key={`requester-send-${selectedTask.id}`} taskId={selectedTask.id} />}
+                  <RequesterSendEvidencePanel key={`requester-send-${selectedTask.id}`} taskId={selectedTask.id}
+                    canConfirm={sessionUser?.role === 'office_admin' || sessionUser?.role === 'administrator'} />}
                 {!selectedTask.latestRevisionId && (
                   <p className="capture-availability" role="note">
                     Request Revision and approval need a recorded design revision; this task has none yet.

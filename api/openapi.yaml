@@ -302,6 +302,29 @@ paths:
         '200': {description: A retried request-owned action has completed or requires an explicit new delivery action after archive failure}
         '202': {description: Publication started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/requester-send-evidence:
+    get:
+      tags: [Tasks]
+      operationId: getRequesterSendEvidence
+      description: Office-only local TelegramSender marks for the current unresolved request-owned publication. A Bot API message ID is not a requester read receipt.
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      responses:
+        '200':
+          description: Approved file and notice marks, exact send keys and local provider message IDs.
+          content: {application/json: {schema: {$ref: '#/components/schemas/RequesterSendEvidence'}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/requester-send-confirmation:
+    post:
+      tags: [Tasks]
+      operationId: confirmRequesterSendVisible
+      description: Office administrator attests that every approved file and notice is visible in the exact requester chat. This does not send, replay or prove a requester read receipt.
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/RequesterSendConfirmation'}}}
+      responses:
+        '200': {description: Staff-visible confirmation committed with one request revision}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/tasks/{taskId}/feedback:
     post:
       tags: [Tasks]
@@ -539,6 +562,54 @@ components:
         attempts: {type: integer, minimum: 0}
         traceId: {type: [string, 'null']}
         updatedAt: {type: string, format: date-time}
+    RequesterSendStep:
+      type: object
+      required: [sendKey, outcome, attemptCount, lastMarkAt, messageId]
+      properties:
+        sendKey: {type: string}
+        outcome: {enum: [not_attempted, attempted, sent, uncertain, failed, released]}
+        attemptCount: {type: integer, minimum: 0}
+        lastMarkAt: {type: [string, 'null'], format: date-time}
+        messageId: {type: [string, 'null'], pattern: '^[1-9][0-9]*$'}
+    RequesterSendEvidence:
+      type: object
+      required: [taskId, requestId, requestRev, publicationId, approvalId, requesterChatId, providerReceipt, files, notice]
+      properties:
+        taskId: {type: string, format: uuid}
+        requestId: {type: string, format: uuid}
+        requestRev: {type: integer, minimum: 1}
+        publicationId: {type: string, format: uuid}
+        approvalId: {type: string, format: uuid}
+        requesterChatId: {type: [string, 'null']}
+        providerReceipt: {const: not_available}
+        files:
+          type: array
+          items:
+            allOf:
+              - {$ref: '#/components/schemas/RequesterSendStep'}
+              - {type: object, required: [artifactId, filename, sha256], properties: {artifactId: {type: string, format: uuid}, filename: {type: string}, sha256: {type: string, pattern: '^[a-f0-9]{64}$'}}}
+        notice: {$ref: '#/components/schemas/RequesterSendStep'}
+    RequesterSendConfirmation:
+      type: object
+      required: [actionId, expectedRev, publicationId, approvalId, requesterChatId, observed, attested]
+      additionalProperties: false
+      properties:
+        actionId: {type: string, format: uuid}
+        expectedRev: {type: integer, minimum: 5}
+        publicationId: {type: string, format: uuid}
+        approvalId: {type: string, format: uuid}
+        requesterChatId: {type: string, minLength: 1}
+        observed:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            required: [sendKey, messageId]
+            additionalProperties: false
+            properties:
+              sendKey: {type: string}
+              messageId: {type: string, pattern: '^[1-9][0-9]*$'}
+        attested: {const: true}
     # BEGIN GENERATED task status: scripts/generate_task_status_contract.ts from packages/contracts/src/task-status.ts. Do not edit.
     TaskState:
       description: A task's database state (task_state in db/schema.sql).

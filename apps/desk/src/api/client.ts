@@ -486,6 +486,14 @@ class HawaApiClient {
     requesterSendEvidence: (taskId: string) =>
       this.request<RequesterSendEvidence>(`/tasks/${encodeURIComponent(taskId)}/requester-send-evidence`),
 
+    confirmRequesterSend: (taskId: string, body: { actionId: string; expectedRev: number;
+      publicationId: string; approvalId: string; requesterChatId: string;
+      observed: Array<{ sendKey: string; messageId: string }>; attested: true }) =>
+      this.request<{ requestId: string; taskId: string; requestRev: number;
+        confirmationSource: 'staff_visible'; stage: 'delivered' }>(
+        `/tasks/${encodeURIComponent(taskId)}/requester-send-confirmation`,
+        { method: 'POST', body: JSON.stringify(body) }),
+
     create: async <T = any>(body: any): Promise<T> => {
       return this.request<T>('/tasks', {
         method: 'POST',

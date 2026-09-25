@@ -80,6 +80,18 @@ function fakeCore(initial: FakeTask[], opts: { role?: string } = {}) {
           sendKey: 'send-file-a1', outcome: 'sent', attemptCount: 1, lastMarkAt: '2026-09-25T10:00:00.000Z', messageId: '87' }],
         notice: { sendKey: 'send-notice', outcome: 'uncertain', attemptCount: 1, lastMarkAt: '2026-09-25T10:00:01.000Z', messageId: null } });
     }
+    const sendConfirmation = /^\/v1\/tasks\/([^/]+)\/requester-send-confirmation$/.exec(c.path);
+    if (sendConfirmation && c.method === 'POST') {
+      const t = tasks.find((task) => task.id === sendConfirmation[1]);
+      if (!t || opts.role !== 'office_admin') return json({ title: 'Office Administrator Required' }, 403);
+      if (c.body?.requesterChatId !== '123456789' ||
+          c.body?.observed?.[0]?.messageId !== '87' || c.body?.observed?.[1]?.messageId !== '88') {
+        return json({ title: 'Evidence Mismatch' }, 409);
+      }
+      t.status = 'COMPLETE';
+      return json({ requestId: t.requestId, taskId: t.id, stage: 'delivered', requestRev: 6,
+        confirmationSource: 'staff_visible' });
+    }
     if (/^\/v1\/tasks\/[^/]+\/canva$/.test(c.path)) {
       return json({ artifacts: [{ id: 'a1', format: 'png', sha256: 'cd'.repeat(32), byte_size: 1000 }] });
     }
@@ -280,10 +292,37 @@ describe('approve and request revision are mutations', () => {
     expect(view.text()).toContain('Bot API message ID: 87');
     expect(view.text()).toContain('May have arrived; requester receipt unknown');
     expect(view.text()).toContain('Telegram requester receipt: unavailable');
+    expect(view.text()).not.toContain('Confirm visible in requester chat');
     expect(view.text()).not.toContain('Retry Sheet Sync');
     expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(true);
     await click(view.container.querySelector('#btn-deliver-approved'));
     expect(core.calls.filter((call) => call.method === 'POST' && call.path.endsWith('/publish'))).toHaveLength(0);
+  });
+
+  it('requires office administrator inspection of every send before recording confirmation', async () => {
+    const stream = new FakeStream('connected');
+    const core = fakeCore([{ id: 't1', title: 'Members evening poster', status: 'REQUESTER_SEND_RECONCILIATION',
+      requestId: '11111111-1111-4111-8111-111111111111', revision: 1, approved: true }], { role: 'office_admin' });
+    const { view } = await renderWork(stream);
+    const button = byText(view.container, 'button', 'Confirm visible in requester chat');
+    expect(button?.hasAttribute('disabled')).toBe(true);
+    const notice = view.container.querySelector('input[aria-label="Observed message ID for delivery notice"]') as HTMLInputElement;
+    await React.act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(notice, '88');
+      notice.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(button?.hasAttribute('disabled')).toBe(true);
+    const checkbox = view.container.querySelector('.requester-send-confirmation input[type="checkbox"]') as HTMLInputElement;
+    await click(checkbox);
+    expect(button?.hasAttribute('disabled')).toBe(false);
+    await click(button);
+    await advance(100);
+    expect(core.calls.find((call) => call.method === 'POST' &&
+      call.path.endsWith('/requester-send-confirmation'))?.body).toMatchObject({
+      expectedRev: 5, publicationId: 'p1', approvalId: 'd1', requesterChatId: '123456789',
+      attested: true, observed: [{ sendKey: 'send-file-a1', messageId: '87' },
+        { sendKey: 'send-notice', messageId: '88' }],
+    });
   });
 
   it('offers a request-owned Sheet retry only when Core reports the reconciliation status', async () => {

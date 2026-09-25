@@ -62,10 +62,11 @@ function packageFiles(manifest: Record<string, unknown>): PackageFile[] {
 }
 
 /** A tenant-scoped read of the exact keys that Delivery and TelegramSender use for this approval. */
-export async function readRequesterSendEvidence(
-  db: Kysely<Database>, input: { tenantId: string; userId: string; role: string; taskId: string },
+export interface RequesterSendEvidenceScope { tenantId: string; userId: string; role: string; taskId: string }
+
+export async function readRequesterSendEvidenceInTransaction(
+  trx: Kysely<Database>, input: RequesterSendEvidenceScope,
 ): Promise<RequesterSendEvidenceRead> {
-  return withRlsContext(db, { tenantId: input.tenantId, userId: input.userId, role: input.role }, async (trx) => {
     const task = await trx.selectFrom('tasks').select(['request_id', 'state'])
       .where('tenant_id', '=', input.tenantId).where('id', '=', input.taskId).executeTakeFirst();
     if (!task) return { kind: 'not_found' };
@@ -110,5 +111,11 @@ export async function readRequesterSendEvidence(
         filename: file.name, sha256: file.sha256, ...step(sendKeys[index], 'document') })),
       notice: step(noticeKey, 'notice'),
     } };
-  });
+}
+
+export async function readRequesterSendEvidence(
+  db: Kysely<Database>, input: RequesterSendEvidenceScope,
+): Promise<RequesterSendEvidenceRead> {
+  return withRlsContext(db, { tenantId: input.tenantId, userId: input.userId, role: input.role },
+    (trx) => readRequesterSendEvidenceInTransaction(trx, input));
 }

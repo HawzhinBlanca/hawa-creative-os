@@ -32,7 +32,7 @@ export interface OpenLifecycleResult {
 }
 
 export class LifecycleProjectionConflict extends Error {
-  constructor(readonly code: 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN' | 'NOT_CURRENT_DRAFT' | 'UNAUTHORIZED_ACTOR' | 'APPROVAL_EVIDENCE_CHANGED', message: string) {
+  constructor(readonly code: 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN' | 'NOT_CURRENT_DRAFT' | 'UNAUTHORIZED_ACTOR' | 'APPROVAL_EVIDENCE_CHANGED' | 'INVALID_CONFIRMATION' | 'WRONG_CHAT' | 'APPROVAL_CHANGED' | 'EVIDENCE_CHANGED' | 'INCOMPLETE_OBSERVATION' | 'EVIDENCE_MISMATCH', message: string) {
     super(message);
   }
 }

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T16:24:00Z",
+  "generatedAt": "2026-09-25T16:38:12Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 305,
+  "fileCount": 306,
   "files": [
     {
       "path": ".dockerignore",
@@ -298,6 +298,11 @@
       "bytes": 3503
     },
     {
+      "path": "adrs/046_staff_requester_send_resolution.md",
+      "sha256": "ebebb48a0da2c9930b06dc0a91c51feaeda365678e882e148003975ef5db38da",
+      "bytes": 3079
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "54ca6b1554c988f5a2405991660047ded612d8d96c93dd3e88bc849cc09c2b7a",
       "bytes": 21896
@@ -309,8 +314,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "53aca5e56479c3319a4dc0109890057cbba9beeae5f3d2e6951f42cf99a9cf16",
-      "bytes": 23451
+      "sha256": "a6cee7c502d7ccf75939826122679ae827d2011cf455282ed319ffa0713515c5",
+      "bytes": 26956
     },
     {
       "path": "config/asset-workflows.example.yaml",
@@ -554,8 +559,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "e9e959254110c5eab5c730ce2c82f56f4767ef1a748739d32a88b587082bafe4",
-      "bytes": 7290
+      "sha256": "6edab74807b642798b00744537a501ef9f1ae1b7edaa0a35a48fb958527339ca",
+      "bytes": 7788
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -569,8 +574,8 @@
     },
     {
       "path": "docs/13_GOOGLE_DRIVE_SHEETS.md",
-      "sha256": "00a9a5023d26c20ae0a47b90bfbe7315640d47a2f5205173d4e224058eee6662",
-      "bytes": 12261
+      "sha256": "0a9b743bc85e9bf9da1ca3e4169d29dab0292707e9d78fdf5fff9cd278e5b78a",
+      "bytes": 13242
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
@@ -794,8 +799,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_EVIDENCE.md",
-      "sha256": "ba9af9074816ed79dca6dc0a7eec5a6b84b0ecfee922e09b19ba27723888c1f1",
-      "bytes": 35895
+      "sha256": "3a4bd37ef2da49baf3e4ff3b0701039cae8c8df87b64488f84b4793122b8ecd6",
+      "bytes": 38036
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_RESTATE_DELIVERY_KILL_DRILL.md",
@@ -859,8 +864,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "fc542ab2dbc798a94a082202e500e88345e92b82a069b0e8971494356be17492",
-      "bytes": 134244
+      "sha256": "afa9c8f7ee61ace2ef4356743f59d6f97f3f00e1092e0ee4104db1f5680480a8",
+      "bytes": 136134
     },
     {
       "path": "plans/user-stories.csv",

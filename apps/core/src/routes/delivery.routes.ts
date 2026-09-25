@@ -10,6 +10,8 @@ import { log } from '../logging.js';
 import { pendingChangeWords } from '../services/pending-change.js';
 import { readPublicationReceipt } from '../services/publication-receipt.js';
 import { readRequesterSendEvidence } from '../services/requester-send-evidence.js';
+import { confirmRequesterSendVisible } from '../services/requester-send-resolution.js';
+import { LifecycleProjectionConflict } from '../services/lifecycle-projection.js';
 import { DELIVERY_OWNED_BY_CORE } from '../services/omnichannel-delivery.js';
 
 /**
@@ -287,6 +289,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     let sheetSyncs: any[] = [];
     let outboxCmds: any[] = [];
     let storedState: string | null = null;
+    let completionEvidence: { source: 'staff_visible'; actorId: string | null; recordedAt: string } | null = null;
 
     if (isValidUuid(taskId)) {
       try {
@@ -306,6 +309,16 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
               outboxCmds = await outboxRepo.findByAggregateId(auth.tenantId, 'task', taskId, trx);
             }
             if (taskRepo) storedState = (await taskRepo.findById(taskId, auth.tenantId, trx))?.state ?? null;
+            if (storedState === 'complete') {
+              const lastChange = await trx.selectFrom('task_events').select(['actor_id', 'data', 'occurred_at'])
+                .where('tenant_id', '=', auth.tenantId).where('task_id', '=', taskId)
+                .where('event_type', '=', 'task.state_changed')
+                .orderBy('aggregate_version', 'desc').limit(1).executeTakeFirst();
+              if (lastChange?.data?.confirmationSource === 'staff_visible') {
+                completionEvidence = { source: 'staff_visible', actorId: lastChange.actor_id,
+                  recordedAt: lastChange.occurred_at.toISOString() };
+              }
+            }
           }
         );
       } catch (err) {
@@ -355,6 +368,11 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     } else if (notificationStatus === 'pending') {
       state = 'complete';
       actionableRecovery = 'Task and publication are complete. Notification is queued for delivery by the outbox worker.';
+    } else if (pubRecord?.executor === 'restate' && pubRecord.state === 'complete') {
+      state = 'complete';
+      actionableRecovery = completionEvidence
+        ? 'Archive and Sheet are confirmed. Office staff recorded every approved item visible in the requester chat. A requester read receipt is unavailable.'
+        : 'Archive and Sheet are confirmed. The request-owned workflow reported requester sends complete; a requester read receipt is unavailable.';
     }
 
     return c.json({
@@ -376,6 +394,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         attempts: notificationCmd?.attempts || 0,
         errorMessage: notificationCmd?.error_message || null,
       },
+      completionEvidence,
       actionableRecovery,
     });
   });
@@ -401,6 +420,41 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     } catch (err) {
       log.error('[core:requester-send-evidence] Could not read send marks:', err);
       return problem(c, 503, 'Send Evidence Unavailable', 'The Telegram send records could not be read safely');
+    }
+  });
+
+  // A staff attestation of exact messages visible in the requester chat. This never sends or
+  // releases a Telegram message; inconclusive cases stay in reconciliation.
+  registerRoute('post', '/tasks/:taskId/requester-send-confirmation', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.tenantId || !auth.userId) return problem(c, 401, 'Authentication Required');
+    if (!['office_admin', 'administrator'].includes(auth.role)) {
+      return problem(c, 403, 'Office Administrator Required');
+    }
+    const taskId = c.req.param('taskId');
+    if (!isValidUuid(taskId)) return problem(c, 404, 'Task Not Found');
+    if (!db) return problem(c, 503, 'Database Unavailable');
+    const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body || Array.isArray(body) || Object.keys(body).some((key) =>
+      !['actionId', 'expectedRev', 'publicationId', 'approvalId', 'requesterChatId', 'observed', 'attested'].includes(key))) {
+      return problem(c, 422, 'Invalid Confirmation', 'Use the current request revision and exact message IDs');
+    }
+    try {
+      const result = await confirmRequesterSendVisible(db, { tenantId: auth.tenantId, taskId,
+        actor: { userId: auth.userId, role: auth.role },
+        actionId: body.actionId as string, expectedRev: body.expectedRev as number,
+        publicationId: body.publicationId as string, approvalId: body.approvalId as string,
+        requesterChatId: body.requesterChatId as string,
+        observed: body.observed as Array<{ sendKey: string; messageId: string }>,
+        attested: body.attested as true });
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        const status = error.code === 'INVALID_CONFIRMATION' ? 422 : error.code === 'UNAUTHORIZED_ACTOR' ? 403 : 409;
+        return problem(c, status, 'Requester Send Confirmation Refused', error.message);
+      }
+      log.error('[core:requester-send-confirmation] Could not confirm send:', error);
+      return problem(c, 503, 'Confirmation Unavailable', 'The delivery remains unresolved; retry with the same action key');
     }
   });
 

@@ -291,13 +291,75 @@ describe('authenticated Desk to private lifecycle office decision', () => {
       status: 'REQUESTER_SEND_RECONCILIATION' });
     const evidence = await desk.request(`/v1/tasks/${taskId}/requester-send-evidence`);
     expect(evidence.status).toBe(200);
-    expect(await evidence.json()).toMatchObject({ taskId, requestId, requestRev: 5,
+    const evidenceData = await evidence.json();
+    expect(evidenceData).toMatchObject({ taskId, requestId, requestRev: 5,
       publicationId: expect.any(String), providerReceipt: 'not_available',
       files: [expect.objectContaining({ artifactId, outcome: 'sent', attemptCount: 1, messageId: '87' })],
       notice: expect.objectContaining({ outcome: 'uncertain', attemptCount: 1, messageId: null }) });
     const viewer = createApp({ db, testAuth: { principal: { role: 'viewer', userId } } });
     expect((await viewer.request(`/v1/tasks/${taskId}/requester-send-evidence`)).status).toBe(403);
     expect((await desk.request(`/v1/tasks/${randomUUID()}/requester-send-evidence`)).status).toBe(404);
+
+    const admin = createApp({ db, testAuth: { principal: { role: 'office_admin', userId } } });
+    const observed = [
+      { sendKey: `${baseKey}:file:${artifactId}`, messageId: '87' },
+      { sendKey: `${baseKey}:notice`, messageId: '88' },
+    ];
+    const body = { actionId: randomUUID(), expectedRev: 5, publicationId: evidenceData.publicationId,
+      approvalId: approval.approvalId, requesterChatId: evidenceData.requesterChatId,
+      observed, attested: true };
+    const path = `/v1/tasks/${taskId}/requester-send-confirmation`;
+    expect((await desk.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body) })).status).toBe(403);
+    expect((await admin.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, requesterChatId: 'wrong-chat' }) })).status).toBe(409);
+    expect((await admin.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, observed: [
+        { ...observed[0], messageId: '999' }, observed[1]] }) })).status).toBe(409);
+    expect((await admin.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, observed: observed.slice(0, 1) }) })).status).toBe(422);
+    await withRlsContext(db, scope, (trx) => trx.updateTable('sheet_syncs').set({ observed_hash: '0'.repeat(64) })
+      .where('tenant_id', '=', tenantId).where('publication_id', '=', evidenceData.publicationId).execute());
+    expect((await admin.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body) })).status).toBe(409);
+    expect((await withRlsContext(db, scope, (trx) => trx.selectFrom('requests').select('rev')
+      .where('request_id', '=', requestId).executeTakeFirst()))?.rev).toBe('5');
+    const packageHash = await withRlsContext(db, scope, (trx) => trx.selectFrom('publications')
+      .select('package_sha256').where('id', '=', evidenceData.publicationId).executeTakeFirstOrThrow());
+    await withRlsContext(db, scope, (trx) => trx.updateTable('sheet_syncs')
+      .set({ observed_hash: packageHash.package_sha256 }).where('tenant_id', '=', tenantId)
+      .where('publication_id', '=', evidenceData.publicationId).execute());
+    const [confirmed, duplicate] = await Promise.all([admin.request(path, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+    admin.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body) })]);
+    expect([confirmed.status, duplicate.status]).toEqual([200, 200]);
+    expect(await confirmed.json()).toMatchObject({ requestId, taskId, stage: 'delivered',
+      confirmationSource: 'staff_visible', requestRev: 6 });
+    expect(await duplicate.json()).toMatchObject({ requestId, taskId, requestRev: 6 });
+    expect((await admin.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, observed: [observed[0], { ...observed[1], messageId: '89' }] }) })).status).toBe(409);
+    const settled = await withRlsContext(db, scope, async (trx) => ({
+      request: await trx.selectFrom('requests').select(['stage', 'rev']).where('request_id', '=', requestId).executeTakeFirst(),
+      task: await trx.selectFrom('tasks').select('state').where('id', '=', taskId).executeTakeFirst(),
+      publication: await trx.selectFrom('publications').select(['state', 'error_class'])
+        .where('task_id', '=', taskId).executeTakeFirst(),
+      events: await trx.selectFrom('task_events').select(['actor_type', 'actor_id', 'data'])
+        .where('task_id', '=', taskId).where('event_type', '=', 'task.state_changed')
+        .orderBy('occurred_at', 'desc').limit(1).execute(),
+      sendMarks: (await sql<{ count: string }>`SELECT count(*)::text AS count FROM hawa.inbox_events
+        WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'telegram_delivery'
+          AND source_event_id IN (${markKey}, ${noticeMarkKey})`.execute(trx)).rows[0]?.count,
+    }));
+    expect(settled.request).toMatchObject({ stage: 'delivered', rev: '6' });
+    expect(settled.task?.state).toBe('complete');
+    expect(settled.publication).toMatchObject({ state: 'complete', error_class: null });
+    expect(await (await admin.request(`/v1/tasks/${taskId}/publication-state`)).json())
+      .toMatchObject({ state: 'complete', completionEvidence: { source: 'staff_visible', actorId: userId },
+        actionableRecovery: expect.stringContaining('Office staff recorded') });
+    expect(settled.events[0]).toMatchObject({ actor_type: 'user', actor_id: userId,
+      data: expect.objectContaining({ confirmationSource: 'staff_visible' }) });
+    expect(settled.sendMarks).toBe('4');
   });
 
   it('does not reopen delivery when a requester file was sent before archive failed', async () => {
