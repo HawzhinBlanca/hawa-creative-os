@@ -125,9 +125,11 @@ Placed today, in the worker only:
 | `worker.sender.after-telegram` (`detail.commandType` = `lifecycle`, `kind`, `key`) | `lifecycle/telegram-sender.ts` `sendAttempt`, after the Telegram send, before its mark | the same, for the TelegramSender object (slice 2.2) |
 | `worker.delivery.between-files` | `lifecycle/delivery.ts`, before the second and later files | some files sent, the rest not yet |
 | `core.delivery.after-drive` (`detail.mode`) | `services/omnichannel-delivery.ts`, after the Drive upload, before anything of it is recorded | Drive holds the files; a retry must adopt them, not upload again |
+| `core.project.after-commit` (`detail.requestId`, `rev`, `key`) | `routes/lifecycle-projection.routes.ts`, after a projection committed, before the answer | the worker asks again under the same key; Core answers from its record and writes nothing twice |
+| `core.office.after-forward` (`detail.requestId`, `taskId`, `kind`, `actionId`, `answer`) | `services/office-decisions.ts`, after `RequestLifecycle.officeDecision` answered a Desk press, before Core answers the Desk (slice 2.4) | the Desk hears nothing and presses again with the same action id: Restate answers from the key, nothing is decided twice |
+| `worker.rl.after-project` (`detail.requestId`, `key`, `rev`) | `lifecycle/request-lifecycle.ts`, inside the `project:<rev>` step, after Core answered, before it is journalled | the step runs again; Core replays the projection |
 
-**Follow-ups.** The design also names `core.project.after-commit`, `core.outcome.after-bridge`,
-`core.delivery.after-drive` and `worker.rl.after-project`, which belong to later Phase 2 slices. Until then Core, Postgres and Restate are killed time-based:
+**Follow-ups.** The design also names `core.outcome.after-bridge`, which belongs to the Core side of slice 2.3. Until then Core, Postgres and Restate are killed time-based:
 while a worker point is held (`killWhileHeld`), or a fixed time into a request.
 
 ## Scenarios (`chaos.test.ts`)
@@ -206,10 +208,112 @@ legacy R1.K14 stays in `publishing`); L2.K15 19 s; L2.K16 17 s; L2.K17 20 s (the
 once Postgres is back, so nothing is uncertain and the office hears nothing); L2.K18 17 s; L2.K12 17 s
 (one office alert naming the task, the file shown once); L2.429 16 s (the second file 3,032 ms after the 429).
 
-Not yet: R1 kill points that need Phase 2 code (poller, `ChatInbox`, `RequestLifecycle`); the design's
-K9 with a *patched* worker build (R1.D1 deploys the same build, so it proves the drain and the pinning
-but cannot show replay on changed code); R2 (reminders), R3 (question and answer; no fixtures for
-feedback revisions yet), R5 (rollback of the per-chat flag, which does not exist yet).
+**Slice 2.3 part B (the worker side: `RequestLifecycle` and `DesignRun`).** These open a request on
+`RequestLifecycle` through Restate's ingress, as ChatInbox sends it, and follow it until its draft is in
+the chat and recorded as sent (since part C, Core projects the outcome). Checks: one `hawa.requests` row
+owned by `restate`, in review at revision 3 (open, outcome, draft sent); one task for it, whose
+`task.created` row is recorded (`OWNED_BY_LIFECYCLE`) and never dispatched; the three projections; no
+`TaskWorkflow`; one `DesignRun`, completed; one Canva import; one `open` invocation, completed; the outcome
+sent to the lifecycle once; the acknowledgement, the draft and its picture in the chat, each once;
+nothing paused; no RT0016.
+
+| Name | What |
+|---|---|
+| L3.0 | the request opened, designed once, its draft in the chat; no faults |
+| L3.K7b | worker killed at `worker.rl.after-project` (Core committed the open projection, the journal has not got the answer) |
+| L3.K6 | Core killed at `core.project.after-commit` (the projection committed, the answer never sent) |
+| L3.K8 | worker killed inside the `DesignRun` after `canva-create-draft` ran, before it was journalled |
+
+First run of part B (2026-09-25, before part C): every invariant held, with the `designFinished`
+invocation waiting on Core's 422 `OP_NOT_AVAILABLE` and killed by the driver.
+
+**Slice 2.3 part C (routing: intake's decide mode, ChatInbox, Core's outcome, requester and reminder
+projections).** `run.ts --poller worker`. The chats 9400001 to 9400040 are on the *workers'*
+`HAWA_LIFECYCLE_CHATS` (`CHAOS_WORKER_LIFECYCLE_CHATS`, set by the driver; Core's own list stays slice
+2.2's), so a brief there is decided by intake, not saved, and opened by ChatInbox on `RequestLifecycle`.
+`driver/lifecycle.ts` holds the script and `checkLifecycle`: the request rows (owned by `restate`, the
+expected stage, the same stage and revision in `RequestLifecycle.get`), the rounds, one design revision per
+drafted round, one completed `DesignRun` per designed round, at most one Canva import per round, no
+`TaskWorkflow`, no pending outbox row of a round, each message once (a picture is its bytes and its
+caption), an uncertain send with exactly one office alert, no paid call twice, the chat's ChatInbox
+invocations completed with the offset past them and nothing dead-lettered, nothing paused, no RT0016.
+Quiescence now leaves out `scheduled` invocations (a reminder or expiry days ahead is not work in flight).
+
+| Name | What |
+|---|---|
+| L3.R1.0 | brief, ack, draft and picture, `rq:ok` (sign-off to the requester, one office alert); no faults |
+| L3.R1.S1K1 | worker killed at `worker.poller.after-enqueue` |
+| L3.R1.S2K4 | Core killed at `core.intake.after-decision` (the decision is on record: the retry is answered from it, classifier once) |
+| L3.R1.S2K5 | worker killed while Core is held at `core.intake.after-decision` |
+| L3.R1.S3K6 | Core killed at `core.project.after-commit` for the open |
+| L3.R1.S3K7b | worker killed at `worker.rl.after-project` for the open |
+| L3.R1.S4K8 | worker killed inside the `DesignRun` after `canva-create-draft` |
+| L3.R1.S5K7b | worker killed at `worker.rl.after-project` for the design outcome |
+| L3.R1.S5K11 | Core killed at `core.outcome.after-bridge` (the draft revision bridged, nothing committed) |
+| L3.R1.S5K12 | worker killed at `worker.sender.after-telegram` for the draft message (one uncertain send, one office alert) |
+| L3.R1.S5K13 | Telegram 429 (`retry_after` 3) on the draft message |
+| L3.R1.S6K5 | worker killed while Core is held at `core.intake.after-decision` for `rq:ok` |
+| L3.R5 | a flagged and an unflagged chat send at once (each its own path); the flagged chat is then taken off the workers' list (worker restarted): a reply to its lifecycle draft is still routed to its request, and its next brief is a legacy task run by `TaskWorkflow` |
+| L3.R6 | rollback to Core's poller (`HAWA_TELEGRAM_POLLER=core`, Core and the worker recreated) with a lifecycle draft in the chat: `rq:ok` is read by Core's poller and routed by Core itself through Restate's ingress under the key ChatInbox uses (`tg:<chat>:<update>`); the sign-off reaches the requester once; the poller goes back to the worker |
+| L3.R2.D1 | silent requester, reminder scale 0.0001 (worker restarted with it): Restate killed after the day-1 reminder was scheduled, the worker after it fired, Core before day 5; one reminder per day, then `expired` |
+| L3.R3.K1 | change, question, answer (`rq:a1`); worker killed at `worker.rl.after-project` for the answer |
+| L3.R3.K2 | the same; Core killed at `core.project.after-commit` for the answer round's outcome |
+| L3.R3.D | the same, with a deploy to green between the question and the answer; blue drains and is deleted |
+| L3.R2.D2 | reminders at scale 0.0001 across a deploy (back to blue): the day-1 reminder runs on the new colour, one per day, the old colour drains |
+
+Run (2026-09-25, `--poller worker --only` the part B and C scenarios plus R1.W0, R1.DUP and R4: 25
+scenarios in 825 s after the build, peak 788 MiB; no `unmatched` model call): every invariant held.
+L3.0 10 s; L3.K7b 14 s; L3.K6 14 s; L3.K8 14 s; L3.R1.0 12 s; S1K1 21 s; S2K4 20 s; S2K5 18 s; S3K6 15 s;
+S3K7b 15 s; S4K8 18 s; S5K7b 19 s; S5K11 19 s; S5K12 19 s; S5K13 15 s; S6K5 20 s; L3.R5 33 s; L3.R2.D1
+139 s; L3.R3.K1 29 s; L3.R3.K2 29 s; L3.R3.D 37 s; L3.R2.D2 139 s; R1.W0 15 s; R1.DUP 11 s; R4 37 s (chat B
+answered after 612 ms while chat A's 30 s download ran). Two earlier runs found what this one shows fixed:
+the fake planner did not answer a change round's prompt (every change and answer round ended
+`failed_operator`), and the "each message once" check took two rounds' draft pictures (the fake Canva's
+same bytes, different captions) for one message sent twice.
+
+Run after the review fixes of part C (2026-09-25, `--poller worker --only` the 19 L3.R* scenarios, 713 s
+after the build, peak 729 MiB; no `unmatched` model call): every invariant held. L3.R1.0 14 s; S1K1 14 s;
+S2K4 19 s; S2K5 18 s; S3K6 15 s; S3K7b 15 s; S4K8 17 s; S5K7b 18 s; S5K11 19 s; S5K12 18 s; S5K13 15 s;
+S6K5 20 s; L3.R5 35 s; L3.R6 19 s; L3.R2.D1 141 s; L3.R3.K1 29 s; L3.R3.K2 29 s; L3.R3.D 37 s; L3.R2.D2 140 s.
+
+R3's question is simulated, because the fixtures cover no studio stage: the driver records the change
+round's `NEEDS_CLARIFICATION` studio run (what the edit stage writes) and hands `RequestLifecycle` the run's
+report with the `DesignRun`'s own event id and idempotency key, while that run is held after its Canva
+step; its own report, later, meets Restate's key and the lifecycle's seen list. Core's outcome projection,
+the question message, its send, its record and the answer are real. The fake planner now answers the
+revision prompt (`Design Brief:` then the request), so change and answer rounds are designed.
+
+Not yet: the design's K9 with a *patched* worker build (R1.D1, L3.R3.D and L3.R2.D2 deploy the same
+build, so they prove the drain and the pinning but cannot show replay on changed code); a studio-made
+question (no studio fixtures).
+
+**Slice 2.4 (office decisions; design R1 S7-S8 on a lifecycle chat).** `run.ts --poller worker`. The
+Desk's approve and Deliver reach Core with the press's action id (`idempotency-key`); Core checks without
+writing and asks `RequestLifecycle.officeDecision` synchronously under `desk:<actionId>`; the lifecycle's
+projection records the approval, claims the publication for the `Delivery` workflow and starts it, and
+the workflow reports back to the lifecycle. `checkOfficeDecisions` (driver/lifecycle.ts), with
+`checkLifecycle`: each press reached `RequestLifecycle` once (one invocation per `desk:` key, completed),
+one approval (nonce `lc:<actionId>`), the lifecycle's stage, nothing for Core's own delivery or dispatch;
+delivered: one publication, complete, the workflow's, every run reported; each `Delivery` run completed and
+reported once; both approved files in Drive and in the chat once each; the task complete.
+
+| Name | What |
+|---|---|
+| L4.S7.0 | brief, draft, the Desk's approval with its press id; answered 200 with the approval the lifecycle recorded |
+| L4.S7.DBL | a double click: two approvals at once with one press id; both 200, one approval, one invocation |
+| L4.S7.K14 | Core killed at `core.office.after-forward` (the lifecycle accepted; the Desk heard nothing); the Desk retries with the same id: 200, the same approval, one row, one invocation |
+| L4.S7.OLD | the requester's change is being made (its `DesignRun` held after its Canva step) and the office approves the old draft: 409 `CHANGE_PENDING` naming the change round, no approval; the change's draft then reaches review |
+| L4.S8.0 | approval (PNG and PPTX pinned), Deliver with its press id (202, executor `restate`); both files and the notice sent once, the request delivered |
+| L4.S8.K15 | Core killed at `core.delivery.after-drive` |
+| L4.S8.K16 | worker killed at `worker.delivery.between-files` |
+| L4.S8.K17 | Postgres killed while the sender is held at `worker.sender.after-telegram` for the first file (no uncertain send) |
+| L4.S8.K18 | Restate killed while the delivery is held between the files |
+
+Run (2026-09-25, `--poller worker --only` the nine L4 scenarios, 426 s): eight held every invariant
+(L4.S7.0 12 s; DBL 10 s; K14 15 s; S8.0 13 s; K15 17 s; K16 15 s; K17 21 s; K18 17 s; peak 575 MiB);
+L4.S7.OLD failed on the script (its change was worded "Make the logo bigger", which the intake fixture
+does not read as a change, so no change round was made). Fixed to the fixture's wording and to wait for the
+change round first, it held every invariant alone (20 s, 22 checks).
 
 Faults a scenario arms and does not use up are dropped when it ends (`/__fakes/faults/clear`), so they
 never reach the next scenario.

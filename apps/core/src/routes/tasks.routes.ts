@@ -454,12 +454,19 @@ export function registerTasksRoutes(ctx: RouteContext): void {
               WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.published'
               ORDER BY aggregate_version DESC LIMIT 1`.execute(trx)).rows[0];
 
-            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent };
+            // The request the task belongs to (slice 2.4): the Desk sends its decisions on such a task to
+            // RequestLifecycle through the same routes; none for a task Core owns.
+            const lifecycleRow = (await sql<{ request_id: string; rev: string; stage: string; owner: string }>`
+              SELECT r.request_id::text, r.rev::text, r.stage, r.owner FROM hawa.tasks t
+              JOIN hawa.requests r ON r.request_id = t.request_id AND r.tenant_id = t.tenant_id
+              WHERE t.tenant_id = ${tenantId}::uuid AND t.id = ${taskId}::uuid`.execute(trx)).rows[0];
+
+            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, lifecycleRow };
           }
         );
 
         if (queryRes && queryRes.dbTask) {
-          const { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent } = queryRes;
+          const { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, lifecycleRow } = queryRes;
           const payload = createdEv?.data?.payload || createdEv?.data?.body || (createdEv?.data as any) || {};
 
           const headlineEn = payload.headlineEn || payload.body?.headlineEn || dbTask.title;
@@ -570,6 +577,9 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             latestApproval,
             canvaBinding,
             deliveryReceipt,
+            lifecycle: lifecycleRow
+              ? { requestId: lifecycleRow.request_id, rev: Number(lifecycleRow.rev), stage: lifecycleRow.stage, owner: lifecycleRow.owner === 'restate' ? 'restate' : 'core' }
+              : null,
             createdAt: dbTask.created_at instanceof Date ? dbTask.created_at.toISOString() : (dbTask.created_at || new Date().toISOString()),
             updatedAt: dbTask.updated_at instanceof Date ? dbTask.updated_at.toISOString() : (dbTask.updated_at || new Date().toISOString()),
           };

@@ -263,11 +263,66 @@ CREATE TABLE tasks (
   updated_at timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz,
   deleted_at timestamptz,
+  -- The request this task is a round of (migration 023, ADR-034); NULL = a request Core owns.
+  request_id uuid,
   FOREIGN KEY (tenant_id, client_id) REFERENCES clients(tenant_id, id),
   FOREIGN KEY (tenant_id, project_id) REFERENCES projects(tenant_id, id),
   FOREIGN KEY (tenant_id, source_message_id) REFERENCES message_events(tenant_id, id),
   UNIQUE (tenant_id, id)
 );
+CREATE INDEX tasks_request_idx ON tasks(tenant_id, request_id) WHERE request_id IS NOT NULL;
+
+-- The request lifecycle's projection (migration 023, ADR-034; PHASE2_DESIGN.md 2.8): one row per
+-- request the RequestLifecycle object in Restate owns, written by Core's projection endpoint only,
+-- with every projection recorded under its idempotency key. The migration explains each column.
+CREATE TABLE requests (
+  request_id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  root_task_id uuid NOT NULL,
+  current_task_id uuid NOT NULL,
+  parent_request_id uuid,
+  owner text NOT NULL CHECK (owner IN ('core', 'restate')),
+  stage text NOT NULL CHECK (stage IN ('designing', 'awaiting_answer', 'in_review', 'manual', 'approved', 'delivering', 'delivered', 'expired', 'cancelled')),
+  rev bigint NOT NULL DEFAULT 0 CHECK (rev >= 0),
+  chat_id text CHECK (chat_id IS NULL OR length(chat_id) <= 64),
+  draft_sent_at timestamptz,
+  question_asked_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, request_id),
+  FOREIGN KEY (tenant_id, root_task_id) REFERENCES tasks(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, current_task_id) REFERENCES tasks(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, parent_request_id) REFERENCES requests(tenant_id, request_id)
+);
+CREATE INDEX requests_tenant_stage_idx ON requests(tenant_id, stage, updated_at DESC);
+
+CREATE TABLE lifecycle_projections (
+  tenant_id uuid NOT NULL,
+  request_id uuid NOT NULL,
+  rev bigint NOT NULL CHECK (rev > 0),
+  idempotency_key text NOT NULL CHECK (length(idempotency_key) BETWEEN 1 AND 300),
+  request_hash text NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
+  result jsonb NOT NULL,
+  applied_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, idempotency_key),
+  UNIQUE (tenant_id, request_id, rev),
+  FOREIGN KEY (tenant_id, request_id) REFERENCES requests(tenant_id, request_id) ON DELETE CASCADE
+);
+
+-- A revision never goes back, and a request never changes tenant, owner or root task.
+CREATE OR REPLACE FUNCTION requests_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path = hawa, public AS $$
+BEGIN
+  IF NEW.rev < OLD.rev THEN
+    RAISE EXCEPTION 'request % is at revision %, it cannot go back to %', OLD.request_id, OLD.rev, NEW.rev USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.owner IS DISTINCT FROM OLD.owner OR NEW.tenant_id IS DISTINCT FROM OLD.tenant_id OR NEW.root_task_id IS DISTINCT FROM OLD.root_task_id THEN
+    RAISE EXCEPTION 'request %: owner, tenant and root task are written once', OLD.request_id USING ERRCODE = 'check_violation';
+  END IF;
+  NEW.updated_at := now();
+  RETURN NEW;
+END $$;
+CREATE TRIGGER requests_guard BEFORE UPDATE ON requests FOR EACH ROW EXECUTE FUNCTION requests_guard();
 
 CREATE TABLE task_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -240,15 +240,55 @@ export async function reportNotRunnable(input: WorkflowInput, ctx: WorkflowDurab
 }
 
 /**
+ * Where a DesignRun (slice 2.3, PHASE2_DESIGN.md 2.4) reports its outcome instead of Core: a one-way,
+ * journaled send to its RequestLifecycle, exactly once, with no Core to wait for.
+ */
+export type OutcomeReport = (status: string, body: Record<string, unknown>) => Promise<void>;
+
+/** Restate's answer at the next await of an invocation that was cancelled (a live one, or from the journal). */
+export const isCancellation = (error: unknown): boolean => {
+  const e = error as { name?: unknown; code?: unknown; message?: unknown } | null | undefined;
+  return e?.name === 'CancelledError' || (e?.code === 409 && /^cancell?ed$/i.test(String(e?.message ?? '')));
+};
+
+/**
  * Restate orchestrates retries; Core journals model charges and Canva side effects. `recordOutcome`
  * writes an outcome Core would not take to the outbox instead (outcome-without-core.ts); without it
  * such an outcome is only logged.
+ *
+ * With `report` (a DesignRun of the request lifecycle) the outcome goes there instead of to Core, and
+ * neither Core's report step nor the outbox fallback runs. A cancelled run (the request was cancelled)
+ * abandons the studio run it was following and reports CANCELLED, which the lifecycle ignores.
  */
 export async function runCanvaDraft(
   input: WorkflowInput,
   ctx: WorkflowDurableContext,
   fetcher: typeof fetch = fetch,
-  recordOutcome?: OutcomeRecorder
+  recordOutcome?: OutcomeRecorder,
+  report?: OutcomeReport
+): Promise<WorkflowOutput> {
+  if (!report) return draftRun(input, ctx, fetcher, recordOutcome);
+  const hooks: DraftHooks = {};
+  try {
+    return await draftRun(input, ctx, fetcher, recordOutcome, report, hooks);
+  } catch (error) {
+    if (isCancellation(error) && hooks.finishCancelled) return hooks.finishCancelled();
+    throw error;
+  }
+}
+
+interface DraftHooks {
+  /** Set once the run can finish: abandons what it was following and reports CANCELLED. */
+  finishCancelled?: () => Promise<WorkflowOutput>;
+}
+
+async function draftRun(
+  input: WorkflowInput,
+  ctx: WorkflowDurableContext,
+  fetcher: typeof fetch,
+  recordOutcome?: OutcomeRecorder,
+  report?: OutcomeReport,
+  hooks?: DraftHooks
 ): Promise<WorkflowOutput> {
   const output = (status: string, documentId?: string): WorkflowOutput =>
     ({ taskId: input.taskId, status, documentId, qcPassed: false, auditEventsCount: 0, executedSteps: [], replayedSteps: [] });
@@ -320,7 +360,7 @@ export async function runCanvaDraft(
     extra: { detail?: string; notifyRequester?: boolean } = {}
   ) => {
     await abandonUnsettledRun(status, code);
-    const report = {
+    const body = {
       status,
       designId,
       code,
@@ -329,14 +369,19 @@ export async function runCanvaDraft(
       ...(extra.detail ? { detail: extra.detail } : {}),
       ...(extra.notifyRequester === false ? { notifyRequester: false } : {}),
     };
+    if (report) {
+      await report(status, body);
+      return output(status, designId);
+    }
     try {
-      await reportOutcome(ctx, call, 'canva-notify-' + status.toLowerCase(), report);
+      await reportOutcome(ctx, call, 'canva-notify-' + status.toLowerCase(), body);
     } catch (error) {
       if (!stepGaveUp(error)) throw error;
-      await recordWithoutCore(status, report);
+      await recordWithoutCore(status, body);
     }
     return output(status, designId);
   };
+  if (hooks) hooks.finishCancelled = () => finish('CANCELLED', result?.designId, 'CANCELLED');
 
   const handleBoundaryError = async (error: unknown, fallbackStatus: string = 'DESIGN_REJECTED', designId?: string) => {
     const boundary = boundaryOf(error);

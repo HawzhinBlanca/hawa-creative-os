@@ -144,6 +144,16 @@ describe('fake models and the paid-call ledger', () => {
     expect(ledger.map((l: any) => l.route)).toEqual(['unmatched', 'unmatched:/v1beta/models/gemini:generateContent']);
   });
 
+  it('answers the planner for a revision, whose request follows "Design Brief:" (slice 2.3 change rounds)', async () => {
+    await admin('/reset', {});
+    const request = { width: 1080, height: 1350, copy: ['Title', 'Body'], copyScripts: ['latin', 'latin'], logoAspect: 1.37, formalBodyFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }, reference: { rules: { palette: ['#0A1628'] } } };
+    const res = await chat('canva_design_plan', `Design Brief:\n${JSON.stringify(request)}\n\nOperator Revision Directive: "make the logo bigger"\n\nRule: Change what the feedback asks; keep copy and brand.`);
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.json.choices[0].message.content).text.map((t: any) => t.copyIndex)).toEqual([0, 1]);
+    const { ledger } = await admin('/models/ledger');
+    expect(ledger.map((l: any) => l.route)).toEqual(['canva_design_plan']);
+  });
+
   it('builds a planner layout that places every copy block once, at the logo aspect Core checks', () => {
     const plan: any = plannerLayout({ width: 1080, height: 1350, copy: ['Title', 'Body one', 'Body two'], copyScripts: ['latin', 'latin', 'latin'], logoAspect: 1.37, formalBodyFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }, reference: { rules: { palette: ['#0A1628', '#FDF8F3'] } } });
     expect(plan.text.map((t: any) => t.copyIndex)).toEqual([0, 1, 2]);

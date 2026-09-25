@@ -1,0 +1,28 @@
+{
+  "v": 1,
+  "requestId": "5a1f0c3e-2b7d-5c11-8e42-0f6d1a2b3c4d",
+  "tenantId": "00000000-0000-4000-a000-000000000001",
+  "clientId": null,
+  "chatId": "9300101",
+  "owner": "restate",
+  "origin": { "kind": "size", "parentRequestId": "6b2f0c3e-2b7d-5c11-8e42-0f6d1a2b3c4d", "action": "sst" },
+  "rev": 9,
+  "stage": "delivered",
+  "stageEpoch": 6,
+  "stageSince": 1790240000000,
+  "round": 1,
+  "rounds": [
+    { "round": 0, "taskId": "11111111-1111-4111-8111-111111111111", "kind": "design", "runId": "dr-11111111-1111-4111-8111-111111111111", "runAttempt": 0, "outcome": { "status": "CANVA_NEEDS_CLARIFICATION", "code": "NEEDS_CLARIFICATION" } },
+    { "round": 1, "taskId": "33333333-3333-4333-8333-333333333333", "kind": "answer", "runId": "dr-33333333-3333-4333-8333-333333333333-a1", "runAttempt": 1, "outcome": { "status": "CANVA_DRAFT_READY_FOR_VISUAL_REVIEW", "designId": "DAF_two", "revisionId": "44444444-4444-4444-8444-444444444444" } }
+  ],
+  "question": { "id": "q-1", "taskId": "11111111-1111-4111-8111-111111111111", "question": "Which logo?", "options": ["Blue", "Red"], "askedAt": 1790234000000 },
+  "draft": { "taskId": "33333333-3333-4333-8333-333333333333", "revisionId": "44444444-4444-4444-8444-444444444444", "designId": "DAF_two", "sentAt": 1790236000000 },
+  "requester": { "signedOff": { "taskId": "33333333-3333-4333-8333-333333333333", "at": 1790236100000 }, "designerAsked": { "at": 1790236050000 } },
+  "approval": { "approvalId": "55555555-5555-4555-8555-555555555555", "taskId": "33333333-3333-4333-8333-333333333333", "revisionId": "44444444-4444-4444-8444-444444444444", "actionId": "act-1", "at": 1790237000000 },
+  "delivery": { "deliveryId": "dl-5a1f0c3e-2b7d-5c11-8e42-0f6d1a2b3c4d-55555555-5555-4555-8555-555555555555", "approvalId": "55555555-5555-4555-8555-555555555555", "startedAt": 1790238000000, "outcome": "chat_only", "sheetsConfirmed": false, "run": 1 },
+  "reminders": ["question:1:11111111-1111-4111-8111-111111111111", "draft:1:33333333-3333-4333-8333-333333333333", "draft:5:33333333-3333-4333-8333-333333333333"],
+  "outcomeDeferred": { "runId": "dr-33333333-3333-4333-8333-333333333333-a1", "since": 1790235000000, "report": { "status": "CANVA_DRAFT_READY_FOR_VISUAL_REVIEW" }, "attempts": 2 },
+  "sizes": { "ssq": "77777777-7777-5777-8777-777777777777" },
+  "seen": ["open:5a1f0c3e-2b7d-5c11-8e42-0f6d1a2b3c4d"],
+  "decisions": [{ "eventId": "desk:act-1", "reply": { "accepted": true, "rev": 7, "stage": "approved" } }]
+}

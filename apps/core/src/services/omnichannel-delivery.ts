@@ -39,6 +39,8 @@ import { loadPinnedDeliverables, type DeliverableStore } from './pinned-delivera
 import { pendingChangeOf } from './pending-change.js';
 import type { ClientDnaResolver } from './client-dna-resolver.js';
 import type { TaskReader } from './task-reader.js';
+import { recordWorkflowDeliveryIn } from './workflow-delivery-record.js';
+import { readTaskLifecycle } from './office-decisions.js';
 
 export interface OmnichannelDeliveryDeps {
   db: Kysely<Database> | null;
@@ -329,6 +331,20 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       throw err;
     }
     if (!task) return { ok: false, status: 404, message: 'Task Not Found' };
+    // A task of a request the lifecycle owns is delivered by RequestLifecycle's Delivery workflow
+    // (slice 2.4): Core's own delivery refuses it, whoever asks (a chat approval, a script).
+    if (!workflowMode && db && isValidUuid(taskId)) {
+      let owner: 'core' | 'restate' | null = null;
+      try {
+        owner = (await readTaskLifecycle(db, tenantOf(task), taskId))?.owner ?? null;
+      } catch (err) {
+        log.error('[core:omnichannel] Could not read whether the request lifecycle owns this task:', err);
+        return { ok: false, status: 503, title: 'Database Unavailable', code: 'DATABASE_UNAVAILABLE', message: 'Who delivers this task could not be read; try again' };
+      }
+      if (owner === 'restate') {
+        return { ok: false, status: 409, title: 'Lifecycle Owned', code: 'LIFECYCLE_OWNED', message: `Task ${taskId} belongs to a request the request lifecycle runs; press Deliver in the Desk` };
+      }
+    }
     if (workflowMode) {
       // The workflow's own run only: a task delivered already, or taken back, is not delivered again.
       const state = String(task.state || task.status || '').toLowerCase();
@@ -1188,43 +1204,13 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     if (!db || !taskRepo || !publicationRepo || !isValidUuid(taskId) || !isValidUuid(tenantId) || !isValidUuid(report.approvalId)) {
       return { ok: false, status: 422, code: 'INVALID_REPORT', message: 'A delivery report names a task, a tenant and an approval' };
     }
-    const publicationKey = `pub_key_${taskId}_${report.approvalId}`;
     const outcome = report.outcome;
     let result: { ok: true; status: 'applied' | 'replayed'; taskState: string } | { ok: false; status: number; code: string; message: string };
     try {
-      result = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-        const pub = (await sql<{ id: string; executor: string; executor_run: number; executor_finished_run: number }>`
-          SELECT id, executor, executor_run, executor_finished_run FROM hawa.publications
-          WHERE tenant_id = ${tenantId}::uuid AND publication_key = ${publicationKey} FOR UPDATE`.execute(trx)).rows[0];
-        if (!pub) return { ok: false as const, status: 404, code: 'PUBLICATION_NOT_FOUND', message: `No publication ${publicationKey}` };
-        if (pub.executor !== 'restate') return { ok: false as const, status: 409, code: 'NOT_OWNED_BY_WORKFLOW', message: `Publication ${publicationKey} is Core's` };
-        const current = await taskRepo.findById(taskId, tenantId, trx);
-        const state = String(current?.state || '');
-        if (report.run <= Number(pub.executor_finished_run)) return { ok: true as const, status: 'replayed' as const, taskState: state };
-        if (report.run > Number(pub.executor_run)) return { ok: false as const, status: 409, code: 'UNKNOWN_RUN', message: `Run ${report.run} of ${publicationKey} was never started` };
-        let next = state;
-        // Only a task still being delivered moves: one delivered or taken back meanwhile stays as it is.
-        if (state === 'publishing') {
-          if (outcome.archived && outcome.sheetsConfirmed) {
-            await taskRepo.transitionState({
-              taskId, tenantId, fromState: 'publishing', toState: 'complete', actorType: 'workflow', actorId: 'delivery-workflow',
-              reason: 'Delivered by the Delivery workflow', data: { publicationKey, deliveryId: report.deliveryId, outcome: outcome.outcome },
-            }, trx);
-            await publicationRepo.markComplete({ tenantId, publicationId: String(pub.id), taskId }, trx);
-            next = 'complete';
-          } else if (!outcome.archived) {
-            await taskRepo.transitionState({
-              taskId, tenantId, fromState: 'publishing', toState: 'approved', actorType: 'workflow', actorId: 'delivery-workflow',
-              reason: `Delivery ended before the Drive archive: ${outcome.reason || outcome.outcome}`,
-              data: { publicationKey, deliveryId: report.deliveryId, outcome: outcome.outcome },
-            }, trx);
-            next = 'approved';
-          }
-        }
-        await sql`UPDATE hawa.publications SET executor_finished_run = ${report.run}, updated_at = now()
-          WHERE tenant_id = ${tenantId}::uuid AND id = ${pub.id}::uuid`.execute(trx);
-        return { ok: true as const, status: 'applied' as const, taskState: next };
-      });
+      // The same record the request lifecycle's projection writes (recordDelivery, slice 2.4).
+      const recorded = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+        recordWorkflowDeliveryIn(trx, { tenantId, taskId, approvalId: report.approvalId, deliveryId: report.deliveryId, run: report.run, outcome }));
+      result = recorded.ok ? { ok: true, status: recorded.status, taskState: recorded.taskState } : recorded;
     } catch (err) {
       log.error('[core:delivery-finished] Could not record the Delivery workflow\'s report:', err);
       return { ok: false, status: 503, code: 'DATABASE_UNAVAILABLE', message: 'The delivery report could not be recorded; send it again' };

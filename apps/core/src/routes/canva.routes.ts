@@ -5,6 +5,7 @@ import { CanvaDesignPlanner } from '../services/canva-design-planner.js';
 import { withRlsContext } from '@hawa/db';
 import { TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
 import { log } from '../logging.js';
+import { decideForLifecycle, officeActionIdOf, readTaskLifecycle, type DecisionAnswer } from '../services/office-decisions.js';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
   const service = ctx.db ? new CanvaConnectService(ctx.db,options) : null;
@@ -70,10 +71,24 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
    * (recordCheckedExportQc). Nothing recorded it until 2026-09-24. The evaluator lives in app.ts,
    * which has loaded by the time a request arrives.
    */
-  const recordCheck = async (s: {tenantId:string;actorId:string;role?:string}, taskId: string, result: { status?: string; artifact?: { format?: string; content_check?: unknown } | null }) => {
+  const recordCheck = async (s: {tenantId:string;actorId:string;role?:string}, taskId: string, result: { status?: string; artifact?: { format?: string; content_check?: unknown } | null }, actionHeader?: string): Promise<{ actionId: string; answer: DecisionAnswer } | undefined> => {
     if (result?.status!=='retrieved'||result.artifact?.format!=='pptx'||!result.artifact.content_check||!ctx.db) return;
     try {
       const [{ recordCheckedExportQc }, { evaluateCanvaExportQc }] = await Promise.all([import('../services/canva-task-outcome.js'), import('../core-helpers.js')]);
+      // A round of a request the lifecycle owns (slice 2.4): the capture the office made after sending
+      // the draft back (stage manual) is offered to RequestLifecycle, whose projection records it as the
+      // revision and puts the request back in review. In any other stage the check is only the draft's
+      // new QC run: no move, since the task is not waiting for a rework.
+      const lifecycle = await readTaskLifecycle(ctx.db, s.tenantId, taskId);
+      if (lifecycle?.owner === 'restate') {
+        if (lifecycle.stage === 'manual') {
+          const { actionId } = officeActionIdOf(actionHeader ? `cap-${actionHeader}` : undefined);
+          const { answer } = await decideForLifecycle(ctx.db, s.tenantId, lifecycle, { actionId, actor: { userId: s.actorId, role: s.role || 'operator' }, kind: 'draftCaptured', taskId });
+          return { actionId, answer };
+        }
+        await withRlsContext(ctx.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},(trx)=>recordCheckedExportQc(trx,evaluateCanvaExportQc,{tenantId:s.tenantId,taskId,actorId:s.actorId}));
+        return;
+      }
       const recorded = await withRlsContext(ctx.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},(trx)=>recordCheckedExportQc(trx,evaluateCanvaExportQc,{tenantId:s.tenantId,taskId,actorId:s.actorId,rework:true}));
       // The revision, its QC run and the task's move are Postgres's; approval reads them there.
       if (recorded.recorded && recorded.transition?.changed) {
@@ -92,13 +107,14 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
   ctx.registerRoute('post','/tasks/:taskId/canva/exports',protect(async(c,s,api)=>{
     const body=await c.req.json().catch(()=>({}));
     const result=await api.startExport(s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body.format,body.expectedVersion);
-    await recordCheck(s,c.req.param('taskId'),result);
-    return c.json(result,202);
+    const captured=await recordCheck(s,c.req.param('taskId'),result,c.req.header('Idempotency-Key'));
+    return c.json(captured?{...result,lifecycleCapture:{actionId:captured.actionId,status:captured.answer.status,code:captured.answer.code,detail:captured.answer.detail}}:result,202);
   }));
   ctx.registerRoute('post','/tasks/:taskId/canva/exports/:operationId/resume',protect(async(c,s,api)=>{
     const result=await api.exportStatus(s,c.req.param('taskId'),c.req.param('operationId'));
-    await recordCheck(s,c.req.param('taskId'),result);
-    return c.json(result);
+    // The operation's id names the capture: asked again, the lifecycle answers it once.
+    const captured=await recordCheck(s,c.req.param('taskId'),result,c.req.param('operationId'));
+    return c.json(captured?{...result,lifecycleCapture:{actionId:captured.actionId,status:captured.answer.status,code:captured.answer.code,detail:captured.answer.detail}}:result);
   }));
   ctx.registerRoute('get','/tasks/:taskId/canva/artifacts/:artifactId',protect(async(c,s,api)=>{
     const file=await api.artifact(s,c.req.param('taskId'),c.req.param('artifactId'));

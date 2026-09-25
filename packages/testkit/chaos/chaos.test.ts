@@ -16,11 +16,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { build, CHAOS_DIR, closeDb, down, fakes, kill, logs, memory, PORTS, restateQuery, RESTATE_INGRESS_URL, start, up, waitHealthy } from './driver/stack.js';
+import { build, CHAOS_DIR, closeDb, down, fakes, kill, logs, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, sql, start, up, waitHealthy } from './driver/stack.js';
 import { archivePath, archives, backupLog, field, intakeSwitchedOff, prepareDrill, restore, startBackup } from './driver/restore-drill.js';
-import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
+import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema, KAAE_CLIENT_ID } from './driver/provision.js';
+import { randomUUID } from 'node:crypto';
 import {
-  approve, briefToDraft, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
+  checkLifecycle, checkOfficeDecisions, lifecycleBrief, lifecycleChat, lifecycleChatList, lifecycleView, liveColour, messagesWith, replyToDraft, requestsOfChat,
+  restartWorkerWith, roundTasks, switchPoller, tap, waitDraftSent, waitLifecycleDelivered, type LifecycleRequest,
+} from './driver/lifecycle.js';
+import {
+  OFFICE_CHAT, approve, briefText, briefToDraft, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
   sendToChatInbox, sentTo, sleep, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
 } from './driver/scenario.js';
 
@@ -83,11 +88,11 @@ interface Expectation {
   executor?: 'core' | 'restate';
 }
 
-function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, options: { flagged?: boolean; needs?: 'worker-poller' | 'restore-drill' } = {}) {
+function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, options: { flagged?: boolean; lifecycle?: boolean; needs?: 'worker-poller' | 'restore-drill' } = {}) {
   const needsMet = options.needs === 'worker-poller' ? poller === 'worker' : options.needs === 'restore-drill' ? restoreDrill && poller === 'worker' : true;
   const run = enabled && (only.length === 0 || only.includes(name)) && needsMet;
   it.skipIf(!run)(`${name}: ${what}`, async () => {
-    const chat = options.flagged ? flaggedChat() : newChat();
+    const chat = options.lifecycle ? lifecycleChat() : options.flagged ? flaggedChat() : newChat();
     const events: string[] = [];
     const started = Date.now();
     const report: ScenarioReport = { name, what, ms: 0, invariants: [], events };
@@ -138,6 +143,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     down({ volumes: true });
     // Core and the worker start below with --no-build, so their images are built from this checkout here.
     build(['core', 'worker-blue']);
+    // Slice 2.3: the chats whose new requests the workers' ChatInbox opens on RequestLifecycle.
+    process.env.CHAOS_WORKER_LIFECYCLE_CHATS = lifecycleChatList();
+    process.env.CHAOS_REMINDER_SCALE = '1';
     up({ services: ['postgres', 'restate', 'fakes'] });
     await upgradeSchema();
     await connectCanva();
@@ -533,6 +541,498 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     };
   }, 12 * 60_000, { flagged: true });
 
+  // Slice 2.3 part B (the worker side; PHASE2_DESIGN.md 2.3, 2.4): RequestLifecycle and DesignRun on
+  // the real Restate, each request opened through ingress (as ChatInbox sends it) and followed until
+  // its draft is in the chat and recorded as sent (part C projects the outcome). The full path from a
+  // Telegram brief is the L3.R* scenarios below.
+  scenario('L3.0', 'RequestLifecycle.open through ingress: Core records the request, DesignRun designs it once, the outcome reaches the lifecycle', async (chat, events) => {
+    return lifecycleOpen(chat, 'L3.0', events);
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L3.K7b', 'worker killed after Core projected the open, before the lifecycle journaled the answer', async (chat, events) => {
+    return lifecycleOpen(chat, 'L3.K7b', events, async (requestId) => {
+      const armed = await killAtPoint('worker.rl.after-project', { requestId });
+      return { done: armed.done.then((d) => `killed ${d.killed} at ${d.point}`) };
+    });
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L3.K6', 'Core killed after committing the open projection, before answering the worker', async (chat, events) => {
+    return lifecycleOpen(chat, 'L3.K6', events, async (requestId) => {
+      const armed = await killAtPoint('core.project.after-commit', { requestId });
+      return { done: armed.done.then((d) => `killed ${d.killed} at ${d.point}`) };
+    });
+  }, 12 * 60_000, { flagged: true });
+
+  scenario('L3.K8', 'worker killed inside the DesignRun after Core planned and imported the draft, before the step was journalled', async (chat, events) => {
+    return lifecycleOpen(chat, 'L3.K8', events, async () => {
+      const armed = await killAtPoint('worker.step.after-action', { step: 'canva-create-draft' });
+      return { done: armed.done.then((d) => `killed ${d.killed} at ${d.point}`) };
+    });
+  }, 12 * 60_000, { flagged: true });
+
+  // Slice 2.3 part C (PHASE2_DESIGN.md 2.3 acceptance; section 6.3 R1 S1-S6, R2, R3, R5): chats on the
+  // workers' HAWA_LIFECYCLE_CHATS (9400001 to 9400040), whose ChatInbox runs intake in decide mode and
+  // opens each new request on RequestLifecycle. Run with `run.ts --poller worker`. Order matters: R2
+  // restarts the worker with the reminder scale, R3.D deploys to green and R2.D2 back to blue.
+  const lifecycleOk = async (chat: string, events: string[], arms: { brief?: () => Promise<{ done: Promise<unknown> }>; ok?: () => Promise<{ done: Promise<unknown> }> } = {}, allowance?: number) => {
+    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+    const armed = arms.brief ? await arms.brief() : null;
+    const request = await lifecycleBrief(chat, `L3R1-${chat}`, events);
+    if (armed) events.push(`kill: ${JSON.stringify(await armed.done).slice(0, 200)}`);
+    const okArmed = arms.ok ? await arms.ok() : null;
+    const okUpdate = await tap(chat, `rq:ok:${request.taskId}`);
+    events.push(`tapped rq:ok (update ${okUpdate})`);
+    await waitUntil('the requester\'s sign-off answered', async () => (await messagesWith(chat, 'you approved this design')).length > 0, 180_000, 1000);
+    if (okArmed) events.push(`kill: ${JSON.stringify(await okArmed.done).slice(0, 200)}`);
+    return { request, ledgerSince, okUpdate };
+  };
+  const lifecycleOkChecks = (chat: string, r: { request: LifecycleRequest; ledgerSince: number; okUpdate: number }, extra: Partial<Parameters<typeof checkLifecycle>[1]> = {}) => async () => [
+    ...await checkLifecycle(chat, { stage: 'in_review', rounds: 1, ledgerSince: r.ledgerSince, updateIds: [r.request.updateId, r.okUpdate], ...extra }),
+    { name: 'the sign-off is answered once', ok: (await messagesWith(chat, 'you approved this design')).length === 1, detail: `${(await messagesWith(chat, 'you approved this design')).length}` },
+    { name: 'the office hears of the sign-off once', ok: (await sentTo(OFFICE_CHAT)).filter((s) => s.text?.includes('requester approved a draft') && s.text.includes(r.request.taskId)).length === 1, detail: 'office alerts naming the task' },
+    { name: 'the draft picture reached the chat once', ok: (await sentTo(chat)).filter((s) => s.method === 'sendPhoto').length === 1, detail: `photos=${(await sentTo(chat)).filter((s) => s.method === 'sendPhoto').length}` },
+  ];
+
+  scenario('L3.R1.0', 'lifecycle chat: brief, draft and picture, rq:ok; no faults', async (chat, events) => {
+    const r = await lifecycleOk(chat, events);
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S1K1', 'lifecycle chat: worker killed after Restate accepted the brief, before the offset was stored', async (chat, events) => {
+    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('worker.poller.after-enqueue', { chat }) });
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S2K4', 'lifecycle chat: Core killed after intake decided (and recorded) the brief, before ChatInbox had the answer', async (chat, events) => {
+    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('core.intake.after-decision', { chat, decision: 'new_request' }) });
+    // The decision was on record before the kill: the retry is answered from it, classified once.
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r, { classifierAllowance: 1 }) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S2K5', 'lifecycle chat: worker killed while Core held its intake answer (decision recorded)', async (chat, events) => {
+    const r = await lifecycleOk(chat, events, { brief: () => killWhileHeld('core.intake.after-decision', { chat, decision: 'new_request' }, 'worker-blue') });
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r, { classifierAllowance: 1 }) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S3K6', 'lifecycle chat: Core killed after committing the open projection, before answering', async (chat, events) => {
+    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('core.project.after-commit', { key: ':1:open' }) });
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S3K7b', 'lifecycle chat: worker killed after Core projected the open, before the lifecycle journaled it', async (chat, events) => {
+    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('worker.rl.after-project', { key: ':1:open' }) });
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S4K8', 'lifecycle chat: worker killed inside the DesignRun after the Canva import, before the step was journaled', async (chat, events) => {
+    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('worker.step.after-action', { step: 'canva-create-draft' }) });
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S5K7b', 'lifecycle chat: worker killed after Core projected the design outcome, before the lifecycle journaled it', async (chat, events) => {
+    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('worker.rl.after-project', { key: ':designFinished' }) });
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S5K11', 'lifecycle chat: Core killed after bridging the draft revision, before the outcome committed', async (chat, events) => {
+    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('core.outcome.after-bridge', {}) });
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S5K12', 'lifecycle chat: worker killed after Telegram took the draft message, before its mark (one uncertain send expected)', async (chat, events) => {
+    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('worker.sender.after-telegram', { chat, key: ':outcome', kind: 'text' }) });
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r, { uncertainSends: 1 }) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S5K13', 'lifecycle chat: Telegram answers 429 (retry_after 3) to the draft message', async (chat, events) => {
+    await fakes.telegramFault({ method: 'sendMessage', chat, kind: '429', retryAfter: 3, n: 1, skip: 1 });
+    const r = await lifecycleOk(chat, events);
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R1.S6K5', 'lifecycle chat: worker killed while Core held its intake answer for rq:ok', async (chat, events) => {
+    const r = await lifecycleOk(chat, events, { ok: () => killWhileHeld('core.intake.after-decision', { chat, decision: 'requester' }, 'worker-blue') });
+    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  // Slice 2.4 (PHASE2_DESIGN.md section 3; section 6.3 R1 S7-S8): the office's decisions on a lifecycle
+  // request. The Desk's approve and Deliver go to Core with the press's action id (Idempotency-Key); Core
+  // checks what it can without writing and asks RequestLifecycle.officeDecision under desk:<actionId>;
+  // the lifecycle's projection records the approval, claims the publication and starts the Delivery
+  // workflow, which reports back to it. Run with `run.ts --poller worker`.
+  const officeLedger = async () => Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+  const pressApprove = async (taskId: string, actionId: string, events: string[], pinDeck = false) => {
+    const res = await approve(taskId, { actionId, pinDeck });
+    events.push(`approve (press ${actionId.slice(0, 8)}…): HTTP ${res.status} ${res.status === 200 ? `decision ${res.body?.decisionId}` : JSON.stringify(res.body).slice(0, 160)}`);
+    return res;
+  };
+  const officeApproved = async (chat: string, events: string[], pinDeck = false) => {
+    const ledgerSince = await officeLedger();
+    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
+    const actionId = randomUUID();
+    const res = await pressApprove(request.taskId, actionId, events, pinDeck);
+    if (res.status !== 200) throw new Error(`the approval was refused: HTTP ${res.status} ${JSON.stringify(res.body).slice(0, 300)}`);
+    return { request, ledgerSince, actionId, approved: res };
+  };
+  /** Brief, approval (PNG and PPTX pinned: two files), Deliver with its press id, then the delivery done. */
+  const officeDelivered = async (chat: string, events: string[], beforeDeliver?: () => Promise<{ done: Promise<unknown> }>) => {
+    const a = await officeApproved(chat, events, true);
+    const armed = beforeDeliver ? await beforeDeliver() : null;
+    const deliverId = randomUUID();
+    const started = Date.now();
+    const res = await deliver(a.request.taskId, { actionId: deliverId });
+    events.push(`deliver (press ${deliverId.slice(0, 8)}…): HTTP ${res.status} in ${Date.now() - started} ms, executor ${res.body?.executor}, ${res.body?.deliveryId}`);
+    if (res.status !== 202 || res.body?.executor !== 'restate') throw new Error(`Deliver was not taken by the lifecycle: HTTP ${res.status} ${JSON.stringify(res.body).slice(0, 300)}`);
+    if (armed) events.push(`kill: ${JSON.stringify(await armed.done).slice(0, 200)}`);
+    await waitLifecycleDelivered(chat, a.request.requestId, a.request.taskId, 2);
+    events.push('delivered: both files in the chat, task complete, request delivered');
+    return { ...a, deliverId };
+  };
+  const officeDeliveredChecks = (chat: string, r: Awaited<ReturnType<typeof officeDelivered>>, uncertainSends?: number) => async () => [
+    ...await checkLifecycle(chat, { stage: 'delivered', rounds: 1, ledgerSince: r.ledgerSince, updateIds: [r.request.updateId], ...(uncertainSends !== undefined ? { uncertainSends } : {}) }),
+    ...await checkOfficeDecisions(chat, r.request, { delivered: true, files: 2, actionIds: [r.actionId, r.deliverId] }),
+  ];
+
+  scenario('L4.S7.0', 'lifecycle chat: the Desk approves the draft with its press id; RequestLifecycle records one approval', async (chat, events) => {
+    const a = await officeApproved(chat, events);
+    const [row] = await query<{ id: string }>(sql`SELECT id::text FROM hawa.approvals WHERE task_id = ${a.request.taskId}::uuid`);
+    return {
+      delivered: false, skipRequestChecks: true,
+      extra: [{ name: 'the Desk is answered 200 with the approval the lifecycle recorded', ok: a.approved.status === 200 && a.approved.body?.decisionId === row?.id && a.approved.body?.lifecycle?.stage === 'approved', detail: JSON.stringify({ status: a.approved.status, decisionId: a.approved.body?.decisionId, row: row?.id }) }],
+      after: async () => [
+        ...await checkLifecycle(chat, { stage: 'approved', rounds: 1, ledgerSince: a.ledgerSince, updateIds: [a.request.updateId] }),
+        ...await checkOfficeDecisions(chat, a.request, { delivered: false, actionIds: [a.actionId] }),
+      ],
+    };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S7.DBL', 'lifecycle chat: a double click (two approvals at once, one press id) records one approval and answers both', async (chat, events) => {
+    const ledgerSince = await officeLedger();
+    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
+    const actionId = randomUUID();
+    const [x, y] = await Promise.all([pressApprove(request.taskId, actionId, events), pressApprove(request.taskId, actionId, events)]);
+    return {
+      delivered: false, skipRequestChecks: true,
+      extra: [{ name: 'both clicks are answered 200 with the same approval', ok: x.status === 200 && y.status === 200 && Boolean(x.body?.decisionId) && x.body?.decisionId === y.body?.decisionId, detail: JSON.stringify([x.status, y.status, x.body?.decisionId, y.body?.decisionId]) }],
+      after: async () => [
+        ...await checkLifecycle(chat, { stage: 'approved', rounds: 1, ledgerSince, updateIds: [request.updateId] }),
+        ...await checkOfficeDecisions(chat, request, { delivered: false, actionIds: [actionId] }),
+      ],
+    };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S7.K14', 'lifecycle chat: Core killed after RequestLifecycle accepted the approval, before the Desk had the answer; the Desk retries with the same press id', async (chat, events) => {
+    const ledgerSince = await officeLedger();
+    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
+    const actionId = randomUUID();
+    const armed = await killAtPoint('core.office.after-forward', { kind: 'approve', answer: 'accepted' });
+    const cut = await pressApprove(request.taskId, actionId, events);
+    events.push(`kill: ${JSON.stringify(await armed.done).slice(0, 200)}`);
+    const retry = await pressApprove(request.taskId, actionId, events);
+    const again = await pressApprove(request.taskId, actionId, events);
+    const [row] = await query<{ id: string }>(sql`SELECT id::text FROM hawa.approvals WHERE task_id = ${request.taskId}::uuid`);
+    return {
+      delivered: false, skipRequestChecks: true,
+      extra: [
+        { name: 'the Desk heard no answer from the killed Core', ok: cut.status >= 500, detail: `HTTP ${cut.status}` },
+        { name: 'the retry with the same id is answered 200 with the approval recorded before the kill, and so is the next', ok: retry.status === 200 && again.status === 200 && retry.body?.decisionId === row?.id && again.body?.decisionId === row?.id, detail: JSON.stringify([retry.status, again.status, retry.body?.decisionId, again.body?.decisionId, row?.id]) },
+      ],
+      after: async () => [
+        ...await checkLifecycle(chat, { stage: 'approved', rounds: 1, ledgerSince, updateIds: [request.updateId] }),
+        ...await checkOfficeDecisions(chat, request, { delivered: false, actionIds: [actionId] }),
+      ],
+    };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S7.OLD', 'lifecycle chat: approving the old draft while the requester\'s change is being made is refused by RequestLifecycle (409)', async (chat, events) => {
+    const ledgerSince = await officeLedger();
+    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
+    // The change's design run is held after its Canva import, so the change is still being made when the office presses.
+    await fakes.hold('worker.step.after-action', { step: 'canva-create-draft' }, 1);
+    // The intake fixture reads this exact wording as a change (fixtures/models/intake.json).
+    const changeUpdate = await replyToDraft(chat, request.taskId, 'make the logo bigger');
+    const round1 = await waitUntil('the change round', async () => {
+      const rows = await roundTasks(request.requestId);
+      return rows.length === 2 ? rows[1] : null;
+    }, 180_000);
+    const held = await fakes.wait('worker.step.after-action', 240_000);
+    if (!held) throw new Error('the change\'s design run never reached its Canva step');
+    events.push(`change (update ${changeUpdate}) is round ${round1.id}, held in its design run at ${held?.detail?.step}`);
+    const actionId = randomUUID();
+    const refused = await pressApprove(request.taskId, actionId, events);
+    await fakes.release('worker.step.after-action');
+    await waitDraftSent(chat, request.requestId, round1.id);
+    events.push(`the change's draft (task ${round1.id}) is in review`);
+    return {
+      delivered: false, skipRequestChecks: true,
+      extra: [
+        { name: 'the old draft\'s approval is refused 409 CHANGE_PENDING, naming the change', ok: refused.status === 409 && refused.body?.code === 'CHANGE_PENDING' && String(refused.body?.detail).includes(round1.id), detail: JSON.stringify({ status: refused.status, code: refused.body?.code, detail: refused.body?.detail }) },
+        { name: 'no approval was recorded', ok: (await query(sql`SELECT 1 FROM hawa.approvals WHERE task_id = ANY(${[request.taskId, round1.id]}::uuid[])`)).length === 0, detail: 'approvals of both rounds' },
+      ],
+      after: async () => [
+        ...await checkLifecycle(chat, { stage: 'in_review', rounds: 2, drafts: 2, ledgerSince, updateIds: [request.updateId, changeUpdate] }),
+        { name: 'the refused press reached RequestLifecycle once', ok: (await restateQuery(`SELECT status FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND idempotency_key = 'desk:${actionId}'`)).length === 1, detail: `desk:${actionId}` },
+      ],
+    };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S8.0', 'lifecycle chat: Deliver through RequestLifecycle; the Delivery workflow sends both approved files and reports back; no faults', async (chat, events) => {
+    const r = await officeDelivered(chat, events);
+    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S8.K15', 'lifecycle chat: Core killed at core.delivery.after-drive (files in Drive, nothing recorded), restarted', async (chat, events) => {
+    const r = await officeDelivered(chat, events, () => killAtPoint('core.delivery.after-drive', { mode: 'workflow' }));
+    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S8.K16', 'lifecycle chat: worker killed between the two files', async (chat, events) => {
+    const r = await officeDelivered(chat, events, () => killAtPoint('worker.delivery.between-files', {}));
+    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S8.K17', 'lifecycle chat: Postgres killed after Telegram took the first file, before its mark was written; back after 5 s', async (chat, events) => {
+    const r = await officeDelivered(chat, events, () => killWhileHeld('worker.sender.after-telegram', { commandType: 'lifecycle', kind: 'document' }, 'postgres'));
+    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r, 0) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S8.K18', 'lifecycle chat: Restate killed between the two files, back after 5 s', async (chat, events) => {
+    const r = await officeDelivered(chat, events, () => killWhileHeld('worker.delivery.between-files', {}, 'restate'));
+    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  // R5 and acceptance (d): a flagged chat and an unflagged one send at once, each takes its own path;
+  // then the flagged chat is taken off the flag (the worker restarts without it): a change to its
+  // lifecycle draft still goes to its request, and its next brief takes the legacy path.
+  scenario('L3.R5', 'un-flag mid-request: a reply to a lifecycle draft still reaches the lifecycle, a new brief goes legacy; an unflagged chat alongside stays legacy', async (chat, events) => {
+    const other = newChat();
+    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+    const [otherUpdate] = await fakes.updates([textUpdate(other, briefText(`L3R5-other-${other}`))]);
+    const request = await lifecycleBrief(chat, `L3R5-${chat}`, events);
+    const colour = await liveColour();
+    await restartWorkerWith(colour, { lifecycleChats: lifecycleChatList([chat]) });
+    events.push(`${colour} restarted without chat ${chat} on its flag list`);
+    const changeUpdate = await replyToDraft(chat, request.taskId, 'make the logo bigger');
+    const round1 = await waitUntil('the change round in the request', async () => {
+      const rows = await roundTasks(request.requestId);
+      return rows.length === 2 ? rows[1] : null;
+    }, 180_000);
+    await waitDraftSent(chat, request.requestId, round1.id);
+    events.push(`change routed to the request: round 1 task ${round1.id}, its draft sent`);
+    const [legacyUpdate] = await fakes.updates([textUpdate(chat, briefText(`L3R5-legacy-${chat}`))]);
+    const legacy = await waitUntil('the legacy task of the new brief', async () => {
+      const rows = await query<{ id: string; request_id: string | null; state: string }>(sql`SELECT t.id::text, t.request_id::text, t.state::text FROM hawa.tasks t
+        WHERE t.id IN (SELECT aggregate_id FROM hawa.outbox_commands WHERE command_type = 'task.created' AND payload->>'sourceChannelId' = ${chat}) AND t.request_id IS NULL`);
+      return rows[0]?.state === 'human_review' ? rows[0] : null;
+    }, 300_000, 2000);
+    events.push(`new brief took the legacy path: task ${legacy.id}`);
+    const otherTask = (await tasksOfChat(other))[0];
+    await restartWorkerWith(colour, { lifecycleChats: lifecycleChatList() });
+    return {
+      delivered: false, skipRequestChecks: true,
+      after: async () => [
+        ...await checkLifecycle(chat, { stage: 'in_review', rounds: 2, drafts: 2, ledgerSince, updateIds: [request.updateId, changeUpdate, legacyUpdate] }),
+        { name: 'the new brief after un-flagging is a legacy task (no request) run by TaskWorkflow', ok: legacy.request_id === null && (await restateQuery(`SELECT status FROM sys_invocation WHERE target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${legacy.id}'`)).some((r: any) => r.status === 'completed'), detail: JSON.stringify(legacy) },
+        { name: 'the unflagged chat alongside took the legacy path (no request row)', ok: Boolean(otherTask) && (await requestsOfChat(other)).length === 0 && (await query(sql`SELECT 1 FROM hawa.tasks WHERE id = ${otherTask?.id ?? '00000000-0000-0000-0000-000000000000'}::uuid AND request_id IS NULL`)).length === 1, detail: `other chat task ${otherTask?.id} (update ${otherUpdate})` },
+      ],
+    };
+  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  // Review of 2.3C: the 2.1 rollback (HAWA_TELEGRAM_POLLER=core) once lifecycle requests exist. Core's
+  // own poller reads the requester's button on a lifecycle draft and routes it to the request itself,
+  // through Restate's ingress with the keys ChatInbox uses; it used to be refused 409 (final for the
+  // poller) and the requester heard nothing. The poller goes back to the worker afterwards.
+  scenario('L3.R6', 'rolled back to Core\'s poller: a button on a lifecycle draft is routed by Core through Restate\'s ingress', async (chat, events) => {
+    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+    const request = await lifecycleBrief(chat, `L3R6-${chat}`, events);
+    const colour = await liveColour();
+    await switchPoller('core', colour);
+    events.push(`rolled back: Core polls Telegram (Core and ${colour} recreated)`);
+    let okUpdate = 0;
+    try {
+      okUpdate = await tap(chat, `rq:ok:${request.taskId}`);
+      events.push(`tapped rq:ok (update ${okUpdate}), read by Core's poller`);
+      await waitUntil('the requester\'s sign-off answered', async () => (await messagesWith(chat, 'you approved this design')).length > 0, 180_000, 1000);
+    } finally {
+      await switchPoller('worker', colour);
+      events.push('the worker polls again');
+    }
+    const r = { request, ledgerSince, okUpdate };
+    return {
+      delivered: false, skipRequestChecks: true,
+      after: async () => [
+        // The button never reached a ChatInbox: only the brief's update is checked there.
+        ...(await lifecycleOkChecks(chat, r, { updateIds: [request.updateId] })()),
+        { name: 'the button reached RequestLifecycle once, under the key ChatInbox would use', ok: (await restateQuery(`SELECT id FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${request.requestId}' AND target_handler_name = 'requesterDecision' AND idempotency_key = 'tg:${chat}:${okUpdate}'`)).length === 1, detail: `tg:${chat}:${okUpdate}` },
+        { name: 'no ChatInbox invocation for the button (Core polled it)', ok: (await restateQuery(`SELECT id FROM sys_invocation WHERE target_service_name = 'ChatInbox' AND idempotency_key = 'tg-${okUpdate}'`)).length === 0, detail: `tg-${okUpdate}` },
+      ],
+    };
+  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  // R2 (scale 0.0001, D1): a silent requester. The draft is sent, reminders are scheduled; Restate,
+  // the worker and Core are each killed between a reminder's scheduling and its firing. Exactly one
+  // reminder per day reaches the chat, and the request expires.
+  scenario('L3.R2.D1', 'silent requester, reminders at scale 0.0001: Restate, worker and Core killed between scheduling and firing; one reminder per day, then expiry', async (chat, events) => {
+    const colour = await liveColour();
+    await restartWorkerWith(colour, { reminderScale: '0.0001' });
+    try {
+      const request = await lifecycleBrief(chat, `L3R2-${chat}`, events);
+      await waitUntil('the day-1 reminder scheduled', async () => (await restateQuery(`SELECT id FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${request.requestId}' AND target_handler_name = 'remind'`)).length > 0, 60_000, 250);
+      kill('restate'); await sleep(4000); start('restate'); await waitHealthy('restate');
+      events.push('Restate killed after the day-1 reminder was scheduled, back after 4 s');
+      await waitUntil('the day-1 reminder in the chat', async () => (await messagesWith(chat, 'Is this design right for you?')).length > 0, 180_000, 500);
+      kill(colour); await sleep(2000); start(colour); await waitHealthy(colour);
+      events.push(`${colour} killed after the day-1 reminder, back after 2 s`);
+      kill('core'); await sleep(4000); start('core'); await waitHealthy('core');
+      events.push('Core killed before the day-5 reminder, back after 4 s');
+      await waitUntil('the day-5 reminder in the chat', async () => (await messagesWith(chat, 'Still waiting on this design')).length > 0, 240_000, 1000);
+      await waitUntil('the request to expire', async () => (await requestsOfChat(chat))[0]?.stage === 'expired', 300_000, 2000);
+      events.push('expired');
+      return {
+        delivered: false, skipRequestChecks: true,
+        after: async () => [
+          ...await checkLifecycle(chat, { stage: 'expired', rounds: 1, updateIds: [request.updateId] }),
+          { name: 'exactly one day-1 reminder', ok: (await messagesWith(chat, 'Is this design right for you?')).length === 1, detail: `${(await messagesWith(chat, 'Is this design right for you?')).length}` },
+          { name: 'exactly one day-5 reminder', ok: (await messagesWith(chat, 'Still waiting on this design')).length === 1, detail: `${(await messagesWith(chat, 'Still waiting on this design')).length}` },
+        ],
+      };
+    } finally {
+      await restartWorkerWith(colour, { reminderScale: '1' });
+    }
+  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  /**
+   * R3's question. The fixtures cover no studio stage, so the change round's studio question is
+   * simulated: the driver records the round's NEEDS_CLARIFICATION run (what the edit stage writes) and
+   * hands RequestLifecycle the run's report with the DesignRun's own event id and key, while that run
+   * is held after its Canva step; its own report, later, meets Restate's key and the seen list. Core's
+   * outcome projection, the question message, its send and record, and the answer are all real.
+   */
+  const changeThenQuestion = async (chat: string, events: string[]) => {
+    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+    const request = await lifecycleBrief(chat, `L3R3-${chat}`, events);
+    await fakes.hold('worker.step.after-action', { step: 'canva-create-draft' }, 1);
+    const changeUpdate = await replyToDraft(chat, request.taskId, 'make the logo bigger');
+    const round1 = await waitUntil('the change round', async () => {
+      const rows = await roundTasks(request.requestId);
+      return rows.length === 2 ? rows[1] : null;
+    }, 180_000);
+    const reached = await fakes.wait('worker.step.after-action', 240_000);
+    events.push(`change round ${round1.id}; its DesignRun held at ${reached?.detail?.step}`);
+    await query(sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, tier, status, stages)
+      VALUES (gen_random_uuid(), ${TENANT_ID_}::uuid, ${round1.id}::uuid, ${KAAE_CLIENT_ID}::uuid, 'chaos', ${`chaos-question-${round1.id}`}, 'chaos', '{}'::jsonb, 'standard', 'failed',
+        ${JSON.stringify({ directed: { refused: 'NEEDS_CLARIFICATION', clarify: { question: 'Which logo should be bigger?', options: ['The KAAE seal', 'The university crest'] }, asks: [{ ask: 'make the logo bigger', status: 'asked' }] } })}::jsonb)`);
+    const runId = `dr-${round1.id}`;
+    const res = await fetch(`${RESTATE_INGRESS_URL}/RequestLifecycle/${request.requestId}/designFinished/send`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': `dr-finished:${runId}` },
+      body: JSON.stringify({ v: 1, eventId: `dr-finished:${runId}`, runId, round: 1, taskId: round1.id, report: { status: 'DESIGN_FAILED', code: 'NEEDS_CLARIFICATION', runId } }),
+    });
+    events.push(`the studio's question handed to the lifecycle: HTTP ${res.status}`);
+    await waitUntil('the question in the chat, recorded as asked', async () => {
+      const [row] = await requestsOfChat(chat);
+      return row?.stage === 'awaiting_answer' && row.question_asked_at && (await messagesWith(chat, 'One question before I make your change')).length > 0;
+    }, 180_000, 1000);
+    await fakes.release();
+    await waitUntil('the held DesignRun to finish', async () => (await restateQuery<{ status: string }>(`SELECT status FROM sys_invocation WHERE target_service_name = 'DesignRun' AND target_service_key = '${runId}'`)).every((r) => r.status === 'completed'), 300_000, 2000);
+    events.push('question asked; the held run finished and its report was ignored');
+    return { request, round1, changeUpdate, ledgerSince };
+  };
+  const TENANT_ID_ = '00000000-0000-4000-a000-000000000001';
+  const answerAndDraft = async (chat: string, events: string[], q: Awaited<ReturnType<typeof changeThenQuestion>>) => {
+    const answerUpdate = await tap(chat, `rq:a1:${q.round1.id}`);
+    const round2 = await waitUntil('the answer round', async () => {
+      const rows = await roundTasks(q.request.requestId);
+      return rows.length === 3 ? rows[2] : null;
+    }, 180_000);
+    await waitDraftSent(chat, q.request.requestId, round2.id);
+    events.push(`answered (update ${answerUpdate}): round 2 task ${round2.id}, its draft sent`);
+    return { answerUpdate, round2 };
+  };
+  const questionChecks = (chat: string, q: Awaited<ReturnType<typeof changeThenQuestion>>, a: Awaited<ReturnType<typeof answerAndDraft>>) => async () => {
+    const [r1] = await query<{ state: string }>(sql`SELECT state::text AS state FROM hawa.tasks WHERE id = ${q.round1.id}::uuid`);
+    const view = await lifecycleView(q.request.requestId);
+    return [
+      ...await checkLifecycle(chat, { stage: 'in_review', rounds: 3, drafts: 2, ledgerSince: q.ledgerSince, updateIds: [q.request.updateId, q.changeUpdate, a.answerUpdate] }),
+      { name: 'the question\'s task is closed once answered', ok: r1?.state === 'cancelled', detail: `state=${r1?.state}` },
+      { name: 'the lifecycle is on the answer\'s round, reviewing its draft', ok: view?.round === 2 && view?.draft?.taskId === a.round2.id, detail: JSON.stringify(view && { round: view.round, draft: view.draft }) },
+      { name: 'the question reached the chat once', ok: (await messagesWith(chat, 'One question before I make your change')).length === 1, detail: 'question messages' },
+    ];
+  };
+
+  scenario('L3.R3.K1', 'change, question, answer: worker killed at the answer\'s projection step', async (chat, events) => {
+    const q = await changeThenQuestion(chat, events);
+    const k = await killAtPoint('worker.rl.after-project', { key: ':answer' });
+    const a = await answerAndDraft(chat, events, q);
+    events.push(`kill: ${JSON.stringify(await k.done).slice(0, 160)}`);
+    return { delivered: false, skipRequestChecks: true, after: questionChecks(chat, q, a) };
+  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R3.K2', 'change, question, answer: Core killed after committing the answer round\'s design outcome, before answering', async (chat, events) => {
+    const q = await changeThenQuestion(chat, events);
+    const k = await killAtPoint('core.project.after-commit', { requestId: q.request.requestId, key: ':designFinished' });
+    const a = await answerAndDraft(chat, events, q);
+    events.push(`kill: ${JSON.stringify(await k.done).slice(0, 160)}`);
+    return { delivered: false, skipRequestChecks: true, after: questionChecks(chat, q, a) };
+  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L3.R3.D', 'change, question, deploy to green, answer: nothing changes, no RT0016, blue drains', async (chat, events) => {
+    const q = await changeThenQuestion(chat, events);
+    const before = await liveColour();
+    up({ build: false, services: ['worker-green'] });
+    const reg = await registerColour('green');
+    events.push(`deploy: register green exit ${reg.code}`);
+    await waitUntil('green to be live', async () => (await liveColour()) === 'worker-green', 60_000, 1000);
+    await sleep(6000); // the gate probes every few seconds: blue's poller stops, green's starts
+    const a = await answerAndDraft(chat, events, q);
+    const drains = await finishDrains(180);
+    events.push(`finish-drains: exit ${drains.code} ${drains.lines.join(' | ').slice(0, 300)}`);
+    return {
+      delivered: false, skipRequestChecks: true,
+      after: async () => [
+        ...await questionChecks(chat, q, a)(),
+        { name: 'green registered without force', ok: reg.code === 0 && before === 'worker-blue', detail: `exit ${reg.code}, live before: ${before}` },
+        { name: 'blue drained and its deployment deleted', ok: drains.lines.some((l) => /deleted=blue/.test(l)), detail: drains.lines.join(' | ').slice(0, 400) },
+      ],
+    };
+  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  // R2.D2: a deploy between a reminder's scheduling and its firing; the reminder fires on the new
+  // colour and the old one drains. Runs after L3.R3.D, so green is live: this deploys back to blue.
+  scenario('L3.R2.D2', 'reminders at scale 0.0001 across a deploy: scheduled on one colour, fired on the other, the old one drains', async (chat, events) => {
+    const from = await liveColour();
+    const to = from === 'worker-green' ? 'worker-blue' : 'worker-green';
+    await restartWorkerWith(from, { reminderScale: '0.0001' });
+    try {
+      const request = await lifecycleBrief(chat, `L3R2D2-${chat}`, events);
+      await waitUntil('the day-1 reminder scheduled', async () => (await restateQuery(`SELECT id FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${request.requestId}' AND target_handler_name = 'remind'`)).length > 0, 60_000, 250);
+      // A colour left registered by an earlier deploy (a scenario that stopped before its drain) is
+      // drained first: registering never replaces a deployment Restate still holds.
+      const leftover = await finishDrains(60);
+      events.push(`drains before the deploy: exit ${leftover.code} ${leftover.lines.join(' | ').slice(0, 200)}`);
+      up({ build: false, services: [to] });
+      await restartWorkerWith(to, { reminderScale: '0.0001' });
+      const reg = await registerColour(to === 'worker-green' ? 'green' : 'blue');
+      events.push(`deploy ${from} → ${to}: exit ${reg.code}`);
+      await waitUntil('the day-1 reminder in the chat', async () => (await messagesWith(chat, 'Is this design right for you?')).length > 0, 180_000, 500);
+      const [fired] = await restateQuery<{ pinned_deployment_id: string | null }>(`SELECT pinned_deployment_id FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${request.requestId}' AND target_handler_name = 'remind' AND status = 'completed' LIMIT 1`);
+      const [target] = await restateQuery<{ id: string }>(`SELECT id FROM sys_deployment WHERE endpoint LIKE '%${to}%'`);
+      await waitUntil('the request to expire', async () => (await requestsOfChat(chat))[0]?.stage === 'expired', 300_000, 2000);
+      const drains = await finishDrains(180);
+      events.push(`finish-drains: exit ${drains.code} ${drains.lines.join(' | ').slice(0, 300)}`);
+      return {
+        delivered: false, skipRequestChecks: true,
+        after: async () => [
+          ...await checkLifecycle(chat, { stage: 'expired', rounds: 1, updateIds: [request.updateId] }),
+          { name: 'the day-1 reminder ran on the new colour', ok: Boolean(fired?.pinned_deployment_id) && fired?.pinned_deployment_id === target?.id, detail: JSON.stringify({ fired, target }) },
+          { name: 'exactly one reminder per day', ok: (await messagesWith(chat, 'Is this design right for you?')).length === 1 && (await messagesWith(chat, 'Still waiting on this design')).length === 1, detail: 'day 1 and day 5 messages' },
+          { name: 'the old colour drained and its deployment deleted', ok: drains.lines.some((l) => new RegExp(`deleted=${from === 'worker-green' ? 'green' : 'blue'}`).test(l)), detail: drains.lines.join(' | ').slice(0, 400) },
+        ],
+      };
+    } finally {
+      await restartWorkerWith(await liveColour(), { reminderScale: '1' });
+    }
+  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
   scenario('R4', 'two chats: a 19.9 MB picture with a 30 s download in chat A must not delay chat B', async (_chat, events) => {
     const chatA = newChat();
     const chatB = newChat();
@@ -695,4 +1195,80 @@ async function outboxOpen(taskId: string): Promise<boolean> {
   const { query, sql } = await import('./driver/stack.js');
   const [row] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands WHERE aggregate_id = ${taskId}::uuid AND state IN ('pending', 'leased')`);
   return Number(row?.n ?? 0) > 0;
+}
+
+/**
+ * Slice 2.3 part B: a request opened on RequestLifecycle through Restate's ingress, as ChatInbox sends
+ * it, followed until its draft is in the chat and recorded as sent. `arm` may arm a kill before the
+ * open is sent; it answers what happened, once it has.
+ */
+async function lifecycleOpen(chat: string, tag: string, events: string[], arm?: (requestId: string) => Promise<{ done: Promise<string> }>): Promise<Expectation> {
+  const { query, sql } = await import('./driver/stack.js');
+  const { TENANT_ID, KAAE_CLIENT_ID } = await import('./driver/provision.js');
+  const { requestIdFor } = await import('../../domain/src/request-lifecycle.js');
+  const { briefText } = await import('./driver/scenario.js');
+  const updateId = 800_000 + Math.floor(Math.random() * 100_000);
+  const requestId = requestIdFor(chat, updateId);
+  const brief = briefText(tag);
+  const killed = arm ? await arm(requestId) : null;
+  const open = {
+    v: 1, eventId: `open:${requestId}`, requestId, tenantId: TENANT_ID, chatId: chat,
+    origin: { kind: 'telegram', chatId: chat, updateId },
+    draft: { title: `KAAE invitation ${tag}`, rawText: brief, clientId: KAAE_CLIENT_ID, designInstructions: '', exactCopy: [], autoGenerate: true },
+  };
+  const res = await fetch(`${RESTATE_INGRESS_URL}/RequestLifecycle/${requestId}/open/send`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': `open:${requestId}` }, body: JSON.stringify(open),
+  });
+  events.push(`open sent: HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Restate refused the open: HTTP ${res.status} ${await res.text()}`);
+  if (killed) events.push(await killed.done);
+
+  const [task] = await waitUntil(`the request's task`, async () => {
+    const rows = await query<{ id: string }>(sql`SELECT id::text AS id FROM hawa.tasks WHERE request_id = ${requestId}::uuid`);
+    return rows.length ? rows : null;
+  }, 120_000);
+  events.push(`task ${task.id}`);
+  const runKey = `dr-${task.id}`;
+  await waitUntil('the design run to finish', async () => {
+    const rows = await restateQuery<{ status: string }>(`SELECT status FROM sys_invocation WHERE target_service_name = 'DesignRun' AND target_service_key = '${runKey}'`);
+    return rows.length > 0 && rows.every((r) => r.status === 'completed');
+  }, 300_000, 2000);
+  // Since part C, Core projects the outcome: the draft goes to the chat and is recorded as sent.
+  await waitUntil('the lifecycle to record the draft as sent', async () => {
+    const rows = await query<{ stage: string; draft_sent_at: Date | null }>(sql`SELECT stage, draft_sent_at FROM hawa.requests WHERE request_id = ${requestId}::uuid`);
+    return rows[0]?.stage === 'in_review' && rows[0].draft_sent_at ? rows[0] : null;
+  }, 180_000, 2000);
+  const view = await fetch(`${RESTATE_INGRESS_URL}/RequestLifecycle/${requestId}/get`, { method: 'POST' })
+    .then((r) => r.json()).catch((e) => ({ error: String(e) })) as Record<string, unknown>;
+  events.push(`lifecycle view: ${JSON.stringify(view)}`);
+
+  const extra: InvariantResult[] = [];
+  const add = (name: string, ok: boolean, detail: string) => extra.push({ name, ok, detail });
+  const requests = await query<{ owner: string; stage: string; rev: string; root_task_id: string }>(sql`SELECT owner, stage, rev::text AS rev, root_task_id::text AS root_task_id FROM hawa.requests WHERE request_id = ${requestId}::uuid`);
+  add('one request row, owned by restate, in review at revision 3 (open, outcome, draft sent)', requests.length === 1 && requests[0].owner === 'restate' && requests[0].stage === 'in_review' && requests[0].rev === '3' && requests[0].root_task_id === task.id, JSON.stringify(requests));
+  const tasks = await query<{ id: string }>(sql`SELECT id FROM hawa.tasks WHERE request_id = ${requestId}::uuid`);
+  add('one task for the request', tasks.length === 1, `tasks=${tasks.length}`);
+  const created = await query<{ state: string; last_error: string | null }>(sql`SELECT state::text AS state, last_error FROM hawa.outbox_commands WHERE aggregate_id = ${task.id}::uuid AND command_type = 'task.created'`);
+  add('its task.created row is recorded, never dispatched', created.length === 1 && created[0].state === 'delivered' && created[0].last_error === 'OWNED_BY_LIFECYCLE', JSON.stringify(created));
+  const projections = await query<{ idempotency_key: string }>(sql`SELECT idempotency_key FROM hawa.lifecycle_projections WHERE request_id = ${requestId}::uuid`);
+  add('three projections: the open, the outcome, the draft sent', projections.map((p) => p.idempotency_key).sort().join(',') === [`${requestId}:1:open`, `${requestId}:2:designFinished`, `${requestId}:3:messageSent`].join(','), JSON.stringify(projections.map((p) => p.idempotency_key)));
+  const legacy = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_name = 'TaskWorkflow' AND target_service_key LIKE 'task-wf-${task.id}%'`);
+  add('no TaskWorkflow for a lifecycle task', Number(legacy[0]?.n ?? 0) === 0, `TaskWorkflow=${legacy[0]?.n ?? 0}`);
+  const runs = await restateQuery<{ status: string; last_failure_error_code: string | null }>(`SELECT status, last_failure_error_code FROM sys_invocation WHERE target_service_name = 'DesignRun' AND target_service_key LIKE 'dr-${task.id}%'`);
+  add('one DesignRun, completed', runs.length === 1 && runs[0].status === 'completed', JSON.stringify(runs));
+  const [ops] = await query<{ imports: string }>(sql`SELECT count(*) FILTER (WHERE kind = 'create') AS imports FROM hawa.canva_remote_operations WHERE task_id = ${task.id}::uuid`);
+  add('one Canva import', Number(ops.imports) === 1, `imports=${ops.imports}`);
+  const opens = await restateQuery<{ status: string }>(`SELECT status FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${requestId}' AND target_handler_name = 'open'`);
+  add('one open invocation, completed', opens.length === 1 && opens[0].status === 'completed', JSON.stringify(opens));
+  const outcomes = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${requestId}' AND target_handler_name = 'designFinished'`);
+  add('the outcome was sent to the lifecycle once', Number(outcomes[0]?.n ?? 0) === 1, `designFinished invocations=${outcomes[0]?.n ?? 0}`);
+  add('the lifecycle shows the first round\'s draft in review', view?.stage === 'in_review' && view?.rev === 3 && view?.currentTaskId === task.id && view?.round === 0, JSON.stringify(view));
+  const shown = await sentTo(chat);
+  const kinds = shown.map((s: any) => `${s.method}:${s.documentSha256 ?? s.textHash}`);
+  add('the requester has the acknowledgement, the draft and its picture, each once', shown.length === 3 && new Set(kinds).size === 3 && shown.filter((s: any) => s.method === 'sendPhoto').length === 1, `${shown.length} sends: ${shown.map((s: any) => s.method).join(',')}`);
+  const [paused] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE status = 'paused'`);
+  add('no paused invocation', Number(paused?.n ?? 0) === 0, `paused=${paused?.n ?? 0}`);
+  const [rt16] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE last_failure_error_code = 'RT0016'`);
+  add('no journal mismatch (RT0016)', Number(rt16?.n ?? 0) === 0, `RT0016=${rt16?.n ?? 0}`);
+  return { delivered: false, skipRequestChecks: true, extra };
 }

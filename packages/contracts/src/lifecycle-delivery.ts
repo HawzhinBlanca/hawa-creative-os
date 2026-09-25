@@ -37,8 +37,18 @@ export interface OutboundMessage {
   /** Deterministic: the same logical message always has the same key (PHASE2_DESIGN.md 2.9). */
   key: string;
   chatId: string;
-  kind: 'text' | 'document';
+  /**
+   * 'callback_answer' (slice 2.3): the answer to a tapped button, `text` shown as its toast. Always
+   * courtesy: Telegram refuses a late answer, which is harmless.
+   * 'photo' (slice 2.3): a stored PNG export (exportRef) shown as a picture, `caption` under it: the
+   * draft the requester replies to. Core also puts the caption in `text`: a sender built before
+   * 'photo' sends every kind but a document as `text` (so, without it, an empty message Telegram
+   * refuses), and with it sends the caption's words instead of the picture.
+   */
+  kind: 'text' | 'document' | 'callback_answer' | 'photo';
   text?: string;
+  /** For 'callback_answer': the tapped button's callback query. */
+  callbackQueryId?: string;
   parseMode?: 'HTML';
   exportRef?: ExportRef;
   filename?: string;

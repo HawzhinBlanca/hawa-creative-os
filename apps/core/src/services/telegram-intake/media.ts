@@ -15,6 +15,7 @@ import { sniffImageMime, isUsableImage, TELEGRAM_BOT_DOWNLOAD_MAX_BYTES } from '
 import type { GuidelinesModel } from '../brand-guidelines.js';
 import { handleGuidelinesPdf, type RulesIntakeDeps } from '../telegram-rules-intake.js';
 import { createTelegramUpdateState, type TelegramUpdateJson } from './update-state.js';
+import { firstOfAlbumInSession, lifecycleMode } from './decide-mode.js';
 
 /** What the webhook read of an update before its media (routes/telegram-webhook.routes.ts). */
 export interface TelegramUpdateRead {
@@ -227,6 +228,9 @@ export function createTelegramMedia(deps: Pick<CoreContext, 'db' | 'voiceTranscr
     // One answer per album: each of its photos arrives as its own message.
     const firstOfAlbum = (() => {
       if (!albumId) return true;
+      // A lifecycle chat's albums are remembered by its ChatInbox (PHASE2_DESIGN.md 2.2), so a restart
+      // between two photos of one album does not answer it twice.
+      if (lifecycleMode()) return firstOfAlbumInSession(albumId);
       const key = `${sourceChannelId}:${albumId}`;
       if (acknowledgedAlbums.has(key)) return false;
       acknowledgedAlbums.add(key);

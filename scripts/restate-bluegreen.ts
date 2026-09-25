@@ -179,9 +179,10 @@ export type RegisterOutcome =
 /**
  * The services a worker build hosts (apps/worker/src/services.ts, which the worker checks what it
  * binds against); checked even when GET /services is short. Every service ever hosted stays here:
- * ChatInbox since Phase 2.1; Delivery and TelegramSender since Phase 2.2.
+ * ChatInbox since Phase 2.1; Delivery and TelegramSender since Phase 2.2; RequestLifecycle and
+ * DesignRun since Phase 2.3.
  */
-export const WORKER_SERVICES = ['TaskWorkflow', 'TaskService', 'ChatInbox', 'Delivery', 'TelegramSender'] as const;
+export const WORKER_SERVICES = ['TaskWorkflow', 'TaskService', 'ChatInbox', 'Delivery', 'TelegramSender', 'RequestLifecycle', 'DesignRun'] as const;
 
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
 

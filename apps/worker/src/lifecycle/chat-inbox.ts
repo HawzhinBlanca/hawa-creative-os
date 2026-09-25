@@ -8,6 +8,15 @@
  * to Core's existing intake (POST /v1/internal/telegram/intake, mode `legacy`) and, when intake keeps
  * failing, dead-letters it. The request lifecycle (2.3) routes decisions from here later.
  *
+ * Slice 2.3 routes decisions from here (PHASE2_DESIGN.md 2.2): for a chat on HAWA_LIFECYCLE_CHATS
+ * (read once, in the journaled `mode` step) intake runs in mode `lifecycle` and answers what a new
+ * request is instead of saving it; ChatInbox opens a RequestLifecycle for each. In either mode an
+ * answer, a requester's button or a change aimed at a request the lifecycle owns comes back as a
+ * decision and is routed to that request, so a chat taken off the flag still finishes its lifecycle
+ * requests there. Every route is a one-way send, keyed by the update: nothing here waits for the
+ * lifecycle or for Telegram. A lifecycle chat's "new request or a change?" question and its answered
+ * albums are this object's state (`chat`), handed to intake with each update, not Core's memory.
+ *
  * The rules are those of Core's polled-update-dispatch.ts, with the attempt count held in Restate's
  * journal instead of a Postgres row:
  *  - intake's deliberate answer (2xx, or a 4xx refusal) is final;
@@ -24,8 +33,19 @@
  * the length of one intake call.
  */
 import * as restate from '@restatedev/restate-sdk';
+import {
+  lifecycleOwnsChat,
+  type AnswerEvent,
+  type ChatIntakeState,
+  type IntakeDecision,
+  type OpenEvent,
+  type OutboundMessage,
+  type RequesterDecisionEvent,
+} from '@hawa/contracts';
+import { routedSendsOf } from '@hawa/domain';
 import { withInvocationLogContext, log } from '../logging.js';
-import type { TelegramUpdateLike } from './telegram-poller.js';
+import { chatKey, type TelegramUpdateLike } from './telegram-poller.js';
+import { TelegramSenderApi } from './telegram-sender.js';
 
 /** Fields are only ever added, and only as optional (PHASE2_DESIGN.md section 4). */
 export interface HandleUpdateInput {
@@ -35,17 +55,27 @@ export interface HandleUpdateInput {
   polledAt?: number;
 }
 
-export type IntakeMode = 'legacy';
+export type IntakeMode = 'legacy' | 'lifecycle';
 
-/** What Core's intake answered, as journaled. */
+/** What Core's intake answered, as journaled. `decision` and `chat` only from a Core with slice 2.3. */
 export type IntakeAnswer =
-  | { kind: 'done'; intakeStatus: number; duplicate?: boolean }
+  | { kind: 'done'; intakeStatus: number; duplicate?: boolean; decision?: IntakeDecision; chat?: ChatIntakeState }
   | { kind: 'retry'; reason: string };
 
 /** The Core calls ChatInbox makes (core-client.ts). A thrown error means "wait and try again". */
 export interface ChatInboxCore {
-  intake(update: TelegramUpdateLike, mode: IntakeMode): Promise<IntakeAnswer>;
+  /** `chat`: the chat's state, sent in lifecycle mode only. */
+  intake(update: TelegramUpdateLike, mode: IntakeMode, chat?: ChatIntakeState): Promise<IntakeAnswer>;
   park(update: TelegramUpdateLike, reason: string): Promise<void>;
+}
+
+/** Where ChatInbox routes a decision: one-way sends, each keyed so a replay sends nothing twice. */
+export interface InboxRoutes {
+  open(requestId: string, event: OpenEvent, idempotencyKey: string): void;
+  answer(requestId: string, event: AnswerEvent, idempotencyKey: string): void;
+  requesterDecision(requestId: string, event: RequesterDecisionEvent, idempotencyKey: string): void;
+  /** A message to its chat's TelegramSender, keyed by its own key. */
+  send(message: OutboundMessage): void;
 }
 
 /** The parts of Restate's ObjectContext the handler uses; tests pass a small journal. */
@@ -54,38 +84,93 @@ export interface InboxContext {
   sleep(ms: number): Promise<void>;
   set(name: string, value: unknown): void;
   now(): Promise<number>;
+  /** State read (slice 2.3); absent in a context that keeps none. */
+  get?<T>(name: string): Promise<T | null>;
+  /** Slice 2.3: where decisions go. */
+  routes?: InboxRoutes;
 }
 
 export interface ChatInboxView {
   v: 1;
   lastUpdateId: number;
-  lastOutcome: 'handled' | 'parked';
+  lastOutcome: 'handled' | 'parked' | 'routed';
   lastIntakeStatus?: number;
   at: number;
 }
 
+/** The chat's own state (slice 2.3), key `chat`: what intake reads with each update of a lifecycle chat. */
+export interface ChatInboxState extends ChatIntakeState {
+  v: 1;
+}
+
 export interface HandleUpdateResult {
-  outcome: 'handled' | 'parked';
+  outcome: 'handled' | 'parked' | 'routed';
   intakeStatus?: number;
   attempts: number;
+  /** For a routed decision: what it was. */
+  decision?: IntakeDecision['kind'];
+}
+
+export interface HandleUpdateOptions {
+  /** Whether a chat is on HAWA_LIFECYCLE_CHATS; tests pass their own. */
+  lifecycleChat?: (chat: string) => boolean;
+}
+
+export const CHAT_STATE_KEY = 'chat';
+/** Albums are answered once; one older than this is forgotten (Telegram sends an album within seconds). */
+export const ALBUM_MEMORY_MS = 15 * 60_000;
+
+/** Only a real chat (a Telegram id) can hold lifecycle requests: Core opens one for a numeric chat only. */
+const isChatId = (chat: string) => /^-?\d{1,20}$/.test(chat);
+
+/** The chat's state as kept, with albums older than ALBUM_MEMORY_MS forgotten. */
+export function prunedChatState(raw: unknown, now: number): ChatInboxState {
+  const s = raw && typeof raw === 'object' ? (raw as ChatInboxState) : ({} as ChatInboxState);
+  const albums = Object.entries(s.albumsAcked ?? {}).filter(([, at]) => Number.isFinite(at) && now - Number(at) < ALBUM_MEMORY_MS);
+  return {
+    v: 1,
+    ...(s.pendingClarification ? { pendingClarification: s.pendingClarification } : {}),
+    ...(albums.length ? { albumsAcked: Object.fromEntries(albums) } : {}),
+  };
+}
+
+/**
+ * Routes one decision, in order: the requests it opens or the events it hands to a request, then the
+ * messages it carries (routedSendsOf in @hawa/domain, which Core also uses when it routes an update
+ * itself). Keys are the update's (`tg:<chat>:<update>`) or the request's open key, so a replayed
+ * invocation (or a second one for the same update) routes nothing twice.
+ */
+export function routeDecision(routes: InboxRoutes, chat: string, update: TelegramUpdateLike, decision: IntakeDecision): void {
+  for (const send of routedSendsOf(chat, update, decision)) {
+    if (send.service === 'TelegramSender') routes.send(send.payload);
+    else if (send.handler === 'open') routes.open(send.key, send.payload, send.idempotencyKey);
+    else if (send.handler === 'answer') routes.answer(send.key, send.payload, send.idempotencyKey);
+    else routes.requesterDecision(send.key, send.payload, send.idempotencyKey);
+  }
 }
 
 export const INTAKE_ATTEMPTS = 5;
 /** Waits between retryable answers: 2, 4, 8 and 16 s, the backoff Core's poller used. */
 const retryDelayMs = (k: number) => 2000 * 2 ** k;
 
-export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, core: ChatInboxCore): Promise<HandleUpdateResult> {
+export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, core: ChatInboxCore, options: HandleUpdateOptions = {}): Promise<HandleUpdateResult> {
   const update = input.update;
-  // The one read of the mode, journaled so that a replay on the other colour agrees with it. In 2.1
-  // every chat is legacy; 2.3 reads the per-chat flag here.
-  const mode = await ctx.run<IntakeMode>('mode', async () => 'legacy');
+  const chat = chatKey(update);
+  // The one read of the per-chat flag, journaled so that a replay on the other colour agrees with it
+  // even if the flag changed in between. After a request is open, only its owner decides (Core reads
+  // tasks.request_id), so this decides new requests only.
+  const lifecycleChat = options.lifecycleChat ?? ((c: string) => lifecycleOwnsChat(c, process.env));
+  const mode = await ctx.run<IntakeMode>('mode', async () => (isChatId(chat) && lifecycleChat(chat) ? 'lifecycle' : 'legacy'));
+  // A lifecycle chat's state goes to intake with the update (its question, its albums).
+  let chatState: ChatInboxState | undefined;
+  if (mode === 'lifecycle' && ctx.get) chatState = prunedChatState(await ctx.get<ChatInboxState>(CHAT_STATE_KEY), await ctx.now());
 
   const reasons: string[] = [];
   let done: Extract<IntakeAnswer, { kind: 'done' }> | null = null;
   for (let k = 0; k < INTAKE_ATTEMPTS && !done; k++) {
     // Lines are written inside the step, so a replay of the journal does not write them again.
     const answer = await ctx.run(`intake-${k}`, async () => {
-      const a = await core.intake(update, mode);
+      const a = mode === 'lifecycle' ? await core.intake(update, mode, stripVersion(chatState)) : await core.intake(update, mode);
       if (a.kind === 'retry') log.warn(`[chat-inbox] update ${update.update_id} attempt ${k + 1}/${INTAKE_ATTEMPTS} failed: ${a.reason}`);
       else if (a.intakeStatus >= 400) log.warn(`[chat-inbox] update ${update.update_id} refused by intake with HTTP ${a.intakeStatus}`);
       return a;
@@ -100,23 +185,63 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
 
   const at = await ctx.now();
   if (done) {
+    // The chat's state after the update, as intake left it (lifecycle mode only).
+    const decision = done.decision;
+    // Clarify sets the waiting question; every other answer clears it (PHASE2_DESIGN.md 2.2 step 3),
+    // whatever state intake sent back: the requester moved on, and a later "new" or "revise" must not
+    // reach back to words sent before.
+    if (mode === 'lifecycle' && done.chat) {
+      const { pendingClarification, ...rest } = done.chat;
+      ctx.set(CHAT_STATE_KEY, prunedChatState({ ...rest, ...(decision?.kind === 'clarify' && pendingClarification ? { pendingClarification } : {}), v: 1 }, at));
+    }
+    if (decision && decision.kind === 'park') {
+      await parkUpdate(ctx, core, update, decision.reason);
+      ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at } satisfies ChatInboxView);
+      return { outcome: 'parked', attempts: reasons.length + 1 };
+    }
+    if (decision) {
+      if (!ctx.routes) throw new Error('ChatInbox cannot route a decision: this context has no routes');
+      routeDecision(ctx.routes, chat, update, decision);
+      ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'routed', lastIntakeStatus: done.intakeStatus, at } satisfies ChatInboxView);
+      return { outcome: 'routed', intakeStatus: done.intakeStatus, attempts: reasons.length + 1, decision: decision.kind };
+    }
     ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'handled', lastIntakeStatus: done.intakeStatus, at } satisfies ChatInboxView);
     return { outcome: 'handled', intakeStatus: done.intakeStatus, attempts: reasons.length + 1 };
   }
 
   const reason = `${reasons[reasons.length - 1]} after ${INTAKE_ATTEMPTS} attempts`;
-  // Core stores the dead letter (id and kind only), alerts the office and tells the sender, once.
+  await parkUpdate(ctx, core, update, reason);
+  ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at } satisfies ChatInboxView);
+  return { outcome: 'parked', attempts: INTAKE_ATTEMPTS };
+}
+
+/** Core stores the dead letter (id and kind only), alerts the office and tells the sender, once. */
+async function parkUpdate(ctx: InboxContext, core: ChatInboxCore, update: TelegramUpdateLike, reason: string): Promise<void> {
   await ctx.run('park', async () => {
     await core.park(update, reason);
     log.error(`[chat-inbox] update ${update.update_id} parked for an operator: ${reason}`);
     return true;
   });
-  ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at } satisfies ChatInboxView);
-  return { outcome: 'parked', attempts: INTAKE_ATTEMPTS };
+}
+
+/** The state as intake reads it (without this object's own version field). */
+function stripVersion(s: ChatInboxState | undefined): ChatIntakeState {
+  if (!s) return {};
+  const { v: _v, ...rest } = s;
+  void _v;
+  return rest;
 }
 
 /** Steps that throw (a wait) back off from 2 s to a 30 s ceiling, without a limit of their own. */
 const WAIT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30_000 };
+
+/** RequestLifecycle's handlers ChatInbox sends to, named here (not imported: RequestLifecycle is the older module). */
+type LifecycleInbound = {
+  open: (ctx: restate.ObjectContext, e: OpenEvent) => Promise<unknown>;
+  answer: (ctx: restate.ObjectContext, e: AnswerEvent) => Promise<unknown>;
+  requesterDecision: (ctx: restate.ObjectContext, e: RequesterDecisionEvent) => Promise<unknown>;
+};
+const RequestLifecycleInbound: restate.VirtualObjectDefinition<'RequestLifecycle', LifecycleInbound> = { name: 'RequestLifecycle' };
 
 function inboxContext(ctx: restate.ObjectContext): InboxContext {
   return {
@@ -124,6 +249,13 @@ function inboxContext(ctx: restate.ObjectContext): InboxContext {
     sleep: (ms) => ctx.sleep(ms),
     set: (name, value) => ctx.set(name, value),
     now: () => ctx.date.now(),
+    get: <T>(name: string) => ctx.get<T>(name) as Promise<T | null>,
+    routes: {
+      open: (requestId, event, key) => { ctx.objectSendClient(RequestLifecycleInbound, requestId).open(event, restate.rpc.sendOpts({ idempotencyKey: key })); },
+      answer: (requestId, event, key) => { ctx.objectSendClient(RequestLifecycleInbound, requestId).answer(event, restate.rpc.sendOpts({ idempotencyKey: key })); },
+      requesterDecision: (requestId, event, key) => { ctx.objectSendClient(RequestLifecycleInbound, requestId).requesterDecision(event, restate.rpc.sendOpts({ idempotencyKey: key })); },
+      send: (m) => { ctx.objectSendClient(TelegramSenderApi, String(m.chatId)).send(m, restate.rpc.sendOpts({ idempotencyKey: m.key })); },
+    },
   };
 }
 
@@ -147,6 +279,10 @@ export const chatInbox = restate.object({
     ),
     get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ChatInboxView | null> =>
       (await ctx.get<ChatInboxView>('inbox')) ?? null
+    ),
+    /** The chat's own state (slice 2.3): its waiting question and answered albums. */
+    getChat: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ChatInboxState | null> =>
+      (await ctx.get<ChatInboxState>(CHAT_STATE_KEY)) ?? null
     ),
   },
   options: {

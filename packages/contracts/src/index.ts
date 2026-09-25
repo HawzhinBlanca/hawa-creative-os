@@ -11,3 +11,4 @@ export * from './release-manifest.js';
 export * from './task-status.js';
 export * from './blobs.js';
 export * from './lifecycle-delivery.js';
+export * from './lifecycle.js';

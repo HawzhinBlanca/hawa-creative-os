@@ -84,6 +84,7 @@ import { registerWhatsappRoutes } from './routes/whatsapp.routes.js';
 import { createChannelKillSwitchStore } from './services/channel-kill-switches.js';
 import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.js';
 import { isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
+import { registerLifecycleProjectionRoutes } from './routes/lifecycle-projection.routes.js';
 import { telegramPollerOf } from './services/telegram-poller-owner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
@@ -1061,6 +1062,9 @@ export function createApp(options?: CreateAppOptions) {
   // The worker's calls into Core (Phase 2.1): ChatInbox hands each polled update to intake here, and
   // dead-letters one intake keeps failing. Only HAWA_WORKER_TOKEN opens them (verifyRequestAuth).
   registerLifecycleInternalRoutes(routeContext);
+  // RequestLifecycle's projection into Postgres (Phase 2.3): the only writer of a lifecycle-owned
+  // request's rows, with an expected revision and an idempotency key per projection.
+  registerLifecycleProjectionRoutes(routeContext);
   if (telegramPollerOf(process.env) === 'worker' && !serviceTokenOf()) {
     log.error('[core:internal] HAWA_TELEGRAM_POLLER=worker but HAWA_WORKER_TOKEN is not usable here: the worker cannot hand updates to intake, and Core does not poll. Set HAWA_WORKER_TOKEN in .env.production (infra/docker/README.md).');
   }

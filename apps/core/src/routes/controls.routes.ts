@@ -6,6 +6,7 @@ import type { RouteContext } from './types.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { createRedrive } from '../services/redrive.js';
+import { decideForLifecycle, decisionProblem, officeActionIdOf, readTaskLifecycle } from '../services/office-decisions.js';
 
 /**
  * The task controls (architecture programme 1.3, SPLIT_PLAN.md G6), moved unchanged from app.ts:
@@ -40,6 +41,37 @@ export function registerControlsRoutes(ctx: RouteContext): void {
       }
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
+
+    // A task of a request the lifecycle owns (slice 2.4): cancel is RequestLifecycle's decision (it also
+    // stops a running design); pause, resume and retry move nothing the lifecycle knows of, so they are
+    // refused rather than let the task and its request disagree.
+    if (db) {
+      let lifecycle: Awaited<ReturnType<typeof readTaskLifecycle>> = null;
+      try {
+        lifecycle = await readTaskLifecycle(db, tenantId, taskId);
+      } catch (err) {
+        log.error('[core:control] Could not read whether the request lifecycle owns this task:', err);
+        return problem(c, 503, 'Database Unavailable', 'Who controls this task could not be read; try again');
+      }
+      if (lifecycle?.owner === 'restate') {
+        if (control !== 'cancel') {
+          return c.json({
+            type: 'https://hawa.design/errors/409', title: 'Lifecycle Owned', status: 409, code: 'LIFECYCLE_OWNED', instance: c.req.url, lifecycle,
+            detail: `Task ${taskId} belongs to request ${lifecycle.requestId}, which the request lifecycle runs; ${control} is not one of its decisions. Cancel it, or re-drive it.`,
+          }, 409);
+        }
+        const { actionId } = officeActionIdOf(c.req.header('Idempotency-Key'));
+        const body = await c.req.json().catch(() => ({}));
+        const comment = String(body?.reason || body?.comment || '').trim().slice(0, 1000);
+        const { answer, forwarded } = await decideForLifecycle(db, tenantId, lifecycle, {
+          actionId, actor: { userId: auth.userId || auth.actorId || 'operator', role: auth.role || 'operator' }, kind: 'cancel', taskId,
+          ...(comment ? { comment } : {}),
+        });
+        const lifecycleNow = forwarded.kind === 'answered' && forwarded.result.accepted ? { ...lifecycle, rev: forwarded.result.rev, stage: forwarded.result.stage } : lifecycle;
+        if (answer.status !== 200) return decisionProblem(c, answer, { actionId, lifecycle: lifecycleNow });
+        return c.json({ commandId: crypto.randomUUID(), taskId, actionId, executor: 'restate', lifecycle: lifecycleNow, acceptedAt: new Date().toISOString() }, 202);
+      }
+    }
 
     const currentStatus = task ? task.status : toApiTaskStatus(dbTask.state);
     const sm = new TaskStateMachine(taskId, currentStatus);
@@ -99,7 +131,13 @@ export function registerControlsRoutes(ctx: RouteContext): void {
     // 404 for a task nobody knows, 503 when Postgres cannot be read (the `:control` catch-all answered these).
     if (!(await readCurrentTask(taskId))) return problem(c, 404, 'Task Not Found');
     try {
-      const result = await redriveTask(taskId, undefined, { id: auth.userId || 'operator', role: auth.role || 'operator' });
+      const result = await redriveTask(taskId, undefined, { id: auth.userId || 'operator', role: auth.role || 'operator' }, { actionHeader: c.req.header('Idempotency-Key') });
+      // A lifecycle request's re-drive or capture was RequestLifecycle's to decide (slice 2.4).
+      if ('lifecycleAnswer' in result && result.lifecycleAnswer) {
+        const { lifecycleAnswer, ...rest } = result;
+        if (lifecycleAnswer.status !== 200) return decisionProblem(c, lifecycleAnswer, rest);
+        return c.json(rest, 200);
+      }
       if (!result.ok && (result as any).code === 'CLIENT_REQUIRED') return problem(c, 422, 'CLIENT_REQUIRED', (result as any).message || '');
       if (!result.ok && (result as any).code === 'TASK_NOT_FOUND') return problem(c, 404, 'TASK_NOT_FOUND', (result as any).message || '');
       return c.json(result, result.ok ? 200 : 500);

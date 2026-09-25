@@ -85,6 +85,8 @@ export async function questionsToRemind(db: Kysely<Database>, tenantId: string, 
           ORDER BY d.created_at DESC LIMIT 1
         ) n ON true
         WHERE t.tenant_id = ${tenantId}::uuid AND t.state = 'paused'
+          -- A request the lifecycle owns is reminded by RequestLifecycle, never here as well.
+          AND t.request_id IS NULL
           AND r.stages->'directed'->>'refused' = 'NEEDS_CLARIFICATION'
           -- Not once a newer change to the same design exists, or the question was answered.
           AND NOT EXISTS (SELECT 1 FROM hawa.tasks n JOIN hawa.outbox_commands no ON no.aggregate_id = n.id AND no.command_type = 'task.created'
@@ -137,6 +139,8 @@ export async function draftsToRemind(db: Kysely<Database>, tenantId: string, use
           ORDER BY d.created_at DESC LIMIT 1
         ) n ON true
         WHERE t.tenant_id = ${tenantId}::uuid AND t.state = 'human_review'
+          -- A request the lifecycle owns is reminded by RequestLifecycle, never here as well.
+          AND t.request_id IS NULL
           AND o.payload->>'sourcePlatform' = 'telegram' AND o.payload->>'sourceChannelId' ~ '^-?[0-9]+$'
           AND n.created_at > ${from}::timestamptz
           AND n.created_at < now() - interval '24 hours' AND n.created_at > now() - interval '14 days'

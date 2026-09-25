@@ -116,7 +116,7 @@ export async function briefToDraft(chat: string, tag: string, timeoutMs = 240_00
  * director. `pinDeck` pins the PPTX too, so a delivery sends two files (the slice 2.2 scenarios kill
  * and throttle between them).
  */
-export async function approve(taskId: string, options: { pinDeck?: boolean } = {}): Promise<{ status: number; body: any }> {
+export async function approve(taskId: string, options: { pinDeck?: boolean; actionId?: string } = {}): Promise<{ status: number; body: any }> {
   const token = secrets().CHAOS_REVIEWER_KEY;
   const state = await fakes.core(`/tasks/${taskId}/canva`, token);
   const artifacts: any[] = Array.isArray(state.json?.artifacts) ? state.json.artifacts : [];
@@ -127,13 +127,15 @@ export async function approve(taskId: string, options: { pinDeck?: boolean } = {
   if (!task?.rev) throw new Error(`task ${taskId} has no design revision to approve`);
   const res = await fakes.core(`/tasks/${taskId}/revisions/${task.rev}/decisions`, token, {
     body: { action: 'approve', reason: 'Brand, hierarchy, and exact-copy verified', pinnedExportIds: [png?.id, deck?.id].filter(Boolean) },
+    // The Desk's press id (slice 2.4): a lifecycle request's decision is applied once per id.
+    ...(options.actionId ? { headers: { 'idempotency-key': options.actionId } } : {}),
   });
   return { status: res.status, body: res.json };
 }
 
 /** The Desk's Deliver button. */
-export async function deliver(taskId: string): Promise<{ status: number; body: any }> {
-  const res = await fakes.core(`/tasks/${taskId}/publish`, secrets().CHAOS_REVIEWER_KEY, { body: {} });
+export async function deliver(taskId: string, options: { actionId?: string } = {}): Promise<{ status: number; body: any }> {
+  const res = await fakes.core(`/tasks/${taskId}/publish`, secrets().CHAOS_REVIEWER_KEY, { body: {}, ...(options.actionId ? { headers: { 'idempotency-key': options.actionId } } : {}) });
   return { status: res.status, body: res.json };
 }
 
@@ -146,11 +148,12 @@ export async function waitDelivered(chat: string, taskId: string, timeoutMs = 18
 
 /**
  * Nothing left to do: no Restate invocation running or backing off, no outbox command pending or
- * leased, and the fake Telegram has had no call for `idleMs`.
+ * leased, and the fake Telegram has had no call for `idleMs`. A delayed invocation waiting for its
+ * time (`scheduled`: a lifecycle reminder or expiry days ahead, slice 2.3) is not work in flight.
  */
 export async function quiescent(idleMs = 5000, timeoutMs = 240_000): Promise<void> {
   await waitUntil('quiescence', async () => {
-    const [inv] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE status NOT IN ('completed')`);
+    const [inv] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE status NOT IN ('completed', 'scheduled')`);
     const [outbox] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands WHERE state IN ('pending', 'leased') AND available_at <= now() + interval '5 seconds'`);
     const sent = await fakes.sent();
     const last = sent.length ? Date.parse(sent[sent.length - 1].at) : 0;

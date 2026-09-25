@@ -10,6 +10,7 @@ import { isValidUuid } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { parsePinnedExportIds } from '../services/pinned-deliverables.js';
 import { pendingChangeOf as findPendingChange, pendingChangeWords } from '../services/pending-change.js';
+import { decideForLifecycle, decisionProblem, officeActionIdOf, readTaskLifecycle } from '../services/office-decisions.js';
 
 /**
  * A reviewer's decision on a design revision, and what the review desk shows before it
@@ -66,6 +67,17 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       );
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
+
+    // A task of a request the lifecycle owns (slice 2.4): RequestLifecycle decides; this route checks
+    // what it can without writing and forwards. Postgres that cannot say whose it is answers 503.
+    let lifecycle: Awaited<ReturnType<typeof readTaskLifecycle>> = null;
+    try {
+      lifecycle = await readTaskLifecycle(db, tenantId, taskId);
+    } catch (err) {
+      log.error('[core:approvals] Could not read whether the request lifecycle owns this task:', err);
+      return problem(c, 503, 'Database Unavailable', 'Who decides this task could not be read; try again');
+    }
+    const byLifecycle = lifecycle?.owner === 'restate';
 
     let resolvedRev: any = null;
     let dbRev: any = null;
@@ -148,7 +160,8 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     // director), which both let the old version through (review of 2026-09-24). Another size of
     // the design is not a change. A revision that failed leaves this design approvable, so the client
     // is never left with nothing to approve.
-    if (isApproved && db && isValidUuid(taskId)) {
+    // A lifecycle request's pending change is its state machine's to decide (openChangeRound), not this rule's.
+    if (isApproved && db && isValidUuid(taskId) && !byLifecycle) {
       const newer = await pendingChangeOf(tenantId, taskId).catch((err: unknown) => {
         log.warn('[core:approval] Could not check for a newer revision:', err);
         return null;
@@ -271,6 +284,15 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
 
     const sourceHash = resolvedRev.document?.sourceSha256 || resolvedRev.sourceSha256 || crypto.createHash('sha256').update(JSON.stringify(resolvedRev.document || {})).digest('hex');
     const qcReportHash = effectiveQcReportHash;
+
+    if (byLifecycle && lifecycle) {
+      return decideThroughLifecycle(c, {
+        lifecycle, tenantId, taskId, revisionId: resolvedRev.id || revisionId, body, task, pinnedExports, sourceHash, qcReportHash,
+        qcRunId: effectiveQcRunId, actorUserId, actorRole, actorDisplayName,
+        kind: isApproved ? 'approve' : isRejected ? 'reject' : 'revise',
+        decision: isApproved ? 'approved' : isRejected ? 'rejected' : 'revision_requested',
+      });
+    }
 
     let dbApproval: any = null;
     if (revisionRepo && db) {
@@ -398,6 +420,93 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
 
     return c.json(decision, 201);
   });
+
+  /**
+   * The decision on a lifecycle-owned task (slice 2.4): the approval Core would have recorded goes to
+   * RequestLifecycle.officeDecision as its payload, keyed by the Desk's action id, and the object's
+   * projection records it (an approvals row, the task's move) or the object refuses. Nothing is
+   * written here. The answer names the approval Postgres now holds for this action.
+   */
+  async function decideThroughLifecycle(c: Context, d: {
+    lifecycle: NonNullable<Awaited<ReturnType<typeof readTaskLifecycle>>>;
+    tenantId: string; taskId: string; revisionId: string;
+    body: { revisionRequest?: { comment?: string } & Record<string, unknown>; reason?: string; expectedRequestRev?: unknown };
+    task: {
+      clientId?: string; requiredFormats?: string[]; latestQAReport?: { profile?: string };
+      canvaBinding?: { id?: string; bindingId?: string; version?: number; canvaDesignId?: string };
+    } | null | undefined;
+    pinnedExports: PinnedExport[] | undefined;
+    sourceHash: string; qcReportHash: string | null; qcRunId: string | null; actorUserId: string; actorRole: string; actorDisplayName: string;
+    kind: 'approve' | 'reject' | 'revise'; decision: 'approved' | 'rejected' | 'revision_requested';
+  }) {
+    const { actionId } = officeActionIdOf(c.req.header('Idempotency-Key'));
+    const comment = String(d.body.revisionRequest?.comment || d.body.reason || '').trim().slice(0, 1000);
+    const approval = {
+      tenantId: d.tenantId,
+      clientId: d.task?.clientId || defaultClientId,
+      taskId: d.taskId,
+      revisionId: d.revisionId,
+      canvaBindingId: d.task?.canvaBinding?.id || d.task?.canvaBinding?.bindingId || null,
+      canvaBindingVersion: d.task?.canvaBinding?.version || null,
+      canvaDesignId: d.task?.canvaBinding?.canvaDesignId || null,
+      sourceHash: d.sourceHash,
+      exportHashes: (d.pinnedExports || []).map((e) => e.sha256),
+      qcRunId: d.qcRunId,
+      qcReportHash: d.qcReportHash,
+      qcProfile: d.task?.latestQAReport?.profile || 'standard',
+      requiredFormats: d.task?.requiredFormats || ['png'],
+      approverId: d.actorUserId,
+      approverRole: d.actorRole,
+      ...(d.body.revisionRequest ? { revisionRequest: d.body.revisionRequest } : {}),
+      ...(d.pinnedExports ? { pinnedExports: d.pinnedExports } : {}),
+    };
+    const expectedRev = Number.isSafeInteger(d.body.expectedRequestRev) ? Number(d.body.expectedRequestRev) : undefined;
+    const { answer, forwarded } = await decideForLifecycle(db ?? undefined, d.tenantId, d.lifecycle, {
+      actionId,
+      actor: { userId: d.actorUserId, role: d.actorRole },
+      kind: d.kind,
+      taskId: d.taskId,
+      revisionId: d.revisionId,
+      approval,
+      ...(expectedRev !== undefined ? { expectedRev } : {}),
+      ...(comment ? { comment } : {}),
+    });
+    const lifecycleNow = forwarded.kind === 'answered' && forwarded.result.accepted
+      ? { requestId: d.lifecycle.requestId, rev: forwarded.result.rev, stage: forwarded.result.stage, owner: 'restate' as const }
+      : d.lifecycle;
+    if (answer.status !== 200) return decisionProblem(c, answer, { actionId, lifecycle: lifecycleNow });
+
+    // The row the object's projection wrote for this press (nonce lc:<actionId>): read, not written.
+    const recorded = await withRlsContext(db!, { tenantId: d.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+      (await sql<{ id: string; decision: string; created_at: Date }>`SELECT id::text, decision::text, created_at FROM hawa.approvals
+        WHERE tenant_id = ${d.tenantId}::uuid AND task_id = ${d.taskId}::uuid AND nonce = ${`lc:${actionId}`}
+        ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]).catch((err: unknown) => {
+      log.warn('[core:approvals] The lifecycle recorded the decision; its approvals row could not be read back:', err);
+      return undefined;
+    });
+    broadcast(d.decision === 'approved' ? 'task:approved' : d.decision === 'rejected' ? 'task:rejected' : 'task:revision_requested', {
+      taskId: d.taskId, revisionId: d.revisionId, decision: d.decision, executor: 'restate',
+    });
+    return c.json({
+      decisionId: recorded?.id ?? null,
+      actionId,
+      taskId: d.taskId,
+      designRevisionId: d.revisionId,
+      sourceHash: d.sourceHash,
+      qcReportHash: d.qcReportHash,
+      exportHashes: approval.exportHashes,
+      tenantId: d.tenantId,
+      clientId: approval.clientId,
+      decision: d.decision,
+      actor: { userId: d.actorUserId, displayName: d.actorDisplayName, role: d.actorRole, verifiedServerSide: true as const },
+      decidedAt: recorded?.created_at ? new Date(recorded.created_at).toISOString() : null,
+      revisionRequest: d.body.revisionRequest,
+      invalidated: false,
+      executor: 'restate',
+      lifecycle: lifecycleNow,
+      ...(d.pinnedExports ? { pinnedExports: d.pinnedExports } : {}),
+    }, 200);
+  }
 
   // Review Desk Inspection Endpoint (FR-041)
   registerRoute('get', '/tasks/:taskId/review-desk', async (c: any) => {

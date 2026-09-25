@@ -5,7 +5,7 @@
  */
 import crypto from 'node:crypto';
 import type { Context } from 'hono';
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, questionIdOf } from '@hawa/contracts';
 import { sql, withRlsContext, toApiTaskStatus } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { cutText, isValidUuid } from '../../core-helpers.js';
@@ -18,6 +18,19 @@ import { isStandingRule } from '../standing-rules-chat.js';
 import { createTelegramUpdateState } from './update-state.js';
 import { createTelegramQuestions, type PendingQuestion } from './questions.js';
 import type { TelegramMediaReading } from './media.js';
+import {
+  answerDecision, clearSessionClarification, courtesyText, decideSession, lifecycleMode, lifecycleOwnerOf,
+  sessionClarification, type TaskOwner,
+} from './decide-mode.js';
+
+/**
+ * What a requester is told when they send a picture about a design the request lifecycle owns: its
+ * rounds do not take pictures yet (Core would have to fetch them by file id), and a picture read as
+ * the words "apply the attached picture" would start a change without it.
+ */
+export const LIFECYCLE_PICTURE_NOTICE =
+  '🖼️ <b>Pictures sent with a change or an answer are not used automatically yet.</b>\n\n' +
+  '<i>Reply to the design with the change in words, or tap 🧑‍🎨 Ask a designer under it and the office will use your picture.</i>';
 
 /**
  * A message the bot asked about ("revise the last design, or a new one?"), per chat, kept until
@@ -36,6 +49,16 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
   const telegramBridge = deps.telegramBridge ?? (() => { throw new Error('Telegram intake needs the Telegram bridge'); })();
   const { markTelegramUpdateHandled, replyDesign } = createTelegramUpdateState(deps);
   const { pendingQuestion, questionFollowUp, answerQuestion } = createTelegramQuestions(deps);
+
+  /** A task as the reading below holds it, from Postgres (a clarification ChatInbox kept names its task by id). */
+  async function rehydrateTask(taskId: string, sourceChannelId: string): Promise<Record<string, unknown> | undefined> {
+    if (!db || !taskRepo || !isValidUuid(taskId)) return undefined;
+    const t = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) => taskRepo.findById(taskId, DEFAULT_TENANT_ID, trx)).catch(() => null);
+    return t ? {
+      id: t.id, tenantId: t.tenant_id, clientId: t.client_id, status: toApiTaskStatus(t.state), title: t.title, sourcePlatform: 'telegram',
+      sourceChannelId, rawText: t.description, createdAt: t.created_at, updatedAt: t.updated_at,
+    } : undefined;
+  }
 
   /**
    * What a message is about: the design a reply answers (followed to its newest version, and only in
@@ -126,7 +149,25 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
 
     // A reply to a question asked before a change was made is its answer, in the requester's own
     // words, whatever it says: read as a new change request, it would revise a task that has no design.
-    if (replyTarget && db && sourceChannelId && sourceChannelId !== 'tg_default' && rawText.trim()) {
+    // A reply to a design of a request the lifecycle owns is routed to it (PHASE2_DESIGN.md 2.3):
+    // an answer when its task waits on a question (paused); otherwise it is read below, and a change
+    // is routed at makeChange. The legacy question lookups are not asked about it.
+    let replyOwner: TaskOwner | null = null;
+    if (replyTarget && db && sourceChannelId && sourceChannelId !== 'tg_default') {
+      try {
+        replyOwner = await lifecycleOwnerOf(db, replyTarget.id);
+      } catch (err) {
+        log.warn('[Core] Could not tell whether the replied-to design is the request lifecycle\'s:', err);
+        return problem(c, 503, 'Database unavailable', 'The owner of the replied-to design could not be read; retry');
+      }
+      if (replyOwner && referenceImageBase64) {
+        return answerDecision(c, { kind: 'handled', messages: [courtesyText(sourceChannelId, `lc-picture:${sourceChannelId}:${sourceEventId}`, LIFECYCLE_PICTURE_NOTICE, 'HTML')] });
+      }
+      if (replyOwner && replyOwner.state === 'paused' && rawText.trim()) {
+        return answerDecision(c, { kind: 'answer', requestId: replyOwner.requestId, questionId: questionIdOf(String(replyTarget.id)), answer: { text: rawText.trim().slice(0, 2000) } });
+      }
+    }
+    if (!replyOwner && replyTarget && db && sourceChannelId && sourceChannelId !== 'tg_default' && rawText.trim()) {
       let pending: PendingQuestion | null;
       let followUp: string | null = null;
       try {
@@ -321,7 +362,13 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
       // The answer to a clarification question completes the message it was asked about. The
       // question used to be sent and the message forgotten, so "revise" became a change request
       // reading "revise" and the brief itself was lost.
-      const pendingClarification = pendingClarifications.get(sourceChannelId);
+      // In a lifecycle chat ChatInbox keeps the question (its state reaches intake with the update);
+      // one asked before the chat was flagged is still in this process's map and is read from there.
+      const inSession = lifecycleMode() ? sessionClarification() : undefined;
+      const pendingClarification = inSession
+        ? { rawText: inSession.rawText, task: inSession.taskId ? await rehydrateTask(inSession.taskId, sourceChannelId) : undefined, at: inSession.askedAt, referenceImageBase64: undefined as string | undefined }
+        : pendingClarifications.get(sourceChannelId);
+      if (lifecycleMode()) clearSessionClarification();
       let answeredKind: 'feedback' | 'new_brief' | undefined;
       if (pendingClarification && Date.now() - pendingClarification.at < 3600_000 && rawText.trim().length <= 60) {
         const answer = rawText.trim();
@@ -374,6 +421,17 @@ export function createTelegramReplies(deps: Pick<CoreContext, 'db' | 'taskRepo' 
 
       // Handle clarification when confidence is below threshold (< 0.75)
       if (classification.needsClarification && classification.clarifyingQuestion) {
+        const session = decideSession();
+        if (session && lifecycleMode()) {
+          // ChatInbox keeps the question, not this process: it survives a Core restart and a deploy.
+          const taskId = pendingTasks[0]?.id && isValidUuid(String(pendingTasks[0].id)) ? String(pendingTasks[0].id) : undefined;
+          const remember = { rawText, askedAt: Date.now(), updateId: Number(sourceEventId) || 0, ...(taskId ? { taskId } : {}) };
+          session.chat.pendingClarification = remember;
+          return answerDecision(c, {
+            kind: 'clarify', remember,
+            messages: [courtesyText(sourceChannelId, `clarify:${sourceChannelId}:${sourceEventId}`, `❓ <b>Clarification needed:</b>\n\n${escapeTelegramHtml(classification.clarifyingQuestion)}`, 'HTML')],
+          });
+        }
         pendingClarifications.set(sourceChannelId, { rawText, referenceImageBase64, task: pendingTasks[0], at: Date.now() });
         await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
           text: `❓ <b>Clarification needed:</b>\n\n${escapeTelegramHtml(classification.clarifyingQuestion)}`,

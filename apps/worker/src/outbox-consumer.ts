@@ -313,7 +313,8 @@ export class OutboxConsumer {
   /** Who hears about a command that ended without being delivered. None of it changes the outcome. */
   private async reportEnded(cmd: OutboxCommandRecord, attempts: number, error: string, uncertain: boolean) {
     // An uncertain dispatch may have started the workflow, so only a definite failure is announced.
-    if (cmd.command_type === 'task.created' && !uncertain) {
+    // A lifecycle-owned request was refused here only because its lifecycle designs it: nobody is told.
+    if (cmd.command_type === 'task.created' && !uncertain && !error.includes('OWNED_BY_LIFECYCLE')) {
       await this.tellRequesterIntakeFailed(cmd, attempts, error);
     }
     if (cmd.command_type === 'notify.published') {
@@ -410,10 +411,25 @@ export class OutboxConsumer {
   }
 
   private registerDefaultHandlers() {
+    /**
+     * A request the Restate lifecycle owns (slice 2.3) is designed by its DesignRun, never by
+     * TaskWorkflow: its `task.created` row is recorded, not pending, so this should never fire. If
+     * one is pending all the same, it is refused for good rather than designed twice.
+     */
+    const refuseLifecycleOwned = (cmd: OutboxCommandRecord) => {
+      if (cmd.payload?.lifecycleOwner === 'restate') {
+        throw new OutboxDeliveryError(
+          `OWNED_BY_LIFECYCLE: task ${cmd.aggregate_id} belongs to the request lifecycle, which starts its design runs; ${cmd.command_type} was not dispatched`,
+          'permanent',
+          'OWNED_BY_LIFECYCLE'
+        );
+      }
+    };
     // A Restate workflow runs once per key (workflow-dispatcher.ts), so a dispatch repeated after a
     // consumer stopped mid-command answers 409 and starts nothing twice.
     if (!this.handlers.has('task.created')) {
       this.handlers.set('task.created', async (cmd) => {
+        refuseLifecycleOwned(cmd);
         // Confirmed submission to durable workflow engine (Restate or embedded runner)
         const receipt = await this.dispatcher.dispatch(cmd);
         if (!receipt || !receipt.workflowId) {
@@ -426,6 +442,7 @@ export class OutboxConsumer {
 
     if (!this.handlers.has('task.dispatch')) {
       this.handlers.set('task.dispatch', async (cmd) => {
+        refuseLifecycleOwned(cmd);
         // Confirmed submission to durable workflow engine
         const receipt = await this.dispatcher.dispatch(cmd);
         if (!receipt || !receipt.workflowId) {

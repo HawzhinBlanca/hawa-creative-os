@@ -4,3 +4,4 @@ export * from './fake-publisher.js';
 export * from './fake-message-adapter.js';
 export * from './chaos.js';
 export * from './slo-daemon.js';
+export * from './fake-restate-context.js';
