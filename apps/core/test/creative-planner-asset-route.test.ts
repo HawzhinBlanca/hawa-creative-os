@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import crypto from 'node:crypto';
 import {
   BoundedCreativePlanner,
@@ -217,6 +217,18 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
 
   describe('4. Provider Outage Handling & Circuit Breaker (FR-058, FR-059)', () => {
     it('fails over gracefully from primary to secondary when primary encounters rate limit 429', async () => {
+      const priorGoogle = process.env.GEMINI_API_KEY;
+      const priorAnthropic = process.env.ANTHROPIC_API_KEY;
+      process.env.GEMINI_API_KEY = ['fixture', 'google', 'key'].join('-');
+      process.env.ANTHROPIC_API_KEY = ['fixture', 'anthropic', 'key'].join('-');
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        if (!String(input).includes('api.anthropic.com')) throw new Error(`Unexpected provider request: ${String(input)}`);
+        return new Response(JSON.stringify({
+          model: 'claude-sonnet-5',
+          content: [{ type: 'text', text: JSON.stringify({ status: 'ok' }) }],
+          usage: { input_tokens: 100, output_tokens: 20 },
+        }), { status: 200 });
+      });
       modelGateway.setSimulatedFailure('google', 1);
 
       const req: StructuredModelRequest = {
@@ -229,12 +241,20 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
         cachePolicy: 'disabled',
       };
 
-      const res = await modelGateway.generateStructured(ctx, req);
-      expect(res.ok).toBe(true);
-      if (res.ok) {
-        expect(res.value.deployment.provider).toBe('anthropic');
-        expect(res.value.deployment.exactModelId).toBe('claude-sonnet-5');
-        expect(res.value.attempts).toBe(2);
+      try {
+        const res = await modelGateway.generateStructured(ctx, req);
+        expect(res.ok).toBe(true);
+        if (res.ok) {
+          expect(res.value.deployment.provider).toBe('anthropic');
+          expect(res.value.deployment.exactModelId).toBe('claude-sonnet-5');
+          expect(res.value.attempts).toBe(2);
+        }
+      } finally {
+        fetchSpy.mockRestore();
+        if (priorGoogle === undefined) delete process.env.GEMINI_API_KEY;
+        else process.env.GEMINI_API_KEY = priorGoogle;
+        if (priorAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY;
+        else process.env.ANTHROPIC_API_KEY = priorAnthropic;
       }
     });
   });

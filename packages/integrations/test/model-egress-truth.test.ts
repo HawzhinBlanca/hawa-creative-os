@@ -38,34 +38,34 @@ describe('R20 governed model egress truth', () => {
   it('does not manufacture a cloud result in production for an older ungoverned caller', async () => {
     for (const key of keys) delete process.env[key];
     vi.stubEnv('NODE_ENV', 'production');
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { throw new Error('Unexpected provider request'); });
     const result = await new ResilientModelGateway().generateStructured(ctx, { ...request('approved_providers', ['google']), egressPolicy: undefined } as unknown as StructuredModelRequest);
     if (result.ok) expect(result.value.deployment.provider).toBe('local');
-    else expect(result.error.code).toBe('MISSING_PROVIDER_CREDENTIALS');
+    else if (result.ok === false) expect(result.error.code).toBe('MISSING_PROVIDER_CREDENTIALS');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('does not manufacture a cloud result when the only authorized provider has no credentials', async () => {
     for (const key of keys) delete process.env[key];
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { throw new Error('Unexpected provider request'); });
     const result = await new ResilientModelGateway().generateStructured(ctx, request('approved_providers', ['google']));
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe('MISSING_PROVIDER_CREDENTIALS');
+    if (result.ok === false) expect(result.error.code).toBe('MISSING_PROVIDER_CREDENTIALS');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('rejects an empty cloud allowlist before any request', async () => {
     process.env.GEMINI_API_KEY = 'test-only-key';
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { throw new Error('Unexpected provider request'); });
     const result = await new ResilientModelGateway().generateStructured(ctx, request('approved_providers', []));
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe('EGRESS_DISALLOWED');
+    if (result.ok === false) expect(result.error.code).toBe('EGRESS_DISALLOWED');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('keeps text, image and audio local-only requests off the external network', async () => {
     for (const key of keys) process.env[key] = 'test-only-key';
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { throw new Error('Unexpected provider request'); });
     const gateway = new ResilientModelGateway();
     for (const inputs of [
       [{ kind: 'text' as const, text: 'local text' }],

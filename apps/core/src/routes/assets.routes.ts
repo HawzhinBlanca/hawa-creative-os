@@ -97,6 +97,12 @@ export function registerAssetsRoutes(ctx: RouteContext): void {
   // Transcribe Kurdish Voice Message into Normalized Brief & Protected Tokens (FR-013, FR-014)
   registerRoute('post', '/assets/transcribe-brief', async (c: any) => {
     const body = await c.req.json().catch(() => ({}));
+    // This standalone route has no locked client scope or trusted policy decision. A caller's
+    // claimed clientId/egressPolicy cannot authorize sending uploaded voice to a cloud provider.
+    if (typeof body.audioBase64 === 'string' && body.audioBase64.trim()) {
+      return problem(c, 412, 'Voice Egress Not Authorized',
+        'A verified client model-egress decision is required before audio transcription. Send the brief as text or use a scoped intake flow.');
+    }
     const textHint = body.text || body.transcript;
     const duration = body.durationSeconds || 12;
 

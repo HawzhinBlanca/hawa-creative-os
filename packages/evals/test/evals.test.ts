@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EvaluationRunner } from '../src/runner.js';
 import { ResilientModelGateway } from '@hawa/integrations';
 
@@ -53,13 +53,24 @@ describe('Evals: Tournament & Acceptance Benchmarks', () => {
     expect(full.admissionEligible).toBe(false);
   });
 
-  it('executes full tournament cleanly with ResilientModelGateway with zero critical violations', async () => {
-    const liveGateway = new ResilientModelGateway();
-    const liveRunner = new EvaluationRunner(liveGateway);
-    const full = await liveRunner.runFullTournament();
-    expect(full.overallPassRate).toBeGreaterThanOrEqual(95);
-    expect(full.routing.criticalViolations).toBe(0);
-    expect(full.retrieval.criticalViolations).toBe(0);
-    expect(full.adversarialSafety.criticalViolations).toBe(0);
+  it('does not call an uncredentialed provider or qualify its failed tournament', async () => {
+    const keys = ['GEMINI_API_KEY', 'GOOGLE_AI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY'] as const;
+    const prior = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    for (const key of keys) delete process.env[key];
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { throw new Error('Unexpected provider request'); });
+    try {
+      const full = await new EvaluationRunner(new ResilientModelGateway()).runFullTournament();
+      expect(full.routing.failedCases).toBe(full.routing.totalCases);
+      expect(full.routing.passRate).toBe(0);
+      expect(full.overallPassRate).toBeLessThan(95);
+      expect(full.admissionEligible).toBe(false);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+      for (const key of keys) {
+        if (prior[key] === undefined) delete process.env[key];
+        else process.env[key] = prior[key];
+      }
+    }
   }, 25000);
 });

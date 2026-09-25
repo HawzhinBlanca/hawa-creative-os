@@ -44,6 +44,7 @@ export function createTelegramMedia(deps: Pick<CoreContext, 'db' | 'voiceTranscr
    */
   async function readMedia(c: Context, update: TelegramUpdateRead) {
     const { json, msg, sourceEventId, verifiedSender } = update;
+    const sourceChannelId = String(msg.chat?.id || json.sourceChannelId || 'tg_default');
     let rawText = msg.text || msg.caption || json.text || '';
     let voiceTranscript: string | undefined = undefined;
 
@@ -77,7 +78,21 @@ export function createTelegramMedia(deps: Pick<CoreContext, 'db' | 'voiceTranscr
         rawText || json.transcriptFallback
       );
 
-      voiceTranscript = transcription.transcript;
+      // Intake has not selected and locked a client yet. Treat the audio as unavailable even if
+      // a caption exists: it may contain instructions beyond the caption. Do not create a design
+      // from only part of the request while implying the voice was read.
+      if (audioBuf?.length && transcription.audioStatus === 'policy_blocked') {
+        await markTelegramUpdateHandled(sourceChannelId, sourceEventId, 'telegram_voice_policy_blocked',
+          { audioStatus: transcription.audioStatus, hadCaption: Boolean(rawText) }, true);
+        if (sourceChannelId !== 'tg_default') {
+          await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+            text: 'Your voice note was received but cannot be sent for transcription until the client is confirmed. Please resend the full brief as text so no spoken instruction is missed.',
+          }).catch(() => undefined);
+        }
+        return c.json({ ok: true, ignored: true, reason: 'VOICE_POLICY_UNRESOLVED', updateId: sourceEventId }, 200);
+      }
+
+      voiceTranscript = transcription.audioStatus === 'transcribed' ? transcription.transcript : undefined;
       // The caption and what was said, together (the transcriber joins them).
       rawText = transcription.normalizedText || rawText;
     }
@@ -141,7 +156,6 @@ export function createTelegramMedia(deps: Pick<CoreContext, 'db' | 'voiceTranscr
       rawText = PICTURE_ONLY_DIRECTIVE;
     }
 
-    const sourceChannelId = String(msg.chat?.id || json.sourceChannelId || 'tg_default');
     const rulesDeps: RulesIntakeDeps | null = db
       ? {
           db,

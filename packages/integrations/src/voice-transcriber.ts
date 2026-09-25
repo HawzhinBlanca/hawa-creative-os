@@ -7,9 +7,17 @@ export interface VoiceTranscriptionRequest {
   durationSeconds?: number;
   sampleRateHertz?: number;
   languageHint?: 'ckb' | 'ar' | 'en';
+  /** Resolved by a trusted caller from the locked client policy; never copied from uploaded media. */
+  egressDecision?: {
+    clientId: string;
+    dataClass: 'client_voice';
+    mode: 'local_only' | 'approved_providers' | 'evaluated_external_allowed';
+    allowedProviders: string[];
+  };
 }
 
 export interface VoiceTranscriptionResult {
+  audioStatus: 'not_provided' | 'policy_blocked' | 'provider_unavailable' | 'provider_failed' | 'transcribed';
   transcript: string;
   normalizedText: string;
   detectedLanguage: 'ckb' | 'ar' | 'en';
@@ -75,8 +83,19 @@ export class KurdishVoiceTranscriber {
     // note, so a spoken brief with a one-word caption was reduced to that word.
     const openaiKey = process.env.OPENAI_API_KEY;
     const audioBytes = req.audioBuffer ? Buffer.from(req.audioBuffer) : (req.audioBase64 ? Buffer.from(req.audioBase64, 'base64') : undefined);
+    const decision = req.egressDecision;
+    const externalAllowed = Boolean(
+      decision &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decision.clientId) &&
+      decision.dataClass === 'client_voice' &&
+      (decision.mode === 'approved_providers' || decision.mode === 'evaluated_external_allowed') &&
+      Array.isArray(decision.allowedProviders) && decision.allowedProviders.includes('openai')
+    );
+    let audioStatus: VoiceTranscriptionResult['audioStatus'] = !audioBytes?.length ? 'not_provided'
+      : !externalAllowed ? 'policy_blocked'
+        : !openaiKey || openaiKey.startsWith('mock-') ? 'provider_unavailable' : 'provider_failed';
 
-    if (audioBytes && openaiKey && !openaiKey.startsWith('mock-')) {
+    if (audioBytes?.length && externalAllowed && openaiKey && !openaiKey.startsWith('mock-')) {
       try {
         const formData = new FormData();
         const blob = new Blob([audioBytes], { type: req.audioMimeType || 'audio/ogg' });
@@ -107,6 +126,7 @@ export class KurdishVoiceTranscriber {
           const json = await response.json() as any;
           if (json.text && typeof json.text === 'string') {
             rawTranscript = json.text.trim();
+            if (rawTranscript) audioStatus = 'transcribed';
           }
         } else {
           console.warn(`[KurdishVoiceTranscriber] transcription refused: HTTP ${response.status} ${(await response.text().catch(() => '')).slice(0, 200)}`);
@@ -124,6 +144,7 @@ export class KurdishVoiceTranscriber {
       // Nothing was transcribed and no caption was supplied. An empty result is the only honest
       // answer; inventing a sample brief would create a task the requester never asked for.
       return {
+        audioStatus,
         transcript: '',
         normalizedText: '',
         detectedLanguage: 'ckb',
@@ -149,6 +170,7 @@ export class KurdishVoiceTranscriber {
     else if (/ڕەمەزان/i.test(normalizedText)) objective = 'Ramadan Kareem Campaign';
 
     return {
+      audioStatus,
       transcript: rawTranscript,
       normalizedText,
       detectedLanguage: 'ckb',

@@ -1,8 +1,35 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { KurdishVoiceTranscriber, normalizeKurdishSpokenText } from '../src/voice-transcriber.js';
 import { TelegramBridgeDaemon, type TelegramUpdate } from '../src/telegram-bridge.js';
 
 describe('KurdishVoiceTranscriber (FR-013, FR-014)', () => {
+  it('does not send unresolved or local-only client audio to an external transcription provider', async () => {
+    const previous = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = ['fixture', 'voice', 'key'].join('-');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { throw new Error('Unexpected external request in local-only voice test'); });
+    try {
+      const transcriber = new KurdishVoiceTranscriber();
+      for (const egressDecision of [undefined, {
+        clientId: '00000000-0000-4000-a000-000000000001',
+        dataClass: 'client_voice' as const,
+        mode: 'local_only' as const,
+        allowedProviders: ['local'],
+      }]) {
+        const result = await transcriber.transcribe({
+          audioBuffer: Buffer.from('private-audio'),
+          egressDecision,
+        }, 'Caption supplied by sender');
+        expect(result.audioStatus).toBe('policy_blocked');
+        expect(result.transcript).toBe('Caption supplied by sender');
+      }
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+      if (previous === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previous;
+    }
+  });
+
   it('normalizes spoken Kurdish Sorani numbers, percentages, and currencies into exact protected tokens', () => {
     const spoken = 'پۆستێکمان بۆ بکە، داشکاندنی لەسەدا بیست و پێنج، نرخەکەشی دوازدە هەزار دینار';
     const normalized = normalizeKurdishSpokenText(spoken);
@@ -58,6 +85,7 @@ describe('KurdishVoiceTranscriber (FR-013, FR-014)', () => {
       const res = await transcriber.transcribe({
         audioBuffer: Buffer.from('fake-audio-bytes'),
         audioMimeType: 'audio/ogg',
+        egressDecision: { clientId: '00000000-0000-4000-a000-000000000001', dataClass: 'client_voice', mode: 'approved_providers', allowedProviders: ['openai'] },
       });
 
       expect(res.transcript).toBe('داشکاندنی بەهارە');
@@ -98,7 +126,8 @@ describe('a voice note with a caption', () => {
     }) as any;
     try {
       const res = await new KurdishVoiceTranscriber().transcribe(
-        { audioBuffer: Buffer.from('fake-audio-bytes'), audioMimeType: 'audio/ogg', languageHint: 'ckb' },
+        { audioBuffer: Buffer.from('fake-audio-bytes'), audioMimeType: 'audio/ogg', languageHint: 'ckb',
+          egressDecision: { clientId: '00000000-0000-4000-a000-000000000001', dataClass: 'client_voice', mode: 'approved_providers', allowedProviders: ['openai'] } },
         'KAAE'
       );
       expect(form).toBeDefined();

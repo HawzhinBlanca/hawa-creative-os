@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 
 describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horizons 16-19)', () => {
@@ -11,7 +11,7 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
     app = createApp();
   });
 
-  it('handles inbound Kurdish Sorani voice note ingress via Telegram webhook and extracts transcript', async () => {
+  it('uses a supplied caption without claiming the unavailable voice was transcribed', async () => {
     const audioPayload = {
       update_id: 88801,
       message: {
@@ -42,9 +42,41 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
     expect(json.ok).toBe(true);
     expect(json.task).toBeDefined();
     expect(json.task.clientId).toBe('client-aster');
-    expect(json.voiceTranscript).toBeDefined();
+    expect(json.voiceTranscript).toBeUndefined();
     expect(['RECEIVED', 'AWAITING_APPROVAL']).toContain(json.task.status);
     expect(json.task.brief).toBeDefined();
+  });
+
+  it('refuses an actual voice file before client policy selection without model egress or a partial task', async () => {
+    const seenUrls: string[] = [];
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      seenUrls.push(String(input));
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { status: 200 });
+    });
+    try {
+      const res = await app.request('/api/webhooks/telegram?generate=true', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': mockWebhookSecret },
+        body: JSON.stringify({
+          update_id: 88811,
+          audioBase64: Buffer.from('private-audio').toString('base64'),
+          message: {
+            message_id: 511,
+            from: { id: 991122, first_name: 'Diyar' },
+            chat: { id: 7001, type: 'private' },
+            voice: { duration: 12, mime_type: 'audio/ogg' },
+            caption: 'Design a poster',
+          },
+        }),
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json).toMatchObject({ ignored: true, reason: 'VOICE_POLICY_UNRESOLVED' });
+      expect(json.task).toBeUndefined();
+      expect(seenUrls.filter((url) => /api\.openai\.com|generativelanguage\.googleapis\.com|api\.anthropic\.com/.test(url))).toEqual([]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it('manages Telegram webhook lifecycle via /v1/adapters/telegram/webhook endpoints', async () => {
