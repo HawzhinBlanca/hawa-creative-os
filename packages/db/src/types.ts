@@ -441,7 +441,7 @@ export interface ReviewRequestsTable {
   tenant_id: string;
   task_id: string;
   design_revision_id: string;
-  qc_run_id: string;
+  qc_run_id: string | null;
   stage: string;
   assigned_user_id: string | null;
   assigned_role: string | null;
@@ -456,7 +456,7 @@ export interface ApprovalsTable {
   task_id: string;
   review_request_id: string;
   design_revision_id: string;
-  qc_run_id: string;
+  qc_run_id: string | null;
   decision: 'approved' | 'revision_requested' | 'rejected' | 'escalated';
   decided_by: string;
   reason: string | null;

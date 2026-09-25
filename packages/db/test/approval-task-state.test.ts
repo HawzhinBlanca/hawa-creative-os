@@ -58,6 +58,23 @@ describe.skipIf(!url)('approval refuses a task in a state past review (PostgreSQ
     repo.recordApproval({ tenantId, taskId: t.taskId, revisionId: t.revisionId, decision: 'approved', decidedBy: approverId });
   const approvals = async (taskId: string) => (await db.selectFrom('approvals').select('id').where('task_id', '=', taskId).execute()).length;
 
+  it('records a revision request without inventing a QA run and rejects an approved row with no QA', async () => {
+    const taskId = randomUUID();
+    await sql`INSERT INTO hawa.tasks(id, tenant_id, client_id, title) VALUES (${taskId}::uuid, ${tenantId}::uuid, ${clientId}::uuid, 'No-QA review check')`.execute(db);
+    const revision = await repo.createRevision({ tenantId, taskId, neutralManifest: { nodes: [{ id: 'n1', type: 'text', text: 'Draft' }] } });
+    const decision = await repo.recordApproval({ tenantId, taskId, revisionId: revision.id,
+      decision: 'revision_requested', decidedBy: approverId, reason: 'Change the title' });
+    expect(decision.qc_run_id).toBeNull();
+    const requests = await db.selectFrom('review_requests').select(['id', 'qc_run_id'])
+      .where('task_id', '=', taskId).execute();
+    expect(requests).toEqual([expect.objectContaining({ qc_run_id: null })]);
+    expect(await db.selectFrom('qc_runs').select('id').where('task_id', '=', taskId).execute()).toEqual([]);
+    await expect(db.insertInto('approvals').values({ tenant_id: tenantId, task_id: taskId,
+      review_request_id: requests[0]!.id, design_revision_id: revision.id, qc_run_id: null,
+      decision: 'approved', decided_by: approverId, reason: null, decision_payload: {}, nonce: randomUUID(),
+    }).execute()).rejects.toThrow(/approvals_approved_requires_qc/);
+  });
+
   it('refuses a task a newer revision replaced, and one already delivering, delivered, cancelled or rejected', async () => {
     const replaced = await reviewedTask('revision_requested');
     await expect(approve(replaced)).rejects.toThrow(/changes were requested on revision .*, so it can no longer be approved/);

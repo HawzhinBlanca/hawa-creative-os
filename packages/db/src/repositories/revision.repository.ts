@@ -32,7 +32,6 @@ export interface RecordApprovalParams {
   nonce?: string;
   correlationId?: string;
   expectedTaskVersion?: number;
-  qaReport?: Record<string, unknown>;
   /** Internal RequestLifecycle projection only; ordinary Desk decisions must leave this unset. */
   lifecycleRequestId?: string;
 }
@@ -345,7 +344,7 @@ export class RevisionRepository {
         if (refusal) throw new Error(refusal);
       }
 
-      // 2. Ensure verified passing QC run exists (NEVER manufacture fake QA rows)
+      // 2. Approval requires a real passing QA run; other decisions may honestly have no run.
       // Earlier PASS then later FAIL cannot qualify: order by created_at desc to inspect the latest run
       let qcRun = await dbClient
         .selectFrom('qc_runs')
@@ -420,40 +419,13 @@ export class RevisionRepository {
         .executeTakeFirst();
 
       if (!reviewReq) {
-        // If qcRun is missing on non-approval decisions, find or assign default profile
-        let qcRunId = qcRun?.id;
-        if (!qcRunId) {
-          const profile = await dbClient
-            .selectFrom('qc_profiles')
-            .select('id')
-            .limit(1)
-            .executeTakeFirst();
-          const profileId = profile?.id || 'de3a6551-acfc-4bcc-a40b-65aaf2674a12';
-          const nonPassQa = await dbClient
-            .insertInto('qc_runs')
-            .values({
-              tenant_id: params.tenantId,
-              task_id: params.taskId,
-              design_revision_id: params.revisionId,
-              qc_profile_id: profileId,
-              status: 'failed',
-              critical_pass: false,
-              report: params.qaReport || {},
-              report_sha256: this.computeSha256(JSON.stringify(params.qaReport || {})),
-            })
-            .returningAll()
-            .executeTakeFirstOrThrow();
-          qcRunId = nonPassQa.id;
-          qcRun = nonPassQa;
-        }
-
         reviewReq = await dbClient
           .insertInto('review_requests')
           .values({
             tenant_id: params.tenantId,
             task_id: params.taskId,
             design_revision_id: params.revisionId,
-            qc_run_id: qcRunId,
+            qc_run_id: qcRun?.id ?? null,
             stage: 'human_review',
             assigned_user_id: params.decidedBy,
             assigned_role: 'operator',
@@ -472,7 +444,7 @@ export class RevisionRepository {
           task_id: params.taskId,
           review_request_id: reviewReq.id,
           design_revision_id: params.revisionId,
-          qc_run_id: qcRun!.id,
+          qc_run_id: qcRun?.id ?? null,
           decision: params.decision,
           decided_by: params.decidedBy,
           reason: params.reason || null,

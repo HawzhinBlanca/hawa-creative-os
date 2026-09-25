@@ -149,14 +149,18 @@ describe('versioned lifecycle design outcome', () => {
     const rows = await withRlsContext(db, scope, async (trx) => ({
       request: await trx.selectFrom('requests').select(['rev', 'stage']).where('request_id', '=', requestId).executeTakeFirst(),
       task: await trx.selectFrom('tasks').select(['state', 'version']).where('id', '=', taskId).executeTakeFirst(),
-      approvals: await trx.selectFrom('approvals').select(['id', 'nonce', 'decision', 'decided_by'])
+      approvals: await trx.selectFrom('approvals').select(['id', 'nonce', 'decision', 'decided_by', 'qc_run_id'])
         .where('task_id', '=', taskId).execute(),
+      qcRuns: await trx.selectFrom('qc_runs').select(['id', 'status']).where('task_id', '=', taskId)
+        .where('design_revision_id', '=', revisionId).execute(),
       receipts: await trx.selectFrom('lifecycle_projections').select('rev').where('request_id', '=', requestId).execute(),
     }));
     expect(rows.request).toMatchObject({ rev: '3', stage: 'manual' });
     expect(rows.task).toMatchObject({ state: 'revision_requested', version: String(Number(before.version) + 1) });
+    expect(rows.qcRuns).toEqual([expect.objectContaining({ id: expect.any(String), status: 'failed' })]);
     expect(rows.approvals).toEqual([expect.objectContaining({ id: first.body.approvalId,
-      nonce: `desk:${actionId}`, decision: 'revision_requested', decided_by: scope.userId })]);
+      nonce: `desk:${actionId}`, decision: 'revision_requested', decided_by: scope.userId,
+      qc_run_id: rows.qcRuns[0]?.id })]);
     expect(rows.receipts.map((r) => Number(r.rev)).sort()).toEqual([1, 2, 3]);
   });
 });
