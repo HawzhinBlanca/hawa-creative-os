@@ -56,6 +56,15 @@ function harness(options: { prepare: () => Promise<PreparedDelivery>; answer?: (
 }
 
 describe('Delivery workflow', () => {
+  it('refuses lifecycle reporting before any external effect while RequestLifecycle is unregistered', async () => {
+    const i = input({ reportTo: 'lifecycle' });
+    const h = harness({ prepare: async () => prepared(i.taskId, 1) });
+    await expect(runDelivery(h.ctx, h.core, i)).rejects.toThrow(/LIFECYCLE_DELIVERY_NOT_AVAILABLE/);
+    expect(h.posts).toEqual([]);
+    expect(h.sends).toEqual([]);
+    expect(h.steps).toEqual([]);
+  });
+
   it('sends each approved file once, then the notice with the count, then reports delivered to Core', async () => {
     const i = input();
     const h = harness({ prepare: async () => prepared(i.taskId, 2) });

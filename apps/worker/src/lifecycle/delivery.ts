@@ -48,8 +48,6 @@ export interface DeliveryContext {
   run<T>(name: string, action: () => Promise<T>, retry: StepRetry): Promise<T>;
   /** An awaited call to the chat's TelegramSender. */
   send(message: OutboundMessage): Promise<SendResult>;
-  /** Slice 2.3: the one-way report to RequestLifecycle. */
-  reportToLifecycle?(requestId: string, event: Record<string, unknown>): void;
 }
 
 /** Core's internal API as the worker reaches it (HAWA_WORKER_TOKEN, a service principal). */
@@ -89,6 +87,11 @@ const messageOf = (err: unknown) => (err instanceof Error ? err.message : String
 
 /** The workflow's body. */
 export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, input: DeliveryInput): Promise<DeliveryOutcome> {
+  // RequestLifecycle is not bound by this worker yet. Refuse an early or malformed caller before
+  // preparing an archive or sending files; a one-way report to an absent object would strand the task.
+  if (input.reportTo !== 'core') {
+    throw new restate.TerminalError('LIFECYCLE_DELIVERY_NOT_AVAILABLE: RequestLifecycle is not registered', { errorCode: 409 });
+  }
   const run = Number.isInteger(input.run) && Number(input.run) > 0 ? Number(input.run) : 1;
   const base = deliveryBaseId(input.taskId, input.approvalId);
   const officeChat = input.officeChatId || (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((s) => s.trim()).find(Boolean) || null;
@@ -170,10 +173,6 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
     });
   }
 
-  if (input.reportTo === 'lifecycle' && ctx.reportToLifecycle) {
-    ctx.reportToLifecycle(input.requestId, { v: 1, eventId: `dl-finished:${input.deliveryId}`, deliveryId: input.deliveryId, ...outcome });
-    return outcome;
-  }
   try {
     await ctx.run('report', () => core.post(`/internal/tasks/${encodeURIComponent(input.taskId)}/delivery-finished`, {
       tenantId: input.tenantId,
@@ -205,11 +204,6 @@ export function createDeliveryWorkflow(core: CoreInternal = coreInternalFromEnv(
           return runDelivery({
             run: (name, action, retry) => ctx.run(name, action, retry),
             send: (message) => ctx.objectClient(TelegramSenderApi, message.chatId).send(message),
-            reportToLifecycle: (requestId, event) => {
-              ctx.objectSendClient<{ deliveryFinished: (c: restate.ObjectContext, e: Record<string, unknown>) => Promise<void> }>(
-                { name: 'RequestLifecycle' }, requestId
-              ).deliveryFinished(event, restate.rpc.sendOpts({ idempotencyKey: String(event.eventId) }));
-            },
           }, core, input);
         }),
     },

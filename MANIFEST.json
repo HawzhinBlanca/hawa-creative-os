@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-24T23:55:57Z",
+  "generatedAt": "2026-09-25T00:02:31Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 283,
+  "fileCount": 284,
   "files": [
     {
       "path": ".dockerignore",
@@ -739,13 +739,18 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R05_EVIDENCE.md",
-      "sha256": "268af32e666019a76bc370bc0b943a98685858ba094fc4bb3f8356c2141b69e7",
-      "bytes": 4908
+      "sha256": "2aca3fdecb2dfda06ff2a86259a2737b17d4847738b0222d7dd43d00de6567b6",
+      "bytes": 5050
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R07_EVIDENCE.md",
+      "sha256": "9b5295ae8c9a8870d7f7133f15e50a8aa12e1c8cdb1e66f55ecc214ea8a47d58",
+      "bytes": 2105
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
-      "sha256": "310d6a664a889a94723b12f99142d0633363b625c152d66ac84ffb9db8013b01",
-      "bytes": 9345
+      "sha256": "64a70179f40617c402d7f0e60b9ca8283d2898932e8d117f8de1c8c3df1ff73a",
+      "bytes": 9349
     },
     {
       "path": "plans/risk-register.csv",
@@ -754,8 +759,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "25451583d661a761cdeae7bbeb63edc2a2332dcdf6df5e112f6f2a702bf16a0e",
-      "bytes": 79483
+      "sha256": "ec58baf962dd3aad8313d4e7a0a307c7ef5836c652182861958c20831e48d228",
+      "bytes": 79800
     },
     {
       "path": "plans/user-stories.csv",

@@ -72,7 +72,7 @@ export interface DeliveryInput {
   revisionId: string;
   chatId: string | null;
   officeChatId: string | null;
-  /** 'core' in slice 2.2: the outcome is posted to Core's delivery-finished endpoint. */
+  /** 'core' posts to Core. 'lifecycle' is reserved for slice 2.3 and refused until its service is registered. */
   reportTo: 'lifecycle' | 'core';
   /** Which run of this publication's delivery this is (1 for the first; later ones retry the archive). */
   run?: number;
