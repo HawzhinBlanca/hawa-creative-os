@@ -16,6 +16,8 @@ function resolveEvalPath(relPath: string): string {
 
 export interface EvalSummary {
   dataset: string;
+  /** Fixture contracts can pass without constituting an independent model or retrieval study. */
+  admissionEligible?: boolean;
   totalCases: number;
   passedCases: number;
   failedCases: number;
@@ -175,7 +177,9 @@ export class EvaluationRunner {
 
     const retrievalService = new RetrievalService();
 
-    // Populate retrieval knowledge store with authentic client assets, rules, and negative examples
+    // This old fixture builds each candidate's text from the query and the expected IDs. It can
+    // test scope and negative-only routing, but its relevance score is label-derived and cannot
+    // qualify a real retriever or a new embedding/reranker.
     for (const c of cases) {
       const allIds = [
         ...c.expected_relevant_ids.map((id: string) => ({ id, polarity: 'positive' as const, relevant: true })),
@@ -192,6 +196,7 @@ export class EvaluationRunner {
 
         retrievalService.addKnowledgeItem({
           id: item.id,
+          tenantId: 'tenant-eval',
           clientId: c.client_id,
           kind,
           sourceId: `source_${item.id}`,
@@ -209,6 +214,7 @@ export class EvaluationRunner {
         const foreignClient = fid.startsWith('NOVA') ? 'NOVA' : fid.startsWith('RONA') ? 'RONA' : 'ASTER';
         retrievalService.addKnowledgeItem({
           id: fid,
+          tenantId: 'tenant-eval',
           clientId: foreignClient,
           kind: 'official_asset',
           sourceId: `foreign_${fid}`,
@@ -277,7 +283,8 @@ export class EvaluationRunner {
     }
 
     return {
-      dataset: 'retrieval_eval.jsonl',
+      dataset: 'retrieval_eval.jsonl (synthetic label-derived contract)',
+      admissionEligible: false,
       totalCases: cases.length,
       passedCases: passed,
       failedCases: failed,
@@ -512,6 +519,7 @@ export class EvaluationRunner {
     visualJudge: EvalSummary;
     adversarialSafety: EvalSummary;
     overallPassRate: number;
+    admissionEligible: false;
   }> {
     const routing = await this.runRoutingAndBriefTournament();
     const retrieval = await this.runRetrievalEvaluation();
@@ -537,6 +545,7 @@ export class EvaluationRunner {
       visualJudge,
       adversarialSafety,
       overallPassRate: total > 0 ? (passed / total) * 100 : 100,
+      admissionEligible: false,
     };
   }
 }
@@ -579,7 +588,7 @@ export async function main() {
     );
     process.exit(1);
   }
-  console.log('Tournament complete: All role gates passed.');
+  console.log('Synthetic fixture contracts passed. This is not an independent retrieval, model or product admission.');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -3,6 +3,7 @@ import { DoclingParser } from '../src/docling-parser.js';
 import { RetrievalService } from '../src/retrieval-service.js';
 import { sanitizeUntrustedUpload } from '../src/upload-sanitizer.js';
 import type { RequestContext } from '@hawa/contracts';
+import { kaaeClientDNA } from '@hawa/domain';
 
 describe('Retrieval: Ingestion & Client-Locked Search', () => {
   const ctx: RequestContext & { clientId: string } = {
@@ -35,6 +36,7 @@ describe('Retrieval: Ingestion & Client-Locked Search', () => {
     // Ingest data for client Aster
     service.addKnowledgeItem({
       id: 'k-1',
+      tenantId: ctx.tenantId,
       clientId: 'client-aster',
       kind: 'rule',
       sourceId: 'rule-aster-1',
@@ -49,6 +51,7 @@ describe('Retrieval: Ingestion & Client-Locked Search', () => {
     // Ingest data for client Nova
     service.addKnowledgeItem({
       id: 'k-2',
+      tenantId: ctx.tenantId,
       clientId: 'client-nova',
       kind: 'rule',
       sourceId: 'rule-nova-1',
@@ -79,6 +82,7 @@ describe('Retrieval: Ingestion & Client-Locked Search', () => {
 
     service.addKnowledgeItem({
       id: 'ex-pos',
+      tenantId: ctx.tenantId,
       clientId: 'client-aster',
       kind: 'approved_example',
       sourceId: 'ex-1',
@@ -92,6 +96,7 @@ describe('Retrieval: Ingestion & Client-Locked Search', () => {
 
     service.addKnowledgeItem({
       id: 'ex-neg',
+      tenantId: ctx.tenantId,
       clientId: 'client-aster',
       kind: 'negative_example',
       sourceId: 'ex-neg-1',
@@ -112,6 +117,69 @@ describe('Retrieval: Ingestion & Client-Locked Search', () => {
       expect(res.value.evidence.some((c) => c.id === 'ex-pos')).toBe(true);
       expect(res.value.negativeEvidence.some((c) => c.id === 'ex-neg')).toBe(true);
     }
+  });
+
+  it('filters tenant and approval before scoring even when another item matches better', async () => {
+    const service = new RetrievalService();
+    const base = { clientId: ctx.clientId, kind: 'approved_example' as const,
+      polarity: 'positive' as const, active: true, metadata: {} };
+    service.addKnowledgeItem({ ...base, id: 'own', tenantId: ctx.tenantId, sourceId: 'own-source',
+      title: 'Own poster', text: 'شیر', approved: true });
+    service.addKnowledgeItem({ ...base, id: 'foreign-tenant', tenantId: 'tenant-2', sourceId: 'foreign-source',
+      title: 'Foreign poster', text: 'شير شير شير', approved: true });
+    service.addKnowledgeItem({ ...base, id: 'unapproved', tenantId: ctx.tenantId, sourceId: 'draft-source',
+      title: 'Draft poster', text: 'شير شير شير', approved: false });
+    service.addKnowledgeItem({ ...base, id: 'draft-logo', tenantId: ctx.tenantId, sourceId: 'draft-logo-source',
+      kind: 'official_asset', title: 'Unapproved logo', text: 'شير logo', approved: false });
+
+    const result = await service.retrieve(ctx, [{ query: 'شير', kinds: ['approved_example'], topK: 10 }]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.evidence.map((item) => item.id)).toEqual(['own']);
+    expect(result.value.evidence[0].vectorScore).toBeUndefined();
+    expect(result.value.evidence[0].rerankScore).toBeUndefined();
+    expect(result.value.retrievalTrace.retrievalMode).toBe('lexical_only');
+    expect(result.value.clientDnaVersion).toBe(0);
+
+    const assetResult = await service.retrieve(ctx, [{ query: 'شير logo', kinds: ['official_asset'], topK: 10 }]);
+    expect(assetResult.ok).toBe(true);
+    if (!assetResult.ok) return;
+    expect(assetResult.value.authoritative.assets).toHaveLength(0);
+    expect(assetResult.value.evidence).toHaveLength(0);
+    expect(assetResult.value.unresolvedConflicts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ conflictType: 'MISSING_BRAND_ASSET' }),
+    ]));
+  });
+
+  it('refuses metadata-only ingestion and invented evaluation receipts', async () => {
+    const service = new RetrievalService();
+    const ingestion = await service.ingest(ctx, { sourceKind: 'document', sourceId: 'brand-guide',
+      storageKey: 'sha256:placeholder', mimeType: 'text/plain', sha256: '0'.repeat(64) });
+    expect(ingestion).toMatchObject({ ok: false, error: { code: 'RETRIEVAL_INGEST_NOT_IMPLEMENTED' } });
+    expect(service.count()).toBe(0);
+    const evaluation = await service.evaluate(ctx, 'unsealed-dataset', {});
+    expect(evaluation).toMatchObject({ ok: false, error: { code: 'RETRIEVAL_EVALUATION_NOT_IMPLEMENTED' } });
+  });
+
+  it('does not reindex unchanged DNA and excludes superseded version rules', async () => {
+    const service = new RetrievalService();
+    service.indexClientDna(kaaeClientDNA);
+    const firstCount = service.count();
+    service.indexClientDna(kaaeClientDNA);
+    expect(service.count()).toBe(firstCount);
+
+    const next = structuredClone(kaaeClientDNA);
+    next.version += 1;
+    next.guidelines.layoutRules.push('Use a newly approved spacious grid.');
+    service.indexClientDna(next);
+    const ownContext = { ...ctx, tenantId: next.tenantId, clientId: next.clientId };
+    const result = await service.retrieve(ownContext, [{ query: 'spacious grid', kinds: ['rule'], topK: 10 }]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.clientDnaVersion).toBe(next.version);
+    expect(result.value.evidence).toHaveLength(1);
+    expect(result.value.evidence[0].metadata.dnaVersion).toBe(next.version);
+    expect(result.value.evidence[0].metadata.dnaHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('sanitizeUntrustedUpload: strips dangerous tags, handlers, unquoted schemes, and inline style XSS', () => {

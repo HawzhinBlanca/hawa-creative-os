@@ -19,6 +19,7 @@ describe('Horizon 3: Adversarial Red-Team Penetration & Chaos Drills', () => {
       // Seed knowledge items
       retrieval.addKnowledgeItem({
         id: 'k-1',
+        tenantId: 'tenant-1',
         clientId: client1Id,
         kind: 'brand_rule',
         sourceId: 'src-1',
@@ -32,6 +33,7 @@ describe('Horizon 3: Adversarial Red-Team Penetration & Chaos Drills', () => {
 
       retrieval.addKnowledgeItem({
         id: 'k-2',
+        tenantId: 'tenant-1',
         clientId: client2Id,
         kind: 'brand_rule',
         sourceId: 'src-2',

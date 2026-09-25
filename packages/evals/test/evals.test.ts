@@ -12,11 +12,13 @@ describe('Evals: Tournament & Acceptance Benchmarks', () => {
     expect(summary.criticalViolations).toBe(0);
   });
 
-  it('evaluates retrieval benchmark dataset with 100% precision', async () => {
+  it('checks the label-derived retrieval fixture without claiming independent relevance', async () => {
     const summary = await runner.runRetrievalEvaluation();
     expect(summary.totalCases).toBe(20);
     expect(summary.passRate).toBe(100);
     expect(summary.criticalViolations).toBe(0);
+    expect(summary.admissionEligible).toBe(false);
+    expect(summary.dataset).toContain('synthetic label-derived contract');
   });
 
   it('evaluates copy guard against unauthorized price/number mutations', async () => {
@@ -48,6 +50,7 @@ describe('Evals: Tournament & Acceptance Benchmarks', () => {
     expect(full.copyGuard.passRate).toBe(100);
     expect(full.visualJudge.passRate).toBe(100);
     expect(full.adversarialSafety.passRate).toBe(100);
+    expect(full.admissionEligible).toBe(false);
   });
 
   it('executes full tournament cleanly with ResilientModelGateway with zero critical violations', async () => {

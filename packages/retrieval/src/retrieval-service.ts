@@ -10,10 +10,11 @@ import type {
   UUID,
 } from '@hawa/contracts';
 import type { ClientDNA } from '@hawa/domain';
-import { DoclingParser } from './docling-parser.js';
+import { extractSearchTokens, normalizeSearchToken } from './search-engine.js';
 
 export interface StoredKnowledgeItem {
   id: UUID;
+  tenantId: UUID;
   clientId: UUID;
   projectId?: UUID;
   kind: RetrievalIntent['kinds'][number];
@@ -27,10 +28,12 @@ export interface StoredKnowledgeItem {
 }
 
 export class RetrievalService implements RetrievalProvider {
-  private parser = new DoclingParser();
   private knowledgeStore: StoredKnowledgeItem[] = [];
 
   addKnowledgeItem(item: StoredKnowledgeItem) {
+    if (!item.tenantId || !item.clientId || !item.sourceId) {
+      throw new Error('Knowledge needs tenant, client and source identity before indexing.');
+    }
     this.knowledgeStore.push(item);
   }
 
@@ -43,13 +46,24 @@ export class RetrievalService implements RetrievalProvider {
   }
 
   /**
-   * Ingests and indexes authentic ClientDNA (CV-09, FR-007, FR-008, FR-011)
+   * Indexes a caller-supplied active DNA snapshot. This in-memory baseline does not verify a
+   * human approval signature; callers must not present it as an authorized production corpus.
    */
   indexClientDna(dna: ClientDNA) {
+    if (dna.status !== 'active') throw new Error('Only an active Client DNA snapshot can be indexed.');
+    const dnaHash = crypto.createHash('sha256').update(JSON.stringify(dna)).digest('hex');
+    if (this.knowledgeStore.some((item) => item.tenantId === dna.tenantId && item.clientId === dna.clientId &&
+        item.active && item.metadata?.dnaHash === dnaHash)) return;
+    for (const item of this.knowledgeStore) {
+      if (item.tenantId === dna.tenantId && item.clientId === dna.clientId && item.metadata?.dnaVersion) item.active = false;
+    }
+    const stableId = (sourceId: string) => crypto.createHash('sha256')
+      .update(JSON.stringify([dna.tenantId, dna.clientId, dna.version, sourceId])).digest('hex');
     // 1. Index official approved assets
     for (const asset of dna.assets) {
       this.addKnowledgeItem({
         id: asset.assetId,
+        tenantId: dna.tenantId,
         clientId: dna.clientId,
         kind: 'official_asset',
         sourceId: asset.storageKey,
@@ -60,6 +74,8 @@ export class RetrievalService implements RetrievalProvider {
         active: true,
         metadata: {
           role: asset.role,
+          dnaVersion: dna.version,
+          dnaHash,
           sha256: asset.sha256,
           storageKey: asset.storageKey,
           mimeType: asset.mimeType,
@@ -73,59 +89,67 @@ export class RetrievalService implements RetrievalProvider {
 
     // 2. Index layout rules & guidelines
     for (const [idx, rule] of dna.guidelines.layoutRules.entries()) {
+      const sourceId = `rule_${dna.code}_layout_${idx + 1}`;
       this.addKnowledgeItem({
-        id: crypto.randomUUID(),
+        id: stableId(sourceId),
+        tenantId: dna.tenantId,
         clientId: dna.clientId,
         kind: 'rule',
-        sourceId: `rule_${dna.code}_layout_${idx + 1}`,
+        sourceId,
         title: `${dna.code} Layout Rule ${idx + 1}`,
         text: rule,
         polarity: 'positive',
         approved: true,
         active: true,
-        metadata: { category: 'layout' },
+        metadata: { category: 'layout', dnaVersion: dna.version, dnaHash },
       });
     }
 
     // 3. Index required disclaimers
     for (const [idx, disclaimer] of dna.guidelines.requiredDisclaimers.entries()) {
+      const sourceId = `rule_${dna.code}_disclaimer_${idx + 1}`;
       this.addKnowledgeItem({
-        id: crypto.randomUUID(),
+        id: stableId(sourceId),
+        tenantId: dna.tenantId,
         clientId: dna.clientId,
         kind: 'rule',
-        sourceId: `rule_${dna.code}_disclaimer_${idx + 1}`,
+        sourceId,
         title: `${dna.code} Statutory Disclaimer ${idx + 1}`,
         text: disclaimer,
         polarity: 'positive',
         approved: true,
         active: true,
-        metadata: { category: 'disclaimer' },
+        metadata: { category: 'disclaimer', dnaVersion: dna.version, dnaHash },
       });
     }
 
     // 4. Index prohibited phrases as negative evidence
     for (const phrase of dna.guidelines.prohibitedPhrases) {
+      const sourceId = `rule_${dna.code}_prohibited_${phrase}`;
       this.addKnowledgeItem({
-        id: crypto.randomUUID(),
+        id: stableId(sourceId),
+        tenantId: dna.tenantId,
         clientId: dna.clientId,
         kind: 'rule',
-        sourceId: `rule_${dna.code}_prohibited_${phrase}`,
+        sourceId,
         title: `Prohibited: ${phrase}`,
         text: phrase,
         polarity: 'negative',
         approved: true,
         active: true,
-        metadata: { prohibited: true, phrase },
+        metadata: { prohibited: true, phrase, dnaVersion: dna.version, dnaHash },
       });
     }
 
     // 5. Index Canva Team & Brand Kit mapping
     if (dna.canvaMapping) {
+      const sourceId = `canva_mapping_${dna.code}`;
       this.addKnowledgeItem({
-        id: crypto.randomUUID(),
+        id: stableId(sourceId),
+        tenantId: dna.tenantId,
         clientId: dna.clientId,
         kind: 'rule',
-        sourceId: `canva_mapping_${dna.code}`,
+        sourceId,
         title: `${dna.code} Canva Team and Brand Kit Mapping`,
         text: `Canva Team ID: ${dna.canvaMapping.canvaTeamId}, Brand Kit ID: ${dna.canvaMapping.canvaBrandKitId}`,
         polarity: 'positive',
@@ -133,6 +157,8 @@ export class RetrievalService implements RetrievalProvider {
         active: true,
         metadata: {
           canvaTeamId: dna.canvaMapping.canvaTeamId,
+          dnaVersion: dna.version,
+          dnaHash,
           canvaBrandKitId: dna.canvaMapping.canvaBrandKitId,
           canvaTemplateIds: dna.canvaMapping.canvaTemplateIds,
           verifiedAt: dna.canvaMapping.verifiedAt,
@@ -145,9 +171,10 @@ export class RetrievalService implements RetrievalProvider {
     ctx: RequestContext & { clientId: UUID },
     intents: RetrievalIntent[]
   ): Promise<Result<ContextPack, AppError>> {
-    // Invariant 6: Strict client isolation before any similarity ranking
+    // Scope and lifecycle are checked before even lexical ranking. This in-memory service is a
+    // deterministic baseline; it has no embedding or reranker and must never claim their scores.
     const clientPool = this.knowledgeStore.filter(
-      (item) => item.clientId === ctx.clientId && item.active
+      (item) => item.tenantId === ctx.tenantId && item.clientId === ctx.clientId && item.active
     );
 
     const evidence: RetrievalCandidate[] = [];
@@ -162,13 +189,13 @@ export class RetrievalService implements RetrievalProvider {
 
     // Check for prohibited phrases in intent queries
     const prohibitedRules = clientPool.filter(
-      (item) => item.polarity === 'negative' || item.metadata?.prohibited === true
+      (item) => item.kind === 'rule' && item.approved && item.metadata?.prohibited === true
     );
 
     for (const intent of intents) {
-      const qLower = intent.query.toLowerCase();
+      const qLower = normalizeSearchToken(intent.query);
       for (const p of prohibitedRules) {
-        if (p.text && qLower.includes(p.text.toLowerCase())) {
+        if (p.text && qLower.includes(normalizeSearchToken(p.text))) {
           unresolvedConflicts.push({
             id: crypto.randomUUID(),
             conflictType: 'PROHIBITED_LEXICON_VIOLATION',
@@ -181,7 +208,7 @@ export class RetrievalService implements RetrievalProvider {
 
       // If intent specifically asks for official_asset, check if client has assets
       if (intent.kinds.includes('official_asset')) {
-        const availableAssets = clientPool.filter((item) => item.kind === 'official_asset');
+        const availableAssets = clientPool.filter((item) => item.kind === 'official_asset' && item.approved);
         if (availableAssets.length === 0) {
           unresolvedConflicts.push({
             id: crypto.randomUUID(),
@@ -196,19 +223,24 @@ export class RetrievalService implements RetrievalProvider {
       const matchingItems = clientPool.filter((item) => {
         if (!intent.kinds.includes(item.kind)) return false;
         if (ctx.projectId && item.projectId && item.projectId !== ctx.projectId) return false;
+        if (item.polarity !== 'negative' && !item.approved) return false;
         return true;
       });
 
-      // Simple scoring: exact word match in text
-      const queryWords = intent.query.toLowerCase().split(/\s+/).filter(Boolean);
+      const queryWords = extractSearchTokens(intent.query);
+      const ranked: Array<{ item: StoredKnowledgeItem; score: number }> = [];
       for (const item of matchingItems) {
         let score = 0;
-        const lower = item.text.toLowerCase();
+        const lower = normalizeSearchToken(`${item.title} ${item.text}`);
         for (const w of queryWords) {
-          if (lower.includes(w)) {
-            score += 1;
-          }
+          if (lower.includes(w)) score += 1;
         }
+        if (qLower && lower.includes(qLower)) score += 2;
+        if (score > 0) ranked.push({ item, score });
+      }
+      ranked.sort((a, b) => b.score - a.score || a.item.id.localeCompare(b.item.id));
+      const limit = Math.max(1, Math.min(intent.topK ?? 10, 10));
+      for (const { item, score } of ranked.slice(0, limit)) {
         const candidate: RetrievalCandidate = {
           id: item.id,
           clientId: item.clientId,
@@ -219,8 +251,6 @@ export class RetrievalService implements RetrievalProvider {
           text: item.text,
           metadata: item.metadata,
           lexicalScore: score,
-          vectorScore: score > 0 ? 0.9 : 0.4,
-          rerankScore: score > 0 ? 0.95 : 0.5,
           approved: item.approved,
           polarity: item.polarity,
           active: item.active,
@@ -237,13 +267,14 @@ export class RetrievalService implements RetrievalProvider {
     const pack: ContextPack = {
       clientId: ctx.clientId,
       projectId: ctx.projectId,
-      clientDnaVersion: 1,
+      clientDnaVersion: Math.max(0, ...clientPool.map((item) => Number(item.metadata?.dnaVersion) || 0)),
       authoritative: {
         rules: clientPool
           .filter(
             (i) =>
               i.kind === 'rule' &&
               i.approved &&
+              i.polarity !== 'negative' &&
               (!ctx.projectId || !i.projectId || i.projectId === ctx.projectId)
           )
           .map((i) => ({ id: i.id, text: i.text, title: i.title })),
@@ -251,7 +282,7 @@ export class RetrievalService implements RetrievalProvider {
           .filter(
             (i) =>
               i.kind === 'official_asset' &&
-              (i.approved ?? true) &&
+              i.approved &&
               (!ctx.projectId || !i.projectId || i.projectId === ctx.projectId)
           )
           .map((i) => ({ id: i.id, text: i.text, metadata: i.metadata })),
@@ -259,18 +290,21 @@ export class RetrievalService implements RetrievalProvider {
           .filter(
             (i) =>
               i.kind === 'template' &&
-              (i.approved ?? true) &&
+              i.approved &&
               (!ctx.projectId || !i.projectId || i.projectId === ctx.projectId)
           )
           .map((i) => ({ id: i.id, metadata: i.metadata })),
         glossary: [],
       },
-      evidence: evidence.slice(0, 10),
-      negativeEvidence: negativeEvidence.slice(0, 5),
+      evidence: [...new Map(evidence.map((item) => [item.id, item])).values()].slice(0, 10),
+      negativeEvidence: [...new Map(negativeEvidence.map((item) => [item.id, item])).values()].slice(0, 5),
       unresolvedConflicts: unresolvedConflicts as any,
       retrievalTrace: {
         poolCount: clientPool.length,
         intentsCount: intents.length,
+        retrievalMode: 'lexical_only',
+        vectorStatus: 'not_run',
+        rerankerStatus: 'not_run',
         timestamp: new Date().toISOString(),
       },
     };
@@ -290,38 +324,14 @@ export class RetrievalService implements RetrievalProvider {
       projectId?: UUID;
     }
   ): Promise<Result<{ documentId: UUID; chunks: number; changed: boolean }>> {
-    const docId = crypto.randomUUID();
-    const parsed = await this.parser.parse(
-      docId,
-      `Sample document content for ${request.sourceId}`,
-      request.mimeType,
-      request.sourceId
-    );
-
-    for (const chunk of parsed.chunks) {
-      this.addKnowledgeItem({
-        id: chunk.chunkId,
-        clientId: ctx.clientId,
-        projectId: request.projectId,
-        kind: 'document',
-        sourceId: request.sourceId,
-        title: `${request.sourceId} - Page ${chunk.pageNumber}`,
-        text: chunk.text,
-        polarity: 'positive',
-        approved: true,
-        active: true,
-        metadata: { ...chunk.metadata, storageKey: request.storageKey },
-      });
-    }
-
-    return {
-      ok: true,
-      value: {
-        documentId: docId,
-        chunks: parsed.chunks.length,
-        changed: true,
-      },
-    };
+    void ctx;
+    void request;
+    return { ok: false, error: {
+      code: 'RETRIEVAL_INGEST_NOT_IMPLEMENTED',
+      message: 'The retrieval adapter cannot read and authorize source bytes from this request contract.',
+      retryable: false,
+      safeAction: 'Use an approved source-byte ingestion path with hash, version and client authorization before indexing.',
+    } };
   }
 
   async deactivate(
@@ -330,7 +340,7 @@ export class RetrievalService implements RetrievalProvider {
     _reason: string
   ): Promise<Result<void>> {
     for (const item of this.knowledgeStore) {
-      if (item.clientId === ctx.clientId && item.sourceId === sourceId) {
+      if (item.tenantId === ctx.tenantId && item.clientId === ctx.clientId && item.sourceId === sourceId) {
         item.active = false;
       }
     }
@@ -342,9 +352,11 @@ export class RetrievalService implements RetrievalProvider {
     _datasetId: UUID,
     _candidateConfig: Record<string, unknown>
   ): Promise<Result<{ runId: UUID }>> {
-    return {
-      ok: true,
-      value: { runId: crypto.randomUUID() },
-    };
+    return { ok: false, error: {
+      code: 'RETRIEVAL_EVALUATION_NOT_IMPLEMENTED',
+      message: 'No sealed relevance dataset or measured retrieval run was executed.',
+      retryable: false,
+      safeAction: 'Run an authorized frozen retrieval dataset with relevance labels before reporting an evaluation ID.',
+    } };
   }
 }
