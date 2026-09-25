@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   ResilientModelGateway,
   CircuitBreaker,
@@ -18,14 +18,32 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
   let gateway: ResilientModelGateway;
 
   beforeEach(() => {
-    delete process.env.GEMINI_API_KEY;
-    delete process.env.GOOGLE_AI_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    delete process.env.OPENAI_API_KEY;
+    process.env.GEMINI_API_KEY = ['fixture', 'gemini', 'key'].join('-');
+    process.env.ANTHROPIC_API_KEY = ['fixture', 'anthropic', 'key'].join('-');
+    process.env.OPENAI_API_KEY = ['fixture', 'openai', 'key'].join('-');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      const value = JSON.stringify({ status: 'ok' });
+      if (url.includes('generativelanguage.googleapis.com')) return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: value }] } }],
+        usageMetadata: { promptTokenCount: 520, candidatesTokenCount: 140 },
+      }), { status: 200 });
+      if (url.includes('api.anthropic.com')) return new Response(JSON.stringify({
+        model: 'claude-sonnet-5', content: [{ type: 'text', text: value }],
+        usage: { input_tokens: 520, output_tokens: 140 },
+      }), { status: 200 });
+      if (url.includes('api.openai.com')) return new Response(JSON.stringify({
+        model: 'gpt-4o', choices: [{ message: { content: value } }],
+        usage: { prompt_tokens: 520, completion_tokens: 140 },
+      }), { status: 200 });
+      throw new Error(`Unexpected test egress: ${url}`);
+    });
     gateway = new ResilientModelGateway();
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
+    for (const key of ['GEMINI_API_KEY', 'GOOGLE_AI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']) delete process.env[key];
     Object.assign(process.env, originalEnv);
   });
 
@@ -250,22 +268,18 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
   });
 
   describe('Multimodal Embeddings & Reranking', () => {
-    it('generates deterministic embeddings with local provider', async () => {
+    it('reports an unavailable local embedding adapter instead of fixed vectors', async () => {
       const res = await gateway.embed(ctx, {
         role: 'embedding_multimodal',
         items: [{ id: 'item-1', text: 'Brand logo' }],
         dimensions: 1024,
       });
 
-      expect(res.ok).toBe(true);
-      if (res.ok) {
-        expect(res.value.dimensions).toBe(1024);
-        expect(res.value.vectors.length).toBe(1);
-        expect(res.value.vectors[0].vector.length).toBe(1024);
-      }
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.error.code).toBe('LOCAL_MODEL_UNAVAILABLE');
     });
 
-    it('ranks multimodal candidates by semantic relevance score', async () => {
+    it('reports an unavailable local reranker instead of fabricated relevance scores', async () => {
       const res = await gateway.rerank(ctx, {
         role: 'reranker_multimodal',
         query: 'Kurdish typography banner',
@@ -275,12 +289,8 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
         ],
       });
 
-      expect(res.ok).toBe(true);
-      if (res.ok) {
-        expect(res.value.ranked.length).toBe(2);
-        expect(res.value.ranked[0].id).toBe('c1');
-        expect(res.value.ranked[0].score).toBeGreaterThan(res.value.ranked[1].score);
-      }
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.error.code).toBe('LOCAL_MODEL_UNAVAILABLE');
     });
   });
 });

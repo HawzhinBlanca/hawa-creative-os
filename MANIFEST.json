@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T03:52:28Z",
+  "generatedAt": "2026-09-25T04:04:39Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 293,
+  "fileCount": 294,
   "files": [
     {
       "path": ".dockerignore",
@@ -1159,8 +1159,8 @@
     },
     {
       "path": "scripts/lint_provider_egress.ts",
-      "sha256": "d1903acbb96cee583a4a15c9de6bd0fadc1f3344d015a74590edd5031b6317b4",
-      "bytes": 2884
+      "sha256": "222246440b3980c902e97add48a17c03536b0b58eb1f10c0c025a17650caeffc",
+      "bytes": 3607
     },
     {
       "path": "scripts/measure_operations_slo.ts",
@@ -1381,6 +1381,11 @@
       "path": "scripts/suite_stability_report.mjs",
       "sha256": "1ed7c2aab13225c36645dccb6e697ca0648196c14fb432f999aa6198136111cb",
       "bytes": 6249
+    },
+    {
+      "path": "scripts/test/lint-provider-egress.test.ts",
+      "sha256": "56f1cb9f80459559e2bba7fe70c8a123076b5ebe9b5f9e24559e6a2b2ae63401",
+      "bytes": 1910
     },
     {
       "path": "scripts/test/suite-stability-report.test.ts",

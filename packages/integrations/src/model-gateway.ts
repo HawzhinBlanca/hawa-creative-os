@@ -297,6 +297,20 @@ export class ResilientModelGateway implements ModelGateway {
       'tenant.id': _ctx.tenantId,
     });
 
+    // A governed request must name the exact providers permitted by the caller's client policy.
+    // An empty list cannot mean "all providers": that silently expands a denied scope.
+    const policy = request.egressPolicy;
+    if (policy && (!Array.isArray(policy.allowedProviders) || policy.allowedProviders.length === 0 ||
+      (policy.mode === 'local_only' && !policy.allowedProviders.includes('local')))) {
+      span.end({ 'error.failed': true, 'error.message': 'No provider authorized by egress policy' });
+      return { ok: false, error: {
+        code: 'EGRESS_DISALLOWED',
+        message: 'Egress policy has no authorized provider for this request',
+        retryable: false,
+        safeAction: 'Choose an authorized local model or update the client policy',
+      } };
+    }
+
     // Visual Judge Invariant (H07): Visual judge requires readable image input bytes.
     // If there is no verified image, no route may produce a visual pass.
     if (request.role === 'visual_judge') {
@@ -399,9 +413,7 @@ export class ResilientModelGateway implements ModelGateway {
       // Check egress policy and budget constraints before attempting any external network call
       const isLocal = candidate.provider === 'local';
       const egressLocalOnly = request.egressPolicy?.mode === 'local_only';
-      const providerAllowed = isLocal || !request.egressPolicy?.allowedProviders ||
-        request.egressPolicy.allowedProviders.length === 0 ||
-        request.egressPolicy.allowedProviders.includes(candidate.provider);
+      const providerAllowed = !policy || policy.allowedProviders.includes(candidate.provider);
       const budgetZeroAttempts = request.budget?.maxAttempts === 0;
       const budgetZeroCost = request.budget?.maxCostUsd === 0;
 
@@ -434,23 +446,13 @@ export class ResilientModelGateway implements ModelGateway {
         (candidate.provider === 'anthropic' && Boolean(process.env.ANTHROPIC_API_KEY)) ||
         (candidate.provider === 'openai' && Boolean(process.env.OPENAI_API_KEY));
 
-      const anyCloudCredentialsConfigured = Boolean(
-        process.env.GEMINI_API_KEY ||
-        process.env.GOOGLE_AI_API_KEY ||
-        process.env.ANTHROPIC_API_KEY ||
-        process.env.OPENAI_API_KEY
-      );
-
       if (!isLocal && !hasCredentials) {
-        // If cloud egress is explicitly mandated without local fallback OR if other cloud providers have live credentials:
-        if ((request.egressPolicy as any)?.mode === 'cloud_allowed' || anyCloudCredentialsConfigured) {
-          span.addEvent('missing_provider_credentials', { provider: candidate.provider });
-          lastError = {
-            code: 'MISSING_PROVIDER_CREDENTIALS',
-            message: `API credentials for cloud provider '${candidate.provider}' are not configured. Cannot claim provider execution (H06).`,
-          };
-          continue;
-        }
+        span.addEvent('missing_provider_credentials', { provider: candidate.provider });
+        lastError = {
+          code: 'MISSING_PROVIDER_CREDENTIALS',
+          message: `API credentials for cloud provider '${candidate.provider}' are not configured. Cannot claim provider execution (H06).`,
+        };
+        continue;
       }
 
       attempts++;
@@ -716,8 +718,8 @@ export class ResilientModelGateway implements ModelGateway {
         }
       }
 
-      // Local / Deterministic execution when candidate is local OR simulated candidate in tests
-      if (!output && (request.egressPolicy as any)?.mode !== 'cloud_allowed') {
+      // Deterministic execution is a distinct local deployment, never a cloud result.
+      if (!output && isLocal) {
         const lowerPrompt = promptText.toLowerCase();
         if (request.role === 'intake_router') {
           const text = lowerPrompt.trim();
@@ -905,40 +907,20 @@ export class ResilientModelGateway implements ModelGateway {
   }
 
   async embed(_ctx: RequestContext, request: EmbeddingRequest): Promise<Result<EmbeddingResponse>> {
-    const dims = request.dimensions || 1024;
+    // The local multimodal model is not wired to this adapter yet. Fixed vectors would look
+    // like a successful Qwen invocation and poison retrieval and its evaluation receipts.
     return {
-      ok: true,
-      value: {
-        deployment: {
-          deploymentId: crypto.randomUUID(),
-          role: 'embedding_multimodal',
-          provider: 'local',
-          exactModelId: 'qwen3-vl-embedding-2b',
-          deploymentVersion: '2026-09-04',
-        },
-        dimensions: dims,
-        vectors: request.items.map((i) => ({ id: i.id, vector: new Array(dims).fill(0.02) })),
-        invocationId: crypto.randomUUID(),
-        latencyMs: 140,
-      },
+      ok: false,
+      error: { code: 'LOCAL_MODEL_UNAVAILABLE', message: 'Multimodal embedding provider is not configured',
+        retryable: false, safeAction: 'Configure and verify an admitted embedding adapter before using semantic retrieval' },
     };
   }
 
   async rerank(_ctx: RequestContext, request: RerankRequest): Promise<Result<RerankResponse>> {
     return {
-      ok: true,
-      value: {
-        deployment: {
-          deploymentId: crypto.randomUUID(),
-          role: 'reranker_multimodal',
-          provider: 'local',
-          exactModelId: 'qwen3-vl-reranker-2b',
-          deploymentVersion: '2026-09-04',
-        },
-        ranked: request.candidates.map((c, i) => ({ id: c.id, score: 0.95 - i * 0.05, rank: i + 1 })),
-        invocationId: crypto.randomUUID(),
-        latencyMs: 95,
-      },
+      ok: false,
+      error: { code: 'LOCAL_MODEL_UNAVAILABLE', message: 'Multimodal reranker provider is not configured',
+        retryable: false, safeAction: 'Configure and verify an admitted reranker adapter before using semantic reranking' },
     };
   }
 }
