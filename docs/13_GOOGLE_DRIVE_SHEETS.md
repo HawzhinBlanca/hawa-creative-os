@@ -65,6 +65,8 @@ sha256(task_id | design_revision | variant | artifact_kind | content_hash)
 
 The app stores Drive file IDs. On an ambiguous network result, it queries by stored ID/app property or deterministic metadata before uploading again.
 
+For a retry of the same task/artifact, the publisher reads every Drive result page and compares the stored package hash and SHA-256 before uploading. A file with missing package identity, a same-package checksum mismatch, duplicate same-package files, an incomplete search, or an unreadable result page stops publication for reconciliation. A different package hash identifies a later revision of the artifact. This lookup does not serialize simultaneous publishers on different processes or prove that a newly uploaded file is immediately visible in Drive search; those cases need an independently verified reconciliation/locking boundary before an exactly-once claim.
+
 ## 6. Sheet columns
 
 Required visible columns:

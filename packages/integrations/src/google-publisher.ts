@@ -26,6 +26,7 @@ export interface GooglePublisherConfig {
 const DRIVE_LOOKUP_TIMEOUT_MS = 10_000;
 const DRIVE_UPLOAD_TIMEOUT_MS = 120_000;
 const TOKEN_TIMEOUT_MS = 15_000;
+const DRIVE_LOOKUP_MAX_PAGES = 10;
 
 const CREDENTIALS_MISSING_MESSAGE = 'Google Workspace credentials not configured; publication is unavailable and cannot complete';
 
@@ -266,17 +267,18 @@ export class GooglePublisher implements Publisher {
     token: string,
     folderId: string,
     taskId: string,
-    file: PackageFile
+    file: PackageFile,
+    packageHash: string
   ): Promise<Result<{ id: string; name?: string; size?: string; mimeType?: string; webViewLink?: string; sha256Checksum?: string } | undefined, AppError>> {
     const lit = (v: string) => v.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const q =
       `'${lit(folderId)}' in parents and trashed = false` +
       ` and properties has { key='taskId' and value='${lit(taskId)}' }` +
       ` and properties has { key='artifactId' and value='${lit(file.artifactId)}' }`;
-    const url =
+    const baseUrl =
       `${this.driveApiBaseUrl}/drive/v3/files?q=${encodeURIComponent(q)}` +
-      `&fields=${encodeURIComponent('files(id,name,size,mimeType,webViewLink,sha256Checksum,properties,createdTime)')}` +
-      `&orderBy=createdTime&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+      `&fields=${encodeURIComponent('nextPageToken,incompleteSearch,files(id,name,size,mimeType,webViewLink,sha256Checksum,properties,createdTime)')}` +
+      `&pageSize=1000&orderBy=createdTime&supportsAllDrives=true&includeItemsFromAllDrives=true`;
     const refuse = (why: string) => ({
       ok: false as const,
       error: {
@@ -285,21 +287,50 @@ export class GooglePublisher implements Publisher {
         retryable: true,
       } as any,
     });
+    const conflict = (why: string) => ({
+      ok: false as const,
+      error: {
+        code: 'DRIVE_ARTIFACT_CONFLICT',
+        message: `Google Drive has conflicting evidence for ${file.filename} (${why}); nothing was uploaded`,
+        retryable: false,
+        safeAction: 'Inspect the existing Drive files and reconcile the publication before retrying',
+      } as AppError,
+    });
     try {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(DRIVE_LOOKUP_TIMEOUT_MS) });
-      if (!res.ok) return refuse(`HTTP ${res.status}`);
-      const data = (await res.json()) as any;
-      if (!data || !Array.isArray(data.files)) return refuse('malformed answer');
       const want = file.sha256.toLowerCase();
-      const same = data.files.find(
-        (f: any) =>
-          f?.id &&
-          f.properties?.taskId === taskId &&
-          f.properties?.artifactId === file.artifactId &&
-          typeof f.sha256Checksum === 'string' &&
-          f.sha256Checksum.toLowerCase() === want
-      );
-      return { ok: true, value: same };
+      let pageToken: string | undefined;
+      const seenTokens = new Set<string>();
+      let same: { id: string; name?: string; size?: string; mimeType?: string; webViewLink?: string; sha256Checksum?: string } | undefined;
+      for (let page = 0; page < DRIVE_LOOKUP_MAX_PAGES; page++) {
+        const url = pageToken ? `${baseUrl}&pageToken=${encodeURIComponent(pageToken)}` : baseUrl;
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(DRIVE_LOOKUP_TIMEOUT_MS) });
+        if (!res.ok) return refuse(`HTTP ${res.status}`);
+        const data = (await res.json()) as any;
+        if (!data || !Array.isArray(data.files)) return refuse('malformed answer');
+        if (data.incompleteSearch === true) return refuse('incomplete search');
+        for (const f of data.files) {
+          if (!f || typeof f.id !== 'string' || !f.id || f.properties?.taskId !== taskId || f.properties?.artifactId !== file.artifactId) {
+            return refuse('malformed or unscoped file');
+          }
+          if (typeof f.properties.packageHash !== 'string' || !f.properties.packageHash) {
+            return conflict('an existing file has no package hash');
+          }
+          // The same artifact in a different package is a legitimate new revision.
+          if (f.properties.packageHash !== packageHash) continue;
+          if (typeof f.sha256Checksum !== 'string' || f.sha256Checksum.toLowerCase() !== want) {
+            return conflict('the same package has a missing or different checksum');
+          }
+          if (same) return conflict('more than one file matches the same package and artifact');
+          same = f;
+        }
+        if (data.nextPageToken === undefined || data.nextPageToken === null) return { ok: true, value: same };
+        if (typeof data.nextPageToken !== 'string' || !data.nextPageToken || seenTokens.has(data.nextPageToken)) {
+          return refuse('invalid pagination token');
+        }
+        seenTokens.add(data.nextPageToken);
+        pageToken = data.nextPageToken;
+      }
+      return refuse(`more than ${DRIVE_LOOKUP_MAX_PAGES} result pages`);
     } catch (err: any) {
       return refuse(err?.name === 'TimeoutError' ? 'timed out' : err?.message || String(err));
     }
@@ -462,7 +493,7 @@ export class GooglePublisher implements Publisher {
       // Ask Drive before uploading, every time. An upload whose reply is lost, or a process killed
       // between the upload and the database record, leaves a file in the folder that nothing here
       // remembers; a fresh process then uploaded a second copy.
-      const lookup = await this.findUploadedArtifact(token!, driveFolderId, request.taskId, file);
+      const lookup = await this.findUploadedArtifact(token!, driveFolderId, request.taskId, file, request.packageHash);
       if (!lookup.ok) return lookup;
       if (lookup.value) {
         uploadedFileId = lookup.value.id;

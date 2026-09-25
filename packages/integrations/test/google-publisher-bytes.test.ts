@@ -123,6 +123,105 @@ describe('GooglePublisher uploads nothing it cannot verify', () => {
   });
 });
 
+describe('GooglePublisher reconciles the complete Drive lookup before uploading', () => {
+  it.each([
+    { label: 'a missing checksum', checksum: undefined },
+    { label: 'a different checksum', checksum: 'f'.repeat(64) },
+  ])('refuses $label for the same package', async ({ checksum }) => {
+    const f = file('a.png', 'aaa');
+    const fetchMock = vi.fn(async () => json({ files: [{
+      id: 'existing', name: f.filename, size: String(f.byteSize), mimeType: f.mimeType,
+      sha256Checksum: checksum,
+      properties: { taskId: 'task-bytes', artifactId: f.artifactId, packageHash: 'package-hash' },
+    }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await livePublisher().publish(ctx, request([f]));
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe('DRIVE_ARTIFACT_CONFLICT');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an older matching artifact with no package identity', async () => {
+    const f = file('a.png', 'aaa');
+    const fetchMock = vi.fn(async () => json({ files: [{
+      id: 'unscoped-existing', name: f.filename, size: String(f.byteSize), mimeType: f.mimeType,
+      sha256Checksum: f.sha256, properties: { taskId: 'task-bytes', artifactId: f.artifactId },
+    }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await livePublisher().publish(ctx, request([f]));
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe('DRIVE_ARTIFACT_CONFLICT');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { label: 'incomplete search', body: { files: [], incompleteSearch: true } },
+    { label: 'missing second page', body: { files: [], nextPageToken: 'more' } },
+  ])('refuses to upload when Drive returns $label', async ({ body, label }) => {
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls++;
+      if (label === 'missing second page' && calls === 2) {
+        return new Response('unavailable', { status: 503 });
+      }
+      return json(body);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await livePublisher().publish(ctx, request([file('a.png', 'aaa')]));
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe('DRIVE_LOOKUP_FAILED');
+    expect(fetchMock).toHaveBeenCalledTimes(label === 'incomplete search' ? 1 : 2);
+  });
+
+  it('finds a matching file on a later page and does not upload it again', async () => {
+    const f = file('a.png', 'aaa');
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith('https://drive.test/drive/v3/files?q=')) {
+        const page = new URL(url).searchParams.get('pageToken');
+        if (!page) return json({ files: [], nextPageToken: 'second-page' });
+        expect(page).toBe('second-page');
+        return json({ files: [{
+          id: 'existing', name: f.filename, size: String(f.byteSize), mimeType: f.mimeType,
+          sha256Checksum: f.sha256,
+          properties: { taskId: 'task-bytes', artifactId: f.artifactId, packageHash: 'package-hash' },
+        }] });
+      }
+      if (url.includes('/values/A:A')) return json({ values: [] });
+      if (url.includes(':append')) return json({ updates: {} });
+      throw new Error(`unexpected call ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await livePublisher().publish(ctx, request([f]));
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.value.driveFiles[0]).toMatchObject({ fileId: 'existing', verified: true });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('https://upload.test'))).toBe(false);
+  });
+
+  it('detects two matching files even when they are on separate result pages', async () => {
+    const f = file('a.png', 'aaa');
+    const listed = (id: string) => ({
+      id, name: f.filename, size: String(f.byteSize), mimeType: f.mimeType,
+      sha256Checksum: f.sha256,
+      properties: { taskId: 'task-bytes', artifactId: f.artifactId, packageHash: 'package-hash' },
+    });
+    const fetchMock = vi.fn(async (url: string) =>
+      json(new URL(url).searchParams.has('pageToken')
+        ? { files: [listed('copy-2')] }
+        : { files: [listed('copy-1')], nextPageToken: 'second-page' })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await livePublisher().publish(ctx, request([f]));
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe('DRIVE_ARTIFACT_CONFLICT');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('GooglePublisher.verify reads the publication back', () => {
   it('an emulated receipt is never reported consistent: nothing was sent to verify', async () => {
     const publisher = new GooglePublisher({ oauthToken: ['test', 'token'].join('_') });
