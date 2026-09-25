@@ -11,7 +11,8 @@
  * The answer is classified into what Restate should do:
  * - sent: `sent`;
  * - 429: `failed`, and a RetryableError asking Restate to try again after Telegram's retry_after;
- * - no connection, or a 5xx: `failed`, and an error Restate retries;
+ * - a definite pre-connection failure: `failed`, and an error Restate retries;
+ * - a 5xx: `uncertain`, since the provider may have accepted the message before failing;
  * - Telegram's answer lost or not a valid receipt: `uncertain`, not retried;
  * - any other 4xx (bot blocked, chat not found, file too large): `failed`, answered `refused`.
  *
@@ -176,7 +177,7 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
     return { outcome: 'sent', messageId: res.messageId };
   }
   const error = res.success ? 'TELEGRAM_RECEIPT_INVALID' : res.error || 'TELEGRAM_SEND_FAILED';
-  if (UNCERTAIN.test(error)) {
+  if (UNCERTAIN.test(error) || SERVER_ERROR.test(error)) {
     await record('uncertain');
     return { outcome: 'uncertain', error };
   }
@@ -185,7 +186,7 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
     const seconds = res.retryAfterSeconds ?? 5;
     throw new restate.RetryableError(`TELEGRAM_RATE_LIMITED: Telegram asked to wait ${seconds} s (${error})`, { retryAfter: Math.max(1, seconds) * 1000 });
   }
-  if (SERVER_ERROR.test(error) || /NETWORK_ERROR|NOT_CONFIGURED/.test(error)) {
+  if (/NETWORK_ERROR|NOT_CONFIGURED/.test(error)) {
     await record('failed');
     throw new Error(`${error}: Telegram did not take ${m.key}; asked again`);
   }

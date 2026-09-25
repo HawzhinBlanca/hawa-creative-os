@@ -111,10 +111,17 @@ describe('TelegramSender: one attempt, classified', () => {
     expect(await markOf(m.key)).toBe('sent');
   });
 
-  it.each([
-    ['a 5xx', 'TELEGRAM_REJECTED_502'],
-    ['no connection (before anything reached Telegram)', 'TELEGRAM_NETWORK_ERROR'],
-  ])('%s: marks it failed and throws an error Restate retries (not terminal)', async (_what, error) => {
+  it('a 5xx can follow an accepted send and must never be retried automatically', async () => {
+    const { bridge, calls } = scriptedBridge([{ success: false, error: 'TELEGRAM_REJECTED_502' }]);
+    const m = text();
+    expect(await sendAttempt(depsWith(bridge), m)).toMatchObject({ outcome: 'uncertain' });
+    expect(await markOf(m.key)).toBe('uncertain');
+    expect((await sendAttempt(depsWith(bridge), m)).outcome).toBe('uncertain');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('a pre-connection failure marks failed and asks Restate to retry', async () => {
+    const error = 'TELEGRAM_NETWORK_ERROR';
     const { bridge } = scriptedBridge([{ success: false, error }]);
     const m = text();
     const err = await sendAttempt(depsWith(bridge), m).catch((e) => e);

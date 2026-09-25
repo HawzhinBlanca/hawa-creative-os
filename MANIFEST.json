@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T16:39:40Z",
+  "generatedAt": "2026-09-25T16:47:04Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -294,8 +294,8 @@
     },
     {
       "path": "adrs/045_requester_send_reconciliation_status.md",
-      "sha256": "eb30cf2113460317e5b602a737a47cdebc63051796a29559b9bf94a1708680bb",
-      "bytes": 3503
+      "sha256": "1dd3742a91eb5c01ccc3c09258548a0563e7801197eb1a58f7641482d5534955",
+      "bytes": 3984
     },
     {
       "path": "adrs/046_staff_requester_send_resolution.md",
@@ -559,8 +559,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "6edab74807b642798b00744537a501ef9f1ae1b7edaa0a35a48fb958527339ca",
-      "bytes": 7788
+      "sha256": "798cc2fb84c9e5eb1276a316f58f249ddb59b8e5d80bbdbd585d512e887d3f02",
+      "bytes": 8144
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -574,8 +574,8 @@
     },
     {
       "path": "docs/13_GOOGLE_DRIVE_SHEETS.md",
-      "sha256": "0a9b743bc85e9bf9da1ca3e4169d29dab0292707e9d78fdf5fff9cd278e5b78a",
-      "bytes": 13242
+      "sha256": "f05e2574052ccd82e065b5b8a4c3ad1c18c67bf5e440332461c678539e95902b",
+      "bytes": 13717
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
@@ -799,8 +799,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_EVIDENCE.md",
-      "sha256": "3a4bd37ef2da49baf3e4ff3b0701039cae8c8df87b64488f84b4793122b8ecd6",
-      "bytes": 38036
+      "sha256": "74b4a2b289221b6ea90fe03090fd439d2a594b7113fadca4f283a25c93ea014c",
+      "bytes": 40104
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_RESTATE_DELIVERY_KILL_DRILL.md",
@@ -864,8 +864,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "afa9c8f7ee61ace2ef4356743f59d6f97f3f00e1092e0ee4104db1f5680480a8",
-      "bytes": 136134
+      "sha256": "17fe8d1a9adf0b749bdc9097569d8385121d1ff127a40682d64134faa463ac76",
+      "bytes": 137226
     },
     {
       "path": "plans/user-stories.csv",

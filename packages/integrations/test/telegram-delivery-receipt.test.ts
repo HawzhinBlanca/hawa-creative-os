@@ -26,6 +26,30 @@ describe('Telegram outbound receipts',()=>{
     expect(await bridge.dispatchOutboundMessage(123,{text:'Status'})).toEqual({success:false,error:'TELEGRAM_DELIVERY_UNCERTAIN'});
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it('holds a 5xx and an unreadable successful HTTP response as uncertain', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ ok: false, error_code: 502 }, { status: 502 }))
+      .mockResolvedValueOnce(new Response('not json', { status: 200 }))
+      .mockResolvedValueOnce(Response.json({ ok: false }, { status: 200 }));
+    const bridge = new TelegramBridgeDaemon({ botToken: 'test' });
+    expect(await bridge.dispatchOutboundMessage(123, { text: 'Status' }))
+      .toEqual({ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' });
+    expect(await bridge.dispatchOutboundMessage(123, { text: 'Status' }))
+      .toEqual({ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' });
+    expect(await bridge.dispatchOutboundMessage(123, { text: 'Status' }))
+      .toEqual({ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+  it('holds a 5xx during the plain-text fallback as uncertain', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ ok: false, error_code: 400,
+        description: "Bad Request: can't parse entities" }, { status: 400 }))
+      .mockResolvedValueOnce(Response.json({ ok: false, error_code: 502 }, { status: 502 }));
+    const bridge = new TelegramBridgeDaemon({ botToken: 'test' });
+    expect(await bridge.dispatchOutboundMessage(123, { text: '<b>Status</b>', parse_mode: 'HTML' }))
+      .toEqual({ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
   it.each([
     { message_id: 42, chat: { id: 999 } },
     { message_id: 0, chat: { id: 123 } },
@@ -60,6 +84,21 @@ describe('Telegram outbound receipts',()=>{
     const fetch=vi.spyOn(globalThis,'fetch');
     expect(await new TelegramBridgeDaemon().dispatchOutboundMessage(123,{text:'Status'})).toEqual({success:false,error:'TELEGRAM_NOT_CONFIGURED'});
     expect(fetch).not.toHaveBeenCalled();
+  });
+  it('never retries a captioned photo after a 5xx and rejects a wrong-chat photo receipt', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ ok: false, error_code: 502 }, { status: 502 }))
+      .mockResolvedValueOnce(Response.json({ ok: true, result: { message_id: 21, chat: { id: 999 } } }))
+      .mockResolvedValueOnce(Response.json({ ok: false }, { status: 200 }));
+    const bridge = new TelegramBridgeDaemon({ botToken: 'test' });
+    expect(await bridge.dispatchOutboundPhoto(123, Buffer.from('png'), 'caption'))
+      .toEqual({ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(await bridge.dispatchOutboundPhoto(123, Buffer.from('png')))
+      .toEqual({ success: false, error: 'TELEGRAM_RECEIPT_INVALID' });
+    expect(await bridge.dispatchOutboundPhoto(123, Buffer.from('png')))
+      .toEqual({ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' });
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
   it('caps in-memory sentMessages history to 500 entries to prevent memory leaks', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ ok: true, result: { message_id: 1, chat: { id: 123 } } })));

@@ -19,6 +19,8 @@ The operator read is scoped to the current tenant, request, task and approval. I
 
 A later sender hardening pass stores a positive Bot API `message_id` in a successful critical send mark and returns it on deduplicated reads. The evidence view shows that local provider acknowledgement when present, while leaving requester receipt unavailable. A success answer without a valid message ID is uncertain. A send whose final `sent` mark cannot be written after bounded retries is also uncertain, so the request cannot complete on an unrecorded provider answer. The plain-text fallback checks the same message ID and target chat as the primary path. Old `sent` marks without IDs remain readable as historical records; no ID is invented.
 
+A later ambiguity audit also treats Telegram 5xx responses and HTTP success without a definite Bot API result as uncertain for text, document and photo sends. Only a definite parse-entity rejection permits a plain-text or plain-caption fallback. An ambiguous fallback response remains uncertain. This enforces the original no-blind-replay decision across all outbound formats; staff must reconcile instead of relying on a transport retry that could duplicate an accepted message.
+
 ## Why
 
 An uncertain external effect requires a different human decision from a missing Sheet row. Distinct status and disabled retry prevent the UI from inviting an action that the lifecycle owner correctly refuses, while preserving existing fail-closed sender behavior.

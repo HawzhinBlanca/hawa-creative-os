@@ -73,6 +73,21 @@ describe('Telegram sendDocument', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('holds a document upload after a 5xx or unreadable success response', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ ok: false, error_code: 503 }, { status: 503 }))
+      .mockResolvedValueOnce(new Response('not json', { status: 200 }))
+      .mockResolvedValueOnce(Response.json({ ok: false }, { status: 200 }));
+    const bridge = new TelegramBridgeDaemon({ botToken });
+    expect(await bridge.dispatchOutboundDocument(123, new Uint8Array([1]), 'a.pdf'))
+      .toEqual({ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' });
+    expect(await bridge.dispatchOutboundDocument(123, new Uint8Array([1]), 'a.pdf'))
+      .toEqual({ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' });
+    expect(await bridge.dispatchOutboundDocument(123, new Uint8Array([1]), 'a.pdf'))
+      .toEqual({ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
   it('refuses to send without a bot token or without bytes', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch');
     expect(await new TelegramBridgeDaemon({}).dispatchOutboundDocument(1, new Uint8Array([1]), 'a.png')).toEqual({

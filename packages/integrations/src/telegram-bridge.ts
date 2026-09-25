@@ -197,6 +197,12 @@ function retryAfterOf(res: Response, body: { error_code?: number; parameters?: {
   return Number.isFinite(seconds) && seconds >= 0 ? { retryAfterSeconds: seconds } : {};
 }
 
+/** A send may have committed when HTTP succeeds without a definite API result, or a server fails. */
+function ambiguousOutboundResponse(res: Response, body: { ok?: boolean; error_code?: number } | null): boolean {
+  return res.status >= 500 || Number(body?.error_code) >= 500 ||
+    (res.ok && body?.ok !== true && !Number.isInteger(body?.error_code));
+}
+
 export class TelegramBridgeDaemon {
   private active = false;
   private lastUpdateId = 0;
@@ -751,8 +757,11 @@ export class TelegramBridgeDaemon {
       });
       const body = await res.json().catch(() => null) as any;
       if (!res.ok || body?.ok !== true) {
+        if (ambiguousOutboundResponse(res, body)) {
+          return { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' };
+        }
         // If entity parsing failed in Markdown mode, retry once as plain text
-        if (message.parse_mode && (body?.description?.includes('can\'t parse entities') || body?.error_code === 400)) {
+        if (message.parse_mode && body?.description?.includes('can\'t parse entities')) {
           const retryRes = await fetch(`https://api.telegram.org/bot${this.config.botToken}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -772,6 +781,11 @@ export class TelegramBridgeDaemon {
             this.recordSentMessage({chatId, text, replyMarkup: message.reply_markup, sentAt: new Date().toISOString()});
             return { success: true, messageId: String(retryBody.result.message_id) };
           }
+          if (ambiguousOutboundResponse(retryRes, retryBody)) {
+            return { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' };
+          }
+          return { success: false, error: `TELEGRAM_REJECTED_${retryBody?.error_code || retryRes.status}`,
+            ...retryAfterOf(retryRes, retryBody) };
         }
         return { success: false, error: `TELEGRAM_REJECTED_${body?.error_code || res.status}`, ...retryAfterOf(res, body) };
       }
@@ -825,11 +839,18 @@ export class TelegramBridgeDaemon {
         signal: AbortSignal.timeout(20000),
       });
       const body = await res.json().catch(() => null) as any;
-      if (res.ok && body?.ok === true && Number.isSafeInteger(body.result?.message_id)) {
+      if (res.ok && body?.ok === true) {
+        if (!Number.isSafeInteger(body.result?.message_id) || body.result.message_id <= 0 ||
+            String(body.result?.chat?.id) !== String(chatId)) {
+          return { success: false, error: 'TELEGRAM_RECEIPT_INVALID' };
+        }
         return { success: true, messageId: String(body.result.message_id) };
       }
-      // If failed and caption was present, retry with plain unformatted caption
-      if (caption) {
+      if (ambiguousOutboundResponse(res, body)) {
+        return { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' };
+      }
+      // Only a definite parse rejection makes a second send safe.
+      if (caption && body?.description?.includes('can\'t parse entities')) {
         const fallbackForm = new FormData();
         fallbackForm.append('chat_id', String(chatId));
         fallbackForm.append('photo', blob, 'design.png');
@@ -838,9 +859,17 @@ export class TelegramBridgeDaemon {
         if (replyMarkup) fallbackForm.append('reply_markup', typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup));
         const fbRes = await fetch(url, { method: 'POST', body: fallbackForm, signal: AbortSignal.timeout(20000) });
         const fbBody = await fbRes.json().catch(() => null) as any;
-        if (fbRes.ok && fbBody?.ok === true && Number.isSafeInteger(fbBody.result?.message_id)) {
+        if (fbRes.ok && fbBody?.ok === true) {
+          if (!Number.isSafeInteger(fbBody.result?.message_id) || fbBody.result.message_id <= 0 ||
+              String(fbBody.result?.chat?.id) !== String(chatId)) {
+            return { success: false, error: 'TELEGRAM_RECEIPT_INVALID' };
+          }
           return { success: true, messageId: String(fbBody.result.message_id) };
         }
+        if (ambiguousOutboundResponse(fbRes, fbBody)) {
+          return { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' };
+        }
+        return { success: false, error: `TELEGRAM_PHOTO_FAILED_${fbBody?.error_code || fbRes.status}` };
       }
       return { success: false, error: `TELEGRAM_PHOTO_FAILED_${body?.error_code || res.status}` };
     } catch (err: unknown) {
@@ -880,6 +909,9 @@ export class TelegramBridgeDaemon {
         signal: AbortSignal.timeout(options.timeoutMs ?? this.config.fileUploadTimeoutMs ?? TELEGRAM_FILE_TRANSFER_TIMEOUT_MS),
       });
       const body = await res.json().catch(() => null) as { ok?: boolean; error_code?: number; parameters?: { retry_after?: unknown }; result?: { message_id?: number; chat?: { id?: number | string } } } | null;
+      if (ambiguousOutboundResponse(res, body)) {
+        return { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' };
+      }
       if (!res.ok || body?.ok !== true || !body.result) {
         return { success: false, error: `TELEGRAM_DOCUMENT_REJECTED_${body?.error_code || res.status}`, ...retryAfterOf(res, body) };
       }
