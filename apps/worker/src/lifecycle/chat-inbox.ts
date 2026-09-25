@@ -35,7 +35,7 @@ export interface HandleUpdateInput {
   polledAt?: number;
 }
 
-export type IntakeMode = 'legacy';
+export type IntakeMode = 'legacy' | 'lifecycle';
 
 /** What Core's intake answered, as journaled. */
 export type IntakeAnswer =
@@ -48,8 +48,15 @@ export interface ChatInboxCore {
   park(update: TelegramUpdateLike, reason: string): Promise<void>;
 }
 
+/** Context the setMode handler uses; tests pass a minimal stub. */
+export interface SetModeContext {
+  get<T>(name: string): Promise<T | null>;
+  set(name: string, value: unknown): void;
+}
+
 /** The parts of Restate's ObjectContext the handler uses; tests pass a small journal. */
 export interface InboxContext {
+  get<T>(name: string): Promise<T | null>;
   run<T>(name: string, action: () => Promise<T>): Promise<T>;
   sleep(ms: number): Promise<void>;
   set(name: string, value: unknown): void;
@@ -62,6 +69,8 @@ export interface ChatInboxView {
   lastOutcome: 'handled' | 'parked';
   lastIntakeStatus?: number;
   at: number;
+  /** Set once when the first RequestLifecycle-owned request opens for this chat. Never reverts. */
+  mode?: IntakeMode;
 }
 
 export interface HandleUpdateResult {
@@ -76,9 +85,13 @@ const retryDelayMs = (k: number) => 2000 * 2 ** k;
 
 export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, core: ChatInboxCore): Promise<HandleUpdateResult> {
   const update = input.update;
-  // The one read of the mode, journaled so that a replay on the other colour agrees with it. In 2.1
-  // every chat is legacy; 2.3 reads the per-chat flag here.
-  const mode = await ctx.run<IntakeMode>('mode', async () => 'legacy');
+  // Read the per-chat mode from Restate state, journaled so a replay on the other colour agrees.
+  // In 2.1 the stored mode is always undefined (legacy); RequestLifecycle.open sets it to
+  // 'lifecycle' via the setMode handler before the first lifecycle update arrives.
+  const mode = await ctx.run<IntakeMode>('mode', async () => {
+    const view = await ctx.get<ChatInboxView>('inbox');
+    return (view?.mode === 'lifecycle') ? 'lifecycle' : 'legacy';
+  });
 
   const reasons: string[] = [];
   let done: Extract<IntakeAnswer, { kind: 'done' }> | null = null;
@@ -120,6 +133,7 @@ const WAIT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetr
 
 function inboxContext(ctx: restate.ObjectContext): InboxContext {
   return {
+    get: (name) => ctx.get(name),
     run: (name, action) => ctx.run(name, action, WAIT_RETRY),
     sleep: (ms) => ctx.sleep(ms),
     set: (name, value) => ctx.set(name, value),
@@ -131,6 +145,34 @@ function inboxContext(ctx: restate.ObjectContext): InboxContext {
 let coreClient: ChatInboxCore | null = null;
 export function useChatInboxCore(core: ChatInboxCore): void {
   coreClient = core;
+}
+
+/**
+ * Mark a chat as lifecycle-mode: future updates from this chat are routed through RequestLifecycle
+ * instead of legacy intake. Idempotent — once set, the mode cannot revert.
+ *
+ * Called by RequestLifecycle.open (via objectSendClient) when it claims a chat's first request.
+ * The handler is exclusive so it serializes with handleUpdate in Restate's queue.
+ */
+export async function setMode(
+  ctx: SetModeContext,
+  requestId: string,
+): Promise<{ mode: IntakeMode; requestId: string }> {
+  const prior = await ctx.get<ChatInboxView>('inbox');
+  if (prior?.mode === 'lifecycle') {
+    return { mode: 'lifecycle', requestId };
+  }
+  // Preserve all existing fields, add or upgrade the mode.
+  const next: ChatInboxView = {
+    v: 1,
+    lastUpdateId: prior?.lastUpdateId ?? 0,
+    lastOutcome: prior?.lastOutcome ?? 'handled',
+    ...(prior?.lastIntakeStatus !== undefined ? { lastIntakeStatus: prior.lastIntakeStatus } : {}),
+    at: prior?.at ?? Date.now(),
+    mode: 'lifecycle',
+  };
+  ctx.set('inbox', next);
+  return { mode: 'lifecycle', requestId };
 }
 
 export const chatInbox = restate.object({
@@ -145,6 +187,18 @@ export const chatInbox = restate.object({
           return handleUpdate(inboxContext(ctx), input, coreClient);
         })
     ),
+    /**
+     * RequestLifecycle.open calls this (exclusive, so it serializes with handleUpdate) to upgrade
+     * a chat from legacy to lifecycle mode. Idempotent: calling it twice on the same chat is safe.
+     */
+    setMode: restate.handlers.object.exclusive(
+      { idempotencyRetention: { days: 7 } },
+      async (ctx: restate.ObjectContext, requestId: string): Promise<{ mode: IntakeMode; requestId: string }> =>
+        setMode(
+          { get: (name) => ctx.get(name), set: (name, value) => ctx.set(name, value) },
+          typeof requestId === 'string' ? requestId : '',
+        )
+    ),
     get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ChatInboxView | null> =>
       (await ctx.get<ChatInboxView>('inbox')) ?? null
     ),
@@ -157,3 +211,4 @@ export const chatInbox = restate.object({
     retryPolicy: { initialInterval: 2000, exponentiationFactor: 2, maxInterval: 30_000, maxAttempts: 500, onMaxAttempts: 'pause' },
   },
 });
+

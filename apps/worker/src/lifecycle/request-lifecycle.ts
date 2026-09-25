@@ -12,6 +12,7 @@ import { withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, DeliveryApi, type CoreInternal } from './delivery.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { DesignRunApi, type DesignRunInput } from './design-run.js';
+import { chatInbox } from './chat-inbox.js';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -67,18 +68,24 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
   stage: 'designing' | 'in_review' | 'manual' | 'approved' | 'delivering' | 'delivered';
   rev: number;
   runId: string;
+  /** Current design round (0 = original, 1+ = revision rounds). */
+  round?: number;
   designInput: DesignRunInput;
   outcome?: { eventId: string; sha256: string; status: string; revisionId?: string;
     message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string } };
   officeRevision?: { eventId: string; sha256: string; actionId: string; revisionId: string; approvalId: string;
     kind?: 'revise' | 'approve' };
+  /** Filled when the requester submits a revision directive after the office marks "revise". */
+  revisionRound?: { eventId: string; sha256: string; round: number; newTaskId: string; runId: string };
   delivery?: { startEventId: string; startSha256: string; actionId: string; input: DeliveryInput;
     finishEventId?: string; finishSha256?: string; finishResult?: DeliveryFinishedReply };
 }
 
 export interface OfficeRevisionEvent {
   v: 1; eventId: string; requestId: string; taskId: string; revisionId: string;
-  actionId: string; expectedRev: 2; kind: 'revise' | 'approve';
+  actionId: string;
+  /** expectedRev ≥ 2: first decision is at 2; subsequent revision rounds use 2+2k. */
+  expectedRev: number; kind: 'revise' | 'approve';
   actor: { userId: string; role: string }; reason: string;
   /** Optional only for signed decisions already in flight before the structured-feedback rollout. */
   revisionRequest?: StructuredRevisionRequest;
@@ -88,7 +95,7 @@ export interface OfficeRevisionEvent {
 
 export type OfficeRevisionReply =
   | { accepted: true; requestId: string; taskId: string; revisionId: string; actionId: string;
-      approvalId: string; stage: 'manual' | 'approved'; rev: 3 }
+      approvalId: string; stage: 'manual' | 'approved'; rev: number }
   | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
 
 export interface OfficeDeliveryStartEvent {
@@ -101,6 +108,25 @@ export type OfficeDeliveryStartReply =
   | { accepted: true; requestId: string; taskId: string; approvalId: string; actionId: string;
       deliveryId: string; stage: 'delivering' | 'delivered' | 'approved'; rev: number }
   | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
+
+/** The requester submits their revision directive after the office marks the draft "revise". */
+export interface RequesterDecisionEvent {
+  v: 1;
+  /** Unique event ID stable across retries. */
+  eventId: string;
+  requestId: string;
+  /** Revision round ≥ 1 (incremented by the worker each time the office marks "revise"). */
+  round: number;
+  directive: string;
+  /** The prior task id that is in revision_requested state. */
+  priorTaskId: string;
+  /** Formatted Telegram chat message text (the requester’s raw reply to the office note). */
+  rawText?: string;
+}
+
+export type RequesterDecisionReply =
+  | { accepted: true; requestId: string; newTaskId: string; runId: string; round: number; rev: number; stage: 'designing' }
+  | { accepted: false; code: 'WRONG_STAGE' };
 
 export interface DeliveryFinishedEvent {
   v: 1; eventId: string; requestId: string; taskId: string; approvalId: string;
@@ -120,10 +146,14 @@ export interface AutomaticOpenContext {
   send(message: OutboundMessage): void;
   startDesign(input: DesignRunInput): void;
   startDelivery?(input: DeliveryInput): void;
+  /** Fire-and-forget: upgrade a Telegram chat to lifecycle mode (exclusive, idempotent). */
+  setChatMode?(chatId: string, requestId: string): void;
 }
 
 export interface DesignFinishedEvent {
-  v: 1; eventId: string; requestId: string; runId: string; round: 0; taskId: string;
+  v: 1; eventId: string; requestId: string; runId: string;
+  /** 0 for the initial design; ≥ 1 for revision rounds. */
+  round: number; taskId: string;
   report: { status: string; designId?: string; code?: string; runId?: string;
     parity?: string; parityError?: string; detail?: string; notifyRequester?: boolean };
 }
@@ -134,6 +164,8 @@ export interface OpenContext {
   run<T>(name: string, action: () => Promise<T>): Promise<T>;
   set(name: string, value: ManualLifecycleState): void;
   send(message: OutboundMessage): void;
+  /** Fire-and-forget: upgrade a Telegram chat to lifecycle mode (exclusive, idempotent). */
+  setChatMode?(chatId: string, requestId: string): void;
 }
 
 function canonical(value: unknown): string {
@@ -184,6 +216,7 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
     openEventId: event.eventId, openSha256: fingerprint,
   };
   ctx.set('lc', state);
+  ctx.setChatMode?.(event.chatId, event.requestId);
   sendAcknowledgement(ctx, state);
   return { accepted: true, taskId: state.taskId, stage: 'manual', rev: 1 };
 }
@@ -235,6 +268,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
       openEventId: event.eventId, openSha256: fingerprint,
     };
     ctx.set('lc', manual);
+    ctx.setChatMode?.(event.chatId, event.requestId);
     sendAcknowledgement(ctx, manual);
     return { accepted: true as const, taskId: manual.taskId, stage: 'manual' as const, rev: 1 as const };
   }
@@ -258,6 +292,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
     openEventId: event.eventId, openSha256: fingerprint, runId, designInput,
   };
   ctx.set('lc', state);
+  ctx.setChatMode?.(event.chatId, event.requestId);
   sendAutomaticAcknowledgement(ctx, state);
   ctx.startDesign(designInput);
   return { accepted: true as const, taskId: state.taskId, stage: state.stage, rev: state.rev };
@@ -266,34 +301,40 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
 export async function recordDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal, event: DesignFinishedEvent) {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
       !UUID.test(event.taskId) || event.runId !== `dr-${event.taskId}` ||
-      event.eventId !== `dr-finished:${event.runId}` || event.round !== 0 ||
+      event.eventId !== `dr-finished:${event.runId}` ||
+      typeof event.round !== 'number' || !Number.isInteger(event.round) || event.round < 0 ||
       !event.report || typeof event.report.status !== 'string') throw invalid('invalid design finish identity');
   const prior = await ctx.get('lc');
   if (!prior || !('runId' in prior) || prior.requestId !== event.requestId ||
       prior.taskId !== event.taskId || prior.runId !== event.runId) return { ignored: true as const };
   const fingerprint = hashOf(event);
-  if (prior.rev >= 2) {
-    if (prior.outcome?.eventId !== event.eventId || prior.outcome.sha256 !== fingerprint) {
+  const nextRev = prior.rev + 1;
+  // Replay detection: if the outcome for this event was already stored (crash after set, before send),
+  // replay the fenced messages rather than projecting again. Works across all revision rounds.
+  if (prior.outcome?.eventId === event.eventId) {
+    if (prior.outcome.sha256 !== fingerprint) {
       throw invalid('the design outcome was already recorded with different content');
     }
     sendDesignOutcome(ctx, prior);
     return { ignored: false as const, stage: prior.stage, rev: prior.rev };
   }
+
   if (prior.stage !== 'designing') throw invalid('request is not designing');
-  const projected = await ctx.run('project:2', () => core.post<{
-    v: 1; requestId: string; taskId: string; rev: 2; stage: 'in_review' | 'manual';
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+    v: 1; requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual';
     status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
     officeAlert?: { chatId: string; text: string };
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/design-outcome`, {
-    v: 1, expectedRev: 1, rev: 2, key: `${event.requestId}:2:designFinished:${event.runId}`,
+    v: 1, expectedRev: prior.rev, rev: nextRev,
+    key: `${event.requestId}:${nextRev}:designFinished:${event.runId}`,
     ops: [{ kind: 'recordOutcome', taskId: event.taskId, runId: event.runId, report: event.report }],
   }));
   if (projected?.v !== 1 || projected.requestId !== event.requestId ||
-      projected.taskId !== event.taskId || projected.rev !== 2 ||
+      projected.taskId !== event.taskId || projected.rev !== nextRev ||
       !['in_review', 'manual'].includes(projected.stage)) {
     throw new Error('Core did not return a valid design outcome projection');
   }
-  const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: 2,
+  const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: nextRev,
     outcome: { eventId: event.eventId, sha256: fingerprint, status: projected.status,
       ...(projected.revisionId ? { revisionId: projected.revisionId } : {}),
       ...(projected.message ? { message: projected.message } : {}),
@@ -308,12 +349,13 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
 const OFFICE_ROLES = new Set(['art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
 const APPROVAL_ROLES = new Set(['art_director', 'creative_director', 'office_admin', 'administrator']);
 
-/** The first request-owned office action: revision request or proof-bound approval. */
+/** A request-owned office action (revision-request or proof-bound approval) at any revision round. */
 export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: CoreInternal, event: OfficeRevisionEvent): Promise<OfficeRevisionReply> {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
       !UUID.test(event.taskId) || !UUID.test(event.revisionId) || !UUID.test(event.actionId) ||
       event.eventId !== `desk:${event.actionId}` || !['revise', 'approve'].includes(event.kind) ||
-      event.expectedRev !== 2 || !event.actor || !UUID.test(event.actor.userId) ||
+      !Number.isInteger(event.expectedRev) || event.expectedRev < 2 ||
+      !event.actor || !UUID.test(event.actor.userId) ||
       !(event.kind === 'approve' ? APPROVAL_ROLES : OFFICE_ROLES).has(event.actor.role) || typeof event.reason !== 'string' ||
       !event.reason.trim() || event.reason.length > 2000 ||
       (event.revisionRequest !== undefined &&
@@ -327,24 +369,26 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
   const fingerprint = hashOf(event);
   const prior = await ctx.get('lc');
   if (!prior || !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
-  if (prior.rev === 3) {
+  const expectedRev = event.expectedRev;
+  const nextRev = expectedRev + 1;
+  if (prior.rev === nextRev) {
     if (prior.officeRevision?.eventId !== event.eventId || prior.officeRevision.sha256 !== fingerprint) {
       throw invalid('this office decision was already recorded with different content');
     }
     return { accepted: true, requestId: prior.requestId, taskId: prior.taskId,
       revisionId: prior.officeRevision.revisionId, actionId: prior.officeRevision.actionId,
-      approvalId: prior.officeRevision.approvalId, stage: prior.stage as 'manual' | 'approved', rev: 3 };
+      approvalId: prior.officeRevision.approvalId, stage: prior.stage as 'manual' | 'approved', rev: nextRev };
   }
-  if (prior.rev !== 2 || prior.stage !== 'in_review') return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.rev !== expectedRev || prior.stage !== 'in_review') return { accepted: false, code: 'WRONG_STAGE' };
   if (prior.taskId !== event.taskId || prior.outcome?.revisionId !== event.revisionId) {
     return { accepted: false, code: 'NOT_CURRENT_DRAFT' };
   }
-  const projected = await ctx.run('project:3', () => core.post<{
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
     v: 1; requestId: string; taskId: string; revisionId: string; actionId: string;
-    approvalId: string; taskState: string; rev: 3; stage: 'manual' | 'approved';
+    approvalId: string; taskState: string; rev: number; stage: 'manual' | 'approved';
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/office-decision`, {
-    v: 1, expectedRev: 2, rev: 3,
-    key: `${event.requestId}:3:officeDecision:${event.eventId}`,
+    v: 1, expectedRev, rev: nextRev,
+    key: `${event.requestId}:${nextRev}:officeDecision:${event.eventId}`,
     ops: [{ kind: event.kind === 'approve' ? 'recordOfficeApproval' : 'recordOfficeRevision', taskId: event.taskId, revisionId: event.revisionId,
       actionId: event.actionId, actor: event.actor, reason: event.reason.trim(),
       ...(event.revisionRequest ? { revisionRequest: parseCompleteRevisionRequest(event.revisionRequest) } : {}),
@@ -356,15 +400,15 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
   if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
       projected.revisionId !== event.revisionId || projected.actionId !== event.actionId ||
       !UUID.test(projected.approvalId) || projected.taskState !== expectedTaskState ||
-      projected.rev !== 3 || projected.stage !== expectedStage) {
+      projected.rev !== nextRev || projected.stage !== expectedStage) {
     throw new Error('Core did not return a valid office revision projection');
   }
-  const next: AutomaticLifecycleState = { ...prior, stage: expectedStage, rev: 3,
+  const next: AutomaticLifecycleState = { ...prior, stage: expectedStage, rev: nextRev,
     officeRevision: { eventId: event.eventId, sha256: fingerprint,
       actionId: event.actionId, revisionId: event.revisionId, approvalId: projected.approvalId, kind: event.kind } };
   ctx.set('lc', next);
   return { accepted: true, requestId: event.requestId, taskId: event.taskId, revisionId: event.revisionId,
-    actionId: event.actionId, approvalId: projected.approvalId, stage: expectedStage, rev: 3 };
+    actionId: event.actionId, approvalId: projected.approvalId, stage: expectedStage, rev: nextRev };
 }
 
 /** A signed office action claims a publication in Core before the workflow can prepare any effect. */
@@ -479,12 +523,93 @@ export async function recordDeliveryFinished(ctx: AutomaticOpenContext, core: Co
 
 function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
   const message = state.outcome?.message;
-  if (message) ctx.send({ v: 1, key: `${state.requestId}:2:design-outcome`, chatId: state.chatId,
+  // Key is scoped to rev so a retried send after a revision round uses the correct idempotency key.
+  if (message) ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:design-outcome`, chatId: state.chatId,
     kind: 'text', text: message.text, parseMode: message.parseMode, class: 'critical',
     tenantId: state.tenantId, taskId: state.taskId });
   const alert = state.outcome?.officeAlert;
-  if (alert) ctx.send({ v: 1, key: `${state.requestId}:2:office-alert`, chatId: alert.chatId,
+  if (alert) ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:office-alert`, chatId: alert.chatId,
     kind: 'text', text: alert.text, class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+}
+
+/**
+ * Records the requester's revision directive and starts the next design round.
+ * The worker must have already intake-persisted the new task via Core with source event
+ * `lc-<requestId>-r<round>` and lifecycleOwner 'restate', then pass its id here.
+ * Rev path: manual (rev N) → designing (rev N+1) with the new task.
+ */
+export async function recordRequesterDecision(
+  ctx: AutomaticOpenContext,
+  core: CoreInternal,
+  event: RequesterDecisionEvent,
+): Promise<RequesterDecisionReply> {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      !Number.isInteger(event.round) || event.round < 1 ||
+      !UUID.test(event.priorTaskId) ||
+      typeof event.directive !== 'string' || !event.directive.trim() || event.directive.length > 5000 ||
+      typeof event.eventId !== 'string' || !event.eventId) {
+    throw invalid('invalid requester decision event');
+  }
+  const fingerprint = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (!prior || !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  // Idempotent replay: already in designing for this round.
+  if (prior.revisionRound?.eventId === event.eventId) {
+    if (prior.revisionRound.sha256 !== fingerprint) throw invalid('requester decision replayed with different content');
+    if (prior.stage === 'designing') ctx.startDesign({
+      ...prior.designInput,
+      lifecycle: { requestId: prior.requestId, round: prior.revisionRound.round, runId: prior.revisionRound.runId },
+      taskId: prior.revisionRound.newTaskId,
+    });
+    return { accepted: true, requestId: prior.requestId, newTaskId: prior.revisionRound.newTaskId,
+      runId: prior.revisionRound.runId, round: prior.revisionRound.round, rev: prior.rev, stage: 'designing' };
+  }
+  if (prior.stage !== 'manual') return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.taskId !== event.priorTaskId) return { accepted: false, code: 'WRONG_STAGE' };
+  // The worker must pass a newTaskId it obtained by intaking via /internal/telegram/intake.
+  // We inline the Core call here to get the new task's id back from the route.
+  // The worker sends the new task id as part of the event, pre-fetched before calling this handler.
+  // Validate the new task: it must be a UUID distinct from the prior task.
+  if (!('newTaskId' in event) || !UUID.test((event as unknown as { newTaskId: string }).newTaskId) ||
+      (event as unknown as { newTaskId: string }).newTaskId === event.priorTaskId) {
+    throw invalid('requester decision must carry a new task id that is distinct from the prior task');
+  }
+  const newTaskId = (event as unknown as { newTaskId: string }).newTaskId;
+  const expectedRev = prior.rev;
+  const nextRev = expectedRev + 1;
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+    v: 1; requestId: string; priorTaskId: string; newTaskId: string;
+    round: number; rev: number; stage: 'designing'; runId: string;
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/requester-revision`, {
+    v: 1, expectedRev, rev: nextRev,
+    key: `${event.requestId}:${nextRev}:requesterRevision:r${event.round}`,
+    ops: [{ kind: 'requesterRevision', priorTaskId: event.priorTaskId, newTaskId,
+      round: event.round, directive: event.directive.trim() }],
+  }));
+  if (projected?.v !== 1 || projected.requestId !== event.requestId ||
+      projected.priorTaskId !== event.priorTaskId || projected.newTaskId !== newTaskId ||
+      projected.round !== event.round || projected.rev !== nextRev || projected.stage !== 'designing' ||
+      projected.runId !== `dr-${newTaskId}`) {
+    throw new Error('Core did not return a valid requester revision projection');
+  }
+  const newRunId = projected.runId;
+  const newDesignInput: DesignRunInput = {
+    ...prior.designInput,
+    lifecycle: { requestId: prior.requestId, round: event.round, runId: newRunId },
+    taskId: newTaskId,
+    idempotencyKey: `lifecycle:${prior.requestId}:${newTaskId}`,
+  };
+  const next: AutomaticLifecycleState = { ...prior, stage: 'designing', rev: nextRev,
+    taskId: newTaskId, runId: newRunId, round: event.round, designInput: newDesignInput,
+    revisionRound: { eventId: event.eventId, sha256: fingerprint, round: event.round,
+      newTaskId, runId: newRunId },
+    // Clear prior-round transient fields so the next design-outcome projects cleanly.
+    outcome: undefined, officeRevision: undefined,
+  };
+  ctx.set('lc', next);
+  ctx.startDesign(newDesignInput);
+  return { accepted: true, requestId: prior.requestId, newTaskId, runId: newRunId,
+    round: event.round, rev: nextRev, stage: 'designing' };
 }
 
 export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv()) {
@@ -503,6 +628,8 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
                 .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
               startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
+              setChatMode: (chatId, requestId) => ctx.objectSendClient(chatInbox, chatId)
+                .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })),
             }, core, event as OpenAutomaticEvent) : openManualRequest({
               key: ctx.key,
               get: (name) => ctx.get<ManualLifecycleState>(name),
@@ -510,6 +637,8 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
               set: (name, value) => ctx.set(name, value),
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
                 .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+              setChatMode: (chatId, requestId) => ctx.objectSendClient(chatInbox, chatId)
+                .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })),
             }, core, event as OpenManualEvent)),
       ),
       designFinished: restate.handlers.object.exclusive(
@@ -542,6 +671,19 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
               ? recordOfficeDeliveryStart(handlers, core, event)
               : recordOfficeRevision(handlers, core, event as OfficeRevisionEvent);
           }),
+      ),
+      requesterDecision: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: RequesterDecisionEvent & { newTaskId: string }) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordRequesterDecision({
+            key: ctx.key,
+            get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+              .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+            startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
+          }, core, event)),
       ),
       deliveryFinished: restate.handlers.object.exclusive(
         { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },

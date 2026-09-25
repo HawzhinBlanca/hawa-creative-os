@@ -19,6 +19,9 @@ class FakeContext implements InboxContext {
   state = new Map<string, unknown>();
   runs: string[] = [];
   constructor(readonly key = '555') {}
+  async get<T>(name: string): Promise<T | null> {
+    return (this.state.get(name) as T) ?? null;
+  }
   async run<T>(name: string, action: () => Promise<T>): Promise<T> {
     if (this.journal.has(name)) return this.journal.get(name) as T;
     this.runs.push(name);
@@ -39,6 +42,7 @@ class FakeContext implements InboxContext {
 
 const update = { update_id: 4242, message: { message_id: 1, date: 1, chat: { id: 555, type: 'private' }, from: { id: 9, is_bot: false, first_name: 'R' }, text: 'a brief' } };
 const input = { v: 1 as const, update };
+
 
 /** Retries a handler the way Restate does: a thrown attempt is run again on the same journal. */
 async function untilSettled(ctx: FakeContext, run: () => Promise<unknown>, attempts = 20) {
@@ -175,3 +179,50 @@ describe('the Core client ChatInbox uses', () => {
     expect(calls[1]).toEqual({ url: 'http://core:3001/v1/internal/telegram/park', body: { v: 1, update, reason: 'intake answered HTTP 500 after 5 attempts', notifySender: true } });
   });
 });
+
+// ─── setMode and per-chat mode cutover ───────────────────────────────────────
+import { setMode, type SetModeContext, type ChatInboxView } from '../src/lifecycle/chat-inbox.js';
+
+describe('ChatInbox.setMode', () => {
+  function fakeCtx(initial?: ChatInboxView): SetModeContext & { stored: ChatInboxView | null } {
+    let stored: ChatInboxView | null = initial ?? null;
+    return {
+      get stored() { return stored; },
+      async get<T>(name: string): Promise<T | null> { return name === 'inbox' ? stored as unknown as T : null; },
+      set(_name: string, value: unknown) { stored = value as ChatInboxView; },
+    };
+  }
+
+  it('sets mode to lifecycle on a fresh chat with no prior inbox', async () => {
+    const ctx = fakeCtx();
+    const result = await setMode(ctx, 'req-1');
+    expect(result).toEqual({ mode: 'lifecycle', requestId: 'req-1' });
+    expect(ctx.stored).toMatchObject({ mode: 'lifecycle', v: 1 });
+  });
+
+  it('is idempotent: calling it twice returns lifecycle and does not change the stored view', async () => {
+    const ctx = fakeCtx({ v: 1, lastUpdateId: 42, lastOutcome: 'handled', at: 100, mode: 'lifecycle' });
+    const result = await setMode(ctx, 'req-2');
+    expect(result).toEqual({ mode: 'lifecycle', requestId: 'req-2' });
+    // stored view is unchanged (the early-return path skips set)
+    expect(ctx.stored).toMatchObject({ lastUpdateId: 42, at: 100 });
+  });
+
+  it('preserves prior inbox fields when upgrading a legacy chat', async () => {
+    const ctx = fakeCtx({ v: 1, lastUpdateId: 7, lastOutcome: 'handled', lastIntakeStatus: 201, at: 999 });
+    await setMode(ctx, 'req-3');
+    expect(ctx.stored).toMatchObject({ v: 1, lastUpdateId: 7, lastIntakeStatus: 201, at: 999, mode: 'lifecycle' });
+  });
+
+  it('handleUpdate reads lifecycle mode from stored ChatInboxView on a new invocation', async () => {
+    const ctx = new FakeContext();
+    // Simulate: a prior setMode stored 'lifecycle' in the inbox state
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0, mode: 'lifecycle' } satisfies ChatInboxView);
+    const c = core([async () => ({ kind: 'done', intakeStatus: 201 })]);
+    await handleUpdate(ctx, input, c);
+    expect(ctx.journal.get('mode')).toBe('lifecycle');
+    // Core's intake should have been called with mode='lifecycle'
+    expect(c.intake.mock.calls[0][1]).toBe('lifecycle');
+  });
+});
+
