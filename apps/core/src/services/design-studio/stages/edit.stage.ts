@@ -76,13 +76,18 @@ export async function runDirectedEditStage(
 ): Promise<DirectedEditResult> {
   const system = buildP0SystemPrompt({ referencePackJson: JSON.stringify(ctx.referencePack), promotedRules: ctx.promotedRules || 'None' });
   const shortEdge = Math.min(ctx.width, ctx.height);
+  const logoConstraints = ctx.referencePack.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number } | undefined;
   const constraints = [
     `canvas ${ctx.width}x${ctx.height}px`,
     `margin >= ${Math.round(shortEdge * 0.06)}px`,
     `body >= ${Math.max(12, Math.round(ctx.width * 0.016))}px`,
     'title >= 2.2 x body',
-    `logo width >= ${Math.max(100, Math.round(ctx.width * 0.08))}px`,
+    `logo width >= ${Math.max(100, Math.round(ctx.width * 0.08), logoConstraints?.minimumWidthPx ?? 0)}px`,
+    `logo clear space >= max(0.5 * logo height, ${logoConstraints?.clearSpacePx ?? 0}px)`,
     `palette ${ctx.referencePack.palette.join(', ')}`,
+    ctx.referencePack.admittedDisplayFonts
+      ? `Latin font ${ctx.latinFont} or [${ctx.referencePack.admittedDisplayFonts.latin.join(', ')}]; Sorani font ${ctx.arabicFont} or [${ctx.referencePack.admittedDisplayFonts.arabic.join(', ')}]; no other fonts`
+      : '',
     ctx.photos?.length ? `all ${ctx.photos.length} client photo(s) stay placed, clear of text and logo` : '',
   ].filter(Boolean).join('; ');
 
@@ -93,8 +98,11 @@ export async function runDirectedEditStage(
     copyScripts: ctx.copyBlocks.map((b) => (b.script === 'arabic' ? 'arabic' : 'latin')),
     photoCount: ctx.photos?.length ?? 0,
     reference: {
-      rules: { fontFamily: ctx.latinFont, palette: ctx.referencePack.palette, scriptFonts: { arabic: ctx.arabicFont } },
+      rules: { fontFamily: ctx.latinFont, palette: ctx.referencePack.palette, scriptFonts: { arabic: ctx.arabicFont },
+        admittedDisplayFonts: ctx.referencePack.admittedDisplayFonts },
       logoAspect: ctx.logoAspect || 1.0,
+      logoMinimumWidthPx: logoConstraints?.minimumWidthPx,
+      logoClearSpacePx: logoConstraints?.clearSpacePx,
     },
     draftFont: ctx.latinFont || 'Inter',
   };

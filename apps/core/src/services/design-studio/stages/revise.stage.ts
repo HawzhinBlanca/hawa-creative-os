@@ -45,7 +45,10 @@ export async function runReviseStage(
   const logoConstraints = ctx.referencePack.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number } | undefined;
   const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08), logoConstraints?.minimumWidthPx ?? 0);
 
-  const constraintsStr = `margin >= ${marginPx}px; body >= ${bodyMinPx}px; title >= 2.2 * body; logo width >= ${logoMinPx}px; logo clear space >= max(0.5 * logo height, ${logoConstraints?.clearSpacePx ?? 0}px); palette = ${ctx.referencePack.palette.join(', ')}`;
+  const fontRule = ctx.referencePack.admittedDisplayFonts
+    ? `; Latin font ${ctx.latinFont} or [${ctx.referencePack.admittedDisplayFonts.latin.join(', ')}]; Sorani font ${ctx.arabicFont} or [${ctx.referencePack.admittedDisplayFonts.arabic.join(', ')}]; no other fonts`
+    : '';
+  const constraintsStr = `margin >= ${marginPx}px; body >= ${bodyMinPx}px; title >= 2.2 * body; logo width >= ${logoMinPx}px; logo clear space >= max(0.5 * logo height, ${logoConstraints?.clearSpacePx ?? 0}px); palette = ${ctx.referencePack.palette.join(', ')}${fontRule}`;
 
   const copyMap: Record<number, string> = {};
   for (let i = 0; i < ctx.copyBlocks.length; i++) {
@@ -69,6 +72,7 @@ export async function runReviseStage(
         scriptFonts: {
           arabic: ctx.arabicFont,
         },
+        admittedDisplayFonts: ctx.referencePack.admittedDisplayFonts,
       },
       logoAspect: ctx.logoAspect || 1.0,
       logoMinimumWidthPx: logoConstraints?.minimumWidthPx,

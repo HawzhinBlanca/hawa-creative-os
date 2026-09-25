@@ -119,6 +119,7 @@ export function hardQaContextFor(
     copyScripts: ctx.copyBlocks.map((b) => (b.script === 'arabic' ? 'arabic' : 'latin')),
     latinFont: ctx.latinFont,
     arabicFont: ctx.arabicFont,
+    admittedDisplayFonts: ctx.referencePack.admittedDisplayFonts,
     palette: ctx.referencePack.palette,
     logoAspect: ctx.logoAspect || 1.0,
     logoMinimumWidthPx: (ctx.referencePack.logoConstraints as { minimumWidthPx?: number } | undefined)?.minimumWidthPx,

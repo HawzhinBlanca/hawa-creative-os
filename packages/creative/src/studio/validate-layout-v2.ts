@@ -9,6 +9,8 @@ export interface ValidationReference {
     scriptFonts?: {
       arabic?: string;
     };
+    /** When present, only these client-approved display faces may augment the body face. */
+    admittedDisplayFonts?: { latin: string[]; arabic: string[] };
   };
   logoAspect: number; // width / height
   logoMinimumWidthPx?: number;
@@ -158,19 +160,16 @@ export function validateLayoutV2(
     'inter',
     'verdana',
   ];
-  const admittedLatinFonts = new Set([
-    (context.reference.rules.fontFamily || 'Verdana').toLowerCase(),
-    (context.draftFont || 'Verdana').toLowerCase(),
-    'verdana',
-    ...admittedDisplayFonts,
-  ]);
+  const clientDisplay = context.reference.rules.admittedDisplayFonts;
+  const admittedLatinFonts = new Set(clientDisplay
+    ? [(context.reference.rules.fontFamily || '').toLowerCase(), ...clientDisplay.latin.map((font) => font.toLowerCase())]
+    : [(context.reference.rules.fontFamily || 'Verdana').toLowerCase(), (context.draftFont || 'Verdana').toLowerCase(),
+      'verdana', ...admittedDisplayFonts]);
   const arabicScriptFont = context.reference.rules.scriptFonts?.arabic || 'Noto Sans Arabic';
-  const admittedArabicFonts = new Set([
-    'noto sans arabic',
-    'amiri',
-    'ibm plex sans arabic',
-    (context.reference.rules.scriptFonts?.arabic || '').toLowerCase(),
-  ].filter(Boolean));
+  const admittedArabicFonts = new Set((clientDisplay
+    ? [arabicScriptFont.toLowerCase(), ...clientDisplay.arabic.map((font) => font.toLowerCase())]
+    : ['noto sans arabic', 'amiri', 'ibm plex sans arabic', (context.reference.rules.scriptFonts?.arabic || '').toLowerCase()]
+  ).filter(Boolean));
 
   for (let i = 0; i < normalized.text.length; i++) {
     const t = normalized.text[i];
@@ -179,6 +178,10 @@ export function validateLayoutV2(
     if (script === 'arabic') {
       t.rtl = true;
       if (!t.fontFamily || !admittedArabicFonts.has(t.fontFamily.toLowerCase())) {
+        if (clientDisplay) return {
+          ok: false, code: 'FONT_NOT_ADMITTED',
+          message: `Font family '${t.fontFamily}' is not admitted for this client's Arabic-script text`,
+        };
         t.fontFamily = arabicScriptFont;
       }
       if (t.align !== 'center' && t.align !== 'right') {

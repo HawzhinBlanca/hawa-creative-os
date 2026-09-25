@@ -20,6 +20,7 @@ export interface HardQaContext {
   copyScripts: Array<'latin' | 'arabic'>;
   latinFont: string;
   arabicFont: string;
+  admittedDisplayFonts?: { latin: string[]; arabic: string[] };
   palette: string[];
   logoAspect: number;
   logoMinimumWidthPx?: number;
@@ -64,6 +65,7 @@ export function evaluateHardQa(
         scriptFonts: {
           arabic: ctx.arabicFont,
         },
+        admittedDisplayFonts: ctx.admittedDisplayFonts,
       },
       logoAspect: ctx.logoAspect || 1.0,
       logoMinimumWidthPx: ctx.logoMinimumWidthPx,

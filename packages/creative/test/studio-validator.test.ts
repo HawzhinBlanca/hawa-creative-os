@@ -217,6 +217,37 @@ describe('Design Studio v2: Layout Validation Engine (validateLayoutV2)', () => 
       if (!res.ok) expect(res.code).toBe('FONT_NOT_ADMITTED');
     });
 
+    it('rejects a globally known display font outside this client\'s admitted set', () => {
+      const layout = createPassingLayout();
+      layout.text[0].fontFamily = 'Cinzel';
+      expect(validateLayoutV2(layout, BASE_CONTEXT).ok).toBe(true);
+
+      const scoped = validateLayoutV2(layout, {
+        ...BASE_CONTEXT,
+        reference: { ...BASE_CONTEXT.reference, rules: {
+          ...BASE_CONTEXT.reference.rules,
+          admittedDisplayFonts: { latin: ['Inter'], arabic: [] },
+        } },
+      });
+      expect(scoped.ok).toBe(false);
+      if (!scoped.ok) expect(scoped.code).toBe('FONT_NOT_ADMITTED');
+    });
+
+    it('refuses to silently substitute another Arabic display face for a client', () => {
+      const layout = createPassingLayout(1080, 1350, [2, 3]);
+      layout.text[2].fontFamily = 'Amiri';
+      const scoped = validateLayoutV2(layout, {
+        ...BASE_CONTEXT,
+        copyScripts: ['latin', 'latin', 'arabic', 'arabic'],
+        reference: { ...BASE_CONTEXT.reference, rules: {
+          ...BASE_CONTEXT.reference.rules,
+          admittedDisplayFonts: { latin: [], arabic: [] },
+        } },
+      });
+      expect(scoped.ok).toBe(false);
+      if (!scoped.ok) expect(scoped.code).toBe('FONT_NOT_ADMITTED');
+    });
+
     it('code PALETTE: rejects non-brand hex color in shapes or text', () => {
       const layout = createPassingLayout();
       layout.shapes[0].color = '#FF0055'; // Non-brand neon pink

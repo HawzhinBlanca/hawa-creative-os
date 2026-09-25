@@ -134,6 +134,7 @@ export type CopyBlock = { text: string; script: 'latin' | 'arabic' | 'mixed' };
 export interface ReferencePack {
   palette: string[];
   referenceFonts?: { latin?: string; arabic?: string };
+  admittedDisplayFonts?: { latin: string[]; arabic: string[] };
   exemplars?: Array<{ path: string; label: string; sha256?: string }>;
   [key: string]: unknown;
 }

@@ -8,6 +8,7 @@ import { persistChatIntake } from '../src/services/chat-intake.js';
 import type { StudioLayoutV2 } from '@hawa/creative';
 import { computeDnaHash } from '../src/core-helpers.js';
 import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
+import { checkCanvaPptx } from '@hawa/qa';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
@@ -191,6 +192,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       } else {
         resultData = overrides.defaultResult || { layout: mockLayout };
       }
+      if (overrides.transformResult) resultData = overrides.transformResult(resultData, promptText);
 
       return {
         ok: true,
@@ -254,7 +256,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     await db.destroy();
   });
 
-  it('scopes a second-client Studio brief to its DNA and logo and refuses its unqualified v3 route', async () => {
+  it('scopes a second-client Studio transfer to its DNA, font, palette and logo', async () => {
     const otherClientId = randomUUID();
     await sql`INSERT INTO hawa.clients(id,tenant_id,code,name)
       VALUES(${otherClientId}::uuid,${scope.tenantId}::uuid,${'other-'+otherClientId.slice(0,8)},'Other Client')`.execute(db);
@@ -268,7 +270,8 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         { family: 'Noto Sans Arabic', style: 'Regular', weight: 400, role: 'body', license: 'test', supportedLocales: ['ckb','ar'] },
         { family: 'Inter', style: 'Bold', weight: 700, role: 'display', license: 'test', supportedLocales: ['en'] }],
       assets: [{ assetId: randomUUID(), name: 'Other logo', role: 'logo_primary',
-        storageKey: `sha256:${logoRef.sha256}`, sha256: logoRef.sha256, mimeType: 'image/png' }],
+        storageKey: `sha256:${logoRef.sha256}`, sha256: logoRef.sha256, mimeType: 'image/png',
+        minimumWidthPx: 130, clearSpacePx: 70 }],
       guidelines: { voiceAndTone: 'Clear', prohibitedPhrases: [], requiredDisclaimers: [], layoutRules: ['Use open spacing.'] },
       destinations: { googleSharedDriveId: 'test', productionFolderId: 'test', archiveFolderId: 'test', spreadsheetId: 'test', sheetId: 1 },
       approvalPolicy: { requiredRoles: ['art_director'], allowAutoApproval: false, autoApprovalEligibleTemplates: [] },
@@ -281,8 +284,33 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     const oldFlag=process.env.DESIGN_PIPELINE_V3, oldChats=process.env.DESIGN_PIPELINE_V3_CHATS;
     process.env.DESIGN_PIPELINE_V3='off'; process.env.DESIGN_PIPELINE_V3_CHATS='';
     try {
-      const fetcher=createMockFetch();
-      const service=new DesignStudioService(db,undefined,{apiKey:'test-key',fetcher,defaultTier:'standard'});
+      const ownPalette = ['#214365', '#FAFAFA', '#EFABCD'];
+      const fetcher=createMockFetch({ transformResult: (result: any) => {
+        if (Array.isArray(result.concepts)) {
+          return { concepts: result.concepts.map((concept: any) => ({ ...concept,
+            colourRoles: { background: ownPalette[0], title: ownPalette[1], body: ownPalette[1],
+              accent: ownPalette[2], rule: ownPalette[2] } })) };
+        }
+        if (result.layout) {
+          const layout = structuredClone(mockLayout);
+          layout.background.color = ownPalette[0];
+          layout.shapes[0].color = ownPalette[2];
+          layout.text[0].color = ownPalette[1];
+          layout.text[1].color = ownPalette[1];
+          layout.text.forEach((block) => { block.fontFamily = 'Inter'; });
+          layout.logo = { x: 850, y: 1000, width: 140, height: 140 };
+          return { layout, notes: 'Client palette, own logo, open spacing' };
+        }
+        if (result.evidence?.brandFidelity) {
+          return { ...result, evidence: { ...result.evidence,
+            brandFidelity: 'The design uses only Other Client palette and its official logo' } };
+        }
+        return result;
+      } });
+      const mockCanvaService = { importEditableDesign: vi.fn().mockResolvedValue({
+        operationId: randomUUID(), status: 'retrieved', designId: 'DAFOTHERCLIENT01',
+      }) } as unknown as CanvaConnectService;
+      const service=new DesignStudioService(db,mockCanvaService,{apiKey:'test-key',fetcher,defaultTier:'standard'});
       const taskId=await intake('other-standard');
       const {run}=await service.createOrGetRun(scope,taskId,`key-${randomUUID().slice(0,16)}`,{width:1080,height:1350,tier:'standard'});
       expect(run.request.logoSha256).toBe(logoRef.sha256);
@@ -293,22 +321,92 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       expect(sent).toContain('Inter');
       expect(sent).not.toContain('KAAE');
       expect(sent).not.toContain('#F7B500');
+      expect((await service.resume(scope,taskId,run.id)).status).toBe('laying_out');
+      expect((await service.resume(scope,taskId,run.id)).status).toBe('rendering');
+      expect((await service.resume(scope,taskId,run.id)).status).toBe('critiquing');
+      expect(fetcher.mock.calls.length).toBeGreaterThan(1);
+      for (const [, init] of fetcher.mock.calls) {
+        const prompt = JSON.stringify(init);
+        expect(prompt).not.toContain('KAAE');
+        expect(prompt).not.toContain('#F7B500');
+      }
+      const candidates = (await sql<{layouts:unknown;preview_png:Buffer|null}>`SELECT layouts,preview_png FROM hawa.design_studio_candidates
+        WHERE tenant_id=${scope.tenantId}::uuid AND run_id=${run.id}::uuid ORDER BY ordinal`.execute(db)).rows;
+      expect(candidates.length).toBeGreaterThan(0);
+      expect(candidates.some(candidate => candidate.preview_png && candidate.preview_png.length > 0)).toBe(true);
+      for (const candidate of candidates) {
+        const layouts = typeof candidate.layouts === 'string' ? JSON.parse(candidate.layouts) : candidate.layouts;
+        if (!Array.isArray(layouts) || !layouts[0]) continue;
+        expect(layouts[0].logo.width).toBeGreaterThanOrEqual(130);
+        expect(layouts[0].background.color).toBe(ownPalette[0]);
+        expect(JSON.stringify(layouts[0])).not.toContain('#F7B500');
+      }
+
+      let completed = 'critiquing';
+      for (let step = 0; step < 12 && !['transferred', 'failed', 'degraded'].includes(completed); step++) {
+        completed = (await service.resume(scope,taskId,run.id)).status;
+      }
+      expect(completed).toBe('transferred');
+      const plan = (await sql<{source_content:Buffer;source_sha256:string;result:unknown}>`SELECT source_content,source_sha256,result
+        FROM hawa.canva_design_plans WHERE tenant_id=${scope.tenantId}::uuid AND task_id=${taskId}::uuid AND status='planned'`.execute(db)).rows[0];
+      expect(plan).toBeDefined();
+      expect(createHash('sha256').update(plan.source_content).digest('hex')).toBe(plan.source_sha256);
+      const pptxCheck = checkCanvaPptx(new Uint8Array(plan.source_content), ['OTHER TITLE', 'Other body.'], 'Inter');
+      expect(pptxCheck.copyPass).toBe(true);
+      expect(pptxCheck.fontPass).toBe(true);
+      const result = typeof plan.result === 'string' ? JSON.parse(plan.result) : plan.result as any;
+      expect(result.manifest.logoSha256).toBe(logoRef.sha256);
+      expect(result.manifest.copy).toEqual(['OTHER TITLE', 'Other body.']);
+      expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
+      for (const [, init] of fetcher.mock.calls) {
+        const prompt = JSON.stringify(init);
+        expect(prompt).not.toContain('KAAE');
+        expect(prompt).not.toContain('#F7B500');
+      }
+
+      const unavailableClientId = randomUUID();
+      await sql`INSERT INTO hawa.clients(id,tenant_id,code,name)
+        VALUES(${unavailableClientId}::uuid,${scope.tenantId}::uuid,${'font-'+unavailableClientId.slice(0,8)},'Font Unavailable')`.execute(db);
+      const unavailableDna = { ...dna, clientId: unavailableClientId, code: 'font-unavailable', name: 'Font Unavailable',
+        fonts: dna.fonts.map((font) => font.family === 'Inter'
+          ? { ...font, family: 'Missing Hawdesign Test Font' } : font) };
+      await sql`INSERT INTO hawa.client_dna_versions(tenant_id,client_id,version,status,dna,content_hash,created_by)
+        VALUES(${scope.tenantId}::uuid,${unavailableClientId}::uuid,1,'active',${JSON.stringify(unavailableDna)}::jsonb,
+          ${computeDnaHash(unavailableDna)},${scope.actorId}::uuid)`.execute(db);
+      const unavailableTaskId = (await persistChatIntake(db, { platform: 'telegram', sourceEventId: randomUUID(),
+        sourceChannelId: 'font-unavailable', clientId: unavailableClientId, title: '[TEST] Font unavailable',
+        rawText: 'Use open spacing.\n---\nOTHER TITLE\n\nOther body.', designInstructions: 'Use open spacing.', exactCopy: [] })).task.id;
+      const callsBeforeFontFailure = fetcher.mock.calls.length;
+      await expect(service.createOrGetRun(scope,unavailableTaskId,`key-${randomUUID().slice(0,16)}`,
+        {width:1080,height:1350,tier:'standard'})).rejects.toMatchObject({code:'CLIENT_FONT_UNAVAILABLE'});
+      expect(fetcher).toHaveBeenCalledTimes(callsBeforeFontFailure);
+      expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
+      const absentRuns = (await sql<{n:number}>`SELECT count(*)::int AS n FROM hawa.design_studio_runs
+        WHERE tenant_id=${scope.tenantId}::uuid AND task_id=${unavailableTaskId}::uuid`.execute(db)).rows[0];
+      expect(absentRuns.n).toBe(0);
 
       const pilotChat=`other-pilot-${randomUUID().slice(0,8)}`;
       process.env.DESIGN_PIPELINE_V3_CHATS=pilotChat;
       const pilotId=await intake(pilotChat);
+      const callsBeforePilot = fetcher.mock.calls.length;
       await expect(service.createOrGetRun(scope,pilotId,`key-${randomUUID().slice(0,16)}`,
         {width:1080,height:1350,tier:'standard'})).rejects.toMatchObject({code:'CLIENT_V3_PROFILE_REQUIRED'});
-      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(fetcher).toHaveBeenCalledTimes(callsBeforePilot);
+
+      const staleTaskId=await intake('other-stale');
+      const {run:staleRun}=await service.createOrGetRun(scope,staleTaskId,`key-${randomUUID().slice(0,16)}`,
+        {width:1080,height:1350,tier:'standard'});
+      expect((await service.resume(scope,staleTaskId,staleRun.id)).status).toBe('conceiving');
+      const callsBeforeSupersede = fetcher.mock.calls.length;
 
       await sql`UPDATE hawa.client_dna_versions SET status='superseded'
         WHERE tenant_id=${scope.tenantId}::uuid AND client_id=${otherClientId}::uuid AND version=1`.execute(db);
       const historical = await resolveClientDesignReference(db,scope,otherClientId,1);
-      expect(createHash('sha256').update(JSON.stringify(historical.reference)).digest('hex')).toBe(run.request.referenceHash);
-      expect(createHash('sha256').update(historical.logo).digest('hex')).toBe(run.request.logoSha256);
-      await expect(service.resume(scope,taskId,run.id)).rejects.toMatchObject({code:'CLIENT_REFERENCE_CHANGED'});
-      expect(fetcher).toHaveBeenCalledTimes(1);
-      const stopped=(await sql<{status:string}>`SELECT status FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0];
+      expect(createHash('sha256').update(JSON.stringify(historical.reference)).digest('hex')).toBe(staleRun.request.referenceHash);
+      expect(createHash('sha256').update(historical.logo).digest('hex')).toBe(staleRun.request.logoSha256);
+      await expect(service.resume(scope,staleTaskId,staleRun.id)).rejects.toMatchObject({code:'CLIENT_REFERENCE_CHANGED'});
+      expect(fetcher).toHaveBeenCalledTimes(callsBeforeSupersede);
+      const stopped=(await sql<{status:string}>`SELECT status FROM hawa.design_studio_runs WHERE id=${staleRun.id}::uuid`.execute(db)).rows[0];
       expect(stopped.status).toBe('failed');
     } finally {
       if(oldFlag===undefined)delete process.env.DESIGN_PIPELINE_V3;else process.env.DESIGN_PIPELINE_V3=oldFlag;

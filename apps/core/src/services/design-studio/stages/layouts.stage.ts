@@ -276,6 +276,7 @@ export async function runLayoutsStage(
       palette: ctx.referencePack.palette.join(', '),
       latinFont: ctx.latinFont,
       arabicFont: ctx.arabicFont,
+      admittedDisplayFonts: ctx.referencePack.admittedDisplayFonts,
       copyBlocks: copyBlocksFormatted,
     });
 
@@ -301,6 +302,7 @@ export async function runLayoutsStage(
           scriptFonts: {
             arabic: ctx.arabicFont,
           },
+          admittedDisplayFonts: ctx.referencePack.admittedDisplayFonts,
         },
         logoAspect,
         logoMinimumWidthPx: logoConstraints?.minimumWidthPx,

@@ -22,6 +22,9 @@ import {
   ExemplarRetrievalIndex,
   studioReferenceFromRaw,
   creativeAssetPath,
+  fontCoversText,
+  fontFamilyScript,
+  probeFontScripts,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings } from '@hawa/domain';
@@ -97,6 +100,35 @@ import {
 export type Scope = { tenantId: string; actorId: string; role?: string; clientId?: string };
 
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+
+type StudioFontProfile = { latin: string[]; arabic: string[] };
+
+/** Reject a versioned brand font that the renderer would substitute or cannot draw for this copy. */
+function qualifiedStudioFonts(reference: Record<string, any>, copyBlocks: CopyBlock[]): StudioFontProfile | undefined {
+  if (reference.status !== 'active_client_dna') return undefined;
+  const body = reference.rules.typography.formalBody as { latin: string; arabic: string };
+  const display = reference.rules.typography.display.admitted as string[];
+  const textFor = (script: CopyBlock['script']) => copyBlocks.filter((block) => block.script === script).map((block) => block.text).join('\n');
+  const qualify = (family: string, text: string) => {
+    const script = fontFamilyScript(family);
+    let exact = false;
+    try { exact = probeFontScripts(family)[script].verdict === 'exact' && fontCoversText(family, text).covers; }
+    catch { /* A missing renderer or unreadable font cannot qualify a client brand. */ }
+    if (!exact) {
+      throw new CanvaFlowError(422, 'CLIENT_FONT_UNAVAILABLE',
+        `The client font "${family}" cannot render the required text faithfully in Studio. Install and qualify that font before generating this design.`);
+    }
+  };
+  if (textFor('latin')) qualify(body.latin, textFor('latin'));
+  if (textFor('arabic')) qualify(body.arabic, textFor('arabic'));
+  const profile: StudioFontProfile = { latin: [], arabic: [] };
+  for (const family of display) {
+    const script = fontFamilyScript(family);
+    qualify(family, textFor(script));
+    profile[script].push(family);
+  }
+  return profile;
+}
 
 /**
  * The official KAAE logo's path. Resolved inside @hawa/creative, from that package's own location,
@@ -381,6 +413,7 @@ export class DesignStudioService {
       text,
       script: copyScripts[idx] === 'arabic' ? 'arabic' : 'latin',
     }));
+    qualifiedStudioFonts(reference, copyBlocks);
 
     return {
       task,
@@ -1026,8 +1059,10 @@ export class DesignStudioService {
     } else {
       latinFont = reference.rules.typography.formalBody.latin;
       arabicFont = reference.rules.typography.formalBody.arabic;
+      const admittedDisplayFonts = qualifiedStudioFonts(reference, request.copyBlocks as CopyBlock[]);
       referencePack = { palette: reference.rules.palette,
         referenceFonts: { latin: latinFont, arabic: arabicFont }, clientId: reference.clientId,
+        admittedDisplayFonts,
         clientName: reference.clientName, dnaVersion: reference.dnaVersion,
         dnaContentHash: reference.dnaContentHash, logoAssetId: reference.logoAssetId,
         logoSha256: reference.logoSha256, logoConstraints: reference.rules.logoConstraints };
