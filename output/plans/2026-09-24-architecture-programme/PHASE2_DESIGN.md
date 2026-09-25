@@ -288,6 +288,7 @@ export const DesignRun = restate.workflow({
 - `runKey` is still `taskId` or `taskId-redrive-n` (pass `redriveAttempt`), so Core's studio and Canva idempotency keys are identical to today's.
 - On cancellation (`TerminalError` with code 409 at the next await), catch it, run `abandonUnsettledRun`, then `finish('CANCELLED')`. RL ignores that report.
 - **`TaskWorkflow` stays registered for good.** It serves legacy requests until 2.5, then becomes a shim (section 4). The gate and `WORKER_SERVICES` go on using it.
+- A direct legacy `TaskWorkflow` or `TaskService` invocation must read Core's persisted nullable `requestId` in its existing task-scope step and refuse a request-owned task before any design or legacy outcome. `DesignRun` may use that task only after checking the same owner against its lifecycle request ID and routing its terminal report to `RequestLifecycle`; a caller-supplied flag alone is not ownership proof.
 
 ### 2.5 Delivery (Workflow, key = `dl-<requestId>-<approvalId>[:archive:<n>]`)
 
