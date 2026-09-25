@@ -2146,9 +2146,10 @@ export class DesignStudioService {
       }
     } catch (err: any) {
       if (isModelCallHoldError(err)) {
-        throw new CanvaFlowError(409, err?.code === 'MODEL_CALL_ADMISSION_CONFLICT'
-          ? 'MODEL_CALL_ADMISSION_CONFLICT' : 'MODEL_CALL_UNCERTAIN',
-          'A Studio model call may have been accepted or another process already admitted it. Reconcile the call before continuing this run.');
+        const code = err?.code === 'MODEL_CALL_ADMISSION_CONFLICT' || err?.code === 'MODEL_CALL_FINALIZATION_CONFLICT'
+          ? err.code : 'MODEL_CALL_UNCERTAIN';
+        throw new CanvaFlowError(409, code,
+          'A Studio model call may have been accepted or another process already recorded its outcome. Reconcile the call before continuing this run.');
       }
       // Not a failure: the run waits at its stage for the design it revises, and a later resume
       // makes the edit.

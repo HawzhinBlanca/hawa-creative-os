@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
+import { isModelCallHoldError } from '../src/services/design-studio/types.js';
 import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
 
 /**
@@ -121,6 +122,38 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
     expect(finalized).toHaveLength(1);
     expect(finalized[0]).toMatchObject({ status: 'ok', responseId: 'chatcmpl_paid' });
     expect(finalized[0].usdEstimate).toBeGreaterThan(0);
+  });
+
+  it('holds a provider reply when its ledger outcome conflicts instead of spending again', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers(),
+      json: async () => ({ id: 'chatcmpl_conflict', model: 'gpt-6-astra',
+        choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: '{"ok":true}' } }],
+        usage: { prompt_tokens: 100, completion_tokens: 10 } }) });
+    const svc = new DesignStudioService({} as any, undefined, { fetcher: fetcher as any, apiKey: 'test-key' });
+    const finalizations: any[] = [];
+    (svc as any).repo = {
+      recordCallStart: async () => undefined,
+      finalizeCall: async (value: any) => {
+        finalizations.push(value);
+        throw Object.assign(new Error('receipt already finalized'), { code: 'MODEL_CALL_FINALIZATION_CONFLICT' });
+      },
+    };
+    const clientId = 'c1000000-0000-4000-8000-000000000002';
+    const s = { tenantId: randomUUID(), actorId: randomUUID(), role: 'operator' };
+    const { reference, logo } = await resolveClientDesignReference({} as any, s, clientId);
+    const run = { id: randomUUID(), task_id: randomUUID(), client_id: clientId, tier: 'premium',
+      request: JSON.stringify({ width: 1080, height: 1350, copyBlocks: [{ text: 'A', script: 'latin' }], instructions: 'x',
+        clientId, referenceHash: createHash('sha256').update(JSON.stringify(reference)).digest('hex'),
+        logoSha256: createHash('sha256').update(logo).digest('hex') }), stages: {} };
+    const ctx = await (svc as any).createStageContext(s, run, 'briefing',
+      { maxUsd: 2, maxCalls: 24, spentUsd: 0, calls: 0 }, async () => { throw new Error('spent after conflict'); });
+    const error = await ctx.client.completeJson({ prompt: 'one paid call', schema: { type: 'object' }, model: 'gpt-6-astra' })
+      .catch((err: unknown) => err);
+    expect(isModelCallHoldError(error)).toBe(true);
+    expect(error).toMatchObject({ code: 'MODEL_CALL_FINALIZATION_CONFLICT' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(finalizations).toHaveLength(1);
+    expect(finalizations[0].status).toBe('ok');
   });
 
   it('does not dispatch a second model request when the logical call reservation collides', async () => {

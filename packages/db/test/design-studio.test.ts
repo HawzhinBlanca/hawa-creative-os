@@ -1,7 +1,7 @@
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, withRlsContext } from '../src/client.js';
-import { DesignStudioRepository } from '../src/repositories/design-studio.repository.js';
+import { DesignStudioRepository, ModelCallFinalizationConflictError } from '../src/repositories/design-studio.repository.js';
 import { sql } from 'kysely';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
@@ -302,6 +302,48 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       await expect(
         sql`DELETE FROM hawa.design_studio_calls WHERE id = ${callId}::uuid`.execute(trx)
       ).rejects.toThrow('Design studio calls ledger is append-only');
+    });
+  });
+
+  it('preserves a pending call identity and seals the first uncertain receipt', async () => {
+    const taskId = await createTask(tenantA, clientA);
+    const runId = randomUUID();
+    const callId = randomUUID();
+    await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA,
+      actorId: 'test_user', requestKey: `sealed-call-${runId}`,
+      requestHash: createHash('sha256').update(runId).digest('hex'),
+      request: { prompt: 'seal the call identity' }, tier: 'premium' });
+    await repo.recordCallStart({ id: callId, runId, tenantId: tenantA,
+      stage: 'briefing', provider: 'openai', model: 'requested-model',
+      requestedModel: 'requested-model', callOrdinal: 1,
+      logicalCallSha256: createHash('sha256').update(callId).digest('hex') });
+
+    for (const change of [
+      sql`UPDATE hawa.design_studio_calls SET stage = 'judging' WHERE id = ${callId}::uuid`,
+      sql`UPDATE hawa.design_studio_calls SET model = 'other-model' WHERE id = ${callId}::uuid`,
+      sql`UPDATE hawa.design_studio_calls SET call_ordinal = 2 WHERE id = ${callId}::uuid`,
+    ]) {
+      await expect(withRlsContext(db, { tenantId: tenantA }, (trx) => change.execute(trx)))
+        .rejects.toThrow('Design studio call identity is immutable');
+    }
+    await expect(withRlsContext(db, { tenantId: tenantA }, (trx) =>
+      sql`UPDATE hawa.design_studio_calls SET usd_estimate = 0.03 WHERE id = ${callId}::uuid`.execute(trx)))
+      .rejects.toThrow('Design studio call update must record its first outcome');
+
+    await repo.finalizeCall({ id: callId, tenantId: tenantA, inputTokens: 0,
+      outputTokens: 0, usdEstimate: 0, status: 'uncertain', errorCode: 'ACCEPTANCE_UNKNOWN' });
+    const sealed = (await repo.getCallsForRun(runId, tenantA))[0];
+    expect(sealed).toMatchObject({ stage: 'briefing', model: 'requested-model',
+      status: 'uncertain', error_code: 'ACCEPTANCE_UNKNOWN' });
+    expect(sealed.finished_at).not.toBeNull();
+    await expect(repo.finalizeCall({ id: callId, tenantId: tenantA, inputTokens: 10,
+      outputTokens: 10, usdEstimate: 0.03, status: 'ok' }))
+      .rejects.toBeInstanceOf(ModelCallFinalizationConflictError);
+    await expect(withRlsContext(db, { tenantId: tenantA }, (trx) =>
+      sql`UPDATE hawa.design_studio_calls SET status = 'ok', usd_estimate = 0.03 WHERE id = ${callId}::uuid`.execute(trx)))
+      .rejects.toThrow('Completed design studio call is immutable');
+    expect((await repo.getCallsForRun(runId, tenantA))[0]).toMatchObject({
+      status: 'uncertain', error_code: 'ACCEPTANCE_UNKNOWN',
     });
   });
 

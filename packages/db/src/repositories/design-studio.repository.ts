@@ -84,6 +84,14 @@ export class ModelCallAdmissionConflictError extends Error {
   }
 }
 
+export class ModelCallFinalizationConflictError extends Error {
+  readonly code = 'MODEL_CALL_FINALIZATION_CONFLICT';
+  constructor() {
+    super('This Studio model call is missing or already has a recorded outcome.');
+    this.name = 'ModelCallFinalizationConflictError';
+  }
+}
+
 export interface FinalizeCallParams {
   id: string;
   tenantId: string;
@@ -585,8 +593,10 @@ export class DesignStudioRepository {
         })
         .where('id', '=', params.id)
         .where('tenant_id', '=', params.tenantId)
+        .where('finished_at', 'is', null)
         .returningAll()
         .execute();
+      if (!row) throw new ModelCallFinalizationConflictError();
       return row;
     });
   }

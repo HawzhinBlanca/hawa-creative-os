@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T19:23:49Z",
+  "generatedAt": "2026-09-25T19:33:36Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 311,
+  "fileCount": 312,
   "files": [
     {
       "path": ".dockerignore",
@@ -323,6 +323,11 @@
       "bytes": 2743
     },
     {
+      "path": "adrs/051_studio_call_receipt_immutability.md",
+      "sha256": "f34b0c2ebd69771c90e2b16d5364472bb2d15fe935cbcb0fc3f4ce5b4bf7ccac",
+      "bytes": 2047
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "54ca6b1554c988f5a2405991660047ded612d8d96c93dd3e88bc849cc09c2b7a",
       "bytes": 21896
@@ -579,8 +584,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "d7e9ae84d436e07db2ce3d97e0acddc01de289c3c31776434776c405a56e93ff",
-      "bytes": 9306
+      "sha256": "32d04a209c95e58df517e6bdda1d470cce076807bdbea5233663a3267d319694",
+      "bytes": 9624
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -869,8 +874,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "77aa188ea38ee3bfded361fb1afaaf8c8c6db53fe089baffee8608ba6710f384",
-      "bytes": 17823
+      "sha256": "2a5642ee33a3acd2ce573f6b1f243599c93e6852c71c5aa7d534943af646218f",
+      "bytes": 19504
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/REALITY_CHECK_2026-09-25.md",
@@ -889,8 +894,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "70eefd1100692c50447b9892b5b63aae4e4644815b3d71218955934d63eb95f6",
-      "bytes": 151538
+      "sha256": "3a38bc1784676d93ffd85ee39d9220c16696721b9372f608f4fa2d3ffa6cde14",
+      "bytes": 153528
     },
     {
       "path": "plans/user-stories.csv",
