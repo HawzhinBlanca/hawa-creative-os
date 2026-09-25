@@ -459,6 +459,20 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     expect(sheetRows[2][0]).toBe('task-a');
     expect(sheetRows[2][6]).toBe('hash-a-updated'); // Task A updated!
     expect(sheetRows[3][0]).toBe('task-b'); // Task B untouched!
+
+    // The cached Task A row can become blank after a user inserts or clears a row. Blank is
+    // not proof of task identity: find Task A again instead of overwriting the blank row.
+    fakeServer.setSheetRows(spreadsheetId, [sheetRows[0], sheetRows[1], ['', '', '', '', '', '', ''],
+      sheetRows[2], sheetRows[3]]);
+    const resA3 = await publisher.publish(ctx, { ...reqA, packageHash: 'hash-a-third', publicationKey: 'pub_a_third' });
+    expect(resA3.ok).toBe(true);
+    if (!resA3.ok) return;
+    expect(resA3.value.sheet.rowNumber).toBe(4);
+    sheetRows = fakeServer.getSheetRows(spreadsheetId);
+    expect(sheetRows[2][0]).toBe('');
+    expect(sheetRows[3][0]).toBe('task-a');
+    expect(sheetRows[3][6]).toBe('hash-a-third');
+    expect(sheetRows[4][0]).toBe('task-b');
   });
 
   it('4. Deliverable checksum mismatch strictly halts publication with PUBLICATION_VERIFICATION_FAILED', async () => {

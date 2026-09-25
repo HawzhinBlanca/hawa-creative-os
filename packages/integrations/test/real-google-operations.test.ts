@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -381,9 +381,33 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
       expect(verifyRes.value).toEqual({ consistent: true, differences: [] });
     }
 
+    const row = sheetRows.get(receipt.sheet.rowNumber!)!;
+    row[6] = 'changed-package-hash';
+    const diverged = await publisher.reconcile(dummyCtx, receipt.publicationId);
+    expect(diverged.ok).toBe(true);
+    if (diverged.ok) {
+      expect(diverged.value.state).toBe('drive_complete');
+      expect(diverged.value.sheet).toMatchObject({ synced: false, observedHash: 'changed-package-hash' });
+      expect(diverged.value.completedAt).toBeUndefined();
+    }
+    row[6] = receipt.sheet.expectedHash;
+    const restored = await publisher.reconcile(dummyCtx, receipt.publicationId);
+    expect(restored.ok && restored.value.state).toBe('complete');
+    const tokenUnavailable = vi.spyOn(publisher as any, 'getAccessToken').mockResolvedValue(null);
+    try {
+      const unknown = await publisher.reconcile(dummyCtx, receipt.publicationId);
+      expect(unknown.ok).toBe(true);
+      if (unknown.ok) {
+        expect(unknown.value.state).toBe('drive_complete');
+        expect(unknown.value.sheet).toMatchObject({ synced: false });
+        expect(unknown.value.sheet.observedHash).toBeUndefined();
+      }
+    } finally {
+      tokenUnavailable.mockRestore();
+    }
+
     // The row is edited in the sheet and the file is purged from Drive: verify reports both.
     const fileId = receipt.driveFiles[0].fileId;
-    const row = sheetRows.get(receipt.sheet.rowNumber!)!;
     row[4] = 'IN_PROGRESS';
     purgedFiles.add(fileId);
     const afterPurge = await publisher.verify(dummyCtx, receipt.publicationId);

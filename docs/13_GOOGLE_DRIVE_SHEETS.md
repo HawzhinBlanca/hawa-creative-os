@@ -79,6 +79,8 @@ Completion locks the named publication and task in that order, verifies the publ
 
 Before Core records a successful publisher answer, it checks that the answer names the same publication key and every approved artifact exactly once, with distinct verified Drive file IDs, expected content hashes, MIME types and byte sizes. An emulated answer cannot qualify. A claimed complete Sheet result must name the configured spreadsheet, task ID, package hash, observed hash and positive row number; a Drive-only result must not claim a synced Sheet row. A false success leaves the publication pending with `ARCHIVE_UNCONFIRMED` and withholds requester delivery. This validates the provider result at Core's trust boundary; it does not independently query Google. The publisher's readback and a live reconciliation drill are separate evidence gates.
 
+The Sheets publisher treats a blank or unreadable cached row identity as untrusted: it searches for the immutable task ID again before updating, rather than writing into the cached row. A Sheet receipt's `observedHash` now comes from an actual row readback; an accepted write without readback leaves it absent and cannot set `completedAt`. A later `reconcile` call that observes a changed row or cannot read it clears the current completion claim and returns `drive_complete` with Sheet sync unconfirmed. These are local adapter and fake-HTTP checks; the live Google row, permissions and staffed repair path remain admission work.
+
 ## 6. Sheet columns
 
 Required visible columns:

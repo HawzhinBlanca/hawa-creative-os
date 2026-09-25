@@ -302,6 +302,8 @@ describe('a publication whose Sheets row was not confirmed', () => {
     if (!first.ok) throw new Error('publish failed');
     expect(first.value.state).toBe('drive_complete');
     expect(first.value.sheet).toMatchObject({ synced: false, rowNumber: undefined });
+    expect(first.value.sheet.observedHash).toBeUndefined();
+    expect(first.value.completedAt).toBeUndefined();
     expect(first.value.detail).toMatchObject({ verified: true, sheetProblem: 'Sheets write failed: HTTP 500' });
 
     appendFails = false;
@@ -311,6 +313,7 @@ describe('a publication whose Sheets row was not confirmed', () => {
     expect(retry.value.publicationId).toBe(first.value.publicationId);
     expect(retry.value.state).toBe('complete');
     expect(retry.value.sheet).toMatchObject({ synced: true, rowNumber: 7 });
+    expect(retry.value.sheet.observedHash).toBe(req.packageHash);
     expect(retry.value.detail).not.toHaveProperty('sheetProblem');
     expect(calls).toEqual([
       'GET https://sheets.test/v4/spreadsheets/sheet-kaae/values/A:A',

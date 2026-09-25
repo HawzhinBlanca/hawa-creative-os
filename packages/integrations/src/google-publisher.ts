@@ -406,6 +406,7 @@ export class GooglePublisher implements Publisher {
         existing.sheet.spreadsheetId = request.destination.spreadsheetId || existing.sheet.spreadsheetId;
         existing.sheet.rowNumber = retry.rowNumber;
         existing.sheet.synced = retry.synced;
+        existing.sheet.observedHash = retry.observedHash;
         const detail: Record<string, any> = { ...existing.detail };
         if (retry.problem) detail.sheetProblem = retry.problem;
         else delete detail.sheetProblem;
@@ -450,7 +451,6 @@ export class GooglePublisher implements Publisher {
           expectedHash: request.packageHash,
           synced: false,
         },
-        completedAt: new Date().toISOString(),
         state: 'failed',
         detail: { verified: false, filesUploaded: 0 },
         emulated: false,
@@ -754,10 +754,10 @@ export class GooglePublisher implements Publisher {
         rowKey: request.taskId,
         rowNumber: sheetRowNumber,
         expectedHash: request.packageHash,
-        observedHash: request.packageHash,
+        observedHash: sheetResult.observedHash,
         synced: sheetSynced,
       },
-      completedAt: new Date().toISOString(),
+      ...(isFullyComplete ? { completedAt: new Date().toISOString() } : {}),
       state: isFullyComplete ? 'complete' : driveFiles.length > 0 ? 'drive_complete' : 'failed',
       detail: {
         verified: allFilesVerified,
@@ -780,7 +780,7 @@ export class GooglePublisher implements Publisher {
     request: PublishRequest,
     token: string | null | undefined,
     driveFiles: DriveFileReceipt[]
-  ): Promise<{ rowNumber?: number; synced: boolean; problem?: string }> {
+  ): Promise<{ rowNumber?: number; observedHash?: string; synced: boolean; problem?: string }> {
     let rowNumber = this.taskRowMap.get(request.taskId);
     const spreadsheetId = request.destination.spreadsheetId;
     if (!spreadsheetId) return { rowNumber, synced: false, problem: 'No spreadsheet is configured for this client' };
@@ -824,7 +824,7 @@ export class GooglePublisher implements Publisher {
           }
           const verifyData = (await verifyRes.json()) as any;
           const readTaskId = verifyData.values?.[0]?.[0];
-          if (readTaskId && readTaskId !== request.taskId) {
+          if (readTaskId !== request.taskId) {
             // Row position drifted (e.g. rows were moved, inserted, or sorted)! Find actual row by immutable taskId
             try {
               const reFound = await this.findRowByTaskId(spreadsheetId, token, request.taskId);
@@ -884,13 +884,15 @@ export class GooglePublisher implements Publisher {
       });
       if (!readback.ok) return { rowNumber, synced: false, problem: `Sheets readback failed: HTTP ${readback.status}` };
       const readRow = ((await readback.json()) as any).values?.[0];
+      const observedHash = typeof readRow?.[6] === 'string' ? readRow[6] : undefined;
       const matches =
         readRow &&
         readRow[0] === request.taskId &&
         readRow[1] === request.clientId &&
         readRow[4] === 'COMPLETE' &&
         readRow[6] === request.packageHash;
-      return matches ? { rowNumber, synced: true } : { rowNumber, synced: false, problem: `Row ${rowNumber} read back from Sheets does not match this publication` };
+      return matches ? { rowNumber, observedHash, synced: true } :
+        { rowNumber, observedHash, synced: false, problem: `Row ${rowNumber} read back from Sheets does not match this publication` };
     } catch (err: any) {
       return { rowNumber, synced: false, problem: `Sheets could not be reached: ${err?.message || String(err)}` };
     }
@@ -921,39 +923,48 @@ export class GooglePublisher implements Publisher {
     const token = await this.getAccessToken();
     for (const receipt of this.inMemoryLedger.values()) {
       if (receipt.publicationId === publicationId) {
-        if (receipt.state === 'failed' || !receipt.detail?.verified || receipt.sheet.rowNumber === undefined) {
+        if (receipt.state === 'failed' || !receipt.detail?.verified) {
           return { ok: true, value: receipt };
+        }
+        const unconfirmSheet = (observedHash?: string) => {
+          receipt.sheet.observedHash = observedHash;
+          receipt.sheet.synced = false;
+          receipt.state = 'drive_complete';
+          delete receipt.completedAt;
+          return { ok: true as const, value: receipt };
+        };
+        if (receipt.sheet.rowNumber === undefined || !receipt.sheet.spreadsheetId || !token) {
+          return unconfirmSheet();
         }
 
         // Perform genuine network call to Google Sheets to reconcile sync state
-        if (receipt.sheet.spreadsheetId && token) {
-          const spreadsheetId = receipt.sheet.spreadsheetId;
-          const readbackSheetUrl = `${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${receipt.sheet.rowNumber}:G${receipt.sheet.rowNumber}`;
-          try {
-            const res = await fetch(readbackSheetUrl, {
-              headers: { 'Authorization': `Bearer ${token}` },
-            });
-            if (res.ok) {
-              const data = await res.json() as any;
-              const row = data.values?.[0];
-              if (
-                row &&
-                row[0] === receipt.sheet.rowKey &&
-                row[4] === 'COMPLETE' &&
-                row[6] === receipt.sheet.expectedHash
-              ) {
-                receipt.sheet.synced = true;
-                receipt.state = 'complete';
-                return { ok: true, value: receipt };
-              }
+        const spreadsheetId = receipt.sheet.spreadsheetId;
+        const readbackSheetUrl = `${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${receipt.sheet.rowNumber}:G${receipt.sheet.rowNumber}`;
+        let observedHash: string | undefined;
+        try {
+          const res = await fetch(readbackSheetUrl, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const data = await res.json() as any;
+            const row = data.values?.[0];
+            observedHash = typeof row?.[6] === 'string' ? row[6] : undefined;
+            if (
+              row &&
+              row[0] === receipt.sheet.rowKey &&
+              row[4] === 'COMPLETE' &&
+              row[6] === receipt.sheet.expectedHash
+            ) {
+              receipt.sheet.observedHash = observedHash;
+              receipt.sheet.synced = true;
+              receipt.state = 'complete';
+              receipt.completedAt ??= new Date().toISOString();
+              return { ok: true, value: receipt };
             }
-          } catch (e) {}
-          // If remote readback failed or mismatched, keep sheet.synced false
-          receipt.sheet.synced = false;
-          return { ok: true, value: receipt };
-        }
-
-        return { ok: true, value: receipt };
+          }
+        } catch (e) {}
+        // A prior completion cannot remain current when this row has changed or is unreadable.
+        return unconfirmSheet(observedHash);
       }
     }
     return {
