@@ -250,3 +250,33 @@ describe('TelegramSender: the office hears of an uncertain critical message once
     await expect(handleSend(ctx, depsWith(bridge), { ...text(), key: '' })).rejects.toBeInstanceOf(restate.TerminalError);
   });
 });
+
+describe('TelegramSender: the draft as a photo (slice 2.3)', () => {
+  it('reads the stored export by reference, checks its hash, sends it as a photo with its caption and buttons, and fences it', async () => {
+    const calls: Array<{ chatId: string; bytes: number; caption?: string; markup?: unknown }> = [];
+    const { bridge } = scriptedBridge([{ success: true, messageId: '9' }]);
+    bridge.dispatchOutboundPhoto = async (chatId, photo, caption, replyMarkup) => {
+      calls.push({ chatId: String(chatId), bytes: photo.length, caption, markup: replyMarkup });
+      return { success: true, messageId: '77' };
+    };
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const m: OutboundMessage = { ...doc(bytes), kind: 'photo', key: `lc-test:${randomUUID()}:outcome:photo`, caption: 'Canva draft · Task ID: t', filename: undefined };
+    const deps = depsWith(bridge, { [m.exportRef!.artifactId]: bytes });
+    expect(await sendAttempt(deps, m)).toEqual({ outcome: 'sent', messageId: '77' });
+    expect(calls).toEqual([{ chatId: m.chatId, bytes: bytes.length, caption: 'Canva draft · Task ID: t', markup: undefined }]);
+    expect(await markOf(m.key)).toBe('sent');
+    // Asked again (a retried invocation): the mark answers, nothing is sent twice.
+    expect(await sendAttempt(deps, m)).toEqual({ outcome: 'sent' });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('a photo whose stored bytes changed since it was composed is refused, not sent', async () => {
+    const { bridge } = scriptedBridge([{ success: true }]);
+    let sent = 0;
+    bridge.dispatchOutboundPhoto = async () => { sent++; return { success: true }; };
+    const m: OutboundMessage = { ...doc(new Uint8Array([1, 2, 3])), kind: 'photo', key: `lc-test:${randomUUID()}:outcome:photo` };
+    const result = await sendAttempt(depsWith(bridge, { [m.exportRef!.artifactId]: new Uint8Array([9, 9, 9]) }), m);
+    expect(result).toMatchObject({ outcome: 'refused', error: expect.stringContaining('DELIVERED_FILE_CHANGED') });
+    expect(sent).toBe(0);
+  });
+});

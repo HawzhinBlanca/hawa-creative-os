@@ -106,7 +106,8 @@ describe('POST /v1/internal/telegram/intake', () => {
   it('answers NOT_CONFIGURED without the webhook secret, and refuses a mode it does not have', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const app = createApp({ db } as any);
-    expect((await intake(app, brief(updateId(), chatId()), 'lifecycle')).status).toBe(400);
+    // 'lifecycle' is a mode since slice 2.3; one this Core does not know is still refused.
+    expect((await intake(app, brief(updateId(), chatId()), 'bogus')).status).toBe(400);
     expect((await intake(app, { message: {} })).status).toBe(400);
     vi.stubEnv('TELEGRAM_WEBHOOK_SECRET', '');
     expect((await intake(app, brief(updateId(), chatId()))).body).toMatchObject({ intakeStatus: 503, code: 'NOT_CONFIGURED' });

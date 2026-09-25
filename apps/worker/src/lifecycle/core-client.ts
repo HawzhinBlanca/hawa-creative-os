@@ -15,6 +15,7 @@
  *    longer than `timeoutMs` counts as this update's retryable failure.
  * "Wait" is a thrown error: Restate retries the step and does not journal it.
  */
+import type { ChatIntakeState, IntakeAnswerBody } from '@hawa/contracts';
 import type { ChatInboxCore, IntakeAnswer, IntakeMode } from './chat-inbox.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
 
@@ -47,23 +48,27 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
   });
 
   return {
-    async intake(update: TelegramUpdateLike, mode: IntakeMode): Promise<IntakeAnswer> {
+    async intake(update: TelegramUpdateLike, mode: IntakeMode, chat?: ChatIntakeState): Promise<IntakeAnswer> {
       let res: Response;
       try {
         res = await doFetch(`${base}/v1/internal/telegram/intake`, {
           method: 'POST',
           headers: headers(update),
-          body: JSON.stringify({ v: 1, update, mode }),
+          body: JSON.stringify({ v: 1, update, mode, ...(chat ? { chat } : {}) }),
           signal: AbortSignal.timeout(options.timeoutMs ?? 8 * 60_000),
         });
       } catch (err) {
         if (isTimeout(err)) return { kind: 'retry', reason: `intake did not answer within ${Math.round((options.timeoutMs ?? 480_000) / 1000)} s` };
         throw new Error(`Core is unreachable, update ${update.update_id} waits: ${errorText(err)}`);
       }
-      const body = (await res.json().catch(() => ({}))) as { intakeStatus?: number; code?: string; duplicate?: boolean; title?: string };
+      const body = (await res.json().catch(() => ({}))) as Partial<IntakeAnswerBody> & { title?: string };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
-        if (!retryable(status)) return { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true };
+        // Slice 2.3: intake decided, and saved nothing; ChatInbox routes the decision.
+        if (body.kind === 'decision' && body.decision && typeof body.decision === 'object') {
+          return { kind: 'done', intakeStatus: status, decision: body.decision, ...(body.chat ? { chat: body.chat } : {}) };
+        }
+        if (!retryable(status)) return { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true, ...(body.chat ? { chat: body.chat } : {}) };
         if (body.code && WAIT_CODES.has(body.code)) throw new Error(`intake waits: ${body.code} (HTTP ${status})`);
         return { kind: 'retry', reason: `intake answered HTTP ${status}` };
       }

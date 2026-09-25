@@ -40,8 +40,10 @@ export interface OutboundMessage {
   /**
    * 'callback_answer' (slice 2.3): the answer to a tapped button, `text` shown as its toast. Always
    * courtesy: Telegram refuses a late answer, which is harmless.
+   * 'photo' (slice 2.3): a stored PNG export (exportRef) shown as a picture, `caption` under it: the
+   * draft the requester replies to. A build that does not know it sends the caption as text.
    */
-  kind: 'text' | 'document' | 'callback_answer';
+  kind: 'text' | 'document' | 'callback_answer' | 'photo';
   text?: string;
   /** For 'callback_answer': the tapped button's callback query. */
   callbackQueryId?: string;

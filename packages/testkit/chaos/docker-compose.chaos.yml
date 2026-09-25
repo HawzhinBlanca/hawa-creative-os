@@ -68,6 +68,14 @@ x-app-environment: &app-environment
   NODE_EXTRA_CA_CERTS: /chaos-ca/ca.pem
   HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
 
+# Slice 2.3: the chats whose new requests the worker's ChatInbox opens on RequestLifecycle (the
+# driver sets 9400001 to 9400040, driver/lifecycle.ts; a scenario takes one off the list and restarts
+# the worker, R5), and the reminder scale (1: real days; R2 restarts the worker with 0.0001). Core's
+# own HAWA_LIFECYCLE_CHATS above is slice 2.2's delivery list and stays as it is.
+x-worker-lifecycle: &worker-lifecycle
+  HAWA_LIFECYCLE_CHATS: ${CHAOS_WORKER_LIFECYCLE_CHATS:-}
+  HAWA_LIFECYCLE_REMINDER_SCALE: ${CHAOS_REMINDER_SCALE:-1}
+
 x-worker: &worker
   build:
     context: ../../..
@@ -212,7 +220,8 @@ services:
   worker-blue:
     <<: *worker
     environment:
-      <<: *app-environment
+      # The worker's own lifecycle settings first: in a merge list the first mapping wins.
+      <<: [*worker-lifecycle, *app-environment]
       PORT: 9080
       HAWA_WORKER_COLOUR: blue
       HAWA_WORKER_SELF_URI: http://worker-blue:9080
@@ -223,7 +232,8 @@ services:
     # Started only for a deploy scenario; blue is the live colour.
     profiles: ["green"]
     environment:
-      <<: *app-environment
+      # The worker's own lifecycle settings first: in a merge list the first mapping wins.
+      <<: [*worker-lifecycle, *app-environment]
       PORT: 9080
       HAWA_WORKER_COLOUR: green
       HAWA_WORKER_SELF_URI: http://worker-green:9080

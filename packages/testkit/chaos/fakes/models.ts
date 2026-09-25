@@ -144,8 +144,10 @@ export class FakeModels {
     const user = textOf(messages.find((m) => m.role === 'user')?.content);
     const schema = body.response_format?.json_schema?.name;
     if (schema === 'canva_design_plan') {
-      // The planner sends the request as JSON: alone, or as the first text part of a vision message.
-      const first = user.trim().startsWith('{') ? user.trim().split('\n')[0] : '';
+      // The planner sends the request as JSON: alone, or as the first text part of a vision message; a
+      // revision or a redesign sends it on the line after "Design Brief:" (canva-design-planner.ts).
+      const trimmed = user.trim();
+      const first = trimmed.startsWith('{') ? trimmed.split('\n')[0] : /^Design Brief:\n/.test(trimmed) ? trimmed.split('\n')[1] ?? '' : '';
       let request: any = null;
       try { request = JSON.parse(first || user); } catch { request = null; }
       return request ? { route: 'canva_design_plan', content: JSON.stringify(plannerLayout(request)) } : null;

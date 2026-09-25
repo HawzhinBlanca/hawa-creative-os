@@ -19,7 +19,8 @@ import { isStandingRule } from '../standing-rules-chat.js';
 import { createOfficeAlerts } from '../office-alerts.js';
 import { createAskHistory } from '../ask-history.js';
 import { createTelegramUpdateState } from './update-state.js';
-import type { TelegramReplyReading } from './replies.js';
+import { LIFECYCLE_PICTURE_NOTICE, type TelegramReplyReading } from './replies.js';
+import { answerDecision, courtesyText, decideSession, lifecycleOwnerOf, lifecycleTargetWithoutInbox } from './decide-mode.js';
 
 export type TelegramChanges = ReturnType<typeof createTelegramChanges>;
 
@@ -52,6 +53,27 @@ export function createTelegramChanges(deps: Pick<CoreContext, 'db' | 'events' | 
           : undefined,
       });
       standingRuleSaved = saved.saved;
+    }
+
+    // A change to a design of a request the lifecycle owns is the lifecycle's to make (PHASE2_DESIGN.md
+    // 2.3): routed with the requester's words, never saved here as well. The lifecycle decides whether
+    // it is the current draft, and Core composes what the requester is told either way.
+    if (feedbackTargetTask && db && isValidUuid(feedbackTargetTask.id)) {
+      let owner: Awaited<ReturnType<typeof lifecycleOwnerOf>>;
+      try {
+        owner = await lifecycleOwnerOf(db, feedbackTargetTask.id);
+      } catch (err) {
+        log.warn('[TelegramIngress] Could not tell whether the change target is the request lifecycle\'s:', err);
+        return problem(c, 503, 'Database unavailable', 'The owner of the design could not be read; retry');
+      }
+      if (owner) {
+        if (!decideSession()) return lifecycleTargetWithoutInbox(c, String(feedbackTargetTask.id), owner.requestId);
+        if (referenceImageBase64) {
+          return answerDecision(c, { kind: 'handled', messages: [courtesyText(sourceChannelId, `lc-picture:${sourceChannelId}:${sourceEventId}`, LIFECYCLE_PICTURE_NOTICE, 'HTML')] });
+        }
+        const directive = String(classification?.directive || rawText).trim().slice(0, 2000);
+        return answerDecision(c, { kind: 'change', requestId: owner.requestId, replyToTaskId: String(feedbackTargetTask.id), directive });
+      }
     }
 
     // A change to a design that is still being made (a reply to "Request saved", a second change

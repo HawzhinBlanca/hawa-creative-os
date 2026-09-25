@@ -4,7 +4,7 @@
  * (architecture programme 1.3, SPLIT_PLAN.md G9).
  */
 import type { Context } from 'hono';
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, questionIdOf } from '@hawa/contracts';
 import { sql, withRlsContext } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../../core-context.js';
@@ -27,6 +27,7 @@ import {
 } from '../requester-actions.js';
 import { createTelegramQuestions, type TaskCreatedPayload } from './questions.js';
 import { createTelegramUpdateState } from './update-state.js';
+import { answerDecision, decideSession, lifecycleOwnerOf, lifecycleTargetWithoutInbox } from './decide-mode.js';
 
 export type TelegramRequesterActions = ReturnType<typeof createTelegramRequesterActions>;
 
@@ -83,6 +84,19 @@ export function createTelegramRequesterActions(
       return c.json({ ok: false, reason: 'NOT_THIS_CHAT', taskId: rq.taskId }, 200);
     }
     const chosen = answerIndex(rq.action);
+    // A button of a request the lifecycle owns is its to act on (PHASE2_DESIGN.md 2.3), whatever
+    // the chat's flag says now: routed, never acted on here as well.
+    const owner = await lifecycleOwnerOf(db, rq.taskId);
+    if (owner) {
+      if (!decideSession()) return lifecycleTargetWithoutInbox(c, rq.taskId, owner.requestId);
+      if (chosen !== undefined) {
+        return answerDecision(c, { kind: 'answer', requestId: owner.requestId, questionId: questionIdOf(rq.taskId), answer: { option: chosen + 1 }, callbackQueryId: cb.id });
+      }
+      return answerDecision(c, {
+        kind: 'requester', requestId: owner.requestId, taskId: rq.taskId, action: rq.action as 'ok' | 'chg' | 'dsg' | 'sst' | 'ssq' | 'sls',
+        callbackQueryId: cb.id, actorId: String(cb?.from?.id || ''),
+      });
+    }
     if (chosen !== undefined) {
       const pending = await pendingQuestion(rq.taskId, chat);
       const option = pending?.options[chosen];

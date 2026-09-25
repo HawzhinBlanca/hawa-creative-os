@@ -13,6 +13,8 @@ import { createTelegramCallbacksAndCommands } from '../services/telegram-intake/
 import { createTelegramMedia } from '../services/telegram-intake/media.js';
 import { createTelegramReplies, type PendingClarifications } from '../services/telegram-intake/replies.js';
 import { createTelegramChanges } from '../services/telegram-intake/changes.js';
+import { answerDecision, decideSession, lifecycleMode } from '../services/telegram-intake/decide-mode.js';
+import { DEFAULT_TENANT_ID } from '../core-context.js';
 import type { RouteContext } from './types.js';
 
 /**
@@ -36,7 +38,7 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
   const { readMedia } = createTelegramMedia(ctx, acknowledgedAlbums);
   const { readReply } = createTelegramReplies(ctx, pendingClarifications);
   const { makeChange } = createTelegramChanges(ctx);
-  const { ingestChatCampaignTask } = createChatCampaignIntake(ctx);
+  const { ingestChatCampaignTask, draftChatRequest } = createChatCampaignIntake(ctx);
 
   // Webhooks
   registerRoute('post', '/webhooks/telegram', async (c: Context) => {
@@ -141,6 +143,15 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
     }
     const media = await readMedia(c, { json, msg, sourceEventId, verifiedSender });
     if (media instanceof Response) return media;
+    // A message with a picture is read on Core's own path even in a lifecycle chat: the lifecycle's
+    // rounds do not take pictures yet (Core would fetch them by file id), and a picture joins the
+    // requests and albums Core keeps. Buttons, replies and changes aimed at a lifecycle request are
+    // still routed to it below.
+    const session = decideSession();
+    if (session?.mode === 'lifecycle' && media.referenceImageBase64) {
+      session.mode = 'legacy';
+      session.legacyBecause = 'PICTURE';
+    }
 
     const commandAnswer = await handleCommand(c, media);
     if (commandAnswer) return commandAnswer;
@@ -193,6 +204,22 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
     }
 
     const shouldGenerate = c.req.query('generate') === 'true' || json.autoGenerate === true || process.env.AUTO_GENERATE_CHAT_DESIGNS === 'true';
+
+    // In a lifecycle chat a new request is opened by RequestLifecycle, not saved here (PHASE2_DESIGN.md
+    // 2.3): intake answers what it read, one draft per graphic, and ChatInbox opens a request for each.
+    if (lifecycleMode()) {
+      const bilingual = splitBilingualRequest(rawText);
+      const parts = bilingual ? [bilingual.en, bilingual.ckb] : [rawText];
+      const requests = [];
+      for (const [index, text] of parts.entries()) {
+        const draft = await draftChatRequest({
+          platform: 'telegram', sourceEventId, sourceChannelId, senderName, rawText: text, explicitClientId: json.clientId, autoGenerate: shouldGenerate,
+        });
+        requests.push({ index, draft });
+      }
+      return answerDecision(c, { kind: 'new_request', tenantId: DEFAULT_TENANT_ID, requests });
+    }
+
     const hostHeader = c.req.header('x-forwarded-host') || c.req.header('host');
     const incomingDeskBase = hostHeader ? `https://${hostHeader}` : undefined;
 

@@ -88,7 +88,7 @@ export const markIdOf = (key: string) => `lc:${key}`;
 const UNCERTAIN = /DELIVERY_UNCERTAIN|RECEIPT_INVALID/;
 const SERVER_ERROR = /_5\d\d$/;
 const RATE_LIMITED = /_429$/;
-const REFUSED = /_4\d\d$|^INVALID_(DOCUMENT|PHOTO)_BUFFER$/;
+const REFUSED = /_4\d\d$|^INVALID_(DOCUMENT|PHOTO)_BUFFER$|^PHOTO_UNSUPPORTED_BY_BRIDGE$/;
 
 const tenantOf = (m: OutboundMessage) => m.tenantId || m.exportRef?.tenantId || process.env.HAWA_TENANT_ID || DEFAULT_TENANT_ID;
 const stepKind = (m: OutboundMessage): SendStepKind => (m.kind === 'document' ? 'document' : 'message');
@@ -120,10 +120,11 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
   if (!botToken) throw new Error('TELEGRAM_NOT_CONFIGURED: TELEGRAM_BOT_TOKEN is not set; the message waits for it');
 
   // The bytes first, checked against their approved hash: a missing or changed file is never sent.
+  // A photo (the draft, slice 2.3) is read the same way, by reference to its stored export.
   let bytes: Uint8Array | null = null;
-  if (m.kind === 'document') {
+  if (m.kind === 'document' || m.kind === 'photo') {
     const ref = m.exportRef;
-    if (!ref) return { outcome: 'refused', error: 'DOCUMENT_WITHOUT_EXPORT: a document names the stored export it sends' };
+    if (!ref) return { outcome: 'refused', error: `${m.kind === 'photo' ? 'PHOTO' : 'DOCUMENT'}_WITHOUT_EXPORT: a ${m.kind} names the stored export it sends` };
     if (!deps.db) throw new Error('DATABASE_NOT_CONFIGURED: the approved file is read from Postgres');
     bytes = await withRlsContext(deps.db, { tenantId: ref.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
       deps.readExportBytes(trx, ref.tenantId, ref.taskId, ref.artifactId));
@@ -139,7 +140,11 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
   const bridge = deps.bridge(botToken);
   let res: TelegramSendResult;
   try {
-    res = m.kind === 'document'
+    res = m.kind === 'photo'
+      ? (bridge.dispatchOutboundPhoto
+          ? await bridge.dispatchOutboundPhoto(m.chatId, Buffer.from(bytes!), m.caption, (m as LifecycleMessage).replyMarkup)
+          : { success: false, error: 'PHOTO_UNSUPPORTED_BY_BRIDGE' })
+      : m.kind === 'document'
       ? await bridge.dispatchOutboundDocument(m.chatId, bytes!, m.filename || 'file', {
           mimeType: m.mimeType,
           caption: m.caption,

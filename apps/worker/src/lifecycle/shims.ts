@@ -52,6 +52,7 @@ export const HANDLERS_EVER: readonly HandlerRecord[] = [
   { service: 'RequestLifecycle', handler: 'retryProjection', since: '2.3' },
   { service: 'RequestLifecycle', handler: 'get', since: '2.3' },
   { service: 'DesignRun', handler: 'run', since: '2.3' },
+  { service: 'ChatInbox', handler: 'getChat', since: '2.3' },
 ];
 
 const DAY_MS = 86_400_000;

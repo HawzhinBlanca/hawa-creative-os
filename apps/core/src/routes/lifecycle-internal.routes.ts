@@ -21,11 +21,12 @@
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, type ChatIntakeState, type IntakeAnswerBody, type PendingClarification } from '@hawa/contracts';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
+import { readDecisionRecord, runWithDecideSession, writeDecisionRecord, type IntakeDecideSession, type IntakeMode } from '../services/telegram-intake/decide-mode.js';
 import type { RouteContext } from './types.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
@@ -63,6 +64,28 @@ interface UpdateLike { update_id: number; [kind: string]: unknown }
 /** The chat an update came from, for the chaos suite's point (the dead letter's own reading). */
 const chatOf = (u: UpdateLike): string => parkedUpdateChat(u) ?? '';
 
+/**
+ * The chat state ChatInbox sent, as far as intake reads it: a clarification with its words and when it
+ * was asked, and the albums answered. Anything else is dropped rather than trusted.
+ */
+export function readChatState(raw: unknown): ChatIntakeState {
+  if (!raw || typeof raw !== 'object') return {};
+  const r = raw as Record<string, unknown>;
+  const out: ChatIntakeState = {};
+  const p = r.pendingClarification as Partial<PendingClarification> | undefined;
+  if (p && typeof p === 'object' && typeof p.rawText === 'string' && p.rawText.trim() && Number.isFinite(p.askedAt)) {
+    out.pendingClarification = {
+      rawText: p.rawText.slice(0, 20000), askedAt: Number(p.askedAt), updateId: Number.isSafeInteger(p.updateId) ? Number(p.updateId) : 0,
+      ...(typeof p.taskId === 'string' && /^[0-9a-f-]{36}$/i.test(p.taskId) ? { taskId: p.taskId } : {}),
+    };
+  }
+  if (r.albumsAcked && typeof r.albumsAcked === 'object') {
+    const albums = Object.entries(r.albumsAcked as Record<string, unknown>).filter(([k, v]) => k.length <= 64 && Number.isFinite(v)).slice(-100);
+    if (albums.length) out.albumsAcked = Object.fromEntries(albums.map(([k, v]) => [k, Number(v)]));
+  }
+  return out;
+}
+
 const isUpdate = (u: unknown): u is UpdateLike =>
   Boolean(u) && typeof u === 'object' && Number.isSafeInteger((u as UpdateLike).update_id) && (u as UpdateLike).update_id > 0;
 
@@ -91,13 +114,14 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const body = await readBody(c);
     const update = body?.update;
     if (!isUpdate(update)) return problem(c, 400, 'Invalid update', 'The body must carry a Telegram update with a positive update_id');
-    // 2.3 adds the lifecycle's decide mode; until then this route knows today's intake only, and an
-    // older Core refuses a mode it does not have instead of treating it as legacy.
+    // 'legacy': today's intake, except that an update aimed at a request the lifecycle owns is
+    // answered as a decision to route. 'lifecycle' (slice 2.3): new requests are decided, not saved.
     const mode = body?.mode ?? 'legacy';
-    if (mode !== 'legacy') return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" only, not "${String(mode)}"`);
+    if (mode !== 'legacy' && mode !== 'lifecycle') return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
 
     const handled = (intakeStatus: number, extra: Record<string, unknown> = {}) =>
       c.json({ v: 1, kind: 'handled', intakeStatus, ...extra }, 200);
+    const chat = chatOf(update);
 
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (!secret) return handled(503, { code: 'NOT_CONFIGURED', detail: 'TELEGRAM_WEBHOOK_SECRET is not configured' });
@@ -105,12 +129,44 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // switch, as it waited in Telegram when Core polled. Asked here so the answer is not a retry.
     if (await intakeRefused(channelKillSwitches, 'telegram')) return handled(503, { code: 'INTAKE_PAUSED' });
 
-    // Today's intake, in this process, as the Core poller handed updates to it (app.ts).
-    const res = await app.request('/api/webhooks/telegram?generate=true', {
+    // The same update decided before (the worker lost the answer, or was killed): the decision is
+    // answered from its record, and nothing is transcribed or classified again.
+    if (db && chat) {
+      const recorded = await readDecisionRecord(db, chat, update.update_id).catch((err: unknown) => {
+        log.warn(`[core:internal] could not read the decision record of update ${update.update_id}:`, err instanceof Error ? err.message : err);
+        return undefined;
+      });
+      if (recorded === undefined) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+      if (recorded) {
+        return c.json({ v: 1, kind: 'decision', intakeStatus: 200, decision: recorded.decision, replayed: true, ...(recorded.chat ? { chat: recorded.chat } : {}) } satisfies IntakeAnswerBody, 200);
+      }
+    }
+
+    // Today's intake, in this process, as the Core poller handed updates to it (app.ts), inside the
+    // decide session its stages read (services/telegram-intake/decide-mode.ts).
+    const session: IntakeDecideSession = { mode: mode as IntakeMode, chat: mode === 'lifecycle' ? readChatState(body?.chat) : {} };
+    const res = await runWithDecideSession(session, async () => app.request('/api/webhooks/telegram?generate=true', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret, ...requestIdHeaders() },
       body: JSON.stringify(update),
-    });
+    }));
+    const chatState = mode === 'lifecycle' ? { chat: session.chat } : {};
+    if (session.legacyBecause) log.info(`[core:internal] update ${update.update_id} of lifecycle chat ${chat} read on Core's own path: ${session.legacyBecause}`);
+
+    if (session.decision) {
+      // The decision is written before it is answered: paid transcription and classification are
+      // not made again for it (PHASE2_DESIGN.md section 5).
+      if (db && chat) {
+        try {
+          await writeDecisionRecord(db, chat, update.update_id, session.decision, mode === 'lifecycle' ? session.chat : undefined);
+        } catch (err) {
+          log.warn(`[core:internal] the decision for update ${update.update_id} could not be recorded; the update waits:`, err instanceof Error ? err.message : err);
+          return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+        }
+      }
+      await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat, status: 200, decision: session.decision.kind });
+      return c.json({ v: 1, kind: 'decision', intakeStatus: 200, decision: session.decision, ...chatState } satisfies IntakeAnswerBody, 200);
+    }
     const answer = (await res.json().catch(() => ({}))) as { duplicate?: boolean; title?: string; task?: { id?: string }; tasks?: Array<{ id?: string }> };
     if (res.status === 503 && answer.title === 'Database Unavailable') return handled(503, { code: 'DATABASE_UNAVAILABLE' });
     // The switch thrown between the check above and intake's own.
@@ -119,9 +175,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
 
     // Intake has decided and saved what it saves; the answer has not left yet (chaos suite point:
     // a Core killed here must not make the worker's retry a second task).
-    await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatOf(update), status: res.status });
+    await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat, status: res.status });
     const taskIds = [...(answer.tasks ?? []), ...(answer.task ? [answer.task] : [])].map((t) => t?.id).filter((id): id is string => typeof id === 'string');
-    return handled(res.status, { duplicate: answer.duplicate === true, ...(taskIds.length ? { taskIds: [...new Set(taskIds)] } : {}) });
+    // The chat's state goes back only when the update is done with; a retried one keeps the old.
+    const done = res.status < 500 && res.status !== 408 && res.status !== 429;
+    return handled(res.status, { duplicate: answer.duplicate === true, ...(taskIds.length ? { taskIds: [...new Set(taskIds)] } : {}), ...(done ? chatState : {}) });
   });
 
   internal('/telegram/park', async (c) => {

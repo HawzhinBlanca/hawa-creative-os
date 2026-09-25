@@ -146,11 +146,12 @@ export async function waitDelivered(chat: string, taskId: string, timeoutMs = 18
 
 /**
  * Nothing left to do: no Restate invocation running or backing off, no outbox command pending or
- * leased, and the fake Telegram has had no call for `idleMs`.
+ * leased, and the fake Telegram has had no call for `idleMs`. A delayed invocation waiting for its
+ * time (`scheduled`: a lifecycle reminder or expiry days ahead, slice 2.3) is not work in flight.
  */
 export async function quiescent(idleMs = 5000, timeoutMs = 240_000): Promise<void> {
   await waitUntil('quiescence', async () => {
-    const [inv] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE status NOT IN ('completed')`);
+    const [inv] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE status NOT IN ('completed', 'scheduled')`);
     const [outbox] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands WHERE state IN ('pending', 'leased') AND available_at <= now() + interval '5 seconds'`);
     const sent = await fakes.sent();
     const last = sent.length ? Date.parse(sent[sent.length - 1].at) : 0;

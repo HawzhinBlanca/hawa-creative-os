@@ -77,7 +77,9 @@ describe.skipIf(!url)('POST /v1/internal/lifecycle/:requestId/project', () => {
     const { ev, answer } = await opened();
     expect(answer).toMatchObject({ v: 1, status: 'applied', rev: 1, stage: 'designing' });
     const [created] = answer.results;
-    expect(created).toMatchObject({ op: 'createRequest', autoGenerate: true, stage: 'designing', messages: [] });
+    expect(created).toMatchObject({ op: 'createRequest', autoGenerate: true, stage: 'designing' });
+    // The requester's acknowledgement is composed here (part C), to be sent by TelegramSender.
+    expect((created as { messages: unknown[] }).messages).toEqual([expect.objectContaining({ key: `${ev.requestId}:1:ack`, chatId: ev.chatId, kind: 'text', class: 'courtesy' })]);
     const taskId = (created as { taskId: string }).taskId;
     const rows = await asOwner(async (trx) => ({
       request: (await sql<{ owner: string; stage: string; rev: string; root_task_id: string; current_task_id: string; chat_id: string }>`
@@ -192,7 +194,7 @@ describe.skipIf(!url)('POST /v1/internal/lifecycle/:requestId/project', () => {
 
   it('refuses what it cannot do yet instead of guessing: an op of a later part, photos, a reference image', async () => {
     const { ev, state } = await opened();
-    const later = await project(ev.requestId, { v: 1, expectedRev: 1, rev: 2, key: `${ev.requestId}:2:designFinished`, tenantId: TENANT, ops: [{ op: 'recordOutcome', taskId: state.rounds[0].taskId, runId: 'dr-x', report: { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW' } }] });
+    const later = await project(ev.requestId, { v: 1, expectedRev: 1, rev: 2, key: `${ev.requestId}:2:officeDecision`, tenantId: TENANT, ops: [{ op: 'recordApproval', taskId: state.rounds[0].taskId, revisionId: randomUUID(), actionId: 'a-1', actor: { userId: 'u', role: 'operator' } }] });
     expect(later.status).toBe(422);
     expect(await later.json()).toMatchObject({ code: 'OP_NOT_AVAILABLE' });
     const photos = openEvent(newChat(), 700_001, { photoFileIds: ['AgAC-file'] });

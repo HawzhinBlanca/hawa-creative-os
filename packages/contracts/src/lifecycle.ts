@@ -76,6 +76,8 @@ export interface DraftIntake {
   studioOptions?: Record<string, unknown>;
   /** Telegram file ids; Core downloads them. */
   photoFileIds?: string[];
+  /** Who sent it, as Telegram names them: the acknowledgement's client line for a client it does not know. */
+  senderName?: string;
 }
 
 /** A "new request or a change?" question ChatInbox keeps until the sender answers it. */
@@ -91,11 +93,51 @@ export interface PendingClarification {
 export type IntakeDecision =
   | { kind: 'handled'; messages?: LifecycleMessage[] }
   | { kind: 'clarify'; remember: PendingClarification; messages: LifecycleMessage[] }
-  | { kind: 'new_request'; requests: Array<{ index: number; draft: DraftIntake }>; messages?: LifecycleMessage[] }
+  /** `tenantId`: the tenant intake read the request in; the requests are opened in it. */
+  | { kind: 'new_request'; requests: Array<{ index: number; draft: DraftIntake }>; messages?: LifecycleMessage[]; tenantId?: string }
   | { kind: 'answer'; requestId: string; questionId: string; answer: RequesterAnswer; callbackQueryId?: string }
   | { kind: 'requester'; requestId: string; taskId: string; action: 'ok' | 'chg' | 'dsg' | 'sst' | 'ssq' | 'sls'; callbackQueryId?: string; actorId: string }
   | { kind: 'change'; requestId: string; replyToTaskId: string; directive: string; photoFileIds?: string[] }
   | { kind: 'park'; reason: string };
+
+/**
+ * What ChatInbox keeps for its chat between updates (PHASE2_DESIGN.md 2.2) and hands to intake with
+ * each update of a lifecycle chat: the "new request or a change?" question waiting for its answer
+ * (it replaced Core's in-memory map), and the albums already answered (album id → when, ms), so an
+ * album of ten photos gets one answer across restarts. Intake answers with the state after the update.
+ */
+export interface ChatIntakeState {
+  pendingClarification?: PendingClarification;
+  albumsAcked?: Record<string, number>;
+}
+
+/**
+ * POST /v1/internal/telegram/intake's answer (slice 2.1, extended in 2.3). `handled`: intake did
+ * what the update asked itself (today's path, or a rule, a command, a greeting). `decision`: intake
+ * decided and saved nothing; ChatInbox routes `decision` (to RequestLifecycle, or the messages to
+ * TelegramSender). `chat` is the chat's state after the update, in lifecycle mode. `replayed`: the
+ * decision was read from its record (the same update asked again), not decided afresh.
+ */
+export interface IntakeAnswerBody {
+  v: 1;
+  kind: 'handled' | 'decision';
+  intakeStatus: number;
+  duplicate?: boolean;
+  code?: string;
+  decision?: IntakeDecision;
+  chat?: ChatIntakeState;
+  replayed?: boolean;
+  taskIds?: string[];
+}
+
+/**
+ * The id of the question a round's design run asked (recordOutcome), which the requester's answer
+ * names. A round asks at most one question: its answer is the next round, and a re-drive starts only
+ * from the office's manual stage, never while a question waits.
+ */
+export function questionIdOf(taskId: string): string {
+  return `q:${taskId}`;
+}
 
 export interface RequesterAnswer {
   text?: string;
