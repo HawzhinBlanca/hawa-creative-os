@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T09:27:04Z",
+  "generatedAt": "2026-09-25T09:42:40Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 298,
+  "fileCount": 299,
   "files": [
     {
       "path": ".dockerignore",
@@ -273,6 +273,11 @@
       "bytes": 2731
     },
     {
+      "path": "adrs/041_nullable_qa_for_nonapproval_decisions.md",
+      "sha256": "b6bdeaddd24e859677e38f12dd8172f8d18cebf59c391d6317f44179bc1edee4",
+      "bytes": 2003
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "54ca6b1554c988f5a2405991660047ded612d8d96c93dd3e88bc849cc09c2b7a",
       "bytes": 21896
@@ -369,8 +374,8 @@
     },
     {
       "path": "db/schema.sql",
-      "sha256": "28a1bf47f792b7450b7a329f0ae3b689f256591024913e2d8c88e7d9d9eeb4db",
-      "bytes": 43617
+      "sha256": "c0ddcd859965bf508efed20a263c6f43ddbdd5260a0e261f609571700229b4fe",
+      "bytes": 43700
     },
     {
       "path": "db/seed.sql",
@@ -759,8 +764,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
-      "sha256": "20454ecef92a6d6512f8d725acdce7e2b274eda6bd83bd4fc29df4b2c55dbd22",
-      "bytes": 15994
+      "sha256": "f70fac5b52adfe922dc5687f2f6f66279976069f6d39565dab7482de20057a67",
+      "bytes": 16770
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_RESTATE_KILL_DRILL.md",
@@ -799,8 +804,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R18_EVIDENCE.md",
-      "sha256": "d9b99f1755a38278329b5aac78a4b9add9a185991bf3966439755a439d414350",
-      "bytes": 3613
+      "sha256": "ae5d65025d654858e488868ac1634376cd57f1589fb36ab1834a8aee31ce92fe",
+      "bytes": 5571
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_EVIDENCE.md",
@@ -809,8 +814,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/REALITY_CHECK_2026-09-25.md",
-      "sha256": "dce304738600efea0c319b81f1b6f25b17488541cfea2b803536ae8898ada560",
-      "bytes": 15458
+      "sha256": "b7bac69d9072837b1baa22651e5dc2ece1aae3685fc0fa513e15b4d6aeadbfbe",
+      "bytes": 16039
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
@@ -824,8 +829,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "7fda25981507a54d1006769a3f7974a371c89bde9852455185cbd3a7738e242d",
-      "bytes": 113097
+      "sha256": "61b7c90f46ce65887a44751f857a2cabe385e756066e77f3d474795b3ff2fde6",
+      "bytes": 113985
     },
     {
       "path": "plans/user-stories.csv",
