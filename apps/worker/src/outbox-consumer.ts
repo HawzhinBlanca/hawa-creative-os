@@ -409,11 +409,31 @@ export class OutboxConsumer {
     throw new Error(error);
   }
 
+  /** A redriven command cannot start the legacy workflow for a Restate-owned task. */
+  private async lifecycleOwnsTask(cmd: OutboxCommandRecord, scope: OutboxHandlerScope): Promise<boolean> {
+    const row = await scope.inTenant(async (trx) =>
+      (await sql<{ request_id: string | null }>`SELECT request_id FROM hawa.tasks
+        WHERE tenant_id = ${cmd.tenant_id}::uuid AND id = ${cmd.aggregate_id}::uuid`.execute(trx)).rows[0]);
+    const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
+    if (row?.request_id) {
+      log.warn(`[OutboxConsumer] Command ${cmd.id} is owned by RequestLifecycle ${row.request_id}; legacy dispatch skipped.`);
+      return true;
+    }
+    if (payload?.lifecycleOwner === 'restate') {
+      throw new OutboxDeliveryError(
+        `LIFECYCLE_OWNERSHIP_INCONSISTENT: command ${cmd.id} claims Restate but its task has no request owner`,
+        'permanent', 'LIFECYCLE_OWNERSHIP_INCONSISTENT',
+      );
+    }
+    return false;
+  }
+
   private registerDefaultHandlers() {
     // A Restate workflow runs once per key (workflow-dispatcher.ts), so a dispatch repeated after a
     // consumer stopped mid-command answers 409 and starts nothing twice.
     if (!this.handlers.has('task.created')) {
-      this.handlers.set('task.created', async (cmd) => {
+      this.handlers.set('task.created', async (cmd, _db, scope) => {
+        if (await this.lifecycleOwnsTask(cmd, scope)) return;
         // Confirmed submission to durable workflow engine (Restate or embedded runner)
         const receipt = await this.dispatcher.dispatch(cmd);
         if (!receipt || !receipt.workflowId) {
@@ -425,7 +445,8 @@ export class OutboxConsumer {
     }
 
     if (!this.handlers.has('task.dispatch')) {
-      this.handlers.set('task.dispatch', async (cmd) => {
+      this.handlers.set('task.dispatch', async (cmd, _db, scope) => {
+        if (await this.lifecycleOwnsTask(cmd, scope)) return;
         // Confirmed submission to durable workflow engine
         const receipt = await this.dispatcher.dispatch(cmd);
         if (!receipt || !receipt.workflowId) {

@@ -93,6 +93,10 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
     const task = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, trx =>
       taskRepo.findById(taskId, auth.tenantId!, trx));
     if (!task) return problem(c, 404, 'Task Not Found');
+    // A Restate-owned request projects its outcome through the versioned lifecycle ledger. The
+    // legacy route sends messages and changes task state independently, so allowing it here would
+    // give one task two owners after a replay or redrive.
+    if (task.request_id) return problem(c, 409, 'LIFECYCLE_OWNED', 'Report this design through RequestLifecycle');
 
     const created = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx =>
       (await sql<any>`SELECT data FROM hawa.task_events
