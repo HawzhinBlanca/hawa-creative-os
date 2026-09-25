@@ -67,6 +67,7 @@ const harness = (over: { status?: string; stages?: Record<string, unknown>; atta
 
   const writes: Array<{ status: string; stages?: any; diagnostic?: string | null }> = [];
   const repo = {
+    getCallsForRun: async () => [],
     getRunById: async () => run,
     updateRunStatus: async (_id: string, _tenant: string, status: string, extra: any = {}) => {
       writes.push({ status, stages: extra.stages, diagnostic: extra.diagnostic });

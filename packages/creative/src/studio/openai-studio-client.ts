@@ -88,13 +88,16 @@ export class OpenAiModelHttpError extends StudioModelHttpError {
   readonly status: number;
   readonly body: string;
   readonly code: string;
+  readonly isUncertain: boolean;
 
   constructor(status: number, body: string) {
     super(status, body);
     this.name = 'OpenAiModelHttpError';
     this.status = status;
     this.body = body;
-    this.code = httpErrorCode(status, body);
+    // A gateway/server error can arrive after the upstream model accepted the request.
+    this.isUncertain = status >= 500;
+    this.code = this.isUncertain ? 'UNCERTAIN_HTTP' : httpErrorCode(status, body);
   }
 }
 
@@ -104,6 +107,18 @@ export class OpenAiModelTimeoutError extends StudioModelTimeoutError {
   constructor(ms: number) {
     super(`OpenAI model call timed out after ${ms}ms`);
     this.name = 'OpenAiModelTimeoutError';
+  }
+}
+
+/** A fetch rejection does not prove the provider never received the request. */
+export class OpenAiModelUnknownAcceptanceError extends StudioModelError {
+  readonly code = 'UNCERTAIN_ACCEPTANCE';
+  readonly isUncertain = true;
+  constructor(model: string, cause: unknown) {
+    const detail = describeFetchCause(cause);
+    super(`OpenAI ${model} request lost its connection${detail ? ` (${detail})` : ''}; acceptance and billing are unknown, so it was not retried`, 'UNCERTAIN_ACCEPTANCE');
+    this.name = 'OpenAiModelUnknownAcceptanceError';
+    this.cause = cause;
   }
 }
 
@@ -254,9 +269,8 @@ function computeRetryDelayMs(attempt: number): number {
 }
 
 /**
- * Attempts per model call, HAWA_MODEL_MAX_ATTEMPTS or 3. Only a request that never got an answer
- * (and 429/5xx) is retried, so each attempt past the first is one that was not billed; six were
- * allowed while unreadable replies were retried too, which multiplied a bad reply's cost.
+ * Attempts per model call, HAWA_MODEL_MAX_ATTEMPTS or 3. Only an explicit 429 rate-limit
+ * rejection is retried. A lost connection or HTTP 5xx has unknown provider acceptance.
  */
 function modelMaxAttempts(): number {
   const configured = Number(process.env.HAWA_MODEL_MAX_ATTEMPTS || 3);
@@ -442,10 +456,8 @@ export class OpenAiStudioClient {
     const timeout = options.timeoutMs || this.timeoutMs;
 
     let attempt = 0;
-    // T9: VPN/tunnel egress intermittently drops long-lived TLS mid-request (UND_ERR_SOCKET), so a
-    // request that got no answer is asked again. Nothing that got an answer is (2026-09-23): a reply
-    // that is cut off or not JSON, or a body that broke after the headers, was retried like a dropped
-    // socket, each attempt a new billed call for the same question.
+    // Only a definite provider rejection can be retried. A fetch rejection after dispatch may mean
+    // that the provider accepted and billed the work even though no response reached this process.
     const maxAttempts = modelMaxAttempts();
 
     while (attempt < maxAttempts) {
@@ -469,26 +481,14 @@ export class OpenAiStudioClient {
           this.breaker.recordFailure();
           throw new OpenAiModelTimeoutError(timeout);
         }
-        // No answer arrived, so nothing was billed: the one failure that is safe to ask again.
-        // Node's fetch reports every network failure as "fetch failed" and keeps the reason in
-        // err.cause (ECONNRESET, UND_ERR_HEADERS_TIMEOUT, ENOTFOUND, ...). A studio run on
-        // 2026-09-22 failed at layout with only "fetch failed" on record and nothing in the logs.
-        const cause = describeFetchCause(err);
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[openai] ${model} attempt ${attempt}/${maxAttempts} failed: ${message}${cause ? ` (${cause})` : ''}`);
-        if (attempt >= maxAttempts) {
-          this.breaker.recordFailure();
-          if (cause && err instanceof Error && !err.message.includes(cause)) err.message = `${err.message} (${cause}) after ${attempt} attempts`;
-          throw err;
-        }
-        await sleep(computeRetryDelayMs(attempt));
-        continue;
+        this.breaker.recordFailure();
+        throw new OpenAiModelUnknownAcceptanceError(model, err);
       }
 
       try {
         if (!res.ok) {
           const errBody = await res.text().catch(() => '');
-          if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
+          if (res.status === 429 && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
             await sleep(computeRetryDelayMs(attempt));
             continue;
           }
@@ -663,9 +663,7 @@ export class OpenAiStudioClient {
     const startTime = Date.now();
     const timeout = options.timeoutMs || this.timeoutMs;
 
-    // T9: the image lane made a single attempt with no retry, so one dropped connection lost
-    // the call outright. Same handling as the text path: only a request that got no answer, and
-    // 429/5xx, is asked again; an image that was generated is never paid for twice.
+    // A dropped image request may have been accepted. Keep it uncertain rather than paying again.
     const maxAttempts = modelMaxAttempts();
     let attempt = 0;
 
@@ -690,18 +688,14 @@ export class OpenAiStudioClient {
           this.breaker.recordFailure();
           throw new OpenAiModelTimeoutError(timeout);
         }
-        if (attempt >= maxAttempts) {
-          this.breaker.recordFailure();
-          throw err;
-        }
-        await sleep(computeRetryDelayMs(attempt));
-        continue;
+        this.breaker.recordFailure();
+        throw new OpenAiModelUnknownAcceptanceError(model, err);
       }
 
       try {
         if (!res.ok) {
           const errBody = await res.text().catch(() => '');
-          if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
+          if (res.status === 429 && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
             await sleep(computeRetryDelayMs(attempt));
             continue;
           }

@@ -208,13 +208,19 @@ export function registerDesignStudioRoutes(
           createdAt: j.created_at,
         })),
         callsCount: calls.length,
-        totalUsdEstimate: calls.reduce((acc, call) => acc + Number(call.usd_estimate ?? 0), 0),
+        // An unresolved provider acceptance may have been billed. Never show its stored zero
+        // placeholder as a complete estimate for the run.
+        uncertainCallsCount: calls.filter((call) => call.status === 'uncertain').length,
+        totalUsdEstimate: calls.some((call) => call.status === 'uncertain')
+          ? null : calls.reduce((acc, call) => acc + Number(call.usd_estimate ?? 0), 0),
+        knownUsdEstimate: calls.filter((call) => call.status !== 'uncertain')
+          .reduce((acc, call) => acc + Number(call.usd_estimate ?? 0), 0),
         // Which model answered each call, as the provider reported it (the ledger's `model`).
         calls: calls.map((call) => ({
           stage: call.stage,
           model: call.model,
           status: call.status,
-          usdEstimate: Number(call.usd_estimate ?? 0),
+          usdEstimate: call.status === 'uncertain' ? null : Number(call.usd_estimate ?? 0),
         })),
       });
     })

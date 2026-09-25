@@ -58,6 +58,7 @@ const harness = (opts: { asks: unknown[]; clarified?: boolean; frustrated?: bool
   };
   const writes: any[] = [];
   const repo = {
+    getCallsForRun: async () => [],
     getRunById: async () => run,
     updateRunStatus: async (_id: string, _t: string, status: string, extra: any = {}) => {
       writes.push({ status, ...extra });

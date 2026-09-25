@@ -904,6 +904,7 @@ export class DesignStudioService {
           // A reply cut off at the token cap or not JSON was answered and billed: the error carries
           // what it cost. Recorded at $0 and left out of the budget until 2026-09-24.
           const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
+          const uncertain = err?.isUncertain === true;
           await this.repo.finalizeCall({
             id: callId,
             tenantId: s.tenantId,
@@ -911,8 +912,8 @@ export class DesignStudioService {
             inputTokens: 0,
             outputTokens: 0,
             usdEstimate: billedUsd,
-            status: 'error',
-            errorCode: err.message || 'CALL_FAILED',
+            status: uncertain ? 'uncertain' : 'error',
+            errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.message || 'CALL_FAILED'),
           });
           if (billedUsd > 0) await onSpendUpdate(billedUsd);
           throw err;
@@ -960,6 +961,7 @@ export class DesignStudioService {
         } catch (err: any) {
           // Billed failures carry their cost, as in completeJson above.
           const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
+          const uncertain = err?.isUncertain === true;
           await this.repo.finalizeCall({
             id: callId,
             tenantId: s.tenantId,
@@ -967,8 +969,8 @@ export class DesignStudioService {
             inputTokens: 0,
             outputTokens: 0,
             usdEstimate: billedUsd,
-            status: 'error',
-            errorCode: err.message || 'CALL_FAILED',
+            status: uncertain ? 'uncertain' : 'error',
+            errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.message || 'CALL_FAILED'),
           });
           if (billedUsd > 0) await onSpendUpdate(billedUsd);
           throw err;
@@ -1016,15 +1018,18 @@ export class DesignStudioService {
           await onSpendUpdate(cost);
           return result;
         } catch (err: any) {
+          const uncertain = err?.isUncertain === true;
+          const knownUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
           await this.repo.finalizeCall({
             id: callId,
             tenantId: s.tenantId,
             inputTokens: 0,
             outputTokens: 0,
-            usdEstimate: 0,
-            status: 'error',
-            errorCode: err.message || 'ART_FAILED',
+            usdEstimate: knownUsd,
+            status: uncertain ? 'uncertain' : 'error',
+            errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.message || 'ART_FAILED'),
           });
+          if (knownUsd > 0) await onSpendUpdate(knownUsd);
           throw err;
         }
       },
@@ -1188,6 +1193,16 @@ export class DesignStudioService {
         status: 'awaiting_selection',
         message: 'Awaiting candidate selection before Canva transfer.',
       };
+    }
+
+    // A previous worker may have died after the provider accepted a call but before it saved the
+    // answer. Its pre-dispatch row survives the restart. Never pay for that logical stage again
+    // until an operator reconciles the unknown provider outcome.
+    const unresolvedCall = (await this.repo.getCallsForRun(runId, s.tenantId))
+      .find((call) => call.status === 'uncertain');
+    if (unresolvedCall) {
+      throw new CanvaFlowError(409, 'MODEL_CALL_UNCERTAIN',
+        `The ${unresolvedCall.stage} model call has an unknown outcome. Reconcile its provider result before resuming this run.`);
     }
 
     const stages: Record<string, any> =

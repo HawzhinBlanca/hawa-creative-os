@@ -68,6 +68,7 @@ const harness = (
   const inserted: any[] = [];
   const updated: any[] = [];
   const repo = {
+    getCallsForRun: async () => [],
     getRunById: async (id: string) =>
       id === 'parent-run'
         ? { id: 'parent-run', stages: JSON.stringify({ brief: { roles: [], readingOrder: [0, 1], imageRoles: [{ index: 0, role: 'content_photo', notes: '' }], styleSpec: { ...NEUTRAL_STYLE_SPEC, titleColor: 'light' } } }) }

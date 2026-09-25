@@ -295,6 +295,19 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       expect(data.totalUsdEstimate).toBeGreaterThanOrEqual(0);
     });
 
+    it('reports unknown model spend without presenting it as zero dollars', async () => {
+      await sql`INSERT INTO hawa.design_studio_calls
+        (id, run_id, tenant_id, stage, provider, model, requested_model, status, error_code)
+        VALUES (${randomUUID()}::uuid, ${runId}::uuid, ${tenantId}::uuid,
+          'laying_out', 'openai', 'gpt-6-astra', 'gpt-6-astra', 'uncertain', 'UNCERTAIN_ACCEPTANCE')`.execute(db);
+      const res = await app.request(`/v1/tasks/${taskId}/canva/studio/${runId}`, { headers });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.uncertainCallsCount).toBe(1);
+      expect(data.totalUsdEstimate).toBeNull();
+      expect(data.calls.find((call: any) => call.status === 'uncertain')).toMatchObject({ usdEstimate: null });
+    });
+
     it('GET /v1/tasks/:taskId/canva/studio/:runId returns 404 for unknown run', async () => {
       const unknownRunId = randomUUID();
       const res = await app.request(`/v1/tasks/${taskId}/canva/studio/${unknownRunId}`, {
@@ -438,4 +451,3 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
     });
   });
 });
-

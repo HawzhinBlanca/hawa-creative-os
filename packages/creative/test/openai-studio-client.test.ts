@@ -183,6 +183,15 @@ describe('OpenAiStudioClient (ADR-030, G01, G02)', () => {
     expect(res.data.headline).toBe('OK');
   });
 
+  it('does not retry a server error whose provider-side acceptance is unknown', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: false, status: 503, text: async () => 'gateway unavailable' });
+    const client = new OpenAiStudioClient({ apiKey: 'test-key', fetcher: fetcher as unknown as typeof fetch });
+    const err = await client.createStructuredCompletion({ model: 'gpt-6-astra',
+      messages: [{ role: 'user', content: 'test' }], jsonSchema: TEST_SCHEMA }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 503, code: 'UNCERTAIN_HTTP', isUncertain: true });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it('never retries an account out of credits, and names it rather than calling it a rate limit', async () => {
     // The 2026-09-18 qualification retried "You have no credits remaining" for about a minute a
     // call, then reported it as RATE_LIMIT_EXCEEDED.
@@ -234,7 +243,7 @@ describe('OpenAiStudioClient (ADR-030, G01, G02)', () => {
  * a body that broke after the headers, was retried like a dropped socket: up to six billed calls
  * for one question.
  */
-describe('OpenAiStudioClient retries only what was never answered', () => {
+describe('OpenAiStudioClient preserves uncertain paid-call outcomes', () => {
   const SCHEMA = { name: 'plan', schema: { type: 'object' }, strict: false };
   const ask = (fetcher: ReturnType<typeof vi.fn>) =>
     new OpenAiStudioClient({ apiKey: 'test-key', fetcher: fetcher as unknown as typeof fetch }).createStructuredCompletion({
@@ -299,33 +308,45 @@ describe('OpenAiStudioClient retries only what was never answered', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('retries a request that got no answer, three times by default', async () => {
+  it('leaves a dropped request uncertain and never sends a second paid call', async () => {
     vi.stubEnv('HAWA_MODEL_MAX_ATTEMPTS', '');
     vi.stubEnv('HAWA_RETRY_DELAY_MS', '1');
     const dropped = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET', message: 'socket hang up' } });
     const fetcher = vi.fn().mockRejectedValue(dropped);
-    await expect(ask(fetcher)).rejects.toThrow(/fetch failed \(ECONNRESET: socket hang up\) after 3 attempts/);
-    expect(fetcher).toHaveBeenCalledTimes(3);
-
-    const recovers = vi
-      .fn()
-      .mockRejectedValueOnce(new TypeError('fetch failed'))
-      .mockResolvedValue(answer({ message: { content: '{"headline":"OK"}' }, finish_reason: 'stop' }));
-    const res = await ask(recovers);
-    expect(res.data).toEqual({ headline: 'OK' });
-    expect(res.receipt.attempts).toBe(2);
+    const err = await ask(fetcher).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'UNCERTAIN_ACCEPTANCE', isUncertain: true });
+    expect((err as Error).message).toContain('ECONNRESET');
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it('keeps an override of the attempt count', async () => {
     vi.stubEnv('HAWA_MODEL_MAX_ATTEMPTS', '1');
     const fetcher = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
-    await expect(ask(fetcher)).rejects.toThrow('fetch failed');
+    await expect(ask(fetcher)).rejects.toMatchObject({ code: 'UNCERTAIN_ACCEPTANCE', isUncertain: true });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it('still turns an abort into a timeout, without retrying', async () => {
     const fetcher = vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
     await expect(ask(fetcher)).rejects.toBeInstanceOf(OpenAiModelTimeoutError);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not regenerate an image after a dropped request with unknown acceptance', async () => {
+    const fetcher = vi.fn().mockRejectedValue(Object.assign(new TypeError('fetch failed'), {
+      cause: { code: 'UND_ERR_SOCKET', message: 'connection closed' },
+    }));
+    const client = new OpenAiStudioClient({ apiKey: 'test-key', fetcher: fetcher as unknown as typeof fetch });
+    await expect(client.generateImage({ model: 'gpt-image-2.5-sunburst', prompt: 'navy texture' }))
+      .rejects.toMatchObject({ code: 'UNCERTAIN_ACCEPTANCE', isUncertain: true });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not regenerate an image after a provider server error', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: false, status: 502, text: async () => 'upstream failed' });
+    const client = new OpenAiStudioClient({ apiKey: 'test-key', fetcher: fetcher as unknown as typeof fetch });
+    await expect(client.generateImage({ model: 'gpt-image-2.5-sunburst', prompt: 'navy texture' }))
+      .rejects.toMatchObject({ code: 'UNCERTAIN_HTTP', isUncertain: true });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 

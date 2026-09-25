@@ -62,4 +62,44 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
     // The ledger row and the run's budget should carry that cost. Today: usdEstimate 0, spentUsd 0.
     expect({ ledgerUsd: finalized[0]?.usdEstimate, spentUsd: budget.spentUsd }).toEqual({ ledgerUsd: err.costUsd, spentUsd: err.costUsd });
   });
+
+  it('records a lost model response as uncertain and keeps the attempt visible', async () => {
+    const fetcher = vi.fn().mockRejectedValue(Object.assign(new TypeError('fetch failed'), {
+      cause: { code: 'ECONNRESET', message: 'socket hang up' },
+    }));
+    const svc = new DesignStudioService({} as any, undefined, { fetcher: fetcher as any, apiKey: 'test-key' });
+    const finalized: any[] = [];
+    (svc as any).repo = {
+      recordCallStart: async () => undefined,
+      finalizeCall: async (p: any) => { finalized.push(p); },
+      updateRunStatus: async () => undefined,
+    };
+    const budget = { maxUsd: 2, maxCalls: 24, spentUsd: 0, calls: 0 };
+    const clientId = 'c1000000-0000-4000-8000-000000000002';
+    const s = { tenantId: randomUUID(), actorId: randomUUID(), role: 'operator' };
+    const { reference, logo } = await resolveClientDesignReference({} as any, s, clientId);
+    const run = { id: randomUUID(), task_id: randomUUID(), client_id: clientId, tier: 'premium',
+      request: JSON.stringify({ width: 1080, height: 1350, copyBlocks: [{ text: 'A', script: 'latin' }], instructions: 'x',
+        clientId, referenceHash: createHash('sha256').update(JSON.stringify(reference)).digest('hex'),
+        logoSha256: createHash('sha256').update(logo).digest('hex') }), stages: {} };
+    const ctx = await (svc as any).createStageContext(s, run, 'laying_out', budget, async () => {});
+    await expect(ctx.client.completeJson({ prompt: 'lay it out', schema: { type: 'object' }, model: 'gpt-6-astra' }))
+      .rejects.toMatchObject({ code: 'UNCERTAIN_ACCEPTANCE', isUncertain: true });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(budget.calls).toBe(1);
+    expect(finalized).toHaveLength(1);
+    expect(finalized[0]).toMatchObject({ status: 'uncertain', errorCode: 'UNCERTAIN_ACCEPTANCE' });
+  });
+
+  it('refuses to resume a run with an unresolved model call', async () => {
+    const svc = new DesignStudioService({} as any);
+    const s = { tenantId: randomUUID(), actorId: randomUUID(), role: 'operator' };
+    const taskId = randomUUID();
+    const runId = randomUUID();
+    (svc as any).repo = {
+      getRunById: async () => ({ id: runId, task_id: taskId, actor_id: s.actorId, status: 'laying_out' }),
+      getCallsForRun: async () => [{ id: randomUUID(), stage: 'laying_out', status: 'uncertain' }],
+    };
+    await expect(svc.resume(s, taskId, runId)).rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
+  });
 });

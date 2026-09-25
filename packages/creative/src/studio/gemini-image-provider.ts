@@ -75,6 +75,18 @@ export interface GenerateArtResult {
   receipt: ArtReceipt;
 }
 
+/** The image provider may have accepted a request even when its answer was lost. */
+export class ImageAcceptanceUnknownError extends Error {
+  readonly code = 'UNCERTAIN_ACCEPTANCE';
+  readonly isUncertain = true;
+  costUsd = 0;
+  constructor(provider: string, cause?: unknown) {
+    super(`${provider} image acceptance and billing are unknown; reconcile this attempt before another generation`);
+    this.name = 'ImageAcceptanceUnknownError';
+    this.cause = cause;
+  }
+}
+
 const SUPPORTED_ASPECTS = ['1:1', '3:4', '4:3', '9:16', '16:9', '4:5'] as const;
 
 export function mapDimensionsToAspect(width: number, height: number): string {
@@ -344,9 +356,17 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
         };
       } catch (err: any) {
         console.warn(`[StudioArt] Error during generation attempt ${attempt}:`, err?.message);
-        // A request that timed out or lost its answer may have been generated and billed: asking
-        // again could pay twice for one picture. The free procedural motif takes its place.
-        if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || err?.isUncertain || /timed?\s*out|aborted/i.test(String(err?.message || ''))) break;
+        // A generated image can be billed even when no answer reached us. Preserve the known cost
+        // of earlier rejected images and leave the current attempt unresolved in Core's ledger.
+        if (err?.isUncertain) {
+          err.costUsd = spentUsd;
+          throw err;
+        }
+        if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || /timed?\s*out|aborted/i.test(String(err?.message || ''))) {
+          const uncertain = new ImageAcceptanceUnknownError(settings.provider, err);
+          uncertain.costUsd = spentUsd;
+          throw uncertain;
+        }
       }
     }
   }
@@ -418,9 +438,17 @@ async function requestImage(
   // One deadline for the whole request, body and download included; a timeout throws like every
   // other network failure, and the caller decides what to do with it.
   const signal = AbortSignal.timeout(IMAGE_REQUEST_TIMEOUT_MS);
+  const providerFetch = async (url: string, init: RequestInit): Promise<Response> => {
+    try { return await fetcher(url, init); }
+    catch (error) { throw new ImageAcceptanceUnknownError(settings.provider, error); }
+  };
+  const readImageResponse = async (res: Response): Promise<any> => {
+    try { return await res.json(); }
+    catch (error) { throw new ImageAcceptanceUnknownError(settings.provider, error); }
+  };
   if (settings.provider === 'google') {
     // Gemini's Interactions API (ai.google.dev/gemini-api/docs/image-generation, 2026-09-18).
-    const res = await fetcher('https://generativelanguage.googleapis.com/v1beta/interactions', {
+    const res = await providerFetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
@@ -436,18 +464,18 @@ async function requestImage(
       signal,
     });
     if (!res.ok) {
+      if (res.status >= 500) throw new ImageAcceptanceUnknownError(settings.provider);
       console.warn(`[StudioArt] Google image generation failed HTTP ${res.status}: ${(await res.text()).substring(0, 150)}`);
       return null;
     }
-    const data = (await res.json()) as any;
+    const data = await readImageResponse(res);
     const parts = [
       ...(data.steps || []).flatMap((step: any) => step?.content || []),
       ...(data.output_image ? [{ type: 'image', ...data.output_image }] : []),
     ];
     const image = parts.find((c: any) => c?.type === 'image' && typeof c.data === 'string');
     if (!image) {
-      console.warn('[StudioArt] Google returned no image data');
-      return null;
+      throw new ImageAcceptanceUnknownError(settings.provider);
     }
     const price = imagePricing(settings.model)?.perImage?.[settings.size];
     return {
@@ -460,23 +488,26 @@ async function requestImage(
     };
   }
 
-  const res = await fetcher('https://api.openai.com/v1/images/generations', {
+  const res = await providerFetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({ model: settings.model, prompt, n: 1, size: settings.size, quality: settings.quality }),
     signal,
   });
   if (!res.ok) {
+    if (res.status >= 500) throw new ImageAcceptanceUnknownError(settings.provider);
     console.warn(`[StudioArt] OpenAI image generation failed HTTP ${res.status}: ${(await res.text()).substring(0, 150)}`);
     return null;
   }
-  const data = (await res.json()) as any;
+  const data = await readImageResponse(res);
   let imageBuffer: Buffer;
   if (data.data?.[0]?.b64_json) imageBuffer = Buffer.from(data.data[0].b64_json, 'base64');
-  else if (data.data?.[0]?.url) imageBuffer = Buffer.from(await (await fetcher(data.data[0].url, { signal })).arrayBuffer());
+  else if (data.data?.[0]?.url) {
+    try { imageBuffer = Buffer.from(await (await fetcher(data.data[0].url, { signal })).arrayBuffer()); }
+    catch (error) { throw new ImageAcceptanceUnknownError(settings.provider, error); }
+  }
   else {
-    console.warn('[StudioArt] OpenAI returned no image data');
-    return null;
+    throw new ImageAcceptanceUnknownError(settings.provider);
   }
   const xRequestId = res.headers?.get?.('x-request-id') || null;
   return {

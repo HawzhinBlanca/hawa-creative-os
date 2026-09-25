@@ -52,6 +52,7 @@ const harness = (editReply: unknown, visual?: (params: any) => unknown) => {
   };
   const updated: any[] = [];
   const repo = {
+    getCallsForRun: async () => [],
     getRunById: async () => run,
     updateRunStatus: async (_id: string, _t: string, status: string, extra: any = {}) => {
       run.status = status;

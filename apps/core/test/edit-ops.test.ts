@@ -122,6 +122,7 @@ describe('a request covered by rules', () => {
     };
     const updated: any[] = [];
     const repo = {
+      getCallsForRun: async () => [],
       getRunById: async () => run,
       updateRunStatus: async (_i: string, _t: string, status: string, extra: any = {}) => { run.status = status; if (extra.stages) run.stages = JSON.stringify(extra.stages); return run; },
       insertCandidate: async (c: any) => c,
@@ -173,6 +174,7 @@ describe('the rules, after the review', () => {
     };
     const updated: any[] = [];
     const repo = {
+      getCallsForRun: async () => [],
       getRunById: async () => run,
       updateRunStatus: async (_i: string, _t: string, status: string, extra: any = {}) => { run.status = status; if (extra.stages) run.stages = JSON.stringify(extra.stages); return run; },
       insertCandidate: async (c: any) => c,

@@ -367,14 +367,14 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     expect(imageCalls).toHaveLength(1);
   });
 
-  it('falls back to procedural motif when image provider attempts are exhausted', async () => {
+  it('stops after one server error with unknown image acceptance', async () => {
     const fakeFetcher: typeof fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
       text: async () => 'Internal Server Error',
     } as any);
 
-    const result = await generateArtImage({
+    await expect(generateArtImage({
       artPrompt: 'Minimalist backdrop',
       palette: PALETTE,
       width: 1080,
@@ -382,14 +382,18 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
       openaiApiKey: 'mock-key',
       fetchFn: fakeFetcher,
       motifFallbackType: 'guilloche',
-    });
+    })).rejects.toMatchObject({ code: 'UNCERTAIN_ACCEPTANCE', isUncertain: true });
+    expect(fakeFetcher).toHaveBeenCalledTimes(1);
+  });
 
-    expect(result.receipt.provider).toBe('procedural');
-    expect(result.receipt.artFallback).toBe('procedural');
-    expect(result.receipt.synthId).toBe(false);
-    expect(result.receipt.costUsd).toBe(0.0);
-    expect(result.receipt.attempts).toBe(2);
-    expect(result.imageBuffer.length).toBeGreaterThan(100);
+  it('does not repeat a generated-art call when the connection drops before a response', async () => {
+    const fakeFetcher = vi.fn().mockRejectedValue(Object.assign(new TypeError('fetch failed'), {
+      cause: { code: 'ECONNRESET' },
+    }));
+    await expect(generateArtImage({ artPrompt: 'Minimalist backdrop', palette: PALETTE,
+      openaiApiKey: 'mock-key', fetchFn: fakeFetcher as unknown as typeof fetch }))
+      .rejects.toMatchObject({ code: 'UNCERTAIN_ACCEPTANCE', isUncertain: true });
+    expect(fakeFetcher).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -405,18 +409,17 @@ describe('Image requests are bounded (2026-09-23)', () => {
       { provider: 'google' as const, model: 'gemini-3.1-flash-lite-image', size: '1K', quality: 'auto', aspectRatio: '1:1' },
       { provider: 'openai' as const, model: 'gpt-image-2.5-sunburst', size: '1024x1024', quality: 'auto', aspectRatio: '1:1' },
     ]) {
-      const result = await generateArtImage({
+      await expect(generateArtImage({
         artPrompt: 'Minimalist backdrop',
         palette: ['#0A1628', '#1E3A5F'],
         geminiApiKey: 'mock-key',
         openaiApiKey: 'mock-key',
         fetchFn: fakeFetcher,
         settings,
-      });
-      expect(result.receipt.artFallback).toBe('procedural');
+      })).rejects.toMatchObject({ code: 'UNCERTAIN_ACCEPTANCE', isUncertain: true });
     }
 
-    expect(signals).toHaveLength(4);
+    expect(signals).toHaveLength(2);
     for (const signal of signals) {
       expect(signal).toBeInstanceOf(AbortSignal);
       expect(signal?.aborted).toBe(false);

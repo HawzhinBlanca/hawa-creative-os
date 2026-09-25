@@ -62,6 +62,7 @@ const harness = (opts: { parentLayout?: StudioLayoutV2; asks?: Ask[]; targets?: 
   const writes: any[] = [];
   const updated: any[] = [];
   const repo = {
+    getCallsForRun: async () => [],
     getRunById: async () => run,
     updateRunStatus: async (_id: string, _t: string, status: string, extra: any = {}) => {
       writes.push({ status, ...extra });
