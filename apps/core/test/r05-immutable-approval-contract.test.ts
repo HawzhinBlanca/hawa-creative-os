@@ -67,6 +67,7 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
       body: JSON.stringify({
         action: 'approve',
         reason: 'Passed QA inspection',
+        pinnedExportIds: [exports.add(task.id)],
       }),
     });
     expect(approveRes.status).toBe(201);

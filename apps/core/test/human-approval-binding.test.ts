@@ -215,7 +215,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
         'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
-      body: JSON.stringify({ decision: 'approved', displayName: 'Lead Art Director' }),
+      body: JSON.stringify({ decision: 'approved', displayName: 'Lead Art Director', pinnedExportIds: [exports.add(task.id)] }),
     });
     expect(artDirectorRes.status).toBe(201);
   });
@@ -357,6 +357,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       body: JSON.stringify({
         decision: 'approved',
         expectedTaskVersion: version,
+        pinnedExportIds: [exports.add(task.id)],
       }),
     });
     expect(op1Res.status).toBe(201);
@@ -695,7 +696,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
         'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
-      body: JSON.stringify({ action: 'approve' }),
+      body: JSON.stringify({ action: 'approve', pinnedExportIds: [exports.add(task.id)] }),
     });
     expect(uiApproveRes.status).toBe(201);
     const uiApproveJson = await uiApproveRes.json();

@@ -7,6 +7,7 @@ import { createDb } from '@hawa/db';
 import { BriefBuilder, CreativeDirectorRunner } from '@hawa/creative';
 import { DeterministicQAEngine } from '@hawa/qa';
 import { extractProtectedTokens } from '@hawa/domain';
+import { memoryExportStore } from '../../../apps/core/test/pinned-exports-fixture.js';
 
 describe('Task R14: Controlled Office Pilot Protocol (FR-080, NFR-010, NFR-018, NFR-019)', () => {
   const root = path.resolve(__dirname, '../../..');
@@ -25,7 +26,8 @@ describe('Task R14: Controlled Office Pilot Protocol (FR-080, NFR-010, NFR-018, 
 
   const connectionString = getTestDbUrl();
   const db = createDb(connectionString);
-  const app = createAppWithClientFixtures({ db });
+  const exports = memoryExportStore();
+  const app = createAppWithClientFixtures({ db, deliverableStore: exports.store });
 
   afterAll(async () => {
     if (db) await db.destroy();
@@ -173,7 +175,7 @@ describe('Task R14: Controlled Office Pilot Protocol (FR-080, NFR-010, NFR-018, 
               'x-user-role': 'art_director',
               Authorization: `Bearer ${process.env.HAWA_REVIEWER_KEY || 'test_reviewer'}`,
             },
-            body: JSON.stringify({ action: 'approve', reason: `Approved pilot task #${index}` }),
+            body: JSON.stringify({ action: 'approve', reason: `Approved pilot task #${index}`, pinnedExportIds: [exports.add(taskId)] }),
           });
           if (approveRes.status !== 201) return;
 

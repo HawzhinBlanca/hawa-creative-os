@@ -47,7 +47,7 @@ async function approvedTask(db: any, app: any, headers: Record<string, string>) 
     (await sql<any>`SELECT current_design_revision_id FROM hawa.tasks WHERE id = ${taskId}::uuid`.execute(trx)).rows[0])).current_design_revision_id;
   const approve = await app.request(`/tasks/${taskId}/revisions/${revId}/decisions`, {
     method: 'POST', headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' },
-    body: JSON.stringify({ decision: 'approved', role: 'art_director', reason: 'lock wiring' }),
+    body: JSON.stringify({ decision: 'approved', role: 'art_director', reason: 'lock wiring', pinnedExportIds: [exportId] }),
   });
   expect(approve.status).toBe(201);
   return taskId;

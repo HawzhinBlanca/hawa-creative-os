@@ -117,6 +117,17 @@ describe('approval pins the exported files the reviewer saw', () => {
 
     expect(await status(taskId)).not.toBe('APPROVED');
   });
+
+  it('refuses approval when stored bytes disagree with the export metadata', async () => {
+    const { exports, taskAwaitingApproval, approve, status } = setup();
+    const { taskId, revisionId } = await taskAwaitingApproval();
+    const id = exports.add(taskId, 'png', new TextEncoder().encode('recorded final export'));
+    exports.store.read = async () => new TextEncoder().encode('different bytes');
+    const res = await approve(taskId, revisionId, [id]);
+    expect(res.status).toBe(422);
+    expect((await res.json()).title).toBe('Export Changed');
+    expect(await status(taskId)).toBe('AWAITING_APPROVAL');
+  });
 });
 
 describe('publish-omnichannel delivers exactly the pinned exports', () => {
@@ -147,17 +158,17 @@ describe('publish-omnichannel delivers exactly the pinned exports', () => {
     expect(stored.sheetRow.packageHash).toBe(sha256(new TextEncoder().encode(sha256(bytes))));
   });
 
-  it('refuses when the approval pins nothing, and leaves the task approved', async () => {
-    const { app, taskAwaitingApproval, approve, status, publishOmnichannel } = setup();
+  it('refuses approval with no explicit selection even when an export exists', async () => {
+    const { app, exports, taskAwaitingApproval, approve, status, publishOmnichannel } = setup();
     const { taskId, revisionId } = await taskAwaitingApproval();
-    expect((await approve(taskId, revisionId)).status).toBe(201);
+    exports.add(taskId);
+    const decision = await approve(taskId, revisionId);
+    expect(decision.status).toBe(422);
+    expect((await decision.json()).title).toBe('Export Selection Required');
 
     const res = await publishOmnichannel(taskId);
-    expect(res.status).toBe(422);
-    expect((await res.json()).detail).toBe(
-      'Nothing to deliver: the approval pins no exported file. Approve in the Desk with the captured export selected.'
-    );
-    expect(await status(taskId)).toBe('APPROVED');
+    expect(res.status).toBe(409);
+    expect(await status(taskId)).toBe('AWAITING_APPROVAL');
     expect((await app.request(`/tasks/${taskId}/publication-receipt`)).status).toBe(404);
   });
 
@@ -209,16 +220,15 @@ describe('the Desk\'s Deliver route (/tasks/:id/publish) uses the same pins', ()
   it('refuses without a pinned export before the task moves to PUBLISHING', async () => {
     const { app, taskAwaitingApproval, approve, status } = setup();
     const { taskId, revisionId } = await taskAwaitingApproval();
-    expect((await approve(taskId, revisionId)).status).toBe(201);
+    expect((await approve(taskId, revisionId, [])).status).toBe(422);
 
     const res = await app.request(`/tasks/${taskId}/publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test_bearer' },
       body: JSON.stringify({}),
     });
-    expect(res.status).toBe(422);
-    expect((await res.json()).title).toBe('Nothing Approved To Deliver');
-    expect(await status(taskId)).toBe('APPROVED');
+    expect(res.status).toBe(409);
+    expect(await status(taskId)).toBe('AWAITING_APPROVAL');
   });
 
   it('delivers the pinned export and reports no invented vault location', async () => {

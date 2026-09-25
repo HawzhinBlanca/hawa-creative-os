@@ -5,6 +5,7 @@ import { createApp, evaluateCanvaExportQc } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { askLedger } from '../src/services/ask-ledger.js';
 import { resolveQcProfileId } from '../src/services/canva-task-outcome.js';
+import { memoryExportStore } from './pinned-exports-fixture.js';
 
 /**
  * Bug hunt (2026-09-24): what Core tells the Desk about a real request, and what the Desk lets an
@@ -21,6 +22,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
   const scope = { tenantId, userId: operatorUserId, role: 'operator' as const };
   const operator = { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };
   const artDirector = { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}` };
+  const exports = memoryExportStore();
   afterAll(() => db.destroy());
 
   const channel = () => String(7_000_000_000 + Math.floor(Math.random() * 999_999_999));
@@ -87,7 +89,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
     app.request(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
       method: 'POST',
       headers: artDirector,
-      body: JSON.stringify({ action: 'approve', reason: 'Checked in the Desk' }),
+      body: JSON.stringify({ action: 'approve', reason: 'Checked in the Desk', pinnedExportIds: [exports.add(taskId)] }),
     });
 
   describe('GET /tasks/:id and GET /tasks (the Work screen reads these)', () => {
@@ -97,7 +99,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
       expect(qc.qaReport.safeMargins).toBeNull(); // what was stored: "null = this evaluator did not measure it"
       expect(qc.qaReport.contrastCompliant).toBeNull();
 
-      const app = createApp({ db } as any);
+      const app = createApp({ db, deliverableStore: exports.store } as any);
       const detail = await (await app.request(`/v1/tasks/${taskId}`, { headers: operator })).json();
       const list = await (await app.request('/v1/tasks?limit=200', { headers: operator })).json();
       const listed = list.items.find((t: any) => t.id === taskId);
@@ -111,7 +113,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
     it("reports the design's recorded size, not an invented 1080 x 1350", async () => {
       const taskId = await request('KAAE: members evening (size read)');
       await draft(taskId);
-      const app = createApp({ db } as any);
+      const app = createApp({ db, deliverableStore: exports.store } as any);
       const detail = await (await app.request(`/v1/tasks/${taskId}`, { headers: operator })).json();
       // VectorInspector prints this as "<w> × <h> px · recorded dimensions".
       expect(detail.latestRevision.dimensions).toEqual({ width: 1200, height: 1697 });
@@ -120,7 +122,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
     it("serves the task's history the Desk's History & Audit tab reads (GET /tasks/:id/timeline)", async () => {
       const taskId = await request('KAAE: members evening (history read)');
       await draft(taskId);
-      const app = createApp({ db } as any);
+      const app = createApp({ db, deliverableStore: exports.store } as any);
       const timeline = await (await app.request(`/v1/tasks/${taskId}/timeline`, { headers: operator })).json();
       expect(JSON.stringify(timeline)).toContain('task.created');
     });
@@ -128,16 +130,16 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
     it('does not report an approval that no longer holds as the current approval (approved, then sent back for changes)', async () => {
       const taskId = await request('KAAE: members evening (approval then change)');
       const { revisionId } = await draft(taskId);
-      expect((await approve(createApp({ db } as any), taskId, revisionId)).status).toBe(201);
+      expect((await approve(createApp({ db, deliverableStore: exports.store } as any), taskId, revisionId)).status).toBe(201);
       // The art director spots a typo after approving and presses Request Revision, as the Desk sends it.
-      const sentBack = await createApp({ db } as any).request(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
+      const sentBack = await createApp({ db, deliverableStore: exports.store } as any).request(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
         method: 'POST',
         headers: artDirector,
         body: JSON.stringify({ action: 'revision_requested', revisionRequest: { comment: 'The date is wrong: 4 December, not 14' } }),
       });
       expect(sentBack.status).toBe(201);
 
-      const detail = await (await createApp({ db } as any).request(`/v1/tasks/${taskId}`, { headers: operator })).json();
+      const detail = await (await createApp({ db, deliverableStore: exports.store } as any).request(`/v1/tasks/${taskId}`, { headers: operator })).json();
       expect(detail.status).toBe('REVISION_REQUESTED');
       // The Desk checks latestApproval before the status: pill "APPROVED", "Deliver Approved Files" enabled.
       expect(detail.latestApproval).toBeUndefined();
@@ -148,7 +150,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
     it('the reworked design can be approved again: the refusal does not name a newer revision that does not exist', async () => {
       const taskId = await request('KAAE: members evening (Desk change)');
       const { revisionId } = await draft(taskId);
-      const sentBack = await createApp({ db } as any).request(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
+      const sentBack = await createApp({ db, deliverableStore: exports.store } as any).request(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, {
         method: 'POST',
         headers: artDirector,
         body: JSON.stringify({ action: 'revision_requested', revisionRequest: { comment: 'Make the Kurdish headline bigger' } }),
@@ -156,7 +158,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
       expect(sentBack.status).toBe(201);
       // The designer edits the Canva design and presses Capture for Review: that stores an export and
       // creates no revision (WorkScreen handleCaptureForReview), so the Desk approves the same revision.
-      const res = await approve(createApp({ db } as any), taskId, revisionId);
+      const res = await approve(createApp({ db, deliverableStore: exports.store } as any), taskId, revisionId);
       const body = await res.json();
       expect(`${res.status} ${body.detail}`).not.toMatch(/replaced by a newer revision/);
     });
@@ -164,7 +166,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
     it('a new revision can be recorded for a task that was approved before (createRevision after an approval)', async () => {
       const taskId = await request('KAAE: members evening (revision after approval)');
       const { revisionId } = await draft(taskId);
-      expect((await approve(createApp({ db } as any), taskId, revisionId)).status).toBe(201);
+      expect((await approve(createApp({ db, deliverableStore: exports.store } as any), taskId, revisionId)).status).toBe(201);
       // createRevision appends approval.invalidated and design.revision_created with the same aggregate_version.
       await expect(draft(taskId, 'KAAE members evening, corrected')).resolves.toMatchObject({ revisionId: expect.any(String) });
     });
@@ -174,7 +176,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
     /** The events naming `taskId` on the Desk's live stream while `notify` is posted, and the status after. */
     const eventsDuring = async (taskId: string, notify: Record<string, unknown>) => {
       const telegramBridge = { dispatchOutboundMessage: async () => ({ success: true }), dispatchOutboundPhoto: async () => ({ success: true }) };
-      const app = createApp({ db, telegramBridge } as any);
+      const app = createApp({ db, telegramBridge, deliverableStore: exports.store } as any);
       const stream = await app.request('/v1/events/stream', { headers: operator });
       expect(stream.status).toBe(200);
       const reader = stream.body!.getReader();
@@ -234,7 +236,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
           VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${change}::uuid, ${kaae}::uuid, 'test', ${randomUUID()}, 'h', '{}'::jsonb, 'standard', 'failed', ${JSON.stringify(stages)}::jsonb)`.execute(trx);
       });
 
-      const res = await approve(createApp({ db } as any), design, revisionId);
+      const res = await approve(createApp({ db, deliverableStore: exports.store } as any), design, revisionId);
       // 201: the version without "less empty space" is approved and can be delivered.
       expect(res.status).toBe(409);
     });
@@ -244,7 +246,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
       const { revisionId } = await draft(design);
       await request('KAAE: members evening (Revision)', { parentTaskId: design, revisionDirective: 'make the logo bigger', revisionRound: 1 });
 
-      const res = await approve(createApp({ db } as any), design, revisionId);
+      const res = await approve(createApp({ db, deliverableStore: exports.store } as any), design, revisionId);
       expect(res.status).toBe(409);
     });
 

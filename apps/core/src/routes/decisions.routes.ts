@@ -225,7 +225,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
 
       // The QC evidence is the run Postgres holds (above). A QA report kept on this process's copy of
       // the task, or sent by the caller with a revision, was trusted here and lost at a restart.
-      if (!passingQcVerified && (body.requireQcPass === true || c.req.header('x-require-qc') === 'true')) {
+      if (!passingQcVerified) {
         return problem(
           c,
           412,
@@ -253,18 +253,20 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     if (isApproved) {
       const pinned = parsePinnedExportIds(body.pinnedExportIds);
       if (!pinned.ok) return problem(c, 422, 'Invalid Pinned Exports', pinned.message);
-      if (pinned.ids.length > 0) {
-        const found = await deliverableStore.find(tenantId, SYSTEM_AUTOMATION_USER_ID, taskId, pinned.ids);
-        const byId = new Map(found.map((f) => [f.artifactId.toLowerCase(), f]));
-        const missing = pinned.ids.filter((id) => !byId.has(id));
-        if (missing.length > 0) {
-          return problem(c, 422, 'Export Not Found', `No retrieved export of this task has id ${missing.join(', ')}. Capture it before approving.`);
-        }
-        pinnedExports = pinned.ids.map((id) => byId.get(id)!);
-      } else {
-        const available = await deliverableStore.find(tenantId, SYSTEM_AUTOMATION_USER_ID, taskId, []);
-        if (available.length > 0) {
-          pinnedExports = available;
+      if (pinned.ids.length === 0) {
+        return problem(c, 422, 'Export Selection Required', 'Select at least one stored final export before approving this revision.');
+      }
+      const found = await deliverableStore.find(tenantId, SYSTEM_AUTOMATION_USER_ID, taskId, pinned.ids);
+      const byId = new Map(found.map((f) => [f.artifactId.toLowerCase(), f]));
+      const missing = pinned.ids.filter((id) => !byId.has(id));
+      if (missing.length > 0) {
+        return problem(c, 422, 'Export Not Found', `No retrieved export of this task has id ${missing.join(', ')}. Capture it before approving.`);
+      }
+      pinnedExports = pinned.ids.map((id) => byId.get(id)!);
+      for (const pin of pinnedExports) {
+        const bytes = await deliverableStore.read(tenantId, SYSTEM_AUTOMATION_USER_ID, taskId, pin.artifactId);
+        if (!bytes || bytes.length !== pin.byteSize || crypto.createHash('sha256').update(bytes).digest('hex') !== pin.sha256) {
+          return problem(c, 422, 'Export Changed', `The stored export ${pin.artifactId} does not match its recorded bytes. Capture it again before approval.`);
         }
       }
     }

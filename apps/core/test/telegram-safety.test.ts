@@ -262,9 +262,10 @@ describe('handlers that act on a task read its status from Postgres', () => {
   it('publish: a task another process sent back for changes is not delivered by the Core that approved it', async () => {
     const taskId = await request('KAAE: stale status (publish)');
     const revisionId = await draft(taskId);
-    const coreA = createApp({ db } as any);
-    const coreB = createApp({ db } as any);
-    expect((await decide(coreA, taskId, revisionId, { action: 'approve' })).status).toBe(201);
+    const exports = memoryExportStore();
+    const coreA = createApp({ db, deliverableStore: exports.store } as any);
+    const coreB = createApp({ db, deliverableStore: exports.store } as any);
+    expect((await decide(coreA, taskId, revisionId, { action: 'approve', pinnedExportIds: [exports.add(taskId)] })).status).toBe(201);
     expect((await sendBack(coreB, taskId, revisionId)).status).toBe(201);
     expect((await dbTask(taskId)).state).toBe('revision_requested');
 
@@ -278,13 +279,14 @@ describe('handlers that act on a task read its status from Postgres', () => {
   it('approve: a draft recorded behind Core\'s back is the current one, and the one checked', async () => {
     const taskId = await request('KAAE: stale status (approve)');
     const first = await draft(taskId);
-    const core = createApp({ db } as any);
+    const exports = memoryExportStore();
+    const core = createApp({ db, deliverableStore: exports.store } as any);
     // Core reads the task (an answer it refuses still loads it into Core's memory).
     expect((await decide(core, taskId, first, { action: 'nonsense' })).status).toBe(400);
     // The worker records the next draft in Postgres; Core's copy still names the first.
     const second = await draft(taskId, 'KAAE members evening, corrected');
 
-    const approved = await decide(core, taskId, second, { action: 'approve' });
+    const approved = await decide(core, taskId, second, { action: 'approve', pinnedExportIds: [exports.add(taskId)] });
     const body = await approved.json();
     expect(`${approved.status} ${body.detail || ''}`).not.toMatch(/Cannot approve stale revision/);
     expect(approved.status).toBe(201);

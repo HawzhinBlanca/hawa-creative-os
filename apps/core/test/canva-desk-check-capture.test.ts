@@ -84,10 +84,10 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
     expect({ http: started.status, status: startedBody.status }).toEqual({ http: 202, status: 'submitted' });
     return (await app.request(`/tasks/${taskId}/canva/exports/${startedBody.operationId}/resume`, { method: 'POST', headers: deskHeaders })).json();
   };
-  const decide = (app: any, taskId: string, revisionId: string, decision: string) =>
+  const decide = (app: any, taskId: string, revisionId: string, decision: string, pinnedExportIds?: string[]) =>
     app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
       method: 'POST', headers: deskHeaders,
-      body: JSON.stringify({ decision, ...(decision === 'revision_requested' ? { revisionRequest: { comment: 'Make the title larger' } } : {}) }),
+      body: JSON.stringify({ decision, ...(pinnedExportIds ? { pinnedExportIds } : {}), ...(decision === 'revision_requested' ? { revisionRequest: { comment: 'Make the title larger' } } : {}) }),
     });
 
   it('exports the worker-made source, and the retrieved check becomes the revision\'s latest QC run', async () => {
@@ -116,7 +116,7 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
 
     // The changed revision is still refused; the new one is approved.
     expect((await decide(app, taskId, first, 'approved')).status).toBe(409);
-    const approved = await decide(app, taskId, detail.latestRevisionId, 'approved');
+    const approved = await decide(app, taskId, detail.latestRevisionId, 'approved', [resumed.artifact.id]);
     expect(approved.status).toBe(201);
   });
 

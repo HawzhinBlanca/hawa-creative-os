@@ -180,13 +180,14 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(taskInList.canvaBinding.designId).toBe(designId);
 
     // -------------------------------------------------------------------------
-    // 5. DESK APPROVAL: Approve the revision (auto-pinning retrieved exports)
+    // 5. DESK APPROVAL: Explicitly select the retrieved export for this revision.
     // -------------------------------------------------------------------------
     const approveRes = await app.request(`/tasks/${taskId}/revisions/${revId}/decisions`, {
       method: 'POST',
       headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' },
       body: JSON.stringify({
         decision: 'approved',
+        pinnedExportIds: [exportId],
         role: 'art_director',
         reason: 'Visual balance, exact copy, and KAAE brand compliance verified',
       }),

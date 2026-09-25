@@ -5,6 +5,7 @@ import { createApp } from '../../../apps/core/src/app.js';
 import { createDb } from '../../../packages/db/src/index.js';
 import { CostGovernor } from '../../../packages/integrations/src/cost-governor.js';
 import { CircuitBreaker } from '../../../packages/integrations/src/circuit-breaker.js';
+import { memoryExportStore } from '../../../apps/core/test/pinned-exports-fixture.js';
 
 describe('Task R12: Operations, Performance, and Safe Failure Behavior (FR-062-065, FR-071, FR-079, NFR-002, NFR-004, NFR-005, NFR-011, NFR-017)', () => {
   const root = path.resolve(__dirname, '../../..');
@@ -24,6 +25,7 @@ describe('Task R12: Operations, Performance, and Safe Failure Behavior (FR-062-0
   const connectionString = getTestDbUrl();
   let db: any;
   let app: any;
+  const exports = memoryExportStore();
 
   const authHeaders = {
     'Content-Type': 'application/json',
@@ -42,7 +44,7 @@ describe('Task R12: Operations, Performance, and Safe Failure Behavior (FR-062-0
 
   it('1. Task and client listing latency stays well within SLO (p95 <= 1500ms)', async () => {
     db = createDb(connectionString);
-    app = createApp({ db });
+    app = createApp({ db, deliverableStore: exports.store });
 
     const latencies: number[] = [];
     for (let i = 0; i < 20; i++) {
@@ -213,7 +215,7 @@ describe('Task R12: Operations, Performance, and Safe Failure Behavior (FR-062-0
         'x-user-role': 'art_director',
         Authorization: `Bearer ${process.env.HAWA_REVIEWER_KEY || 'test_reviewer'}`,
       },
-      body: JSON.stringify({ action: 'approve', reason: 'R12 Trace verification passed' }),
+      body: JSON.stringify({ action: 'approve', reason: 'R12 Trace verification passed', pinnedExportIds: [exports.add(task.id)] }),
     });
     expect(approveRes.status).toBe(201);
     const decision = await approveRes.json();

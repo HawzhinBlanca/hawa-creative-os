@@ -20,6 +20,7 @@ const operatorUserId = '00000000-0000-4000-b000-000000000001';
 async function approvedTask(db: ReturnType<typeof createDb>, app: ReturnType<typeof createApp>, headers: Record<string, string>) {
   const taskId = randomUUID();
   const designId = `dup_design_${randomUUID().slice(0, 8)}`;
+  const exportId = randomUUID();
   const content = Buffer.from(`export bytes ${taskId}`);
   await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
     await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
@@ -33,7 +34,7 @@ async function approvedTask(db: ReturnType<typeof createDb>, app: ReturnType<typ
     await sql`INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
       VALUES (${opId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${operatorUserId}, ${'req_' + randomUUID().slice(0, 8)}, 'hash', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format: 'pptx' })}::jsonb, now(), now())`.execute(trx);
     await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
-      VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${opId}::uuid, 'pptx', ${createHash('sha256').update(content).digest('hex')}, ${content},
+      VALUES (${exportId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${opId}::uuid, 'pptx', ${createHash('sha256').update(content).digest('hex')}, ${content},
         ${JSON.stringify({ copyPass: true, fontPass: true, rtlPass: true, status: 'passed' })}::jsonb, now())`.execute(trx);
   });
   const ready = await app.request(`/tasks/${taskId}/notifications/canva-status`, {
@@ -43,7 +44,7 @@ async function approvedTask(db: ReturnType<typeof createDb>, app: ReturnType<typ
   const revisionId = (await (await app.request(`/tasks/${taskId}`, { headers })).json()).latestRevisionId;
   const approve = await app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
     method: 'POST', headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' },
-    body: JSON.stringify({ decision: 'approved', reason: 'one delivery path' }),
+    body: JSON.stringify({ decision: 'approved', reason: 'one delivery path', pinnedExportIds: [exportId] }),
   });
   expect(approve.status).toBe(201);
   return taskId;
