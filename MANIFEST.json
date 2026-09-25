@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T16:48:34Z",
+  "generatedAt": "2026-09-25T16:58:43Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "7729400ee95a7659bf2f8ed53fdffd611392609096bcd5eac52625251375a736",
+      "sha256": "450f1e7c89ea74ad4db0877984bc702c7cea8a158d654daa1743e5b7a1ebaa58",
       "bytes": 3983
     },
     {
@@ -294,8 +294,8 @@
     },
     {
       "path": "adrs/045_requester_send_reconciliation_status.md",
-      "sha256": "1dd3742a91eb5c01ccc3c09258548a0563e7801197eb1a58f7641482d5534955",
-      "bytes": 3984
+      "sha256": "3854dbe1d10a7f8819be8f3fbd0d45b649cbafff28ed6246cd81a65b5ede8676",
+      "bytes": 4699
     },
     {
       "path": "adrs/046_staff_requester_send_resolution.md",
@@ -559,8 +559,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "798cc2fb84c9e5eb1276a316f58f249ddb59b8e5d80bbdbd585d512e887d3f02",
-      "bytes": 8144
+      "sha256": "e3fae75d444c941889e3c0385939958192cf56a12ff049c36d4bf58fec709108",
+      "bytes": 8685
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -799,8 +799,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_EVIDENCE.md",
-      "sha256": "74b4a2b289221b6ea90fe03090fd439d2a594b7113fadca4f283a25c93ea014c",
-      "bytes": 40104
+      "sha256": "8ac6f0a014aa48f59ff84964a17e95389eb84299de945d8fc90bcc9400e51c4f",
+      "bytes": 42077
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_RESTATE_DELIVERY_KILL_DRILL.md",
@@ -864,8 +864,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "17fe8d1a9adf0b749bdc9097569d8385121d1ff127a40682d64134faa463ac76",
-      "bytes": 137226
+      "sha256": "a9d81b70f57f9767b1d153133e0feca6fc72ecfcf320c3e4c2f11fb50463427a",
+      "bytes": 138344
     },
     {
       "path": "plans/user-stories.csv",
