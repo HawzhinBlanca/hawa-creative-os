@@ -1,6 +1,6 @@
 # R09 — delivery truth and reconciliation evidence
 
-**Date:** 2026-09-25. **Status:** in progress. **Sources:** `4ac0a4d`, `f58c67b`, `87b7328`, `0cce7a4`. **Decision:** ADR-043.
+**Date:** 2026-09-25. **Status:** in progress. **Sources:** `4ac0a4d`, `f58c67b`, `87b7328`, `0cce7a4`, and `apps/worker/drills/delivery-restate-harness.ts`. **Decision:** ADR-043.
 
 ## First pass — require requester-send proof
 
@@ -38,6 +38,14 @@ The same source blocks a fresh delivery run when a requester file was sent befor
 
 The focused PostgreSQL/Desk lifecycle suite passed **1 file / 9 tests**. It rejects missing and mismatched Drive receipts, missing and wrong-hash Sheet receipts, and a second run after partial requester send. The existing local path still completes when matching receipts are present. The full source suite excluding only the unsealed release gate passed **419 files / 3,137 tests**, with **4 files / 48 tests skipped**. TypeScript, lint and blueprint **755 pass / 0 warning / 0 failure** passed. An earlier test run exposed a synthetic publisher fixture with a fabricated Sheet hash and a different destination filename; the fixture now uses the package hash and the guard compares byte identity rather than labels. No live provider result was used in this pass.
 
-## Current limits
+## Fourth-pass limits
 
 The final projection now cross-checks stored receipts, but those receipts are written from the publisher's locally reported, read-back-verified result. Real Drive byte read-back, real Sheet row read-back, requester delivery confirmation, a Restate/PostgreSQL kill-and-replay, and clean-host restore remain admission work. A permanently missing receipt leaves the same workflow report retrying and needs an operator resolution path; an uncertain requester send still cannot be resolved safely in Desk. R17's Canva edit race and the full creative-quality gates remain open. Flags stay off; R09 is **in progress**.
+
+## Fifth pass — kill the handler during delivery completion
+
+The production signed office gateway, private RequestLifecycle and Delivery handlers ran on a disposable Restate instance with synthetic Core, Drive, Sheet and Telegram effects. After one requester file and notice were acknowledged, the synthetic final Core projection persisted one hash-bound result and killed the handler before returning. On restart, Restate replayed the final call. The recovered request was delivered at revision 5, with one claim, one prepare, one file key, one notice key, two final Core calls and one logical final write. An exact signed action resend returned the same delivery ID without new sends. A changed action under the old signature returned HTTP 401; direct public ingress to the private finish method returned HTTP 400. The container and its volume were removed after the run. Exact setup, counters and scope are in [the delivery kill drill](R09_RESTATE_DELIVERY_KILL_DRILL.md).
+
+## Current limits
+
+This is real Restate journal replay at one narrow boundary, with synthetic storage and provider acknowledgements. It does not prove PostgreSQL crash recovery, provider effects that time out after acceptance, a clean-host Restate restore or real requester confirmation. A permanently missing stored receipt still leaves a report retrying and needs an operator resolution path; uncertain sends remain unresolved. The live Drive, Sheet, Canva and Telegram gates, later lifecycle rounds, and final design-quality gates remain open. R09 is **in progress** and both new pipeline flags remain off.
