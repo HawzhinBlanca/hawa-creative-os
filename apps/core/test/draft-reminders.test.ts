@@ -105,7 +105,12 @@ describe.skipIf(!url)('draft reminders (PostgreSQL)', () => {
   it('never at night, and never for drafts sent before reminders existed', async () => {
     const { taskId } = await draft(30);
     expect(await remindUnansweredDrafts({ db, outbox, tenantId, userId, now: new Date('2026-09-24T21:00:00Z'), from: '2026-01-01T00:00:00Z' })).toBe(0);
-    await remindUnansweredDrafts({ db, outbox, tenantId, userId, now: officeHours });
+    const sent = await withRlsContext(db, operator, (trx) => trx.selectFrom('outbox_commands')
+      .select('created_at').where('aggregate_id', '=', taskId).where('command_type', '=', 'notify.telegram')
+      .executeTakeFirstOrThrow());
+    const remindersStartedAfterThisDraft = new Date(sent.created_at.getTime() + 1000).toISOString();
+    await remindUnansweredDrafts({ db, outbox, tenantId, userId, now: officeHours,
+      from: remindersStartedAfterThisDraft });
     expect(await reminders(taskId)).toEqual([]);
   });
 });
