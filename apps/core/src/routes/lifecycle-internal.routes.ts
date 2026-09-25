@@ -26,7 +26,7 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
-import { LifecycleProjectionConflict, projectLifecycleDesignOutcome, projectLifecycleOpen } from '../services/lifecycle-projection.js';
+import { LifecycleProjectionConflict, projectLifecycleDesignOutcome, projectLifecycleOfficeRevision, projectLifecycleOpen } from '../services/lifecycle-projection.js';
 import type { ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
 
@@ -265,6 +265,44 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
       log.error(`[core:internal] lifecycle design outcome ${requestId} failed:`, error instanceof Error ? error.message : error);
       return problem(c, 503, 'Lifecycle Projection Unavailable', 'The projection did not commit; retry with the same key');
+    }
+  });
+
+  // The first versioned office transition is a revision request for the current round-zero draft.
+  // It records the reviewer, task transition, request revision and replay receipt in one transaction.
+  internal('/lifecycle/:requestId/office-decision', async (c) => {
+    const requestId = c.req.param('requestId') ?? '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const actor = op?.actor && typeof op.actor === 'object' && !Array.isArray(op.actor)
+      ? op.actor as Record<string, unknown> : null;
+    const actionId = op?.actionId;
+    if (!UUID.test(requestId) || body?.v !== 1 || body.expectedRev !== 2 || body.rev !== 3 ||
+        op?.kind !== 'recordOfficeRevision' || typeof op.taskId !== 'string' || !UUID.test(op.taskId) ||
+        typeof op.revisionId !== 'string' || !UUID.test(op.revisionId) ||
+        typeof actionId !== 'string' || !UUID.test(actionId) ||
+        body.key !== `${requestId}:3:officeDecision:desk:${actionId}` ||
+        !actor || typeof actor.userId !== 'string' || !UUID.test(actor.userId) ||
+        typeof actor.role !== 'string' || actor.role.length > 60 ||
+        typeof op.reason !== 'string' || !op.reason.trim() || op.reason.length > 2000) {
+      return problem(c, 400, 'Invalid office decision', 'Expected one versioned revision request for the current draft and an attributed office actor');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleOfficeRevision(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID, taskId: op.taskId as string,
+        revisionId: op.revisionId as string, actionId: actionId as string,
+        actor: { userId: actor.userId as string, role: actor.role as string },
+        reason: (op.reason as string).trim(), expectedRev: 2, rev: 3, key: body.key as string,
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] lifecycle office revision ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The office decision did not commit; retry with the same key');
     }
   });
 }

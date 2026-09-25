@@ -31,9 +31,81 @@ export interface OpenLifecycleResult {
 }
 
 export class LifecycleProjectionConflict extends Error {
-  constructor(readonly code: 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN', message: string) {
+  constructor(readonly code: 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN' | 'NOT_CURRENT_DRAFT' | 'UNAUTHORIZED_ACTOR', message: string) {
     super(message);
   }
+}
+
+export interface OfficeRevisionProjection {
+  requestId: string; tenantId: string; taskId: string; revisionId: string;
+  actionId: string; actor: { userId: string; role: string }; reason: string;
+  expectedRev: 2; rev: 3; key: string;
+}
+
+export interface OfficeRevisionResult {
+  requestId: string; taskId: string; revisionId: string; actionId: string;
+  approvalId: string; taskState: string; rev: 3; stage: 'manual';
+}
+
+const OFFICE_REVISION_ROLES = new Set(['art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
+
+/** First request-owned office decision. The request and approval/audit rows commit as one revision. */
+export async function projectLifecycleOfficeRevision(db: Kysely<Database>, input: OfficeRevisionProjection): Promise<OfficeRevisionResult> {
+  const { requestId, tenantId, taskId, revisionId, actionId, actor, reason, key } = input;
+  const hash = createHash('sha256').update(canonical(input)).digest('hex');
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
+    const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', 3).executeTakeFirst();
+    if (receipt) {
+      if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'This office revision has different content or action identity');
+      }
+      return receipt.result as unknown as OfficeRevisionResult;
+    }
+    const request = await trx.selectFrom('requests').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+    if (!request || Number(request.rev) !== 2) {
+      throw new LifecycleProjectionConflict('STALE_REVISION', 'The request is not at expected revision 2');
+    }
+    if (request.owner !== 'restate' || request.stage !== 'in_review') {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'Only an in-review request may receive this decision');
+    }
+    if (request.current_task_id !== taskId) {
+      throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The office action names an older request task');
+    }
+    const task = await trx.selectFrom('tasks').select(['request_id', 'current_design_revision_id', 'state', 'version'])
+      .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirst();
+    if (task?.request_id !== requestId || task.current_design_revision_id !== revisionId) {
+      throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The office action names a stale or unowned design revision');
+    }
+    if (task.state !== 'human_review') {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'The current draft is no longer awaiting office review');
+    }
+    if (!OFFICE_REVISION_ROLES.has(actor.role)) {
+      throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR', 'An authorized office reviewer must request this revision');
+    }
+    const approval = await new RevisionRepository(trx).recordApproval({
+      tenantId, taskId, revisionId, decision: 'revision_requested', decidedBy: actor.userId,
+      reason, nonce: `desk:${actionId}`, lifecycleRequestId: requestId,
+      expectedTaskVersion: Number(task.version),
+      decisionPayload: { lifecycleRequestId: requestId, approverRole: actor.role,
+        actionId, requestFingerprint: hash },
+    }, trx);
+    const changed = await trx.updateTable('requests').set({ stage: 'manual', rev: 3, updated_at: new Date() })
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', 2)
+      .returning('request_id').executeTakeFirst();
+    if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'The request changed during office revision');
+    const taskState = (await trx.selectFrom('tasks').select('state')
+      .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirstOrThrow()).state;
+    const result: OfficeRevisionResult = { requestId, taskId, revisionId, actionId,
+      approvalId: approval.id, taskState, rev: 3, stage: 'manual' };
+    await trx.insertInto('lifecycle_projections').values({
+      tenant_id: tenantId, request_id: requestId, rev: 3, idempotency_key: key,
+      payload_sha256: hash, result: result as unknown as Record<string, unknown>,
+    }).execute();
+    return result;
+  });
 }
 
 function canonical(value: unknown): string {

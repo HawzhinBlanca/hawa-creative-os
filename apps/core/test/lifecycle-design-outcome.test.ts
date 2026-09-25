@@ -24,7 +24,7 @@ async function post(requestId: string, path: string, body: unknown, bearer = tok
     method: 'POST', headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return { status: res.status, body: await res.json() as Record<string, any> };
+  return { status: res.status, body: await res.json().catch(() => ({})) as Record<string, any> };
 }
 
 async function opened() {
@@ -104,5 +104,59 @@ describe('versioned lifecycle design outcome', () => {
     }));
     expect(rows.request).toMatchObject({ stage: 'in_review', rev: '2' });
     expect(rows.task).toMatchObject({ state: 'human_review', current_design_revision_id: result.body.revisionId });
+  });
+
+  it('records one versioned office revision request on the current draft and replays its receipt', async () => {
+    const { requestId, taskId } = await opened();
+    const designId = `DA${randomUUID().replaceAll('-', '').slice(0, 12)}`;
+    await withRlsContext(db, scope, (trx) => new CanvaBindingRepository(trx).createBinding({
+      tenantId, taskId, clientId, canvaDesignId: designId,
+      editUrl: `https://www.canva.com/design/${designId}/edit`,
+    }, trx));
+    const designed = await post(requestId, 'design-outcome', outcome(requestId, taskId,
+      { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId }));
+    expect(designed.status).toBe(200);
+    const revisionId = designed.body.revisionId as string;
+    const before = await withRlsContext(db, scope, (trx) => trx.selectFrom('tasks')
+      .select('version').where('id', '=', taskId).executeTakeFirstOrThrow());
+    const actionId = randomUUID();
+    const decision = { v: 1, expectedRev: 2, rev: 3,
+      key: `${requestId}:3:officeDecision:desk:${actionId}`,
+      ops: [{ kind: 'recordOfficeRevision', taskId, revisionId, actionId,
+        actor: { userId: scope.userId, role: 'art_director' }, reason: 'Correct the venue before approval' }],
+    };
+    expect((await post(requestId, 'office-decision', decision, 'wrong-token')).status).toBe(401);
+    expect(await post(requestId, 'office-decision', { ...decision,
+      ops: [{ ...decision.ops[0], revisionId: randomUUID() }] })).toMatchObject({
+      status: 409, body: { code: 'NOT_CURRENT_DRAFT' },
+    });
+    expect(await post(requestId, 'office-decision', { ...decision,
+      ops: [{ ...decision.ops[0], actor: { ...decision.ops[0].actor, role: 'operator' } }] })).toMatchObject({
+      status: 409, body: { code: 'UNAUTHORIZED_ACTOR' },
+    });
+    const [first, simultaneous] = await Promise.all([
+      post(requestId, 'office-decision', decision), post(requestId, 'office-decision', decision),
+    ]);
+    expect(first).toMatchObject({ status: 200, body: { v: 1, requestId, taskId, revisionId,
+      rev: 3, stage: 'manual', actionId, approvalId: expect.any(String) } });
+    expect(simultaneous).toEqual(first);
+    expect(await post(requestId, 'office-decision', decision)).toEqual(first);
+    const changed = structuredClone(decision);
+    changed.ops[0].reason = 'Different decision';
+    expect(await post(requestId, 'office-decision', changed)).toMatchObject({
+      status: 409, body: { code: 'IDEMPOTENCY_CONFLICT' },
+    });
+    const rows = await withRlsContext(db, scope, async (trx) => ({
+      request: await trx.selectFrom('requests').select(['rev', 'stage']).where('request_id', '=', requestId).executeTakeFirst(),
+      task: await trx.selectFrom('tasks').select(['state', 'version']).where('id', '=', taskId).executeTakeFirst(),
+      approvals: await trx.selectFrom('approvals').select(['id', 'nonce', 'decision', 'decided_by'])
+        .where('task_id', '=', taskId).execute(),
+      receipts: await trx.selectFrom('lifecycle_projections').select('rev').where('request_id', '=', requestId).execute(),
+    }));
+    expect(rows.request).toMatchObject({ rev: '3', stage: 'manual' });
+    expect(rows.task).toMatchObject({ state: 'revision_requested', version: String(Number(before.version) + 1) });
+    expect(rows.approvals).toEqual([expect.objectContaining({ id: first.body.approvalId,
+      nonce: `desk:${actionId}`, decision: 'revision_requested', decided_by: scope.userId })]);
+    expect(rows.receipts.map((r) => Number(r.rev)).sort()).toEqual([1, 2, 3]);
   });
 });

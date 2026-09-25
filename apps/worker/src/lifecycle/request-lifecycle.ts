@@ -63,12 +63,24 @@ export interface OpenAutomaticEvent extends Omit<OpenManualEvent, 'draft'> {
 
 export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'stage' | 'rev'> {
   stage: 'designing' | 'in_review' | 'manual';
-  rev: 1 | 2;
+  rev: 1 | 2 | 3;
   runId: string;
   designInput: DesignRunInput;
   outcome?: { eventId: string; sha256: string; status: string; revisionId?: string;
     message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string } };
+  officeRevision?: { eventId: string; sha256: string; actionId: string; revisionId: string; approvalId: string };
 }
+
+export interface OfficeRevisionEvent {
+  v: 1; eventId: string; requestId: string; taskId: string; revisionId: string;
+  actionId: string; expectedRev: 2; kind: 'revise';
+  actor: { userId: string; role: string }; reason: string;
+}
+
+export type OfficeRevisionReply =
+  | { accepted: true; requestId: string; taskId: string; revisionId: string; actionId: string;
+      approvalId: string; stage: 'manual'; rev: 3 }
+  | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
 
 export interface AutomaticOpenContext {
   key: string;
@@ -229,7 +241,7 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
   if (!prior || !('runId' in prior) || prior.requestId !== event.requestId ||
       prior.taskId !== event.taskId || prior.runId !== event.runId) return { ignored: true as const };
   const fingerprint = hashOf(event);
-  if (prior.rev === 2) {
+  if (prior.rev >= 2) {
     if (prior.outcome?.eventId !== event.eventId || prior.outcome.sha256 !== fingerprint) {
       throw invalid('the design outcome was already recorded with different content');
     }
@@ -260,6 +272,56 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
   ctx.set('lc', next);
   sendDesignOutcome(ctx, next);
   return { ignored: false as const, stage: next.stage, rev: next.rev };
+}
+
+const OFFICE_ROLES = new Set(['art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
+
+/** The first request-owned office action: a reviewer's revision request for the current draft. */
+export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: CoreInternal, event: OfficeRevisionEvent): Promise<OfficeRevisionReply> {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      !UUID.test(event.taskId) || !UUID.test(event.revisionId) || !UUID.test(event.actionId) ||
+      event.eventId !== `desk:${event.actionId}` || event.kind !== 'revise' ||
+      event.expectedRev !== 2 || !event.actor || !UUID.test(event.actor.userId) ||
+      !OFFICE_ROLES.has(event.actor.role) || typeof event.reason !== 'string' ||
+      !event.reason.trim() || event.reason.length > 2000) {
+    throw invalid('invalid office revision identity, reviewer or audit reason');
+  }
+  const fingerprint = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (!prior || !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.rev === 3) {
+    if (prior.officeRevision?.eventId !== event.eventId || prior.officeRevision.sha256 !== fingerprint) {
+      throw invalid('this office decision was already recorded with different content');
+    }
+    return { accepted: true, requestId: prior.requestId, taskId: prior.taskId,
+      revisionId: prior.officeRevision.revisionId, actionId: prior.officeRevision.actionId,
+      approvalId: prior.officeRevision.approvalId, stage: 'manual', rev: 3 };
+  }
+  if (prior.rev !== 2 || prior.stage !== 'in_review') return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.taskId !== event.taskId || prior.outcome?.revisionId !== event.revisionId) {
+    return { accepted: false, code: 'NOT_CURRENT_DRAFT' };
+  }
+  const projected = await ctx.run('project:3', () => core.post<{
+    v: 1; requestId: string; taskId: string; revisionId: string; actionId: string;
+    approvalId: string; taskState: string; rev: 3; stage: 'manual';
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/office-decision`, {
+    v: 1, expectedRev: 2, rev: 3,
+    key: `${event.requestId}:3:officeDecision:${event.eventId}`,
+    ops: [{ kind: 'recordOfficeRevision', taskId: event.taskId, revisionId: event.revisionId,
+      actionId: event.actionId, actor: event.actor, reason: event.reason.trim() }],
+  }));
+  if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
+      projected.revisionId !== event.revisionId || projected.actionId !== event.actionId ||
+      !UUID.test(projected.approvalId) || projected.taskState !== 'revision_requested' ||
+      projected.rev !== 3 || projected.stage !== 'manual') {
+    throw new Error('Core did not return a valid office revision projection');
+  }
+  const next: AutomaticLifecycleState = { ...prior, stage: 'manual', rev: 3,
+    officeRevision: { eventId: event.eventId, sha256: fingerprint,
+      actionId: event.actionId, revisionId: event.revisionId, approvalId: projected.approvalId } };
+  ctx.set('lc', next);
+  return { accepted: true, requestId: event.requestId, taskId: event.taskId, revisionId: event.revisionId,
+    actionId: event.actionId, approvalId: projected.approvalId, stage: 'manual', rev: 3 };
 }
 
 function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
@@ -308,6 +370,18 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
               .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
             startDesign: () => { throw new Error('designFinished cannot start a new run'); },
+          }, core, event)),
+      ),
+      officeDecision: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: OfficeRevisionEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordOfficeRevision({
+            key: ctx.key,
+            get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: () => { throw new Error('officeDecision cannot send from this transition'); },
+            startDesign: () => { throw new Error('officeDecision cannot start a run from this transition'); },
           }, core, event)),
       ),
       get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ManualLifecycleState | AutomaticLifecycleState | null> =>

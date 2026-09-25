@@ -636,8 +636,9 @@ POST /v1/ingress/rehearsal
 POST /v1/ingress/unified
 POST /v1/integrations/canva/authorize
 POST /v1/integrations/canva/disconnect
-POST /v1/internal/lifecycle/:requestId/design-outcome
 POST /v1/internal/lifecycle/:requestId/deliveries/:approvalId/prepare
+POST /v1/internal/lifecycle/:requestId/design-outcome
+POST /v1/internal/lifecycle/:requestId/office-decision
 POST /v1/internal/lifecycle/:requestId/project
 POST /v1/internal/tasks/:taskId/delivery-finished
 POST /v1/internal/telegram/intake

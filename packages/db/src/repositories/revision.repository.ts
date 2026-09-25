@@ -33,6 +33,8 @@ export interface RecordApprovalParams {
   correlationId?: string;
   expectedTaskVersion?: number;
   qaReport?: Record<string, unknown>;
+  /** Internal RequestLifecycle projection only; ordinary Desk decisions must leave this unset. */
+  lifecycleRequestId?: string;
 }
 
 /** Why a task in this state cannot be approved, or undefined when it can (received, human_review, …). */
@@ -287,7 +289,12 @@ export class RevisionRepository {
       }
       // RequestLifecycle owns this task's decisions. Check under the task lock so a direct
       // repository caller cannot append a legacy approval or replay one after ownership is pinned.
-      if (task.request_id) throw new Error('LIFECYCLE_OWNED: Review this task through RequestLifecycle');
+      if (task.request_id && task.request_id !== params.lifecycleRequestId) {
+        throw new Error('LIFECYCLE_OWNED: Review this task through RequestLifecycle');
+      }
+      if (!task.request_id && params.lifecycleRequestId) {
+        throw new Error('LIFECYCLE_OWNER_MISMATCH: This task has no matching request owner');
+      }
 
       // A retry may arrive after the first decision committed but before the Desk got its answer.
       // Check under the task lock: concurrent attempts with the same action key then serialize here.
