@@ -1,7 +1,21 @@
 import { createHash } from 'node:crypto';
 import type { StageContext, CandidateState } from '../types.js';
-import { renderMotifPng, type ProceduralMotifType } from '@hawa/creative';
+import { FORBIDDEN_ART_WORDS, renderMotifPng, type ProceduralMotifType } from '@hawa/creative';
 import { log } from '../../../logging.js';
+
+function assertArtPromptSafe(prompt: string, ctx: StageContext): void {
+  const normalized = (value: string) => value.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+  const art = normalized(prompt);
+  const protectedPhrases = [ctx.referencePack.clientName, ...ctx.copyBlocks.map((block) => block.text)]
+    .filter((value): value is string => typeof value === 'string' && normalized(value).length >= 3);
+  const copyAcronyms = ctx.copyBlocks.flatMap((block) => [...block.text.matchAll(/\b[A-Z]{3,}\b/g)].map(([value]) => value));
+  const prohibitedMarks = new RegExp(`\\b(?:${[...FORBIDDEN_ART_WORDS, 'insignia', 'crest', 'wordmark', 'brandmark'].join('|')})\\b`, 'i');
+  if (prohibitedMarks.test(prompt) || /\p{N}/u.test(prompt) ||
+      protectedPhrases.some((value) => art.includes(normalized(value))) ||
+      copyAcronyms.some((value) => art.includes(normalized(value)))) {
+    throw new Error('ART_PROMPT_PROTECTED_CONTENT');
+  }
+}
 
 export async function runArtStage(
   ctx: StageContext,
@@ -23,6 +37,7 @@ export async function runArtStage(
 
     if (artConfig.source === 'generated' && ctx.artProvider) {
       const basePrompt = artConfig.prompt || cand.concept.artPrompt || 'Editorial still life composition';
+      assertArtPromptSafe(basePrompt, ctx);
       const rawCalm = artConfig.calmRegion || box;
       const calmBox = {
         x: rawCalm.x ?? box.x,
@@ -42,13 +57,20 @@ export async function runArtStage(
           height,
         });
 
+        const actualSha256 = createHash('sha256').update(artResult.imageBuffer).digest('hex');
+        if (actualSha256 !== artResult.receipt.sha256) {
+          throw new Error('ART_RECEIPT_HASH_MISMATCH');
+        }
+
         cand.artPng = artResult.imageBuffer;
-        cand.artSha256 = artResult.receipt.sha256;
+        cand.artSha256 = actualSha256;
         cand.artProvenance = {
-          source: 'generated',
+          source: artResult.receipt.provider === 'procedural' ? 'procedural' : 'generated',
           model: artResult.receipt.model,
           synthId: artResult.receipt.synthId,
           prompt: basePrompt,
+          ...(artResult.receipt.artFallback ? { artFallback: artResult.receipt.artFallback } : {}),
+          ...(artResult.receipt.fallbackReason ? { fallbackReason: artResult.receipt.fallbackReason } : {}),
         };
       } catch (err: any) {
         // Degradation ladder rung 2: fallback to procedural motif. Logged because the ladder is

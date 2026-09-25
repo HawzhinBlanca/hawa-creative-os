@@ -376,6 +376,52 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     expect(updated[0].artProvenance?.source).toBe('procedural');
   });
 
+  it('4a. art stage records the actual procedural fallback instead of a generated-art claim', async () => {
+    const ctx = createMockContext(vi.fn());
+    const bytes = Buffer.from('mock-art-bytes');
+    ctx.artProvider = { generateArt: vi.fn().mockResolvedValue({
+      imageBuffer: bytes,
+      receipt: {
+        provider: 'procedural', model: 'procedural-motif-gradient-wash', synthId: false,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+        artFallback: 'procedural', fallbackReason: 'vision_check_unavailable',
+      },
+    }) } as any;
+    const layout = createMockLayout();
+    layout.art = { source: 'generated', prompt: 'Abstract blue gradient',
+      box: { x: 0, y: 0, width: 1080, height: 1350 }, opacity: 0.2,
+      calmRegion: { x: 100, y: 200, width: 880, height: 900 } };
+    const candidate: CandidateState = {
+      id: randomUUID(), ordinal: 0, concept: { artStrategy: 'generated' } as any,
+      layouts: [layout], currentLayout: layout, critiques: [], status: 'draft',
+    };
+    const [result] = await runArtStage(ctx, [candidate]);
+    expect(result.artPng).toEqual(bytes);
+    expect(result.artProvenance).toMatchObject({
+      source: 'procedural', model: 'procedural-motif-gradient-wash',
+      fallbackReason: 'vision_check_unavailable',
+    });
+  });
+
+  it('4b. art stage refuses protected client identity in an image prompt before provider use', async () => {
+    const ctx = createMockContext(vi.fn());
+    ctx.referencePack.clientName = 'Northstar Museum';
+    const generateArt = vi.fn();
+    ctx.artProvider = { generateArt } as any;
+    for (const prompt of ['Northstar Museum blue gradient', 'KAAE blue abstraction', 'Blue ribbon marked 2026']) {
+      const layout = createMockLayout();
+      layout.art = { source: 'generated', prompt,
+        box: { x: 0, y: 0, width: 1080, height: 1350 }, opacity: 0.2,
+        calmRegion: { x: 100, y: 200, width: 880, height: 900 } };
+      const candidate: CandidateState = {
+        id: randomUUID(), ordinal: 0, concept: { artStrategy: 'generated' } as any,
+        layouts: [layout], currentLayout: layout, critiques: [], status: 'draft',
+      };
+      await expect(runArtStage(ctx, [candidate])).rejects.toThrow('ART_PROMPT_PROTECTED_CONTENT');
+    }
+    expect(generateArt).not.toHaveBeenCalled();
+  });
+
   it('5. render stage: local render produces preview PNG, composite PNG, and metrics', async () => {
     const ctx = createMockContext(vi.fn());
     const layout = createMockLayout(1080, 1350);

@@ -326,6 +326,33 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     expect(result.receipt.verificationReport?.passed).toBe(true);
   });
 
+  it('does not ship generated pixels when visual safety verification is unavailable', async () => {
+    const validBase64 = createSolidPng(64, 64, [30, 58, 95]).toString('base64');
+    const imageCalls: string[] = [];
+    const fakeFetcher: typeof fetch = vi.fn(async (url: any) => {
+      const address = String(url);
+      if (address.includes('/images/generations')) {
+        imageCalls.push(address);
+        return { ok: true, status: 200, json: async () => ({ data: [{ b64_json: validBase64 }] }) } as any;
+      }
+      if (address.includes('/chat/completions')) {
+        return { ok: false, status: 503, text: async () => 'unavailable' } as any;
+      }
+      throw new Error(`Unexpected URL: ${address}`);
+    });
+    const result = await generateArtImage({
+      artPrompt: 'Minimalist navy gradient textured backdrop', palette: PALETTE,
+      openaiApiKey: 'mock-key', fetchFn: fakeFetcher,
+    });
+    expect(result.receipt.provider).toBe('procedural');
+    expect(result.receipt.artFallback).toBe('procedural');
+    expect(result.receipt.fallbackReason).toBe('vision_check_unavailable');
+    expect(result.receipt.attempts).toBe(1);
+    expect(result.receipt.costUsd).toBeGreaterThan(0);
+    expect(result.receipt.verificationReport?.passed).toBe(true);
+    expect(imageCalls).toHaveLength(1);
+  });
+
   it('falls back to procedural motif when image provider attempts are exhausted', async () => {
     const fakeFetcher: typeof fetch = vi.fn().mockResolvedValue({
       ok: false,

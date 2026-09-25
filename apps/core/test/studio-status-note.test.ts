@@ -45,6 +45,16 @@ describe('studio summary line sent with the Canva result', () => {
     expect(note).toBe('Studio v2 · 1 concept · 2 revision rounds · judge 7.4/10 · imagery: procedural (arcs) · typeface: Cinzel, Verdana');
   });
 
+  it('reports a procedural image fallback even when the planned concept asked for generation', () => {
+    const note = studioStatusNote({
+      run: { winner_candidate_id: 'w', stages: {} },
+      candidates: [{ id: 'w', layouts: [layout], concept: { artStrategy: 'generated' },
+        art_provenance: { source: 'procedural', artFallback: 'procedural', fallbackReason: 'vision_check_unavailable' } }],
+    });
+    expect(note).toContain('imagery: procedural fallback');
+    expect(note).not.toContain('imagery: generated');
+  });
+
   it('keeps the ladder and parity notes', () => {
     const note = studioStatusNote({ run: { stages: { ladderRung: 3 } }, candidates: [], parityNote: ' · parity: unavailable (timeout)' });
     expect(note).toBe('Studio v2 · Rung 3 fallback · parity: unavailable (timeout)');

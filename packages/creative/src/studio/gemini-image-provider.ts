@@ -65,6 +65,7 @@ export interface ArtReceipt {
   requested?: { size: string; quality: string; aspectRatio: string };
   attempts: number;
   artFallback?: 'procedural';
+  fallbackReason?: 'vision_check_unavailable';
   verificationReport?: ArtVerificationReport;
 }
 
@@ -253,6 +254,7 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
   let spentUsd = 0;
   let costSource: ArtReceipt['costSource'] = 'none';
   let attempts = 0;
+  let fallbackReason: ArtReceipt['fallbackReason'];
   const requested = { size: settings.size, quality: settings.quality, aspectRatio: settings.aspectRatio };
 
   if (imageKey) {
@@ -287,7 +289,7 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
         }
 
         // Vision check with the active tier's critique model
-        let visionCheck = { passed: true, containsForbidden: false, what: 'clean' };
+        let visionCheck: { passed: boolean; containsForbidden: boolean; what: string };
         try {
           visionCheck = await runVisionCheck(imageBuffer, mimeType, {
             openaiApiKey: openaiKey,
@@ -296,6 +298,10 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
           });
         } catch (vErr: any) {
           console.warn(`[StudioArt] Vision check error:`, vErr.message);
+          // The image was already billed, but its pixels cannot be admitted without a verdict.
+          // A second image call would pay again while the verifier is still unavailable.
+          fallbackReason = 'vision_check_unavailable';
+          break;
         }
 
         if (!visionCheck.passed) {
@@ -375,6 +381,7 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
       requested,
       attempts,
       artFallback: 'procedural',
+      ...(fallbackReason ? { fallbackReason } : {}),
       verificationReport: {
         dominantColorsPassed: paletteCheck.passed,
         dominantColors: paletteCheck.dominantColors,

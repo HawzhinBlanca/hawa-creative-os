@@ -62,7 +62,8 @@ export function studioStatusNote({ run, candidates, parityNote = '', models = []
 
   const artProv = parse(winner?.art_provenance);
   const concept = parse(winner?.concept);
-  if (artProv?.synthId || artProv?.generator === 'imagen' || concept?.artStrategy === 'generated') parts.push('imagery: generated');
+  if (artProv?.source === 'procedural') parts.push(artProv?.artFallback ? 'imagery: procedural fallback' : `imagery: procedural (${artProv.motif || concept?.motif || 'thin-rules'})`);
+  else if (artProv?.source === 'generated' || artProv?.synthId || artProv?.generator === 'imagen' || concept?.artStrategy === 'generated') parts.push('imagery: generated');
   else if (concept?.artStrategy === 'procedural') parts.push(`imagery: procedural (${concept.motif || 'thin-rules'})`);
   else if (winner) parts.push('imagery: none');
 
