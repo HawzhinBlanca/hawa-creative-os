@@ -121,6 +121,8 @@ export function hardQaContextFor(
     arabicFont: ctx.arabicFont,
     palette: ctx.referencePack.palette,
     logoAspect: ctx.logoAspect || 1.0,
+    logoMinimumWidthPx: (ctx.referencePack.logoConstraints as { minimumWidthPx?: number } | undefined)?.minimumWidthPx,
+    logoClearSpacePx: (ctx.referencePack.logoConstraints as { clearSpacePx?: number } | undefined)?.clearSpacePx,
     copyText: copyForStageV3(ctx).text,
   };
 }

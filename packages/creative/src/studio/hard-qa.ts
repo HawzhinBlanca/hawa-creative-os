@@ -22,6 +22,8 @@ export interface HardQaContext {
   arabicFont: string;
   palette: string[];
   logoAspect: number;
+  logoMinimumWidthPx?: number;
+  logoClearSpacePx?: number;
   /** The copy of each block, by copyIndex. With it, a block whose copy wraps taller than its box fails. */
   copyText?: Record<number, string>;
   /**
@@ -64,6 +66,8 @@ export function evaluateHardQa(
         },
       },
       logoAspect: ctx.logoAspect || 1.0,
+      logoMinimumWidthPx: ctx.logoMinimumWidthPx,
+      logoClearSpacePx: ctx.logoClearSpacePx,
     },
     draftFont: ctx.latinFont || 'Verdana',
     photoCount: ctx.photoCount ?? 0,

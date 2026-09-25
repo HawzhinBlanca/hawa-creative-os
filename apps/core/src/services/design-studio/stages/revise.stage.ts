@@ -42,9 +42,10 @@ export async function runReviseStage(
   const shortEdge = Math.min(ctx.width, ctx.height);
   const marginPx = Math.round(shortEdge * 0.06);
   const bodyMinPx = Math.max(12, Math.round(ctx.width * 0.016));
-  const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08));
+  const logoConstraints = ctx.referencePack.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number } | undefined;
+  const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08), logoConstraints?.minimumWidthPx ?? 0);
 
-  const constraintsStr = `margin >= ${marginPx}px; body >= ${bodyMinPx}px; title >= 2.2 * body; logo width >= ${logoMinPx}px; palette = ${ctx.referencePack.palette.join(', ')}`;
+  const constraintsStr = `margin >= ${marginPx}px; body >= ${bodyMinPx}px; title >= 2.2 * body; logo width >= ${logoMinPx}px; logo clear space >= max(0.5 * logo height, ${logoConstraints?.clearSpacePx ?? 0}px); palette = ${ctx.referencePack.palette.join(', ')}`;
 
   const copyMap: Record<number, string> = {};
   for (let i = 0; i < ctx.copyBlocks.length; i++) {
@@ -70,6 +71,8 @@ export async function runReviseStage(
         },
       },
       logoAspect: ctx.logoAspect || 1.0,
+      logoMinimumWidthPx: logoConstraints?.minimumWidthPx,
+      logoClearSpacePx: logoConstraints?.clearSpacePx,
     },
     draftFont: ctx.latinFont || 'Inter',
   };

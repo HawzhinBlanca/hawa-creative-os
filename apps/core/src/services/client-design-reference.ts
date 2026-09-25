@@ -23,16 +23,26 @@ async function packagedKaaeReference(clientId: string): Promise<Resolved | null>
   return { reference, logo };
 }
 
-/** Resolve an active versioned client reference and exact logo bytes from the office blob store. */
-export async function resolveClientDesignReference(db: Kysely<Database>, scope: Scope, clientId: string): Promise<Resolved> {
+/** Resolve a versioned client reference and exact logo bytes from the office blob store.
+ * A requested historical version is for recovery reads; callers must separately check that it
+ * is still current before making a new design or side effect.
+ */
+export async function resolveClientDesignReference(
+  db: Kysely<Database>, scope: Scope, clientId: string, historicalVersion?: number
+): Promise<Resolved> {
   if (!isValidUuid(clientId)) throw new CanvaFlowError(422, 'CLIENT_REQUIRED', 'The task needs a recorded client ID.');
+  if (historicalVersion !== undefined && (!Number.isInteger(historicalVersion) || historicalVersion < 1)) {
+    throw new CanvaFlowError(422, 'CLIENT_REFERENCE_INVALID', 'The saved client reference version is invalid.');
+  }
   const packaged = await packagedKaaeReference(clientId);
   if (packaged) return packaged;
 
   const row = await withRlsContext(db, { tenantId: scope.tenantId, userId: scope.actorId, role: 'operator' }, async trx =>
-    (await sql<{ dna: unknown; version: number; content_hash: string }>`
-      SELECT dna, version, content_hash FROM hawa.client_dna_versions
-      WHERE tenant_id = ${scope.tenantId}::uuid AND client_id = ${clientId}::uuid AND status = 'active'
+    (await sql<{ dna: unknown; version: number; content_hash: string; status: string }>`
+      SELECT dna, version, content_hash, status FROM hawa.client_dna_versions
+      WHERE tenant_id = ${scope.tenantId}::uuid AND client_id = ${clientId}::uuid
+        AND (${historicalVersion ?? null}::integer IS NULL AND status = 'active'
+          OR version = ${historicalVersion ?? null}::integer AND status IN ('active','superseded'))
       ORDER BY version DESC LIMIT 1`.execute(trx)).rows[0]);
   if (!row) throw new CanvaFlowError(422, 'CLIENT_REFERENCE_REQUIRED', 'This client needs an active versioned design reference before planning.');
   const dna = typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna;
@@ -85,7 +95,10 @@ export async function resolveClientDesignReference(db: Kysely<Database>, scope: 
   return {
     reference: {
       clientId, clientName: d.name, dnaVersion: row.version, dnaContentHash: row.content_hash,
-      status: 'active_client_dna', logoAssetId: logoAsset.assetId, logoSha256: logoAsset.sha256,
+      // This identifies the reference format, not the mutable row lifecycle. Keep a saved run's
+      // reference hash stable if its DNA row is later superseded; currentness is checked separately.
+      status: 'active_client_dna',
+      logoAssetId: logoAsset.assetId, logoSha256: logoAsset.sha256,
       rules: {
         palette, paletteFallbacks,
         typography: { display: { admitted }, formalBody: { latin, arabic } },

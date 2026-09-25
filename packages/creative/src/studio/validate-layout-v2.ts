@@ -11,6 +11,8 @@ export interface ValidationReference {
     };
   };
   logoAspect: number; // width / height
+  logoMinimumWidthPx?: number;
+  logoClearSpacePx?: number;
 }
 
 export interface LayoutValidationContext {
@@ -516,7 +518,7 @@ export function validateLayoutV2(
   }
 
   // 12. LOGO
-  const minLogoWidth = houseMinLogoWidth(layout.width);
+  const minLogoWidth = Math.max(houseMinLogoWidth(layout.width), context.reference.logoMinimumWidthPx ?? 0);
   if (layout.logo.width < minLogoWidth) {
     return {
       ok: false,
@@ -534,16 +536,16 @@ export function validateLayoutV2(
     };
   }
 
-  // Clear space: 0.5 * logo.height free of text and rules
-  const cs = HOUSE_RULES.logo.clearSpaceShareOfHeight * layout.logo.height;
-  const logoClearSpace: Box = logoClearZone(layout.logo);
+  // Respect the stronger of the house rule and the client's stated minimum.
+  const cs = Math.max(HOUSE_RULES.logo.clearSpaceShareOfHeight * layout.logo.height, context.reference.logoClearSpacePx ?? 0);
+  const logoClearSpace: Box = logoClearZone(layout.logo, context.reference.logoClearSpacePx);
 
   for (const t of layout.text) {
     if (boxesIntersect(t, logoClearSpace)) {
       return {
         ok: false,
         code: 'LOGO',
-        message: `Text box copyIndex ${t.copyIndex} violates logo clear space (0.5x logo height = ${cs.toFixed(1)}px)`,
+        message: `Text box copyIndex ${t.copyIndex} violates logo clear space (${cs.toFixed(1)}px)`,
       };
     }
   }
@@ -552,7 +554,7 @@ export function validateLayoutV2(
       return {
         ok: false,
         code: 'LOGO',
-        message: `Rule shape violates logo clear space (0.5x logo height = ${cs.toFixed(1)}px)`,
+        message: `Rule shape violates logo clear space (${cs.toFixed(1)}px)`,
       };
     }
   }

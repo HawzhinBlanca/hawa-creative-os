@@ -96,7 +96,7 @@ export const STYLE_SPEC_SCHEMA = {
     },
     accentFirstTitleLine: {
       type: 'boolean',
-      description: "True when the first line of the title is set in gold above a light title (for example 'MEET KAAE AT' over the event's name).",
+      description: "True when the first line of the title uses the brand's accent colour above a light title (for example an edition label above the event's name).",
     },
     cta: {
       type: 'string',

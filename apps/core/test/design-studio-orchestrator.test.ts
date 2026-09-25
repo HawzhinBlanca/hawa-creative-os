@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, afterAll, beforeAll, beforeEach } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
+import { blobStoreFromEnv, createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { DesignStudioService, isPipelineV3Run } from '../src/services/design-studio/design-studio-service.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { CanvaDesignPlanner } from '../src/services/canva-design-planner.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import type { StudioLayoutV2 } from '@hawa/creative';
+import { computeDnaHash } from '../src/core-helpers.js';
+import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
@@ -250,6 +252,68 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
 
   afterAll(async () => {
     await db.destroy();
+  });
+
+  it('scopes a second-client Studio brief to its DNA and logo and refuses its unqualified v3 route', async () => {
+    const otherClientId = randomUUID();
+    await sql`INSERT INTO hawa.clients(id,tenant_id,code,name)
+      VALUES(${otherClientId}::uuid,${scope.tenantId}::uuid,${'other-'+otherClientId.slice(0,8)},'Other Client')`.execute(db);
+    const logoBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+    const logoRef = await blobStoreFromEnv(db).put(logoBytes, 'image/png');
+    const dna = { tenantId: scope.tenantId, clientId: otherClientId, name: 'Other Client', code: 'other', version: 1,
+      status: 'active', defaultLocale: 'en', defaultDirection: 'ltr',
+      colors: [{ name: 'Ocean', hex: '#214365', role: 'background' }, { name: 'Paper', hex: '#FAFAFA', role: 'text' },
+        { name: 'Rose', hex: '#EFABCD', role: 'accent' }],
+      fonts: [{ family: 'Inter', style: 'Regular', weight: 400, role: 'body', license: 'test', supportedLocales: ['en'] },
+        { family: 'Noto Sans Arabic', style: 'Regular', weight: 400, role: 'body', license: 'test', supportedLocales: ['ckb','ar'] },
+        { family: 'Inter', style: 'Bold', weight: 700, role: 'display', license: 'test', supportedLocales: ['en'] }],
+      assets: [{ assetId: randomUUID(), name: 'Other logo', role: 'logo_primary',
+        storageKey: `sha256:${logoRef.sha256}`, sha256: logoRef.sha256, mimeType: 'image/png' }],
+      guidelines: { voiceAndTone: 'Clear', prohibitedPhrases: [], requiredDisclaimers: [], layoutRules: ['Use open spacing.'] },
+      destinations: { googleSharedDriveId: 'test', productionFolderId: 'test', archiveFolderId: 'test', spreadsheetId: 'test', sheetId: 1 },
+      approvalPolicy: { requiredRoles: ['art_director'], allowAutoApproval: false, autoApprovalEligibleTemplates: [] },
+      updatedAt: new Date().toISOString() };
+    await sql`INSERT INTO hawa.client_dna_versions(tenant_id,client_id,version,status,dna,content_hash,created_by)
+      VALUES(${scope.tenantId}::uuid,${otherClientId}::uuid,1,'active',${JSON.stringify(dna)}::jsonb,${computeDnaHash(dna)},${scope.actorId}::uuid)`.execute(db);
+    const intake = async (chat: string) => (await persistChatIntake(db, { platform: 'telegram', sourceEventId: randomUUID(),
+      sourceChannelId: chat, clientId: otherClientId, title: '[TEST] Other Studio',
+      rawText: 'Use open spacing.\n---\nOTHER TITLE\n\nOther body.', designInstructions: 'Use open spacing.', exactCopy: [] })).task.id;
+    const oldFlag=process.env.DESIGN_PIPELINE_V3, oldChats=process.env.DESIGN_PIPELINE_V3_CHATS;
+    process.env.DESIGN_PIPELINE_V3='off'; process.env.DESIGN_PIPELINE_V3_CHATS='';
+    try {
+      const fetcher=createMockFetch();
+      const service=new DesignStudioService(db,undefined,{apiKey:'test-key',fetcher,defaultTier:'standard'});
+      const taskId=await intake('other-standard');
+      const {run}=await service.createOrGetRun(scope,taskId,`key-${randomUUID().slice(0,16)}`,{width:1080,height:1350,tier:'standard'});
+      expect(run.request.logoSha256).toBe(logoRef.sha256);
+      expect((await service.resume(scope,taskId,run.id)).status).toBe('conceiving');
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      const sent=JSON.stringify(fetcher.mock.calls[0][1]);
+      expect(sent).toContain('#214365');
+      expect(sent).toContain('Inter');
+      expect(sent).not.toContain('KAAE');
+      expect(sent).not.toContain('#F7B500');
+
+      const pilotChat=`other-pilot-${randomUUID().slice(0,8)}`;
+      process.env.DESIGN_PIPELINE_V3_CHATS=pilotChat;
+      const pilotId=await intake(pilotChat);
+      await expect(service.createOrGetRun(scope,pilotId,`key-${randomUUID().slice(0,16)}`,
+        {width:1080,height:1350,tier:'standard'})).rejects.toMatchObject({code:'CLIENT_V3_PROFILE_REQUIRED'});
+      expect(fetcher).toHaveBeenCalledTimes(1);
+
+      await sql`UPDATE hawa.client_dna_versions SET status='superseded'
+        WHERE tenant_id=${scope.tenantId}::uuid AND client_id=${otherClientId}::uuid AND version=1`.execute(db);
+      const historical = await resolveClientDesignReference(db,scope,otherClientId,1);
+      expect(createHash('sha256').update(JSON.stringify(historical.reference)).digest('hex')).toBe(run.request.referenceHash);
+      expect(createHash('sha256').update(historical.logo).digest('hex')).toBe(run.request.logoSha256);
+      await expect(service.resume(scope,taskId,run.id)).rejects.toMatchObject({code:'CLIENT_REFERENCE_CHANGED'});
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      const stopped=(await sql<{status:string}>`SELECT status FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0];
+      expect(stopped.status).toBe('failed');
+    } finally {
+      if(oldFlag===undefined)delete process.env.DESIGN_PIPELINE_V3;else process.env.DESIGN_PIPELINE_V3=oldFlag;
+      if(oldChats===undefined)delete process.env.DESIGN_PIPELINE_V3_CHATS;else process.env.DESIGN_PIPELINE_V3_CHATS=oldChats;
+    }
   });
 
   it('1. repeated Idempotency-Key returns the same run; altered payload throws GENERATION_CONFLICT', async () => {

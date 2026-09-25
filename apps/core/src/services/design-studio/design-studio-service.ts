@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -32,6 +31,7 @@ import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from
 import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type PhotoFaces } from './photo-cutouts.js';
 import { log } from '../../logging.js';
 import { blobStoreFor, putToStore, readPreferringStore } from '../blob-store-context.js';
+import { assertCurrentClientDesignReference, resolveClientDesignReference } from '../client-design-reference.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -361,17 +361,7 @@ export class DesignStudioService {
       throw new CanvaFlowError(422, 'CLIENT_REQUIRED', 'Select the client before retrieving brand references.');
     }
 
-    const reference: ReferencePack & { clientId: string; logoSha256: string } = JSON.parse(
-      await readFile(creativeAssetPath('kaae-reference.json'), 'utf8')
-    );
-
-    if (task.client_id !== reference.clientId) {
-      throw new CanvaFlowError(
-        422,
-        'CLIENT_REFERENCE_REQUIRED',
-        'This client needs its own verified reference pack. KAAE references cannot be used for another client.'
-      );
-    }
+    const { reference, logo } = await resolveClientDesignReference(this.db, s, task.client_id);
 
     const content = savedDesignCopy(task.source, task.description || '');
     if (!content.copy.length || content.copy.join('').length > 16000) {
@@ -385,11 +375,6 @@ export class DesignStudioService {
         'COPY_UNSUPPORTED',
         'This transfer sets English and Sorani Kurdish copy only; the request contains other scripts or symbols.'
       );
-    }
-
-    const logo = await readFile(officialLogoPath());
-    if (hash(logo) !== reference.logoSha256) {
-      throw new CanvaFlowError(409, 'LOGO_CHANGED', 'The official logo checksum changed; review the reference pack.');
     }
 
     const copyBlocks: CopyBlock[] = content.copy.map((text, idx) => ({
@@ -438,6 +423,10 @@ export class DesignStudioService {
     // recorded on the run so every later stage and every resume agrees. The key is omitted rather
     // than written false so a non-v3 run's request hash is unchanged from before it existed.
     const pipelineV3 = runsPipelineV3(taskCtx.task.source?.sourceChannelId);
+    if (pipelineV3 && taskCtx.reference.status !== 'reference_for_draft_not_release_approval') {
+      throw new CanvaFlowError(422, 'CLIENT_V3_PROFILE_REQUIRED',
+        'This client has no admitted Studio v3 font and exemplar profile. Use the standard Studio path until its profile is qualified.');
+    }
     // A change the client asked for on a design they received: the run edits that design.
     const sourceOptions = (taskCtx.task.source?.payload || taskCtx.task.source || {})?.studioOptions || {};
     const directed =
@@ -465,6 +454,7 @@ export class DesignStudioService {
       instructions: taskCtx.content.instructions,
       clientId: taskCtx.task.client_id,
       referenceHash: hash(JSON.stringify(taskCtx.reference)),
+      ...(taskCtx.reference.dnaVersion ? { dnaVersion: taskCtx.reference.dnaVersion } : {}),
       logoSha256: hash(taskCtx.logo),
       logoAspect: taskCtx.logoAspect,
       ...(pipelineV3 ? { pipelineV3: true } : {}),
@@ -485,6 +475,7 @@ export class DesignStudioService {
       if (!lockedTask || lockedTask.client_id !== taskCtx.task.client_id) {
         throw new CanvaFlowError(409, 'CLIENT_CHANGED', 'Client changed while references were retrieved.');
       }
+      await assertCurrentClientDesignReference(db, s, taskCtx.reference);
 
       // 3. Check for existing run by request_key OR in-flight active run for this task.
       // A task keeps at most one unfinished run (unique index design_studio_one_active_run): it is
@@ -810,13 +801,13 @@ export class DesignStudioService {
   /**
    * Builds the StageContext with wrapped clients that enforce ledger-insert-before-dispatch and budget caps.
    */
-  private createStageContext(
+  private async createStageContext(
     s: Scope,
     run: any,
     currentStageName: string,
     currentBudget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
     onSpendUpdate: (cost: number) => Promise<void>
-  ): StageContext {
+  ): Promise<StageContext> {
     const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
     const fetchFn = this.options.fetcher || fetch;
     const apiKey = this.options.apiKey || process.env.OPENAI_API_KEY || 'mock-key';
@@ -1006,53 +997,45 @@ export class DesignStudioService {
       },
     };
 
-    let referencePack: ReferencePack = {
-      palette: [
-        '#0A1628',
-        '#1E3A5F',
-        '#4770A3',
-        '#F7B500',
-        '#FDF8F3',
-        '#FFFFFF',
-        '#1A1A1A',
-      ],
-      referenceFonts: {
-        latin: 'Verdana',
-        arabic: 'Noto Sans Arabic',
-      },
-    };
+    const { reference, logo: logoBytes } = await resolveClientDesignReference(this.db, s, run.client_id, request.dnaVersion);
+    if (request.clientId !== run.client_id || reference.clientId !== run.client_id ||
+        hash(JSON.stringify(reference)) !== request.referenceHash ||
+        hash(logoBytes) !== request.logoSha256) {
+      throw new CanvaFlowError(409, 'CLIENT_REFERENCE_CHANGED',
+        'The client reference changed after this Studio run was created. Abandon it and plan again.');
+    }
+    if (currentStageName !== 'parity') await assertCurrentClientDesignReference(this.db, s, reference);
+    const packagedKaae = reference.status === 'reference_for_draft_not_release_approval';
+    if (isPipelineV3Run(run) && !packagedKaae) {
+      throw new CanvaFlowError(422, 'CLIENT_V3_PROFILE_REQUIRED',
+        'This client has no admitted Studio v3 font and exemplar profile.');
+    }
+    let referencePack: ReferencePack;
     let promotedRules: string;
     let latinFont: string;
     let arabicFont: string;
 
-    try {
-      const rawRef = JSON.parse(readFileSync(creativeAssetPath('kaae-reference.json'), 'utf8'));
+    if (packagedKaae) {
       // Read the way the qualification reads it (shared), so both design with the same rules.
-      const rules = studioReferenceFromRaw(rawRef);
-      referencePack.palette = rules.palette;
+      const rules = studioReferenceFromRaw(reference);
+      referencePack = { palette: rules.palette, referenceFonts: { latin: rules.latinFont, arabic: rules.arabicFont },
+        clientId: reference.clientId, referenceHash: request.referenceHash };
       latinFont = rules.latinFont;
       arabicFont = rules.arabicFont;
       promotedRules = rules.promotedRules;
-      if (rawRef.rules?.fontFamily) {
-        referencePack.referenceFonts = { latin: rules.latinFont, arabic: rules.arabicFont };
-      }
-    } catch (err: any) {
-      // This used to fall back to a placeholder rule inside an "if (refPath)" with no else, and the
-      // only warning sat in a catch that never ran. Both candidate paths missed in the image, so
-      // 24 hours of production logs held no occurrence of it while every brief went out with
-      // "Keep title clear and centered..." instead of the client's colour rules. A run that cannot
-      // read the client's pack must stop rather than design to defaults nobody approved.
-      const detail = err?.message || String(err);
-      log.error(`[design-studio] Reference pack could not be read; this run is stopping. ${detail}`);
-      throw new CanvaFlowError(
-        500,
-        'REFERENCE_PACK_UNREADABLE',
-        `The client's brand reference pack could not be read, so this design cannot be briefed. ${detail}`
-      );
+    } else {
+      latinFont = reference.rules.typography.formalBody.latin;
+      arabicFont = reference.rules.typography.formalBody.arabic;
+      referencePack = { palette: reference.rules.palette,
+        referenceFonts: { latin: latinFont, arabic: arabicFont }, clientId: reference.clientId,
+        clientName: reference.clientName, dnaVersion: reference.dnaVersion,
+        dnaContentHash: reference.dnaContentHash, logoAssetId: reference.logoAssetId,
+        logoSha256: reference.logoSha256, logoConstraints: reference.rules.logoConstraints };
+      promotedRules = JSON.stringify(reference.rules.layoutRules || []);
     }
 
     const exemplars: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }> = [];
-    try {
+    if (packagedKaae) try {
       const retrievalIndex = new ExemplarRetrievalIndex();
       const briefQuery = {
         text: (s as any).instructions || (s as any).title || (run as any).title || '',
@@ -1083,7 +1066,7 @@ export class DesignStudioService {
           `this design is being generated without exemplar conditioning.`
       );
     }
-    if (!exemplars.length) {
+    if (packagedKaae && !exemplars.length) {
       // In production this was silent: the layout model was conditioned on nothing and no one
       // could tell from the logs that the run had seen no exemplar at all.
       log.error(
@@ -1092,15 +1075,7 @@ export class DesignStudioService {
       );
     }
 
-    // A KAAE design without the KAAE logo is not deliverable, so a missing or changed logo stops the
-    // run. It used to pass silently: the only path tried did not exist in the image, and the design
-    // went to Canva with the logo box empty.
-    const logoBytes = readFileSync(officialLogoPath());
-    const logoSha256 = createHash('sha256').update(logoBytes).digest('hex');
-    if (request.logoSha256 && logoSha256 !== request.logoSha256) {
-      throw new CanvaFlowError(409, 'LOGO_CHANGED', 'The official logo changed after this run started; review the reference pack.');
-    }
-    const logo = { bytes: logoBytes, sha256: logoSha256, mimeType: 'image/png' as const };
+    const logo = { bytes: logoBytes, sha256: reference.logoSha256, mimeType: 'image/png' as const };
 
     return {
       runId: run.id,
@@ -1124,7 +1099,7 @@ export class DesignStudioService {
       artProvider: ledgerArtProvider as any,
       pipelineV3: isPipelineV3Run(run),
       requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
-      ornament: ornamentSettings(),
+      ornament: packagedKaae ? ornamentSettings() : undefined,
       style: (runStages(run).brief as CreativeBrief | undefined)?.styleSpec,
     };
   }
@@ -1195,7 +1170,7 @@ export class DesignStudioService {
     // worker to retry for ever, so it is marked failed here with the reason.
     let ctx: StageContext;
     try {
-      ctx = await this.withClientRules(s, this.createStageContext(s, run, run.status, budget, onSpendUpdate));
+      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate));
     } catch (err: any) {
       const diagnostic = `Stage context could not be built: ${err?.message || err}`;
       await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
@@ -2579,7 +2554,7 @@ export class DesignStudioService {
     // status and liveness (updated_at) are not the parity check's to change. A completed run is
     // immutable (trigger immutable_design_studio_run), so a transferred run's parity cost stays on the
     // calls ledger (design_studio_calls), which the Desk's total adds up.
-    const stageCtx = this.createStageContext(s, run, 'parity', budget, async (cost) => {
+    const stageCtx = await this.createStageContext(s, run, 'parity', budget, async (cost) => {
       budget.spentUsd += cost;
       await this.tx(s, (db) =>
         sql`UPDATE hawa.design_studio_runs SET budget = ${JSON.stringify(budget)}::jsonb
@@ -2615,4 +2590,3 @@ export class DesignStudioService {
     return parityResult;
   }
 }
-

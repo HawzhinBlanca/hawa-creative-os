@@ -174,6 +174,25 @@ describe('Design Studio v2: Layout Validation Engine (validateLayoutV2)', () => 
   });
 
   describe('Adversarial Hard-Fail Cases (14 Codes)', () => {
+    it('rejects a layout that meets house logo rules but violates this client\'s stricter logo policy', () => {
+      const layout = createPassingLayout();
+      expect(validateLayoutV2(layout, BASE_CONTEXT).ok).toBe(true);
+
+      const tooSmall = validateLayoutV2(layout, {
+        ...BASE_CONTEXT,
+        reference: { ...BASE_CONTEXT.reference, logoMinimumWidthPx: 160 },
+      });
+      expect(tooSmall.ok).toBe(false);
+      if (!tooSmall.ok) expect(tooSmall.code).toBe('LOGO');
+
+      const tooClose = validateLayoutV2(layout, {
+        ...BASE_CONTEXT,
+        reference: { ...BASE_CONTEXT.reference, logoClearSpacePx: 80 },
+      });
+      expect(tooClose.ok).toBe(false);
+      if (!tooClose.ok) expect(tooClose.code).toBe('LOGO');
+    });
+
     it('code DIMENSIONS_CHANGED: rejects when width or height differ from request', () => {
       const layout = createPassingLayout();
       layout.width = 1200;
