@@ -1,5 +1,11 @@
 # Research-grade upgrade: current-candidate reality check
 
+## Latest local checkpoint — 26 September 2026
+
+ADR-057 now boots an authenticated encrypted Restate archive on an isolated disposable volume. **33 Python controls**, **12 isolated PostgreSQL/blob tests**, and a synthetic Restate 1.7.10 restore of **51 files and one matching durable state row** passed. See `R10_EVIDENCE.md` and `R10_RESTORE_DRILL.json`. This source has not been deployed or admitted as a release; the previous full-suite seal below predates it. R10 remains in progress because clean-host journal replay, cross-store reconciliation and production recovery are unproved. Both design flags remain off.
+
+The user requested faster, more token-efficient completion. `EXECUTION.md` is the compact continuation checkpoint: batch connected behavior and focused verification, then run full required release checks at a coherent milestone. All 28 acceptance criteria remain in scope; one real request journey is the next milestone.
+
 ## Current candidate and 10/10 verdict — 25 September 2026
 
 **Branch:** `codex/research-grade-design-system`. **Latest behavior:** R10 adds a persisted switch revision and conditional release for the guarded Restate cold backup (ADR-054), following the volume archive (ADR-053) and legacy delivery-executor pin (ADR-052, migration 031). Source `512e108`, sealed by `47bfbc6` with source-manifest SHA-256 `e00ed1b9…`, passed the full exact-candidate suite: **422 files / 3,230 tests**, with **4 files / 48 tests skipped**. Sixteen focused PostgreSQL switch tests, nine Python backup failure-path tests and the existing nine-test PostgreSQL/blob regression passed. Typecheck, lint, the zero-secret scan, blueprint **783/0/0**, release-manifest verification and six release-gate controls passed. The source flags remain `DESIGN_PIPELINE_V3=off` and `DESIGN_STUDIO_V2=off`. These are local source checks, not deployed-product proof.

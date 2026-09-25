@@ -168,6 +168,7 @@ def inspect_tar(path: Path, node_name: str) -> int:
     """Check a full-volume copy, including safe files outside the named node directory."""
     files = 0
     node_files = 0
+    names: set[str] = set()
     try:
         with tarfile.open(path, "r:") as archive:
             for item in archive:
@@ -179,6 +180,10 @@ def inspect_tar(path: Path, node_name: str) -> int:
                     raise BackupError("Restate archive contains an unsafe path")
                 if item.issym() or item.islnk() or item.isdev():
                     raise BackupError("Restate archive contains an unsafe link or device")
+                normalized = str(PurePosixPath(name))
+                if normalized in names or not (item.isfile() or item.isdir()):
+                    raise BackupError("Restate archive contains duplicate or unsupported members")
+                names.add(normalized)
                 if item.isfile():
                     files += 1
                     if parts[0] == node_name:

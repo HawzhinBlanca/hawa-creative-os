@@ -1,0 +1,17 @@
+{
+  "status": "isolated_boot_verified",
+  "pair": "hawa_20260926T000000Z.restate.json",
+  "restateManifest": "restate_20260926T000000Z.json",
+  "nodeName": "hawa-restate-prod-1",
+  "imageId": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+  "composeSha256": "3b5621865a8271ed7639d8cb46cc358a908856e73e5eb6031a498cb3fc7ada58",
+  "capturedAt": "2026-09-26T00:00:00Z",
+  "regularFiles": 51,
+  "observedInvocations": 1,
+  "network": "none",
+  "externalEffectReplayProved": false,
+  "fixture": "synthetic",
+  "stateRowsCompared": 1,
+  "plaintextBytes": 665600,
+  "journalReplayProved": false
+}

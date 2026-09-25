@@ -100,6 +100,21 @@ Manual or otherwise unpaired Restate archives are deliberately kept for operator
 
 This proves stored-byte integrity and matching archive identity only. **R10 stays open** until an isolated clean host restores the matching version/configuration, starts exactly one node, resumes a representative invocation and reconciles its external-effect marks without duplicate sends. PostgreSQL, blob and Restate archives have different capture times; treat their combined restore as a reconciliation exercise, never an atomic distributed snapshot. The local retention policy still needs real-archive observation and orphan capacity monitoring. Do not bring a restored copy online alongside the original node.
 
+### Offline archive boot rehearsal (ADR-057)
+
+Select an explicit complete signed pair, its archive key file, and the source Compose file. The server image recorded in the archive must already be locally available by immutable image ID.
+
+```bash
+python3 infra/backup/restate_restore_rehearsal.py \
+  --pair /path/to/hawa_YYYYMMDDTHHMMSSZ.restate.json \
+  --key-file /path/to/archive-key \
+  --compose-file infra/docker/docker-compose.prod.yml
+```
+
+The default verifies the files without creating Docker resources. Add `--apply` to copy/decrypt the authenticated archive, extract it into a random disposable volume and boot its exact image/node name without networking or published ports. The receipt is `isolated_boot_verified`, with the observed invocation count; it never claims external-effect replay. Cleanup uses a private label, including after a command timeout or interruption. If cleanup fails, the command fails and identifies the remaining run label or volume for staffed cleanup. An uncatchable process kill or Docker outage may still require that cleanup.
+
+`infra/backup/drill_restate_restore.py --image-id <immutable Restate image ID> --worker-image-id <immutable cached worker image ID> --compose-file infra/docker/docker-compose.prod.yml` reproduces a separate fully synthetic cold-copy, encrypted-pair and saved-state comparison without reading a production volume. On 2026-09-26 it restored 51 files and matched one saved state row. This is not a substitute for the clean-host journal/effect drill above.
+
 ### Restoring for real
 
 1. Stop Core and both worker colours (nothing may write while the store and the database disagree).
