@@ -1,6 +1,6 @@
 # R09 — delivery truth and reconciliation evidence
 
-**Date:** 2026-09-25. **Status:** in progress. **Sources:** `4ac0a4d`, `f58c67b`. **Decision:** ADR-043.
+**Date:** 2026-09-25. **Status:** in progress. **Sources:** `4ac0a4d`, `f58c67b`, `87b7328`. **Decision:** ADR-043.
 
 ## First pass — require requester-send proof
 
@@ -16,6 +16,16 @@ Source `f58c67b` connects an authenticated Desk Deliver action to a signed offic
 
 The local chain exercised a lost Desk answer after the delivery claim, a fresh Core retry with one publication/run, a tampered workflow input refused before preparation, emulated Drive and Sheet effects, two Telegram files plus notice, a versioned final projection, duplicate finish replay, changed-outcome conflict, uncertain-send refusal, changed pinned bytes, and a second run after an archive failure. The affected suite passed **5 files / 57 tests**; a focused worker rerun after the fixture-only secret change passed **1 file / 11 tests**. The full source suite excluding only the unsealed release gate passed **419 files / 3,133 tests**, with **4 files / 48 tests skipped**. TypeScript, lint, the Desk production build, and blueprint **755 pass / 0 warning / 0 failure** passed. The first full run failed solely because two new internal routes were missing from the route inventory; that contract was updated before the passing rerun.
 
-## Limits and next proof
+## Second-pass limits and next proof
 
 The request-owned code path is locally connected, but the test substitutes the Restate HTTP hop and uses synthetic exports, emulated Drive/Sheets and Telegram, and isolated PostgreSQL. It does not prove a killed-process replay for delivery, a real Drive byte read-back, a real Sheet row receipt, a requester receipt, or clean-host restore. An archived package with an unconfirmed Sheet row remains `delivering`; a staffed reconciliation action is not yet available in the Desk. Uncertain Telegram delivery also needs an explicit office resolution workflow. Uncaptured live Canva edits and a provider race remain open under R17. No publication flag or production deployment was changed. R09 remains **in progress**.
+
+## Third pass — make the recorded Sheet retry actionable
+
+Source `87b7328` maps a request-owned publication's latest `SHEET_UNCONFIRMED` result to `PUBLISH_RECONCILIATION` in both task detail and the paged Desk queue. The status filter and count now distinguish that task from an ordinary in-progress publication even though both use the same database `publishing` state. The Desk offers “Retry Sheet Sync”; the existing signed Deliver action claims the next request revision and publication run. The same publication and stable sender keys remain in use, so the workflow can retry the Sheet row without deliberately resending requester files. Migration 026 indexes the latest publication lookup, and both base schema and upgrade contract include it.
+
+An isolated PostgreSQL test records an archived, requester-confirmed but Sheet-unconfirmed result at revision 5, reads the actionable task/queue status, excludes it from the ordinary publishing filter, and verifies a second run advances revisions 6→7 to delivered. A rendered Desk test exposes the retry button only for the reconciliation status. The migration and affected suites passed **5 files / 46 tests**; the Desk wording rerun passed **1 file / 20 tests**. The full source suite excluding the unsealed release gate passed **419 files / 3,135 tests**, with **4 files / 48 tests skipped**. TypeScript, lint, Desk build and blueprint **755 pass / 0 warning / 0 failure** passed. The first broad run found two fixed migration inventory expectations; both passed before the green rerun.
+
+## Current limits
+
+The Sheet retry is locally actionable but has no live Google row read-back or killed-process replay. The direct second-run test checks state and idempotency keys; it does not observe a real Telegram deduplication after a Sheet failure. Uncertain requester sends still need a separate, evidence-based office resolution path. The completion projection relies on the worker's reported archive/Sheet result rather than independently rechecking every stored Drive and Sheet receipt in its final transaction; that is the next integrity repair. R17's uncaptured Canva edit and provider race, clean-host restore, and production cutover remain open. Flags remain off; R09 is **in progress**.
