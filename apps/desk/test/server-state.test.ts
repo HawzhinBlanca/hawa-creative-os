@@ -269,6 +269,16 @@ describe('approve and request revision are mutations', () => {
     expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(false);
   });
 
+  it('shows uncertain Drive archive in Needs Action with a safe recheck action', async () => {
+    const stream = new FakeStream('connected');
+    fakeCore([{ id: 't1', title: 'Members evening poster', status: 'ARCHIVE_RECONCILIATION',
+      requestId: '11111111-1111-4111-8111-111111111111', revision: 1, approved: true }]);
+    const { view } = await renderWork(stream);
+    expect(view.text()).toContain('Drive may already have the approved files');
+    expect(view.text()).toContain('Recheck Drive Archive');
+    expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(false);
+  });
+
   it('shows a request-owned approval as recorded while delivery remains unavailable', async () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([{ ...approvable('t1', 'Members evening poster'),

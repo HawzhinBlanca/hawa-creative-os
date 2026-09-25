@@ -85,6 +85,33 @@ export class PublicationRepository {
     return await query.executeTakeFirst();
   }
 
+  /** Record an archive outcome that cannot yet be proved either present or absent. */
+  async markArchiveUnconfirmed(params: { tenantId: string; publicationId: string; taskId: string; code: string }, trx?: Kysely<Database>) {
+    const runner = async (dbClient: Kysely<Database>) => {
+      const pub = await dbClient.selectFrom('publications').select(['state', 'error_class', 'error_detail'])
+        .where('tenant_id', '=', params.tenantId).where('id', '=', params.publicationId).where('task_id', '=', params.taskId)
+        .forUpdate().executeTakeFirst();
+      if (!pub || pub.state === 'complete') return false;
+      const detail = params.code.slice(0, 100);
+      if (pub.error_class === 'ARCHIVE_UNCONFIRMED' && pub.error_detail === detail) return true;
+      const task = await dbClient.selectFrom('tasks').select('version')
+        .where('tenant_id', '=', params.tenantId).where('id', '=', params.taskId).forUpdate().executeTakeFirstOrThrow();
+      const version = Number(task.version) + 1;
+      await dbClient.updateTable('publications').set({ error_class: 'ARCHIVE_UNCONFIRMED', error_detail: detail, updated_at: new Date() })
+        .where('tenant_id', '=', params.tenantId).where('id', '=', params.publicationId).executeTakeFirstOrThrow();
+      await dbClient.updateTable('tasks').set({ version, updated_at: new Date() })
+        .where('tenant_id', '=', params.tenantId).where('id', '=', params.taskId).executeTakeFirstOrThrow();
+      await dbClient.insertInto('task_events').values({
+        tenant_id: params.tenantId, task_id: params.taskId, event_type: 'publication.archive_unconfirmed',
+        aggregate_version: version, actor_type: 'workflow', actor_id: 'publisher',
+        correlation_id: crypto.randomUUID(), trace_id: currentTraceId(),
+        data: { publicationId: params.publicationId, code: detail },
+      }).executeTakeFirstOrThrow();
+      return true;
+    };
+    return trx ? runner(trx) : this.db.transaction().execute(runner);
+  }
+
   async createPublication(params: CreatePublicationParams, trx?: Kysely<Database>) {
     const runner = async (dbClient: Kysely<Database>) => {
       // 1. Check idempotency
@@ -298,6 +325,8 @@ export class PublicationRepository {
         .updateTable('publications')
         .set({
           state: 'complete',
+          error_class: null,
+          error_detail: null,
           completed_at: now,
           updated_at: now,
         })

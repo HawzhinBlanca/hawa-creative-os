@@ -70,14 +70,15 @@ describe('the mapping between database states and API statuses', () => {
   it('gives every state one status and every status one state', () => {
     expect(Object.keys(API_STATUS_OF_DB_STATE).sort()).toEqual([...TASK_DB_STATES].sort());
     expect(Object.keys(DB_STATE_OF_API_STATUS).sort()).toEqual([...TASK_API_STATUSES].sort());
-    expect(new Set(Object.values(API_STATUS_OF_DB_STATE))).toEqual(new Set(TASK_API_STATUSES.filter((s) => s !== 'PUBLISH_RECONCILIATION')));
+    expect(new Set(Object.values(API_STATUS_OF_DB_STATE))).toEqual(new Set(TASK_API_STATUSES.filter((s) =>
+      s !== 'ARCHIVE_RECONCILIATION' && s !== 'PUBLISH_RECONCILIATION')));
   });
 
-  it('round-trips every word except the three listed pairs that share a word', () => {
+  it('round-trips every word except the four listed aliases that share a database state', () => {
     const lossy: string[] = [];
     for (const state of TASK_DB_STATES) if (toDbTaskState(toApiTaskStatus(state)) !== state) lossy.push(state);
     for (const status of TASK_API_STATUSES) if (toApiTaskStatus(toDbTaskState(status)) !== status) lossy.push(status);
-    expect(lossy.sort()).toEqual(['PUBLISH_RECONCILIATION', 'context_ready', 'failed_retryable']);
+    expect(lossy.sort()).toEqual(['ARCHIVE_RECONCILIATION', 'PUBLISH_RECONCILIATION', 'context_ready', 'failed_retryable']);
   });
 });
 

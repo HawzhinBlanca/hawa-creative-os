@@ -174,6 +174,20 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
           notifications: (await sql<{ count: number }>`SELECT count(*)::int AS count FROM hawa.outbox_commands WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].count,
         }));
       expect(before).toEqual({ state: 'publishing', notifications: 0 });
+      const unresolved = await (await app.request(`/v1/tasks/${task.id}/publication-state`, { headers: operatorHeaders })).json();
+      expect(unresolved).toMatchObject({ status: 'ARCHIVE_RECONCILIATION', state: 'archive_reconciliation',
+        driveFiles: { verified: false, count: 0 }, notification: { status: 'not_enqueued' } });
+      const archiveQueue = await (await app.request('/v1/tasks?statuses=ARCHIVE_RECONCILIATION', { headers: operatorHeaders })).json();
+      expect(archiveQueue.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: task.id, status: 'ARCHIVE_RECONCILIATION' })]));
+      expect((await (await app.request('/v1/tasks?statuses=PUBLISHING', { headers: operatorHeaders })).json()).items)
+        .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: task.id })]));
+      const audit = await (await app.request('/v1/operations/reconciliation/run', {
+        method: 'POST', headers: operatorHeaders, body: '{}',
+      })).json();
+      expect(audit.totalTasksAudited).toBeGreaterThan(0);
+      expect(audit.anomalies).toEqual(expect.arrayContaining([expect.objectContaining({
+        taskId: task.id, kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity: 'high',
+      })]));
 
       // The first upload may have committed. Losing the office credential before the next press
       // must not turn that unresolved archive into a claim that Drive has no file.
@@ -190,6 +204,8 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
           notifications: (await sql<{ count: number }>`SELECT count(*)::int AS count FROM hawa.outbox_commands WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].count,
         }));
       expect(afterDisconnect).toEqual({ state: 'publishing', notifications: 0 });
+      expect((await (await app.request(`/v1/tasks/${task.id}`, { headers: operatorHeaders })).json()).status)
+        .toBe('ARCHIVE_RECONCILIATION');
       if (previous.oauth === undefined) delete process.env.GOOGLE_OAUTH_TOKEN;
       else process.env.GOOGLE_OAUTH_TOKEN = previous.oauth;
 
@@ -201,6 +217,10 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       expect(body.publicationReceipt.driveFiles[0]).toMatchObject({ fileId: drive.files[0].id, verified: true });
       expect(drive.generatedIdsIssued).toBe(1);
       expect(drive.files).toHaveLength(1);
+      expect((await (await app.request(`/v1/tasks/${task.id}`, { headers: operatorHeaders })).json()).status)
+        .toBe('PUBLISH_RECONCILIATION');
+      expect((await (await app.request('/v1/tasks?statuses=ARCHIVE_RECONCILIATION', { headers: operatorHeaders })).json()).items)
+        .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: task.id })]));
     } finally {
       if (previous.api === undefined) delete process.env.GOOGLE_DRIVE_API_BASE_URL;
       else process.env.GOOGLE_DRIVE_API_BASE_URL = previous.api;

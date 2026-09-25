@@ -3,8 +3,8 @@
  * (services/no-database-store.ts). Moved from app.ts (architecture programme 1.3, SPLIT_PLAN.md F3),
  * where it was shared by eight route groups.
  */
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { withRlsContext, toApiTaskStatus, sql, type TaskRepository } from '@hawa/db';
+import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus } from '@hawa/contracts';
+import { withRlsContext, sql, type TaskRepository } from '@hawa/db';
 import { isValidUuid, TaskStoreUnavailableError } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { log } from '../logging.js';
@@ -45,8 +45,7 @@ export function taskFromRows(row: TaskRow, record: TaskRecord = {}) {
   return {
     id: row.id, tenantId: row.tenant_id, clientId: row.client_id, projectId: row.project_id,
     requestId: row.request_id || null,
-    status: row.request_id && row.state === 'publishing' && record.deliveryErrorClass === 'SHEET_UNCONFIRMED'
-      ? 'PUBLISH_RECONCILIATION' : toApiTaskStatus(row.state || 'received'),
+    status: publicationAwareTaskStatus(row.state, { errorClass: record.deliveryErrorClass }),
     state: row.state, priority: row.priority,
     title: row.title, description: row.description, version: Number(row.version), // bigint: pg returns a string, and version checks compare with ===
     latestRevisionId: row.current_design_revision_id || undefined,
@@ -115,7 +114,7 @@ export function createTaskReader({ db, taskRepo, tasks }: Pick<CoreContext, 'db'
               WHERE r.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND r.task_id = ${taskId}::uuid AND r.decision = 'revision_requested') AS revision_requests,
             (SELECT p.error_class FROM hawa.publications p
               WHERE p.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND p.task_id = ${taskId}::uuid
-                AND p.executor = 'restate' ORDER BY p.created_at DESC LIMIT 1) AS delivery_error_class
+              ORDER BY p.created_at DESC LIMIT 1) AS delivery_error_class
         `.execute(trx)).rows[0];
         return { row, record: { created: more?.created, approval: more?.approval,
           revisionRequests: Number(more?.revision_requests ?? 0), deliveryErrorClass: more?.delivery_error_class } };

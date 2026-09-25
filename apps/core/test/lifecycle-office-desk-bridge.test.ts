@@ -136,6 +136,39 @@ async function recordClaimedReceipts(taskId: string, options: { sheet?: boolean;
 }
 
 describe('authenticated Desk to private lifecycle office decision', () => {
+  it('keeps a possible Drive archive open through a failed worker report and a new request-owned run', async () => {
+    const { requestId, taskId, approval, store, start } = await approvedForDelivery();
+    const first = await projectLifecycleDeliveryStart(db, store, start);
+    await withRlsContext(db, scope, async (trx) => {
+      const publication = await trx.selectFrom('publications').select('id')
+        .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).executeTakeFirstOrThrow();
+      expect(await new PublicationRepository(trx).markArchiveUnconfirmed({ tenantId,
+        publicationId: publication.id, taskId, code: 'DRIVE_IDENTITY_CONFLICT' }, trx)).toBe(true);
+    });
+    const failed = { outcome: 'failed' as const, uncertain: [], sheetsConfirmed: false,
+      archived: false, filesSent: 0, reason: 'PREPARE_FAILED: DRIVE_IDENTITY_CONFLICT' };
+    const finish = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
+      approvalId: approval.approvalId, deliveryId: first.delivery.deliveryId, run: 1,
+      outcome: failed, expectedRev: 4, rev: 5,
+      key: `${requestId}:5:deliveryFinished:${first.delivery.deliveryId}` });
+    expect(finish).toMatchObject({ stage: 'delivering', taskState: 'publishing' });
+    const desk = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+    expect((await (await desk.request(`/v1/tasks/${taskId}`)).json()).status).toBe('ARCHIVE_RECONCILIATION');
+
+    const actionId = randomUUID();
+    const second = await projectLifecycleDeliveryStart(db, store, { ...start, actionId,
+      expectedRev: 5, rev: 6, key: `${requestId}:6:officeDecision:desk:${actionId}` });
+    const stillHeld = await withRlsContext(db, scope, (trx) => trx.selectFrom('publications')
+      .select('error_class').where('tenant_id', '=', tenantId).where('task_id', '=', taskId).executeTakeFirstOrThrow());
+    expect(stillHeld.error_class).toBe('ARCHIVE_UNCONFIRMED');
+    const secondFinish = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
+      approvalId: approval.approvalId, deliveryId: second.delivery.deliveryId, run: 2,
+      outcome: failed, expectedRev: 6, rev: 7,
+      key: `${requestId}:7:deliveryFinished:${second.delivery.deliveryId}` });
+    expect(secondFinish).toMatchObject({ stage: 'delivering', taskState: 'publishing' });
+    expect((await (await desk.request(`/v1/tasks/${taskId}`)).json()).status).toBe('ARCHIVE_RECONCILIATION');
+  });
+
   it('commits one Drive upload ID across concurrent database handles before either can upload', async () => {
     const { taskId, artifactId, approval, store, start } = await approvedForDelivery();
     await projectLifecycleDeliveryStart(db, store, start);

@@ -9,6 +9,15 @@ import {
 import { GooglePublisher } from '../src/google-publisher.js';
 
 describe('ReconciliationService (FR-049, FR-050)', () => {
+  it('flags an uncertain archive without claiming the Drive file is missing', () => {
+    const report = new ReconciliationService().audit([
+      { id: 'task-uncertain', status: 'ARCHIVE_RECONCILIATION', updatedAt: new Date().toISOString() },
+    ], [], []);
+    expect(report).toMatchObject({ status: 'divergent', inSyncCount: 0, driftCount: 1 });
+    expect(report.anomalies).toEqual([expect.objectContaining({ taskId: 'task-uncertain',
+      kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity: 'high' })]);
+    expect(report.anomalies[0].description).not.toMatch(/missing|absent/i);
+  });
   it('detects clean state when PostgreSQL, Drive, and Sheets are perfectly synced', () => {
     const service = new ReconciliationService();
     const tasks: TaskRecord[] = [

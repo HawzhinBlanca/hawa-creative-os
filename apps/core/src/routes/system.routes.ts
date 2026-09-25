@@ -7,7 +7,7 @@ import { checkProductionFunnelHealth } from '../services/funnel-monitor.js';
 import { probeDatabase } from '../core-helpers.js';
 import { readDeliveredRecords } from '../services/publication-receipt.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus } from '@hawa/contracts';
 import { log } from '../logging.js';
 import { telegramPollerOf } from '../services/telegram-poller-owner.js';
 
@@ -493,7 +493,10 @@ export function registerSystemRoutes(ctx: RouteContext) {
     const scope = { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId || SYSTEM_AUTOMATION_USER_ID, role: auth.role || 'operator' };
     const stored = await Promise.all([
       withRlsContext(db, scope, (trx) =>
-        trx.selectFrom('tasks').select(['id', 'state', 'client_id', 'current_design_revision_id', 'updated_at'])
+        trx.selectFrom('tasks').select(['id', 'state', 'client_id', 'current_design_revision_id', 'updated_at',
+          sql<string | null>`(SELECT p.error_class FROM hawa.publications p
+            WHERE p.tenant_id = tasks.tenant_id AND p.task_id = tasks.id
+            ORDER BY p.created_at DESC LIMIT 1)`.as('delivery_error_class')])
           .where('tenant_id', '=', scope.tenantId).execute()),
       readDeliveredRecords(db, scope),
     ]).catch((err: unknown) => {
@@ -504,7 +507,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
     const [taskRows, delivered] = stored;
     const allTasks = taskRows.map((t) => ({
       id: t.id,
-      status: toApiTaskStatus(t.state),
+      status: publicationAwareTaskStatus(t.state, { errorClass: t.delivery_error_class }),
       clientId: t.client_id || undefined,
       latestRevisionId: t.current_design_revision_id || undefined,
       updatedAt: t.updated_at instanceof Date ? t.updated_at.toISOString() : String(t.updated_at),

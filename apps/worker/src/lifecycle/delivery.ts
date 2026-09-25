@@ -8,7 +8,8 @@
  * `notify.published` command:
  * 1. prepare: Core does the Drive and Sheets work (idempotent by the publication key) and answers
  *    with what the requester is sent. A Core that does not answer is asked again for 10 minutes; a
- *    refusal or a Core gone for longer ends the delivery `failed`, and the task goes back to APPROVED.
+ *    refusal or a Core gone for longer ends the delivery `failed`. Core keeps a possible Drive upload
+ *    in archive reconciliation; only a definite pre-upload failure can return the task to APPROVED.
  * 2. each approved file, then the notice, through the chat's TelegramSender, awaited one at a time.
  *    Their keys are the publication's, not the run's (`dl-<task>-<approval>:file:<artifact>`,
  *    `…:notice`), so a later run never sends a file twice; a send that may have arrived is never

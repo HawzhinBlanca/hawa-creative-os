@@ -118,7 +118,9 @@ export async function projectLifecycleDeliveryStart(
     }
     const run = Number(publication.executor_run) + 1;
     await sql`UPDATE hawa.publications SET executor = 'restate', executor_run = ${run},
-      error_class = NULL, error_detail = NULL, updated_at = now()
+      error_class = CASE WHEN error_class = 'ARCHIVE_UNCONFIRMED' THEN error_class ELSE NULL END,
+      error_detail = CASE WHEN error_class = 'ARCHIVE_UNCONFIRMED' THEN error_detail ELSE NULL END,
+      updated_at = now()
       WHERE tenant_id = ${input.tenantId}::uuid AND id = ${publication.id}::uuid`.execute(trx);
     const advanced = await trx.updateTable('requests').set({ stage: 'delivering', rev: input.rev, updated_at: new Date() })
       .where('tenant_id', '=', input.tenantId).where('request_id', '=', input.requestId)
@@ -210,7 +212,7 @@ export async function projectLifecycleDeliveryFinish(db: Kysely<Database>, input
     }
     const publicationKey = `pub_key_${input.taskId}_${input.approvalId}`;
     const pub = (await sql<{ id: string; executor: string; executor_run: number; executor_finished_run: number;
-      package_manifest: Record<string, unknown>; package_sha256: string }>`SELECT id, executor, executor_run, executor_finished_run, package_manifest, package_sha256
+      package_manifest: Record<string, unknown>; package_sha256: string; error_class: string | null }>`SELECT id, executor, executor_run, executor_finished_run, package_manifest, package_sha256, error_class
       FROM hawa.publications WHERE tenant_id = ${input.tenantId}::uuid AND publication_key = ${publicationKey} FOR UPDATE`.execute(trx)).rows[0];
     if (!pub || pub.executor !== 'restate' || Number(pub.executor_run) !== input.run ||
         Number(pub.executor_finished_run) >= input.run ||
@@ -236,6 +238,8 @@ export async function projectLifecycleDeliveryFinish(db: Kysely<Database>, input
       await new PublicationRepository(trx).markComplete({ tenantId: input.tenantId,
         publicationId: pub.id, taskId: input.taskId }, trx);
       stage = 'delivered'; taskState = 'complete';
+    } else if (pub.error_class === 'ARCHIVE_UNCONFIRMED' && !input.outcome.archived) {
+      errorClass = 'ARCHIVE_UNCONFIRMED';
     } else if ((input.outcome.filesSent > 0 && (!input.outcome.archived || !requesterConfirmed)) ||
         input.outcome.uncertain.length > 0 ||
         input.outcome.outcome === 'uncertain' ||

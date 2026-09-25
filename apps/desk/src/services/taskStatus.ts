@@ -134,6 +134,12 @@ export const STATUS_VIEWS: Readonly<Record<TaskApiStatus, View>> = {
     primaryButton: 'none',
     group: 'delivering',
   },
+  ARCHIVE_RECONCILIATION: {
+    pillClass: 'pill-action',
+    message: 'Drive may already have the approved files, but the archive is not verified. Restore Google access if needed, then recheck the same publication. The requester is waiting for a verified outcome.',
+    primaryButton: 'deliver',
+    group: 'needs_action',
+  },
   PUBLISH_RECONCILIATION: {
     pillClass: 'pill-action',
     message: 'The approved files are in Google Drive, but the Sheets row is not confirmed. Deliver again to retry only the row.',

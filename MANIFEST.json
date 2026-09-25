@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T13:34:53Z",
+  "generatedAt": "2026-09-25T13:55:49Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -304,8 +304,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "69205fc851060adcd5b5f7c60556421d78ad79cdd434b8809c7cb38e2d4cb565",
-      "bytes": 23396
+      "sha256": "b8cb872a1c2360773bb835943a3be642bdd65da59febe68765a29321ea295651",
+      "bytes": 23420
     },
     {
       "path": "config/asset-workflows.example.yaml",
@@ -564,8 +564,8 @@
     },
     {
       "path": "docs/13_GOOGLE_DRIVE_SHEETS.md",
-      "sha256": "e7e208ae491f96c4c4222a3d516462f4826a1489447a3008d061dc7eb239d8cf",
-      "bytes": 5666
+      "sha256": "4c583c472190bc98db8ae76fcbf18ad4656e10e0861118a2c1bf091c342c9033",
+      "bytes": 6735
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
@@ -789,8 +789,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_EVIDENCE.md",
-      "sha256": "c0ea09c52db5a255a0b8348b69e00545f7f265c3d1b5a6ccbebcd61e28671793",
-      "bytes": 19069
+      "sha256": "712ffbf2f41a86b8b64bcbb3c6495f733e612c72beaac5ce2a981b673b57be60",
+      "bytes": 21298
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_RESTATE_DELIVERY_KILL_DRILL.md",
@@ -839,8 +839,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/REALITY_CHECK_2026-09-25.md",
-      "sha256": "91d090d0abe4a2f4c3073d06755668cd563434be554ddc30cf3ce908b02788b1",
-      "bytes": 25804
+      "sha256": "a4ebb7c29ec235f5e601a9c62909fc122eb082ebcfbee4c535307eb5dd57a881",
+      "bytes": 26555
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
@@ -854,8 +854,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "7cc519f6f524805a7451ab2b8fabfa9e965f712c32d28aa483e3503c75694193",
-      "bytes": 124481
+      "sha256": "94a0fee8d447d5c051dc863427408edddeebfe0dcb45170831b90aa77680c798",
+      "bytes": 125628
     },
     {
       "path": "plans/user-stories.csv",
@@ -994,8 +994,8 @@
     },
     {
       "path": "schemas/Task.schema.json",
-      "sha256": "bf89f0e8c3b74c18ba370d7659fa9ca49c883fca8b0d23db1692c41762364dc6",
-      "bytes": 3683
+      "sha256": "d942c6345c1c330266d83a7b369abf1cc66c4d778686a1e6fbddafe47d4750a9",
+      "bytes": 3717
     },
     {
       "path": "scripts/add_exemplar.ts",

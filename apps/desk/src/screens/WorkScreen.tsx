@@ -997,10 +997,13 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     disabled={busy || !detail?.latestApproval || nextAction?.primaryButton !== 'deliver'}
                     title={selectedTask.status === 'PUBLISH_RECONCILIATION'
                       ? 'Retry the unconfirmed Sheets row using the recorded publication'
-                      : 'Start the approved delivery to Drive, Sheets and the requester (FR-046, FR-078)'}
+                      : selectedTask.status === 'ARCHIVE_RECONCILIATION'
+                        ? 'Recheck the recorded Drive file identity before requester delivery'
+                        : 'Start the approved delivery to Drive, Sheets and the requester (FR-046, FR-078)'}
                   >
                     <span className="btn-icon" aria-hidden="true">🚀</span>
-                    <span>{selectedTask.status === 'PUBLISH_RECONCILIATION' ? 'Retry Sheet Sync' : 'Deliver Approved Files'}</span>
+                    <span>{selectedTask.status === 'PUBLISH_RECONCILIATION' ? 'Retry Sheet Sync'
+                      : selectedTask.status === 'ARCHIVE_RECONCILIATION' ? 'Recheck Drive Archive' : 'Deliver Approved Files'}</span>
                   </button>
                   {(detail?.requestId || selectedTask.requestId) && selectedTask.status === 'APPROVED' && (
                     <p className="capture-availability" role="note">

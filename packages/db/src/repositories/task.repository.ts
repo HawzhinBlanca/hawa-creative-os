@@ -65,13 +65,13 @@ export const TASK_STATES: readonly TaskState[] = TASK_DB_STATES;
  * The database states the list shows under the given API statuses: every state whose API status is
  * one of them. Built from the state-to-status mapping rather than toDbTaskState, so a filter matches
  * the tasks the list may label with that status (OPERATOR_REQUIRED takes failed_retryable too).
- * PUBLISH_RECONCILIATION shares the publishing state; the page/count query checks its current
- * publication receipt when that status alone is requested. An unknown word matches nothing.
+ * The two reconciliation statuses share the publishing state; the page/count query checks the
+ * latest publication error when either is requested. An unknown word matches nothing.
  */
 export function dbStatesForApiStatuses(statuses: readonly string[]): TaskState[] {
   const wanted = new Set(statuses.map((s) => String(s || '').trim().toUpperCase()).filter(Boolean));
   return TASK_STATES.filter((state) => wanted.has(API_STATUS_OF_DB_STATE[state]) ||
-    (state === 'publishing' && wanted.has('PUBLISH_RECONCILIATION')));
+    (state === 'publishing' && (wanted.has('PUBLISH_RECONCILIATION') || wanted.has('ARCHIVE_RECONCILIATION'))));
 }
 
 /** Where a task page starts: the last row of the page before it, in list order. */
@@ -118,8 +118,8 @@ export interface TaskPageParams {
   clientId?: string | null;
   /** Only tasks in these states; an empty list matches nothing. Undefined means every state. */
   states?: readonly TaskState[];
-  /** Distinguish the two API statuses backed by the publishing database state. */
-  publishingStatus?: 'reconciliation' | 'ordinary';
+  /** The publication substates requested by the API filter, for rows stored as publishing. */
+  publishingStatuses?: readonly ('archive' | 'sheet' | 'ordinary')[];
   /** Text to find in the title, the description, the client's name or the task id. */
   search?: string | null;
 }
@@ -226,17 +226,16 @@ function taskListFilter(params: TaskPageParams) {
   if (params.clientId) conditions.push(sql`t.client_id = ${params.clientId}::uuid`);
   if (params.states) {
     const states = [...params.states];
-    const sheetRetry = sql`(t.request_id IS NOT NULL AND EXISTS (
-      SELECT 1 FROM hawa.publications p WHERE p.tenant_id = t.tenant_id AND p.task_id = t.id
-        AND p.executor = 'restate' AND p.error_class = 'SHEET_UNCONFIRMED'
-        AND p.id = (SELECT p2.id FROM hawa.publications p2
-          WHERE p2.tenant_id = t.tenant_id AND p2.task_id = t.id
-          ORDER BY p2.created_at DESC LIMIT 1)))`;
-    conditions.push(params.publishingStatus === 'reconciliation' && states.includes('publishing')
-      ? sql`(t.state = ANY(${states}::hawa.task_state[]) AND (t.state <> 'publishing' OR ${sheetRetry}))`
-      : params.publishingStatus === 'ordinary' && states.includes('publishing')
-        ? sql`(t.state = ANY(${states}::hawa.task_state[]) AND (t.state <> 'publishing' OR NOT ${sheetRetry}))`
-        : sql`t.state = ANY(${states}::hawa.task_state[])`);
+    const publicationStatus = sql`COALESCE((SELECT CASE
+      WHEN p.error_class = 'ARCHIVE_UNCONFIRMED' THEN 'archive'
+      WHEN p.error_class = 'SHEET_UNCONFIRMED' THEN 'sheet'
+      ELSE 'ordinary' END
+      FROM hawa.publications p WHERE p.tenant_id = t.tenant_id AND p.task_id = t.id
+      ORDER BY p.created_at DESC LIMIT 1), 'ordinary')`;
+    conditions.push(params.publishingStatuses && states.includes('publishing')
+      ? sql`(t.state = ANY(${states}::hawa.task_state[]) AND
+          (t.state <> 'publishing' OR ${publicationStatus} = ANY(${[...params.publishingStatuses]}::text[])))`
+      : sql`t.state = ANY(${states}::hawa.task_state[])`);
   }
   if (params.search && params.search.trim()) {
     const pattern = searchPattern(params.search);
@@ -348,7 +347,7 @@ export function buildTaskPageQuery(params: TaskPageParams) {
     LEFT JOIN LATERAL (
       SELECT p.error_class, p.executor FROM hawa.publications p
       WHERE p.tenant_id = t.tenant_id AND p.task_id = t.id
-        AND t.request_id IS NOT NULL AND t.state = 'publishing'
+        AND t.state = 'publishing'
       ORDER BY p.created_at DESC LIMIT 1
     ) p ON true
     ORDER BY t.created_at DESC, t.id DESC`;

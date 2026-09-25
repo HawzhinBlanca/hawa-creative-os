@@ -502,6 +502,20 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
       expect(await result.json()).toMatchObject({ code: 'ARCHIVE_STATE_UNCERTAIN' });
       expect(await taskState(taskId)).toBe('publishing');
       expect(await publishedCommands(taskId)).toEqual([]);
+      expect((await (await app.request(`/tasks/${taskId}`, { headers })).json()).status).toBe('ARCHIVE_RECONCILIATION');
+      const state = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
+      expect(state).toMatchObject({ status: 'ARCHIVE_RECONCILIATION', state: 'archive_reconciliation' });
+
+      // A terminal prepare report must not turn a possible stored Drive file into "no archive".
+      const finished = await app.request(`/v1/internal/tasks/${taskId}/delivery-finished`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${workerToken}` },
+        body: JSON.stringify({ tenantId, deliveryId: input.deliveryId, approvalId: input.approvalId, run: 1,
+          outcome: { outcome: 'failed', uncertain: [], sheetsConfirmed: false, archived: false,
+            filesSent: 0, reason: 'PREPARE_FAILED: DRIVE_IDENTITY_CONFLICT' } }),
+      });
+      expect(await finished.json()).toMatchObject({ status: 'applied', taskState: 'publishing' });
+      expect((await (await app.request(`/tasks/${taskId}`, { headers })).json()).status).toBe('ARCHIVE_RECONCILIATION');
+      expect(await publishedCommands(taskId)).toEqual([]);
     });
 
     it('record a report once: a second report of the same run changes nothing', async () => {

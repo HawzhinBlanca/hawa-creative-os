@@ -35,7 +35,7 @@ describe('the vocabulary these tests load', () => {
 describe('the label and next step of every status Core reports', () => {
   it('gives each its own view; only RECEIVED reads as a new request to design', () => {
     const statuses = coreStatuses();
-    expect(statuses.length).toBe(21);
+    expect(statuses.length).toBe(22);
     for (const status of statuses) {
       const view = taskStatusView(status);
       expect(view.known, status).toBe(true);
@@ -59,7 +59,7 @@ describe('the label and next step of every status Core reports', () => {
   it('offers approval where a person may approve, never after a change is asked or once closed, and never for a status it does not know', () => {
     const ready = { hasRevision: true, qaPassed: true, busy: false };
     for (const status of APPROVABLE_TASK_STATUSES) expect(approveButtonState(status, ready), status).toBe('enabled');
-    for (const status of ['REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'COMPLETE', 'REJECTED', 'CANCELLED']) expect(approveButtonState(status, ready), status).toBe('disabled');
+    for (const status of ['REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'ARCHIVE_RECONCILIATION', 'PUBLISH_RECONCILIATION', 'COMPLETE', 'REJECTED', 'CANCELLED']) expect(approveButtonState(status, ready), status).toBe('disabled');
     for (const unknown of ['ON_HOLD', 'IN_PROGRESS', 'CHANGES_REQUESTED', 'awaiting_approval', '', undefined, null]) {
       expect(taskStatusView(unknown).canApprove, String(unknown)).toBe(false);
       expect(taskStatusView(unknown).primaryButton, String(unknown)).toBe('none');
@@ -97,6 +97,7 @@ describe('the queue filters, built from the same groups', () => {
     expect(where('OPERATOR_REQUIRED')).toEqual(['needs_action']);
     expect(where('AWAITING_APPROVAL')).toEqual(['needs_action', 'review']);
     expect(where('REVISION_REQUESTED')).toEqual(['needs_action']);
+    expect(where('ARCHIVE_RECONCILIATION')).toEqual(['needs_action']);
     for (const s of ['PROMOTION_PENDING', 'ROUTING', 'BRIEFING', 'PLANNING', 'ASSET_GENERATION', 'COMPOSING', 'QA', 'REPAIRING']) expect(where(s), s).toEqual(['in_progress']);
     expect(where('COMPLETE')).toEqual(['complete']);
     for (const s of ['PAUSED', 'CANCELLED', 'REJECTED', 'PUBLISHING']) expect(where(s), s).toEqual([]);

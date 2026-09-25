@@ -408,7 +408,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     }
 
     const isDeliverApprovedStored = deliveryOptions?.policy === 'deliver_approved_stored';
-    const sm = new TaskStateMachine(taskId, isDeliverApprovedStored && task.status !== 'PUBLISH_RECONCILIATION' ? 'APPROVED' : task.status);
+    const sm = new TaskStateMachine(taskId, isDeliverApprovedStored &&
+      !['PUBLISH_RECONCILIATION', 'ARCHIVE_RECONCILIATION'].includes(task.status) ? 'APPROVED' : task.status);
 
     const publicationKey = `pub_key_${taskId}_${approval.approvalId}`;
 
@@ -548,8 +549,9 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
 
       // Files already delivered with the Sheets row unconfirmed: publishing again retries only the row.
       // The workflow's task is PUBLISHING already: the publish route moved it.
-      const retryingSheetRow = task.status === 'PUBLISH_RECONCILIATION' || workflowMode;
-      if (!retryingSheetRow) {
+      const retryingPublication = task.status === 'PUBLISH_RECONCILIATION' ||
+        task.status === 'ARCHIVE_RECONCILIATION' || workflowMode;
+      if (!retryingPublication) {
         const trans = sm.transition('PUBLISHING', actor as any, 'Omnichannel publication started');
         if (!trans.ok) {
           return { ok: false, status: 409, message: trans.error.message };
@@ -561,7 +563,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         }
       }
 
-      if (taskRepo && db && isValidUuid(taskId) && !retryingSheetRow) {
+      if (taskRepo && db && isValidUuid(taskId) && !retryingPublication) {
         try {
           const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
           await withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
@@ -576,6 +578,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
           });
         } catch (err) {
           log.error('[core:omnichannel:publishing] DB transition error:', err);
+          return { ok: false as const, status: 503, code: 'PUBLICATION_STATE_NOT_RECORDED',
+            message: 'Delivery could not be recorded before the Drive upload; try again' };
         }
       }
 
@@ -594,6 +598,25 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     // archived the same publication. Credentials or destination may disappear after an upload whose
     // reply was lost; the current failure then proves nothing about the earlier Drive state.
     const failTenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
+    const holdArchive = async (failure: { status: number; code: string; message: string }) => {
+      if (publicationRepo && db && isValidUuid(taskId)) {
+        try {
+          const recorded = await withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+            const pub = await publicationRepo.findByKey(publicationKey, failTenantId, trx);
+            return pub && publicationRepo.markArchiveUnconfirmed({ tenantId: failTenantId,
+              publicationId: pub.id, taskId, code: failure.code }, trx);
+          });
+          if (!recorded) throw new Error('Publication intent was absent or already complete');
+        } catch (err) {
+          log.error('[core:omnichannel:archive-hold] Could not record uncertain archive:', err);
+          return { ok: false as const, status: 503, code: 'ARCHIVE_STATE_UNRECORDED',
+            message: 'The Drive outcome could not be recorded; requester delivery remains held' };
+        }
+      }
+      task.status = 'ARCHIVE_RECONCILIATION';
+      broadcast('task:publish_reconciliation', { taskId, status: task.status, archiveProblem: failure.code });
+      return { ok: false as const, ...failure };
+    };
     const failBeforeDrive = async (failure: { status: number; code: string; message: string }) => {
       let archiveMayExist = priorPublication && !workflowMode;
       if (!archiveMayExist && db && isValidUuid(taskId)) {
@@ -616,8 +639,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         }
       }
       if (archiveMayExist) {
-        return { ok: false as const, status: 503, code: 'ARCHIVE_STATE_UNCERTAIN',
-          message: `${failure.message}. The archive may already exist from an earlier attempt; requester delivery is held until it is reconciled` };
+        return holdArchive({ status: 503, code: 'ARCHIVE_STATE_UNCERTAIN',
+          message: `${failure.message}. The archive may already exist from an earlier attempt; requester delivery is held until it is reconciled` });
       }
       if (workflowMode) {
         // The workflow asks again: a database that could not record the intent is not a Drive failure.
@@ -805,12 +828,11 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       // response is lost, and an earlier file in this package may already be there. Keep the
       // publication pending and let the same key reconcile it before any requester notification.
       if (String(publishResult.error.code).startsWith('DRIVE_')) {
-        return {
-          ok: false as const,
+        return holdArchive({
           status: publishResult.error.retryable === false ? 409 : 503,
           code: publishResult.error.code,
           message: `${publishResult.error.message}. Check the Drive publication before sending the approved files`,
-        };
+        });
       }
       return failBeforeDrive({
         status: publishResult.error.code === 'INVALID_DESTINATION' ? 400 : 422,
@@ -820,8 +842,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     }
     if (publishResult.value.state === 'failed' ||
         publishResult.value.driveFiles?.some((file: { verified?: boolean }) => !file.verified)) {
-      return { ok: false as const, status: 409, code: 'DRIVE_VERIFICATION_FAILED',
-        message: 'Drive has not verified every approved file; reconcile the publication before requester delivery' };
+      return holdArchive({ status: 409, code: 'DRIVE_VERIFICATION_FAILED',
+        message: 'Drive has not verified every approved file; reconcile the publication before requester delivery' });
     }
     // The chaos suite kills Core here: the files are in Drive, and nothing of it is recorded yet.
     await chaosPoint('core.delivery.after-drive', { taskId, mode: workflowMode ? 'workflow' : 'core' });
@@ -950,6 +972,16 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
               observedHash: publishResult.value.sheet.observedHash,
               status: publishResult.value.sheet.synced ? 'synced' : 'pending',
             }, trx);
+          }
+
+          if (!workflowMode && !sheetsConfirmed) {
+            await sql`UPDATE hawa.publications SET error_class = 'SHEET_UNCONFIRMED',
+              error_detail = ${String(publishResult.value.detail?.sheetProblem || 'Sheet row not confirmed').slice(0, 500)},
+              updated_at = now() WHERE tenant_id = ${pubTenantId}::uuid AND id = ${dbPub.id}::uuid`.execute(trx);
+          } else {
+            await sql`UPDATE hawa.publications SET error_class = NULL, error_detail = NULL, updated_at = now()
+              WHERE tenant_id = ${pubTenantId}::uuid AND id = ${dbPub.id}::uuid
+                AND error_class = 'ARCHIVE_UNCONFIRMED'`.execute(trx);
           }
 
           // The workflow's publication is completed with its task, by delivery-finished.
@@ -1277,8 +1309,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
    * - archived and the Sheets row confirmed: COMPLETE, with the publication;
    * - archived, the row not confirmed: stays PUBLISHING (PUBLISH_RECONCILIATION), and Deliver retries
    *   the row;
-   * - nothing archived (Drive refused, or the prepare step gave up): back to APPROVED, so Deliver can
-   *   be pressed again once Drive works. The requester's files are sent once whatever happens.
+   * - definitely nothing archived: back to APPROVED; an uncertain archive remains PUBLISHING with
+   *   ARCHIVE_UNCONFIRMED so the office can recheck the reserved Drive identity.
    * A report for a run already recorded answers 'replayed' and changes nothing.
    */
   async function finishWorkflowDelivery(taskId: string, tenantId: string, report: DeliveryFinishedReport):
@@ -1288,11 +1320,11 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     }
     const publicationKey = `pub_key_${taskId}_${report.approvalId}`;
     const outcome = report.outcome;
-    let result: { ok: true; status: 'applied' | 'replayed'; taskState: string } | { ok: false; status: number; code: string; message: string };
+    let result: { ok: true; status: 'applied' | 'replayed'; taskState: string; errorClass?: string | null } | { ok: false; status: number; code: string; message: string };
     try {
       result = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-        const pub = (await sql<{ id: string; executor: string; executor_run: number; executor_finished_run: number; package_manifest: Record<string, unknown> }>`
-          SELECT id, executor, executor_run, executor_finished_run, package_manifest FROM hawa.publications
+        const pub = (await sql<{ id: string; executor: string; executor_run: number; executor_finished_run: number; package_manifest: Record<string, unknown>; error_class: string | null }>`
+          SELECT id, executor, executor_run, executor_finished_run, package_manifest, error_class FROM hawa.publications
           WHERE tenant_id = ${tenantId}::uuid AND publication_key = ${publicationKey} FOR UPDATE`.execute(trx)).rows[0];
         if (!pub) return { ok: false as const, status: 404, code: 'PUBLICATION_NOT_FOUND', message: `No publication ${publicationKey}` };
         if (pub.executor !== 'restate') return { ok: false as const, status: 409, code: 'NOT_OWNED_BY_WORKFLOW', message: `Publication ${publicationKey} is Core's` };
@@ -1304,6 +1336,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         if (report.run > Number(pub.executor_run)) return { ok: false as const, status: 409, code: 'UNKNOWN_RUN', message: `Run ${report.run} of ${publicationKey} was never started` };
         let next = state;
         // Only a task still being delivered moves: one delivered or taken back meanwhile stays as it is.
+        const archiveUnconfirmed = pub.error_class === 'ARCHIVE_UNCONFIRMED' && !outcome.archived;
         if (state === 'publishing') {
           const expectedFiles = Array.isArray(pub.package_manifest?.files) ? pub.package_manifest.files.length : 0;
           const requesterConfirmed = outcome.outcome === 'delivered' && outcome.uncertain.length === 0 &&
@@ -1315,7 +1348,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
             }, trx);
             await publicationRepo.markComplete({ tenantId, publicationId: String(pub.id), taskId }, trx);
             next = 'complete';
-          } else if (!outcome.archived) {
+          } else if (!outcome.archived && !archiveUnconfirmed) {
             await taskRepo.transitionState({
               taskId, tenantId, fromState: 'publishing', toState: 'approved', actorType: 'workflow', actorId: 'delivery-workflow',
               reason: `Delivery ended before the Drive archive: ${outcome.reason || outcome.outcome}`,
@@ -1324,15 +1357,17 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
             next = 'approved';
           }
         }
-        const sendProblem = outcome.archived && outcome.sheetsConfirmed && next !== 'complete'
-          ? 'REQUESTER_SEND_UNCONFIRMED' : null;
+        const sendProblem = archiveUnconfirmed ? 'ARCHIVE_UNCONFIRMED'
+          : outcome.archived && !outcome.sheetsConfirmed ? 'SHEET_UNCONFIRMED'
+          : outcome.archived && outcome.sheetsConfirmed && next !== 'complete'
+            ? 'REQUESTER_SEND_UNCONFIRMED' : null;
         const sendDetail = sendProblem ? JSON.stringify({ deliveryId: report.deliveryId,
           outcome: outcome.outcome, uncertain: outcome.uncertain, filesSent: outcome.filesSent,
           reason: outcome.reason ?? null }).slice(0, 1000) : null;
         await sql`UPDATE hawa.publications SET executor_finished_run = ${report.run},
           error_class = ${sendProblem}, error_detail = ${sendDetail}, updated_at = now()
           WHERE tenant_id = ${tenantId}::uuid AND id = ${pub.id}::uuid`.execute(trx);
-        return { ok: true as const, status: 'applied' as const, taskState: next };
+        return { ok: true as const, status: 'applied' as const, taskState: next, errorClass: sendProblem };
       });
     } catch (err) {
       log.error('[core:delivery-finished] Could not record the Delivery workflow\'s report:', err);
@@ -1340,7 +1375,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     }
     if (result.ok && result.status === 'applied') {
       if (result.taskState === 'complete') broadcast('task:published', { taskId, status: 'COMPLETE', executor: 'restate' });
-      else if (result.taskState === 'publishing') broadcast('task:publish_reconciliation', { taskId, status: 'PUBLISH_RECONCILIATION', executor: 'restate' });
+      else if (result.taskState === 'publishing') broadcast('task:publish_reconciliation', { taskId,
+        status: result.errorClass === 'ARCHIVE_UNCONFIRMED' ? 'ARCHIVE_RECONCILIATION' : 'PUBLISH_RECONCILIATION', executor: 'restate' });
       else if (result.taskState === 'approved') broadcastMove(taskId, 'publishing', 'approved');
     }
     return result;

@@ -26,6 +26,7 @@ export interface SheetRowRecord {
 }
 
 export type DriftAnomalyKind =
+  | 'ARCHIVE_OUTCOME_UNCONFIRMED'
   | 'MISSING_DRIVE_ASSET'
   | 'MISSING_SHEET_ROW'
   | 'CHECKSUM_MISMATCH'
@@ -41,7 +42,7 @@ export interface DriftAnomaly {
 
 /** What an audit compares. Core has no Drive or Sheets read path, so it never claims to have read them. */
 export const RECONCILIATION_BASIS =
-  "Core's in-memory task list against the publication receipts Core recorded when it published. Google Drive and Google Sheets were not read, and nothing was repaired.";
+  'PostgreSQL task and publication records against the verified delivery receipts Core stored. Google Drive and Google Sheets were not read, and nothing was repaired.';
 
 export interface ReconciliationReport {
   auditId: string;
@@ -91,6 +92,12 @@ export class ReconciliationService {
     let inSyncCount = 0;
 
     for (const task of tasks) {
+      if (task.status === 'ARCHIVE_RECONCILIATION') {
+        anomalies.push({ taskId: task.id, kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity: 'high',
+          description: `Task ${task.id} has an unresolved Drive outcome. Core cannot prove whether the file exists until the reserved identity is rechecked against Drive.`,
+          detectedAt: timestamp });
+        continue;
+      }
       // Only tasks that should already have been delivered can drift. PUBLISH_RECONCILIATION is a task
       // whose files were delivered while its Sheets row was not confirmed.
       if (['COMPLETE', 'APPROVED', 'PUBLISHING', 'PUBLISH_RECONCILIATION'].includes(task.status)) {

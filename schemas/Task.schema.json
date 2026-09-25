@@ -111,6 +111,7 @@
         "REVISION_REQUESTED",
         "APPROVED",
         "PUBLISHING",
+        "ARCHIVE_RECONCILIATION",
         "PUBLISH_RECONCILIATION",
         "COMPLETE",
         "PAUSED",

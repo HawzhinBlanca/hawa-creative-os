@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, publicationAwareTaskStatus, isTaskDbState } from '@hawa/contracts';
 import { withRlsContext, toApiTaskStatus } from '@hawa/db';
 import { buildOutboundReviewDispatch, signLifecycleOfficeEvent } from '@hawa/integrations';
 import type { Context } from 'hono';
@@ -179,7 +179,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         const stored = await storedCompletePublication(task, taskId);
         if (stored) return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: stored.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
       }
-      if (policy !== 'deliver_approved_stored' && !['approved', 'publishing', 'publish_reconciliation'].includes(status)) {
+      if (policy !== 'deliver_approved_stored' && !['approved', 'publishing', 'archive_reconciliation', 'publish_reconciliation'].includes(status)) {
         return problem(c, status === 'awaiting_approval' ? 409 : 422, 'Cannot Publish Unapproved Task', `Task ${taskId} is in status '${status}', not 'approved'`);
       }
       started = await startWorkflowDelivery(taskId, {
@@ -218,8 +218,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const change = await changeBlockingDelivery(task, taskId);
     if (change === null) return problem(c, 503, 'Database Unavailable', 'Whether the client asked for a change could not be checked; try again');
     if (change) return problem(c, 409, 'Changed At The Client\'s Request', `${pendingChangeWords(change)} The approved version was not delivered.`);
-    const retryingSheetRow = currentStatus === 'publish_reconciliation';
-    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && !retryingSheetRow) {
+    const retryingPublication = ['archive_reconciliation', 'publish_reconciliation'].includes(currentStatus);
+    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && !retryingPublication) {
       const stored = currentStatus === 'complete' ? await storedCompletePublication(task, taskId) : null;
       if (stored) return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: stored.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
       return problem(c, currentStatus === 'awaiting_approval' ? 409 : 422, 'Cannot Publish Unapproved Task', `Task ${taskId} is in status '${currentStatus}', not 'approved'`);
@@ -312,8 +312,9 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const task = tasks.get(taskId);
     // The task's own status: the in-memory one, else the stored one (every task after a restart). It
     // used to fall back to 'PENDING', a word no layer knows; with neither, there is no status to report.
-    const taskStatus = task?.status
-      ?? (storedState ? toApiTaskStatus(storedState) : null)
+    const taskStatus = storedState && isTaskDbState(storedState)
+      ? publicationAwareTaskStatus(storedState, { errorClass: pubRecord?.error_class })
+      : task?.status
       ?? (pubRecord?.state === 'complete' ? 'COMPLETE' : (pubRecord?.state === 'drive_complete' ? 'PUBLISH_RECONCILIATION' : null));
 
     // What the delivery recorded in Postgres; a copy this process kept is no longer consulted.
@@ -327,9 +328,12 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const notificationStatus = notificationCmd ? notificationCmd.state : 'not_enqueued';
 
     let actionableRecovery = 'Publication, sheet sync, and notification completed successfully.';
-    let state: 'unstarted' | 'drive_complete' | 'publish_reconciliation' | 'complete' | 'failed' = 'complete';
+    let state: 'unstarted' | 'drive_complete' | 'archive_reconciliation' | 'publish_reconciliation' | 'complete' | 'failed' = 'complete';
 
-    if (pubRecord?.executor === 'restate' && pubRecord.error_class === 'REQUESTER_SEND_UNCONFIRMED') {
+    if (pubRecord?.error_class === 'ARCHIVE_UNCONFIRMED') {
+      state = 'archive_reconciliation';
+      actionableRecovery = 'Drive may already contain the approved files, but the archive is not verified. Restore Google access if needed, then use Recheck Drive Archive. The same reserved file ID is checked before requester delivery; a continuing conflict needs an operator to inspect Drive.';
+    } else if (pubRecord?.executor === 'restate' && pubRecord.error_class === 'REQUESTER_SEND_UNCONFIRMED') {
       state = 'publish_reconciliation';
       actionableRecovery = 'The archive and Sheet row may be ready, but delivery to the requester was not confirmed. Review the Telegram send evidence before resolving this delivery.';
     } else if (!hasDriveFiles) {
@@ -474,7 +478,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         publishedAt: existingReceipt.completedAt || existingReceipt.sheetRow?.syncedAt || new Date().toISOString(),
       }, 200);
     }
-    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && currentStatus !== 'publish_reconciliation') {
+    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' &&
+        currentStatus !== 'archive_reconciliation' && currentStatus !== 'publish_reconciliation') {
       return problem(c, 409, 'Conflict', `Task ${taskId} is in status '${task.status}', not 'approved'`);
     }
 

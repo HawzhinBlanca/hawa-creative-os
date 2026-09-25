@@ -63,12 +63,16 @@ async function setup() {
   }
   const status = async (taskId: string) => (await (await app.request(`/tasks/${taskId}`)).json()).status;
   /**
-   * Waiting for the Sheets row. Postgres has no PUBLISH_RECONCILIATION task state, so the stored task
-   * stays PUBLISHING; its publication (Drive done, no synced row) is what says the row is owed.
+   * Waiting for the Sheets row. The database task stays publishing, while the durable publication
+   * error makes the API and Desk show the staffed reconciliation status after a restart.
    */
   const reconciling = async (taskId: string) => {
-    expect(await status(taskId)).toBe('PUBLISHING');
+    expect(await status(taskId)).toBe('PUBLISH_RECONCILIATION');
     expect((await (await app.request(`/tasks/${taskId}/publication-state`, { headers: auth })).json()).state).toBe('publish_reconciliation');
+    expect((await (await app.request('/tasks?statuses=PUBLISH_RECONCILIATION', { headers: auth })).json()).items)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: taskId, status: 'PUBLISH_RECONCILIATION' })]));
+    expect((await (await app.request('/tasks?statuses=PUBLISHING', { headers: auth })).json()).items)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: taskId })]));
   };
 
   return { app, saveDna, approvedTask, status, reconciling };

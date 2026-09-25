@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
 import { log } from '../logging.js';
 import crypto from 'node:crypto';
-import { type UUID, isTaskApiStatus, isTaskDbState, isSha256Hex, parseBlobRef } from '@hawa/contracts';
+import { type UUID, isTaskApiStatus, isTaskDbState, isSha256Hex, parseBlobRef, publicationAwareTaskStatus } from '@hawa/contracts';
 import { withRlsContext, IdempotencyConflictError, toDbTaskState, toApiTaskStatus, listTaskPage, decodeTaskCursor, dbStatesForApiStatuses, TASK_PAGE_DEFAULT_LIMIT, TASK_PAGE_MAX_LIMIT, sql, type Database, type TaskState } from '@hawa/db';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
@@ -75,10 +75,12 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     // tasks the list labels with one of them. `status` keeps its old mapping for existing callers.
     let states: TaskState[] | undefined;
     const requestedStatuses = statusList !== undefined ? String(statusList).split(',') : status ? [status] : [];
-    const publishingStatus = requestedStatuses.includes('PUBLISH_RECONCILIATION') &&
-      !requestedStatuses.includes('PUBLISHING') ? 'reconciliation' as const
-      : requestedStatuses.includes('PUBLISHING') && !requestedStatuses.includes('PUBLISH_RECONCILIATION')
-        ? 'ordinary' as const : undefined;
+    const publishingStatuses = statusList !== undefined || (status && isTaskApiStatus(status))
+      ? ([
+          ...(requestedStatuses.includes('PUBLISHING') ? ['ordinary' as const] : []),
+          ...(requestedStatuses.includes('ARCHIVE_RECONCILIATION') ? ['archive' as const] : []),
+          ...(requestedStatuses.includes('PUBLISH_RECONCILIATION') ? ['sheet' as const] : []),
+        ]) : undefined;
     if (statusList !== undefined) states = dbStatesForApiStatuses(requestedStatuses);
     else if (status) {
       // One word of the vocabulary; an unknown one used to list the new requests ('received').
@@ -94,7 +96,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           db,
           { tenantId, userId: auth.userId, role: auth.role },
           (trx) => listTaskPage(trx, { tenantId, limit, cursor, offset, clientId: clientId || null,
-            states, publishingStatus, search })
+            states, publishingStatuses, search })
         );
 
         const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : String(value));
@@ -145,9 +147,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             clientId: t.client_id,
             projectId: t.project_id,
             requestId: t.request_id || null,
-            status: t.request_id && t.state === 'publishing' &&
-              t.delivery_executor === 'restate' && t.delivery_error_class === 'SHEET_UNCONFIRMED'
-              ? 'PUBLISH_RECONCILIATION' : toApiTaskStatus(t.state || 'received'),
+            status: publicationAwareTaskStatus(t.state, { errorClass: t.delivery_error_class }),
             state: t.state,
             priority: t.priority,
             title: t.title,
@@ -464,7 +464,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
               WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.published'
               ORDER BY aggregate_version DESC LIMIT 1`.execute(trx)).rows[0];
 
-            const publication = dbTask.request_id && dbTask.state === 'publishing'
+            const publication = dbTask.state === 'publishing'
               ? await trx.selectFrom('publications').select(['executor', 'error_class'])
                 .where('tenant_id', '=', tenantId).where('task_id', '=', taskId)
                 .orderBy('created_at', 'desc').executeTakeFirst()
@@ -564,9 +564,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             clientId: dbTask.client_id,
             requestId: dbTask.request_id || null,
             projectId: dbTask.project_id,
-            status: dbTask.request_id && dbTask.state === 'publishing' &&
-              publication?.executor === 'restate' && publication.error_class === 'SHEET_UNCONFIRMED'
-              ? 'PUBLISH_RECONCILIATION' : toApiTaskStatus(dbTask.state || 'received'),
+            status: publicationAwareTaskStatus(dbTask.state, { errorClass: publication?.error_class }),
             state: dbTask.state,
             priority: dbTask.priority,
             title: dbTask.title,
