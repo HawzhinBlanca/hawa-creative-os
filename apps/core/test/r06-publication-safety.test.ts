@@ -146,6 +146,10 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       api: process.env.GOOGLE_DRIVE_API_BASE_URL,
       upload: process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL,
       sheets: process.env.GOOGLE_SHEETS_API_BASE_URL,
+      oauth: process.env.GOOGLE_OAUTH_TOKEN,
+      serviceKey: process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
+      gcpKey: process.env.GCP_PRIVATE_KEY,
+      keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
     };
     try {
       process.env.GOOGLE_DRIVE_API_BASE_URL = drive.base;
@@ -171,6 +175,24 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
         }));
       expect(before).toEqual({ state: 'publishing', notifications: 0 });
 
+      // The first upload may have committed. Losing the office credential before the next press
+      // must not turn that unresolved archive into a claim that Drive has no file.
+      delete process.env.GOOGLE_OAUTH_TOKEN;
+      delete process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+      delete process.env.GCP_PRIVATE_KEY;
+      delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      const disconnected = await deliver();
+      expect(disconnected.status).toBe(503);
+      expect((await disconnected.json()).detail).toMatch(/archive may already exist/i);
+      const afterDisconnect = await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' },
+        async (trx) => ({
+          state: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].state,
+          notifications: (await sql<{ count: number }>`SELECT count(*)::int AS count FROM hawa.outbox_commands WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].count,
+        }));
+      expect(afterDisconnect).toEqual({ state: 'publishing', notifications: 0 });
+      if (previous.oauth === undefined) delete process.env.GOOGLE_OAUTH_TOKEN;
+      else process.env.GOOGLE_OAUTH_TOKEN = previous.oauth;
+
       drive.fault.hideSearches = 1;
       const retried = await deliver();
       expect(retried.status).toBe(202);
@@ -186,6 +208,14 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       else process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL = previous.upload;
       if (previous.sheets === undefined) delete process.env.GOOGLE_SHEETS_API_BASE_URL;
       else process.env.GOOGLE_SHEETS_API_BASE_URL = previous.sheets;
+      if (previous.oauth === undefined) delete process.env.GOOGLE_OAUTH_TOKEN;
+      else process.env.GOOGLE_OAUTH_TOKEN = previous.oauth;
+      if (previous.serviceKey === undefined) delete process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+      else process.env.GOOGLE_SERVICE_ACCOUNT_KEY = previous.serviceKey;
+      if (previous.gcpKey === undefined) delete process.env.GCP_PRIVATE_KEY;
+      else process.env.GCP_PRIVATE_KEY = previous.gcpKey;
+      if (previous.keyFile === undefined) delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      else process.env.GOOGLE_APPLICATION_CREDENTIALS = previous.keyFile;
       await drive.close();
     }
   });

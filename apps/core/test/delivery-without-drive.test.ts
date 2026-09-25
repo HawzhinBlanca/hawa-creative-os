@@ -98,8 +98,11 @@ describe.skipIf(!url)('an approved design when Drive cannot be written', () => {
       (await sql<any>`SELECT state FROM hawa.tasks WHERE id = ${taskId}::uuid`.execute(trx)).rows[0].state);
     expect(state).toBe('approved');
 
-    // Trying again (Drive still down) reaches Drive again, and does not queue the files a second time.
-    await app.request(`/tasks/${taskId}/publish`, { method: 'POST', headers, body: JSON.stringify({ policy: 'current_task' }) });
+    // A previous publication intent is not proof that no upload happened. A repeated press may
+    // recheck credentials, but stays pending for reconciliation and queues no second notification.
+    const repeated = await app.request(`/tasks/${taskId}/publish`, { method: 'POST', headers, body: JSON.stringify({ policy: 'current_task' }) });
+    expect(repeated.status).toBe(503);
+    expect((await repeated.json()).detail).toMatch(/archive may already exist/i);
     expect(publisher.publish).toHaveBeenCalledTimes(2);
     const again = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) =>
       (await sql<any>`SELECT count(*)::int AS n FROM hawa.outbox_commands WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n);

@@ -416,7 +416,8 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect((await first.json()).status).toBe('DELIVERED_TO_CHAT_ONLY');
     process.env.HAWA_LIFECYCLE_CHATS = chat;
     const again = await deliver(app, taskId);
-    expect((await again.json()).status).toBe('DELIVERED_TO_CHAT_ONLY');
+    expect(again.status).toBe(503);
+    expect((await again.json()).detail).toMatch(/archive may already exist/i);
     expect(restateIngress.starts).toEqual([]);
     expect((await publications(taskId)).map((p) => p.executor)).toEqual(['core']);
   });
@@ -478,6 +479,29 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
       const res = await prepare(app, taskId, detail.latestApproval?.decisionId || randomUUID(), `Bearer ${workerToken}`);
       expect(res.status).toBe(409);
       expect((await res.json()).code).toBe('NOT_PUBLISHING');
+    });
+
+    it('holds a credential failure when a prior workflow upload has a durable reservation', async () => {
+      const restateIngress = fakeRestate();
+      const app = core(noDrivePublisher());
+      const { taskId, chat } = await approvedTask(app);
+      process.env.HAWA_LIFECYCLE_CHATS = chat;
+      expect((await deliver(app, taskId)).status).toBe(202);
+      const input = restateIngress.starts[0];
+      await withRlsContext(db, operator, async (trx) => {
+        const publication = (await sql<{ id: string; package_sha256: string }>`SELECT id, package_sha256
+          FROM hawa.publications WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid`.execute(trx)).rows[0];
+        await sql`INSERT INTO hawa.drive_upload_reservations
+          (tenant_id, publication_id, artifact_id, task_id, package_sha256, folder_id, file_name, mime_type, expected_sha256, drive_file_id)
+          VALUES (${tenantId}::uuid, ${publication.id}::uuid, ${randomUUID()}::uuid, ${taskId}::uuid,
+            ${publication.package_sha256}, 'kaae-folder', 'approved.png', 'image/png', ${'a'.repeat(64)}, ${`reserved_${randomUUID()}`})`.execute(trx);
+      });
+
+      const result = await prepare(app, taskId, input.approvalId, `Bearer ${workerToken}`);
+      expect(result.status).toBe(503);
+      expect(await result.json()).toMatchObject({ code: 'ARCHIVE_STATE_UNCERTAIN' });
+      expect(await taskState(taskId)).toBe('publishing');
+      expect(await publishedCommands(taskId)).toEqual([]);
     });
 
     it('record a report once: a second report of the same run changes nothing', async () => {

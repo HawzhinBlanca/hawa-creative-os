@@ -493,12 +493,15 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     const doPublish = async () => {
       // One executor per publication (slice 2.2). Read under the publish lock, which the publish route
       // also takes when it hands a delivery to the workflow, so the answer cannot change under us.
+      let priorPublication = false;
       if (publicationRepo && db && isValidUuid(taskId)) {
         const ownerTenant = tenantOf(task);
         let owner: 'core' | 'restate' | null;
         try {
-          owner = (await withRlsContext(db, { tenantId: ownerTenant, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
-            publicationRepo.findByKey(publicationKey, ownerTenant, trx)))?.executor ?? null;
+          const recorded = await withRlsContext(db, { tenantId: ownerTenant, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
+            publicationRepo.findByKey(publicationKey, ownerTenant, trx));
+          priorPublication = Boolean(recorded);
+          owner = recorded?.executor ?? null;
         } catch (err) {
           log.error('[core:omnichannel] Could not read who delivers this publication:', err);
           return { ok: false, status: 503, title: 'Database Unavailable', code: 'DATABASE_UNAVAILABLE', message: 'Who delivers this publication could not be read; try again' };
@@ -587,12 +590,35 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         idempotencyKey: publicationKey,
       };
 
-    // Every failure before a file reaches Drive ends the same way: the requester still gets the
-    // design the office approved, and the task goes back to APPROVED so Deliver can be pressed
-    // again. A missing destination and an unrecorded publication intent used to return straight
-    // after the move to PUBLISHING, leaving the task there for good with nothing sent.
+    // A pre-upload failure can use chat-only delivery only when an earlier attempt cannot have
+    // archived the same publication. Credentials or destination may disappear after an upload whose
+    // reply was lost; the current failure then proves nothing about the earlier Drive state.
     const failTenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
     const failBeforeDrive = async (failure: { status: number; code: string; message: string }) => {
+      let archiveMayExist = priorPublication && !workflowMode;
+      if (!archiveMayExist && db && isValidUuid(taskId)) {
+        try {
+          archiveMayExist = await withRlsContext(db, { tenantId: failTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+            const result = await sql<{ possible: boolean }>`SELECT EXISTS (
+              SELECT 1 FROM hawa.publications p
+              WHERE p.tenant_id = ${failTenantId}::uuid AND p.publication_key = ${publicationKey}
+                AND (EXISTS (SELECT 1 FROM hawa.drive_upload_reservations r
+                      WHERE r.tenant_id = p.tenant_id AND r.publication_id = p.id)
+                  OR EXISTS (SELECT 1 FROM hawa.drive_refs d
+                      WHERE d.tenant_id = p.tenant_id AND d.publication_id = p.id))
+            ) AS possible`.execute(trx);
+            return result.rows[0]?.possible === true;
+          });
+        } catch (err) {
+          log.error('[core:omnichannel:archive-history] Could not establish whether a prior upload exists:', err);
+          return { ok: false as const, status: 503, code: 'ARCHIVE_HISTORY_UNAVAILABLE',
+            message: 'The prior archive state could not be checked; requester delivery is held until it can be reconciled' };
+        }
+      }
+      if (archiveMayExist) {
+        return { ok: false as const, status: 503, code: 'ARCHIVE_STATE_UNCERTAIN',
+          message: `${failure.message}. The archive may already exist from an earlier attempt; requester delivery is held until it is reconciled` };
+      }
       if (workflowMode) {
         // The workflow asks again: a database that could not record the intent is not a Drive failure.
         if (failure.code === 'PUBLICATION_INTENT_PERSISTENCE_FAILED') return { ok: false, status: 503, code: failure.code, message: failure.message };
