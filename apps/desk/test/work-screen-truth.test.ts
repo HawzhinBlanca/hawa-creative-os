@@ -83,9 +83,10 @@ describe('the status an office member sees for each state Core reports (WorkScre
 
 describe('the Approve button of the task on screen (WorkScreen approveState)', () => {
   // A draft with a revision whose QA passed: only its status decides.
-  const state = (status: unknown) =>
+  const state = (status: unknown, hasDetail = true) =>
     lift<string>('approveState', {
       selectedTask: { id: 't', title: 't', status, latestRevisionId: 'r1', qaReport: { passed: true } },
+      detail: hasDetail ? { id: 't', requestId: null } : undefined,
       busy: false,
       approveButtonState,
     });
@@ -99,6 +100,10 @@ describe('the Approve button of the task on screen (WorkScreen approveState)', (
     for (const status of TASK_API_STATUSES.filter((s) => !APPROVABLE_TASK_STATUSES.includes(s))) expect(state(status), status).toBe('disabled');
     expect(state('OPERATOR_REQUIRED')).toBe('enabled');
     expect(state('RECEIVED')).toBe('enabled');
+  });
+
+  it('waits for the current task detail before enabling approval', () => {
+    expect(state('AWAITING_APPROVAL', false)).toBe('disabled');
   });
 
   it('no status but RECEIVED reads as RECEIVED', () => {

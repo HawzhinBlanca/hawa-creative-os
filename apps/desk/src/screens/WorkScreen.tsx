@@ -23,6 +23,7 @@ const SEARCH_PAUSE_MS = 300;
 
 export interface LiveTask {
   id: string;
+  requestId?: string | null;
   clientId?: string;
   clientName?: string;
   title: string;
@@ -457,10 +458,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   };
 
   // A mutation (ADR-037): pending until Core answers and the task is read again. The cached status is
-  // never set to approved beforehand: Core can refuse (a stale revision, a role, a pin), and approval
-  // starts delivery on the server.
+  // never set to approved beforehand: Core can refuse a stale revision, role or selected export.
   const approve = useMutation({
-    mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[]; rtlVisualReview?: { confirmed: true; exportSha256: string }; actionKey: string; reservation: ReservedDecisionAction }) =>
+    mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[]; requestOwned: boolean; rtlVisualReview?: { confirmed: true; exportSha256: string }; actionKey: string; reservation: ReservedDecisionAction }) =>
       apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
         action: 'approve',
         reason: 'Approved by art director',
@@ -473,7 +473,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       const refreshedTask = await readTaskAgain(input.taskId);
       setIsApprovalModalOpen(false);
       const notice = describeApproval(input.revisionId, decisionRes?.decisionId, Boolean(refreshedTask));
-      showToast(notice.text, notice.tone, notice.durationMs);
+      showToast(input.requestOwned ? `${notice.text} Delivery will need a separate workflow action.` : notice.text,
+        notice.tone, notice.durationMs);
     },
     onError: (err: Error) => showToast(`Approval failed: ${err.message || 'Server error'}`, 'error'),
   });
@@ -482,6 +483,10 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     if (decisionStarting.current) return;
     if (!selectedTask || !selectedTask.latestRevisionId) {
       showToast('No active design revision to approve.', 'error');
+      return;
+    }
+    if (!detail || detail.id !== selectedTask.id) {
+      showToast('Wait for the current task details before approving.', 'info');
       return;
     }
     const exportsForApproval = approvalExports.state === 'known' ? approvalExports.value : [];
@@ -503,6 +508,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     try {
       const reservation = await reserveDecisionAction(actionKey);
       approve.mutate({ taskId: selectedTask.id, revisionId: selectedTask.latestRevisionId, pinnedExportIds,
+        requestOwned: Boolean(detail.requestId),
         actionKey, reservation,
         ...(rtlRequired ? { rtlVisualReview: { confirmed: true, exportSha256: checkedHash! } } : {}) });
     } catch (err) { showToast(`Approval could not start: ${reasonOf(err)}`, 'error'); }
@@ -515,6 +521,10 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // Primary Action 5: Deliver approved files (FR-078, CV-16, H02)
   const handleDeliver = async () => {
     if (!selectedTask) return;
+    if (selectedTask.requestId) {
+      showToast('Delivery for this request is waiting for the durable request workflow.', 'info');
+      return;
+    }
     const taskId = selectedTask.id;
     setActionLoading(true);
     let delivery: unknown;
@@ -542,7 +552,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const nextAction = selectedTask ? getNextActionPrompt(selectedTask) : null;
   // Hidden for a status the Desk does not know, which could be approved until 2026-09-24.
   const approveState = selectedTask
-    ? approveButtonState(selectedTask.status, { hasRevision: Boolean(selectedTask.latestRevisionId), qaPassed: selectedTask.qaReport?.passed === true, busy })
+    ? approveButtonState(selectedTask.status, { hasRevision: Boolean(selectedTask.latestRevisionId), qaPassed: selectedTask.qaReport?.passed === true, busy: busy || !detail })
     : 'hidden';
 
   return (
@@ -979,12 +989,19 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     id="btn-deliver-approved"
                     className="action-btn deliver-btn"
                     onClick={handleDeliver}
-                    disabled={busy || !selectedTask.latestApproval || nextAction?.primaryButton !== 'deliver'}
-                    title="Publish approved files to Google Drive and Google Sheets (FR-046, FR-078)"
+                    disabled={busy || !detail || Boolean(selectedTask.requestId) || !selectedTask.latestApproval || nextAction?.primaryButton !== 'deliver'}
+                    title={selectedTask.requestId
+                      ? 'Delivery for this request is waiting for the durable request workflow'
+                      : 'Publish approved files to Google Drive and Google Sheets (FR-046, FR-078)'}
                   >
                     <span className="btn-icon" aria-hidden="true">🚀</span>
                     <span>Deliver Approved Files</span>
                   </button>
+                  {selectedTask.requestId && selectedTask.status === 'APPROVED' && (
+                    <p className="capture-availability" role="note">
+                      Approval is recorded. Delivery for this request is waiting for the durable request workflow.
+                    </p>
+                  )}
                 </div>
                 {!selectedTask.latestRevisionId && (
                   <p className="capture-availability" role="note">
@@ -1368,7 +1385,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       {isApprovalModalOpen && selectedTask && selectedTask.latestRevision && (
         <div className="hawa-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-app-title">
           <div className="hawa-modal-box">
-            <h3 id="modal-app-title" style={{ marginTop: 0 }}>Authorize Release & Approve</h3>
+            <h3 id="modal-app-title" style={{ marginTop: 0 }}>Approve Captured Files</h3>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 12 }}>
               You are recording binding human approval for <b>Revision v{selectedTask.latestRevision.version}</b>.
             </p>
@@ -1447,7 +1464,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   Boolean(approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId ?? null : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion ?? null : undefined))
                 }
               >
-                {approve.isPending ? 'Approving…' : 'Confirm Approval & Release'}
+                {approve.isPending ? 'Approving…' : 'Confirm Approval'}
               </button>
             </div>
           </div>

@@ -27,6 +27,7 @@ interface FakeTask {
   id: string;
   title: string;
   status: string;
+  requestId?: string;
   revision?: number;
   approved?: boolean;
 }
@@ -37,6 +38,7 @@ const approvable = (id: string, title: string): FakeTask => ({ id, title, status
 function asTask(t: FakeTask) {
   return {
     id: t.id,
+    ...(t.requestId ? { requestId: t.requestId } : {}),
     title: t.title,
     status: t.status,
     clientName: 'KAAE',
@@ -257,6 +259,28 @@ describe('the Work queue follows the event stream', () => {
 });
 
 describe('approve and request revision are mutations', () => {
+  it('shows a request-owned approval as recorded while delivery remains unavailable', async () => {
+    const stream = new FakeStream('connected');
+    const core = fakeCore([{ ...approvable('t1', 'Members evening poster'),
+      requestId: '11111111-1111-4111-8111-111111111111' }]);
+    const { view } = await renderWork(stream);
+    await click(view.container.querySelector('#btn-approve-captured'));
+    await advance(100);
+    expect(view.text()).toContain('Approve Captured Files');
+    expect(view.text()).not.toContain('Authorize Release & Approve');
+    await click(byText(view.container, 'button', 'Confirm Approval'));
+    await advance(100);
+    const t1 = core.tasks[0];
+    t1.status = 'APPROVED';
+    t1.approved = true;
+    core.answerDecision(json({ decisionId: 'd1' }, 201));
+    await advance(500);
+    expect(view.text()).toContain('Delivery will need a separate workflow action.');
+    expect(view.text()).toContain('Approval is recorded. Delivery for this request is waiting for the durable request workflow.');
+    expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(true);
+    expect(core.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/publish'))).toHaveLength(0);
+  });
+
   it('approve shows pending, leaves the status Core reported until Core answers, then reads the task and the list again', async () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
@@ -266,7 +290,7 @@ describe('approve and request revision are mutations', () => {
 
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
-    await click(byText(view.container, 'button', 'Confirm Approval & Release'));
+    await click(byText(view.container, 'button', 'Confirm Approval'));
     await advance(100);
 
     // Sent, and Core has not answered.
@@ -298,7 +322,7 @@ describe('approve and request revision are mutations', () => {
     const { view } = await renderWork(stream);
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
-    await click(byText(view.container, 'button', 'Confirm Approval & Release'));
+    await click(byText(view.container, 'button', 'Confirm Approval'));
     await advance(100);
     const lists = core.listReads();
     core.answerDecision(json({ title: 'Conflict', detail: 'The revision changed since it was captured' }, 409));
@@ -306,7 +330,7 @@ describe('approve and request revision are mutations', () => {
     expect(view.container.querySelector('[data-testid="task-status"]')?.textContent).toBe('NEEDS APPROVAL');
     expect(view.text()).toContain('Approval failed: The revision changed since it was captured');
     expect(core.listReads()).toBe(lists);
-    expect(byText(view.container, 'button', 'Confirm Approval & Release')?.hasAttribute('disabled')).toBe(false);
+    expect(byText(view.container, 'button', 'Confirm Approval')?.hasAttribute('disabled')).toBe(false);
   });
 
   it('an approval Core recorded is reported as recorded even when reading the task again fails', async () => {
@@ -315,7 +339,7 @@ describe('approve and request revision are mutations', () => {
     const { view } = await renderWork(stream);
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
-    await click(byText(view.container, 'button', 'Confirm Approval & Release'));
+    await click(byText(view.container, 'button', 'Confirm Approval'));
     await advance(100);
     // Core goes away right after recording the approval.
     const answered = core.answerDecision.bind(core);
