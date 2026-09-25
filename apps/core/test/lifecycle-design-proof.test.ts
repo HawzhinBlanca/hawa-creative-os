@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createDb, sql, withRlsContext } from '@hawa/db';
+import { createDb, RevisionRepository, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { projectLifecycleOpen } from '../src/services/lifecycle-projection.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
@@ -155,6 +155,48 @@ describe('one write owner for lifecycle-owned designs', () => {
     const after = await withRlsContext(db, scope, (trx) => trx.selectFrom('tasks')
       .select(['state', 'version']).where('id', '=', taskId).executeTakeFirstOrThrow());
     expect(after).toEqual(before);
+  });
+
+  it('refuses legacy review and delivery for a request-owned task before either can write', async () => {
+    const { requestId, taskId } = await ownedTask();
+    const revisionId = await withRlsContext(db, scope, async (trx) => {
+      await trx.updateTable('requests').set({ stage: 'manual', rev: 2 })
+        .where('request_id', '=', requestId).execute();
+      const revision = await new RevisionRepository(trx).createRevision({ tenantId, taskId,
+        neutralManifest: { nodes: [{ id: 'headline', type: 'text', text: 'Office copy' }] } }, trx);
+      return revision.id;
+    });
+    const reviewPath = `/v1/tasks/${taskId}/revisions/${revisionId}/decisions`;
+    const director = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+    const decision = await director.request(reviewPath, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'revise', reason: 'Needs correction' }) });
+    expect({ status: decision.status, body: await decision.json() }).toMatchObject({
+      status: 409, body: { title: 'LIFECYCLE_OWNED' },
+    });
+    expect(await post(`/v1/tasks/${taskId}/publish`)).toMatchObject({
+      status: 409, body: { title: 'LIFECYCLE_OWNED' },
+    });
+    expect(await post(`/v1/tasks/${taskId}/publish-omnichannel`)).toMatchObject({
+      status: 409, body: { title: 'LIFECYCLE_OWNED' },
+    });
+    const prepare = await app.request(`/v1/internal/lifecycle/${requestId}/deliveries/${randomUUID()}/prepare`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ taskId, tenantId }),
+    });
+    expect({ status: prepare.status, body: await prepare.json() }).toMatchObject({
+      status: 409, body: { code: 'LIFECYCLE_OWNED' },
+    });
+    await expect(withRlsContext(db, scope, (trx) => new RevisionRepository(trx).recordApproval({
+      tenantId, taskId, revisionId, decision: 'revision_requested', decidedBy: userId,
+    }, trx))).rejects.toThrow('LIFECYCLE_OWNED');
+    const [approvals, publications, outbox] = await withRlsContext(db, scope, async (trx) => Promise.all([
+      trx.selectFrom('approvals').select('id').where('task_id', '=', taskId).execute(),
+      trx.selectFrom('publications').select('id').where('task_id', '=', taskId).execute(),
+      trx.selectFrom('outbox_commands').select('id').where('aggregate_id', '=', taskId)
+        .where('command_type', '=', 'notify.published').execute(),
+    ]));
+    expect([approvals, publications, outbox]).toEqual([[], [], []]);
   });
 
   it('does not let an older round task accept a manual revision', async () => {

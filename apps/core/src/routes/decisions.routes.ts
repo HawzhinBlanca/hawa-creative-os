@@ -66,6 +66,8 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       );
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
+    if (dbTask?.request_id) return problem(c, 409, 'LIFECYCLE_OWNED',
+      'Review this request through RequestLifecycle; the legacy Desk decision cannot record it');
 
     let resolvedRev: any = null;
     let dbRev: any = null;

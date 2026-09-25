@@ -66,6 +66,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const taskId = c.req.param('taskId');
     const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
+    if (task.requestId) return problem(c, 409, 'LIFECYCLE_OWNED',
+      'Deliver this request through RequestLifecycle; the legacy publisher cannot send it');
 
     const body = await c.req.json().catch(() => ({}));
     const policy = body.policy || 'current_task';
@@ -342,13 +344,14 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
   // --- 4-in-1 Omnichannel Production Outbox Dispatch to Google Drive & Sheets (FR-012, FR-082, CV-15) ---
   registerRoute('post', '/tasks/:taskId/publish-omnichannel', async (c: any) => {
     const taskId = c.req.param('taskId');
+    const task = await readCurrentTask(taskId);
+    if (!task) return problem(c, 404, 'Task Not Found');
+    if (task.requestId) return problem(c, 409, 'LIFECYCLE_OWNED',
+      'Deliver this request through RequestLifecycle; the legacy publisher cannot send it');
     const body = await c.req.json().catch(() => ({}));
     const policy = body.policy || 'current_task';
     const targetRevisionId = body.designRevisionId;
     const requestedApprovalId = body.approvalId;
-
-    const task = await readCurrentTask(taskId);
-    if (!task) return problem(c, 404, 'Task Not Found');
 
     // Invariant: B cannot ship using A's approval (CV-15)
     if (targetRevisionId && task.latestApproval) {

@@ -338,6 +338,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       throw err;
     }
     if (!task) return { ok: false, status: 404, message: 'Task Not Found' };
+    if (task.requestId) return { ok: false, status: 409, code: 'LIFECYCLE_OWNED',
+      message: `RequestLifecycle owns task ${taskId}; Core delivery cannot send it` };
     if (workflowMode) {
       // The workflow's own run only: a task delivered already, or taken back, is not delivered again.
       const state = String(task.state || task.status || '').toLowerCase();
@@ -1011,8 +1013,6 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     if (!db || !taskRepo || !publicationRepo || !isValidUuid(taskId)) {
       return { ok: false, status: 503, code: 'DATABASE_REQUIRED', message: 'The Delivery workflow keeps its publication in the database, which is not connected' };
     }
-    const ingress = (process.env.RESTATE_INGRESS_URL || '').replace(/\/+$/, '');
-    if (!ingress) return { ok: false, status: 503, code: 'RESTATE_NOT_CONFIGURED', message: 'RESTATE_INGRESS_URL is not set, so the Delivery workflow cannot be started' };
     let task: Awaited<ReturnType<typeof readCurrentTask>>;
     try {
       task = await readCurrentTask(taskId);
@@ -1021,6 +1021,10 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       throw err;
     }
     if (!task) return { ok: false, status: 404, code: 'TASK_NOT_FOUND', message: 'Task Not Found' };
+    if (task.requestId) return { ok: false, status: 409, code: 'LIFECYCLE_OWNED',
+      message: `RequestLifecycle owns task ${taskId}; this legacy delivery workflow cannot start` };
+    const ingress = (process.env.RESTATE_INGRESS_URL || '').replace(/\/+$/, '');
+    if (!ingress) return { ok: false, status: 503, code: 'RESTATE_NOT_CONFIGURED', message: 'RESTATE_INGRESS_URL is not set, so the Delivery workflow cannot be started' };
     const tenantId = tenantOf(task);
     const client = await resolveClientDna(task.clientId, { tenantId });
     const clientSlug = client?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'client';
@@ -1208,6 +1212,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         if (!pub) return { ok: false as const, status: 404, code: 'PUBLICATION_NOT_FOUND', message: `No publication ${publicationKey}` };
         if (pub.executor !== 'restate') return { ok: false as const, status: 409, code: 'NOT_OWNED_BY_WORKFLOW', message: `Publication ${publicationKey} is Core's` };
         const current = await taskRepo.findById(taskId, tenantId, trx);
+        if (current?.request_id) return { ok: false as const, status: 409, code: 'LIFECYCLE_OWNED',
+          message: `RequestLifecycle owns task ${taskId}; this legacy delivery report cannot move it` };
         const state = String(current?.state || '');
         if (report.run <= Number(pub.executor_finished_run)) return { ok: true as const, status: 'replayed' as const, taskState: state };
         if (report.run > Number(pub.executor_run)) return { ok: false as const, status: 409, code: 'UNKNOWN_RUN', message: `Run ${report.run} of ${publicationKey} was never started` };

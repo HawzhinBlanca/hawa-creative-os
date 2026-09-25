@@ -42,6 +42,7 @@ export function taskFromRows(row: TaskRow, record: TaskRecord = {}) {
   const pick = (field: string) => text(payload[field]) ?? text(body[field]);
   return {
     id: row.id, tenantId: row.tenant_id, clientId: row.client_id, projectId: row.project_id,
+    requestId: row.request_id || null,
     status: toApiTaskStatus(row.state || 'received'), state: row.state, priority: row.priority,
     title: row.title, description: row.description, version: Number(row.version), // bigint: pg returns a string, and version checks compare with ===
     latestRevisionId: row.current_design_revision_id || undefined,

@@ -285,6 +285,9 @@ export class RevisionRepository {
       if (!task) {
         throw new Error(`Task ${params.taskId} not found`);
       }
+      // RequestLifecycle owns this task's decisions. Check under the task lock so a direct
+      // repository caller cannot append a legacy approval or replay one after ownership is pinned.
+      if (task.request_id) throw new Error('LIFECYCLE_OWNED: Review this task through RequestLifecycle');
 
       // A retry may arrive after the first decision committed but before the Desk got its answer.
       // Check under the task lock: concurrent attempts with the same action key then serialize here.
