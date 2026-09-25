@@ -194,11 +194,17 @@ describe.skipIf(!url)('POST /v1/internal/lifecycle/:requestId/project', () => {
     expect(answer.results[0]).toMatchObject({ autoGenerate: false, stage: 'manual' });
   });
 
-  it('refuses what it cannot do yet instead of guessing: an op of a later part, photos, a reference image', async () => {
+  it('refuses what it cannot do instead of guessing: an office decision it cannot record, photos, a reference image', async () => {
     const { ev, state } = await opened();
-    const later = await project(ev.requestId, { v: 1, expectedRev: 1, rev: 2, key: `${ev.requestId}:2:officeDecision`, tenantId: TENANT, ops: [{ op: 'recordApproval', taskId: state.rounds[0].taskId, revisionId: randomUUID(), actionId: 'a-1', actor: { userId: 'u', role: 'operator' } }] });
-    expect(later.status).toBe(422);
-    expect(await later.json()).toMatchObject({ code: 'OP_NOT_AVAILABLE' });
+    // Slice 2.4 brought the office's ops: one without the Desk's action id, or on a revision the task
+    // does not have, is refused and nothing is written.
+    const approval = (actionId: string) => ({ v: 1 as const, expectedRev: 1, rev: 2, key: `${ev.requestId}:2:officeDecision`, tenantId: TENANT, ops: [{ op: 'recordApproval' as const, taskId: state.rounds[0].taskId, revisionId: randomUUID(), actionId, actor: { userId: 'u', role: 'operator' } }] });
+    const noAction = await project(ev.requestId, approval('a-1'));
+    expect(noAction.status).toBe(422);
+    expect(await noAction.json()).toMatchObject({ code: 'INVALID_OP' });
+    const noRevision = await project(ev.requestId, approval(randomUUID()));
+    expect(noRevision.status).toBe(422);
+    expect(await noRevision.json()).toMatchObject({ code: 'DECISION_REFUSED' });
     const photos = openEvent(newChat(), 700_001, { photoFileIds: ['AgAC-file'] });
     expect((await project(photos.requestId, planned(undefined, photos))).status).toBe(422);
     const reference = openEvent(newChat(), 700_001, { studioOptions: { referenceImageBase64: 'iVBORw0KGgo=' } });

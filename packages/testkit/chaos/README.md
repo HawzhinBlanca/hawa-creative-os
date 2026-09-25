@@ -125,6 +125,7 @@ Placed today, in the worker only:
 | `worker.delivery.between-files` | `lifecycle/delivery.ts`, before the second and later files | some files sent, the rest not yet |
 | `core.delivery.after-drive` (`detail.mode`) | `services/omnichannel-delivery.ts`, after the Drive upload, before anything of it is recorded | Drive holds the files; a retry must adopt them, not upload again |
 | `core.project.after-commit` (`detail.requestId`, `rev`, `key`) | `routes/lifecycle-projection.routes.ts`, after a projection committed, before the answer | the worker asks again under the same key; Core answers from its record and writes nothing twice |
+| `core.office.after-forward` (`detail.requestId`, `taskId`, `kind`, `actionId`, `answer`) | `services/office-decisions.ts`, after `RequestLifecycle.officeDecision` answered a Desk press, before Core answers the Desk (slice 2.4) | the Desk hears nothing and presses again with the same action id: Restate answers from the key, nothing is decided twice |
 | `worker.rl.after-project` (`detail.requestId`, `key`, `rev`) | `lifecycle/request-lifecycle.ts`, inside the `project:<rev>` step, after Core answered, before it is journalled | the step runs again; Core replays the projection |
 
 **Follow-ups.** The design also names `core.outcome.after-bridge`, which belongs to the Core side of slice 2.3. Until then Core, Postgres and Restate are killed time-based:
@@ -282,8 +283,36 @@ the question message, its send, its record and the answer are real. The fake pla
 revision prompt (`Design Brief:` then the request), so change and answer rounds are designed.
 
 Not yet: the design's K9 with a *patched* worker build (R1.D1, L3.R3.D and L3.R2.D2 deploy the same
-build, so they prove the drain and the pinning but cannot show replay on changed code); R1 S7-S8 on the
-lifecycle (office decisions, slice 2.4); a studio-made question (no studio fixtures).
+build, so they prove the drain and the pinning but cannot show replay on changed code); a studio-made
+question (no studio fixtures).
+
+**Slice 2.4 (office decisions; design R1 S7-S8 on a lifecycle chat).** `run.ts --poller worker`. The
+Desk's approve and Deliver reach Core with the press's action id (`idempotency-key`); Core checks without
+writing and asks `RequestLifecycle.officeDecision` synchronously under `desk:<actionId>`; the lifecycle's
+projection records the approval, claims the publication for the `Delivery` workflow and starts it, and
+the workflow reports back to the lifecycle. `checkOfficeDecisions` (driver/lifecycle.ts), with
+`checkLifecycle`: each press reached `RequestLifecycle` once (one invocation per `desk:` key, completed),
+one approval (nonce `lc:<actionId>`), the lifecycle's stage, nothing for Core's own delivery or dispatch;
+delivered: one publication, complete, the workflow's, every run reported; each `Delivery` run completed and
+reported once; both approved files in Drive and in the chat once each; the task complete.
+
+| Name | What |
+|---|---|
+| L4.S7.0 | brief, draft, the Desk's approval with its press id; answered 200 with the approval the lifecycle recorded |
+| L4.S7.DBL | a double click: two approvals at once with one press id; both 200, one approval, one invocation |
+| L4.S7.K14 | Core killed at `core.office.after-forward` (the lifecycle accepted; the Desk heard nothing); the Desk retries with the same id: 200, the same approval, one row, one invocation |
+| L4.S7.OLD | the requester's change is being made (its `DesignRun` held after its Canva step) and the office approves the old draft: 409 `CHANGE_PENDING` naming the change round, no approval; the change's draft then reaches review |
+| L4.S8.0 | approval (PNG and PPTX pinned), Deliver with its press id (202, executor `restate`); both files and the notice sent once, the request delivered |
+| L4.S8.K15 | Core killed at `core.delivery.after-drive` |
+| L4.S8.K16 | worker killed at `worker.delivery.between-files` |
+| L4.S8.K17 | Postgres killed while the sender is held at `worker.sender.after-telegram` for the first file (no uncertain send) |
+| L4.S8.K18 | Restate killed while the delivery is held between the files |
+
+Run (2026-09-25, `--poller worker --only` the nine L4 scenarios, 426 s): eight held every invariant
+(L4.S7.0 12 s; DBL 10 s; K14 15 s; S8.0 13 s; K15 17 s; K16 15 s; K17 21 s; K18 17 s; peak 575 MiB);
+L4.S7.OLD failed on the script (its change was worded "Make the logo bigger", which the intake fixture
+does not read as a change, so no change round was made). Fixed to the fixture's wording and to wait for the
+change round first, it held every invariant alone (20 s, 22 checks).
 
 Faults a scenario arms and does not use up are dropped when it ends (`/__fakes/faults/clear`), so they
 never reach the next scenario.

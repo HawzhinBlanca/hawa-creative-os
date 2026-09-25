@@ -355,6 +355,10 @@ export interface DeliveryFinishedEvent extends Versioned {
   outcome: 'delivered' | 'chat_only' | 'uncertain' | 'failed';
   uncertain: string[];
   sheetsConfirmed: boolean;
+  /** Slice 2.4: whether the approved files are in Drive (the Delivery workflow's DeliveryOutcome). Absent: read as `sheetsConfirmed`. */
+  archived?: boolean;
+  filesSent?: number;
+  reason?: string;
 }
 
 export interface MessageSentEvent extends Versioned {
@@ -460,7 +464,14 @@ export type ProjectionOp =
   /** Closes the question's task; the answer's round task is the one createRound made in the same projection. */
   | { op: 'closeQuestion'; taskId: string; questionId: string }
   | { op: 'composeReminder'; taskId: string; kind: 'draft' | 'question'; day: 1 | 5; since: number }
-  | { op: 'recordApproval'; taskId: string; revisionId: string; actionId: string; actor: { userId: string; role: string }; approval?: ApprovalDraft }
+  /**
+   * The office's decision on a draft, recorded as the decisions route records it (an approvals row).
+   * `decision` absent is an approval; a revision request or a rejection names itself (slice 2.4).
+   */
+  | {
+      op: 'recordApproval'; taskId: string; revisionId: string; actionId: string; actor: { userId: string; role: string }; approval?: ApprovalDraft;
+      decision?: 'approved' | 'revision_requested' | 'rejected'; reason?: string;
+    }
   | { op: 'bridgeCapturedRevision'; taskId: string; revisionId?: string }
   | { op: 'prepareRedrive'; taskId: string; attempt: number }
   | {
@@ -470,9 +481,24 @@ export type ProjectionOp =
       toState?: TaskDbState;
       /** 'keep': a move the task's vocabulary does not allow leaves the task as it is instead of refusing. */
       ifIllegal?: 'refuse' | 'keep';
+      /**
+       * Slice 2.4: tried when `toState` is not a legal move, before `ifIllegal` applies (the office's
+       * cancel of a task in review moves it to an operator, as the legacy cancel control did).
+       */
+      fallbackState?: TaskDbState;
       reason: string;
+      /**
+       * Slice 2.4: the move starts a run of the Delivery workflow. Core claims the approval's
+       * publication for the workflow (executor 'restate', this run) in the same transaction, which the
+       * workflow's prepare step requires.
+       */
+      delivery?: { approvalId: string; deliveryId: string; run: number };
     }
-  | { op: 'recordDelivery'; taskId: string; deliveryId: string; approvalId: string; outcome: DeliveryFinishedEvent['outcome']; sheetsConfirmed: boolean; uncertain: string[] };
+  | {
+      op: 'recordDelivery'; taskId: string; deliveryId: string; approvalId: string; outcome: DeliveryFinishedEvent['outcome']; sheetsConfirmed: boolean; uncertain: string[];
+      /** Slice 2.4: the run reported, whether Drive has the files, and why a delivery failed. */
+      run?: number; archived?: boolean; reason?: string;
+    };
 
 export type ProjectionOpName = ProjectionOp['op'];
 
@@ -510,7 +536,7 @@ export type ProjectionOpResult =
   | { op: 'composeReminder'; skip: boolean; messages: LifecycleMessage[] }
   | { op: 'recordApproval'; approvalId: string }
   | { op: 'bridgeCapturedRevision'; revisionId: string; designId?: string; messages: LifecycleMessage[] }
-  | { op: 'prepareRedrive' }
+  | { op: 'prepareRedrive'; messages?: LifecycleMessage[] }
   | { op: 'transition'; taskId: string; fromState: string | null; toState: string | null; changed: boolean; version: number | null; messages: LifecycleMessage[] }
   | { op: 'recordDelivery'; messages: LifecycleMessage[] };
 
@@ -552,6 +578,31 @@ export interface LifecycleRecord extends Versioned {
   questionAskedAt: string | null;
   tasks: Array<{ id: string; state: string; version: number }>;
   lastProjection: { rev: number; key: string; appliedAt: string } | null;
+}
+
+/**
+ * What GET /tasks/:id says of the request a task belongs to (slice 2.4): the Desk sends the revision
+ * with a decision, and a task whose owner is 'restate' is decided by RequestLifecycle. Absent (null)
+ * for a task Core owns (no request).
+ */
+export interface TaskLifecycle {
+  requestId: string;
+  rev: number;
+  stage: LifecycleStage;
+  owner: LifecycleOwner;
+}
+
+/**
+ * An office action's id, as the Desk makes it: one per click, kept while the request is pending and
+ * sent again on a retry (header Idempotency-Key). Letters, digits, '-' and '_', 8 to 100 of them.
+ */
+export function isOfficeActionId(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{8,100}$/.test(value);
+}
+
+/** The event id and Restate idempotency key of an office decision: `desk:<actionId>` (catalogue 2.9). */
+export function officeDecisionKey(actionId: string): string {
+  return `desk:${actionId}`;
 }
 
 /** The DesignRun workflow key of a round's task: `dr-<taskId>`, or `dr-<taskId>-a<n>` for the n-th re-drive. */

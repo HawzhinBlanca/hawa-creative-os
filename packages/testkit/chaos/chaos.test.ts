@@ -17,9 +17,10 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, sql, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema, KAAE_CLIENT_ID } from './driver/provision.js';
+import { randomUUID } from 'node:crypto';
 import {
-  checkLifecycle, lifecycleBrief, lifecycleChat, lifecycleChatList, lifecycleView, liveColour, messagesWith, replyToDraft, requestsOfChat,
-  restartWorkerWith, roundTasks, switchPoller, tap, waitDraftSent, type LifecycleRequest,
+  checkLifecycle, checkOfficeDecisions, lifecycleBrief, lifecycleChat, lifecycleChatList, lifecycleView, liveColour, messagesWith, replyToDraft, requestsOfChat,
+  restartWorkerWith, roundTasks, switchPoller, tap, waitDraftSent, waitLifecycleDelivered, type LifecycleRequest,
 } from './driver/lifecycle.js';
 import {
   OFFICE_CHAT, approve, briefText, briefToDraft, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
@@ -646,6 +647,152 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   scenario('L3.R1.S6K5', 'lifecycle chat: worker killed while Core held its intake answer for rq:ok', async (chat, events) => {
     const r = await lifecycleOk(chat, events, { ok: () => killWhileHeld('core.intake.after-decision', { chat, decision: 'requester' }, 'worker-blue') });
     return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  // Slice 2.4 (PHASE2_DESIGN.md section 3; section 6.3 R1 S7-S8): the office's decisions on a lifecycle
+  // request. The Desk's approve and Deliver go to Core with the press's action id (Idempotency-Key); Core
+  // checks what it can without writing and asks RequestLifecycle.officeDecision under desk:<actionId>;
+  // the lifecycle's projection records the approval, claims the publication and starts the Delivery
+  // workflow, which reports back to it. Run with `run.ts --poller worker`.
+  const officeLedger = async () => Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+  const pressApprove = async (taskId: string, actionId: string, events: string[], pinDeck = false) => {
+    const res = await approve(taskId, { actionId, pinDeck });
+    events.push(`approve (press ${actionId.slice(0, 8)}…): HTTP ${res.status} ${res.status === 200 ? `decision ${res.body?.decisionId}` : JSON.stringify(res.body).slice(0, 160)}`);
+    return res;
+  };
+  const officeApproved = async (chat: string, events: string[], pinDeck = false) => {
+    const ledgerSince = await officeLedger();
+    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
+    const actionId = randomUUID();
+    const res = await pressApprove(request.taskId, actionId, events, pinDeck);
+    if (res.status !== 200) throw new Error(`the approval was refused: HTTP ${res.status} ${JSON.stringify(res.body).slice(0, 300)}`);
+    return { request, ledgerSince, actionId, approved: res };
+  };
+  /** Brief, approval (PNG and PPTX pinned: two files), Deliver with its press id, then the delivery done. */
+  const officeDelivered = async (chat: string, events: string[], beforeDeliver?: () => Promise<{ done: Promise<unknown> }>) => {
+    const a = await officeApproved(chat, events, true);
+    const armed = beforeDeliver ? await beforeDeliver() : null;
+    const deliverId = randomUUID();
+    const started = Date.now();
+    const res = await deliver(a.request.taskId, { actionId: deliverId });
+    events.push(`deliver (press ${deliverId.slice(0, 8)}…): HTTP ${res.status} in ${Date.now() - started} ms, executor ${res.body?.executor}, ${res.body?.deliveryId}`);
+    if (res.status !== 202 || res.body?.executor !== 'restate') throw new Error(`Deliver was not taken by the lifecycle: HTTP ${res.status} ${JSON.stringify(res.body).slice(0, 300)}`);
+    if (armed) events.push(`kill: ${JSON.stringify(await armed.done).slice(0, 200)}`);
+    await waitLifecycleDelivered(chat, a.request.requestId, a.request.taskId, 2);
+    events.push('delivered: both files in the chat, task complete, request delivered');
+    return { ...a, deliverId };
+  };
+  const officeDeliveredChecks = (chat: string, r: Awaited<ReturnType<typeof officeDelivered>>, uncertainSends?: number) => async () => [
+    ...await checkLifecycle(chat, { stage: 'delivered', rounds: 1, ledgerSince: r.ledgerSince, updateIds: [r.request.updateId], ...(uncertainSends !== undefined ? { uncertainSends } : {}) }),
+    ...await checkOfficeDecisions(chat, r.request, { delivered: true, files: 2, actionIds: [r.actionId, r.deliverId] }),
+  ];
+
+  scenario('L4.S7.0', 'lifecycle chat: the Desk approves the draft with its press id; RequestLifecycle records one approval', async (chat, events) => {
+    const a = await officeApproved(chat, events);
+    const [row] = await query<{ id: string }>(sql`SELECT id::text FROM hawa.approvals WHERE task_id = ${a.request.taskId}::uuid`);
+    return {
+      delivered: false, skipRequestChecks: true,
+      extra: [{ name: 'the Desk is answered 200 with the approval the lifecycle recorded', ok: a.approved.status === 200 && a.approved.body?.decisionId === row?.id && a.approved.body?.lifecycle?.stage === 'approved', detail: JSON.stringify({ status: a.approved.status, decisionId: a.approved.body?.decisionId, row: row?.id }) }],
+      after: async () => [
+        ...await checkLifecycle(chat, { stage: 'approved', rounds: 1, ledgerSince: a.ledgerSince, updateIds: [a.request.updateId] }),
+        ...await checkOfficeDecisions(chat, a.request, { delivered: false, actionIds: [a.actionId] }),
+      ],
+    };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S7.DBL', 'lifecycle chat: a double click (two approvals at once, one press id) records one approval and answers both', async (chat, events) => {
+    const ledgerSince = await officeLedger();
+    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
+    const actionId = randomUUID();
+    const [x, y] = await Promise.all([pressApprove(request.taskId, actionId, events), pressApprove(request.taskId, actionId, events)]);
+    return {
+      delivered: false, skipRequestChecks: true,
+      extra: [{ name: 'both clicks are answered 200 with the same approval', ok: x.status === 200 && y.status === 200 && Boolean(x.body?.decisionId) && x.body?.decisionId === y.body?.decisionId, detail: JSON.stringify([x.status, y.status, x.body?.decisionId, y.body?.decisionId]) }],
+      after: async () => [
+        ...await checkLifecycle(chat, { stage: 'approved', rounds: 1, ledgerSince, updateIds: [request.updateId] }),
+        ...await checkOfficeDecisions(chat, request, { delivered: false, actionIds: [actionId] }),
+      ],
+    };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S7.K14', 'lifecycle chat: Core killed after RequestLifecycle accepted the approval, before the Desk had the answer; the Desk retries with the same press id', async (chat, events) => {
+    const ledgerSince = await officeLedger();
+    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
+    const actionId = randomUUID();
+    const armed = await killAtPoint('core.office.after-forward', { kind: 'approve', answer: 'accepted' });
+    const cut = await pressApprove(request.taskId, actionId, events);
+    events.push(`kill: ${JSON.stringify(await armed.done).slice(0, 200)}`);
+    const retry = await pressApprove(request.taskId, actionId, events);
+    const again = await pressApprove(request.taskId, actionId, events);
+    const [row] = await query<{ id: string }>(sql`SELECT id::text FROM hawa.approvals WHERE task_id = ${request.taskId}::uuid`);
+    return {
+      delivered: false, skipRequestChecks: true,
+      extra: [
+        { name: 'the Desk heard no answer from the killed Core', ok: cut.status >= 500, detail: `HTTP ${cut.status}` },
+        { name: 'the retry with the same id is answered 200 with the approval recorded before the kill, and so is the next', ok: retry.status === 200 && again.status === 200 && retry.body?.decisionId === row?.id && again.body?.decisionId === row?.id, detail: JSON.stringify([retry.status, again.status, retry.body?.decisionId, again.body?.decisionId, row?.id]) },
+      ],
+      after: async () => [
+        ...await checkLifecycle(chat, { stage: 'approved', rounds: 1, ledgerSince, updateIds: [request.updateId] }),
+        ...await checkOfficeDecisions(chat, request, { delivered: false, actionIds: [actionId] }),
+      ],
+    };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S7.OLD', 'lifecycle chat: approving the old draft while the requester\'s change is being made is refused by RequestLifecycle (409)', async (chat, events) => {
+    const ledgerSince = await officeLedger();
+    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
+    // The change's design run is held after its Canva import, so the change is still being made when the office presses.
+    await fakes.hold('worker.step.after-action', { step: 'canva-create-draft' }, 1);
+    // The intake fixture reads this exact wording as a change (fixtures/models/intake.json).
+    const changeUpdate = await replyToDraft(chat, request.taskId, 'make the logo bigger');
+    const round1 = await waitUntil('the change round', async () => {
+      const rows = await roundTasks(request.requestId);
+      return rows.length === 2 ? rows[1] : null;
+    }, 180_000);
+    const held = await fakes.wait('worker.step.after-action', 240_000);
+    if (!held) throw new Error('the change\'s design run never reached its Canva step');
+    events.push(`change (update ${changeUpdate}) is round ${round1.id}, held in its design run at ${held?.detail?.step}`);
+    const actionId = randomUUID();
+    const refused = await pressApprove(request.taskId, actionId, events);
+    await fakes.release('worker.step.after-action');
+    await waitDraftSent(chat, request.requestId, round1.id);
+    events.push(`the change's draft (task ${round1.id}) is in review`);
+    return {
+      delivered: false, skipRequestChecks: true,
+      extra: [
+        { name: 'the old draft\'s approval is refused 409 CHANGE_PENDING, naming the change', ok: refused.status === 409 && refused.body?.code === 'CHANGE_PENDING' && String(refused.body?.detail).includes(round1.id), detail: JSON.stringify({ status: refused.status, code: refused.body?.code, detail: refused.body?.detail }) },
+        { name: 'no approval was recorded', ok: (await query(sql`SELECT 1 FROM hawa.approvals WHERE task_id = ANY(${[request.taskId, round1.id]}::uuid[])`)).length === 0, detail: 'approvals of both rounds' },
+      ],
+      after: async () => [
+        ...await checkLifecycle(chat, { stage: 'in_review', rounds: 2, drafts: 2, ledgerSince, updateIds: [request.updateId, changeUpdate] }),
+        { name: 'the refused press reached RequestLifecycle once', ok: (await restateQuery(`SELECT status FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND idempotency_key = 'desk:${actionId}'`)).length === 1, detail: `desk:${actionId}` },
+      ],
+    };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S8.0', 'lifecycle chat: Deliver through RequestLifecycle; the Delivery workflow sends both approved files and reports back; no faults', async (chat, events) => {
+    const r = await officeDelivered(chat, events);
+    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S8.K15', 'lifecycle chat: Core killed at core.delivery.after-drive (files in Drive, nothing recorded), restarted', async (chat, events) => {
+    const r = await officeDelivered(chat, events, () => killAtPoint('core.delivery.after-drive', { mode: 'workflow' }));
+    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S8.K16', 'lifecycle chat: worker killed between the two files', async (chat, events) => {
+    const r = await officeDelivered(chat, events, () => killAtPoint('worker.delivery.between-files', {}));
+    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S8.K17', 'lifecycle chat: Postgres killed after Telegram took the first file, before its mark was written; back after 5 s', async (chat, events) => {
+    const r = await officeDelivered(chat, events, () => killWhileHeld('worker.sender.after-telegram', { commandType: 'lifecycle', kind: 'document' }, 'postgres'));
+    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r, 0) };
+  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+
+  scenario('L4.S8.K18', 'lifecycle chat: Restate killed between the two files, back after 5 s', async (chat, events) => {
+    const r = await officeDelivered(chat, events, () => killWhileHeld('worker.delivery.between-files', {}, 'restate'));
+    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
   }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
 
   // R5 and acceptance (d): a flagged chat and an unflagged one send at once, each takes its own path;

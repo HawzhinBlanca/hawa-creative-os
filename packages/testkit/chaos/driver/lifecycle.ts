@@ -213,3 +213,57 @@ export async function messagesWith(chat: string, words: string): Promise<any[]> 
 }
 
 export { sleep };
+
+/** Until a lifecycle request's delivery is done: its files in the chat, its task complete, the request delivered. */
+export async function waitLifecycleDelivered(chat: string, requestId: string, taskId: string, files: number, timeoutMs = 300_000): Promise<void> {
+  await waitUntil(`the lifecycle delivery of task ${taskId} to chat ${chat}`, async () => {
+    const docs = (await sentTo(chat)).filter((s) => s.method === 'sendDocument' && s.delivered !== false);
+    const [task] = await query<{ state: string }>(sql`SELECT state::text AS state FROM hawa.tasks WHERE id = ${taskId}::uuid`);
+    const [request] = await query<{ stage: string }>(sql`SELECT stage FROM hawa.requests WHERE request_id = ${requestId}::uuid`);
+    return new Set(docs.map((d) => d.documentSha256)).size >= files && task?.state === 'complete' && request?.stage === 'delivered';
+  }, timeoutMs, 2000);
+}
+
+/**
+ * The checks of PHASE2_DESIGN.md 6.3 for the office's side of a lifecycle request (slice 2.4, R1 S7-S8):
+ * each Desk press reached RequestLifecycle once (one invocation per `desk:<actionId>` key, completed),
+ * one approval row, and, delivered, one publication the Delivery workflow completed and reported, the
+ * files in Drive and in the chat once each, and nothing for Core's own delivery.
+ */
+export async function checkOfficeDecisions(chat: string, r: { requestId: string; taskId: string }, expect: {
+  delivered: boolean;
+  files?: number;
+  /** Every press the scenario made, by action id, and how many reached the object (default 1 each). */
+  actionIds: string[];
+}): Promise<InvariantResult[]> {
+  const out: InvariantResult[] = [];
+  const add = (name: string, ok: boolean, detail: string) => out.push({ name, ok, detail });
+  for (const actionId of expect.actionIds) {
+    const inv = await restateQuery<{ status: string; target_handler_name: string }>(`SELECT status, target_handler_name FROM sys_invocation
+      WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${r.requestId}' AND idempotency_key = 'desk:${actionId}'`);
+    add(`the press ${actionId.slice(0, 8)}… reached RequestLifecycle once and completed`, inv.length === 1 && inv[0].status === 'completed' && inv[0].target_handler_name === 'officeDecision', JSON.stringify(inv));
+  }
+  const approvals = await query<{ nonce: string }>(sql`SELECT nonce FROM hawa.approvals WHERE task_id = ${r.taskId}::uuid AND decision = 'approved'`);
+  add('one approval, recorded by the lifecycle\'s projection', approvals.length === 1 && approvals[0].nonce.startsWith('lc:'), JSON.stringify(approvals));
+  const view = await lifecycleView(r.requestId);
+  add(`RequestLifecycle is ${expect.delivered ? 'delivered' : 'approved'}`, view?.stage === (expect.delivered ? 'delivered' : 'approved'), JSON.stringify(view && { stage: view.stage, rev: view.rev }));
+  const [pending] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands WHERE aggregate_id = ${r.taskId}::uuid AND command_type IN ('notify.published', 'task.dispatch')`);
+  add('nothing for Core\'s own delivery or dispatch (no notify.published, no task.dispatch)', Number(pending?.n ?? 0) === 0, `rows=${pending?.n}`);
+  if (!expect.delivered) return out;
+
+  const files = expect.files ?? 1;
+  const pubs = await query<{ state: string; executor: string; executor_run: number; executor_finished_run: number }>(sql`SELECT state::text AS state, executor, executor_run, executor_finished_run
+    FROM hawa.publications WHERE task_id = ${r.taskId}::uuid`);
+  add('one publication, complete, the Delivery workflow\'s, every run reported', pubs.length === 1 && pubs[0].state === 'complete' && pubs[0].executor === 'restate' && pubs[0].executor_run >= 1 && pubs[0].executor_run === pubs[0].executor_finished_run, JSON.stringify(pubs));
+  const runs = await restateQuery<{ status: string; target_service_key: string }>(`SELECT status, target_service_key FROM sys_invocation WHERE target_service_name = 'Delivery' AND target_service_key LIKE 'dl-${r.requestId}-%'`);
+  add('each Delivery run the lifecycle started completed', runs.length === (pubs[0]?.executor_run ?? -1) && runs.every((x) => x.status === 'completed'), JSON.stringify(runs.map((x) => `${x.target_service_key.slice(-14)}:${x.status}`)));
+  const reports = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${r.requestId}' AND target_handler_name = 'deliveryFinished'`);
+  add('the delivery was reported to the lifecycle once per run', Number(reports[0]?.n ?? 0) === runs.length, `deliveryFinished=${reports[0]?.n}`);
+  const drive = (await fakes.driveFiles()).filter((f: any) => f.properties?.taskId === r.taskId);
+  add(`the ${files} approved file(s) are archived to Drive once each`, drive.length === files, `drive files=${drive.length}`);
+  const docs = (await sentTo(chat)).filter((s) => s.method === 'sendDocument');
+  add(`the requester has the ${files} approved file(s)`, new Set(docs.map((d) => d.documentSha256)).size === files, `documents shown=${docs.length}`);
+  const [task] = await query<{ state: string }>(sql`SELECT state::text AS state FROM hawa.tasks WHERE id = ${r.taskId}::uuid`);
+  add('the task is complete', task?.state === 'complete', `state=${task?.state}`);
+  return out;
+}

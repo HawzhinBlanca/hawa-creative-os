@@ -430,7 +430,9 @@ class HawaApiClient {
     bindCanva: (taskId: string, editUrl: string) => this.request(`/tasks/${encodeURIComponent(taskId)}/canva-binding`, {
       method: 'POST', body: JSON.stringify({ editUrl }),
     }),
-    redrive: (taskId: string) => this.request<any>(`/tasks/${encodeURIComponent(taskId)}/redrive`, { method: 'POST' }),
+    /** `actionId`: the press's id (services/officeActions.ts), sent as Idempotency-Key. */
+    redrive: (taskId: string, actionId?: string) =>
+      this.request<any>(`/tasks/${encodeURIComponent(taskId)}/redrive`, { method: 'POST', ...(actionId ? { headers: { 'Idempotency-Key': actionId } } : {}) }),
     /** What the requester asked of this design, round by round (Core: GET /tasks/:taskId/asks). */
     asks: (taskId: string) => this.request<{ taskId: string; rounds: import('../components/AskLedger.js').LedgerRound[] }>(`/tasks/${encodeURIComponent(taskId)}/asks`),
     sweepFailed: () => this.request<any>('/tasks/sweep-failed', { method: 'POST' }),
@@ -477,21 +479,28 @@ class HawaApiClient {
       });
     },
 
+    /**
+     * `actionId`: the press's id (services/officeActions.ts), sent as Idempotency-Key. Core forwards a
+     * decision on a lifecycle request under it, so a double click or a retry is applied once (slice 2.4).
+     */
     recordDecision: async <T = any>(
       taskId: string,
       revisionId: string,
-      payload: DecisionPayload
+      payload: DecisionPayload,
+      actionId?: string
     ): Promise<T> => {
       return this.request<T>(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
         method: 'POST',
         body: JSON.stringify(payload),
+        ...(actionId ? { headers: { 'Idempotency-Key': actionId } } : {}),
       });
     },
 
-    publish: async <T = any>(taskId: string, body?: { destination?: string; policy?: string }): Promise<T> => {
+    publish: async <T = any>(taskId: string, body?: { destination?: string; policy?: string }, actionId?: string): Promise<T> => {
       return this.request<T>(`/tasks/${taskId}/publish`, {
         method: 'POST',
         body: JSON.stringify(body || {}),
+        ...(actionId ? { headers: { 'Idempotency-Key': actionId } } : {}),
       });
     },
   };

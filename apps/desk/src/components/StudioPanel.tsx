@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client.js';
+import { officeActionIds } from '../services/officeActions.js';
 import { AuthorizedImage } from './AuthorizedImage.js';
 
 interface CritiqueDetail {
@@ -570,7 +571,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
                   onClick={async () => {
                     setBusy(true);
                     try {
-                      await apiClient.tasks.redrive(taskId);
+                      await officeActionIds.run(`redrive:${taskId}`, (actionId) => apiClient.tasks.redrive(taskId, actionId));
                       setMessage('Task generation re-driven successfully');
                       await refresh();
                     } catch (err: any) {

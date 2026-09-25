@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, deliveryWorkflowId, lifecycleOwnsChat } from '@hawa/contracts';
 import { withRlsContext, toApiTaskStatus } from '@hawa/db';
 import { buildOutboundReviewDispatch } from '@hawa/integrations';
 import type { Context } from 'hono';
@@ -10,6 +10,7 @@ import { log } from '../logging.js';
 import { pendingChangeWords } from '../services/pending-change.js';
 import { readPublicationReceipt } from '../services/publication-receipt.js';
 import { DELIVERY_OWNED_BY_CORE } from '../services/omnichannel-delivery.js';
+import { approvalToDeliver, decideForLifecycle, decisionProblem, officeActionIdOf, readTaskLifecycle } from '../services/office-decisions.js';
 
 /**
  * Delivery of an approved design and what it left behind (architecture programme 1.3, group G5,
@@ -71,6 +72,56 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const policy = body.policy || 'current_task';
     const targetRevisionId = body.designRevisionId || task?.latestRevisionId;
     const requestedApprovalId = body.approvalId;
+
+    // Slice 2.4 (PHASE2_DESIGN.md section 3, ADR-034): a task of a request the lifecycle owns is
+    // delivered by RequestLifecycle, which checks the stage, the approval and any pending change, then
+    // claims the publication and starts the Delivery workflow. This route only reads.
+    if (db) {
+      const tenantId = task?.tenantId && isValidUuid(task.tenantId) ? task.tenantId : (auth.tenantId || DEFAULT_TENANT_ID);
+      let lifecycle: Awaited<ReturnType<typeof readTaskLifecycle>> = null;
+      try {
+        lifecycle = await readTaskLifecycle(db, tenantId, taskId);
+      } catch (err) {
+        log.error('[core:publish] Could not read whether the request lifecycle owns this task:', err);
+        return problem(c, 503, 'Database Unavailable', 'Who delivers this task could not be read; try again');
+      }
+      if (lifecycle?.owner === 'restate') {
+        let approval: Awaited<ReturnType<typeof approvalToDeliver>>;
+        try {
+          approval = await approvalToDeliver(db, tenantId, taskId, typeof requestedApprovalId === 'string' ? requestedApprovalId : undefined);
+        } catch (err) {
+          log.error('[core:publish] Could not read the approval to deliver:', err);
+          return problem(c, 503, 'Database Unavailable', 'The approval to deliver could not be read; try again');
+        }
+        if (!approval) return problem(c, 422, 'Nothing Approved To Deliver', `Task ${taskId} has no approval to deliver`);
+        if (approval.pins === 0) return problem(c, 422, 'Nothing Approved To Deliver', 'Nothing to deliver: the approval pins no exported file. Approve in the Desk with the captured export selected.');
+        const { actionId } = officeActionIdOf(c.req.header('Idempotency-Key'));
+        // A delivery that could not archive the files is run again for its archive, not delivered anew.
+        const kind = lifecycle.stage === 'delivered' ? 'retryArchive' : 'deliver';
+        const { answer, forwarded } = await decideForLifecycle(db, tenantId, lifecycle, {
+          actionId, actor: { userId: auth.userId || SYSTEM_AUTOMATION_USER_ID, role: auth.role || 'operator' }, kind, taskId, approvalId: approval.approvalId,
+        });
+        const accepted = forwarded.kind === 'answered' && forwarded.result.accepted ? forwarded.result : null;
+        const lifecycleNow = accepted ? { ...lifecycle, rev: accepted.rev, stage: accepted.stage } : lifecycle;
+        if (answer.status !== 200) return decisionProblem(c, answer, { actionId, lifecycle: lifecycleNow });
+        // The run the projection claimed names the workflow (read back, not written).
+        const claimed = await approvalToDeliver(db, tenantId, taskId, approval.approvalId).catch(() => null);
+        const run = claimed?.run || 1;
+        // The move to PUBLISHING was broadcast by the projection that made it (lifecycle-projection.routes.ts).
+        return c.json({
+          commandId: crypto.randomUUID(),
+          taskId,
+          actionId,
+          workflowId: deliveryWorkflowId(lifecycle.requestId, approval.approvalId, run),
+          deliveryId: deliveryWorkflowId(lifecycle.requestId, approval.approvalId, run),
+          approvalId: approval.approvalId,
+          executor: 'restate',
+          status: 'PUBLISHING',
+          lifecycle: lifecycleNow,
+          acceptedAt: new Date().toISOString(),
+        }, 202);
+      }
+    }
 
     // Invariant: B cannot ship using A's approval (CV-15)
     if (body.designRevisionId && task?.latestApproval) {

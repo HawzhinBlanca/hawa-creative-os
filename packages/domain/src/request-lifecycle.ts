@@ -458,7 +458,7 @@ function outcomeRule(s: LifecycleStateV1, runId: string, report: CanvaStatusRepo
   };
 }
 
-function cancelRule(s: LifecycleStateV1, reason: string): Decision {
+function cancelRule(s: LifecycleStateV1, reason: string, fallbackState?: 'failed_operator'): Decision {
   if (s.stage === 'cancelled' || s.stage === 'delivered') return ignore(`a ${s.stage} request cannot be cancelled`);
   const taskId = currentTaskId(s);
   if (!taskId) return ignore('the request has no task to cancel');
@@ -467,7 +467,7 @@ function cancelRule(s: LifecycleStateV1, reason: string): Decision {
   return {
     ignored: false,
     stage: 'cancelled',
-    ops: [{ op: 'transition', taskId, toState: 'cancelled', ifIllegal: 'keep', reason }],
+    ops: [{ op: 'transition', taskId, toState: 'cancelled', ...(fallbackState ? { fallbackState } : {}), ifIllegal: 'keep', reason }],
     fold: (f) => {
       moveTo(f, 'cancelled');
       if (running && cur?.runId) f.effects.push({ type: 'cancelRun', runId: cur.runId, ...(cur.runInvocationId ? { invocationId: cur.runInvocationId } : {}) });
@@ -484,9 +484,11 @@ function officeDecision(s: LifecycleStateV1, ev: Extract<LifecycleEvent, { type:
   const draft = s.draft;
   switch (ev.kind) {
     case 'approve': {
+      // Asked first: the older draft the Desk still shows while its change is made is refused as
+      // replaced, whatever stage the change has put the request in (legacy: 409 "Replaced By A Newer Revision").
+      if (openChangeRound(s)) return refuse('CHANGE_PENDING', 'A change to this design is being made');
       if (s.stage !== 'in_review' && s.stage !== 'expired') return wrongStage();
       if (!draft || ev.taskId !== draft.taskId || !ev.revisionId || ev.revisionId !== draft.revisionId) return refuse('NOT_CURRENT_DRAFT', 'Only the current draft can be approved');
-      if (openChangeRound(s)) return refuse('CHANGE_PENDING', 'A change to this design is being made');
       const revisionId = ev.revisionId;
       return {
         ignored: false,
@@ -501,13 +503,40 @@ function officeDecision(s: LifecycleStateV1, ev: Extract<LifecycleEvent, { type:
     }
     case 'revise': {
       if (s.stage !== 'in_review') return wrongStage();
-      if (!draft || ev.taskId !== draft.taskId) return refuse('NOT_CURRENT_DRAFT', 'Only the current draft can be sent back for a revision');
+      if (!draft || ev.taskId !== draft.taskId || (ev.revisionId && draft.revisionId && ev.revisionId !== draft.revisionId)) {
+        return refuse('NOT_CURRENT_DRAFT', 'Only the current draft can be sent back for a revision');
+      }
+      const reason = cut(ev.comment?.trim() || 'The office asked for a revision', 1000);
+      // Recorded as the decisions route records it (an approvals row on the revision, which moves the
+      // task), so the Desk's history of decisions reads the same for both paths.
+      const revisionId = ev.revisionId ?? draft.revisionId;
       return {
         ignored: false,
         stage: 'manual',
-        ops: [{ op: 'transition', taskId: ev.taskId, toState: 'revision_requested', reason: cut(ev.comment?.trim() || 'The office asked for a revision', 1000) }],
+        ops: [revisionId
+          ? { op: 'recordApproval', taskId: ev.taskId, revisionId, actionId: ev.actionId, actor: ev.actor, decision: 'revision_requested', reason, ...(ev.approval ? { approval: ev.approval } : {}) }
+          : { op: 'transition', taskId: ev.taskId, toState: 'revision_requested', reason }],
         fold: (f) => {
           moveTo(f, 'manual');
+          sendAll(f);
+        },
+      };
+    }
+    case 'reject': {
+      // The office turns the design down: the request ends (its task REJECTED), as the decisions route
+      // ends a task it rejects.
+      if (s.stage !== 'in_review' && s.stage !== 'expired' && s.stage !== 'manual') return wrongStage();
+      const cur = currentRound(s);
+      if (!cur || ev.taskId !== cur.taskId || !ev.revisionId) return refuse('NOT_CURRENT_DRAFT', 'Only the current round\'s design can be rejected');
+      return {
+        ignored: false,
+        stage: 'cancelled',
+        ops: [{
+          op: 'recordApproval', taskId: ev.taskId, revisionId: ev.revisionId, actionId: ev.actionId, actor: ev.actor, decision: 'rejected',
+          reason: cut(ev.comment?.trim() || 'Rejected by the office', 1000), ...(ev.approval ? { approval: ev.approval } : {}),
+        }],
+        fold: (f) => {
+          moveTo(f, 'cancelled');
           sendAll(f);
         },
       };
@@ -545,22 +574,27 @@ function officeDecision(s: LifecycleStateV1, ev: Extract<LifecycleEvent, { type:
           delete round.runInvocationId;
           moveTo(f, 'designing');
           startRun(f, round);
+          sendAll(f);
         },
       };
     }
     case 'deliver': {
+      // A change asked for after the approval is being made: the approved version is not delivered.
+      if (openChangeRound(s)) return refuse('CHANGE_PENDING', 'A change to this design is being made');
       if (s.stage !== 'approved') return wrongStage();
       const approval = s.approval;
       if (!approval || ev.taskId !== approval.taskId || (ev.approvalId && ev.approvalId !== approval.approvalId)) return refuse('NOT_CURRENT_DRAFT', 'Only the approved draft can be delivered');
-      if (openChangeRound(s)) return refuse('CHANGE_PENDING', 'A change to this design is being made');
       // A failed delivery of this approval was run 1: the next one needs a new workflow key.
       const run = s.delivery?.approvalId === approval.approvalId ? (s.delivery.run ?? 1) + 1 : 1;
+      const deliveryId = deliveryWorkflowId(s.requestId, approval.approvalId, run);
       return {
         ignored: false,
         stage: 'delivering',
-        ops: [{ op: 'transition', taskId: approval.taskId, toState: 'publishing', reason: 'The office asked for delivery' }],
+        ops: [{
+          op: 'transition', taskId: approval.taskId, toState: 'publishing', reason: 'The office asked for delivery',
+          delivery: { approvalId: approval.approvalId, deliveryId, run },
+        }],
         fold: (f) => {
-          const deliveryId = deliveryWorkflowId(f.next.requestId, approval.approvalId, run);
           f.next.delivery = { deliveryId, approvalId: approval.approvalId, startedAt: f.now, run };
           moveTo(f, 'delivering');
           f.effects.push({
@@ -575,12 +609,17 @@ function officeDecision(s: LifecycleStateV1, ev: Extract<LifecycleEvent, { type:
       if (s.delivery.sheetsConfirmed) return refuse('WRONG_STAGE', 'The delivery is archived already');
       const approval = s.approval;
       const run = (s.delivery.run ?? 1) + 1;
+      const deliveryId = deliveryWorkflowId(s.requestId, approval.approvalId, run);
       return {
         ignored: false,
         stage: 'delivering',
-        ops: [{ op: 'transition', taskId: approval.taskId, reason: 'The office asked to archive the delivery again' }],
+        // A delivery whose files never reached Drive put the task back to APPROVED; one whose Sheets
+        // row is unconfirmed left it PUBLISHING. Either way the task is being delivered again.
+        ops: [{
+          op: 'transition', taskId: approval.taskId, toState: 'publishing', ifIllegal: 'keep', reason: 'The office asked to archive the delivery again',
+          delivery: { approvalId: approval.approvalId, deliveryId, run },
+        }],
         fold: (f) => {
-          const deliveryId = deliveryWorkflowId(f.next.requestId, approval.approvalId, run);
           f.next.delivery = { deliveryId, approvalId: approval.approvalId, startedAt: f.now, run };
           moveTo(f, 'delivering');
           f.effects.push({
@@ -591,10 +630,12 @@ function officeDecision(s: LifecycleStateV1, ev: Extract<LifecycleEvent, { type:
       };
     }
     case 'cancel':
-      return cancelRule(s, cut(ev.comment?.trim() || 'The office cancelled the request', 1000));
-    case 'reject':
+      // The office hears why nothing happened (an ignored cancel answers nothing).
+      if (s.stage === 'cancelled' || s.stage === 'delivered') return wrongStage();
+      // A task the vocabulary cannot cancel (in review, say) goes to an operator, as the legacy cancel
+      // control moved it, so the Desk never offers a cancelled request's draft for approval.
+      return cancelRule(s, cut(ev.comment?.trim() || 'The office cancelled the request', 1000), 'failed_operator');
     default:
-      // Rejection stays with Core's decisions route until the office decisions slice (2.4).
       return wrongStage();
   }
 }
@@ -838,13 +879,20 @@ function decide(s: LifecycleStateV1 | undefined, ev: LifecycleEvent): Decision {
     case 'deliveryFinished': {
       if (s.stage !== 'delivering' || !s.delivery || ev.deliveryId !== s.delivery.deliveryId) return ignore(`delivery ${ev.deliveryId} is not the one running`);
       const approval = s.approval;
-      const stage: LifecycleStage = ev.outcome === 'failed' ? 'approved' : 'delivered';
+      const archived = typeof ev.archived === 'boolean' ? ev.archived : ev.sheetsConfirmed;
+      // A failed delivery that left nothing in Drive can be delivered again (Core puts the task back
+      // to APPROVED); one that reached Drive is delivered, and the office follows up what failed.
+      const stage: LifecycleStage = ev.outcome === 'failed' && !archived ? 'approved' : 'delivered';
       return {
         ignored: false,
         stage,
         ops: [{
           op: 'recordDelivery', taskId: approval?.taskId ?? currentTaskId(s) ?? '', deliveryId: ev.deliveryId, approvalId: s.delivery.approvalId,
-          outcome: ev.outcome, sheetsConfirmed: ev.sheetsConfirmed, uncertain: ev.uncertain.slice(0, 50),
+          outcome: ev.outcome, sheetsConfirmed: ev.sheetsConfirmed, uncertain: (ev.uncertain ?? []).slice(0, 50),
+          run: s.delivery.run ?? 1,
+          // A report from a Delivery built before 2.4 names no archive: confirmed Sheets means it was archived.
+          archived,
+          ...(ev.reason ? { reason: cut(ev.reason, 500) } : {}),
         }],
         fold: (f) => {
           f.next.delivery = { ...f.next.delivery!, outcome: ev.outcome, sheetsConfirmed: ev.sheetsConfirmed };

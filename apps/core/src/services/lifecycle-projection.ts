@@ -20,14 +20,16 @@
  * Part A of slice 2.3 carries the ops that only write rows (open, rounds, task moves, questions
  * closed, sends recorded); part C the ops that need Core's composition (a design outcome, a
  * requester's button, a reminder: lifecycle-compose.ts), and the acknowledgements of a new request
- * and a round. The office's ops (an approval, a captured draft, a re-drive, a delivery report) are
- * refused with OP_NOT_AVAILABLE until slice 2.4 brings them, rather than guessed at.
+ * and a round. Slice 2.4 the office's: a decision on a draft (an approvals row, as the decisions route
+ * records one), a captured draft, a re-drive, the claim of a publication for the Delivery workflow and
+ * its report.
  */
 import { createHash } from 'node:crypto';
-import { sql, TaskRepository, withRlsContext, type Database, type Kysely, type TaskState } from '@hawa/db';
+import { sql, RevisionRepository, TaskRepository, withRlsContext, type Database, type Kysely, type TaskState } from '@hawa/db';
 import {
   SYSTEM_AUTOMATION_USER_ID,
   canTransitionTaskStatus,
+  isOfficeActionId,
   isLifecycleStage,
   isTaskDbState,
   toApiTaskStatus,
@@ -44,22 +46,23 @@ import {
 import { stageAfterOpen, stageAfterRound } from '@hawa/domain';
 import { isValidUuid } from '../core-helpers.js';
 import { persistChatIntakeIn } from './chat-intake.js';
-import { closeAnsweredQuestion } from './canva-task-outcome.js';
+import { captureBoundDraftIn, closeAnsweredQuestion, transitionTaskForOutcome } from './canva-task-outcome.js';
+import { claimPublicationForWorkflowIn, recordWorkflowDeliveryIn } from './workflow-delivery-record.js';
 import { composeReminderIn, messageOf, recordOutcomeIn, recordRequesterActionIn, type ComposeRun } from './lifecycle-compose.js';
 import { composeRequestSavedAck } from './chat-campaign-intake.js';
 import { OTHER_SIZES, composeAnswerTaken, composeSizeStarted, type SizeAction } from './requester-actions.js';
 import { escapeTelegramHtml } from '@hawa/integrations';
-import { cutText } from '../core-helpers.js';
+import { cutText, evaluateCanvaExportQc } from '../core-helpers.js';
 
 const OPS: ReadonlySet<string> = new Set([
   'createRequest', 'createRound', 'recordOutcome', 'recordRequesterAction', 'recordDraftSent', 'recordQuestionSent',
   'closeQuestion', 'composeReminder', 'recordApproval', 'bridgeCapturedRevision', 'prepareRedrive', 'transition', 'recordDelivery',
 ]);
-/** Ops whose Core side arrives with the office decisions (slice 2.4). */
-const NOT_YET: ReadonlySet<string> = new Set([
-  'recordApproval', 'bridgeCapturedRevision', 'prepareRedrive', 'recordDelivery',
-]);
 const MAX_OPS = 10;
+/** An approval's recorded payload (the pinned exports and the QC evidence) is small; this bounds it. */
+const MAX_APPROVAL_PAYLOAD = 64_000;
+const DECISIONS: ReadonlySet<string> = new Set(['approved', 'revision_requested', 'rejected']);
+const DELIVERY_OUTCOMES: ReadonlySet<string> = new Set(['delivered', 'chat_only', 'uncertain', 'failed']);
 const ACTOR = 'request_lifecycle';
 
 /** What the projection answers, before HTTP. */
@@ -332,18 +335,161 @@ async function transition(run: Run, op: Extract<ProjectionOp, { op: 'transition'
   const unchanged: ProjectionOpResult = { op: 'transition', taskId: task.id, fromState: task.state, toState: task.state, changed: false, version: task.version, messages: [] };
   if (op.toState === undefined || op.toState === task.state) return unchanged;
   if (!isTaskDbState(op.toState)) return refuse('INVALID_OP', `Unknown task state ${JSON.stringify(op.toState)}`);
+  if (op.fallbackState !== undefined && !isTaskDbState(op.fallbackState)) return refuse('INVALID_OP', `Unknown task state ${JSON.stringify(op.fallbackState)}`);
   // The one vocabulary's moves (packages/contracts task-status.ts) hold here as everywhere.
-  if (!canTransitionTaskStatus(toApiTaskStatus(task.state), toApiTaskStatus(op.toState))) {
+  const legal = (to: string) => canTransitionTaskStatus(toApiTaskStatus(task.state), toApiTaskStatus(to));
+  const toState = legal(op.toState) ? op.toState : op.fallbackState && op.fallbackState !== task.state && legal(op.fallbackState) ? op.fallbackState : null;
+  if (!toState) {
     if (op.ifIllegal === 'keep') return unchanged;
     return refuse('ILLEGAL_TRANSITION', `A task cannot move from ${task.state} to ${op.toState}`);
   }
   const moved = await new TaskRepository(run.trx).transitionState({
-    taskId: task.id, tenantId: run.tenantId, expectedVersion: task.version, fromState: task.state as TaskState, toState: op.toState,
+    taskId: task.id, tenantId: run.tenantId, expectedVersion: task.version, fromState: task.state as TaskState, toState,
     actorType: 'workflow', actorId: ACTOR, reason: text(op.reason, 1000) || 'The request lifecycle moved the task',
     data: { requestId: run.requestId, rev: run.body.rev },
   }, run.trx);
-  run.moves.push({ taskId: task.id, from: task.state, to: op.toState, version: Number(moved.version) });
-  return { op: 'transition', taskId: task.id, fromState: task.state, toState: op.toState, changed: true, version: Number(moved.version), messages: [] };
+  run.moves.push({ taskId: task.id, from: task.state, to: toState, version: Number(moved.version) });
+  return { op: 'transition', taskId: task.id, fromState: task.state, toState, changed: true, version: Number(moved.version), messages: [] };
+}
+
+/**
+ * A move that starts a run of the Delivery workflow (slice 2.4): the approval's publication is claimed
+ * for that run in the same transaction, after the move (creating the publication bumps the task's
+ * version, which the move checks).
+ */
+async function transitionAndClaim(run: Run, op: Extract<ProjectionOp, { op: 'transition' }>): Promise<ProjectionOpResult> {
+  const delivery = op.delivery;
+  if (!delivery) return transition(run, op);
+  if (!isValidUuid(delivery.approvalId) || !Number.isSafeInteger(delivery.run) || delivery.run < 1 || !text(delivery.deliveryId, 300)) {
+    refuse('INVALID_OP', 'A delivery names its approval, its run (1 or more) and its workflow id');
+  }
+  const moved = await transition(run, op);
+  const task = await requestTask(run, op.taskId);
+  if (task.state !== 'publishing') refuse('NOT_PUBLISHING', `Task ${task.id} is ${task.state}, so it cannot be delivered`);
+  const claim = await claimPublicationForWorkflowIn(run.trx, { tenantId: run.tenantId, taskId: task.id, approvalId: delivery.approvalId, run: delivery.run });
+  if (!claim.ok) refuse(claim.code, claim.message);
+  return moved;
+}
+
+/**
+ * The office's decision on a draft, recorded as the decisions route records it: an approvals row on the
+ * revision (the nonce `lc:<actionId>`), the revision's status and the task's move with its event. The
+ * payload is the route's (pinned exports, QC evidence), checked there before it was forwarded.
+ */
+async function recordApproval(run: Run, op: Extract<ProjectionOp, { op: 'recordApproval' }>): Promise<ProjectionOpResult> {
+  const task = await requestTask(run, op.taskId);
+  if (!isValidUuid(op.revisionId)) refuse('INVALID_OP', 'recordApproval names the revision decided on');
+  if (!isOfficeActionId(op.actionId)) refuse('INVALID_OP', 'recordApproval carries the office action id');
+  const decision = op.decision ?? 'approved';
+  if (!DECISIONS.has(decision)) refuse('INVALID_OP', `Unknown decision ${JSON.stringify(decision)}`);
+  const nonce = `lc:${op.actionId}`;
+  // The same action recorded before (under another projection key): its row answers.
+  const earlier = (await sql<{ id: string }>`SELECT id::text FROM hawa.approvals
+    WHERE tenant_id = ${run.tenantId}::uuid AND task_id = ${task.id}::uuid AND nonce = ${nonce} LIMIT 1`.execute(run.trx)).rows[0];
+  if (earlier) return { op: 'recordApproval', approvalId: earlier.id };
+  const payload = op.approval && typeof op.approval === 'object' && !Array.isArray(op.approval) ? op.approval : {};
+  if (JSON.stringify(payload).length > MAX_APPROVAL_PAYLOAD) refuse('INVALID_OP', `The approval's payload is over ${MAX_APPROVAL_PAYLOAD} characters`);
+  const decidedBy = isValidUuid(op.actor?.userId) ? op.actor.userId : SYSTEM_AUTOMATION_USER_ID;
+  const reason = text(op.reason, 1000) || (decision === 'approved' ? 'Approved by operator' : decision === 'rejected' ? 'Rejected by operator' : 'Revision requested');
+  let approval: { id: string };
+  try {
+    approval = await new RevisionRepository(run.trx).recordApproval({
+      tenantId: run.tenantId, taskId: task.id, revisionId: op.revisionId, decision: decision as 'approved', decidedBy, reason, nonce,
+      decisionPayload: {
+        ...payload,
+        taskId: task.id, revisionId: op.revisionId, approverId: decidedBy, approverRole: text(op.actor?.role, 40) || 'operator',
+        ...(decision === 'approved' ? { approvedAt: new Date().toISOString() } : {}),
+        lifecycle: { requestId: run.requestId, rev: run.body.rev, actionId: op.actionId },
+      },
+    }, run.trx) as { id: string };
+  } catch (err) {
+    // A database error is the database's (503 or 500 below); the repository's own refusals (a stale
+    // revision, no passing QC run, approved already) say why the decision cannot be recorded.
+    if (err instanceof Refusal || pgCode(err)) throw err;
+    return refuse('DECISION_REFUSED', String((err as Error)?.message ?? err).slice(0, 300));
+  }
+  const after = (await sql<{ state: string; version: string }>`SELECT state::text, version::text FROM hawa.tasks
+    WHERE tenant_id = ${run.tenantId}::uuid AND id = ${task.id}::uuid`.execute(run.trx)).rows[0];
+  if (after && after.state !== task.state) run.moves.push({ taskId: task.id, from: task.state, to: after.state, version: Number(after.version) });
+  return { op: 'recordApproval', approvalId: String(approval.id) };
+}
+
+/**
+ * A draft the office made or changed in Canva, captured (its exports made again by the route that
+ * forwarded the decision) and recorded as the round's Desk revision in review: a first revision, the
+ * new revision after a revision request, or the check of the current one.
+ */
+async function bridgeCapturedRevision(run: Run, op: Extract<ProjectionOp, { op: 'bridgeCapturedRevision' }>): Promise<ProjectionOpResult> {
+  const task = await requestTask(run, op.taskId);
+  const binding = (await sql<{ canva_design_id: string; version: string; edit_url: string | null }>`SELECT canva_design_id, version::text, edit_url
+    FROM hawa.canva_bindings WHERE tenant_id = ${run.tenantId}::uuid AND task_id = ${task.id}::uuid AND status = 'bound'
+    ORDER BY created_at DESC LIMIT 1`.execute(run.trx)).rows[0];
+  if (!binding) return refuse('NO_CANVA_DESIGN', `Task ${task.id} has no Canva design to capture`);
+  const payload = await taskCreatedPayload(run, task.id);
+  const copy = Array.isArray(payload.exactCopy) && payload.exactCopy.every((c) => typeof c === 'string') ? payload.exactCopy as string[] : undefined;
+  const captured = await captureBoundDraftIn(run.trx, { revisionRepo: new RevisionRepository(run.trx), evaluateQc: evaluateCanvaExportQc }, {
+    tenantId: run.tenantId, taskId: task.id, actorId: SYSTEM_AUTOMATION_USER_ID, designId: binding.canva_design_id, bindingVersion: Number(binding.version),
+    ...(binding.edit_url ? { canvaUrl: binding.edit_url } : {}), ...(copy ? { fallbackCopy: copy } : {}), rework: true,
+  });
+  if (captured.transition?.changed) run.moves.push({ taskId: task.id, from: captured.transition.fromState, to: captured.transition.toState, version: captured.transition.version });
+  const now = (await sql<{ state: string; rev: string | null }>`SELECT state::text, current_design_revision_id::text AS rev FROM hawa.tasks
+    WHERE tenant_id = ${run.tenantId}::uuid AND id = ${task.id}::uuid`.execute(run.trx)).rows[0];
+  const revisionId = captured.revisionId ?? now?.rev ?? null;
+  if (!revisionId) return refuse('NOTHING_CAPTURED', `No checked export of Canva design ${binding.canva_design_id} is stored: capture it first`);
+  if (op.revisionId && op.revisionId !== revisionId) return refuse('NOT_CURRENT_DRAFT', `The captured revision is ${revisionId}, not ${op.revisionId}`);
+  // A round the office took over after a failed design goes back to review with its captured draft.
+  if (now && now.state !== 'human_review') {
+    const moved = await transitionTaskForOutcome(run.trx, {
+      tenantId: run.tenantId, taskId: task.id, toState: 'human_review', actorId: ACTOR,
+      reason: `The office captured Canva draft ${binding.canva_design_id}; awaiting visual review.`, data: { requestId: run.requestId, rev: run.body.rev },
+    });
+    if (!moved.changed) return refuse('NOT_REVIEWABLE', `Task ${task.id} is ${now.state}; a captured draft cannot put it in review`);
+    run.moves.push({ taskId: task.id, from: moved.fromState, to: moved.toState, version: moved.version });
+  }
+  return { op: 'bridgeCapturedRevision', revisionId, designId: binding.canva_design_id, messages: [] };
+}
+
+/**
+ * Before a round is designed again: a studio run of the round nobody follows any more (its design run
+ * reported, or was cut off) is abandoned, so the new run is not refused as one in progress, and the
+ * requester hears that a new design was started (the words of the legacy re-drive).
+ */
+async function prepareRedrive(run: Run, op: Extract<ProjectionOp, { op: 'prepareRedrive' }>): Promise<ProjectionOpResult> {
+  const task = await requestTask(run, op.taskId);
+  if (!Number.isSafeInteger(op.attempt) || op.attempt < 0) refuse('INVALID_OP', 'prepareRedrive names the attempt (0 or more)');
+  if (!task.client_id) refuse('CLIENT_REQUIRED', `Task ${task.id} has no client, so it cannot be designed automatically`);
+  await sql`UPDATE hawa.design_studio_runs
+    SET status = 'abandoned', diagnostic = ${`Abandoned by the request lifecycle: the office re-drove round task ${task.id} (attempt ${op.attempt})`}, updated_at = now()
+    WHERE tenant_id = ${run.tenantId}::uuid AND task_id = ${task.id}::uuid AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned')`.execute(run.trx);
+  run.derivedStage = 'designing';
+  const chat = run.row?.chat_id ?? null;
+  const words = `🔄 <b>A new automatic design has been started</b> for task <code>${escapeTelegramHtml(task.id)}</code>.\n<i>You will receive the Canva link here when it is ready, or an explanation if it cannot be made.</i>`;
+  return {
+    op: 'prepareRedrive',
+    messages: chat ? [messageOf(`${run.requestId}:${run.body.rev}:redrive`, chat, { text: words, parse_mode: 'HTML' }, { tenantId: run.tenantId, taskId: task.id, class: 'courtesy' })] : [],
+  };
+}
+
+/** The Delivery workflow's report, recorded as Core's delivery-finished endpoint records it. */
+async function recordDelivery(run: Run, op: Extract<ProjectionOp, { op: 'recordDelivery' }>): Promise<ProjectionOpResult> {
+  const task = await requestTask(run, op.taskId);
+  const deliveryRun = op.run ?? 1;
+  if (!isValidUuid(op.approvalId) || !Number.isSafeInteger(deliveryRun) || deliveryRun < 1 || !DELIVERY_OUTCOMES.has(String(op.outcome)) || !text(op.deliveryId, 300)) {
+    refuse('INVALID_OP', 'A delivery report names its approval, its run, its workflow id and an outcome');
+  }
+  const recorded = await recordWorkflowDeliveryIn(run.trx, {
+    tenantId: run.tenantId, taskId: task.id, approvalId: op.approvalId, deliveryId: op.deliveryId, run: deliveryRun,
+    outcome: {
+      outcome: op.outcome, sheetsConfirmed: op.sheetsConfirmed === true, archived: typeof op.archived === 'boolean' ? op.archived : op.sheetsConfirmed === true,
+      ...(op.reason ? { reason: text(op.reason, 500) } : {}),
+    },
+  });
+  if (!recorded.ok) return refuse(recorded.code, recorded.message);
+  if (recorded.status === 'applied' && recorded.taskState !== recorded.fromState) {
+    const v = (await sql<{ version: string }>`SELECT version::text FROM hawa.tasks WHERE tenant_id = ${run.tenantId}::uuid AND id = ${task.id}::uuid`.execute(run.trx)).rows[0];
+    run.moves.push({ taskId: task.id, from: recorded.fromState, to: recorded.taskState, version: Number(v?.version ?? 0) });
+  }
+  return { op: 'recordDelivery', messages: [] };
 }
 
 async function closeQuestion(run: Run, op: Extract<ProjectionOp, { op: 'closeQuestion' }>): Promise<ProjectionOpResult> {
@@ -391,12 +537,11 @@ function composeRun(run: Run): ComposeRun {
 }
 
 async function runOp(run: Run, op: ProjectionOp): Promise<ProjectionOpResult> {
-  if (NOT_YET.has(op.op)) refuse('OP_NOT_AVAILABLE', `${op.op} is projected from slice 2.4 on; this Core does not have it`);
   if (op.op !== 'createRequest' && !run.row) refuse('REQUEST_NOT_FOUND', `Request ${run.requestId} is not open in this tenant`, 404);
   switch (op.op) {
     case 'createRequest': return createRequest(run, op);
     case 'createRound': return createRound(run, op);
-    case 'transition': return transition(run, op);
+    case 'transition': return transitionAndClaim(run, op);
     case 'closeQuestion': return closeQuestion(run, op);
     case 'recordDraftSent':
     case 'recordQuestionSent': return recordSent(run, op);
@@ -408,6 +553,10 @@ async function runOp(run: Run, op: ProjectionOp): Promise<ProjectionOpResult> {
     }
     case 'recordRequesterAction': return recordRequesterActionIn(composeRun(run), await requestTask(run, op.taskId), op);
     case 'composeReminder': return composeReminderIn(composeRun(run), await requestTask(run, op.taskId), op);
+    case 'recordApproval': return recordApproval(run, op);
+    case 'bridgeCapturedRevision': return bridgeCapturedRevision(run, op);
+    case 'prepareRedrive': return prepareRedrive(run, op);
+    case 'recordDelivery': return recordDelivery(run, op);
     default: return refuse('INVALID_OP', `Unknown op ${(op as { op: string }).op}`);
   }
 }

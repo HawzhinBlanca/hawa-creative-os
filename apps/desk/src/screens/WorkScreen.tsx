@@ -11,6 +11,7 @@ import { read, reasonOf, type Reading } from '../services/statusReport.js';
 import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
 import { queueEntryChanged, readTaskDetail } from '../services/taskDetail.js';
 import { approvalRoleBlocker, describeApproval, describeDelivery, roleLabel } from '../services/actionOutcome.js';
+import { officeActionIds } from '../services/officeActions.js';
 import { approveButtonState, inQueueFilter, queueFilterStatuses, taskStatusView, type QueueFilter } from '../services/taskStatus.js';
 import { queryKeys, readingOf, type TaskPageView } from '../services/queryClient.js';
 import { useDesk, usePollInterval, useSessionUser } from '../DeskProviders.js';
@@ -53,6 +54,11 @@ export interface LiveTask {
     title?: string;
     lastSyncedAt?: string;
   };
+  /**
+   * The request the task belongs to, when the request lifecycle runs it (GET /tasks/:id, slice 2.4):
+   * its decisions are the lifecycle's, answered through the same routes. Null for a task Core owns.
+   */
+  lifecycle?: { requestId: string; rev: number; stage: string; owner: 'core' | 'restate' } | null;
   latestApproval?: {
     decisionId: string;
     role: string;
@@ -373,11 +379,13 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // not record, and the notes stay until Core has them. A mutation (ADR-037): the button shows it is
   // pending, and the task's status on screen is Core's, read again after Core answered.
   const requestRevision = useMutation({
+    // One action id per press, sent again on a retry after no answer (services/officeActions.ts).
     mutationFn: (input: { taskId: string; revisionId: string; comment: string }) =>
-      apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
-        action: 'revision_requested',
-        revisionRequest: { comment: input.comment },
-      }),
+      officeActionIds.run(`revise:${input.taskId}:${input.revisionId}`, (actionId) =>
+        apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
+          action: 'revision_requested',
+          revisionRequest: { comment: input.comment },
+        }, actionId)),
     onSuccess: async (decisionRes, input) => {
       setIsRevisionModalOpen(false);
       setRevisionNotes('');
@@ -424,11 +432,12 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // starts delivery on the server.
   const approve = useMutation({
     mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[] }) =>
-      apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
-        action: 'approve',
-        reason: 'Brand, hierarchy, and exact-copy verified',
-        pinnedExportIds: input.pinnedExportIds,
-      }),
+      officeActionIds.run(`approve:${input.taskId}:${input.revisionId}`, (actionId) =>
+        apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
+          action: 'approve',
+          reason: 'Brand, hierarchy, and exact-copy verified',
+          pinnedExportIds: input.pinnedExportIds,
+        }, actionId)),
     onSuccess: async (decisionRes, input) => {
       // Core recorded the approval; a failed read after it is not a failed approval.
       const refreshedTask = await readTaskAgain(input.taskId);
@@ -463,9 +472,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     setActionLoading(true);
     let delivery: unknown;
     try {
-      delivery = await apiClient.tasks.publish(taskId, {
+      delivery = await officeActionIds.run(`deliver:${taskId}`, (actionId) => apiClient.tasks.publish(taskId, {
         destination: 'google_drive',
-      });
+      }, actionId));
     } catch (err: any) {
       showToast(`Delivery failed: ${err.message || 'Server error'}`, 'error');
       setActionLoading(false);

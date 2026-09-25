@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { eventStream } from '../services/eventStream';
 import { apiClient } from '../api/client.js';
+import { officeActionIds } from '../services/officeActions.js';
 import { read, reasonOf } from '../services/statusReport.js';
 
 interface IntegrationHealth {
@@ -650,7 +651,7 @@ export const OpsScreen: React.FC = () => {
                 className="btn primary"
                 onClick={async () => {
                   try {
-                    await apiClient.tasks.redrive(inspectingFailure.id);
+                    await officeActionIds.run(`redrive:${inspectingFailure.id}`, (actionId) => apiClient.tasks.redrive(inspectingFailure.id, actionId));
                     setOpsToast(`✓ Task ${inspectingFailure.id.substring(0, 8)}… re-queued into operator intake pipeline`);
                   } catch (err: any) {
                     setOpsToast(`✕ Failed to re-queue task: ${err.message || 'Error'}`);

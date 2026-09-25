@@ -68,6 +68,7 @@ function coreAnswers(ops: ProjectionOp[], answers: Answers): ProjectionOpResult[
       case 'transition': return { op: 'transition', taskId: op.taskId, fromState: null, toState: op.toState ?? null, changed: Boolean(op.toState), version: 2, messages: [], ...a } as ProjectionOpResult;
       case 'recordDelivery': return { op: 'recordDelivery', messages: [], ...a } as ProjectionOpResult;
       case 'closeQuestion': return { op: 'closeQuestion', changed: true };
+      case 'prepareRedrive': return { op: 'prepareRedrive', ...a } as ProjectionOpResult;
       default: return { op: op.op } as ProjectionOpResult;
     }
   });
@@ -546,11 +547,18 @@ describe('officeDecision', () => {
     expect(plan(s, office('approve', TASK0, { revisionId: REV0 }), T0).ignored).toBe(false);
   });
 
-  it('revise the current draft: in_review → manual, the task to revision_requested', () => {
-    const { applied, ops } = step(draftSent(), office('revise', TASK0, { comment: 'Tighter margins' }));
-    expect(ops).toEqual([{ op: 'transition', taskId: TASK0, toState: 'revision_requested', reason: 'Tighter margins' }]);
+  it('revise the current draft: in_review → manual, recorded as the decisions route records it (an approvals row that moves the task)', () => {
+    const { applied, ops } = step(draftSent(), office('revise', TASK0, { comment: 'Tighter margins', revisionId: REV0 }));
+    expect(ops).toEqual([{ op: 'recordApproval', taskId: TASK0, revisionId: REV0, actionId: 'revise-action', actor: OPERATOR, decision: 'revision_requested', reason: 'Tighter margins' }]);
     expect(applied.next.stage).toBe('manual');
+    expect(applied.reply).toMatchObject({ accepted: true, stage: 'manual' });
+    // No revision named: the draft's own.
+    expect(step(draftSent(), office('revise', TASK0)).ops[0]).toMatchObject({ op: 'recordApproval', revisionId: REV0, decision: 'revision_requested' });
+    // A draft with no revision on record: the task alone moves.
+    const bare: LifecycleStateV1 = { ...draftSent(), draft: { taskId: TASK0 } };
+    expect(step(bare, office('revise', TASK0)).ops).toEqual([{ op: 'transition', taskId: TASK0, toState: 'revision_requested', reason: 'The office asked for a revision' }]);
     expect(ignored(draftSent(), office('revise', TASK1)).reply).toMatchObject({ code: 'NOT_CURRENT_DRAFT' });
+    expect(ignored(draftSent(), office('revise', TASK0, { revisionId: REV1 })).reply).toMatchObject({ code: 'NOT_CURRENT_DRAFT' });
   });
 
   it('draftCaptured in manual: the captured revision becomes the draft under review', () => {
@@ -564,8 +572,10 @@ describe('officeDecision', () => {
 
   it('redrive in manual: designing again with the next attempt\'s run key', () => {
     const manual = step(opened(), finished(`dr-${TASK0}`, TASK0, { status: 'CANVA_DRAFT_FAILED' }), { recordOutcome: { hasDraft: false, revisionId: undefined, designId: undefined, messages: [] } }).applied.next;
-    const { applied, ops } = step(manual, office('redrive', TASK0));
+    const { applied, ops } = step(manual, office('redrive', TASK0), { prepareRedrive: { messages: [msg('redrive-started')] } });
     expect(ops).toEqual([{ op: 'prepareRedrive', taskId: TASK0, attempt: 1 }]);
+    // What Core composed for the requester ("a new automatic design has been started") is sent.
+    expect(effectsOf(applied, 'send').map((e) => e.message.key)).toEqual(['redrive-started']);
     expect(applied.next.stage).toBe('designing');
     expect(applied.next.rounds[0]).toEqual({ round: 0, taskId: TASK0, kind: 'design', runId: `dr-${TASK0}-a1`, runAttempt: 1 });
     expect(effectsOf(applied, 'startDesignRun')[0]).toMatchObject({ runId: `dr-${TASK0}-a1`, attempt: 1 });
@@ -580,15 +590,42 @@ describe('officeDecision', () => {
   it('deliver the approval: approved → delivering, the task to publishing, the Delivery workflow started', () => {
     const s = approved();
     const { applied, ops } = step(s, office('deliver', TASK0, { approvalId: APPROVAL }), {}, T0 + 7);
-    expect(ops).toEqual([{ op: 'transition', taskId: TASK0, toState: 'publishing', reason: 'The office asked for delivery' }]);
+    // The move claims the approval's publication for this run of the workflow (its prepare step needs it).
+    expect(ops).toEqual([{ op: 'transition', taskId: TASK0, toState: 'publishing', reason: 'The office asked for delivery', delivery: { approvalId: APPROVAL, deliveryId, run: 1 } }]);
     expect(applied.next).toMatchObject({ stage: 'delivering', delivery: { deliveryId, approvalId: APPROVAL, startedAt: T0 + 7, run: 1 } });
     expect(effectsOf(applied, 'startDelivery')).toEqual([{ type: 'startDelivery', requestId: REQ, tenantId: TENANT, deliveryId, approvalId: APPROVAL, taskId: TASK0, revisionId: REV0, run: 1, chatId: CHAT }]);
     expect(ignored(s, office('deliver', TASK0, { approvalId: REV1 })).reply).toMatchObject({ code: 'NOT_CURRENT_DRAFT' });
     expect(ignored(draftSent(), office('deliver', TASK0)).reply).toMatchObject({ code: 'WRONG_STAGE' });
   });
 
-  it('reject stays with Core until slice 2.4: refused as WRONG_STAGE', () => {
-    expect(ignored(draftSent(), office('reject', TASK0)).reply).toMatchObject({ accepted: false, code: 'WRONG_STAGE' });
+  it('reject (slice 2.4): the request ends, the rejection recorded on the revision; refused without the current round\'s revision or in the wrong stage', () => {
+    const { applied, ops } = step(draftSent(), office('reject', TASK0, { revisionId: REV0, comment: 'Off brand' }));
+    expect(ops).toEqual([{ op: 'recordApproval', taskId: TASK0, revisionId: REV0, actionId: 'reject-action', actor: OPERATOR, decision: 'rejected', reason: 'Off brand' }]);
+    expect(applied.next.stage).toBe('cancelled');
+    expect(applied.reply).toMatchObject({ accepted: true, stage: 'cancelled' });
+    expect(ignored(draftSent(), office('reject', TASK0)).reply).toMatchObject({ accepted: false, code: 'NOT_CURRENT_DRAFT' });
+    expect(ignored(draftSent(), office('reject', TASK1, { revisionId: REV0 })).reply).toMatchObject({ accepted: false, code: 'NOT_CURRENT_DRAFT' });
+    expect(ignored(opened(), office('reject', TASK0, { revisionId: REV0 })).reply).toMatchObject({ accepted: false, code: 'WRONG_STAGE' });
+    expect(ignored(approved(), office('reject', TASK0, { revisionId: REV0 })).reply).toMatchObject({ accepted: false, code: 'WRONG_STAGE' });
+  });
+
+  it('an old round is refused while its change is being made, whatever the office asks (one place decides "a change is pending")', () => {
+    const s = draftSent();
+    const change = step(s, requester('change', TASK0, { directive: 'Bigger logo' })).applied.next;
+    expect(change.stage).toBe('designing');
+    expect(ignored(change, office('approve', TASK0, { revisionId: REV0 })).reply).toMatchObject({ accepted: false, code: 'CHANGE_PENDING' });
+    // Its draft arrived: the change is made, and the old draft is simply not the current one.
+    const changed = step(change, finished(`dr-${TASK1}`, TASK1, { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId: 'DAF_2' }, 1), { recordOutcome: { revisionId: REV1 } }).applied.next;
+    expect(ignored(changed, office('approve', TASK0, { revisionId: REV0 })).reply).toMatchObject({ accepted: false, code: 'NOT_CURRENT_DRAFT' });
+    expect(step(changed, office('approve', TASK1, { revisionId: REV1 })).applied.next.stage).toBe('approved');
+    // Approved before the requester asked for the change: delivery is refused while it is made.
+    const approvedThenChanged: LifecycleStateV1 = { ...approved(), round: 1, rounds: [...approved().rounds, { round: 1, taskId: TASK1, kind: 'change', runId: `dr-${TASK1}`, runAttempt: 0 }] };
+    expect(ignored(approvedThenChanged, office('deliver', TASK0, { approvalId: APPROVAL })).reply).toMatchObject({ accepted: false, code: 'CHANGE_PENDING' });
+  });
+
+  it('cancel of a request that is cancelled or delivered is answered WRONG_STAGE, never nothing', () => {
+    const cancelled = step(draftSent(), office('cancel', TASK0)).applied.next;
+    expect(ignored(cancelled, office('cancel', TASK0, { comment: 'again' })).reply).toMatchObject({ accepted: false, code: 'WRONG_STAGE' });
   });
 
   it('the same decision again (same event id) gets the answer it got the first time', () => {
@@ -602,7 +639,8 @@ describe('officeDecision', () => {
 describe('deliveryFinished and archive retries', () => {
   it('delivering → delivered; the outcome kept', () => {
     const { applied, ops } = step(delivering(), { type: 'deliveryFinished', v: 1, eventId: `dl-finished:${deliveryId}`, deliveryId, outcome: 'chat_only', uncertain: [], sheetsConfirmed: false });
-    expect(ops).toEqual([{ op: 'recordDelivery', taskId: TASK0, deliveryId, approvalId: APPROVAL, outcome: 'chat_only', sheetsConfirmed: false, uncertain: [] }]);
+    // A report without `archived` (a Delivery built before 2.4) is read by its Sheets confirmation.
+    expect(ops).toEqual([{ op: 'recordDelivery', taskId: TASK0, deliveryId, approvalId: APPROVAL, outcome: 'chat_only', sheetsConfirmed: false, uncertain: [], run: 1, archived: false }]);
     expect(applied.next).toMatchObject({ stage: 'delivered', delivery: { outcome: 'chat_only', sheetsConfirmed: false } });
   });
 
@@ -613,6 +651,12 @@ describe('deliveryFinished and archive retries', () => {
     expect(effectsOf(again, 'startDelivery')[0]).toMatchObject({ run: 2, deliveryId: `${deliveryId}:archive:2` });
   });
 
+  it('a failed delivery whose files reached Drive is delivered (the office follows up); the reason goes to Core', () => {
+    const { applied, ops } = step(delivering(), { type: 'deliveryFinished', v: 1, eventId: 'f2', deliveryId, outcome: 'failed', uncertain: [], sheetsConfirmed: true, archived: true, reason: 'TELEGRAM_REFUSED: a.png' });
+    expect(ops[0]).toMatchObject({ op: 'recordDelivery', archived: true, run: 1, reason: 'TELEGRAM_REFUSED: a.png' });
+    expect(applied.next.stage).toBe('delivered');
+  });
+
   it('ignores a report of another delivery', () => {
     expect(ignored(delivering(), { type: 'deliveryFinished', v: 1, eventId: 'x', deliveryId: 'dl-other', outcome: 'delivered', uncertain: [], sheetsConfirmed: true }).reason).toMatch(/not the one running/);
   });
@@ -620,7 +664,10 @@ describe('deliveryFinished and archive retries', () => {
   it('retryArchive: delivered without the Sheets row → delivering again under the next run\'s key', () => {
     const delivered = step(delivering(), { type: 'deliveryFinished', v: 1, eventId: 'd', deliveryId, outcome: 'chat_only', uncertain: [], sheetsConfirmed: false }).applied.next;
     const { applied, ops } = step(delivered, office('retryArchive', TASK0));
-    expect(ops).toEqual([{ op: 'transition', taskId: TASK0, reason: expect.stringMatching(/archive/) }]);
+    expect(ops).toEqual([{
+      op: 'transition', taskId: TASK0, toState: 'publishing', ifIllegal: 'keep', reason: expect.stringMatching(/archive/),
+      delivery: { approvalId: APPROVAL, deliveryId: `${deliveryId}:archive:2`, run: 2 },
+    }]);
     expect(applied.next).toMatchObject({ stage: 'delivering', delivery: { run: 2, deliveryId: `${deliveryId}:archive:2` } });
     const archived = step(delivering(), { type: 'deliveryFinished', v: 1, eventId: 'd2', deliveryId, outcome: 'delivered', uncertain: [], sheetsConfirmed: true }).applied.next;
     expect(ignored(archived, office('retryArchive', TASK0)).reply).toMatchObject({ code: 'WRONG_STAGE' });
@@ -637,7 +684,8 @@ describe('cancel', () => {
   });
 
   it('in review: no run to cancel; the office can cancel through a decision; a cancelled or delivered request stays', () => {
-    const { applied } = step(draftSent(), office('cancel', TASK0));
+    const { applied, ops } = step(draftSent(), office('cancel', TASK0));
+    expect(ops).toEqual([{ op: 'transition', taskId: TASK0, toState: 'cancelled', fallbackState: 'failed_operator', ifIllegal: 'keep', reason: 'The office cancelled the request' }]);
     expect(applied.next.stage).toBe('cancelled');
     expect(effectsOf(applied, 'cancelRun')).toEqual([]);
     expect(applied.reply).toMatchObject({ accepted: true, stage: 'cancelled' });
