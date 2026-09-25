@@ -195,7 +195,8 @@ export type ExportQcResult =
  * again. A check captured through the Canva routes after the request (`rework`: the Desk's capture,
  * not a sweep, a report or a re-drive) is the changed design: it is recorded as a new revision, with
  * its QC run, and the task goes back to review. Nothing recorded one until 2026-09-24, so a Desk
- * "Request Revision" left the task unapprovable for good.
+ * "Request Revision" left the task unapprovable for good. A checked capture after approval is
+ * likewise a new revision: approval of the prior bytes must not authorize this capture.
  */
 export async function recordCheckedExportQc(
   trx: Kysely<Database>,
@@ -208,13 +209,23 @@ export async function recordCheckedExportQc(
   if (task.state === 'revision_requested' && !p.rework) return { recorded: false, reason: 'REVISION_REQUESTED' };
   // Changes requested: only a check made after the request (the task's last update) shows them.
   const reworkedSince = task.state === 'revision_requested' ? task.updated_at : null;
+  const priorApproval = task.state === 'approved'
+    ? await trx.selectFrom('approvals').select('created_at')
+        .where('tenant_id', '=', p.tenantId).where('task_id', '=', p.taskId)
+        .where('design_revision_id', '=', revisionId).where('decision', '=', 'approved')
+        .orderBy('created_at', 'desc').executeTakeFirst()
+    : null;
+  if (task.state === 'approved' && !priorApproval) {
+    throw new Error('An approved Canva task has no current revision approval; the capture cannot be accepted as the same revision');
+  }
+  const changedSince = reworkedSince || priorApproval?.created_at || null;
   const exportRow = (await sql<ExportRow>`SELECT b.sha256, b.format, b.content, b.content_check FROM hawa.canva_export_bytes b
     JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
     JOIN hawa.canva_bindings g ON g.tenant_id = b.tenant_id AND g.task_id = b.task_id AND g.status = 'bound'
       AND g.canva_design_id = o.design_id AND g.version = o.binding_version
     WHERE b.tenant_id = ${p.tenantId}::uuid AND b.task_id = ${p.taskId}::uuid AND b.format = 'pptx' AND b.content_check IS NOT NULL
       AND NOT EXISTS (SELECT 1 FROM hawa.qc_runs q WHERE q.tenant_id = b.tenant_id AND q.design_revision_id = ${revisionId}::uuid AND q.started_at >= b.created_at)
-      AND (${reworkedSince}::timestamptz IS NULL OR b.created_at > ${reworkedSince}::timestamptz)
+      AND (${changedSince}::timestamptz IS NULL OR b.created_at > ${changedSince}::timestamptz)
     ORDER BY b.created_at DESC LIMIT 1`.execute(trx)).rows[0];
   if (!exportRow) return { recorded: false, reason: 'NO_NEWER_CHECKED_EXPORT' };
   const copy = (await sql<{ copy: string[] | null }>`SELECT result->'manifest'->'copy' AS copy FROM hawa.canva_design_plans
@@ -222,16 +233,18 @@ export async function recordCheckedExportQc(
     ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.copy;
   const qc = evaluateQc(exportRow, copy || p.fallbackCopy);
   let transition: OutcomeTransition | undefined;
-  if (reworkedSince) {
+  if (changedSince) {
     // The move is recorded as an event first, as the bridge does; createRevision then points the
     // task at the new revision. The new revision keeps the changed revision's document.
     const prior = (await sql<{ neutral_manifest: Record<string, unknown> | null }>`SELECT neutral_manifest FROM hawa.design_revisions
       WHERE tenant_id = ${p.tenantId}::uuid AND id = ${revisionId}::uuid`.execute(trx)).rows[0]?.neutral_manifest;
     const moved = await new TaskRepository(trx).transitionState({
-      taskId: p.taskId, tenantId: p.tenantId, expectedVersion: Number(task.version), fromState: 'revision_requested', toState: 'human_review',
+      taskId: p.taskId, tenantId: p.tenantId, expectedVersion: Number(task.version), fromState: task.state as 'revision_requested' | 'approved', toState: 'human_review',
       actorType: 'workflow', actorId: p.actorId || null,
-      reason: 'The requested changes were captured from Canva with a copy-and-font check; the capture is the revision to review.',
-      data: { changedRevisionId: revisionId, exportSha256: exportRow.sha256 },
+      reason: reworkedSince
+        ? 'The requested changes were captured from Canva with a copy-and-font check; the capture is the revision to review.'
+        : 'A checked Canva capture arrived after approval; the prior approval no longer authorizes delivery.',
+      data: { changedRevisionId: revisionId, exportSha256: exportRow.sha256, ...(priorApproval ? { recapturedAfterApproval: true } : {}) },
     }, trx);
     const newId = crypto.randomUUID();
     const revision = await new RevisionRepository(trx).createRevision({
@@ -241,7 +254,7 @@ export async function recordCheckedExportQc(
       authorType: p.actorId ? 'user' : 'workflow', authorId: p.actorId || 'canva_capture', status: 'review',
     }, trx);
     revisionId = revision?.id || newId;
-    transition = { changed: true, fromState: 'revision_requested', toState: 'human_review', version: Number(moved.version) };
+    transition = { changed: true, fromState: task.state, toState: 'human_review', version: Number(moved.version) };
   }
   const profileId = await resolveQcProfileId(trx, p.tenantId);
   // A revision's runs under one profile are numbered (UNIQUE design_revision_id, qc_profile_id, attempt).
@@ -258,7 +271,7 @@ export async function recordCheckedExportQc(
     report: qc.qaReport,
     report_sha256: crypto.createHash('sha256').update(JSON.stringify(qc.qaReport)).digest('hex'),
   }).execute();
-  return { recorded: true, revisionId, revisionCreated: Boolean(reworkedSince), qc, ...(transition ? { transition } : {}) };
+  return { recorded: true, revisionId, revisionCreated: Boolean(changedSince), qc, ...(transition ? { transition } : {}) };
 }
 
 /**

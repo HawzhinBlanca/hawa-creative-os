@@ -120,6 +120,28 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
     expect(approved.status).toBe(201);
   });
 
+  it('a new checked Canva capture after approval invalidates that approval before delivery', async () => {
+    const { taskId, app } = await draftWithTimedOutCheck();
+    const firstCapture = await deskCheck(app, taskId);
+    expect(firstCapture.status).toBe('retrieved');
+    const firstRevision = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect((await decide(app, taskId, firstRevision, 'approved', [firstCapture.artifact.id])).status).toBe(201);
+
+    // A later check can observe edits Canva made after the reviewer approved the earlier bytes.
+    // Even identical bytes are a new capture event and must be reviewed again.
+    const secondCapture = await deskCheck(app, taskId);
+    expect(secondCapture.status).toBe('retrieved');
+    const detail = await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json();
+    expect(detail.latestRevisionId).not.toBe(firstRevision);
+    expect(detail.status).toBe('AWAITING_APPROVAL');
+    const timeline = (await (await app.request(`/tasks/${taskId}/timeline`, { headers: deskHeaders })).json()).events;
+    expect(timeline.some((event: any) => event.eventType === 'approval.invalidated' && event.data.priorRevisionId === firstRevision)).toBe(true);
+    const publish = await app.request(`/tasks/${taskId}/publish`, {
+      method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'current_task' }),
+    });
+    expect(publish.status).toBe(409);
+  });
+
   it('after "Request Revision", a capture whose check fails is recorded as the new revision but cannot be approved', async () => {
     const { taskId, app } = await draftWithTimedOutCheck();
     const first = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
