@@ -39,6 +39,11 @@
       "#FFFFFF",
       "#1A1A1A"
     ],
+    "paletteFallbacks": {
+      "background": "#0A1628",
+      "text": "#FDF8F3",
+      "accent": "#F7B500"
+    },
     "brandColors": {
       "midnightNavy": "#0A1628",
       "royalNavy": "#1E3A5F",
