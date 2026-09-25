@@ -164,14 +164,16 @@ export interface CanvaQcEvaluationResult {
     status: 'passed' | 'failed';
     criticalPass: boolean;
     passed: boolean;
-    bidiIsolation: boolean;
+    bidiIsolation: boolean | null;
+    /** True when Canva's PPTX lacks readable RTL direction metadata; a person must inspect the final image. */
+    rtlVisualReviewRequired: boolean;
     fontCoverage: boolean;
     copyFidelity: boolean;
     /** null = this evaluator did not measure it. It reads the exported PPTX, which carries no pixels or geometry verdict. */
     contrastCompliant: boolean | null;
     safeMargins: boolean | null;
     errors: string[];
-    checks: Array<{ name: string; passed: boolean; details?: any; observedFonts?: string[] }>;
+    checks: Array<{ name: string; passed: boolean | null; details?: any; observedFonts?: string[] }>;
     exportSha256: string | null;
     exportFormat: string | null;
     /** Added when a stored Canva export is linked to a revision's QC run. */
@@ -201,6 +203,7 @@ export function evaluateCanvaExportQc(
         criticalPass: false,
         passed: false,
         bidiIsolation: false,
+        rtlVisualReviewRequired: false,
         fontCoverage: false,
         copyFidelity: false,
         contrastCompliant: false,
@@ -233,7 +236,7 @@ export function evaluateCanvaExportQc(
       status: 'failed', criticalPass: false,
       qaReport: {
         status: 'failed', criticalPass: false, passed: false,
-        bidiIsolation: false, fontCoverage: false, copyFidelity: false,
+        bidiIsolation: false, rtlVisualReviewRequired: false, fontCoverage: false, copyFidelity: false,
         contrastCompliant: null, safeMargins: null, errors,
         checks: [
           { name: 'exportRetrieved', passed: Boolean(bytes?.length) },
@@ -274,6 +277,7 @@ export function evaluateCanvaExportQc(
         criticalPass: false,
         passed: false,
         bidiIsolation: false,
+        rtlVisualReviewRequired: false,
         fontCoverage: false,
         copyFidelity: false,
         contrastCompliant: false,
@@ -297,6 +301,8 @@ export function evaluateCanvaExportQc(
   // one of its results. Absence is a failure here, never a pass.
   // A Canva export with no rtl attribute at all is left to the visual review (checkCanvaPptx says so
   // since 2026-09-23); checks stored before that recorded it as a failure, and are read the same way.
+  const rtlVisualReviewRequired = Boolean(resolvedCheck.rtlNote && resolvedCheck.source === 'canva_exported_pptx'
+    && Number(resolvedCheck.arabicTextObjectCount) > 0 && Number(resolvedCheck.rtlTextObjectCount) === 0);
   const rtlPass = resolvedCheck.rtlPass === true
     || (resolvedCheck.rtlPass === false && resolvedCheck.source === 'canva_exported_pptx'
       && Number(resolvedCheck.arabicTextObjectCount) > 0 && Number(resolvedCheck.rtlTextObjectCount) === 0);
@@ -331,7 +337,8 @@ export function evaluateCanvaExportQc(
       status,
       criticalPass,
       passed: criticalPass,
-      bidiIsolation: rtlPass,
+      bidiIsolation: rtlVisualReviewRequired ? null : rtlPass,
+      rtlVisualReviewRequired,
       fontCoverage: fontPass,
       copyFidelity: copyPass,
       contrastCompliant: null,
@@ -341,7 +348,8 @@ export function evaluateCanvaExportQc(
         { name: 'exportRetrieved', passed: true },
         { name: 'copyPass', passed: copyPass, details: resolvedCheck.offendingObjects || [] },
         { name: 'fontPass', passed: fontPass, observedFonts: resolvedCheck.observedFonts || [] },
-        { name: 'bidiIsolation', passed: rtlPass },
+        { name: 'bidiIsolation', passed: rtlVisualReviewRequired ? null : rtlPass,
+          details: rtlVisualReviewRequired ? 'Unmeasured in Canva PPTX; final image needs human visual review' : undefined },
       ],
       exportSha256: exportRow.sha256 || null,
       exportFormat: exportRow.format || null,

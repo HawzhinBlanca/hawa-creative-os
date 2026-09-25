@@ -100,6 +100,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           const qaReport = t.qc_status ? {
             passed: t.qc_status === 'passed' && t.qc_critical_pass === true,
             bidiIsolation: report.bidiIsolation ?? null,
+            rtlVisualReviewRequired: report.rtlVisualReviewRequired === true,
             safeMargins: report.safeMargins ?? null,
             contrastCompliant: report.contrastCompliant ?? null,
             fontCoverage: report.fontCoverage ?? null,
@@ -501,11 +502,13 @@ export function registerTasksRoutes(ctx: RouteContext): void {
               passed: qcRow.status === 'passed' && qcRow.critical_pass === true,
               // Not measured is null, not a pass (see the task list).
               bidiIsolation: report?.bidiIsolation ?? null,
+              rtlVisualReviewRequired: report?.rtlVisualReviewRequired === true,
               safeMargins: report?.safeMargins ?? null,
               contrastCompliant: report?.contrastCompliant ?? null,
               fontCoverage: report?.fontCoverage ?? null,
               copyFidelity: report?.copyFidelity ?? null,
               exportArtifactId: typeof report?.exportArtifactId === 'string' ? report.exportArtifactId : null,
+              exportSha256: typeof report?.exportSha256 === 'string' ? report.exportSha256 : null,
               captureVersion: typeof report?.captureVersion === 'string' ? report.captureVersion : null,
               errors: report?.errors || [],
             };

@@ -175,6 +175,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     // Gate E/F Hard QA Gates & Verification (FR-015, FR-041, R05):
     let effectiveQcReportHash: string | null = null;
     let effectiveQcRunId: string | null = null;
+    let rtlVisualReviewHash: string | null = null;
 
     if (isApproved) {
       const docNodes = resolvedRev.document?.nodes;
@@ -209,6 +210,10 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
             }
             if (latestDbQc.status === 'passed' && latestDbQc.critical_pass) {
               passingQcVerified = true;
+              if (latestDbQc.report?.rtlVisualReviewRequired === true) {
+                rtlVisualReviewHash = typeof latestDbQc.report.exportSha256 === 'string'
+                  ? latestDbQc.report.exportSha256 : '';
+              }
             } else {
               return problem(
                 c,
@@ -269,6 +274,14 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
           return problem(c, 422, 'Export Changed', `The stored export ${pin.artifactId} does not match its recorded bytes. Capture it again before approval.`);
         }
       }
+      if (rtlVisualReviewHash !== null) {
+        if (!rtlVisualReviewHash || !pinnedExports.some((pin) => pin.format === 'png') ||
+            body.rtlVisualReview?.confirmed !== true ||
+            body.rtlVisualReview?.exportSha256 !== rtlVisualReviewHash) {
+          return problem(c, 412, 'RTL Visual Review Required',
+            'Inspect a selected final PNG for Kurdish/Arabic reading direction and glyphs, then confirm visual review of the checked export.');
+        }
+      }
     }
 
     const sourceHash = resolvedRev.document?.sourceSha256 || resolvedRev.sourceSha256 || crypto.createHash('sha256').update(JSON.stringify(resolvedRev.document || {})).digest('hex');
@@ -306,6 +319,10 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
               approverId: actorUserId,
               approverRole: actorRole,
               approvedAt: new Date().toISOString(),
+              ...(rtlVisualReviewHash !== null ? { rtlVisualReview: {
+                confirmed: true, reviewerId: actorUserId, qcRunId: effectiveQcRunId,
+                exportSha256: rtlVisualReviewHash, confirmedAt: new Date().toISOString(),
+              } } : {}),
               revisionRequest: body.revisionRequest,
               ...(pinnedExports ? { pinnedExports } : {}),
             },

@@ -84,6 +84,57 @@ describe.skipIf(!url)('HUNT: a draft whose automatic check ran out of time', () 
     expect({ status: approve.status, title: body.title }).toEqual({ status: 201, title: undefined });
   });
 
+  it('requires a reviewer and selected final PNG when the checked source cannot prove RTL direction', async () => {
+    const app = createApp({ testAuth: { roleHeader: true }, db,
+      deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)) } as any);
+    const taskId = randomUUID();
+    const designId = `canva_rtl_${randomUUID().slice(0, 8)}`;
+    await withRlsContext(db, operator, async (trx) => {
+      await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
+        VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'RTL visual review', 'x', 'received', 3, 1, now(), now())`.execute(trx);
+      await sql`INSERT INTO hawa.task_events (id, tenant_id, task_id, aggregate_version, event_type, actor_type, actor_id, correlation_id, data, occurred_at)
+        VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, 1, 'task.created', 'user', ${operator.userId}, ${randomUUID()}::uuid,
+          ${JSON.stringify({ payload: { sourcePlatform: 'telegram', sourceChannelId: '61234567', copyEn: 'x' } })}::jsonb, now())`.execute(trx);
+      await sql`INSERT INTO hawa.canva_bindings (id, tenant_id, task_id, client_id, canva_design_id, edit_url, status, version, created_at, updated_at)
+        VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${designId}, ${`https://www.canva.com/design/${designId}/edit`}, 'bound', 1, now(), now())`.execute(trx);
+    });
+    const checked = await checkedCanvaExportFixture('x');
+    const checkedId = await storeExport(taskId, designId, 'pptx', checked.bytes, checked.contentCheck);
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(randomUUID())]);
+    const pngId = await storeExport(taskId, designId, 'png', png, null);
+    expect((await app.request(`/tasks/${taskId}/notifications/canva-status`, {
+      method: 'POST', headers, body: JSON.stringify({ status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId, notifyRequester: false }),
+    })).status).toBe(200);
+    const detail = await (await app.request(`/tasks/${taskId}`, { headers })).json();
+    const checkedHash = createHash('sha256').update(checked.bytes).digest('hex');
+    // The evaluator's separate unit case proves when this flag is emitted from a Canva PPTX.
+    // This row tests the durable decision gate against that reported unknown state.
+    await withRlsContext(db, operator, async (trx) => {
+      const prior = (await sql<any>`SELECT qc_profile_id, report FROM hawa.qc_runs
+        WHERE tenant_id=${tenantId}::uuid AND task_id=${taskId}::uuid ORDER BY started_at DESC LIMIT 1`.execute(trx)).rows[0];
+      const report = { ...prior.report, rtlVisualReviewRequired: true, bidiIsolation: null,
+        exportArtifactId: checkedId, exportSha256: checkedHash, captureVersion: '200' };
+      await sql`INSERT INTO hawa.qc_runs (tenant_id,task_id,design_revision_id,qc_profile_id,attempt,status,critical_pass,report,report_sha256,started_at)
+        VALUES (${tenantId}::uuid,${taskId}::uuid,${detail.latestRevisionId}::uuid,${prior.qc_profile_id}::uuid,2,'passed',true,
+          ${JSON.stringify(report)}::jsonb,${createHash('sha256').update(JSON.stringify(report)).digest('hex')},now()+interval '1 second')`.execute(trx);
+    });
+    const approve = (pins: string[], rtlVisualReview?: { confirmed: true; exportSha256: string }) =>
+      app.request(`/tasks/${taskId}/revisions/${detail.latestRevisionId}/decisions`, {
+        method: 'POST', headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' },
+        body: JSON.stringify({ decision: 'approved', pinnedExportIds: pins, ...(rtlVisualReview ? { rtlVisualReview } : {}) }),
+      });
+    expect((await approve([pngId, checkedId])).status).toBe(412);
+    expect((await approve([pngId, checkedId], { confirmed: true, exportSha256: 'a'.repeat(64) })).status).toBe(412);
+    expect((await approve([checkedId], { confirmed: true, exportSha256: checkedHash })).status).toBe(412);
+    expect((await approve([pngId, checkedId], { confirmed: true, exportSha256: checkedHash })).status).toBe(201);
+    const evidence = await withRlsContext(db, operator, async (trx) =>
+      (await sql<any>`SELECT decision_payload->'rtlVisualReview' AS review FROM hawa.approvals
+        WHERE tenant_id=${tenantId}::uuid AND task_id=${taskId}::uuid AND decision='approved'
+        ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.review);
+    expect(evidence).toMatchObject({ confirmed: true, exportSha256: checkedHash,
+      reviewerId: '00000000-0000-4000-b000-000000000002' });
+  });
+
   it('a bound design whose preview export was refused once (CANVA_PREVIEW_UNCERTAIN) still reaches the Desk', async () => {
     const telegram = { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) };
     const app = createApp({ testAuth: { roleHeader: true }, db, deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)), telegramBridge: telegram } as any);

@@ -70,12 +70,14 @@ export interface LiveTask {
   copyCkb?: string;
   qaReport?: {
     passed: boolean;
-    bidiIsolation: boolean;
+    bidiIsolation: boolean | null;
+    rtlVisualReviewRequired?: boolean;
     /** null = not measured by the check that produced this report; rendered as pending, never as a pass. */
     safeMargins: boolean | null;
     contrastCompliant: boolean | null;
     fontCoverage: boolean;
     exportArtifactId?: string | null;
+    exportSha256?: string | null;
     captureVersion?: string | null;
     errors?: string[];
   };
@@ -129,6 +131,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // The stored exports the reviewer can pin to the approval; delivery sends exactly the pinned files.
   const [approvalExports, setApprovalExports] = useState<Reading<StoredExport[]>>({ state: 'loading' });
   const [pinnedExportIds, setPinnedExportIds] = useState<string[]>([]);
+  const [rtlReviewed, setRtlReviewed] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -413,6 +416,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     setIsApprovalModalOpen(true);
     setApprovalExports({ state: 'loading' });
     setPinnedExportIds([]);
+    setRtlReviewed(false);
     const reading = await read(async () => {
       const state = await apiClient.canva.taskState(taskId);
       return Array.isArray(state?.artifacts) ? (state.artifacts as StoredExport[]) : [];
@@ -425,11 +429,12 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // never set to approved beforehand: Core can refuse (a stale revision, a role, a pin), and approval
   // starts delivery on the server.
   const approve = useMutation({
-    mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[] }) =>
+    mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[]; rtlVisualReview?: { confirmed: true; exportSha256: string } }) =>
       apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
         action: 'approve',
-        reason: 'Brand, hierarchy, and exact-copy verified',
+        reason: 'Approved by art director',
         pinnedExportIds: input.pinnedExportIds,
+        ...(input.rtlVisualReview ? { rtlVisualReview: input.rtlVisualReview } : {}),
       }),
     onSuccess: async (decisionRes, input) => {
       // Core recorded the approval; a failed read after it is not a failed approval.
@@ -452,7 +457,15 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       showToast(blocker, 'error');
       return;
     }
-    approve.mutate({ taskId: selectedTask.id, revisionId: selectedTask.latestRevisionId, pinnedExportIds });
+    const rtlRequired = selectedTask.qaReport?.rtlVisualReviewRequired === true;
+    const checkedHash = selectedTask.qaReport?.exportSha256;
+    if (rtlRequired && (!rtlReviewed || !checkedHash || !exportsForApproval.some((item) =>
+      item.format === 'png' && pinnedExportIds.includes(item.id)))) {
+      showToast('Inspect and select the final PNG, then confirm Kurdish/Arabic visual review.', 'error');
+      return;
+    }
+    approve.mutate({ taskId: selectedTask.id, revisionId: selectedTask.latestRevisionId, pinnedExportIds,
+      ...(rtlRequired ? { rtlVisualReview: { confirmed: true, exportSha256: checkedHash! } } : {}) });
   };
 
   // Every action button waits while one runs.
@@ -1113,10 +1126,12 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                                   <strong>Kurdish Sorani Bidi Isolation (UAX #9)</strong>
                                   <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
                                     {bidiPass === true
-                                      ? 'Unicode directional isolates present around mixed LTR numbers and Kurdish text.'
+                                      ? 'Readable text-direction metadata passed in the exported source.'
                                       : bidiPass === false
                                       ? 'Bidi directional isolation missing or corrupted for RTL Arabic script segments.'
-                                      : 'Automated check pending review of vector layout.'}
+                                      : qa?.rtlVisualReviewRequired
+                                      ? 'Canva did not export readable RTL direction metadata. Inspect the final PNG before approval.'
+                                      : 'Automated direction check has not been measured.'}
                                   </p>
                                 </div>
                               </div>
@@ -1317,6 +1332,20 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               )}
             </fieldset>
 
+            {selectedTask.qaReport?.rtlVisualReviewRequired === true && (
+              <fieldset style={{ margin: '0 0 14px', padding: 12 }}>
+                <legend style={{ fontSize: 12, fontWeight: 600 }}>Kurdish/Arabic visual review required</legend>
+                <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 0 }}>
+                  Canva's editable export has no readable direction flag. Inspect the final PNG for letter shape,
+                  reading order, mixed numbers and clipping. Select that PNG above before approving.
+                </p>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'start', fontSize: 12 }}>
+                  <input type="checkbox" checked={rtlReviewed} onChange={(event) => setRtlReviewed(event.target.checked)} />
+                  <span>I inspected the selected final PNG and confirmed the Kurdish/Arabic text reads correctly.</span>
+                </label>
+              </fieldset>
+            )}
+
             {/* Core records the approval under the signed-in session's role; nothing chosen here is sent. */}
             <div style={{ marginBottom: 16, fontSize: 12 }}>
               <span style={{ fontWeight: 600 }}>Signing off as: </span>
@@ -1339,6 +1368,10 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 disabled={
                   busy ||
                   Boolean(approvalRoleBlocker(sessionUser?.role)) ||
+                  (selectedTask.qaReport?.rtlVisualReviewRequired === true &&
+                    (!rtlReviewed || !selectedTask.qaReport.exportSha256 ||
+                      !(approvalExports.state === 'known' && approvalExports.value.some((item) =>
+                        item.format === 'png' && pinnedExportIds.includes(item.id))))) ||
                   Boolean(approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId ?? null : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion ?? null : undefined))
                 }
               >

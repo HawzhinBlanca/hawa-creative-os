@@ -71,6 +71,8 @@ export interface DecisionPayload {
   qcReportHash?: string;
   /** Stored Canva export ids this approval pins; delivery sends exactly these files. */
   pinnedExportIds?: string[];
+  /** Reviewer inspected the selected final PNG where Canva's PPTX has no readable RTL flag. */
+  rtlVisualReview?: { confirmed: true; exportSha256: string };
   revisionRequest?: {
     scope?: string;
     category?: string;

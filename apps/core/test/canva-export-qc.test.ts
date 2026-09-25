@@ -122,12 +122,16 @@ describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
     // Canva's own export never writes it; failing it disabled Approve on every Kurdish design.
     const r = evaluateCanvaExportQc(storedRow(pptx({ rtl: false })), COPY);
     expect(r.criticalPass).toBe(true);
+    expect(r.qaReport.bidiIsolation).toBeNull();
+    expect(r.qaReport.rtlVisualReviewRequired).toBe(true);
+    expect(r.qaReport.checks.find(c => c.name === 'bidiIsolation')?.passed).toBeNull();
   });
 
   it('refuses a deck made here whose Sorani paragraph lost its right-to-left flag', () => {
     const r = evaluateCanvaExportQc(storedRow(pptx({ rtl: false, madeHere: true })), COPY);
     expect(r.criticalPass).toBe(false);
     expect(r.qaReport.bidiIsolation).toBe(false);
+    expect(r.qaReport.rtlVisualReviewRequired).toBe(false);
     expect(r.qaReport.errors.join(' ')).toMatch(/RTL/);
   });
 
