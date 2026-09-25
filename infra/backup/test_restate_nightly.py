@@ -9,11 +9,13 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import unittest
 from contextlib import redirect_stderr
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from restate_nightly import BackupError, Config, RestateBackup, Runner, inspect_tar, sha256, verify_archive, verify_pair
+from restate_nightly import BackupError, Config, RestateBackup, Runner, RESTATE_RUNNING, inspect_tar, sha256, verify_archive, verify_pair
 
 
 class FakeDocker(Runner):
@@ -312,6 +314,40 @@ class RestateBackupTest(unittest.TestCase):
         manifest.write_text(json.dumps(facts))
         with self.assertRaisesRegex(BackupError, "authentication failed"):
             verify_archive(manifest, self.key)
+
+
+class RestateAdminWireTest(unittest.TestCase):
+    def test_running_query_negotiates_json_before_parsing(self) -> None:
+        class Admin(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                if self.path != "/query":
+                    self.send_error(404)
+                    return
+                self.rfile.read(int(self.headers["content-length"]))
+                wants_json = self.headers.get("accept") == "application/json"
+                body = b'{"rows":[{"n":0}]}' if wants_json else b"\xffbinary-query-response"
+                self.send_response(200)
+                self.send_header("content-type", "application/json" if wants_json else "application/octet-stream")
+                self.send_header("content-length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, _format: str, *_args: object) -> None:
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Admin)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        script = RESTATE_RUNNING.replace("http://restate:9070", f"http://127.0.0.1:{server.server_port}")
+        without_accept = script.replace(",accept:'application/json'", "")
+        rejected = subprocess.run(["node", "-e", without_accept], capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(rejected.returncode, 0)
+        accepted = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertEqual(accepted.stdout.strip(), "0")
 
 
 if __name__ == "__main__":

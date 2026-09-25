@@ -276,7 +276,7 @@ console.log(JSON.stringify(result));
 """
 
 RESTATE_RUNNING = r"""
-const response = await fetch('http://restate:9070/query',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({query:"SELECT count(*) AS n FROM sys_invocation WHERE status = 'running'"}),signal:AbortSignal.timeout(5000)});
+const response = await fetch('http://restate:9070/query',{method:'POST',headers:{'content-type':'application/json',accept:'application/json'},body:JSON.stringify({query:"SELECT count(*) AS n FROM sys_invocation WHERE status = 'running'"}),signal:AbortSignal.timeout(5000)});
 if (!response.ok) throw new Error('Restate query answered HTTP '+response.status);
 const rows = (await response.json()).rows;
 const n = Number(rows?.[0]?.n);
