@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -35,7 +36,7 @@ describe('Task 5: Async Non-Blocking Layout Renderer (renderLayoutV2Async)', () 
       tickFired = true;
     });
 
-    const resAsync = await renderLayoutV2Async(LATIN_LAYOUT, {
+    const resAsync = await renderLayoutV2Async(LATIN_LAYOUT, { logoDataUri: KAAE_TEST_LOGO,
       copyText: LATIN_COPY,
     });
 
@@ -46,7 +47,7 @@ describe('Task 5: Async Non-Blocking Layout Renderer (renderLayoutV2Async)', () 
     expect(typeof resAsync.fontFidelity).toBe('object');
     expect(tickFired).toBe(true);
 
-    const resSync = renderLayoutV2(LATIN_LAYOUT, { copyText: LATIN_COPY });
+    const resSync = renderLayoutV2(LATIN_LAYOUT, { logoDataUri: KAAE_TEST_LOGO, copyText: LATIN_COPY });
     expect(resAsync.svg).toBe(resSync.svg);
     expect(resAsync.wrappedLines).toEqual(resSync.wrappedLines);
   });

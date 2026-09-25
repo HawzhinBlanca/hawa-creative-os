@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
@@ -81,7 +82,7 @@ describe("the title takes the design's colour, not a standing gold rule", () => 
     const raw = candidate('en', 0);
     titleOf(raw).color = GOLD;
     const layout = prepare(raw, 'en', { ...fixture.spec, titleColor: 'light' });
-    const { svg } = renderLayoutV2ToSvg(layout, { copyText: copyOf('en').text });
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: copyOf('en').text });
     expect(svg).toMatch(/<tspan[^>]*fill="#F7B500"[^>]*>EDITION 2\.0<\/tspan>/);
     // The title wraps to "K-12 STANDARDS" / "FRAMEWORK" / "EDITION 2.0" at this size. Only the
     // accent line carries a fill of its own; the rest take the title's light colour.

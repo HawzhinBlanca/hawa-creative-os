@@ -1,3 +1,4 @@
+import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
@@ -105,7 +106,7 @@ describe('a size run', () => {
       runId: r.id, tenantId: scope.tenantId, taskId: r.task_id, clientId: r.client_id, actorId: scope.actorId,
       width: 1080, height: 1920, tier: 'standard', instructions: 'x', copyBlocks: r.request.copyBlocks,
       referencePack: { palette: ['#0A1628', '#1E3A5F', '#F7B500', '#FFFFFF'] }, promotedRules: 'None',
-      latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 168 / 118, client: { completeJson }, pipelineV3: true,
+      latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 168 / 118, client: { completeJson }, logo: KAAE_TEST_CLIENT_LOGO, pipelineV3: true,
     });
     await service.resume(scope as any, run.task_id, run.id);
     const res: any = await service.resume(scope as any, run.task_id, run.id);

@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import {
   renderAnnotatedLayoutV2,
@@ -28,7 +29,7 @@ describe('P05 — Annotated Render and Box-Grounded Critique', () => {
     expect(titleAnn).toBeDefined();
     expect(titleAnn?.boxId).toMatch(/^B\d+$/);
 
-    const rendered = renderAnnotatedLayoutV2(baseLayout);
+    const rendered = renderAnnotatedLayoutV2(baseLayout, { logoDataUri: KAAE_TEST_LOGO });
     expect(rendered.svg).toContain('id="set-of-marks-debug-overlay"');
     expect(rendered.svg).toContain('B0: logo');
     expect(rendered.png.length).toBeGreaterThan(1000);
@@ -134,6 +135,7 @@ describe('P05 — Annotated Render and Box-Grounded Critique', () => {
     const critiqueResult = await generateBoxGroundedCritique(misalignedLayout, {
       openaiApiKey: 'test-key',
       fetchFn: mockFetcher,
+      renderOptions: { logoDataUri: KAAE_TEST_LOGO },
     });
 
     expect(critiqueResult.status).toBe('success');

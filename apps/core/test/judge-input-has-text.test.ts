@@ -1,3 +1,4 @@
+import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { OpenAiStudioClient, type StudioLayoutV2 } from '@hawa/creative';
@@ -151,6 +152,7 @@ function createMockContext(client: OpenAiStudioClient): StageContext {
     latinFont: 'Verdana',
     arabicFont: 'Noto Sans Arabic',
     logoAspect: 1.0,
+    logo: KAAE_TEST_CLIENT_LOGO,
     client,
   } as unknown as StageContext;
 }

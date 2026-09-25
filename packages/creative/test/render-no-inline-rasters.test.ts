@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -186,9 +187,9 @@ describe('ADR-035: the renderer reads pictures as files beside the SVG', () => {
 
   it('photos passed the legacy way, as data URIs, are written as files too, with the same pixels as photoFiles', async () => {
     const photos = [{ photoIndex: 0, role: 'portrait', x: 72, y: 620, width: 500, height: 500 } as PhotoElement];
-    const viaUri = await renderLayoutV2Async(layout(photos, false), { copyText: { 0: 'x' }, photoDataUris: [uri(phone, 'image/jpeg')] });
+    const viaUri = await renderLayoutV2Async(layout(photos, false), { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: 'x' }, photoDataUris: [uri(phone, 'image/jpeg')] });
     assertNoLargeDataUris();
-    const viaFiles = await renderLayoutV2Async(layout(photos, false), { copyText: { 0: 'x' }, photoFiles: [{ bytes: phone }] });
+    const viaFiles = await renderLayoutV2Async(layout(photos, false), { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: 'x' }, photoFiles: [{ bytes: phone }] });
     expect(viaUri.svg).toBe(viaFiles.svg);
     expect(samePixels(viaUri.png, viaFiles.png)).toBe(true);
   }, 60_000);
@@ -197,7 +198,7 @@ describe('ADR-035: the renderer reads pictures as files beside the SVG', () => {
     const huge = noisePng(2800, 2200, 11);
     expect(huge.length).toBeGreaterThan(20 * 1024 * 1024);
     const photos = [{ photoIndex: 0, role: 'hero', x: 0, y: 0, width: 1080, height: 1000 } as PhotoElement];
-    const result = await renderLayoutV2Async(layout(photos, false), { copyText: { 0: 'x' }, photoFiles: [{ bytes: huge }] });
+    const result = await renderLayoutV2Async(layout(photos, false), { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: 'x' }, photoFiles: [{ bytes: huge }] });
     assertNoLargeDataUris();
     expect(result.png.length).toBeGreaterThan(1000);
     // The pixel at the photo's centre is the photo's, not the navy background.
@@ -241,7 +242,7 @@ describe('ADR-035: the renderer reads pictures as files beside the SVG', () => {
     expect(() => checkInlineDataUris(svg, 'test')).toThrow(/inline data URI \d+ bytes/);
     expect(() => checkInlineDataUris(`<svg><image href="${uri(noisePng(10, 10, 1), 'image/png')}"/></svg>`, 'test')).not.toThrow();
     // renderLayoutV2ToSvg itself never emits one.
-    const { svg: built } = renderLayoutV2ToSvg(layout([{ photoIndex: 0, role: 'hero', x: 0, y: 0, width: 400, height: 400 } as PhotoElement]), {
+    const { svg: built } = renderLayoutV2ToSvg(layout([{ photoIndex: 0, role: 'hero', x: 0, y: 0, width: 400, height: 400 } as PhotoElement]), { logoDataUri: KAAE_TEST_LOGO,
       copyText: { 0: 'x' },
       artImagePath: uri(art, 'image/png'),
       photoDataUris: [uri(phone, 'image/jpeg')],

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { readFileSync } from 'node:fs';
 import { generateLayoutCandidatesV3, evaluatePairOrder, type StudioLayoutV2 } from '../src/index.js';
 
@@ -42,7 +43,7 @@ describe("the client's reference image", () => {
     const copyText = Object.fromEntries(fixture.copy.map((b, i) => [i, b]));
     const { client, seen } = capture();
     const cand = (id: string) => ({ id, layout: fixture.layout });
-    await expect(evaluatePairOrder(cand('a') as any, cand('b') as any, 'AB', { client, reference, renderOptions: { copyText } } as any)).rejects.toThrow('captured');
+    await expect(evaluatePairOrder(cand('a') as any, cand('b') as any, 'AB', { client, reference, renderOptions: { copyText, logoDataUri: KAAE_TEST_LOGO } } as any)).rejects.toThrow('captured');
     const urls = imageUrls(seen[0]);
     expect(urls).toHaveLength(3);
     expect(urls[2]).toBe(reference.dataUrl);

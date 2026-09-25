@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import { unzipSync, strFromU8 } from 'fflate';
 import { encodeStudioTransferV2 } from '../src/studio/transfer-v2.js';
@@ -28,7 +29,7 @@ describe('HUNT: an eyebrow shrunk to one line in the preview', () => {
     } as StudioLayoutV2;
     const copy = ['KAAE ANNUAL ACCREDITATION FORUM', 'Quality in Higher Education'];
 
-    const { svg } = renderLayoutV2ToSvg(clone(layout), { copyText: { 0: copy[0], 1: copy[1] } });
+    const { svg } = renderLayoutV2ToSvg(clone(layout), { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: copy[0], 1: copy[1] } });
     const eyebrowTag = svg.match(/<text id="text-copy-0"[^>]*>/)?.[0] || '';
     const previewPx = Number(eyebrowTag.match(/font-size="([\d.]+)(px)?"/)?.[1]);
     const previewTracked = /letter-spacing="[\d.]+px"/.test(eyebrowTag);

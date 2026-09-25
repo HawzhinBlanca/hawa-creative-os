@@ -1,3 +1,4 @@
+import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import type { StageContext, CandidateState, CreativeBrief, Concept } from '../src/services/design-studio/types.js';
@@ -158,6 +159,7 @@ function createMockContext(fetchFn: typeof fetch): StageContext {
     latinFont: 'Verdana',
     arabicFont: 'Noto Sans Arabic',
     logoAspect: 1.0,
+    logo: KAAE_TEST_CLIENT_LOGO,
     client,
     artProvider,
   };

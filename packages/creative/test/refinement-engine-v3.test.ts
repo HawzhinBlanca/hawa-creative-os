@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import {
   checkRefinementGate,
   refineCandidate,
@@ -132,6 +133,7 @@ describe('P06 — Gated Refinement with Plateau Stop', () => {
     const result = await refineCandidate('candidate-repair', failingLayout, {
       openaiApiKey: 'test-key',
       fetchFn: mockFetcher,
+      renderOptions: { logoDataUri: KAAE_TEST_LOGO },
       maxRounds: 2,
     });
     expect(result.gateDecision).toBe('refine');
@@ -237,6 +239,7 @@ describe('P06 — Gated Refinement with Plateau Stop', () => {
     const result = await refineCandidate('candidate-plateau', failingLayout, {
       openaiApiKey: 'test-key',
       fetchFn: mockFetcher,
+      renderOptions: { logoDataUri: KAAE_TEST_LOGO },
       maxRounds: 2,
       minDelta: 0.02,
     });

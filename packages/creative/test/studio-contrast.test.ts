@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import {
   evaluateCompositeContrast,
@@ -52,7 +53,7 @@ describe('Design Studio v2: Composite p05 Contrast Evaluation (evaluateComposite
       ],
     };
 
-    const render = renderLayoutV2(failingLayout, {
+    const render = renderLayoutV2(failingLayout, { logoDataUri: KAAE_TEST_LOGO,
       copyText: { 0: 'This body text is unreadable due to dark-on-dark color selection.' },
     });
 
@@ -151,7 +152,7 @@ describe('Design Studio v2: Composite p05 Contrast Evaluation (evaluateComposite
       ],
     };
 
-    const render = renderLayoutV2(passingLayout, {
+    const render = renderLayoutV2(passingLayout, { logoDataUri: KAAE_TEST_LOGO,
       copyText: {
         0: 'Quality Assurance & Accreditation in Education',
         1: 'High-contrast text protected by an authoritative scrim layer over composite background.',

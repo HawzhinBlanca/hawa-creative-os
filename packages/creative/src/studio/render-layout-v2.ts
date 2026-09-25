@@ -20,7 +20,7 @@ import {
   framedPhotoTreated,
   type PhotoFragment,
 } from './photo-treatments.js';
-import { getKaaeOfficialLogoDataUri, escapeXml } from '../operations-to-svg.js';
+import { escapeXml } from '../operations-to-svg.js';
 import { SvgFiles, checkInlineDataUris } from './svg-files.js';
 import { pinnedFontconfigFile, rasteriserEnv } from './font-environment.js';
 
@@ -1535,13 +1535,23 @@ function focusedPhotoSvg(
   return `<g clip-path="url(#${clipId})">${croppedPhotoSvg(id, href, box, pixels, crop)}</g>`;
 }
 
-/** The logo a render draws: the caller's data URI or file, else the KAAE logo, typed from its bytes. */
+/** A logo-bearing layout must receive the current client's actual image bytes. */
 function resolveLogoHref(options: RenderLayoutOptions): string {
-  if (options.logoDataUri) return relabelDataUri(options.logoDataUri);
-  if (options.logoPath && fs.existsSync(options.logoPath)) {
-    return imageDataUri(fs.readFileSync(options.logoPath), `logo ${options.logoPath}`);
+  if (options.logoDataUri) {
+    const bytes = dataUriBytes(options.logoDataUri);
+    if (!bytes) throw new Error('CLIENT_LOGO_INVALID: logoDataUri must contain base64 image bytes');
+    return imageDataUri(bytes, 'client logo');
   }
-  return getKaaeOfficialLogoDataUri();
+  if (options.logoPath) {
+    if (!fs.existsSync(options.logoPath)) throw new Error('CLIENT_LOGO_UNAVAILABLE: the supplied client logo file is missing');
+    return imageDataUri(fs.readFileSync(options.logoPath), `client logo ${options.logoPath}`);
+  }
+  throw new Error('CLIENT_LOGO_REQUIRED: a logo-bearing layout needs an explicit client logo');
+}
+
+/** Check identity-critical render input before a caller starts paid or external work. */
+export function assertClientLogoForLayout(layout: StudioLayoutV2, options: RenderLayoutOptions = {}): void {
+  if (layout.logo) resolveLogoHref(options);
 }
 
 /**
@@ -1837,9 +1847,8 @@ export function renderLayoutV2ToSvg(
 
 
   // Logo Layer
-  const logoHref = resolveLogoHref(options);
-
   if (layout.logo) {
+    const logoHref = resolveLogoHref(options);
     const prescaled = logoHref ? prescaledLogoHref(logoHref, layout.logo, options) : undefined;
     if (prescaled) {
       // Already fitted into exactly this box ("meet" applied when it was scaled), so drawn 1:1.
@@ -1849,11 +1858,6 @@ export function renderLayoutV2ToSvg(
     } else if (logoHref) {
       bodyPartsNoText.push(
         `<image id="logo" xlink:href="${svgFiles.hrefFor(logoHref, 'logo')}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="xMidYMid meet"/>`
-      );
-    } else {
-      // Vector fallback logo box
-      bodyPartsNoText.push(
-        `<rect id="logo-placeholder" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" fill="#F7B500" opacity="0.9" rx="8"/>`
       );
     }
   }
@@ -2130,4 +2134,3 @@ export function renderAnnotatedLayoutV2(
     annotations,
   };
 }
-

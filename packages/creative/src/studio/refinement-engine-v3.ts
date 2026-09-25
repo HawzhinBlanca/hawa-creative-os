@@ -1,4 +1,4 @@
-import { measureWrappedLines } from './render-layout-v2.js';
+import { measureWrappedLines, type RenderLayoutOptions } from './render-layout-v2.js';
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
 import {
@@ -82,6 +82,8 @@ export interface RefineOptions {
    * metrics fall back to box area instead of the measured lines the ranking uses.
    */
   copyText?: Record<number, string>;
+  /** Explicit scoped assets used when the critique renders a candidate. */
+  renderOptions?: RenderLayoutOptions;
   /**
    * Refine even when the metric gate would skip: the caller knows of a failure the metrics do not
    * see — a hard-QA defect, for instance.
@@ -408,7 +410,7 @@ export async function refineCandidate(
       deterministicMetrics: currentMetrics,
       model,
       detail: 'low',
-      renderOptions: copyText ? { copyText } : undefined,
+      renderOptions: { ...options.renderOptions, ...(copyText ? { copyText } : {}) },
     });
 
     const issues = options.issuesFor ? options.issuesFor(currentLayout) : [];

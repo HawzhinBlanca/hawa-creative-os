@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { PNG } from 'pngjs';
 import {
   deriveConditionedArtPrompt,
@@ -83,6 +84,15 @@ describe('P04 — Art Layer Conditioned on Layout (gpt-image-2.5-sunburst & Calm
     );
   });
 
+  it('refuses missing client logo before an image-provider call', async () => {
+    const fetchFn = vi.fn();
+    await expect(generateConditionedArtLayer(layoutWithArt, {
+      openaiApiKey: 'test-key',
+      fetchFn: fetchFn as unknown as typeof fetch,
+    })).rejects.toThrow(/CLIENT_LOGO_REQUIRED/);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
   it('degrades to procedural motif when image provider returns error', async () => {
     // Mock fetcher that fails HTTP 500
     const mockFailingFetch = (async () => {
@@ -96,6 +106,7 @@ describe('P04 — Art Layer Conditioned on Layout (gpt-image-2.5-sunburst & Calm
     const result = await generateConditionedArtLayer(layoutWithArt, {
       openaiApiKey: 'test-key',
       fetchFn: mockFailingFetch,
+      renderOptions: { logoDataUri: KAAE_TEST_LOGO },
     });
 
     expect(result.status).toBe('degraded_procedural_motif');

@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { crc32 } from 'node:zlib';
@@ -89,7 +90,7 @@ describe('photos as content', () => {
   it('the preview draws each photo, clipped to its box, and a labelled slot when the bytes are missing', () => {
     const png = tinyPng(4, 2);
     const uri = `data:image/png;base64,${png.toString('base64')}`;
-    const render = renderLayoutV2(twoPortraits(), { copyText: { 0: 'Her path, her power', 1: 'September 25, 2026' }, photoDataUris: [uri] });
+    const render = renderLayoutV2(twoPortraits(), { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: 'Her path, her power', 1: 'September 25, 2026' }, photoDataUris: [uri] });
     expect(render.svg).toMatch(/<image id="photo-0"[^>]*preserveAspectRatio="xMidYMid slice"[^>]*clip-path="url\(#photo-clip-0\)"/);
     expect(render.svg).toMatch(/<rect id="photo-slot-1"/);
     // Photos sit above the art and below the text.
@@ -200,7 +201,7 @@ describe('settlePhotos: the photos move, not the copy', () => {
   it('draws photos above panels (card backgrounds), below the copy', () => {
     const l = twoPortraits();
     l.shapes = [{ kind: 'rect', role: 'panel', x: 60, y: 400, width: 960, height: 640, color: '#1E3A5F' } as any];
-    const svg = renderLayoutV2(l, { copyText: { 0: 'Title', 1: 'Body' }, photoDataUris: [`data:image/png;base64,${tinyPng(2, 2).toString('base64')}`, `data:image/png;base64,${tinyPng(2, 2).toString('base64')}`] }).svg;
+    const svg = renderLayoutV2(l, { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: 'Title', 1: 'Body' }, photoDataUris: [`data:image/png;base64,${tinyPng(2, 2).toString('base64')}`, `data:image/png;base64,${tinyPng(2, 2).toString('base64')}`] }).svg;
     expect(svg.indexOf('fill="#1E3A5F"')).toBeLessThan(svg.indexOf('id="photo-0"'));
   });
 });

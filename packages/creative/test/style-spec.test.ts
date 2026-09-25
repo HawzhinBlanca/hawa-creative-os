@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { unzipSync, strFromU8 } from 'fflate';
@@ -107,7 +108,7 @@ describe('a style spec read from the reference is enforced on every candidate', 
 
   it('draws the edition line in gold in the preview and in the Canva deck', async () => {
     const { layout, copy, blocks } = prepared('en', 0);
-    const { svg } = renderLayoutV2ToSvg(layout, { copyText: copy.text });
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: copy.text });
     expect(svg).toMatch(/<tspan[^>]*fill="#F7B500"[^>]*>EDITION 2\.0<\/tspan>/);
     const deck = await encodeStudioTransferV2(layout, blocks, undefined);
     const xml = strFromU8(unzipSync(deck.bytes, { filter: (f) => f.name === 'ppt/slides/slide1.xml' })['ppt/slides/slide1.xml']);

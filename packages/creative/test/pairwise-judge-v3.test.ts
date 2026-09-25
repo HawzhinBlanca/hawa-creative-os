@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import {
   createDegradedCanaryLayout,
   comparePairWithOrderSwap,
@@ -96,6 +97,7 @@ describe('P07 — Pairwise Dimension-Wise Judge & Order Swapping', () => {
     const match = await comparePairWithOrderSwap(cand1, cand2, {
       openaiApiKey: 'test-key',
       fetchFn: mockFetcher,
+      renderOptions: { logoDataUri: KAAE_TEST_LOGO },
     });
 
     expect(match.isConsistent).toBe(false);
@@ -158,6 +160,7 @@ describe('P07 — Pairwise Dimension-Wise Judge & Order Swapping', () => {
     const match = await comparePairWithOrderSwap(goodCand, canaryCand, {
       openaiApiKey: 'test-key',
       fetchFn: mockFetcher,
+      renderOptions: { logoDataUri: KAAE_TEST_LOGO },
     });
 
     expect(match.isConsistent).toBe(true);

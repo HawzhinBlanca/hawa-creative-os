@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -212,7 +213,7 @@ describe('ink centring in the renderer', () => {
     const layout = singleBlockLayout();
     const t: any = layout.text[0];
     const copy = 'Quality Standards';
-    const { svg } = renderLayoutV2ToSvg(layout, { copyText: { 0: copy } });
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: copy } });
     const baseline = baselineOf(svg);
 
     const font = fk.openSync(resolveTestFont('Verdana.ttf'));
@@ -233,7 +234,7 @@ describe('ink centring in the renderer', () => {
   it('pushes the baseline below the old metric-ascent position for a tall box', () => {
     const layout = singleBlockLayout();
     const t: any = layout.text[0];
-    const { svg } = renderLayoutV2ToSvg(layout, { copyText: { 0: 'Quality Standards' } });
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: 'Quality Standards' } });
     const baseline = baselineOf(svg);
 
     const font = fk.openSync(resolveTestFont('Verdana.ttf'));
@@ -245,7 +246,7 @@ describe('ink centring in the renderer', () => {
     // A box far too short for the copy must still start at its top edge and spill downward,
     // rather than being centred up past the canvas edge.
     const layout = singleBlockLayout({ height: 10, y: 0 });
-    const { svg } = renderLayoutV2ToSvg(layout, {
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO,
       copyText: { 0: 'Quality Standards Under Institutional Law' },
     });
     const baseline = baselineOf(svg);

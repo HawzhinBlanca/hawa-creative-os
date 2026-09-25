@@ -1,3 +1,4 @@
+import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { NEUTRAL_STYLE_SPEC, PNG, type StudioLayoutV2 } from '@hawa/creative';
@@ -61,7 +62,7 @@ const runEdit = async (opts: { parent: StudioLayoutV2; asks: unknown[]; reply?: 
     createStageContext: (_s: any, r: any) => ({
       runId: r.id, tenantId: r.tenant_id, taskId: r.task_id, clientId: r.client_id, actorId: 'a', width: 1080, height: 1350, tier: 'standard', instructions: 'x',
       copyBlocks: r.request.copyBlocks, referencePack: { palette }, promotedRules: 'None',
-      latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 168 / 118, client: { completeJson }, pipelineV3: true, ...(opts.photos ? { photos: opts.photos } : {}),
+      latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 168 / 118, client: { completeJson }, logo: KAAE_TEST_CLIENT_LOGO, pipelineV3: true, ...(opts.photos ? { photos: opts.photos } : {}),
     }),
   });
   await service.resume({ tenantId: run.tenant_id, actorId: 'a' } as any, run.task_id, run.id);

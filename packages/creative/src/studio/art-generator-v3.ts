@@ -5,7 +5,7 @@ import { PNG } from 'pngjs';
 import type { StudioLayoutV2, Box, Hex } from './layout-v2.js';
 import { evaluateDesignMetrics, computeOcclusion } from './design-metrics.js';
 import { rgbToLuminance, evaluateCompositeContrast, type CompositeContrastResult } from './composite-contrast.js';
-import { renderLayoutV2, type RenderLayoutV2Result } from './render-layout-v2.js';
+import { assertClientLogoForLayout, renderLayoutV2, type RenderLayoutOptions, type RenderLayoutV2Result } from './render-layout-v2.js';
 import { renderMotifPng, type ProceduralMotifType } from './motifs.js';
 import { assertModelAllowed } from '@hawa/domain';
 
@@ -14,6 +14,8 @@ export interface ArtGeneratorOptions {
   fetchFn?: typeof fetch;
   quality?: 'medium' | 'high';
   timeoutMs?: number;
+  /** Exact client logo and copy for the composite; the renderer has no packaged-logo default. */
+  renderOptions?: RenderLayoutOptions;
 }
 
 export interface RegionMeasurements {
@@ -226,6 +228,8 @@ export async function generateConditionedArtLayer(
     );
   }
 
+  assertClientLogoForLayout(layout, options.renderOptions);
+
   const apiKey = options.openaiApiKey || process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY is required for gpt-image-2.5-sunburst image generation');
@@ -331,15 +335,16 @@ export async function generateConditionedArtLayer(
   fs.mkdirSync(path.dirname(tempArtPath), { recursive: true });
   fs.writeFileSync(tempArtPath, artBuffer!);
 
-  // Render composite
-  const renderResult: RenderLayoutV2Result = renderLayoutV2(layout, {
-    artImagePath: tempArtPath,
-  });
-
-  // Clean up temp file
+  // Render composite. A missing client logo fails closed; clean up even on that path.
+  let renderResult: RenderLayoutV2Result;
   try {
-    fs.unlinkSync(tempArtPath);
-  } catch {}
+    renderResult = renderLayoutV2(layout, {
+      ...options.renderOptions,
+      artImagePath: tempArtPath,
+    });
+  } finally {
+    fs.rmSync(tempArtPath, { force: true });
+  }
 
   // 4. Re-run composite contrast check on rendered composite
   const compositeContrast = evaluateCompositeContrast(renderResult.noTextPng, layout);

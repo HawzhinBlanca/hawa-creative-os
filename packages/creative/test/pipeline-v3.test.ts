@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import {
   admittedFontFor,
@@ -227,10 +228,10 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
     const a = centred();
     const b = asymmetric();
     const names: Record<string, string> = {
-      [b64(renderLayoutV2(a, { copyText: COPY.text }).png)]: 'centred',
-      [b64(renderLayoutV2(b, { copyText: COPY.text }).png)]: 'asymmetric',
-      [b64(renderLayoutV2(createDegradedCanaryLayout(a), { copyText: COPY.text }).png)]: 'degraded',
-      [b64(renderLayoutV2(createDegradedCanaryLayout(b), { copyText: COPY.text }).png)]: 'degraded',
+      [b64(renderLayoutV2(a, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png)]: 'centred',
+      [b64(renderLayoutV2(b, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png)]: 'asymmetric',
+      [b64(renderLayoutV2(createDegradedCanaryLayout(a), { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png)]: 'degraded',
+      [b64(renderLayoutV2(createDegradedCanaryLayout(b), { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png)]: 'degraded',
     };
     const ranked = rankCandidatesV3(
       [
@@ -255,7 +256,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
       },
     });
 
-    const result = await selectWinnerV3(ranked, COPY, { client });
+    const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.decidedBy).toBe('judge');
     expect(result.winner.sourceIndex).toBe(second.sourceIndex);
     expect(result.judgeReliable).toBe(true);
@@ -267,7 +268,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
     const { names, ranked } = named();
     const { client } = mockClient({ names, prefer: () => 'A' });
 
-    const result = await selectWinnerV3(ranked, COPY, { client });
+    const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.match?.winnerId).toBe('TIE_DISCARDED');
     expect(result.decidedBy).toBe('composite_after_tie');
     expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
@@ -287,7 +288,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
       },
     });
 
-    const result = await selectWinnerV3(ranked, COPY, { client });
+    const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.decidedBy).toBe('composite_judge_unreliable');
     expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
     expect(result.judgeReliable).toBe(false);
@@ -296,9 +297,9 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
   it('shows the judge the real copy, never placeholder text', async () => {
     const { names, ranked } = named();
     const { client, calls } = mockClient({ names, prefer: () => 'A' });
-    await selectWinnerV3(ranked, COPY, { client });
+    await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
 
-    const placeholder = b64(renderLayoutV2(ranked[0].layout).png);
+    const placeholder = b64(renderLayoutV2(ranked[0].layout, { logoDataUri: KAAE_TEST_LOGO }).png);
     const seen = calls.flatMap((c) => c.images);
     expect(seen.length).toBe(8);
     expect(seen).not.toContain(placeholder);
@@ -308,7 +309,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
   it('spends nothing when only one candidate is left', async () => {
     const { client, calls } = mockClient({});
     const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }], COPY);
-    const result = await selectWinnerV3(ranked, COPY, { client });
+    const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.decidedBy).toBe('single_candidate');
     expect(calls).toHaveLength(0);
   });
@@ -319,7 +320,7 @@ describe('pipeline v3 — refinement', { timeout: 30000 }, () => {
   it('spends nothing on a candidate that already passes the gate', async () => {
     const { client, calls } = mockClient({});
     const [top] = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }], COPY);
-    const outcome = await refineCandidateV3(top, COPY, { client });
+    const outcome = await refineCandidateV3(top, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(outcome.reason).toBe('gate_passed');
     expect(outcome.adopted).toBe(false);
     expect(calls).toHaveLength(0);
@@ -331,7 +332,7 @@ describe('pipeline v3 — refinement', { timeout: 30000 }, () => {
     const [top] = rankCandidatesV3([{ sourceIndex: 3, layout: failing }], COPY);
     expect(top.metrics.passed).toBe(false);
 
-    const outcome = await refineCandidateV3(top, COPY, { client });
+    const outcome = await refineCandidateV3(top, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(outcome.adopted).toBe(true);
     expect(outcome.reason).toBe('adopted_now_passes');
     expect(outcome.metrics.passed).toBe(true);
@@ -339,7 +340,7 @@ describe('pipeline v3 — refinement', { timeout: 30000 }, () => {
 
     // The critic was shown the design with its copy, not "Sample copy block N".
     const critiqueCall = calls.find((c) => c.schema === 'DesignCritiqueReport');
-    expect(critiqueCall?.images[0]).toBe(b64(renderAnnotatedLayoutV2(failing, { copyText: COPY.text }).png));
+    expect(critiqueCall?.images[0]).toBe(b64(renderAnnotatedLayoutV2(failing, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png));
 
     // Each round records its two calls separately, with the tokens a ledger needs.
     const round = outcome.result.rounds[0];
@@ -643,7 +644,7 @@ describe('refinement is told what production QA rejects', { timeout: 30000 }, ()
         return (client as any).createStructuredCompletion(params);
       },
     } as unknown as OpenAiStudioClient;
-    const outcome = await refineCandidateV3(top, COPY, { client: spying, qa, canvas });
+    const outcome = await refineCandidateV3(top, COPY, { client: spying, qa, canvas, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(prompts.length).toBeGreaterThan(0);
     expect(prompts[0]).toContain('HARD QA DEFECTS');
     expect(prompts[0]).toContain('COPY_PLACEMENT');
