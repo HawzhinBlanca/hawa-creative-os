@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-26T23:57:10+03:00",
+  "generatedAt": "2026-09-27T01:11:31+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "9e3c3b9297901118760ff1dc04aefa6f0c57db4c",
+    "commit": "b22bb063e1586575e5197b81f1d7bd30072404b8",
     "treeClean": true,
-    "commitTimestamp": "2026-09-26T23:57:10+03:00",
+    "commitTimestamp": "2026-09-27T01:11:31+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
-    "targetVersion": "042_document_knowledge",
-    "latestMigrationFile": "042_document_knowledge.sql",
-    "totalMigrations": 42
+    "targetVersion": "043_lifecycle_source_retention",
+    "latestMigrationFile": "043_lifecycle_source_retention.sql",
+    "totalMigrations": 43
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -73,7 +73,7 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "f1c6493c0203ce5f7cf51ddaa5c8f3823ca3ab1a5f92c4f435a1851989660f12",
+      "apps/core/src/services/canva-design-planner.ts": "177301c56f87b3ce0440f39bbd08eb2b057f9ca4781195483ff23892736c2e6d",
       "packages/creative/src/studio/layout-generator-v3.ts": "c0a14f8490fbebf171fd3c820acecf53f45255926e4ae9f0e55376bb3f469164",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "950d7d5f1701c9a80871f74843e59115b3440c73bade98b6d80a755f12d36889",
       "packages/creative/src/studio/box-critique-v3.ts": "34c2d9b4f8d194ee0e0d8cec0229c3d1a12fbf07a8a5be94c94461f2456672c4"
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "ed0fe56b7f1f42fa1494ec1dbbdf47bbad71ebcf958ecdeaa537fd85178b40cc"
+  "sha256": "384f6b201118db6d7619d01459f5a2e0e8c1837e7a9c5c944a66e150761bedba"
 }

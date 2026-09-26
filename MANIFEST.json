@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T21:00:17Z",
+  "generatedAt": "2026-09-26T22:12:10Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 347,
+  "fileCount": 350,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "1d08a73108a78f274e7faf19cf4b8470279ca779958f690fe5bd8b3c7a3bb66b",
-      "bytes": 3969
+      "sha256": "85093deb0a6301dac9e907f5c8d7a42f10e689892f88a0d4d5a9e39d8ca9e545",
+      "bytes": 3985
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -433,6 +433,11 @@
       "bytes": 3254
     },
     {
+      "path": "adrs/073_request_source_copy_review.md",
+      "sha256": "be4a7cc54d0aa7ab0e639bc956115e7dfcf6943ad17ddd3e355f9ada333ea640",
+      "bytes": 4951
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "54ca6b1554c988f5a2405991660047ded612d8d96c93dd3e88bc849cc09c2b7a",
       "bytes": 21896
@@ -444,8 +449,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "4cac35a5c1aa982a39e81b1e1d4452ea2c844f1ee33cbaf6cbb9a766bbe321ea",
-      "bytes": 41250
+      "sha256": "0088b3115dd7cd8581d1dc02056dfee992483e00b5e5bcafd49127023feb8660",
+      "bytes": 43681
     },
     {
       "path": "config/asset-workflows.example.yaml",
@@ -879,8 +884,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "02868711f1e47bf0334b9e91e37f3a11fafe486f7523e7e839fa8852f84292b4",
-      "bytes": 24304
+      "sha256": "de51384060fc3bee3659e5564c23dab7dd3c1caabe41664f3314291150786795",
+      "bytes": 25640
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -934,13 +939,18 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_EVIDENCE.md",
-      "sha256": "09d377792d77bb0f524cb577fb533522ff9d93cf00ef99f2196c2b6024d4798a",
-      "bytes": 64309
+      "sha256": "4d95aec689c53a13b31faa74fc9f34541601af424719d106ba52c6e490d6b2a1",
+      "bytes": 66897
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_IMAGE_DOCUMENT_DRILL.json",
       "sha256": "ef7557f696a6362e00c3c36913daa2e6fded6c2d8174150883510ff14ddd8a8d",
       "bytes": 14789
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R07_SOURCE_RECOVERY_PROOF.json",
+      "sha256": "12aad207ae47c464ae7d02e94abdfb9186e627eb6dddde94f87517ff35821462",
+      "bytes": 6763
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
@@ -999,8 +1009,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R12_EVIDENCE.md",
-      "sha256": "28730097c6a5043e2c5228d466ce0106be18bdc1ee07d42229f01c804400a64e",
-      "bytes": 22101
+      "sha256": "3ad52c47d702f89259d615f69d522af47d7e5bed444dfa7bf1f68ab350c7f609",
+      "bytes": 22894
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R13_EVIDENCE.md",
@@ -1059,8 +1069,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "4373854f37aaab11738027e5299b9754fd03f4d273866cbb37431a14b7d28729",
-      "bytes": 219705
+      "sha256": "da591b578372fdae4dd50f42ec3aba6c0b746f1faa017f791610f9639106dc74",
+      "bytes": 227288
     },
     {
       "path": "plans/user-stories.csv",
@@ -1161,6 +1171,11 @@
       "path": "runbooks/CONFIRMED_PHOTO_ALBUMS.md",
       "sha256": "8d23b892149def34fb1df551b908b11e5fc140c4ac68b00f7109cfb9a85cabfe",
       "bytes": 3938
+    },
+    {
+      "path": "runbooks/REQUEST_SOURCE_REVIEW.md",
+      "sha256": "0b7a39e39f97c16ee5ab014973f3e33f0eea4279f532e377eb382df50f751cb8",
+      "bytes": 5390
     },
     {
       "path": "schemas/ApprovalDecision.schema.json",
