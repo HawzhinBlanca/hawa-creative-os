@@ -46,7 +46,11 @@ export interface CreateTaskAggregateParams {
   traceId?: string | null;
   metadata?: Record<string, unknown>;
   payload?: Record<string, unknown>;
+  /** Original HTTP body, excluding server-derived evidence. Legacy receipts retain it as payload.body. */
+  requestBody?: Record<string, unknown>;
   enqueueOutbox?: boolean;
+  /** New intake validation/enrichment only; exact committed replays retain their recorded metadata. */
+  prepareCreatePayload?: (trx: Kysely<Database>) => Promise<Record<string, unknown>>;
   /** A lifecycle-owned task records its creation without making it claimable by the legacy worker. */
   outboxState?: 'pending' | 'recorded';
   /** Immutable at task creation; an enrolled chat cannot switch an existing task at Deliver. */
@@ -477,7 +481,7 @@ export class TaskRepository {
   async createTaskAggregate(
     params: CreateTaskAggregateParams,
     trx?: Kysely<Database>
-  ): Promise<{ task: any; created: boolean }> {
+  ): Promise<{ task: any; created: boolean; payload: Record<string, unknown> }> {
     const runner = async (dbClient: Kysely<Database>) => {
       // 1. Check idempotency in outbox_commands
       const existingCmd = await dbClient
@@ -493,7 +497,7 @@ export class TaskRepository {
         description: params.description || '',
         priority: params.priority || 3,
       };
-      const incomingHash = this.computePayloadHash(incomingPayload);
+      const incomingHash = this.computePayloadHash(params.requestBody || incomingPayload);
 
       if (existingCmd) {
         const storedPayload = typeof existingCmd.payload === 'string' ? JSON.parse(existingCmd.payload) : existingCmd.payload;
@@ -501,7 +505,12 @@ export class TaskRepository {
           (storedPayload as any)?.requestHash ||
           this.computePayloadHash(storedPayload as Record<string, unknown>);
 
-        if (storedHash !== incomingHash) {
+        const matchesRequest = params.requestBody
+          ? existingCmd.command_type === 'task.created' && (storedPayload.requestIdentityHash
+              ? storedPayload.requestIdentityHash === incomingHash
+              : storedPayload.body && this.computePayloadHash(storedPayload.body) === incomingHash)
+          : storedHash === incomingHash;
+        if (!matchesRequest) {
           throw new IdempotencyConflictError(
             `Idempotency conflict: key '${params.idempotencyKey}' already used with differing payload`
           );
@@ -515,9 +524,12 @@ export class TaskRepository {
           .executeTakeFirst();
 
         if (existingTask) {
-          return { task: existingTask, created: false };
+          return { task: existingTask, created: false, payload: storedPayload as Record<string, unknown> };
         }
       }
+
+      // Enrichment is server evidence, not part of the submitted request's idempotency identity.
+      const recordedPayload = { ...(params.payload || {}), ...(await params.prepareCreatePayload?.(dbClient) || {}) };
 
       // 2. Insert into tasks
       const priorityNum = typeof params.priority === 'number' ? params.priority : 3;
@@ -567,8 +579,8 @@ export class TaskRepository {
             priority: task.priority,
             deliveryExecutorPin: task.delivery_executor_pin,
             metadata: params.metadata || {},
-            payload: params.payload || {},
-            ...(params.payload || {}),
+            payload: recordedPayload,
+            ...recordedPayload,
           },
         })
         .execute();
@@ -584,7 +596,7 @@ export class TaskRepository {
             command_type: 'task.created',
             idempotency_key: params.idempotencyKey,
             payload: withRequestId({
-              ...(params.payload || {}),
+              ...recordedPayload,
               taskId: task.id,
               tenantId: params.tenantId,
               title: task.title,
@@ -592,6 +604,7 @@ export class TaskRepository {
               priority: task.priority,
               deliveryExecutorPin: task.delivery_executor_pin,
               requestHash: incomingHash,
+              ...(params.requestBody ? { requestIdentityHash: incomingHash } : {}),
             }),
             state: params.outboxState === 'recorded' ? 'delivered' : 'pending',
             ...(params.outboxState === 'recorded'
@@ -601,7 +614,7 @@ export class TaskRepository {
           .execute();
       }
 
-      return { task, created: true };
+      return { task, created: true, payload: recordedPayload };
     };
 
     if (trx) {

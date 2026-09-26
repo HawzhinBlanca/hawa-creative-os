@@ -55,3 +55,44 @@ The source suite excluding the release-manifest test passed **420 files / 3,194 
 ## 2026-09-25: procedural motif palette boundary
 
 The shared motif utility still replaced an empty palette with seven packaged KAAE colors, so a missing client palette could make a valid-looking wrong-brand fallback in the Core art stage. A red-before test confirmed that `generateMotifSvg` accepted `[]`. The production image-provider prompt also substituted house colors for an empty palette, allowed a paid attempt before failure, and forced “photographic or painterly,” soft neutrals and a dark calm region on unrelated client art. Two red-before provider controls caught that. The utility now refuses empty palettes and non-hex colors before SVG generation, and gradient/diagonal helpers no longer carry their own KAAE color defaults. The production provider validates its palette while composing the prompt, before any external image request, and its suffix preserves the supplied art direction and palette without imposing a dark style. Focused motif/provider/art tests passed **3 files / 41 tests**. The first overlapping full run began before the provider repair and captured the two expected red tests (419 files/3,195 tests passed, 1 file/2 tests failed, 4 files/48 skipped); it is not acceptance evidence. The corrected source suite passed **420 files / 3,197 tests**, with **4 files / 48 tests skipped**. TypeScript, lint and the zero-secret scan passed. This guards a local boundary; it does not prove the supplied palette was approved or that final Canva art is faithful.
+
+## 2026-09-26: registered-client Desk intake and isolated brand editors (ADR-066)
+
+**Requirements:** FR-008, FR-011, FR-017, FR-078. The new-request form listed three
+packaged clients and preselected KAAE. The DNA screen separately filtered every
+other registered client out. Replacing those choices exposed an asynchronous
+scope hazard: a delayed response for the previous client could overwrite the
+newly selected client's state. The form now reads the authorized directory,
+requires an explicit client, preserves an unavailable saved client, reports
+failed reads and offers retry. Each DNA editor has a separate lifetime keyed by
+client UUID, so old reads, saves and editor controls cannot update the next client.
+Remote command search has no guessed default client.
+
+Core's directory joins active clients to their active DNA and uses canonical
+row UUID/version rather than an embedded alias. DNA detail likewise returns the
+canonical identity. Manual intake rechecks writable active client, active DNA
+and same-client active project under transaction locks before creating task,
+event and outbox. The original body determines idempotency, independently of
+server-derived DNA evidence. A committed retry returns its original task and
+metadata after DNA/client changes, including receipts written by the preceding
+server. Changed intent conflicts. A first definite refusal permits correction;
+an earlier uncertain browser save stays frozen and may be retried even when
+its client leaves the directory.
+
+**Verification:** The initial UI file failed **4 tests**, and the PostgreSQL file
+failed **3 tests**, before implementation. The first affected group passed
+**7 files / 43 tests**; subsequent retry-compatibility and existing Desk checks
+passed **4 files / 44 tests**. Adding a read-only identity control exposed a test
+fixture mistake (`auth_provider` does not exist on `users`): the broad source
+run had **432 files / 3,339 tests pass, 1 file / 1 test fail**, with **4 files /
+52 tests skipped**. That failure is not a passing full-suite result. The fixture
+now uses the actual user schema and isolated owner provisioning, while the app
+still runs as the restricted database role. The corrected final affected group
+passed **3 files / 18 tests**, covering a cross-client project, a read-only actor,
+legacy/current exact replay, late reads/saves and browser recovery. The exact
+sealed-tree suite follows this checkpoint.
+
+**Limits:** These are local PostgreSQL and rendered jsdom fixtures. No new-client
+onboarding, live Canva output, three-client creative comparison, Workspace
+configuration or deployed operation is qualified. The broader R11 exit condition
+and release admission remain open; production design flags stay off.

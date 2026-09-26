@@ -12,7 +12,25 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R08 chat-to-Desk review)
+## Current result (2026-09-26 — R11 registered-client Desk scope)
+
+The request form and Brand DNA editor now use the authorized client directory,
+with no packaged KAAE-only choices or guessed default client. A saved draft keeps
+its original scope if that client becomes unavailable. DNA editor state is keyed
+by client, isolating delayed reads and saves. Core returns canonical client UUIDs
+and checks active, writable client/project scope before manual intake writes.
+Exact current/legacy retries return the original task and DNA metadata even after
+the directory changes; changed intent is refused. See ADR-066 and `R11_EVIDENCE.md`.
+
+The corrected final affected group passed **3 files / 18 tests**. The broad source
+run preceding the fixture correction had **3,339 passed / 1 failed / 52 skipped**;
+the failure was a nonexistent user-fixture column, now repaired and retested.
+Typecheck, lint and Desk build passed. The final exact candidate suite follows the
+source seal. No deployment, new-client onboarding, live provider output or human
+quality acceptance is claimed. Workspace configuration and the remaining research
+plan gates stay open; production lifecycle flags remain off.
+
+## Prior result (2026-09-26 — R08 chat-to-Desk review)
 
 Chat notifications now open the exact recorded task/revision, including after
 Google Workspace sign-in and outside the first queue page. Unavailable tasks

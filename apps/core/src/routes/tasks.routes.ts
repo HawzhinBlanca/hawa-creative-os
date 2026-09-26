@@ -1,3 +1,4 @@
+import { ManualIntakeScopeError, prepareManualIntake } from '../services/manual-intake-scope.js';
 import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
 import { log } from '../logging.js';
@@ -221,6 +222,13 @@ export function registerTasksRoutes(ctx: RouteContext): void {
       );
     }
 
+    const manualIntake = body.workflow === 'canva_manual';
+    if (manualIntake && (!body.clientId || typeof body.clientId !== 'string')) {
+      return problem(c, 422, 'Client Selection Required', 'Choose a registered client before saving this request');
+    }
+    if (manualIntake && body.projectId && !UUID_PATTERN.test(body.projectId)) {
+      return problem(c, 422, 'Invalid Project Identifier', 'Choose a registered project in the selected client');
+    }
     if (taskRepo && db && body.clientId) {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(body.clientId)) {
@@ -254,12 +262,12 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             ? 4
             : 3;
 
-        let clientDnaVersion = body.clientDnaVersion;
+        let clientDnaVersion = manualIntake ? undefined : body.clientDnaVersion;
         const aggregateResult = await withRlsContext(
           db,
           { tenantId, userId, role: auth.role || 'operator' },
           async (trx) => {
-            clientDnaVersion ||= (await resolveClientDna(body.clientId, undefined, trx))?.version || 1;
+            if (!manualIntake) clientDnaVersion ||= (await resolveClientDna(body.clientId, undefined, trx))?.version || 1;
             return await taskRepo.createTaskAggregate(
               {
                 tenantId,
@@ -281,12 +289,15 @@ export function registerTasksRoutes(ctx: RouteContext): void {
                   clientDnaVersion,
                 },
                 enqueueOutbox: true,
+                ...(manualIntake ? { requestBody: body, prepareCreatePayload: (lockedTrx: Parameters<typeof prepareManualIntake>[0]) =>
+                  prepareManualIntake(lockedTrx, { tenantId, clientId: body.clientId, projectId: body.projectId }) } : {}),
               },
               trx
             );
           }
         );
 
+        if (manualIntake) clientDnaVersion = aggregateResult.payload.clientDnaVersion;
         const dbTask = aggregateResult.task;
         const normalizedTask = {
           id: dbTask.id,
@@ -320,6 +331,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           return c.json(normalizedTask, 200);
         }
       } catch (err: any) {
+        if (err instanceof ManualIntakeScopeError) return problem(c, 403, 'Client Scope Unavailable', err.message);
         if (err instanceof IdempotencyConflictError) {
           return problem(
             c,

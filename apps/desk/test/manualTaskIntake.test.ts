@@ -56,3 +56,21 @@ describe('manual Canva intake', () => {
     expect(draftStore.getActiveDraft()).toMatchObject(draft);
   });
 });
+
+describe('definitive client refusal versus uncertain recovery', () => {
+  it('permits correcting a first refused client while retaining the browser draft', async () => {
+    draftStore.saveActiveDraft(draft);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 403 })));
+    await expect(submitManualTask(draft)).rejects.toThrow('403');
+    expect(getPendingManualDraft()).toBeNull();
+    expect(draftStore.getActiveDraft()).toMatchObject(draft);
+  });
+  it('keeps an earlier uncertain request frozen when a later attempt is refused', async () => {
+    const fetcher = vi.fn().mockRejectedValueOnce(new Error('lost'))
+      .mockResolvedValueOnce(new Response('{}', { status: 403 }));
+    vi.stubGlobal('fetch', fetcher);
+    await expect(submitManualTask(draft)).rejects.toThrow('unconfirmed');
+    await expect(submitManualTask(draft)).rejects.toThrow('403');
+    expect(getPendingManualDraft()).toEqual(draft);
+  });
+});

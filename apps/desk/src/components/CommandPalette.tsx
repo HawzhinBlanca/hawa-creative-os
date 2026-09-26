@@ -24,7 +24,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   isOpen,
   onClose,
   onNavigate,
-  activeClientId = 'client-drustee',
+  activeClientId,
   onAction,
 }) => {
   const [query, setQuery] = useState('');
@@ -196,6 +196,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     setResults(localMatches);
     setSelectedIndex(0);
+
+    // No guessed scope: remote results require an actual selected client.
+    if (!activeClientId) { setIsLoading(false); return; }
 
     // 2. Fetch server items if query provided (tasks, client DNA)
     const timer = setTimeout(async () => {

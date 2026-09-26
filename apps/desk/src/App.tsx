@@ -1,6 +1,6 @@
 import { deskReviewTarget } from '@hawa/contracts/desk-navigation';
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sidebar, type ScreenId } from './components/Sidebar.js';
 import { Header } from './components/Header.js';
 import { WorkScreen } from './screens/WorkScreen.js';
@@ -19,6 +19,7 @@ import { submitManualTask, getPendingManualDraft } from './services/manualTaskIn
 import { useI18n } from './services/i18n.js';
 import { SignIn } from './components/SignIn.js';
 import { useSessionState, useSessionUser } from './DeskProviders.js';
+import { readClientDirectory } from './services/clientDirectory.js';
 import { queryKeys } from './services/queryClient.js';
 
 export const App: React.FC = () => {
@@ -140,14 +141,16 @@ export const App: React.FC = () => {
   const [taskReferenceAssets, setTaskReferenceAssets] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
-  const [selectedClientId, setSelectedClientId] = useState('c1000000-0000-4000-8000-000000000002');
+  const [selectedClientId, setSelectedClientId] = useState('');
   const taskTitleInputRef = useRef<HTMLInputElement>(null);
 
-  const availableClients = [
-    { id: 'c1000000-0000-4000-8000-000000000002', name: 'KAAE (Kurdistan Accrediting Association for Education)' },
-    { id: 'c1000000-0000-4000-8000-000000000003', name: 'Drustee Evidence-First Health' },
-    { id: 'c1000000-0000-4000-8000-000000000004', name: 'FastPay Mobile Wallet' },
-  ];
+  const [pendingManualRetry, setPendingManualRetry] = useState(false);
+  const clientDirectory = useQuery({ queryKey: ['client-directory'], queryFn: readClientDirectory,
+    enabled: showNewTaskModal && sessionState.status === 'signed_in', staleTime: 0 });
+  const availableClients = clientDirectory.data || [];
+  const clientAvailable = availableClients.some(client => client.clientId === selectedClientId);
+  const canSaveRequest = Boolean(taskTitle.trim()) && !isSubmitting &&
+    (pendingManualRetry || (clientDirectory.isSuccess && !clientDirectory.isFetching && clientAvailable));
 
   const modalRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
@@ -204,6 +207,7 @@ export const App: React.FC = () => {
   // Restore draft when opening modal
   const handleOpenModal = () => {
     const pendingDraft = getPendingManualDraft();
+    setPendingManualRetry(Boolean(pendingDraft));
     const existingDraft = pendingDraft || draftStore.getActiveDraft();
     if (existingDraft && (pendingDraft || (!taskTitle && !taskCopyEn))) {
       setTaskTitle(existingDraft.title || '');
@@ -231,7 +235,7 @@ export const App: React.FC = () => {
   const handleCopyEnChange = setTaskCopyEn;
 
   const handleCreateTask = async () => {
-    if (!taskTitle.trim() || isSubmitting) return;
+    if (!canSaveRequest) return;
     setIsSubmitting(true);
     setTaskSubmissionError(null);
     try {
@@ -246,9 +250,12 @@ export const App: React.FC = () => {
       setTaskCopyCkb('');
       setTaskDesignInstructions('');
       setTaskReferenceAssets('');
+      setSelectedClientId('');
+      setPendingManualRetry(false);
       setAppToast('Request saved. Create or link a Canva design to edit it. Automatic design composition is not connected.');
       handleNavigate('review');
     } catch (error) {
+      setPendingManualRetry(Boolean(getPendingManualDraft()));
       setTaskSubmissionError(error instanceof Error ? error.message : 'Request could not be confirmed. Your draft is retained; retry without changing it.');
     } finally {
       setIsSubmitting(false);
@@ -348,14 +355,23 @@ export const App: React.FC = () => {
                 id="modal-client-select"
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--panel)', color: 'var(--text)' }}
                 value={selectedClientId}
+                disabled={pendingManualRetry || clientDirectory.isFetching}
                 onChange={(e) => setSelectedClientId(e.target.value)}
               >
+                <option value="">Choose a client</option>
+                {selectedClientId && !clientAvailable && <option value={selectedClientId} disabled>Saved client unavailable</option>}
                 {availableClients.map((client) => (
-                  <option key={client.id} value={client.id}>
+                  <option key={client.clientId} value={client.clientId}>
                     {client.name}
                   </option>
                 ))}
               </select>
+              {clientDirectory.isFetching && <p role="status">Reading the client list…</p>}
+              {clientDirectory.isError && <p role="alert">Client list unavailable: {clientDirectory.error.message}
+                {' '}<button className="btn" onClick={() => void clientDirectory.refetch()}>Retry client list</button></p>}
+              {clientDirectory.isSuccess && availableClients.length === 0 && <p>No active clients are available. Ask an office administrator to configure client access and brand DNA.</p>}
+              {selectedClientId && clientDirectory.isSuccess && !clientAvailable && <p role="alert">The saved client is unavailable. Your draft retains its original client.</p>}
+              {pendingManualRetry && <p role="status">An earlier save is unconfirmed. Retry the unchanged request to recover its result.</p>}
             </div>
 
             <div style={{ margin: '14px 0' }}>
@@ -451,7 +467,7 @@ export const App: React.FC = () => {
               <button className="btn" disabled={isSubmitting} onClick={() => setShowNewTaskModal(false)}>
                 {t.modal.cancel}
               </button>
-              <button className="btn primary" disabled={isSubmitting} onClick={handleCreateTask}>
+              <button className="btn primary" disabled={!canSaveRequest} onClick={handleCreateTask}>
                 {isSubmitting ? 'Saving request…' : 'Save request'}
               </button>
             </div>
@@ -495,7 +511,7 @@ export const App: React.FC = () => {
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
         onNavigate={(screen) => handleNavigate(screen)}
-        activeClientId={selectedTask?.clientId || 'client-drustee'}
+        activeClientId={selectedTask?.clientId}
         onAction={(actionId) => {
           if (actionId === 'tour') {
             setShowTour(true);

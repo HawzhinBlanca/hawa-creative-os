@@ -32,6 +32,12 @@ export async function submitManualTask(draft: Omit<ActiveDraft, 'savedAt'>) {
     throw new Error('The server result is unconfirmed. Your full draft is retained. Retry unchanged to avoid a duplicate task.');
   }
   if (!response.ok) {
+    // A first, definitive refusal made no task. An earlier uncertain request keeps its frozen
+    // identity even if a later auth/scope check refuses it; its original commit is still unknown.
+    if (!raw && [400, 401, 403, 404, 422].includes(response.status)) {
+      localStorage.removeItem(PENDING_KEY);
+      throw new Error(`Request was refused (HTTP ${response.status}). Your draft is retained. Correct the client or access problem, then save again.`);
+    }
     throw new Error(`Request was not confirmed (HTTP ${response.status}). Your full draft is retained. Retry unchanged after the problem is resolved.`);
   }
   const task = await response.json();
