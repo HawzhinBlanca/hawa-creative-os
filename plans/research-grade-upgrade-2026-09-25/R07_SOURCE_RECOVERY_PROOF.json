@@ -1,7 +1,7 @@
 {
-  "date": "2026-09-26T22:09:10.905Z",
+  "date": "2026-09-26T22:20:57.994Z",
   "status": "passed",
-  "durationMs": 3176,
+  "durationMs": 2878,
   "sourcePdfSha256": "adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617",
   "parserImageId": "sha256:ecfecce7e0d97f9e12c417a1d159b9cb73d6c6bf1f4794b496bde9b3d5b7994a",
   "parserVersion": "docling-2.130.0/parse-7.22.0/native-v1",
@@ -133,10 +133,11 @@
     "apps/core/src/routes/source-files.routes.ts": "518186f61d16aa8cdba81df558ed7f2c03838f558d881cb704150470bc1b1a1d",
     "packages/domain/src/telegram-source-review.ts": "ee4689e9462dd686257eaa975bbf52e23c43078b65ffe30ed7c95166c986185f",
     "packages/integrations/src/telegram-bridge.ts": "2028c34ccd696ce416eaca8317bed0dcef68cb20655b290a467ad78447a4dd91",
-    "packages/db/migrations/043_lifecycle_source_retention.sql": "c93e40bf4ddcf1725f5f3516b27b394abf78f076d105cc385da9f1e06cd012db",
+    "packages/db/migrations/043_lifecycle_source_retention.sql": "db03433d4754bee29d306d9f952362306077ecf55dff324cba251773e4039d4a",
     "packages/testkit/chaos/chaos.test.ts": "434846fdc773f5dd01e742d2bc60976cfb572fb367f7809adb35f2d4a90a502d",
     "apps/worker/src/lifecycle/chat-inbox.ts": "0dc572f6da9a7a43962953dc4f006d6eb18edac6fa16e65f06bf72211f7a9cc1",
-    "apps/worker/src/lifecycle/core-client.ts": "bad7a33bc43bafa1bad655a22f8bb5e5a1f42cb215793ac5ebd135848b7b2774"
+    "apps/worker/src/lifecycle/core-client.ts": "bad7a33bc43bafa1bad655a22f8bb5e5a1f42cb215793ac5ebd135848b7b2774",
+    "packages/db/test/blob-migration.test.ts": "3a0098fb6b1be70b6498bd4f2ebd97b1d4379491d02b0a25e20bb981c091d523"
   },
   "limits": [
     "Disposable same-host PostgreSQL and blob directory; not clean-host restore or production RPO/RTO",
@@ -153,7 +154,21 @@
     "lint": "passed",
     "deskBuild": "passed",
     "secretScan": "passed; zero secrets",
-    "sealedRegression": "pending"
+    "sealedRegression": "pending",
+    "policyFollowup": {
+      "filesPassed": 5,
+      "testsPassed": 30,
+      "log": "/private/tmp/hawa-telegram-source-migration-final.log"
+    },
+    "earlierSealedRegression": {
+      "commit": "9235990",
+      "filesPassed": 443,
+      "filesFailed": 1,
+      "testsPassed": 3468,
+      "testsFailed": 1,
+      "testsSkipped": 58,
+      "cause": "The old blob fixture assumed tenant identity alone authorizes task-file access. It now requires an authorized actor and asserts tenant-only denial."
+    }
   },
   "earlierRuns": [
     "Downloader red-before: 7 failed / 7 passed. An earlier infinite test stream was interrupted and replaced by finite chunks.",
@@ -163,7 +178,8 @@
     "The first source listing migration used created_at instead of received_at; isolated migration setup refused it before tests. Corrected before release.",
     "One UI acceptance run used stale compiled domain exports: 15 failed / 29 passed. Rebuilt workspace packages; subsequent runs passed.",
     "The first wide affected run: 4 failed / 176 passed. Two failures found filename-based PDF dispatch overriding images; two assertions still expected the prior all-PDF hold. Names no longer choose the extractor; explicit PDF without a client gets an actionable refusal.",
-    "The first secret scan flagged a hard-coded test webhook value; replaced with a per-run generated fixture. Final scan passed without a new allowlist entry."
+    "The first secret scan flagged a hard-coded test webhook value; replaced with a per-run generated fixture. Final scan passed without a new allowlist entry.",
+    "The added migration-replay test reproduced an actual bypass: replay of migration 019 restored its permissive tenant policy (1 failed / 5 passed). Migration 043 now adds mandatory RESTRICTIVE client policies over the existing tenant gate. Five files/30 checks, including the 26-invariant process drill, passed after correction."
   ],
   "restateTransport": {
     "status": "passed",

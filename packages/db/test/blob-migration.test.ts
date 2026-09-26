@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { sql } from 'kysely';
 import { createDb, withRlsContext } from '../src/client.js';
+import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 
 /**
  * Migration 019 (ADR-035, FILESTORE_DESIGN.md section 2.3): the blob table's guard and grants, the
@@ -72,14 +73,18 @@ describe.skipIf(!appUrl || !ownerUrl)('migration 019: the blob store schema', ()
     expect(privileges.rows[0]).toEqual({ public_sweep: false, app_sweep: true });
   });
 
-  it("task_files: a tenant sees and writes only its own rows, cannot change them, and a task's deletion takes them", async () => {
+  it("task_files: an authorized actor sees and writes its task files, tenant identity alone grants no access, and task deletion cascades", async () => {
     const task = randomUUID();
     await owner.query(`INSERT INTO hawa.tasks(id, tenant_id, client_id, title) VALUES ($1, $2, $3, 'blob test')`, [task, TENANT, CLIENT]);
     const h = await blob();
-    await withRlsContext(app, { tenantId: TENANT }, (trx) =>
+    const authorized = { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
+    await expect(withRlsContext(app, { tenantId: TENANT }, (trx) =>
+      sql`INSERT INTO hawa.task_files(tenant_id, task_id, sha256, role) VALUES (${TENANT}::uuid, ${task}::uuid, ${h}, 'reference_image')`.execute(trx))).rejects.toThrow(/row-level security/);
+    await withRlsContext(app, authorized, (trx) =>
       sql`INSERT INTO hawa.task_files(tenant_id, task_id, sha256, role) VALUES (${TENANT}::uuid, ${task}::uuid, ${h}, 'reference_image')`.execute(trx));
-    const mine = await withRlsContext(app, { tenantId: TENANT }, (trx) => sql`SELECT sha256 FROM hawa.task_files WHERE task_id = ${task}::uuid`.execute(trx));
+    const mine = await withRlsContext(app, authorized, (trx) => sql`SELECT sha256 FROM hawa.task_files WHERE task_id = ${task}::uuid`.execute(trx));
     expect(mine.rows).toEqual([{ sha256: h }]);
+    expect((await withRlsContext(app, { tenantId: TENANT }, (trx) => sql`SELECT sha256 FROM hawa.task_files WHERE task_id = ${task}::uuid`.execute(trx))).rows).toEqual([]);
     const other = randomUUID();
     const theirs = await withRlsContext(app, { tenantId: other }, (trx) => sql`SELECT sha256 FROM hawa.task_files WHERE task_id = ${task}::uuid`.execute(trx));
     expect(theirs.rows).toEqual([]);
@@ -124,6 +129,13 @@ describe.skipIf(!appUrl || !ownerUrl)('migration 019: the blob store schema', ()
         has_table_privilege('hawa_app', 'hawa.blob_references', 'SELECT') AS view_select,
         has_table_privilege('hawa_app', 'hawa.task_files', 'DELETE') AS files_delete`);
       expect(r.rows[0]).toEqual({ blobs_delete: false, size_update: false, mark_update: true, blobs_insert: true, view_select: false, files_delete: false });
+      // Replaying the old migration must not restore its tenant-only client bypass.
+      const task = randomUUID(), h = hex();
+      await owner.query(`INSERT INTO hawa.tasks(id,tenant_id,client_id,title) VALUES ($1,$2,$3,'migration replay')`, [task,TENANT,CLIENT]);
+      await owner.query(`INSERT INTO hawa.blobs(sha256,size,media_type) VALUES ($1,10,'image/png')`, [h]);
+      await owner.query('SET LOCAL ROLE hawa_app');
+      await owner.query("SELECT set_config('app.tenant_id',$1,true),set_config('hawa.current_tenant_id',$1,true)", [TENANT]);
+      await expect(owner.query(`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role) VALUES ($1,$2,$3,'reference_image')`, [TENANT,task,h])).rejects.toThrow(/row-level security/);
     } finally {
       await owner.query('ROLLBACK');
     }

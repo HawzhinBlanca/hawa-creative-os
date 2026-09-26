@@ -2,13 +2,13 @@
 BEGIN;
 ALTER TABLE hawa.task_files DROP CONSTRAINT task_files_role_check;
 ALTER TABLE hawa.task_files ADD CONSTRAINT task_files_role_check CHECK (role IN ('reference_image', 'source_document'));
--- A tenant match alone must never expose another client's original file by task/hash.
-DROP POLICY task_files_tenant_scope ON hawa.task_files;
-CREATE POLICY task_files_client_read ON hawa.task_files FOR SELECT USING (
+-- Retain the original permissive tenant gate, adding mandatory client restrictions.
+-- Even replay of migration 019 cannot OR a tenant-only policy past these restrictions.
+CREATE POLICY task_files_client_read ON hawa.task_files AS RESTRICTIVE FOR SELECT USING (
   tenant_id = nullif(current_setting('app.tenant_id',true),'')::uuid AND
   EXISTS (SELECT 1 FROM hawa.tasks t WHERE t.tenant_id=task_files.tenant_id AND t.id=task_files.task_id)
 );
-CREATE POLICY task_files_client_write ON hawa.task_files FOR INSERT WITH CHECK (
+CREATE POLICY task_files_client_write ON hawa.task_files AS RESTRICTIVE FOR INSERT WITH CHECK (
   tenant_id = nullif(current_setting('app.tenant_id',true),'')::uuid AND
   EXISTS (SELECT 1 FROM hawa.tasks t WHERE t.tenant_id=task_files.tenant_id AND t.id=task_files.task_id
     AND ((SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator','operator']::hawa.membership_role[]))

@@ -60,8 +60,9 @@ An altered update cannot overwrite the legitimate event's answer. Exact confirma
 JSON is retained as a string as well as structured audit data: JSONB reorders keys,
 which otherwise invalidated the source hash during revision replay.
 
-Migration 043 admits `source_document` attachments and makes task-file RLS depend on
-the visible task/client. A red-before test demonstrated a designer downloading a
+Migration 043 admits `source_document` attachments and adds mandatory restrictive
+task-file policies over the original tenant gate. They depend on the visible
+task/client and survive raw replay of the older permissive policy. A red-before test demonstrated a designer downloading a
 known task/hash from an unassigned client under the earlier tenant-only policy.
 Source-file list/download routes join the active RLS-visible client and expose only
 retained-file status/identities; failed extraction never hides the saved original.

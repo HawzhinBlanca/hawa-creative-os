@@ -37,6 +37,15 @@ completed ChatInbox invocations under different Restate idempotency keys. Its
 fake-provider receipt is included in the same proof file. Earlier dated all-PDF
 hold results are historical; the current scenario reflects explicit PDF admission.
 
+The first sealed full run passed 3,468 tests and failed one old blob-migration
+fixture that assumed tenant identity alone grants attachment access (58 skipped).
+The corrected fixture requires an actual authorized actor and verifies tenant-only
+denial. An additional red-before test then reproduced a real policy bypass after
+raw replay of migration 019. Migration 043 now adds **restrictive** client policies
+over the original tenant gate, so a restored permissive policy cannot bypass them.
+The policy/upgrade/source set passed **5 files / 30 tests**, including a fresh pass
+of the 26-invariant Core crash drill. Final sealed regression remains pending.
+
 The crash result, source hashes, limits and earlier failed runs are in
 `R07_SOURCE_RECOVERY_PROOF.json`; usage/recovery is in
 `runbooks/REQUEST_SOURCE_REVIEW.md`. Sealed full regression is pending for this
