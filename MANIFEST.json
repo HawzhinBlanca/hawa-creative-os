@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T08:55:33Z",
+  "generatedAt": "2026-09-26T09:00:29Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "1d628e8cc1a556d163b6ded91b44e5ef0c213b6a0b2aecfe80f0044d98b99d75",
+      "sha256": "dd3218a73af75eba7ab7cdd7649a353305908f3faefaef0c18056f7fa8316bc0",
       "bytes": 3985
     },
     {
@@ -884,8 +884,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
-      "sha256": "9bb89fd09fd7b069b0191b4ddfe111d8fed31bc896c5d23c0eba065f76b676ac",
-      "bytes": 30652
+      "sha256": "fa39937f80f4a7fb4e05574e6e50d417e2bb615592c004d9b3256febad63b02d",
+      "bytes": 31447
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_RESTATE_KILL_DRILL.md",
