@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { sql, withRlsContext, BlobCorruptError, BlobMissingError, type Kysely, type Database } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, type LifecycleSourceRef } from '@hawa/contracts';
-import { telegramPdfSource, sourceCopyConfirmation, sourceMessageScope } from '@hawa/domain';
+import { telegramSource, sourceCopyConfirmation, sourceMessageScope, inspectVoiceAudio, VoiceAudioError } from '@hawa/domain';
 import { DoclingParser, localPdfExtractor, PDF_EXTRACTOR_VERSION, DocumentExtractionError } from '@hawa/retrieval';
 import { chaosPoint } from '@hawa/observability';
 import type { CoreContext } from '../core-context.js';
@@ -13,10 +13,11 @@ import { recordNewBriefDecision, readNewBriefDecision } from './lifecycle-chat-t
 import { projectLifecycleRequesterRevisionWithIntake, LifecycleProjectionConflict } from './lifecycle-projection.js';
 import { createTelegramUpdateState } from './telegram-intake/update-state.js';
 import { readSourceUpload, readSourceExtraction, readSourceConfirmation, saveSourceUpload, saveSourceExtraction,
-  saveSourceConfirmation, readSourceAdmission, readSourceAnswer, saveSourceAnswer, verifyReviewedSource, sourceHash, SourceConflict,
+  saveSourceConfirmation, readSourceAdmission, readSourceAnswer, saveSourceAnswer, verifyReviewedSource, voiceInspectionHash, sourceHash, SourceConflict,
   type SourceUpload, type SourceExtraction, type SourceIntakeAnswer } from './lifecycle-source-store.js';
 import { admitSource, sourceNotice as notice } from './lifecycle-source-admission.js';
 import type { ChatIntake } from './chat-intake.js';
+import { transcribeRetainedVoice, holdVoiceForManualReview, type SourceVoiceReview } from './lifecycle-voice.js';
 
 type Answer = SourceIntakeAnswer;
 const requestIdFor = (chat: string, id: number) => {
@@ -28,17 +29,17 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
   const scope = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
   const tx = <T>(fn: (trx: Kysely<Database>) => Promise<T>) => withRlsContext(db!, scope, fn);
   const store = () => blobStoreFor(db, ctx.options?.blobStore);
-  const review = (upload: SourceUpload, extraction: SourceExtraction) => notice(upload.chatId, upload.updateId,
-    `PDF saved for review. No design has started.\n` +
+  const review = (upload: SourceUpload, extraction: SourceExtraction, voice?: SourceVoiceReview) => notice(upload.chatId, upload.updateId,
+    `${upload.kind === 'voice' ? 'Voice original' : 'PDF'} saved for review. No design has started.\n` +
     `Canvas: ${upload.variant ? `${upload.variant.width} × ${upload.variant.height} px` : upload.target ? 'keep the existing request format' : '1080 × 1350 px (default)'}.\n\n` +
-    `Extracted preview (check every page of the original):\n${extraction.preview}\n\n` +
+    (voice ? `${voice.message}\nReserved estimate: ${voice.estimatedUsd === null ? 'no paid call' : `$${voice.estimatedUsd.toFixed(3)}`}; actual billed cost unknown.\n\n${voice.transcript ? `Unreviewed transcript preview:\n${voice.transcript.slice(0, 1400)}${voice.transcript.length > 1400 ? '\n[Preview shortened; open the full transcript in Desk.]' : ''}\n\n` : ''}` : `Extracted preview (check every page of the original):\n${extraction.preview}\n\n`) +
     `Limits: ${extraction.limitations.join('; ').slice(0, 350)}\n\n` +
-    'Reply to your original PDF with /use_source on its own line, then the exact corrected text to print. ' +
+    'Reply to your original source with /use_source on its own line, then the exact corrected text to print. ' +
     'Everything after that line is copy, including whitespace. Use the original caption for design instructions. ' +
-    'The saved PDF is also available in Hawa Desk under this client.');
+    'The saved original is also available in Hawa Desk under this client.');
 
   return async (update: unknown, mode: string): Promise<Answer | null> => {
-    const envelope = sourceMessageScope(update), pdf = telegramPdfSource(update), confirmation = sourceCopyConfirmation(update);
+    const envelope = sourceMessageScope(update), pdf = telegramSource(update), confirmation = sourceCopyConfirmation(update);
     if (!envelope) return null;
     if (!db) return pdf || confirmation ? { status: 503, extra: { code: 'DATABASE_UNAVAILABLE' } } : null;
     const allowed = !ctx.isProduction || ctx.telegramIntakeUsers.includes('*') ||
@@ -71,6 +72,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
         if (!upload) throw new SourceConflict('The saved original source is unavailable');
         const extraction = await tx(trx => readSourceExtraction(trx, scope.tenantId, upload.updateId));
         if (!extraction) return { status: 503, extra: { code: 'SOURCE_EXTRACTION_PENDING' } };
+        if (upload.kind === 'voice') await tx(trx => holdVoiceForManualReview(trx, scope.tenantId, upload));
         const requestId = upload.target?.requestId ?? requestIdFor(upload.chatId, upload.updateId);
         const proposed = { sourceUpdateId: upload.updateId, confirmationUpdateId: envelope.updateId, requestId,
           copy: confirmation.copy, copySha256: sourceHash(confirmation.copy), sourceUpdate: update,
@@ -124,7 +126,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
       let upload = priorUpload;
       if (upload) {
         const extraction = await tx(trx => readSourceExtraction(trx, scope.tenantId, upload!.updateId));
-        if (extraction) return review(upload, extraction);
+        if (extraction && upload.kind === 'pdf') return review(upload, extraction);
       }
       if (busy) return { status: 503, extra: { code: 'SOURCE_BUSY' } };
       busy = true;
@@ -133,9 +135,10 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
           if (!store() || !ctx.telegramBridge) return { status: 503, extra: { code: 'NOT_CONFIGURED' } };
           const bytes = await ctx.telegramBridge.downloadFile(source.fileId);
           if (!bytes?.length) return { status: 503, extra: { code: 'SOURCE_DOWNLOAD_UNAVAILABLE' } };
-          if (bytes.length > 20 * 1024 * 1024 || bytes.subarray(0, 5).toString() !== '%PDF-')
+          if (source.kind === 'pdf' && (bytes.length > 20 * 1024 * 1024 || bytes.subarray(0, 5).toString() !== '%PDF-'))
             return finalAnswer(notice(source.chatId, source.updateId, 'This file is not an admitted PDF. Send a valid PDF of at most 20 MiB; its caption cannot replace the source.', 422));
-          const blob = await store()!.put(bytes, 'application/pdf'); await store()!.read(blob, { verify: true });
+          if (source.kind === 'voice') inspectVoiceAudio(bytes);
+          const blob = await store()!.put(bytes, source.kind === 'voice' ? 'audio/ogg' : 'application/pdf'); await store()!.read(blob, { verify: true });
           upload = await tx(async trx => {
             const active = await trx.selectFrom('clients').select('id').where('id', '=', source.clientId)
               .where('tenant_id', '=', scope.tenantId).where('status', '=', 'active').forShare().executeTakeFirst();
@@ -143,6 +146,18 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
             return saveSourceUpload(trx, scope.tenantId, { ...source, blob });
           });
           await chaosPoint('core.source.after-upload', { updateId: upload.updateId, chatId: upload.chatId });
+        }
+        if (upload.kind === 'voice') {
+          const bytes = await store()!.read(upload.blob, { verify: true });
+          const audio = inspectVoiceAudio(bytes);
+          const extraction = await tx(trx => saveSourceExtraction(trx, scope.tenantId, {
+            sourceUpdateId: upload!.updateId, sourceSha256: upload!.blob.sha256,
+            extractionSha256: voiceInspectionHash(upload!.blob.sha256, audio), extractorVersion: audio.version,
+            preview: '', limitations: ['Transcription is unreviewed; no confidence or detected-language claim. Listen to the complete original.'], voice: audio,
+          }));
+          await chaosPoint('core.source.after-extraction', { updateId: upload.updateId, chatId: upload.chatId });
+          const voice = await transcribeRetainedVoice(tx, scope.tenantId, upload, audio, bytes, ctx.voiceTranscriber);
+          return review(upload, extraction, voice);
         }
         let document = await tx(trx => findDocumentByHash(trx, scope.tenantId, upload!.clientId, upload!.blob.sha256, PDF_EXTRACTOR_VERSION));
         if (!document) {
@@ -168,6 +183,8 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
         const admission = await tx(trx => readSourceAdmission(trx, scope.tenantId, envelope.updateId));
         return admission?.payloadHash === payloadHash ? finalAnswer(answer) : answer;
       }
+      if (error instanceof VoiceAudioError)
+        return finalAnswer(notice(envelope.chatId, envelope.updateId, `${error.message}. Send a valid single-stream Ogg Opus recording of at most 20 MiB and ten minutes, or send the complete brief as text. No design or transcription started.`, 422));
       if (error instanceof DocumentExtractionError && !/CONFIG|BUSY|TIMEOUT|UNAVAILABLE/.test(error.code))
         return finalAnswer(notice(envelope.chatId, envelope.updateId, `The PDF is retained but extraction stopped (${error.code}). No design started. Ask the office to review the original or send a text PDF.`, 422));
       if (error instanceof BlobCorruptError || error instanceof BlobMissingError ||

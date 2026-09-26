@@ -20,6 +20,7 @@ export interface VoiceTranscriptionResult {
   audioStatus: 'not_provided' | 'invalid_audio' | 'policy_blocked' | 'provider_unavailable' | 'provider_failed' | 'transcribed';
   /** Uncertain transport must be reconciled by the durable caller before another paid call. */
   providerOutcome: 'not_sent' | 'rejected' | 'received' | 'uncertain';
+  providerRequestId: string | null;
   transcript: string;
   /** Compatibility field: exact source text, never automatically normalized factual copy. */
   normalizedText: string;
@@ -124,6 +125,7 @@ export class KurdishVoiceTranscriber {
   async transcribe(req: VoiceTranscriptionRequest, suppliedText?: string): Promise<VoiceTranscriptionResult> {
     let rawTranscript = '';
     let providerOutcome: VoiceTranscriptionResult['providerOutcome'] = 'not_sent';
+    let providerRequestId: string | null = null;
     const hasAudio = Boolean(req.audioBuffer?.byteLength || req.audioBase64?.length);
     const invalidAudio = Boolean(
       (req.audioBuffer && req.audioBuffer.byteLength > MAX_AUDIO_BYTES) ||
@@ -177,6 +179,8 @@ export class KurdishVoiceTranscriber {
           redirect: 'error',
           body: formData,
         });
+        const requestId = response.headers.get('x-request-id');
+        if (requestId && /^req_[A-Za-z0-9_-]{1,180}$/.test(requestId)) providerRequestId = requestId;
 
         if (response.ok) {
           const json = await readVoiceResponse(response, controller.signal);
@@ -201,7 +205,7 @@ export class KurdishVoiceTranscriber {
     const duration = typeof req.durationSeconds === 'number' && Number.isFinite(req.durationSeconds) && req.durationSeconds > 0
       ? req.durationSeconds : null;
     return {
-      audioStatus, providerOutcome,
+      audioStatus, providerOutcome, providerRequestId,
       transcript: rawTranscript,
       normalizedText: text,
       suppliedText: caption,

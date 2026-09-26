@@ -74,3 +74,36 @@ Retained audio, current locked client policy, model/cost admission, durable paid
 reservation/outcome, reviewed-source handoff and process-crash proof remain next.
 Unknown outcome flags are not a substitute for PostgreSQL reconciliation. Real
 multilingual transcription accuracy has not been measured. Production is unchanged.
+
+
+## 2026-09-27 — Retained voice, reviewed copy and durable paid admission
+
+ADR-075/migration 044 extends the existing source owner to bounded Ogg Opus voice.
+The client is fixed before download; original bytes and locally inspected timing
+are retained. Current approved Client DNA, client privacy and an admitted versioned
+voice model with explicit cost limits govern one durable reservation per
+tenant/client/audio hash. The first outcome is immutable. Restart or duplicate
+audio cannot repeat a paid call; missing outcomes remain uncertain. Exact requester
+copy creates one new request or current revision, and Desk exposes the original and
+full escaped, unreviewed transcript with reserved estimate and unknown actual cost.
+
+The first paid-path run failed four tests because `FOR SHARE` also applied model
+update RLS. A narrow role-checked definer reader locks eligible models without
+granting model write access. One later failure exposed four missing route-inventory
+entries. The final affected run passed 184 tests and failed one malformed generated
+duration fixture; its corrected 13-test domain follow-up passed, including the
+600/601-second boundary. All **185 distinct affected tests across 13 files** have
+passing final observations. Source/test types, lint and Desk build passed.
+
+The actual Core crash drill passed **40 invariants**, with **five SIGKILLs, six
+starts, four original downloads and two synthetic transcription requests**. Three
+paid attempts retain one completed outcome; the two missing outcomes are not
+retried. A policy revocation before paid admission prevents the request. New and
+revision copy, no duplicate task/outbox, daily-limit concurrency, and client-access
+revocation have separate PostgreSQL tests. No actual provider service was used.
+
+Live multilingual speech accuracy, billing reconciliation, an isolated deployed
+canary, the complete real Canva journey, retrieval measurements, clean-host recovery
+and human creative review remain open. Manual copy does not settle uncertain
+billing. R07/R12/R20 remain in progress. Proof: `R07_VOICE_RECOVERY_PROOF.json`;
+operation: `runbooks/REQUEST_SOURCE_REVIEW.md`. Full sealed regression follows.

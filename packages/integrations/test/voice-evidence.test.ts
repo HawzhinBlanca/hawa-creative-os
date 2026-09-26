@@ -111,4 +111,10 @@ describe('voice evidence and bounded transport', () => {
     await new KurdishVoiceTranscriber().transcribe(request);
     expect(JSON.stringify(warn.mock.calls)).not.toContain(secret);
   });
+  it('retains a safe provider request reference even when its successful body is unusable', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{invalid', { headers: { 'x-request-id': 'req_voice_fixture' } }));
+    expect(await new KurdishVoiceTranscriber().transcribe(request)).toMatchObject({
+      providerOutcome: 'uncertain', providerRequestId: 'req_voice_fixture', transcript: '',
+    });
+  });
 });

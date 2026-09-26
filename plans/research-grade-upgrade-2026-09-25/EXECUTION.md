@@ -12,7 +12,27 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-27 — honest voice evidence boundary)
+## Current result (2026-09-27 — durable retained voice)
+
+ADR-075/migration 044 completes local engineering for retained Ogg Opus → locked
+client/privacy/model admission → one durable paid attempt → requester exact-copy
+review → new/current revision. Desk exposes originals and full unreviewed transcripts.
+Unknown outcomes are not retried; actual cost stays unknown. No model is admitted
+or production service changed by this work.
+
+All 185 distinct affected tests have passing final observations across the final
+affected run and corrected duration-fixture follow-up. The real Core process drill
+passed 40 checks across five kills and six starts; all provider replies are synthetic.
+Typecheck, lint and Desk build passed. Full regression and release seal are pending.
+See R07_VOICE_RECOVERY_PROOF.json, ADR-075 and runbooks/REQUEST_SOURCE_REVIEW.md.
+
+Next: qualify the isolated Core/Desk/worker/Docling candidate, then the complete real
+request → editable Canva design → revision → named approval → verified export/delivery
+and reopen journey. Real multilingual voice/PDF quality, cited Design Plans and
+retrieval relevance/latency, clean-host WAL/PITR/Restate recovery and independent
+human creative review remain required. App-wide 10/10 is not established.
+
+## Prior result (2026-09-27 — honest voice evidence boundary)
 
 ADR-074 removes fabricated confidence/language/duration and automatic price rewrites
 from voice evidence, separates captions, bounds provider transport and holds legacy

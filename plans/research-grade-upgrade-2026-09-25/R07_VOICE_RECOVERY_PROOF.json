@@ -1,0 +1,255 @@
+{
+  "completed": true,
+  "checkedAt": "2026-09-26T23:02:38.814Z",
+  "durationMs": 3628,
+  "downloads": 4,
+  "transcriptions": 2,
+  "starts": 6,
+  "kills": 5,
+  "audioSha256": "e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2",
+  "events": [
+    "core.source.after-admission",
+    "core.voice.after-attempt",
+    "core.voice.after-response",
+    "core.voice.after-outcome",
+    "core.source.after-confirmation"
+  ],
+  "checks": [
+    {
+      "name": "kill 1 terminated Core with SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-admission: no HTTP acknowledgement survives",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-admission: restart retains the correct review state",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-admission: no extra provider dispatch",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-admission: original audio remains byte-identical in Desk",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-admission: Desk shows unknown billed cost",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-admission: reviewed exact copy survives",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-admission: repeated projection has one task/outbox",
+      "passed": true
+    },
+    {
+      "name": "kill 2 terminated Core with SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-attempt: no HTTP acknowledgement survives",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-attempt: restart retains the correct review state",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-attempt: no extra provider dispatch",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-attempt: original audio remains byte-identical in Desk",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-attempt: Desk shows unknown billed cost",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-attempt: reviewed exact copy survives",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-attempt: repeated projection has one task/outbox",
+      "passed": true
+    },
+    {
+      "name": "provider call 1 carries original bytes",
+      "passed": true
+    },
+    {
+      "name": "kill 3 terminated Core with SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-response: no HTTP acknowledgement survives",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-response: restart retains the correct review state",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-response: no extra provider dispatch",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-response: original audio remains byte-identical in Desk",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-response: Desk shows unknown billed cost",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-response: reviewed exact copy survives",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-response: repeated projection has one task/outbox",
+      "passed": true
+    },
+    {
+      "name": "provider call 2 carries original bytes",
+      "passed": true
+    },
+    {
+      "name": "kill 4 terminated Core with SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-outcome: no HTTP acknowledgement survives",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-outcome: restart retains the correct review state",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-outcome: no extra provider dispatch",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-outcome: original audio remains byte-identical in Desk",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-outcome: Desk shows unknown billed cost",
+      "passed": true
+    },
+    {
+      "name": "kill 5 terminated Core with SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-confirmation: no HTTP acknowledgement survives",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-outcome: reviewed exact copy survives",
+      "passed": true
+    },
+    {
+      "name": "core.voice.after-outcome: repeated projection has one task/outbox",
+      "passed": true
+    },
+    {
+      "name": "four originals are downloaded once each",
+      "passed": true
+    },
+    {
+      "name": "three admitted attempts retain exactly one completed provider outcome",
+      "passed": true
+    },
+    {
+      "name": "only two synthetic paid requests reached the bridge",
+      "passed": true
+    },
+    {
+      "name": "all five kills and six starts completed",
+      "passed": true
+    }
+  ],
+  "provider": "synthetic loopback HTTP; no external calls or real accuracy claim",
+  "date": "2026-09-27",
+  "scope": "ADR-075 durable retained voice; local engineering only; no production or live-provider admission",
+  "sourceHashes": {
+    "apps/core/src/routes/source-files.routes.ts": "ceeb480ab267d2b9d7ce52e224494ac3974cdd5a53b0223f3da6ca0a218bd437",
+    "apps/core/src/services/lifecycle-source-admission.ts": "873605fc1ded6b5bf06aa7839fb3bc68d6b0b9fd935b9237bed9c7731b93f5a6",
+    "apps/core/src/services/lifecycle-source-intake.ts": "40521729b9bb3c74b580ec96939cd73be9cf60252158ab3f567f2877b028033d",
+    "apps/core/src/services/lifecycle-source-store.ts": "6adc9478beca413d51e4bcb04c4a34902f2e082847982713655349cac7eecba2",
+    "apps/core/src/services/lifecycle-voice.ts": "5a24862de0bea539fbd8fe2a7c97d9c47a64938edad065e9a64b7cc4c3aeb62d",
+    "apps/core/test/fixtures/document-recovery-process.ts": "4f28ec14704e39c9a8427d7f71c8278f96067de6852b4b981f075d94dd51bdd5",
+    "apps/core/test/fixtures/route-inventory.txt": "37093d9fbd8619aae4e013977d0f163f90386cb5d43fbd4adbea80cbed032167",
+    "apps/core/test/lifecycle-internal-intake.test.ts": "2428e2a1343b29b25c8a6a44d1d0a3a306740ed2c415325073c3d7ef87c82eb2",
+    "apps/core/test/lifecycle-voice-recovery.test.ts": "65ebda53b8dc305b984e7282b184717e7f62b784dfa23d83ae3df0470cae5c21",
+    "apps/core/test/lifecycle-voice.test.ts": "b2bda7d288562aafbf155edbbccab8580e8d2127ba5821c2aab5176132e53c58",
+    "apps/core/test/startup-schema-check.test.ts": "4d9b98cc5fe6136dd1b1fcbcb48b4a5e5f152a157421da97a1a61fb4f2390b81",
+    "apps/desk/src/api/client.ts": "b9dc73f8a9b36124593d6908f468193081a115d30433aceb9188cc0839537e15",
+    "apps/desk/src/components/SourceFilesPanel.tsx": "601c324f8c637fa55657d955fb31226fa19742b5cf7d4ff7068eb4b8336cc10b",
+    "apps/desk/test/source-files.test.ts": "41dc8ab8dba2e67f872ac8db1241dd3004cdc46cec4697c660e4836f421998dc",
+    "packages/contracts/src/blobs.ts": "e051b9e4e74b6a0f53553286856177e9be2e851a3f3eae96acbd9187c65644fa",
+    "packages/db/migrations/044_voice_source_admission.sql": "2d148acb20ae8e547c8a23551effc269de665226dbf4f39e4249e62d63f86ab3",
+    "packages/db/test/schema-upgrade.test.ts": "7e9f423969697e23e75bdb5bc4eb8289eb25d939ba999566fccc486ba7db319b",
+    "packages/domain/src/index.ts": "1444548ef988c78a01f3a7a6c6549ca4880743aa1fffa943d9ac6d2fc63a539f",
+    "packages/domain/src/telegram-source-review.ts": "0f2dec2998c7c6ece2c08e1d9dad0e92aef43f013aa62c047dcd986cf4976f99",
+    "packages/domain/src/voice-audio.ts": "631e9e1d782ee0a05a79d07cbcb50f69616a67a6988e4b09e74a1b51b38d6420",
+    "packages/domain/test/voice-audio.test.ts": "21cfdd02bab9a3a5f8dfd2d91ed26a5c5b10a1bc694dc5b5c8aac420ed10d837",
+    "packages/integrations/src/voice-transcriber.ts": "9579b3add162f9026cbccd785bffd2bc4b04967f0eb8b77b99c5a84f80604f02",
+    "packages/integrations/test/voice-evidence.test.ts": "e220f9192423cbe320d83a2f75e93476a07d2c365fe509c7413b40454f8e763a",
+    "packages/testkit/fixtures/voice/README.md": "b2527e7a94fb1d385f43013cf85ccb907a0f082d9b09da8d259dc71c04d96d8e",
+    "packages/testkit/fixtures/voice/silence-one-second.ogg": "e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2"
+  },
+  "verification": {
+    "focused": {
+      "uniqueTestsPassed": 185,
+      "files": 13,
+      "method": "Final affected run: 184 passed, one malformed generated duration fixture failed. Corrected fixture follow-up: 13/13 domain tests passed, including valid 600-second and invalid 601-second boundaries. All 185 distinct affected tests have passing final observations.",
+      "logs": [
+        "/private/tmp/hawa-voice-workflow-final-focused.log",
+        "/private/tmp/hawa-voice-duration-followup.log"
+      ]
+    },
+    "typecheck": "passed",
+    "lint": "passed; 1005 any occurrences within 1053 ceiling; nine existing egress exceptions remain",
+    "deskBuild": "passed",
+    "fullRegression": "pending sealed candidate",
+    "securityScan": "passed: zero secrets in committable files",
+    "blueprint": "passed: 859 checks, zero warnings/failures"
+  },
+  "earlierFailures": [
+    {
+      "run": "first focused",
+      "failed": 4,
+      "passed": 50,
+      "cause": "SELECT FOR SHARE applied model UPDATE RLS and hid admitted voice models from runtime operator. Fixed narrow tenant-role-checked reader."
+    },
+    {
+      "run": "recovery affected",
+      "failed": 1,
+      "passed": 80,
+      "cause": "Four newly registered review route aliases missing from inventory; updated inventory. The crash drill passed."
+    },
+    {
+      "run": "final affected",
+      "failed": 1,
+      "passed": 184,
+      "cause": "Duration fixture concatenated two pages while rewriting one page header. Corrected to complete one-second pages and proved both boundary sides."
+    }
+  ],
+  "limits": [
+    "Single-stream Ogg Opus structural/timing envelope only; at most 20 MiB and 600 encoded seconds; no acoustic decoder or other codecs.",
+    "Real speech accuracy, multilingual quality and human review remain unqualified; fixture audio is generated silence and transcripts are synthetic.",
+    "Actual billed cost is null, not zero; no automatic provider reconciliation, retry or refund.",
+    "Reservation admission is the policy linearization point. The revocation drill changes policy before this admission; it does not claim cancellation of a previously admitted/in-flight call.",
+    "Paid attempts deduplicate tenant/client/audio hash; manual copy review does not settle financial uncertainty.",
+    "Core restart drill is not a voice Restate journal recovery, clean-host restore, full live Canva journey or production rollout.",
+    "No production model deployment, credential, enrolment flag, service or live Telegram message changed."
+  ]
+}

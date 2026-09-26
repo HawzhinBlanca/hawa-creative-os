@@ -25,6 +25,12 @@ globalThis.fetch = (input, init) => {
       return transport(`${origin}/telegram/getFile`, { ...init, redirect: 'error' });
     if (url.href === `https://api.telegram.org/file/bot${bot}/sources/fixture.pdf`)
       return transport(`${origin}/telegram/file`, { ...init, redirect: 'error' });
+    if (process.env.HAWA_VOICE_RECOVERY === '1') {
+      if (url.href === `https://api.telegram.org/file/bot${bot}/sources/fixture.ogg`)
+        return transport(`${origin}/telegram/file`, { ...init, redirect: 'error' });
+      if (url.href === 'https://api.openai.com/v1/audio/transcriptions')
+        return transport(`${origin}/transcribe`, { ...init, redirect: 'error' });
+    }
   }
   if (url.origin !== origin || !['/parse', '/reach'].includes(url.pathname))
     throw new Error('Recovery process refused non-fixture network access');

@@ -153,8 +153,14 @@ export interface DocumentReceipt {
   extractorVersion: string; createdAt: string; contentUrl: string;
 }
 export interface RetainedSourceFile {
-  clientId: string; updateId: number; sourceSha256: string; createdAt: string; documentId: string | null;
+  kind: 'pdf' | 'voice'; clientId: string; updateId: number; sourceSha256: string; createdAt: string; documentId: string | null;
   stage: 'retained' | 'ready' | 'copy_confirmed' | 'extraction_stopped'; message: string | null;
+}
+export interface RetainedVoiceReview {
+  clientId: string; updateId: number; sourceSha256: string;
+  state: 'manual' | 'received' | 'rejected' | 'uncertain'; message: string; transcript: string | null;
+  estimatedUsd: number | null; actualUsd: null; attemptKey?: string;
+  audio: { durationSeconds: number; channels: number } | null;
 }
 export interface SavedDocumentInspection extends Omit<DocumentInspection, 'sourceSaved'> {
   sourceSaved: true; receipt: DocumentReceipt;
@@ -349,6 +355,8 @@ class HawaApiClient {
     documents: (clientId: string) => this.request<{ items: DocumentReceipt[] }>(`/clients/${encodeURIComponent(clientId)}/documents`),
     sourceFiles: (clientId: string, signal?: AbortSignal) =>
       this.request<{ clientId: string; items: RetainedSourceFile[] }>(`/clients/${encodeURIComponent(clientId)}/source-files`, { signal }),
+    sourceVoiceReview: (clientId: string, updateId: number, signal?: AbortSignal) =>
+      this.request<RetainedVoiceReview>(`/clients/${encodeURIComponent(clientId)}/source-files/${updateId}/review`, { signal }),
     sourceFileContent: async (clientId: string, updateId: number, signal?: AbortSignal): Promise<Blob> => {
       const response = await fetch(`/v1/clients/${encodeURIComponent(clientId)}/source-files/${updateId}/content`, { headers: getAuthHeaders(), signal });
       if (!response.ok) throw new ApiError(response.status, 'The retained original could not be downloaded.');

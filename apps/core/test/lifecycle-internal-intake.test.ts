@@ -288,7 +288,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
 
-  it('holds voice and unlinked photos and requests an explicit client for a PDF', async () => {
+  it('requests an explicit client for voice and PDF sources and holds unlinked photos', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     const app = createApp({ db } as any);
@@ -302,7 +302,7 @@ describe('POST /v1/internal/telegram/intake', () => {
       delete (update.message as any).text;
       Object.assign(update.message, media);
       const result = await intake(app, update, 'lifecycle');
-      expect(result.body).toMatchObject('document' in media
+      expect(result.body).toMatchObject('document' in media || 'voice' in media
         ? { intakeStatus: 422, lifecycleAction: 'source-message' }
         : { intakeStatus: 422, lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
       expect(await tasksInChat(chat)).toHaveLength(0);

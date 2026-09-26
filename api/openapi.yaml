@@ -381,8 +381,8 @@ paths:
   /v1/clients/{clientId}/source-files:
     get:
       tags: [Clients]
-      operationId: listRetainedTelegramPdfs
-      summary: Inspect the latest 20 retained Telegram PDFs, including stopped extraction
+      operationId: listRetainedTelegramSources
+      summary: Inspect the latest 20 retained Telegram PDF and voice originals, including stopped extraction
       description: Requires an office session and current client access. Returns source identities and review state without raw messages, sender identities or extracted copy. Copy review is not design or knowledge approval.
       parameters: [{$ref: '#/components/parameters/ClientId'}]
       responses:
@@ -400,8 +400,9 @@ paths:
                     maxItems: 20
                     items:
                       type: object
-                      required: [clientId, updateId, sourceSha256, createdAt, documentId, stage, message]
+                      required: [kind, clientId, updateId, sourceSha256, createdAt, documentId, stage, message]
                       properties:
+                        kind: {type: string, enum: [pdf, voice]}
                         clientId: {type: string, format: uuid}
                         updateId: {type: integer, minimum: 1}
                         sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
@@ -413,15 +414,50 @@ paths:
   /v1/clients/{clientId}/source-files/{updateId}/content:
     get:
       tags: [Clients]
-      operationId: downloadRetainedTelegramPdf
-      summary: Download the hash-verified original even if PDF extraction stopped
+      operationId: downloadRetainedTelegramSource
+      summary: Download the hash-verified PDF or voice original even if extraction stopped
       parameters:
         - {$ref: '#/components/parameters/ClientId'}
         - {name: updateId, in: path, required: true, schema: {type: integer, minimum: 1}}
       responses:
-        '200': {description: Original PDF attachment with private no-store caching, content: {application/pdf: {schema: {type: string, format: binary}}}}
+        '200': {description: Original attachment with private no-store caching, content: {application/pdf: {schema: {type: string, format: binary}}, audio/ogg: {schema: {type: string, format: binary}}}}
         '404': {description: Source or client unavailable to the current session}
         '503': {description: Original bytes unavailable or corrupt}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/source-files/{updateId}/review:
+    get:
+      tags: [Clients]
+      operationId: inspectRetainedVoiceSource
+      summary: Inspect unreviewed transcription and durable paid-call state
+      description: Requires current client access. Does not dispatch a model or approve copy. Missing or uncertain outcomes never cause a retry. Actual billed cost remains unknown.
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: updateId, in: path, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '200':
+          description: Client-scoped retained voice evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clientId, updateId, sourceSha256, state, message, transcript, estimatedUsd, actualUsd, audio]
+                properties:
+                  clientId: {type: string, format: uuid}
+                  updateId: {type: integer, minimum: 1}
+                  sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+                  state: {type: string, enum: [manual, received, rejected, uncertain]}
+                  message: {type: string}
+                  transcript: {type: [string, 'null'], maxLength: 100000}
+                  estimatedUsd: {type: [number, 'null'], minimum: 0}
+                  actualUsd: {type: 'null'}
+                  attemptKey: {type: string, pattern: '^[0-9a-f]{64}$'}
+                  providerRequestId: {type: [string, 'null'], pattern: '^req_[A-Za-z0-9_-]{1,180}$'}
+                  audio:
+                    type: [object, 'null']
+                    properties:
+                      durationSeconds: {type: number, exclusiveMinimum: 0, maximum: 600}
+                      channels: {type: integer, enum: [1, 2]}
+        '404': {description: Voice source or client unavailable to the current session}
         default: {$ref: '#/components/responses/Problem'}
   /v1/clients/{clientId}/documents:
     post:
@@ -465,7 +501,7 @@ paths:
         - {$ref: '#/components/parameters/ClientId'}
         - {name: documentId, in: path, required: true, schema: {type: string, format: uuid}}
       responses:
-        '200': {description: Original PDF attachment with private no-store caching, content: {application/pdf: {schema: {type: string, format: binary}}}}
+        '200': {description: Original attachment with private no-store caching, content: {application/pdf: {schema: {type: string, format: binary}}, audio/ogg: {schema: {type: string, format: binary}}}}
         '404': {description: Receipt outside authorized client scope or unavailable}
         '503': {description: File store unavailable or original bytes missing or corrupt}
         default: {$ref: '#/components/responses/Problem'}

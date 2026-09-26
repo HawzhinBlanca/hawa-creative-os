@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { sql, type Database, type Kysely, type BlobStore } from '@hawa/db';
 import { parseBlobRef, type BlobRef, type LifecycleSourceRef, type ReviewedSourceEvidence } from '@hawa/contracts';
-import type { TelegramSourceEnvelope } from '@hawa/domain';
+import { inspectVoiceAudio, type TelegramSourceEnvelope, type VoiceAudioInspection } from '@hawa/domain';
 import type { DocumentRow } from './client-documents.js';
 
 export const sourceHash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
@@ -13,7 +13,8 @@ export interface SourceUpload extends TelegramSourceEnvelope {
 }
 export interface SourceExtraction {
   sourceUpdateId: number; sourceSha256: string; extractionSha256: string;
-  extractorVersion: string; documentId: string; preview: string; limitations: string[];
+  extractorVersion: string; documentId?: string; preview: string; limitations: string[];
+  voice?: VoiceAudioInspection;
 }
 export interface SourceConfirmation {
   sourceUpdateId: number; confirmationUpdateId: number; requestId: string;
@@ -39,21 +40,22 @@ export async function assertSourceIdentity(trx: Kysely<Database>, tenantId: stri
   if (rows.some(row => row.payload.payloadHash !== hash)) throw new SourceConflict('This source event already has different content');
 }
 
-async function read<T>(trx: Kysely<Database>, tenantId: string, kind: string, id: number): Promise<T | null> {
+export async function readSourceRecord<T>(trx: Kysely<Database>, tenantId: string, kind: string, id: number | string): Promise<T | null> {
   const row = (await sql<{ payload: T }>`SELECT payload FROM hawa.inbox_events
     WHERE tenant_id=${tenantId}::uuid AND source_account_id=${kind} AND source_event_id=${String(id)}
       AND event_kind=${kind} LIMIT 1`.execute(trx)).rows[0];
   return row?.payload ?? null;
 }
-async function append<T>(trx: Kysely<Database>, tenantId: string, kind: string, id: number, payload: T): Promise<T> {
+export async function appendSourceRecord<T>(trx: Kysely<Database>, tenantId: string, kind: string, id: number | string, payload: T): Promise<T> {
   const json = JSON.stringify(payload);
   await sql`INSERT INTO hawa.inbox_events(tenant_id,source_account_id,source_event_id,event_kind,payload,payload_hash,verified)
     VALUES (${tenantId}::uuid,${kind},${String(id)},${kind},${json}::jsonb,${sourceHash(json)},true)
     ON CONFLICT DO NOTHING`.execute(trx);
-  const saved = await read<T>(trx, tenantId, kind, id);
+  const saved = await readSourceRecord<T>(trx, tenantId, kind, id);
   if (!saved) throw new Error('Source ledger did not commit');
   return saved;
 }
+const read = readSourceRecord, append = appendSourceRecord;
 export async function readSourceUpload(trx: Kysely<Database>, tenantId: string, updateId: number) {
   const upload = await read<SourceUpload>(trx, tenantId, 'lifecycle_source_upload', updateId);
   if (upload && (!parseBlobRef(upload.blob) || upload.updateId !== updateId || !upload.clientId || !upload.payloadHash))
@@ -119,12 +121,21 @@ export async function verifyReviewedSource(trx: Kysely<Database>, store: BlobSto
   const client = await trx.selectFrom('clients').select('id').where('tenant_id', '=', input.tenantId)
     .where('id', '=', input.clientId).where('status', '=', 'active').forShare().executeTakeFirst();
   if (!client) throw new SourceConflict('The source client is no longer active');
-  const document = (await sql<DocumentRow>`SELECT * FROM hawa.client_documents WHERE tenant_id=${input.tenantId}::uuid
-    AND client_id=${input.clientId}::uuid AND id=${extraction.documentId}::uuid`.execute(trx)).rows[0];
-  if (!document || document.source_sha256 !== upload.blob.sha256 || document.extraction_sha256 !== extraction.extractionSha256)
-    throw new SourceConflict('The original extraction receipt is unavailable');
+  if (upload.kind === 'pdf') {
+    const document = (await sql<DocumentRow>`SELECT * FROM hawa.client_documents WHERE tenant_id=${input.tenantId}::uuid
+      AND client_id=${input.clientId}::uuid AND id=${extraction.documentId}::uuid`.execute(trx)).rows[0];
+    if (!document || document.source_sha256 !== upload.blob.sha256 || document.extraction_sha256 !== extraction.extractionSha256)
+      throw new SourceConflict('The original extraction receipt is unavailable');
+  }
   if (!store) throw new Error('SOURCE_STORE_UNAVAILABLE');
-  try { await store.read(upload.blob, { verify: true }); } catch { throw new Error('SOURCE_BYTES_UNAVAILABLE'); }
+  let bytes: Buffer;
+  try { bytes = await store.read(upload.blob, { verify: true }); } catch { throw new Error('SOURCE_BYTES_UNAVAILABLE'); }
+  if (upload.kind === 'voice') {
+    const inspected = inspectVoiceAudio(bytes);
+    if (!extraction.voice || voiceInspectionHash(upload.blob.sha256, inspected) !== extraction.extractionSha256 ||
+        voiceInspectionHash(upload.blob.sha256, extraction.voice) !== extraction.extractionSha256)
+      throw new SourceConflict('The original audio inspection receipt is unavailable');
+  }
   return { upload, confirmation, evidence: {
     kind: upload.kind, sourceSha256: upload.blob.sha256, extractionSha256: extraction.extractionSha256,
     sourceUpdateId: upload.updateId, confirmationUpdateId: confirmation.confirmationUpdateId,
@@ -133,3 +144,7 @@ export async function verifyReviewedSource(trx: Kysely<Database>, store: BlobSto
     documentId: extraction.documentId, extractorVersion: extraction.extractorVersion,
   } };
 }
+
+export const voiceInspectionHash = (sha256: string, audio: VoiceAudioInspection) =>
+  sourceHash(JSON.stringify([sha256, audio.version, audio.mediaType, audio.channels,
+    audio.durationSeconds, audio.encodedSamples, audio.sampleRate]));

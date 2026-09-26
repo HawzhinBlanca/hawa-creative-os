@@ -15,3 +15,4 @@ export * from './retention.js';
 export * from './lifecycle-chat-routing.js';
 export * from './office-hours.js';
 export * from './telegram-source-review.js';
+export * from './voice-audio.js';

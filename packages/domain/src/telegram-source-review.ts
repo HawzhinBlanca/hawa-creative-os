@@ -2,7 +2,7 @@
 export interface TelegramSourceEnvelope {
   updateId: number; chatId: string; senderId: string; topicId: string;
   messageId: number; replyMessageId: number | null; chatType: string;
-  caption: string; fileId: string; kind: 'pdf';
+  caption: string; fileId: string; kind: 'pdf' | 'voice';
 }
 const record = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -32,6 +32,21 @@ export function telegramPdfSource(update: unknown): TelegramSourceEnvelope | nul
       (file.file_size !== undefined && (!positive(file.file_size) || file.file_size > 20 * 1024 * 1024))) return null;
   return { ...scope, fileId: file.file_id, kind: 'pdf', caption: typeof msg.caption === 'string' ? msg.caption : '' };
 }
+
+export function telegramVoiceSource(update: unknown): TelegramSourceEnvelope | null {
+  const scope = sourceMessageScope(update), msg = record(record(update)?.message);
+  if (!scope || !msg || Boolean(msg.voice) === Boolean(msg.audio) ||
+      ['photo','document','video','animation','live_photo','video_note','media_group_id','text'].some(key => msg[key] !== undefined) ||
+      (msg.caption !== undefined && typeof msg.caption !== 'string')) return null;
+  const file = record(msg.voice ?? msg.audio);
+  if (!file || typeof file.file_id !== 'string' || !file.file_id.trim() || file.file_id.length > 512 ||
+      (file.file_size !== undefined && (!positive(file.file_size) || file.file_size > 20 * 1024 * 1024))) return null;
+  const mime = typeof file.mime_type === 'string' ? file.mime_type.toLowerCase().split(';')[0].trim() : '';
+  if (mime && !['audio/ogg', 'audio/opus', 'application/ogg'].includes(mime)) return null;
+  return { ...scope, fileId: file.file_id, kind: 'voice', caption: typeof msg.caption === 'string' ? msg.caption : '' };
+}
+
+export const telegramSource = (update: unknown) => telegramPdfSource(update) ?? telegramVoiceSource(update);
 
 /** Only the command line is removed. Whitespace, script, punctuation and all remaining text survive. */
 export function sourceCopyConfirmation(update: unknown): { scope: NonNullable<ReturnType<typeof sourceMessageScope>>; copy: string } | null {
