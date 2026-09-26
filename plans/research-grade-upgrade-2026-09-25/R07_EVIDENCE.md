@@ -1,5 +1,24 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — text refusal survives a chat flag rollback
+
+The media replay review exposed the same cutover problem for existing text refusals.
+A red-before PostgreSQL test showed that a stale, unlinked reply returned a deliberate
+`STALE_REQUEST_REPLY` in the flagged chat but created a legacy task (`intakeStatus:
+201`) when the identical update was repeated after the flag was removed. Core now
+replays every stored hash-bound routing refusal before selecting lifecycle or legacy
+intake. A changed payload under the same update ID returns `IDEMPOTENCY_CONFLICT`.
+ADR-059 records the ownership reason. Requirements: FR-060 and NFR-001.
+
+**Verification:** the focused Core/worker set passed **2 files / 50 tests** after
+the change, including the original refusal, rollback replay, changed-payload
+conflict and absence of a task. Repository lint and full source/test typecheck passed.
+The full **425-file / 3,285-
+test** source result and `R1.S3.MEDIA` isolated Docker run in the next section belong
+to source `29774a1`, immediately before this text-refusal follow-up; they have not
+yet been rerun on the follow-up source. Live cutover and full media admission remain
+open; the production flag remains off.
+
 ## 2026-09-26 — flagged media is held instead of creating a wrong-owner task
 
 A red-before PostgreSQL test showed that a captioned photo in a flagged chat returned

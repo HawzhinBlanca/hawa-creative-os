@@ -56,3 +56,8 @@ replays the refusal; a changed payload under the same update ID conflicts. This 
 interim ownership fence, not media support. Full cutover still requires Core-owned
 downloads, a retained content reference outside the Restate journal, image and voice
 use in the correct request, album grouping, and process-kill tests of those paths.
+
+The same cutover rule also applies to a stored text refusal. A stale or ambiguous
+requester reply, or a blocked revision, must replay its hash-bound decision even if
+the chat flag is rolled back. Otherwise the legacy intake can reinterpret a refused
+reply as a new task under a different owner.

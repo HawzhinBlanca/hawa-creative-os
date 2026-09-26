@@ -162,6 +162,15 @@ describe('POST /v1/internal/telegram/intake', () => {
     const result = await intake(createApp({ db } as any), update);
     expect(result.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY' });
     expect(await tasksInChat(chat)).toHaveLength(0);
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
+    const replay = await intake(createApp({ db } as any), update);
+    expect(replay.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY',
+      lifecycleAction: 'request-choice-required' });
+    const altered = structuredClone(update);
+    altered.message.text = 'An unrelated brief';
+    expect((await intake(createApp({ db } as any), altered)).body).toMatchObject({
+      intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
   it('admits a styling-only message as manual and does not promote a greeting to a lifecycle request', async () => {
@@ -367,6 +376,9 @@ describe('POST /v1/internal/telegram/intake', () => {
     vi.stubEnv('AUTO_GENERATE_DAILY_CAP_PER_SENDER', '10000');
     const replay = await intake(createApp({ db } as any), update, 'lifecycle', requestId);
     expect(replay.body).toMatchObject({ intakeStatus: 409, code: 'DAILY_CAP_REACHED',
+      lifecycleAction: 'revision-blocked' });
+    const afterRollback = await intake(createApp({ db } as any), update);
+    expect(afterRollback.body).toMatchObject({ intakeStatus: 409, code: 'DAILY_CAP_REACHED',
       lifecycleAction: 'revision-blocked' });
     expect(await tasksInChat(chat)).toHaveLength(1);
   });

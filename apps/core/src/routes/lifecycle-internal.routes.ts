@@ -191,15 +191,21 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
     }
 
-    // A media update parked while this chat used RequestLifecycle must not become a legacy task
-    // when a rollback changes the chat flag before Telegram repeats the same update ID.
-    if (priorRefusal?.code === 'LIFECYCLE_MEDIA_NOT_ADMITTED') {
+    // A deliberate lifecycle refusal must not become a legacy task when the chat flag
+    // changes before Telegram repeats the same update ID.
+    if (priorRefusal) {
       const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
       if (priorRefusal.payloadHash !== hash || priorRefusal.chatId !== sourceChat) {
         return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
       }
-      return handled(422, { code: priorRefusal.code, lifecycleAction: 'park-update',
-        chatId: sourceChat, reason: 'A lifecycle chat media update needs operator review; no task was started' });
+      if (priorRefusal.code === 'LIFECYCLE_MEDIA_NOT_ADMITTED') {
+        return handled(422, { code: priorRefusal.code, lifecycleAction: 'park-update',
+          chatId: sourceChat, reason: 'A lifecycle chat media update needs operator review; no task was started' });
+      }
+      return handled(409, { code: priorRefusal.code,
+        lifecycleAction: priorRefusal.code === 'AMBIGUOUS_REQUEST' ||
+          priorRefusal.code === 'STALE_REQUEST_REPLY' ? 'request-choice-required' : 'revision-blocked',
+        chatId: sourceChat });
     }
 
     // --- lifecycle mode: bind a requester answer to one request, then replay it by update ID ---
@@ -267,13 +273,6 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           try {
             const TENANT = DEFAULT_TENANT_ID;
             const directive = rawText.trim();
-            if (priorRefusal) {
-              if (priorRefusal.payloadHash !== payloadHash || priorRefusal.chatId !== chatId) {
-                return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
-              }
-              return handled(409, { code: priorRefusal.code,
-                lifecycleAction: actionFor(priorRefusal.code), chatId });
-            }
             // The Core poller may have committed this update before the chat flag or worker
             // poller changed. Its old receipt wins; reopening it under Restate would duplicate
             // a task even though this update ID is the same.
