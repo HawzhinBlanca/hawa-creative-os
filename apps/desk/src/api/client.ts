@@ -139,6 +139,15 @@ export interface ReviewAssignmentChange {
   active: boolean; expectedVersion: number; reason: string;
 }
 
+export interface DocumentInspection {
+  clientId: string; sourceSaved: false; approved: false;
+  document: {
+    sourceSha256: string;
+    chunks: Array<{ chunkId: string; pageNumber: number | null; text: string }>;
+    extraction: { version: string; pageCount: number | null; limitations: string[] };
+  };
+}
+
 class HawaApiClient {
   private basePrefix = '/v1';
   private unauthorizedHint: ((error: ApiError) => void) | null = null;
@@ -298,6 +307,9 @@ class HawaApiClient {
   // Core restart discards what is written here.
   public readonly clients = {
     list: () => this.request<any[]>('/clients'),
+    inspectDocument: (clientId: string, file: File, signal?: AbortSignal) =>
+      this.request<DocumentInspection>(`/clients/${encodeURIComponent(clientId)}/documents/inspect`,
+        { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file, signal }),
     dna: (clientId: string) => this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`),
     saveDna: (clientId: string, dna: unknown) =>
       this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`, { method: 'POST', body: JSON.stringify(dna) }),

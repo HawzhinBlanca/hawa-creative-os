@@ -12,7 +12,27 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R07 original image files)
+## Current result (2026-09-26 — R12 local PDF inspection)
+
+Desk's client Brand DNA view can inspect PDFs through a client-authorized local
+Docling service. The parser preserves source-byte hashes, actual page coordinates
+and stable chunk IDs; it refuses partial/unsupported results. Preview content is
+unsaved and unapproved, and cannot activate brand rules or create tasks. One active
+inspection per Core process, bounded upload/output/time and an isolated non-root
+parser container limit resource use. See ADR-070, `R12_EVIDENCE.md`,
+`R12_DOCLING_PROOF.json` and `services/docling/README.md`.
+
+Six parser defects were reproduced before implementation. The real isolated
+container/TypeScript probe passed six checks, and outbound access was refused.
+Final focused checks passed **5 files / 39 tests**; full typecheck, lint, Desk
+build and zero-secret scan passed. Exact sealing and full regression follow this
+source/evidence commit. Native text
+order is unverified; OCR, tables and images are not extracted. Retained/approved
+PDF ingestion, lifecycle PDF/voice intake, live Workspace/provider/export/recovery
+and independent quality admission remain open. No production configuration or
+flag changed.
+
+## Prior result (2026-09-26 — R07 original image files)
 
 Images sent through Telegram's file/document option now work as first briefs,
 current request revision/clarification replies and confirmed albums. Intake uses
@@ -30,8 +50,9 @@ and simulated delivery after Core SIGKILL/replay; a PDF stayed held with one
 sender notice and office alert. No unmatched model calls. The first batch exposed
 a harness wait on future reminders; the corrected final batch preserves those
 timers while checking ready work. Exact source hashes and results are in
-`R07_IMAGE_DOCUMENT_DRILL.json`. Source sealing and the full regression suite
-follow this source/evidence commit.
+`R07_IMAGE_DOCUMENT_DRILL.json`. Source `c6ce07d`, seal `b2e9eaa`, passed
+**435 files / 3,385 tests**, with **4 files / 56 skipped**; manifest and blueprint
+**831/0/0** verified.
 Live Workspace/provider workflow, PDF/voice intake, export/reopen/recovery and
 independent creative-quality gates remain open. No production flag or deployment
 changed.

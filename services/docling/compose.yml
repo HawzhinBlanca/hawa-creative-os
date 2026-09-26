@@ -1,0 +1,15 @@
+services:
+  docling:
+    build: .
+    image: hawa-docling:2.130.0-native-v1
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 32
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    networks: [parser]
+networks:
+  parser:
+    internal: true

@@ -1,5 +1,55 @@
 # R12 — Retrieval truth and scope, first slice
 
+## 2026-09-26 — Local PDF inspection with real provenance (ADR-070)
+
+The unused `DoclingParser` still decoded binary documents as UTF-8, invented page
+numbers/boxes and changed chunk IDs on every replay. Six red-before tests reproduced
+those defects, including loss of the original byte hash when decoding a BOM. It
+now strictly decodes plain UTF-8 with character offsets, or invokes a pinned local
+Docling native PDF service. Original-byte hashes, parser version, measured pages
+and boxes are independently checked; chunk identities are deterministic and
+source-bound. Token counts are explicitly estimates. Unsupported MIME, invalid
+UTF-8, mismatched hashes/versions, partial pages and excessive results are refused.
+
+Desk's client Brand DNA view now offers **Inspect a PDF**. The authenticated
+`POST /v1/clients/{clientId}/documents/inspect` checks active PostgreSQL/RLS access
+before and after conversion. It streams a bounded upload, permits one active
+inspection per Core process, and returns an explicitly unsaved/unapproved preview.
+No source, task, knowledge item or DNA is written. Client changes discard late
+responses; React displays document content as text, with page selection and
+extraction limitations. This is a usable inspection slice, not automatic PDF
+brief intake or governed document indexing. Requirements: FR-011, FR-018, FR-019,
+NFR-006, NFR-014. Usage and deployment boundary: `services/docling/README.md`.
+
+The sidecar pins Docling 2.130.0, docling-parse 7.22.0, all resolved Python packages
+and the Python base-image digest. It takes bytes only, with no source paths/URLs,
+models, OCR, external plugins or credentials. Limits cover bytes, pages, text,
+response size, process count, upload/conversion deadlines, CPU and memory. Its
+non-root, read-only container has a private internal network and no host port.
+A direct connection probe returned `ENETUNREACH` for an external address.
+
+**Real acceptance:** `R12_DOCLING_PROOF.json` preserves six passing checks through
+the actual container and compiled TypeScript adapter: two compressed PDF pages
+with exact text/measured coordinates and source hash, stable replay, blank-page
+refusal, 41-page refusal, malformed-PDF refusal and an oversized HTTP body. Source
+hashes, compiled adapter hash and tested parser/probe image IDs are recorded.
+
+**Verification:** six red-before failures; final focused checks passed **5 files / 39 tests**. Full source/test typecheck,
+lint, Desk build (441.06 kB main chunk) and zero-secret scan passed. The full
+regression suite follows the source/evidence commit and candidate seal. Early integration runs exposed
+stale workspace package output, a wrong fixture path and an unsupported test
+principal tenant override; these were fixed rather than counted as passing. The
+first Compose run failed because tmpfs commas needed quoting. The host could not
+reach the internal Docker network, so the real probe was moved into that same
+private network without giving the parser an egress route.
+
+Limits remain explicit: native text ordering is unverified; OCR, table structure
+and images are not extracted. Textless pages are held, and visual information on
+otherwise text-bearing pages can still be absent. English fixtures do not qualify
+Sorani/Arabic PDF fidelity. No production service/configuration changed. R12 stays
+in progress: approved source retention/indexing, hybrid retrieval evaluation and
+human quality evidence remain open; lifecycle PDFs/voice still hold.
+
 **Date:** 2026-09-25. **Status:** in progress. **Source:** `02fff0b` on `codex/research-grade-design-system`.
 
 ## What changed

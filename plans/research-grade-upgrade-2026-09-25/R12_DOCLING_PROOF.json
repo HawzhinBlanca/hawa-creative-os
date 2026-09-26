@@ -1,0 +1,67 @@
+{
+  "at": "2026-09-26T19:47:15.227Z",
+  "fixtureSha256": "adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617",
+  "extraction": {
+    "version": "docling-2.130.0/parse-7.22.0/native-v1",
+    "pageCount": 2,
+    "limitations": [
+      "Native text order is unverified.",
+      "OCR, table structure and images are not extracted."
+    ]
+  },
+  "checks": [
+    {
+      "name": "real compressed pages, exact text and measured boxes",
+      "passed": true
+    },
+    {
+      "name": "stable replay identity",
+      "passed": true
+    },
+    {
+      "name": "refuse blank.pdf",
+      "passed": true
+    },
+    {
+      "name": "refuse too-many-pages.pdf",
+      "passed": true
+    },
+    {
+      "name": "refuse malformed PDF",
+      "passed": true
+    },
+    {
+      "name": "refuse oversized declared body before extraction",
+      "passed": true
+    }
+  ],
+  "kind": "local_native_pdf_acceptance",
+  "limits": [
+    "Synthetic English PDFs only; no live production or Sorani/Arabic PDF quality admission.",
+    "Inspection does not retain sources, approve knowledge or admit PDF design requests."
+  ],
+  "parserImageId": "sha256:ecfecce7e0d97f9e12c417a1d159b9cb73d6c6bf1f4794b496bde9b3d5b7994a",
+  "probeImageId": "sha256:0d9bda80e71fe9594583a04a66e487a4a5e4453455fae2fe38655e17597b2c13",
+  "isolation": {
+    "outboundConnect": "ENETUNREACH",
+    "user": "65532:65532",
+    "readOnly": true,
+    "memoryBytes": 805306368,
+    "pidsLimit": 32,
+    "cpus": 1,
+    "network": "dedicated internal bridge; no host ports"
+  },
+  "sourceFileSha256": {
+    "packages/retrieval/src/docling-parser.ts": "b6a7127437c6e15780404c0f1869af4177c8194b67eff8a792ccc53220ccd200",
+    "services/docling/extract.py": "f0316630f7b320b7f060793a4b938823826e58346f36f2fc57fe869bc20640a4",
+    "services/docling/server.py": "396a0a1a0e6a9c3d015a3b9c3123392a4f3153b41461997a9721fd5703a5fef7",
+    "services/docling/Dockerfile": "6450bc790360770e4ed4603d2ab7cb2146f6b9dd5b84ffb0310a299e501083c8",
+    "services/docling/requirements.lock": "189435ea865b159ee4e1920f0f2719b3993ce918d561fcc2e10891ffec13af8f",
+    "services/docling/compose.yml": "33dbf42bb196f48381c2cd47591b5435852da4476ab4a0691d4de382f352e476",
+    "services/docling/probe.mjs": "8a8cd9af4c4309cd7fbdca677ccb598b96bf38161fdc227c9a9c73626f6ad1da",
+    "services/docling/fixtures/two-pages.pdf": "adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617",
+    "services/docling/fixtures/blank.pdf": "63a6083ecab3367c000c9b32ce64955170f6857ce0cd76edf74ba78f63de5cb9",
+    "services/docling/fixtures/too-many-pages.pdf": "a820520e2b4ea48440aeba4f248b2e340c963aec4949f31571c727e9c10f70bb"
+  },
+  "compiledParserSha256": "75f7c88446526ca761b7afb37e5622c05586b691fa9027bba8f7556a71b80f1b"
+}

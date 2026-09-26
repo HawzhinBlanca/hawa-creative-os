@@ -362,6 +362,38 @@ paths:
       responses:
         '201': {description: Draft DNA version created, content: {application/json: {schema: {$ref: '../schemas/ClientDNA.schema.json'}}}}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/documents/inspect:
+    post:
+      tags: [Clients]
+      operationId: inspectClientPdf
+      summary: Preview native PDF text locally without saving or approving it
+      description: Requires active client access before and after extraction. Limits are 20 MiB and 40 pages. OCR, semantic reading order, tables and images are not extracted. Partial or textless-page results are refused.
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+      requestBody:
+        required: true
+        content:
+          application/pdf:
+            schema: {type: string, format: binary}
+      responses:
+        '200':
+          description: Unsaved, unapproved text preview with original source hash and measured page coordinates
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clientId, sourceSaved, approved, document]
+                properties:
+                  clientId: {type: string, format: uuid}
+                  sourceSaved: {type: boolean, const: false}
+                  approved: {type: boolean, const: false}
+                  document: {type: object, description: 'Source SHA-256, stable chunks with text/page/coordinates, and extractor version/capability limitations.'}
+        '404': {description: Client unavailable or unauthorized}
+        '408': {description: Upload deadline exceeded}
+        '413': {description: Input size limit exceeded}
+        '422': {description: Unsupported, partial, textless or invalid PDF extraction}
+        '503': {description: Local parser or authorization store unavailable}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/operations/failures:
     get:
       tags: [Operations]

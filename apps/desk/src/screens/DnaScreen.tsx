@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { extractPaletteFromFile, type ExtractedPalette } from '../services/paletteExtractor.js';
 import { apiClient } from '../api/client.js';
+import { DocumentInspectionPanel } from '../components/DocumentInspectionPanel.js';
 import { read, reasonOf } from '../services/statusReport.js';
 
 import { readClientDirectory, type ClientSummary } from '../services/clientDirectory.js';
@@ -700,6 +701,7 @@ const DnaClientScreen: React.FC<{
 
         {/* Center Column: Live DNA Workspace */}
         <div className="panel" style={{ minWidth: 0 }}>
+          <DocumentInspectionPanel clientId={selectedClientId} />
           <div className="tabs" style={{ marginBottom: 16 }}>
             <button className={activeTab === 'brand' ? 'on' : ''} onClick={() => setActiveTab('brand')}>
               🎨 Brand & Palette

@@ -15,7 +15,7 @@ describe('Retrieval: Ingestion & Client-Locked Search', () => {
     idempotencyKey: 'retrieval-key-1',
   };
 
-  it('DoclingParser: extracts paragraph chunks with coordinates and content hashes', async () => {
+  it('DoclingParser: extracts text paragraphs with honest provenance and content hashes', async () => {
     const parser = new DoclingParser();
     const parsed = await parser.parse(
       'doc-1',
@@ -27,7 +27,8 @@ describe('Retrieval: Ingestion & Client-Locked Search', () => {
     expect(parsed.documentId).toBe('doc-1');
     expect(parsed.chunks.length).toBe(2);
     expect(parsed.chunks[0].sha256).toBeDefined();
-    expect(parsed.chunks[0].metadata.coordinates).toBeDefined();
+    expect(parsed.chunks[0].metadata.coordinates).toBeUndefined();
+    expect(parsed.chunks[0].metadata.characterRange).toEqual({ start: 0, end: 31 });
   });
 
   it('RetrievalService: strictly enforces client isolation and zero cross-client leakage', async () => {
