@@ -155,6 +155,25 @@ export interface DocumentReceipt {
 export interface SavedDocumentInspection extends Omit<DocumentInspection, 'sourceSaved'> {
   sourceSaved: true; receipt: DocumentReceipt;
 }
+export interface KnowledgeEvent {
+  actionId: string; version: number; approved: boolean; actorUserId: string; actorDisplayName: string; reason: string; createdAt: string;
+}
+export interface DocumentKnowledgeState {
+  state: { version: number; approved: boolean }; events: KnowledgeEvent[]; canManage: boolean;
+  replayed?: boolean; action?: KnowledgeEvent;
+}
+export interface DocumentKnowledgeChange {
+  approved: boolean; expectedVersion: number; reviewed: boolean; reason: string;
+  sourceSha256: string; extractionSha256: string;
+}
+export interface KnowledgeSearch {
+  clientId: string; mode: 'postgres_lexical_v1'; vectorStatus: 'not_run'; rerankerStatus: 'not_run';
+  items: Array<{ text: string; truncated: boolean; score: number; citation: {
+    documentId: string; chunkId: string; pageNumber: number | null; chunkSha256: string;
+    sourceSha256: string; extractionSha256: string; extractorVersion: string;
+    approvalVersion: number; approvalActionId: string;
+  } }>;
+}
 
 class HawaApiClient {
   private basePrefix = '/v1';
@@ -324,6 +343,13 @@ class HawaApiClient {
     documents: (clientId: string) => this.request<{ items: DocumentReceipt[] }>(`/clients/${encodeURIComponent(clientId)}/documents`),
     document: (clientId: string, id: string, signal?: AbortSignal) =>
       this.request<SavedDocumentInspection>(`/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}`, { signal }),
+    documentKnowledge: (clientId: string, id: string) =>
+      this.request<DocumentKnowledgeState>(`/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}/knowledge`),
+    changeDocumentKnowledge: (clientId: string, id: string, actionId: string, body: string) =>
+      this.request<DocumentKnowledgeState>(`/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}/knowledge`,
+        { method: 'PUT', headers: { 'Idempotency-Key': actionId }, body }),
+    searchKnowledge: (clientId: string, query: string, signal?: AbortSignal) =>
+      this.request<KnowledgeSearch>(`/clients/${encodeURIComponent(clientId)}/knowledge/search?q=${encodeURIComponent(query)}`, { signal }),
     documentContent: async (clientId: string, id: string): Promise<Blob> => {
       const response = await fetch(`/v1/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}/content`, { headers: getAuthHeaders() });
       if (!response.ok) throw new ApiError(response.status, 'The original PDF could not be downloaded.');

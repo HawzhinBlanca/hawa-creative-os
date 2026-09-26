@@ -424,6 +424,46 @@ paths:
         '404': {description: Receipt outside authorized client scope or unavailable}
         '503': {description: File store unavailable or original bytes missing or corrupt}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/documents/{documentId}/knowledge:
+    get:
+      tags: [Clients]
+      operationId: getDocumentKnowledgeApproval
+      summary: Read current reference-search approval and latest 20 audit events
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: documentId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Current version and current named-manager capability, content: {application/json: {schema: {$ref: '#/components/schemas/DocumentKnowledgeState'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+    put:
+      tags: [Clients]
+      operationId: changeDocumentKnowledgeApproval
+      summary: Approve or revoke this exact PDF for client reference search
+      description: Requires live named Google office administrator or scoped client DNA manager authority. New approval verifies original bytes and derives immutable chunks from the saved extraction. Expected version and UUID action identity serialize concurrent decisions. Replay requires current authority and returns the original action plus current state; it never restores an old approval. Revocation and replay do not require source bytes. No DNA rule, final copy, model input or design approval is created. Upload limit 8 KiB and 5 seconds.
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: documentId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/DocumentKnowledgeChange'}}}
+      responses:
+        '201': {description: Immutable action and index transaction committed, content: {application/json: {schema: {$ref: '#/components/schemas/DocumentKnowledgeState'}}}}
+        '200': {description: Original action replayed with current state, content: {application/json: {schema: {$ref: '#/components/schemas/DocumentKnowledgeState'}}}}
+        '409': {description: Stale version, changed source hashes, inactive client or reused action identity}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/knowledge/search:
+    get:
+      tags: [Clients]
+      operationId: searchApprovedClientDocuments
+      summary: Search approved retained PDF passages in an active authorized client
+      description: PostgreSQL normalized exact substring, simple full-text and trigram search. Tenant, client and latest approval are filtered in a materialized relation before ranking. Up to 10 passages, 2000 original characters each, with immutable source, chunk, page and approval citations. No vector, reranker or automatic model context. Private no-store; results represent the query snapshot. Queries have a 3-second database timeout.
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: q, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 500}, description: At most 50 whitespace-separated words; at least one letter or numeral.}
+      responses:
+        '200': {description: Scoped lexical results with original text and citations, content: {application/json: {schema: {$ref: '#/components/schemas/DocumentKnowledgeSearch'}}}}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/clients/{clientId}/documents/inspect:
     post:
       tags: [Clients]
@@ -617,9 +657,72 @@ components:
       properties:
         clientId: {type: string, format: uuid}
         sourceSaved: {const: true}
-        approved: {const: false}
+        approved: {const: false, description: Retention itself grants no approval. Read the separate knowledge endpoint for current reference approval.}
         receipt: {$ref: '#/components/schemas/ClientDocumentReceipt'}
         document: {type: object, description: Immutable source-byte SHA-256, chunks with measured page provenance and extractor capability limits.}
+    DocumentKnowledgeChange:
+      type: object
+      required: [approved, expectedVersion, sourceSha256, extractionSha256, reviewed, reason]
+      properties:
+        approved: {type: boolean}
+        expectedVersion: {type: integer, minimum: 0, maximum: 2147483646}
+        sourceSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        extractionSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        reviewed: {type: boolean, description: Must be true for approval; revocation does not require source review.}
+        reason: {type: string, minLength: 1, maxLength: 1000}
+    DocumentKnowledgeEvent:
+      type: object
+      required: [actionId, version, approved, actorUserId, actorDisplayName, reason, createdAt]
+      properties:
+        actionId: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        approved: {type: boolean}
+        actorUserId: {type: string, format: uuid}
+        actorDisplayName: {type: string}
+        reason: {type: string}
+        createdAt: {type: string, format: date-time}
+    DocumentKnowledgeState:
+      type: object
+      required: [state, events, canManage]
+      properties:
+        state: {type: object, required: [version, approved], properties: {version: {type: integer, minimum: 0}, approved: {type: boolean}}}
+        events: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/DocumentKnowledgeEvent'}}
+        canManage: {type: boolean}
+        replayed: {type: boolean}
+        action: {$ref: '#/components/schemas/DocumentKnowledgeEvent'}
+    DocumentKnowledgeSearch:
+      type: object
+      required: [clientId, mode, vectorStatus, rerankerStatus, items]
+      properties:
+        clientId: {type: string, format: uuid}
+        mode: {const: postgres_lexical_v1}
+        vectorStatus: {const: not_run}
+        rerankerStatus: {const: not_run}
+        items:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            required: [text, truncated, score, citation]
+            properties:
+              text: {type: string, maxLength: 2000}
+              truncated: {type: boolean}
+              score: {type: number, description: Lexical heuristic; not a calibrated relevance probability.}
+              citation:
+                type: object
+                required: [documentId, chunkId, pageNumber, chunkSha256, sourceSha256, extractionSha256, extractorVersion, approvalVersion, approvalActionId]
+                properties:
+                  documentId: {type: string, format: uuid}
+                  chunkId: {type: string, format: uuid}
+                  pageNumber: {type: [integer, 'null']}
+                  chunkSha256: {type: string}
+                  sourceSha256: {type: string}
+                  extractionSha256: {type: string}
+                  extractorVersion: {type: string}
+                  approvalVersion: {type: integer, minimum: 1}
+                  approvalActionId: {type: string, format: uuid}
+                  coordinates: {type: [array, 'null'], items: {type: number}, minItems: 4, maxItems: 4}
+                  coordinateSystem: {type: [string, 'null']}
     Problem:
       type: object
       required: [type, title, status, code, detail, safe_action]

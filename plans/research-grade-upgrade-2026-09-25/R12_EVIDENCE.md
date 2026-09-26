@@ -1,5 +1,69 @@
 # R12 — Retrieval truth and scope, first slice
 
+## 2026-09-26 — Approved PDF reference search (ADR-072)
+
+Retained PDFs now have a separate, explicit reference-search approval. A live named
+Google office administrator, or a tenant-and-client DNA manager, can approve or
+revoke the exact source/extraction receipt with a reason, expected version and
+stable action UUID. Retention and request-copy confirmation grant no knowledge
+approval. Approval author identity and display name come from locked server records.
+
+Migration **042** adds immutable admission events and immutable derived PDF chunks.
+Runtime roles can read scoped rows but cannot insert/update/delete these projections.
+A narrow database function checks and locks session, user, memberships, client and
+receipt, fingerprints the decision and derives every chunk from the saved extraction.
+One malformed chunk rolls back both index and approval. Original PDF bytes are
+hash-verified before new approval; revocation and action reconciliation work even
+when the original is missing. Replaying an old approval after revocation returns
+that original action plus the current revoked state, without resurrecting it.
+
+Search filters tenant, client, active client and the latest positive admission in
+a materialized PostgreSQL relation before lexical ranking. It combines normalized
+exact substring, simple full-text and trigram matching, preserving original strings
+and immutable source/extraction/chunk hashes, page coordinates, extractor version,
+approval version and action ID. Query/output/time limits are explicit. Results are
+labeled `postgres_lexical_v1`; vector and reranker are `not_run`. The immutable PDF
+projection is separate from the older mutable generic knowledge tables because
+metadata on those tables does not prove named approval.
+
+Desk exposes approval/revocation and the latest 20 named audit events. Uncertain
+actions are retained before sending and replay identical bytes/key after reload.
+Search results are rendered as text and open the saved PDF at the cited page, where
+the existing reviewed-request form still starts with empty copy. Client changes and
+local approval changes discard stale results. Document text never becomes model
+instructions, Client DNA or final copy automatically. Search is a query snapshot;
+revocation affects future queries, not copies a reader already viewed.
+
+**Acceptance:** real isolated PostgreSQL/runtime RLS and jsdom checks passed
+**9 files / 71 tests**. New coverage comprises **8 Core / 6 Desk tests**. It checks
+named authority and revocation, source integrity, atomic rollback, competing/replayed
+and changed actions, client/foreign-tenant and unapproved-source exclusion, bounded
+queries, English/Sorani/numeral variants, exact original citations, immutable writes,
+missing-source revocation, client switching, lost-response recovery, storage failure
+and search-to-source-to-reviewed-request handoff. Parser output in this slice is
+mocked native extraction; ADR-070 retains the separate real-container parser proof.
+These fixtures do not establish real office PDF fidelity or retrieval relevance.
+
+**Checks:** source and included-test typecheck, lint (1006 existing `any`, unchanged;
+9 existing provider-egress exceptions), Desk build and zero-secret scan passed.
+The complete regression and clean-tree release seal follow the source commit.
+
+**Failed runs retained:** five initial red-before acceptance failures were missing
+routes. The first DB run passed 8/failed 1 because a removed client membership is
+concealed by RLS as 404, rather than the test's expected 403. The first nine-file
+run passed 66/failed 2: revoked-session middleware correctly returned 401 rather than
+403, and a test helper returned undefined for an absent button rather than null.
+Assertions were corrected to preserve those boundaries. Initial typecheck found two
+untyped route contexts; both now use Hono Context, with no added `any`. Final
+71-test verification passed. Earlier passing subsets are not added to this total.
+
+**Limits:** R12 remains in progress. This completes approved retained-PDF reference
+search, not automatic cited Design Plans, visual/vector/reranker evaluation, large
+corpus latency admission, folder-wide Drive ingestion, OCR/tables/images, real
+multilingual PDF qualification or a new process-kill/restore drill. Telegram PDF/voice,
+live Workspace/provider/export/reopen/restore and independent human-quality gates
+remain open. No production service, flag, model or integration was activated.
+
 ## 2026-09-26 — Retained PDF to reviewed Desk request (ADR-071)
 
 The next vertical slice retains original PDFs and their immutable extraction

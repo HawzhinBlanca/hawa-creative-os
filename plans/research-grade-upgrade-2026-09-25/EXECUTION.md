@@ -12,7 +12,24 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — retained PDF request handoff)
+## Current result (2026-09-26 — approved PDF reference search)
+
+Desk can explicitly approve/revoke exact saved PDF evidence through a live named
+client DNA manager or administrator, search approved passages with original page
+citations, and reopen the source into the reviewed-request flow. Migration 042 keeps
+approval events and derived chunks immutable, verifies current authority and original
+bytes, and filters active tenant/client/approval state before PostgreSQL lexical
+ranking. Concurrent/replayed decisions and uncertain browser responses reconcile
+without reactivating a revoked source. No automatic model context or DNA activation.
+
+Focused checks passed **9 files / 71 tests**; source/test typecheck, lint, Desk build
+and secret scan passed. Full regression and candidate sealing follow the source
+commit. See ADR-072, `R12_EVIDENCE.md` and `R12_DOCUMENT_KNOWLEDGE_PROOF.json`.
+R12 remains in progress: real corpus relevance/latency, vector/reranker and cited
+Design Plans, Telegram PDF/voice, live Workspace/provider/export/reopen/restore and
+independent human-quality admission remain open. Production remains unchanged.
+
+## Prior result (2026-09-26 — retained PDF request handoff)
 
 Desk can retain an original PDF and its immutable local extraction, reopen saved
 sources, explicitly confirm exact copy, and save one request with original-source

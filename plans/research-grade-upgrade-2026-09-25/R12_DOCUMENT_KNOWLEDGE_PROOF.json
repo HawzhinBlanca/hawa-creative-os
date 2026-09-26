@@ -1,0 +1,85 @@
+{
+  "date": "2026-09-26",
+  "adr": "072",
+  "requirements": [
+    "FR-018",
+    "FR-019",
+    "FR-020",
+    "FR-021",
+    "NFR-006",
+    "NFR-014",
+    "NFR-020"
+  ],
+  "status": "local_approved_pdf_search_verified_r12_in_progress",
+  "focused": {
+    "files": 9,
+    "passed": 71,
+    "skipped": 0,
+    "newCoreTests": 8,
+    "newDeskTests": 6
+  },
+  "verification": {
+    "sourceAndTestTypecheck": "passed",
+    "lint": "passed",
+    "deskBuild": "passed",
+    "secretScan": "passed_zero_secrets",
+    "fullRegression": "pending_sealed_run"
+  },
+  "testFiles": [
+    "apps/core/test/document-knowledge.test.ts",
+    "apps/core/test/document-intake.test.ts",
+    "apps/core/test/route-inventory.test.ts",
+    "apps/desk/test/document-knowledge.test.ts",
+    "apps/desk/test/document-inspection.test.ts",
+    "apps/desk/test/document-request.test.ts",
+    "packages/db/test/rls-hoisted.test.ts",
+    "packages/db/test/schema-upgrade.test.ts",
+    "apps/core/test/startup-schema-check.test.ts"
+  ],
+  "database": "real isolated PostgreSQL, runtime role and RLS, migrations 001\u2013042",
+  "parserEvidence": "mocked extraction for this slice; separate real-container ADR-070 proof unchanged",
+  "retrievalMode": "postgres_lexical_v1",
+  "vectorStatus": "not_run",
+  "rerankerStatus": "not_run",
+  "priorFailedRuns": [
+    {
+      "log": "/private/tmp/hawa-knowledge-red.log",
+      "passed": 0,
+      "failed": 5,
+      "reason": "Missing endpoints before implementation"
+    },
+    {
+      "log": "/private/tmp/hawa-knowledge-first.log",
+      "passed": 8,
+      "failed": 1,
+      "reason": "RLS concealed removed client as 404, test expected 403"
+    },
+    {
+      "log": "/private/tmp/hawa-knowledge-focused.log",
+      "passed": 66,
+      "failed": 2,
+      "reason": "Revoked session 401 and absent-button undefined required corrected assertions"
+    },
+    {
+      "log": "/private/tmp/hawa-knowledge-types.log",
+      "reason": "Two route contexts needed explicit Hono Context types"
+    }
+  ],
+  "productionChanged": false,
+  "remaining": [
+    "Real office source/relevance/scale-latency qualification",
+    "Automatic cited Design Plans",
+    "Vector/multimodal/reranker admission",
+    "OCR/table/image extraction",
+    "Telegram PDF/voice intake",
+    "Live provider/Workspace/export/reopen/restore",
+    "Independent human quality"
+  ],
+  "logHashes": {
+    "focused-final": "f2b6ae56db0d7bb1a87dd1727f2dead0176ef3e44e4533975822e3d42cbf5c8e",
+    "types-final": "4d197d29898f91b1ad1f8a6e148d451b549947f8580b26bca3c8515c31abced9",
+    "lint": "5984de6934a7db84ee4a6d7011c820798382119ba5acf0fa8d8ac07a5b1dece6",
+    "desk": "d020d00bac8e7c71c869ad84e8d4fa9a7dc348145c56cfb02407cf1320e9f107",
+    "security": "2326d2626fe4728800a41c19e154accd75acec0b817eb884ab2278d41cee437f"
+  }
+}

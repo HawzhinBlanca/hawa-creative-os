@@ -6,9 +6,11 @@ import { DoclingParser, DocumentExtractionError, DOCUMENT_MAX_BYTES, PDF_EXTRACT
 import { log } from '../logging.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { documentReceipt, savedDocument, findDocument, findDocumentByHash, retainDocument, DocumentIntakeError, type DocumentRow } from '../services/client-documents.js';
+import { registerDocumentKnowledgeRoutes } from './document-knowledge.routes.js';
 
 const uuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 export function registerDocumentRoutes(ctx: RouteContext): void {
+  registerDocumentKnowledgeRoutes(ctx);
   const { db, registerRoute, problem, verifyRequestAuth } = ctx;
   const store = blobStoreFor(db, ctx.options?.blobStore);
   const scopeOf = (c: Context) => {

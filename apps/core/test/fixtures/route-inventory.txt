@@ -28,6 +28,8 @@ GET /api/clients/:clientId/dna
 GET /api/clients/:clientId/documents
 GET /api/clients/:clientId/documents/:documentId
 GET /api/clients/:clientId/documents/:documentId/content
+GET /api/clients/:clientId/documents/:documentId/knowledge
+GET /api/clients/:clientId/knowledge/search
 GET /api/clients/:clientId/learning/data-lineage
 GET /api/clients/:clientId/snapshots
 GET /api/clients/budgets
@@ -110,6 +112,8 @@ GET /api/v1/clients/:clientId/dna
 GET /api/v1/clients/:clientId/documents
 GET /api/v1/clients/:clientId/documents/:documentId
 GET /api/v1/clients/:clientId/documents/:documentId/content
+GET /api/v1/clients/:clientId/documents/:documentId/knowledge
+GET /api/v1/clients/:clientId/knowledge/search
 GET /api/v1/clients/:clientId/learning/data-lineage
 GET /api/v1/clients/:clientId/snapshots
 GET /api/v1/clients/budgets
@@ -194,6 +198,8 @@ GET /clients/:clientId/dna
 GET /clients/:clientId/documents
 GET /clients/:clientId/documents/:documentId
 GET /clients/:clientId/documents/:documentId/content
+GET /clients/:clientId/documents/:documentId/knowledge
+GET /clients/:clientId/knowledge/search
 GET /clients/:clientId/learning/data-lineage
 GET /clients/:clientId/snapshots
 GET /clients/budgets
@@ -278,6 +284,8 @@ GET /v1/clients/:clientId/dna
 GET /v1/clients/:clientId/documents
 GET /v1/clients/:clientId/documents/:documentId
 GET /v1/clients/:clientId/documents/:documentId/content
+GET /v1/clients/:clientId/documents/:documentId/knowledge
+GET /v1/clients/:clientId/knowledge/search
 GET /v1/clients/:clientId/learning/data-lineage
 GET /v1/clients/:clientId/snapshots
 GET /v1/clients/budgets
@@ -764,7 +772,11 @@ POST /waha/kill-switch
 POST /webhooks/telegram
 POST /webhooks/whatsapp
 POST /webhooks/whatsapp/actions
+PUT /api/clients/:clientId/documents/:documentId/knowledge
 PUT /api/office/review-assignments/:assignmentId
+PUT /api/v1/clients/:clientId/documents/:documentId/knowledge
 PUT /api/v1/office/review-assignments/:assignmentId
+PUT /clients/:clientId/documents/:documentId/knowledge
 PUT /office/review-assignments/:assignmentId
+PUT /v1/clients/:clientId/documents/:documentId/knowledge
 PUT /v1/office/review-assignments/:assignmentId

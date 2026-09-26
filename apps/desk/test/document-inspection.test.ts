@@ -11,7 +11,7 @@ const answer = (clientId: string): DocumentInspection => ({ clientId, sourceSave
   document: { sourceSha256: 'a'.repeat(64), extraction: { version: 'native', pageCount: 2, limitations: ['OCR is not extracted.'] },
     chunks: [{ chunkId: '1', pageNumber: 1, text: '<script>exact untrusted text</script>' }, { chunkId: '2', pageNumber: 2, text: 'Second page' }] } });
 async function selectFile(container: HTMLElement, size = 15) {
-  const input = container.querySelector('input')!;
+  const input = container.querySelector('input[type=file]')!;
   Object.defineProperty(input, 'files', { value: [new File(['x'.repeat(size)], 'source.pdf', { type: 'application/pdf' })], configurable: true });
   await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); });
 }
