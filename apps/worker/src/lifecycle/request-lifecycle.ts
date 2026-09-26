@@ -6,7 +6,7 @@
  */
 import { createHash } from 'node:crypto';
 import * as restate from '@restatedev/restate-sdk';
-import type { DeliveryInput, DeliveryOutcome, OutboundMessage } from '@hawa/contracts';
+import type { BlobRef, DeliveryInput, DeliveryOutcome, OutboundMessage } from '@hawa/contracts';
 import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProof, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, DeliveryApi, type CoreInternal } from './delivery.js';
@@ -38,6 +38,7 @@ export interface OpenManualEvent {
     clientId: string | null;
     autoGenerate: false;
     isInstructionOnly?: boolean;
+    lifecycleImage?: BlobRef & { updateId: number };
   };
 }
 

@@ -4,6 +4,7 @@ import { createDb, readTelegramKillSwitch, sql, withRlsContext } from '@hawa/db'
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { createApp } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
+import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { PARKED_UPDATE_NOTICE } from '../src/services/polled-update-dispatch.js';
 import { productionAppOptions } from '../src/entrypoint-options.js';
 import { telegramPollerOf } from '../src/services/telegram-poller-owner.js';
@@ -192,7 +193,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
-  it('does not send a flagged captioned photo through legacy task creation', async () => {
+  it('admits a captioned photo through its owned task without image bytes in Restate', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
@@ -205,18 +206,62 @@ describe('POST /v1/internal/telegram/intake', () => {
       dispatchOutboundMessage: vi.fn(async () => ({ success: true })) };
     const app = createApp({ db, telegramBridge: bridge } as any);
     const result = await intake(app, update);
-    expect(result.body).toMatchObject({ intakeStatus: 422,
-      lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+    expect(result.body).toMatchObject({ intakeStatus: 200,
+      lifecycleAction: 'open-request', draft: { lifecycleImage: {
+        updateId: update.update_id, mediaType: 'image/png', size: photo.length } } });
+    expect(result.body.draft.autoGenerate).toBe(true);
+    expect(result.body.draft.lifecycleImage.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(result.body.draft)).not.toContain(photo.toString('base64'));
+    const pendingRefs = await sql<{ sha256: string }>`SELECT h AS sha256
+      FROM hawa.blob_reference_hashes() AS h WHERE h = ${result.body.draft.lifecycleImage.sha256}`.execute(db);
+    expect(pendingRefs.rows).toHaveLength(1);
     expect(await tasksInChat(chat)).toHaveLength(0);
-    expect(bridge.downloadFile).not.toHaveBeenCalled();
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
     vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect((await intake(createApp({ db } as any), update)).body).toMatchObject({
-      intakeStatus: 422, lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+      intakeStatus: 200, duplicate: true, lifecycleAction: 'open-request',
+      requestId: result.body.requestId, draft: result.body.draft });
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
     const altered = structuredClone(update);
     (altered.message as any).caption = 'KAAE members evening\n---\nDecember 5, 2026\nErbil';
     expect((await intake(createApp({ db } as any), altered)).body).toMatchObject({
       intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
     expect(await tasksInChat(chat)).toHaveLength(0);
+    const forged = structuredClone(result.body.draft);
+    forged.lifecycleImage.sha256 = '0'.repeat(64);
+    const forgedProjection = await app.request(`/v1/internal/lifecycle/${result.body.requestId}/project`, {
+      method: 'POST', headers: worker, body: JSON.stringify({ v: 1, expectedRev: 0, rev: 1,
+        key: `${result.body.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: forged }] }),
+    });
+    expect(forgedProjection.status).toBe(409);
+    expect(await tasksInChat(chat)).toHaveLength(0);
+    const projected = await app.request(`/v1/internal/lifecycle/${result.body.requestId}/project`, {
+      method: 'POST', headers: worker, body: JSON.stringify({ v: 1, expectedRev: 0, rev: 1,
+        key: `${result.body.requestId}:1:open`,
+        ops: [{ kind: 'createRequest', draft: result.body.draft }] }),
+    });
+    expect(projected.status).toBe(200);
+    const projectedBody = await projected.json();
+    expect(projectedBody.stage).toBe('designing');
+    const taskId = projectedBody.taskId;
+    const rows = await withRlsContext(db, scope, (trx) => sql<{ sha256: string }>`SELECT sha256
+      FROM hawa.task_files WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
+        AND role = 'reference_image'`.execute(trx));
+    expect(rows.rows).toEqual([{ sha256: result.body.draft.lifecycleImage.sha256 }]);
+    const studio = new DesignStudioService(db, undefined, { apiKey: 'test-key',
+      fetcher: (async () => { throw new Error('no model calls'); }) as any });
+    expect(await (studio as any).requestImages({ tenantId, actorId: operatorUserId }, taskId))
+      .toEqual([`data:image/png;base64,${photo.toString('base64')}`]);
+    const unreadable = vi.spyOn((studio as any).blobs, 'read').mockRejectedValue(new Error('disk missing'));
+    await expect((studio as any).imagesForRun({ tenantId, actorId: operatorUserId },
+      { task_id: taskId, request: {} })).rejects.toThrow('request-owned image is missing or corrupt');
+    unreadable.mockRestore();
+    const replayProjection = await app.request(`/v1/internal/lifecycle/${result.body.requestId}/project`, {
+      method: 'POST', headers: worker, body: JSON.stringify({ v: 1, expectedRev: 0, rev: 1,
+        key: `${result.body.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: result.body.draft }] }),
+    });
+    expect(await replayProjection.json()).toMatchObject({ taskId, stage: 'designing' });
+    expect(await tasksInChat(chat)).toHaveLength(1);
   });
 
   it('holds voice, PDF and album parts when the stored chat mode is lifecycle', async () => {
@@ -227,6 +272,7 @@ describe('POST /v1/internal/telegram/intake', () => {
       { voice: { file_id: 'voice-fixture', duration: 5 }, caption: 'The exact spoken brief' },
       { document: { file_id: 'pdf-fixture', mime_type: 'application/pdf', file_name: 'brand.pdf' }, caption: 'Use these guidelines' },
       { photo: [{ file_id: 'album-fixture' }], media_group_id: 'album-1' },
+      { photo: [{ file_id: 'captionless-fixture' }] },
     ]) {
       const chat = chatId();
       const update = brief(updateId(), chat);
@@ -237,6 +283,38 @@ describe('POST /v1/internal/telegram/intake', () => {
         lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
       expect(await tasksInChat(chat)).toHaveLength(0);
     }
+  });
+
+  it('waits without downloading when durable photo storage is unavailable', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    vi.stubEnv('HAWA_BLOB_DIR', '');
+    const chat = chatId();
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const update = brief(updateId(), chat);
+    delete (update.message as any).text;
+    (update.message as any).caption = 'KAAE new design\n---\nDecember 4, 2026';
+    (update.message as any).photo = [{ file_id: 'photo-unavailable' }];
+    const bridge = { downloadFile: vi.fn(async () => Buffer.from('no bytes')) };
+    const result = await intake(createApp({ db, telegramBridge: bridge } as any), update);
+    expect(result.body).toMatchObject({ intakeStatus: 503, code: 'NOT_CONFIGURED' });
+    expect(bridge.downloadFile).not.toHaveBeenCalled();
+    expect(await tasksInChat(chat)).toHaveLength(0);
+  });
+
+  it('parks an unreadable photo rather than designing from its caption alone', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const update = brief(updateId(), chat);
+    delete (update.message as any).text;
+    (update.message as any).caption = 'KAAE new design\n---\nDecember 4, 2026';
+    (update.message as any).photo = [{ file_id: 'photo-invalid' }];
+    const bridge = { downloadFile: vi.fn(async () => Buffer.from('not an image')) };
+    const result = await intake(createApp({ db, telegramBridge: bridge } as any), update);
+    expect(result.body).toMatchObject({ intakeStatus: 422, lifecycleAction: 'park-update',
+      code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
+    expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
   it('holds media in channel posts and edited messages before legacy intake can see it', async () => {

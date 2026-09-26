@@ -62,6 +62,19 @@ export function imageDocumentUpdate(chat: string, fileId: string, size: number, 
   };
 }
 
+export function captionedPhotoUpdate(chat: string, fileId: string, size: number, caption: string, from = REQUESTER_ID) {
+  return {
+    message: {
+      message_id: ++messageSeq,
+      date: Math.floor(Date.now() / 1000),
+      from: { id: from, is_bot: false, first_name: 'Chaos' },
+      chat: { id: Number(chat), type: 'private' },
+      caption,
+      photo: [{ file_id: fileId, file_unique_id: `u-${fileId}`, width: 800, height: 600, file_size: size }],
+    },
+  };
+}
+
 /** Tasks Core created for a chat's requests (read from the intake's own outbox rows). */
 export async function tasksOfChat(chat: string): Promise<Array<{ id: string; state: string; version: number }>> {
   return query(sql`SELECT t.id, t.state::text AS state, t.version FROM hawa.tasks t

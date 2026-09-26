@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { type Kysely, type Database, TaskRepository, withRlsContext, sql } from '@hawa/db';
-import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
+import { CHANNEL_INGRESS_USER_ID, type BlobRef } from '@hawa/contracts';
 
 export interface ChatIntake {
   tenantId?: string;
@@ -25,6 +25,8 @@ export interface ChatIntake {
   variant?: { width: number; height: number };
   /** Studio v2 execution flag; defaults to process.env.DESIGN_STUDIO_V2 === 'on' */
   designStudio?: boolean;
+  /** Core-retained image for a lifecycle open; only its verified blob reference enters Restate. */
+  lifecycleImage?: BlobRef & { updateId: number };
   /** Optional studio generation parameters */
   studioOptions?: {
     tier?: 'fast' | 'quality';

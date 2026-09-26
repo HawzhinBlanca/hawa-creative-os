@@ -19,10 +19,12 @@ import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, type DeliveryOutcome } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, parseBlobRef, type DeliveryOutcome } from '@hawa/contracts';
 import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
+import { blobStoreFor } from '../services/blob-store-context.js';
+import { retainLifecyclePhoto } from '../services/lifecycle-photo.js';
 import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log, requestIdHeaders } from '../logging.js';
@@ -109,6 +111,12 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
       ((options as any).imagery !== undefined && !['none', 'abstract', 'photographic'].includes((options as any).imagery)) ||
       ((options as any).previews !== undefined && (!Number.isInteger((options as any).previews) || (options as any).previews < 1 || (options as any).previews > 4)) ||
       ((options as any).holdForSelection !== undefined && typeof (options as any).holdForSelection !== 'boolean'))) return null;
+  const image = d.lifecycleImage;
+  const imageRef = image === undefined ? undefined : parseBlobRef(image);
+  if (image !== undefined && (!imageRef || !Number.isSafeInteger((image as any).updateId) ||
+      (image as any).updateId <= 0 ||
+      !['image/png', 'image/jpeg', 'image/webp'].includes(imageRef.mediaType) ||
+      imageRef.size > 20 * 1024 * 1024)) return null;
   // Select the contract explicitly. A worker payload cannot choose the database principal, tenant,
   // outbox owner or a second source through spare JSON fields.
   return {
@@ -121,6 +129,7 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
     ...(variant ? { variant: variant as { width: number; height: number } } : {}),
     ...(d.designStudio !== undefined ? { designStudio: d.designStudio as boolean } : {}),
     ...(options ? { studioOptions: options as ChatIntake['studioOptions'] } : {}),
+    ...(imageRef ? { lifecycleImage: { ...imageRef, updateId: (image as { updateId: number }).updateId } } : {}),
   };
 }
 
@@ -219,12 +228,19 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         const chatId: string = chatOf(update);
         const carrier = update.message ?? update.edited_message ?? update.channel_post;
         const media = carrier && typeof carrier === 'object' ? carrier as Record<string, unknown> : null;
-        if (media && chatId && (media.photo || media.voice || media.audio || media.document ||
-            media.video || media.video_note || media.animation || media.caption)) {
-          // The current lifecycle open/answer wire shape cannot carry a photo, album, voice note
+        const photos = media?.photo;
+        const lastPhoto = Array.isArray(photos) ? photos[photos.length - 1] as Record<string, unknown> | undefined : undefined;
+        const photoFileId = typeof lastPhoto?.file_id === 'string' && lastPhoto.file_id.length <= 512
+          ? lastPhoto.file_id : null;
+        const singleCaptionedPhoto = Boolean(media && media === msg && photoFileId &&
+          typeof media.caption === 'string' && media.caption.trim() && !media.media_group_id &&
+          !media.reply_to_message && !media.voice && !media.audio && !media.document &&
+          !media.video && !media.video_note && !media.animation);
+        const holdMedia = async () => {
+          // The current lifecycle open/answer wire shape cannot carry an album, voice note
           // or PDF without silently discarding it. Hold the whole update for an operator until
           // Core has a durable media reference and RequestLifecycle can use that reference.
-          const sender = media.from as { id?: unknown } | undefined;
+          const sender = media?.from as { id?: unknown } | undefined;
           const senderId = String(sender?.id ?? '');
           const isIntakeOpen = ctx.telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
           if (ctx.isProduction && !isIntakeOpen &&
@@ -242,6 +258,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           }
           return handled(422, { code: stored.code, lifecycleAction: 'park-update', chatId,
             reason: 'A lifecycle chat media update needs operator review; no task was started' });
+        };
+        if (media && chatId && (media.photo || media.voice || media.audio || media.document ||
+            media.video || media.video_note || media.animation || media.caption) && !singleCaptionedPhoto) {
+          return holdMedia();
         }
         const rawText: string = (() => {
           if (cbq && typeof cbq === 'object') {
@@ -249,7 +269,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             return typeof d === 'string' ? d : '';
           }
           if (msg && typeof msg === 'object') {
-            const t = (msg as Record<string, unknown>).text;
+            const t = (msg as Record<string, unknown>).text ?? (msg as Record<string, unknown>).caption;
             return typeof t === 'string' ? t : '';
           }
           return '';
@@ -357,7 +377,17 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     autoGenerate: !classification.isInstructionOnly,
                     isInstructionOnly: classification.isInstructionOnly,
                   });
-                  const draft = openDraft(prepared, requestId);
+                  let lifecycleImage: ChatIntake['lifecycleImage'];
+                  if (singleCaptionedPhoto && photoFileId) {
+                    if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
+                    const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
+                      (id) => ctx.telegramBridge!.downloadFile(id), photoFileId);
+                    if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
+                    if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
+                    if (photo.kind === 'unsupported') return holdMedia();
+                    lifecycleImage = { ...photo.ref, updateId: update.update_id };
+                  }
+                  const draft = openDraft({ ...prepared, ...(lifecycleImage ? { lifecycleImage } : {}) }, requestId);
                   if (!draft) return handled(422, { code: 'INVALID_BRIEF' });
                   const stored = await withRlsContext(db,
                     { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
@@ -371,6 +401,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 }
               }
             }
+            if (singleCaptionedPhoto) return holdMedia();
             const choice = chooseWaitingChatRequest(waiting.map((r) =>
               ({ requestId: r.request_id, rev: Number(r.rev) })), links[0]);
             if (choice.kind === 'ambiguous' || choice.kind === 'stale_reply') {

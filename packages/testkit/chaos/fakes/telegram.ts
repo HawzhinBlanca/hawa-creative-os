@@ -234,6 +234,7 @@ export class FakeTelegram {
 
   private async download(res: ServerResponse, filePath: string): Promise<void> {
     const id = filePath.replace(/^documents\//, '');
+    this.calls.push({ method: `download:${id}`, at: new Date().toISOString() });
     const f = this.files.get(id);
     if (!f) return sendJson(res, 404, { ok: false, error_code: 404, description: 'Not Found' });
     if (f.delayMs > 0) await sleep(f.delayMs);

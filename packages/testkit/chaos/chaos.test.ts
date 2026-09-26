@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, sql, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
-  approve, briefToDraft, chatInboxInvocations, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
+  approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
   OFFICE_CHAT, sendToChatInbox, sentTo, sleep, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
 } from './driver/scenario.js';
 
@@ -495,6 +495,63 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
             detail: JSON.stringify(inbox) },
           { name: 'Telegram offset passed the update', ok: offset >= updateId,
             detail: `offset=${offset} update=${updateId}` },
+        ];
+      },
+    };
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+
+  scenario('R1.S3.PHOTO', 'flagged chat: a captioned photo survives a Core crash, binds to one request, and is downloaded once', async (chat, events) => {
+    const fileId = `lifecycle-reference-${chat}`;
+    const size = 1024;
+    await fakes.file({ file_id: fileId, size, mime: 'image/jpeg' });
+    const killed = await killAtPoint('core.intake.after-decision', { chat });
+    const update = captionedPhotoUpdate(chat, fileId, size,
+      'Please use the attached image as a reference and change the background to navy.');
+    const [updateId] = await fakes.updates([update]);
+    const polled = { ...update, update_id: updateId };
+    events.push(`captioned photo update ${updateId} in flagged chat ${chat}`);
+    events.push(`killed ${(await killed.done).killed} after the stored photo decision`);
+    await waitUntil('the photo-owned request and acknowledgement', async () => {
+      const requests = await query<{ request_id: string }>(sql`SELECT request_id FROM hawa.requests WHERE chat_id = ${chat}`);
+      const acks = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' && send.text?.includes('Request received.'));
+      return requests.length === 1 && acks.length === 1 ? requests[0] : null;
+    });
+    const replay = await sendToChatInbox(chat, polled, `chaos-photo-replay-${updateId}`);
+    events.push(`same photo under a second Restate key: HTTP ${replay}`);
+    return {
+      delivered: false, skipRequestChecks: true,
+      extra: [{ name: 'second photo update accepted for replay', ok: replay === 200 || replay === 202, detail: `HTTP ${replay}` }],
+      after: async () => {
+        const requests = await query<{ request_id: string; root_task_id: string; owner: string; stage: string }>(sql`
+          SELECT request_id, root_task_id, owner, stage FROM hawa.requests WHERE chat_id = ${chat}`);
+        const tasks = await tasksOfChat(chat);
+        const files = requests.length === 1 ? await query<{ sha256: string; role: string; size: string; media_type: string }>(sql`
+          SELECT f.sha256, f.role, b.size, b.media_type FROM hawa.task_files f
+          JOIN hawa.blobs b ON b.sha256 = f.sha256 WHERE f.task_id = ${requests[0].root_task_id}::uuid`) : [];
+        const refs = files.length === 1 ? await query<{ h: string }>(sql`
+          SELECT h FROM hawa.blob_reference_hashes() AS h WHERE h = ${files[0].sha256}`) : [];
+        const decisions = await query<{ payload: any }>(sql`SELECT payload FROM hawa.inbox_events
+          WHERE source_account_id = 'lifecycle_chat_open' AND source_event_id = ${String(updateId)}`);
+        const downloads = (await fakes.polls()).downloads?.filter((id: string) => id === fileId) ?? [];
+        const acks = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' && send.text?.includes('Request received.'));
+        const parked = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events WHERE source_event_id = ${`parked-update-${updateId}`}`);
+        const inbox = (await chatInboxInvocations(chat)).filter((item) =>
+          item.idempotency_key === `tg-${updateId}` || item.idempotency_key === `chaos-photo-replay-${updateId}`);
+        return [
+          { name: 'one Restate-owned manual request and task', ok: requests.length === 1 && tasks.length === 1 &&
+            requests[0].owner === 'restate' && requests[0].stage === 'manual' && requests[0].root_task_id === tasks[0].id,
+            detail: JSON.stringify({ requests, tasks }) },
+          { name: 'the image is bound to the task and retained for retrieval', ok: files.length === 1 &&
+            files[0].role === 'reference_image' && files[0].media_type === 'image/jpeg' && Number(files[0].size) === size && refs.length === 1,
+            detail: JSON.stringify({ files, refs }) },
+          { name: 'the decision carries only an image reference', ok: decisions.length === 1 &&
+            decisions[0].payload?.draft?.lifecycleImage?.sha256 === files[0]?.sha256 &&
+            !JSON.stringify(decisions[0].payload).includes('/9j/'), detail: JSON.stringify(decisions[0]?.payload?.draft?.lifecycleImage) },
+          { name: 'the photo is downloaded once across crash and replay', ok: downloads.length === 1, detail: `downloads=${downloads.length}` },
+          { name: 'one acknowledgement and no parked update', ok: acks.length === 1 && Number(parked[0]?.n ?? 0) === 0,
+            detail: `acknowledgements=${acks.length} parked=${parked[0]?.n ?? 0}` },
+          { name: 'both photo intake invocations completed', ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
+            detail: JSON.stringify(inbox) },
         ];
       },
     };

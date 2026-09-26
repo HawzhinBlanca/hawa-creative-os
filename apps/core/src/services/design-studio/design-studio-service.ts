@@ -99,6 +99,13 @@ import {
 
 export type Scope = { tenantId: string; actorId: string; role?: string; clientId?: string };
 
+class RequestOwnedImageUnavailable extends Error {}
+
+const optionalImages = (error: unknown): string[] => {
+  if (error instanceof RequestOwnedImageUnavailable) throw error;
+  return [];
+};
+
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 
 /** Stable object-key order for the digest only; provider requests keep their original shape. */
@@ -252,7 +259,25 @@ export class DesignStudioService {
 
     // RequestLifecycle fixes scope when it creates the task. Nearby unbound photos have no
     // verified request identity, so only images attached to this task may enter its design.
-    if (source?.request_id) return found.map((item) => item.url);
+    if (source?.request_id) {
+      const refs = await this.tx(s, async (db) =>
+        (await sql<{ sha256: string; media_type: string }>`SELECT f.sha256, b.media_type
+          FROM hawa.task_files f JOIN hawa.blobs b ON b.sha256 = f.sha256
+          WHERE f.tenant_id = ${s.tenantId}::uuid AND f.task_id = ${taskId}::uuid
+            AND f.role = 'reference_image'
+          ORDER BY f.created_at, f.sha256`.execute(db)).rows);
+      if (refs.length && !this.blobs) throw new RequestOwnedImageUnavailable('A request-owned image needs its durable blob store');
+      for (const ref of refs) {
+        if (!['image/png', 'image/jpeg', 'image/webp'].includes(ref.media_type)) {
+          throw new Error('A request-owned image has an unsupported stored media type');
+        }
+        let bytes: Buffer;
+        try { bytes = await this.blobs!.read(ref.sha256, { verify: true }); }
+        catch { throw new RequestOwnedImageUnavailable('A request-owned image is missing or corrupt'); }
+        found.push({ at: myTime, url: `data:${ref.media_type};base64,${bytes.toString('base64')}` });
+      }
+      return [...new Set(found.map((item) => item.url))];
+    }
 
     const channel = payload.sourceChannelId;
     // An hour back, not a day: a day's window let pictures from the day's earlier attempts, failed
@@ -646,10 +671,10 @@ export class DesignStudioService {
     const own = await this.requestImages(s, run.task_id);
     const parentTaskId = request?.pipelineV3 ? request?.directed?.parentTaskId : undefined;
     if (!parentTaskId) return own;
-    const parent = await this.revisionChainImages(s, parentTaskId).catch(() => [] as string[]);
+    const parent = await this.revisionChainImages(s, parentTaskId).catch(optionalImages);
     // A change that answers a question carries the photos the question's task was sent with (an
     // album sent with the change was filed under that task, which is not in the chain).
-    const answered = request?.directed?.answers ? await this.requestImages(s, request.directed.answers).catch(() => [] as string[]) : [];
+    const answered = request?.directed?.answers ? await this.requestImages(s, request.directed.answers).catch(optionalImages) : [];
     const before = [...parent, ...answered.filter((url) => !parent.includes(url))];
     return [...before, ...own.filter((url) => !before.includes(url))];
   }
@@ -668,8 +693,8 @@ export class DesignStudioService {
     // or size of that version lost them and its layout pointed at a photo that was not there (review
     // of 2026-09-24).
     const answersTask = depth < 10 ? await this.answersOf(s, taskId).catch(() => undefined) : undefined;
-    const answered = answersTask ? await this.requestImages(s, answersTask).catch(() => [] as string[]) : [];
-    const parent = parentTaskId && parentTaskId !== taskId ? await this.revisionChainImages(s, parentTaskId, depth + 1).catch(() => [] as string[]) : [];
+    const answered = answersTask ? await this.requestImages(s, answersTask).catch(optionalImages) : [];
+    const parent = parentTaskId && parentTaskId !== taskId ? await this.revisionChainImages(s, parentTaskId, depth + 1).catch(optionalImages) : [];
     const before = [...parent, ...answered.filter((url) => !parent.includes(url))];
     return [...before, ...own.filter((url) => !before.includes(url))];
   }
@@ -1277,7 +1302,7 @@ export class DesignStudioService {
       // Turned upright once, here, so the brief, the face detector, the cut-out, the preview and the deck
       // all see a phone photo the right way up (the renderer ignores a JPEG's orientation tag).
       const images = await Promise.all(
-        (await this.imagesForRun(s, run).catch(() => [] as string[])).map((url) => uprightPhotoDataUrl(url).catch(() => url))
+        (await this.imagesForRun(s, run).catch(optionalImages)).map((url) => uprightPhotoDataUrl(url).catch(() => url))
       );
       const roles = briefSoFar?.imageRoles;
       let classified = false;

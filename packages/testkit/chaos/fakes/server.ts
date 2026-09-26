@@ -138,7 +138,8 @@ export async function startFakes(options: { httpPort?: number; httpsPort?: numbe
       case 'GET /telegram/sent':
         return sendJson(res, 200, { sent: telegram.sent });
       case 'GET /telegram/polls':
-        return sendJson(res, 200, { polls: telegram.polls, pending: telegram.pending().map((u) => u.update_id), calls: telegram.calls.length });
+        return sendJson(res, 200, { polls: telegram.polls, pending: telegram.pending().map((u) => u.update_id), calls: telegram.calls.length,
+          downloads: telegram.calls.filter((call) => call.method.startsWith('download:')).map((call) => call.method.slice('download:'.length)) });
       case 'POST /canva/faults':
         canva.addFault(body);
         return sendJson(res, 200, { ok: true });

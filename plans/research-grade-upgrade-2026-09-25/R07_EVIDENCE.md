@@ -1,5 +1,42 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — a single captioned photo belongs to its lifecycle request (ADR-061)
+
+Core now accepts a single Telegram photo with a caption when the message resolves to
+an unambiguous new brief in a lifecycle chat. It downloads the bytes, checks the size
+and image signature, stores them in the content-addressed blob store, and commits a
+hash-bound new-brief decision containing only the blob reference. The worker's
+RequestLifecycle event carries that reference, never the image bytes. A pending
+decision keeps the blob reachable to garbage collection through migration 032.
+Projection verifies the worker's exact reference against the committed decision and
+blob metadata, then inserts the task, Restate-owned request, revision receipt and
+`task_files(reference_image)` row atomically. Studio reads and verifies that owned
+file, without borrowing nearby unbound chat photos. A missing or corrupt owned file
+now fails the Studio image lookup instead of silently dropping the reference.
+Requirements: FR-011, FR-060, NFR-001 and NFR-006.
+
+**Verification:** focused PostgreSQL and migration checks passed **5 files / 62
+tests**. They cover changed-update conflict, forged blob reference, pending and
+projected garbage-collector references, no second download on replay, owned Studio
+retrieval, missing store, unreadable bytes and unsupported media. Repository lint and
+full source/test typecheck passed. The full source suite, excluding only the
+intentionally unsealed release-manifest gate, passed **425 files / 3,288 tests**,
+with **4 files / 51 tests skipped**. The disposable Docker scenario `R1.S3.PHOTO`
+passed a Core kill after the stored decision, restart and replay under a second
+Restate key: one request, task, file binding, download and requester acknowledgement.
+An exact-code Docker rerun passed both `R1.S3.PHOTO` and `R1.S3.MEDIA`
+from one clean disposable stack: **2 scenarios passed**, with the other 36 skipped
+by selection. The latter confirms a captioned document image still parks for
+operator review. Blueprint validation and the sealed-tree release gate follow the
+source and manifest commits.
+
+**Limit:** This admission is for a captioned single-message photo and first brief.
+It does not cover albums, captionless images, media on requester revisions, voice,
+PDF or documents; these still park for office follow-up. Signature and size checks
+do not prove every image can be decoded or used creatively. The disposable fake
+provider is not a live Telegram or Canva receipt, and this source change does not
+qualify production cutover. `HAWA_LIFECYCLE_CHATS` remains off by default.
+
 ## 2026-09-26 — owned designs cannot borrow nearby unbound photos (ADR-060)
 
 Studio's legacy image lookup inferred that a photo belonged to a task from the same

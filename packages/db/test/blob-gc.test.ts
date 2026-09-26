@@ -315,7 +315,9 @@ describe.skipIf(!appUrl || !ownerUrl)('blob garbage collection against PostgreSQ
     const withFk = fks.rows.map((r) => `${String(r.tbl).replace(/^hawa\./, '')}.${r.col}`);
     expect(withFk.sort()).toEqual([...WITH_FOREIGN_KEY].sort());
     for (const column of withFk) expect(inView, `${column} has a foreign key to hawa.blobs but blob_references does not read it`).toContain(column);
-    // And the view reads exactly the branches this file tests.
-    expect([...inView].sort()).toEqual([...BRANCHES].sort());
+    // ADR-061 also retains a pending lifecycle decision's JSON blob reference before its
+    // task_files row exists. The intake test exercises that branch; it has no foreign key.
+    expect([...inView].sort()).toEqual([...BRANCHES,
+      'inbox_events.event_kind', 'inbox_events.payload', 'inbox_events.source_account_id'].sort());
   });
 });

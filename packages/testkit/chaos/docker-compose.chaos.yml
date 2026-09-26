@@ -85,6 +85,16 @@ x-worker: &worker
     restate: { condition: service_healthy }
 
 services:
+  blob-init:
+    image: hawa-chaos-core:local
+    user: root
+    restart: "no"
+    logging: *logging
+    command: ["sh", "-c", "mkdir -p /var/lib/hawa/blobs/sha256 /var/lib/hawa/blobs/tmp && printf 'sha256-v1\\n' > /var/lib/hawa/blobs/.hawa-blob-store && chown -R 10001:10001 /var/lib/hawa/blobs"]
+    volumes:
+      - chaos_blobs:/var/lib/hawa/blobs
+    networks: [chaos]
+
   postgres:
     image: pgvector/pgvector:pg17
     restart: "no"
@@ -196,13 +206,16 @@ services:
       <<: *app-environment
       PORT: 3001
       HAWA_CHAOS_SERVICE: core
+      HAWA_BLOB_DIR: /var/lib/hawa/blobs
     volumes:
       - chaos_ca:/chaos-ca:ro
+      - chaos_blobs:/var/lib/hawa/blobs
     networks: [chaos]
     depends_on:
       fakes: { condition: service_healthy }
       postgres: { condition: service_healthy }
       restate: { condition: service_healthy }
+      blob-init: { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/ready').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
       interval: 2s
@@ -238,3 +251,4 @@ volumes:
   chaos_postgres: {}
   chaos_restate: {}
   chaos_ca: {}
+  chaos_blobs: {}
