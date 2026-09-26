@@ -65,7 +65,7 @@ export interface OpenAutomaticEvent extends Omit<OpenManualEvent, 'draft'> {
 }
 
 export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'stage' | 'rev'> {
-  stage: 'designing' | 'in_review' | 'manual' | 'approved' | 'delivering' | 'delivered';
+  stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'delivering' | 'delivered';
   rev: number;
   runId: string;
   /** Current design round (0 = original, 1+ = revision rounds). */
@@ -73,6 +73,7 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
   designInput: DesignRunInput;
   outcome?: { eventId: string; sha256: string; status: string; revisionId?: string;
     message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string } };
+  question?: { id: string; text: string; options: string[]; taskId: string; rev: number };
   officeRevision?: { eventId: string; sha256: string; actionId: string; revisionId: string; approvalId: string;
     kind?: 'revise' | 'approve' };
   /** Filled when the requester submits a revision directive after the office marks "revise". */
@@ -122,6 +123,8 @@ export interface RequesterDecisionEvent {
   priorTaskId: string;
   /** Formatted Telegram chat message text (the requester’s raw reply to the office note). */
   rawText?: string;
+  /** Present only when answering the current verified Studio clarification question. */
+  questionId?: string;
 }
 
 export type RequesterDecisionReply =
@@ -144,9 +147,13 @@ export interface ReminderTickEvent {
   requestId: string;
   /** Rev at the time the reminder was scheduled; stale if the request has advanced. */
   expectedRev: number;
+  kind?: 'revision' | 'question';
+  questionId?: string;
+  day?: 1 | 5;
 }
 
 const REVISION_REMINDER_DELAY_MS = 24 * 60 * 60_000;
+const QUESTION_SECOND_REMINDER_DELAY_MS = 5 * 24 * 60 * 60_000;
 
 export interface AutomaticOpenContext {
   key: string;
@@ -160,6 +167,8 @@ export interface AutomaticOpenContext {
   setChatMode?(chatId: string, requestId: string): void;
   /** Schedule a delayed self-call to send a requester reminder if still waiting. */
   scheduleReminder?(requestId: string, rev: number, delayMs: number): void;
+  scheduleQuestionReminder?(requestId: string, rev: number, questionId: string,
+    day: 1 | 5, delayMs: number): void;
 }
 
 export interface DesignFinishedEvent {
@@ -328,13 +337,20 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
       throw invalid('the design outcome was already recorded with different content');
     }
     sendDesignOutcome(ctx, prior);
+    if (prior.stage === 'awaiting_answer' && prior.question) {
+      ctx.scheduleQuestionReminder?.(prior.requestId, prior.rev, prior.question.id, 1,
+        REVISION_REMINDER_DELAY_MS);
+      ctx.scheduleQuestionReminder?.(prior.requestId, prior.rev, prior.question.id, 5,
+        QUESTION_SECOND_REMINDER_DELAY_MS);
+    }
     return { ignored: false as const, stage: prior.stage, rev: prior.rev };
   }
 
   if (prior.stage !== 'designing') throw invalid('request is not designing');
   const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
-    v: 1; requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual';
+    v: 1; requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer';
     status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
+    question?: { id: string; text: string; options: string[] };
     officeAlert?: { chatId: string; text: string };
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/design-outcome`, {
     v: 1, expectedRev: prior.rev, rev: nextRev,
@@ -343,10 +359,14 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
   }));
   if (projected?.v !== 1 || projected.requestId !== event.requestId ||
       projected.taskId !== event.taskId || projected.rev !== nextRev ||
-      !['in_review', 'manual'].includes(projected.stage)) {
+      !['in_review', 'manual', 'awaiting_answer'].includes(projected.stage) ||
+      (projected.stage === 'awaiting_answer' &&
+        (!projected.question || !UUID.test(projected.question.id) ||
+         typeof projected.question.text !== 'string' || !Array.isArray(projected.question.options)))) {
     throw new Error('Core did not return a valid design outcome projection');
   }
   const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: nextRev,
+    question: projected.question ? { ...projected.question, taskId: event.taskId, rev: nextRev } : undefined,
     outcome: { eventId: event.eventId, sha256: fingerprint, status: projected.status,
       ...(projected.revisionId ? { revisionId: projected.revisionId } : {}),
       ...(projected.message ? { message: projected.message } : {}),
@@ -355,6 +375,12 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
   };
   ctx.set('lc', next);
   sendDesignOutcome(ctx, next);
+  if (next.stage === 'awaiting_answer' && next.question) {
+    ctx.scheduleQuestionReminder?.(next.requestId, next.rev, next.question.id, 1,
+      REVISION_REMINDER_DELAY_MS);
+    ctx.scheduleQuestionReminder?.(next.requestId, next.rev, next.question.id, 5,
+      QUESTION_SECOND_REMINDER_DELAY_MS);
+  }
   return { ignored: false as const, stage: next.stage, rev: next.rev };
 }
 
@@ -442,10 +468,26 @@ function sendOfficeRevisionNotice(ctx: AutomaticOpenContext, state: AutomaticLif
 export async function recordReminderTick(ctx: Pick<AutomaticOpenContext, 'key' | 'get' | 'send'>,
   event: ReminderTickEvent): Promise<{ skipped: true } | { reminded: true }> {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
-      !Number.isInteger(event.expectedRev) || event.expectedRev < 3) {
+      !Number.isInteger(event.expectedRev) || event.expectedRev < (event.kind === 'question' ? 2 : 3) ||
+      (event.kind !== undefined && event.kind !== 'revision' && event.kind !== 'question') ||
+      (event.kind === 'question' && (!UUID.test(event.questionId || '') ||
+        (event.day !== 1 && event.day !== 5))) ||
+      (event.kind !== 'question' && (event.questionId !== undefined || event.day !== undefined))) {
     throw invalid('invalid revision reminder identity');
   }
   const state = await ctx.get('lc');
+  if (event.kind === 'question') {
+    if (!state || !('runId' in state) || state.rev !== event.expectedRev ||
+        state.stage !== 'awaiting_answer' || !state.question ||
+        state.question.id !== event.questionId) {
+      return { skipped: true };
+    }
+    ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:question-reminder-${event.day}`,
+      chatId: state.chatId, kind: 'text',
+      text: `Reminder: This design is waiting for your answer.\n\n${state.question.text}\n\nPlease reply to this message when you are ready.`,
+      class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+    return { reminded: true };
+  }
   if (!state || !('runId' in state) || state.rev !== event.expectedRev || state.stage !== 'manual') {
     return { skipped: true };
   }
@@ -609,7 +651,12 @@ export async function recordRequesterDecision(
     return { accepted: true, requestId: prior.requestId, newTaskId: prior.revisionRound.newTaskId,
       runId: prior.revisionRound.runId, round: prior.revisionRound.round, rev: prior.rev, stage: 'designing' };
   }
-  if (prior.stage !== 'manual') return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.stage !== (event.questionId ? 'awaiting_answer' : 'manual')) {
+    return { accepted: false, code: 'WRONG_STAGE' };
+  }
+  if (event.questionId && (!UUID.test(event.questionId) ||
+      prior.question?.id !== event.questionId || prior.question.taskId !== event.priorTaskId ||
+      prior.question.rev !== prior.rev)) return { accepted: false, code: 'WRONG_STAGE' };
   if (prior.taskId !== event.priorTaskId) return { accepted: false, code: 'WRONG_STAGE' };
   // The worker must pass a newTaskId it obtained by intaking via /internal/telegram/intake.
   // We inline the Core call here to get the new task's id back from the route.
@@ -627,14 +674,19 @@ export async function recordRequesterDecision(
       (!updateMatch || !Number.isSafeInteger(Number(updateMatch[1])))) {
     throw invalid('requester decision has an invalid Telegram update identity');
   }
+  if (event.questionId && !updateMatch) {
+    throw invalid('clarification answers require the persisted Telegram update identity');
+  }
   const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
     v: 1; requestId: string; priorTaskId: string; newTaskId: string;
     round: number; rev: number; stage: 'designing'; runId: string; directive?: string;
+    questionId?: string;
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/${updateMatch
     ? 'requester-revision-intake' : 'requester-revision'}`, updateMatch
     ? { v: 1, updateId: Number(updateMatch[1]), expectedRev,
         priorTaskId: event.priorTaskId, newTaskId, round: event.round,
-        directive: event.directive.trim() }
+        directive: event.directive.trim(),
+        ...(event.questionId ? { questionId: event.questionId } : {}) }
     : { v: 1, expectedRev, rev: nextRev,
         key: `${event.requestId}:${nextRev}:requesterRevision:r${event.round}`,
         ops: [{ kind: 'requesterRevision', priorTaskId: event.priorTaskId, newTaskId,
@@ -643,6 +695,7 @@ export async function recordRequesterDecision(
       projected.priorTaskId !== event.priorTaskId || projected.newTaskId !== newTaskId ||
       projected.round !== event.round || projected.rev !== nextRev || projected.stage !== 'designing' ||
       projected.runId !== `dr-${newTaskId}` ||
+      projected.questionId !== event.questionId ||
       (updateMatch && projected.directive !== event.directive.trim())) {
     throw new Error('Core did not return a valid requester revision projection');
   }
@@ -659,7 +712,7 @@ export async function recordRequesterDecision(
     revisionRound: { eventId: event.eventId, sha256: fingerprint, round: event.round,
       newTaskId, runId: newRunId },
     // Clear prior-round transient fields so the next design-outcome projects cleanly.
-    outcome: undefined, officeRevision: undefined,
+    outcome: undefined, officeRevision: undefined, question: undefined,
   };
   ctx.set('lc', next);
   ctx.startDesign(newDesignInput);
@@ -707,6 +760,13 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
               .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
             startDesign: () => { throw new Error('designFinished cannot start a new run'); },
+            scheduleQuestionReminder: (requestId, rev, questionId, day, delayMs) =>
+              ctx.objectSendClient(RequestLifecycleApi, requestId)
+                .reminderTick({ v: 1, requestId, expectedRev: rev, kind: 'question', questionId, day },
+                  restate.rpc.sendOpts({
+                    idempotencyKey: `lifecycle:question-reminder:${requestId}:${rev}:${day}`,
+                    delay: delayMs,
+                  })),
           }, core, event)),
       ),
       officeDecision: restate.handlers.object.exclusive(

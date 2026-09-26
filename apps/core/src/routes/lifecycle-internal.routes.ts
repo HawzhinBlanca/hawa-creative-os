@@ -173,7 +173,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         if (rawText.trim() && chatId) {
           const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
           type RefusalCode = 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' |
-            'DAILY_CAP_REACHED' | 'PARENT_BRIEF_MISSING';
+            'DAILY_CAP_REACHED' | 'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING';
           const actionFor = (code: RefusalCode) => code === 'AMBIGUOUS_REQUEST' ||
             code === 'STALE_REQUEST_REPLY' ? 'request-choice-required' : 'revision-blocked';
           const refuseWithReceipt = async (code: RefusalCode) => {
@@ -212,9 +212,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   result.sourceUpdateHash !== payloadHash ||
                   typeof result.newTaskId !== 'string' || typeof result.priorTaskId !== 'string' ||
                   typeof result.round !== 'number') return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
-              return handled(200, { duplicate: true, lifecycleAction: 'requester-revision',
+              return handled(200, { duplicate: true,
+                lifecycleAction: typeof result.questionId === 'string' ? 'requester-answer' : 'requester-revision',
                 requestId: result.requestId, newTaskId: result.newTaskId, round: result.round,
-                directive: result.directive, priorTaskId: result.priorTaskId, rawText: directive });
+                directive: result.directive, priorTaskId: result.priorTaskId, rawText: directive, chatId,
+                ...(typeof result.questionId === 'string' ? { questionId: result.questionId } : {}) });
             }
 
             const replied = msg && typeof msg === 'object' ? (msg as Record<string, unknown>).reply_to_message : null;
@@ -235,27 +237,36 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             const openRequest = choice.kind === 'target'
               ? waiting.find((r) => r.request_id === choice.requestId) : undefined;
             if (openRequest) {
+              if (openRequest.stage === 'awaiting_answer' &&
+                  (!openRequest.question || !UUID.test(openRequest.question.id))) {
+                return refuseWithReceipt('QUESTION_MISSING');
+              }
+              const questionId = openRequest.stage === 'awaiting_answer'
+                ? openRequest.question!.id : undefined;
               const requestId = openRequest.request_id;
               const expectedRev = Number(openRequest.rev);
               const nextRev = expectedRev + 1;
               // Derive the round from the revision number: first office-revise lands at rev=3;
               // subsequent revisions increment by 2 each time (office+requester), so round = (rev - 1) / 2.
-              const round = Math.floor((expectedRev - 1) / 2);
+              const round = Math.max(1, Math.floor((expectedRev - 1) / 2));
               if (round >= 1) {
                 const sourceEventId = `lc-${requestId}-r${round}-u${update.update_id}`;
                 const key = `${requestId}:${nextRev}:requesterRevisionIntake:u${update.update_id}`;
                 const projected = await projectLifecycleRequesterRevisionWithIntake(db, {
                   requestId, tenantId: TENANT, priorTaskId: openRequest.current_task_id,
                   round, directive, sourceEventId, sourceChannelId: chatId,
-                  rawText: directive, sourceUpdateHash: payloadHash, clientId: openRequest.client_id,
+                  rawText: directive, sourceUpdateHash: payloadHash, sourceUpdate: update,
+                  clientId: openRequest.client_id,
+                  ...(questionId ? { questionId } : {}),
                   expectedRev, rev: nextRev, key,
                 });
                 await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
                 return handled(200, { duplicate: false,
-                  lifecycleAction: 'requester-revision',
+                  lifecycleAction: questionId ? 'requester-answer' : 'requester-revision',
                   requestId, newTaskId: projected.newTaskId,
                   round: projected.round, directive: projected.directive,
-                  priorTaskId: openRequest.current_task_id, rawText: directive,
+                  priorTaskId: openRequest.current_task_id, rawText: directive, chatId,
+                  ...(questionId ? { questionId } : {}),
                 });
               }
             }
@@ -532,10 +543,12 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const updateId = Number(body?.updateId);
     const expectedRev = Number(body?.expectedRev);
     const round = Number(body?.round);
+    const questionId = typeof body?.questionId === 'string' ? body.questionId : undefined;
     if (!UUID.test(requestId) || body?.v !== 1 ||
         !Number.isSafeInteger(updateId) || updateId <= 0 ||
-        !Number.isInteger(expectedRev) || expectedRev < 3 ||
+        !Number.isInteger(expectedRev) || expectedRev < (questionId ? 2 : 3) ||
         !Number.isInteger(round) || round < 1 ||
+        (questionId !== undefined && !UUID.test(questionId)) ||
         !UUID.test(String(body?.priorTaskId || '')) || !UUID.test(String(body?.newTaskId || '')) ||
         typeof body?.directive !== 'string' || !body.directive.trim() || body.directive.length > 5000) {
       return problem(c, 400, 'Invalid requester revision intake receipt',
@@ -546,7 +559,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
       (trx) => verifiedRevisionIntake(trx, { tenantId: DEFAULT_TENANT_ID, requestId,
         updateId, expectedRev, priorTaskId: body.priorTaskId as string,
-        newTaskId: body.newTaskId as string, round, directive: body.directive as string }));
+        newTaskId: body.newTaskId as string, round, directive: body.directive as string,
+        ...(questionId ? { questionId } : {}) }));
     if (!result) return problem(c, 409, 'Requester revision receipt mismatch',
       'The admitted update, request, revision and child task do not match');
     return c.json({ v: 1, ...result }, 200);

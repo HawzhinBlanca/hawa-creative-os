@@ -12,7 +12,15 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — base source `3f839a4`, current R07 worktree)
+## Current result (2026-09-26 — R07 source checkpoint `256cba8` plus current question/answer worktree)
+
+**Studio clarification now has a local end-to-end path.** A verified failed Studio run
+projects a persisted question and pauses the task. An answer linked to the current
+question creates one child task with the original brief and Telegram update, closes the
+paused task, advances the request, and starts the next DesignRun. The worker schedules
+revision-bound day-1 and day-5 question reminders and skips them after an answer.
+The affected lifecycle set passed 10 files / 87 tests; repository lint and full
+typecheck passed. See `R07_EVIDENCE.md` for the exact coverage and limits.
 
 **Requester revision directive routing is implemented and locally tested:**
 
@@ -60,10 +68,10 @@ the last full suite passed 421 files / 3,237 tests before the reminder changes.
 
 ## Next useful milestone
 
-1. **Complete R07 Q/A**: route `NEEDS_CLARIFICATION` questions into lifecycle chat, bind answers to the
-   waiting request, and prove restart, duplicate, late-answer and reminder behavior end to end. The
-   second-request pointer hazard is locally contained by database selection and exact reply binding;
-   explicit new-brief routing while another request waits still needs its own admission contract.
+1. **Finish R07 admission and recovery**: anchor reminders to confirmed Telegram sends and office hours,
+   admit an explicit new brief while another request waits, and prove the question path through a killed
+   Restate worker, PostgreSQL replay and live Telegram. The second-request pointer hazard is locally
+   contained by database selection and exact reply binding.
 2. **Final exports and provider boundaries**: qualify R11–R19 exports and R20–R23 provider boundaries.
 3. **Canary & admission**: deploy only after a coherent release gate, then run live recovery and blind human
    creative-quality acceptance. No current source or local test result establishes production admission.

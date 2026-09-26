@@ -84,6 +84,20 @@ describe('versioned lifecycle design outcome', () => {
     expect(rows.events.some((e) => e.event_type === 'task.state_changed')).toBe(true);
   });
 
+  it('does not ask a question from a report without a matching persisted Studio question', async () => {
+    const { requestId, taskId } = await opened();
+    const result = await post(requestId, 'design-outcome', outcome(requestId, taskId,
+      { status: 'DESIGN_FAILED', code: 'NEEDS_CLARIFICATION', runId: randomUUID() }));
+    expect(result).toMatchObject({ status: 200, body: { stage: 'manual', rev: 2 } });
+    expect(result.body.question).toBeUndefined();
+    const rows = await withRlsContext(db, scope, async (trx) => ({
+      request: await trx.selectFrom('requests').select('stage').where('request_id', '=', requestId).executeTakeFirst(),
+      task: await trx.selectFrom('tasks').select('state').where('id', '=', taskId).executeTakeFirst(),
+    }));
+    expect(rows.request?.stage).toBe('manual');
+    expect(rows.task?.state).toBe('failed_operator');
+  });
+
   it('creates a Desk revision for a bound design in the same projection', async () => {
     const { requestId, taskId } = await opened();
     const unbound = await post(requestId, 'design-outcome', outcome(requestId, taskId,

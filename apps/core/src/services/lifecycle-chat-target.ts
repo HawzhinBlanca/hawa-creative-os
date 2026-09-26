@@ -5,8 +5,10 @@ import type { RequesterRevisionWithIntakeResult } from './lifecycle-projection.j
 export interface WaitingLifecycleRequest {
   request_id: string;
   rev: number | string;
+  stage: 'manual' | 'awaiting_answer';
   current_task_id: string;
   client_id: string | null;
+  question: { id: string; text: string; options: string[] } | null;
 }
 
 export interface RevisionIntakeReceipt {
@@ -29,6 +31,7 @@ export async function revisionIntakeReceipts(trx: Kysely<Database>, tenantId: st
 export async function verifiedRevisionIntake(trx: Kysely<Database>, input: {
   tenantId: string; requestId: string; updateId: number; expectedRev: number;
   priorTaskId: string; newTaskId: string; round: number; directive: string;
+  questionId?: string;
 }): Promise<RequesterRevisionWithIntakeResult | null> {
   const rev = input.expectedRev + 1;
   const key = `${input.requestId}:${rev}:requesterRevisionIntake:u${input.updateId}`;
@@ -48,25 +51,28 @@ export async function verifiedRevisionIntake(trx: Kysely<Database>, input: {
       result.requestId !== input.requestId || result.priorTaskId !== input.priorTaskId ||
       result.newTaskId !== input.newTaskId || result.round !== input.round || result.rev !== rev ||
       result.stage !== 'designing' || result.runId !== `dr-${input.newTaskId}` ||
-      result.directive !== input.directive.trim()) return null;
+      result.directive !== input.directive.trim() || result.questionId !== input.questionId) return null;
   return result;
 }
 
 export async function waitingLifecycleRequests(trx: Kysely<Database>, tenantId: string,
   chatId: string): Promise<WaitingLifecycleRequest[]> {
-  return (await sql<WaitingLifecycleRequest>`SELECT r.request_id::text, r.rev, r.current_task_id::text,
-      t.client_id::text
+  return (await sql<WaitingLifecycleRequest>`SELECT r.request_id::text, r.rev, r.stage, r.current_task_id::text,
+      t.client_id::text, p.result->'question' AS question
     FROM hawa.requests r JOIN hawa.tasks t
       ON t.tenant_id = r.tenant_id AND t.id = r.current_task_id
+    LEFT JOIN hawa.lifecycle_projections p ON p.tenant_id = r.tenant_id
+      AND p.request_id = r.request_id AND p.rev = r.rev
     WHERE r.tenant_id = ${tenantId}::uuid AND r.chat_id = ${chatId}
-      AND r.owner = 'restate' AND r.stage = 'manual' AND r.rev >= 3
+      AND r.owner = 'restate' AND (r.stage = 'awaiting_answer' OR
+        (r.stage = 'manual' AND r.rev >= 3))
     ORDER BY r.created_at, r.request_id`.execute(trx)).rows;
 }
 
 export interface LinkedLifecycleReply { requestId: string; rev: number }
 
 export interface RoutingRefusal { code: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' |
-  'DAILY_CAP_REACHED' | 'PARENT_BRIEF_MISSING'; chatId: string;
+  'DAILY_CAP_REACHED' | 'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING'; chatId: string;
   payloadHash: string }
 
 export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string,
@@ -78,7 +84,8 @@ export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string
   const code = row?.payload?.code;
   const chatId = row?.payload?.chatId;
   if (!row || (code !== 'AMBIGUOUS_REQUEST' && code !== 'STALE_REQUEST_REPLY' &&
-      code !== 'DAILY_CAP_REACHED' && code !== 'PARENT_BRIEF_MISSING') ||
+      code !== 'DAILY_CAP_REACHED' && code !== 'PARENT_BRIEF_MISSING' &&
+      code !== 'QUESTION_MISSING') ||
       typeof chatId !== 'string') return null;
   return { code, chatId, payloadHash: row.payload_hash };
 }
@@ -110,10 +117,13 @@ export async function linkedLifecycleReplies(trx: Kysely<Database>, tenantId: st
       AND e.event_kind = 'telegram_message_sent'
       AND e.payload->>'messageId' = ${replyMessageId}
       AND (e.source_event_id LIKE '%:office-revision-notify:send'
-        OR e.source_event_id LIKE '%:revision-reminder:send')`.execute(trx)).rows;
+        OR e.source_event_id LIKE '%:revision-reminder:send'
+        OR e.source_event_id LIKE '%:design-outcome:send'
+        OR e.source_event_id LIKE '%:question-reminder-1:send'
+        OR e.source_event_id LIKE '%:question-reminder-5:send')`.execute(trx)).rows;
   const found = new Map<string, LinkedLifecycleReply>();
   for (const row of rows) {
-    const match = /^lc:([0-9a-f-]{36}):(\d+):(office-revision-notify|revision-reminder):send$/i.exec(row.source_event_id);
+    const match = /^lc:([0-9a-f-]{36}):(\d+):(office-revision-notify|revision-reminder|design-outcome|question-reminder-[15]):send$/i.exec(row.source_event_id);
     if (!match || match[1].toLowerCase() !== row.request_id.toLowerCase()) continue;
     const rev = Number(match[2]);
     if (!Number.isSafeInteger(rev) || rev < 3) continue;

@@ -64,17 +64,22 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         intakeStatus?: number; code?: string; duplicate?: boolean; title?: string;
         lifecycleAction?: string; requestId?: string; newTaskId?: string;
         round?: number; directive?: string; priorTaskId?: string; rawText?: string;
-        chatId?: string;
+        chatId?: string; questionId?: string;
       };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
         if (!retryable(status)) {
           const base: Extract<IntakeAnswer, { kind: 'done' }> = { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true };
-          if (body.lifecycleAction === 'requester-revision' && body.requestId && body.newTaskId &&
+          if ((body.lifecycleAction === 'requester-revision' ||
+               (body.lifecycleAction === 'requester-answer' && body.questionId)) &&
+              body.requestId && body.newTaskId &&
               typeof body.round === 'number' && body.directive && body.priorTaskId) {
-            return { ...base, lifecycleAction: 'requester-revision',
+            return { ...base, lifecycleAction: body.lifecycleAction,
               requestId: body.requestId, newTaskId: body.newTaskId, round: body.round,
               directive: body.directive, priorTaskId: body.priorTaskId,
+              ...(body.chatId ? { chatId: body.chatId } : {}),
+              ...(body.lifecycleAction === 'requester-answer' && body.questionId
+                ? { questionId: body.questionId } : {}),
               ...(body.rawText !== undefined ? { rawText: body.rawText } : {}) };
           }
           if (body.lifecycleAction === 'request-choice-required' && body.chatId &&
@@ -83,7 +88,8 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
               chatId: body.chatId, code: body.code };
           }
           if (body.lifecycleAction === 'revision-blocked' && body.chatId &&
-              (body.code === 'DAILY_CAP_REACHED' || body.code === 'PARENT_BRIEF_MISSING')) {
+              (body.code === 'DAILY_CAP_REACHED' || body.code === 'PARENT_BRIEF_MISSING' ||
+                body.code === 'QUESTION_MISSING')) {
             return { ...base, lifecycleAction: 'revision-blocked',
               chatId: body.chatId, code: body.code };
           }

@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto';
 import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
 import { parseCompleteRevisionRequest, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
 import { IdempotencyConflictError, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
+import { escapeTelegramHtml } from '@hawa/integrations';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
-import { bridgeCanvaDraftRevision, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
+import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage } from './canva-status-message.js';
 
@@ -237,8 +238,9 @@ export interface DesignOutcomeProjection {
 }
 
 export interface DesignOutcomeResult {
-  requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual';
+  requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer';
   status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
+  question?: { id: string; text: string; options: string[] };
   officeAlert?: { chatId: string; text: string };
 }
 
@@ -279,6 +281,23 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
     }
     const status = report.status;
     const hasDraft = outcomeHasDraft(status, report.designId);
+    let question: DesignOutcomeResult['question'];
+    if (!hasDraft && status === 'DESIGN_FAILED' && report.code === 'NEEDS_CLARIFICATION' &&
+        report.runId && /^[0-9a-f-]{36}$/i.test(report.runId)) {
+      const row = (await sql<{ question: string | null; options: unknown }>`SELECT
+          r.stages->'directed'->'clarify'->>'question' AS question,
+          r.stages->'directed'->'clarify'->'options' AS options
+        FROM hawa.design_studio_runs r
+        WHERE r.tenant_id = ${tenantId}::uuid AND r.task_id = ${taskId}::uuid
+          AND r.id = ${report.runId}::uuid AND r.status = 'failed'
+          AND r.stages->'directed'->>'refused' = 'NEEDS_CLARIFICATION'
+        LIMIT 1`.execute(trx)).rows[0];
+      const options = Array.isArray(row?.options) ? row.options.filter((value): value is string =>
+        typeof value === 'string' && value.trim().length > 0 && value.length <= 100) : [];
+      if (row?.question?.trim() && row.question.length <= 500 && options.length >= 2 && options.length <= 3) {
+        question = { id: report.runId, text: row.question.trim(), options };
+      }
+    }
     if (hasDraft) {
       if (!report.designId) throw new LifecycleProjectionConflict('WRONG_STAGE', 'A draft outcome needs its verified Canva design ID');
       const binding = await trx.selectFrom('canva_bindings').select(['client_id', 'status'])
@@ -290,6 +309,7 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
     }
     const reason = hasDraft
       ? `Canva draft ${report.designId || ''} awaits visual review.`
+      : question ? 'The design is waiting for the requester to answer a clarification question.'
       : `Automatic design ended ${status}${report.code ? ` (${report.code})` : ''}; an operator must follow up.`;
     let revisionId: string | undefined;
     if (hasDraft) {
@@ -306,17 +326,18 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       });
       revisionId = bridged.created ? bridged.revisionId : task.current_design_revision_id || undefined;
     } else {
-      await transitionTaskForOutcome(trx, { tenantId, taskId, toState: 'failed_operator',
+      await transitionTaskForOutcome(trx, { tenantId, taskId, toState: question ? 'paused' : 'failed_operator',
         actorId: CHANNEL_INGRESS_USER_ID, reason,
         data: { outcome: status, ...(report.code ? { code: report.code } : {}) },
       });
     }
-    const stage = hasDraft ? 'in_review' : 'manual';
-    const changed = await trx.updateTable('requests').set({ stage, rev, updated_at: new Date() })
+    const stage = hasDraft ? 'in_review' : question ? 'awaiting_answer' : 'manual';
+    const changed = await trx.updateTable('requests').set({ stage, rev,
+      ...(question ? { question_asked_at: new Date() } : {}), updated_at: new Date() })
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during outcome projection');
-    const composed = report.notifyRequester === false ? undefined : composeCanvaStatusMessage({
+    const composed = question || report.notifyRequester === false ? undefined : composeCanvaStatusMessage({
       taskId, title: task.title, status, code: report.code,
       canvaUrl: report.designId ? `https://www.canva.com/design/${report.designId}/edit` : undefined,
     });
@@ -324,12 +345,16 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
     const officeAlert = !hasDraft && officeChat && officeChat !== request.chat_id
       ? { chatId: officeChat, text: `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.` }
       : undefined;
-    const messageText = composed?.text && !officeChat
+    const questionText = question
+      ? `I need one detail before I can finish your requested change.\n\n<b>${escapeTelegramHtml(question.text)}</b>\n\n${question.options.map((option, index) => `${index + 1}. ${escapeTelegramHtml(option)}`).join('\n')}\n\nReply to this message with your answer. No new design has started yet.`
+      : undefined;
+    const messageText = questionText || (composed?.text && !officeChat
       ? composed.text.replace('The office has been alerted and will follow up with you here.',
           'A person needs to review it in Hawa Desk and follow up with you here.')
-      : composed?.text;
+      : composed?.text);
     const result: DesignOutcomeResult = { requestId, taskId, rev, stage, status,
       ...(revisionId ? { revisionId } : {}),
+      ...(question ? { question } : {}),
       ...(messageText ? { message: { text: messageText, parseMode: 'HTML' as const } } : {}),
       ...(officeAlert ? { officeAlert } : {}),
     };
@@ -449,8 +474,12 @@ export interface RequesterRevisionWithIntakeProjection {
   sourceChannelId: string;
   /** Raw text of the directive (the requester's message). */
   rawText: string;
+  /** Present only for an answer to the current clarification question. */
+  questionId?: string;
   /** Hash of the complete source update, including its Telegram reply target. */
   sourceUpdateHash: string;
+  /** The verified ingress update saved with the child task for source audit and replay. */
+  sourceUpdate: unknown;
   /** The client the prior task belongs to (carried forward to the new task). */
   clientId: string | null;
   /** Current request revision (manual stage). rev = expectedRev + 1. */
@@ -463,6 +492,7 @@ export interface RequesterRevisionWithIntakeResult extends RequesterRevisionResu
   /** The directive text as trimmed. */
   directive: string;
   sourceUpdateHash: string;
+  questionId?: string;
 }
 
 /**
@@ -476,12 +506,16 @@ export async function projectLifecycleRequesterRevisionWithIntake(
 ): Promise<RequesterRevisionWithIntakeResult> {
   const { requestId, tenantId, priorTaskId, round, directive, sourceEventId, sourceChannelId, rawText, clientId, key } = input;
   const { expectedRev, rev } = input;
-  if (!Number.isInteger(expectedRev) || expectedRev < 3 || !Number.isInteger(rev) || rev !== expectedRev + 1 ||
+  if (!Number.isInteger(expectedRev) || expectedRev < (input.questionId ? 2 : 3) ||
+      !Number.isInteger(rev) || rev !== expectedRev + 1 ||
       !Number.isInteger(round) || round < 1 || typeof directive !== 'string' || !directive.trim()) {
     throw new LifecycleProjectionConflict('STALE_REVISION', 'Invalid revision pair or round for lifecycle requester revision with intake');
   }
   if (!/^[a-f0-9]{64}$/.test(input.sourceUpdateHash)) {
     throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The Telegram source update hash is invalid');
+  }
+  if (input.questionId !== undefined && !/^[0-9a-f-]{36}$/i.test(input.questionId)) {
+    throw new LifecycleProjectionConflict('WRONG_STAGE', 'The answer has no valid question identity');
   }
   const hash = createHash('sha256').update(canonical(input)).digest('hex');
   return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
@@ -501,8 +535,9 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     if (!request || Number(request.rev) !== expectedRev) {
       throw new LifecycleProjectionConflict('STALE_REVISION', `Request is not at expected revision ${expectedRev}`);
     }
-    if (request.owner !== 'restate' || request.stage !== 'manual') {
-      throw new LifecycleProjectionConflict('WRONG_STAGE', 'Only a manual-stage request may accept a requester revision directive');
+    const answering = input.questionId !== undefined;
+    if (request.owner !== 'restate' || request.stage !== (answering ? 'awaiting_answer' : 'manual')) {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'The request is not waiting for this kind of requester reply');
     }
     if (request.current_task_id !== priorTaskId) {
       throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The directive names an older request task');
@@ -523,13 +558,30 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     }
     const parentOptions = parentPayload.studioOptions && typeof parentPayload.studioOptions === 'object'
       ? parentPayload.studioOptions as Record<string, unknown> : {};
+    let question: DesignOutcomeResult['question'];
+    if (answering) {
+      const last = await trx.selectFrom('lifecycle_projections').select('result')
+        .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
+        .where('rev', '=', expectedRev).executeTakeFirst();
+      question = (last?.result as unknown as DesignOutcomeResult | undefined)?.question;
+      if (!question || question.id !== input.questionId ||
+          typeof parentOptions.parentTaskId !== 'string' ||
+          typeof parentOptions.revisionDirective !== 'string' || !parentOptions.revisionDirective.trim()) {
+        throw new LifecycleProjectionConflict('WRONG_STAGE', 'The current question or its parent design is missing');
+      }
+    }
     const inheritedOptions = Object.fromEntries(['tier', 'imagery', 'previews', 'holdForSelection']
       .filter((name) => parentOptions[name] !== undefined).map((name) => [name, parentOptions[name]]));
+    const answerText = answering ? directive.trim().replace(/\s+/g, ' ').slice(0, 500) : '';
+    const revisionDirective = question
+      ? `${parentOptions.revisionDirective}\nAsked "${question.text}", the requester answered: ${answerText}`
+      : directive.trim();
     // Persist the new task via chat-intake with lifecycleOwner: 'restate'.
     const draft: ChatIntake = {
       platform: 'telegram', sourceEventId, sourceChannelId,
-      rawText, title: directive.trim().slice(0, 200),
-      designInstructions: `${parentPayload.designInstructions}\nRevision: ${directive.trim()}`,
+      rawText, rawJson: input.sourceUpdate, title: directive.trim().slice(0, 200),
+      designInstructions: `${parentPayload.designInstructions}\n${question
+        ? `Answer to "${question.text}": ${answerText}` : `Revision: ${directive.trim()}`}`,
       exactCopy: parentPayload.exactCopy,
       clientId, autoGenerate: true,
       ...(typeof parentPayload.headlineEn === 'string' ? { headlineEn: parentPayload.headlineEn } : {}),
@@ -539,8 +591,10 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       ...(parentPayload.variant && typeof parentPayload.variant === 'object'
         ? { variant: parentPayload.variant as { width: number; height: number } } : {}),
       ...(typeof parentPayload.designStudio === 'boolean' ? { designStudio: parentPayload.designStudio } : {}),
-      studioOptions: { ...inheritedOptions, parentTaskId: priorTaskId,
-        revisionRound: round, revisionDirective: directive.trim() } as ChatIntake['studioOptions'],
+      studioOptions: { ...inheritedOptions,
+        parentTaskId: question ? parentOptions.parentTaskId as string : priorTaskId,
+        revisionRound: round, revisionDirective,
+        ...(question ? { clarified: true, answers: priorTaskId } : {}) } as ChatIntake['studioOptions'],
     };
     let persisted: Awaited<ReturnType<typeof persistChatIntake>>;
     try {
@@ -562,14 +616,21 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       .where('tenant_id', '=', tenantId).where('id', '=', newTaskId).where('request_id', 'is', null)
       .returning('id').executeTakeFirst();
     if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The new task acquired another request owner');
+    if (question) {
+      const closed = await closeAnsweredQuestion(trx, { tenantId, taskId: priorTaskId,
+        revisionTaskId: newTaskId, actorId: CHANNEL_INGRESS_USER_ID });
+      if (!closed.changed) throw new LifecycleProjectionConflict('WRONG_STAGE', 'The question task is no longer paused');
+    }
     const changed = await trx.updateTable('requests')
-      .set({ stage: 'designing', rev, current_task_id: newTaskId, updated_at: new Date() })
+      .set({ stage: 'designing', rev, current_task_id: newTaskId,
+        ...(question ? { question_asked_at: null } : {}), updated_at: new Date() })
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during requester revision with intake');
     const result: RequesterRevisionWithIntakeResult = {
       requestId, priorTaskId, newTaskId, round, rev, stage: 'designing', runId,
       directive: directive.trim(), sourceUpdateHash: input.sourceUpdateHash,
+      ...(question ? { questionId: question.id } : {}),
     };
     await trx.insertInto('lifecycle_projections').values({
       tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,

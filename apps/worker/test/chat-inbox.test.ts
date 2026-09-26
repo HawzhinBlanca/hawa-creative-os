@@ -188,6 +188,22 @@ describe('the Core client ChatInbox uses', () => {
       kind: 'done', lifecycleAction: 'revision-blocked', code: 'PARENT_BRIEF_MISSING', chatId: '555' });
   });
 
+  it('passes a verified clarification answer to the same request', async () => {
+    const c = client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 200,
+      lifecycleAction: 'requester-answer', requestId: 'req-x', newTaskId: 'task-new',
+      priorTaskId: 'task-old', round: 2, directive: 'Yes', questionId: 'question-x', chatId: '555' }));
+    expect(await c.intake(update, 'lifecycle')).toMatchObject({ kind: 'done',
+      lifecycleAction: 'requester-answer', questionId: 'question-x' });
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+      mode: 'lifecycle', requestId: 'old-pointer' } satisfies ChatInboxView);
+    await handleUpdate(ctx, input, c);
+    expect(ctx.lifecycleDecisions).toMatchObject([{ requestId: 'req-x',
+      event: { questionId: 'question-x', round: 2, newTaskId: 'task-new' } }]);
+    expect(ctx.notices).toMatchObject([{ key: `chatinbox:answer-accepted:${update.update_id}`,
+      chatId: '555', class: 'critical', text: expect.stringContaining('same design') }]);
+  });
+
   it('a Core that does not answer at all waits; one that answers too slowly is a retryable answer', async () => {
     await expect(client(async () => { throw new TypeError('fetch failed'); }).intake(update, 'legacy')).rejects.toThrow(/Core/);
     const slow = client(async (_url, init) => new Promise<Response>((_, reject) => init.signal.addEventListener('abort', () => reject(Object.assign(new Error('timed out'), { name: 'TimeoutError' })))));

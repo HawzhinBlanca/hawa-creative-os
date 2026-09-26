@@ -4,7 +4,7 @@ import type { OutboundMessage } from '@hawa/contracts';
 import { DurableStepJournal } from '../src/durable-context.js';
 import { lifecycleDesignProofHeaders } from '../src/lifecycle/design-proof.js';
 import { runOwnedDesign, validDesignRun, type DesignRunInput } from '../src/lifecycle/design-run.js';
-import { openAutomaticRequest, recordDesignFinished, type AutomaticLifecycleState,
+import { openAutomaticRequest, recordDesignFinished, recordReminderTick, type AutomaticLifecycleState,
   type AutomaticOpenContext, type DesignFinishedEvent, type ManualLifecycleState,
   type OpenAutomaticEvent } from '../src/lifecycle/request-lifecycle.js';
 
@@ -17,6 +17,8 @@ class Context implements AutomaticOpenContext {
   journal = new Map<string, unknown>();
   sent: OutboundMessage[] = [];
   started: DesignRunInput[] = [];
+  scheduledQuestions: Array<{ requestId: string; rev: number; questionId: string;
+    day: 1 | 5; delayMs: number }> = [];
   failAt: 'ack' | 'start' | 'outcome' | null = null;
   constructor(readonly key: string) {}
   async get() { return this.state; }
@@ -35,6 +37,10 @@ class Context implements AutomaticOpenContext {
   startDesign(input: DesignRunInput) {
     if (this.failAt === 'start') { this.failAt = null; throw new Error('crash before workflow send'); }
     this.started.push(input);
+  }
+  scheduleQuestionReminder(requestId: string, rev: number, questionId: string,
+    day: 1 | 5, delayMs: number) {
+    this.scheduledQuestions.push({ requestId, rev, questionId, day, delayMs });
   }
 }
 
@@ -101,6 +107,49 @@ describe('request-owned automatic design', () => {
     expect(ctx.sent.find((m) => m.key === `${e.requestId}:2:design-outcome`)).toMatchObject({ text: 'The office will follow up.' });
     expect(ctx.sent.at(-1)).toMatchObject({ key: `${e.requestId}:2:office-alert`, text: 'Task needs an operator.' });
     await expect(recordDesignFinished(ctx, core, { ...finish, report: { status: 'DESIGN_FAILED' } })).rejects.toThrow('different content');
+  });
+
+  it('keeps a verified clarification question in request state across notice replay', async () => {
+    const e = automatic(); const ctx = new Context(e.requestId); const opened = projected(e);
+    await openAutomaticRequest(ctx, { post: async () => opened }, e);
+    const questionId = randomUUID();
+    const finish: DesignFinishedEvent = { v: 1, eventId: `dr-finished:dr-${opened.taskId}`,
+      requestId: e.requestId, runId: `dr-${opened.taskId}`, round: 0, taskId: opened.taskId,
+      report: { status: 'DESIGN_FAILED', code: 'NEEDS_CLARIFICATION', runId: questionId } };
+    const core = { post: vi.fn(async () => ({ v: 1, requestId: e.requestId,
+      taskId: opened.taskId, rev: 2, stage: 'awaiting_answer', status: 'DESIGN_FAILED',
+      question: { id: questionId, text: 'Bigger headline?', options: ['Yes', 'No'] },
+      message: { text: '<b>Bigger headline?</b>', parseMode: 'HTML' } })) };
+    ctx.failAt = 'outcome';
+    await expect(recordDesignFinished(ctx, core, finish)).rejects.toThrow('crash');
+    expect(ctx.state).toMatchObject({ stage: 'awaiting_answer', rev: 2,
+      question: { id: questionId, taskId: opened.taskId, rev: 2 } });
+    await recordDesignFinished(ctx, core, finish);
+    expect(core.post).toHaveBeenCalledTimes(1);
+    expect(ctx.sent.at(-1)).toMatchObject({ key: `${e.requestId}:2:design-outcome`, class: 'critical' });
+    expect(ctx.scheduledQuestions).toMatchObject([
+      { requestId: e.requestId, rev: 2, questionId, day: 1 },
+      { requestId: e.requestId, rev: 2, questionId, day: 5 },
+    ]);
+    await recordDesignFinished(ctx, core, finish);
+    expect(ctx.scheduledQuestions).toMatchObject([
+      { requestId: e.requestId, rev: 2, questionId, day: 1 },
+      { requestId: e.requestId, rev: 2, questionId, day: 5 },
+      { requestId: e.requestId, rev: 2, questionId, day: 1 },
+      { requestId: e.requestId, rev: 2, questionId, day: 5 },
+    ]);
+    expect(await recordReminderTick(ctx, { v: 1, requestId: e.requestId,
+      expectedRev: 2, kind: 'question', questionId, day: 1 })).toEqual({ reminded: true });
+    expect(ctx.sent.at(-1)).toMatchObject({ key: `${e.requestId}:2:question-reminder-1`,
+      class: 'critical' });
+    expect(ctx.scheduledQuestions).toHaveLength(4);
+    expect(await recordReminderTick(ctx, { v: 1, requestId: e.requestId,
+      expectedRev: 2, kind: 'question', questionId, day: 5 })).toEqual({ reminded: true });
+    expect(ctx.sent.at(-1)).toMatchObject({ key: `${e.requestId}:2:question-reminder-5` });
+    ctx.state = { ...ctx.state as AutomaticLifecycleState, stage: 'designing', rev: 3,
+      question: undefined };
+    expect(await recordReminderTick(ctx, { v: 1, requestId: e.requestId,
+      expectedRev: 2, kind: 'question', questionId, day: 5 })).toEqual({ skipped: true });
   });
 
   it('refuses a run with the wrong workflow key before any Core request', async () => {

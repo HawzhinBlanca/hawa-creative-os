@@ -1,5 +1,37 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — verified Studio question and requester answer
+
+Core now enters `awaiting_answer` only when a `NEEDS_CLARIFICATION` outcome matches a
+persisted failed Studio run for the same tenant and task, with a valid question and options.
+It pauses that task and commits the question, request revision, timestamp, and escaped
+Telegram question notice together. A forged question report leaves the request in its
+manual operator state. RequestLifecycle saves the question before sending the critical
+notice and schedules revision-bound day-1 and day-5 reminders under stable Restate keys.
+Reminders skip after the request advances; replies to the sent question or reminder bind
+to that request even when another request in the chat is waiting.
+
+Core resolves an answer against the current question and exact Telegram reply target.
+In one transaction it saves a new task with the original factual brief, answer directive,
+parent design context, original Telegram update and full update hash; closes the paused
+question task; and advances `awaiting_answer → designing` with a hash-bound receipt.
+The worker adopts that receipt, acknowledges the answer with a critical sender key and
+starts the next DesignRun. A duplicate update returns the original result; an ambiguous,
+late, or mismatched answer is refused without a new task. Clarification answers require
+the persisted Telegram update identity, including when a worker handler is called directly.
+Requirements: FR-060 and NFR-001. R07 remains **in progress**.
+
+**Verification:** the affected lifecycle set passed **10 files / 87 tests** against
+isolated PostgreSQL and worker fakes. It includes the question→answer→new DesignRun
+journey, two waiting requests, duplicate and late answers, a forged Studio question,
+state-save replay, and stale reminder ticks. `pnpm lint` and `pnpm typecheck` passed;
+the first unprivileged typecheck was blocked by local IPC and the same command passed
+with access to that IPC. These are local tests. Reminder timing is currently elapsed
+from the question projection, not anchored to a confirmed Telegram send or moved to
+the next office moment. A killed Restate/PostgreSQL replay of this exact question path,
+busy-chat new-brief admission, live Telegram delivery, and the final release gate remain
+open. The lifecycle flag remains off.
+
 ## 2026-09-26 — revision reply binding and Core receipt adoption
 
 The per-chat `requestId` stored by ChatInbox is only a hint: Core now reads every waiting

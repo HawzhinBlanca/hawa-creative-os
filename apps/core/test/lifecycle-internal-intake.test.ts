@@ -296,6 +296,92 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(3);
   });
 
+  it('asks a verified Studio question, resumes from its answer, and rejects a late second answer', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const { requestId, taskId: originalTaskId } = await seedWaitingRequest(app, chat);
+    const change = brief(updateId(), chat);
+    change.message.text = 'Make the background blue';
+    const revised = await intake(app, change, 'lifecycle', requestId);
+    expect(revised.body).toMatchObject({ lifecycleAction: 'requester-revision', round: 1 });
+    const waitingTaskId = revised.body.newTaskId as string;
+    const questionId = randomUUID();
+    await withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.design_studio_runs
+      (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash,
+       request, tier, status, stages)
+      VALUES (${questionId}::uuid, ${tenantId}::uuid, ${waitingTaskId}::uuid,
+        ${clientId}::uuid, 'test', ${`question-${questionId}`}, 'fixture-hash',
+        '{}'::jsonb, 'premium', 'failed',
+        ${JSON.stringify({ directed: { refused: 'NEEDS_CLARIFICATION',
+          clarify: { question: 'Should the headline be <larger>?',
+            options: ['Larger headline', 'Keep it as is'] } } })}::jsonb)`.execute(trx));
+    const runId = `dr-${waitingTaskId}`;
+    const outcome = await app.request(`/v1/internal/lifecycle/${requestId}/design-outcome`, {
+      method: 'POST', headers: worker, body: JSON.stringify({ v: 1, expectedRev: 4, rev: 5,
+        key: `${requestId}:5:designFinished:${runId}`,
+        ops: [{ kind: 'recordOutcome', taskId: waitingTaskId, runId,
+          report: { status: 'DESIGN_FAILED', code: 'NEEDS_CLARIFICATION', runId: questionId } }] }),
+    });
+    expect(outcome.status).toBe(200);
+    const asked = await outcome.json();
+    expect(asked).toMatchObject({ stage: 'awaiting_answer', rev: 5,
+      question: { id: questionId, options: ['Larger headline', 'Keep it as is'] } });
+    expect(asked.message.text).toContain('&lt;larger&gt;');
+    await withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.inbox_events
+      (tenant_id, source_account_id, source_event_id, event_kind, payload,
+       payload_hash, verified)
+      VALUES (${tenantId}::uuid, 'telegram_delivery',
+        ${`lc:${requestId}:5:design-outcome:send`}, 'telegram_message_sent',
+        '{"messageId":"735"}'::jsonb, 'question-sent', true)`.execute(trx));
+    const other = await seedWaitingRequest(app, chat);
+    const unlinked = brief(updateId(), chat);
+    unlinked.message.text = 'Larger headline';
+    expect((await intake(app, unlinked, 'lifecycle', other.requestId)).body).toMatchObject({
+      intakeStatus: 409, code: 'AMBIGUOUS_REQUEST', lifecycleAction: 'request-choice-required' });
+    const answer = brief(updateId(), chat);
+    answer.message.text = 'Larger headline';
+    (answer.message as Record<string, unknown>).reply_to_message = { message_id: 735 };
+    const resumed = await intake(app, answer, 'lifecycle', requestId);
+    expect(resumed.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'requester-answer',
+      requestId, priorTaskId: waitingTaskId, questionId, round: 2 });
+    const answeredTaskId = resumed.body.newTaskId as string;
+    const child = (await tasksInChat(chat)).find((task: any) => task.aggregate_id === answeredTaskId);
+    expect(child?.payload).toMatchObject({ exactCopy: [{ text: 'December 4, 2026' }],
+      studioOptions: { parentTaskId: originalTaskId, answers: waitingTaskId,
+        clarified: true, revisionRound: 2 } });
+    expect((child?.payload as any).studioOptions.revisionDirective).toContain('Larger headline');
+    const rows = await withRlsContext(db, scope, async (trx) => ({
+      request: await trx.selectFrom('requests').select(['rev', 'stage', 'current_task_id'])
+        .where('request_id', '=', requestId).executeTakeFirst(),
+      questionTask: await trx.selectFrom('tasks').select('state').where('id', '=', waitingTaskId).executeTakeFirst(),
+      source: await trx.selectFrom('inbox_events').select('payload')
+        .where('source_account_id', '=', 'telegram')
+        .where('source_event_id', '=', `${chat}:lc-${requestId}-r2-u${answer.update_id}`)
+        .executeTakeFirst(),
+    }));
+    expect(rows.request).toMatchObject({ rev: '6', stage: 'designing', current_task_id: answeredTaskId });
+    expect(rows.questionTask).toMatchObject({ state: 'cancelled' });
+    expect(rows.source?.payload).toMatchObject({ update_id: answer.update_id,
+      message: { reply_to_message: { message_id: 735 } } });
+    const adopted = await app.request(`/v1/internal/lifecycle/${requestId}/requester-revision-intake`, {
+      method: 'POST', headers: worker, body: JSON.stringify({ v: 1, updateId: answer.update_id,
+        expectedRev: 5, priorTaskId: waitingTaskId, newTaskId: answeredTaskId,
+        round: 2, directive: answer.message.text, questionId }),
+    });
+    expect(adopted.status).toBe(200);
+    const replay = await intake(createApp({ db } as any), answer, 'lifecycle', requestId);
+    expect(replay.body).toMatchObject({ intakeStatus: 200, duplicate: true,
+      lifecycleAction: 'requester-answer', newTaskId: answeredTaskId, questionId });
+    const late = brief(updateId(), chat);
+    late.message.text = 'Keep it as is';
+    (late.message as Record<string, unknown>).reply_to_message = { message_id: 735 };
+    expect((await intake(app, late, 'lifecycle', requestId)).body).toMatchObject({
+      intakeStatus: 409, code: 'STALE_REQUEST_REPLY', lifecycleAction: 'request-choice-required' });
+    expect(await tasksInChat(chat)).toHaveLength(4);
+  });
+
   it('answers NOT_CONFIGURED without the webhook secret', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const app = createApp({ db } as any);

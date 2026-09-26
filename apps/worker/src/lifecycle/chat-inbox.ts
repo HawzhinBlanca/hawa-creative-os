@@ -43,11 +43,12 @@ export type IntakeMode = 'legacy' | 'lifecycle';
 export type IntakeAnswer =
   | { kind: 'done'; intakeStatus: number; duplicate?: boolean;
       /** When mode=lifecycle and Core routed the update as a requester revision. */
-      lifecycleAction?: 'requester-revision' | 'request-choice-required' | 'revision-blocked';
+      lifecycleAction?: 'requester-revision' | 'requester-answer' |
+        'request-choice-required' | 'revision-blocked';
       requestId?: string; newTaskId?: string; round?: number; directive?: string;
-      priorTaskId?: string; rawText?: string; chatId?: string;
+      priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
       code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
-        'PARENT_BRIEF_MISSING'; }
+        'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING'; }
   | { kind: 'retry'; reason: string };
 
 /** The Core calls ChatInbox makes (core-client.ts). A thrown error means "wait and try again". */
@@ -132,7 +133,7 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
     // In lifecycle mode, if Core recognised the update as a requester revision decision, fire the
     // lifecycle handler so RequestLifecycle can advance its state machine. Idempotency key:
     // chatinbox:revision:<update_id> — stable, unique per update, replay-safe.
-    if (done.lifecycleAction === 'requester-revision' &&
+    if ((done.lifecycleAction === 'requester-revision' || done.lifecycleAction === 'requester-answer') &&
         done.requestId && done.newTaskId && done.round !== undefined && done.directive && done.priorTaskId) {
       const lcEvent: RequesterDecisionEvent & { newTaskId: string } = {
         v: 1,
@@ -142,11 +143,18 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
         directive: done.directive,
         priorTaskId: done.priorTaskId,
         newTaskId: done.newTaskId,
+        ...(done.questionId ? { questionId: done.questionId } : {}),
         ...(done.rawText !== undefined ? { rawText: done.rawText as string } : {}),
       };
       // Keep the Restate context alive until the send is durably recorded. A failed import or send
       // retries this handler from its journaled Core answer under the same event key.
       await ctx.sendLifecycleDecision(done.requestId, lcEvent);
+      if (done.lifecycleAction === 'requester-answer' && done.chatId) {
+        ctx.sendNotice({ v: 1, key: `chatinbox:answer-accepted:${update.update_id}`,
+          chatId: done.chatId, kind: 'text', class: 'critical',
+          text: 'Your answer is saved. I am continuing the same design with that detail.',
+        });
+      }
     }
     if (done.lifecycleAction === 'request-choice-required' && done.chatId &&
         (done.code === 'AMBIGUOUS_REQUEST' || done.code === 'STALE_REQUEST_REPLY')) {
@@ -158,12 +166,15 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
       });
     }
     if (done.lifecycleAction === 'revision-blocked' && done.chatId &&
-        (done.code === 'DAILY_CAP_REACHED' || done.code === 'PARENT_BRIEF_MISSING')) {
+        (done.code === 'DAILY_CAP_REACHED' || done.code === 'PARENT_BRIEF_MISSING' ||
+          done.code === 'QUESTION_MISSING')) {
       ctx.sendNotice({ v: 1, key: `chatinbox:revision-blocked:${update.update_id}`,
         chatId: done.chatId, kind: 'text', class: 'critical',
         text: done.code === 'DAILY_CAP_REACHED'
           ? 'The automatic design limit has been reached. No revision started. Please send this change again after the daily limit resets, or ask the office for help.'
-          : 'I could not safely find the original design brief, so no revision started. Please ask the office to check this request.',
+          : done.code === 'QUESTION_MISSING'
+            ? 'I could not safely recover the question for this design, so no answer was applied. Please ask the office to check this request.'
+            : 'I could not safely find the original design brief, so no revision started. Please ask the office to check this request.',
       });
     }
     ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'handled',
