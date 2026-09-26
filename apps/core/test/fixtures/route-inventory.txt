@@ -17,6 +17,9 @@ GET /api/adapters/figma/cloud-status
 GET /api/adapters/telegram/status
 GET /api/adapters/telegram/webhook/info
 GET /api/assets
+GET /api/auth/google/callback
+GET /api/auth/google/start
+GET /api/auth/providers
 GET /api/auth/session
 GET /api/clients
 GET /api/clients/:clientId/budget
@@ -90,6 +93,9 @@ GET /api/v1/adapters/figma/cloud-status
 GET /api/v1/adapters/telegram/status
 GET /api/v1/adapters/telegram/webhook/info
 GET /api/v1/assets
+GET /api/v1/auth/google/callback
+GET /api/v1/auth/google/start
+GET /api/v1/auth/providers
 GET /api/v1/auth/session
 GET /api/v1/clients
 GET /api/v1/clients/:clientId/budget
@@ -165,6 +171,9 @@ GET /api/v1/webhooks/whatsapp/actions
 GET /api/waha/health
 GET /api/webhooks/whatsapp/actions
 GET /assets
+GET /auth/google/callback
+GET /auth/google/start
+GET /auth/providers
 GET /auth/session
 GET /clients
 GET /clients/:clientId/budget
@@ -240,6 +249,9 @@ GET /v1/adapters/figma/cloud-status
 GET /v1/adapters/telegram/status
 GET /v1/adapters/telegram/webhook/info
 GET /v1/assets
+GET /v1/auth/google/callback
+GET /v1/auth/google/start
+GET /v1/auth/providers
 GET /v1/auth/session
 GET /v1/clients
 GET /v1/clients/:clientId/budget
@@ -407,9 +419,9 @@ POST /api/tasks/:taskId/pause
 POST /api/tasks/:taskId/publish
 POST /api/tasks/:taskId/publish-omnichannel
 POST /api/tasks/:taskId/redrive
+POST /api/tasks/:taskId/requester-send-confirmation
 POST /api/tasks/:taskId/resume
 POST /api/tasks/:taskId/retry
-POST /api/tasks/:taskId/requester-send-confirmation
 POST /api/tasks/:taskId/revisions
 POST /api/tasks/:taskId/revisions/:revisionId/decisions
 POST /api/tasks/:taskId/revisions/:revisionId/evaluate-rubric
@@ -500,9 +512,9 @@ POST /api/v1/tasks/:taskId/pause
 POST /api/v1/tasks/:taskId/publish
 POST /api/v1/tasks/:taskId/publish-omnichannel
 POST /api/v1/tasks/:taskId/redrive
+POST /api/v1/tasks/:taskId/requester-send-confirmation
 POST /api/v1/tasks/:taskId/resume
 POST /api/v1/tasks/:taskId/retry
-POST /api/v1/tasks/:taskId/requester-send-confirmation
 POST /api/v1/tasks/:taskId/revisions
 POST /api/v1/tasks/:taskId/revisions/:revisionId/decisions
 POST /api/v1/tasks/:taskId/revisions/:revisionId/evaluate-rubric
@@ -596,9 +608,9 @@ POST /tasks/:taskId/pause
 POST /tasks/:taskId/publish
 POST /tasks/:taskId/publish-omnichannel
 POST /tasks/:taskId/redrive
+POST /tasks/:taskId/requester-send-confirmation
 POST /tasks/:taskId/resume
 POST /tasks/:taskId/retry
-POST /tasks/:taskId/requester-send-confirmation
 POST /tasks/:taskId/revisions
 POST /tasks/:taskId/revisions/:revisionId/decisions
 POST /tasks/:taskId/revisions/:revisionId/evaluate-rubric
@@ -702,9 +714,9 @@ POST /v1/tasks/:taskId/pause
 POST /v1/tasks/:taskId/publish
 POST /v1/tasks/:taskId/publish-omnichannel
 POST /v1/tasks/:taskId/redrive
+POST /v1/tasks/:taskId/requester-send-confirmation
 POST /v1/tasks/:taskId/resume
 POST /v1/tasks/:taskId/retry
-POST /v1/tasks/:taskId/requester-send-confirmation
 POST /v1/tasks/:taskId/revisions
 POST /v1/tasks/:taskId/revisions/:revisionId/decisions
 POST /v1/tasks/:taskId/revisions/:revisionId/evaluate-rubric

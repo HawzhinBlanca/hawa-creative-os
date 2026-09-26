@@ -195,22 +195,22 @@ describe('the session, as the API client ends it', () => {
     apiClient.auth.setUnauthorizedHint(null);
   });
 
-  it('Sign Out revokes the session it ends, and signs the tab out even when Core does not answer', async () => {
+  it('keeps the session when Core cannot confirm revocation, so a retry is possible', async () => {
     await signIn('hawa_sess_b');
     const fetchSpy = vi.fn(async (_url: string, _init?: RequestInit) => {
       throw new TypeError('fetch failed');
     });
     vi.stubGlobal('fetch', fetchSpy);
-    await apiClient.auth.logout();
+    await expect(apiClient.auth.logout()).rejects.toMatchObject({ status: 0 });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe('/v1/auth/session');
     expect(init?.method).toBe('DELETE');
     expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer hawa_sess_b');
-    // The next request goes without the ended token.
+    // A failed server revoke cannot be represented as a completed sign-out.
     vi.stubGlobal('fetch', vi.fn(async () => json({ items: [], total: 0 }, 200)));
     await apiClient.tasks.list({ limit: 1 });
     const headers = (vi.mocked(fetch).mock.calls[0][1]?.headers || {}) as Record<string, string>;
-    expect(headers.Authorization).toBeUndefined();
+    expect(headers.Authorization).toBe('Bearer hawa_sess_b');
   });
 });

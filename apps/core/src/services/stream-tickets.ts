@@ -5,7 +5,8 @@ import crypto from 'node:crypto';
  *
  * A browser's EventSource cannot send an Authorization header, so the Desk put its 24-hour session
  * token in the stream's address (`?access_token=`), where every proxy, access log and browser history
- * could keep it. Now the Desk asks for a ticket with its bearer header and opens the stream with
+ * could keep it. Now the Desk asks for a ticket with its bearer header or a CSRF-protected session
+ * cookie and opens the stream with
  * `?ticket=`. A ticket:
  *
  * - opens one stream, once: it is removed when redeemed, so a copied address is worthless;
@@ -34,7 +35,7 @@ export interface IssuedStreamTicket {
 }
 
 export interface StreamTicketStore {
-  /** A new ticket that stands for `credential` (the bearer token it was requested with). */
+  /** A new ticket that stands for `credential` (the authenticated session token). */
   issue(credential: string): IssuedStreamTicket;
   /** The credential a live ticket stands for, once; undefined for an unknown, used or expired ticket. */
   redeem(ticket: string | undefined | null): string | undefined;

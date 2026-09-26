@@ -181,6 +181,27 @@ describe('the DNA, Ops and Eval screens send the operator token', () => {
     expect(sentRequest(fetchMock).headers.has('Authorization')).toBe(false);
   });
 
+  it('sends cookie-session CSRF proof for a Desk mutation without exposing a bearer token', async () => {
+    browserWithToken(null);
+    vi.stubGlobal('document', { cookie: `hawa_csrf=${'a'.repeat(64)}` });
+    const fetchMock = stubFetch();
+    await apiClient.clients.allocateBudget(KAAE, 500);
+    const sent = sentRequest(fetchMock);
+    expect(sent.headers.has('Authorization')).toBe(false);
+    expect(sent.headers.get('x-hawa-csrf')).toBe('a'.repeat(64));
+    expect(fetchMock.mock.calls[0][1]?.credentials).toBe('same-origin');
+  });
+
+  it('uses a new Google cookie identity ahead of a shared key left in this tab', async () => {
+    browserWithToken(TOKEN);
+    vi.stubGlobal('document', { cookie: `hawa_csrf=${'b'.repeat(64)}` });
+    const fetchMock = stubFetch();
+    await apiClient.clients.allocateBudget(KAAE, 500);
+    const sent = sentRequest(fetchMock);
+    expect(sent.headers.has('Authorization')).toBe(false);
+    expect(sent.headers.get('x-hawa-csrf')).toBe('b'.repeat(64));
+  });
+
   it('the three screens make no call of their own: every request goes through apiClient', () => {
     for (const file of ['DnaScreen.tsx', 'OpsScreen.tsx', 'EvalScreen.tsx']) {
       const text = fs.readFileSync(path.join(SCREENS, file), 'utf8');

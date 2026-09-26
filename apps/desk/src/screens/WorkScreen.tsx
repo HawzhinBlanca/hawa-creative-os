@@ -270,10 +270,14 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     [stream]
   );
 
-  // Ends the session on the server too; the tab is signed out whether or not Core answers.
-  const handleSignOut = () => {
-    void apiClient.auth.logout();
-    session.signOut();
+  // A failed revoke cannot be called sign-out: the HttpOnly cookie or bearer session may still work.
+  const handleSignOut = async () => {
+    try {
+      await apiClient.auth.logout();
+      session.signOut();
+    } catch {
+      showToast('Could not sign out. Check the connection and try again.', 'error');
+    }
   };
 
   // Filtered tasks. Core filters and searches the page (folding the Arabic-keyboard letters into

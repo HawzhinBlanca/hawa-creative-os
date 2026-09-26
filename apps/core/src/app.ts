@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { getCookie } from 'hono/cookie';
 import { SYSTEM_AUTOMATION_USER_ID, PRIMARY_OPERATOR_USER_ID, TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
 import { type ClientDNA, type DesignBrief, resolveModel, resolveImageSettings, activeModelTier } from '@hawa/domain';
 import {
@@ -199,7 +200,9 @@ export function createApp(options?: CreateAppOptions) {
       title,
       status,
       detail: detail || title,
-      instance: c.req.url,
+      // OAuth callback URLs carry one-time codes and state. Problem responses must not echo
+      // query strings into the browser, proxy logs, or any captured support bundle.
+      instance: new URL(c.req.url).pathname,
     }, status);
   }
 
@@ -326,6 +329,7 @@ export function createApp(options?: CreateAppOptions) {
     actorId: string;
     role: string;
     displayName: string;
+    authMethod?: 'shared_key' | 'google_oidc' | 'telegram_miniapp';
     expiresAt?: number;
     /** Last time PostgreSQL confirmed this session (revocation from another instance is honoured within a minute). */
     checkedAt?: number;
@@ -340,8 +344,8 @@ export function createApp(options?: CreateAppOptions) {
   async function persistSession(token: string, session: IssuedSession): Promise<boolean> {
     if (!db) return false;
     try {
-      await withRlsContext(db, sessionRls, (trx) => sql`INSERT INTO hawa.desk_sessions(token_hash,tenant_id,user_id,actor_id,role,display_name,expires_at)
-        VALUES (${sessionHash(token)},${session.tenantId}::uuid,${session.userId}::uuid,${session.actorId},${session.role},${session.displayName},${new Date(session.expiresAt || Date.now() + 86400000)})`.execute(trx));
+      await withRlsContext(db, sessionRls, (trx) => sql`INSERT INTO hawa.desk_sessions(token_hash,tenant_id,user_id,actor_id,role,display_name,expires_at,auth_method)
+        VALUES (${sessionHash(token)},${session.tenantId}::uuid,${session.userId}::uuid,${session.actorId},${session.role},${session.displayName},${new Date(session.expiresAt || Date.now() + 86400000)},${session.authMethod || 'shared_key'})`.execute(trx));
       return true;
     } catch (err) {
       log.error('[core:sessions] could not persist session; it will not survive a restart:', err);
@@ -367,7 +371,7 @@ export function createApp(options?: CreateAppOptions) {
     const cached = issuedSessions.get(token);
     if (cached && cached.checkedAt && Date.now() - cached.checkedAt < SESSION_RECHECK_MS) return;
     try {
-      const row = await withRlsContext(db, sessionRls, async (trx) => (await sql<any>`SELECT tenant_id,user_id,actor_id,role,display_name,expires_at,revoked_at
+      const row = await withRlsContext(db, sessionRls, async (trx) => (await sql<any>`SELECT tenant_id,user_id,actor_id,role,display_name,expires_at,revoked_at,auth_method
         FROM hawa.desk_sessions WHERE token_hash=${sessionHash(token)}`.execute(trx)).rows[0]);
       if (!row || row.revoked_at || new Date(row.expires_at).getTime() <= Date.now()) {
         if (cached && row && (row.revoked_at || new Date(row.expires_at).getTime() <= Date.now())) issuedSessions.delete(token);
@@ -376,7 +380,8 @@ export function createApp(options?: CreateAppOptions) {
       }
       issuedSessions.set(token, {
         authenticated: true, tenantId: row.tenant_id, userId: row.user_id, actorId: row.actor_id, role: row.role,
-        displayName: row.display_name, expiresAt: new Date(row.expires_at).getTime(), checkedAt: Date.now(),
+        displayName: row.display_name, authMethod: row.auth_method,
+        expiresAt: new Date(row.expires_at).getTime(), checkedAt: Date.now(),
       });
     } catch (err) {
       // Database trouble must not log everyone out: keep whatever the cache already knows.
@@ -386,7 +391,8 @@ export function createApp(options?: CreateAppOptions) {
   const bearerTokenOf = (c: any): string | undefined => {
     const header = c.req.header('Authorization');
     if (header && header.startsWith('Bearer ')) return header.slice(7).trim();
-    return undefined;
+    const cookie = getCookie(c, 'hawa_session');
+    return cookie?.startsWith('hawa_sess_') ? cookie : undefined;
   };
 
   function saveSession(token: string, session: IssuedSession) {
@@ -407,7 +413,7 @@ export function createApp(options?: CreateAppOptions) {
    * `ticketCredential` is the bearer token a redeemed stream ticket stood for (routes/system.routes.ts);
    * it is checked exactly as that header would be. Nothing else passes it.
    */
-  function verifyRequestAuth(c: any, ticketCredential?: string): { authenticated: boolean; tenantId: string; userId: string; actorId: string; role: string; displayName?: string } {
+  function verifyRequestAuth(c: any, ticketCredential?: string): { authenticated: boolean; tenantId: string; userId: string; actorId: string; role: string; displayName?: string; authMethod?: string } {
     // The worker's own credential (architecture programme Phase 2.1): HAWA_WORKER_TOKEN is a
     // `service` principal on /v1/internal/* and nothing anywhere else, and those routes take no other
     // credential: not the operator's or administrator's keys, a session, a stream ticket, the webhook
@@ -421,6 +427,11 @@ export function createApp(options?: CreateAppOptions) {
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
     }
     let authHeader = ticketCredential ? `Bearer ${ticketCredential}` : c.req.header('Authorization');
+    if (!authHeader) {
+      const rawCookie = getCookie(c, 'hawa_session');
+      const cookieSession = rawCookie?.startsWith('hawa_sess_') ? rawCookie : undefined;
+      if (cookieSession) authHeader = `Bearer ${cookieSession}`;
+    }
     // Browser <img> elements cannot set request headers: media and preview endpoints may carry the
     // session token as an `access_token` query parameter (validated against issued sessions). The
     // event stream no longer does: it takes a one-use ticket instead (ADR-037).
@@ -868,6 +879,9 @@ export function createApp(options?: CreateAppOptions) {
 
   const PUBLIC_READ_PATHS = new Set([
     '/auth/session',
+    '/auth/providers',
+    '/auth/google/start',
+    '/auth/google/callback',
     '/health',
     '/ready',
     '/system/studio-status',
@@ -891,7 +905,19 @@ export function createApp(options?: CreateAppOptions) {
     const isPublic = method === 'get' ? isPublicRead(path) || SELF_AUTHENTICATED_READS.has(path) : isPublicMutation(path);
     const guarded = isPublic
       ? handler
-      : async (c: any, next: any) => {
+        : async (c: any, next: any) => {
+          if (method !== 'get' && !c.req.header('Authorization')) {
+            const cookieSession = getCookie(c, 'hawa_session');
+            if (cookieSession) {
+              const presented = c.req.header('x-hawa-csrf') || '';
+              const expected = crypto.createHash('sha256').update(`${cookieSession}:csrf`).digest('hex');
+              const origin = c.req.header('Origin');
+              const requestOrigin = new URL(c.req.url).origin;
+              if (!secretsEqual(presented, expected) || (origin && origin !== requestOrigin)) {
+                return problem(c, 403, 'CSRF Check Failed', 'The office session requires a same-origin request and CSRF proof');
+              }
+            }
+          }
           await ensureSessionLoaded(bearerTokenOf(c));
           const auth = verifyRequestAuth(c);
           if (!auth.authenticated) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');

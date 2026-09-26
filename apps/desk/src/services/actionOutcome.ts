@@ -18,7 +18,7 @@ export interface ActionNotice {
 export function approvalRoleBlocker(role: string | undefined | null): string | null {
   if (!role) return null;
   return role.toLowerCase().trim() === 'operator'
-    ? 'Approval needs an art director or administrator sign-in. You are signed in as an operator; sign out and sign in with an approver key to approve.'
+    ? 'Approval needs an assigned reviewer. You are signed in as an operator; sign out and use your Google Workspace account to review.'
     : null;
 }
 

@@ -54,7 +54,7 @@ describe('the Work screen reports what Approve and Deliver actually did (2026-09
   });
 
   it('shows the signed-in role instead of a role picker that was never sent, and an operator cannot approve', () => {
-    expect(approvalRoleBlocker('operator')).toMatch(/^Approval needs an art director or administrator sign-in/);
+    expect(approvalRoleBlocker('operator')).toMatch(/^Approval needs an assigned reviewer/);
     expect(approvalRoleBlocker('art_director')).toBeNull();
     expect(approvalRoleBlocker('administrator')).toBeNull();
     expect(approvalRoleBlocker(undefined)).toBeNull();

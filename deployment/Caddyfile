@@ -30,6 +30,14 @@
 
   log {
     output stdout
-    format json
+    # OAuth redirects carry one-time authorization codes and state in the query. Keep the
+    # request/status evidence while removing those values from access logs.
+    format filter {
+      request>uri query {
+        delete code
+        delete state
+      }
+      wrap json
+    }
   }
 }

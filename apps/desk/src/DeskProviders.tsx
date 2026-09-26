@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useSyncExternalStore } from 'react';
 import { QueryClientProvider, useQuery, type QueryClient } from '@tanstack/react-query';
 import { apiClient } from './api/client.js';
-import { clearAuthToken, getAuthToken } from './services/auth.js';
+import { clearAuthToken, getAuthToken, hasCookieSession } from './services/auth.js';
 import { createDeskQueryClient, queryKeys } from './services/queryClient.js';
 import { createDeskSession, type DeskSession, type SessionState } from './services/session.js';
 import { bridgeTaskEvents, pollIntervalFor, useStreamStatus, type LiveEventSource, type VisibilitySource } from './services/liveUpdates.js';
@@ -21,7 +21,7 @@ export function createDeskRuntime(input: { stream: LiveEventSource; doc?: Visibi
   const { stream, doc } = input;
   let queryClient: QueryClient | undefined;
   const session = createDeskSession({
-    hasToken: () => Boolean(getAuthToken()),
+    hasToken: () => Boolean(getAuthToken()) || hasCookieSession(),
     clearToken: clearAuthToken,
     // A signed-out tab keeps no answer read with the old session and listens to nothing.
     onSignedOut: () => {

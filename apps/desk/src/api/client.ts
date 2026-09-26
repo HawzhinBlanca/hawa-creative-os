@@ -5,7 +5,7 @@
  * using authenticated sessions. No hardcoded development bearer fallbacks.
  */
 
-import { getAuthToken, setAuthToken, clearAuthToken } from '../services/auth.js';
+import { getAuthToken, setAuthToken, clearAuthToken, getCsrfToken } from '../services/auth.js';
 
 export interface ApiSessionUser {
   id: string;
@@ -146,12 +146,17 @@ class HawaApiClient {
   ): Promise<T> {
     const url = `${this.basePrefix}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     const headers = this.getHeaders(options.headers as Record<string, string>);
+    if (!getAuthToken() && !['GET', 'HEAD'].includes((options.method || 'GET').toUpperCase())) {
+      const csrf = getCsrfToken();
+      if (csrf) headers['x-hawa-csrf'] = csrf;
+    }
 
     let response: Response;
     try {
       response = await fetch(url, {
         ...options,
         headers,
+        credentials: 'same-origin',
       });
     } catch (networkErr: any) {
       throw new ApiError(0, `Network error: ${networkErr.message || 'Unable to connect to server'}`);
@@ -206,6 +211,8 @@ class HawaApiClient {
   }
 
   public readonly auth = {
+    providers: async (): Promise<{ googleWorkspace: boolean }> =>
+      this.request('/auth/providers', { method: 'GET' }),
     getSession: async (): Promise<ApiSessionResponse> => {
       return this.request<ApiSessionResponse>('/auth/session', { method: 'GET' });
     },
@@ -233,9 +240,9 @@ class HawaApiClient {
      */
     logout: async (): Promise<void> => {
       const token = getAuthToken();
+      await this.request('/auth/session', { method: 'DELETE',
+        ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}) });
       clearAuthToken();
-      if (!token) return;
-      await this.request('/auth/session', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
     },
 
     /**

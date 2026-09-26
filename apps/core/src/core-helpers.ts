@@ -82,7 +82,8 @@ export interface CreateAppOptions {
    * `roleHeader`: the x-user-role header sets the role, so a test can act as several people.
    * Production code has no environment switch that turns either on; there is nothing to leave on.
    */
-  testAuth?: { principal?: { role: string; userId?: string; displayName?: string }; roleHeader?: boolean };
+  testAuth?: { principal?: { role: string; userId?: string; displayName?: string }; roleHeader?: boolean;
+    googleOidcProvider?: import('./services/google-oidc.js').OfficeOidcProvider };
   /** @deprecated use testAuth.roleHeader */
   allowRoleHeader?: boolean;
   extraBearerTokens?: Record<string, { role: string; email?: string; sub?: string } | string>;

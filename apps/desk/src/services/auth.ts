@@ -9,8 +9,29 @@ const TOKEN_KEY = 'hawa_operator_token';
 
 let inMemoryToken: string | null = null;
 
+export function getCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)hawa_csrf=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+export function hasCookieSession(): boolean {
+  return Boolean(getCsrfToken());
+}
+
 export function getAuthToken(): string | null {
   if (typeof window === 'undefined') return inMemoryToken;
+
+  // A completed Google sign-in owns this browser session. Discard a key left in this tab by
+  // an earlier shared-key sign-in so requests cannot silently act as that older identity.
+  if (hasCookieSession()) {
+    inMemoryToken = null;
+    try {
+      window.localStorage?.removeItem(TOKEN_KEY);
+      window.sessionStorage?.removeItem(TOKEN_KEY);
+    } catch { /* A blocked storage API does not override the cookie identity. */ }
+    return null;
+  }
 
   const runtimeConfigToken = (window as any).__HAWA_CONFIG__?.apiToken;
   if (runtimeConfigToken) return runtimeConfigToken;
@@ -51,6 +72,7 @@ export function clearAuthToken(): void {
   try {
     window.localStorage?.removeItem(TOKEN_KEY);
     window.sessionStorage?.removeItem(TOKEN_KEY);
+    document.cookie = 'hawa_csrf=; Max-Age=0; Path=/; Secure; SameSite=Strict';
   } catch {
     // Ignore
   }

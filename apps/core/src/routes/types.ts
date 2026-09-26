@@ -18,6 +18,7 @@ export type RouteRegistrar = (method: 'get' | 'post' | 'put' | 'delete', path: s
 export interface AuthContext {
   authenticated: boolean;
   role?: string;
+  authMethod?: string;
   tenantId?: string;
   actorId?: string;
   userId?: string;

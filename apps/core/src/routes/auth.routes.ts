@@ -1,8 +1,12 @@
 import crypto from 'node:crypto';
 import type { Context } from 'hono';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { verifyTelegramMiniAppInitData } from '@hawa/integrations';
+import { sql, withRlsContext } from '@hawa/db';
+import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import type { RouteContext } from './types.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
+import { createGoogleOidcProvider, googleOidcSettings, oidcCodeChallenge, oidcCodeVerifier } from '../services/google-oidc.js';
 
 export function registerAuthRoutes(ctx: RouteContext) {
   const {
@@ -17,9 +21,92 @@ export function registerAuthRoutes(ctx: RouteContext) {
     streamTickets,
     options,
     telegramAllowedUsers,
+    db,
   } = ctx;
   const defaultTenantId = DEFAULT_TENANT_ID;
   const operatorUserId = OPERATOR_USER_ID;
+  const settings = googleOidcSettings();
+  const googleOidc = options?.testAuth?.googleOidcProvider || (settings ? createGoogleOidcProvider(settings) : null);
+  const oidcEnabled = Boolean(db && googleOidc);
+  const oidcRls = { tenantId: defaultTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
+
+  registerRoute('get', '/auth/providers', (c: Context) => c.json({ googleWorkspace: oidcEnabled }, 200));
+
+  registerRoute('get', '/auth/google/start', async (c: Context) => {
+    if (!db || !googleOidc) return problem(c, 503, 'Google Sign-In Unavailable', 'Office sign-in is not configured');
+    const state = crypto.randomBytes(32).toString('base64url');
+    const nonce = crypto.randomBytes(32).toString('base64url');
+    const verifier = oidcCodeVerifier();
+    let destination: string;
+    try {
+      destination = await googleOidc.authorizationUrl({ state, nonce, codeChallenge: await oidcCodeChallenge(verifier) });
+    } catch {
+      return problem(c, 503, 'Google Sign-In Unavailable', 'The identity provider could not start sign-in');
+    }
+    const stateHash = crypto.createHash('sha256').update(state).digest('hex');
+    await withRlsContext(db, oidcRls, (trx) => sql`INSERT INTO hawa.office_oidc_flows
+      (state_hash,tenant_id,code_verifier,nonce,expires_at)
+      VALUES (${stateHash},${defaultTenantId}::uuid,${verifier},${nonce},now()+interval '5 minutes')`.execute(trx));
+    setCookie(c, 'hawa_oidc_state', state, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 300 });
+    c.header('Cache-Control', 'no-store');
+    c.header('Referrer-Policy', 'no-referrer');
+    return c.redirect(destination, 302);
+  });
+
+  registerRoute('get', '/auth/google/callback', async (c: Context) => {
+    if (!db || !googleOidc) return problem(c, 503, 'Google Sign-In Unavailable', 'Office sign-in is not configured');
+    const callback = new URL(c.req.url);
+    const state = callback.searchParams.get('state') || '';
+    const cookieState = getCookie(c, 'hawa_oidc_state') || '';
+    deleteCookie(c, 'hawa_oidc_state', { path: '/', secure: true, sameSite: 'Lax' });
+    c.header('Cache-Control', 'no-store');
+    c.header('Referrer-Policy', 'no-referrer');
+    const stateBytes = Buffer.from(state);
+    const cookieBytes = Buffer.from(cookieState);
+    if (!state || !cookieState || stateBytes.length !== cookieBytes.length ||
+        !crypto.timingSafeEqual(stateBytes, cookieBytes)) {
+      return problem(c, 403, 'Sign-In State Mismatch', 'Start sign-in again from Hawa Desk');
+    }
+    const stateHash = crypto.createHash('sha256').update(state).digest('hex');
+    const flow = await withRlsContext(db, oidcRls, async (trx) => (await sql<{
+      code_verifier: string; nonce: string; expires_at: Date;
+    }>`DELETE FROM hawa.office_oidc_flows WHERE state_hash=${stateHash} AND tenant_id=${defaultTenantId}::uuid
+      RETURNING code_verifier,nonce,expires_at`.execute(trx)).rows[0]);
+    if (!flow || new Date(flow.expires_at).getTime() <= Date.now() || callback.searchParams.has('error')) {
+      return problem(c, 401, 'Sign-In Expired', 'Start sign-in again from Hawa Desk');
+    }
+    let identity: Awaited<ReturnType<typeof googleOidc.exchange>>;
+    try {
+      identity = await googleOidc.exchange({ callbackQuery: callback.search,
+        state, nonce: flow.nonce, codeVerifier: flow.code_verifier });
+    } catch {
+      return problem(c, 401, 'Google Identity Rejected', 'The identity provider could not verify this sign-in');
+    }
+    const user = await withRlsContext(db, oidcRls, async (trx) => (await sql<{
+      id: string; display_name: string; disabled_at: Date | null;
+    }>`SELECT * FROM hawa.lookup_office_oidc_user(${defaultTenantId}::uuid,${identity.subject})`
+      .execute(trx)).rows[0]);
+    if (!user || user.disabled_at) return problem(c, 403, 'Office Membership Required', 'This Google account is not enabled for Hawa Desk');
+    const memberships = await withRlsContext(db, { tenantId: defaultTenantId, userId: user.id, role: 'requester' },
+      async (trx) => (await sql<{ role: string }>`SELECT role::text FROM hawa.tenant_memberships
+        WHERE tenant_id=${defaultTenantId}::uuid AND user_id=${user.id}::uuid AND active`.execute(trx)).rows);
+    const role = ['administrator', 'approver', 'operator', 'designer', 'language_reviewer', 'client_dna_manager',
+      'model_evaluator', 'auditor', 'requester'].find((candidate) => memberships.some((row) => row.role === candidate));
+    if (!role) return problem(c, 403, 'Office Membership Required', 'This Google account has no active office membership');
+    const token = `hawa_sess_${crypto.randomUUID().replace(/-/g, '')}`;
+    const expiresAt = Date.now() + 8 * 60 * 60 * 1000;
+    const session = { authenticated: true, tenantId: defaultTenantId, userId: user.id,
+      actorId: `oidc:${identity.subject}`, role, displayName: user.display_name,
+      authMethod: 'google_oidc' as const, expiresAt, checkedAt: Date.now() };
+    if (!persistSession || !(await persistSession(token, session))) {
+      return problem(c, 503, 'Office Session Unavailable', 'The verified sign-in could not be recorded');
+    }
+    saveSession?.(token, session);
+    setCookie(c, 'hawa_session', token, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 8 * 60 * 60 });
+    setCookie(c, 'hawa_csrf', crypto.createHash('sha256').update(`${token}:csrf`).digest('hex'),
+      { secure: true, sameSite: 'Strict', path: '/', maxAge: 8 * 60 * 60 });
+    return c.redirect('/', 303);
+  });
 
   // Authenticated Session Endpoints (H01, FR-076, FR-078)
   registerRoute('get', '/auth/session', async (c: any) => {
@@ -37,6 +124,7 @@ export function registerAuthRoutes(ctx: RouteContext) {
         id: auth.userId,
         role: auth.role,
         displayName: (auth as any).displayName || (auth.role === 'administrator' ? 'Administrator' : auth.role === 'art_director' ? 'Art Director' : 'Primary Operator'),
+        authMethod: auth.authMethod || 'shared_key',
       },
     }, 200);
   });
@@ -101,6 +189,7 @@ export function registerAuthRoutes(ctx: RouteContext) {
       actorId: `sess_${resolvedUserId.slice(0, 8)}`,
       role: resolvedRole,
       displayName: resolvedDisplayName,
+      authMethod: 'shared_key' as const,
     };
     const issued = { ...sessionRecord, expiresAt: Date.now() + 24 * 60 * 60 * 1000, checkedAt: Date.now() };
     if (saveSession) saveSession(sessionToken, issued);
@@ -121,12 +210,12 @@ export function registerAuthRoutes(ctx: RouteContext) {
 
   // A one-use ticket that opens the event stream for 60 s (services/stream-tickets.ts, ADR-037). The
   // Desk's EventSource cannot send its bearer header, and the session token it put in the stream's
-  // address instead was written to every access log on the way. Only a bearer header earns a ticket
-  // (registerRoute has already checked it); the ticket stands for that credential and nothing more.
+  // address instead was written to every access log on the way. An authenticated bearer or a cookie
+  // session with a valid CSRF proof earns a ticket; it stands for that credential and nothing more.
   registerRoute('post', '/auth/stream-ticket', async (c: Context) => {
     const credential = bearerTokenOf?.(c);
     if (!credential || !streamTickets) {
-      return problem(c, 401, 'Unauthorized', 'A stream ticket is issued only to a request signed with a bearer token');
+      return problem(c, 401, 'Unauthorized', 'A stream ticket requires an authenticated office session');
     }
     const { ticket, expiresAt } = streamTickets.issue(credential);
     c.header('Cache-Control', 'no-store');
@@ -134,11 +223,12 @@ export function registerAuthRoutes(ctx: RouteContext) {
   });
 
   registerRoute('delete', '/auth/session', async (c: any) => {
-    const authHeader = c.req.header('Authorization');
-    if (authHeader && revokeSession) {
-      const token = authHeader.replace(/^Bearer\s*/, '').trim();
+    const token = bearerTokenOf?.(c);
+    if (token && revokeSession) {
       await revokeSession(token);
     }
+    deleteCookie(c, 'hawa_session', { path: '/', secure: true, sameSite: 'Lax' });
+    deleteCookie(c, 'hawa_csrf', { path: '/', secure: true, sameSite: 'Strict' });
     return c.json({ ok: true }, 200);
   });
 
