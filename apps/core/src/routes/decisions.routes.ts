@@ -86,8 +86,6 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
           sessionHash: reviewerSessionHash!, clientId: dbTask.client_id, projectId: dbTask.project_id }));
       if (!assignment) return problem(c, 403, 'Reviewer Assignment Required',
         'This account has no active review assignment for the design client and project');
-      if (!dbTask.request_id) return problem(c, 409, 'Legacy Review Pending Migration',
-        'Named review authority is currently available for request-owned designs');
     }
     if (dbTask?.request_id) {
       // A signed-in Desk reviewer sends each review decision through the public signed gateway.
@@ -360,7 +358,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     // Client role assertions (x-user-role header, body.role) are STRICTLY IGNORED in production mode!
     // The reviewer's role is the authenticated session's role. A test that needs another role signs
     // in as it (testAuth.roleHeader); the request body never decides who is approving.
-    const effectiveRole = (auth.role || 'anonymous').toLowerCase().trim();
+    const effectiveRole = requireNamedReviewer ? 'approver' : (auth.role || 'anonymous').toLowerCase().trim();
 
     if (effectiveRole === 'operator' || !isAuthorizedReviewerRole(effectiveRole)) {
       return problem(
@@ -372,7 +370,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     }
 
     // Client approver scope check (FR-043): client_approver can only review designs for their assigned client
-    const targetClientId = task?.clientId || dbTask?.client_id;
+    const targetClientId = dbTask?.client_id || task?.clientId;
     if (effectiveRole === 'client_approver' && (!(auth as any).clientId || !targetClientId || (auth as any).clientId !== targetClientId)) {
       return problem(c, 403, 'Forbidden', `Actor is not authorized to review designs for client '${targetClientId || 'unresolved'}'`);
     }
@@ -577,7 +575,8 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       try {
         dbApproval = await withRlsContext(
           db,
-          { tenantId, userId: actorUserId, role: actorRole },
+          { tenantId, userId: requireNamedReviewer ? SYSTEM_AUTOMATION_USER_ID : actorUserId,
+            role: requireNamedReviewer ? 'operator' : actorRole },
           async (trx) => await revisionRepo.recordApproval({
             tenantId,
             taskId,
@@ -587,9 +586,20 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
             reason: body.revisionRequest?.comment || body.reason || (isApproved ? 'Approved by operator' : (isRejected ? 'Rejected by operator' : 'Revision requested')),
             expectedTaskVersion: body.expectedTaskVersion,
             nonce,
+            ...(reviewerSessionHash ? { authorizeDecision: async (locked, scope) => {
+              if (!scope.clientId) throw new Error('Named reviewer authority requires a task client');
+              const assignment = await lockNamedReviewAuthority(locked, {
+                tenantId, userId: actorUserId, sessionHash: reviewerSessionHash,
+                clientId: scope.clientId, projectId: scope.projectId,
+              });
+              if (!assignment) throw new Error('Named reviewer authority was revoked before this decision');
+              return { authMethod: 'google_oidc', reviewerAssignmentId: assignment.assignmentId,
+                reviewerAssignmentVersion: assignment.assignmentVersion,
+                reviewClientId: scope.clientId, reviewProjectId: scope.projectId };
+            } } : {}),
             decisionPayload: {
               tenantId,
-              clientId: task?.clientId || defaultClientId,
+              clientId: dbTask?.client_id || task?.clientId || defaultClientId,
               taskId,
               revisionId: resolvedRev.id || revisionId,
               canvaBindingId: verifiedCanvaBinding?.id || task?.canvaBinding?.id || task?.canvaBinding?.bindingId || null,
@@ -617,6 +627,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
           }, trx)
         );
       } catch (err: any) {
+        if (err.message?.startsWith('Named reviewer authority')) {
+          return problem(c, 403, 'Reviewer Assignment Required', err.message);
+        }
         log.error('[core:approvals:create] DB approval error:', err);
         if (err.message?.includes('Cannot approve stale revision') || err.message?.includes('Cannot approve task') || err.message?.includes('already approved') || err.message?.includes('Concurrent modification') || err.message?.includes('Idempotency key')) {
           return problem(c, 409, 'Conflict', err.message);
@@ -643,7 +656,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       canvaBindingId: task?.canvaBinding?.id || task?.canvaBinding?.bindingId || null,
       canvaBindingVersion: task?.canvaBinding?.version || null,
       tenantId,
-      clientId: task?.clientId || defaultClientId,
+      clientId: dbTask?.client_id || task?.clientId || defaultClientId,
       decision: isApproved ? 'approved' : (isRejected ? 'rejected' : 'revision_requested'),
       actor: {
         userId: actorUserId,

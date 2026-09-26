@@ -38,6 +38,8 @@ export interface RecordApprovalParams {
   expectedQcReportHash?: string;
   /** Internal RequestLifecycle projection only; ordinary Desk decisions must leave this unset. */
   lifecycleRequestId?: string;
+  /** Optional caller-supplied authority check executed under the task lock before a new decision. */
+  authorizeDecision?: (trx: Kysely<Database>, scope: { clientId: string | null; projectId: string | null }) => Promise<Record<string, unknown>>;
 }
 
 /** Why a task in this state cannot be approved, or undefined when it can (received, human_review, …). */
@@ -321,6 +323,12 @@ export class RevisionRepository {
         }
       }
 
+      // Scope can change after the HTTP handler looked at the task. A named reviewer's current
+      // session and assignment must be checked on the locked task row in this transaction.
+      const authorityPayload = params.authorizeDecision
+        ? await params.authorizeDecision(dbClient, { clientId: task.client_id, projectId: task.project_id })
+        : {};
+
       // Optimistic concurrency fencing (CV-15, R05)
       if (params.expectedTaskVersion !== undefined && Number(task.version) !== Number(params.expectedTaskVersion)) {
         throw new Error(
@@ -475,6 +483,7 @@ export class RevisionRepository {
           // request-owned lifecycle approvals receive the same immutable server binding proof.
           decision_payload: {
             ...(params.decisionPayload || {}),
+            ...authorityPayload,
             ...(approvedCanvaBinding ? {
               canvaBindingId: approvedCanvaBinding.id,
               canvaBindingVersion: approvedCanvaBinding.version,

@@ -32,12 +32,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await sql`DELETE FROM hawa.office_review_assignments WHERE user_id=${userId}::uuid`.execute(owner);
-  await sql`DELETE FROM hawa.desk_sessions WHERE user_id=${userId}::uuid`.execute(owner);
-  await sql`DELETE FROM hawa.client_memberships WHERE user_id=${userId}::uuid`.execute(owner);
-  await sql`DELETE FROM hawa.tenant_memberships WHERE user_id=${userId}::uuid`.execute(owner);
-  await sql`DELETE FROM hawa.projects WHERE id=${projectId}::uuid`.execute(owner);
-  await sql`DELETE FROM hawa.users WHERE id=${userId}::uuid`.execute(owner);
+  // The per-file database clone is dropped by test setup. Review assignments and their audit
+  // events are intentionally append-only, so cleanup must not delete those records.
   await Promise.all([owner.destroy(), appDb.destroy()]);
 });
 
@@ -75,6 +71,9 @@ describe('ADR-064 named office assignment', () => {
     await sql`UPDATE hawa.users SET disabled_at=now() WHERE id=${userId}::uuid`.execute(owner);
     expect(await authority()).toBeNull();
     await sql`UPDATE hawa.users SET disabled_at=NULL WHERE id=${userId}::uuid`.execute(owner);
+    await sql`UPDATE hawa.clients SET status='inactive' WHERE id=${clientId}::uuid`.execute(owner);
+    expect(await authority()).toBeNull();
+    await sql`UPDATE hawa.clients SET status='active' WHERE id=${clientId}::uuid`.execute(owner);
     await sql`UPDATE hawa.desk_sessions SET revoked_at=now() WHERE token_hash=${sessionHash}`.execute(owner);
     expect(await authority()).toBeNull();
   });

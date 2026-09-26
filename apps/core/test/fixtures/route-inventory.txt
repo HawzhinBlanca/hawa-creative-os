@@ -49,6 +49,9 @@ GET /api/judge/:token/image/:pairId/:side
 GET /api/judge/:token/next
 GET /api/migration/ledger
 GET /api/migration/reconciliation
+GET /api/office/review-assignments
+GET /api/office/review-assignments/:assignmentId/events
+GET /api/office/review-directory
 GET /api/operations/failures
 GET /api/operations/reconciliation
 GET /api/operations/slo
@@ -125,6 +128,9 @@ GET /api/v1/judge/:token/image/:pairId/:side
 GET /api/v1/judge/:token/next
 GET /api/v1/migration/ledger
 GET /api/v1/migration/reconciliation
+GET /api/v1/office/review-assignments
+GET /api/v1/office/review-assignments/:assignmentId/events
+GET /api/v1/office/review-directory
 GET /api/v1/operations/failures
 GET /api/v1/operations/reconciliation
 GET /api/v1/operations/slo
@@ -204,6 +210,9 @@ GET /judge/:token/image/:pairId/:side
 GET /judge/:token/next
 GET /migration/ledger
 GET /migration/reconciliation
+GET /office/review-assignments
+GET /office/review-assignments/:assignmentId/events
+GET /office/review-directory
 GET /operations/failures
 GET /operations/reconciliation
 GET /operations/slo
@@ -283,6 +292,9 @@ GET /v1/judge/:token/image/:pairId/:side
 GET /v1/judge/:token/next
 GET /v1/migration/ledger
 GET /v1/migration/reconciliation
+GET /v1/office/review-assignments
+GET /v1/office/review-assignments/:assignmentId/events
+GET /v1/office/review-directory
 GET /v1/operations/failures
 GET /v1/operations/reconciliation
 GET /v1/operations/slo
@@ -732,3 +744,7 @@ POST /waha/kill-switch
 POST /webhooks/telegram
 POST /webhooks/whatsapp
 POST /webhooks/whatsapp/actions
+PUT /api/office/review-assignments/:assignmentId
+PUT /api/v1/office/review-assignments/:assignmentId
+PUT /office/review-assignments/:assignmentId
+PUT /v1/office/review-assignments/:assignmentId

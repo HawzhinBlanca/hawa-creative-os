@@ -12,7 +12,29 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R07 revision-photo design handoff)
+## Current result (2026-09-26 — R08 named review and assignment administration)
+
+Named Google Workspace reviewers can now decide older Core-owned tasks with
+the same client/project assignment check as request-owned reviews. The task
+transaction repeats the identity, session, membership and assignment check,
+then records the matched assignment and version in the append-only decision.
+Named administrators can grant, renew, reactivate and revoke assignments in
+Desk Settings with expected versions, idempotent action IDs, required reasons
+and immutable change history. Direct application-role assignment changes
+without named action metadata are refused. See ADR-064, migration 038 and
+`R08_EVIDENCE.md` eighteenth pass.
+
+The affected group passed **9 files / 57 tests**. The full source suite
+excluding the unsealed release gate passed **430 files / 3,314 tests**, with
+**4 files / 52 tests skipped**. Full typecheck, lint, zero-secret scan and
+Desk production build passed on the final source. Exact-tree release checks
+are still being sealed. A trusted operator must still provision each
+verified Google identity and its memberships. No live Google, deployed
+reviewer, provider receipt or independent design-quality acceptance is
+claimed. R08 and release admission remain open; production lifecycle flags
+stay off.
+
+## Prior result (2026-09-26 — R07 revision-photo design handoff)
 
 The revision-photo crash drill exposed a real Canva planner gap: although
 the child photo was durably attached, the planner never read that file, and

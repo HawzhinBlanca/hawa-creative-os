@@ -21,3 +21,15 @@ export async function lockNamedReviewAuthority(db: Kysely<Database>, input: {
   `.execute(db)).rows[0];
   return row ? { assignmentId: row.assignment_id, assignmentVersion: Number(row.assignment_version) } : null;
 }
+
+/** An administrator's shared key or stale role string cannot mutate review permissions. */
+export async function lockNamedOfficeAdministrator(db: Kysely<Database>, input: {
+  tenantId: string; userId: string; sessionHash: string;
+}): Promise<boolean> {
+  if (!/^[a-f0-9]{64}$/.test(input.sessionHash)) return false;
+  const row = (await sql<{ administrator_user_id: string }>`
+    SELECT * FROM hawa.lock_named_office_administrator(
+      ${input.tenantId}::uuid, ${input.sessionHash}, ${input.userId}::uuid)
+  `.execute(db)).rows[0];
+  return row?.administrator_user_id === input.userId;
+}

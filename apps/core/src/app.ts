@@ -73,6 +73,7 @@ import { registerSystemStatusRoutes } from './routes/system-status.routes.js';
 import { registerClientLearningRoutes } from './routes/client-learning.routes.js';
 import { registerRevisionsRoutes } from './routes/revisions.routes.js';
 import { registerDecisionsRoutes } from './routes/decisions.routes.js';
+import { registerOfficeReviewAdminRoutes } from './routes/office-review-admin.routes.js';
 import { registerCanvaOutcomeRoutes } from './routes/canva-outcome.routes.js';
 import { registerDeliveryRoutes } from './routes/delivery.routes.js';
 import { registerDeliveryInternalRoutes } from './routes/delivery-internal.routes.js';
@@ -1035,6 +1036,7 @@ export function createApp(options?: CreateAppOptions) {
   registerClientLearningRoutes(routeContext);
   registerRevisionsRoutes(routeContext);
   registerDecisionsRoutes(routeContext);
+  registerOfficeReviewAdminRoutes(routeContext);
   registerCanvaOutcomeRoutes(routeContext);
   registerDeliveryRoutes(routeContext);
   registerDeliveryInternalRoutes(routeContext);

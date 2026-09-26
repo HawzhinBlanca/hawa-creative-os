@@ -124,6 +124,21 @@ export interface StreamTicket {
   expiresAt: number;
 }
 
+export interface ReviewAssignment {
+  id: string; clientId: string; projectId: string | null; userId: string;
+  active: boolean; version: number;
+}
+
+export interface ReviewDirectory {
+  reviewers: Array<{ userId: string; displayName: string; clientId: string; clientName: string }>;
+  projects: Array<{ id: string; clientId: string; name: string }>;
+}
+
+export interface ReviewAssignmentChange {
+  clientId: string; projectId: string | null; userId: string;
+  active: boolean; expectedVersion: number; reason: string;
+}
+
 class HawaApiClient {
   private basePrefix = '/v1';
   private unauthorizedHint: ((error: ApiError) => void) | null = null;
@@ -457,6 +472,19 @@ class HawaApiClient {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+  };
+
+  public readonly reviewAssignments = {
+    directory: () => this.request<ReviewDirectory>('/office/review-directory'),
+    list: () => this.request<ReviewAssignment[]>('/office/review-assignments'),
+    events: (assignmentId: string) => this.request<Array<{ id: string; action: string;
+      assignment_version: number | string; reason: string; occurred_at: string }>>(
+      `/office/review-assignments/${encodeURIComponent(assignmentId)}/events`),
+    save: (assignmentId: string, actionId: string, body: ReviewAssignmentChange) =>
+      this.request<{ id: string; version: number; replayed: boolean; created: boolean }>(
+        `/office/review-assignments/${encodeURIComponent(assignmentId)}`, {
+          method: 'PUT', headers: { 'Idempotency-Key': actionId }, body: JSON.stringify(body),
+        }),
   };
 
   public readonly tasks = {
