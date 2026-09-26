@@ -39,3 +39,9 @@ network membership, and rejects mismatched labels or externally routed provider
 callers. This is a disposable deployment receipt, not the production deployment
 receipt or admission gate. See R26_EVIDENCE.md; the clean candidate run is pending
 at this implementation checkpoint.
+
+The clean candidate run is now recorded in R26_CANDIDATE_PROOF.json: source
+`9e3a00a`, tested seal/image labels `4c113ae`, immutable image IDs and zero
+changed runtime sources; 21/21 scenario checks and 3,531 full regression tests
+passed (59 skipped). This closes the isolated identity check only; production
+receipt, live task/export linkage and product admission remain open.

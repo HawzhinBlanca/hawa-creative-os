@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T23:34:54Z",
+  "generatedAt": "2026-09-26T23:38:13Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 356,
+  "fileCount": 357,
   "files": [
     {
       "path": ".dockerignore",
@@ -894,8 +894,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "20d59040111dd950ceb60e7a13c9197851df060c7ea6efc3b1bba037189e8bcb",
-      "bytes": 29372
+      "sha256": "fc6430eceaba0a33b5c20ddbb2ab5c0caf1b7e2e5f0318a32fb8e089d1c3fef9",
+      "bytes": 30897
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -919,8 +919,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R03_EVIDENCE.md",
-      "sha256": "cbccf40aaa48ad5b2f4cc3b23026a6f41422649599a5b991a0c026bd9e23e343",
-      "bytes": 5727
+      "sha256": "29c81941891b9715aa448a382e1ba45376423666275d9af7bd17f12f98e3362c",
+      "bytes": 6106
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R04_EVIDENCE.md",
@@ -1073,14 +1073,19 @@
       "bytes": 20345
     },
     {
+      "path": "plans/research-grade-upgrade-2026-09-25/R26_CANDIDATE_PROOF.json",
+      "sha256": "a4d775d4913f48920e906e8584a858f49890a35fac80ace160e13921a71e5dfd",
+      "bytes": 10270
+    },
+    {
       "path": "plans/research-grade-upgrade-2026-09-25/R26_DESK_HANDOFF.png",
       "sha256": "2b0f49f955e34b983a3fd53ebb944ae5c32dc62b69dc933cf57bc29cc6018f30",
       "bytes": 26642
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R26_EVIDENCE.md",
-      "sha256": "93eb1160319929559a517181e61ed86560c44f51b5e3e6bbdbeceb8bd4d594a9",
-      "bytes": 4697
+      "sha256": "4cc33e118b50148ad76154d06622769e1d6ab65e0976c7095c3ae0553eb973ec",
+      "bytes": 5767
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/REALITY_CHECK_2026-09-25.md",
@@ -1099,8 +1104,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "fb69f1ebc8d53c0c75097a31187e3ebf4493ad579cdb55b3dc7756aaa8a4e627",
-      "bytes": 252145
+      "sha256": "e2cbfeb9fec1e48b7c67d53ae7d80da9ddacfa1b23c33e0f3b093450872e2b3a",
+      "bytes": 257185
     },
     {
       "path": "plans/user-stories.csv",

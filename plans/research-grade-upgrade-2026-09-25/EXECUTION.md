@@ -12,7 +12,32 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-27 — durable retained voice)
+## Current result (2026-09-27 — full-app candidate and Desk copy repair)
+
+The isolated Core/Desk/worker/PostgreSQL/Restate/nginx/real Docling rehearsal passed
+**21/21 checks**, including PDF exact-copy intake, manual voice revision, process
+restart at review, simulated delivery and bilingual Desk intake/generation replay.
+Browser testing found a real saved-copy rejection: the planner expected a legacy
+headline/divider. Structured Desk copy now stays exact in both languages and the
+explicit generation button works against the simulated Canva service. Model
+progress wording now points to the actual receipt.
+
+Source `9e3a00a`, tested seal `4c113ae`: **447 files / 3,531 tests passed**,
+**7 files / 59 skipped**; 47 focused tests, types/lint/security and clean manifest
+passed. Core/worker/Desk image labels match the tested seal; no dirty runtime
+sources were present. See R26_EVIDENCE.md and R26_CANDIDATE_PROOF.json for exact
+image IDs and limits. The disposable app is kept on loopback port 56081.
+Production and flags remain unchanged.
+
+Next: correct Desk's misleading automatic-failure wording for manual requests
+while preserving the retired-generator spending guard, verify the manual
+capture/review/export journey, then qualify real Canva edit/reopen and named human
+approval/delivery. Native multilingual quality, retrieval relevance/latency,
+clean-host WAL/PITR/Restate restore and independent creative-quality gates remain
+open. Synthetic adapters and silent audio establish no live provider or 10/10
+claim.
+
+## Prior result (2026-09-27 — durable retained voice)
 
 ADR-075/migration 044 completes local engineering for retained Ogg Opus → locked
 client/privacy/model admission → one durable paid attempt → requester exact-copy

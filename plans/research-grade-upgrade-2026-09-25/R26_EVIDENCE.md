@@ -79,3 +79,20 @@ handles its proxy reload/restart.
 
 No live provider calls, real messages, production deployment or flag changes were
 made. App-wide 10/10 is not established by this rehearsal.
+
+## Clean candidate qualification — 2026-09-27
+
+Source `9e3a00a`, tested seal `4c113ae`: the full source regression passed
+**447 files / 3,531 tests**, with **7 files / 59 tests skipped**, in 104.31 seconds.
+The separately enabled deployed candidate passed **21/21 invariants** in 83.71
+seconds including setup (the scenario itself took 25.68 seconds); 43 unrelated
+chaos cases were skipped. All Core/worker/Desk image labels equal the tested seal,
+no changed runtime sources were present, provider callers/parser use internal
+networks, and the fake model ledger has no unmatched calls. The clean source
+release manifest verified. Exact IDs, hashes, checks and limits are in
+[R26_CANDIDATE_PROOF.json](R26_CANDIDATE_PROOF.json). This supersedes the pending
+qualification statement at the implementation checkpoint above.
+
+The isolated candidate remains at `http://127.0.0.1:56081`; production is unchanged.
+Next is accurate manual-work status and the full manual capture/review flow, then
+real Canva edit/reopen, named human review and the remaining acceptance gates.
