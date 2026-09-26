@@ -12,7 +12,29 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — approved PDF reference search)
+## Current result (2026-09-26 — PDF process-crash and restore proof)
+
+The retained-PDF source → approval/search → reviewed request journey survives four
+actual Core SIGKILL boundaries and a PostgreSQL/blob restore into fresh storage.
+Original test storage is removed before reopening; PDF bytes, named approval history,
+exact citations/copy, task identity and the single outbox command survive. Corrupt
+restored bytes fail closed while revocation remains available. OpenAPI and Core
+fixtures now describe the real parser's coordinate object; Desk exposes its type.
+
+Focused acceptance passed **8 files / 76 tests**, including the opt-in drill's **31
+invariants**, four kills and six Core starts. Typecheck, lint, Desk build and secret
+scan passed. Full regression and candidate sealing follow the source commit.
+See `R12_EVIDENCE.md`, `R12_DOCUMENT_RECOVERY_PROOF.json` and the Docling runbook.
+The normal full suite reports this gated drill as skipped; its explicit passing run
+is recorded separately. No production service, configuration or flag changed.
+
+Next engineering work: Telegram PDF/voice with reviewed exact-copy handoff, cited
+Design Plans and measured retrieval quality/latency. Separate release admissions:
+real multilingual office sources, live Workspace/provider/export/reopen, clean-host
+WAL/PITR + Restate recovery with measured RPO/RTO, and independent human design review.
+This local quiesced fixture restore does not close those gates or claim app-wide 10/10.
+
+## Prior result (2026-09-26 — approved PDF reference search)
 
 Desk can explicitly approve/revoke exact saved PDF evidence through a live named
 client DNA manager or administrator, search approved passages with original page

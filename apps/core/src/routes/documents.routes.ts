@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
 import { withRlsContext, sql } from '@hawa/db';
+import { chaosPoint } from '@hawa/observability';
 import { DoclingParser, DocumentExtractionError, DOCUMENT_MAX_BYTES, PDF_EXTRACTOR_VERSION, localPdfExtractor } from '@hawa/retrieval';
 import { log } from '../logging.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
@@ -80,6 +81,7 @@ export function registerDocumentRoutes(ctx: RouteContext): void {
       // Bytes commit first; an interrupted receipt transaction leaves a GC-eligible orphan.
       await store!.put(bytes, 'application/pdf');
       await store!.read(digest, { verify: true });
+      await chaosPoint('core.documents.after-bytes', { clientId, sourceSha256: digest });
       const row = await withRlsContext(db, scope, async trx => {
         const client = await trx.selectFrom('clients').select('id').where('id', '=', clientId)
           .where('tenant_id', '=', scope.tenantId).where('status', '=', 'active')
@@ -88,6 +90,7 @@ export function registerDocumentRoutes(ctx: RouteContext): void {
         if (!client) throw new DocumentIntakeError(403, 'Client access changed during inspection.');
         return retainDocument(trx, { ...scope, clientId, document });
       });
+      await chaosPoint('core.documents.after-receipt', { clientId, documentId: row.id });
       return c.json(savedDocument(row), 201);
     } catch (error) {
       if (error instanceof DocumentIntakeError) return problem(c, error.status, 'DOCUMENT_INTAKE_REFUSED', error.message);

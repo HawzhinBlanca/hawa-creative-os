@@ -1,4 +1,5 @@
 import { DocumentIntakeError, prepareDocumentIntake } from '../services/client-documents.js';
+import { chaosPoint } from '@hawa/observability';
 import { ManualIntakeScopeError, prepareManualIntake } from '../services/manual-intake-scope.js';
 import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
@@ -313,6 +314,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           }
         );
 
+        if (documentIntake && aggregateResult.created)
+          await chaosPoint('core.documents.after-task-commit', { clientId: body.clientId, taskId: aggregateResult.task.id });
         if (manualIntake) clientDnaVersion = aggregateResult.payload.clientDnaVersion;
         const dbTask = aggregateResult.task;
         const normalizedTask = {

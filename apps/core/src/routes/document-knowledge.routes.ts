@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { sql, withRlsContext } from '@hawa/db';
+import { chaosPoint } from '@hawa/observability';
 import { isValidUuid } from '../core-helpers.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { DocumentIntakeError, findDocument } from '../services/client-documents.js';
@@ -59,6 +60,8 @@ export function registerDocumentKnowledgeRoutes(ctx: RouteContext) {
         return { ...await knowledgeState(trx, scope, documentId), canManage: await canManageKnowledge(trx, scope) };
       });
       if (!result) return problem(c, 404, 'Document Not Found');
+      if ('replayed' in result && !result.replayed)
+        await chaosPoint('core.documents.after-knowledge-commit', { clientId, documentId, actionId });
       return c.json(result, 'replayed' in result && !result.replayed ? 201 : 200);
     } catch (error) {
       if (error instanceof DocumentIntakeError) return problem(c, error.status, 'Knowledge Change Refused', error.message);

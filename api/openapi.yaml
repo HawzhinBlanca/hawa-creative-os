@@ -721,7 +721,15 @@ components:
                   extractorVersion: {type: string}
                   approvalVersion: {type: integer, minimum: 1}
                   approvalActionId: {type: string, format: uuid}
-                  coordinates: {type: [array, 'null'], items: {type: number}, minItems: 4, maxItems: 4}
+                  coordinates:
+                    type: [object, 'null']
+                    description: Measured top-left page box in points, preserved from the PDF parser.
+                    required: [x, y, width, height]
+                    properties:
+                      x: {type: number, minimum: 0}
+                      y: {type: number, minimum: 0}
+                      width: {type: number, exclusiveMinimum: 0}
+                      height: {type: number, exclusiveMinimum: 0}
                   coordinateSystem: {type: [string, 'null']}
     Problem:
       type: object

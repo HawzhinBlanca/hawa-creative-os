@@ -21,7 +21,7 @@ beforeEach(() => {
     documentId: id, title: 'source.pdf', sourceSha256: hash(bytes), tables: [], images: [],
     chunks: [{ chunkId: randomUUID(), documentId: id, pageNumber: 2, text: original, sha256: hash(original),
       tokenCountEstimate: 20, metadata: { sourceKind: 'docling_native_pdf', sourceId: 'uploaded.pdf', mimeType: 'application/pdf',
-        coordinates: [10, 20, 100, 80], coordinateSystem: 'top_left_points' } }],
+        coordinates: { x: 10, y: 20, width: 100, height: 80 }, coordinateSystem: 'top_left_points' } }],
     extraction: { version: PDF_EXTRACTOR_VERSION, pageCount: 2, limitations: ['Native order unverified'] },
   }));
 });
@@ -72,7 +72,7 @@ describe('approved document knowledge', () => {
       expect(found.items[0]).toMatchObject({ text: original, truncated: false, citation: {
         documentId: f.source.receipt.id, sourceSha256: hash(f.raw), extractionSha256: f.source.receipt.extractionSha256,
         pageNumber: 2, chunkSha256: hash(original), approvalVersion: 1, extractorVersion: PDF_EXTRACTOR_VERSION,
-        coordinates: [10, 20, 100, 80] } });
+        coordinates: { x: 10, y: 20, width: 100, height: 80 } } });
     }
     const restarted = await createApp({ db }).request(f.path, { headers: f.headers });
     expect(await restarted.json()).toMatchObject({ state: { approved: true, version: 1 }, events: [{ actorUserId: f.userId }] });

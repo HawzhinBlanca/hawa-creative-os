@@ -1,5 +1,55 @@
 # R12 — Retrieval truth and scope, first slice
 
+## 2026-09-26 — Real PDF process-crash and restore proof
+
+The retained-PDF journey now has an opt-in acceptance drill using actual Core HTTP
+processes, named database sessions, the runtime RLS role, pinned offline Docling
+extraction of a compressed two-page PDF, and real PostgreSQL/filesystem storage.
+Existing chaos instrumentation adds four observation points; without the chaos
+control environment they are no-ops. No persistence foundation or production flag changes.
+
+Four actual **SIGKILLs** interrupt responses after original bytes, the immutable
+receipt, the knowledge decision, and the task/event/outbox commit. Six Core starts
+reconcile the same source, decision and request identities. The drill checks no
+invented receipt, one committed receipt, atomic approved chunks, one task/event/outbox,
+changed-payload conflicts, GC protection, exact English/Sorani request strings,
+original page boxes, current revocation on old approval replay, and parser-free reopening.
+
+It then quiesces Core, takes a PostgreSQL custom-format dump and a blob-file copy,
+restores into a fresh database and different directory, and deletes only its original
+disposable database/store. New Core reads must use the restore. Byte-identical PDF,
+all named approval versions, complete search/citations, source/copy evidence and
+request identity survive. Same-size corruption subsequently refuses original download
+and new task creation, while revocation and old-action reconciliation still work.
+
+**Actual defect corrected:** native parser coordinates are an object
+`{x, y, width, height}`. The search OpenAPI schema and mocked Core fixture had an
+array shape. Both now match real output; Desk's citation type includes the object.
+The drill checks both actual pages by chunk identity rather than assuming result order.
+
+**Acceptance:** **8 files / 76 tests passed**, including the opt-in drill with **31
+invariants**, four process kills and six starts. Source/included-test typecheck, lint
+(1006 existing `any`, 9 existing provider-egress exceptions), Desk build and a
+zero-secret scan passed. Full regression and candidate sealing follow the source commit.
+See `R12_DOCUMENT_RECOVERY_PROOF.json` for actual hashes and
+`services/docling/README.md` for the guarded reproduction command.
+
+**Failed harness runs retained:** the first run failed because Vitest does not expose
+`import.meta.resolve`; use Node `createRequire` instead. Two subsequent starts were
+correctly refused because the minimal production-mode environment lacked an action
+HMAC secret; the harness now generates a disposable synthetic value. These were
+harness setup failures, not reproduced application recovery defects. The first full
+drill then passed; final focused verification includes stronger checks of both pages.
+
+**Limits:** only `hawa_t_*` local test databases on port 55432 and temporary blob
+stores are admitted. Each child has a fresh cwd, synthetic environment and a fetch
+guard; office `.env.local` is never loaded. Real offline parser JSON is replayed over
+a loopback bridge. Normal regression skips this explicitly gated test. A quiesced
+same-host fixture restore does not prove WAL/PITR, off-site or clean-host recovery,
+production RPO/RTO, Restate execution or live Workspace/provider reconciliation.
+R12 remains in progress. Telegram PDF/voice, real multilingual PDF fidelity, retrieval
+relevance/scale, automatic cited Design Plans and independent human quality remain open.
+
 ## 2026-09-26 — Approved PDF reference search (ADR-072)
 
 Retained PDFs now have a separate, explicit reference-search approval. A live named

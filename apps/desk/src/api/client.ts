@@ -172,6 +172,8 @@ export interface KnowledgeSearch {
     documentId: string; chunkId: string; pageNumber: number | null; chunkSha256: string;
     sourceSha256: string; extractionSha256: string; extractorVersion: string;
     approvalVersion: number; approvalActionId: string;
+    coordinates?: { x: number; y: number; width: number; height: number } | null;
+    coordinateSystem?: string | null;
   } }>;
 }
 

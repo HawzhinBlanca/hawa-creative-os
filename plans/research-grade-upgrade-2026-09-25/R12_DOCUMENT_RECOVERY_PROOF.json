@@ -1,0 +1,219 @@
+{
+  "date": "2026-09-26T20:55:33.009Z",
+  "status": "passed",
+  "sourcePdfSha256": "adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617",
+  "parserImageId": "sha256:ecfecce7e0d97f9e12c417a1d159b9cb73d6c6bf1f4794b496bde9b3d5b7994a",
+  "parserVersion": "docling-2.130.0/parse-7.22.0/native-v1",
+  "parserResponseSha256": "bd9797a931e5e2ced18308e5e0aabcbefc3d8d1d07b18b984da49b60f6793a1a",
+  "parserCalls": 2,
+  "restarts": 6,
+  "processKills": 4,
+  "restoredFrom": "PostgreSQL custom-format pg_dump and copied content-addressed blob files; original test DB/store removed",
+  "databaseDumpSha256": "d3c07c2f1e44f2d2042b389ec3ec7b0b0c7d81dceb6f1f399f7e1d806cfc37de",
+  "noWorkerOrModelExecution": true,
+  "durationMs": 4425,
+  "events": [
+    "core.documents.after-bytes",
+    "core.documents.after-receipt",
+    "core.documents.after-knowledge-commit",
+    "core.documents.after-task-commit"
+  ],
+  "checks": [
+    {
+      "name": "real parser hashes original PDF and extracts both fixture pages",
+      "passed": true
+    },
+    {
+      "name": "Core kill 1 is an actual SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.documents.after-bytes: no success response survived the crash",
+      "passed": true
+    },
+    {
+      "name": "bytes-before-receipt crash leaves no invented receipt",
+      "passed": true
+    },
+    {
+      "name": "Core kill 2 is an actual SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.documents.after-receipt: no success response survived the crash",
+      "passed": true
+    },
+    {
+      "name": "receipt-before-response crash commits exactly one receipt",
+      "passed": true
+    },
+    {
+      "name": "saved bytes and extraction reopen without a parser or reprocessing",
+      "passed": true
+    },
+    {
+      "name": "receipt protects original bytes from orphan collection",
+      "passed": true
+    },
+    {
+      "name": "Core kill 3 is an actual SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.documents.after-knowledge-commit: no success response survived the crash",
+      "passed": true
+    },
+    {
+      "name": "approval crash commits one event and both derived chunks atomically",
+      "passed": true
+    },
+    {
+      "name": "changed approval under the original key is refused",
+      "passed": true
+    },
+    {
+      "name": "real page boxes survive the immutable search projection",
+      "passed": true
+    },
+    {
+      "name": "Core kill 4 is an actual SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.documents.after-task-commit: no success response survived the crash",
+      "passed": true
+    },
+    {
+      "name": "task crash leaves one task and one source decision",
+      "passed": true
+    },
+    {
+      "name": "replay cannot duplicate task events or outbox commands",
+      "passed": true
+    },
+    {
+      "name": "changed task body conflicts under its saved identity",
+      "passed": true
+    },
+    {
+      "name": "old approval replay cannot resurrect a revoked search source",
+      "passed": true
+    },
+    {
+      "name": "reviewed request retains exact bilingual copy and source evidence",
+      "passed": true
+    },
+    {
+      "name": "original PDF is byte-identical after fresh database and file restore",
+      "passed": true
+    },
+    {
+      "name": "all named approval versions survive restore unchanged",
+      "passed": true
+    },
+    {
+      "name": "search text and exact citations survive restore unchanged",
+      "passed": true
+    },
+    {
+      "name": "restored task replay adopts original identity",
+      "passed": true
+    },
+    {
+      "name": "restored request preserves exact bilingual copy and original source",
+      "passed": true
+    },
+    {
+      "name": "restored outbox remains a single durable command",
+      "passed": true
+    },
+    {
+      "name": "same-size corruption after restore fails original download",
+      "passed": true
+    },
+    {
+      "name": "corrupt restored source cannot create another task",
+      "passed": true
+    },
+    {
+      "name": "revocation remains available even when restored bytes are damaged",
+      "passed": true
+    },
+    {
+      "name": "replay of the pre-crash action after restore appends no extra event",
+      "passed": true
+    }
+  ],
+  "sourceHashes": {
+    "apps/core/src/routes/documents.routes.ts": "598bb157e06537e298e0ef6a643ac04996b0089d279a5abac32e983d8e767a8b",
+    "apps/core/src/routes/document-knowledge.routes.ts": "27f4e822bb6b82e1767d27da9617d9ecb2645ae987e777a5bb1bbe509783f761",
+    "apps/core/src/routes/tasks.routes.ts": "f8ea23f891e7344e2ab4e1f780b9ce861f78922033945121a5f08d8f633ec41f",
+    "apps/core/src/services/client-documents.ts": "8ec8904ac5f8833b718567bf44f707f2fb57007b0d59f71febfee7e5d6a9ce33",
+    "apps/core/src/services/document-knowledge.ts": "689d9cb89d8efd82eed038fd6a86f54fc21bb48ab1479f2954690520c7a13876",
+    "packages/db/migrations/041_client_documents.sql": "222d881f59892d10dd662b5e4a63ba06498c88e349b88d274be352bc0d93ade9",
+    "packages/db/migrations/042_document_knowledge.sql": "afeee006079d5446bcb1377b60c68f05878c65db47c3c22f576ea219f2749020",
+    "apps/core/test/document-recovery.test.ts": "3ffaa9f590c6b31f441e038bc63ff6305b4debc40fc5d98a374d658820809647",
+    "apps/core/test/fixtures/document-recovery-process.ts": "b69b46912d1ec46bbc9b568b04c12b11fd753004c4d9d23ae13a16a80407d95c",
+    "services/docling/extract.py": "f0316630f7b320b7f060793a4b938823826e58346f36f2fc57fe869bc20640a4",
+    "services/docling/Dockerfile": "6450bc790360770e4ed4603d2ab7cb2146f6b9dd5b84ffb0310a299e501083c8",
+    "services/docling/requirements.lock": "189435ea865b159ee4e1920f0f2719b3993ce918d561fcc2e10891ffec13af8f",
+    "api/openapi.yaml": "4cac35a5c1aa982a39e81b1e1d4452ea2c844f1ee33cbaf6cbb9a766bbe321ea",
+    "apps/desk/src/api/client.ts": "724b81c2dfea8f6ff4821389e04e0cecc7b9eb72fb3f00bff1382f53e690a89d"
+  },
+  "limits": [
+    "Same-host disposable PostgreSQL; not an off-site/clean-host restore or production RPO/RTO measurement",
+    "Real offline parser response replayed through a loopback bridge; sidecar uptime not measured",
+    "Actual named session fixtures; no external OIDC login, Restate worker, live provider or human quality admission"
+  ],
+  "requirements": [
+    "FR-004",
+    "FR-006",
+    "FR-018",
+    "FR-019",
+    "FR-021",
+    "NFR-003",
+    "NFR-006",
+    "NFR-014",
+    "NFR-024"
+  ],
+  "scope": "Local retained-PDF crash/replay and quiesced restore; NFR-003 production RPO/RTO remains unqualified",
+  "focused": {
+    "files": 8,
+    "passed": 76,
+    "skipped": 0,
+    "includesOptInDrill": true,
+    "drillInvariants": 31
+  },
+  "verification": {
+    "sourceAndTestTypecheck": "passed",
+    "lint": "passed",
+    "deskBuild": "passed",
+    "secretScan": "passed_zero_secrets",
+    "fullRegression": "pending_sealed_run"
+  },
+  "productionChanged": false,
+  "priorFailedRuns": [
+    {
+      "log": "/private/tmp/hawa-pdf-recovery-red.log",
+      "reason": "Harness used import.meta.resolve, unsupported by the Vitest module runner; replaced with createRequire resolution",
+      "sha256": "24513123f665aa57e57d578b790b4b7a822bc63063c63bb2f962c1bb5e7a03f9"
+    },
+    {
+      "log": "/private/tmp/hawa-pdf-recovery-before.log",
+      "reason": "Minimal production-mode child lacked a synthetic action HMAC secret; startup correctly refused",
+      "sha256": "c6ed45aaf3fd4f0f1766405d2c448812deb8388a777e49e7d536458bbc1ed9ea"
+    },
+    {
+      "log": "/private/tmp/hawa-pdf-recovery-first.log",
+      "reason": "Same missing synthetic HMAC startup failure before environment correction",
+      "sha256": "ea46827ab06006052ab5178e178ddd46dc0b779cb71c05440e9b32a353642bae"
+    }
+  ],
+  "logHashes": {
+    "final": "3c16e148a75f96cf589231d8b97c39b78367d625dcdceeededa408166e3f6966",
+    "types-final": "4d197d29898f91b1ad1f8a6e148d451b549947f8580b26bca3c8515c31abced9",
+    "lint": "5984de6934a7db84ee4a6d7011c820798382119ba5acf0fa8d8ac07a5b1dece6",
+    "desk": "8c801d80d1dd51529ac3dc0d52f88a9f25bd42110232e81670d98587e64aff90",
+    "security": "2326d2626fe4728800a41c19e154accd75acec0b817eb884ab2278d41cee437f"
+  }
+}

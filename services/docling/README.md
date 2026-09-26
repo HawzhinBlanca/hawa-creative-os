@@ -24,7 +24,8 @@ Native text order is unverified. Table structure and images are not extracted.
 Every page must yield text; scanned/blank pages, partial conversions and malformed
 PDFs are refused for manual review. A text-bearing scanned page can still omit
 visual information. English synthetic fixtures do not establish Sorani/Arabic PDF
-fidelity. Request-owned PDF/voice intake and approved document indexing remain open.
+fidelity. Telegram PDF/voice intake remains open. Desk retention and separately
+approved reference search are described below.
 
 ## Disposable acceptance proof
 
@@ -92,3 +93,54 @@ Rollback: remove Core's parser URL and stop the sidecar to stop new extraction.
 Retained evidence, source downloads and exact task retries remain available. Keep
 migration 041 and the blob roots; never drop saved originals as a rollback step.
 Production activation and a real office PDF quality review remain separate gates.
+
+## Approved reference search (ADR-072)
+
+Retention alone does not authorize search. A live named Google office administrator
+or tenant-and-client DNA manager approves or revokes the exact source/extraction
+hashes with a reason, expected version and stable action key. Migration 042 derives
+immutable chunks atomically with that decision. Search filters current client and
+approval scope before lexical ranking and returns original text, hashes and page
+boxes as `{x, y, width, height}` in top-left points. Vector/reranker quality remains
+unqualified. Desk opens the cited PDF for deliberate copy review.
+
+Revocation and reconciliation of an earlier decision remain available if original
+bytes are missing or corrupt. An old approval replay returns the current revoked
+state; it cannot restore reference use. Keep migration 042 and its audit records
+when disabling new parsing. Search and saved evidence do not require a running parser.
+
+## Disposable process-crash and restore acceptance
+
+With dependencies installed, the isolated test database configured (`pnpm test:db`)
+and Docker running, execute from the repository root:
+
+```sh
+docker compose -f services/docling/compose.yml build docling
+HAWA_DOCUMENT_RECOVERY=1 \
+HAWA_DOCUMENT_RECOVERY_REPORT=/private/tmp/hawa-pdf-recovery.json \
+pnpm exec vitest run apps/core/test/document-recovery.test.ts
+```
+
+The opt-in test accepts only `hawa_t_*` databases on loopback port **55432**, and
+only the Vitest-created temporary blob store. It never reads office credentials:
+each Core child has a minimal synthetic environment, a fresh working directory and
+a fetch guard allowing only the local parser/control bridge. The pinned parser
+runs offline on the compressed two-page fixture. Its unchanged JSON is then served
+locally, so the drill measures Core recovery independently of parser availability.
+
+Four actual SIGKILL boundaries interrupt the HTTP response after stored bytes,
+the receipt transaction, the knowledge decision transaction and the task/event/outbox
+transaction. Fresh Core processes replay the same identities, reject changed bodies,
+and preserve exact copy, citations, revocation and GC roots. The test stops Core,
+takes a PostgreSQL custom-format dump plus a blob-file copy, restores them into a
+new disposable database and a different directory, and removes its original test
+database/store before reopening. It verifies byte-identical originals and audit
+history, then injects same-size file corruption to check download/task refusal and
+continued revocation. Cleanup removes only this run's disposable resources.
+
+Normal regression reports this drill as skipped unless explicitly enabled. The
+machine-readable report records 31 invariants, source/image hashes and limitations;
+its duration is not production RTO. This same-host, quiesced fixture restore does
+not qualify WAL/PITR, off-site backup, a clean host, Restate resumption, provider
+reconciliation or production RPO/RTO. Those remain the separate admission in
+`docs/20_DEPLOYMENT_BACKUP_DR.md`.
