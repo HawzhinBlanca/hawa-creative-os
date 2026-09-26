@@ -33,6 +33,7 @@ import { verifyLifecycleDeliveryClaim } from '@hawa/integrations';
 import { composeDeliveredMessage, composeDeliveryFailedAlert } from '../delivery-notification.js';
 import { log, requestIdHeaders, withInvocationLogContext } from '../logging.js';
 import { TelegramSenderApi } from './telegram-sender.js';
+import { RequestLifecycleApi } from './request-lifecycle.js';
 
 /** A Core step's retry: from 2 s doubling to 30 s, for up to 10 minutes (as TaskWorkflow's steps). */
 export const PREPARE_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30000, maxRetryDuration: 10 * 60 * 1000 };
@@ -43,9 +44,6 @@ export const PREPARE_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 
  * and records it (startWorkflowDelivery in Core).
  */
 export const REPORT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 60000, maxRetryDuration: 60 * 60 * 1000 };
-/** A request-owned outcome is the only completion report. Keep it pending through a Core outage. */
-export const LIFECYCLE_REPORT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 60000 };
-
 type StepRetry = { initialRetryInterval: number; retryIntervalFactor: number;
   maxRetryInterval: number; maxRetryDuration?: number };
 
@@ -195,15 +193,19 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
   }
 
   try {
-    await ctx.run('report', () => input.reportTo === 'lifecycle'
-      ? ctx.reportLifecycle!(input, outcome)
-      : core.post(`/internal/tasks/${encodeURIComponent(input.taskId)}/delivery-finished`, {
+    if (input.reportTo === 'lifecycle') {
+      // This is already a Restate object call. Nesting it inside ctx.run creates an extra journal
+      // command around the RPC and can strand a completed delivery on replay (Restate 570).
+      await ctx.reportLifecycle!(input, outcome);
+    } else {
+      await ctx.run('report', () => core.post(`/internal/tasks/${encodeURIComponent(input.taskId)}/delivery-finished`, {
         tenantId: input.tenantId,
         deliveryId: input.deliveryId,
         approvalId: input.approvalId,
         run,
         outcome,
-      }), input.reportTo === 'lifecycle' ? LIFECYCLE_REPORT_RETRY : REPORT_RETRY);
+      }), REPORT_RETRY);
+    }
   } catch (err) {
     if (!isTerminal(err)) throw err;
     if (input.reportTo === 'lifecycle') throw err;
@@ -228,15 +230,13 @@ export function createDeliveryWorkflow(core: CoreInternal = coreInternalFromEnv(
           return runDelivery({
             run: (name, action, retry) => ctx.run(name, action, retry),
             send: (message) => ctx.objectClient(TelegramSenderApi, message.chatId).send(message),
-            reportLifecycle: async (delivery, outcome) => {
-              const { RequestLifecycleApi } = await import('./request-lifecycle.js');
-              return ctx.objectClient(RequestLifecycleApi, delivery.requestId).deliveryFinished({
+            reportLifecycle: (delivery, outcome) =>
+              ctx.objectClient(RequestLifecycleApi, delivery.requestId).deliveryFinished({
                 v: 1, eventId: `delivery:${delivery.deliveryId}`, requestId: delivery.requestId,
                 taskId: delivery.taskId, approvalId: delivery.approvalId,
                 deliveryId: delivery.deliveryId, run: Number(delivery.run || 1),
                 expectedRev: Number(delivery.requestRev), outcome,
-              });
-            },
+              }),
           }, core, input);
         }),
     },

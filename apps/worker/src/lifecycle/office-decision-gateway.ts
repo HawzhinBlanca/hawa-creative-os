@@ -23,7 +23,7 @@ export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: s
           Object.keys(input.event).some((key) => !['v', 'kind', 'eventId', 'requestId', 'taskId',
             'revisionId', 'approvalId', 'actionId', 'expectedRev', 'actor', 'reason'].includes(key)) ||
           !['art_director', 'creative_director', 'office_admin', 'administrator'].includes(input.event.actor?.role))
-        : input.event.expectedRev !== 2) ||
+        : (!Number.isInteger(input.event.expectedRev) || input.event.expectedRev < 2)) ||
       !UUID.test(input.event.requestId) || !UUID.test(input.event.taskId) ||
       !UUID.test(input.event.revisionId) || !UUID.test(input.event.actionId) ||
       input.event.eventId !== `desk:${input.event.actionId}` ||

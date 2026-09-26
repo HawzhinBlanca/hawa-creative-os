@@ -61,6 +61,12 @@ describe('RequestLifecycle office revision', () => {
     const secret = ['office', 'gateway', 'fixture'].join('-');
     const signed = { v: 1 as const, event, signature: signLifecycleOfficeEvent(secret, event) };
     expect(checkSignedOfficeDecision(signed, secret)).toBe('ok');
+    const laterRound = { ...event, expectedRev: 5 };
+    expect(checkSignedOfficeDecision({ v: 1, event: laterRound,
+      signature: signLifecycleOfficeEvent(secret, laterRound) }, secret)).toBe('ok');
+    const invalidRound = { ...event, expectedRev: 1 };
+    expect(checkSignedOfficeDecision({ v: 1, event: invalidRound,
+      signature: signLifecycleOfficeEvent(secret, invalidRound) }, secret)).toBe('invalid');
     expect(checkSignedOfficeDecision({ ...signed, event: { ...event, reason: 'Tampered',
       revisionRequest: { ...event.revisionRequest!, comment: 'Tampered' } } }, secret)).toBe('unauthorized');
     expect(checkSignedOfficeDecision({ ...signed, event: { ...event,

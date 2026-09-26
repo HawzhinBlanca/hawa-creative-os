@@ -75,7 +75,7 @@ describe('Delivery workflow', () => {
       const h = harness({ prepare: async () => prepared(i.taskId, 1) });
       h.ctx.reportLifecycle = async () => { throw new restate.TerminalError('Core refused stale report', { errorCode: 409 }); };
       await expect(runDelivery(h.ctx, h.core, i)).rejects.toThrow('Core refused stale report');
-      expect(h.steps).toEqual(['prepare', 'report']);
+      expect(h.steps).toEqual(['prepare']);
       expect(h.posts).toHaveLength(1);
       expect(h.sends.filter((m) => m.chatId === i.chatId)).toHaveLength(2);
     } finally {

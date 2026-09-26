@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T07:21:04Z",
+  "generatedAt": "2026-09-26T07:43:39Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -874,8 +874,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
-      "sha256": "688cf75c638990edd2611b752cfb1804c86f7517e5d8895c4158bb877bec25ba",
-      "bytes": 22245
+      "sha256": "823bce5e454d47056d5164c83e1be30ae5dc4c0ea13d40af602ae1c867e8a821",
+      "bytes": 24542
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_RESTATE_KILL_DRILL.md",
@@ -884,8 +884,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_EVIDENCE.md",
-      "sha256": "8ac6f0a014aa48f59ff84964a17e95389eb84299de945d8fc90bcc9400e51c4f",
-      "bytes": 42077
+      "sha256": "dd9b637b98be05762b7c8c2119556fb89abfddeb98671479b9993851f682799e",
+      "bytes": 43614
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_RESTATE_DELIVERY_KILL_DRILL.md",
@@ -964,8 +964,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "6110961c12aefde77ad5462726b65e2bb3836f618ce7ed067006d3981dc6b283",
-      "bytes": 182213
+      "sha256": "1402b6a0b00bc773d67f9724367c3addba6d4d0dc577d7a261ea10b42931970d",
+      "bytes": 183889
     },
     {
       "path": "plans/user-stories.csv",

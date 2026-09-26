@@ -619,6 +619,38 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       return result && (row?.stage === 'in_review' || state?.startsWith('failed')) ? result : null;
     });
     events.push(`child design outcome: ${outcome}`);
+    const [review] = await query<{ revision_id: string }>(sql`
+      SELECT current_design_revision_id AS revision_id FROM hawa.tasks WHERE id = ${child}::uuid`);
+    const [qc] = await query<{ status: string; critical_pass: boolean; report: any }>(sql`
+      SELECT status, critical_pass, report FROM hawa.qc_runs
+      WHERE task_id = ${child}::uuid AND design_revision_id = ${review?.revision_id}::uuid
+      ORDER BY started_at DESC LIMIT 1`);
+    const exportId = qc?.report?.exportArtifactId;
+    if (!review?.revision_id || qc?.status !== 'passed' || !qc.critical_pass || !exportId)
+      throw new Error(`revised draft has no approval-ready QA/export: ${JSON.stringify({ review, status: qc?.status, criticalPass: qc?.critical_pass, exportId })}`);
+    const approved = await fakes.core(`/tasks/${child}/revisions/${review.revision_id}/decisions`,
+      secrets().CHAOS_REVIEWER_KEY, { headers: { 'Idempotency-Key': randomUUID() }, body: {
+        action: 'approve', reason: 'Checked the revised design and selected its verified export',
+        pinnedExportIds: [exportId],
+      } });
+    events.push(`office approval of revised draft: HTTP ${approved.status}`);
+    if (approved.status !== 201) throw new Error(`office approval refused: ${JSON.stringify(approved.json).slice(0, 400)}`);
+    const approvalId = approved.json?.decisionId;
+    await waitUntil('the revised draft approval at rev 6', async () => {
+      const [row] = await query<{ rev: string; stage: string }>(sql`
+        SELECT rev, stage FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+      return Number(row?.rev) === 6 && row?.stage === 'approved' ? row : null;
+    });
+    const delivery = await fakes.core(`/tasks/${child}/publish`, secrets().CHAOS_REVIEWER_KEY,
+      { headers: { 'Idempotency-Key': randomUUID() }, body: { approvalId } });
+    events.push(`approved revised draft delivery: HTTP ${delivery.status}`);
+    if (delivery.status !== 202 && delivery.status !== 200)
+      throw new Error(`revised draft delivery refused: ${JSON.stringify(delivery.json).slice(0, 400)}`);
+    await waitUntil('revised draft delivery result', async () => {
+      const [row] = await query<{ rev: string; stage: string }>(sql`
+        SELECT rev, stage FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+      return Number(row?.rev) >= 8 ? row : null;
+    });
     return { delivered: false, skipRequestChecks: true, skipQuiescence: true,
       extra: [{ name: 'second revision photo update accepted for replay',
         ok: replay === 200 || replay === 202, detail: `HTTP ${replay}` }],
@@ -669,8 +701,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
           { name: 'both ChatInbox invocations completed',
             ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
             detail: JSON.stringify(inbox) },
-          { name: 'revised draft reaches human review',
-            ok: tasks[1]?.state === 'human_review' && state?.stage === 'in_review' && Number(state.rev) === 5 &&
+          { name: 'revised draft passes human review and reaches approved delivery',
+            ok: tasks[1]?.state === 'complete' && state?.stage === 'delivered' && Number(state.rev) === 8 &&
               outcome === 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW',
             detail: JSON.stringify({childState:tasks[1]?.state,request:state,outcome}) },
           { name: 'the planner received the child photo by content hash',

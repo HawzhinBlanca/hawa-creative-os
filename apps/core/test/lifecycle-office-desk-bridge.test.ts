@@ -593,7 +593,8 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(sentMessages).toHaveLength(2);
     expect(sentMessages[0]).toMatchObject({ kind: 'text', chatId, class: 'critical' });
     expect(sentMessages[0]).toEqual(sentMessages[1]);
-    expect(transport).toHaveBeenCalledTimes(3);
+    // Changed intent is rejected against the persisted decision before another gateway call.
+    expect(transport).toHaveBeenCalledTimes(2);
   });
 
   it('approves only the checked stored export and replays its original proof after a lost answer', async () => {
@@ -850,5 +851,15 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(completed.task?.state).toBe('complete');
     expect(completed.publication).toMatchObject({ state: 'complete', executor_finished_run: 1 });
     expect(completed.revisions.map((row) => Number(row.rev)).sort()).toEqual([1, 2, 3, 4, 5]);
+    // A lost Desk answer can arrive after delivery has advanced the request past approval.
+    // The exact old action is answered from its committed receipt without resending it.
+    const lateApprovalRetry = await resumed.request(path, { method: 'POST', headers, body: JSON.stringify(body) });
+    expect(lateApprovalRetry.status, await lateApprovalRetry.clone().text()).toBe(201);
+    expect(await lateApprovalRetry.json()).toMatchObject({
+      decisionId: result.decisionId, decision: 'approved', requestId, requestRev: 3,
+    });
+    expect((await resumed.request(path, { method: 'POST', headers,
+      body: JSON.stringify({ ...body, reason: 'Different approval' }) })).status).toBe(409);
+    expect(deliveryTransport).toHaveBeenCalledTimes(2);
   });
 });

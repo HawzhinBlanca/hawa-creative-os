@@ -67,7 +67,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
     if (dbTask?.request_id) {
-      // A signed-in Desk reviewer sends the first review decision through the public signed gateway.
+      // A signed-in Desk reviewer sends each review decision through the public signed gateway.
       // The private RequestLifecycle object owns the state; Core never writes an owned decision here.
       const actionId = c.req.header('Idempotency-Key');
       if (!actionId || !isValidUuid(actionId)) return problem(c, 422, 'Action Key Required',
@@ -89,12 +89,35 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         return problem(c, 403, 'Forbidden', 'This lifecycle revision needs an authorized office reviewer');
       }
       const requestId = dbTask.request_id as string;
-      const current = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, async (trx) =>
-        trx.selectFrom('requests').select(['owner'])
-          .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst());
-      if (!current || current.owner !== 'restate') {
+      const review = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, async (trx) => ({
+        request: await trx.selectFrom('requests').select(['owner', 'rev', 'stage', 'current_task_id'])
+          .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst(),
+        receipt: await trx.selectFrom('lifecycle_projections').select(['rev', 'result'])
+          .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
+          .where('idempotency_key', 'like', `${requestId}:%:officeDecision:desk:${actionId}`)
+          .orderBy('rev', 'desc').executeTakeFirst(),
+        prior: await trx.selectFrom('approvals').selectAll().where('tenant_id', '=', tenantId)
+          .where('task_id', '=', taskId).where('nonce', '=', `desk:${actionId}`).executeTakeFirst(),
+      }));
+      if (!review.request || review.request.owner !== 'restate') {
         return problem(c, 409, 'Lifecycle Owner Mismatch',
           'This task does not have an active request owner');
+      }
+      if (Boolean(review.receipt) !== Boolean(review.prior)) {
+        return problem(c, 503, 'Decision Receipt Incomplete', 'The decision and lifecycle receipt disagree; reconcile them before retrying');
+      }
+      const receiptResult = review.receipt?.result as Record<string, unknown> | undefined;
+      if (review.receipt && (receiptResult?.requestId !== requestId || receiptResult?.actionId !== actionId ||
+          receiptResult?.taskId !== taskId || receiptResult?.revisionId !== revisionId ||
+          receiptResult?.approvalId !== review.prior?.id || receiptResult?.rev !== Number(review.receipt.rev) ||
+          receiptResult?.stage !== (isOwnedApproval ? 'approved' : 'manual'))) {
+        return problem(c, 409, 'Action Key Conflict', 'Idempotency-Key was already used for another lifecycle decision');
+      }
+      const expectedRev = review.receipt ? Number(review.receipt.rev) - 1 : Number(review.request.rev);
+      const decisionRev = expectedRev + 1;
+      if (!Number.isInteger(expectedRev) || expectedRev < 2 || Number(review.request.rev) < expectedRev ||
+          (!review.receipt && (review.request.stage !== 'in_review' || review.request.current_task_id !== taskId))) {
+        return problem(c, 409, 'Stale Lifecycle Decision', 'The request is no longer reviewing this draft; refresh the task');
       }
       const deskRequestFingerprint = crypto.createHash('sha256')
         .update(JSON.stringify({ taskId, revisionId, actorUserId: auth.userId, body })).digest('hex');
@@ -102,9 +125,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       let eventRole = officeRole;
       let eventReason = isOwnedApproval ? (body.reason as string).trim() : revisionRequest!.comment;
       if (isOwnedApproval) {
-        const prior = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, (trx) =>
-          trx.selectFrom('approvals').selectAll().where('tenant_id', '=', tenantId)
-            .where('task_id', '=', taskId).where('nonce', '=', `desk:${actionId}`).executeTakeFirst());
+        const prior = review.prior;
         if (prior) {
           const saved = prior.decision_payload as Record<string, unknown>;
           if (prior.decision !== 'approved' || prior.design_revision_id !== revisionId ||
@@ -169,15 +190,33 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
             ...(rtlVisualReview ? { rtlVisualReview } : {}) });
           if (!approvalProof) return problem(c, 422, 'Invalid Approval Proof', 'Stored QA or export evidence is malformed');
         }
+      } else if (review.prior) {
+        const prior = review.prior;
+        const saved = prior.decision_payload as Record<string, unknown>;
+        const savedRequest = parseCompleteRevisionRequest(saved.revisionRequest);
+        if (prior.decision !== 'revision_requested' || prior.design_revision_id !== revisionId ||
+            prior.decided_by !== auth.userId || prior.reason !== revisionRequest!.comment ||
+            typeof saved.approverRole !== 'string' || !savedRequest ||
+            JSON.stringify(savedRequest) !== JSON.stringify(revisionRequest)) {
+          return problem(c, 409, 'Action Key Conflict', 'Idempotency-Key was already used for a different decision');
+        }
+        eventRole = saved.approverRole;
+        eventReason = prior.reason;
       }
-      // Do not pre-reject rev 3 or a later draft: a response lost after the original commit must
-      // still reach RequestLifecycle, whose stored event hash decides whether this is an exact replay.
+      if (review.receipt && Number(review.request.rev) > decisionRev) {
+        // The request owner has moved past this decision. The committed approval and matching
+        // projection receipt are sufficient to answer an exact old-action retry without replaying it.
+        return c.json({ decisionId: review.prior!.id, taskId, designRevisionId: revisionId,
+          decision: isOwnedApproval ? 'approved' : 'revision_requested',
+          actor: { userId: auth.userId, role: eventRole, verifiedServerSide: true },
+          requestId, requestRev: decisionRev }, 201);
+      }
       const ingress = (process.env.RESTATE_INGRESS_URL || '').trim().replace(/\/+$/, '');
       const secret = (process.env.HAWA_WORKER_TOKEN || '').trim();
       if (!ingress || !secret) return problem(c, 503, 'Lifecycle Decision Unavailable',
         'The decision gateway is not configured; retry this action later');
       const event = { v: 1 as const, eventId: `desk:${actionId}`, requestId, taskId, revisionId,
-        actionId, expectedRev: 2 as const, kind: isOwnedApproval ? 'approve' as const : 'revise' as const,
+        actionId, expectedRev, kind: isOwnedApproval ? 'approve' as const : 'revise' as const,
         actor: { userId: auth.userId, role: eventRole }, reason: eventReason,
         ...(isOwnedApproval ? { approvalProof: approvalProof!, deskRequestFingerprint } : { revisionRequest: revisionRequest! }) };
       const signature = signLifecycleOfficeEvent(secret, event);
@@ -189,12 +228,12 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         const result = await response.json().catch(() => null) as Record<string, unknown> | null;
         if (response.ok && result?.accepted === true && result.requestId === requestId &&
             result.taskId === taskId && result.revisionId === revisionId && result.actionId === actionId &&
-            isValidUuid(result.approvalId as string) && result.rev === 3 &&
+            isValidUuid(result.approvalId as string) && result.rev === decisionRev &&
             result.stage === (isOwnedApproval ? 'approved' : 'manual')) {
           return c.json({ decisionId: result.approvalId, taskId, designRevisionId: revisionId,
             decision: isOwnedApproval ? 'approved' : 'revision_requested',
             actor: { userId: auth.userId, role: eventRole, verifiedServerSide: true },
-            requestId, requestRev: 3 }, 201);
+            requestId, requestRev: decisionRev }, 201);
         }
         if (response.ok && result?.accepted === false) return problem(c, 409, 'Stale Lifecycle Decision',
           'The request is no longer reviewing this draft; refresh the task');
