@@ -66,11 +66,19 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         round?: number; directive?: string; priorTaskId?: string; rawText?: string;
         chatId?: string; questionId?: string; draft?: unknown; reason?: string;
         albumMessage?: string; albumNoticeKey?: string;
+        sourceMessage?: string; sourceNoticeKey?: string;
       };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
         if (!retryable(status)) {
           const base: Extract<IntakeAnswer, { kind: 'done' }> = { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true };
+          if (body.lifecycleAction === 'source-message') {
+            if (!body.chatId || typeof body.sourceMessage !== 'string' || !body.sourceMessage || body.sourceMessage.length > 3000 ||
+                typeof body.sourceNoticeKey !== 'string' || !/^source-review:[0-9]+$/.test(body.sourceNoticeKey))
+              throw new Error(`Core returned an invalid source notice for update ${update.update_id}`);
+            return { ...base, lifecycleAction: 'source-message', chatId: body.chatId,
+              sourceMessage: body.sourceMessage, sourceNoticeKey: body.sourceNoticeKey };
+          }
           if (body.lifecycleAction === 'album-message') {
             if (!body.chatId || typeof body.albumMessage !== 'string' || !body.albumMessage ||
                 body.albumMessage.length > 2000 || typeof body.albumNoticeKey !== 'string' ||

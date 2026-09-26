@@ -1,0 +1,165 @@
+{
+  "date": "2026-09-26T22:09:10.905Z",
+  "status": "passed",
+  "durationMs": 3176,
+  "sourcePdfSha256": "adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617",
+  "parserImageId": "sha256:ecfecce7e0d97f9e12c417a1d159b9cb73d6c6bf1f4794b496bde9b3d5b7994a",
+  "parserVersion": "docling-2.130.0/parse-7.22.0/native-v1",
+  "starts": 6,
+  "kills": 5,
+  "downloads": 1,
+  "parses": 1,
+  "events": [
+    "core.source.after-admission",
+    "core.source.after-upload",
+    "core.source.after-extraction",
+    "core.source.after-confirmation",
+    "core.source.after-projection"
+  ],
+  "checks": [
+    {
+      "name": "offline parser preserves the compressed fixture hash and both source pages",
+      "passed": true
+    },
+    {
+      "name": "kill 1 terminated Core with SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-admission: no HTTP acknowledgement survives",
+      "passed": true
+    },
+    {
+      "name": "client admission commits before any external download",
+      "passed": true
+    },
+    {
+      "name": "kill 2 terminated Core with SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-upload: no HTTP acknowledgement survives",
+      "passed": true
+    },
+    {
+      "name": "original bytes commit exactly once after flag rollback",
+      "passed": true
+    },
+    {
+      "name": "pending source protects its original from GC before extraction",
+      "passed": true
+    },
+    {
+      "name": "kill 3 terminated Core with SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-extraction: no HTTP acknowledgement survives",
+      "passed": true
+    },
+    {
+      "name": "extraction commits once without downloading the original again",
+      "passed": true
+    },
+    {
+      "name": "replay opens the saved real extraction while parser and enrolment are off",
+      "passed": true
+    },
+    {
+      "name": "office can download identical source bytes before copy confirmation",
+      "passed": true
+    },
+    {
+      "name": "reassigned code cannot expose the source in another client",
+      "passed": true
+    },
+    {
+      "name": "kill 4 terminated Core with SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-confirmation: no HTTP acknowledgement survives",
+      "passed": true
+    },
+    {
+      "name": "confirmation commits once before its response",
+      "passed": true
+    },
+    {
+      "name": "saved decision keeps original client and exact reviewed strings",
+      "passed": true
+    },
+    {
+      "name": "kill 5 terminated Core with SIGKILL",
+      "passed": true
+    },
+    {
+      "name": "core.source.after-projection: no HTTP acknowledgement survives",
+      "passed": true
+    },
+    {
+      "name": "projection replay adopts one task after a lost commit acknowledgement",
+      "passed": true
+    },
+    {
+      "name": "projection leaves one task event and one outbox command",
+      "passed": true
+    },
+    {
+      "name": "Desk preserves exact mixed-script copy and linked original",
+      "passed": true
+    },
+    {
+      "name": "changed confirmation body remains a conflict after all restarts",
+      "passed": true
+    },
+    {
+      "name": "six Core processes did not repeat download or extraction",
+      "passed": true
+    },
+    {
+      "name": "copy confirmation never promotes source knowledge",
+      "passed": true
+    }
+  ],
+  "sourceHashes": {
+    "apps/core/test/lifecycle-source-recovery.test.ts": "e0444e7e8a6f44acdb194ff2e3e2892522b63aed8d1277651c2dab12d8b32aa3",
+    "apps/core/test/fixtures/document-recovery-process.ts": "608f27697f0f2390d8db7bf9583c6734d7bdbc6919f64aecc44b077b620b2d31",
+    "apps/core/src/services/lifecycle-source-admission.ts": "0ce2cc30b98c855a1e04eea04940918512863be9e04efd98c65dab452330538d",
+    "apps/core/src/services/lifecycle-source-intake.ts": "80fb1bc40976c76c1e2c9155f9fb5fdc0a601d39de450a43bfcea0c31ec7b568",
+    "apps/core/src/services/lifecycle-source-store.ts": "6abb61e35bb10bb7bb8737453c5fb87a3fcb23633376818a378b1136d6634673",
+    "apps/core/src/services/lifecycle-projection.ts": "5c5f414747373bfe2c7aa0b3904b86b66d4582efe6dd125df80776db5e878df0",
+    "apps/core/src/routes/lifecycle-internal.routes.ts": "985c4677e77e0c815a0694772f6d2659dc9ff64812632a8f81ff6a2f737acd56",
+    "apps/core/src/routes/source-files.routes.ts": "518186f61d16aa8cdba81df558ed7f2c03838f558d881cb704150470bc1b1a1d",
+    "packages/domain/src/telegram-source-review.ts": "ee4689e9462dd686257eaa975bbf52e23c43078b65ffe30ed7c95166c986185f",
+    "packages/integrations/src/telegram-bridge.ts": "2028c34ccd696ce416eaca8317bed0dcef68cb20655b290a467ad78447a4dd91",
+    "packages/db/migrations/043_lifecycle_source_retention.sql": "c93e40bf4ddcf1725f5f3516b27b394abf78f076d105cc385da9f1e06cd012db"
+  },
+  "limits": [
+    "Disposable same-host PostgreSQL and blob directory; not clean-host restore or production RPO/RTO",
+    "Real offline Docling extraction replayed by local bridge; Telegram transport uses fixed local fixtures",
+    "Actual Core HTTP processes and runtime role; no live Telegram, Restate worker, Canva export or human quality admission"
+  ],
+  "qualification": {
+    "focused": {
+      "filesPassed": 14,
+      "testsPassed": 180,
+      "log": "/private/tmp/hawa-telegram-source-focused-final2.log"
+    },
+    "typecheck": "passed",
+    "lint": "passed",
+    "deskBuild": "passed",
+    "secretScan": "passed; zero secrets",
+    "sealedRegression": "pending"
+  },
+  "earlierRuns": [
+    "Downloader red-before: 7 failed / 7 passed. An earlier infinite test stream was interrupted and replaced by finite chunks.",
+    "Initial source tests found the old image-only attachment constraint and JSONB key-reordering mismatch in confirmation replay; fixed and retested.",
+    "Task-file client-isolation red-before returned 200 instead of 404 to an unassigned designer; migration 043 corrects the policy.",
+    "Retry red-before: 3 failed / 9 passed (refusal replay, premature confirmation and client-code reassignment).",
+    "The first source listing migration used created_at instead of received_at; isolated migration setup refused it before tests. Corrected before release.",
+    "One UI acceptance run used stale compiled domain exports: 15 failed / 29 passed. Rebuilt workspace packages; subsequent runs passed.",
+    "The first wide affected run: 4 failed / 176 passed. Two failures found filename-based PDF dispatch overriding images; two assertions still expected the prior all-PDF hold. Names no longer choose the extractor; explicit PDF without a client gets an actionable refusal.",
+    "The first secret scan flagged a hard-coded test webhook value; replaced with a per-run generated fixture. Final scan passed without a new allowlist entry."
+  ]
+}

@@ -19,7 +19,9 @@ import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, parseBlobRef, parseLifecycleAlbumRef, type DeliveryOutcome } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, parseBlobRef, parseLifecycleAlbumRef, parseLifecycleSourceRef, type DeliveryOutcome } from '@hawa/contracts';
+import { createLifecycleSourceIntake } from '../services/lifecycle-source-intake.js';
+import { assertSourceIdentity, SourceConflict } from '../services/lifecycle-source-store.js';
 import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
@@ -115,6 +117,8 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
       ((options as any).previews !== undefined && (!Number.isInteger((options as any).previews) || (options as any).previews < 1 || (options as any).previews > 4)) ||
       ((options as any).holdForSelection !== undefined && typeof (options as any).holdForSelection !== 'boolean'))) return null;
   const image = d.lifecycleImage;
+  const source = d.lifecycleSource === undefined ? undefined : parseLifecycleSourceRef(d.lifecycleSource);
+  if (d.lifecycleSource !== undefined && (!source || image || d.lifecycleAlbum)) return null;
   const album = d.lifecycleAlbum === undefined ? undefined : parseLifecycleAlbumRef(d.lifecycleAlbum);
   if ((d.lifecycleAlbum !== undefined && !album) || (image && album)) return null;
   const imageRef = image === undefined ? undefined : parseBlobRef(image);
@@ -136,11 +140,13 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
     ...(options ? { studioOptions: options as ChatIntake['studioOptions'] } : {}),
     ...(imageRef ? { lifecycleImage: { ...imageRef, updateId: (image as { updateId: number }).updateId } } : {}),
     ...(album ? { lifecycleAlbum: album } : {}),
+    ...(source ? { lifecycleSource: source } : {}),
   };
 }
 
 export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
   const { app, db, problem, verifyRequestAuth, channelKillSwitches } = ctx;
+  const sourceIntake = createLifecycleSourceIntake(ctx);
 
   // Registered on /v1/internal/* only (not under every prefix, as registerRoute does): one address,
   // which nginx does not need to serve, for one caller.
@@ -179,6 +185,15 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // Intake refuses while the office has switched Telegram off; the update waits in its chat for the
     // switch, as it waited in Telegram when Core polled. Asked here so the answer is not a retry.
     if (await intakeRefused(channelKillSwitches, 'telegram')) return handled(503, { code: 'INTAKE_PAUSED' });
+
+    if (db) {
+      try { await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+        trx => assertSourceIdentity(trx, DEFAULT_TENANT_ID, incoming)); }
+      catch (error) {
+        if (error instanceof SourceConflict) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        throw error;
+      }
+    }
 
     let admittedAlbum: AlbumSnapshot | undefined;
     if (db) {
@@ -294,6 +309,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           priorRefusal.code === 'STALE_REQUEST_REPLY' ? 'request-choice-required' : 'revision-blocked',
         chatId: sourceChat });
     }
+
+    const sourceAnswer = await sourceIntake(update, String(mode));
+    if (sourceAnswer) return handled(sourceAnswer.status, sourceAnswer.extra);
 
     // --- lifecycle mode: bind a requester answer to one request, then replay it by update ID ---
     if (mode === 'lifecycle' || lifecycleOwnsChat(chatOf(update)) || priorRevisionPhoto) {
@@ -625,7 +643,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       const result = await projectLifecycleOpen(db, {
         requestId, tenantId: DEFAULT_TENANT_ID, expectedRev: 0, rev: 1,
         key: body.key as string, draft,
-      });
+      }, blobStoreFor(db, ctx.options?.blobStore));
+      if (draft.lifecycleSource) await chaosPoint('core.source.after-projection', { requestId });
       return c.json({ v: 1, ...result }, 200);
     } catch (error) {
       if (error instanceof LifecycleProjectionConflict) {

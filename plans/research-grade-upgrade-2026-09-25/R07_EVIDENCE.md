@@ -1,5 +1,43 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-27 — requester-reviewed Telegram PDF workflow (ADR-073)
+
+Core now freezes an explicit active client or exact current request reply before
+downloading, retains hash-verified original bytes, extracts candidate text locally,
+and waits for an exact `/use_source` copy confirmation from the original sender in
+the same chat/topic. New and revision/clarification requests use the existing
+lifecycle and expected revisions. The planner and Desk preserve the confirmed
+strings, including whitespace, underscores and Sorani. Explicit Size captions use
+the existing supported dimension bounds; the new-request default is visible.
+
+Admission/refusals survive restart, client-code reassignment and flag rollback.
+Confirmation retains its exact serialized update because JSONB key ordering cannot
+reconstruct the original hash. Worker notices use the existing critical sender.
+The new task-file RLS policy closes a demonstrated cross-client original-download
+hole. Desk also lists/downloads retained originals after parser failure; late
+responses cannot cross a client change. Files named .pdf cannot override the
+byte-verified image path: PDF extraction requires an explicit PDF media type and
+verified PDF bytes. Unknown/unsupported media still needs correction.
+
+**Measured acceptance:** 14 affected files / 180 tests passed with real PostgreSQL
+and runtime RLS, plus source/test typecheck, lint, Desk build and zero-secret scan.
+The included opt-in drill passed **26 invariants**, **five actual Core SIGKILLs**
+and **six Core starts**. Admission, bytes, extraction, confirmation and task commit
+all lose their HTTP acknowledgement before restart; the final state has **one
+download, one extraction, one task, one task event and one outbox command**.
+Client-code reassignment cannot change the admitted client. The real offline Docling
+fixture is served through a bounded local HTTP bridge; the real downloader receives
+two fixed Telegram-shaped responses. Child processes use a fresh cwd, synthetic
+session/config and an outbound fetch guard. Production was not changed.
+
+The crash result, source hashes, limits and earlier failed runs are in
+`R07_SOURCE_RECOVERY_PROOF.json`; usage/recovery is in
+`runbooks/REQUEST_SOURCE_REVIEW.md`. Sealed full regression is pending for this
+source checkpoint. The standard suite skips this opt-in drill; its explicit pass
+is recorded above. Voice, real office source fidelity, live Telegram/Restate/Canva
+export, clean-host recovery and independent human quality remain open. No request
+copy confirmation promotes knowledge or approves a design.
+
 ## 2026-09-26 — original image files and preserved source evidence (ADR-069)
 
 Telegram images sent as documents now follow the same request-owned path as

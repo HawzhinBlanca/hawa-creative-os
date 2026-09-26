@@ -513,8 +513,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
 
           const headlineEn = payload.headlineEn || payload.body?.headlineEn || dbTask.title;
           const headlineCkb = payload.headlineCkb || payload.body?.headlineCkb || null;
-          const copyEn = payload.sourceDocument ? (payload.copyEn ?? '') : (payload.copyEn || payload.body?.copyEn || dbTask.description);
-          const copyCkb = payload.sourceDocument ? (payload.copyCkb ?? '') : (payload.copyCkb || payload.body?.copyCkb || null);
+          const copyEn = payload.sourceDocument || payload.reviewedSource ? (payload.copyEn ?? '') : (payload.copyEn || payload.body?.copyEn || dbTask.description);
+          const copyCkb = payload.sourceDocument || payload.reviewedSource ? (payload.copyCkb ?? '') : (payload.copyCkb || payload.body?.copyCkb || null);
 
           const latestRevisionId = dbTask.current_design_revision_id || undefined;
 
@@ -611,7 +611,11 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             sourceChannelId: payload.sourceChannelId || 'hawa_desk',
             designInstructions: payload.designInstructions || payload.body?.designInstructions || '',
             referenceAssets: payload.referenceAssets || payload.body?.referenceAssets || '',
-            sourceDocument: payload.sourceDocument || null,
+            sourceDocument: payload.sourceDocument || (payload.reviewedSource?.kind === 'pdf' ? {
+              id: payload.reviewedSource.documentId, clientId: payload.reviewedSource.clientId,
+              sourceSha256: payload.reviewedSource.sourceSha256,
+            } : null),
+            reviewedSource: payload.reviewedSource || null,
             clientScopeLocked: Boolean(dbTask.client_id),
             clientDnaVersion:
               payload.clientDnaVersion ||

@@ -32,6 +32,8 @@ GET /api/clients/:clientId/documents/:documentId/knowledge
 GET /api/clients/:clientId/knowledge/search
 GET /api/clients/:clientId/learning/data-lineage
 GET /api/clients/:clientId/snapshots
+GET /api/clients/:clientId/source-files
+GET /api/clients/:clientId/source-files/:updateId/content
 GET /api/clients/budgets
 GET /api/comparisons
 GET /api/comparisons/:id
@@ -116,6 +118,8 @@ GET /api/v1/clients/:clientId/documents/:documentId/knowledge
 GET /api/v1/clients/:clientId/knowledge/search
 GET /api/v1/clients/:clientId/learning/data-lineage
 GET /api/v1/clients/:clientId/snapshots
+GET /api/v1/clients/:clientId/source-files
+GET /api/v1/clients/:clientId/source-files/:updateId/content
 GET /api/v1/clients/budgets
 GET /api/v1/comparisons
 GET /api/v1/comparisons/:id
@@ -202,6 +206,8 @@ GET /clients/:clientId/documents/:documentId/knowledge
 GET /clients/:clientId/knowledge/search
 GET /clients/:clientId/learning/data-lineage
 GET /clients/:clientId/snapshots
+GET /clients/:clientId/source-files
+GET /clients/:clientId/source-files/:updateId/content
 GET /clients/budgets
 GET /comparisons
 GET /comparisons/:id
@@ -288,6 +294,8 @@ GET /v1/clients/:clientId/documents/:documentId/knowledge
 GET /v1/clients/:clientId/knowledge/search
 GET /v1/clients/:clientId/learning/data-lineage
 GET /v1/clients/:clientId/snapshots
+GET /v1/clients/:clientId/source-files
+GET /v1/clients/:clientId/source-files/:updateId/content
 GET /v1/clients/budgets
 GET /v1/comparisons
 GET /v1/comparisons/:id

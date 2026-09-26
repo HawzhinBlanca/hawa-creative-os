@@ -5,6 +5,7 @@ import { DocumentRequestForm } from './DocumentRequestForm.js';
 import { getPendingDocumentDraft } from '../services/manualTaskIntake.js';
 import { DocumentKnowledgePanel } from './DocumentKnowledgePanel.js';
 import { KnowledgeSearchPanel } from './KnowledgeSearchPanel.js';
+import { SourceFilesPanel } from './SourceFilesPanel.js';
 
 /** Each client owns its own preview lifetime. Extracted text is untrusted, rendered only as text. */
 export function DocumentInspectionPanel({ clientId }: { clientId: string }) {
@@ -71,6 +72,7 @@ export function DocumentInspectionPanel({ clientId }: { clientId: string }) {
   const chunks = result?.document.chunks.filter(chunk => chunk.pageNumber === page) ?? [];
   return <section aria-label="PDF text inspection" style={{ borderTop: '1px solid var(--line)', marginTop: 16, paddingTop: 12 }}>
     <KnowledgeSearchPanel clientId={clientId} revision={knowledgeRevision} onOpen={(id, sourcePage) => void openSaved(id, sourcePage)} />
+    <SourceFilesPanel clientId={clientId} onOpen={id => void openSaved(id)} />
     <h3>Inspect a PDF</h3>
     <p>Preview the document’s text before using it in a brief or brand rule. Check it against the original PDF.</p>
     <label>PDF file (up to 20 MiB, 40 pages)

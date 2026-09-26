@@ -1,5 +1,17 @@
 # R12 — Retrieval truth and scope, first slice
 
+## 2026-09-27 — reviewed Telegram PDF source handoff
+
+ADR-073 reuses the retained local document receipt and exact-copy planner path for
+Telegram new/revision/clarification sources. Original client scope is committed
+before download, and pending/failed originals remain inspectable through scoped
+Desk routes. A requester must deliberately select the final copy; no extraction
+is automatically approved or indexed. Migration 043 also corrects task-file read
+scope. See R07_EVIDENCE.md and R07_SOURCE_RECOVERY_PROOF.json: 14 files/180 affected
+tests, 26 actual process-crash invariants, types/lint/Desk build/security passed.
+Full sealed regression is pending. R12's measured relevance/latency, cited Design
+Plans, optional vector/reranker evaluation and real corpus acceptance remain open.
+
 ## 2026-09-26 — Real PDF process-crash and restore proof
 
 The retained-PDF journey now has an opt-in acceptance drill using actual Core HTTP

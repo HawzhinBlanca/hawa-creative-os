@@ -12,7 +12,28 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — PDF process-crash and restore proof)
+## Current result (2026-09-27 — Telegram PDF source workflow)
+
+The Telegram PDF → retained original → reviewed exact copy → owned request path is
+implemented for new briefs and current revision/clarification replies. Admission
+freezes the client before IO; refused updates remain refused after restart/flag
+changes. Source originals remain available in Desk even if extraction stops.
+A demonstrated cross-client task-file download hole is fixed in migration 043.
+
+Affected checks passed **14 files / 180 tests**, including **26 invariants** across
+five actual Core kills and six starts, one download/extraction/task/event/outbox.
+Typecheck, lint, Desk build and zero-secret scan passed. Full sealed regression is
+pending. See ADR-073, R07_EVIDENCE.md, R12_EVIDENCE.md,
+R07_SOURCE_RECOVERY_PROOF.json and runbooks/REQUEST_SOURCE_REVIEW.md.
+
+Next: seal and qualify this coherent PDF workflow; then voice with reviewed copy,
+locked client egress and durable paid-call uncertainty, followed by the complete
+real request → editable design → revision → approval → export/delivery journey.
+Cited Design Plans and retrieval relevance/latency, clean-host/WAL/PITR/Restate
+recovery and independent human creative-quality admission remain in scope.
+Production services and enrolment flags are unchanged; app-wide 10/10 is unproven.
+
+## Prior result (2026-09-26 — PDF process-crash and restore proof)
 
 The retained-PDF source → approval/search → reviewed request journey survives four
 actual Core SIGKILL boundaries and a PostgreSQL/blob restore into fresh storage.

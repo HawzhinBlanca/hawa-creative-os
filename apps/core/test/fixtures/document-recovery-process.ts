@@ -17,6 +17,15 @@ const origin = new URL(process.env.HAWA_CHAOS_CONTROL_URL!).origin;
 if (new URL(origin).hostname !== '127.0.0.1') throw new Error('Loopback recovery bridge required');
 globalThis.fetch = (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input));
+  // The source drill exercises the real Telegram downloader against two fixed local fixtures.
+  // This opt-in mapping never permits an external request or forwards a real credential.
+  if (process.env.HAWA_SOURCE_RECOVERY === '1') {
+    const bot = process.env.TELEGRAM_BOT_TOKEN;
+    if (url.href === `https://api.telegram.org/bot${bot}/getFile?file_id=source-fixture`)
+      return transport(`${origin}/telegram/getFile`, { ...init, redirect: 'error' });
+    if (url.href === `https://api.telegram.org/file/bot${bot}/sources/fixture.pdf`)
+      return transport(`${origin}/telegram/file`, { ...init, redirect: 'error' });
+  }
   if (url.origin !== origin || !['/parse', '/reach'].includes(url.pathname))
     throw new Error('Recovery process refused non-fixture network access');
   return transport(input, { ...init, redirect: 'error' });

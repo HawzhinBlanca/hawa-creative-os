@@ -1,6 +1,10 @@
 import { officeReviewUrl } from './desk-review-link.js';
 import { createHash } from 'node:crypto';
-import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef, type LifecycleAlbumRef } from '@hawa/contracts';
+import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef, type LifecycleAlbumRef, type LifecycleSourceRef } from '@hawa/contracts';
+import { sourceCopyConfirmation } from '@hawa/domain';
+import { type BlobStore } from '@hawa/db';
+import { blobStoreFor } from './blob-store-context.js';
+import { verifyReviewedSource, SourceConflict } from './lifecycle-source-store.js';
 import { parseCompleteRevisionRequest, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
 import { IdempotencyConflictError, OUTBOX_SEND_MARK_SOURCE, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
@@ -204,7 +208,8 @@ async function attachAlbum(trx: Kysely<Database>, tenantId: string, taskId: stri
 }
 
 /** One transaction makes the task, its recorded outbox row, ownership and replay receipt inseparable. */
-export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLifecycleProjection): Promise<OpenLifecycleResult> {
+export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLifecycleProjection,
+  sourceStore: BlobStore | null = blobStoreFor(db)): Promise<OpenLifecycleResult> {
   const { requestId, tenantId, draft, key } = input;
   const hash = createHash('sha256').update(canonical({ ...input, draft: { ...draft, tenantId } })).digest('hex');
   return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
@@ -227,6 +232,26 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
     if (prior) throw new LifecycleProjectionConflict('STALE_REVISION', `Request already has revision ${prior.rev}`);
 
     let admittedSource: unknown;
+    const sourceDecision = (await sql<{ payload: { draft: ChatIntake } }>`SELECT payload FROM hawa.inbox_events
+      WHERE tenant_id=${tenantId}::uuid AND source_account_id='lifecycle_chat_open'
+        AND payload->>'requestId'=${requestId} AND payload->'draft'->'lifecycleSource' IS NOT NULL LIMIT 1`.execute(trx)).rows[0];
+    if (sourceDecision && canonical(sourceDecision.payload.draft) !== canonical(draft))
+      throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The worker changed or omitted the reviewed source');
+    let reviewed: Awaited<ReturnType<typeof verifyReviewedSource>> | undefined;
+    if (draft.lifecycleSource) {
+      const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleSource.confirmationUpdateId);
+      if (!decision || !draft.clientId || decision.requestId !== requestId || decision.chatId !== draft.sourceChannelId ||
+          canonical(decision.draft) !== canonical(draft) || draft.lifecycleImage || draft.lifecycleAlbum)
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The source is not bound to this new brief');
+      try { reviewed = await verifyReviewedSource(trx, sourceStore, { tenantId, requestId, clientId: draft.clientId,
+        chatId: draft.sourceChannelId, ref: draft.lifecycleSource, copy: draft.rawText }); }
+      catch (error) {
+        if (error instanceof SourceConflict) throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', error.message);
+        throw error;
+      }
+      if (reviewed.upload.target) throw new LifecycleProjectionConflict('WRONG_STAGE', 'A revision source cannot open a new request');
+      admittedSource = decision.sourceUpdate;
+    }
     if (draft.lifecycleAlbum) {
       const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleAlbum.updateId);
       if (draft.lifecycleImage || !decision || decision.requestId !== requestId ||
@@ -254,6 +279,10 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
     let persisted: Awaited<ReturnType<typeof persistChatIntake>>;
     try {
       persisted = await persistChatIntake(trx, { ...draft, tenantId,
+        ...(reviewed ? { reviewedSource: reviewed.evidence,
+          ...(reviewed.upload.variant ? { variant: reviewed.upload.variant } : {}),
+          copyEn: /[\u0600-\u06ff]/.test(draft.rawText) ? '' : draft.rawText,
+          copyCkb: /[\u0600-\u06ff]/.test(draft.rawText) ? draft.rawText : '' } : {}),
         ...(admittedSource !== undefined ? { rawJson: admittedSource } : {}) }, { outboxState: 'recorded' });
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
@@ -280,6 +309,8 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
       .returning('id').executeTakeFirst();
     if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The task acquired another request owner');
     if (draft.lifecycleAlbum) await attachAlbum(trx, tenantId, taskId, draft.lifecycleAlbum);
+    if (reviewed) await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
+      VALUES (${tenantId}::uuid,${taskId}::uuid,${reviewed.evidence.sourceSha256},'source_document') ON CONFLICT DO NOTHING`.execute(trx);
     if (draft.lifecycleImage) {
       await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
         VALUES (${tenantId}::uuid, ${taskId}::uuid, ${draft.lifecycleImage.sha256}, 'reference_image')`.execute(trx);
@@ -613,6 +644,7 @@ export interface RequesterRevisionWithIntakeProjection {
   /** Core-stored image for this exact update and selected request, if present. */
   lifecycleImage?: BlobRef;
   lifecycleAlbum?: LifecycleAlbumRef;
+  lifecycleSource?: LifecycleSourceRef;
   /** The client the prior task belongs to (carried forward to the new task). */
   clientId: string | null;
   /** Current request revision (manual stage). rev = expectedRev + 1. */
@@ -636,6 +668,7 @@ export interface RequesterRevisionWithIntakeResult extends RequesterRevisionResu
 export async function projectLifecycleRequesterRevisionWithIntake(
   db: Kysely<Database>,
   input: RequesterRevisionWithIntakeProjection,
+  sourceStore: BlobStore | null = blobStoreFor(db),
 ): Promise<RequesterRevisionWithIntakeResult> {
   const { requestId, tenantId, priorTaskId, round, directive, sourceEventId, sourceChannelId, rawText, clientId, key } = input;
   const { expectedRev, rev } = input;
@@ -656,6 +689,11 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     ? source.message as Record<string, unknown> : null;
   const sourceImage = sourceMessage?.photo ?? sourceMessage?.document;
   const photoInput = lifecyclePhotoInput(input.sourceUpdate);
+  const sourceConfirmation = sourceCopyConfirmation(input.sourceUpdate);
+  if (Boolean(sourceConfirmation) !== Boolean(input.lifecycleSource) ||
+      (input.lifecycleSource && (input.lifecycleImage || input.lifecycleAlbum || !sourceConfirmation ||
+        sourceConfirmation.copy !== rawText || sourceConfirmation.copy.trim() !== directive)))
+    throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The source confirmation does not match this exact copy');
   if (input.lifecycleAlbum && (input.lifecycleImage || sourceImage ||
       sourceMessage?.text !== directive || input.lifecycleAlbum.updateId !== source?.update_id)) {
     throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The album source does not match this directive');
@@ -698,6 +736,19 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     }
     if (request.chat_id !== sourceChannelId) {
       throw new LifecycleProjectionConflict('WRONG_CHAT', 'The update chat does not match the request');
+    }
+    let reviewed: Awaited<ReturnType<typeof verifyReviewedSource>> | undefined;
+    if (input.lifecycleSource) {
+      if (!clientId) throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'Source client is missing');
+      try { reviewed = await verifyReviewedSource(trx, sourceStore, { tenantId, requestId, clientId,
+        chatId: sourceChannelId, ref: input.lifecycleSource, copy: rawText }); }
+      catch (error) {
+        if (error instanceof SourceConflict) throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', error.message);
+        throw error;
+      }
+      if (reviewed.upload.target?.requestId !== requestId || reviewed.upload.target.taskId !== priorTaskId ||
+          reviewed.upload.target.rev !== expectedRev || reviewed.confirmation.payloadHash !== input.sourceUpdateHash)
+        throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'Source review is bound to a different request revision');
     }
     if (input.lifecycleAlbum) {
       await checkAlbum(trx, tenantId, sourceChannelId, input.lifecycleAlbum, input.sourceUpdate);
@@ -783,7 +834,18 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     };
     let persisted: Awaited<ReturnType<typeof persistChatIntake>>;
     try {
-      persisted = await persistChatIntake(trx, { ...draft, tenantId }, { outboxState: 'recorded' });
+      persisted = await persistChatIntake(trx, { ...draft, tenantId,
+        ...(reviewed ? { reviewedSource: reviewed.evidence,
+          rawJson: { original: reviewed.upload.sourceUpdate, confirmation: reviewed.confirmation.sourceUpdate },
+          ...(reviewed.upload.variant ? { variant: reviewed.upload.variant } : {}),
+          exactCopy: [{ id: 'reviewed_source_copy', text: rawText, role: 'body', approved: true,
+            language: /[\u0600-\u06ff]/.test(rawText) ? 'ckb' : 'en', direction: /[\u0600-\u06ff]/.test(rawText) ? 'rtl' : 'ltr' }],
+          headlineEn: '', headlineCkb: '',
+          copyEn: /[\u0600-\u06ff]/.test(rawText) ? '' : rawText, copyCkb: /[\u0600-\u06ff]/.test(rawText) ? rawText : '',
+          designInstructions: `${String(parentPayload.designInstructions)}\n${reviewed.upload.instructions}`,
+          studioOptions: { ...draft.studioOptions,
+            revisionDirective: 'Replace the design copy with exactly the confirmed source copy. Preserve the other design requirements.' } } : {}),
+      }, { outboxState: 'recorded' });
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
         throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The source event already belongs to a different executor');
@@ -802,6 +864,8 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       .returning('id').executeTakeFirst();
     if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The new task acquired another request owner');
     if (input.lifecycleAlbum) await attachAlbum(trx, tenantId, newTaskId, input.lifecycleAlbum);
+    if (reviewed) await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
+      VALUES (${tenantId}::uuid,${newTaskId}::uuid,${reviewed.evidence.sourceSha256},'source_document') ON CONFLICT DO NOTHING`.execute(trx);
     if (input.lifecycleImage) {
       await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
         VALUES (${tenantId}::uuid, ${newTaskId}::uuid, ${input.lifecycleImage.sha256}, 'reference_image')`.execute(trx);

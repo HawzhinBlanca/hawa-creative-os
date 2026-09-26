@@ -19,6 +19,37 @@ export interface TelegramBridgeConfig {
 
 /** Default bound on one Telegram file transfer, in either direction. */
 export const TELEGRAM_FILE_TRANSFER_TIMEOUT_MS = 60_000;
+export const TELEGRAM_DOWNLOAD_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Count actual streamed bytes, even when Content-Length is absent or misleading. */
+async function boundedTelegramBody(response: Response, limit: number, signal: AbortSignal): Promise<Buffer> {
+  const declared = response.headers.get('content-length');
+  if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > limit)) {
+    void response.body?.cancel().catch(() => undefined); throw new Error('Telegram response exceeds the byte limit');
+  }
+  if (!response.body) throw new Error('Telegram response has no body');
+  const reader = response.body.getReader();
+  let abort: (() => void) | undefined;
+  const cancelled = new Promise<never>((_, reject) => {
+    abort = () => reject(new Error('Telegram download timed out'));
+    if (signal.aborted) abort(); else signal.addEventListener('abort', abort, { once: true });
+  });
+  const chunks: Buffer[] = []; let size = 0;
+  try {
+    for (;;) {
+      const chunk = await Promise.race([reader.read(), cancelled]);
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > limit) throw new Error('Telegram response exceeds the byte limit');
+      chunks.push(Buffer.from(chunk.value));
+    }
+    return Buffer.concat(chunks, size);
+  } finally {
+    if (abort) signal.removeEventListener('abort', abort);
+    // Cancellation itself must not let a broken remote stream hold intake indefinitely.
+    void reader.cancel().catch(() => undefined);
+  }
+}
 
 export interface TelegramUpdate {
   update_id: number;
@@ -428,23 +459,30 @@ export class TelegramBridgeDaemon {
    * Downloads an audio or voice file buffer from Telegram Bot API via getFile
    */
   async downloadFile(fileId: string): Promise<Buffer | null> {
-    if (!this.config.botToken) return null;
+    if (!this.config.botToken || typeof fileId !== 'string' || !fileId.trim() || fileId.length > 512) return null;
     try {
       // One deadline covers getFile, the file request and reading its body. Without it a single
       // stalled download held the intake that awaited it indefinitely.
       const signal = AbortSignal.timeout(this.config.downloadTimeoutMs ?? TELEGRAM_FILE_TRANSFER_TIMEOUT_MS);
-      const getFileUrl = `https://api.telegram.org/bot${this.config.botToken}/getFile?file_id=${fileId}`;
-      const res = await fetch(getFileUrl, { signal });
+      const getFileUrl = `https://api.telegram.org/bot${this.config.botToken}/getFile?file_id=${encodeURIComponent(fileId)}`;
+      const res = await fetch(getFileUrl, { signal, redirect: 'error' });
       if (!res.ok) return null;
-      const data = await res.json();
+      const data = JSON.parse((await boundedTelegramBody(res, 64 * 1024, signal)).toString('utf8'));
       if (!data.ok || !data.result?.file_path) return null;
+      const filePath = data.result.file_path;
+      if (typeof filePath !== 'string' || filePath.length > 1024 ||
+          !/^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+$/.test(filePath) ||
+          filePath.split('/').some(part => part === '.' || part === '..')) return null;
+      if (data.result.file_size !== undefined && (!Number.isSafeInteger(data.result.file_size) ||
+          data.result.file_size < 1 || data.result.file_size > TELEGRAM_DOWNLOAD_MAX_BYTES)) return null;
       const fileUrl = `https://api.telegram.org/file/bot${this.config.botToken}/${data.result.file_path}`;
-      const fileRes = await fetch(fileUrl, { signal });
+      const fileRes = await fetch(fileUrl, { signal, redirect: 'error' });
       if (!fileRes.ok) return null;
-      const arrayBuffer = await fileRes.arrayBuffer();
-      return Buffer.from(arrayBuffer);
-    } catch (err) {
-      console.warn('[TelegramBridge] Failed to download file:', err);
+      const bytes = await boundedTelegramBody(fileRes, TELEGRAM_DOWNLOAD_MAX_BYTES, signal);
+      return bytes.length ? bytes : null;
+    } catch {
+      // Transport errors can include the credential-bearing Telegram URL.
+      console.warn('[TelegramBridge] File download unavailable');
       return null;
     }
   }

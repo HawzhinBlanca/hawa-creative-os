@@ -401,3 +401,25 @@ describe('album collection notices', () => {
     expect(ctx.notices[0]).toMatchObject({key:'chatinbox:album-received:abc123',chatId:'555'});
   });
 });
+
+describe('source review notices', () => {
+  it('replays one stable copy-review notice after a journal crash without starting design', async () => {
+    const transport = vi.fn(async () => Response.json({ intakeStatus: 200, lifecycleAction: 'source-message',
+      chatId: '555', sourceMessage: 'PDF saved. Reply to the source with /use_source and corrected copy.', sourceNoticeKey: 'source-review:123' }));
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: transport });
+    const ctx = new FakeContext(); ctx.crashOnSet = 1;
+    await untilSettled(ctx, () => handleUpdate(ctx, input, client));
+    expect(transport).toHaveBeenCalledTimes(1); expect(ctx.lifecycleOpens).toHaveLength(0);
+    expect(ctx.lifecycleDecisions).toHaveLength(0); expect(ctx.notices).toHaveLength(2);
+    expect(ctx.notices[0]).toEqual(ctx.notices[1]);
+    expect(ctx.notices[0]).toMatchObject({ key: 'chatinbox:source-review:123', chatId: '555' });
+  });
+  it('refuses an unbounded or malformed source notice from Core', async () => {
+    for (const fields of [{ sourceMessage: 'x'.repeat(3001), sourceNoticeKey: 'source-review:123' },
+      { sourceMessage: 'Review this source', sourceNoticeKey: 'arbitrary-key' }]) {
+      const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: async () =>
+        Response.json({ intakeStatus: 200, lifecycleAction: 'source-message', chatId: '555', ...fields }) });
+      await expect(client.intake(update, 'legacy')).rejects.toThrow('invalid source notice');
+    }
+  });
+});

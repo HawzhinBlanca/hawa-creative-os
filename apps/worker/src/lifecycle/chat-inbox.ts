@@ -44,8 +44,9 @@ export type IntakeAnswer =
   | { kind: 'done'; intakeStatus: number; duplicate?: boolean;
       /** When mode=lifecycle and Core routed the update as a requester revision. */
       lifecycleAction?: 'open-request' | 'new-brief-required' | 'requester-revision' | 'requester-answer' |
-        'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message';
+        'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message' | 'source-message';
       albumMessage?: string; albumNoticeKey?: string;
+      sourceMessage?: string; sourceNoticeKey?: string;
       draft?: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'];
       requestId?: string; newTaskId?: string; round?: number; directive?: string;
       priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
@@ -134,6 +135,11 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
 
   const at = await ctx.now();
   if (done) {
+    if (done.lifecycleAction === 'source-message') {
+      if (!done.chatId || !done.sourceMessage || !done.sourceNoticeKey) throw new Error('Core returned an incomplete source notice');
+      ctx.sendNotice({ v: 1, key: `chatinbox:${done.sourceNoticeKey}`, chatId: done.chatId,
+        kind: 'text', class: 'critical', text: done.sourceMessage });
+    }
     if (done.lifecycleAction === 'album-message') {
       if (!done.chatId || !done.albumMessage || !done.albumNoticeKey) throw new Error('Core returned an incomplete album notice');
       ctx.sendNotice({ v: 1, key: `chatinbox:${done.albumNoticeKey}`, chatId: done.chatId,

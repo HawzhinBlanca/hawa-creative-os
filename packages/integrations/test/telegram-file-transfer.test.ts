@@ -103,6 +103,53 @@ describe('Telegram sendDocument', () => {
 });
 
 describe('Telegram downloadFile', () => {
+  it('refuses declared oversized files before requesting their bytes', async () => {
+    const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ok: true,
+      result: { file_path: 'documents/file.pdf', file_size: 20 * 1024 * 1024 + 1 } }));
+    await expect(new TelegramBridgeDaemon({ botToken }).downloadFile('large')).resolves.toBeNull();
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a chunked body as soon as the actual byte limit is exceeded', async () => {
+    const cancel = vi.fn();
+    let chunks = 0;
+    const stream = new ReadableStream<Uint8Array>({ pull(controller) {
+      if (chunks === 23) { controller.close(); return; }
+      chunks++; controller.enqueue(new Uint8Array(1024 * 1024));
+    }, cancel });
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ ok: true, result: { file_path: 'documents/file.pdf' } }))
+      .mockResolvedValueOnce(new Response(stream));
+    await expect(new TelegramBridgeDaemon({ botToken }).downloadFile('chunked')).resolves.toBeNull();
+    expect(cancel).toHaveBeenCalled();
+    expect(chunks).toBeLessThanOrEqual(23);
+  });
+
+  it.each(['../outside', 'https://elsewhere.invalid/file', 'documents/a?token=x', 'documents/%2e%2e/file'])
+  ('refuses a malformed provider file path: %s', async file_path => {
+    const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ok: true, result: { file_path } }));
+    await expect(new TelegramBridgeDaemon({ botToken }).downloadFile('file')).resolves.toBeNull();
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds a stalled response body as well as the fetch call', async () => {
+    const cancel = vi.fn();
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ ok: true, result: { file_path: 'voice/note.oga' } }))
+      .mockResolvedValueOnce(new Response(new ReadableStream({ pull() {}, cancel })));
+    await expect(new TelegramBridgeDaemon({ botToken, downloadTimeoutMs: 30 }).downloadFile('stalled')).resolves.toBeNull();
+    expect(cancel).toHaveBeenCalled();
+  }, 2000);
+
+  it('does not wait on broken stream cancellation when rejecting an oversized response', async () => {
+    const cancel = vi.fn(() => new Promise<void>(() => {}));
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ ok: true, result: { file_path: 'documents/source.pdf' } }))
+      .mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), { headers: { 'Content-Length': String(21 * 1024 * 1024) } }));
+    await expect(new TelegramBridgeDaemon({ botToken, downloadTimeoutMs: 30 }).downloadFile('file')).resolves.toBeNull();
+    expect(cancel).toHaveBeenCalledOnce();
+  }, 1000);
+
   it('gives up on a stalled download at its timeout instead of holding intake', async () => {
     stalledFetch();
     const bridge = new TelegramBridgeDaemon({ botToken, downloadTimeoutMs: 50 });

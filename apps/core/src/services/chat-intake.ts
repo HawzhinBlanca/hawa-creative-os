@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { type Kysely, type Database, TaskRepository, withRlsContext, sql } from '@hawa/db';
-import { CHANNEL_INGRESS_USER_ID, type BlobRef, type LifecycleAlbumRef } from '@hawa/contracts';
+import { CHANNEL_INGRESS_USER_ID, type BlobRef, type LifecycleAlbumRef, type LifecycleSourceRef, type ReviewedSourceEvidence } from '@hawa/contracts';
 
 export interface ChatIntake {
   tenantId?: string;
@@ -28,6 +28,9 @@ export interface ChatIntake {
   /** Core-retained image for a lifecycle open; only its verified blob reference enters Restate. */
   lifecycleImage?: BlobRef & { updateId: number };
   lifecycleAlbum?: LifecycleAlbumRef;
+  lifecycleSource?: LifecycleSourceRef;
+  /** Server-authored only after verification of the immutable source confirmation. */
+  reviewedSource?: ReviewedSourceEvidence;
   /** Optional studio generation parameters */
   studioOptions?: {
     tier?: 'fast' | 'quality';
@@ -247,6 +250,7 @@ export async function persistChatIntake(
       copyEn: input.copyEn || null, copyCkb: input.copyCkb || null,
       designInstructions: input.designInstructions, exactCopy: input.exactCopy,
       ...(input.lifecycleAlbum ? { lifecycleAlbum: input.lifecycleAlbum } : {}),
+      ...(input.reviewedSource ? { reviewedSource: input.reviewedSource } : {}),
       clientId: input.clientId, workflow: 'canva',
       designStudio,
       ...(input.isInstructionOnly ? { isInstructionOnly: true } : {}),

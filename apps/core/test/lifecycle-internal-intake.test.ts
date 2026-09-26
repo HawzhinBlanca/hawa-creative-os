@@ -288,7 +288,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
 
-  it('holds voice, PDF and unlinked single photos when the stored chat mode is lifecycle', async () => {
+  it('holds voice and unlinked photos and requests an explicit client for a PDF', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     const app = createApp({ db } as any);
@@ -302,8 +302,9 @@ describe('POST /v1/internal/telegram/intake', () => {
       delete (update.message as any).text;
       Object.assign(update.message, media);
       const result = await intake(app, update, 'lifecycle');
-      expect(result.body).toMatchObject({ intakeStatus: 422,
-        lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+      expect(result.body).toMatchObject('document' in media
+        ? { intakeStatus: 422, lifecycleAction: 'source-message' }
+        : { intakeStatus: 422, lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
       expect(await tasksInChat(chat)).toHaveLength(0);
     }
   });
@@ -347,7 +348,8 @@ describe('POST /v1/internal/telegram/intake', () => {
     if (fault === 'mixed') message.photo = [{ file_id: 'other-image' }];
     const bytes = fault === 'oversized-bytes' ? Buffer.alloc(20 * 1024 * 1024 + 1) : Buffer.from('%PDF-1.7\nnot an image');
     const bridge = { downloadFile: vi.fn(async () => bytes), dispatchOutboundMessage: vi.fn() };
-    const expected = { intakeStatus: 422, lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' };
+    const expected = fault === 'pdf' ? { intakeStatus: 422, lifecycleAction: 'source-message' }
+      : { intakeStatus: 422, lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' };
     expect((await intake(createApp({ db, telegramBridge: bridge } as any), update)).body).toMatchObject(expected);
     expect(bridge.downloadFile).toHaveBeenCalledTimes(fault.endsWith('bytes') ? 1 : 0);
     expect(await tasksInChat(chat)).toHaveLength(0);

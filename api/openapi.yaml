@@ -378,6 +378,51 @@ paths:
       responses:
         '201': {description: Draft DNA version created, content: {application/json: {schema: {$ref: '../schemas/ClientDNA.schema.json'}}}}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/source-files:
+    get:
+      tags: [Clients]
+      operationId: listRetainedTelegramPdfs
+      summary: Inspect the latest 20 retained Telegram PDFs, including stopped extraction
+      description: Requires an office session and current client access. Returns source identities and review state without raw messages, sender identities or extracted copy. Copy review is not design or knowledge approval.
+      parameters: [{$ref: '#/components/parameters/ClientId'}]
+      responses:
+        '200':
+          description: Retained originals in this client
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clientId, items]
+                properties:
+                  clientId: {type: string, format: uuid}
+                  items:
+                    type: array
+                    maxItems: 20
+                    items:
+                      type: object
+                      required: [clientId, updateId, sourceSha256, createdAt, documentId, stage, message]
+                      properties:
+                        clientId: {type: string, format: uuid}
+                        updateId: {type: integer, minimum: 1}
+                        sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+                        createdAt: {type: string, format: date-time}
+                        documentId: {type: [string, 'null'], format: uuid}
+                        stage: {type: string, enum: [retained, ready, copy_confirmed, extraction_stopped]}
+                        message: {type: [string, 'null']}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/source-files/{updateId}/content:
+    get:
+      tags: [Clients]
+      operationId: downloadRetainedTelegramPdf
+      summary: Download the hash-verified original even if PDF extraction stopped
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: updateId, in: path, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: Original PDF attachment with private no-store caching, content: {application/pdf: {schema: {type: string, format: binary}}}}
+        '404': {description: Source or client unavailable to the current session}
+        '503': {description: Original bytes unavailable or corrupt}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/clients/{clientId}/documents:
     post:
       tags: [Clients]

@@ -152,6 +152,10 @@ export interface DocumentReceipt {
   id: string; clientId: string; sourceSha256: string; extractionSha256: string;
   extractorVersion: string; createdAt: string; contentUrl: string;
 }
+export interface RetainedSourceFile {
+  clientId: string; updateId: number; sourceSha256: string; createdAt: string; documentId: string | null;
+  stage: 'retained' | 'ready' | 'copy_confirmed' | 'extraction_stopped'; message: string | null;
+}
 export interface SavedDocumentInspection extends Omit<DocumentInspection, 'sourceSaved'> {
   sourceSaved: true; receipt: DocumentReceipt;
 }
@@ -343,6 +347,13 @@ class HawaApiClient {
       this.request<SavedDocumentInspection>(`/clients/${encodeURIComponent(clientId)}/documents`,
         { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file, signal }),
     documents: (clientId: string) => this.request<{ items: DocumentReceipt[] }>(`/clients/${encodeURIComponent(clientId)}/documents`),
+    sourceFiles: (clientId: string, signal?: AbortSignal) =>
+      this.request<{ clientId: string; items: RetainedSourceFile[] }>(`/clients/${encodeURIComponent(clientId)}/source-files`, { signal }),
+    sourceFileContent: async (clientId: string, updateId: number, signal?: AbortSignal): Promise<Blob> => {
+      const response = await fetch(`/v1/clients/${encodeURIComponent(clientId)}/source-files/${updateId}/content`, { headers: getAuthHeaders(), signal });
+      if (!response.ok) throw new ApiError(response.status, 'The retained original could not be downloaded.');
+      return response.blob();
+    },
     document: (clientId: string, id: string, signal?: AbortSignal) =>
       this.request<SavedDocumentInspection>(`/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}`, { signal }),
     documentKnowledge: (clientId: string, id: string) =>
