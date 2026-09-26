@@ -44,7 +44,8 @@ export type IntakeAnswer =
   | { kind: 'done'; intakeStatus: number; duplicate?: boolean;
       /** When mode=lifecycle and Core routed the update as a requester revision. */
       lifecycleAction?: 'open-request' | 'new-brief-required' | 'requester-revision' | 'requester-answer' |
-        'request-choice-required' | 'revision-blocked' | 'park-update';
+        'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message';
+      albumMessage?: string; albumNoticeKey?: string;
       draft?: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'];
       requestId?: string; newTaskId?: string; round?: number; directive?: string;
       priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
@@ -133,6 +134,11 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
 
   const at = await ctx.now();
   if (done) {
+    if (done.lifecycleAction === 'album-message') {
+      if (!done.chatId || !done.albumMessage || !done.albumNoticeKey) throw new Error('Core returned an incomplete album notice');
+      ctx.sendNotice({ v: 1, key: `chatinbox:${done.albumNoticeKey}`, chatId: done.chatId,
+        kind: 'text', class: 'critical', text: done.albumMessage });
+    }
     if (done.lifecycleAction === 'park-update') {
       if (done.code !== 'LIFECYCLE_MEDIA_NOT_ADMITTED' || !done.reason) {
         throw new Error('Core returned an invalid lifecycle media hold');

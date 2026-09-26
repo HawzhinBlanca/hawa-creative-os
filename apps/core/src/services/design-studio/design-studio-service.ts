@@ -1,3 +1,4 @@
+import { orderedAlbumImages } from '../lifecycle-album.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -261,13 +262,14 @@ export class DesignStudioService {
     // verified request identity, so only images attached to this task may enter its design.
     if (source?.request_id) {
       const refs = await this.tx(s, async (db) =>
-        (await sql<{ sha256: string; media_type: string }>`SELECT f.sha256, b.media_type
+        (await sql<{ sha256: string; media_type: string; size: string }>`SELECT f.sha256, b.media_type, b.size
           FROM hawa.task_files f JOIN hawa.blobs b ON b.sha256 = f.sha256
           WHERE f.tenant_id = ${s.tenantId}::uuid AND f.task_id = ${taskId}::uuid
             AND f.role = 'reference_image'
           ORDER BY f.created_at, f.sha256`.execute(db)).rows);
       if (refs.length && !this.blobs) throw new RequestOwnedImageUnavailable('A request-owned image needs its durable blob store');
-      for (const ref of refs) {
+      if (payload.lifecycleAlbum) found.length = 0;
+      for (const ref of orderedAlbumImages(payload.lifecycleAlbum, refs)) {
         if (!['image/png', 'image/jpeg', 'image/webp'].includes(ref.media_type)) {
           throw new Error('A request-owned image has an unsupported stored media type');
         }

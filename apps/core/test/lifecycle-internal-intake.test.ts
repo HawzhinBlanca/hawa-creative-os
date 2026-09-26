@@ -268,14 +268,13 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
 
-  it('holds voice, PDF and album parts when the stored chat mode is lifecycle', async () => {
+  it('holds voice, PDF and unlinked single photos when the stored chat mode is lifecycle', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     const app = createApp({ db } as any);
     for (const media of [
       { voice: { file_id: 'voice-fixture', duration: 5 }, caption: 'The exact spoken brief' },
       { document: { file_id: 'pdf-fixture', mime_type: 'application/pdf', file_name: 'brand.pdf' }, caption: 'Use these guidelines' },
-      { photo: [{ file_id: 'album-fixture' }], media_group_id: 'album-1' },
       { photo: [{ file_id: 'captionless-fixture' }] },
     ]) {
       const chat = chatId();

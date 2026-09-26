@@ -1,5 +1,54 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — confirmed photo albums through one owned request (ADR-068)
+
+Core now saves each album part before any task or paid design starts. The sender
+replies to a stored photo with `/use_album` after all photos have finished sending.
+A transaction freezes the ordered selection, original captions/reply context and
+confirmation source hash. The prepared brief or exact current request reply then
+uses the existing lifecycle owner. Scope includes tenant, chat, sender and topic;
+the new manifest contains only hashes, media types and sizes. Projection verifies
+the frozen record and attaches all images to the child/new task atomically. Both
+Studio and the active Canva planner verify and consume that task's manifest order.
+Captionless request replies preserve the existing exact copy.
+
+The collection admits two to ten supported still photos, at most 20 MiB per image
+and 100 MiB total. Received identities persist before network I/O, so a failed
+download cannot disappear from the confirmed selection. Mixed media, conflicting
+captions/replies, changed source identity and partial/oversized collections are
+refused. Late photos cannot mutate a frozen album; another confirmation cannot
+create a second design. Historical media holds remain held on replay. Recorded
+parts/confirmations survive flag rollback, and retained images remain reachable
+by garbage collection. Migration 040 supplies collection/reply indexes and the
+blob-reference view. Requirements: FR-004, FR-011, FR-060, NFR-001 and NFR-006.
+
+**Verification:** final affected Core/worker/planner/schema checks passed **6 files /
+110 tests**. Two subsequent size/count checks brought the album file to **11/11**
+passing tests. Full source/test typecheck, repository lint and zero-secret scan
+passed. The initial test run exposed a malformed projection fixture, an obsolete
+album-hold assertion and a planner assertion that omitted existing approved brand
+examples; these were corrected and the affected tests rerun. No red-before proof
+is claimed for this new feature.
+
+The isolated Docker drill `R1.S3.ALBUM --poller worker` passed **1 scenario /
+10 invariants** at **2026-09-26 19:09 UTC** (40 scenarios skipped by selection).
+Two album parts created no child before confirmation. Core was killed after
+freezing the album and before child projection. Restart plus a second Restate key
+produced one child task, one requester projection, two child-only image bindings,
+one download per photo and one successful revision planner call carrying both
+content hashes. Simulated office review and approved delivery reached request
+rev 8 `delivered`, child `complete`; both intakes completed, no model calls were
+unmatched, and no ready outbox work remained. `R07_ALBUM_DRILL.json` preserves the
+report and tested source hashes. Exact source sealing and its full regression
+suite follow this source/evidence commit.
+
+**Limits:** explicit confirmation defines the selected set, not proof that every
+intended photo reached Telegram/Core. The local image/model/provider fakes and
+simulated office approval do not establish visual quality or live provider use.
+Voice, documents/PDFs, real Workspace/provider workflow, clean-host admission and
+independent human quality remain open. No production flag or deployment changed.
+Requester/operation instructions are in `runbooks/CONFIRMED_PHOTO_ALBUMS.md`.
+
 ## 2026-09-26 — captionless photos through exact current replies (ADR-067)
 
 A single photo without a caption can now continue a revision or clarification

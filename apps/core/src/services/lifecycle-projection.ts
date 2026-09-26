@@ -1,12 +1,13 @@
 import { officeReviewUrl } from './desk-review-link.js';
 import { createHash } from 'node:crypto';
-import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef } from '@hawa/contracts';
+import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef, type LifecycleAlbumRef } from '@hawa/contracts';
 import { parseCompleteRevisionRequest, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
 import { IdempotencyConflictError, OUTBOX_SEND_MARK_SOURCE, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
 import { linkedLifecycleReplies, readNewBriefDecision, readRevisionPhotoDecision } from './lifecycle-chat-target.js';
 import { lifecyclePhotoInput } from './lifecycle-photo.js';
+import { verifyAlbumSnapshot } from './lifecycle-album.js';
 import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage } from './canva-status-message.js';
@@ -184,6 +185,24 @@ function canonical(value: unknown): string {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
 }
 
+async function checkAlbum(trx: Kysely<Database>, tenantId: string, chatId: string,
+  ref: LifecycleAlbumRef, sourceUpdate?: unknown): Promise<void> {
+  const snapshot = await verifyAlbumSnapshot(trx, tenantId, ref, sourceUpdate);
+  if (!snapshot || snapshot.chatId !== chatId)
+    throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The album differs from its confirmed source');
+  for (const image of ref.images) {
+    const blob = (await sql<{ size: string; media_type: string }>`SELECT size, media_type
+      FROM hawa.blobs WHERE sha256 = ${image.sha256}`.execute(trx)).rows[0];
+    if (!blob || Number(blob.size) !== image.size || blob.media_type !== image.mediaType)
+      throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'A confirmed album image is not stored');
+  }
+}
+
+async function attachAlbum(trx: Kysely<Database>, tenantId: string, taskId: string, ref: LifecycleAlbumRef) {
+  for (const image of ref.images) await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
+    VALUES (${tenantId}::uuid, ${taskId}::uuid, ${image.sha256}, 'reference_image') ON CONFLICT DO NOTHING`.execute(trx);
+}
+
 /** One transaction makes the task, its recorded outbox row, ownership and replay receipt inseparable. */
 export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLifecycleProjection): Promise<OpenLifecycleResult> {
   const { requestId, tenantId, draft, key } = input;
@@ -206,6 +225,14 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
     const prior = await trx.selectFrom('requests').select(['rev'])
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
     if (prior) throw new LifecycleProjectionConflict('STALE_REVISION', `Request already has revision ${prior.rev}`);
+
+    if (draft.lifecycleAlbum) {
+      const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleAlbum.updateId);
+      if (draft.lifecycleImage || !decision || decision.requestId !== requestId ||
+          decision.chatId !== draft.sourceChannelId || canonical(decision.draft) !== canonical(draft))
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The album is not bound to this new brief');
+      await checkAlbum(trx, tenantId, draft.sourceChannelId, draft.lifecycleAlbum);
+    }
 
     if (draft.lifecycleImage) {
       const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleImage.updateId);
@@ -248,6 +275,7 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
       .where('tenant_id', '=', tenantId).where('id', '=', taskId).where('request_id', 'is', null)
       .returning('id').executeTakeFirst();
     if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The task acquired another request owner');
+    if (draft.lifecycleAlbum) await attachAlbum(trx, tenantId, taskId, draft.lifecycleAlbum);
     if (draft.lifecycleImage) {
       await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
         VALUES (${tenantId}::uuid, ${taskId}::uuid, ${draft.lifecycleImage.sha256}, 'reference_image')`.execute(trx);
@@ -580,6 +608,7 @@ export interface RequesterRevisionWithIntakeProjection {
   sourceUpdate: unknown;
   /** Core-stored image for this exact update and selected request, if present. */
   lifecycleImage?: BlobRef;
+  lifecycleAlbum?: LifecycleAlbumRef;
   /** The client the prior task belongs to (carried forward to the new task). */
   clientId: string | null;
   /** Current request revision (manual stage). rev = expectedRev + 1. */
@@ -623,6 +652,10 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     ? source.message as Record<string, unknown> : null;
   const sourceImage = sourceMessage?.photo;
   const photoInput = lifecyclePhotoInput(input.sourceUpdate);
+  if (input.lifecycleAlbum && (input.lifecycleImage || sourceImage ||
+      sourceMessage?.text !== directive || input.lifecycleAlbum.updateId !== source?.update_id)) {
+    throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The album source does not match this directive');
+  }
   if (Boolean(sourceImage) !== Boolean(input.lifecycleImage)) {
     throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'A requester photo requires its stored image decision');
   }
@@ -661,6 +694,15 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     }
     if (request.chat_id !== sourceChannelId) {
       throw new LifecycleProjectionConflict('WRONG_CHAT', 'The update chat does not match the request');
+    }
+    if (input.lifecycleAlbum) {
+      await checkAlbum(trx, tenantId, sourceChannelId, input.lifecycleAlbum, input.sourceUpdate);
+      const reply = sourceMessage?.reply_to_message as { message_id?: unknown } | undefined;
+      if (reply) {
+        const links = await linkedLifecycleReplies(trx, tenantId, sourceChannelId, String(reply.message_id));
+        if (links.length !== 1 || links[0].requestId !== requestId || links[0].rev !== expectedRev)
+          throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The album reply no longer names the current request');
+      }
     }
     if (input.lifecycleImage) {
       if (photoInput?.captionless) {
@@ -718,6 +760,7 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     const draft: ChatIntake = {
       platform: 'telegram', sourceEventId, sourceChannelId,
       rawText, rawJson: input.sourceUpdate, title: directive.trim().slice(0, 200),
+      ...(input.lifecycleAlbum ? { lifecycleAlbum: input.lifecycleAlbum } : {}),
       designInstructions: `${parentPayload.designInstructions}\n${question
         ? `Answer to "${question.text}": ${answerText}` : `Revision: ${directive.trim()}`}`,
       exactCopy: parentPayload.exactCopy,
@@ -754,6 +797,7 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       .where('tenant_id', '=', tenantId).where('id', '=', newTaskId).where('request_id', 'is', null)
       .returning('id').executeTakeFirst();
     if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The new task acquired another request owner');
+    if (input.lifecycleAlbum) await attachAlbum(trx, tenantId, newTaskId, input.lifecycleAlbum);
     if (input.lifecycleImage) {
       await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
         VALUES (${tenantId}::uuid, ${newTaskId}::uuid, ${input.lifecycleImage.sha256}, 'reference_image')`.execute(trx);

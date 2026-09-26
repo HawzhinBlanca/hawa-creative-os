@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "limits": "Disposable local stack, fake Telegram/model/Canva/Drive/Sheets; approval simulated by the test, not independent human creative acceptance. No production deployment.",
+  "sourceFileSha256": {
+    "apps/core/src/routes/lifecycle-internal.routes.ts": "f7e9a9b5d4f016df570bd81c63a6023f132c7e9b5ef5766064bcf9d4a0bb44d9",
+    "apps/core/src/services/lifecycle-album.ts": "071993c1156202b73968fd5fdabe8644b10e1de4a130b2f97fb426197ec12e43",
+    "apps/core/src/services/lifecycle-photo.ts": "80fcf88c1097dfb77d42e058fb00c8fe722452d4e3d7c35210154185d52369ef",
+    "apps/core/src/services/lifecycle-projection.ts": "17594c2be002ef7ffdc844c9d112f101fcb1cab65d06729f5b82d9648b6cda9a",
+    "apps/core/src/services/chat-intake.ts": "758ea8066a1946bde8ca2d87301191da8f9456d0f4b011666b1340221fff6a35",
+    "apps/core/src/services/canva-design-planner.ts": "688498de6c7ac895fa022fdf6959844e711456d3be9d781fe3dff561c0a1901e",
+    "apps/core/src/services/design-studio/design-studio-service.ts": "d60d982921321f16b6050612d6a9e7ac58f48583d24246fab0bfe5bc2e384fac",
+    "apps/worker/src/lifecycle/chat-inbox.ts": "94a41b9728bc56efa57367a66e946d2f1ba366028548839d093f515b7df98906",
+    "apps/worker/src/lifecycle/core-client.ts": "78de5ef8918caf63399f5f421b0da526a605338854e4408c68d3a9da350a3b05",
+    "apps/worker/src/lifecycle/request-lifecycle.ts": "47f17ceea311b2454e7e067fdd5c147c5a6dc8cb0ea3be69118dec5f14a2cb68",
+    "packages/contracts/src/lifecycle-album.ts": "b246658a51612d0e14e00dc2a5cb19430d3ec95e55c99340cccca1a5590aeaaf",
+    "packages/db/migrations/040_lifecycle_album_retention.sql": "368a18b5f3fa7e0fe258d2054d427f15db57ab02ff3f1c3e5ab4dfadf4e1f7b3",
+    "packages/testkit/chaos/chaos.test.ts": "87a88e6398480c7e8ae89d484d96cdf843afec54ae94871184e43f594d3a90f7"
+  },
+  "run": {
+    "finishedAt": "2026-09-26T19:09:59.392Z",
+    "telegramPoller": "worker",
+    "totalMs": 66793,
+    "peakMemoryMiB": {
+      "hawa-chaos-core-1": 102,
+      "hawa-chaos-worker-blue-1": 65,
+      "hawa-chaos-postgres-1": 82,
+      "hawa-chaos-restate-1": 615,
+      "hawa-chaos-fakes-1": 74
+    },
+    "peakTotalMiB": 937,
+    "uncoveredModelCalls": [],
+    "scenarios": [
+      {
+        "name": "R1.S3.ALBUM",
+        "what": "flagged chat: album photo input survives Core SIGKILL before task projection",
+        "ms": 21286,
+        "invariants": [
+          {
+            "name": "second revision photo update accepted for replay",
+            "ok": true,
+            "detail": "HTTP 202"
+          },
+          {
+            "name": "one owned child task after the office revision",
+            "ok": true,
+            "detail": "{\"tasks\":[{\"id\":\"892e703f-9afb-44c7-96ea-2e15c54e3c57\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"c42994d4-aa38-4731-9e6f-a2f24b0ce01b\",\"state\":\"complete\",\"version\":\"8\"}],\"state\":{\"current_task_id\":\"c42994d4-aa38-4731-9e6f-a2f24b0ce01b\",\"rev\":\"8\",\"owner\":\"restate\",\"stage\":\"delivered\"}}"
+          },
+          {
+            "name": "requester revision projection recorded exactly once",
+            "ok": true,
+            "detail": "[{\"rev\":\"1\"},{\"rev\":\"2\"},{\"rev\":\"3\"},{\"rev\":\"4\"},{\"rev\":\"5\"},{\"rev\":\"6\"},{\"rev\":\"7\"},{\"rev\":\"8\"}]"
+          },
+          {
+            "name": "all selected photos bound only to the child task",
+            "ok": true,
+            "detail": "[{\"task_id\":\"c42994d4-aa38-4731-9e6f-a2f24b0ce01b\",\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"role\":\"reference_image\",\"size\":\"1024\",\"media_type\":\"image/jpeg\"},{\"task_id\":\"c42994d4-aa38-4731-9e6f-a2f24b0ce01b\",\"sha256\":\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\",\"role\":\"reference_image\",\"size\":\"1025\",\"media_type\":\"image/jpeg\"}]"
+          },
+          {
+            "name": "hash-bound photo decision, with no image bytes in the event",
+            "ok": true,
+            "detail": "{\"chatId\":\"9300001\",\"source\":{\"message\":{\"chat\":{\"id\":9300001,\"type\":\"private\"},\"date\":1790449782,\"from\":{\"id\":9100001,\"is_bot\":false,\"first_name\":\"Chaos\"},\"text\":\"/use_album\",\"message_id\":104,\"reply_to_message\":{\"message_id\":102}},\"update_id\":90449763303},\"snapshot\":{\"ref\":{\"images\":[{\"size\":1024,\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"mediaType\":\"image/jpeg\"},{\"size\":1025,\"sha256\":\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\",\"mediaType\":\"image/jpeg\"}],\"sha256\":\"84aae7711b96d70a0c66201dbc51e9420a2be92c47e31ef9e4f1dd8ece17a037\",\"updateId\":90449763303},\"chatId\":\"9300001\",\"update\":{\"message\":{\"chat\":{\"id\":9300001,\"type\":\"private\"},\"date\":1790449782,\"from\":{\"id\":9100001,\"is_bot\":false,\"first_name\":\"Chaos\"},\"text\":\"Please use this photo as the reference and change the background to navy.\",\"message_id\":104,\"album_source\":[{\"hash\":\"22a7cc31492459c7361d8519c7d11a4b347f10d0ea5a229b764347411149a6b0\",\"updateId\":90449763301},{\"hash\":\"7a97c3c18c71c0674812045825115c4cf716cd2c87dc1107412d24f597117fed\",\"updateId\":90449763302}],\"reply_to_message\":{\"message_id\":5004}},\"update_id\":90449763303}}}"
+          },
+          {
+            "name": "one download per photo and no parked update across kill and replay",
+            "ok": true,
+            "detail": "downloads=2 parked=0"
+          },
+          {
+            "name": "both ChatInbox invocations completed",
+            "ok": true,
+            "detail": "[{\"id\":\"inv_1hvUuXij6tHU1XrphGCVDSZOmouagVEspV\",\"status\":\"completed\",\"idempotency_key\":\"tg-90449763303\"},{\"id\":\"inv_1hvUuXij6tHU6xCIyB0kRVKG17Isidnabx\",\"status\":\"completed\",\"idempotency_key\":\"chaos-revision-photo-replay-90449763303\"}]"
+          },
+          {
+            "name": "revised draft passes simulated office review and reaches approved delivery",
+            "ok": true,
+            "detail": "{\"childState\":\"complete\",\"request\":{\"current_task_id\":\"c42994d4-aa38-4731-9e6f-a2f24b0ce01b\",\"rev\":\"8\",\"owner\":\"restate\",\"stage\":\"delivered\"},\"outcome\":\"CANVA_DRAFT_READY_FOR_VISUAL_REVIEW\"}"
+          },
+          {
+            "name": "the planner received every child photo by content hash",
+            "ok": true,
+            "detail": "[{\"seq\":1,\"provider\":\"openai\",\"route\":\"canva_design_plan\",\"model\":\"gpt-6-astra\",\"fingerprint\":\"c7f5f13f06c0a24dbd18796d7d4d8763b37760774ac717e9fbd5a3a39b57e373\",\"status\":200,\"at\":\"2026-09-26T19:09:37.036Z\"},{\"seq\":2,\"provider\":\"openai\",\"route\":\"canva_design_plan\",\"model\":\"gpt-6-astra\",\"fingerprint\":\"dc21cf366ec40da9bcde3af10ebb96320be322c4d353d705f5308391e84f70a5\",\"status\":200,\"imageSha256\":[\"31ca6200fae5a9cb339df35cf5886c0a0ca9d97c9edfbdc5f6c5034e34d849df\",\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"a7b481ce29ba4cbe094d706c39e4a45c5b64e06fb4649d20555505ca0a776079\"],\"at\":\"2026-09-26T19:09:49.153Z\"}]"
+          },
+          {
+            "name": "only future lifecycle reminders remain scheduled",
+            "ok": true,
+            "detail": "{\"unfinished\":[{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"}],\"readyOutbox\":\"0\"}"
+          }
+        ],
+        "events": [
+          "office revision: HTTP 201",
+          "album reply to confirmed notice 5004",
+          "saved album updates 90449763301, 90449763302; no child before confirmation",
+          "revision photo update 90449763303 in request fb03fade-2c34-566b-a9c9-4c2572b13c86",
+          "killed core after album confirmation, before child task projection",
+          "child task c42994d4-aa38-4731-9e6f-a2f24b0ce01b after restart",
+          "same update under a second Restate key: HTTP 202",
+          "child design outcome: CANVA_DRAFT_READY_FOR_VISUAL_REVIEW",
+          "office approval of revised draft: HTTP 201",
+          "approved revised draft delivery: HTTP 202"
+        ]
+      }
+    ]
+  }
+}

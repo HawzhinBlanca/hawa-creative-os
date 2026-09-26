@@ -19,12 +19,14 @@ import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, parseBlobRef, type DeliveryOutcome } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, parseBlobRef, parseLifecycleAlbumRef, type DeliveryOutcome } from '@hawa/contracts';
 import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
+import { AlbumConflict, albumMessage, isAlbumConfirmation, hasAlbum, readAlbumPart, partReply, assertAlbumSource,
+  confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot } from '../services/lifecycle-album.js';
 import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log, requestIdHeaders } from '../logging.js';
@@ -113,6 +115,8 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
       ((options as any).previews !== undefined && (!Number.isInteger((options as any).previews) || (options as any).previews < 1 || (options as any).previews > 4)) ||
       ((options as any).holdForSelection !== undefined && typeof (options as any).holdForSelection !== 'boolean'))) return null;
   const image = d.lifecycleImage;
+  const album = d.lifecycleAlbum === undefined ? undefined : parseLifecycleAlbumRef(d.lifecycleAlbum);
+  if ((d.lifecycleAlbum !== undefined && !album) || (image && album)) return null;
   const imageRef = image === undefined ? undefined : parseBlobRef(image);
   if (image !== undefined && (!imageRef || !Number.isSafeInteger((image as any).updateId) ||
       (image as any).updateId <= 0 ||
@@ -131,6 +135,7 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
     ...(d.designStudio !== undefined ? { designStudio: d.designStudio as boolean } : {}),
     ...(options ? { studioOptions: options as ChatIntake['studioOptions'] } : {}),
     ...(imageRef ? { lifecycleImage: { ...imageRef, updateId: (image as { updateId: number }).updateId } } : {}),
+    ...(album ? { lifecycleAlbum: album } : {}),
   };
 }
 
@@ -157,10 +162,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
 
   internal('/telegram/intake', async (c) => {
     const body = await readBody(c);
-    const update = body?.update;
-    if (!isUpdate(update)) return problem(c, 400, 'Invalid update', 'The body must carry a Telegram update with a positive update_id');
+    const incoming = body?.update;
+    if (!isUpdate(incoming)) return problem(c, 400, 'Invalid update', 'The body must carry a Telegram update with a positive update_id');
+    let preparedUpdate: UpdateLike = incoming;
     // 2.3 adds the lifecycle's decide mode. Unknown modes are refused explicitly.
-    const mode = body?.mode ?? 'legacy';
+    let mode = body?.mode ?? 'legacy';
     if (mode !== 'legacy' && mode !== 'lifecycle') {
       return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
     }
@@ -173,6 +179,64 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // Intake refuses while the office has switched Telegram off; the update waits in its chat for the
     // switch, as it waited in Telegram when Core polled. Asked here so the answer is not a retry.
     if (await intakeRefused(channelKillSwitches, 'telegram')) return handled(503, { code: 'INTAKE_PAUSED' });
+
+    let admittedAlbum: AlbumSnapshot | undefined;
+    if (db) {
+      try {
+        await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+          (trx) => assertAlbumSource(trx, DEFAULT_TENANT_ID, preparedUpdate));
+      } catch (error) {
+        if (error instanceof AlbumConflict) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        throw error;
+      }
+    }
+    const albumPart = albumMessage(preparedUpdate);
+    if (albumPart || isAlbumConfirmation(preparedUpdate)) {
+      if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+      const tx = <T>(fn: (trx: import('@hawa/db').Kysely<import('@hawa/db').Database>) => Promise<T>) =>
+        withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, fn);
+      const source = preparedUpdate;
+      const chatId = chatOf(source);
+      const msg = source.message as Record<string, unknown>;
+      const senderId = String((msg.from as { id?: unknown } | undefined)?.id ?? '');
+      const senderAllowed = !ctx.isProduction || ctx.telegramIntakeUsers.includes('*') ||
+        process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*' || ctx.telegramIntakeUsers.includes(senderId);
+      const reply = (answer: { status: number; message: string; noticeKey: string }) =>
+        handled(answer.status, { lifecycleAction: 'album-message', chatId,
+          albumMessage: answer.message, albumNoticeKey: answer.noticeKey });
+      try {
+        if (albumPart) {
+          const priorPart = await tx((trx) => readAlbumPart(trx, DEFAULT_TENANT_ID, source));
+          if (priorPart) return reply(partReply(priorPart));
+          const priorRouting = await tx((trx) => readRoutingRefusal(trx, DEFAULT_TENANT_ID, source.update_id));
+          const owned = mode === 'lifecycle' || lifecycleOwnsChat(chatId) ||
+            await tx((trx) => hasAlbum(trx, DEFAULT_TENANT_ID, chatId, String(albumPart.media_group_id)));
+          if (owned && !priorRouting) {
+            if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+            const old = await createTelegramUpdateState(ctx).telegramUpdateHandled(chatId, String(source.update_id));
+            if (old) return handled(200, { duplicate: true, ...(old.taskId ? { taskIds: [old.taskId] } : {}) });
+            return reply(await retainAlbumPart(tx, DEFAULT_TENANT_ID, source, blobStoreFor(db, ctx.options?.blobStore),
+              (id) => ctx.telegramBridge?.downloadFile(id) ?? Promise.resolve(null)));
+          }
+        } else {
+          if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+          const confirmed = await tx((trx) => confirmAlbum(trx, DEFAULT_TENANT_ID, source));
+          if (confirmed.reply) return reply(confirmed.reply);
+          admittedAlbum = confirmed.snapshot;
+          if (!admittedAlbum) throw new Error('Album confirmation has no stored result');
+          preparedUpdate = normalizedAlbumUpdate(admittedAlbum);
+          mode = 'lifecycle';
+          await chaosPoint('core.intake.after-album-confirmation', { updateId: source.update_id, chat: chatId });
+        }
+      } catch (error) {
+        if (error instanceof AlbumConflict) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        if (error instanceof Error && error.message === 'ALBUM_STORE_UNAVAILABLE') return handled(503, { code: 'NOT_CONFIGURED' });
+        if (error instanceof Error && error.message === 'ALBUM_PHOTO_UNAVAILABLE') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
+        throw error;
+      }
+    }
+
+    const update = preparedUpdate;
 
     // A decision must replay even if the flag changed after the first answer was lost.
     const sourceChat = chatOf(update);
@@ -349,7 +413,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             if (links.length > 1) return refuseWithReceipt('AMBIGUOUS_REQUEST');
             // An explicit new brief may coexist with a waiting request. A reply to a lifecycle
             // notice always remains bound to that notice, including a stale reply.
-            const mayOpen = lifecycleOwnsChat(chatId) && Boolean(msg) && !replyMessageId &&
+            const mayOpen = (lifecycleOwnsChat(chatId) || Boolean(admittedAlbum)) && Boolean(msg) && !replyMessageId &&
               (Boolean(newCommand) || waiting.length === 0);
             if (mayOpen) {
               const classification = classifyWithHeuristics(newBriefText, false, false);
@@ -393,7 +457,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     if (photo.kind === 'unsupported') return holdMedia();
                     lifecycleImage = { ...photo.ref, updateId: update.update_id };
                   }
-                  const draft = openDraft({ ...prepared, ...(lifecycleImage ? { lifecycleImage } : {}) }, requestId);
+                  const draft = openDraft({ ...prepared, ...(lifecycleImage ? { lifecycleImage } : {}),
+                    ...(admittedAlbum ? { lifecycleAlbum: admittedAlbum.ref } : {}) }, requestId);
                   if (!draft) return handled(422, { code: 'INVALID_BRIEF' });
                   const stored = await withRlsContext(db,
                     { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
@@ -457,6 +522,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   round, directive, sourceEventId, sourceChannelId: chatId,
                   rawText: directive, sourceUpdateHash: payloadHash, sourceUpdate: update,
                   ...(lifecycleImage ? { lifecycleImage } : {}),
+                  ...(admittedAlbum ? { lifecycleAlbum: admittedAlbum.ref } : {}),
                   clientId: openRequest.client_id,
                   ...(questionId ? { questionId } : {}),
                   expectedRev, rev: nextRev, key,
@@ -471,7 +537,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 });
               }
             }
-            if (photoInput) return holdMedia();
+            if (photoInput || admittedAlbum) return holdMedia();
             // Not in manual stage or no open request → fall through to legacy intake.
           } catch (err) {
             if (err instanceof LifecycleProjectionConflict) {

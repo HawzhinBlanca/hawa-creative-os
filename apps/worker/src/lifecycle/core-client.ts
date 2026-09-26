@@ -65,11 +65,20 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         lifecycleAction?: string; requestId?: string; newTaskId?: string;
         round?: number; directive?: string; priorTaskId?: string; rawText?: string;
         chatId?: string; questionId?: string; draft?: unknown; reason?: string;
+        albumMessage?: string; albumNoticeKey?: string;
       };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
         if (!retryable(status)) {
           const base: Extract<IntakeAnswer, { kind: 'done' }> = { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true };
+          if (body.lifecycleAction === 'album-message') {
+            if (!body.chatId || typeof body.albumMessage !== 'string' || !body.albumMessage ||
+                body.albumMessage.length > 2000 || typeof body.albumNoticeKey !== 'string' ||
+                !/^album-[a-z]+:[a-zA-Z0-9-]+$/.test(body.albumNoticeKey))
+              throw new Error(`Core returned an invalid album notice for update ${update.update_id}`);
+            return { ...base, lifecycleAction: 'album-message', chatId: body.chatId,
+              albumMessage: body.albumMessage, albumNoticeKey: body.albumNoticeKey };
+          }
           if (body.lifecycleAction === 'open-request') {
             const draft = body.draft as Record<string, unknown> | undefined;
             if (!body.requestId || !body.chatId || !draft || draft.platform !== 'telegram' ||

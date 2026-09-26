@@ -39,6 +39,7 @@ export interface OpenManualEvent {
     autoGenerate: false;
     isInstructionOnly?: boolean;
     lifecycleImage?: BlobRef & { updateId: number };
+    lifecycleAlbum?: import('@hawa/contracts').LifecycleAlbumRef;
   };
 }
 

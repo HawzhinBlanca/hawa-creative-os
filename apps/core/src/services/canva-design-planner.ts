@@ -1,3 +1,4 @@
+import { orderedAlbumImages } from './lifecycle-album.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -213,17 +214,19 @@ export class CanvaDesignPlanner {
     if(!task?.client_id)throw new CanvaFlowError(422,'CLIENT_REQUIRED','Select the client before retrieving brand references.');
     const {reference,logo}=await resolveClientDesignReference(this.db,s,task.client_id);
     let ownedReferenceImage: {sha256:string;mediaType:string;size:number}|null=null;
-    let ownedImageDataUrl:string|null=null;
+    const ownedImageDataUrls:string[]=[];
+    const ownedReferenceImages:Array<{sha256:string;mediaType:string;size:number}>=[];
     if(task.request_id){
-      const refs=await this.tx(s,async db=>(await sql<{sha256:string;media_type:string;size:string}>`
+      const storedRefs=await this.tx(s,async db=>(await sql<{sha256:string;media_type:string;size:string}>`
         SELECT f.sha256,b.media_type,b.size FROM hawa.task_files f
         JOIN hawa.blobs b ON b.sha256=f.sha256
         WHERE f.tenant_id=${s.tenantId}::uuid AND f.task_id=${taskId}::uuid
           AND f.role='reference_image' ORDER BY f.created_at,f.sha256`.execute(db)).rows);
-      if(refs.length>1)throw new CanvaFlowError(422,'MULTIPLE_REFERENCE_IMAGES_UNSUPPORTED',
+      const album=task.source?.payload?.lifecycleAlbum ?? task.source?.lifecycleAlbum;
+      const refs=orderedAlbumImages(album,storedRefs);
+      if(refs.length>1&&!album)throw new CanvaFlowError(422,'MULTIPLE_REFERENCE_IMAGES_UNSUPPORTED',
         'This planner can use one request-owned reference image; review the remaining images in Studio.');
-      if(refs.length){
-        const ref=refs[0];
+      for(const ref of refs){
         if(!['image/png','image/jpeg','image/webp'].includes(ref.media_type))
           throw new CanvaFlowError(422,'REFERENCE_IMAGE_UNSUPPORTED','The request-owned reference is not a supported image.');
         const store=blobStoreFor(this.db);
@@ -233,10 +236,11 @@ export class CanvaDesignPlanner {
         catch{throw new CanvaFlowError(503,'REFERENCE_IMAGE_UNAVAILABLE','The request-owned image is missing or corrupt.');}
         if(bytes.length!==Number(ref.size))throw new CanvaFlowError(503,'REFERENCE_IMAGE_UNAVAILABLE',
           'The request-owned image size changed.');
-        ownedReferenceImage={sha256:ref.sha256,mediaType:ref.media_type,size:bytes.length};
-        ownedImageDataUrl=`data:${ref.media_type};base64,${bytes.toString('base64')}`;
+        ownedReferenceImages.push({sha256:ref.sha256,mediaType:ref.media_type,size:bytes.length});
+        ownedImageDataUrls.push(`data:${ref.media_type};base64,${bytes.toString('base64')}`);
       }
     }
+    ownedReferenceImage=ownedReferenceImages.length===1?ownedReferenceImages[0]:null;
     const referencePalette = reference.rules?.palette;
     const paletteFallbacks = reference.rules?.paletteFallbacks;
     const allowedReferenceColors = new Set((Array.isArray(referencePalette) ? referencePalette : []).map((color: string) => color.toLowerCase()));
@@ -290,6 +294,7 @@ export class CanvaDesignPlanner {
         parentTaskId: (task.source?.studioOptions?.parentTaskId || task.source?.parentTaskId || null) as string | null,
         referenceImageBase64,
         ...(ownedReferenceImage?{ownedReferenceImage}:{}),
+        ...(ownedReferenceImages.length>1?{ownedReferenceImages}:{}),
         includeExemplarImages,
         reference,
         referenceHash: hash(JSON.stringify(reference)),
@@ -297,7 +302,7 @@ export class CanvaDesignPlanner {
         model: resolveModel('text')
       },
       logo,
-      ownedImageDataUrl
+      ownedImageDataUrls
     };
   }
   async state(s:Scope,taskId:string){return this.tx(s,async db=>(await sql<any>`SELECT id,status,diagnostic,request->>'model' AS requested_model,
@@ -305,7 +310,7 @@ export class CanvaDesignPlanner {
     FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND actor_id=${s.actorId} ORDER BY created_at DESC LIMIT 10`.execute(db)).rows);}
   async generate(s:Scope,taskId:string,key:string,width:number,height:number){
     if(!/^[A-Za-z0-9_-]{8,128}$/.test(key))throw new CanvaFlowError(422,'REQUEST_KEY_REQUIRED','Use a stable generation request key.');
-    const {request,logo,ownedImageDataUrl}=await this.context(s,taskId,width,height),requestHash=hash(JSON.stringify(request));
+    const {request,logo,ownedImageDataUrls}=await this.context(s,taskId,width,height),requestHash=hash(JSON.stringify(request));
     const claim=await this.tx(s,async db=>{
       await sql`SELECT pg_advisory_xact_lock(hashtextextended(${'canva-planning:'+s.tenantId},0))`.execute(db);
       const locked=(await sql<any>`SELECT client_id,request_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
@@ -390,9 +395,10 @@ export class CanvaDesignPlanner {
 
       const schemaPrompt = `Output schema: {width:number,height:number,background:hex,text:[{copyIndex:number,role:"headline"|"title"|"subtitle"|"body"|"caption"|"date"|"location"|"meta",x:number,y:number,width:number,height:number,fontSize:number,fontFamily:string,color:hex,align:"left"|"center"|"right",bold?:boolean}],shapes:[{x:number,y:number,width:number,height:number,color:hex}],logo:{x:number,y:number,width:number,height:number}}`;
 
-      const referenceImageUrl=ownedImageDataUrl || (request.referenceImageBase64
-        ? (request.referenceImageBase64.startsWith('data:')?request.referenceImageBase64:`data:image/jpeg;base64,${request.referenceImageBase64}`)
-        : null);
+      const referenceImageUrls=ownedImageDataUrls.length?ownedImageDataUrls:(request.referenceImageBase64
+        ? [request.referenceImageBase64.startsWith('data:')?request.referenceImageBase64:`data:image/jpeg;base64,${request.referenceImageBase64}`]
+        : []);
+      const referenceImageUrl=referenceImageUrls[0]??null;
       const visionPromptNote = referenceImageUrl
         ? ' REFERENCE IMAGE ATTACHED: The operator provided a visual reference image as an aesthetic and compositional guide. Analyze its layout balance, spatial rhythm, framing, and visual style. Infuse its design principles into this layout while strictly adhering to the client Brand DNA palette and exact copy.'
         : '';
@@ -427,7 +433,7 @@ export class CanvaDesignPlanner {
             image_url: { url: `data:image/png;base64,${claim.priorPreviewPng}` }
           });
         }
-        if(referenceImageUrl)userContent.push({type:'image_url',image_url:{url:referenceImageUrl}});
+        for(const url of referenceImageUrls)userContent.push({type:'image_url',image_url:{url}});
         openAiBody = {
           model: request.model,
           messages: [
@@ -447,10 +453,10 @@ export class CanvaDesignPlanner {
         const userContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
           { type: 'text' as const, text: redesignPrompt }
         ];
-        if (referenceImageUrl) {
+        for (const url of referenceImageUrls) {
           userContent.push({
             type: 'image_url' as const,
-            image_url: { url: referenceImageUrl }
+            image_url: { url }
           });
         }
         userContent.push(...exemplarImages);
@@ -472,7 +478,7 @@ export class CanvaDesignPlanner {
         const userContent = (referenceImageUrl || request.includeExemplarImages)
           ? [
               { type: 'text' as const, text: JSON.stringify(request) },
-              ...(referenceImageUrl ? [{ type: 'image_url' as const, image_url: { url: referenceImageUrl } }] : []),
+              ...referenceImageUrls.map(url=>({type:'image_url' as const,image_url:{url}})),
               ...exemplarImages
             ]
           : JSON.stringify(request);
@@ -656,6 +662,7 @@ export class CanvaDesignPlanner {
         isRedesign:Boolean(isRedesignRequest),
         hasReferenceImage:Boolean(referenceImageUrl),
         referenceImageSha256:request.ownedReferenceImage?.sha256||null,
+        ...(request.ownedReferenceImages?{referenceImageSha256s:request.ownedReferenceImages.map(image=>image.sha256)}:{}),
         exemplars: exemplars.map(e => ({ label: e.label, sha256: e.sha256 })),
         priorPlanId:claim.priorPlanRow?.id||null,
         turns:openAiBody.messages.length

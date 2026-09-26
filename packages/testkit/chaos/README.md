@@ -3,9 +3,21 @@
 The acceptance test of every Phase 2 slice (architecture programme `PLAN.md` Phase 2, design in
 `PHASE2_DESIGN.md` section 6): scripted requests through the whole stack, with Core, the worker,
 Postgres and Restate killed at named points, and the invariants of section 6.3 checked after each
-request. Today it drives the **legacy path** (Core intake → outbox → `TaskWorkflow` in the blue
-worker → Canva → outcome → Desk approval → delivery). The same scenarios are meant to run against
-the Restate lifecycle once its slices land.
+request. It covers the legacy path (Core intake → outbox → `TaskWorkflow` → Canva →
+outcome → Desk approval → delivery) and the admitted Restate lifecycle slices.
+The dated run histories below preserve their original scope and limitations.
+
+## Confirmed album recovery (2026-09-26)
+
+`pnpm exec tsx packages/testkit/chaos/run.ts --only R1.S3.ALBUM --poller worker`
+sends two photos as a reply to a recorded office revision notice, confirms the
+album, kills Core after freezing it and replays the confirmation after restart.
+It verifies no task before confirmation, one child/projection, both child-owned
+photos, one download per photo, both hashes in one revision planner call,
+completed intakes and simulated approval/delivery. The run's ten invariants passed;
+the source-bound report is in
+`plans/research-grade-upgrade-2026-09-25/R07_ALBUM_DRILL.json`. Fakes establish
+workflow recovery and image handoff; independent visual quality remains unproved.
 
 ## Run it
 

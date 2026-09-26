@@ -12,7 +12,30 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R07 captionless request replies)
+## Current result (2026-09-26 — R07 confirmed photo albums)
+
+Album parts are saved without starting a task. The sender replies to one photo
+with `/use_album` to freeze two to ten supported images and hand the complete
+selection to one new brief or current request revision/clarification. Every image
+is bound to that task and reaches both design paths in the confirmed order.
+Failed downloads block confirmation; changed sources, conflicting scope/content,
+late parts and duplicate submissions are refused or replay their recorded result.
+Captionless replies preserve factual copy. See ADR-068,
+`runbooks/CONFIRMED_PHOTO_ALBUMS.md` and the newest `R07_EVIDENCE.md` section.
+
+The affected group passed **6 files / 110 tests**, then the album file passed
+**11/11** with two added boundary checks. Typecheck, lint and zero-secret scan
+passed. The disposable Core SIGKILL drill passed **10/10 invariants**: one child,
+two image bindings/downloads, one projection and one successful planner call with
+both photo hashes; simulated review/delivery reached rev 8 `delivered`. Exact
+source hashes and results are in `R07_ALBUM_DRILL.json`. The release seal and full
+regression suite follow this source/evidence commit.
+
+Next admission remains the live Workspace reviewer/provider journey, other media,
+clean-host recovery and independent creative-quality evaluation described in
+`WORK_ITEMS.csv`. No production flag or deployment changed.
+
+## Prior result (2026-09-26 — R07 captionless request replies)
 
 A captionless single photo can now answer the exact current lifecycle revision
 or clarification notice. Core rechecks the reply's request/revision in the task
@@ -25,10 +48,11 @@ Affected Core/worker checks passed **4 files / 75 tests**; source/test typecheck
 and lint passed. The disposable Core SIGKILL drill passed **10/10 invariants**:
 one child/photo/download, one projection, planner received the photo hash and
 simulated review/delivery reached rev 8 `delivered`. The source hashes and exact
-results are preserved in `R07_CAPTIONLESS_PHOTO_DRILL.json`. Exact source sealing
-and its full regression suite follow.
-Albums, other media, live Workspace/provider output and independent human quality
-remain open. No production flag or deployment changed.
+results are preserved in `R07_CAPTIONLESS_PHOTO_DRILL.json`. Seal `eec002e`
+(source `1fc4466`) passed **434 files / 3,353 tests**, with **4 files / 53 tests
+skipped**, and manifest verification. At that checkpoint albums, other media,
+live Workspace/provider output and independent human quality remained open.
+No production flag or deployment changed.
 
 ## Prior result (2026-09-26 — R11 registered-client Desk scope)
 

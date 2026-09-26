@@ -1,5 +1,5 @@
 import { describe,it,expect,vi,beforeAll,afterAll } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { blobStoreFromEnv,createDb,sql,withRlsContext } from '@hawa/db';
@@ -319,6 +319,42 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(revisionSaved.result.manifest.isRevision).toBe(true);
     expect(revisionSaved.result.manifest.priorPlanId).toBe(initialSaved.id);
     expect(revisionSaved.result.manifest.turns).toBe(2);
+  });
+
+  it('sends every confirmed album image in manifest order and refuses a lost image before the model',async()=>{
+    const photo=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==','base64');
+    const bytes=[1,2].map(n=>Buffer.concat([photo,Buffer.from(`${randomUUID()}-${n}`)]));
+    const store=blobStoreFromEnv(db);
+    const refs=await Promise.all(bytes.map(b=>store.put(b,'image/png')));
+    const taskId=(await persistChatIntake(db,{
+      platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-album-planner',clientId,
+      title:'[TEST] Confirmed album',rawText:'Use the album.\n---\nEXACT TITLE\n\nExact body. Never rewrite it.',
+      designInstructions:'Use both references in their source order.',exactCopy:[],
+      lifecycleAlbum:{updateId:424242,sha256:'a'.repeat(64),images:[refs[1],refs[0]]},
+    },{outboxState:'recorded'})).task.id;
+    const requestId=randomUUID();
+    await withRlsContext(db,{tenantId:scope.tenantId,userId:scope.actorId,role:'operator'},async(trx)=>{
+      await sql`INSERT INTO hawa.requests(request_id,tenant_id,root_task_id,current_task_id,owner,stage,rev,chat_id)
+        VALUES(${requestId}::uuid,${scope.tenantId}::uuid,${taskId}::uuid,${taskId}::uuid,'restate','designing',1,'isolated-album-planner')`.execute(trx);
+      await trx.updateTable('tasks').set({request_id:requestId}).where('id','=',String(taskId)).execute();
+      for(const ref of refs)await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
+        VALUES(${scope.tenantId}::uuid,${taskId}::uuid,${ref.sha256},'reference_image')`.execute(trx);
+    });
+    const remote=vi.fn(async()=>response());
+    expect((await make(remote).planner.generate(scope,taskId,'owned-album-0001',1200,1697)).status).toBe('submitted');
+    const sent=JSON.parse(remote.mock.calls[0][1].body);
+    const attached=sent.messages[1].content.filter((part:any)=>part.type==='image_url')
+      .map((part:any)=>createHash('sha256').update(Buffer.from(part.image_url.url.split(',')[1],'base64')).digest('hex'));
+    expect(attached.slice(0,2)).toEqual([refs[1].sha256,refs[0].sha256]);
+    const saved=(await sql<any>`SELECT request,result FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(db)).rows[0];
+    expect(saved.request.ownedReferenceImages.map((image:any)=>image.sha256)).toEqual([refs[1].sha256,refs[0].sha256]);
+    expect(saved.result.manifest.referenceImageSha256s).toEqual([refs[1].sha256,refs[0].sha256]);
+    expect(JSON.stringify(saved.request)).not.toContain(bytes[1].toString('base64'));
+    unlinkSync(store.pathOf(refs[0]));
+    const refused=vi.fn(async()=>response());
+    await expect(make(refused).planner.generate(scope,taskId,'owned-album-0002',1200,1697))
+      .rejects.toMatchObject({code:'REFERENCE_IMAGE_UNAVAILABLE'});
+    expect(refused).not.toHaveBeenCalled();
   });
 
   it('sends only the child task-owned photo with a lifecycle revision, pinned by hash',async()=>{

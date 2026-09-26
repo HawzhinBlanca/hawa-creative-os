@@ -383,3 +383,21 @@ describe('ChatInbox.setMode', () => {
       chatId: '555', class: 'critical', text: expect.stringContaining('No revision started') }]);
   });
 });
+
+
+describe('album collection notices', () => {
+  it('journals one collection response and replays a stable notice without starting a lifecycle request', async () => {
+    const transport=vi.fn(async()=>Response.json({intakeStatus:202,lifecycleAction:'album-message',
+      chatId:'555',albumMessage:'Photos saved. Reply with /use_album when finished.',albumNoticeKey:'album-received:abc123'}));
+    const client=createCoreClient({baseUrl:'http://core',token:'fixture-token',fetch:transport});
+    const ctx=new FakeContext();
+    ctx.crashOnSet=1;
+    await untilSettled(ctx,()=>handleUpdate(ctx,input,client));
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(ctx.lifecycleOpens).toHaveLength(0);
+    expect(ctx.lifecycleDecisions).toHaveLength(0);
+    expect(ctx.notices).toHaveLength(2);
+    expect(ctx.notices[0]).toEqual(ctx.notices[1]);
+    expect(ctx.notices[0]).toMatchObject({key:'chatinbox:album-received:abc123',chatId:'555'});
+  });
+});

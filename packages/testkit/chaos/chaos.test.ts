@@ -560,9 +560,11 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     };
   }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
-  for (const captionless of [false, true]) {
-  const scenarioId = captionless ? 'R1.S3.CAPTIONLESS_PHOTO' : 'R1.S3.REVISION_PHOTO';
-  scenario(scenarioId, `flagged chat: a ${captionless ? 'captionless reply' : 'captioned revision'} photo survives Core SIGKILL before task projection`, async (chat, events) => {
+  for (const mediaKind of ['captioned', 'captionless', 'album'] as const) {
+  const album = mediaKind === 'album';
+  const captionless = mediaKind === 'captionless';
+  const scenarioId = album ? 'R1.S3.ALBUM' : captionless ? 'R1.S3.CAPTIONLESS_PHOTO' : 'R1.S3.REVISION_PHOTO';
+  scenario(scenarioId, `flagged chat: ${mediaKind} photo input survives Core SIGKILL before task projection`, async (chat, events) => {
     await sendBrief(chat, scenarioId);
     const request = await waitUntil('the first draft to enter lifecycle review', async () => {
       const [row] = await query<{ request_id: string; current_task_id: string; rev: string; stage: string }>(sql`
@@ -588,12 +590,12 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       return row?.stage === 'manual' && Number(row.rev) === 3 ? row : null;
     });
     const fileId = `lifecycle-revision-${chat}`;
+    const secondFileId = `${fileId}-second`;
     const size = 1024;
     await fakes.file({ file_id: fileId, size, mime: 'image/jpeg' });
-    const killed = await killAtPoint('core.intake.after-revision-photo-decision', { chat });
-    const update = captionedPhotoUpdate(chat, fileId, size,
+    let update: { message: Record<string, unknown> } = captionedPhotoUpdate(chat, fileId, size,
       'Please use this photo as the reference and change the background to navy.');
-    if (captionless) {
+    if (captionless || album) {
       const noticeId = await waitUntil('the current office revision notice to be confirmed', async () => {
         const [mark] = await query<{ message_id: string }>(sql`SELECT payload->>'messageId' AS message_id
           FROM hawa.inbox_events WHERE source_account_id = 'telegram_delivery'
@@ -601,14 +603,36 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
             AND source_event_id = ${`lc:${request.request_id}:3:office-revision-notify:send`}`);
         return mark?.message_id ? Number(mark.message_id) : null;
       });
-      delete (update.message as { caption?: string }).caption;
-      (update.message as Record<string, unknown>).reply_to_message = { message_id: noticeId };
-      events.push(`captionless reply to confirmed notice ${noticeId}`);
+      if (captionless) delete update.message.caption;
+      update.message.reply_to_message = { message_id: noticeId };
+      events.push(`${mediaKind} reply to confirmed notice ${noticeId}`);
+      if (album) {
+        await fakes.file({ file_id: secondFileId, size: size + 1, mime: 'image/jpeg' });
+        const second: { message: Record<string, unknown> } = captionedPhotoUpdate(chat, secondFileId, size + 1, '');
+        delete second.message.caption;
+        const groupId = `chaos-album-${chat}`;
+        update.message.media_group_id = groupId;
+        second.message.media_group_id = groupId;
+        second.message.reply_to_message = { message_id: noticeId };
+        const partIds = await fakes.updates([update, second]);
+        await waitUntil('both album parts saved before confirmation', async () => {
+          const [row] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
+            WHERE source_account_id = 'lifecycle_album_part' AND payload->>'chatId' = ${chat}
+              AND payload->>'groupId' = ${groupId} AND payload->'image'->>'sha256' IS NOT NULL`);
+          return Number(row?.n) === 2 ? true : null;
+        });
+        if ((await tasksOfChat(chat)).length !== 1) throw new Error('An album started a task before confirmation');
+        events.push(`saved album updates ${partIds.join(', ')}; no child before confirmation`);
+        const confirmation: { message: Record<string, unknown> } = textUpdate(chat, '/use_album');
+        confirmation.message.reply_to_message = { message_id: update.message.message_id };
+        update = confirmation;
+      }
     }
+    const killed = await killAtPoint(album ? 'core.intake.after-album-confirmation' : 'core.intake.after-revision-photo-decision', { chat });
     const [updateId] = await fakes.updates([update]);
     const polled = { ...update, update_id: updateId };
     events.push(`revision photo update ${updateId} in request ${request.request_id}`);
-    events.push(`killed ${(await killed.done).killed} after photo decision, before child task projection`);
+    events.push(`killed ${(await killed.done).killed} after ${album ? 'album confirmation' : 'photo decision'}, before child task projection`);
     const child = await waitUntil('one revision task after Core restart', async () => {
       const tasks = await tasksOfChat(chat);
       const [row] = await query<{ rev: string; current_task_id: string }>(sql`
@@ -678,8 +702,10 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
           SELECT f.task_id, f.sha256, f.role, b.size, b.media_type FROM hawa.task_files f
           JOIN hawa.blobs b ON b.sha256 = f.sha256 WHERE f.task_id IN (${rootTaskId}::uuid, ${child}::uuid)`);
         const decisions = await query<{ payload: any }>(sql`SELECT payload FROM hawa.inbox_events
-          WHERE source_account_id = 'lifecycle_chat_revision_photo' AND source_event_id = ${String(updateId)}`);
-        const downloads = (await fakes.polls()).downloads?.filter((id: string) => id === fileId) ?? [];
+          WHERE source_account_id = ${album ? 'lifecycle_album_confirm' : 'lifecycle_chat_revision_photo'}
+            AND source_event_id = ${String(updateId)}`);
+        const downloads = (await fakes.polls()).downloads?.filter((id: string) =>
+          id === fileId || (album && id === secondFileId)) ?? [];
         const parked = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
           WHERE source_event_id = ${`parked-update-${updateId}`}`);
         const inbox = (await chatInboxInvocations(chat)).filter((item) =>
@@ -700,28 +726,31 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
           { name: 'requester revision projection recorded exactly once',
             ok: projections.filter((row) => Number(row.rev) === 4).length === 1,
             detail: JSON.stringify(projections) },
-          { name: 'photo bound only to the child task', ok: files.length === 1 &&
-              files[0].task_id === child && files[0].role === 'reference_image' &&
-              files[0].media_type === 'image/jpeg' && Number(files[0].size) === size,
+          { name: 'all selected photos bound only to the child task', ok: files.length === (album ? 2 : 1) &&
+              files.every((file) => file.task_id === child && file.role === 'reference_image' &&
+                file.media_type === 'image/jpeg') &&
+              files.map((file) => Number(file.size)).sort().join(',') === (album ? `${size},${size + 1}` : String(size)),
             detail: JSON.stringify(files) },
           { name: 'hash-bound photo decision, with no image bytes in the event',
-            ok: decisions.length === 1 && decisions[0].payload?.requestId === request.request_id &&
-              decisions[0].payload?.image?.sha256 === files[0]?.sha256 &&
+            ok: decisions.length === 1 && (album
+              ? decisions[0].payload?.snapshot?.ref?.images?.length === 2 && files.every((file) =>
+                decisions[0].payload.snapshot.ref.images.some((image: { sha256: string }) => image.sha256 === file.sha256))
+              : decisions[0].payload?.requestId === request.request_id && decisions[0].payload?.image?.sha256 === files[0]?.sha256) &&
               !JSON.stringify(decisions[0].payload).includes('/9j/'),
             detail: JSON.stringify(decisions[0]?.payload) },
-          { name: 'one download and no parked update across kill and replay',
-            ok: downloads.length === 1 && Number(parked[0]?.n ?? 0) === 0,
+          { name: 'one download per photo and no parked update across kill and replay',
+            ok: downloads.length === (album ? 2 : 1) && new Set(downloads).size === downloads.length && Number(parked[0]?.n ?? 0) === 0,
             detail: `downloads=${downloads.length} parked=${parked[0]?.n ?? 0}` },
           { name: 'both ChatInbox invocations completed',
             ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
             detail: JSON.stringify(inbox) },
-          { name: 'revised draft passes human review and reaches approved delivery',
+          { name: 'revised draft passes simulated office review and reaches approved delivery',
             ok: tasks[1]?.state === 'complete' && state?.stage === 'delivered' && Number(state.rev) === 8 &&
               outcome === 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW',
             detail: JSON.stringify({childState:tasks[1]?.state,request:state,outcome}) },
-          { name: 'the planner received the child photo by content hash',
+          { name: 'the planner received every child photo by content hash',
             ok: model.filter((entry) => entry.route === 'canva_design_plan' && entry.status === 200 &&
-              entry.imageSha256?.includes(files[0]?.sha256)).length === 1 &&
+              files.length > 0 && files.every((file) => entry.imageSha256?.includes(file.sha256))).length === 1 &&
               !model.some((entry) => entry.route.startsWith('unmatched')),
             detail: JSON.stringify(model) },
           { name: 'only future lifecycle reminders remain scheduled',
