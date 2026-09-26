@@ -204,7 +204,8 @@
     "packages/integrations/src/voice-transcriber.ts": "9579b3add162f9026cbccd785bffd2bc4b04967f0eb8b77b99c5a84f80604f02",
     "packages/integrations/test/voice-evidence.test.ts": "e220f9192423cbe320d83a2f75e93476a07d2c365fe509c7413b40454f8e763a",
     "packages/testkit/fixtures/voice/README.md": "b2527e7a94fb1d385f43013cf85ccb907a0f082d9b09da8d259dc71c04d96d8e",
-    "packages/testkit/fixtures/voice/silence-one-second.ogg": "e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2"
+    "packages/testkit/fixtures/voice/silence-one-second.ogg": "e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2",
+    "packages/contracts/test/task-status.contract.test.ts": "a1d0f6d9f07a498c10cded436b20d1262b10e4c56f817f17c6d919b709b3b948"
   },
   "verification": {
     "focused": {
@@ -221,7 +222,8 @@
     "deskBuild": "passed",
     "fullRegression": "pending sealed candidate",
     "securityScan": "passed: zero secrets in committable files",
-    "blueprint": "passed: 859 checks, zero warnings/failures"
+    "blueprint": "passed: 859 checks, zero warnings/failures",
+    "taskStatusFollowup": "18/18 passed"
   },
   "earlierFailures": [
     {
@@ -241,6 +243,13 @@
       "failed": 1,
       "passed": 184,
       "cause": "Duration fixture concatenated two pages while rewriting one page header. Corrected to complete one-second pages and proved both boundary sides."
+    },
+    {
+      "run": "first sealed full suite at 3bf53ea",
+      "failed": 1,
+      "passed": 3527,
+      "skipped": 59,
+      "cause": "Task-status contract checker classified any received enum as a task vocabulary and rejected the independent voice outcome enum. It now identifies task-specific review states while retaining complete generated-block and mutation checks. Focused correction: 18/18 passed."
     }
   ],
   "limits": [

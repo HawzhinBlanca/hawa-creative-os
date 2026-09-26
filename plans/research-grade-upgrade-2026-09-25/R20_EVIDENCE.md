@@ -107,3 +107,9 @@ canary, the complete real Canva journey, retrieval measurements, clean-host reco
 and human creative review remain open. Manual copy does not settle uncertain
 billing. R07/R12/R20 remain in progress. Proof: `R07_VOICE_RECOVERY_PROOF.json`;
 operation: `runbooks/REQUEST_SOURCE_REVIEW.md`. Full sealed regression follows.
+
+First sealed full run (`aaa5ff7` / `3bf53ea`): **3,527 passed, one failed,
+59 skipped**. The task-status drift test mistook the independent voice outcome
+`received` for a task enum. It now recognizes the task-specific review states;
+complete generated declarations and deliberate drift checks remain. Its focused
+follow-up passed **18/18**. The failing full run is not release acceptance.

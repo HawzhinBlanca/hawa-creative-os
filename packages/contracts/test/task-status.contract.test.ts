@@ -124,12 +124,12 @@ describe('Task.schema.json and OpenAPI', () => {
   it('every task-status enum in openapi.yaml is the module\'s, and the check fails when one gains a word', () => {
     const openapi = read('api/openapi.yaml');
     expect(openapi).toContain(openApiBlock());
-    // Revision and job enums share words such as approved and cancelled; an enum naming a task's
-    // first or review state is a task-status enum, and must be one of the module's two lists.
+    // Voice, revision and job outcomes share received/approved/cancelled. Task-specific review
+    // states identify these lists; the generated block above also verifies both complete declarations.
     let taskEnums = 0;
     for (const m of openapi.matchAll(/enum: \[([^\]]*)\]/g)) {
       const words = m[1].split(',').map((w) => w.trim());
-      if (!words.some((w) => ['received', 'human_review', 'RECEIVED', 'AWAITING_APPROVAL'].includes(w))) continue;
+      if (!words.some((w) => ['human_review', 'AWAITING_APPROVAL'].includes(w))) continue;
       taskEnums += 1;
       expect([[...TASK_DB_STATES], [...TASK_API_STATUSES]], m[0]).toContainEqual(words);
     }
