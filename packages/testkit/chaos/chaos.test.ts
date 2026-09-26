@@ -15,11 +15,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, restateQuery, RESTATE_INGRESS_URL, start, up, waitHealthy } from './driver/stack.js';
+import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, sql, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
-  approve, briefToDraft, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
-  sendToChatInbox, sentTo, sleep, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
+  approve, briefToDraft, chatInboxInvocations, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
+  sendToChatInbox, sentTo, sleep, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
 } from './driver/scenario.js';
 
 const enabled = process.env.HAWA_CHAOS === '1';
@@ -440,6 +440,65 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       after: () => checkIntake(chat, [update.update_id]),
     };
   }, 12 * 60_000, { needs: 'worker-poller' });
+
+  // R07/FR-060/NFR-001: a flagged chat opens its first request through RequestLifecycle.
+  // Crash Core after it commits the intake decision but before ChatInbox receives the answer;
+  // then cross Restate's seven-day key with another invocation of the same Telegram update.
+  scenario('R1.S3.K1', 'flagged chat: a Core crash and update replay open one owned request and send one acknowledgement', async (chat, events) => {
+    const killed = await killAtPoint('core.intake.after-decision', { chat });
+    const update = textUpdate(chat, 'Please use a navy background and a clean serif font for the design.');
+    const [updateId] = await fakes.updates([update]);
+    const polled = { ...update, update_id: updateId };
+    events.push(`update ${updateId} in flagged chat ${chat}`);
+    events.push(`killed ${(await killed.done).killed} after Core committed the intake decision`);
+    await waitUntil('the request-owned task and acknowledgement', async () => {
+      const tasks = await tasksOfChat(chat);
+      const acknowledgements = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' &&
+        send.text?.includes('Request received.'));
+      return tasks.length === 1 && acknowledgements.length === 1 ? tasks[0] : null;
+    });
+    const replay = await sendToChatInbox(chat, polled, `chaos-lifecycle-replay-${updateId}`);
+    events.push(`same update under a second Restate key: HTTP ${replay}`);
+    return {
+      delivered: false,
+      skipRequestChecks: true,
+      extra: [{ name: 'second Restate key accepted for replay', ok: replay === 200 || replay === 202,
+        detail: `HTTP ${replay}` }],
+      after: async () => {
+        const tasks = await tasksOfChat(chat);
+        const requests = await query<{ request_id: string; root_task_id: string; owner: string; stage: string; rev: string }>(sql`
+          SELECT request_id, root_task_id, owner, stage, rev FROM hawa.requests WHERE chat_id = ${chat}`);
+        const projections = requests.length === 1
+          ? await query<{ rev: string }>(sql`SELECT rev FROM hawa.lifecycle_projections
+              WHERE request_id = ${requests[0].request_id}::uuid`)
+          : [];
+        const acknowledgements = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' &&
+          send.text?.includes('Request received.'));
+        const invocations = requests.length === 1 ? await restateQuery<{ status: string }>(
+          `SELECT status FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${requests[0].request_id}' AND target_handler_name = 'open'`
+        ) : [];
+        const inbox = (await chatInboxInvocations(chat)).filter((item) =>
+          item.idempotency_key === `tg-${updateId}` ||
+          item.idempotency_key === `chaos-lifecycle-replay-${updateId}`);
+        const offset = await storedOffset();
+        return [
+          { name: 'one task and one Restate-owned request', ok: tasks.length === 1 && requests.length === 1 &&
+            requests[0].owner === 'restate' && requests[0].stage === 'manual' && tasks[0].id === requests[0].root_task_id,
+            detail: JSON.stringify({ tasks, requests }) },
+          { name: 'one version-one projection', ok: projections.length === 1 && Number(projections[0].rev) === 1,
+            detail: JSON.stringify(projections) },
+          { name: 'one requester acknowledgement', ok: acknowledgements.length === 1,
+            detail: `acknowledgements=${acknowledgements.length}` },
+          { name: 'request owner invocation completed', ok: invocations.length === 1 && invocations[0].status === 'completed',
+            detail: JSON.stringify(invocations) },
+          { name: 'both ChatInbox invocations completed', ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
+            detail: JSON.stringify(inbox) },
+          { name: 'Telegram offset passed the update', ok: offset >= updateId,
+            detail: `offset=${offset} update=${updateId}` },
+        ];
+      },
+    };
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   // Slice 2.2 (PHASE2_DESIGN.md section 3; design R1 S8): the Delivery workflow and TelegramSender, on
   // chats listed in HAWA_LIFECYCLE_CHATS. Each request pins two files; no scenario presses Deliver twice.

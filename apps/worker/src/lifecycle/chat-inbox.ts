@@ -104,14 +104,13 @@ const retryDelayMs = (k: number) => 2000 * 2 ** k;
 
 export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, core: ChatInboxCore): Promise<HandleUpdateResult> {
   const update = input.update;
-  // Read the per-chat mode and requestId from Restate state, journaled so a replay agrees.
+  // Read state directly through Restate's context. A ctx.get inside ctx.run records a nested
+  // journal operation that is skipped when the completed run replays after a crash.
   // The first flagged update arrives in legacy mode. Core can return open-request for that update;
   // the resulting request then sets lifecycle mode for later chat updates.
-  const { mode, requestId: lifecycleRequestId } = await ctx.run<{ mode: IntakeMode; requestId?: string }>('mode', async () => {
-    const view = await ctx.get<ChatInboxView>('inbox');
-    if (view?.mode === 'lifecycle') return { mode: 'lifecycle', requestId: view.requestId };
-    return { mode: 'legacy' };
-  });
+  const view = await ctx.get<ChatInboxView>('inbox');
+  const mode: IntakeMode = view?.mode === 'lifecycle' ? 'lifecycle' : 'legacy';
+  const lifecycleRequestId = view?.mode === 'lifecycle' ? view.requestId : undefined;
 
   const reasons: string[] = [];
   let done: Extract<IntakeAnswer, { kind: 'done' }> | null = null;

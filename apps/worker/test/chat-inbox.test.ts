@@ -18,6 +18,8 @@ class FakeContext implements InboxContext {
   sleeps: number[] = [];
   state = new Map<string, unknown>();
   runs: string[] = [];
+  stateReads: string[] = [];
+  inRun = false;
   lifecycleDecisions: Array<{ requestId: string; event: unknown }> = [];
   lifecycleOpens: Array<{ requestId: string; event: unknown }> = [];
   notices: unknown[] = [];
@@ -25,12 +27,16 @@ class FakeContext implements InboxContext {
   failOpenOnce = false;
   constructor(readonly key = '555') {}
   async get<T>(name: string): Promise<T | null> {
+    if (this.inRun) throw new Error('Restate state access must not be nested in a run action');
+    this.stateReads.push(name);
     return (this.state.get(name) as T) ?? null;
   }
   async run<T>(name: string, action: () => Promise<T>): Promise<T> {
     if (this.journal.has(name)) return this.journal.get(name) as T;
     this.runs.push(name);
-    const value = await action();
+    this.inRun = true;
+    let value: T;
+    try { value = await action(); } finally { this.inRun = false; }
     this.journal.set(name, value);
     return value;
   }
@@ -104,8 +110,8 @@ describe('ChatInbox.handleUpdate', () => {
     expect(c.intake).toHaveBeenCalledTimes(1);
     expect(c.intake.mock.calls[0]).toEqual([update, 'legacy', undefined]);
     expect(c.park).not.toHaveBeenCalled();
-    // The mode journal stores an object now; a replay on another colour reads the same journaled value.
-    expect(ctx.journal.get('mode')).toMatchObject({ mode: 'legacy' });
+    expect(ctx.stateReads).toEqual(['inbox']);
+    expect(ctx.runs).toEqual(['intake-0']);
   });
 
   it('a deliberate refusal (4xx) is final: no retry, no dead letter', async () => {
@@ -287,8 +293,9 @@ describe('ChatInbox.setMode', () => {
     ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0, mode: 'lifecycle', requestId: 'req-x' } satisfies ChatInboxView);
     const c = core([async () => ({ kind: 'done', intakeStatus: 201 })]);
     await handleUpdate(ctx, input, c);
-    // The mode journal now stores { mode, requestId } to support lifecycle routing.
-    expect(ctx.journal.get('mode')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x' });
+    // Restate journals the direct state read without nesting it in a run action.
+    expect(ctx.stateReads).toEqual(['inbox']);
+    expect(ctx.runs).toEqual(['intake-0']);
     // Core's intake should have been called with mode='lifecycle'
     expect(c.intake.mock.calls[0][1]).toBe('lifecycle');
     expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x' });

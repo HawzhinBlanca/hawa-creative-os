@@ -1,5 +1,35 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — real Core-kill replay of the first flagged brief
+
+The first disposable-stack run exposed a Restate 570 nondeterminism error after Core
+was killed immediately after storing the new-brief decision. `ChatInbox` had read
+its own Restate state inside `ctx.run('mode')`: the first execution recorded a nested
+state read, while replay of the completed run skipped that read and could not match
+the journal. The handler now reads chat state directly through Restate's context,
+before its Core intake run. The worker unit journal refuses nested state access so
+this specific mistake regresses visibly. The chaos Compose file also had a duplicate
+worker-token mapping that prevented the initial stack build; the duplicate was removed.
+
+**Verification:** the focused worker file passed **24 tests**. The real isolated
+`hawa-chaos` stack then killed Core after it committed a flagged chat's first
+instruction-only brief decision, restarted it, and resent the same Telegram update
+under a second Restate key. `R1.S3.K1` passed: one task, one Restate-owned manual
+request, one revision-1 Core projection, one requester acknowledgement, completed
+request-owner and both intake invocations, and a Telegram offset past the update.
+The drill used fake providers on the isolated internal network; no unmatched model
+call occurred. The initial red run's Restate 570 and the intermediate test-only
+invocation-count failure are not counted as passing runs. The source suite, excluding
+only the unsealed release-manifest gate, passed **425 files / 3,280 tests** with
+**4 files / 49 tests skipped** (the new chaos scenario is skipped in ordinary runs).
+Repository lint and source/test typecheck passed. Blueprint validation and the
+sealed-tree release gate follow the evidence commit.
+
+**Limit:** This qualifies one manual first-brief admission and Core crash/replay on
+the source checkout. It does not qualify a worker or Restate restart, an automatic
+design, photos/voice/albums, live Telegram acceptance, clean-host restore, or the
+closed request-to-delivery flow. The production lifecycle flag remains off.
+
 ## 2026-09-26 — legacy receipt wins across a chat flag change (ADR-059 addendum)
 
 After the first-brief checkpoint, a second cutover replay was found: an update already
