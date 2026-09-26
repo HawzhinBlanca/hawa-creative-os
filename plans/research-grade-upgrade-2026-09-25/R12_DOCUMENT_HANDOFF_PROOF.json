@@ -76,5 +76,20 @@
     "initialFailed": 1,
     "reason": "Existing operator-only durable outbox returned 503 to a client-only designer",
     "correction": "Explicit 403 explains operator handoff; retained source is confirmed by an operator without widening outbox permissions"
+  },
+  "sealed_regression": {
+    "sourceCommit": "96f1f5ece12c65fd62a5907bb3afd9cdeda33439",
+    "testedSealCommit": "a28e9d300e1f517a770688fff31dae4fcef3445c",
+    "passedFiles": 440,
+    "skippedFiles": 4,
+    "passedTests": 3426,
+    "skippedTests": 56,
+    "releaseManifest": "verified",
+    "blueprint": {
+      "passed": 839,
+      "warnings": 0,
+      "failures": 0
+    },
+    "subsequentChange": "Evidence and generated pack hashes only; no implementation changes after this run"
   }
 }

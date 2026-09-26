@@ -52,7 +52,9 @@ NFR-006, NFR-014**; linked normative documents in traceability and ADR-071.
   Explicit migration inventories now include 041. Blueprint validation: **839 pass / 0 warn / 0 fail**.
 - Full source/test typecheck, lint, Desk production build and secret scan passed.
   Lint remains 1,006 `any` uses against ceiling 1,053 and 9 pre-existing provider
-  egress exceptions. Exact full-suite and manifest results follow source sealing.
+  egress exceptions. Source `96f1f5e`, seal `a28e9d3`: **440 files / 3,426 tests passed;
+  4 files / 56 tests skipped**, clean-tree release manifest verified and blueprint
+  **839/0/0**. The following evidence commit changes documentation/pack hashes only.
 - One initial typecheck reached the sandbox IPC restriction (`EPERM`) before test
   types ran. It was rerun with permitted IPC access and passed. No failed application
   assertion is hidden; the rollback test deliberately injects/logs a commit-boundary
