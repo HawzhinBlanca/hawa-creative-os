@@ -38,3 +38,37 @@ The first full run after blocking the model found three behavior regressions: a 
 Focused classifier and webhook checks passed **3 files / 67 tests**, including key-present, no-policy and local-only cases, mock-network denial, a multi-photo revision and both clarification replies. After those corrections, the full source suite passed **419 files / 3,126 tests**, with **4 files / 48 tests skipped**. Full workspace/test TypeScript checks and the egress lint passed; the lint still lists nine direct-call exceptions. The initial broader run had **3 failing tests** and is not passing evidence.
 
 **Limit:** This protects only this Telegram text-classification call. It does not prove all client text/photo content stays local, that a supplied decision was derived from a locked client, or that the local classifier matches the model's accuracy across real multilingual messages. Model-assisted routing stays unavailable until client policy resolution, scoped budget and trace receipts are wired in and separately evaluated. R20 remains in progress.
+
+
+## 2026-09-27 — Voice candidates preserve evidence and unread audio cannot become work
+
+ADR-074 corrects a prerequisite for source-review admission. The adapter previously
+mixed captions into transcripts, rewrote spoken prices, assigned fixed confidence
+0.96 and language ckb, and substituted a made-up duration. Provider response reads
+were unbounded and error logs could contain private response/transport content.
+Legacy Telegram intake could still create a design from a caption when audio was
+unavailable. The earlier caption-only allowance in this file describes superseded
+behavior; all voice sources are now held before download in that legacy path.
+
+Provider text is retained exactly, supplied text is separate, unknown measurements
+are null and caller duration is explicitly labeled. No automatic price normalization
+or inferred campaign objective is used as source evidence. The existing standalone
+endpoint inspects exact supplied text, validates its shape/size, requires copy review
+and refuses audio with 412. The adapter reports not_sent/rejected/received/uncertain,
+makes one HTTP request at most, bounds audio/response/text, refuses redirects and
+bounds stalled response reads without awaiting broken cancellation. Error bodies and
+thrown provider errors are not logged. Unknown acceptance never becomes a success.
+
+Red-before: **22 failed / 1 passed**, including stalled-body/error-body timeouts.
+The initial sandbox run could not connect to the isolated database and executed no
+tests. The negative-size fetch spy initially delegated to native fetch with synthetic
+bytes and a synthetic key; it now rejects explicitly, and all final provider fixtures
+are mocked. Final affected regression: **5 files / 55 tests passed**. Source, script
+and included-test types and lint passed. Full release regression is pending the new
+seal. Exact file hashes and results: `R20_VOICE_EVIDENCE_PROOF.json`.
+
+This is an adapter and unsafe-intake correction, not completed voice admission.
+Retained audio, current locked client policy, model/cost admission, durable paid-call
+reservation/outcome, reviewed-source handoff and process-crash proof remain next.
+Unknown outcome flags are not a substitute for PostgreSQL reconciliation. Real
+multilingual transcription accuracy has not been measured. Production is unchanged.

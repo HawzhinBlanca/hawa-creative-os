@@ -108,3 +108,15 @@ and committed task projection. The expected result is six starts, one download,
 one extraction and one task/event/outbox. This is not live Telegram, Restate journal,
 Canva export, clean-host restore or independent human design-quality qualification.
 Production flags must stay under the broader release admission procedure.
+
+
+## Voice while admission is unfinished
+
+Send the complete brief as text. Legacy voice messages are held before download,
+including messages with captions, because the spoken instructions cannot be assumed
+from the caption. No task starts from a partial voice request. The transcription
+adapter's candidate output needs explicit copy review and reports unknown confidence,
+language and duration honestly; it is not yet a supported durable voice intake flow.
+The legacy `/v1/assets/transcribe-brief` route accepts supplied text for inspection,
+preserves it without factual normalization, and returns 412 for uploaded audio.
+See ADR-074 and R20_VOICE_EVIDENCE_PROOF.json for engineering scope and limits.

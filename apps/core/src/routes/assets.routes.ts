@@ -97,24 +97,24 @@ export function registerAssetsRoutes(ctx: RouteContext): void {
     return c.json(res);
   });
 
-  // Transcribe Kurdish Voice Message into Normalized Brief & Protected Tokens (FR-013, FR-014)
+  // Inspect supplied text without silently rewriting facts (FR-013, FR-014).
   registerRoute('post', '/assets/transcribe-brief', async (c: any) => {
     const body = await c.req.json().catch(() => ({}));
     // This standalone route has no locked client scope or trusted policy decision. A caller's
     // claimed clientId/egressPolicy cannot authorize sending uploaded voice to a cloud provider.
-    if (typeof body.audioBase64 === 'string' && body.audioBase64.trim()) {
+    if (!body || typeof body !== 'object' || Array.isArray(body))
+      return problem(c, 422, 'Invalid Source', 'Supply a text source object.');
+    if (body.audioBase64 !== undefined && body.audioBase64 !== '') {
       return problem(c, 412, 'Voice Egress Not Authorized',
         'A verified client model-egress decision is required before audio transcription. Send the brief as text or use a scoped intake flow.');
     }
-    const textHint = body.text || body.transcript;
-    const duration = body.durationSeconds || 12;
+    const textHint = body.text ?? body.transcript;
+    if (typeof textHint !== 'string' || !textHint.trim() || textHint.length > 100_000)
+      return problem(c, 422, 'Invalid Source', 'Supply non-empty text of at most 100,000 characters.');
 
     const result = await voiceTranscriber.transcribe(
       {
-        audioBase64: body.audioBase64,
-        audioMimeType: body.audioMimeType || 'audio/ogg',
-        durationSeconds: duration,
-        languageHint: 'ckb',
+        durationSeconds: typeof body.durationSeconds === 'number' ? body.durationSeconds : undefined,
       },
       textHint
     );

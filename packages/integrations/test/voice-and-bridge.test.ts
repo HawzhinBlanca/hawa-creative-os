@@ -20,7 +20,9 @@ describe('KurdishVoiceTranscriber (FR-013, FR-014)', () => {
           egressDecision,
         }, 'Caption supplied by sender');
         expect(result.audioStatus).toBe('policy_blocked');
-        expect(result.transcript).toBe('Caption supplied by sender');
+        expect(result.transcript).toBe('');
+        expect(result.suppliedText).toBe('Caption supplied by sender');
+        expect(result.normalizedText).toBe('');
       }
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
@@ -38,29 +40,28 @@ describe('KurdishVoiceTranscriber (FR-013, FR-014)', () => {
     expect(normalized).toContain('١٢٬٠٠٠ دینار');
   });
 
-  it('transcribes Sorani voice note into structured brief and extracts protected tokens without hallucination', async () => {
+  it('preserves supplied Sorani text without rewriting prices or claiming transcription', async () => {
     const transcriber = new KurdishVoiceTranscriber();
     const result = await transcriber.transcribe(
       { durationSeconds: 10, languageHint: 'ckb' },
       'داشکاندنی بیست و پێنج لە سەد بۆ ڕۆژی نەورۆز بە نرخی دە دۆلار'
     );
 
-    expect(result.detectedLanguage).toBe('ckb');
-    expect(result.objective).toBe('Nawroz Holiday Campaign');
-    expect(result.normalizedText).toContain('٪٢٥');
-    expect(result.normalizedText).toContain('$10');
-    expect(result.protectedTokens.length).toBeGreaterThanOrEqual(1);
-    expect(result.missingFacts).toHaveLength(0);
+    expect(result.detectedLanguage).toBeNull();
+    expect(result.transcript).toBe('');
+    expect(result.audioStatus).toBe('not_provided');
+    expect(result.normalizedText).toBe('داشکاندنی بیست و پێنج لە سەد بۆ ڕۆژی نەورۆز بە نرخی دە دۆلار');
+    expect(result.missingFacts).toEqual(['copy_review']);
   });
 
-  it('flags missing facts when no price or discount is mentioned in voice note (Invariant 5)', async () => {
+  it('requires copy review without inventing a requirement for a price or discount', async () => {
     const transcriber = new KurdishVoiceTranscriber();
     const result = await transcriber.transcribe(
       { durationSeconds: 6, languageHint: 'ckb' },
       'سڵاو کاکە، وێنەیەکمان بۆ چاپ بکەن'
     );
 
-    expect(result.missingFacts).toContain('exact_price_or_discount');
+    expect(result.missingFacts).toEqual(['copy_review']);
   });
 
   it('proves OpenAI Whisper REST call passes API key via Authorization header and does not leak it in URL query parameter', async () => {
@@ -115,7 +116,7 @@ describe('audio file names', () => {
 });
 
 describe('a voice note with a caption', () => {
-  it('is transcribed as well, with no Kurdish language code Whisper refuses, and the caption kept', async () => {
+  it('keeps the provider transcript and supplied caption separate', async () => {
     const originalKey = process.env.OPENAI_API_KEY;
     const originalFetch = globalThis.fetch;
     process.env.OPENAI_API_KEY = ['voice', 'fixture', 'key'].join('-');
@@ -133,7 +134,8 @@ describe('a voice note with a caption', () => {
       expect(form).toBeDefined();
       expect(form!.get('language')).toBeNull();
       expect(String(form!.get('prompt'))).toMatch(/سۆرانی/);
-      expect(res.normalizedText).toBe('KAAE\n\nبانگهێشتنامەیەک بۆ کۆنفرانسی ساگاکۆن');
+      expect(res.normalizedText).toBe('بانگهێشتنامەیەک بۆ کۆنفرانسی ساگاکۆن');
+      expect(res.suppliedText).toBe('KAAE');
     } finally {
       process.env.OPENAI_API_KEY = originalKey;
       globalThis.fetch = originalFetch;

@@ -11,7 +11,7 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
     app = createApp();
   });
 
-  it('uses a supplied caption without claiming the unavailable voice was transcribed', async () => {
+  it('holds the entire voice request even when its download is unavailable and a caption exists', async () => {
     const audioPayload = {
       update_id: 88801,
       message: {
@@ -37,14 +37,11 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
       body: JSON.stringify(audioPayload),
     });
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.ok).toBe(true);
-    expect(json.task).toBeDefined();
-    expect(json.task.clientId).toBe('client-aster');
+    expect(json).toMatchObject({ ok: true, ignored: true, reason: 'VOICE_POLICY_UNRESOLVED' });
+    expect(json.task).toBeUndefined();
     expect(json.voiceTranscript).toBeUndefined();
-    expect(['RECEIVED', 'AWAITING_APPROVAL']).toContain(json.task.status);
-    expect(json.task.brief).toBeDefined();
   });
 
   it('refuses an actual voice file before client policy selection without model egress or a partial task', async () => {
@@ -73,7 +70,7 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
       const json = await res.json();
       expect(json).toMatchObject({ ignored: true, reason: 'VOICE_POLICY_UNRESOLVED' });
       expect(json.task).toBeUndefined();
-      expect(seenUrls.filter((url) => /api\.openai\.com|generativelanguage\.googleapis\.com|api\.anthropic\.com/.test(url))).toEqual([]);
+      expect(seenUrls.filter((url) => /getFile|api\.openai\.com|generativelanguage\.googleapis\.com|api\.anthropic\.com/.test(url))).toEqual([]);
     } finally {
       fetchSpy.mockRestore();
     }

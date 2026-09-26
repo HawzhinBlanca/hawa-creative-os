@@ -1,0 +1,49 @@
+{
+  "date": "2026-09-27",
+  "scope": "R20/R07 unreviewed voice evidence and legacy partial-intake repair",
+  "requirements": [
+    "FR-013",
+    "FR-014",
+    "FR-060",
+    "FR-066",
+    "FR-067",
+    "NFR-006",
+    "NFR-007"
+  ],
+  "earlierRuns": [
+    {
+      "kind": "sandbox preflight",
+      "result": "isolated DB connection denied; no tests executed"
+    },
+    {
+      "kind": "red-before",
+      "filesFailed": 1,
+      "testsFailed": 22,
+      "testsPassed": 1,
+      "note": "Original adapter reproduced wrong evidence, leaked synthetic error content and stalled reads. Fixtures were synthetic; the negative-size fetch spy was subsequently changed to reject explicitly instead of delegating to native fetch."
+    }
+  ],
+  "focused": {
+    "filesPassed": 5,
+    "testsPassed": 55,
+    "testsFailed": 0
+  },
+  "typecheck": "passed source, scripts and included tests",
+  "lint": "passed; 9 existing direct-provider exceptions remain",
+  "fullRegression": "pending release seal",
+  "limits": [
+    "Synthetic provider responses do not measure transcription accuracy.",
+    "No trusted database-backed voice policy or durable paid-call admission wired yet.",
+    "Legacy voice is held before download; API audio still returns 412.",
+    "No production deployment, model change or flag change.",
+    "Adapter outcome classification alone does not prevent retry across process restart."
+  ],
+  "sourceFiles": {
+    "packages/integrations/src/voice-transcriber.ts": "814e9dd2cbe4f56ff994f1331886a2c271b851110c8f5941521aa6001645a7af",
+    "packages/integrations/test/voice-evidence.test.ts": "981ebd6cbfe6c18e82954f1dabab0eebe0db7ef093ef274a0ae1f9b4ef4a0e7a",
+    "apps/core/src/services/telegram-intake/media.ts": "133e0991a49a02575d5c6df1cd63ea7cc36eb39166b97843fdef1ed1a5722a84",
+    "apps/core/src/routes/assets.routes.ts": "562d3898bab1b07a1e82d0a27b3a3e514529d25ba3b18eff801c00dbf267eb56",
+    "apps/core/test/transcribe.test.ts": "eea96f03aaf25095f99a49dffbdb6ebf8684771c34fb74a78709c3ad662bf9e9",
+    "apps/core/test/voice-ingress-and-webhook.test.ts": "60288011d9ab07c4984836e8c7760aef07d3b4c72140b91e2311759f20e6d997"
+  }
+}

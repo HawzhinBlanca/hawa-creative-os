@@ -17,19 +17,25 @@ export interface VoiceTranscriptionRequest {
 }
 
 export interface VoiceTranscriptionResult {
-  audioStatus: 'not_provided' | 'policy_blocked' | 'provider_unavailable' | 'provider_failed' | 'transcribed';
+  audioStatus: 'not_provided' | 'invalid_audio' | 'policy_blocked' | 'provider_unavailable' | 'provider_failed' | 'transcribed';
+  /** Uncertain transport must be reconciled by the durable caller before another paid call. */
+  providerOutcome: 'not_sent' | 'rejected' | 'received' | 'uncertain';
   transcript: string;
+  /** Compatibility field: exact source text, never automatically normalized factual copy. */
   normalizedText: string;
-  detectedLanguage: 'ckb' | 'ar' | 'en';
-  confidence: number;
-  durationSeconds: number;
+  suppliedText: string;
+  detectedLanguage: 'ckb' | 'ar' | 'en' | null;
+  confidence: number | null;
+  durationSeconds: number | null;
+  durationSource: 'caller' | 'unknown';
+  requiresCopyReview: true;
   protectedTokens: ProtectedToken[];
   objective: string;
   missingFacts: string[];
 }
 
 /**
- * Normalizes spoken Kurdish Sorani numbers, dates, and currencies into standard written orthography
+ * Optional suggestion only. Never use this transformation as approved or transcribed factual copy.
  */
 export function normalizeKurdishSpokenText(spoken: string): string {
   let text = spoken.trim();
@@ -71,18 +77,63 @@ export function audioExtension(mimeType?: string): string {
   return 'ogg';
 }
 
-export class KurdishVoiceTranscriber {
-  /**
-   * Transcribes Sorani voice audio note and extracts protected factual tokens
-   */
-  async transcribe(req: VoiceTranscriptionRequest, fallbackText?: string): Promise<VoiceTranscriptionResult> {
-    let rawTranscript: string | undefined;
+const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+const MAX_RESPONSE_BYTES = 1024 * 1024;
+const MAX_TRANSCRIPT_CHARS = 100_000;
 
-    // 1. Live audio transcription via OpenAI Whisper if audio is supplied and API key exists. The
-    // audio is transcribed whatever caption came with it: a caption used to stand in for the voice
-    // note, so a spoken brief with a one-word caption was reduced to that word.
+/** Bounds actual bytes and the body-read deadline; cancellation may itself be broken. */
+async function readVoiceResponse(response: Response, signal: AbortSignal): Promise<unknown> {
+  const length = response.headers.get('content-length');
+  if (length !== null && (!/^\d+$/.test(length) || Number(length) > MAX_RESPONSE_BYTES)) {
+    void response.body?.cancel().catch(() => undefined);
+    throw new Error('VOICE_RESPONSE_LIMIT');
+  }
+  if (!response.body) throw new Error('VOICE_RESPONSE_EMPTY');
+  const reader = response.body.getReader();
+  let abort: (() => void) | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    abort = () => reject(new Error('VOICE_RESPONSE_TIMEOUT'));
+    if (signal.aborted) abort(); else signal.addEventListener('abort', abort, { once: true });
+  });
+  const chunks: Uint8Array[] = []; let size = 0;
+  try {
+    for (;;) {
+      const chunk = await Promise.race([reader.read(), timeout]);
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > MAX_RESPONSE_BYTES) throw new Error('VOICE_RESPONSE_LIMIT');
+      chunks.push(chunk.value);
+    }
+    return JSON.parse(Buffer.concat(chunks, size).toString('utf8')) as unknown;
+  } finally {
+    if (abort) signal.removeEventListener('abort', abort);
+    void reader.cancel().catch(() => undefined);
+  }
+}
+
+export class KurdishVoiceTranscriber {
+  private readonly timeoutMs: number;
+  constructor(options: { timeoutMs?: number } = {}) {
+    const timeout = options.timeoutMs ?? 30_000;
+    if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 30_000) throw new Error('Invalid voice timeout');
+    this.timeoutMs = timeout;
+  }
+  /**
+   * Produces unreviewed source evidence. This adapter never retries a paid request.
+   */
+  async transcribe(req: VoiceTranscriptionRequest, suppliedText?: string): Promise<VoiceTranscriptionResult> {
+    let rawTranscript = '';
+    let providerOutcome: VoiceTranscriptionResult['providerOutcome'] = 'not_sent';
+    const hasAudio = Boolean(req.audioBuffer?.byteLength || req.audioBase64?.length);
+    const invalidAudio = Boolean(
+      (req.audioBuffer && req.audioBuffer.byteLength > MAX_AUDIO_BYTES) ||
+      (!req.audioBuffer && req.audioBase64 && (req.audioBase64.length > Math.ceil(MAX_AUDIO_BYTES / 3) * 4 ||
+        req.audioBase64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(req.audioBase64)))
+    );
     const openaiKey = process.env.OPENAI_API_KEY;
-    const audioBytes = req.audioBuffer ? Buffer.from(req.audioBuffer) : (req.audioBase64 ? Buffer.from(req.audioBase64, 'base64') : undefined);
+    const decoded = invalidAudio ? undefined : req.audioBuffer ? Buffer.from(req.audioBuffer)
+      : req.audioBase64 ? Buffer.from(req.audioBase64, 'base64') : undefined;
+    const audioBytes = decoded && decoded.byteLength <= MAX_AUDIO_BYTES ? decoded : undefined;
     const decision = req.egressDecision;
     const externalAllowed = Boolean(
       decision &&
@@ -91,11 +142,14 @@ export class KurdishVoiceTranscriber {
       (decision.mode === 'approved_providers' || decision.mode === 'evaluated_external_allowed') &&
       Array.isArray(decision.allowedProviders) && decision.allowedProviders.includes('openai')
     );
-    let audioStatus: VoiceTranscriptionResult['audioStatus'] = !audioBytes?.length ? 'not_provided'
+    let audioStatus: VoiceTranscriptionResult['audioStatus'] = invalidAudio || (hasAudio && !audioBytes?.length) ? 'invalid_audio'
+      : !hasAudio ? 'not_provided'
       : !externalAllowed ? 'policy_blocked'
         : !openaiKey || openaiKey.startsWith('mock-') ? 'provider_unavailable' : 'provider_failed';
 
     if (audioBytes?.length && externalAllowed && openaiKey && !openaiKey.startsWith('mock-')) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
       try {
         const formData = new FormData();
         const blob = new Blob([audioBytes], { type: req.audioMimeType || 'audio/ogg' });
@@ -113,72 +167,52 @@ export class KurdishVoiceTranscriber {
         }
 
         const endpoint = 'https://api.openai.com/v1/audio/transcriptions';
+        providerOutcome = 'uncertain';
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${openaiKey}`,
           },
-          signal: AbortSignal.timeout(30000),
+          signal: controller.signal,
+          redirect: 'error',
           body: formData,
         });
 
         if (response.ok) {
-          const json = await response.json() as any;
-          if (json.text && typeof json.text === 'string') {
-            rawTranscript = json.text.trim();
-            if (rawTranscript) audioStatus = 'transcribed';
+          const json = await readVoiceResponse(response, controller.signal);
+          const text = json && typeof json === 'object' && 'text' in json ? json.text : undefined;
+          if (typeof text === 'string' && text.trim() && text.length <= MAX_TRANSCRIPT_CHARS) {
+            rawTranscript = text;
+            audioStatus = 'transcribed';
+            providerOutcome = 'received';
           }
         } else {
-          console.warn(`[KurdishVoiceTranscriber] transcription refused: HTTP ${response.status} ${(await response.text().catch(() => '')).slice(0, 200)}`);
+          // Errors can contain private transcript fragments or credentials. Never read/log them.
+          void response.body?.cancel().catch(() => undefined);
+          if ([400, 401, 403, 404, 413, 415, 422, 429].includes(response.status)) providerOutcome = 'rejected';
         }
-      } catch (err) {
-        console.warn('[KurdishVoiceTranscriber] Live OpenAI audio transcription failed, falling back to rule-based parser:', err);
-      }
+      } catch {
+        // Outcome remains uncertain after dispatch, including lost/invalid/oversized replies.
+      } finally { clearTimeout(timer); }
     }
 
-    // The caption and the spoken words together; either alone when there is only one.
-    const caption = fallbackText?.trim();
-    rawTranscript = [caption, rawTranscript].filter((part) => part && part.length > 0).join('\n\n') || undefined;
-
-    if (!rawTranscript) {
-      // Nothing was transcribed and no caption was supplied. An empty result is the only honest
-      // answer; inventing a sample brief would create a task the requester never asked for.
-      return {
-        audioStatus,
-        transcript: '',
-        normalizedText: '',
-        detectedLanguage: 'ckb',
-        confidence: 0,
-        durationSeconds: req.durationSeconds || 0,
-        protectedTokens: [],
-        objective: 'Untranscribed voice note',
-        missingFacts: ['transcript'],
-      };
-    }
-    
-    const normalizedText = normalizeKurdishSpokenText(rawTranscript);
-    const protectedTokens = extractProtectedTokens(normalizedText);
-
-    const missingFacts: string[] = [];
-    if (protectedTokens.length === 0 && !/\d|٪|\$|دینار/i.test(normalizedText)) {
-      missingFacts.push('exact_price_or_discount');
-    }
-
-    let objective = 'General Promotion';
-    if (/نەورۆز/i.test(normalizedText)) objective = 'Nawroz Holiday Campaign';
-    else if (/هاوین|تامی سارد/i.test(normalizedText)) objective = 'Summer Campaign';
-    else if (/ڕەمەزان/i.test(normalizedText)) objective = 'Ramadan Kareem Campaign';
-
+    const caption = typeof suppliedText === 'string' ? suppliedText : '';
+    const text = hasAudio ? rawTranscript : caption;
+    const duration = typeof req.durationSeconds === 'number' && Number.isFinite(req.durationSeconds) && req.durationSeconds > 0
+      ? req.durationSeconds : null;
     return {
-      audioStatus,
+      audioStatus, providerOutcome,
       transcript: rawTranscript,
-      normalizedText,
-      detectedLanguage: 'ckb',
-      confidence: 0.96,
-      durationSeconds: req.durationSeconds || 14.5,
-      protectedTokens,
-      objective,
-      missingFacts,
+      normalizedText: text,
+      suppliedText: caption,
+      detectedLanguage: null,
+      confidence: null,
+      durationSeconds: duration,
+      durationSource: duration === null ? 'unknown' : 'caller',
+      requiresCopyReview: true,
+      protectedTokens: extractProtectedTokens(text),
+      objective: hasAudio ? 'Unreviewed voice source' : 'Supplied text',
+      missingFacts: [...(text.trim() ? [] : ['transcript']), 'copy_review'],
     };
   }
 }

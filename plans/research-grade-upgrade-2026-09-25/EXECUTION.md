@@ -12,7 +12,24 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-27 — Telegram PDF source workflow)
+## Current result (2026-09-27 — honest voice evidence boundary)
+
+ADR-074 removes fabricated confidence/language/duration and automatic price rewrites
+from voice evidence, separates captions, bounds provider transport and holds legacy
+voice before download so missing audio cannot turn into a caption-only design.
+The standalone text-inspection route preserves exact text and still refuses audio.
+Affected checks: **5 files / 55 tests**, source/test types and lint passed. Full
+regression/seal is pending; the prior PDF checkpoint below remains the last sealed
+full-suite result. No deployment, provider-model or flag change.
+
+Next is the complete retained-audio → trusted locked-client policy → durable paid
+transcription → requester copy review journey, with unknown call outcomes preserved
+across restart. Then the isolated Core/Desk/worker/Docling canary and complete live
+Canva request/revision/approval/export/delivery journey. Retrieval quality, clean-host
+recovery and human creative-quality gates remain open. See R20_EVIDENCE.md and
+R20_VOICE_EVIDENCE_PROOF.json for the exact scope and remaining work.
+
+## Prior result (2026-09-27 — Telegram PDF source workflow)
 
 The Telegram PDF → retained original → reviewed exact copy → owned request path is
 implemented for new briefs and current revision/clarification replies. Admission
