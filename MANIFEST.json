@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T22:41:51Z",
+  "generatedAt": "2026-09-26T23:06:54Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 352,
+  "fileCount": 354,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "c04b6fee1d9d64c4f51db81248ff0f007ad28ba5d35497705d6d60692e6c0d26",
-      "bytes": 3985
+      "sha256": "cbc9db42a1d4cc5fc3af1031de0a62b8f8abd8f7b86a13bd4902104e7aae778d",
+      "bytes": 3977
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -443,6 +443,11 @@
       "bytes": 3221
     },
     {
+      "path": "adrs/075_durable_voice_source_review.md",
+      "sha256": "ddafbecff05fff73a8d4bb8bb1200f2599c5b2ea7177c51e95047a60a361b4c1",
+      "bytes": 4704
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "54ca6b1554c988f5a2405991660047ded612d8d96c93dd3e88bc849cc09c2b7a",
       "bytes": 21896
@@ -454,8 +459,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "0088b3115dd7cd8581d1dc02056dfee992483e00b5e5bcafd49127023feb8660",
-      "bytes": 43681
+      "sha256": "b191cd8ccaf8d01de41ab5f1c08bfdcd0a1a04b1fe0be8694cf1c1699047864f",
+      "bytes": 45851
     },
     {
       "path": "config/asset-workflows.example.yaml",
@@ -889,8 +894,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "c84c53b0eb6e33e38f9066d78edae8521b9589145459b152229d2b47e2f255de",
-      "bytes": 27706
+      "sha256": "4dec666e4552d71bc8f22a6cdf4b1a73f58c91e75e279b68244afcf2bed72e95",
+      "bytes": 28984
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -944,8 +949,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_EVIDENCE.md",
-      "sha256": "7d24c5b645bcc5ce06a87a0b75eb4942078744eebdf551b1b4c6b179bfe4b7ff",
-      "bytes": 68281
+      "sha256": "83ff543428456d5fb68561040f18ac258019f49e35e6be322cabbe2325d4a822",
+      "bytes": 70465
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_IMAGE_DOCUMENT_DRILL.json",
@@ -956,6 +961,11 @@
       "path": "plans/research-grade-upgrade-2026-09-25/R07_SOURCE_RECOVERY_PROOF.json",
       "sha256": "2b0376f5c2838f567c8359ad1dc34bf458757a3551ef58268bdfa7dd9f64bf67",
       "bytes": 10423
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R07_VOICE_RECOVERY_PROOF.json",
+      "sha256": "599267860157c69b9ae3b27e5805f30261f427e4dc82447b566d6d7e46987072",
+      "bytes": 10518
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
@@ -1014,8 +1024,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R12_EVIDENCE.md",
-      "sha256": "5a8ef60c305e31415516b57aeb5296c45d90fe962fd1dd0f1050e649c2aac7df",
-      "bytes": 23002
+      "sha256": "d0108bbe203845cc2a0e25882ffd59fbe74c86244231f292900980b222516ae3",
+      "bytes": 25186
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R13_EVIDENCE.md",
@@ -1049,8 +1059,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_EVIDENCE.md",
-      "sha256": "18292d5d0cc3e26256be79e8c19fb07711244071a5e4d650a2d1925e0249284e",
-      "bytes": 11044
+      "sha256": "20c305fab25fa3404b0087a6d34326c0838938e6a9ee2fe286a2a2c86f3f60dc",
+      "bytes": 13228
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_VOICE_EVIDENCE_PROOF.json",
@@ -1079,8 +1089,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "e89d7ba794d215346dfd4d35b6b6a410af428ee90593fe0dbf4c6db6567e3538",
-      "bytes": 233609
+      "sha256": "c70e7b6ab754bceec8e9933675dc441df139c2677cfbccacd19254521376ce53",
+      "bytes": 241673
     },
     {
       "path": "plans/user-stories.csv",
@@ -1184,8 +1194,8 @@
     },
     {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",
-      "sha256": "e8fd0f89f167ef70932ff31121325ab836c483ac942b994707699ed366471859",
-      "bytes": 6094
+      "sha256": "9029fdbb6a6610da10319988521f1e4d94f60dab28e0a9764e8e2400228b299e",
+      "bytes": 9814
     },
     {
       "path": "schemas/ApprovalDecision.schema.json",
