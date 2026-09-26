@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CanvaBindingRepository, createDb, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 
@@ -118,6 +118,28 @@ describe('versioned lifecycle design outcome', () => {
     }));
     expect(rows.request).toMatchObject({ stage: 'in_review', rev: '2' });
     expect(rows.task).toMatchObject({ state: 'human_review', current_design_revision_id: result.body.revisionId });
+  });
+
+  it('persists the exact review link and replays it across a changed deployment URL', async () => {
+    const { requestId, taskId } = await opened();
+    const designId = `DA${randomUUID().replaceAll('-', '').slice(0, 12)}`;
+    await withRlsContext(db, scope, trx => new CanvaBindingRepository(trx).createBinding({
+      tenantId, taskId, clientId, canvaDesignId: designId, editUrl: `https://www.canva.com/design/${designId}/edit`,
+    }, trx));
+    vi.stubEnv('PUBLIC_TUNNEL_URL', 'https://desk.example.test');
+    try {
+      process.env.TELEGRAM_ALLOWED_USERS = '940001111';
+      const payload = outcome(requestId, taskId, { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId,
+        reviewUrl: 'https://outside.test/forged' });
+      const first = await post(requestId, 'design-outcome', payload);
+      expect(first.status).toBe(200);
+      expect(first.body.message.text).toContain(`https://desk.example.test/#/work?task=${taskId}&amp;revision=${first.body.revisionId}`);
+      expect(first.body.message.text).not.toContain('outside.test');
+      expect(first.body.officeAlert).toMatchObject({ chatId: '940001111' });
+      expect(first.body.officeAlert.text).toContain(`https://desk.example.test/#/work?task=${taskId}&revision=${first.body.revisionId}`);
+      vi.stubEnv('PUBLIC_TUNNEL_URL', 'https://changed.example.test');
+      expect(await post(requestId, 'design-outcome', payload)).toEqual(first);
+    } finally { vi.unstubAllEnvs(); }
   });
 
   it('records one versioned office revision request on the current draft and replays its receipt', async () => {

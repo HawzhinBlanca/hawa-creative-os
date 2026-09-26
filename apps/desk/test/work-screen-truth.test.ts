@@ -87,7 +87,7 @@ describe('the Approve button of the task on screen (WorkScreen approveState)', (
     lift<string>('approveState', {
       selectedTask: { id: 't', title: 't', status, latestRevisionId: 'r1', qaReport: { passed: true } },
       detail: hasDetail ? { id: 't', requestId: null } : undefined,
-      busy: false,
+      busy: false, reviewBlocked: false,
       approveButtonState,
     });
 
@@ -137,7 +137,7 @@ describe('Request Revision (WorkScreen handleSendRevisionRequest)', () => {
       // A task with no design revision yet: a failed draft, a paused question, a Desk-made request.
       selectedTask: { id: 't1', title: 'KAAE evening', status: 'OPERATOR_REQUIRED' },
       revisionNotes: 'Make the Kurdish headline bigger and move the logo left',
-      decisionStarting: { current: false },
+      reviewBlocked: false, decisionStarting: { current: false },
       setActionLoading: () => {},
       apiClient: { tasks: { recordDecision, get: vi.fn(async () => ({ id: 't1', status: 'OPERATOR_REQUIRED' })) } },
       setTasks: () => {},
@@ -157,7 +157,7 @@ describe('Reject Design (WorkScreen handleReject)', () => {
     const mutate = vi.fn();
     const base = { selectedTask: { id: 'task-1', status: 'AWAITING_APPROVAL', latestRevisionId: 'rev-1' },
       sessionUser: { id: 'reviewer-1', role: 'art_director' }, rejectionCategory: 'brand_direction',
-      rejectionReason: 'Wrong brand direction', decisionStarting: { current: false },
+      rejectionReason: 'Wrong brand direction', reviewBlocked: false, decisionStarting: { current: false },
       reject: { isPending: false, mutate }, approvalRoleBlocker: () => null,
       reserveDecisionAction, showToast: vi.fn() };
     const send = lift<() => Promise<void>>('handleReject', base);

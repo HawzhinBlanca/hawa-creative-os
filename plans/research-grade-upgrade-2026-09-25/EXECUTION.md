@@ -12,7 +12,28 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R08 named review and assignment administration)
+## Current result (2026-09-26 — R08 chat-to-Desk review)
+
+Chat notifications now open the exact recorded task/revision, including after
+Google Workspace sign-in and outside the first queue page. Unavailable tasks
+cannot silently become a different queue entry. An old notification blocks
+approve/revise/reject until the reviewer explicitly inspects the current revision;
+a further revision change blocks them again. Legacy and lifecycle notifications
+keep the database-derived link in their durable receipts. A separate office chat
+receives the ready-draft review notice. The old chat-action endpoint returns an
+explicit non-decision Desk handoff. See ADR-065, migration 039 and
+`R08_EVIDENCE.md` nineteenth pass.
+
+Focused checks passed **10 files / 110 tests**, followed by **2 files / 35 tests**
+for off-page/open-tab navigation, subsequent revision changes and the office notice.
+The full source suite excluding only the unsealed release gate passed **431 files /
+3,327 tests**, with **4 files / 52 tests skipped**. Full TypeScript, lint, zero-secret
+scan and Desk production build passed. The exact source manifest is sealed next.
+No production migration, live sign-in, external delivery or human quality admission
+is claimed. `runbooks/CHAT_REVIEW_ACCEPTANCE.md` defines the deployed handoff check.
+R08 and the wider `WORK_ITEMS.csv` remain open; production lifecycle flags stay off.
+
+## Prior result (2026-09-26 — R08 named review and assignment administration)
 
 Named Google Workspace reviewers can now decide older Core-owned tasks with
 the same client/project assignment check as request-owned reviews. The task

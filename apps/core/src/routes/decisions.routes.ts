@@ -1,3 +1,4 @@
+import { deskReviewPath } from '@hawa/contracts/desk-navigation';
 import crypto from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { isAuthorizedReviewerRole, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, type OfficeApprovalProof, type PinnedExport } from '@hawa/domain';
@@ -865,9 +866,11 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       return problem(c, 409, 'Conflict', actionRes.error.message);
     }
 
-    // This check does not write a decision to PostgreSQL or signal the durable review workflow.
-    // Do not acknowledge it as an approval until the chat action is connected to that transaction.
-    return problem(c, 501, 'Chat Decision Unavailable',
-      'Chat action was validated but approval was not recorded; use the Desk decision endpoint');
+    // ADR-065 selects the specification's Desk handoff, with the same named decision transaction.
+    c.header('Content-Type', 'application/problem+json');
+    return c.json({ type: 'about:blank', status: 409, title: 'Desk Review Required',
+      detail: 'Approval was not recorded. Open Hawa Desk, sign in and inspect the current design before deciding.',
+      decisionRecorded: false, reviewPath: deskReviewPath({ taskId, revisionId: currentRevisionId }),
+    }, 409);
   });
 }

@@ -88,6 +88,14 @@ Annotations store normalized canvas coordinates, page/artboard, target node when
 
 Telegram/WhatsApp/email notifications may announce review availability. The approval action itself opens Hawa Desk or uses a signed, expiring, authorization-checked interaction. A chat reaction alone is not sufficient for high-risk approval unless explicitly configured.
 
+The active implementation selects the Desk handoff (ADR-065). Notifications carry
+the recorded task/revision; opening a link does not approve it. Google sign-in
+preserves this local destination in single-use server state. If the revision has
+changed, Desk requires explicit review of the current revision. The existing
+named, assigned reviewer transaction remains authoritative. Legacy chat decision
+calls return `409 Desk Review Required` with `decisionRecorded: false` and a local
+`reviewPath`; they do not write an approval.
+
 ## 9. Controlled auto-approval
 
 Disabled at launch.

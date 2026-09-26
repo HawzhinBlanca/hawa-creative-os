@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { parseDeskReviewParams, deskReviewPath } from '@hawa/contracts/desk-navigation';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { verifyTelegramMiniAppInitData } from '@hawa/integrations';
@@ -34,6 +35,9 @@ export function registerAuthRoutes(ctx: RouteContext) {
 
   registerRoute('get', '/auth/google/start', async (c: Context) => {
     if (!db || !googleOidc) return problem(c, 503, 'Google Sign-In Unavailable', 'Office sign-in is not configured');
+    const params = new URL(c.req.url).searchParams;
+    const reviewTarget = parseDeskReviewParams(params);
+    if (params.size && !reviewTarget) return problem(c, 422, 'Invalid Review Destination', 'Use a Desk task link to start sign-in');
     const state = crypto.randomBytes(32).toString('base64url');
     const nonce = crypto.randomBytes(32).toString('base64url');
     const verifier = oidcCodeVerifier();
@@ -45,8 +49,9 @@ export function registerAuthRoutes(ctx: RouteContext) {
     }
     const stateHash = crypto.createHash('sha256').update(state).digest('hex');
     await withRlsContext(db, oidcRls, (trx) => sql`INSERT INTO hawa.office_oidc_flows
-      (state_hash,tenant_id,code_verifier,nonce,expires_at)
-      VALUES (${stateHash},${defaultTenantId}::uuid,${verifier},${nonce},now()+interval '5 minutes')`.execute(trx));
+      (state_hash,tenant_id,code_verifier,nonce,expires_at,return_task_id,return_revision_id)
+      VALUES (${stateHash},${defaultTenantId}::uuid,${verifier},${nonce},now()+interval '5 minutes',
+        ${reviewTarget?.taskId ?? null}::uuid,${reviewTarget?.revisionId ?? null}::uuid)`.execute(trx));
     setCookie(c, 'hawa_oidc_state', state, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 300 });
     c.header('Cache-Control', 'no-store');
     c.header('Referrer-Policy', 'no-referrer');
@@ -69,9 +74,9 @@ export function registerAuthRoutes(ctx: RouteContext) {
     }
     const stateHash = crypto.createHash('sha256').update(state).digest('hex');
     const flow = await withRlsContext(db, oidcRls, async (trx) => (await sql<{
-      code_verifier: string; nonce: string; expires_at: Date;
+      code_verifier: string; nonce: string; expires_at: Date; return_task_id: string | null; return_revision_id: string | null;
     }>`DELETE FROM hawa.office_oidc_flows WHERE state_hash=${stateHash} AND tenant_id=${defaultTenantId}::uuid
-      RETURNING code_verifier,nonce,expires_at`.execute(trx)).rows[0]);
+      RETURNING code_verifier,nonce,expires_at,return_task_id,return_revision_id`.execute(trx)).rows[0]);
     if (!flow || new Date(flow.expires_at).getTime() <= Date.now() || callback.searchParams.has('error')) {
       return problem(c, 401, 'Sign-In Expired', 'Start sign-in again from Hawa Desk');
     }
@@ -105,7 +110,8 @@ export function registerAuthRoutes(ctx: RouteContext) {
     setCookie(c, 'hawa_session', token, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 8 * 60 * 60 });
     setCookie(c, 'hawa_csrf', crypto.createHash('sha256').update(`${token}:csrf`).digest('hex'),
       { secure: true, sameSite: 'Strict', path: '/', maxAge: 8 * 60 * 60 });
-    return c.redirect('/', 303);
+    return c.redirect(flow.return_task_id ? deskReviewPath({ taskId: flow.return_task_id,
+      ...(flow.return_revision_id ? { revisionId: flow.return_revision_id } : {}) }) : '/', 303);
   });
 
   // Authenticated Session Endpoints (H01, FR-076, FR-078)

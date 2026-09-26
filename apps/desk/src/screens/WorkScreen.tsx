@@ -101,6 +101,7 @@ export function readQueuePage(
 
 interface WorkScreenProps {
   initialTaskId?: string;
+  reviewRevisionId?: string;
   onNavigateToClients?: (clientId?: string) => void;
   onNavigateToSettings?: () => void;
   onNewTask?: () => void;
@@ -108,6 +109,7 @@ interface WorkScreenProps {
 
 export const WorkScreen: React.FC<WorkScreenProps> = ({
   initialTaskId,
+  reviewRevisionId,
   onNavigateToClients: _onNavigateToClients,
   onNavigateToSettings: _onNavigateToSettings,
   onNewTask,
@@ -119,12 +121,16 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const pollInterval = usePollInterval();
 
   const [selectedTaskId, setSelectedTaskId] = useState<string>(initialTaskId || '');
-  useEffect(() => { if (initialTaskId) setSelectedTaskId(initialTaskId); }, [initialTaskId]);
+  const [confirmedReviewRevision, setConfirmedReviewRevision] = useState<string | undefined>();
+  useEffect(() => {
+    setConfirmedReviewRevision(undefined);
+    if (initialTaskId) { setSelectedTaskId(initialTaskId); setMobilePane('detail'); }
+  }, [initialTaskId, reviewRevisionId]);
   const [canvaLinkInput, setCanvaLinkInput] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'brief' | 'brand' | 'qa' | 'history'>('brief');
-  const [mobilePane, setMobilePane] = useState<'queue' | 'detail'>('queue');
+  const [mobilePane, setMobilePane] = useState<'queue' | 'detail'>(initialTaskId ? 'detail' : 'queue');
   const [previewZoom, setPreviewZoom] = useState(false);
 
   // Modals & In-Flight State
@@ -201,6 +207,14 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     enabled: Boolean(selectedTaskId),
   });
   const detail = detailQuery.data?.id === selectedTaskId ? detailQuery.data : undefined;
+
+  useEffect(() => {
+    setIsApprovalModalOpen(false);
+    setIsRevisionModalOpen(false);
+    setIsRejectionModalOpen(false);
+  }, [selectedTaskId, reviewRevisionId]);
+  const reviewBlocked = Boolean(initialTaskId && reviewRevisionId && selectedTaskId === initialTaskId &&
+    (!detail?.latestRevisionId || (detail.latestRevisionId !== reviewRevisionId && confirmedReviewRevision !== detail.latestRevisionId)));
 
   // The page, and the task opened from a link or a notification when it is not on this page.
   const tasks = useMemo<LiveTask[]>(() => {
@@ -291,7 +305,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const selectedTask = useMemo(() => {
     const entry = tasks.find((t) => t.id === selectedTaskId);
     if (entry && detail) return { ...entry, ...detail };
-    return entry || filteredTasks[0] || tasks[0];
+    return selectedTaskId ? entry : filteredTasks[0] || tasks[0];
   }, [tasks, selectedTaskId, filteredTasks, detail]);
 
   // History & Audit reads the task's recorded events (GET /tasks/:id/timeline). It read `history`
@@ -421,7 +435,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   });
 
   const handleSendRevisionRequest = async () => {
-    if (!selectedTask || !revisionNotes.trim() || decisionStarting.current) return;
+    if (reviewBlocked || !selectedTask || !revisionNotes.trim() || decisionStarting.current) return;
     const revisionId = selectedTask.latestRevisionId;
     if (!revisionId) {
       showToast('Nothing sent: this task has no design revision to request changes on. Your notes are kept.', 'error');
@@ -467,7 +481,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   });
 
   const handleReject = async () => {
-    if (decisionStarting.current || reject.isPending || !selectedTask?.latestRevisionId || !rejectionCategory || !rejectionReason.trim()) return;
+    if (reviewBlocked || decisionStarting.current || reject.isPending || !selectedTask?.latestRevisionId || !rejectionCategory || !rejectionReason.trim()) return;
     if (selectedTask.status !== 'AWAITING_APPROVAL' || approvalRoleBlocker(sessionUser?.role)) {
       showToast('This draft is no longer available for this reviewer. Refresh the task.', 'error');
       return;
@@ -486,7 +500,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // Primary Action 4: Approve captured files (FR-078, CV-15, H02, H03). The modal lists the exports
   // Core has stored for the task; the ones the reviewer keeps selected are pinned to the approval.
   const openApprovalModal = async () => {
-    if (!selectedTask) return;
+    if (reviewBlocked || !selectedTask) return;
     const taskId = selectedTask.id;
     setIsApprovalModalOpen(true);
     setApprovalExports({ state: 'loading' });
@@ -523,7 +537,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   });
 
   const handleApprove = async () => {
-    if (decisionStarting.current) return;
+    if (reviewBlocked || decisionStarting.current) return;
     if (!selectedTask || !selectedTask.latestRevisionId) {
       showToast('No active design revision to approve.', 'error');
       return;
@@ -600,7 +614,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const nextAction = selectedTask ? getNextActionPrompt(selectedTask) : null;
   // Hidden for a status the Desk does not know, which could be approved until 2026-09-24.
   const approveState = selectedTask
-    ? approveButtonState(selectedTask.status, { hasRevision: Boolean(selectedTask.latestRevisionId), qaPassed: selectedTask.qaReport?.passed === true, busy: busy || !detail })
+    ? approveButtonState(selectedTask.status, { hasRevision: Boolean(selectedTask.latestRevisionId), qaPassed: selectedTask.qaReport?.passed === true, busy: busy || !detail || reviewBlocked })
     : 'hidden';
 
   return (
@@ -913,6 +927,21 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 </button>
               </div>
 
+              {reviewBlocked && detail && (
+                <div role="alert" className="next-action-banner">
+                  <div>
+                    <strong>This notification names an older revision.</strong>
+                    <p>Decisions are paused. Inspect the current design and its evidence before continuing.</p>
+                    {detail.latestRevisionId && <button className="btn primary" onClick={() => {
+                      setIsApprovalModalOpen(false);
+                      setIsRevisionModalOpen(false);
+                      setIsRejectionModalOpen(false);
+                      setConfirmedReviewRevision(detail.latestRevisionId);
+                    }}>Review current revision</button>}
+                  </div>
+                </div>
+              )}
+
               {/* Task Header Summary */}
               <div className="detail-header-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
@@ -1007,7 +1036,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     id="btn-request-revision"
                     className="action-btn revision-btn"
                     onClick={() => setIsRevisionModalOpen(true)}
-                    disabled={busy || !selectedTask.latestRevisionId}
+                    disabled={busy || !detail || reviewBlocked || !selectedTask.latestRevisionId}
                     title={
                       selectedTask.latestRevisionId
                         ? 'Request revision and log structured operator instructions (FR-078)'
@@ -1034,7 +1063,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
 
                   {selectedTask.status === 'AWAITING_APPROVAL' && selectedTask.latestRevisionId && (
                     <button id="btn-reject-design" className="action-btn revision-btn"
-                      onClick={() => setIsRejectionModalOpen(true)} disabled={busy || Boolean(approvalRoleBlocker(sessionUser?.role))}
+                      onClick={() => setIsRejectionModalOpen(true)} disabled={busy || !detail || reviewBlocked || Boolean(approvalRoleBlocker(sessionUser?.role))}
                       title="Stop this request and record why the current design is rejected">
                       <span className="btn-icon" aria-hidden="true">⛔</span>
                       <span>{reject.isPending ? 'Rejecting…' : 'Reject Design'}</span>
@@ -1368,7 +1397,11 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
           ) : (
             <div className="detail-empty-state">
               <h3>No Task Selected</h3>
-              <p>Select a task from the queue to inspect details and perform creative actions.</p>
+              {selectedTaskId && selectedTaskId === initialTaskId
+                ? <p role={detailQuery.isError ? 'alert' : 'status'}>{detailQuery.isError
+                  ? 'Linked task unavailable. It may have been removed or your account may not have access. Select a task from the queue or contact your office administrator.'
+                  : 'Loading the linked task…'}</p>
+                : <p>Select a task from the queue to inspect details and perform creative actions.</p>}
             </div>
           )}
         </section>

@@ -1,3 +1,4 @@
+import { deskReviewTarget } from '@hawa/contracts/desk-navigation';
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar, type ScreenId } from './components/Sidebar.js';
@@ -42,6 +43,7 @@ export const App: React.FC = () => {
     return 'work';
   };
 
+  const [linkedReview, setLinkedReview] = useState(() => deskReviewTarget(window.location.hash));
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(getInitialScreen);
   const [appToast, setAppToast] = useState<string | null>(null);
   const [showTour, setShowTour] = useState<boolean>(false);
@@ -90,12 +92,15 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const handleLocationChange = () => {
+      const target = deskReviewTarget(window.location.hash);
+      setLinkedReview(target);
+      if (target) { setCurrentScreen('work'); return; }
       const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0];
       if (hash === 'adapters') {
         setCurrentScreen('settings');
         return;
       }
-      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval', 'comparison'];
+      const validScreens: ScreenId[] = ['work', 'clients', 'inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval', 'comparison'];
       if (validScreens.includes(hash as ScreenId)) {
         setCurrentScreen(hash as ScreenId);
       }
@@ -103,7 +108,7 @@ export const App: React.FC = () => {
 
     const handleCustomNav = (e: any) => {
       const targetScreen = e.detail;
-      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval', 'comparison'];
+      const validScreens: ScreenId[] = ['work', 'clients', 'inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval', 'comparison'];
       if (targetScreen && validScreens.includes(targetScreen as ScreenId)) {
         window.location.hash = `#/${targetScreen}`;
         setCurrentScreen(targetScreen as ScreenId);
@@ -122,6 +127,7 @@ export const App: React.FC = () => {
 
   const handleNavigate = (screen: ScreenId) => {
     window.location.hash = `#/${screen}`;
+    setLinkedReview(undefined);
     setCurrentScreen(screen);
   };
 
@@ -264,7 +270,8 @@ export const App: React.FC = () => {
           {sessionState.status === 'signed_out' && <SignIn reason={sessionState.reason} />}
           {sessionState.status === 'signed_in' && (currentScreen === 'work' || currentScreen === 'inbox' || currentScreen === 'review') && (
             <WorkScreen
-              initialTaskId={selectedTask?.id}
+              initialTaskId={linkedReview?.taskId || selectedTask?.id}
+              reviewRevisionId={linkedReview?.revisionId}
               onNavigateToClients={() => handleNavigate('clients')}
               onNavigateToSettings={() => handleNavigate('settings')}
               onNewTask={handleOpenModal}

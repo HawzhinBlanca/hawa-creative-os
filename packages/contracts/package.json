@@ -12,6 +12,10 @@
     "./task-status": {
       "import": "./dist/task-status.js",
       "types": "./dist/task-status.d.ts"
+    },
+    "./desk-navigation": {
+      "import": "./dist/desk-navigation.js",
+      "types": "./dist/desk-navigation.d.ts"
     }
   },
   "scripts": {

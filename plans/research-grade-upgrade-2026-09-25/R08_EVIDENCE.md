@@ -139,3 +139,48 @@ The Desk Settings screen now offers a named-administrator panel with eligible pe
 Blueprint validation passed **811/0/0** after the final source and documentation update. The exact release-manifest seal and sealed-tree test run follow this source checkpoint.
 
 **Limit:** A trusted operator still has to bootstrap each verified Google subject and tenant/client memberships; the Settings panel manages only those eligible accounts. The named administrator workflow has local PostgreSQL/jsdom proof but no deployed Google session or human operator acceptance. The direct database owner remains an exceptional bootstrap path whose ledger records the database role, not a named person. Live reviewer approval/rejection, external provider receipts, independent human design quality and release admission remain open. FR-043, NFR-015 and R08 are **in progress**; production lifecycle flags stay off.
+
+## Nineteenth pass — revision-bound chat links through named Desk sign-in
+
+**Source:** ADR-065 and migration 039 (2026-09-26). The review specification permits
+notifications to open Desk. That is now the selected path: office decisions still
+use the single named, assigned reviewer transaction. Chat links select the exact
+task, including a task outside the first queue page, and open its mobile detail.
+Old task-only links remain usable. A missing task shows an unavailable state instead
+of silently substituting the first queue task. If a link's revision is superseded,
+approve/revise/reject pause until the reviewer explicitly chooses the current
+revision. A later revision change blocks decisions again; navigation and that
+acknowledgement send no decision.
+
+Google start accepts only task/revision UUIDs and stores them in its one-time,
+five-minute PostgreSQL flow. A fresh Core callback returns to that same local path;
+callback query injection cannot change it. Notification origins come only from
+configured HTTPS Desk origins. Legacy and request-owned outcomes derive revision
+identity from PostgreSQL, retain the exact link in their outbox/projection receipt,
+and ignore worker-provided destination or revision hints. A ready lifecycle draft
+also alerts the separate configured office chat. The old chat action endpoint
+retains validation and returns an explicit 409 Desk handoff with
+`decisionRecorded: false`, instead of an unimplemented action or false approval.
+
+**Verification:** Red-before navigation/sign-in tests failed in **2 files / 7 tests**
+while **28 passed**. The initial sandbox run could not reach the isolated PostgreSQL
+port and is not counted as a test result. After implementation the focused group
+passed **10 files / 110 tests**. The subsequent off-page, open-tab, newer-revision
+and separate-office notification checks passed **2 files / 35 tests**. Tests use
+controlled identity/provider adapters with real isolated PostgreSQL and a rendered
+jsdom Desk. Full source and exact candidate results are recorded below when complete.
+
+**Limit:** No live Google or Telegram click-through, deployed migration, named human
+visual inspection, provider delivery receipt or independent creative-quality result
+is established by these fixtures. `runbooks/CHAT_REVIEW_ACCEPTANCE.md` specifies the
+remaining deployed check. FR-041, FR-043, FR-044, FR-060, NFR-015 and R08 remain **in
+progress** for release admission; production design flags remain off.
+
+**Final source checks:** The complete source suite excluding only the unsealed
+release-manifest gate passed **431 files / 3,327 tests**, with **4 files / 52 tests
+skipped**, in 95 seconds. Log: `/private/tmp/hawa-chat-review-source.log`. Full
+source/test TypeScript, lint/provider-egress checks, committable secret scan
+(**0 secrets**) and Desk production build passed. The main Desk chunk is 439.51 kB
+(135.03 kB gzip), below the existing 500 kB budget. The first static invocation was
+blocked by sandbox IPC; the permitted final rerun passed. This source result does
+not include the six release-manifest checks; those run after the exact source seal.

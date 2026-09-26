@@ -1,3 +1,4 @@
+import { officeReviewUrl } from '../services/desk-review-link.js';
 import crypto from 'node:crypto';
 import { CanvaBindingRepository, sql, withRlsContext } from '@hawa/db';
 import { CanvaDesignStudioAdapter, validateCanvaDesignUrl } from '@hawa/integrations';
@@ -196,13 +197,19 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
       : waitingForAnswer
         ? `A question was sent to the requester before the change is made: ${question!.question}`
         : `Automatic draft ended ${status}${code ? ` (${code})` : ''}${detail ? `: ${detail}` : ''}. An operator has to follow up.`;
+    let reviewRevisionId: string | undefined;
     if (hasDraft && revisionRepo) {
       try {
-        const bridged = await withRlsContext(db, outcomeScope, (trx) =>
-          bridgeCanvaDraftRevision(trx, { revisionRepo, evaluateQc: evaluateCanvaExportQc }, {
+        const bridged = await withRlsContext(db, outcomeScope, async (trx) => {
+          const result = await bridgeCanvaDraftRevision(trx, { revisionRepo, evaluateQc: evaluateCanvaExportQc }, {
             tenantId: auth.tenantId!, taskId, actorId: auth.userId || null, status, designId, canvaUrl,
             fallbackCopy: source?.exactCopy, reason: outcomeReason,
-          }));
+          });
+          reviewRevisionId = result.created ? result.revisionId :
+            (await trx.selectFrom('tasks').select('current_design_revision_id')
+              .where('tenant_id', '=', auth.tenantId!).where('id', '=', taskId).executeTakeFirst())?.current_design_revision_id ?? undefined;
+          return result;
+        });
         // The bridge moves the task to review itself, so the transition below finds nothing to change
         // and told no one: the Desk kept the task as RECEIVED, Approve disabled, until a reload (review
         // of 2026-09-24).
@@ -248,7 +255,8 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
     let notificationError: string | undefined;
     let notificationCommandId: string | undefined;
     if (sourceChannelId && notifyRequester) {
-      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes, notPossible, question });
+      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes, notPossible, question,
+        reviewUrl: officeReviewUrl({ taskId, ...(reviewRevisionId ? { revisionId: reviewRevisionId } : {}) }) });
       const scope = { tenantId: auth.tenantId, userId: auth.userId, role: auth.role };
       // The worker's finish() swallows its own notification errors so a failed message cannot fail
       // a design (canva-draft-workflow.ts), and this was a single fire-and-forget send: a Telegram

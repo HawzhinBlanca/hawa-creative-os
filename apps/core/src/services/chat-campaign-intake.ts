@@ -1,3 +1,4 @@
+import { officeReviewUrl } from './desk-review-link.js';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
 import { peelTrailingRemarks } from './request-remarks.js';
 import { log } from '../logging.js';
@@ -478,18 +479,11 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       else if (clientId === 'client-drustee' || clientId === 'c1000000-0000-4000-8000-000000000003') clientDisplayName = 'Drustee Health';
       else if (clientId === 'c1000000-0000-4000-8000-000000000001') clientDisplayName = 'Hawa Studio';
 
-      const publicDeskBase =
-        deskBaseUrl ||
-        process.env.PUBLIC_TUNNEL_URL ||
-        process.env.HAWA_PUBLIC_URL ||
-        process.env.HAWA_DESK_BASE_URL ||
-        'http://127.0.0.1:8080';
-
       // The Canva draft itself is produced by the durable worker workflow (Restate), never inline
       // in the webhook: the model call and the Canva import can take minutes, must survive a Core
       // restart, and must never run twice. The worker reports the outcome back through
       // POST /v1/tasks/:taskId/notifications/canva-status, which sends the link or the reason.
-      const deskLink = `${publicDeskBase}/#task-${taskId}`;
+      const deskLink = officeReviewUrl({ taskId }, deskBaseUrl);
       // An unscoped brief named the sender here, as if they were the client.
       const clientLabel = escapeTelegramHtml(isKaae ? 'KAAE (Accreditation)' : task.clientId ? clientDisplayName : 'not named in the message');
       const safeTitle = escapeTelegramHtml(title || 'Campaign Design');
@@ -510,10 +504,10 @@ function buildChatCampaignIntake(ctx: CoreContext) {
           ? `✏️ An editable Canva draft is being prepared automatically. You will receive the Canva link in this chat when it is ready, or an explanation if it cannot be produced automatically.\n`
           : `⚡ The art director has received your brief and will design it in Canva.\n`) +
         `<i>Every design is reviewed by the art director in Hawa Desk before release.</i>` + scopeNote;
-      // Telegram only accepts public http(s) button URLs; a local Desk address goes in the text instead.
-      const deskButton = /^https:\/\//.test(deskLink) ? { inline_keyboard: [[{ text: '🖥 Open in Hawa Desk', url: deskLink }]] } : undefined;
+      // A deployment without a public HTTPS Desk origin must not send a localhost link.
+      const deskButton = deskLink ? { inline_keyboard: [[{ text: '🖥 Open in Hawa Desk', url: deskLink }]] } : undefined;
       notification = await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
-        text: deskButton ? text : `${text}\n\n🖥 Hawa Desk: ${escapeTelegramHtml(deskLink)}`,
+        text,
         parse_mode: 'HTML',
         ...(deskButton ? { reply_markup: deskButton } : {}),
       });

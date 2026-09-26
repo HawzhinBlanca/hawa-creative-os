@@ -29,6 +29,7 @@ interface FakeTask {
   status: string;
   requestId?: string;
   revision?: number;
+  revisionId?: string;
   approved?: boolean;
 }
 
@@ -46,8 +47,8 @@ function asTask(t: FakeTask) {
     updatedAt: `2026-09-24T10:00:0${t.revision ?? 0}.000Z`,
     ...(t.revision
       ? {
-          latestRevisionId: `r${t.revision}`,
-          latestRevision: { id: `r${t.revision}`, version: t.revision, sha256: 'ab'.repeat(32), format: 'png' },
+          latestRevisionId: t.revisionId || `r${t.revision}`,
+          latestRevision: { id: t.revisionId || `r${t.revision}`, version: t.revision, sha256: 'ab'.repeat(32), format: 'png' },
           qaReport: { passed: true, bidiIsolation: true, safeMargins: true, contrastCompliant: true, fontCoverage: true, errors: [] },
         }
       : {}),
@@ -56,14 +57,14 @@ function asTask(t: FakeTask) {
 }
 
 /** Core as the Work screen reads it. `decision` holds a POST .../decisions until the test answers it. */
-function fakeCore(initial: FakeTask[], opts: { role?: string } = {}) {
+function fakeCore(initial: FakeTask[], opts: { role?: string; listIds?: string[] } = {}) {
   const tasks = [...initial];
   let answerDecision: ((res: Response) => void) | null = null;
   const calls = stubCore((c: FetchCall) => {
     if (c.path === '/v1/auth/session' && c.method === 'GET') {
       return json({ authenticated: true, user: { id: 'u1', role: opts.role ?? 'art_director', displayName: 'Art Director' } });
     }
-    if (isListRead(c)) return json({ items: tasks.map(asTask), total: tasks.length, limit: 50, nextCursor: null });
+    if (isListRead(c)) return json({ items: tasks.filter(t => !opts.listIds || opts.listIds.includes(t.id)).map(asTask), total: tasks.length, limit: 50, nextCursor: null });
     const detail = /^\/v1\/tasks\/([^/]+)$/.exec(c.path);
     if (detail && c.method === 'GET') {
       const t = tasks.find((x) => x.id === detail[1]);
@@ -570,5 +571,73 @@ describe('an expired session reaches sign-in from any screen, once', () => {
     expect(signInForms(view.container)).toBe(0);
     expect(stream.connects).toBeGreaterThanOrEqual(2);
     expect(view.text()).toContain('No tasks currently pending in the work queue.');
+  });
+});
+
+describe('chat review navigation (ADR-065)', () => {
+  const taskId = 'aa000000-0000-4000-8000-000000000001';
+  const revisionId = 'aa000000-0000-4000-8000-000000000002';
+  const oldRevision = 'aa000000-0000-4000-8000-000000000003';
+  async function openLink(hash: string) {
+    window.location.hash = hash;
+    const runtime = createDeskRuntime({ stream: new FakeStream('connected'), doc: { hidden: false } });
+    const view = await mount(h(DeskProviders, { runtime, children: h(App) }));
+    mounted.push({ view, runtime });
+    await advance(3_000);
+    return { view, runtime };
+  }
+
+  for (const hash of [`#/work?task=${taskId}&revision=${revisionId}`, `#task-${taskId}`]) {
+    it(`opens the linked task, not the first queue item: ${hash}`, async () => {
+      fakeCore([approvable('first', 'Unrelated first task'), { ...approvable(taskId, 'Linked review'), revisionId }], { listIds: ['first'] });
+      const { view } = await openLink(hash);
+      const detail = view.container.querySelector('[aria-label="Task Detail View"]')!;
+      expect(detail.textContent).toContain('Linked review');
+      expect(detail.textContent).not.toContain('Unrelated first task');
+      expect(detail.classList.contains('mobile-hidden')).toBe(false);
+    });
+  }
+
+  it('does not substitute a queue task when the linked task is unavailable', async () => {
+    fakeCore([approvable('first', 'Unrelated first task')]);
+    const { view } = await openLink(`#/work?task=${taskId}&revision=${revisionId}`);
+    const detail = view.container.querySelector('[aria-label="Task Detail View"]')!;
+    expect(detail.textContent).toContain('Linked task unavailable');
+    expect(detail.textContent).not.toContain('Unrelated first task');
+  });
+
+  it('requires an explicit review of the current revision after opening an old notification', async () => {
+    const core = fakeCore([{ ...approvable(taskId, 'Linked review'), revisionId }]);
+    const { view, runtime } = await openLink(`#/work?task=${taskId}&revision=${oldRevision}`);
+    expect(view.text()).toContain('This notification names an older revision');
+    expect((byText(view.container, 'button', 'Approve Captured Files') as HTMLButtonElement).disabled).toBe(true);
+    expect((byText(view.container, 'button', 'Request Revision') as HTMLButtonElement).disabled).toBe(true);
+    await click(byText(view.container, 'button', 'Review current revision'));
+    expect((byText(view.container, 'button', 'Approve Captured Files') as HTMLButtonElement).disabled).toBe(false);
+    expect(core.calls.filter(c => c.method === 'POST')).toHaveLength(0);
+    core.tasks[0] = { ...core.tasks[0], revisionId: 'aa000000-0000-4000-8000-000000000004', revision: 2 };
+    await live(() => { void runtime.queryClient.invalidateQueries({ queryKey: queryKeys.taskDetail(taskId) }); });
+    await advance(500);
+    expect((byText(view.container, 'button', 'Approve Captured Files') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('follows another task link in an already open Desk tab', async () => {
+    fakeCore([approvable('first', 'Unrelated first task'), { ...approvable(taskId, 'Linked review'), revisionId }]);
+    const { view } = await openLink('#/work');
+    await live(() => {
+      window.location.hash = `#/work?task=${taskId}&revision=${revisionId}`;
+      window.dispatchEvent(new Event('hashchange'));
+    });
+    await advance(500);
+    expect(view.container.querySelector('.detail-title')?.textContent).toBe('Linked review');
+  });
+
+  it('carries only the parsed task and revision into Google sign-in', async () => {
+    clearAuthToken();
+    stubCore(c => c.path === '/v1/auth/providers' ? json({ googleWorkspace: true })
+      : c.path === '/v1/health' ? json({ status: 'ok' }) : json({ title: 'Sign in' }, 401));
+    const { view } = await openLink(`#/work?task=${taskId}&revision=${revisionId}`);
+    const signIn = byText(view.container, 'a', 'Sign in with Google Workspace');
+    expect(signIn?.getAttribute('href')).toBe(`/v1/auth/google/start?task=${taskId}&revision=${revisionId}`);
   });
 });

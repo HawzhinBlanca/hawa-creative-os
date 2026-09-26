@@ -42,8 +42,8 @@ function newApp() {
   return createApp({ db: appDb, testAuth: { googleOidcProvider: provider }, skipPaidModelProbe: true });
 }
 
-async function start(app: ReturnType<typeof newApp>) {
-  const response = await app.request('/v1/auth/google/start');
+async function start(app: ReturnType<typeof newApp>, query = '') {
+  const response = await app.request(`/v1/auth/google/start${query}`);
   expect(response.status).toBe(302);
   expect(response.headers.get('location')).toContain('accounts.google.com');
   expect(lastStart?.codeChallenge).toMatch(/^[A-Za-z0-9_-]+$/);
@@ -53,6 +53,24 @@ async function start(app: ReturnType<typeof newApp>) {
 }
 
 describe('ADR-064 named Google Workspace sign-in', () => {
+  it('returns to the exact review task across a fresh Core callback and ignores callback redirect injection', async () => {
+    const taskId = randomUUID();
+    const revisionId = randomUUID();
+    const flow = await start(newApp(), `?task=${taskId}&revision=${revisionId}`);
+    const response = await newApp().request(`/v1/auth/google/callback?state=${flow.state}&code=fixture&task=${randomUUID()}&returnTo=https://outside.test`,
+      { headers: { Cookie: flow.cookie } });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe(`/#/work?task=${taskId}&revision=${revisionId}`);
+  });
+
+  it('refuses malformed review destinations before creating an OAuth flow', async () => {
+    const app = newApp();
+    for (const query of ['?task=https://outside.test', `?revision=${randomUUID()}`,
+      `?task=${randomUUID()}&task=${randomUUID()}`, `?returnTo=https://outside.test`]) {
+      expect((await app.request(`/v1/auth/google/start${query}`)).status, query).toBe(422);
+    }
+  });
+
   it('rejects incomplete, insecure or unscoped provider configuration', () => {
     expect(googleOidcSettings({})).toBeNull();
     expect(googleOidcSettings({ HAWA_GOOGLE_OIDC_CLIENT_ID: 'id', HAWA_GOOGLE_OIDC_CLIENT_SECRET: 'secret',

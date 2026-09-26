@@ -9,6 +9,8 @@ export interface CanvaStatusMessageInput {
   /** Optional rejection code from Core, e.g. COPY_UNSUPPORTED or CLIENT_REFERENCE_REQUIRED. */
   code?: string;
   canvaUrl?: string;
+  /** Server-built Desk link; navigation never records a decision. */
+  reviewUrl?: string;
   /** Honest caveats about this particular draft, e.g. a provisional Kurdish typeface. Plain text; escaped here. */
   notes?: string[];
   /** What a change asked for that no edit of the design can make (code CHANGE_NOT_SUPPORTED). Plain text; escaped here. */
@@ -43,7 +45,8 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
   const readyRows = READY.has(status) && input.canvaUrl ? requesterButtons(input.taskId) : [];
   const asking = code === 'NEEDS_CLARIFICATION' && input.question && input.question.question.trim() && input.question.options.length >= 2 ? input.question : undefined;
   const answerRows = asking ? questionButtons(input.taskId, asking.options) : [];
-  const rows = [...canvaRow, ...readyRows, ...answerRows];
+  const reviewRows: InlineButton[][] = input.reviewUrl ? [[{ text: 'Open review in Hawa Desk', url: input.reviewUrl }]] : [];
+  const rows = [...canvaRow, ...readyRows, ...answerRows, ...reviewRows];
   const button = rows.length ? { inline_keyboard: rows } : undefined;
   const link = input.canvaUrl ? `✏️ <b>Open in Canva:</b> ${escapeTelegramHtml(input.canvaUrl)}\n\n` : '';
 
@@ -121,7 +124,8 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
     .filter((n) => typeof n === 'string' && n.trim())
     .map((n) => `${/^\p{Extended_Pictographic}/u.test(n.trim()) ? '' : 'ℹ️ '}${escapeTelegramHtml(n.trim())}\n`)
     .join('');
-  return { text: header(title) + body + (notes ? notes + '\n' : '') + footer, parse_mode: 'HTML', ...(button ? { reply_markup: button } : {}) };
+  const reviewLink = input.reviewUrl ? `\n\n<a href="${escapeTelegramHtml(input.reviewUrl)}">Open review in Hawa Desk</a> (office sign-in required)` : '';
+  return { text: header(title) + body + (notes ? notes + '\n' : '') + footer + reviewLink, parse_mode: 'HTML', ...(button ? { reply_markup: button } : {}) };
 }
 
 /**

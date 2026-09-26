@@ -1,3 +1,4 @@
+import { officeReviewUrl } from './desk-review-link.js';
 import { createHash } from 'node:crypto';
 import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef } from '@hawa/contracts';
 import { parseCompleteRevisionRequest, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
@@ -379,13 +380,18 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during outcome projection');
+    const reviewUrl = officeReviewUrl({ taskId, ...(revisionId ? { revisionId } : {}) });
     const composed = question || report.notifyRequester === false ? undefined : composeCanvaStatusMessage({
       taskId, title: task.title, status, code: report.code,
+      reviewUrl,
       canvaUrl: report.designId ? `https://www.canva.com/design/${report.designId}/edit` : undefined,
     });
     const officeChat = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
-    const officeAlert = !hasDraft && officeChat && officeChat !== request.chat_id
-      ? { chatId: officeChat, text: `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.` }
+    const officeAlert = officeChat && officeChat !== request.chat_id
+      ? { chatId: officeChat, text: (hasDraft
+          ? `A design is ready for office review in Hawa Desk. Task ${taskId}.`
+          : `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.`) +
+          (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '') }
       : undefined;
     const questionText = question
       ? `I need one detail before I can finish your requested change.\n\n<b>${escapeTelegramHtml(question.text)}</b>\n\n${question.options.map((option, index) => `${index + 1}. ${escapeTelegramHtml(option)}`).join('\n')}\n\nReply to this message with your answer. No new design has started yet.`

@@ -537,8 +537,11 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       },
       body: JSON.stringify({ revisionId, decision: 'approved' }),
     });
-    expect(response.status).toBe(501);
-    expect((await response.json()).detail).toContain('not recorded');
+    expect(response.status).toBe(409);
+    const handoff = await response.json();
+    expect(handoff.detail).toContain('not recorded');
+    expect(handoff).toMatchObject({ title: 'Desk Review Required', decisionRecorded: false,
+      reviewPath: `/#/work?task=${task.id}&revision=${revisionId}` });
     expect((await (await app.request(`/tasks/${task.id}`)).json()).latestApproval).toBeUndefined();
   });
 
