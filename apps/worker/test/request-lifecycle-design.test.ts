@@ -4,7 +4,7 @@ import type { OutboundMessage } from '@hawa/contracts';
 import { DurableStepJournal } from '../src/durable-context.js';
 import { lifecycleDesignProofHeaders } from '../src/lifecycle/design-proof.js';
 import { runOwnedDesign, validDesignRun, type DesignRunInput } from '../src/lifecycle/design-run.js';
-import { openAutomaticRequest, recordDesignFinished, recordReminderTick, type AutomaticLifecycleState,
+import { openAutomaticRequest, recordDesignFinished, recordQuestionSent, recordReminderTick, type AutomaticLifecycleState,
   type AutomaticOpenContext, type DesignFinishedEvent, type ManualLifecycleState,
   type OpenAutomaticEvent } from '../src/lifecycle/request-lifecycle.js';
 
@@ -19,7 +19,8 @@ class Context implements AutomaticOpenContext {
   started: DesignRunInput[] = [];
   scheduledQuestions: Array<{ requestId: string; rev: number; questionId: string;
     day: 1 | 5; delayMs: number }> = [];
-  failAt: 'ack' | 'start' | 'outcome' | null = null;
+  failAt: 'ack' | 'start' | 'outcome' | 'schedule' | null = null;
+  nowValue = Date.parse('2026-09-25T18:30:01Z');
   constructor(readonly key: string) {}
   async get() { return this.state; }
   async run<T>(name: string, action: () => Promise<T>): Promise<T> {
@@ -40,8 +41,10 @@ class Context implements AutomaticOpenContext {
   }
   scheduleQuestionReminder(requestId: string, rev: number, questionId: string,
     day: 1 | 5, delayMs: number) {
+    if (this.failAt === 'schedule') { this.failAt = null; throw new Error('crash before timer'); }
     this.scheduledQuestions.push({ requestId, rev, questionId, day, delayMs });
   }
+  async now() { return this.nowValue; }
 }
 
 function automatic(): OpenAutomaticEvent {
@@ -126,28 +129,45 @@ describe('request-owned automatic design', () => {
       question: { id: questionId, taskId: opened.taskId, rev: 2 } });
     await recordDesignFinished(ctx, core, finish);
     expect(core.post).toHaveBeenCalledTimes(1);
-    expect(ctx.sent.at(-1)).toMatchObject({ key: `${e.requestId}:2:design-outcome`, class: 'critical' });
-    expect(ctx.scheduledQuestions).toMatchObject([
-      { requestId: e.requestId, rev: 2, questionId, day: 1 },
-      { requestId: e.requestId, rev: 2, questionId, day: 5 },
-    ]);
+    expect(ctx.sent.at(-1)).toMatchObject({ key: `${e.requestId}:2:design-outcome`, class: 'critical',
+      onSent: { kind: 'question', requestId: e.requestId, requestRev: 2,
+        taskId: opened.taskId, questionId } });
+    expect(ctx.scheduledQuestions).toEqual([]);
     await recordDesignFinished(ctx, core, finish);
+    expect(ctx.scheduledQuestions).toEqual([]);
+    const sentAtMs = Date.parse('2026-09-25T18:30:00Z');
+    const sent = { v: 1 as const, requestId: e.requestId, expectedRev: 2,
+      taskId: opened.taskId, questionId, messageKey: `${e.requestId}:2:design-outcome`,
+      messageId: '735' };
+    const confirmed = { post: vi.fn(async () => ({ v: 1, requestId: e.requestId,
+      rev: 2, taskId: opened.taskId, questionId, messageId: '735', sentAtMs })) };
+    ctx.failAt = 'schedule';
+    await expect(recordQuestionSent(ctx, confirmed, sent)).rejects.toThrow('crash before timer');
+    expect(ctx.state).toMatchObject({ question: { sentAtMs, messageId: '735' } });
+    expect(ctx.scheduledQuestions).toEqual([]);
+    expect(await recordQuestionSent(ctx, confirmed, sent)).toEqual({ recorded: true, sentAtMs });
+    expect(confirmed.post).toHaveBeenCalledTimes(1);
     expect(ctx.scheduledQuestions).toMatchObject([
       { requestId: e.requestId, rev: 2, questionId, day: 1 },
       { requestId: e.requestId, rev: 2, questionId, day: 5 },
-      { requestId: e.requestId, rev: 2, questionId, day: 1 },
-      { requestId: e.requestId, rev: 2, questionId, day: 5 },
     ]);
+    // 21:30 Erbil + 24 hours is outside office hours: wait until the following 09:00.
+    expect(ctx.scheduledQuestions[0].delayMs)
+      .toBe(Date.parse('2026-09-27T06:00:00Z') - ctx.nowValue);
+    expect(ctx.scheduledQuestions[1].delayMs)
+      .toBe(Date.parse('2026-10-01T06:00:00Z') - ctx.nowValue);
     expect(await recordReminderTick(ctx, { v: 1, requestId: e.requestId,
       expectedRev: 2, kind: 'question', questionId, day: 1 })).toEqual({ reminded: true });
     expect(ctx.sent.at(-1)).toMatchObject({ key: `${e.requestId}:2:question-reminder-1`,
       class: 'critical' });
-    expect(ctx.scheduledQuestions).toHaveLength(4);
+    expect(ctx.scheduledQuestions).toHaveLength(2);
     expect(await recordReminderTick(ctx, { v: 1, requestId: e.requestId,
       expectedRev: 2, kind: 'question', questionId, day: 5 })).toEqual({ reminded: true });
     expect(ctx.sent.at(-1)).toMatchObject({ key: `${e.requestId}:2:question-reminder-5` });
     ctx.state = { ...ctx.state as AutomaticLifecycleState, stage: 'designing', rev: 3,
       question: undefined };
+    expect(await recordQuestionSent(ctx, confirmed, sent)).toEqual({ skipped: true });
+    expect(confirmed.post).toHaveBeenCalledTimes(1);
     expect(await recordReminderTick(ctx, { v: 1, requestId: e.requestId,
       expectedRev: 2, kind: 'question', questionId, day: 5 })).toEqual({ skipped: true });
   });

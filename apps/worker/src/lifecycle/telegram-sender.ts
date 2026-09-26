@@ -76,6 +76,8 @@ export interface SenderContext {
   run<T>(name: string, action: () => Promise<T>): Promise<T>;
   /** A one-way send to another chat's TelegramSender, deduplicated by the message's key. */
   sendTo(message: OutboundMessage): void;
+  /** A one-way, keyed notice that the critical message has a confirmed Telegram mark. */
+  notifySent?(message: OutboundMessage, messageId: string): Promise<void> | void;
 }
 
 /** The step every message is fenced under: `lc:<key>:send`. */
@@ -220,7 +222,20 @@ export async function handleSend(ctx: SenderContext, deps: TelegramSenderDeps, m
   if (!m || typeof m.key !== 'string' || !m.key || !m.chatId) {
     throw new restate.TerminalError('INVALID_MESSAGE: a message names its key and chat', { errorCode: 400 });
   }
+  const onSent = m.onSent;
+  if (onSent && (onSent.kind !== 'question' || m.class !== 'critical' || m.kind !== 'text' ||
+      m.taskId !== onSent.taskId || !Number.isInteger(onSent.requestRev) || onSent.requestRev < 2 ||
+      ![onSent.requestId, onSent.taskId, onSent.questionId].every((id) =>
+        typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) ||
+      m.key !== `${onSent.requestId}:${onSent.requestRev}:design-outcome`)) {
+    throw new restate.TerminalError('INVALID_MESSAGE: question send callback identity does not match the notice', { errorCode: 400 });
+  }
+  if (onSent && !ctx.notifySent) throw new Error('QUESTION_CALLBACK_UNAVAILABLE: the sender cannot confirm this question');
   const result = await ctx.run('send', () => sendAttempt(deps, m));
+  if (onSent && result.outcome === 'sent') {
+    if (!result.messageId) throw new Error('QUESTION_SEND_RECEIPT_MISSING: a confirmed question needs a Telegram message ID');
+    await ctx.notifySent!(m, result.messageId);
+  }
   if (m.class === 'critical' && result.outcome === 'uncertain') {
     const office = deps.officeChatId();
     if (office && office !== String(m.chatId)) {
@@ -251,11 +266,20 @@ export function createTelegramSender(deps: TelegramSenderDeps) {
             sendTo: (message) => {
               ctx.objectSendClient(TelegramSenderApi, message.chatId).send(message, restate.rpc.sendOpts({ idempotencyKey: message.key }));
             },
+            notifySent: async (message, messageId) => {
+              const { RequestLifecycleApi } = await import('./request-lifecycle.js');
+              const sent = message.onSent!;
+              ctx.objectSendClient(RequestLifecycleApi, sent.requestId).questionSent({
+                v: 1, requestId: sent.requestId, expectedRev: sent.requestRev,
+                taskId: sent.taskId, questionId: sent.questionId,
+                messageKey: message.key, messageId,
+              }, restate.rpc.sendOpts({ idempotencyKey: `lifecycle:question-sent:${message.key}` }));
+            },
           }, deps, m)),
     },
     options: {
       // Core sends office alerts through ingress in slice 2.5; the Delivery workflow calls it inside Restate.
-      ingressPrivate: false,
+      ingressPrivate: true,
       idempotencyRetention: { days: 7 },
       retryPolicy: { initialInterval: 1000, exponentiationFactor: 2, maxInterval: 60000, maxAttempts: 200, onMaxAttempts: 'pause' },
     },

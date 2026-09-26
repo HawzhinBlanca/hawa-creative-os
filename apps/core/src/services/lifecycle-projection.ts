@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
 import { parseCompleteRevisionRequest, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
-import { IdempotencyConflictError, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
+import { IdempotencyConflictError, OUTBOX_SEND_MARK_SOURCE, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
 import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
@@ -333,7 +333,7 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
     }
     const stage = hasDraft ? 'in_review' : question ? 'awaiting_answer' : 'manual';
     const changed = await trx.updateTable('requests').set({ stage, rev,
-      ...(question ? { question_asked_at: new Date() } : {}), updated_at: new Date() })
+      ...(question ? { question_asked_at: null } : {}), updated_at: new Date() })
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during outcome projection');
@@ -363,6 +363,55 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
       payload_sha256: hash, result: result as unknown as Record<string, unknown>,
     }).execute();
     return result;
+  });
+}
+
+export interface LifecycleQuestionSentInput {
+  requestId: string; tenantId: string; expectedRev: number; taskId: string;
+  questionId: string; messageKey: string; messageId: string;
+}
+
+/** Confirm a question from the sender's committed Telegram mark, without advancing request rev. */
+export async function confirmLifecycleQuestionSent(db: Kysely<Database>, input: LifecycleQuestionSentInput): Promise<
+  { skipped: true } | { requestId: string; rev: number; taskId: string; questionId: string;
+    messageId: string; sentAtMs: number }
+> {
+  const { requestId, tenantId, expectedRev, taskId, questionId, messageKey, messageId } = input;
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
+    const request = await trx.selectFrom('requests').select(['owner', 'stage', 'rev',
+      'current_task_id', 'question_asked_at'])
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+    if (!request) throw new LifecycleProjectionConflict('WRONG_STAGE', 'Question request does not exist');
+    if (request.owner !== 'restate' || request.stage !== 'awaiting_answer' ||
+        Number(request.rev) !== expectedRev || request.current_task_id !== taskId) return { skipped: true };
+    const receipt = await trx.selectFrom('lifecycle_projections').select('result')
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
+      .where('rev', '=', expectedRev).executeTakeFirst();
+    const result = receipt?.result as Partial<DesignOutcomeResult> | undefined;
+    if (result?.stage !== 'awaiting_answer' || result.taskId !== taskId ||
+        result.question?.id !== questionId) {
+      throw new LifecycleProjectionConflict('EVIDENCE_MISMATCH', 'The current projection does not contain this question');
+    }
+    const mark = (await sql<{ received_at: Date; message_id: string | null }>`SELECT received_at,
+        payload->>'messageId' AS message_id FROM hawa.inbox_events
+      WHERE tenant_id = ${tenantId}::uuid AND source_account_id = ${OUTBOX_SEND_MARK_SOURCE}
+        AND source_event_id = ${`lc:${messageKey}:send`}
+        AND event_kind = 'telegram_message_sent'
+      ORDER BY received_at ASC, id ASC LIMIT 1`.execute(trx)).rows[0];
+    if (!mark) throw new Error('The question notice has no confirmed Telegram send mark yet');
+    if (mark.message_id !== messageId) {
+      throw new LifecycleProjectionConflict('EVIDENCE_MISMATCH', 'The question message ID differs from its confirmed send mark');
+    }
+    const sentAtMs = new Date(mark.received_at).getTime();
+    if (!Number.isFinite(sentAtMs) || sentAtMs <= 0) throw new Error('The confirmed send mark has an invalid timestamp');
+    if (!request.question_asked_at) {
+      await trx.updateTable('requests').set({ question_asked_at: new Date(sentAtMs), updated_at: new Date() })
+        .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
+        .where('rev', '=', expectedRev).where('question_asked_at', 'is', null).execute();
+    }
+    return { requestId, rev: expectedRev, taskId, questionId, messageId,
+      sentAtMs: request.question_asked_at ? new Date(request.question_asked_at).getTime() : sentAtMs };
   });
 }
 

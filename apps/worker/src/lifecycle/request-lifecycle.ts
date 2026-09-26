@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 import * as restate from '@restatedev/restate-sdk';
 import type { DeliveryInput, DeliveryOutcome, OutboundMessage } from '@hawa/contracts';
-import { parseCompleteRevisionRequest, parseOfficeApprovalProof, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
+import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProof, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, DeliveryApi, type CoreInternal } from './delivery.js';
 import { TelegramSenderApi } from './telegram-sender.js';
@@ -73,7 +73,9 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
   designInput: DesignRunInput;
   outcome?: { eventId: string; sha256: string; status: string; revisionId?: string;
     message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string } };
-  question?: { id: string; text: string; options: string[]; taskId: string; rev: number };
+  question?: { id: string; text: string; options: string[]; taskId: string; rev: number;
+    /** Derived from the confirmed Telegram send mark, never from outcome projection time. */
+    sentAtMs?: number; messageId?: string };
   officeRevision?: { eventId: string; sha256: string; actionId: string; revisionId: string; approvalId: string;
     kind?: 'revise' | 'approve' };
   /** Filled when the requester submits a revision directive after the office marks "revise". */
@@ -152,6 +154,11 @@ export interface ReminderTickEvent {
   day?: 1 | 5;
 }
 
+export interface QuestionSentEvent {
+  v: 1; requestId: string; expectedRev: number; taskId: string; questionId: string;
+  messageKey: string; messageId: string;
+}
+
 const REVISION_REMINDER_DELAY_MS = 24 * 60 * 60_000;
 const QUESTION_SECOND_REMINDER_DELAY_MS = 5 * 24 * 60 * 60_000;
 
@@ -169,6 +176,11 @@ export interface AutomaticOpenContext {
   scheduleReminder?(requestId: string, rev: number, delayMs: number): void;
   scheduleQuestionReminder?(requestId: string, rev: number, questionId: string,
     day: 1 | 5, delayMs: number): void;
+}
+
+export interface QuestionSentContext extends Pick<AutomaticOpenContext,
+  'key' | 'get' | 'run' | 'set' | 'scheduleQuestionReminder'> {
+  now(): Promise<number>;
 }
 
 export interface DesignFinishedEvent {
@@ -337,12 +349,6 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
       throw invalid('the design outcome was already recorded with different content');
     }
     sendDesignOutcome(ctx, prior);
-    if (prior.stage === 'awaiting_answer' && prior.question) {
-      ctx.scheduleQuestionReminder?.(prior.requestId, prior.rev, prior.question.id, 1,
-        REVISION_REMINDER_DELAY_MS);
-      ctx.scheduleQuestionReminder?.(prior.requestId, prior.rev, prior.question.id, 5,
-        QUESTION_SECOND_REMINDER_DELAY_MS);
-    }
     return { ignored: false as const, stage: prior.stage, rev: prior.rev };
   }
 
@@ -375,13 +381,58 @@ export async function recordDesignFinished(ctx: AutomaticOpenContext, core: Core
   };
   ctx.set('lc', next);
   sendDesignOutcome(ctx, next);
-  if (next.stage === 'awaiting_answer' && next.question) {
-    ctx.scheduleQuestionReminder?.(next.requestId, next.rev, next.question.id, 1,
-      REVISION_REMINDER_DELAY_MS);
-    ctx.scheduleQuestionReminder?.(next.requestId, next.rev, next.question.id, 5,
-      QUESTION_SECOND_REMINDER_DELAY_MS);
-  }
   return { ignored: false as const, stage: next.stage, rev: next.rev };
+}
+
+/** A confirmed Telegram send starts the question's office-hour reminder clock. */
+export async function recordQuestionSent(ctx: QuestionSentContext, core: CoreInternal,
+  event: QuestionSentEvent): Promise<{ skipped: true } | { recorded: true; sentAtMs: number }> {
+  if (event?.v !== 1 || ctx.key !== event.requestId ||
+      ![event.requestId, event.taskId, event.questionId].every((id) => UUID.test(id)) ||
+      !Number.isInteger(event.expectedRev) || event.expectedRev < 2 ||
+      event.messageKey !== `${event.requestId}:${event.expectedRev}:design-outcome` ||
+      !/^[1-9][0-9]*$/.test(event.messageId) || !Number.isSafeInteger(Number(event.messageId))) {
+    throw invalid('invalid confirmed question notice identity');
+  }
+  const prior = await ctx.get('lc');
+  if (!prior || !('runId' in prior) || prior.stage !== 'awaiting_answer' ||
+      prior.rev !== event.expectedRev || prior.taskId !== event.taskId ||
+      prior.question?.id !== event.questionId || prior.question.taskId !== event.taskId) {
+    return { skipped: true };
+  }
+  if (prior.question.messageId && prior.question.messageId !== event.messageId) {
+    throw invalid('question notice was confirmed with a different Telegram message ID');
+  }
+  let sentAtMs = prior.question.sentAtMs;
+  if (sentAtMs === undefined) {
+    const result = await ctx.run(`question-sent:${prior.rev}`, () => core.post<{
+      v: 1; requestId: string; rev: number; taskId: string; questionId: string;
+      messageId: string; sentAtMs: number;
+    } | { v: 1; skipped: true }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/question-sent`, event));
+    if (result?.v !== 1) throw new Error('Core did not answer the question send confirmation');
+    if ('skipped' in result) {
+      if (result.skipped) return { skipped: true };
+      throw new Error('Core returned an invalid question send confirmation');
+    }
+    if (result?.v !== 1 || result.requestId !== event.requestId ||
+        result.rev !== event.expectedRev || result.taskId !== event.taskId ||
+        result.questionId !== event.questionId || result.messageId !== event.messageId ||
+        !Number.isFinite(result.sentAtMs) || result.sentAtMs <= 0) {
+      throw new Error('Core did not confirm the question send mark');
+    }
+    sentAtMs = result.sentAtMs;
+    ctx.set('lc', { ...prior, question: { ...prior.question, sentAtMs,
+      messageId: event.messageId } });
+  }
+  if (sentAtMs === undefined) throw new Error('Confirmed question has no send timestamp');
+  const now = await ctx.now();
+  if (!Number.isFinite(now) || now <= 0) throw invalid('invalid reminder clock');
+  for (const day of [1, 5] as const) {
+    const due = nextOfficeMoment(Math.max(sentAtMs + day * REVISION_REMINDER_DELAY_MS, now));
+    ctx.scheduleQuestionReminder?.(event.requestId, event.expectedRev, event.questionId,
+      day, Math.max(0, due - now));
+  }
+  return { recorded: true, sentAtMs };
 }
 
 const OFFICE_ROLES = new Set(['art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
@@ -613,7 +664,12 @@ function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleS
   // Key is scoped to rev so a retried send after a revision round uses the correct idempotency key.
   if (message) ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:design-outcome`, chatId: state.chatId,
     kind: 'text', text: message.text, parseMode: message.parseMode, class: 'critical',
-    tenantId: state.tenantId, taskId: state.taskId });
+    tenantId: state.tenantId, taskId: state.taskId,
+    ...(state.stage === 'awaiting_answer' && state.question ? { onSent: {
+      kind: 'question' as const, requestId: state.requestId, requestRev: state.rev,
+      taskId: state.taskId, questionId: state.question.id,
+    } } : {}),
+  });
   const alert = state.outcome?.officeAlert;
   if (alert) ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:office-alert`, chatId: alert.chatId,
     kind: 'text', text: alert.text, class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
@@ -760,6 +816,17 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
               .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
             startDesign: () => { throw new Error('designFinished cannot start a new run'); },
+          }, core, event)),
+      ),
+      questionSent: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: QuestionSentEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordQuestionSent({
+            key: ctx.key,
+            get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            now: () => ctx.date.now(),
             scheduleQuestionReminder: (requestId, rev, questionId, day, delayMs) =>
               ctx.objectSendClient(RequestLifecycleApi, requestId)
                 .reminderTick({ v: 1, requestId, expectedRev: rev, kind: 'question', questionId, day },

@@ -27,7 +27,7 @@ import { intakeRefused } from '../services/channel-kill-switches.js';
 import { linkedLifecycleReplies, readRoutingRefusal, recordRoutingRefusal,
   revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests } from '../services/lifecycle-chat-target.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
-import { LifecycleProjectionConflict, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
+import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
 import type { ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
@@ -410,6 +410,39 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
       log.error(`[core:internal] lifecycle design outcome ${requestId} failed:`, error instanceof Error ? error.message : error);
       return problem(c, 503, 'Lifecycle Projection Unavailable', 'The projection did not commit; retry with the same key');
+    }
+  });
+
+  internal('/lifecycle/:requestId/question-sent', async (c) => {
+    const requestId = c.req.param('requestId') ?? '';
+    const body = await readBody(c);
+    const rev = body?.expectedRev;
+    const taskId = body?.taskId;
+    const questionId = body?.questionId;
+    const messageId = body?.messageId;
+    if (!UUID.test(requestId) || body?.v !== 1 || body.requestId !== requestId ||
+        !Number.isInteger(rev) || (rev as number) < 2 ||
+        typeof taskId !== 'string' || !UUID.test(taskId) ||
+        typeof questionId !== 'string' || !UUID.test(questionId) ||
+        body.messageKey !== `${requestId}:${rev}:design-outcome` ||
+        typeof messageId !== 'string' || !/^[1-9][0-9]*$/.test(messageId) ||
+        !Number.isSafeInteger(Number(messageId))) {
+      return problem(c, 400, 'Invalid question send confirmation', 'The confirmation must name the current question and Telegram message');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The question send confirmation requires a database');
+    try {
+      const result = await confirmLifecycleQuestionSent(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID, expectedRev: rev as number,
+        taskId, questionId, messageKey: body.messageKey as string, messageId,
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] question send confirmation ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Question Confirmation Unavailable', 'The confirmation did not commit; retry the same message');
     }
   });
 

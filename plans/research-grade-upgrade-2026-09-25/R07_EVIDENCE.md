@@ -1,5 +1,32 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — confirmed question sends own the reminder clock (ADR-058)
+
+The earlier R07 question timer started when Core projected `awaiting_answer`, before
+Telegram confirmed the question. Now the projection leaves `question_asked_at` empty.
+TelegramSender commits a critical `sent` mark with a positive message ID, then emits a
+keyed private `questionSent` callback. Core checks that exact mark, the current request
+revision and task, and the persisted Studio question before storing the mark timestamp.
+The request object stores that timestamp and schedules day-1 and day-5 reminders for
+the next 09:00–20:00 Erbil moment. A callback replay after Core commit uses the same
+timestamp; a crash after state save reissues the same timer keys. Refused or uncertain
+sends start no timer. Stale ticks still check request stage, revision and question ID.
+Older already-scheduled ticks retain those checks across blue/green deployment. The
+legacy SQL draft and question scans now exclude request-owned tasks, so two reminder
+owners cannot act on one task. TelegramSender is private to internal Restate callers;
+repository call sites already use those object clients. Requirements: FR-060, NFR-001.
+
+**Verification:** affected tests passed **15 files / 156 tests** against isolated
+PostgreSQL and worker fakes. They cover no pre-send timestamp, absent and mismatched
+marks, fresh-Core confirmation replay, sender callback crash after a confirmed mark,
+uncertain-send suppression, state-save crash before timers, next office moment, and
+legacy owner exclusion. The route inventory now names the new endpoint and two
+previously omitted lifecycle routes. The source suite excluding only the intentionally
+unsealed R11 release-manifest test passed **425 files / 3,274 tests**, with **4 files /
+48 tests skipped**. Repository lint and full source/test typecheck passed. This is not
+the sealed release suite, a killed Restate/PostgreSQL drill, or a live Telegram receipt.
+R07 stays **in progress**; the lifecycle flag remains off.
+
 ## 2026-09-26 — verified Studio question and requester answer
 
 Core now enters `awaiting_answer` only when a `NEEDS_CLARIFICATION` outcome matches a

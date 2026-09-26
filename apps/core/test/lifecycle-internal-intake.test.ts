@@ -329,12 +329,35 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(asked).toMatchObject({ stage: 'awaiting_answer', rev: 5,
       question: { id: questionId, options: ['Larger headline', 'Keep it as is'] } });
     expect(asked.message.text).toContain('&lt;larger&gt;');
+    const confirmBody = { v: 1, requestId, expectedRev: 5, taskId: waitingTaskId,
+      questionId, messageKey: `${requestId}:5:design-outcome`, messageId: '735' };
+    const confirm = (body: Record<string, unknown>) => app.request(
+      `/v1/internal/lifecycle/${requestId}/question-sent`, {
+        method: 'POST', headers: worker, body: JSON.stringify(body),
+      });
+    expect((await withRlsContext(db, scope, (trx) => trx.selectFrom('requests')
+      .select('question_asked_at').where('request_id', '=', requestId)
+      .executeTakeFirstOrThrow())).question_asked_at).toBeNull();
+    expect((await confirm(confirmBody)).status).toBe(503);
     await withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.inbox_events
       (tenant_id, source_account_id, source_event_id, event_kind, payload,
        payload_hash, verified)
       VALUES (${tenantId}::uuid, 'telegram_delivery',
         ${`lc:${requestId}:5:design-outcome:send`}, 'telegram_message_sent',
         '{"messageId":"735"}'::jsonb, 'question-sent', true)`.execute(trx));
+    expect((await confirm({ ...confirmBody, messageId: '736' })).status).toBe(409);
+    const confirmed = await confirm(confirmBody);
+    expect(confirmed.status).toBe(200);
+    const sentAtMs = (await confirmed.json()).sentAtMs as number;
+    expect(sentAtMs).toBeGreaterThan(0);
+    const freshCore = createApp({ db } as any);
+    const replayConfirm = await freshCore.request(`/v1/internal/lifecycle/${requestId}/question-sent`, {
+      method: 'POST', headers: worker, body: JSON.stringify(confirmBody),
+    });
+    expect(await replayConfirm.json()).toMatchObject({ sentAtMs });
+    const askedAt = await withRlsContext(db, scope, (trx) => trx.selectFrom('requests')
+      .select('question_asked_at').where('request_id', '=', requestId).executeTakeFirstOrThrow());
+    expect(askedAt.question_asked_at?.getTime()).toBe(sentAtMs);
     const other = await seedWaitingRequest(app, chat);
     const unlinked = brief(updateId(), chat);
     unlinked.message.text = 'Larger headline';
@@ -379,6 +402,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     (late.message as Record<string, unknown>).reply_to_message = { message_id: 735 };
     expect((await intake(app, late, 'lifecycle', requestId)).body).toMatchObject({
       intakeStatus: 409, code: 'STALE_REQUEST_REPLY', lifecycleAction: 'request-choice-required' });
+    expect(await (await confirm(confirmBody)).json()).toMatchObject({ skipped: true });
     expect(await tasksInChat(chat)).toHaveLength(4);
   });
 

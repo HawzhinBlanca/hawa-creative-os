@@ -13,3 +13,4 @@ export * from './provider-policy.js';
 export * from './fixtures/index.js';
 export * from './retention.js';
 export * from './lifecycle-chat-routing.js';
+export * from './office-hours.js';

@@ -2,6 +2,14 @@
 
 ## Latest local checkpoint — 26 September 2026
 
+The current R07 worktree after source `8ad32b3` adds ADR-058 confirmed-send,
+office-hour question reminders and excludes request-owned tasks from legacy reminder
+scans. Affected 15 files / 156 tests, lint and typecheck passed; the wider source
+suite excluding the unsealed release-manifest test passed 425 files / 3,274 tests
+(4 files / 48 tests skipped). This worktree has no release seal, deployed restart
+drill or live Telegram receipt. R07 and the 28-item engineering/live/human admission
+remain open. See `R07_EVIDENCE.md` and `EXECUTION.md`.
+
 ADR-057 now boots an authenticated encrypted Restate archive on an isolated disposable volume. **33 Python controls**, **12 isolated PostgreSQL/blob tests**, and a synthetic Restate 1.7.10 restore of **51 files and one matching durable state row** passed. See `R10_EVIDENCE.md` and `R10_RESTORE_DRILL.json`. This source has not been deployed or admitted as a release; the previous full-suite seal below predates it. R10 remains in progress because clean-host journal replay, cross-store reconciliation and production recovery are unproved. Both design flags remain off.
 
 The user requested faster, more token-efficient completion. `EXECUTION.md` is the compact continuation checkpoint: batch connected behavior and focused verification, then run full required release checks at a coherent milestone. All 28 acceptance criteria remain in scope; one real request journey is the next milestone.

@@ -12,7 +12,15 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R07 source checkpoint `256cba8` plus current question/answer worktree)
+## Current result (2026-09-26 — R07 source checkpoint `8ad32b3` plus current confirmed-send worktree)
+
+**Question reminders now start from a confirmed Telegram send mark.** ADR-058
+adds a private sender callback, Core mark/revision/question validation, and
+office-hour day-1/day-5 timers. The legacy SQL scans exclude request-owned tasks.
+Affected checks passed 15 files / 156 tests; the wider source suite excluding the
+unsealed release-manifest test passed 425 files / 3,274 tests, with 4 files /
+48 tests skipped. Lint and full typecheck passed. This is local evidence; no
+killed-process or live Telegram claim follows from it.
 
 **Studio clarification now has a local end-to-end path.** A verified failed Studio run
 projects a persisted question and pauses the task. An answer linked to the current
@@ -68,8 +76,8 @@ the last full suite passed 421 files / 3,237 tests before the reminder changes.
 
 ## Next useful milestone
 
-1. **Finish R07 admission and recovery**: anchor reminders to confirmed Telegram sends and office hours,
-   admit an explicit new brief while another request waits, and prove the question path through a killed
+1. **Finish R07 admission and recovery**: admit an explicit new brief while another request waits,
+   and prove the question path through a killed
    Restate worker, PostgreSQL replay and live Telegram. The second-request pointer hazard is locally
    contained by database selection and exact reply binding.
 2. **Final exports and provider boundaries**: qualify R11–R19 exports and R20–R23 provider boundaries.

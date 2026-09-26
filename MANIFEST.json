@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T04:25:40Z",
+  "generatedAt": "2026-09-26T04:41:47Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 321,
+  "fileCount": 322,
   "files": [
     {
       "path": ".dockerignore",
@@ -356,6 +356,11 @@
       "path": "adrs/057_isolated_restate_archive_boot_rehearsal.md",
       "sha256": "bd2c99e911d03164d12f90e41eb0cb0e123b58a64c24298de424cc8c0caff88f",
       "bytes": 2985
+    },
+    {
+      "path": "adrs/058_confirmed_question_reminders.md",
+      "sha256": "84d985c3c7ee5dbbb7942a6b7c63e2db8d1b1d9ba55644e0ff827242a31c6d24",
+      "bytes": 2188
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -799,8 +804,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "f907d830e45794fb1e12a741b653346c24c44fea23f2d714f5ffb1789efb59e2",
-      "bytes": 6675
+      "sha256": "c27e1ffcd1d778c32943fc2859ef4b02ac122dac59f013ad22d46256ee7a180a",
+      "bytes": 7140
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -844,8 +849,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_EVIDENCE.md",
-      "sha256": "03d01cfc43b7e8d4f47940d1c400c870cfd0d2105b630eae44cf2d0e2120e8ad",
-      "bytes": 32986
+      "sha256": "5c3cd11ccb80f14b6145f01d2516b5798ab2e714baa39f0d6f6cffe3732173d5",
+      "bytes": 35012
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
@@ -924,8 +929,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/REALITY_CHECK_2026-09-25.md",
-      "sha256": "c51b2d394c2f004b1b912aeff77794519902238a10cbefe47ee4eb0b8436c164",
-      "bytes": 42172
+      "sha256": "f394c997e02b0498a80525238b6fb6adbcd1ba20ac81de5e83e834acdb59cad9",
+      "bytes": 42721
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/WORK_ITEMS.csv",
@@ -939,8 +944,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "43cf5070efb146bfa583a1941f306ed4cfb43d069cba8486252ccbceb1e59982",
-      "bytes": 168000
+      "sha256": "adf3e61b9d6046b53bb0d91d08e73959c3c28d9091ea327bb786aaf1b11a78ac",
+      "bytes": 169062
     },
     {
       "path": "plans/user-stories.csv",

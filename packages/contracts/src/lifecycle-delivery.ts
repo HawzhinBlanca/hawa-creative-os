@@ -54,6 +54,9 @@ export interface OutboundMessage {
   tenantId?: string;
   /** The task the message is about, named in the office's alert when it may not have arrived. */
   taskId?: string;
+  /** Optional durable callback after a verified critical send mark, for request waitpoints. */
+  onSent?: { kind: 'question'; requestId: string; requestRev: number;
+    taskId: string; questionId: string };
 }
 
 export type SendResult =

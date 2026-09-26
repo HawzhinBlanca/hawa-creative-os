@@ -291,6 +291,45 @@ describe('TelegramSender: the office hears of an uncertain critical message once
     expect(forwarded).toEqual([]);
   });
 
+  it('notifies a question send after its confirmed mark, including after a callback crash', async () => {
+    const requestId = randomUUID();
+    const taskId = randomUUID();
+    const questionId = randomUUID();
+    const m = text(`${requestId}:2:design-outcome`, { taskId, onSent: {
+      kind: 'question', requestId, requestRev: 2, taskId, questionId,
+    } });
+    const { bridge, calls } = scriptedBridge([{ success: true, messageId: '739' }]);
+    const callbacks: string[] = [];
+    let fail = true;
+    const ctx: SenderContext = { run: (_name, action) => action(), sendTo: () => {},
+      notifySent: (_message, messageId) => {
+        if (fail) { fail = false; throw new Error('callback crashed'); }
+        callbacks.push(messageId);
+      } };
+    await expect(handleSend(ctx, depsWith(bridge), m)).rejects.toThrow('callback crashed');
+    expect(await markOf(m.key)).toBe('sent');
+    expect(await handleSend(ctx, depsWith(bridge), m)).toEqual({ outcome: 'sent', messageId: '739' });
+    expect(calls).toHaveLength(1);
+    expect(callbacks).toEqual(['739']);
+  });
+
+  it('does not start a question timer for an uncertain send or mismatched callback identity', async () => {
+    const requestId = randomUUID();
+    const taskId = randomUUID();
+    const message = text(`${requestId}:2:design-outcome`, { taskId, onSent: {
+      kind: 'question', requestId, requestRev: 2, taskId, questionId: randomUUID(),
+    } });
+    const { bridge, calls } = scriptedBridge([{ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' }]);
+    const callbacks: string[] = [];
+    const ctx: SenderContext = { run: (_name, action) => action(), sendTo: () => {},
+      notifySent: (_message, messageId) => { callbacks.push(messageId); } };
+    expect((await handleSend(ctx, depsWith(bridge), message)).outcome).toBe('uncertain');
+    expect(callbacks).toEqual([]);
+    await expect(handleSend(ctx, depsWith(bridge), { ...message, key: `wrong:${randomUUID()}` }))
+      .rejects.toBeInstanceOf(restate.TerminalError);
+    expect(calls).toHaveLength(1);
+  });
+
   it('a message without a key or chat is refused for good', async () => {
     const { bridge } = scriptedBridge([{ success: true }]);
     const { ctx } = fakeContext();

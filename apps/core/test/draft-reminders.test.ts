@@ -58,6 +58,40 @@ describe.skipIf(!url)('draft reminders (PostgreSQL)', () => {
     expect(await reminders(taskId)).toEqual([`notify.telegram:reminder5:${taskId}`]);
   });
 
+  it('leaves request-owned drafts and questions to RequestLifecycle', async () => {
+    const ownedDraft = await draft(27);
+    const ownedQuestion = await draft(27);
+    await withRlsContext(db, operator, async (trx) => {
+      for (const [taskId, chat, stage] of [
+        [ownedDraft.taskId, ownedDraft.chat, 'in_review'],
+        [ownedQuestion.taskId, ownedQuestion.chat, 'awaiting_answer'],
+      ]) {
+        const requestId = randomUUID();
+        await sql`INSERT INTO hawa.requests (request_id, tenant_id, root_task_id, current_task_id,
+          owner, stage, rev, chat_id) VALUES (${requestId}::uuid, ${tenantId}::uuid,
+          ${taskId}::uuid, ${taskId}::uuid, 'restate', ${stage}, 2, ${chat})`.execute(trx);
+        await sql`UPDATE hawa.tasks SET request_id = ${requestId}::uuid
+          WHERE tenant_id = ${tenantId}::uuid AND id = ${taskId}::uuid`.execute(trx);
+      }
+      await sql`UPDATE hawa.tasks SET state = 'paused' WHERE id = ${ownedQuestion.taskId}::uuid`.execute(trx);
+      const stages = { directed: { refused: 'NEEDS_CLARIFICATION', clarify: {
+        question: 'Which layout?', options: ['A', 'B'],
+      } } };
+      await sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id,
+        request_key, request_hash, request, tier, status, stages)
+        VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${ownedQuestion.taskId}::uuid,
+          ${kaae}::uuid, ${userId}, ${`owned-question-${ownedQuestion.taskId}`}, 'h', '{}'::jsonb,
+          'standard', 'failed', ${JSON.stringify(stages)}::jsonb)`.execute(trx);
+    });
+    await pass();
+    expect(await reminders(ownedDraft.taskId)).toEqual([]);
+    const questionMarks = await withRlsContext(db, operator, async (trx) =>
+      sql<{ id: string }>`SELECT id::text FROM hawa.outbox_commands
+        WHERE aggregate_id = ${ownedQuestion.taskId}::uuid
+          AND idempotency_key LIKE 'notify.telegram:question-reminder%'`.execute(trx));
+    expect(questionMarks.rows).toEqual([]);
+  });
+
   it('never for a draft the requester answered, by a button or any message after it', async () => {
     const pressed = await draft(30);
     const wrote = await draft(30);
