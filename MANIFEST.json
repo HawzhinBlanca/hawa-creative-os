@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T09:00:29Z",
+  "generatedAt": "2026-09-26T09:28:31Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "dd3218a73af75eba7ab7cdd7649a353305908f3faefaef0c18056f7fa8316bc0",
-      "bytes": 3985
+      "sha256": "971bf7089010d55fac5b1b4612e51934d9587e2d6f207a41e0f9de49d4ff5593",
+      "bytes": 3983
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -524,8 +524,8 @@
     },
     {
       "path": "deployment/env.example",
-      "sha256": "edf11653dafcd03059a70ee5fd6ffa378af95ca551bc21dd0b03b80320fd6b78",
-      "bytes": 2699
+      "sha256": "b1246ccc2cba951567a3167669ada40ef6e7a4c7e01066bd8159948e93f28794",
+      "bytes": 2886
     },
     {
       "path": "deployment/init-databases.sh",
@@ -884,8 +884,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
-      "sha256": "fa39937f80f4a7fb4e05574e6e50d417e2bb615592c004d9b3256febad63b02d",
-      "bytes": 31447
+      "sha256": "b4bb6ac56e490ce9eb8c265f6dcc9c792a70cd953bfe0937d5f820811f6400a0",
+      "bytes": 34109
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_RESTATE_KILL_DRILL.md",
@@ -979,8 +979,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "5ddd1345e3955c571a055e65e152c1380f83a5664f20dc2fb41ca4634fa5d48a",
-      "bytes": 185280
+      "sha256": "bb01378eb7a6de2f4cb54eeda57484ec1bd01dfaa2536ceac8951459fa7a7ead",
+      "bytes": 186103
     },
     {
       "path": "plans/user-stories.csv",
