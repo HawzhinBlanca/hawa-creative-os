@@ -24,7 +24,7 @@ import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeAppr
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
-import { retainLifecyclePhoto } from '../services/lifecycle-photo.js';
+import { lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
 import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log, requestIdHeaders } from '../logging.js';
@@ -242,14 +242,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         const chatId: string = chatOf(update);
         const carrier = update.message ?? update.edited_message ?? update.channel_post;
         const media = carrier && typeof carrier === 'object' ? carrier as Record<string, unknown> : null;
-        const photos = media?.photo;
-        const lastPhoto = Array.isArray(photos) ? photos[photos.length - 1] as Record<string, unknown> | undefined : undefined;
-        const photoFileId = typeof lastPhoto?.file_id === 'string' && lastPhoto.file_id.length <= 512
-          ? lastPhoto.file_id : null;
-        const singleCaptionedPhoto = Boolean(media && media === msg && photoFileId &&
-          typeof media.caption === 'string' && media.caption.trim() && !media.media_group_id &&
-          !media.voice && !media.audio && !media.document &&
-          !media.video && !media.video_note && !media.animation);
+        const photoInput = lifecyclePhotoInput(update);
         const sender = media?.from as { id?: unknown } | undefined;
         const senderId = String(sender?.id ?? '');
         const isIntakeOpen = ctx.telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
@@ -275,10 +268,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             reason: 'A lifecycle chat media update needs operator review; no task was started' });
         };
         if (media && chatId && (media.photo || media.voice || media.audio || media.document ||
-            media.video || media.video_note || media.animation || media.caption) && !singleCaptionedPhoto) {
+            media.video || media.video_note || media.animation || media.caption) && !photoInput) {
           return holdMedia();
         }
         const rawText: string = (() => {
+          if (photoInput) return photoInput.directive;
           if (cbq && typeof cbq === 'object') {
             const d = (cbq as Record<string, unknown>).data;
             return typeof d === 'string' ? d : '';
@@ -390,10 +384,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     isInstructionOnly: classification.isInstructionOnly,
                   });
                   let lifecycleImage: ChatIntake['lifecycleImage'];
-                  if (singleCaptionedPhoto && photoFileId) {
+                  if (photoInput) {
                     if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
                     const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
-                      (id) => ctx.telegramBridge!.downloadFile(id), photoFileId);
+                      (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
                     if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
                     if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
                     if (photo.kind === 'unsupported') return holdMedia();
@@ -438,11 +432,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               const round = Math.max(1, Math.floor((expectedRev - 1) / 2));
               if (round >= 1) {
                 let lifecycleImage = priorRevisionPhoto?.image;
-                if (singleCaptionedPhoto && !lifecycleImage && photoFileId) {
+                if (photoInput && !lifecycleImage) {
                   if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
                   if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
                   const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
-                    (id) => ctx.telegramBridge!.downloadFile(id), photoFileId);
+                    (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
                   if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
                   if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
                   if (photo.kind === 'unsupported') return holdMedia();
@@ -477,7 +471,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 });
               }
             }
-            if (singleCaptionedPhoto) return holdMedia();
+            if (photoInput) return holdMedia();
             // Not in manual stage or no open request → fall through to legacy intake.
           } catch (err) {
             if (err instanceof LifecycleProjectionConflict) {

@@ -5,7 +5,8 @@ import { parseCompleteRevisionRequest, parseRejectionCategory, type OfficeApprov
 import { IdempotencyConflictError, OUTBOX_SEND_MARK_SOURCE, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
-import { readNewBriefDecision, readRevisionPhotoDecision } from './lifecycle-chat-target.js';
+import { linkedLifecycleReplies, readNewBriefDecision, readRevisionPhotoDecision } from './lifecycle-chat-target.js';
+import { lifecyclePhotoInput } from './lifecycle-photo.js';
 import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage } from './canva-status-message.js';
@@ -621,14 +622,14 @@ export async function projectLifecycleRequesterRevisionWithIntake(
   const sourceMessage = source?.message && typeof source.message === 'object'
     ? source.message as Record<string, unknown> : null;
   const sourceImage = sourceMessage?.photo;
+  const photoInput = lifecyclePhotoInput(input.sourceUpdate);
   if (Boolean(sourceImage) !== Boolean(input.lifecycleImage)) {
     throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'A requester photo requires its stored image decision');
   }
   if (input.lifecycleImage && (!parseBlobRef(input.lifecycleImage) ||
-      !Array.isArray(sourceImage) || sourceImage.length === 0 ||
-      typeof sourceMessage?.caption !== 'string' || sourceMessage.caption.trim() !== directive.trim() ||
+      !photoInput || photoInput.directive !== directive.trim() ||
       !Number.isSafeInteger(source?.update_id) || Number(source?.update_id) <= 0)) {
-    throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The requester image does not match a captioned Telegram photo');
+    throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The requester image does not match an admitted Telegram photo');
   }
   if (input.questionId !== undefined && !/^[0-9a-f-]{36}$/i.test(input.questionId)) {
     throw new LifecycleProjectionConflict('WRONG_STAGE', 'The answer has no valid question identity');
@@ -662,6 +663,13 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       throw new LifecycleProjectionConflict('WRONG_CHAT', 'The update chat does not match the request');
     }
     if (input.lifecycleImage) {
+      if (photoInput?.captionless) {
+        const replies = await linkedLifecycleReplies(trx, tenantId, sourceChannelId, photoInput.replyMessageId!);
+        if (replies.length !== 1 || replies[0].requestId !== requestId || replies[0].rev !== expectedRev) {
+          throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT',
+            'A captionless image must reply to the current request notice');
+        }
+      }
       const decision = await readRevisionPhotoDecision(trx, tenantId, Number(source!.update_id));
       if (!decision || decision.requestId !== requestId || decision.chatId !== sourceChannelId ||
           decision.payloadHash !== input.sourceUpdateHash ||

@@ -7,6 +7,8 @@ import { persistChatIntake } from '../src/services/chat-intake.js';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { blobStoreFor } from '../src/services/blob-store-context.js';
 import { recordRevisionPhotoDecision } from '../src/services/lifecycle-chat-target.js';
+import { lifecyclePhotoInput } from '../src/services/lifecycle-photo.js';
+import { projectLifecycleRequesterRevisionWithIntake } from '../src/services/lifecycle-projection.js';
 import { PARKED_UPDATE_NOTICE } from '../src/services/polled-update-dispatch.js';
 import { productionAppOptions } from '../src/entrypoint-options.js';
 import { telegramPollerOf } from '../src/services/telegram-poller-owner.js';
@@ -440,7 +442,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect((child?.payload as any).designInstructions).toContain('Make the approved event design');
   });
 
-  it('binds a captioned reply photo to only its selected revision task and replays after flag rollback', async () => {
+  it.each(['captioned', 'captionless'] as const)('binds a %s reply photo to only its selected revision task and replays after flag rollback', async (kind) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     const app = createApp({ db } as any);
@@ -455,7 +457,7 @@ describe('POST /v1/internal/telegram/intake', () => {
         'test-sent-mark', true)`.execute(trx));
     const update = brief(updateId(), chat);
     delete (update.message as any).text;
-    (update.message as any).caption = 'Please use this photo and a blue background';
+    if (kind === 'captioned') (update.message as any).caption = 'Please use this photo and a blue background';
     (update.message as any).photo = [{ file_id: 'revision-photo', file_size: 128 }];
     (update.message as any).reply_to_message = { message_id: 843 };
     const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64');
@@ -466,6 +468,11 @@ describe('POST /v1/internal/telegram/intake', () => {
     const result = await intake(photoApp, update, 'lifecycle');
     expect(result.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'requester-revision',
       requestId: second.requestId, priorTaskId: second.taskId, duplicate: false });
+    if (kind === 'captionless') {
+      expect(result.body.directive).toContain('no written instructions');
+      const child = (await tasksInChat(chat)).find((task) => task.aggregate_id === result.body.newTaskId);
+      expect(child?.payload).toMatchObject({ exactCopy: [{ text: 'December 4, 2026' }] });
+    }
     expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
     expect((await tasksInChat(chat))).toHaveLength(3);
     const decision = await withRlsContext(db, scope, (trx) => sql<{ payload: any }>`SELECT payload
@@ -496,6 +503,72 @@ describe('POST /v1/internal/telegram/intake', () => {
       intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
     expect((await tasksInChat(chat))).toHaveLength(3);
     expect(first.taskId).not.toBe(result.body.newTaskId);
+  });
+
+  it.each(['unlinked', 'unknown-reply', 'stale-reply'] as const)(
+    'refuses a captionless %s photo before downloading or creating a task', async (kind) => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const { requestId } = await seedWaitingRequest(app, chat);
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const update = brief(updateId(), chat);
+    delete (update.message as any).text;
+    (update.message as any).photo = [{ file_id: 'unowned-captionless-photo' }];
+    if (kind !== 'unlinked') (update.message as any).reply_to_message = { message_id: 928 };
+    if (kind === 'stale-reply') {
+      await withRlsContext(db, scope, async (trx) => {
+        await sql`INSERT INTO hawa.inbox_events
+          (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+          VALUES (${tenantId}::uuid, 'telegram_delivery', ${`lc:${requestId}:3:office-revision-notify:send`},
+            'telegram_message_sent', '{"messageId":"928"}'::jsonb, 'test-sent-mark', true)`.execute(trx);
+        await trx.updateTable('requests').set({ rev: 5 }).where('request_id', '=', requestId).execute();
+      });
+    }
+    const bridge = { downloadFile: vi.fn(), dispatchOutboundMessage: vi.fn() };
+    const result = await intake(createApp({ db, telegramBridge: bridge } as any), update);
+    const expected = kind === 'unlinked'
+      ? { intakeStatus: 422, code: 'LIFECYCLE_MEDIA_NOT_ADMITTED', lifecycleAction: 'park-update' }
+      : { intakeStatus: 409, code: 'STALE_REQUEST_REPLY', lifecycleAction: 'request-choice-required' };
+    expect(result.body).toMatchObject(expected);
+    expect(bridge.downloadFile).not.toHaveBeenCalled();
+    expect(await tasksInChat(chat)).toHaveLength(1);
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
+    expect((await intake(createApp({ db } as any), update)).body).toMatchObject(expected);
+    expect(await tasksInChat(chat)).toHaveLength(1);
+  });
+
+  it('checks the exact captionless reply again at the task projection boundary', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const first = await seedWaitingRequest(app, chat);
+    const second = await seedWaitingRequest(app, chat);
+    const update = brief(updateId(), chat);
+    delete (update.message as any).text;
+    (update.message as any).photo = [{ file_id: 'wrong-request-photo' }];
+    (update.message as any).reply_to_message = { message_id: 936 };
+    await withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.inbox_events
+      (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+      VALUES (${tenantId}::uuid, 'telegram_delivery', ${`lc:${second.requestId}:3:office-revision-notify:send`},
+        'telegram_message_sent', '{"messageId":"936"}'::jsonb, 'test-sent-mark', true)`.execute(trx));
+    const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64');
+    const image = await blobStoreFor(db)!.put(photo, 'image/png');
+    const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+    await withRlsContext(db, scope, (trx) => recordRevisionPhotoDecision(trx,
+      tenantId, update.update_id, { requestId: first.requestId, chatId: String(chat), payloadHash, image }));
+    const directive = lifecyclePhotoInput(update)!.directive;
+    await expect(projectLifecycleRequesterRevisionWithIntake(db, {
+      requestId: first.requestId, tenantId, priorTaskId: first.taskId, round: 1, directive,
+      sourceEventId: `lc-${first.requestId}-r1-u${update.update_id}`, sourceChannelId: String(chat),
+      rawText: directive, sourceUpdateHash: payloadHash, sourceUpdate: update,
+      lifecycleImage: image, clientId, expectedRev: 3, rev: 4,
+      key: `${first.requestId}:4:requesterRevisionIntake:u${update.update_id}`,
+    })).rejects.toMatchObject({ code: 'NOT_CURRENT_DRAFT' });
+    expect(await tasksInChat(chat)).toHaveLength(2);
+    const request = await withRlsContext(db, scope, (trx) => trx.selectFrom('requests')
+      .select(['rev', 'current_task_id']).where('request_id', '=', first.requestId).executeTakeFirstOrThrow());
+    expect(request).toMatchObject({ rev: '3', current_task_id: first.taskId });
   });
 
   it('requires a unique request before downloading a revision photo', async () => {
@@ -554,14 +627,21 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(requestId).toBeTruthy();
   });
 
-  it('projects a saved photo decision after Core restarts without asking Telegram for the file again', async () => {
+  it.each(['captioned', 'captionless'] as const)('projects a saved %s photo decision after Core restarts without asking Telegram for the file again', async (kind) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     const { requestId } = await seedWaitingRequest(createApp({ db } as any), chat);
     const update = brief(updateId(), chat);
     delete (update.message as any).text;
-    (update.message as any).caption = 'Use this reference for the revision';
+    if (kind === 'captioned') (update.message as any).caption = 'Use this reference for the revision';
     (update.message as any).photo = [{ file_id: 'already-saved-photo' }];
+    if (kind === 'captionless') {
+      (update.message as any).reply_to_message = { message_id: 917 };
+      await withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.inbox_events
+        (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+        VALUES (${tenantId}::uuid, 'telegram_delivery', ${`lc:${requestId}:3:office-revision-notify:send`},
+          'telegram_message_sent', '{"messageId":"917"}'::jsonb, 'test-sent-mark', true)`.execute(trx));
+    }
     const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64');
     const image = await blobStoreFor(db)!.put(photo, 'image/png');
     const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
@@ -706,7 +786,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(3);
   });
 
-  it('asks a verified Studio question, resumes from a photo answer, and rejects a late second answer', async () => {
+  it.each(['captioned', 'captionless'] as const)('asks a verified Studio question, resumes from a %s photo answer, and rejects a late second answer', async (kind) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
@@ -778,7 +858,7 @@ describe('POST /v1/internal/telegram/intake', () => {
       intakeStatus: 409, code: 'AMBIGUOUS_REQUEST', lifecycleAction: 'request-choice-required' });
     const answer = brief(updateId(), chat);
     delete (answer.message as any).text;
-    (answer.message as any).caption = 'Larger headline';
+    if (kind === 'captioned') (answer.message as any).caption = 'Larger headline';
     (answer.message as any).photo = [{ file_id: 'clarification-photo' }];
     (answer.message as Record<string, unknown>).reply_to_message = { message_id: 735 };
     const resumed = await intake(app, answer, 'lifecycle', requestId);
@@ -794,7 +874,8 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(child?.payload).toMatchObject({ exactCopy: [{ text: 'December 4, 2026' }],
       studioOptions: { parentTaskId: originalTaskId, answers: waitingTaskId,
         clarified: true, revisionRound: 2 } });
-    expect((child?.payload as any).studioOptions.revisionDirective).toContain('Larger headline');
+    expect((child?.payload as any).studioOptions.revisionDirective)
+      .toContain(kind === 'captioned' ? 'Larger headline' : 'no written instructions');
     const rows = await withRlsContext(db, scope, async (trx) => ({
       request: await trx.selectFrom('requests').select(['rev', 'stage', 'current_task_id'])
         .where('request_id', '=', requestId).executeTakeFirst(),
@@ -811,7 +892,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     const adopted = await app.request(`/v1/internal/lifecycle/${requestId}/requester-revision-intake`, {
       method: 'POST', headers: worker, body: JSON.stringify({ v: 1, updateId: answer.update_id,
         expectedRev: 5, priorTaskId: waitingTaskId, newTaskId: answeredTaskId,
-        round: 2, directive: (answer.message as any).caption, questionId }),
+        round: 2, directive: resumed.body.directive, questionId }),
     });
     expect(adopted.status).toBe(200);
     const replay = await intake(createApp({ db } as any), answer, 'lifecycle', requestId);

@@ -560,8 +560,10 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     };
   }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
-  scenario('R1.S3.REVISION_PHOTO', 'flagged chat: an office revision photo survives Core SIGKILL before task projection', async (chat, events) => {
-    await sendBrief(chat, 'R1.S3.REVISION_PHOTO');
+  for (const captionless of [false, true]) {
+  const scenarioId = captionless ? 'R1.S3.CAPTIONLESS_PHOTO' : 'R1.S3.REVISION_PHOTO';
+  scenario(scenarioId, `flagged chat: a ${captionless ? 'captionless reply' : 'captioned revision'} photo survives Core SIGKILL before task projection`, async (chat, events) => {
+    await sendBrief(chat, scenarioId);
     const request = await waitUntil('the first draft to enter lifecycle review', async () => {
       const [row] = await query<{ request_id: string; current_task_id: string; rev: string; stage: string }>(sql`
         SELECT request_id, current_task_id, rev, stage FROM hawa.requests WHERE chat_id = ${chat}`);
@@ -591,6 +593,18 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     const killed = await killAtPoint('core.intake.after-revision-photo-decision', { chat });
     const update = captionedPhotoUpdate(chat, fileId, size,
       'Please use this photo as the reference and change the background to navy.');
+    if (captionless) {
+      const noticeId = await waitUntil('the current office revision notice to be confirmed', async () => {
+        const [mark] = await query<{ message_id: string }>(sql`SELECT payload->>'messageId' AS message_id
+          FROM hawa.inbox_events WHERE source_account_id = 'telegram_delivery'
+            AND event_kind = 'telegram_message_sent'
+            AND source_event_id = ${`lc:${request.request_id}:3:office-revision-notify:send`}`);
+        return mark?.message_id ? Number(mark.message_id) : null;
+      });
+      delete (update.message as { caption?: string }).caption;
+      (update.message as Record<string, unknown>).reply_to_message = { message_id: noticeId };
+      events.push(`captionless reply to confirmed notice ${noticeId}`);
+    }
     const [updateId] = await fakes.updates([update]);
     const polled = { ...update, update_id: updateId };
     events.push(`revision photo update ${updateId} in request ${request.request_id}`);
@@ -717,6 +731,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       },
     };
   }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+
+  }
 
   scenario('R1.S3.MEDIA', 'flagged chat: a captioned image is parked once, alerted, and never creates a legacy task', async (chat, events) => {
     const update = imageDocumentUpdate(chat, 'lifecycle-photo', 128,

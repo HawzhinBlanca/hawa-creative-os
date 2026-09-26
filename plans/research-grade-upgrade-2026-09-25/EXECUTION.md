@@ -12,7 +12,25 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R11 registered-client Desk scope)
+## Current result (2026-09-26 — R07 captionless request replies)
+
+A captionless single photo can now answer the exact current lifecycle revision
+or clarification notice. Core rechecks the reply's request/revision in the task
+transaction, keeps the original exact copy and records that the image contains
+no written instructions. Unlinked, stale and cross-request photos cannot create
+a task. Stored decisions and completed receipts replay after restart and flag
+rollback. See ADR-067 and the newest `R07_EVIDENCE.md` section.
+
+Affected Core/worker checks passed **4 files / 75 tests**; source/test typecheck
+and lint passed. The disposable Core SIGKILL drill passed **10/10 invariants**:
+one child/photo/download, one projection, planner received the photo hash and
+simulated review/delivery reached rev 8 `delivered`. The source hashes and exact
+results are preserved in `R07_CAPTIONLESS_PHOTO_DRILL.json`. Exact source sealing
+and its full regression suite follow.
+Albums, other media, live Workspace/provider output and independent human quality
+remain open. No production flag or deployment changed.
+
+## Prior result (2026-09-26 — R11 registered-client Desk scope)
 
 The request form and Brand DNA editor now use the authorized client directory,
 with no packaged KAAE-only choices or guessed default client. A saved draft keeps
@@ -25,8 +43,8 @@ the directory changes; changed intent is refused. See ADR-066 and `R11_EVIDENCE.
 The corrected final affected group passed **3 files / 18 tests**. The broad source
 run preceding the fixture correction had **3,339 passed / 1 failed / 52 skipped**;
 the failure was a nonexistent user-fixture column, now repaired and retested.
-Typecheck, lint and Desk build passed. The final exact candidate suite follows the
-source seal. No deployment, new-client onboarding, live provider output or human
+Typecheck, lint and Desk build passed. The sealed candidate `4972f49` (source `26dc8b6`) then passed **434 files /
+3,346 tests**, with **4 files / 52 tests skipped**; manifest verification passed. No deployment, new-client onboarding, live provider output or human
 quality acceptance is claimed. Workspace configuration and the remaining research
 plan gates stay open; production lifecycle flags remain off.
 

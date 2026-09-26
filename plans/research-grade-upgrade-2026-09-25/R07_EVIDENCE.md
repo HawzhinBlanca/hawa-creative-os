@@ -1,5 +1,44 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — captionless photos through exact current replies (ADR-067)
+
+A single photo without a caption can now continue a revision or clarification
+when it replies to the recorded notice for that exact current request revision.
+Core checks the outgoing message identity at routing and again inside the task
+projection transaction. The existing photo decision, blob reference, task file
+binding and revision receipt handle recovery. An unlinked photo stays held even
+when only one request waits. Unknown/stale replies are refused, and a saved photo
+decision cannot authorize a different request's reply.
+
+The application labels a captionless submission as having **no written
+instructions** and tells the planner to preserve the existing factual copy. The
+original Telegram update is retained; no image text is promoted into exact copy.
+Shared parsing rejects albums and mixed/unsupported media at the same boundary
+used by projection. Requirements: FR-011, FR-060, NFR-001 and NFR-006.
+
+**Verification:** the new captionless revision test failed before the change
+(`park-update`, 422), while the captioned control passed. The final affected
+Core/worker group passed **4 files / 75 tests**. It covers two waiting requests,
+exact reply selection, child-only file binding and Studio retrieval, unchanged
+exact copy, clarification, late answers, replay after flag rollback, a pending
+photo decision across Core reconstruction, and a direct projection attempting to
+use another request's notice. TypeScript source/test checks and repository lint
+passed. The disposable Docker `R1.S3.CAPTIONLESS_PHOTO` drill passed at
+2026-09-26 18:45 UTC: **1 scenario / 10 invariants**, with 39 scenarios skipped by
+selection. Core was killed after committing the image decision and before child
+projection. Restart plus a second Restate key produced one child task, one file
+binding/download and one requester projection. The planner received the exact
+image hash; both intakes completed; simulated approval/delivery reached request
+rev 8 `delivered` and child `complete`, with no ready outbox work or unmatched
+model calls. The preserved JSON report is `R07_CAPTIONLESS_PHOTO_DRILL.json`,
+including the tested source-file hashes. The exact sealed regression suite follows
+this source/evidence commit.
+
+**Limit:** this does not admit unlinked photos, albums, voice or PDF/document
+messages. Local model/file fakes cannot establish visual use or human quality.
+Live provider, deployed workflow and release admission remain open; production
+lifecycle flags stay off.
+
 ## 2026-09-26 — correction and Canva revision-photo completion
 
 The prior drill's unmatched model call was **Canva's revision planner**, not
