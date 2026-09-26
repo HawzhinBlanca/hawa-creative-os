@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T20:43:54Z",
+  "generatedAt": "2026-09-26T20:57:44Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 346,
+  "fileCount": 347,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "293e23af83a61306129ff8a9568d35ab25501fba8a78d8ecc2c797a0e19760a1",
+      "sha256": "1d08a73108a78f274e7faf19cf4b8470279ca779958f690fe5bd8b3c7a3bb66b",
       "bytes": 3969
     },
     {
@@ -444,8 +444,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "9b51425f7ae9a3a2367ee7021ea088af990aa7e9119223e60c7936b865631fea",
-      "bytes": 40859
+      "sha256": "4cac35a5c1aa982a39e81b1e1d4452ea2c844f1ee33cbaf6cbb9a766bbe321ea",
+      "bytes": 41250
     },
     {
       "path": "config/asset-workflows.example.yaml",
@@ -879,8 +879,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "a1f0bfa72db98bd5efbeb743f4bc5a8c343d00d082875e798112bf062801d9ac",
-      "bytes": 22582
+      "sha256": "f496c030cdb2acd1babb86d8d446a305be8d8b837559cdd72c33caeaa3c5f375",
+      "bytes": 24069
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -993,9 +993,14 @@
       "bytes": 3460
     },
     {
+      "path": "plans/research-grade-upgrade-2026-09-25/R12_DOCUMENT_RECOVERY_PROOF.json",
+      "sha256": "34c25581888494d24ac35e77fee7ae365b0dd49725d73d944c6573f0f87d545e",
+      "bytes": 8122
+    },
+    {
       "path": "plans/research-grade-upgrade-2026-09-25/R12_EVIDENCE.md",
-      "sha256": "a3dc589c97216938a122623e07dd07bd77941f73cbc4b2f9b41cd07406229eb0",
-      "bytes": 18414
+      "sha256": "a5e7192c2faa293e8cae317a3150b7643e12d546c2dd5551d87877476d0f845f",
+      "bytes": 21866
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R13_EVIDENCE.md",
@@ -1054,8 +1059,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "49f0d62be9c1c6a5289d6489e33ea3f1b4adfdbd8e9fe992e1fcf517646e65e8",
-      "bytes": 212685
+      "sha256": "10707d12198aebde485f57dd5ea9f8ffa45758e7656b48173af77958456781a7",
+      "bytes": 218274
     },
     {
       "path": "plans/user-stories.csv",
