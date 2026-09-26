@@ -922,3 +922,97 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(deliveryTransport).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('ADR-064 named reviewer transaction authority', () => {
+  it('blocks an unassigned reviewer and a shared key, then refuses a scope revoked after the gateway call', async () => {
+    const { requestId, taskId, revisionId, chatId, runId } = await reviewableRequest();
+    const owner = createDb(process.env.TEST_DATABASE_OWNER_URL!);
+    const reviewerId = randomUUID();
+    const assignmentId = randomUUID();
+    const token = `hawa_sess_${randomUUID().replaceAll('-', '')}`;
+    const sessionHash = createHash('sha256').update(token).digest('hex');
+    const csrf = createHash('sha256').update(`${token}:csrf`).digest('hex');
+    const actionId = randomUUID();
+    const path = `/v1/tasks/${taskId}/revisions/${revisionId}/decisions`;
+    const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': actionId,
+      Cookie: `hawa_session=${token}; hawa_csrf=${csrf}`, 'x-hawa-csrf': csrf };
+    const body = { action: 'reject', rejectionCategory: 'concept', reason: 'The named reviewer rejects this concept' };
+    vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_ID', 'test-client');
+    vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_SECRET', 'test-client-secret');
+    vi.stubEnv('HAWA_GOOGLE_OIDC_REDIRECT_URI', 'https://desk.office.example/v1/auth/google/callback');
+    vi.stubEnv('HAWA_GOOGLE_OIDC_HOSTED_DOMAINS', 'example.test');
+    try {
+      vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_SECRET', '');
+      const incompleteOffice = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+      expect((await incompleteOffice.request(path, { method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() },
+        body: JSON.stringify(body) })).status).toBe(403);
+      vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_SECRET', 'test-client-secret');
+      await sql`INSERT INTO hawa.users(id,email,display_name,external_subject)
+        VALUES (${reviewerId}::uuid,${`review-${reviewerId}@example.test`},'Named Reviewer',${`google-${reviewerId}`})`.execute(owner);
+      await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role,active)
+        VALUES (${tenantId}::uuid,${reviewerId}::uuid,'approver',true)`.execute(owner);
+      await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)
+        VALUES (${tenantId}::uuid,${clientId}::uuid,${reviewerId}::uuid,'approver',true)`.execute(owner);
+      await sql`INSERT INTO hawa.desk_sessions(token_hash,tenant_id,user_id,actor_id,role,display_name,expires_at,auth_method)
+        VALUES (${sessionHash},${tenantId}::uuid,${reviewerId}::uuid,'oidc:fixture','approver','Named Reviewer',now()+interval '1 hour','google_oidc')`.execute(owner);
+      const desk = createApp({ db });
+      const oldSharedReviewer = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+      expect((await oldSharedReviewer.request(path, { method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() },
+        body: JSON.stringify(body) })).status).toBe(403);
+      expect((await desk.request(path, { method: 'POST', headers, body: JSON.stringify(body) })).status).toBe(403);
+      await sql`INSERT INTO hawa.office_review_assignments(id,tenant_id,client_id,user_id)
+        VALUES (${assignmentId}::uuid,${tenantId}::uuid,${clientId}::uuid,${reviewerId}::uuid)`.execute(owner);
+      let state = { v: 1, requestId, tenantId, chatId, owner: 'restate', stage: 'in_review', rev: 2,
+        taskId, runId, outcome: { revisionId } } as unknown as AutomaticLifecycleState;
+      const object: AutomaticOpenContext = {
+        key: requestId, get: async () => state, run: async (_name, action) => action(),
+        set: (_name, value) => { state = value as AutomaticLifecycleState; },
+        send: () => { throw new Error('rejection starts no revision notice'); },
+        startDesign: () => { throw new Error('rejection starts no design'); },
+      };
+      const internal = createApp({ db } as any);
+      const core = { post: async <T>(route: string, payload: unknown): Promise<T> => {
+        const answer = await internal.request(`/v1${route}`, { method: 'POST',
+          headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload) });
+        if (!answer.ok) throw new Error(`Core projection HTTP ${answer.status}`);
+        return answer.json() as Promise<T>;
+      } };
+      let revokeBeforeProjection = true;
+      vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+        const envelope = JSON.parse(String(init?.body)) as SignedOfficeDecision;
+        expect(checkSignedOfficeDecision(envelope, secret)).toBe('ok');
+        expect(envelope.event.actor).toMatchObject({ userId: reviewerId, role: 'approver',
+          authMethod: 'google_oidc', sessionHash });
+        if (revokeBeforeProjection) {
+          revokeBeforeProjection = false;
+          await sql`UPDATE hawa.office_review_assignments SET active=false
+            WHERE id=${assignmentId}::uuid`.execute(owner);
+        }
+        try { return Response.json(await recordOfficeRevision(object, core, envelope.event)); }
+        catch { return Response.json({ accepted: false }, { status: 409 }); }
+      }));
+      const refused = await desk.request(path, { method: 'POST', headers, body: JSON.stringify(body) });
+      expect(refused.status).toBe(409);
+      const before = await sql`SELECT id FROM hawa.approvals WHERE task_id=${taskId}::uuid`.execute(owner);
+      expect(before.rows).toHaveLength(0);
+      await sql`UPDATE hawa.office_review_assignments SET active=true WHERE id=${assignmentId}::uuid`.execute(owner);
+      const accepted = await desk.request(path, { method: 'POST', headers, body: JSON.stringify(body) });
+      expect(accepted.status, await accepted.clone().text()).toBe(201);
+      const saved = await sql<{ decision_payload: Record<string, unknown> }>`SELECT decision_payload
+        FROM hawa.approvals WHERE task_id=${taskId}::uuid`.execute(owner);
+      expect(saved.rows).toHaveLength(1);
+      expect(saved.rows[0].decision_payload).toMatchObject({ authMethod: 'google_oidc',
+        reviewerAssignmentId: assignmentId, reviewerAssignmentVersion: 3,
+        reviewClientId: clientId, reviewProjectId: null });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+      // The isolated per-file database is dropped after this suite. The decision intentionally
+      // leaves an append-only review request pointing at this named user until that teardown.
+      await owner.destroy();
+    }
+  });
+});

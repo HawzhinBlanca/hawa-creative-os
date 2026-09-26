@@ -10,6 +10,8 @@ import { isValidUuid } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { parsePinnedExportIds } from '../services/pinned-deliverables.js';
 import { pendingChangeOf as findPendingChange, pendingChangeWords } from '../services/pending-change.js';
+import { namedOfficeReviewMode } from '../services/google-oidc.js';
+import { lockNamedReviewAuthority } from '../services/named-review-authority.js';
 
 /**
  * A reviewer's decision on a design revision, and what the review desk shows before it
@@ -35,6 +37,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
   const verifyRequestAuth = ctx.verifyRequestAuth as (c: Context) => Required<AuthContext> & { displayName?: string };
   const defaultClientId = DEFAULT_CLIENT_ID;
   const humanApprovalManager = new HumanApprovalManager();
+  const namedReviewerMode = namedOfficeReviewMode();
   const pendingChangeOf = (tenantId: string, taskId: string, after?: Date) => findPendingChange(db!, tenantId, taskId, after);
 
   // Human Review Decision (H03, FR-043, FR-044, CV-15)
@@ -66,6 +69,26 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       );
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
+    // A configured named-review deployment cannot let an old shared key keep deciding. The
+    // database function checks the live session and explicit scope, then Core checks again under
+    // the private decision lock before an approval is inserted.
+    const requireNamedReviewer = namedReviewerMode || auth.authMethod === 'google_oidc';
+    let reviewerSessionHash: string | null = null;
+    if (requireNamedReviewer) {
+      const token = ctx.bearerTokenOf?.(c);
+      if (auth.authMethod !== 'google_oidc' || !token || !dbTask?.client_id) {
+        return problem(c, 403, 'Named Reviewer Required', 'This design needs a named, assigned office reviewer');
+      }
+      reviewerSessionHash = crypto.createHash('sha256').update(token).digest('hex');
+      const assignment = await withRlsContext(db,
+        { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+        (trx) => lockNamedReviewAuthority(trx, { tenantId, userId: auth.userId,
+          sessionHash: reviewerSessionHash!, clientId: dbTask.client_id, projectId: dbTask.project_id }));
+      if (!assignment) return problem(c, 403, 'Reviewer Assignment Required',
+        'This account has no active review assignment for the design client and project');
+      if (!dbTask.request_id) return problem(c, 409, 'Legacy Review Pending Migration',
+        'Named review authority is currently available for request-owned designs');
+    }
     if (dbTask?.request_id) {
       // A signed-in Desk reviewer sends each review decision through the public signed gateway.
       // The private RequestLifecycle object owns the state; Core never writes an owned decision here.
@@ -88,8 +111,8 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
           'Use a structured revision request, approval with selected exports, or rejection with category and reason');
       }
       const pinIds = parsedPins?.ok ? parsedPins.ids : [];
-      const officeRole = (auth.role || '').toLowerCase().trim();
-      if (!['art_director', 'creative_director', 'office_admin', 'administrator'].includes(officeRole)) {
+      const officeRole = requireNamedReviewer ? 'approver' : (auth.role || '').toLowerCase().trim();
+      if (!['approver', 'art_director', 'creative_director', 'office_admin', 'administrator'].includes(officeRole)) {
         return problem(c, 403, 'Forbidden', 'This lifecycle revision needs an authorized office reviewer');
       }
       const requestId = dbTask.request_id as string;
@@ -232,7 +255,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         'The decision gateway is not configured; retry this action later');
       const event = { v: 1 as const, eventId: `desk:${actionId}`, requestId, taskId, revisionId,
         actionId, expectedRev, kind: isOwnedApproval ? 'approve' as const : isOwnedRejection ? 'reject' as const : 'revise' as const,
-        actor: { userId: auth.userId, role: eventRole }, reason: eventReason,
+        actor: { userId: auth.userId, role: eventRole,
+          ...(reviewerSessionHash ? { authMethod: 'google_oidc' as const, sessionHash: reviewerSessionHash } : {}) },
+        reason: eventReason,
         ...(isOwnedApproval ? { approvalProof: approvalProof!, deskRequestFingerprint } :
           isOwnedRejection ? { rejectionCategory } : { revisionRequest: revisionRequest! }) };
       const signature = signLifecycleOfficeEvent(secret, event);

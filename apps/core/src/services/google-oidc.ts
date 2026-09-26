@@ -21,6 +21,13 @@ export interface OfficeOidcProvider {
   exchange(input: { callbackQuery: string; state: string; nonce: string; codeVerifier: string }): Promise<OfficeOidcIdentity>;
 }
 
+/** A partially entered identity configuration must not leave shared-key review enabled. */
+export function namedOfficeReviewMode(env: NodeJS.ProcessEnv = process.env): boolean {
+  return ['HAWA_GOOGLE_OIDC_CLIENT_ID', 'HAWA_GOOGLE_OIDC_CLIENT_SECRET',
+    'HAWA_GOOGLE_OIDC_REDIRECT_URI', 'HAWA_GOOGLE_OIDC_HOSTED_DOMAINS']
+    .some((key) => Boolean(env[key]?.trim()));
+}
+
 /** An incomplete identity-provider configuration cannot accidentally enable the login route. */
 export function googleOidcSettings(env: NodeJS.ProcessEnv = process.env): GoogleOidcSettings | null {
   const clientId = (env.HAWA_GOOGLE_OIDC_CLIENT_ID || '').trim();

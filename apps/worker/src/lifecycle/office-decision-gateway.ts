@@ -29,6 +29,8 @@ export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: s
       input.event.eventId !== `desk:${input.event.actionId}` ||
       !input.event.actor || !UUID.test(input.event.actor.userId) ||
       typeof input.event.actor.role !== 'string' || typeof input.event.reason !== 'string' ||
+      (input.event.kind !== 'deliver' && (input.event.actor.authMethod !== undefined || input.event.actor.sessionHash !== undefined) &&
+        (input.event.actor.authMethod !== 'google_oidc' || !/^[a-f0-9]{64}$/.test(input.event.actor.sessionHash || ''))) ||
       !input.event.reason.trim() || input.event.reason.length > 2000 ||
       (input.event.kind !== 'deliver' && input.event.revisionRequest !== undefined &&
         (!parseCompleteRevisionRequest(input.event.revisionRequest) ||

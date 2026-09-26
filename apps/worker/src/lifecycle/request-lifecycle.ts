@@ -91,7 +91,7 @@ export interface OfficeRevisionEvent {
   actionId: string;
   /** expectedRev ≥ 2: first decision is at 2; subsequent revision rounds use 2+2k. */
   expectedRev: number; kind: 'revise' | 'approve' | 'reject';
-  actor: { userId: string; role: string }; reason: string;
+  actor: { userId: string; role: string; authMethod?: 'google_oidc'; sessionHash?: string }; reason: string;
   rejectionCategory?: RejectionCategory;
   /** Optional only for signed decisions already in flight before the structured-feedback rollout. */
   revisionRequest?: StructuredRevisionRequest;
@@ -438,8 +438,8 @@ export async function recordQuestionSent(ctx: QuestionSentContext, core: CoreInt
   return { recorded: true, sentAtMs };
 }
 
-const OFFICE_ROLES = new Set(['art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
-const APPROVAL_ROLES = new Set(['art_director', 'creative_director', 'office_admin', 'administrator']);
+const OFFICE_ROLES = new Set(['approver', 'art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
+const APPROVAL_ROLES = new Set(['approver', 'art_director', 'creative_director', 'office_admin', 'administrator']);
 
 /** A request-owned office action (revision-request or proof-bound approval) at any revision round. */
 export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: CoreInternal, event: OfficeRevisionEvent): Promise<OfficeRevisionReply> {

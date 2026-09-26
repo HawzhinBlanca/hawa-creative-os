@@ -8,6 +8,8 @@ import { readNewBriefDecision, readRevisionPhotoDecision } from './lifecycle-cha
 import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage } from './canva-status-message.js';
+import { namedOfficeReviewMode } from './google-oidc.js';
+import { lockNamedReviewAuthority } from './named-review-authority.js';
 
 /** First projection of a request; later transitions must advance the same revision ledger. */
 export interface OpenLifecycleProjection {
@@ -41,7 +43,7 @@ export class LifecycleProjectionConflict extends Error {
 
 export interface OfficeDecisionProjection {
   requestId: string; tenantId: string; taskId: string; revisionId: string;
-  actionId: string; actor: { userId: string; role: string }; reason: string;
+  actionId: string; actor: { userId: string; role: string; authMethod?: 'google_oidc'; sessionHash?: string }; reason: string;
   revisionRequest?: StructuredRevisionRequest;
   decision?: 'revision_requested' | 'approved' | 'rejected';
   rejectionCategory?: RejectionCategory;
@@ -56,8 +58,8 @@ export interface OfficeDecisionResult {
   approvalId: string; taskState: string; rev: number; stage: 'manual' | 'approved' | 'rejected';
 }
 
-const OFFICE_REVISION_ROLES = new Set(['art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
-const OFFICE_APPROVAL_ROLES = new Set(['art_director', 'creative_director', 'office_admin', 'administrator']);
+const OFFICE_REVISION_ROLES = new Set(['approver', 'art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
+const OFFICE_APPROVAL_ROLES = new Set(['approver', 'art_director', 'creative_director', 'office_admin', 'administrator']);
 
 /**
  * Request-owned office decision (revision-request or proof-bound approval). Works across all
@@ -102,13 +104,27 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
     if (request.current_task_id !== taskId) {
       throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The office action names an older request task');
     }
-    const task = await trx.selectFrom('tasks').select(['request_id', 'current_design_revision_id', 'state', 'version'])
+    const task = await trx.selectFrom('tasks').select(['request_id', 'current_design_revision_id', 'state', 'version', 'client_id', 'project_id'])
       .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirst();
     if (task?.request_id !== requestId || task.current_design_revision_id !== revisionId) {
       throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The office action names a stale or unowned design revision');
     }
     if (task.state !== 'human_review') {
       throw new LifecycleProjectionConflict('WRONG_STAGE', 'The current draft is no longer awaiting office review');
+    }
+    const namedReviewerRequired = namedOfficeReviewMode() || actor.authMethod === 'google_oidc';
+    let namedAuthority: Awaited<ReturnType<typeof lockNamedReviewAuthority>> = null;
+    if (namedReviewerRequired) {
+      if (actor.authMethod !== 'google_oidc' || actor.role !== 'approver' ||
+          !actor.sessionHash || !task.client_id) {
+        throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR', 'A named, assigned reviewer is required');
+      }
+      namedAuthority = await lockNamedReviewAuthority(trx, {
+        tenantId, userId: actor.userId, sessionHash: actor.sessionHash,
+        clientId: task.client_id, projectId: task.project_id,
+      });
+      if (!namedAuthority) throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR',
+        'The reviewer session or client/project assignment was revoked before this decision');
     }
     if (!(decision === 'approved' || decision === 'rejected' ? OFFICE_APPROVAL_ROLES : OFFICE_REVISION_ROLES).has(actor.role)) {
       throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR', 'An authorized office reviewer must request this revision');
@@ -120,6 +136,9 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
       reason, nonce: `desk:${actionId}`, lifecycleRequestId: requestId,
       expectedTaskVersion: Number(task.version),
       decisionPayload: { lifecycleRequestId: requestId, approverRole: actor.role,
+        ...(namedAuthority ? { authMethod: 'google_oidc', reviewerAssignmentId: namedAuthority.assignmentId,
+          reviewerAssignmentVersion: namedAuthority.assignmentVersion,
+          reviewClientId: task.client_id, reviewProjectId: task.project_id } : {}),
         actionId, requestFingerprint: hash, ...(revisionRequest ? { revisionRequest } : {}),
         ...(input.rejectionCategory ? { rejectionCategory: input.rejectionCategory } : {}),
         ...(input.approvalProof ? { officeApprovalProof: input.approvalProof,

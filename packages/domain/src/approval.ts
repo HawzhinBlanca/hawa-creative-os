@@ -10,6 +10,7 @@ export function parseRejectionCategory(input: unknown): RejectionCategory | null
 }
 
 export type StandardReviewerRole =
+  | 'approver'
   | 'art_director'
   | 'creative_director'
   | 'account_lead'
@@ -19,6 +20,7 @@ export type StandardReviewerRole =
   | 'administrator';
 
 export const AUTHORIZED_REVIEWER_ROLES: readonly StandardReviewerRole[] = [
+  'approver',
   'art_director',
   'creative_director',
   'account_lead',

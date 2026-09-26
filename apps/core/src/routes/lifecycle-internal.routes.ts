@@ -690,7 +690,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       const result = await projectLifecycleOfficeDecision(db, {
         requestId, tenantId: DEFAULT_TENANT_ID, taskId: op.taskId as string,
         revisionId: op.revisionId as string, actionId: actionId as string,
-        actor: { userId: actor.userId as string, role: actor.role as string },
+        actor: { userId: actor.userId as string, role: actor.role as string,
+          ...(actor.authMethod === 'google_oidc' ? { authMethod: 'google_oidc' as const,
+            sessionHash: actor.sessionHash as string } : {}) },
         reason: (op.reason as string).trim(), expectedRev, rev, key: body.key as string,
         ...(revisionRequest ? { revisionRequest } : {}),
         ...(isRejection ? { decision: 'rejected', rejectionCategory: parseRejectionCategory(op.rejectionCategory)! } : {}),
