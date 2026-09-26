@@ -1,5 +1,6 @@
 /** PostgreSQL reads used to bind a Telegram reply to one RequestLifecycle owner. */
 import { sql, type Database, type Kysely } from '@hawa/db';
+import type { ChatIntake } from './chat-intake.js';
 import type { RequesterRevisionWithIntakeResult } from './lifecycle-projection.js';
 
 export interface WaitingLifecycleRequest {
@@ -14,6 +15,41 @@ export interface WaitingLifecycleRequest {
 export interface RevisionIntakeReceipt {
   request_id: string;
   result: unknown;
+}
+
+export interface NewBriefDecision {
+  requestId: string;
+  chatId: string;
+  payloadHash: string;
+  draft: ChatIntake;
+}
+
+/** The Core decision is durable before ChatInbox sends RequestLifecycle.open. */
+export async function readNewBriefDecision(trx: Kysely<Database>, tenantId: string,
+  updateId: number): Promise<NewBriefDecision | null> {
+  const row = (await sql<{ payload: Record<string, unknown>; payload_hash: string }>`SELECT payload, payload_hash
+    FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
+      AND source_account_id = 'lifecycle_chat_open' AND source_event_id = ${String(updateId)}
+    LIMIT 1`.execute(trx)).rows[0];
+  if (!row) return null;
+  const { requestId, chatId, draft } = row.payload;
+  if (typeof requestId !== 'string' || typeof chatId !== 'string' ||
+      !draft || typeof draft !== 'object') throw new Error('Invalid stored new-brief decision');
+  return { requestId, chatId, payloadHash: row.payload_hash, draft: draft as ChatIntake };
+}
+
+export async function recordNewBriefDecision(trx: Kysely<Database>, tenantId: string,
+  updateId: number, decision: NewBriefDecision): Promise<NewBriefDecision> {
+  await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id,
+      event_kind, payload, payload_hash, verified)
+    VALUES (${tenantId}::uuid, 'lifecycle_chat_open', ${String(updateId)},
+      'lifecycle_new_brief_decision',
+      ${JSON.stringify({ requestId: decision.requestId, chatId: decision.chatId,
+        draft: decision.draft })}::jsonb, ${decision.payloadHash}, true)
+    ON CONFLICT DO NOTHING`.execute(trx);
+  const stored = await readNewBriefDecision(trx, tenantId, updateId);
+  if (!stored) throw new Error('New-brief decision was not stored');
+  return stored;
 }
 
 export async function revisionIntakeReceipts(trx: Kysely<Database>, tenantId: string,

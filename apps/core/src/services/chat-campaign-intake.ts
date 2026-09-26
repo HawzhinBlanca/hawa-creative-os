@@ -1,4 +1,4 @@
-import { persistChatIntake } from './chat-intake.js';
+import { persistChatIntake, type ChatIntake } from './chat-intake.js';
 import { peelTrailingRemarks } from './request-remarks.js';
 import { log } from '../logging.js';
 import crypto from 'node:crypto';
@@ -46,7 +46,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
   const defaultClientId = DEFAULT_CLIENT_ID;
 
   // Autonomous Inbound Chat Ingress & Vector Composition Engine (Invariants #1, #2, #4, #8, #10)
-  async function ingestChatCampaignTask(input: {
+  async function doIngestChatCampaignTask(input: {
     platform: 'telegram' | 'whatsapp';
     sourceEventId: string;
     sourceChannelId: string;
@@ -59,7 +59,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     rawJson?: any;
     deskBaseUrl?: string;
     isInstructionOnly?: boolean;
-  }) {
+  }, prepareOnly = false) {
     const { platform, sourceEventId, sourceChannelId, senderName, rawText, voiceTranscript, referenceImageBase64, explicitClientId, autoGenerate, deskBaseUrl, isInstructionOnly } = input;
     const normalizedText = normalizeKurdishIncomingText(rawText);
 
@@ -367,6 +367,33 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       updatedAt: new Date().toISOString(),
     };
 
+    // The lifecycle path uses this exact draft without a Core task or Telegram effect. Keeping
+    // one construction path prevents a new request from changing client or factual copy at cutover.
+    const CLIENT_ALIAS_TO_UUID: Record<string, string> = {
+      'client-kaae': KAAE_CLIENT_ID, 'kaae': KAAE_CLIENT_ID,
+      'client-drustee': 'c1000000-0000-4000-8000-000000000003', 'drustee': 'c1000000-0000-4000-8000-000000000003',
+      'client-fastpay': 'c1000000-0000-4000-8000-000000000004', 'fastpay': 'c1000000-0000-4000-8000-000000000004',
+      'client-hawa': 'c1000000-0000-4000-8000-000000000001', 'hawa': 'c1000000-0000-4000-8000-000000000001',
+    };
+    const durableClient = clientId && isValidUuid(clientId)
+      ? clientId
+      : (clientId && CLIENT_ALIAS_TO_UUID[clientId]) || null;
+    const preparedDraft: ChatIntake = {
+      platform, sourceEventId, sourceChannelId, rawText, rawJson: input.rawJson,
+      clientId: durableClient, title, headlineEn, headlineCkb, copyEn, copyCkb,
+      designInstructions: clientInstructions, exactCopy,
+      isInstructionOnly: Boolean(input.isInstructionOnly),
+      autoGenerate: Boolean(autoGenerate && durableClient && !input.isInstructionOnly),
+      variant: { width: variantWidth, height: variantHeight },
+      studioOptions: referenceImageBase64 || input.rawJson?.message?.media_group_id
+        ? {
+            ...(referenceImageBase64 ? { referenceImageBase64 } : {}),
+            ...(input.rawJson?.message?.media_group_id ? { mediaGroupId: String(input.rawJson.message.media_group_id) } : {}),
+          }
+        : undefined,
+    };
+    if (prepareOnly) return { kind: 'prepared' as const, draft: preparedDraft };
+
     const existingMemoryTask = db ? undefined : Array.from(tasks.values()).find(
       (t: any) => t.sourcePlatform === platform && t.sourceEventId === sourceEventId
     );
@@ -382,34 +409,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
 
     let persistedVersion: number | null = null;
     if (db) {
-      // Known chat aliases resolve to the seeded client rows. Unknown aliases stay unscoped:
-      // the art director assigns the client in Hawa Desk. Guessing a client would attribute a
-      // stranger's request, and the brand assets used to draft it, to the wrong client.
-      const CLIENT_ALIAS_TO_UUID: Record<string, string> = {
-        'client-kaae': KAAE_CLIENT_ID, 'kaae': KAAE_CLIENT_ID,
-        'client-drustee': 'c1000000-0000-4000-8000-000000000003', 'drustee': 'c1000000-0000-4000-8000-000000000003',
-        'client-fastpay': 'c1000000-0000-4000-8000-000000000004', 'fastpay': 'c1000000-0000-4000-8000-000000000004',
-        'client-hawa': 'c1000000-0000-4000-8000-000000000001', 'hawa': 'c1000000-0000-4000-8000-000000000001',
-      };
-      const durableClient = clientId && isValidUuid(clientId)
-        ? clientId
-        : (clientId && CLIENT_ALIAS_TO_UUID[clientId]) || null;
-      const persisted = await persistChatIntake(db, {
-        platform, sourceEventId, sourceChannelId, rawText, rawJson: input.rawJson,
-        clientId: durableClient, title, headlineEn, headlineCkb, copyEn, copyCkb,
-        designInstructions: clientInstructions, exactCopy,
-        isInstructionOnly: Boolean(input.isInstructionOnly),
-        // Automatic drafting needs a scoped client; unscoped requests wait for the art director.
-        autoGenerate: Boolean(autoGenerate && durableClient && !input.isInstructionOnly),
-        variant: { width: variantWidth, height: variantHeight },
-        studioOptions: referenceImageBase64 || input.rawJson?.message?.media_group_id
-          ? {
-              ...(referenceImageBase64 ? { referenceImageBase64 } : {}),
-              // The album the request's photo came in; its other photos join this request.
-              ...(input.rawJson?.message?.media_group_id ? { mediaGroupId: String(input.rawJson.message.media_group_id) } : {}),
-            }
-          : undefined,
-      });
+      const persisted = await persistChatIntake(db, preparedDraft);
       taskId = persisted.task.id;
       task.autoGenerateDeclined = persisted.autoGenerateDeclined;
       task.id = taskId; task.tenantId = persisted.tenantId; task.clientId = persisted.task.client_id;
@@ -523,5 +523,17 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     return { task, brief, costReceipt, latestQAReport, notification };
   }
 
-  return { ingestChatCampaignTask };
+  async function ingestChatCampaignTask(input: Parameters<typeof doIngestChatCampaignTask>[0]) {
+    const result = await doIngestChatCampaignTask(input);
+    if ('kind' in result && result.kind === 'prepared') throw new Error('Task intake did not persist');
+    return result;
+  }
+
+  async function prepareChatCampaignDraft(input: Parameters<typeof doIngestChatCampaignTask>[0]): Promise<ChatIntake> {
+    const result = await doIngestChatCampaignTask(input, true);
+    if ('kind' in result && result.kind === 'prepared') return result.draft;
+    throw new Error('New-brief planning unexpectedly persisted a task');
+  }
+
+  return { ingestChatCampaignTask, prepareChatCampaignDraft };
 }

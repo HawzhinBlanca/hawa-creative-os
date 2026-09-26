@@ -98,6 +98,113 @@ async function seedWaitingRequest(app: any, chat: number) {
 }
 
 describe('POST /v1/internal/telegram/intake', () => {
+  it('prepares a flagged first brief without a Core task and replays its open after the flag changes', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const update = brief(updateId(), chat);
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const app = createApp({ db } as any);
+    const first = await intake(app, update);
+    expect(first.body).toMatchObject({ kind: 'handled', intakeStatus: 200,
+      lifecycleAction: 'open-request', duplicate: false, chatId: String(chat),
+      draft: { platform: 'telegram', rawText: update.message.text,
+        sourceChannelId: String(chat), autoGenerate: true, clientId } });
+    expect(first.body.draft.sourceEventId).toBe(`lc-${first.body.requestId}-r0`);
+    expect(await tasksInChat(chat)).toHaveLength(0);
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
+    const again = await intake(createApp({ db } as any), update);
+    expect(again.body).toMatchObject({ duplicate: true, lifecycleAction: 'open-request',
+      requestId: first.body.requestId, draft: first.body.draft });
+    const altered = structuredClone(update);
+    altered.message.text = 'KAAE members evening\n---\nDecember 5, 2026\nErbil';
+    expect((await intake(app, altered)).body).toMatchObject({
+      intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    const projected = await app.request(`/v1/internal/lifecycle/${first.body.requestId}/project`, {
+      method: 'POST', headers: worker,
+      body: JSON.stringify({ v: 1, expectedRev: 0, rev: 1,
+        key: `${first.body.requestId}:1:open`,
+        ops: [{ kind: 'createRequest', draft: first.body.draft }] }),
+    });
+    expect(projected.status).toBe(200);
+    const task = (await tasksInChat(chat))[0];
+    expect(task).toBeDefined();
+    const ownership = await withRlsContext(db, scope, async (trx) =>
+      (await sql<{ owner: string; delivery_executor_pin: string }>`SELECT r.owner, t.delivery_executor_pin
+        FROM hawa.requests r JOIN hawa.tasks t ON t.id = r.current_task_id
+        WHERE r.request_id = ${first.body.requestId}::uuid`.execute(trx)).rows[0]);
+    expect(ownership).toEqual({ owner: 'restate', delivery_executor_pin: 'restate' });
+  });
+
+  it('opens an explicit second brief while another lifecycle request awaits a revision', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const waiting = await seedWaitingRequest(app, chat);
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const update = brief(updateId(), chat);
+    update.message.text = '/new KAAE second event\n---\nDecember 9, 2026\nErbil';
+    const result = await intake(app, update, 'lifecycle', waiting.requestId);
+    expect(result.body).toMatchObject({ lifecycleAction: 'open-request', intakeStatus: 200,
+      draft: { rawText: 'KAAE second event\n---\nDecember 9, 2026\nErbil' } });
+    expect(result.body.requestId).not.toBe(waiting.requestId);
+    expect(await tasksInChat(chat)).toHaveLength(1);
+  });
+
+  it('refuses an unlinked reply in a flagged chat instead of saving it as a new task', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const update = brief(updateId(), chat);
+    (update.message as any).reply_to_message = { message_id: 123456 };
+    const result = await intake(createApp({ db } as any), update);
+    expect(result.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY' });
+    expect(await tasksInChat(chat)).toHaveLength(0);
+  });
+
+  it('admits a styling-only message as manual and does not promote a greeting to a lifecycle request', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const app = createApp({ db } as any);
+    const manual = brief(updateId(), chat);
+    manual.message.text = 'Please change the background to navy';
+    const planned = await intake(app, manual);
+    expect(planned.body).toMatchObject({ lifecycleAction: 'open-request',
+      draft: { autoGenerate: false, isInstructionOnly: true, exactCopy: [] } });
+    expect(await tasksInChat(chat)).toHaveLength(0);
+    const greeting = brief(updateId(), chat);
+    greeting.message.text = 'hello';
+    const answered = await intake(app, greeting);
+    expect(answered.body.lifecycleAction).not.toBe('open-request');
+    expect(await tasksInChat(chat)).toHaveLength(0);
+  });
+
+  it('keeps an existing Core chat on legacy intake until the sender explicitly starts a separate brief', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const old = await intake(app, brief(updateId(), chat));
+    expect(old.body.taskIds).toHaveLength(1);
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const ordinary = brief(updateId(), chat);
+    ordinary.message.text = 'KAAE follow-up event\n---\nDecember 9, 2026';
+    const legacy = await intake(app, ordinary);
+    expect(legacy.body.lifecycleAction).toBeUndefined();
+    expect(legacy.body.taskIds).toHaveLength(1);
+    const pins = await withRlsContext(db, scope, async (trx) =>
+      (await sql<{ delivery_executor_pin: string }>`SELECT t.delivery_executor_pin
+        FROM hawa.tasks t WHERE t.id = ${legacy.body.taskIds[0]}::uuid`.execute(trx)).rows);
+    expect(pins).toEqual([{ delivery_executor_pin: 'core' }]);
+    const explicit = brief(updateId(), chat);
+    explicit.message.text = '/new KAAE new request\n---\nDecember 10, 2026';
+    expect((await intake(app, explicit)).body).toMatchObject({ lifecycleAction: 'open-request' });
+  });
+
   it('runs today\'s intake: a brief becomes one task, and the same update again is a duplicate, not a second task', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();

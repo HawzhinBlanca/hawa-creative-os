@@ -1,5 +1,32 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — first and concurrent Telegram briefs reach the request owner (ADR-059)
+
+Before this change, no production ChatInbox path called `RequestLifecycle.open`. A flagged
+chat with no waiting revision fell through to legacy task creation; the live flag alone
+could pin that legacy task to the lifecycle delivery executor without a request owner.
+Core now prepares a brief with the same client and factual-copy parser as legacy intake,
+stores its draft and complete-update hash under the Telegram update ID, and returns a
+deterministic request ID without creating a task or sending an acknowledgement. A retry
+replays that decision even after the chat flag changes. ChatInbox journals the answer and
+sends `open:<requestId>` to RequestLifecycle; the object projects the task and sends its
+keyed acknowledgement. A fresh flagged chat admits an ordinary full brief; `/new <brief>`
+opens a separate request while another waits. A reply to an unknown or stale lifecycle
+notice is refused. Existing Core tasks keep their Core delivery pin, and a newly flagged
+chat with historical Core tasks needs `/new` to open a separate lifecycle request.
+Instruction-only text opens manual review; greetings and questions retain legacy chat
+handling. Requirements: FR-060, NFR-001.
+
+**Verification:** focused intake/worker/ownership tests passed **3 files / 51 tests**
+against isolated PostgreSQL and worker journals, including changed-payload conflict,
+lost Core answer, failed open dispatch replay, busy-chat second brief, stale reply,
+manual instruction, and old task pin. Adjacent delivery and automatic-open tests passed
+**4 files / 34 tests**. Full repository lint and source/test typecheck passed. The wider
+source suite excluding only the intentionally unsealed release-manifest gate passed
+**425 files / 3,280 tests**, with **4 files / 48 tests skipped**. This local proof does not establish a killed
+Restate/PostgreSQL admission, media or album cutover, a live Telegram receipt, or the
+final release gate. The lifecycle chat flag remains off in production; R07 is in progress.
+
 ## 2026-09-26 — confirmed question sends own the reminder clock (ADR-058)
 
 The earlier R07 question timer started when Core projected `awaiting_answer`, before

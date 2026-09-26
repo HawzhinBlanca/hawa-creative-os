@@ -12,7 +12,19 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R07 source checkpoint `8ad32b3` plus current confirmed-send worktree)
+## Current result (2026-09-26 — R07 new-brief admission worktree)
+
+**The missing first-brief handoff is now locally wired.** Core stores a hash-bound,
+prepared Telegram brief, then ChatInbox sends one keyed `RequestLifecycle.open` so the
+request owner creates the task. `/new <brief>` opens a separate request in a busy chat;
+unknown replies are refused, and legacy tasks keep the Core delivery executor. The
+focused intake set passed 3 files / 51 tests; adjacent delivery/open tests passed 4
+files / 34 tests; lint and full source/test typecheck passed. See ADR-059 and
+`R07_EVIDENCE.md`. The wider source suite excluding the unsealed release-manifest
+gate passed 425 files / 3,280 tests, with 4 files / 48 tests skipped. The flag
+remains off pending process-kill, media, and live admission.
+
+## Prior result (2026-09-26 — R07 source checkpoint `7d322b0`)
 
 **Question reminders now start from a confirmed Telegram send mark.** ADR-058
 adds a private sender callback, Core mark/revision/question validation, and
@@ -76,9 +88,9 @@ the last full suite passed 421 files / 3,237 tests before the reminder changes.
 
 ## Next useful milestone
 
-1. **Finish R07 admission and recovery**: admit an explicit new brief while another request waits,
-   and prove the question path through a killed
-   Restate worker, PostgreSQL replay and live Telegram. The second-request pointer hazard is locally
+1. **Finish R07 admission and recovery**: prove the new-brief and question paths through a killed
+   Restate worker, PostgreSQL replay and live Telegram; qualify media/album intake and fallback
+   with the lifecycle flag before a canary. The second-request pointer hazard is locally
    contained by database selection and exact reply binding.
 2. **Final exports and provider boundaries**: qualify R11–R19 exports and R20–R23 provider boundaries.
 3. **Canary & admission**: deploy only after a coherent release gate, then run live recovery and blind human

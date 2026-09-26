@@ -19,12 +19,15 @@ import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID, type DeliveryOutcome } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, type DeliveryOutcome } from '@hawa/contracts';
 import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
+import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
+import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
-import { linkedLifecycleReplies, readRoutingRefusal, recordRoutingRefusal,
+import { linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
+  readRoutingRefusal, recordRoutingRefusal,
   revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests } from '../services/lifecycle-chat-target.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
@@ -71,6 +74,14 @@ const isUpdate = (u: unknown): u is UpdateLike =>
   Boolean(u) && typeof u === 'object' && Number.isSafeInteger((u as UpdateLike).update_id) && (u as UpdateLike).update_id > 0;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function requestIdForUpdate(chatId: string, updateId: number): string {
+  const bytes = Buffer.from(createHash('sha256').update(`telegram-new-brief:${chatId}:${updateId}`).digest().subarray(0, 16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function openDraft(value: unknown, requestId: string): ChatIntake | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const d = value as Record<string, unknown>;
@@ -81,7 +92,8 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
       typeof d.designInstructions !== 'string' || d.designInstructions.length > 100_000 ||
       !Array.isArray(d.exactCopy) || d.exactCopy.length > 500 || JSON.stringify(d.exactCopy).length > 100_000 ||
       !(d.clientId === null || (typeof d.clientId === 'string' && UUID.test(d.clientId))) ||
-      (d.autoGenerate !== undefined && typeof d.autoGenerate !== 'boolean')) return null;
+      (d.autoGenerate !== undefined && typeof d.autoGenerate !== 'boolean') ||
+      (d.isInstructionOnly !== undefined && typeof d.isInstructionOnly !== 'boolean')) return null;
   const variant = d.variant;
   if (variant !== undefined && (!variant || typeof variant !== 'object' ||
       !Number.isInteger((variant as any).width) || !Number.isInteger((variant as any).height) ||
@@ -104,6 +116,7 @@ function openDraft(value: unknown, requestId: string): ChatIntake | null {
     designInstructions: d.designInstructions as string, exactCopy: d.exactCopy as unknown[],
     clientId: d.clientId as string | null,
     ...(d.autoGenerate !== undefined ? { autoGenerate: d.autoGenerate as boolean } : {}),
+    ...(d.isInstructionOnly !== undefined ? { isInstructionOnly: d.isInstructionOnly as boolean } : {}),
     ...(variant ? { variant: variant as { width: number; height: number } } : {}),
     ...(d.designStudio !== undefined ? { designStudio: d.designStudio as boolean } : {}),
     ...(options ? { studioOptions: options as ChatIntake['studioOptions'] } : {}),
@@ -150,8 +163,29 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // switch, as it waited in Telegram when Core polled. Asked here so the answer is not a retry.
     if (await intakeRefused(channelKillSwitches, 'telegram')) return handled(503, { code: 'INTAKE_PAUSED' });
 
+    // A decision must replay even if the flag changed after the first answer was lost.
+    const sourceChat = chatOf(update);
+    if (db && sourceChat) {
+      try {
+        const priorOpen = await withRlsContext(db,
+          { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+          (trx) => readNewBriefDecision(trx, DEFAULT_TENANT_ID, update.update_id));
+        if (priorOpen) {
+          const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+          if (priorOpen.payloadHash !== hash || priorOpen.chatId !== sourceChat) {
+            return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+          }
+          return handled(200, { duplicate: true, lifecycleAction: 'open-request',
+            requestId: priorOpen.requestId, chatId: sourceChat, draft: priorOpen.draft });
+        }
+      } catch (err) {
+        if ((err as { status?: number })?.status === 503) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+        throw err;
+      }
+    }
+
     // --- lifecycle mode: bind a requester answer to one request, then replay it by update ID ---
-    if (mode === 'lifecycle') {
+    if (mode === 'lifecycle' || lifecycleOwnsChat(chatOf(update))) {
       // The chat's stored request ID is only a hint. A chat can contain more than one request.
       if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
       {
@@ -223,12 +257,72 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             const messageId = replied && typeof replied === 'object'
               ? (replied as Record<string, unknown>).message_id : null;
             const replyMessageId = Number.isSafeInteger(messageId) && Number(messageId) > 0 ? String(messageId) : null;
+            const newCommand = /^\/new(?:@\w+)?(?:\s+|$)/i.exec(directive);
+            const newBriefText = newCommand ? directive.slice(newCommand[0].length).trim() : directive;
+            if (newCommand && !newBriefText) {
+              return handled(422, { code: 'NEW_BRIEF_EMPTY', lifecycleAction: 'new-brief-required', chatId });
+            }
             const { waiting, links } = await withRlsContext(db,
               { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => ({
                 waiting: await waitingLifecycleRequests(trx, TENANT, chatId),
                 links: replyMessageId ? await linkedLifecycleReplies(trx, TENANT, chatId, replyMessageId) : [],
               }));
+            if (replyMessageId && (mode === 'lifecycle' || lifecycleOwnsChat(chatId)) &&
+                (links.length === 0 || newCommand)) return refuseWithReceipt('STALE_REQUEST_REPLY');
             if (links.length > 1) return refuseWithReceipt('AMBIGUOUS_REQUEST');
+            // An explicit new brief may coexist with a waiting request. A reply to a lifecycle
+            // notice always remains bound to that notice, including a stale reply.
+            const mayOpen = lifecycleOwnsChat(chatId) && Boolean(msg) && !replyMessageId &&
+              (Boolean(newCommand) || waiting.length === 0);
+            if (mayOpen) {
+              const classification = classifyWithHeuristics(newBriefText, false, false);
+              if (classification.kind !== 'new_brief') {
+                if (newCommand) return handled(422, { code: 'NEW_BRIEF_EMPTY',
+                  lifecycleAction: 'new-brief-required', chatId });
+                // Questions, greetings and lasting preferences retain the legacy handler's
+                // established response; a chat flag does not turn them into design tasks.
+              } else {
+                const sender = (msg as Record<string, { id?: unknown; first_name?: unknown }>).from;
+                const senderId = String(sender?.id ?? '');
+                const isIntakeOpen = ctx.telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
+                if (ctx.isProduction && !isIntakeOpen &&
+                    (!ctx.telegramIntakeUsers.length || !ctx.telegramIntakeUsers.includes(senderId))) {
+                  return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+                }
+                if (newBriefText.length > 100_000) return handled(413, { code: 'BRIEF_TOO_LONG' });
+                // A newly flagged chat with historical Core tasks needs an explicit command; an
+                // ordinary message could be a change to an older design.
+                const hasLegacyTask = await withRlsContext(db,
+                  { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                  async (trx) =>
+                    (await sql<{ one: number }>`SELECT 1 AS one FROM hawa.outbox_commands o
+                      JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
+                      WHERE o.tenant_id = ${TENANT}::uuid AND o.command_type = 'task.created'
+                        AND o.payload->>'sourceChannelId' = ${chatId}
+                        AND t.delivery_executor_pin = 'core' LIMIT 1`.execute(trx)).rows.length > 0);
+                if (newCommand || !hasLegacyTask) {
+                  const requestId = requestIdForUpdate(chatId, update.update_id);
+                  const prepared = await createChatCampaignIntake(ctx).prepareChatCampaignDraft({
+                    platform: 'telegram', sourceEventId: `lc-${requestId}-r0`, sourceChannelId: chatId,
+                    senderName: typeof sender?.first_name === 'string' ? sender.first_name : 'Requester',
+                    rawText: newBriefText, rawJson: update,
+                    autoGenerate: !classification.isInstructionOnly,
+                    isInstructionOnly: classification.isInstructionOnly,
+                  });
+                  const draft = openDraft(prepared, requestId);
+                  if (!draft) return handled(422, { code: 'INVALID_BRIEF' });
+                  const stored = await withRlsContext(db,
+                    { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                    (trx) => recordNewBriefDecision(trx, TENANT, update.update_id,
+                      { requestId, chatId, payloadHash, draft }));
+                  if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
+                      stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+                  await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
+                  return handled(200, { duplicate: false, lifecycleAction: 'open-request',
+                    requestId, chatId, draft: stored.draft });
+                }
+              }
+            }
             const choice = chooseWaitingChatRequest(waiting.map((r) =>
               ({ requestId: r.request_id, rev: Number(r.rev) })), links[0]);
             if (choice.kind === 'ambiguous' || choice.kind === 'stale_reply') {
@@ -341,9 +435,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     }
   });
 
-  // Phase 2.3's first projection. Its caller is the future RequestLifecycle handler, never a
-  // browser. It is safe to expose before cutover: only the worker credential can reach it, and no
-  // current ChatInbox path emits a lifecycle open. One transaction pins task/outbox ownership.
+  // RequestLifecycle's first projection. Only the worker credential can reach it; a flagged
+  // ChatInbox admission sends the owner an open event. One transaction pins task/outbox ownership.
   internal('/lifecycle/:requestId/project', async (c) => {
     const requestId = c.req.param('requestId') ?? '';
     const body = await readBody(c);

@@ -37,6 +37,7 @@ export interface OpenManualEvent {
     exactCopy: unknown[];
     clientId: string | null;
     autoGenerate: false;
+    isInstructionOnly?: boolean;
   };
 }
 

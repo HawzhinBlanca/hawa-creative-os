@@ -26,7 +26,7 @@ import * as restate from '@restatedev/restate-sdk';
 import type { OutboundMessage } from '@hawa/contracts';
 import { withInvocationLogContext, log } from '../logging.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
-import type { RequesterDecisionEvent } from './request-lifecycle.js';
+import type { OpenAutomaticEvent, OpenManualEvent, RequesterDecisionEvent } from './request-lifecycle.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 
 /** Fields are only ever added, and only as optional (PHASE2_DESIGN.md section 4). */
@@ -43,8 +43,9 @@ export type IntakeMode = 'legacy' | 'lifecycle';
 export type IntakeAnswer =
   | { kind: 'done'; intakeStatus: number; duplicate?: boolean;
       /** When mode=lifecycle and Core routed the update as a requester revision. */
-      lifecycleAction?: 'requester-revision' | 'requester-answer' |
+      lifecycleAction?: 'open-request' | 'new-brief-required' | 'requester-revision' | 'requester-answer' |
         'request-choice-required' | 'revision-blocked';
+      draft?: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'];
       requestId?: string; newTaskId?: string; round?: number; directive?: string;
       priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
       code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
@@ -75,6 +76,7 @@ export interface InboxContext {
    * Only available in the real VO context; tests may stub this as a no-op.
    */
   sendLifecycleDecision(requestId: string, event: RequesterDecisionEvent & { newTaskId: string }): Promise<void> | void;
+  sendLifecycleOpen(requestId: string, event: OpenManualEvent | OpenAutomaticEvent): Promise<void> | void;
   sendNotice(message: OutboundMessage): void;
 }
 
@@ -103,7 +105,8 @@ const retryDelayMs = (k: number) => 2000 * 2 ** k;
 export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, core: ChatInboxCore): Promise<HandleUpdateResult> {
   const update = input.update;
   // Read the per-chat mode and requestId from Restate state, journaled so a replay agrees.
-  // RequestLifecycle.open sets the mode to 'lifecycle' via setMode before the first owned update arrives.
+  // The first flagged update arrives in legacy mode. Core can return open-request for that update;
+  // the resulting request then sets lifecycle mode for later chat updates.
   const { mode, requestId: lifecycleRequestId } = await ctx.run<{ mode: IntakeMode; requestId?: string }>('mode', async () => {
     const view = await ctx.get<ChatInboxView>('inbox');
     if (view?.mode === 'lifecycle') return { mode: 'lifecycle', requestId: view.requestId };
@@ -130,6 +133,13 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
 
   const at = await ctx.now();
   if (done) {
+    if (done.lifecycleAction === 'open-request') {
+      if (!done.requestId || !done.chatId || !done.draft) throw new Error('Core returned an incomplete lifecycle open');
+      const event = { v: 1 as const, eventId: `open:${done.requestId}`, requestId: done.requestId,
+        tenantId: '00000000-0000-4000-a000-000000000001', chatId: done.chatId,
+        draft: done.draft } as OpenManualEvent | OpenAutomaticEvent;
+      await ctx.sendLifecycleOpen(done.requestId, event);
+    }
     // In lifecycle mode, if Core recognised the update as a requester revision decision, fire the
     // lifecycle handler so RequestLifecycle can advance its state machine. Idempotency key:
     // chatinbox:revision:<update_id> — stable, unique per update, replay-safe.
@@ -165,6 +175,12 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
           : 'More than one design is waiting for your changes. Please reply directly to the revision notice for the design you mean.',
       });
     }
+    if (done.lifecycleAction === 'new-brief-required' && done.chatId) {
+      ctx.sendNotice({ v: 1, key: `chatinbox:new-brief-required:${update.update_id}`,
+        chatId: done.chatId, kind: 'text', class: 'critical',
+        text: 'Please send /new followed by the full design brief and the exact words to place on it.',
+      });
+    }
     if (done.lifecycleAction === 'revision-blocked' && done.chatId &&
         (done.code === 'DAILY_CAP_REACHED' || done.code === 'PARENT_BRIEF_MISSING' ||
           done.code === 'QUESTION_MISSING')) {
@@ -179,7 +195,8 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
     }
     ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'handled',
       lastIntakeStatus: done.intakeStatus, at,
-      ...(mode === 'lifecycle' ? { mode, requestId: lifecycleRequestId } : {}),
+      ...(mode === 'lifecycle' || done.lifecycleAction === 'open-request'
+        ? { mode: 'lifecycle' as const, requestId: done.requestId ?? lifecycleRequestId } : {}),
     } satisfies ChatInboxView);
     return { outcome: 'handled', intakeStatus: done.intakeStatus, attempts: reasons.length + 1 };
   }
@@ -214,6 +231,11 @@ function inboxContext(ctx: restate.ObjectContext): InboxContext {
       const { RequestLifecycleApi } = await import('./request-lifecycle.js');
       ctx.objectSendClient(RequestLifecycleApi, requestId)
         .requesterDecision(event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
+    },
+    sendLifecycleOpen: async (requestId, event) => {
+      const { RequestLifecycleApi } = await import('./request-lifecycle.js');
+      ctx.objectSendClient(RequestLifecycleApi, requestId)
+        .open(event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
     },
     sendNotice: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
       .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),

@@ -64,12 +64,27 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         intakeStatus?: number; code?: string; duplicate?: boolean; title?: string;
         lifecycleAction?: string; requestId?: string; newTaskId?: string;
         round?: number; directive?: string; priorTaskId?: string; rawText?: string;
-        chatId?: string; questionId?: string;
+        chatId?: string; questionId?: string; draft?: unknown;
       };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
         if (!retryable(status)) {
           const base: Extract<IntakeAnswer, { kind: 'done' }> = { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true };
+          if (body.lifecycleAction === 'open-request') {
+            const draft = body.draft as Record<string, unknown> | undefined;
+            if (!body.requestId || !body.chatId || !draft || draft.platform !== 'telegram' ||
+                draft.sourceEventId !== `lc-${body.requestId}-r0` ||
+                draft.sourceChannelId !== body.chatId ||
+                (draft.autoGenerate !== true && draft.autoGenerate !== false) ||
+                typeof draft.rawText !== 'string' || typeof draft.title !== 'string') {
+              throw new Error(`Core returned an invalid lifecycle open for update ${update.update_id}`);
+            }
+            return { ...base, lifecycleAction: 'open-request', requestId: body.requestId,
+              chatId: body.chatId, draft: draft as Extract<IntakeAnswer, { kind: 'done' }>['draft'] };
+          }
+          if (body.lifecycleAction === 'new-brief-required' && body.chatId) {
+            return { ...base, lifecycleAction: 'new-brief-required', chatId: body.chatId };
+          }
           if ((body.lifecycleAction === 'requester-revision' ||
                (body.lifecycleAction === 'requester-answer' && body.questionId)) &&
               body.requestId && body.newTaskId &&

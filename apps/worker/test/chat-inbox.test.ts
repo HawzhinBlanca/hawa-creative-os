@@ -19,8 +19,10 @@ class FakeContext implements InboxContext {
   state = new Map<string, unknown>();
   runs: string[] = [];
   lifecycleDecisions: Array<{ requestId: string; event: unknown }> = [];
+  lifecycleOpens: Array<{ requestId: string; event: unknown }> = [];
   notices: unknown[] = [];
   failDecisionOnce = false;
+  failOpenOnce = false;
   constructor(readonly key = '555') {}
   async get<T>(name: string): Promise<T | null> {
     return (this.state.get(name) as T) ?? null;
@@ -48,6 +50,13 @@ class FakeContext implements InboxContext {
     }
     this.lifecycleDecisions.push({ requestId, event });
   }
+  async sendLifecycleOpen(requestId: string, event: any) {
+    if (this.failOpenOnce) {
+      this.failOpenOnce = false;
+      throw new Error('open dispatch interrupted');
+    }
+    this.lifecycleOpens.push({ requestId, event });
+  }
   sendNotice(message: unknown) { this.notices.push(message); }
 }
 
@@ -71,6 +80,23 @@ function core(answers: Array<() => Promise<any>>) {
 }
 
 describe('ChatInbox.handleUpdate', () => {
+  it('dispatches a prepared first brief under a stable open key and recovers after send interruption', async () => {
+    const ctx = new FakeContext();
+    ctx.failOpenOnce = true;
+    const requestId = '43d3fca4-7ce2-5afe-9ae4-b9530874d618';
+    const draft = { platform: 'telegram', sourceEventId: `lc-${requestId}-r0`,
+      sourceChannelId: '555', rawText: 'KAAE event', title: 'KAAE event',
+      designInstructions: '', exactCopy: [{ text: 'KAAE event' }],
+      clientId: 'c1000000-0000-4000-8000-000000000002', autoGenerate: true };
+    const c = core([async () => ({ kind: 'done', intakeStatus: 200,
+      lifecycleAction: 'open-request', requestId, chatId: '555', draft })]);
+    expect(await untilSettled(ctx, () => handleUpdate(ctx, input, c))).toMatchObject({ outcome: 'handled' });
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(ctx.lifecycleOpens).toMatchObject([{ requestId, event: {
+      eventId: `open:${requestId}`, requestId, chatId: '555', draft } }]);
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId });
+  });
+
   it('hands the update to intake once and is done', async () => {
     const ctx = new FakeContext();
     const c = core([async () => ({ kind: 'done', intakeStatus: 201 })]);

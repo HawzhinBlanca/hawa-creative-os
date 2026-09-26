@@ -108,7 +108,7 @@ describe.skipIf(!url)('T7 Flag Scoping: DESIGN_PIPELINE_V3_CHATS', () => {
     expect(outbox?.payload?.designStudio).toBe(true);
   });
 
-  it('pins an enrolled Telegram task to Restate and preserves the pin through a flag change and replay', async () => {
+  it('keeps a legacy Telegram task on Core even when its chat is flagged for future lifecycle admission', async () => {
     const chat = '7191500999';
     process.env.HAWA_LIFECYCLE_CHATS = chat;
     const input: ChatIntake = { platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: chat,
@@ -116,14 +116,14 @@ describe.skipIf(!url)('T7 Flag Scoping: DESIGN_PIPELINE_V3_CHATS', () => {
       designInstructions: 'Simple layout', exactCopy: [] };
     const first = await persistChatIntake(db, input);
     expect(first.created).toBe(true);
-    expect(first.task.delivery_executor_pin).toBe('restate');
+    expect(first.task.delivery_executor_pin).toBe('core');
     delete process.env.HAWA_LIFECYCLE_CHATS;
     const replay = await persistChatIntake(db, input);
     expect(replay.created).toBe(false);
     expect(replay.task.id).toBe(first.task.id);
-    expect(replay.task.delivery_executor_pin).toBe('restate');
+    expect(replay.task.delivery_executor_pin).toBe('core');
     await expect(withRlsContext(db, { tenantId: tenant, role: 'administrator' }, (trx) =>
-      sql`UPDATE hawa.tasks SET delivery_executor_pin = 'core' WHERE id = ${first.task.id}::uuid`.execute(trx)))
+      sql`UPDATE hawa.tasks SET delivery_executor_pin = 'restate' WHERE id = ${first.task.id}::uuid`.execute(trx)))
       .rejects.toThrow('Task delivery executor pin is immutable');
   });
 
@@ -161,13 +161,13 @@ describe.skipIf(!url)('T7 Flag Scoping: DESIGN_PIPELINE_V3_CHATS', () => {
       .rejects.toThrow('outside this request scope');
   });
 
-  it('keeps an enrolled request pinned through revision and reference tasks after unenrolment', async () => {
+  it('keeps a lifecycle-owned request pinned through revision and reference tasks after unenrolment', async () => {
     const chat = '7191500555';
     process.env.HAWA_LIFECYCLE_CHATS = chat;
     const base: ChatIntake = { platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: chat,
       clientId: client, title: 'Enrolled request', rawText: 'Enrolled request',
       designInstructions: 'Simple layout', exactCopy: [] };
-    const original = await persistChatIntake(db, base);
+    const original = await persistChatIntake(db, base, { outboxState: 'recorded' });
     delete process.env.HAWA_LIFECYCLE_CHATS;
     const revision = await persistChatIntake(db, { ...base, sourceEventId: randomUUID(),
       studioOptions: { parentTaskId: original.task.id } });

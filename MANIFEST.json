@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T04:41:47Z",
+  "generatedAt": "2026-09-26T04:56:28Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 322,
+  "fileCount": 323,
   "files": [
     {
       "path": ".dockerignore",
@@ -361,6 +361,11 @@
       "path": "adrs/058_confirmed_question_reminders.md",
       "sha256": "84d985c3c7ee5dbbb7942a6b7c63e2db8d1b1d9ba55644e0ff827242a31c6d24",
       "bytes": 2188
+    },
+    {
+      "path": "adrs/059_lifecycle_new_brief_admission.md",
+      "sha256": "eeb83ad15304394e512a3c281eed9410e442ddc1be8a866ac70b2a2ffd745cb9",
+      "bytes": 2252
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -804,8 +809,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "c27e1ffcd1d778c32943fc2859ef4b02ac122dac59f013ad22d46256ee7a180a",
-      "bytes": 7140
+      "sha256": "6b5678c2ce06a96666dad615e1f84e108109e9e18cf9dc07293f90843a8a4746",
+      "bytes": 7932
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -849,8 +854,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_EVIDENCE.md",
-      "sha256": "5c3cd11ccb80f14b6145f01d2516b5798ab2e714baa39f0d6f6cffe3732173d5",
-      "bytes": 35012
+      "sha256": "71d2b97ab4146f4038d5dcac0cd33d84b135c0a3fd09835de0bc9e3b4306f8e8",
+      "bytes": 37092
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
@@ -944,8 +949,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "adf3e61b9d6046b53bb0d91d08e73959c3c28d9091ea327bb786aaf1b11a78ac",
-      "bytes": 169062
+      "sha256": "893ddba900fde9f86fc86c9cbd1e44170a9f0536c294a49aa8826ad3477b7f33",
+      "bytes": 170150
     },
     {
       "path": "plans/user-stories.csv",
