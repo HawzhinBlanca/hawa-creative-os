@@ -91,6 +91,7 @@ import { evaluatePaidModelHealth, isBillableChatCompletion, paidModelConfigFinge
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
 import { remindUnansweredDrafts } from './services/draft-reminders.js';
 import { createStreamTicketStore } from './services/stream-tickets.js';
+import { googleOidcSettings } from './services/google-oidc.js';
 import {
   canonicalJson,
   computeDnaHash,
@@ -123,6 +124,9 @@ const globalCanvaCircuitBreaker = new CircuitBreaker({ name: 'canva-api', failur
 
 export function createApp(options?: CreateAppOptions) {
   const app = new Hono();
+  // The Node adapter sees an HTTP upstream socket behind the HTTPS reverse proxy. Compare browser
+  // Origin with the configured public OAuth callback origin, never that internal request scheme.
+  const officeBrowserOrigin = googleOidcSettings()?.redirectUri;
   const currentEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
   const isProduction = currentEnv === 'production';
   const db = options?.db || (process.env.DATABASE_URL ? createDb(process.env.DATABASE_URL) : null);
@@ -912,7 +916,7 @@ export function createApp(options?: CreateAppOptions) {
               const presented = c.req.header('x-hawa-csrf') || '';
               const expected = crypto.createHash('sha256').update(`${cookieSession}:csrf`).digest('hex');
               const origin = c.req.header('Origin');
-              const requestOrigin = new URL(c.req.url).origin;
+              const requestOrigin = new URL(officeBrowserOrigin || c.req.url).origin;
               if (!secretsEqual(presented, expected) || (origin && origin !== requestOrigin)) {
                 return problem(c, 403, 'CSRF Check Failed', 'The office session requires a same-origin request and CSRF proof');
               }

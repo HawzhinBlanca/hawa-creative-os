@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createDb, sql } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { googleOidcSettings, officeIdentityFromClaims, type OfficeOidcIdentity, type OfficeOidcProvider } from '../src/services/google-oidc.js';
@@ -77,7 +77,12 @@ describe('ADR-064 named Google Workspace sign-in', () => {
   });
 
   it('issues a durable cookie session only for a pre-provisioned, active named member and revokes it', async () => {
+    vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_ID', 'test-client');
+    vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_SECRET', 'test-client-secret');
+    vi.stubEnv('HAWA_GOOGLE_OIDC_REDIRECT_URI', 'https://desk.office.example/v1/auth/google/callback');
+    vi.stubEnv('HAWA_GOOGLE_OIDC_HOSTED_DOMAINS', 'example.test');
     const app = newApp();
+    vi.unstubAllEnvs();
     expect(await (await app.request('/v1/auth/providers')).json()).toEqual({ googleWorkspace: true });
     const flow = await start(app);
     const callback = await app.request(`/v1/auth/google/callback?state=${encodeURIComponent(flow.state)}&code=fixture`,
@@ -95,8 +100,10 @@ describe('ADR-064 named Google Workspace sign-in', () => {
     expect(session.status).toBe(200);
     expect(await session.json()).toMatchObject({ user: { id: userId, role: 'approver', authMethod: 'google_oidc' } });
     expect((await app.request('/v1/auth/stream-ticket', { method: 'POST', headers: { Cookie: authCookie } })).status).toBe(403);
-    expect((await app.request('/v1/auth/stream-ticket', { method: 'POST',
-      headers: { Cookie: authCookie, 'x-hawa-csrf': csrf! } })).status).toBe(201);
+    expect((await app.request('http://app:3000/v1/auth/stream-ticket', { method: 'POST',
+      headers: { Cookie: authCookie, 'x-hawa-csrf': csrf!, Origin: 'https://desk.office.example' } })).status).toBe(201);
+    expect((await app.request('http://app:3000/v1/auth/stream-ticket', { method: 'POST',
+      headers: { Cookie: authCookie, 'x-hawa-csrf': csrf!, Origin: 'https://foreign.example' } })).status).toBe(403);
     expect((await app.request('/v1/auth/session', { method: 'DELETE',
       headers: { Cookie: authCookie, 'x-hawa-csrf': csrf! } })).status).toBe(200);
     expect((await app.request('/v1/auth/session', { headers: { Cookie: authCookie } })).status).toBe(401);
