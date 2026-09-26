@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T23:06:54Z",
+  "generatedAt": "2026-09-26T23:10:34Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "cbc9db42a1d4cc5fc3af1031de0a62b8f8abd8f7b86a13bd4902104e7aae778d",
+      "sha256": "b910373f7bdbc8190c87ccd807689ba7134855b16d05fbca1251689a7d6c3c11",
       "bytes": 3977
     },
     {
@@ -949,8 +949,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_EVIDENCE.md",
-      "sha256": "83ff543428456d5fb68561040f18ac258019f49e35e6be322cabbe2325d4a822",
-      "bytes": 70465
+      "sha256": "b4d80c5f95cce423ae1a14c5548d709c92395ee3b5896316818ed1435b085eff",
+      "bytes": 70855
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_IMAGE_DOCUMENT_DRILL.json",
@@ -964,8 +964,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_VOICE_RECOVERY_PROOF.json",
-      "sha256": "599267860157c69b9ae3b27e5805f30261f427e4dc82447b566d6d7e46987072",
-      "bytes": 10518
+      "sha256": "04624fe684aed76ebecb1d062ff1c31ee8240e6ae4923152e0a5803f4ee17e79",
+      "bytes": 11101
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
@@ -1024,8 +1024,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R12_EVIDENCE.md",
-      "sha256": "d0108bbe203845cc2a0e25882ffd59fbe74c86244231f292900980b222516ae3",
-      "bytes": 25186
+      "sha256": "c4253df42c26df8c20982063466bcf8527fc4538317564759cf379f80fde66cf",
+      "bytes": 25576
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R13_EVIDENCE.md",
@@ -1059,8 +1059,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_EVIDENCE.md",
-      "sha256": "20c305fab25fa3404b0087a6d34326c0838938e6a9ee2fe286a2a2c86f3f60dc",
-      "bytes": 13228
+      "sha256": "94a4bb511a758086a0e8b7eafec1f10888e342a133001c2821f5df69e3fbf24b",
+      "bytes": 13618
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_VOICE_EVIDENCE_PROOF.json",
