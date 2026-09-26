@@ -1,8 +1,8 @@
 import { describe,it,expect,vi,beforeAll,afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { blobStoreFromEnv,createDb,sql } from '@hawa/db';
+import { blobStoreFromEnv,createDb,sql,withRlsContext } from '@hawa/db';
 import { CanvaDesignPlanner,assertPlannerLogoRules,buildPlannerSystemPrompt,correctPlannerPalette,savedDesignCopy } from '../src/services/canva-design-planner.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
@@ -319,6 +319,57 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(revisionSaved.result.manifest.isRevision).toBe(true);
     expect(revisionSaved.result.manifest.priorPlanId).toBe(initialSaved.id);
     expect(revisionSaved.result.manifest.turns).toBe(2);
+  });
+
+  it('sends only the child task-owned photo with a lifecycle revision, pinned by hash',async()=>{
+    const parentTaskId=await intake();
+    await make(vi.fn(async()=>response())).planner.generate(scope,parentTaskId,'owned-photo-parent-01',1200,1697);
+    const childTaskId=(await persistChatIntake(db,{
+      platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,
+      title:'[TEST] Owned image revision',
+      rawText:'Use navy.\n---\nEXACT TITLE\n\nExact body. Never rewrite it.',
+      designInstructions:'Use navy.\nOperator Revision Directive: Use this photo as the reference and keep the exact copy.',
+      exactCopy:[],studioOptions:{parentTaskId,revisionRound:1,
+        referenceImageBase64:Buffer.from('unowned image bytes').toString('base64')},
+    })).task.id;
+    const requestId=randomUUID();
+    const photo=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==','base64');
+    const stored=await blobStoreFromEnv(db).put(photo,'image/png');
+    await withRlsContext(db,{tenantId:scope.tenantId,userId:scope.actorId,role:'operator'},async(trx)=>{
+      await sql`INSERT INTO hawa.requests(request_id,tenant_id,root_task_id,current_task_id,parent_request_id,owner,stage,rev,chat_id)
+        VALUES(${requestId}::uuid,${scope.tenantId}::uuid,${parentTaskId}::uuid,${childTaskId}::uuid,
+          null,'restate','designing',4,'isolated-planner')`.execute(trx);
+      await sql`UPDATE hawa.tasks SET request_id=${requestId}::uuid WHERE id IN (${parentTaskId}::uuid,${childTaskId}::uuid)`.execute(trx);
+      await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
+        VALUES(${scope.tenantId}::uuid,${childTaskId}::uuid,${stored.sha256},'reference_image')`.execute(trx);
+    });
+    const remote=vi.fn(async()=>response());
+    const result=await make(remote).planner.generate(scope,childTaskId,'owned-photo-child-01',1200,1697);
+    expect(result.status).toBe('submitted');
+    const sent=JSON.parse(remote.mock.calls[0][1].body);
+    const parts=sent.messages[1].content;
+    expect(parts.filter((part:any)=>part.type==='image_url')).toEqual([
+      {type:'image_url',image_url:{url:`data:image/png;base64,${photo.toString('base64')}`}},
+    ]);
+    expect(parts[0].text).toContain('new requester reference image');
+    const saved=(await sql<any>`SELECT request,result FROM hawa.canva_design_plans
+      WHERE task_id=${childTaskId}::uuid`.execute(db)).rows[0];
+    expect(saved.request.ownedReferenceImage).toMatchObject({sha256:stored.sha256,mediaType:'image/png'});
+    expect(saved.request.referenceImageBase64).toBeNull();
+    expect(JSON.stringify(saved.request)).not.toContain(photo.toString('base64'));
+    expect(saved.result.manifest).toMatchObject({hasReferenceImage:true,referenceImageSha256:stored.sha256});
+
+    const blobStore=blobStoreFromEnv(db);
+    const missing=await blobStore.put(Buffer.concat([photo,Buffer.from(randomUUID())]),'image/png');
+    await withRlsContext(db,{tenantId:scope.tenantId,userId:scope.actorId,role:'operator'},async(trx)=>{
+      await sql`UPDATE hawa.task_files SET sha256=${missing.sha256}
+        WHERE tenant_id=${scope.tenantId}::uuid AND task_id=${childTaskId}::uuid AND role='reference_image'`.execute(trx);
+    });
+    unlinkSync(blobStore.pathOf(missing));
+    const refused=vi.fn(async()=>response());
+    await expect(make(refused).planner.generate(scope,childTaskId,'owned-photo-child-02',1200,1697))
+      .rejects.toMatchObject({code:'REFERENCE_IMAGE_UNAVAILABLE'});
+    expect(refused).not.toHaveBeenCalled();
   });
 
   it('breaks free from previous layout coordinates and supports multimodal reference photo when user requests redesign', async () => {

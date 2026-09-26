@@ -19,3 +19,7 @@ ADR-061 admits a single captioned photo as a first brief. A requester can also s
 ## Consequences
 
 One captioned photo can inform an owned revision or clarification answer without borrowing images from neighboring chat work. The durable decision may outlive an interrupted projection and is retained as source evidence. This admits one media shape in local tests; albums, other media and live Telegram/creative quality remain separate gates.
+
+## Implementation addendum — 2026-09-26
+
+The active lifecycle design path can use the Canva planner as well as Studio. The planner must resolve a request-owned `reference_image` from its exact task file binding, verify the content-addressed blob, and send those bytes only in the model request. Its durable planning record contains the hash, MIME type and size, never the image data URL. An unavailable owned image fails before a model call. Request-owned designs ignore inherited inline image options and may use a prior Canva plan or preview only when the parent task belongs to the same request. The task's request ID is checked again under the generation lock after reference retrieval. These constraints implement the same immutable scope decision across both design paths; they do not change the selected foundation.

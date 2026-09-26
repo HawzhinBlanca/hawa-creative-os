@@ -12,7 +12,25 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R07 revision-photo restart drill)
+## Current result (2026-09-26 — R07 revision-photo design handoff)
+
+The revision-photo crash drill exposed a real Canva planner gap: although
+the child photo was durably attached, the planner never read that file, and
+the fake model parser rejected its tagged revision prompt. The planner now
+verifies the exact child-owned blob and sends it to the model without saving
+image bytes in its request. It ignores inherited inline photos, restricts
+prior plans and previews to the same request, and checks request ownership
+under the generation lock. The final-source isolated Core SIGKILL/replay
+drill passed **10/10 invariants**: one photo download and projection, two
+completed ChatInbox invocations, the exact photo hash in the successful
+model call, and the child design at rev 5 `in_review`/`human_review`.
+Focused tests passed **2 files / 36 tests**; the source suite excluding the
+unsealed release gate passed **425 files / 3,294 tests** with **4 files /
+52 tests skipped**. Lint and full typecheck passed. See `R07_EVIDENCE.md`
+and ADR-062. The fake result proves handoff and review state; live visual
+use and human quality remain open, and production lifecycle flags stay off.
+
+## Prior result (2026-09-26 — R07 revision-photo restart drill)
 
 The disposable worker-poller/Restate stack passed `R1.S3.REVISION_PHOTO`:
 an authenticated office revision left a request waiting, Core stored the
@@ -21,8 +39,9 @@ restarted. Retry plus a second Restate key yielded one rev-4 projection,
 one child-owned attachment and one download; all eight invariants passed.
 The source suite passed 425 files / 3,292 tests with 4 files / 52 tests
 skipped, lint/typecheck passed, and blueprint validation was 803/0/0.
-The fake model server does not cover the image Design Studio call, so this
-drill does not qualify a successful revised design or live operation. See
+The unmatched call was later identified as the Canva revision planner, not
+Design Studio; the current result above corrects it. This first drill did
+not qualify a successful revised design or live operation. See
 `R07_EVIDENCE.md`. A release seal proves this source snapshot only; it does
 not change the open creative and live-operation admissions.
 

@@ -1,5 +1,44 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — correction and Canva revision-photo completion
+
+The prior drill's unmatched model call was **Canva's revision planner**, not
+Design Studio. Its fake understood a plain JSON brief but not the tagged
+revision prompt. More importantly, the real planner read only legacy inline
+image options: the child task's correctly attached lifecycle photo never
+reached the model. This corrects the diagnosis in the earlier dated section
+below; that section remains as the record of the first drill.
+
+The planner now reads and verifies `reference_image` from the exact
+request-owned task, records only its hash, media type and size in the saved
+request, and attaches the bytes to the model call. It fails before a model
+call if the owned blob is unavailable. It ignores inherited inline image
+options for request-owned work, pins the request ID under the generation
+lock, and restricts prior Canva plan/preview lookup to a parent in the same
+request. The fake planner now accepts tagged revisions and records attached
+image hashes without image bytes. A focused PostgreSQL test was red before
+the fix because the child photo was absent from the model request; it now
+checks the actual attached bytes, hash-only durable record, inherited-image
+refusal, and missing-blob refusal. The fake-provider test covers the tagged
+revision and hash ledger.
+
+The disposable Core SIGKILL/replay drill now waits for the child design to
+finish and checks the final request stage and model ledger. The final-source
+rerun passed **10 invariants**: one child file/download/projection, both
+completed ChatInbox invocations, a rev-5 `in_review` request with the child
+in `human_review`, and exactly one successful Canva planner call containing
+the child's photo hash. No model call was unmatched. Focused planner/fake
+tests passed **2 files / 36 tests**, repository lint and full source/test
+typecheck passed, and the source suite excluding only the unsealed
+release-manifest gate passed **425 files / 3,294 tests**, with **4 files /
+52 tests skipped**. Blueprint validation and release sealing follow this
+source/evidence checkpoint.
+
+**Limit:** The 1,024-byte fake JPEG and deterministic fake layout establish
+handoff, scope, replay and review-state behavior, not a model's visual use of
+the photo or design quality. Live Telegram/Canva and blinded human review
+remain open. The production lifecycle chat flag stays off.
+
 ## 2026-09-26 — revision photo survives a killed Core process
 
 The disposable `hawa-chaos` stack now exercises the full entry path for a

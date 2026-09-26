@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
-  approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
+  approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
   OFFICE_CHAT, sendToChatInbox, sentTo, sleep, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
 } from './driver/scenario.js';
 
@@ -611,13 +611,21 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         item.idempotency_key === `chaos-revision-photo-replay-${updateId}`);
       return inbox.length === 2 && inbox.every((item) => item.status === 'completed') ? inbox : null;
     });
+    const outcome = await waitUntil('the revision design to settle', async () => {
+      const result = await designOutcome(child);
+      const [row] = await query<{ stage: string }>(sql`
+        SELECT stage FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+      const state = await taskState(child);
+      return result && (row?.stage === 'in_review' || state?.startsWith('failed')) ? result : null;
+    });
+    events.push(`child design outcome: ${outcome}`);
     return { delivered: false, skipRequestChecks: true, skipQuiescence: true,
       extra: [{ name: 'second revision photo update accepted for replay',
         ok: replay === 200 || replay === 202, detail: `HTTP ${replay}` }],
       after: async () => {
         const tasks = await tasksOfChat(chat);
-        const [state] = await query<{ current_task_id: string; rev: string; owner: string }>(sql`
-          SELECT current_task_id, rev, owner FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+        const [state] = await query<{ current_task_id: string; rev: string; owner: string; stage: string }>(sql`
+          SELECT current_task_id, rev, owner, stage FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
         const projections = await query<{ rev: string }>(sql`
           SELECT rev FROM hawa.lifecycle_projections WHERE request_id = ${request.request_id}::uuid ORDER BY rev`);
         const files = await query<{ task_id: string; sha256: string; role: string; size: string; media_type: string }>(sql`
@@ -637,6 +645,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
           item.target_service_name === 'RequestLifecycle' && item.target_handler_name === 'reminderTick'));
         const [outbox] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands
           WHERE state IN ('pending', 'leased') AND available_at <= now() + interval '5 seconds'`);
+        const model = (await fakes.modelLedger()).ledger as Array<{route:string;status:number;imageSha256?:string[]}>;
         return [
           { name: 'one owned child task after the office revision',
             ok: tasks.length === 2 && tasks[0].id === rootTaskId && tasks[1].id === child &&
@@ -660,6 +669,15 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
           { name: 'both ChatInbox invocations completed',
             ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
             detail: JSON.stringify(inbox) },
+          { name: 'revised draft reaches human review',
+            ok: tasks[1]?.state === 'human_review' && state?.stage === 'in_review' && Number(state.rev) === 5 &&
+              outcome === 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW',
+            detail: JSON.stringify({childState:tasks[1]?.state,request:state,outcome}) },
+          { name: 'the planner received the child photo by content hash',
+            ok: model.filter((entry) => entry.route === 'canva_design_plan' && entry.status === 200 &&
+              entry.imageSha256?.includes(files[0]?.sha256)).length === 1 &&
+              !model.some((entry) => entry.route.startsWith('unmatched')),
+            detail: JSON.stringify(model) },
           { name: 'only future lifecycle reminders remain scheduled',
             ok: active.length === 0 && Number(outbox?.n ?? -1) === 0,
             detail: JSON.stringify({ unfinished, readyOutbox: outbox?.n }) },

@@ -72,7 +72,9 @@ Typecheck this directory with `npx tsc -p packages/testkit/chaos/tsconfig.json`.
   answer is lost: the "uncertain" case), `delay`; `skip` lets the first N matching calls through.
 - **Models** (`models.ts`): OpenAI chat completions answered from `fixtures/models/*.json` by the
   caller's JSON schema name, and the Canva planner's layout built from the request it carries (each
-  copy block once, the logo at the requested aspect: what Core validates). A **paid-call ledger**
+  copy block once, the logo at the requested aspect: what Core validates). The planner fake accepts
+  both initial briefs and tagged revision briefs; attached data URL images are recorded as SHA-256
+  hashes, without logging their bytes. A **paid-call ledger**
   keyed by a fingerprint of model, system prompt and first user message. Any call no fixture answers
   (OpenAI images or responses, Gemini, Anthropic) is refused with HTTP 500 and ledgered as
   `unmatched`, so a stage the fixtures do not cover shows up in the results.
@@ -100,7 +102,7 @@ Sheets row in the fake Drive, `notify.published` with the approved file and the 
 
 Not covered (a scenario that reaches them shows `unmatched` model calls): the design studio
 (`DESIGN_PIPELINE_V3` / `designStudio`: layout, imagery, critique, judge, parity models), voice
-transcription, brand-guidelines PDF reading, feedback revisions and clarifying questions, person
+transcription, brand-guidelines PDF reading, feedback revisions outside the Canva planner and clarifying questions, person
 cut-outs (no cut-out service in the project), WhatsApp.
 
 ## Chaos points
@@ -256,4 +258,3 @@ three messages and one task.
 
 `run.ts --poller core --only R1.0,R4` (the default, unchanged): R1.0 holds; R4 fails as before, chat B
 answered after 31.0 s.
-

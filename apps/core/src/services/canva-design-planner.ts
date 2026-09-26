@@ -207,11 +207,36 @@ export class CanvaDesignPlanner {
   private tx<T>(s:Scope,fn:(db:Kysely<Database>)=>Promise<T>){return withRlsContext(this.db,{tenantId:s.tenantId,userId:s.actorId,role:'operator'},fn);}
   private async context(s:Scope,taskId:string,width:number,height:number){
     if(![width,height].every(n=>Number.isInteger(n)&&n>=640&&n<=2400))throw new CanvaFlowError(422,'DIMENSIONS_REQUIRED','Choose dimensions between 640 and 2400 pixels.');
-    const task=await this.tx(s,async db=>(await sql<any>`SELECT t.client_id,t.description,
+    const task=await this.tx(s,async db=>(await sql<any>`SELECT t.client_id,t.description,t.request_id,
       (SELECT e.data FROM hawa.task_events e WHERE e.task_id=t.id AND e.tenant_id=t.tenant_id AND e.event_type='task.created' ORDER BY e.aggregate_version LIMIT 1) AS source
       FROM hawa.tasks t WHERE t.tenant_id=${s.tenantId}::uuid AND t.id=${taskId}::uuid`.execute(db)).rows[0]);
     if(!task?.client_id)throw new CanvaFlowError(422,'CLIENT_REQUIRED','Select the client before retrieving brand references.');
     const {reference,logo}=await resolveClientDesignReference(this.db,s,task.client_id);
+    let ownedReferenceImage: {sha256:string;mediaType:string;size:number}|null=null;
+    let ownedImageDataUrl:string|null=null;
+    if(task.request_id){
+      const refs=await this.tx(s,async db=>(await sql<{sha256:string;media_type:string;size:string}>`
+        SELECT f.sha256,b.media_type,b.size FROM hawa.task_files f
+        JOIN hawa.blobs b ON b.sha256=f.sha256
+        WHERE f.tenant_id=${s.tenantId}::uuid AND f.task_id=${taskId}::uuid
+          AND f.role='reference_image' ORDER BY f.created_at,f.sha256`.execute(db)).rows);
+      if(refs.length>1)throw new CanvaFlowError(422,'MULTIPLE_REFERENCE_IMAGES_UNSUPPORTED',
+        'This planner can use one request-owned reference image; review the remaining images in Studio.');
+      if(refs.length){
+        const ref=refs[0];
+        if(!['image/png','image/jpeg','image/webp'].includes(ref.media_type))
+          throw new CanvaFlowError(422,'REFERENCE_IMAGE_UNSUPPORTED','The request-owned reference is not a supported image.');
+        const store=blobStoreFor(this.db);
+        if(!store)throw new CanvaFlowError(503,'REFERENCE_IMAGE_UNAVAILABLE','The request-owned image store is unavailable.');
+        let bytes:Buffer;
+        try{bytes=await store.read(ref.sha256,{verify:true});}
+        catch{throw new CanvaFlowError(503,'REFERENCE_IMAGE_UNAVAILABLE','The request-owned image is missing or corrupt.');}
+        if(bytes.length!==Number(ref.size))throw new CanvaFlowError(503,'REFERENCE_IMAGE_UNAVAILABLE',
+          'The request-owned image size changed.');
+        ownedReferenceImage={sha256:ref.sha256,mediaType:ref.media_type,size:bytes.length};
+        ownedImageDataUrl=`data:${ref.media_type};base64,${bytes.toString('base64')}`;
+      }
+    }
     const referencePalette = reference.rules?.palette;
     const paletteFallbacks = reference.rules?.paletteFallbacks;
     const allowedReferenceColors = new Set((Array.isArray(referencePalette) ? referencePalette : []).map((color: string) => color.toLowerCase()));
@@ -232,7 +257,9 @@ export class CanvaDesignPlanner {
       throw new CanvaFlowError(422,'COPY_UNSUPPORTED','The client reference pack names no Sorani typeface, so Kurdish copy cannot be drafted automatically yet.');
     // PNG IHDR dimensions preserve the supplied logo's aspect ratio.
     if(logo.subarray(1,4).toString()!=='PNG')throw new Error('Expected PNG logo');
-    const referenceImageBase64 = (task.source?.studioOptions?.referenceImageBase64 || task.source?.referenceImageBase64 || null) as string | null;
+    // A lifecycle design may use only media attached to its exact task; old inline options are legacy input.
+    const referenceImageBase64 = (task.request_id ? null :
+      task.source?.studioOptions?.referenceImageBase64 || task.source?.referenceImageBase64 || null) as string | null;
     const includeExemplarImages = Boolean(task.source?.studioOptions?.includeExemplarImages || task.source?.includeExemplarImages);
     if (includeExemplarImages && reference.status !== 'reference_for_draft_not_release_approval') {
       throw new CanvaFlowError(422, 'CLIENT_EXEMPLARS_REQUIRED', 'This client has no scoped approved exemplar images for design planning.');
@@ -259,15 +286,18 @@ export class CanvaDesignPlanner {
         width,
         height,
         clientId: task.client_id,
+        requestId: task.request_id || null,
         parentTaskId: (task.source?.studioOptions?.parentTaskId || task.source?.parentTaskId || null) as string | null,
         referenceImageBase64,
+        ...(ownedReferenceImage?{ownedReferenceImage}:{}),
         includeExemplarImages,
         reference,
         referenceHash: hash(JSON.stringify(reference)),
         logoAspect: logo.readUInt32BE(16) / logo.readUInt32BE(20),
         model: resolveModel('text')
       },
-      logo
+      logo,
+      ownedImageDataUrl
     };
   }
   async state(s:Scope,taskId:string){return this.tx(s,async db=>(await sql<any>`SELECT id,status,diagnostic,request->>'model' AS requested_model,
@@ -275,11 +305,12 @@ export class CanvaDesignPlanner {
     FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND actor_id=${s.actorId} ORDER BY created_at DESC LIMIT 10`.execute(db)).rows);}
   async generate(s:Scope,taskId:string,key:string,width:number,height:number){
     if(!/^[A-Za-z0-9_-]{8,128}$/.test(key))throw new CanvaFlowError(422,'REQUEST_KEY_REQUIRED','Use a stable generation request key.');
-    const {request,logo}=await this.context(s,taskId,width,height),requestHash=hash(JSON.stringify(request));
+    const {request,logo,ownedImageDataUrl}=await this.context(s,taskId,width,height),requestHash=hash(JSON.stringify(request));
     const claim=await this.tx(s,async db=>{
       await sql`SELECT pg_advisory_xact_lock(hashtextextended(${'canva-planning:'+s.tenantId},0))`.execute(db);
-      const locked=(await sql<any>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      const locked=(await sql<any>`SELECT client_id,request_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
       if(locked?.client_id!==request.clientId)throw new CanvaFlowError(409,'CLIENT_CHANGED','Client changed while references were retrieved.');
+      if((locked.request_id||null)!==request.requestId)throw new CanvaFlowError(409,'REQUEST_CHANGED','Request ownership changed while references were retrieved.');
       await assertCurrentClientDesignReference(db,s,request.reference);
       const prior=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND (request_key=${key} OR status IN ('planning','planned','uncertain')) ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
       if(prior){
@@ -307,16 +338,19 @@ export class CanvaDesignPlanner {
       let priorPlanRow: any = null;
       let priorPreviewPng: string | null = null;
       if (request.parentTaskId) {
-        priorPlanRow = (await sql<any>`SELECT id, task_id, result FROM hawa.canva_design_plans
-          WHERE tenant_id=${s.tenantId}::uuid AND task_id=${request.parentTaskId}::uuid AND status IN ('planned','completed','transferred')
-          ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
+        priorPlanRow = (await sql<any>`SELECT cp.id,cp.task_id,cp.result FROM hawa.canva_design_plans cp
+          JOIN hawa.tasks parent ON parent.tenant_id=cp.tenant_id AND parent.id=cp.task_id
+          WHERE cp.tenant_id=${s.tenantId}::uuid AND cp.task_id=${request.parentTaskId}::uuid
+            AND cp.status IN ('planned','completed','transferred')
+            AND (${request.requestId}::uuid IS NULL OR parent.request_id=${request.requestId}::uuid)
+          ORDER BY cp.created_at DESC LIMIT 1`.execute(db)).rows[0];
       }
-      if (!priorPlanRow && /Operator Revision Directive:/i.test(request.instructions || '')) {
+      if (!priorPlanRow && !request.requestId && /Operator Revision Directive:/i.test(request.instructions || '')) {
         priorPlanRow = (await sql<any>`SELECT id, task_id, result FROM hawa.canva_design_plans
           WHERE tenant_id=${s.tenantId}::uuid AND client_id=${request.clientId}::uuid AND task_id != ${taskId}::uuid AND status IN ('planned','completed','transferred')
           ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
       }
-      const targetPriorTaskId = priorPlanRow?.task_id || request.parentTaskId;
+      const targetPriorTaskId = priorPlanRow?.task_id || (!request.requestId ? request.parentTaskId : null);
       if (targetPriorTaskId) {
         const exp = (await sql<any>`SELECT encode(content, 'base64') AS b64 FROM hawa.canva_export_bytes WHERE tenant_id=${s.tenantId}::uuid AND task_id=${targetPriorTaskId}::uuid AND format='png' ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
         if (exp?.b64) {
@@ -356,7 +390,10 @@ export class CanvaDesignPlanner {
 
       const schemaPrompt = `Output schema: {width:number,height:number,background:hex,text:[{copyIndex:number,role:"headline"|"title"|"subtitle"|"body"|"caption"|"date"|"location"|"meta",x:number,y:number,width:number,height:number,fontSize:number,fontFamily:string,color:hex,align:"left"|"center"|"right",bold?:boolean}],shapes:[{x:number,y:number,width:number,height:number,color:hex}],logo:{x:number,y:number,width:number,height:number}}`;
 
-      const visionPromptNote = request.referenceImageBase64
+      const referenceImageUrl=ownedImageDataUrl || (request.referenceImageBase64
+        ? (request.referenceImageBase64.startsWith('data:')?request.referenceImageBase64:`data:image/jpeg;base64,${request.referenceImageBase64}`)
+        : null);
+      const visionPromptNote = referenceImageUrl
         ? ' REFERENCE IMAGE ATTACHED: The operator provided a visual reference image as an aesthetic and compositional guide. Analyze its layout balance, spatial rhythm, framing, and visual style. Infuse its design principles into this layout while strictly adhering to the client Brand DNA palette and exact copy.'
         : '';
 
@@ -381,7 +418,7 @@ export class CanvaDesignPlanner {
         const userContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
           {
             type: 'text',
-            text: `Design Brief:\n${JSON.stringify(request)}\n\nOperator Revision Directive: "${revisionDirective}"\n\nRule: Change what the feedback asks; keep copy and brand.`
+            text: `Design Brief:\n${JSON.stringify(request)}\n\nOperator Revision Directive: "${revisionDirective}"\n\nRule: Change what the feedback asks; keep copy and brand.${referenceImageUrl?'\n\nThe new requester reference image is attached after any previous render. Use it as the visual reference for this revision.':''}`
           }
         ];
         if (claim.priorPreviewPng) {
@@ -390,12 +427,13 @@ export class CanvaDesignPlanner {
             image_url: { url: `data:image/png;base64,${claim.priorPreviewPng}` }
           });
         }
+        if(referenceImageUrl)userContent.push({type:'image_url',image_url:{url:referenceImageUrl}});
         openAiBody = {
           model: request.model,
           messages: [
             {
               role: 'system',
-              content: `${baseSystemPrompt} REVISION MODE: You are refining the design shown in the attached previous render image according to the operator's feedback directive: "${revisionDirective}". Change what the feedback asks; keep all copy blocks and brand palette intact. All exact copy blocks must appear once. Return the complete revised layout JSON. ${schemaPrompt}`
+              content: `${baseSystemPrompt} REVISION MODE: Refine the prior design according to the operator's feedback directive: "${revisionDirective}". Any prior render image appears before the new requester reference image. Change what the feedback asks; keep all copy blocks and brand palette intact. All exact copy blocks must appear once. Return the complete revised layout JSON. ${schemaPrompt}`
             },
             {
               role: 'user',
@@ -409,10 +447,10 @@ export class CanvaDesignPlanner {
         const userContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
           { type: 'text' as const, text: redesignPrompt }
         ];
-        if (request.referenceImageBase64) {
+        if (referenceImageUrl) {
           userContent.push({
             type: 'image_url' as const,
-            image_url: { url: request.referenceImageBase64.startsWith('data:') ? request.referenceImageBase64 : `data:image/jpeg;base64,${request.referenceImageBase64}` }
+            image_url: { url: referenceImageUrl }
           });
         }
         userContent.push(...exemplarImages);
@@ -431,10 +469,10 @@ export class CanvaDesignPlanner {
           ]
         };
       } else {
-        const userContent = (request.referenceImageBase64 || request.includeExemplarImages)
+        const userContent = (referenceImageUrl || request.includeExemplarImages)
           ? [
               { type: 'text' as const, text: JSON.stringify(request) },
-              ...(request.referenceImageBase64 ? [{ type: 'image_url' as const, image_url: { url: request.referenceImageBase64.startsWith('data:') ? request.referenceImageBase64 : `data:image/jpeg;base64,${request.referenceImageBase64}` } }] : []),
+              ...(referenceImageUrl ? [{ type: 'image_url' as const, image_url: { url: referenceImageUrl } }] : []),
               ...exemplarImages
             ]
           : JSON.stringify(request);
@@ -616,7 +654,8 @@ export class CanvaDesignPlanner {
         isRevision,
         conversationalRevision:Boolean(claim.priorPlanRow && priorLayout && !isRedesignRequest),
         isRedesign:Boolean(isRedesignRequest),
-        hasReferenceImage:Boolean(request.referenceImageBase64),
+        hasReferenceImage:Boolean(referenceImageUrl),
+        referenceImageSha256:request.ownedReferenceImage?.sha256||null,
         exemplars: exemplars.map(e => ({ label: e.label, sha256: e.sha256 })),
         priorPlanId:claim.priorPlanRow?.id||null,
         turns:openAiBody.messages.length

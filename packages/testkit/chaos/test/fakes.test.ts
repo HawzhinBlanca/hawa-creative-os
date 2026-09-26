@@ -144,6 +144,28 @@ describe('fake models and the paid-call ledger', () => {
     expect(ledger.map((l: any) => l.route)).toEqual(['unmatched', 'unmatched:/v1beta/models/gemini:generateContent']);
   });
 
+  it('answers a tagged Canva revision and records the attached image by hash only', async () => {
+    await admin('/reset', {});
+    const image = Buffer.from([0xff, 0xd8, 0xff, 0x01, 0x02]);
+    const request = { width: 1080, height: 1350, copy: ['Exact title'], copyScripts: ['latin'],
+      logoAspect: 1.37, formalBodyFonts: { latin: 'Verdana' },
+      reference: { rules: { palette: ['#0A1628', '#FDF8F3'] } } };
+    const text = `Design Brief:\n${JSON.stringify(request)}\n\nOperator Revision Directive: "Use the new image."`;
+    const response = await chat('canva_design_plan', '', { messages: [
+      { role: 'system', content: 'Return the complete revised layout JSON.' },
+      { role: 'user', content: [
+        { type: 'text', text },
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${image.toString('base64')}` } },
+      ] },
+    ] });
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.json.choices[0].message.content).text[0].copyIndex).toBe(0);
+    const { ledger } = await admin('/models/ledger');
+    expect(ledger).toMatchObject([{ route: 'canva_design_plan', status: 200,
+      imageSha256: [crypto.createHash('sha256').update(image).digest('hex')] }]);
+    expect(JSON.stringify(ledger)).not.toContain(image.toString('base64'));
+  });
+
   it('builds a planner layout that places every copy block once, at the logo aspect Core checks', () => {
     const plan: any = plannerLayout({ width: 1080, height: 1350, copy: ['Title', 'Body one', 'Body two'], copyScripts: ['latin', 'latin', 'latin'], logoAspect: 1.37, formalBodyFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }, reference: { rules: { palette: ['#0A1628', '#FDF8F3'] } } });
     expect(plan.text.map((t: any) => t.copyIndex)).toEqual([0, 1, 2]);
