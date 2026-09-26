@@ -45,3 +45,8 @@ The clean candidate run is now recorded in R26_CANDIDATE_PROOF.json: source
 changed runtime sources; 21/21 scenario checks and 3,531 full regression tests
 passed (59 skipped). This closes the isolated identity check only; production
 receipt, live task/export linkage and product admission remain open.
+
+Fresh-reset correction: the first isolated run left inactive-profile services
+alive. Final source/image labels `196d415` now pass 22 checks including all
+eight creation timestamps; tested seal `94321df` passes 3,531 tests/59 skipped
+and the regenerated source manifest. The R26 proof retains the first run's limit.

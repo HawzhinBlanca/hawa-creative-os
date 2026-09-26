@@ -1,8 +1,8 @@
 {
-  "finishedAt": "2026-09-26T23:37:03.709Z",
+  "finishedAt": "2026-09-26T23:43:05.779Z",
   "telegramPoller": "worker",
   "deployment": {
-    "commit": "4c113ae6363b1fb17b19cc7aec70ac343c82d44b",
+    "commit": "196d4151ee5d35a2b14fe4ec53f02becfc347396",
     "sourceChanges": {},
     "containers": {
       "postgres": {
@@ -11,7 +11,8 @@
         "networks": [
           "hawa-chaos_chaos",
           "hawa-chaos_chaos-edge"
-        ]
+        ],
+        "createdAt": "2026-09-26T23:42:10.29216142Z"
       },
       "restate": {
         "imageId": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
@@ -19,44 +20,50 @@
         "networks": [
           "hawa-chaos_chaos",
           "hawa-chaos_chaos-edge"
-        ]
+        ],
+        "createdAt": "2026-09-26T23:42:10.289323962Z"
       },
       "core": {
-        "imageId": "sha256:78c7511a3f69193a31413b074c7ca83ec8e8599b0c8820eee68b146487a5d66c",
-        "buildCommit": "4c113ae6363b1fb17b19cc7aec70ac343c82d44b",
+        "imageId": "sha256:1248529d4d81d67d83472832ebd708ab093415761b03d4035caeb2cdc4986dc3",
+        "buildCommit": "196d4151ee5d35a2b14fe4ec53f02becfc347396",
         "networks": [
           "hawa-chaos_chaos",
           "hawa-chaos_parser"
-        ]
+        ],
+        "createdAt": "2026-09-26T23:42:13.499192005Z"
       },
       "worker-blue": {
-        "imageId": "sha256:2d6ba19f6a814e7ffeb1787d2d067dffe8a5a4faf3b53f2e56b88ecbbadb4cc8",
-        "buildCommit": "4c113ae6363b1fb17b19cc7aec70ac343c82d44b",
+        "imageId": "sha256:6c193c5561fb19dd830478cc818e1c142ab60d103c85141bc71dead65933c4a2",
+        "buildCommit": "196d4151ee5d35a2b14fe4ec53f02becfc347396",
         "networks": [
           "hawa-chaos_chaos"
-        ]
+        ],
+        "createdAt": "2026-09-26T23:42:13.42202988Z"
       },
       "fakes": {
-        "imageId": "sha256:aff2e95acf224b6a67a1fb47f8addcdc5964584b05b7392123951dd2d032c3b1",
+        "imageId": "sha256:e15e28a21aeed02787f16c4ebef288fba6605aae07083d85ea4c7fa4f64920fc",
         "buildCommit": "",
         "networks": [
           "hawa-chaos_chaos",
           "hawa-chaos_chaos-edge"
-        ]
+        ],
+        "createdAt": "2026-09-26T23:42:10.289219295Z"
       },
       "docling": {
-        "imageId": "sha256:dfde498c334fdf7ebbed9fab8b03f6aa9da8def27b27447109a29d305997193d",
+        "imageId": "sha256:5680c66e0d9887c3bc60a1d3f9b1f04452438301ddbff0067792a43818526659",
         "buildCommit": "",
         "networks": [
           "hawa-chaos_parser"
-        ]
+        ],
+        "createdAt": "2026-09-26T23:42:19.838421675Z"
       },
       "desk": {
-        "imageId": "sha256:b01e43af9cd76acf38e62a9d2e0396226ddbb2b8650c45fa47caf424acd0b256",
-        "buildCommit": "4c113ae6363b1fb17b19cc7aec70ac343c82d44b",
+        "imageId": "sha256:ec9c12031ac89faf59fe223762d61067772126e5d0844cda666b36a216b7bf76",
+        "buildCommit": "196d4151ee5d35a2b14fe4ec53f02becfc347396",
         "networks": [
           "hawa-chaos_chaos"
-        ]
+        ],
+        "createdAt": "2026-09-26T23:42:19.839012341Z"
       },
       "nginx": {
         "imageId": "sha256:b947b2630c97622793113555e13332eec85bdc7a0ac6ab697159af78942bb856",
@@ -64,7 +71,8 @@
         "networks": [
           "hawa-chaos_chaos",
           "hawa-chaos_chaos-edge"
-        ]
+        ],
+        "createdAt": "2026-09-26T23:42:19.88577655Z"
       }
     },
     "networks": [
@@ -75,30 +83,35 @@
     "parser": "real pinned offline Docling",
     "productionChanged": false
   },
-  "totalMs": 83706,
+  "totalMs": 82913,
   "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
   "peakMemoryMiB": {
-    "hawa-chaos-desk-1": 7,
-    "hawa-chaos-core-1": 115,
-    "hawa-chaos-worker-blue-1": 78,
-    "hawa-chaos-postgres-1": 90,
-    "hawa-chaos-fakes-1": 75,
-    "hawa-chaos-restate-1": 621,
     "hawa-chaos-nginx-1": 8,
-    "hawa-chaos-docling-1": 13
+    "hawa-chaos-desk-1": 7,
+    "hawa-chaos-docling-1": 13,
+    "hawa-chaos-core-1": 110,
+    "hawa-chaos-worker-blue-1": 76,
+    "hawa-chaos-postgres-1": 91,
+    "hawa-chaos-restate-1": 597,
+    "hawa-chaos-fakes-1": 75
   },
-  "peakTotalMiB": 1007,
+  "peakTotalMiB": 976,
   "uncoveredModelCalls": [],
   "scenarios": [
     {
       "name": "R1.S3.SOURCES",
       "what": "full-app PDF source to voice revision and simulated approved delivery",
-      "ms": 25681,
+      "ms": 26460,
       "invariants": [
+        {
+          "name": "every candidate container was created after this rehearsal started",
+          "ok": true,
+          "detail": "rehearsal started 2026-09-26T23:41:43.086Z"
+        },
         {
           "name": "Core, worker and Desk image labels match the candidate checkout",
           "ok": true,
-          "detail": "build 4c113ae6363b1fb17b19cc7aec70ac343c82d44b; changed source files=0"
+          "detail": "build 196d4151ee5d35a2b14fe4ec53f02becfc347396; changed source files=0"
         },
         {
           "name": "provider callers and the real parser have only internal networks",
@@ -123,7 +136,7 @@
         {
           "name": "PDF source review creates no premature task",
           "ok": true,
-          "detail": "source 90465771970"
+          "detail": "source 90466130739"
         },
         {
           "name": "application/pdf original crosses nginx byte-identically",
@@ -143,7 +156,7 @@
         {
           "name": "review wait survives Restate and worker process restart",
           "ok": true,
-          "detail": "request baf96f4f-e954-4ddf-aa51-b7c240668da8; rev 2"
+          "detail": "request c2cbb437-768f-4d49-a480-89fea145f904; rev 2"
         },
         {
           "name": "audio/ogg original crosses nginx byte-identically",
@@ -153,12 +166,12 @@
         {
           "name": "unapproved voice model remains manual with honest timing and billing",
           "ok": true,
-          "detail": "{\"clientId\":\"c1000000-0000-4000-8000-000000000002\",\"updateId\":90465771972,\"sourceSha256\":\"e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2\",\"audio\":{\"version\":\"ogg-opus-v1\",\"channels\":1,\"mediaType\":\"audio/ogg\",\"sampleRate\":48000,\"encodedSamples\":48960,\"durationSeconds\":1},\"state\":\"manual\",\"message\":\"Client privacy does not authorize cloud transcription. The original is retained for manual copy review; no audio was sent to a model.\",\"transcript\":null,\"estimatedUsd\":null,\"actualUsd\":null}"
+          "detail": "{\"clientId\":\"c1000000-0000-4000-8000-000000000002\",\"updateId\":90466130741,\"sourceSha256\":\"e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2\",\"audio\":{\"version\":\"ogg-opus-v1\",\"channels\":1,\"mediaType\":\"audio/ogg\",\"sampleRate\":48000,\"encodedSamples\":48960,\"durationSeconds\":1},\"state\":\"manual\",\"message\":\"Client privacy does not authorize cloud transcription. The original is retained for manual copy review; no audio was sent to a model.\",\"transcript\":null,\"estimatedUsd\":null,\"actualUsd\":null}"
         },
         {
           "name": "voice source does not create a child before exact-copy review",
           "ok": true,
-          "detail": "voice source 90465771972"
+          "detail": "voice source 90466130741"
         },
         {
           "name": "revised simulated Canva export passes configured QA",
@@ -168,7 +181,7 @@
         {
           "name": "PDF new request and voice revision reach one logical simulated delivery",
           "ok": true,
-          "detail": "{\"tasks\":[{\"id\":\"b1d9a104-2c11-4773-b21d-857ac73d1254\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"e112993c-9fe3-4e47-b2f8-aef4ef41c3f9\",\"state\":\"complete\",\"version\":\"8\"}],\"delivered\":{\"request_id\":\"baf96f4f-e954-4ddf-aa51-b7c240668da8\",\"current_task_id\":\"e112993c-9fe3-4e47-b2f8-aef4ef41c3f9\",\"rev\":\"8\",\"stage\":\"delivered\"}}"
+          "detail": "{\"tasks\":[{\"id\":\"c84f9764-3dab-4c14-8da1-636a4c0a17ef\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"6f965d1a-f17e-4730-a8ec-a74a47e29482\",\"state\":\"complete\",\"version\":\"8\"}],\"delivered\":{\"request_id\":\"c2cbb437-768f-4d49-a480-89fea145f904\",\"current_task_id\":\"6f965d1a-f17e-4730-a8ec-a74a47e29482\",\"rev\":\"8\",\"stage\":\"delivered\"}}"
         },
         {
           "name": "retained confirmations preserve exact source copy",
@@ -188,7 +201,7 @@
         {
           "name": "bilingual Desk intake replay returns one task",
           "ok": true,
-          "detail": "task ba530d8b-c3d2-4fd0-b149-990dfbf017d1"
+          "detail": "task 5381c12b-86a3-4c2b-b7f0-56dbf9a559b5"
         },
         {
           "name": "saved bilingual Desk copy imports through the explicit generation action",
@@ -198,21 +211,21 @@
         {
           "name": "the saved plan preserves both exact copy blocks and separate instructions",
           "ok": true,
-          "detail": "plans=1; source=7c349da4265b3a8b87da715bde3a472245dc584c8805168ae04fb2560a305048"
+          "detail": "plans=1; source=37d451f57c1e23fb7fb84094f40eb8492fa80de67903e47b7813cf150b0a681a"
         }
       ],
       "events": [
-        "PDF 90465771970 → request baf96f4f-e954-4ddf-aa51-b7c240668da8 → task b1d9a104-2c11-4773-b21d-857ac73d1254",
+        "PDF 90466130739 → request c2cbb437-768f-4d49-a480-89fea145f904 → task c84f9764-3dab-4c14-8da1-636a4c0a17ef",
         "Restate and worker SIGKILL/restart at the PDF review waitpoint",
-        "voice 90465771972 → reviewed revision task e112993c-9fe3-4e47-b2f8-aef4ef41c3f9",
-        "Desk bilingual request ba530d8b-c3d2-4fd0-b149-990dfbf017d1 → saved plan 3edddd04-0ff7-4c30-9516-9d68447609f3 → simulated Canva import"
+        "voice 90466130741 → reviewed revision task 6f965d1a-f17e-4730-a8ec-a74a47e29482",
+        "Desk bilingual request 5381c12b-86a3-4c2b-b7f0-56dbf9a559b5 → saved plan a3a6046d-31e1-4d1e-890e-0dc6eb61b035 → simulated Canva import"
       ]
     }
   ],
   "scope": "isolated full-app candidate rehearsal; fake external adapters; not production or human-quality admission",
   "verification": {
-    "sourceCommit": "9e3a00a1330e1e36135766d4104f27eacc088a7b",
-    "testedSealCommit": "4c113ae6363b1fb17b19cc7aec70ac343c82d44b",
+    "sourceCommit": "196d4151ee5d35a2b14fe4ec53f02becfc347396",
+    "testedSealCommit": "94321dfe84c86b728f38386d9709baab8d584a27",
     "fullRegression": {
       "command": "pnpm exec vitest run",
       "passedFiles": 447,
@@ -220,7 +233,8 @@
       "passed": 3531,
       "skipped": 59,
       "failed": 0,
-      "durationSeconds": 104.31
+      "durationSeconds": 100.61,
+      "testedCommit": "94321dfe84c86b728f38386d9709baab8d584a27"
     },
     "focused": {
       "passedFiles": 3,
@@ -248,7 +262,14 @@
     "lint": "passed",
     "securityScan": "passed",
     "coreAndDeskImageBuild": "passed",
-    "releaseManifest": "verified on clean tested seal; final clean evidence check follows separately"
+    "releaseManifest": "verified on clean tested seal; final clean evidence check follows separately",
+    "applicationImplementationCommit": "9e3a00a1330e1e36135766d4104f27eacc088a7b",
+    "resetFollowup": {
+      "changes": "Explicitly stop green and candidate profiles; propagate down errors before deleting credentials; assert all eight container creation times.",
+      "typecheck": "passed",
+      "freshContainerInvariant": "passed",
+      "manifestHistory": "The prior source manifest failed the recent-commit check after the harness follow-up; it was regenerated from the clean follow-up source and verified before the final full suite."
+    }
   },
   "limitations": [
     "Provider/model/Canva/Telegram and office approval identity are synthetic.",
@@ -257,5 +278,18 @@
     "Source content uses direct Core responses here; production X-Accel has a separate gate.",
     "Manual request is mislabeled as automatic draft failure in Desk; spending guard remains enabled.",
     "Memory values are sparse samples, not a continuous peak."
-  ]
+  ],
+  "priorRun": {
+    "commit": "4c113ae6363b1fb17b19cc7aec70ac343c82d44b",
+    "finishedAt": "2026-09-26T23:37:03.709Z",
+    "passedInvariants": 21,
+    "fullRegression": {
+      "passed": 3531,
+      "skipped": 59,
+      "failed": 0,
+      "testedCommit": "4c113ae6363b1fb17b19cc7aec70ac343c82d44b"
+    },
+    "reportHistory": "git 5492e87:plans/research-grade-upgrade-2026-09-25/R26_CANDIDATE_PROOF.json",
+    "limitation": "Inactive candidate-profile nginx and Docling were left alive; this run did not establish a fully fresh reset."
+  }
 }

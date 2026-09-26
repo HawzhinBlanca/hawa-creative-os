@@ -96,3 +96,26 @@ qualification statement at the implementation checkpoint above.
 The isolated candidate remains at `http://127.0.0.1:56081`; production is unchanged.
 Next is accurate manual-work status and the full manual capture/review flow, then
 real Canva edit/reopen, named human review and the remaining acceptance gates.
+
+## Fully fresh reset follow-up — 2026-09-27
+
+Final health inspection found that inactive candidate-profile nginx and Docling
+were left running by the original teardown. Compose knows those containers, so
+`--remove-orphans` did not remove them; nginx also held the blob volume. The
+preceding 21-check run remains recorded as workflow evidence and does **not**
+establish a fully fresh reset. Its original report is retained at git `5492e87`.
+
+Source `196d415` explicitly tears down both profiles, propagates failure before
+deleting ephemeral credentials and verifies that all eight containers were
+created after the rehearsal started. The fresh run passed **22/22 checks** in
+82.91 seconds including setup, with no changed runtime files
+and no unmatched fake model calls. The receipt includes every creation time.
+Core/worker/Desk image labels equal this candidate source commit.
+
+The previous manifest correctly refused the later harness commit because it no
+longer matched its recent release commits. A new clean seal `94321df` passed
+the release verifier and the final full regression: **447 files / 3,531 passed**,
+**7 files / 59 skipped**, 100.61 seconds. Product source is unchanged from
+the bilingual fix; this follow-up strengthens the test environment. The final
+proof links the deployed source and tested seal separately. All stated live,
+physical-recovery and human-quality limitations remain.

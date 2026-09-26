@@ -15,17 +15,18 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 ## Current result (2026-09-27 — full-app candidate and Desk copy repair)
 
 The isolated Core/Desk/worker/PostgreSQL/Restate/nginx/real Docling rehearsal passed
-**21/21 checks**, including PDF exact-copy intake, manual voice revision, process
+**22/22 checks**, including PDF exact-copy intake, manual voice revision, process
 restart at review, simulated delivery and bilingual Desk intake/generation replay.
 Browser testing found a real saved-copy rejection: the planner expected a legacy
 headline/divider. Structured Desk copy now stays exact in both languages and the
 explicit generation button works against the simulated Canva service. Model
 progress wording now points to the actual receipt.
 
-Source `9e3a00a`, tested seal `4c113ae`: **447 files / 3,531 tests passed**,
+Final source `196d415`, tested seal `94321df`: **447 files / 3,531 tests passed**,
 **7 files / 59 skipped**; 47 focused tests, types/lint/security and clean manifest
-passed. Core/worker/Desk image labels match the tested seal; no dirty runtime
-sources were present. See R26_EVIDENCE.md and R26_CANDIDATE_PROOF.json for exact
+passed. Core/worker/Desk image labels match source `196d415`; no dirty runtime
+sources were present. The first reset left inactive-profile nginx/Docling alive;
+the corrected reset now proves all eight containers are newly created. See R26_EVIDENCE.md and R26_CANDIDATE_PROOF.json for exact
 image IDs and limits. The disposable app is kept on loopback port 56081.
 Production and flags remain unchanged.
 
