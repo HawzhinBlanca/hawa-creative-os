@@ -2,6 +2,7 @@ import { Kysely, sql } from 'kysely';
 import crypto from 'node:crypto';
 import type { Database } from '../types.js';
 import { currentTraceId } from '../trace-context.js';
+import { FeedbackRepository } from './feedback.repository.js';
 
 export interface CreateRevisionParams {
   id?: string;
@@ -551,6 +552,36 @@ export class RevisionRepository {
           },
         })
         .execute();
+
+      // Feedback is part of the decision commit, not a later best-effort projection. A keyed
+      // retry returns above before this insert, so one decision produces one feedback signal.
+      if (!task.client_id && params.lifecycleRequestId) {
+        throw new Error('Request-owned review cannot record feedback without a resolved client');
+      }
+      if (task.client_id) {
+        const detail = params.decisionPayload?.revisionRequest;
+        const structured = detail && typeof detail === 'object' && !Array.isArray(detail)
+          ? detail as Record<string, unknown> : null;
+        const priority = structured?.priority;
+        const rejectionCategory = params.decisionPayload?.rejectionCategory;
+        const target: Record<string, unknown> = {
+          approvalId: approval.id, decision: params.decision, revisionId: params.revisionId,
+          ...(typeof rejectionCategory === 'string' ? { rejectionCategory } : {}),
+          ...(structured ? { revisionRequest: structured } : {}),
+        };
+        await new FeedbackRepository(dbClient).recordFeedback({
+          tenantId: params.tenantId, clientId: task.client_id,
+          projectId: task.project_id, taskId: params.taskId,
+          beforeRevisionId: params.revisionId,
+          category: params.decision === 'rejected' && typeof rejectionCategory === 'string'
+            ? `rejection.${rejectionCategory}` : `decision.${params.decision}`,
+          severity: priority === 'low' || priority === 'medium' || priority === 'high' || priority === 'critical'
+            ? priority : 'medium',
+          scope: 'one_time',
+          explicitness: params.decision === 'approved' ? 'approval_signal' : 'direct_instruction',
+          target, comment: params.reason, actorId: params.decidedBy,
+        }, dbClient);
+      }
 
       return { ...approval, replayed: false as const };
     };

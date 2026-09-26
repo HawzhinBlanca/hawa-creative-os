@@ -1,8 +1,9 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import { createDb } from '../src/client.js';
 import { RevisionRepository, unapprovableTaskReason } from '../src/repositories/revision.repository.js';
+import { FeedbackRepository } from '../src/repositories/feedback.repository.js';
 import type { TaskState } from '../src/types.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
@@ -96,6 +97,43 @@ describe.skipIf(!url)('approval refuses a task in a state past review (PostgreSQ
       const row = await db.selectFrom('tasks').select('state').where('id', '=', t.taskId).executeTakeFirstOrThrow();
       expect(row.state).toBe('approved');
     }
+  });
+
+  it('writes one structured feedback event with each approval, correction or rejection decision', async () => {
+    for (const decision of ['approved', 'revision_requested', 'rejected'] as const) {
+      const task = await reviewedTask('human_review');
+      const recorded = await repo.recordApproval({ tenantId, taskId: task.taskId,
+        revisionId: task.revisionId, decision, decidedBy: approverId,
+        reason: 'Reviewer finding', decisionPayload: decision === 'rejected'
+          ? { rejectionCategory: 'concept' } : undefined });
+      const feedback = await db.selectFrom('feedback_events').selectAll()
+        .where('tenant_id', '=', tenantId).where('task_id', '=', task.taskId).execute();
+      expect(feedback).toHaveLength(1);
+      expect(feedback[0]).toMatchObject({ client_id: clientId, actor_id: approverId,
+        before_revision_id: task.revisionId, comment: 'Reviewer finding',
+        category: decision === 'rejected' ? 'rejection.concept' : `decision.${decision}`,
+        explicitness: decision === 'approved' ? 'approval_signal' : 'direct_instruction',
+        target: { approvalId: recorded.id, decision, revisionId: task.revisionId },
+      });
+    }
+  });
+
+  it('rolls back the decision when its feedback row cannot commit', async () => {
+    const task = await reviewedTask('human_review');
+    const before = await db.selectFrom('tasks').select(['state', 'version'])
+      .where('id', '=', task.taskId).executeTakeFirstOrThrow();
+    const failure = vi.spyOn(FeedbackRepository.prototype, 'recordFeedback')
+      .mockRejectedValueOnce(new Error('feedback ledger unavailable'));
+    try {
+      await expect(repo.recordApproval({ tenantId, taskId: task.taskId,
+        revisionId: task.revisionId, decision: 'rejected', decidedBy: approverId,
+        reason: 'Reject the concept' })).rejects.toThrow('feedback ledger unavailable');
+    } finally { failure.mockRestore(); }
+    expect(await db.selectFrom('tasks').select(['state', 'version'])
+      .where('id', '=', task.taskId).executeTakeFirstOrThrow()).toEqual(before);
+    expect(await db.selectFrom('approvals').select('id').where('task_id', '=', task.taskId).execute()).toEqual([]);
+    expect(await db.selectFrom('task_events').select('id').where('task_id', '=', task.taskId)
+      .where('event_type', '=', 'design.rejected').execute()).toEqual([]);
   });
 
   // 2026-09-24: the invalidation and the new revision shared one aggregate version, which the unique

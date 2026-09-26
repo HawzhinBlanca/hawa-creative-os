@@ -220,11 +220,16 @@ describe('versioned lifecycle design outcome', () => {
         .where('task_id', '=', taskId).executeTakeFirst(),
       events: await trx.selectFrom('task_events').select(['event_type'])
         .where('task_id', '=', taskId).where('event_type', '=', 'design.rejected').execute(),
+      feedback: await trx.selectFrom('feedback_events').select(['category', 'actor_id', 'target'])
+        .where('task_id', '=', taskId).execute(),
     }));
     expect(rows.request).toMatchObject({ rev: '3', stage: 'rejected' });
     expect(rows.task).toMatchObject({ state: 'rejected' });
     expect(rows.approval).toMatchObject({ decision: 'rejected', reason: decision.ops[0].reason,
       decision_payload: { rejectionCategory: 'concept' } });
     expect(rows.events).toHaveLength(1);
+    expect(rows.feedback).toEqual([expect.objectContaining({ category: 'rejection.concept',
+      actor_id: scope.userId, target: { approvalId: first.body.approvalId,
+        decision: 'rejected', revisionId, rejectionCategory: 'concept' } })]);
   });
 });

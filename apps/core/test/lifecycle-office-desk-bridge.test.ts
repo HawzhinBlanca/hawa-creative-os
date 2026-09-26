@@ -778,6 +778,8 @@ describe('authenticated Desk to private lifecycle office decision', () => {
       task: await trx.selectFrom('tasks').select(['state', 'version']).where('id', '=', taskId).executeTakeFirst(),
       approvals: await trx.selectFrom('approvals').select(['id', 'decision', 'qc_run_id', 'decision_payload'])
         .where('task_id', '=', taskId).execute(),
+      feedback: await trx.selectFrom('feedback_events').select(['category', 'actor_id', 'target'])
+        .where('task_id', '=', taskId).execute(),
       receipts: await trx.selectFrom('lifecycle_projections').select('rev').where('request_id', '=', requestId).execute(),
     }));
     expect(rows.request).toMatchObject({ stage: 'approved', rev: '3' });
@@ -789,6 +791,8 @@ describe('authenticated Desk to private lifecycle office decision', () => {
         { artifactId: pngArtifactId, sha256: pngSha256, byteSize: pngBytes.length }],
         officeApprovalProof: { rtlVisualReview: body.rtlVisualReview },
         rtlVisualReview: { confirmed: true, qcRunId, exportSha256: sha256, reviewerId: userId } } }]);
+    expect(rows.feedback).toEqual([expect.objectContaining({ category: 'decision.approved',
+      actor_id: userId, target: { approvalId: result.decisionId, decision: 'approved', revisionId } })]);
     expect(rows.receipts.map((row) => Number(row.rev)).sort()).toEqual([1, 2, 3]);
     expect(transport).toHaveBeenCalledTimes(2);
 
