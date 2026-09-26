@@ -1,5 +1,33 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — revision reply binding and Core receipt adoption
+
+The per-chat `requestId` stored by ChatInbox is only a hint: Core now reads every waiting
+RequestLifecycle request in that chat. One waiting request can receive a directive directly; when
+two wait, the Telegram message must reply to the exact sent revision notice or reminder. The notice
+send mark binds its message ID to a request and revision. An ambiguous message or late reply gets a
+durable refusal receipt and a critical keyed notice asking for the correct reply. The same refused
+update cannot later be reinterpreted after another request advances.
+
+Core first looks for a committed intake projection by Telegram update ID. A retry after Core moves
+the request to `designing` returns that projection instead of creating a legacy task. Its receipt
+binds the full update hash, including the replied-to message. RequestLifecycle then verifies and
+adopts Core's exact revision-4 receipt and child task; it does not post a second projection. The
+child task inherits the parent task's factual copy, dimensions, studio settings and design
+instructions, and records the parent task, round and revision directive. A missing parent brief or
+daily automatic limit rolls back the task and request transition, stores a durable refusal, and
+sends an actionable critical notice. Requirements: FR-060 and NFR-001.
+
+**Verification:** `pnpm exec vitest run apps/core/test/lifecycle-internal-intake.test.ts
+apps/worker/test/chat-inbox.test.ts apps/worker/test/request-lifecycle-requester.test.ts`
+passed **3 files / 38 tests** against isolated PostgreSQL and worker fakes. Coverage includes two
+waiting requests, exact and stale linked replies, lost-answer replay, changed update body and reply
+target, inherited child payload, worker adoption without a second Core write, capped and missing
+brief refusals, and sender notice handoff. Core and worker TypeScript checks and repository lint
+passed. No full-suite or sealed-release claim follows from this focused run. `HAWA_LIFECYCLE_CHATS`
+remains off; live Telegram, process-kill and provider-result admission, clarification answers and
+explicit new-brief routing in a busy chat remain open.
+
 ## 2026-09-26 — requester notice and delayed reminder hardening
 
 An office `revise` decision now sends a critical requester notice and schedules a revision-bound 24-hour

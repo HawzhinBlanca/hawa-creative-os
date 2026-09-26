@@ -12,7 +12,7 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — source `78d1cce`)
+## Current result (2026-09-26 — base source `3f839a4`, current R07 worktree)
 
 **Requester revision directive routing is implemented and locally tested:**
 
@@ -24,10 +24,8 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
   restate-owned manual-stage request at `rev ≥ 3`, Core extracts the directive text from the update, calls
   the projection above, and returns `lifecycleAction: 'requester-revision'` with the new task ID, round,
   directive, and priorTaskId. If no matching request is found it falls through to legacy intake.
-- **Worker `ChatInboxCore.intake` passes `requestId`**: the worker reads `requestId` from the journaled mode
-  object (alongside `mode: 'lifecycle'`) and passes it to Core so the intake can locate the request.
-- **`ChatInboxView.requestId`** stored by `setMode` so the mode journal already carries it; no extra DB lookup
-  on the hot path.
+- **Worker `ChatInboxCore.intake` passes `requestId`** from its journaled mode as a historical hint.
+  Core reads the current manual requests from PostgreSQL; the chat pointer does not choose the target.
 - **`InboxContext.sendLifecycleDecision`**: when Core returns `lifecycleAction: 'requester-revision'`,
   `handleUpdate` calls this method, which uses `ctx.objectSendClient(RequestLifecycleApi, requestId)` to fire
   `RequestLifecycle.requesterDecision` (the VO's state machine advances to `designing` and starts the next
@@ -46,15 +44,26 @@ lifecycle mode and request ID after both handled and parked updates; a requester
 inside the Restate handler, so a failed dispatch replays from its journaled Core answer. Focused worker/Core
 tests: 3 files / 34 tests passed; worker TypeScript passed. This is local proof, not a live delayed-send drill.
 
+**R07 reply binding and revision context (current worktree):** Core selects the only waiting manual
+request in a chat or a reply linked to its exact revision notice. When two requests wait, an unlinked
+message gets a durable, actionable choice refusal. A late reply to a completed notice is refused.
+The same Telegram update replays its committed projection by update ID and full update hash, including
+reply target, even after the request advances. The worker adopts that projection once rather than
+writing revision 4 again. The child task inherits exact copy, format and studio policy from the prior
+brief, with a parent task and revision directive. Missing source brief and automatic daily limit
+produce durable blocked receipts and a critical sender notice; no new design starts. Focused tests:
+3 files / 38 tests passed; Core and worker TypeScript and repository lint passed. This is local
+PostgreSQL/worker proof. It does not cover a deployed chat, concurrent process kill or provider result.
+
 Prior milestones still hold: ChatInbox cutover (`1902c32`); multi-round journey (`f25ebf1`); delivery routes;
 the last full suite passed 421 files / 3,237 tests before the reminder changes.
 
 ## Next useful milestone
 
 1. **Complete R07 Q/A**: route `NEEDS_CLARIFICATION` questions into lifecycle chat, bind answers to the
-   waiting request, and prove restart, duplicate, late-answer and reminder behavior end to end. Resolve
-   the per-chat request pointer for a second open request before canary: `setMode` currently retains its
-   first request ID, so another request in the same chat has ambiguous answer routing.
+   waiting request, and prove restart, duplicate, late-answer and reminder behavior end to end. The
+   second-request pointer hazard is locally contained by database selection and exact reply binding;
+   explicit new-brief routing while another request waits still needs its own admission contract.
 2. **Final exports and provider boundaries**: qualify R11–R19 exports and R20–R23 provider boundaries.
 3. **Canary & admission**: deploy only after a coherent release gate, then run live recovery and blind human
    creative-quality acceptance. No current source or local test result establishes production admission.

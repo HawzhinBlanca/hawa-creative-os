@@ -64,6 +64,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         intakeStatus?: number; code?: string; duplicate?: boolean; title?: string;
         lifecycleAction?: string; requestId?: string; newTaskId?: string;
         round?: number; directive?: string; priorTaskId?: string; rawText?: string;
+        chatId?: string;
       };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
@@ -75,6 +76,16 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
               requestId: body.requestId, newTaskId: body.newTaskId, round: body.round,
               directive: body.directive, priorTaskId: body.priorTaskId,
               ...(body.rawText !== undefined ? { rawText: body.rawText } : {}) };
+          }
+          if (body.lifecycleAction === 'request-choice-required' && body.chatId &&
+              (body.code === 'AMBIGUOUS_REQUEST' || body.code === 'STALE_REQUEST_REPLY')) {
+            return { ...base, lifecycleAction: 'request-choice-required',
+              chatId: body.chatId, code: body.code };
+          }
+          if (body.lifecycleAction === 'revision-blocked' && body.chatId &&
+              (body.code === 'DAILY_CAP_REACHED' || body.code === 'PARENT_BRIEF_MISSING')) {
+            return { ...base, lifecycleAction: 'revision-blocked',
+              chatId: body.chatId, code: body.code };
           }
           return base;
         }

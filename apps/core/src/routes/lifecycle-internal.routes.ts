@@ -5,11 +5,8 @@
  *   POST /v1/internal/telegram/intake  {v, update, mode: 'legacy'}  → {v, kind: 'handled', intakeStatus, …}
  *   POST /v1/internal/telegram/park    {v, update, reason, notifySender?} → {v, parked, alreadyParked}
  *
- * Intake is a thin wrapper around today's Telegram intake (routes/telegram-webhook.routes.ts): the
- * update goes to POST /api/webhooks/telegram in this process, with the webhook secret added here, and
- * the answer comes back as `intakeStatus`. So the worker's poller changes who asks Telegram and in
- * what order chats are served, and nothing about what intake does with an update; the same update
- * twice is one task, as it always was (intake's inbox row `<chat>:<update_id>`).
+ * Legacy mode wraps today's Telegram intake. Lifecycle mode first checks request ownership and
+ * a committed revision receipt before deciding whether the update belongs to a waiting request.
  *
  * Only the worker calls these, with HAWA_WORKER_TOKEN: a `service` principal that app.ts's
  * verifyRequestAuth accepts on /v1/internal/* and nowhere else, and those routes accept nothing else.
@@ -18,14 +15,17 @@
  * DATABASE_UNAVAILABLE, INTAKE_PAUSED (the office's kill switch) and NOT_CONFIGURED. A dead letter
  * made while the database is down or intake is switched off would help nobody: the update waits.
  */
+import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID, type DeliveryOutcome } from '@hawa/contracts';
-import { parseCompleteRevisionRequest, parseOfficeApprovalProof } from '@hawa/domain';
+import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
+import { linkedLifecycleReplies, readRoutingRefusal, recordRoutingRefusal,
+  revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests } from '../services/lifecycle-chat-target.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
 import { LifecycleProjectionConflict, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
@@ -135,8 +135,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const body = await readBody(c);
     const update = body?.update;
     if (!isUpdate(update)) return problem(c, 400, 'Invalid update', 'The body must carry a Telegram update with a positive update_id');
-    // 2.3 adds the lifecycle's decide mode. An older Core that does not have it refuses the mode
-    // so the worker falls back to legacy rather than routing silently wrong.
+    // 2.3 adds the lifecycle's decide mode. Unknown modes are refused explicitly.
     const mode = body?.mode ?? 'legacy';
     if (mode !== 'legacy' && mode !== 'lifecycle') {
       return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
@@ -151,13 +150,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // switch, as it waited in Telegram when Core polled. Asked here so the answer is not a retry.
     if (await intakeRefused(channelKillSwitches, 'telegram')) return handled(503, { code: 'INTAKE_PAUSED' });
 
-    // --- lifecycle mode: route requester answers back to the open lifecycle request ---
+    // --- lifecycle mode: bind a requester answer to one request, then replay it by update ID ---
     if (mode === 'lifecycle') {
-      const requestId = typeof body?.requestId === 'string' && UUID.test(body.requestId) ? body.requestId : null;
-      if (!requestId || !db) {
-        // No requestId or no DB: treat as legacy (best-effort; the worker should always pass requestId).
-        log.warn(`[core:internal] lifecycle intake for update ${update.update_id} missing requestId or db; falling back to legacy`);
-      } else {
+      // The chat's stored request ID is only a hint. A chat can contain more than one request.
+      if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+      {
         // Extract the directive text from the Telegram update.
         const msg = (update as Record<string, unknown>).message;
         const cbq = (update as Record<string, unknown>).callback_query;
@@ -174,35 +171,87 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         })();
         const chatId: string = chatOf(update);
         if (rawText.trim() && chatId) {
+          const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+          type RefusalCode = 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' |
+            'DAILY_CAP_REACHED' | 'PARENT_BRIEF_MISSING';
+          const actionFor = (code: RefusalCode) => code === 'AMBIGUOUS_REQUEST' ||
+            code === 'STALE_REQUEST_REPLY' ? 'request-choice-required' : 'revision-blocked';
+          const refuseWithReceipt = async (code: RefusalCode) => {
+            const stored = await withRlsContext(db,
+              { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+              (trx) => recordRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id,
+                { code, chatId, payloadHash }));
+            if (stored.payloadHash !== payloadHash || stored.chatId !== chatId) {
+              return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+            }
+            return handled(409, { code: stored.code,
+              lifecycleAction: actionFor(stored.code), chatId });
+          };
           try {
-            // Find the open lifecycle request for this chat at manual stage.
             const TENANT = DEFAULT_TENANT_ID;
-            const openRequest = await withRlsContext(db, { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
-              (await sql<{ request_id: string; rev: number; current_task_id: string; client_id: string | null }>`
-                SELECT r.request_id, r.rev, r.current_task_id,
-                  (SELECT t.client_id::text FROM hawa.tasks t WHERE t.tenant_id = r.tenant_id AND t.id = r.current_task_id LIMIT 1) AS client_id
-                FROM hawa.requests r
-                WHERE r.tenant_id = ${TENANT}::uuid AND r.chat_id = ${chatId}
-                  AND r.owner = 'restate' AND r.stage = 'manual' AND r.request_id = ${requestId}
-                LIMIT 1`.execute(trx)).rows[0]);
+            const directive = rawText.trim();
+            const priorRefusal = await withRlsContext(db,
+              { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+              (trx) => readRoutingRefusal(trx, TENANT, update.update_id));
+            if (priorRefusal) {
+              if (priorRefusal.payloadHash !== payloadHash || priorRefusal.chatId !== chatId) {
+                return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+              }
+              return handled(409, { code: priorRefusal.code,
+                lifecycleAction: actionFor(priorRefusal.code), chatId });
+            }
+            // A lost answer from Core must replay before reading today's stage. The original
+            // projection already moved manual → designing; falling through would create a legacy task.
+            const receipts = await withRlsContext(db,
+              { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+              (trx) => revisionIntakeReceipts(trx, TENANT, chatId, update.update_id));
+            if (receipts.length > 1) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+            if (receipts.length === 1) {
+              const result = receipts[0].result as Record<string, unknown>;
+              if (result?.requestId !== receipts[0].request_id || result.directive !== directive ||
+                  result.sourceUpdateHash !== payloadHash ||
+                  typeof result.newTaskId !== 'string' || typeof result.priorTaskId !== 'string' ||
+                  typeof result.round !== 'number') return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+              return handled(200, { duplicate: true, lifecycleAction: 'requester-revision',
+                requestId: result.requestId, newTaskId: result.newTaskId, round: result.round,
+                directive: result.directive, priorTaskId: result.priorTaskId, rawText: directive });
+            }
+
+            const replied = msg && typeof msg === 'object' ? (msg as Record<string, unknown>).reply_to_message : null;
+            const messageId = replied && typeof replied === 'object'
+              ? (replied as Record<string, unknown>).message_id : null;
+            const replyMessageId = Number.isSafeInteger(messageId) && Number(messageId) > 0 ? String(messageId) : null;
+            const { waiting, links } = await withRlsContext(db,
+              { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => ({
+                waiting: await waitingLifecycleRequests(trx, TENANT, chatId),
+                links: replyMessageId ? await linkedLifecycleReplies(trx, TENANT, chatId, replyMessageId) : [],
+              }));
+            if (links.length > 1) return refuseWithReceipt('AMBIGUOUS_REQUEST');
+            const choice = chooseWaitingChatRequest(waiting.map((r) =>
+              ({ requestId: r.request_id, rev: Number(r.rev) })), links[0]);
+            if (choice.kind === 'ambiguous' || choice.kind === 'stale_reply') {
+              return refuseWithReceipt(choice.kind === 'ambiguous' ? 'AMBIGUOUS_REQUEST' : 'STALE_REQUEST_REPLY');
+            }
+            const openRequest = choice.kind === 'target'
+              ? waiting.find((r) => r.request_id === choice.requestId) : undefined;
             if (openRequest) {
+              const requestId = openRequest.request_id;
               const expectedRev = Number(openRequest.rev);
               const nextRev = expectedRev + 1;
               // Derive the round from the revision number: first office-revise lands at rev=3;
               // subsequent revisions increment by 2 each time (office+requester), so round = (rev - 1) / 2.
               const round = Math.floor((expectedRev - 1) / 2);
               if (round >= 1) {
-                const directive = rawText.trim();
                 const sourceEventId = `lc-${requestId}-r${round}-u${update.update_id}`;
                 const key = `${requestId}:${nextRev}:requesterRevisionIntake:u${update.update_id}`;
                 const projected = await projectLifecycleRequesterRevisionWithIntake(db, {
                   requestId, tenantId: TENANT, priorTaskId: openRequest.current_task_id,
                   round, directive, sourceEventId, sourceChannelId: chatId,
-                  rawText: directive, clientId: openRequest.client_id,
+                  rawText: directive, sourceUpdateHash: payloadHash, clientId: openRequest.client_id,
                   expectedRev, rev: nextRev, key,
                 });
                 await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
-                return handled(200, {
+                return handled(200, { duplicate: false,
                   lifecycleAction: 'requester-revision',
                   requestId, newTaskId: projected.newTaskId,
                   round: projected.round, directive: projected.directive,
@@ -213,7 +262,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             // Not in manual stage or no open request → fall through to legacy intake.
           } catch (err) {
             if (err instanceof LifecycleProjectionConflict) {
-              log.warn(`[core:internal] lifecycle intake conflict for ${requestId}: ${err.code} ${err.message}`);
+              log.warn(`[core:internal] lifecycle intake conflict for update ${update.update_id}: ${err.code} ${err.message}`);
+              if (err.code === 'DAILY_CAP_REACHED' || err.code === 'PARENT_BRIEF_MISSING') {
+                return refuseWithReceipt(err.code);
+              }
               // Treat projection conflicts as a handled non-retryable result (409-like).
               return handled(409, { code: err.code, detail: err.message });
             }
@@ -470,6 +522,34 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       log.error(`[core:internal] lifecycle requester revision ${requestId} failed:`, error instanceof Error ? error.message : error);
       return problem(c, 503, 'Lifecycle Projection Unavailable', 'The requester revision did not commit; retry with the same key');
     }
+  });
+
+  // The Telegram intake projection has already committed rev N+1 and claimed the child task.
+  // RequestLifecycle reads that exact receipt before starting DesignRun; it must not project again.
+  internal('/lifecycle/:requestId/requester-revision-intake', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const updateId = Number(body?.updateId);
+    const expectedRev = Number(body?.expectedRev);
+    const round = Number(body?.round);
+    if (!UUID.test(requestId) || body?.v !== 1 ||
+        !Number.isSafeInteger(updateId) || updateId <= 0 ||
+        !Number.isInteger(expectedRev) || expectedRev < 3 ||
+        !Number.isInteger(round) || round < 1 ||
+        !UUID.test(String(body?.priorTaskId || '')) || !UUID.test(String(body?.newTaskId || '')) ||
+        typeof body?.directive !== 'string' || !body.directive.trim() || body.directive.length > 5000) {
+      return problem(c, 400, 'Invalid requester revision intake receipt',
+        'Expected a versioned Telegram update and the exact admitted revision task');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle receipt requires a database');
+    const result = await withRlsContext(db,
+      { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+      (trx) => verifiedRevisionIntake(trx, { tenantId: DEFAULT_TENANT_ID, requestId,
+        updateId, expectedRev, priorTaskId: body.priorTaskId as string,
+        newTaskId: body.newTaskId as string, round, directive: body.directive as string }));
+    if (!result) return problem(c, 409, 'Requester revision receipt mismatch',
+      'The admitted update, request, revision and child task do not match');
+    return c.json({ v: 1, ...result }, 200);
   });
 
   internal('/lifecycle/:requestId/delivery-finished', async (c) => {

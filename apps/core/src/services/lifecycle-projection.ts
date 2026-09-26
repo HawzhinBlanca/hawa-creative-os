@@ -32,7 +32,7 @@ export interface OpenLifecycleResult {
 }
 
 export class LifecycleProjectionConflict extends Error {
-  constructor(readonly code: 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN' | 'NOT_CURRENT_DRAFT' | 'UNAUTHORIZED_ACTOR' | 'APPROVAL_EVIDENCE_CHANGED' | 'INVALID_CONFIRMATION' | 'WRONG_CHAT' | 'APPROVAL_CHANGED' | 'EVIDENCE_CHANGED' | 'INCOMPLETE_OBSERVATION' | 'EVIDENCE_MISMATCH', message: string) {
+  constructor(readonly code: 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN' | 'NOT_CURRENT_DRAFT' | 'UNAUTHORIZED_ACTOR' | 'APPROVAL_EVIDENCE_CHANGED' | 'INVALID_CONFIRMATION' | 'WRONG_CHAT' | 'APPROVAL_CHANGED' | 'EVIDENCE_CHANGED' | 'INCOMPLETE_OBSERVATION' | 'EVIDENCE_MISMATCH' | 'PARENT_BRIEF_MISSING' | 'DAILY_CAP_REACHED', message: string) {
     super(message);
   }
 }
@@ -449,6 +449,8 @@ export interface RequesterRevisionWithIntakeProjection {
   sourceChannelId: string;
   /** Raw text of the directive (the requester's message). */
   rawText: string;
+  /** Hash of the complete source update, including its Telegram reply target. */
+  sourceUpdateHash: string;
   /** The client the prior task belongs to (carried forward to the new task). */
   clientId: string | null;
   /** Current request revision (manual stage). rev = expectedRev + 1. */
@@ -460,6 +462,7 @@ export interface RequesterRevisionWithIntakeProjection {
 export interface RequesterRevisionWithIntakeResult extends RequesterRevisionResult {
   /** The directive text as trimmed. */
   directive: string;
+  sourceUpdateHash: string;
 }
 
 /**
@@ -476,6 +479,9 @@ export async function projectLifecycleRequesterRevisionWithIntake(
   if (!Number.isInteger(expectedRev) || expectedRev < 3 || !Number.isInteger(rev) || rev !== expectedRev + 1 ||
       !Number.isInteger(round) || round < 1 || typeof directive !== 'string' || !directive.trim()) {
     throw new LifecycleProjectionConflict('STALE_REVISION', 'Invalid revision pair or round for lifecycle requester revision with intake');
+  }
+  if (!/^[a-f0-9]{64}$/.test(input.sourceUpdateHash)) {
+    throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The Telegram source update hash is invalid');
   }
   const hash = createHash('sha256').update(canonical(input)).digest('hex');
   return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
@@ -504,11 +510,37 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     if (request.chat_id !== sourceChannelId) {
       throw new LifecycleProjectionConflict('WRONG_CHAT', 'The update chat does not match the request');
     }
+    // A revision edits the prior design. Keep its factual copy, format and studio policy;
+    // the new Telegram text supplies only the change directive.
+    const parent = await trx.selectFrom('outbox_commands').select('payload')
+      .where('tenant_id', '=', tenantId).where('aggregate_id', '=', priorTaskId)
+      .where('command_type', '=', 'task.created').executeTakeFirst();
+    const parentPayload = parent?.payload as Record<string, unknown> | undefined;
+    if (!parentPayload || !Array.isArray(parentPayload.exactCopy) ||
+        typeof parentPayload.designInstructions !== 'string') {
+      throw new LifecycleProjectionConflict('PARENT_BRIEF_MISSING',
+        'The current task has no complete source brief to revise');
+    }
+    const parentOptions = parentPayload.studioOptions && typeof parentPayload.studioOptions === 'object'
+      ? parentPayload.studioOptions as Record<string, unknown> : {};
+    const inheritedOptions = Object.fromEntries(['tier', 'imagery', 'previews', 'holdForSelection']
+      .filter((name) => parentOptions[name] !== undefined).map((name) => [name, parentOptions[name]]));
     // Persist the new task via chat-intake with lifecycleOwner: 'restate'.
     const draft: ChatIntake = {
       platform: 'telegram', sourceEventId, sourceChannelId,
       rawText, title: directive.trim().slice(0, 200),
-      designInstructions: directive.trim(), exactCopy: [], clientId,
+      designInstructions: `${parentPayload.designInstructions}\nRevision: ${directive.trim()}`,
+      exactCopy: parentPayload.exactCopy,
+      clientId, autoGenerate: true,
+      ...(typeof parentPayload.headlineEn === 'string' ? { headlineEn: parentPayload.headlineEn } : {}),
+      ...(typeof parentPayload.headlineCkb === 'string' ? { headlineCkb: parentPayload.headlineCkb } : {}),
+      ...(typeof parentPayload.copyEn === 'string' ? { copyEn: parentPayload.copyEn } : {}),
+      ...(typeof parentPayload.copyCkb === 'string' ? { copyCkb: parentPayload.copyCkb } : {}),
+      ...(parentPayload.variant && typeof parentPayload.variant === 'object'
+        ? { variant: parentPayload.variant as { width: number; height: number } } : {}),
+      ...(typeof parentPayload.designStudio === 'boolean' ? { designStudio: parentPayload.designStudio } : {}),
+      studioOptions: { ...inheritedOptions, parentTaskId: priorTaskId,
+        revisionRound: round, revisionDirective: directive.trim() } as ChatIntake['studioOptions'],
     };
     let persisted: Awaited<ReturnType<typeof persistChatIntake>>;
     try {
@@ -518,6 +550,10 @@ export async function projectLifecycleRequesterRevisionWithIntake(
         throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The source event already belongs to a different executor');
       }
       throw error;
+    }
+    if (persisted.autoGenerateDeclined) {
+      throw new LifecycleProjectionConflict('DAILY_CAP_REACHED',
+        'This revision would exceed the automatic design limit');
     }
     const newTaskId = String(persisted.task.id);
     const runId = `dr-${newTaskId}`;
@@ -532,7 +568,8 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       .returning('request_id').executeTakeFirst();
     if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during requester revision with intake');
     const result: RequesterRevisionWithIntakeResult = {
-      requestId, priorTaskId, newTaskId, round, rev, stage: 'designing', runId, directive: directive.trim(),
+      requestId, priorTaskId, newTaskId, round, rev, stage: 'designing', runId,
+      directive: directive.trim(), sourceUpdateHash: input.sourceUpdateHash,
     };
     await trx.insertInto('lifecycle_projections').values({
       tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,

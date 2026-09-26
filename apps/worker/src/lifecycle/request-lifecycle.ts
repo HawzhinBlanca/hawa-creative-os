@@ -622,24 +622,34 @@ export async function recordRequesterDecision(
   const newTaskId = (event as unknown as { newTaskId: string }).newTaskId;
   const expectedRev = prior.rev;
   const nextRev = expectedRev + 1;
+  const updateMatch = /^chatinbox:revision:([1-9][0-9]*)$/.exec(event.eventId);
+  if (event.eventId.startsWith('chatinbox:revision:') &&
+      (!updateMatch || !Number.isSafeInteger(Number(updateMatch[1])))) {
+    throw invalid('requester decision has an invalid Telegram update identity');
+  }
   const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
     v: 1; requestId: string; priorTaskId: string; newTaskId: string;
-    round: number; rev: number; stage: 'designing'; runId: string;
-  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/requester-revision`, {
-    v: 1, expectedRev, rev: nextRev,
-    key: `${event.requestId}:${nextRev}:requesterRevision:r${event.round}`,
-    ops: [{ kind: 'requesterRevision', priorTaskId: event.priorTaskId, newTaskId,
-      round: event.round, directive: event.directive.trim() }],
-  }));
+    round: number; rev: number; stage: 'designing'; runId: string; directive?: string;
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/${updateMatch
+    ? 'requester-revision-intake' : 'requester-revision'}`, updateMatch
+    ? { v: 1, updateId: Number(updateMatch[1]), expectedRev,
+        priorTaskId: event.priorTaskId, newTaskId, round: event.round,
+        directive: event.directive.trim() }
+    : { v: 1, expectedRev, rev: nextRev,
+        key: `${event.requestId}:${nextRev}:requesterRevision:r${event.round}`,
+        ops: [{ kind: 'requesterRevision', priorTaskId: event.priorTaskId, newTaskId,
+          round: event.round, directive: event.directive.trim() }] }));
   if (projected?.v !== 1 || projected.requestId !== event.requestId ||
       projected.priorTaskId !== event.priorTaskId || projected.newTaskId !== newTaskId ||
       projected.round !== event.round || projected.rev !== nextRev || projected.stage !== 'designing' ||
-      projected.runId !== `dr-${newTaskId}`) {
+      projected.runId !== `dr-${newTaskId}` ||
+      (updateMatch && projected.directive !== event.directive.trim())) {
     throw new Error('Core did not return a valid requester revision projection');
   }
   const newRunId = projected.runId;
   const newDesignInput: DesignRunInput = {
     ...prior.designInput,
+    rawText: event.directive.trim(),
     lifecycle: { requestId: prior.requestId, round: event.round, runId: newRunId },
     taskId: newTaskId,
     idempotencyKey: `lifecycle:${prior.requestId}:${newTaskId}`,

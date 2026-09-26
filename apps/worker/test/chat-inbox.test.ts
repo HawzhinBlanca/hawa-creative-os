@@ -19,6 +19,7 @@ class FakeContext implements InboxContext {
   state = new Map<string, unknown>();
   runs: string[] = [];
   lifecycleDecisions: Array<{ requestId: string; event: unknown }> = [];
+  notices: unknown[] = [];
   failDecisionOnce = false;
   constructor(readonly key = '555') {}
   async get<T>(name: string): Promise<T | null> {
@@ -47,6 +48,7 @@ class FakeContext implements InboxContext {
     }
     this.lifecycleDecisions.push({ requestId, event });
   }
+  sendNotice(message: unknown) { this.notices.push(message); }
 }
 
 const update = { update_id: 4242, message: { message_id: 1, date: 1, chat: { id: 555, type: 'private' }, from: { id: 9, is_bot: false, first_name: 'R' }, text: 'a brief' } };
@@ -172,6 +174,20 @@ describe('the Core client ChatInbox uses', () => {
     for (const s of [400, 401, 403, 404]) await expect(answer({ title: 'no' }, s)).rejects.toThrow(String(s));
   });
 
+  it('passes Core’s request-choice action through to the fenced chat notice', async () => {
+    const c = client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 409,
+      lifecycleAction: 'request-choice-required', code: 'AMBIGUOUS_REQUEST', chatId: '555' }));
+    expect(await c.intake(update, 'lifecycle', 'old-pointer')).toMatchObject({
+      kind: 'done', lifecycleAction: 'request-choice-required', code: 'AMBIGUOUS_REQUEST', chatId: '555' });
+  });
+
+  it('passes a blocked revision through as an actionable final refusal', async () => {
+    const c = client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 409,
+      lifecycleAction: 'revision-blocked', code: 'PARENT_BRIEF_MISSING', chatId: '555' }));
+    expect(await c.intake(update, 'lifecycle')).toMatchObject({
+      kind: 'done', lifecycleAction: 'revision-blocked', code: 'PARENT_BRIEF_MISSING', chatId: '555' });
+  });
+
   it('a Core that does not answer at all waits; one that answers too slowly is a retryable answer', async () => {
     await expect(client(async () => { throw new TypeError('fetch failed'); }).intake(update, 'legacy')).rejects.toThrow(/Core/);
     const slow = client(async (_url, init) => new Promise<Response>((_, reject) => init.signal.addEventListener('abort', () => reject(Object.assign(new Error('timed out'), { name: 'TimeoutError' })))));
@@ -269,5 +285,29 @@ describe('ChatInbox.setMode', () => {
     const c = core(Array.from({ length: INTAKE_ATTEMPTS }, () => async () => ({ kind: 'retry', reason: 'Core busy' })));
     expect(await handleUpdate(ctx, input, c)).toMatchObject({ outcome: 'parked' });
     expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x', lastOutcome: 'parked' });
+  });
+
+  it('asks for a specific reply when more than one request is waiting', async () => {
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+      mode: 'lifecycle', requestId: 'old-pointer' } satisfies ChatInboxView);
+    const c = core([async () => ({ kind: 'done', intakeStatus: 409,
+      lifecycleAction: 'request-choice-required', chatId: '555', code: 'AMBIGUOUS_REQUEST' })]);
+    await handleUpdate(ctx, input, c);
+    expect(ctx.lifecycleDecisions).toHaveLength(0);
+    expect(ctx.notices).toMatchObject([{ key: `chatinbox:request-choice:${update.update_id}`,
+      chatId: '555', class: 'critical', text: expect.stringContaining('reply directly') }]);
+  });
+
+  it('tells the sender when a revision cannot start under the daily limit', async () => {
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+      mode: 'lifecycle', requestId: 'req-x' } satisfies ChatInboxView);
+    const c = core([async () => ({ kind: 'done', intakeStatus: 409,
+      lifecycleAction: 'revision-blocked', chatId: '555', code: 'DAILY_CAP_REACHED' })]);
+    await handleUpdate(ctx, input, c);
+    expect(ctx.lifecycleDecisions).toHaveLength(0);
+    expect(ctx.notices).toMatchObject([{ key: `chatinbox:revision-blocked:${update.update_id}`,
+      chatId: '555', class: 'critical', text: expect.stringContaining('No revision started') }]);
   });
 });

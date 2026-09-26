@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createDb, readTelegramKillSwitch, sql, withRlsContext } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { createApp } from '../src/app.js';
+import { persistChatIntake } from '../src/services/chat-intake.js';
 import { PARKED_UPDATE_NOTICE } from '../src/services/polled-update-dispatch.js';
 import { productionAppOptions } from '../src/entrypoint-options.js';
 import { telegramPollerOf } from '../src/services/telegram-poller-owner.js';
@@ -14,6 +16,7 @@ import { telegramPollerOf } from '../src/services/telegram-poller-owner.js';
  * polls; unset, Core does, exactly as before.
  */
 const tenantId = '00000000-0000-4000-a000-000000000001';
+const clientId = 'c1000000-0000-4000-8000-000000000002';
 const operatorUserId = '00000000-0000-4000-b000-000000000001';
 const scope = { tenantId, userId: operatorUserId, role: 'operator' as const };
 const OFFICE = 91000007;
@@ -73,6 +76,27 @@ const intake = async (app: any, update: unknown, mode?: string, requestId?: stri
   return { status: res.status, body: await res.json().catch(() => ({})) };
 };
 
+async function seedWaitingRequest(app: any, chat: number) {
+  const requestId = randomUUID();
+  const created = await persistChatIntake(db, {
+    platform: 'telegram', sourceEventId: `lc-seed-${requestId}`, sourceChannelId: String(chat),
+    rawText: 'KAAE members evening', title: 'KAAE members evening', clientId,
+    designInstructions: 'Make the approved event design', exactCopy: [{ text: 'December 4, 2026' }],
+    autoGenerate: true, designStudio: true, variant: { width: 1200, height: 1697 },
+    studioOptions: { tier: 'quality' },
+  }, { outboxState: 'recorded' });
+  const taskId = String(created.task.id);
+  await withRlsContext(db, scope, async (trx) => {
+    await sql`INSERT INTO hawa.requests (request_id, tenant_id, root_task_id, current_task_id,
+      parent_request_id, owner, stage, rev, chat_id)
+    VALUES (${requestId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${taskId}::uuid,
+      null, 'restate', 'manual', 3, ${String(chat)})`.execute(trx);
+    await sql`UPDATE hawa.tasks SET request_id = ${requestId}::uuid
+      WHERE tenant_id = ${tenantId}::uuid AND id = ${taskId}::uuid`.execute(trx);
+  });
+  return { requestId, taskId };
+}
+
 describe('POST /v1/internal/telegram/intake', () => {
   it('runs today\'s intake: a brief becomes one task, and the same update again is a duplicate, not a second task', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
@@ -122,27 +146,8 @@ describe('POST /v1/internal/telegram/intake', () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
-    // Generate a valid UUID (version 4 pattern that satisfies the route's UUID regex).
-    const rnd = () => Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
-    const uuid = `${rnd()}${rnd()}-${rnd()}-4${rnd().slice(1)}-a${rnd().slice(1)}-${rnd()}${rnd()}${rnd()}`;
     const app = createApp({ db } as any);
-
-    // 1) Seed a lifecycle request in manual stage directly in the DB, simulating that
-    //    RequestLifecycle.open already ran.
-    //    We do this by first creating a task via legacy intake, then inserting the lifecycle rows.
-    const seedUpdate = brief(updateId(), chat);
-    const firstIntake = await intake(app, seedUpdate);
-    expect(firstIntake.body.intakeStatus).toBe(201);
-    const priorTaskId = firstIntake.body.taskIds?.[0];
-    expect(priorTaskId).toBeDefined();
-
-    // Insert the lifecycle request row at manual stage, rev=3 (simulating two prior projections).
-    await withRlsContext(db, scope, async (trx) => {
-      await sql`
-        INSERT INTO hawa.requests (request_id, tenant_id, root_task_id, current_task_id, parent_request_id, owner, stage, rev, chat_id, draft_sent_at, question_asked_at)
-        VALUES (${uuid}::uuid, ${tenantId}::uuid, ${priorTaskId}, ${priorTaskId}, null, 'restate', 'manual', 3, ${String(chat)}, null, null)
-      `.execute(trx);
-    });
+    const { requestId, taskId: priorTaskId } = await seedWaitingRequest(app, chat);
 
     // 2) Send the requester's directive update in lifecycle mode.
     const directiveUpdate = {
@@ -150,15 +155,145 @@ describe('POST /v1/internal/telegram/intake', () => {
       message: { message_id: 9999, from: { id: OFFICE, is_bot: false, first_name: 'Owner' },
         chat: { id: chat, type: 'private' }, date: 1790000001, text: 'Please make the background blue' },
     };
-    const result = await intake(app, directiveUpdate, 'lifecycle', uuid);
+    const result = await intake(app, directiveUpdate, 'lifecycle', requestId);
     expect(result.status).toBe(200);
     expect(result.body).toMatchObject({
       kind: 'handled', intakeStatus: 200,
       lifecycleAction: 'requester-revision',
-      requestId: uuid, round: 1, priorTaskId,
+      requestId, round: 1, priorTaskId,
     });
     expect(result.body.newTaskId).toBeDefined();
     expect(result.body.directive).toBe('Please make the background blue');
+    const child = (await tasksInChat(chat)).find((task: any) =>
+      task.aggregate_id === result.body.newTaskId);
+    expect(child?.payload).toMatchObject({
+      autoGenerate: true, designStudio: true, exactCopy: [{ text: 'December 4, 2026' }],
+      variant: { width: 1200, height: 1697 },
+      studioOptions: { tier: 'quality', parentTaskId: priorTaskId, revisionRound: 1,
+        revisionDirective: 'Please make the background blue' },
+    });
+    expect((child?.payload as any).designInstructions).toContain('Make the approved event design');
+  });
+
+  it('refuses a capped revision durably and leaves the request waiting', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const { requestId } = await seedWaitingRequest(app, chat);
+    vi.stubEnv('AUTO_GENERATE_DAILY_CAP_PER_SENDER', '0');
+    const update = brief(updateId(), chat);
+    update.message.text = 'Make the background blue';
+    const first = await intake(app, update, 'lifecycle', requestId);
+    expect(first.body).toMatchObject({ intakeStatus: 409, code: 'DAILY_CAP_REACHED',
+      lifecycleAction: 'revision-blocked', chatId: String(chat) });
+    expect(await tasksInChat(chat)).toHaveLength(1);
+    vi.stubEnv('AUTO_GENERATE_DAILY_CAP_PER_SENDER', '10000');
+    const replay = await intake(createApp({ db } as any), update, 'lifecycle', requestId);
+    expect(replay.body).toMatchObject({ intakeStatus: 409, code: 'DAILY_CAP_REACHED',
+      lifecycleAction: 'revision-blocked' });
+    expect(await tasksInChat(chat)).toHaveLength(1);
+  });
+
+  it('refuses a revision when the prior source brief is missing', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const { requestId, taskId } = await seedWaitingRequest(app, chat);
+    await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.outbox_commands
+      SET payload = payload - 'exactCopy'
+      WHERE tenant_id = ${tenantId}::uuid AND aggregate_id = ${taskId}::uuid
+        AND command_type = 'task.created'`.execute(trx));
+    const update = brief(updateId(), chat);
+    update.message.text = 'Change the background';
+    const result = await intake(app, update, 'lifecycle', requestId);
+    expect(result.body).toMatchObject({ intakeStatus: 409, code: 'PARENT_BRIEF_MISSING',
+      lifecycleAction: 'revision-blocked', chatId: String(chat) });
+    expect(await tasksInChat(chat)).toHaveLength(1);
+  });
+
+  it('replays the same Telegram revision update after Core advanced the request, without a legacy task', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const { requestId, taskId } = await seedWaitingRequest(app, chat);
+    const update = brief(updateId(), chat);
+    update.message.text = 'Move the venue to Erbil';
+    const first = await intake(app, update, 'lifecycle', requestId);
+    expect(first.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'requester-revision',
+      requestId, priorTaskId: taskId, duplicate: false });
+    const adopted = await app.request(`/v1/internal/lifecycle/${requestId}/requester-revision-intake`, {
+      method: 'POST', headers: worker, body: JSON.stringify({ v: 1, updateId: update.update_id,
+        expectedRev: 3, priorTaskId: taskId, newTaskId: first.body.newTaskId,
+        round: 1, directive: update.message.text }),
+    });
+    expect(adopted.status).toBe(200);
+    expect(await adopted.json()).toMatchObject({ requestId, newTaskId: first.body.newTaskId,
+      stage: 'designing', rev: 4, directive: update.message.text });
+    const forgedAdoption = await app.request(`/v1/internal/lifecycle/${requestId}/requester-revision-intake`, {
+      method: 'POST', headers: worker, body: JSON.stringify({ v: 1, updateId: update.update_id,
+        expectedRev: 3, priorTaskId: taskId, newTaskId: randomUUID(),
+        round: 1, directive: update.message.text }),
+    });
+    expect(forgedAdoption.status).toBe(409);
+    const replay = await intake(createApp({ db } as any), update, 'lifecycle', requestId);
+    expect(replay.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'requester-revision',
+      requestId, newTaskId: first.body.newTaskId, duplicate: true });
+    const changed = await intake(app, { ...update, message: { ...update.message, text: 'Different direction' } },
+      'lifecycle', requestId);
+    expect(changed.body).toMatchObject({ intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    const changedReply = await intake(app, { ...update,
+      message: { ...update.message, reply_to_message: { message_id: 734 } } },
+    'lifecycle', requestId);
+    expect(changedReply.body).toMatchObject({ intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    expect(await tasksInChat(chat)).toHaveLength(2);
+  });
+
+  it('requires a linked reply for two waiting requests and refuses a stale linked reply', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const first = await seedWaitingRequest(app, chat);
+    const second = await seedWaitingRequest(app, chat);
+    const unlinkedUpdate = brief(updateId(), chat);
+    unlinkedUpdate.message.text = 'Use the blue background';
+    const ambiguous = await intake(app, unlinkedUpdate, 'lifecycle', first.requestId);
+    expect(ambiguous.body).toMatchObject({ intakeStatus: 409, code: 'AMBIGUOUS_REQUEST',
+      lifecycleAction: 'request-choice-required', chatId: String(chat) });
+    expect(await tasksInChat(chat)).toHaveLength(2);
+
+    await withRlsContext(db, scope, (trx) => sql`
+      INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id,
+        event_kind, payload, payload_hash, verified)
+      VALUES (${tenantId}::uuid, 'telegram_delivery',
+        ${`lc:${second.requestId}:3:office-revision-notify:send`},
+        'telegram_message_sent', ${JSON.stringify({ messageId: '734' })}::jsonb,
+        'test-sent-mark', true)`.execute(trx));
+    const linkedUpdate = brief(updateId(), chat);
+    linkedUpdate.message.text = 'Make this one blue';
+    (linkedUpdate.message as Record<string, unknown>).reply_to_message = { message_id: 734 };
+    const linked = await intake(app, linkedUpdate, 'lifecycle', first.requestId);
+    expect(linked.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'requester-revision',
+      requestId: second.requestId, priorTaskId: second.taskId });
+    // The first answer was lost; even after one request advanced, the same update cannot be
+    // reinterpreted as a directive for the other waiting request.
+    const ambiguousReplay = await intake(createApp({ db } as any), unlinkedUpdate, 'lifecycle', first.requestId);
+    expect(ambiguousReplay.body).toMatchObject({ intakeStatus: 409, code: 'AMBIGUOUS_REQUEST',
+      lifecycleAction: 'request-choice-required' });
+    const changedAmbiguity = await intake(app,
+      { ...unlinkedUpdate, message: { ...unlinkedUpdate.message, text: 'Changed under the same ID' } },
+      'lifecycle', first.requestId);
+    expect(changedAmbiguity.body).toMatchObject({ intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    const staleUpdate = brief(updateId(), chat);
+    staleUpdate.message.text = 'Another change';
+    (staleUpdate.message as Record<string, unknown>).reply_to_message = { message_id: 734 };
+    const stale = await intake(app, staleUpdate, 'lifecycle', first.requestId);
+    expect(stale.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY',
+      lifecycleAction: 'request-choice-required' });
+    expect(await tasksInChat(chat)).toHaveLength(3);
   });
 
   it('answers NOT_CONFIGURED without the webhook secret', async () => {

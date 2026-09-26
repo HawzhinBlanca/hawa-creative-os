@@ -23,9 +23,11 @@
  * the length of one intake call.
  */
 import * as restate from '@restatedev/restate-sdk';
+import type { OutboundMessage } from '@hawa/contracts';
 import { withInvocationLogContext, log } from '../logging.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
 import type { RequesterDecisionEvent } from './request-lifecycle.js';
+import { TelegramSenderApi } from './telegram-sender.js';
 
 /** Fields are only ever added, and only as optional (PHASE2_DESIGN.md section 4). */
 export interface HandleUpdateInput {
@@ -41,9 +43,11 @@ export type IntakeMode = 'legacy' | 'lifecycle';
 export type IntakeAnswer =
   | { kind: 'done'; intakeStatus: number; duplicate?: boolean;
       /** When mode=lifecycle and Core routed the update as a requester revision. */
-      lifecycleAction?: 'requester-revision';
+      lifecycleAction?: 'requester-revision' | 'request-choice-required' | 'revision-blocked';
       requestId?: string; newTaskId?: string; round?: number; directive?: string;
-      priorTaskId?: string; rawText?: string; }
+      priorTaskId?: string; rawText?: string; chatId?: string;
+      code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
+        'PARENT_BRIEF_MISSING'; }
   | { kind: 'retry'; reason: string };
 
 /** The Core calls ChatInbox makes (core-client.ts). A thrown error means "wait and try again". */
@@ -70,6 +74,7 @@ export interface InboxContext {
    * Only available in the real VO context; tests may stub this as a no-op.
    */
   sendLifecycleDecision(requestId: string, event: RequesterDecisionEvent & { newTaskId: string }): Promise<void> | void;
+  sendNotice(message: OutboundMessage): void;
 }
 
 export interface ChatInboxView {
@@ -80,7 +85,7 @@ export interface ChatInboxView {
   at: number;
   /** Set once when the first RequestLifecycle-owned request opens for this chat. Never reverts. */
   mode?: IntakeMode;
-  /** The requestId of the lifecycle request that claimed this chat (stored alongside mode). */
+  /** Historical request hint; Core selects the actual target from current request state. */
   requestId?: string;
 }
 
@@ -143,6 +148,24 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
       // retries this handler from its journaled Core answer under the same event key.
       await ctx.sendLifecycleDecision(done.requestId, lcEvent);
     }
+    if (done.lifecycleAction === 'request-choice-required' && done.chatId &&
+        (done.code === 'AMBIGUOUS_REQUEST' || done.code === 'STALE_REQUEST_REPLY')) {
+      ctx.sendNotice({ v: 1, key: `chatinbox:request-choice:${update.update_id}`,
+        chatId: done.chatId, kind: 'text', class: 'critical',
+        text: done.code === 'STALE_REQUEST_REPLY'
+          ? 'That design is no longer waiting for changes. Please reply to the current revision notice for the design you mean.'
+          : 'More than one design is waiting for your changes. Please reply directly to the revision notice for the design you mean.',
+      });
+    }
+    if (done.lifecycleAction === 'revision-blocked' && done.chatId &&
+        (done.code === 'DAILY_CAP_REACHED' || done.code === 'PARENT_BRIEF_MISSING')) {
+      ctx.sendNotice({ v: 1, key: `chatinbox:revision-blocked:${update.update_id}`,
+        chatId: done.chatId, kind: 'text', class: 'critical',
+        text: done.code === 'DAILY_CAP_REACHED'
+          ? 'The automatic design limit has been reached. No revision started. Please send this change again after the daily limit resets, or ask the office for help.'
+          : 'I could not safely find the original design brief, so no revision started. Please ask the office to check this request.',
+      });
+    }
     ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'handled',
       lastIntakeStatus: done.intakeStatus, at,
       ...(mode === 'lifecycle' ? { mode, requestId: lifecycleRequestId } : {}),
@@ -181,6 +204,8 @@ function inboxContext(ctx: restate.ObjectContext): InboxContext {
       ctx.objectSendClient(RequestLifecycleApi, requestId)
         .requesterDecision(event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
     },
+    sendNotice: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+      .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
   };
 }
 
