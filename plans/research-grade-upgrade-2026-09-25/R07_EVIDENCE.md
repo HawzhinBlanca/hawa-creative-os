@@ -734,10 +734,18 @@ Live multilingual speech accuracy, billing reconciliation, an isolated deployed
 canary, the complete real Canva journey, retrieval measurements, clean-host recovery
 and human creative review remain open. Manual copy does not settle uncertain
 billing. R07/R12/R20 remain in progress. Proof: `R07_VOICE_RECOVERY_PROOF.json`;
-operation: `runbooks/REQUEST_SOURCE_REVIEW.md`. Full sealed regression follows.
+operation: `runbooks/REQUEST_SOURCE_REVIEW.md`. Final sealed regression is recorded below.
 
 First sealed full run (`aaa5ff7` / `3bf53ea`): **3,527 passed, one failed,
 59 skipped**. The task-status drift test mistook the independent voice outcome
 `received` for a task enum. It now recognizes the task-specific review states;
 complete generated declarations and deliberate drift checks remain. Its focused
 follow-up passed **18/18**. The failing full run is not release acceptance.
+
+**Final sealed regression:** source `d92014c` (implementation `aaa5ff7`), tested
+seal `0621da8`: **447 files / 3,528 tests passed**, **7 files / 59 tests skipped**.
+The opt-in voice kill drill passed separately with 40 checks as above. Typecheck,
+lint, Desk build, zero-secret scan, blueprint **859/0/0** and sealed manifest pass.
+Production containers reported healthy on read-only inspection; this candidate has
+not been deployed and no model/flag/admission changed. Next is the isolated complete
+app candidate and real Canva/source/recovery/human qualification.

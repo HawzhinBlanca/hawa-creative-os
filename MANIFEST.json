@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T23:10:34Z",
+  "generatedAt": "2026-09-26T23:13:09Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -894,8 +894,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "4dec666e4552d71bc8f22a6cdf4b1a73f58c91e75e279b68244afcf2bed72e95",
-      "bytes": 28984
+      "sha256": "20d59040111dd950ceb60e7a13c9197851df060c7ea6efc3b1bba037189e8bcb",
+      "bytes": 29372
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -949,8 +949,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_EVIDENCE.md",
-      "sha256": "b4d80c5f95cce423ae1a14c5548d709c92395ee3b5896316818ed1435b085eff",
-      "bytes": 70855
+      "sha256": "3d63067bd51c4976b87ca484b4a076aa40aa77549897ed93656336c77ab1a21c",
+      "bytes": 71432
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_IMAGE_DOCUMENT_DRILL.json",
@@ -964,8 +964,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R07_VOICE_RECOVERY_PROOF.json",
-      "sha256": "04624fe684aed76ebecb1d062ff1c31ee8240e6ae4923152e0a5803f4ee17e79",
-      "bytes": 11101
+      "sha256": "d566fb950deb5d18aca11982756bd69a0d089f6865fc5eea976363562c6ab6ad",
+      "bytes": 11630
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
@@ -1024,8 +1024,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R12_EVIDENCE.md",
-      "sha256": "c4253df42c26df8c20982063466bcf8527fc4538317564759cf379f80fde66cf",
-      "bytes": 25576
+      "sha256": "fb24d70e346d27c5ff65ad54307e6fc0225a1d5b08f07b0d20ba3cba27f8a0fe",
+      "bytes": 26153
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R13_EVIDENCE.md",
@@ -1059,8 +1059,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_EVIDENCE.md",
-      "sha256": "94a4bb511a758086a0e8b7eafec1f10888e342a133001c2821f5df69e3fbf24b",
-      "bytes": 13618
+      "sha256": "9f233c0199b9a48364b478624ea0b7cbe1acb7964d2d5df9c32b6acde41c4c7a",
+      "bytes": 14195
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_VOICE_EVIDENCE_PROOF.json",
@@ -1089,8 +1089,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "c70e7b6ab754bceec8e9933675dc441df139c2677cfbccacd19254521376ce53",
-      "bytes": 241673
+      "sha256": "64dc9843e49354c09310f9e09900af86474b6fa01b7c94fcdafbf05f5d19f5a3",
+      "bytes": 244721
     },
     {
       "path": "plans/user-stories.csv",

@@ -23,7 +23,12 @@ or production service changed by this work.
 All 185 distinct affected tests have passing final observations across the final
 affected run and corrected duration-fixture follow-up. The real Core process drill
 passed 40 checks across five kills and six starts; all provider replies are synthetic.
-Typecheck, lint and Desk build passed. Full regression and release seal are pending.
+Typecheck, lint, Desk build and zero-secret scan passed. Final source `d92014c`
+(implementation `aaa5ff7`), tested seal `0621da8`: **447 files / 3,528 tests passed**,
+**7 files / 59 tests skipped**. The opt-in voice drill passed separately; blueprint
+**859/0/0** and release manifest verified. Initial full run had one task-enum
+classification false positive, corrected with an 18-test follow-up before the final
+green run. Production remains on its earlier healthy build.
 See R07_VOICE_RECOVERY_PROOF.json, ADR-075 and runbooks/REQUEST_SOURCE_REVIEW.md.
 
 Next: qualify the isolated Core/Desk/worker/Docling candidate, then the complete real

@@ -220,10 +220,23 @@
     "typecheck": "passed",
     "lint": "passed; 1005 any occurrences within 1053 ceiling; nine existing egress exceptions remain",
     "deskBuild": "passed",
-    "fullRegression": "pending sealed candidate",
+    "fullRegression": {
+      "sourceCommit": "d92014c",
+      "implementationCommit": "aaa5ff7",
+      "sealCommit": "0621da8",
+      "passed": 3528,
+      "failed": 0,
+      "skipped": 59,
+      "filesPassed": 447,
+      "filesSkipped": 7,
+      "durationSeconds": 98.59,
+      "log": "/private/tmp/hawa-voice-workflow-full-final.log",
+      "optInVoiceDrill": "Skipped in ordinary suite; explicit 40-invariant passing drill is recorded in this proof."
+    },
     "securityScan": "passed: zero secrets in committable files",
     "blueprint": "passed: 859 checks, zero warnings/failures",
-    "taskStatusFollowup": "18/18 passed"
+    "taskStatusFollowup": "18/18 passed",
+    "releaseManifest": "verified at sealed candidate; final clean-tree verification required after evidence commit"
   },
   "earlierFailures": [
     {

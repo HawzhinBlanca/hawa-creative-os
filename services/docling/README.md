@@ -24,8 +24,9 @@ Native text order is unverified. Table structure and images are not extracted.
 Every page must yield text; scanned/blank pages, partial conversions and malformed
 PDFs are refused for manual review. A text-bearing scanned page can still omit
 visual information. English synthetic fixtures do not establish Sorani/Arabic PDF
-fidelity. Telegram PDF/voice intake remains open. Desk retention and separately
-approved reference search are described below.
+fidelity. Telegram PDF/voice source intake now uses the reviewed-copy workflow in
+`runbooks/REQUEST_SOURCE_REVIEW.md` (ADRs 073/075); live quality admission remains
+separate. Desk retention and explicitly approved reference search are described below.
 
 ## Disposable acceptance proof
 
