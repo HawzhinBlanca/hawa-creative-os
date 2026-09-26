@@ -30,6 +30,7 @@ import { createTelegramUpdateState } from '../services/telegram-intake/update-st
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
+  readRevisionPhotoDecision, recordRevisionPhotoDecision,
   readRoutingRefusal, recordRoutingRefusal,
   revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests } from '../services/lifecycle-chat-target.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
@@ -176,6 +177,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // A decision must replay even if the flag changed after the first answer was lost.
     const sourceChat = chatOf(update);
     let priorRefusal: Awaited<ReturnType<typeof readRoutingRefusal>> = null;
+    let priorRevisionPhoto: Awaited<ReturnType<typeof readRevisionPhotoDecision>> = null;
     if (db && sourceChat) {
       try {
         const prior = await withRlsContext(db,
@@ -183,9 +185,21 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           async (trx) => ({
             open: await readNewBriefDecision(trx, DEFAULT_TENANT_ID, update.update_id),
             refusal: await readRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id),
+            revisionPhoto: await readRevisionPhotoDecision(trx, DEFAULT_TENANT_ID, update.update_id),
           }));
         priorRefusal = prior.refusal;
-        if (prior.open && priorRefusal) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        priorRevisionPhoto = prior.revisionPhoto;
+        // A valid photo can subsequently hit the daily cap or a missing parent brief.
+        // That refusal replays before the pending image decision; both carry this update hash.
+        if (prior.open && (priorRefusal || priorRevisionPhoto)) {
+          return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        }
+        if (priorRevisionPhoto) {
+          const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+          if (priorRevisionPhoto.payloadHash !== hash || priorRevisionPhoto.chatId !== sourceChat) {
+            return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+          }
+        }
         if (prior.open) {
           const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
           if (prior.open.payloadHash !== hash || prior.open.chatId !== sourceChat) {
@@ -218,7 +232,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     }
 
     // --- lifecycle mode: bind a requester answer to one request, then replay it by update ID ---
-    if (mode === 'lifecycle' || lifecycleOwnsChat(chatOf(update))) {
+    if (mode === 'lifecycle' || lifecycleOwnsChat(chatOf(update)) || priorRevisionPhoto) {
       // The chat's stored request ID is only a hint. A chat can contain more than one request.
       if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
       {
@@ -234,17 +248,18 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           ? lastPhoto.file_id : null;
         const singleCaptionedPhoto = Boolean(media && media === msg && photoFileId &&
           typeof media.caption === 'string' && media.caption.trim() && !media.media_group_id &&
-          !media.reply_to_message && !media.voice && !media.audio && !media.document &&
+          !media.voice && !media.audio && !media.document &&
           !media.video && !media.video_note && !media.animation);
+        const sender = media?.from as { id?: unknown } | undefined;
+        const senderId = String(sender?.id ?? '');
+        const isIntakeOpen = ctx.telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
+        const senderAllowed = !ctx.isProduction || isIntakeOpen ||
+          (ctx.telegramIntakeUsers.length > 0 && ctx.telegramIntakeUsers.includes(senderId));
         const holdMedia = async () => {
           // The current lifecycle open/answer wire shape cannot carry an album, voice note
           // or PDF without silently discarding it. Hold the whole update for an operator until
           // Core has a durable media reference and RequestLifecycle can use that reference.
-          const sender = media?.from as { id?: unknown } | undefined;
-          const senderId = String(sender?.id ?? '');
-          const isIntakeOpen = ctx.telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
-          if (ctx.isProduction && !isIntakeOpen &&
-              (!ctx.telegramIntakeUsers.length || !ctx.telegramIntakeUsers.includes(senderId))) {
+          if (!senderAllowed) {
             return handled(403, { code: 'SENDER_NOT_ALLOWED' });
           }
           const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
@@ -335,7 +350,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 waiting: await waitingLifecycleRequests(trx, TENANT, chatId),
                 links: replyMessageId ? await linkedLifecycleReplies(trx, TENANT, chatId, replyMessageId) : [],
               }));
-            if (replyMessageId && (mode === 'lifecycle' || lifecycleOwnsChat(chatId)) &&
+            if (replyMessageId && (mode === 'lifecycle' || lifecycleOwnsChat(chatId) || priorRevisionPhoto) &&
                 (links.length === 0 || newCommand)) return refuseWithReceipt('STALE_REQUEST_REPLY');
             if (links.length > 1) return refuseWithReceipt('AMBIGUOUS_REQUEST');
             // An explicit new brief may coexist with a waiting request. A reply to a lifecycle
@@ -351,10 +366,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 // established response; a chat flag does not turn them into design tasks.
               } else {
                 const sender = (msg as Record<string, { id?: unknown; first_name?: unknown }>).from;
-                const senderId = String(sender?.id ?? '');
-                const isIntakeOpen = ctx.telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
-                if (ctx.isProduction && !isIntakeOpen &&
-                    (!ctx.telegramIntakeUsers.length || !ctx.telegramIntakeUsers.includes(senderId))) {
+                if (!senderAllowed) {
                   return handled(403, { code: 'SENDER_NOT_ALLOWED' });
                 }
                 if (newBriefText.length > 100_000) return handled(413, { code: 'BRIEF_TOO_LONG' });
@@ -401,7 +413,6 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 }
               }
             }
-            if (singleCaptionedPhoto) return holdMedia();
             const choice = chooseWaitingChatRequest(waiting.map((r) =>
               ({ requestId: r.request_id, rev: Number(r.rev) })), links[0]);
             if (choice.kind === 'ambiguous' || choice.kind === 'stale_reply') {
@@ -409,6 +420,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             }
             const openRequest = choice.kind === 'target'
               ? waiting.find((r) => r.request_id === choice.requestId) : undefined;
+            if (priorRevisionPhoto && priorRevisionPhoto.requestId !== openRequest?.request_id) {
+              return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+            }
             if (openRequest) {
               if (openRequest.stage === 'awaiting_answer' &&
                   (!openRequest.question || !UUID.test(openRequest.question.id))) {
@@ -423,12 +437,30 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               // subsequent revisions increment by 2 each time (office+requester), so round = (rev - 1) / 2.
               const round = Math.max(1, Math.floor((expectedRev - 1) / 2));
               if (round >= 1) {
+                let lifecycleImage = priorRevisionPhoto?.image;
+                if (singleCaptionedPhoto && !lifecycleImage && photoFileId) {
+                  if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+                  if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
+                  const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
+                    (id) => ctx.telegramBridge!.downloadFile(id), photoFileId);
+                  if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
+                  if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
+                  if (photo.kind === 'unsupported') return holdMedia();
+                  const stored = await withRlsContext(db,
+                    { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                    (trx) => recordRevisionPhotoDecision(trx, TENANT, update.update_id,
+                      { requestId, chatId, payloadHash, image: photo.ref }));
+                  if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
+                      stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+                  lifecycleImage = stored.image;
+                }
                 const sourceEventId = `lc-${requestId}-r${round}-u${update.update_id}`;
                 const key = `${requestId}:${nextRev}:requesterRevisionIntake:u${update.update_id}`;
                 const projected = await projectLifecycleRequesterRevisionWithIntake(db, {
                   requestId, tenantId: TENANT, priorTaskId: openRequest.current_task_id,
                   round, directive, sourceEventId, sourceChannelId: chatId,
                   rawText: directive, sourceUpdateHash: payloadHash, sourceUpdate: update,
+                  ...(lifecycleImage ? { lifecycleImage } : {}),
                   clientId: openRequest.client_id,
                   ...(questionId ? { questionId } : {}),
                   expectedRev, rev: nextRev, key,
@@ -443,6 +475,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 });
               }
             }
+            if (singleCaptionedPhoto) return holdMedia();
             // Not in manual stage or no open request → fall through to legacy intake.
           } catch (err) {
             if (err instanceof LifecycleProjectionConflict) {

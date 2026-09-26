@@ -1,5 +1,6 @@
 /** PostgreSQL reads used to bind a Telegram reply to one RequestLifecycle owner. */
 import { sql, type Database, type Kysely } from '@hawa/db';
+import { parseBlobRef, type BlobRef } from '@hawa/contracts';
 import type { ChatIntake } from './chat-intake.js';
 import type { RequesterRevisionWithIntakeResult } from './lifecycle-projection.js';
 
@@ -22,6 +23,44 @@ export interface NewBriefDecision {
   chatId: string;
   payloadHash: string;
   draft: ChatIntake;
+}
+
+export interface RevisionPhotoDecision {
+  requestId: string;
+  chatId: string;
+  payloadHash: string;
+  image: BlobRef;
+}
+
+/** A downloaded revision photo survives a crash before its child task is projected. */
+export async function readRevisionPhotoDecision(trx: Kysely<Database>, tenantId: string,
+  updateId: number): Promise<RevisionPhotoDecision | null> {
+  const row = (await sql<{ payload: Record<string, unknown>; payload_hash: string }>`SELECT payload, payload_hash
+    FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
+      AND source_account_id = 'lifecycle_chat_revision_photo' AND source_event_id = ${String(updateId)}
+      AND event_kind = 'lifecycle_revision_photo_decision'
+    LIMIT 1`.execute(trx)).rows[0];
+  if (!row) return null;
+  const { requestId, chatId } = row.payload;
+  const image = parseBlobRef(row.payload.image);
+  if (typeof requestId !== 'string' || typeof chatId !== 'string' || !image ||
+      !['image/png', 'image/jpeg', 'image/webp'].includes(image.mediaType) ||
+      image.size > 20 * 1024 * 1024) throw new Error('Invalid stored revision-photo decision');
+  return { requestId, chatId, payloadHash: row.payload_hash, image };
+}
+
+export async function recordRevisionPhotoDecision(trx: Kysely<Database>, tenantId: string,
+  updateId: number, decision: RevisionPhotoDecision): Promise<RevisionPhotoDecision> {
+  await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id,
+      event_kind, payload, payload_hash, verified)
+    VALUES (${tenantId}::uuid, 'lifecycle_chat_revision_photo', ${String(updateId)},
+      'lifecycle_revision_photo_decision',
+      ${JSON.stringify({ requestId: decision.requestId, chatId: decision.chatId,
+        image: decision.image })}::jsonb, ${decision.payloadHash}, true)
+    ON CONFLICT DO NOTHING`.execute(trx);
+  const stored = await readRevisionPhotoDecision(trx, tenantId, updateId);
+  if (!stored) throw new Error('Revision-photo decision was not stored');
+  return stored;
 }
 
 /** The Core decision is durable before ChatInbox sends RequestLifecycle.open. */

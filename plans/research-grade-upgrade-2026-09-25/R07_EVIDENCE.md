@@ -1,5 +1,37 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — requester revision and clarification photos stay with their request (ADR-062)
+
+Core now admits a captioned single Telegram photo as a requester revision or Studio
+clarification answer only after the current lifecycle request is selected. An exact
+reply to its notice identifies one request; an unlinked photo in a chat with two
+waiting requests is refused before download. Core stores the validated bytes by
+content hash and commits a separate decision bound to the update hash, chat and
+request. The pending decision protects the blob from garbage collection. A fresh
+Core can finish projection from that decision even if the chat flag and Telegram
+download are unavailable. The projection checks the exact decision and blob metadata,
+then attaches the file to the new child task in the same transaction as task
+ownership, request revision and replay receipt. Studio reads that task-owned image.
+The worker receives the existing child task identity and directive, without image
+bytes. Requirements: FR-011, FR-060, NFR-001 and NFR-006.
+
+**Verification:** focused Core intake and schema-upgrade checks passed **2 files /
+33 tests**. They cover two simultaneous requests, exact reply selection, task-only
+file binding, Studio retrieval, a photo clarification answer, no second download
+after flag rollback, a saved-decision restart fixture, ambiguous-chat refusal,
+changed-update conflict and pending-decision garbage-collector retention. Repository
+lint and full source/test TypeScript checks passed. The exact source suite, excluding
+only the unsealed release-manifest gate, passed **425 files / 3,292 tests**, with
+**4 files / 51 tests skipped**. Its first run had 3,291 passes and one stale
+newest-migration test assertion; that assertion was updated for migration 033, and
+the complete suite then passed. The release seal follows the source commit.
+
+**Limit:** These are isolated PostgreSQL and fake Telegram checks. The restart fixture
+recreates Core after a committed decision; it is not a killed Docker process or a
+live Telegram receipt. Albums, captionless photos, voice, documents and PDFs remain
+on the explicit hold path. Real creative use and human approval remain open, and
+the production lifecycle chat flag stays off.
+
 ## 2026-09-26 — a single captioned photo belongs to its lifecycle request (ADR-061)
 
 Core now accepts a single Telegram photo with a caption when the message resolves to

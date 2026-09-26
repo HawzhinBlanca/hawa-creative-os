@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { CHANNEL_INGRESS_USER_ID } from '@hawa/contracts';
+import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef } from '@hawa/contracts';
 import { parseCompleteRevisionRequest, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
 import { IdempotencyConflictError, OUTBOX_SEND_MARK_SOURCE, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
-import { readNewBriefDecision } from './lifecycle-chat-target.js';
+import { readNewBriefDecision, readRevisionPhotoDecision } from './lifecycle-chat-target.js';
 import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage } from './canva-status-message.js';
@@ -548,6 +548,8 @@ export interface RequesterRevisionWithIntakeProjection {
   sourceUpdateHash: string;
   /** The verified ingress update saved with the child task for source audit and replay. */
   sourceUpdate: unknown;
+  /** Core-stored image for this exact update and selected request, if present. */
+  lifecycleImage?: BlobRef;
   /** The client the prior task belongs to (carried forward to the new task). */
   clientId: string | null;
   /** Current request revision (manual stage). rev = expectedRev + 1. */
@@ -582,6 +584,23 @@ export async function projectLifecycleRequesterRevisionWithIntake(
   if (!/^[a-f0-9]{64}$/.test(input.sourceUpdateHash)) {
     throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The Telegram source update hash is invalid');
   }
+  if (createHash('sha256').update(JSON.stringify(input.sourceUpdate)).digest('hex') !== input.sourceUpdateHash) {
+    throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The Telegram update differs from its source hash');
+  }
+  const source = input.sourceUpdate && typeof input.sourceUpdate === 'object'
+    ? input.sourceUpdate as Record<string, unknown> : null;
+  const sourceMessage = source?.message && typeof source.message === 'object'
+    ? source.message as Record<string, unknown> : null;
+  const sourceImage = sourceMessage?.photo;
+  if (Boolean(sourceImage) !== Boolean(input.lifecycleImage)) {
+    throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'A requester photo requires its stored image decision');
+  }
+  if (input.lifecycleImage && (!parseBlobRef(input.lifecycleImage) ||
+      !Array.isArray(sourceImage) || sourceImage.length === 0 ||
+      typeof sourceMessage?.caption !== 'string' || sourceMessage.caption.trim() !== directive.trim() ||
+      !Number.isSafeInteger(source?.update_id) || Number(source?.update_id) <= 0)) {
+    throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The requester image does not match a captioned Telegram photo');
+  }
   if (input.questionId !== undefined && !/^[0-9a-f-]{36}$/i.test(input.questionId)) {
     throw new LifecycleProjectionConflict('WRONG_STAGE', 'The answer has no valid question identity');
   }
@@ -612,6 +631,20 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     }
     if (request.chat_id !== sourceChannelId) {
       throw new LifecycleProjectionConflict('WRONG_CHAT', 'The update chat does not match the request');
+    }
+    if (input.lifecycleImage) {
+      const decision = await readRevisionPhotoDecision(trx, tenantId, Number(source!.update_id));
+      if (!decision || decision.requestId !== requestId || decision.chatId !== sourceChannelId ||
+          decision.payloadHash !== input.sourceUpdateHash ||
+          canonical(decision.image) !== canonical(input.lifecycleImage)) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The image is not bound to this requester revision');
+      }
+      const blob = (await sql<{ size: string; media_type: string }>`SELECT size, media_type
+        FROM hawa.blobs WHERE sha256 = ${input.lifecycleImage.sha256}`.execute(trx)).rows[0];
+      if (!blob || Number(blob.size) !== input.lifecycleImage.size ||
+          blob.media_type !== input.lifecycleImage.mediaType) {
+        throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The requester image is not stored');
+      }
     }
     // A revision edits the prior design. Keep its factual copy, format and studio policy;
     // the new Telegram text supplies only the change directive.
@@ -684,6 +717,10 @@ export async function projectLifecycleRequesterRevisionWithIntake(
       .where('tenant_id', '=', tenantId).where('id', '=', newTaskId).where('request_id', 'is', null)
       .returning('id').executeTakeFirst();
     if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The new task acquired another request owner');
+    if (input.lifecycleImage) {
+      await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
+        VALUES (${tenantId}::uuid, ${newTaskId}::uuid, ${input.lifecycleImage.sha256}, 'reference_image')`.execute(trx);
+    }
     if (question) {
       const closed = await closeAnsweredQuestion(trx, { tenantId, taskId: priorTaskId,
         revisionTaskId: newTaskId, actorId: CHANNEL_INGRESS_USER_ID });
