@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-26T09:56:00+03:00",
+  "generatedAt": "2026-09-26T10:20:00+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "fb4727bb5db6f3aa5f289ef1191eaab8e6d8ede5",
+    "commit": "09ef4f67bad5cfa38ac8270bc069b3d1fd10a7a6",
     "treeClean": true,
-    "commitTimestamp": "2026-09-26T09:56:00+03:00",
+    "commitTimestamp": "2026-09-26T10:20:00+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
@@ -73,7 +73,7 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "bb8c8270b73df615a724ca3758e0c01f95cc936989f9d3669a21a970f6299a43",
+      "apps/core/src/services/canva-design-planner.ts": "b174650df9a01cd044b997fec85fa0ff79dafc066f912c440601fe008e0a8901",
       "packages/creative/src/studio/layout-generator-v3.ts": "c0a14f8490fbebf171fd3c820acecf53f45255926e4ae9f0e55376bb3f469164",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "950d7d5f1701c9a80871f74843e59115b3440c73bade98b6d80a755f12d36889",
       "packages/creative/src/studio/box-critique-v3.ts": "34c2d9b4f8d194ee0e0d8cec0229c3d1a12fbf07a8a5be94c94461f2456672c4"
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "aa5b482c4a089ad8f9ccffe8bc183b77937a65ae65502e80afe9741ec0647dd8"
+  "sha256": "08a256acd8819a7b1af9b82c2aa83eba3cd6356ac82d2e94ab2340e4883cbaf6"
 }
