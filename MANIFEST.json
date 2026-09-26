@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T17:52:19Z",
+  "generatedAt": "2026-09-26T18:37:12Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 332,
+  "fileCount": 333,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "51663231300f3f5beb0c8d39d8aaae9e82cb7951c1b6bf7f98e7a4cb81952407",
+      "sha256": "1b25a38f61f75feb17e749e2b21afbbf6430bf3cd4c937d77d644a9c1d7d685c",
       "bytes": 3973
     },
     {
@@ -396,6 +396,11 @@
       "path": "adrs/065_chat_review_desk_handoff.md",
       "sha256": "31b088ae5af6e5a84b3d07bd86836003a5b9a417727f9f223d182bcd4572d38a",
       "bytes": 2456
+    },
+    {
+      "path": "adrs/066_registered_client_desk_scope.md",
+      "sha256": "a0b3254399d697352292e111348e8561bcce6b1d688cd3fae460a74e8bf26dbb",
+      "bytes": 1736
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -844,8 +849,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "f1b95544aa9264f2eb5d424aec92d6e0f3330278abed9c1a11a09550d24f7fb7",
-      "bytes": 13113
+      "sha256": "68fcc7a8961868518d2061b988ea8b0b6de6aa8ba1c7b75e59a2f86fe9ba44aa",
+      "bytes": 14302
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -924,8 +929,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R11_EVIDENCE.md",
-      "sha256": "135c237a3e05690b2a5060afed8c90c9099cfe43ff951e3af56b960505ff5e88",
-      "bytes": 14761
+      "sha256": "9e0c83f56afdd9dd5d288d90dea680d5f86a2b7a0cde766afb265e4da5c34a28",
+      "bytes": 17496
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R12_EVIDENCE.md",
@@ -989,8 +994,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "ef25d8abe0edbd4280cc1d9344190e71778761ddcdf9b2aebca83b9f32c4e600",
-      "bytes": 189259
+      "sha256": "d949e34fd40cb717d22ab3961cbbe732bb64e38678b537c6102cc1709161e51b",
+      "bytes": 191001
     },
     {
       "path": "plans/user-stories.csv",
