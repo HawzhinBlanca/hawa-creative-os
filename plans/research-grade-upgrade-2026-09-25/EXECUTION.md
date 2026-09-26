@@ -23,8 +23,7 @@ ranking. Concurrent/replayed decisions and uncertain browser responses reconcile
 without reactivating a revoked source. No automatic model context or DNA activation.
 
 Focused checks passed **9 files / 71 tests**; source/test typecheck, lint, Desk build
-and secret scan passed. Full regression and candidate sealing follow the source
-commit. See ADR-072, `R12_EVIDENCE.md` and `R12_DOCUMENT_KNOWLEDGE_PROOF.json`.
+and secret scan passed. **Sealed regression:** source `dbf1646`, seal `7694ef9` passed **442 files / 3440 tests**, with **4 files / 56 tests skipped**. Blueprint **843/0/0** and clean-tree release manifest verified; production flags remain off. This evidence-only recording changes no implementation. See ADR-072, `R12_EVIDENCE.md` and `R12_DOCUMENT_KNOWLEDGE_PROOF.json`.
 R12 remains in progress: real corpus relevance/latency, vector/reranker and cited
 Design Plans, Telegram PDF/voice, live Workspace/provider/export/reopen/restore and
 independent human-quality admission remain open. Production remains unchanged.

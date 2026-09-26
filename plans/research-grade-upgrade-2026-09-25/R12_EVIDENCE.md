@@ -46,7 +46,7 @@ These fixtures do not establish real office PDF fidelity or retrieval relevance.
 
 **Checks:** source and included-test typecheck, lint (1006 existing `any`, unchanged;
 9 existing provider-egress exceptions), Desk build and zero-secret scan passed.
-The complete regression and clean-tree release seal follow the source commit.
+**Sealed regression:** source `dbf1646`, seal `7694ef9` passed **442 files / 3440 tests**, with **4 files / 56 tests skipped**. Blueprint **843/0/0** and clean-tree release manifest verified; production flags remain off. This evidence-only recording changes no implementation.
 
 **Failed runs retained:** five initial red-before acceptance failures were missing
 routes. The first DB run passed 8/failed 1 because a removed client membership is

@@ -23,7 +23,7 @@
     "lint": "passed",
     "deskBuild": "passed",
     "secretScan": "passed_zero_secrets",
-    "fullRegression": "pending_sealed_run"
+    "fullRegression": "passed_on_sealed_source_candidate"
   },
   "testFiles": [
     "apps/core/test/document-knowledge.test.ts",
@@ -80,6 +80,22 @@
     "types-final": "4d197d29898f91b1ad1f8a6e148d451b549947f8580b26bca3c8515c31abced9",
     "lint": "5984de6934a7db84ee4a6d7011c820798382119ba5acf0fa8d8ac07a5b1dece6",
     "desk": "d020d00bac8e7c71c869ad84e8d4fa9a7dc348145c56cfb02407cf1320e9f107",
-    "security": "2326d2626fe4728800a41c19e154accd75acec0b817eb884ab2278d41cee437f"
+    "security": "2326d2626fe4728800a41c19e154accd75acec0b817eb884ab2278d41cee437f",
+    "full": "046724dd8f22730ad39eb62a6c4974b51b9b34fe084d990a9dcd73ef96830921",
+    "manifest": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6",
+    "blueprint": "b4b9e7eb53ea738910652e05452150a9fde9274cc87d9c0ddd75092dad4ae71e"
+  },
+  "sealedRegression": {
+    "sourceCommit": "dbf1646fbe52b5a23ad79b1eab088ff711927854",
+    "testedSealCommit": "7694ef99430a605ecbbf50b9b87931e228b7872d",
+    "filesPassed": 442,
+    "filesSkipped": 4,
+    "testsPassed": 3440,
+    "testsSkipped": 56,
+    "blueprintPassed": 843,
+    "blueprintWarnings": 0,
+    "blueprintFailed": 0,
+    "releaseManifest": "verified",
+    "productionFlags": "off"
   }
 }
