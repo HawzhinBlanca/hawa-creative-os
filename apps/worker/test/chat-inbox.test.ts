@@ -168,6 +168,18 @@ describe('ChatInbox.handleUpdate', () => {
     expect(ctx.runs.filter((r) => r === 'park')).toHaveLength(3);
   });
 
+  it('parks a flagged media hold before advancing the chat and does not park twice on replay', async () => {
+    const ctx = new FakeContext();
+    ctx.crashOnSet = 1;
+    const c = core([async () => ({ kind: 'done', intakeStatus: 422,
+      lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED',
+      reason: 'A lifecycle chat media update needs operator review; no task was started' })]);
+    expect(await untilSettled(ctx, () => handleUpdate(ctx, input, c))).toMatchObject({ outcome: 'parked', attempts: 1 });
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(c.park).toHaveBeenCalledTimes(1);
+    expect(ctx.state.get('inbox')).toMatchObject({ lastOutcome: 'parked', lastUpdateId: update.update_id });
+  });
+
   it('is bound as a Virtual Object named ChatInbox, whose handleUpdate keeps idempotency keys for 7 days', () => {
     expect(chatInbox.name).toBe('ChatInbox');
     const options = (chatInbox as any).handlers?.handleUpdate ?? (chatInbox as any).object?.handleUpdate;
@@ -218,6 +230,17 @@ describe('the Core client ChatInbox uses', () => {
       lifecycleAction: 'revision-blocked', code: 'PARENT_BRIEF_MISSING', chatId: '555' }));
     expect(await c.intake(update, 'lifecycle')).toMatchObject({
       kind: 'done', lifecycleAction: 'revision-blocked', code: 'PARENT_BRIEF_MISSING', chatId: '555' });
+  });
+
+  it('passes a flagged media hold to ChatInbox for durable parking', async () => {
+    const c = client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 422,
+      lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED', chatId: '555',
+      reason: 'A lifecycle chat media update needs operator review; no task was started' }));
+    expect(await c.intake(update, 'legacy')).toMatchObject({ kind: 'done',
+      lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+    const invalid = client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 422,
+      lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED', chatId: '555' }));
+    await expect(invalid.intake(update, 'legacy')).rejects.toThrow('invalid media hold');
   });
 
   it('passes a verified clarification answer to the same request', async () => {

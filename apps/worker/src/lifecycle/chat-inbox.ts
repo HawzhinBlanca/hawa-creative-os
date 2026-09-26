@@ -44,12 +44,13 @@ export type IntakeAnswer =
   | { kind: 'done'; intakeStatus: number; duplicate?: boolean;
       /** When mode=lifecycle and Core routed the update as a requester revision. */
       lifecycleAction?: 'open-request' | 'new-brief-required' | 'requester-revision' | 'requester-answer' |
-        'request-choice-required' | 'revision-blocked';
+        'request-choice-required' | 'revision-blocked' | 'park-update';
       draft?: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'];
       requestId?: string; newTaskId?: string; round?: number; directive?: string;
       priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
       code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
-        'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING'; }
+        'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' | 'LIFECYCLE_MEDIA_NOT_ADMITTED';
+      reason?: string; }
   | { kind: 'retry'; reason: string };
 
 /** The Core calls ChatInbox makes (core-client.ts). A thrown error means "wait and try again". */
@@ -132,6 +133,16 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
 
   const at = await ctx.now();
   if (done) {
+    if (done.lifecycleAction === 'park-update') {
+      if (done.code !== 'LIFECYCLE_MEDIA_NOT_ADMITTED' || !done.reason) {
+        throw new Error('Core returned an invalid lifecycle media hold');
+      }
+      await ctx.run('park', () => core.park(update, done.reason!));
+      ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at,
+        ...(mode === 'lifecycle' ? { mode, requestId: lifecycleRequestId } : {}),
+      } satisfies ChatInboxView);
+      return { outcome: 'parked', intakeStatus: done.intakeStatus, attempts: reasons.length + 1 };
+    }
     if (done.lifecycleAction === 'open-request') {
       if (!done.requestId || !done.chatId || !done.draft) throw new Error('Core returned an incomplete lifecycle open');
       const event = { v: 1 as const, eventId: `open:${done.requestId}`, requestId: done.requestId,

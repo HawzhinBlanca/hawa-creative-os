@@ -183,6 +183,70 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
+  it('does not send a flagged captioned photo through legacy task creation', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const update = brief(updateId(), chat);
+    delete (update.message as any).text;
+    (update.message as any).caption = 'KAAE members evening\n---\nDecember 4, 2026\nErbil';
+    (update.message as any).photo = [{ file_id: 'photo-fixture', file_size: 128 }];
+    const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64');
+    const bridge = { downloadFile: vi.fn(async () => photo),
+      dispatchOutboundMessage: vi.fn(async () => ({ success: true })) };
+    const app = createApp({ db, telegramBridge: bridge } as any);
+    const result = await intake(app, update);
+    expect(result.body).toMatchObject({ intakeStatus: 422,
+      lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+    expect(await tasksInChat(chat)).toHaveLength(0);
+    expect(bridge.downloadFile).not.toHaveBeenCalled();
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
+    expect((await intake(createApp({ db } as any), update)).body).toMatchObject({
+      intakeStatus: 422, lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+    const altered = structuredClone(update);
+    (altered.message as any).caption = 'KAAE members evening\n---\nDecember 5, 2026\nErbil';
+    expect((await intake(createApp({ db } as any), altered)).body).toMatchObject({
+      intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    expect(await tasksInChat(chat)).toHaveLength(0);
+  });
+
+  it('holds voice, PDF and album parts when the stored chat mode is lifecycle', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
+    const app = createApp({ db } as any);
+    for (const media of [
+      { voice: { file_id: 'voice-fixture', duration: 5 }, caption: 'The exact spoken brief' },
+      { document: { file_id: 'pdf-fixture', mime_type: 'application/pdf', file_name: 'brand.pdf' }, caption: 'Use these guidelines' },
+      { photo: [{ file_id: 'album-fixture' }], media_group_id: 'album-1' },
+    ]) {
+      const chat = chatId();
+      const update = brief(updateId(), chat);
+      delete (update.message as any).text;
+      Object.assign(update.message, media);
+      const result = await intake(app, update, 'lifecycle');
+      expect(result.body).toMatchObject({ intakeStatus: 422,
+        lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+      expect(await tasksInChat(chat)).toHaveLength(0);
+    }
+  });
+
+  it('holds media in channel posts and edited messages before legacy intake can see it', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    for (const kind of ['channel_post', 'edited_message'] as const) {
+      const chat = chatId();
+      vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+      const update = brief(updateId(), chat) as any;
+      update[kind] = { ...update.message, photo: [{ file_id: `${kind}-fixture` }],
+        caption: 'New design with this image' };
+      delete update[kind].text;
+      delete update.message;
+      const result = await intake(createApp({ db } as any), update);
+      expect(result.body).toMatchObject({ intakeStatus: 422,
+        lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+      expect(await tasksInChat(chat)).toHaveLength(0);
+    }
+  });
+
   it('keeps an existing Core chat on legacy intake until the sender explicitly starts a separate brief', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();

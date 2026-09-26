@@ -64,7 +64,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         intakeStatus?: number; code?: string; duplicate?: boolean; title?: string;
         lifecycleAction?: string; requestId?: string; newTaskId?: string;
         round?: number; directive?: string; priorTaskId?: string; rawText?: string;
-        chatId?: string; questionId?: string; draft?: unknown;
+        chatId?: string; questionId?: string; draft?: unknown; reason?: string;
       };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
@@ -84,6 +84,13 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
           }
           if (body.lifecycleAction === 'new-brief-required' && body.chatId) {
             return { ...base, lifecycleAction: 'new-brief-required', chatId: body.chatId };
+          }
+          if (body.lifecycleAction === 'park-update') {
+            if (body.code !== 'LIFECYCLE_MEDIA_NOT_ADMITTED' || !body.chatId || !body.reason) {
+              throw new Error(`Core returned an invalid media hold for update ${update.update_id}`);
+            }
+            return { ...base, lifecycleAction: 'park-update', code: body.code,
+              chatId: body.chatId, reason: body.reason };
           }
           if ((body.lifecycleAction === 'requester-revision' ||
                (body.lifecycleAction === 'requester-answer' && body.questionId)) &&

@@ -19,7 +19,7 @@ import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, query, res
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
   approve, briefToDraft, chatInboxInvocations, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
-  sendToChatInbox, sentTo, sleep, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
+  OFFICE_CHAT, sendToChatInbox, sentTo, sleep, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
 } from './driver/scenario.js';
 
 const enabled = process.env.HAWA_CHAOS === '1';
@@ -495,6 +495,48 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
             detail: JSON.stringify(inbox) },
           { name: 'Telegram offset passed the update', ok: offset >= updateId,
             detail: `offset=${offset} update=${updateId}` },
+        ];
+      },
+    };
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+
+  scenario('R1.S3.MEDIA', 'flagged chat: a captioned image is parked once, alerted, and never creates a legacy task', async (chat, events) => {
+    const update = imageDocumentUpdate(chat, 'lifecycle-photo', 128,
+      'KAAE members evening\n---\nDecember 4, 2026\nErbil');
+    const [updateId] = await fakes.updates([update]);
+    const polled = { ...update, update_id: updateId };
+    events.push(`captioned image update ${updateId} in flagged chat ${chat}`);
+    await waitUntil('the media update to be parked', async () => {
+      const rows = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
+        WHERE source_account_id = 'telegram' AND source_event_id = ${`parked-update-${updateId}`}`);
+      return Number(rows[0]?.n) === 1 ? true : null;
+    });
+    const replay = await sendToChatInbox(chat, polled, `chaos-media-replay-${updateId}`);
+    events.push(`duplicate media update under a second Restate key: HTTP ${replay}`);
+    return { delivered: false, skipRequestChecks: true,
+      extra: [{ name: 'second media update accepted for replay', ok: replay === 200 || replay === 202,
+        detail: `HTTP ${replay}` }],
+      after: async () => {
+        const tasks = await tasksOfChat(chat);
+        const rows = await query<{ source_account_id: string }>(sql`SELECT source_account_id
+          FROM hawa.inbox_events WHERE source_event_id IN (${String(updateId)}, ${`parked-update-${updateId}`})
+            AND source_account_id IN ('lifecycle_chat_routing', 'telegram')`);
+        const notices = (await sentTo(chat)).filter((s) => s.method === 'sendMessage' &&
+          s.text?.includes('could not process it automatically'));
+        const alerts = (await sentTo(OFFICE_CHAT)).filter((s) => s.method === 'sendMessage' &&
+          s.text?.includes(String(updateId)));
+        const inbox = (await chatInboxInvocations(chat)).filter((item) =>
+          item.idempotency_key === `tg-${updateId}` || item.idempotency_key === `chaos-media-replay-${updateId}`);
+        return [
+          { name: 'no legacy task created', ok: tasks.length === 0, detail: `tasks=${tasks.length}` },
+          { name: 'one routing receipt and one parked update', ok: rows.length === 2 &&
+            rows.filter((r) => r.source_account_id === 'telegram').length === 1 &&
+            rows.filter((r) => r.source_account_id === 'lifecycle_chat_routing').length === 1,
+            detail: JSON.stringify(rows) },
+          { name: 'one sender notice and one office alert', ok: notices.length === 1 && alerts.length === 1,
+            detail: `sender=${notices.length} office=${alerts.length}` },
+          { name: 'both media intake invocations completed', ok: inbox.length === 2 &&
+            inbox.every((item) => item.status === 'completed'), detail: JSON.stringify(inbox) },
         ];
       },
     };

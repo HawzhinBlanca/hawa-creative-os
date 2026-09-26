@@ -1,5 +1,38 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — flagged media is held instead of creating a wrong-owner task
+
+A red-before PostgreSQL test showed that a captioned photo in a flagged chat returned
+`intakeStatus: 201` and created a legacy Core task: lifecycle intake inspected only
+`message.text`, so the media and caption bypassed its new-brief route. Core now records
+a hash-bound refusal for lifecycle media before legacy intake can create a task.
+ChatInbox journals that answer, parks the update through Core's durable dead-letter
+path, and leaves one follow-up notice for the requester and one office alert. An
+identical update still replays the refusal after a flag rollback; changed content
+under the same update ID conflicts. The guard covers photo, album part, voice, audio,
+document, video, animation, caption, channel post and edited message carriers. Its
+production sender check uses the existing Telegram intake allowlist. ADR-059 records
+why the route holds the complete update until the lifecycle media contract exists.
+Requirements: FR-060 and NFR-001.
+
+**Verification:** the final focused Core/worker tests passed **2 files / 50 tests**,
+including a journal replay of the hold, changed-payload conflict, flag rollback,
+photo, voice, PDF, album part, channel post and edited message. The isolated Docker
+Telegram/Core/Restate/PostgreSQL scenario `R1.S3.MEDIA` passed on the final source:
+two deliveries under distinct Restate keys produced **zero tasks**, one routing
+receipt, one parked update, one requester notice and one office alert. Both intake
+invocations completed, and the fake-provider network recorded no unmatched model
+calls. Repository lint and full source/test typecheck passed. The source suite,
+excluding only the intentionally unsealed release-manifest gate, passed **425 files /
+3,285 tests**, with **4 files / 50 tests skipped**. Blueprint validation and the
+sealed-tree release gate follow the evidence commit.
+
+**Limit:** Media is deliberately parked and requires office follow-up; it is not yet
+usable as image, voice or guideline input for a lifecycle design. This run does not
+prove album grouping, durable media retrieval, process-kill recovery during media
+download, a live Telegram receipt or the final release gate. The production
+lifecycle chat flag remains off.
+
 ## 2026-09-26 — real Core-kill replay of the first flagged brief
 
 The first disposable-stack run exposed a Restate 570 nondeterminism error after Core

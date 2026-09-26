@@ -108,7 +108,8 @@ export async function waitingLifecycleRequests(trx: Kysely<Database>, tenantId: 
 export interface LinkedLifecycleReply { requestId: string; rev: number }
 
 export interface RoutingRefusal { code: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' |
-  'DAILY_CAP_REACHED' | 'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING'; chatId: string;
+  'DAILY_CAP_REACHED' | 'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' |
+  'LIFECYCLE_MEDIA_NOT_ADMITTED'; chatId: string;
   payloadHash: string }
 
 export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string,
@@ -121,7 +122,7 @@ export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string
   const chatId = row?.payload?.chatId;
   if (!row || (code !== 'AMBIGUOUS_REQUEST' && code !== 'STALE_REQUEST_REPLY' &&
       code !== 'DAILY_CAP_REACHED' && code !== 'PARENT_BRIEF_MISSING' &&
-      code !== 'QUESTION_MISSING') ||
+      code !== 'QUESTION_MISSING' && code !== 'LIFECYCLE_MEDIA_NOT_ADMITTED') ||
       typeof chatId !== 'string') return null;
   return { code, chatId, payloadHash: row.payload_hash };
 }
@@ -132,7 +133,7 @@ export async function recordRoutingRefusal(trx: Kysely<Database>, tenantId: stri
   await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id,
       event_kind, payload, payload_hash, verified)
     VALUES (${tenantId}::uuid, 'lifecycle_chat_routing', ${String(updateId)},
-      'lifecycle_request_choice_required',
+      ${refusal.code === 'LIFECYCLE_MEDIA_NOT_ADMITTED' ? 'lifecycle_media_not_admitted' : 'lifecycle_request_choice_required'},
       ${JSON.stringify({ code: refusal.code, chatId: refusal.chatId })}::jsonb,
       ${refusal.payloadHash}, true)
     ON CONFLICT DO NOTHING`.execute(trx);

@@ -41,3 +41,18 @@ second task. Deliberate refusal is preferable to guessing when a message could b
 new brief or a change to an older request. Media and callback variants require their
 own admission tests before broad cutover; the live flag remains off until the full
 canary and recovery gates pass.
+
+## Addendum: media ownership at the cutover boundary (2026-09-26)
+
+A flagged photo with a caption was observed creating a legacy task because lifecycle
+intake read only `message.text`. Until the lifecycle contract can carry durable media
+references and the design run can read them, Core records a hash-bound routing refusal
+for photos, albums, voice, audio, documents, videos and captions in a lifecycle chat,
+including channel posts and edited messages. The production sender allowlist is checked
+before recording a new hold. ChatInbox parks the
+whole update through Core's durable dead-letter and office-alert path and sends the
+requester the existing follow-up notice. Repeating the update after a flag rollback
+replays the refusal; a changed payload under the same update ID conflicts. This is an
+interim ownership fence, not media support. Full cutover still requires Core-owned
+downloads, a retained content reference outside the Restate journal, image and voice
+use in the correct request, album grouping, and process-kill tests of those paths.

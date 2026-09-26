@@ -166,23 +166,40 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
 
     // A decision must replay even if the flag changed after the first answer was lost.
     const sourceChat = chatOf(update);
+    let priorRefusal: Awaited<ReturnType<typeof readRoutingRefusal>> = null;
     if (db && sourceChat) {
       try {
-        const priorOpen = await withRlsContext(db,
+        const prior = await withRlsContext(db,
           { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
-          (trx) => readNewBriefDecision(trx, DEFAULT_TENANT_ID, update.update_id));
-        if (priorOpen) {
+          async (trx) => ({
+            open: await readNewBriefDecision(trx, DEFAULT_TENANT_ID, update.update_id),
+            refusal: await readRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id),
+          }));
+        priorRefusal = prior.refusal;
+        if (prior.open && priorRefusal) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        if (prior.open) {
           const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
-          if (priorOpen.payloadHash !== hash || priorOpen.chatId !== sourceChat) {
+          if (prior.open.payloadHash !== hash || prior.open.chatId !== sourceChat) {
             return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
           }
           return handled(200, { duplicate: true, lifecycleAction: 'open-request',
-            requestId: priorOpen.requestId, chatId: sourceChat, draft: priorOpen.draft });
+            requestId: prior.open.requestId, chatId: sourceChat, draft: prior.open.draft });
         }
       } catch (err) {
         if ((err as { status?: number })?.status === 503) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
         throw err;
       }
+    }
+
+    // A media update parked while this chat used RequestLifecycle must not become a legacy task
+    // when a rollback changes the chat flag before Telegram repeats the same update ID.
+    if (priorRefusal?.code === 'LIFECYCLE_MEDIA_NOT_ADMITTED') {
+      const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+      if (priorRefusal.payloadHash !== hash || priorRefusal.chatId !== sourceChat) {
+        return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+      }
+      return handled(422, { code: priorRefusal.code, lifecycleAction: 'park-update',
+        chatId: sourceChat, reason: 'A lifecycle chat media update needs operator review; no task was started' });
     }
 
     // --- lifecycle mode: bind a requester answer to one request, then replay it by update ID ---
@@ -193,6 +210,33 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         // Extract the directive text from the Telegram update.
         const msg = (update as Record<string, unknown>).message;
         const cbq = (update as Record<string, unknown>).callback_query;
+        const chatId: string = chatOf(update);
+        const carrier = update.message ?? update.edited_message ?? update.channel_post;
+        const media = carrier && typeof carrier === 'object' ? carrier as Record<string, unknown> : null;
+        if (media && chatId && (media.photo || media.voice || media.audio || media.document ||
+            media.video || media.video_note || media.animation || media.caption)) {
+          // The current lifecycle open/answer wire shape cannot carry a photo, album, voice note
+          // or PDF without silently discarding it. Hold the whole update for an operator until
+          // Core has a durable media reference and RequestLifecycle can use that reference.
+          const sender = media.from as { id?: unknown } | undefined;
+          const senderId = String(sender?.id ?? '');
+          const isIntakeOpen = ctx.telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
+          if (ctx.isProduction && !isIntakeOpen &&
+              (!ctx.telegramIntakeUsers.length || !ctx.telegramIntakeUsers.includes(senderId))) {
+            return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+          }
+          const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+          const stored = await withRlsContext(db,
+            { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+            (trx) => recordRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id,
+              { code: 'LIFECYCLE_MEDIA_NOT_ADMITTED', chatId, payloadHash }));
+          if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
+              stored.code !== 'LIFECYCLE_MEDIA_NOT_ADMITTED') {
+            return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+          }
+          return handled(422, { code: stored.code, lifecycleAction: 'park-update', chatId,
+            reason: 'A lifecycle chat media update needs operator review; no task was started' });
+        }
         const rawText: string = (() => {
           if (cbq && typeof cbq === 'object') {
             const d = (cbq as Record<string, unknown>).data;
@@ -204,7 +248,6 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           }
           return '';
         })();
-        const chatId: string = chatOf(update);
         if (rawText.trim() && chatId) {
           const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
           type RefusalCode = 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' |
@@ -216,18 +259,14 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
               (trx) => recordRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id,
                 { code, chatId, payloadHash }));
-            if (stored.payloadHash !== payloadHash || stored.chatId !== chatId) {
+            if (stored.payloadHash !== payloadHash || stored.chatId !== chatId || stored.code !== code) {
               return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
             }
-            return handled(409, { code: stored.code,
-              lifecycleAction: actionFor(stored.code), chatId });
+            return handled(409, { code, lifecycleAction: actionFor(code), chatId });
           };
           try {
             const TENANT = DEFAULT_TENANT_ID;
             const directive = rawText.trim();
-            const priorRefusal = await withRlsContext(db,
-              { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
-              (trx) => readRoutingRefusal(trx, TENANT, update.update_id));
             if (priorRefusal) {
               if (priorRefusal.payloadHash !== payloadHash || priorRefusal.chatId !== chatId) {
                 return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
