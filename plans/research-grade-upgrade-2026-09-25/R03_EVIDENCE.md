@@ -30,3 +30,12 @@ The preflight now reports its engineering result separately, marks A–H as requ
 An R21 fifth/sixth-pass review found that five requirement rows had their new evidence notes appended to `test_id` instead of `acceptance_evidence`. The prior package validator accepted these rows because it checked only that `test_id` started with `TEST-`. The notes were moved into `acceptance_evidence`, leaving each stable ID exactly `TEST-<requirement_id>`. The validator now enforces that exact mapping. A negative control changed `FR-059` to `TEST-FR-059 | misplaced evidence` in the validator's in-memory CSV read and confirmed rejection; all 105 actual requirement rows now have exact IDs. This repairs proof indexing, not runtime model behavior or admission status.
 
 The repair is in sealed source `af910c88267da28b9d637c5c431906375d49b3e0` (seal `9cd65e1`). Blueprint validation passed **773 checks / 0 warnings / 0 failures**, and the manifest verifier passed on the clean seal. The admission assessor still returned `UNQUALIFIED_ENGINEERING`; deployed gate evidence is absent.
+
+## Isolated candidate identity — 2026-09-27
+
+The opt-in full-app rehearsal now stamps Core/worker/Desk images, records their
+immutable IDs and labels, captures changed runtime file hashes and internal
+network membership, and rejects mismatched labels or externally routed provider
+callers. This is a disposable deployment receipt, not the production deployment
+receipt or admission gate. See R26_EVIDENCE.md; the clean candidate run is pending
+at this implementation checkpoint.

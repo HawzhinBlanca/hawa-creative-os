@@ -7,6 +7,38 @@ request. It covers the legacy path (Core intake → outbox → `TaskWorkflow` �
 outcome → Desk approval → delivery) and the admitted Restate lifecycle slices.
 The dated run histories below preserve their original scope and limitations.
 
+## Isolated full-app candidate rehearsal (2026-09-27)
+
+```sh
+pnpm exec tsx packages/testkit/chaos/run.ts --candidate --only R1.S3.SOURCES --poller worker --keep
+```
+
+This opt-in scenario builds Core, worker, Desk and the real pinned offline Docling
+parser from the checkout. Production nginx serves Desk and Core at
+`http://127.0.0.1:56081`. It checks durable Desk sign-in, both pages of a real PDF,
+byte-identical source downloads, exact-copy confirmation, duplicate intake, a
+Restate/worker restart at review, a manually reviewed voice revision, QA and
+simulated delivery. A second bilingual Desk request exercises the explicit Canva
+generation action, unchanged intake/generation retries and the saved copy/source
+hash. Image labels, immutable image IDs, changed source hashes and internal
+networks are recorded in `.run/last-run.json` without credentials. Use a clean
+source commit for qualification; a dirty build is only a development observation.
+
+Provider/model/Telegram/Canva replies and office identity are synthetic. The parser
+and app processes are real. The voice fixture is silence: this proves manual
+fallback and duration handling, not speech quality. This does not admit native
+Canva editability, human approval identity, real delivery or creative quality.
+The topology also keeps chaos PostgreSQL's `fsync=off`; this is not a power-loss,
+WAL/PITR or clean-host proof. The source content route uses direct Core bytes;
+production X-Accel delivery requires its separate gate. Memory values are sparse
+samples, not continuous resource peaks.
+
+The command replaces only the disposable `hawa-chaos` volumes/data. `--keep` leaves
+the candidate for browser inspection; `--down` removes it afterwards. For an
+in-place Core/Desk development rebuild, refresh nginx after recreating upstream
+containers so its cached addresses do not point at the old containers. Normal
+production deployment already reloads/restarts nginx for this boundary.
+
 ## PDF source review transport (2026-09-27)
 
 `pnpm exec tsx packages/testkit/chaos/run.ts --only R1.S3.MEDIA --poller worker`
@@ -73,10 +105,10 @@ Typecheck this directory with `npx tsc -p packages/testkit/chaos/tsconfig.json`.
   names `hawa-production` or `hawa-test`; `driver/stack.ts` refuses to kill a container whose name
   does not start with `hawa-chaos-`.
 - Host ports, all on 127.0.0.1: Postgres 56432 (database `hawa_chaos`), Restate admin 56070 and
-  ingress 56080, fakes 56090. Core has no host port; the driver reaches it through the fakes
-  (`/__core/...`).
-- **No paid or real provider call can happen.** Core and the workers are on the `chaos` network only,
-  which is `internal: true`: no route to the internet. The provider hosts written into the code
+  ingress 56080, fakes 56090; the optional candidate nginx is 56081. Core has no host port;
+  the driver normally reaches it through the fakes (`/__core/...`).
+- **No paid or real provider call can happen.** Core and the workers use only the internal
+  `chaos` network, plus Core's internal `parser` network: no route to the internet. The provider hosts written into the code
   (`api.telegram.org`, `api.openai.com`, `generativelanguage.googleapis.com`, `api.anthropic.com`,
   `api.canva.com`, `export-download.canva.com`, `oauth2.googleapis.com`, `www.googleapis.com`,
   `sheets.googleapis.com`) are network aliases of the fakes container there, and the fakes' own CA

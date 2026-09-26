@@ -170,6 +170,16 @@ export function savedDesignCopy(payload:any,description:string):{copy:string[];i
     if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','The reviewed PDF request has no exact copy.');
     return {copy,instructions:typeof body.designInstructions==='string'?body.designInstructions:''};
   }
+  if(body.workflow==='canva_manual'){
+    // Desk separates copy from instructions at entry. A queue title is metadata, not a headline.
+    // Preserve both current copy fields and explicit headlines on older saved Desk requests.
+    const fields=[body.headlineEn,body.copyEn,body.headlineCkb,body.copyCkb];
+    if(fields.some(text=>text!==undefined&&text!==null&&typeof text!=='string'))
+      throw new CanvaFlowError(422,'COPY_REQUIRED','The saved Desk request has invalid exact copy fields.');
+    const copy=fields.filter((text):text is string=>typeof text==='string'&&Boolean(text.trim()));
+    if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','The saved Desk request has no exact copy.');
+    return {copy,instructions:typeof body.designInstructions==='string'?body.designInstructions:''};
+  }
   const saved=savedDesignCopyAsSent(payload,description);
   const copy=saved.copy.map(withoutEmoji).filter(Boolean);
   if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','The request carries no design copy apart from emoji. Send the exact text to set; no placeholder copy will be invented.');

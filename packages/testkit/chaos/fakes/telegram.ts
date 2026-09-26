@@ -43,6 +43,8 @@ export interface FakeFile {
   file_id: string;
   size: number;
   mime: string;
+  /** Explicit synthetic fixture bytes for actual parser/codec integration checks. */
+  contentBase64?: string;
   /** Wait before the download answers, as a large file on a slow line would. */
   delayMs: number;
 }
@@ -57,6 +59,7 @@ const SEND_METHODS = new Set(['sendMessage', 'sendPhoto', 'sendDocument', 'sendM
 
 /** Bytes that read as the start of a JPEG, then zeros: enough for Core's type sniffing. */
 function fakeFileBytes(file: FakeFile): Buffer {
+  if (file.contentBase64 !== undefined) return Buffer.from(file.contentBase64, 'base64');
   const bytes = Buffer.alloc(Math.max(16, file.size));
   if (file.mime === 'application/pdf') bytes.write('%PDF-1.4\n', 0, 'latin1');
   else if (file.mime === 'image/png') Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes);
@@ -108,7 +111,10 @@ export class FakeTelegram {
   }
 
   addFile(file: Partial<FakeFile> & { file_id: string }): void {
-    this.files.set(file.file_id, { size: 1024, mime: 'image/jpeg', delayMs: 0, ...file });
+    const bytes = file.contentBase64 === undefined ? null : Buffer.from(file.contentBase64, 'base64');
+    if (bytes && (bytes.length > 20 * 1024 * 1024 || bytes.toString('base64') !== file.contentBase64))
+      throw new Error('Fixture bytes must be canonical base64 within 20 MiB');
+    this.files.set(file.file_id, { size: 1024, mime: 'image/jpeg', delayMs: 0, ...file, ...(bytes ? { size: bytes.length } : {}) });
   }
 
   /** Updates Telegram still holds: those at or above the last offset the bot confirmed. */

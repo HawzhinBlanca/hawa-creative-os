@@ -28,7 +28,7 @@ export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
     }
   };
   const create=()=>run(async()=>{const r=await apiClient.canva.create(taskId,Number(width),Number(height),requestKey('create'));setMessage(r.status==='retrieved'?'Blank Canva design created and linked. Open Canva to add your design.':r.message||'Creation recorded; inspect its status before retrying.');});
-  const generate=()=>run(async()=>{setMessage('Claude Opus 5 is planning the saved copy with client references. This may take up to 90 seconds.');const r=await apiClient.canva.generate(taskId,Number(width),Number(height),requestKey('generate'));setMessage(r.message);if(r.status==='failed')delete keys.current.generate;});
+  const generate=()=>run(async()=>{setMessage('Planning the saved copy with client references. The resulting plan records the model used. This may take up to 90 seconds.');const r=await apiClient.canva.generate(taskId,Number(width),Number(height),requestKey('generate'));setMessage(r.message);if(r.status==='failed')delete keys.current.generate;});
   const capture=(format:'png'|'pdf'|'pptx')=>run(async()=>{
     const current=await apiClient.canva.taskState(taskId);
     if(!current.binding)throw new Error('Link a Canva design first.');
@@ -43,7 +43,7 @@ export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
     <h4>Canva design and exports</h4>
     {!connected&&<p>Connect Canva in Settings to create a native design or retrieve its exports.</p>}
     {state&&!state.binding&&<div>
-      <p>Create an editable draft from the saved copy and verified client references. Design planning uses Claude Opus 5. Native font, layout and copy still require review.</p>
+      <p>Create an editable draft from the saved copy and verified client references. The saved plan records the model used. Native font, layout and copy still require review.</p>
       <label>Draft proportions <select value={`${width}x${height}`} onChange={e=>{const [w,h]=e.target.value.split('x');setWidth(w);setHeight(h);}}>
         <option value="1200x1697">Portrait invitation</option><option value="1080x1350">Portrait post</option><option value="1080x1080">Square post</option></select></label>
       <button className="btn" disabled={busy||!connected||plans.some(p=>['planning','planned','uncertain'].includes(p.status))||state.operations?.some((o:any)=>o.kind==='create')} onClick={generate}>Design in Canva</button>

@@ -7,7 +7,7 @@
  * the office's hawa-production or hawa-test projects.
  */
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,8 +25,8 @@ export const FAKES_URL = `http://127.0.0.1:${PORTS.fakes}`;
 export const RESTATE_ADMIN_URL = `http://127.0.0.1:${PORTS.restateAdmin}`;
 export const RESTATE_INGRESS_URL = `http://127.0.0.1:${PORTS.restateIngress}`;
 
-export type Service = 'postgres' | 'restate' | 'core' | 'worker-blue' | 'worker-green' | 'fakes';
-const SERVICES: readonly Service[] = ['postgres', 'restate', 'core', 'worker-blue', 'worker-green', 'fakes'];
+export type Service = 'postgres' | 'restate' | 'core' | 'worker-blue' | 'worker-green' | 'fakes' | 'docling' | 'desk' | 'nginx';
+const SERVICES: readonly Service[] = ['postgres', 'restate', 'core', 'worker-blue', 'worker-green', 'fakes', 'docling', 'desk', 'nginx'];
 
 export interface ChaosSecrets {
   CHAOS_OWNER_PASSWORD: string;
@@ -232,3 +232,26 @@ export const fakes = {
   core: (path: string, token: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) =>
     call(`/__core${path}`, { ...init, headers: { authorization: `Bearer ${token}`, ...init.headers } }),
 };
+
+/** Sanitized identity receipt: image IDs and network names, never container environment/secrets. */
+export function deploymentReceipt() {
+  const commit = run('git', ['-C', REPO_ROOT, 'rev-parse', 'HEAD']).stdout.trim();
+  const changed = [...new Set([
+    ...run('git', ['-C', REPO_ROOT, 'diff', 'HEAD', '--name-only']).stdout.trim().split('\n'),
+    ...run('git', ['-C', REPO_ROOT, 'ls-files', '--others', '--exclude-standard']).stdout.trim().split('\n'),
+  ])].filter(p => /^(apps|packages|infra|services)\//.test(p));
+  const sourceChanges = Object.fromEntries(changed.map(p => [p, existsSync(join(REPO_ROOT, p))
+    ? createHash('sha256').update(readFileSync(join(REPO_ROOT, p))).digest('hex') : 'deleted']));
+  const containers = Object.fromEntries(SERVICES.flatMap(service => {
+    const result = run('docker', ['inspect', '--format',
+      '{{.Image}}|{{index .Config.Labels "org.opencontainers.image.revision"}}|{{range $name, $net := .NetworkSettings.Networks}}{{$name}} {{end}}',
+      containerOf(service)], { allowFail: true });
+    if (result.status !== 0) return [];
+    const [imageId, buildCommit, networks] = result.stdout.trim().split('|');
+    return [[service, { imageId, buildCommit, networks: networks.trim().split(/\s+/) }]];
+  }));
+  const networks = run('docker', ['network', 'inspect', `${PROJECT}_chaos`, `${PROJECT}_parser`,
+    '--format', '{{.Name}}|{{.Internal}}'], { allowFail: true }).stdout.trim().split('\n');
+  return { commit, sourceChanges, containers, networks, externalAdapters: 'synthetic fakes',
+    parser: 'real pinned offline Docling', productionChanged: false };
+}

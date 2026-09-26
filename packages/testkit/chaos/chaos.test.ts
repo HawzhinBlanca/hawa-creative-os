@@ -13,10 +13,11 @@
  * .run/last-run.json and printed; a failed invariant fails its scenario.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { candidateSources } from './driver/candidate-sources.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, start, up, waitHealthy } from './driver/stack.js';
+import { build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
   approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
@@ -26,6 +27,7 @@ import {
 const enabled = process.env.HAWA_CHAOS === '1';
 const only = (process.env.HAWA_CHAOS_ONLY || '').split(',').map((s) => s.trim()).filter(Boolean);
 const keep = process.env.HAWA_CHAOS_KEEP === '1';
+const candidate = process.env.HAWA_CHAOS_CANDIDATE === '1';
 // Who polls Telegram in the stack (run.ts --poller; docker-compose.chaos.yml): Core, as production
 // does today, or the worker's poller and ChatInbox (Phase 2.1). Scenarios of 2.1 need the worker.
 const poller = (process.env.CHAOS_TELEGRAM_POLLER || 'core').trim().toLowerCase() === 'worker' ? 'worker' : 'core';
@@ -134,7 +136,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     // Always from nothing: a kept project from an earlier run would carry its tasks and journals.
     down({ volumes: true });
     // Core and the worker start below with --no-build, so their images are built from this checkout here.
-    build(['core', 'worker-blue']);
+    build(['core', 'worker-blue', ...(candidate ? ['desk', 'docling'] as const : [])]);
     up({ services: ['postgres', 'restate', 'fakes'] });
     await upgradeSchema();
     await connectCanva();
@@ -142,6 +144,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     up({ build: false, services: ['core', 'worker-blue'] });
     const reg = await registerColour('blue');
     if (reg.code !== 0) throw new Error(`register blue: ${reg.lines.join(' | ')}`);
+    if (candidate) up({ build: false, services: ['docling', 'desk', 'nginx'] });
     sampleMemory();
   }, 30 * 60_000);
 
@@ -150,7 +153,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     const result = {
       finishedAt: new Date().toISOString(),
       telegramPoller: poller,
+      ...(candidate ? { deployment: deploymentReceipt() } : {}),
       totalMs: Date.now() - suiteStarted,
+      memoryMeasurement: 'start/end and scenario samples; not a continuous peak measurement',
       peakMemoryMiB: peakMemory,
       peakTotalMiB: Math.max(0, ...samples.map((s) => s.totalMiB)),
       uncoveredModelCalls: await uncoveredModelCalls().catch(() => ['(fakes unreachable)']),
@@ -167,6 +172,10 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     if (!keep) down({ volumes: true });
     else console.log('[chaos] HAWA_CHAOS_KEEP=1: the hawa-chaos project is still running; take it down with `npx tsx packages/testkit/chaos/run.ts --down`.');
   }, 10 * 60_000);
+
+  if (candidate) scenario('R1.S3.SOURCES', 'full-app PDF source to voice revision and simulated approved delivery', async (chat, events) => ({
+    delivered: false, skipRequestChecks: true, skipQuiescence: true, extra: await candidateSources(chat, events),
+  }), 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('R1.0', 'happy path: brief, draft, approve, deliver, no faults', async (chat, events) => {
     await fullRequest(chat, 'R1.0', events);

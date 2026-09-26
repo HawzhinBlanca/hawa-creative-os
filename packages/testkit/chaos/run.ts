@@ -10,7 +10,7 @@
  *
  * The scenarios are chaos.test.ts (vitest); this sets HAWA_CHAOS and friends and runs it alone.
  */
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { REPO_ROOT, down } from './driver/stack.js';
 
@@ -19,6 +19,10 @@ if (args.includes('--down')) {
   down({ volumes: true });
   console.log('hawa-chaos is down; its volumes and throwaway secrets are gone.');
   process.exit(0);
+}
+if (args.includes('--candidate') && (args[args.indexOf('--only') + 1] !== 'R1.S3.SOURCES' || !args.includes('--poller') || args[args.indexOf('--poller') + 1] !== 'worker')) {
+  console.error('--candidate requires --only R1.S3.SOURCES and --poller worker');
+  process.exit(2);
 }
 const onlyAt = args.indexOf('--only');
 const pollerAt = args.indexOf('--poller');
@@ -29,6 +33,8 @@ if (pollerAt >= 0 && !['core', 'worker'].includes(args[pollerAt + 1] ?? '')) {
 const env = {
   ...process.env,
   HAWA_CHAOS: '1',
+  CHAOS_BUILD_COMMIT: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim(),
+  ...(args.includes('--candidate') ? { HAWA_CHAOS_CANDIDATE: '1', CHAOS_DOCLING_URL: 'http://docling:8091' } : {}),
   ...(args.includes('--keep') ? { HAWA_CHAOS_KEEP: '1' } : {}),
   ...(onlyAt >= 0 && args[onlyAt + 1] ? { HAWA_CHAOS_ONLY: args[onlyAt + 1] } : {}),
   // Who polls Telegram in the stack: core (as production today) or worker (Phase 2.1). Compose reads

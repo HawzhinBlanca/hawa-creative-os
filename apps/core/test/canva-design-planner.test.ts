@@ -10,6 +10,23 @@ import { checkCanvaPptx } from '@hawa/qa';
 import { computeDnaHash } from '../src/core-helpers.js';
 
 describe('exact copy selection',()=>{
+  it('plans the current Desk manual request shape without changing either language or treating its title as copy',()=>{
+    const copyEn='  Office trial — 123.45 USD\n27 September 2026  ';
+    const copyCkb='تاقیکردنەوە — ١٢٣.٤٥\n\n___';
+    const payload={body:{workflow:'canva_manual',title:'Internal queue title',copyEn,copyCkb,
+      designInstructions:'Navy and gold; preserve all copy.'}};
+    expect(savedDesignCopy({payload},'Unstructured fallback must not replace reviewed fields'))
+      .toEqual({copy:[copyEn,copyCkb],instructions:'Navy and gold; preserve all copy.'});
+  });
+  it('accepts Sorani-only Desk copy and keeps instruction-like factual paragraphs',()=>{
+    const copyCkb='  تاقیکردنەوە\n\nPlease keep this line.  ';
+    expect(savedDesignCopy({body:{workflow:'canva_manual',copyEn:'',copyCkb}},''))
+      .toEqual({copy:[copyCkb],instructions:''});
+  });
+  it('does not invent Desk copy from a queue title or description when explicit copy is missing',()=>{
+    expect(()=>savedDesignCopy({body:{workflow:'canva_manual',title:'Not design copy'}},'Fallback description'))
+      .toThrow('exact copy');
+  });
   it('keeps each client palette and body fonts inside its own planning prompt',()=>{
     const make=(palette:string[],latin:string,arabic:string)=>buildPlannerSystemPrompt({
       reference:{rules:{palette}},formalBodyFonts:{latin,arabic},admittedFonts:[latin,arabic],
