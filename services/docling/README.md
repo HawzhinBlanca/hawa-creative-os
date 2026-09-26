@@ -75,6 +75,10 @@ roots before task creation. Re-uploading the same source/version reuses its rece
 Recent saved sources can be reopened, and original downloads verify their hashes.
 Missing or corrupt storage refuses new request creation; it never substitutes text.
 
+Client-scoped designers can retain source PDFs for review. The existing durable
+outbox requires an office operator/administrator to create the reviewed request;
+other roles receive an explicit refusal with their source retained.
+
 The operator explicitly enters/edits copy and confirms it against the original.
 The existing manual Desk task transaction binds the receipt hashes, authenticated
 actor and exact copy to one task/event/outbox with a stable request key. This neither

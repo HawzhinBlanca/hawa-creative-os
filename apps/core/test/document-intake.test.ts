@@ -184,4 +184,28 @@ describe('retained PDF request handoff', () => {
     expect((await submit(body(id, { ...source.data.receipt, id: foreignId }))).status).toBe(403);
   });
 
+  it('lets a client-level designer retain their own PDF for an operator to confirm without granting other clients', async () => {
+    const id = await client(), other = await client(), userId = randomUUID();
+    await sql`INSERT INTO hawa.users(id,email,display_name) VALUES (${userId}::uuid,${userId+'@example.test'},'Scoped designer')`.execute(owner);
+    await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role,active)
+      VALUES (${tenantId}::uuid,${id}::uuid,${userId}::uuid,'designer',true)`.execute(owner);
+    const designer = createApp({ db, testAuth: { principal: { role: 'designer', userId } } });
+    const uploadAsDesigner = (clientId: string) => designer.request(`/v1/clients/${clientId}/documents`, {
+      method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: bytes(),
+    });
+    const response = await uploadAsDesigner(id); expect(response.status).toBe(201);
+    const source = await response.json();
+    expect((await uploadAsDesigner(other)).status).toBe(404);
+    const confirmed = await designer.request('/v1/tasks', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() }, body: JSON.stringify(body(id, source.receipt)),
+    });
+    expect(confirmed.status).toBe(403);
+    expect(await confirmed.text()).toContain('An office operator must save');
+    const committed = await submit(body(id, source.receipt));
+    expect(committed.status).toBe(201);
+    const task = committed.data;
+    const detail = await (await designer.request(`/v1/tasks/${task.id}`)).json();
+    expect(detail.sourceDocument.confirmedBy).toBe(scope.userId);
+  });
+
 });

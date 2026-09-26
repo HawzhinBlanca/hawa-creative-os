@@ -127,7 +127,7 @@ paths:
                     properties:
                       workflow: {const: canva_manual}
                       title: {type: string, minLength: 1, maxLength: 200}
-                    description: Requires an authenticated user, explicit Idempotency-Key and nonblank exact copy in at least one language. Checks retained PDF bytes and receipt hashes atomically with task/event/outbox. Exact retries reuse the first task; changed payload with the same key conflicts.
+                    description: Requires an authenticated office operator/administrator, explicit Idempotency-Key and nonblank exact copy in at least one language. Checks retained PDF bytes and receipt hashes atomically with task/event/outbox. Exact retries reuse the first task; changed payload with the same key conflicts.
 
       responses:
         '201':

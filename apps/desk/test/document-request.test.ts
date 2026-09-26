@@ -85,4 +85,15 @@ describe('reviewed PDF request UI', () => {
     expect((view.container.querySelector('[aria-label="PDF request title"]') as HTMLInputElement).value).toBe('Pending title');
     expect(fetch).not.toHaveBeenCalled();
   });
+  it('shows the operator handoff requirement after a definitive refusal and retains editable copy', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: 'An office operator must save this reviewed request. The PDF remains available for review.' }), { status: 403 })));
+    view = await mount(React.createElement(DocumentRequestForm, { source: answer }));
+    await fill(); await click(view.container.querySelector('input[type=checkbox]'));
+    await click(byText(view.container, 'button', 'Save reviewed request'));
+    expect(view.text()).toContain('An office operator must save');
+    expect(getPendingDocumentDraft()).toBeNull();
+    const copy = view.container.querySelector('[aria-label="PDF exact copy English"]') as HTMLTextAreaElement;
+    expect(copy.value).toBe('Confirmed price 123.45'); expect(copy.disabled).toBe(false);
+  });
+
 });

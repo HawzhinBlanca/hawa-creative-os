@@ -44,6 +44,10 @@ export async function retainDocument(trx: Kysely<Database>, input: {
 export async function prepareDocumentIntake(trx: Kysely<Database>, store: BlobStore | null, input: {
   tenantId: string; clientId: string; userId: string; source: unknown;
 }) {
+  // The existing durable outbox admits office operators/admins. Match that boundary explicitly.
+  const permission = (await sql<{ allowed: boolean }>`SELECT hawa.has_tenant_role(${input.tenantId}::uuid,
+    ARRAY['administrator','operator']::hawa.membership_role[]) AS allowed`.execute(trx)).rows[0];
+  if (!permission?.allowed) throw new DocumentIntakeError(403, 'An office operator must save this reviewed request. The PDF remains available for review.');
   const source = input.source as Record<string, unknown> | null;
   if (!source || source.confirmed !== true || typeof source.id !== 'string' ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(source.id))

@@ -22,6 +22,11 @@ copy. Stable request keys serialize concurrent duplicates. Changed copy with the
 same key conflicts. Exact replay returns the original receipt without reparsing or
 recreating task/event/outbox, even after parser or client configuration changes.
 
+Task confirmation requires the existing outbox operator/administrator permission.
+Client-level designers may retain sources for that review; a direct task attempt
+gets an explicit 403 rather than an opaque outbox storage failure. No outbox
+permission is widened.
+
 The UI leaves copy empty until a human selects or types it; extracted text never
 becomes executable instructions, approved Client DNA, indexed knowledge or a
 publication approval. Review is about the chosen request copy only. Original PDF,

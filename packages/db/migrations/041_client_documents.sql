@@ -23,7 +23,9 @@ CREATE POLICY client_documents_read ON hawa.client_documents FOR SELECT
     AND EXISTS (SELECT 1 FROM hawa.clients c WHERE c.tenant_id = client_documents.tenant_id AND c.id = client_documents.client_id));
 CREATE POLICY client_documents_write ON hawa.client_documents FOR INSERT
   WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id',true),'')::uuid
-    AND hawa.can_write_client(tenant_id,client_id));
+    -- ADR-033: membership sets are evaluated once per statement.
+    AND ((SELECT hawa.has_tenant_role(hawa.current_tenant_id(), ARRAY['administrator','operator']::hawa.membership_role[]))
+      OR client_id = ANY ((SELECT hawa.member_client_ids(true))::uuid[])));
 CREATE TRIGGER client_documents_immutable BEFORE UPDATE OR DELETE ON hawa.client_documents
   FOR EACH ROW EXECUTE FUNCTION hawa.forbid_update_delete();
 REVOKE ALL ON hawa.client_documents FROM PUBLIC, hawa_app;

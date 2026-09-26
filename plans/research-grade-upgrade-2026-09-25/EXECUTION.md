@@ -22,7 +22,9 @@ exact copy into the Canva planner are checked. See ADR-071, `R12_EVIDENCE.md` an
 `R12_DOCUMENT_HANDOFF_PROOF.json`.
 
 Focused verification: **9 files / 103 tests passed**; source/test typecheck, lint,
-Desk build and secret scan passed. Full regression and release verification follow
+Desk build and secret scan passed. The policy/operator-handoff correction passed **6 files / 37 tests** after the
+first full run caught one policy performance regression (3,423 passed/1 failed/56
+skipped). Full regression and release verification follow
 source sealing. Production remains unchanged. Telegram PDF/voice, governed knowledge
 indexing, actual office PDF fidelity, live provider/Workspace/export/reopen/restore
 and independent human quality remain open. This is another completed local slice,

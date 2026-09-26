@@ -58,6 +58,23 @@ NFR-006, NFR-014**; linked normative documents in traceability and ADR-071.
   assertion is hidden; the rollback test deliberately injects/logs a commit-boundary
   failure and verifies absence of the task/outbox before successful replay.
 
+### Full-suite correction before admission
+
+The first sealed run on source `6e66c50` / seal `932a330` passed **439 files /
+3,423 tests**, skipped **4 files / 56 tests**, and failed one existing architecture
+check: `client_documents_write` evaluated a membership helper per row. The unreleased
+041 policy now uses ADR-033's statement-level role/membership sets with the same
+client permissions. No deployed database was modified. A client-only designer
+probe then exposed the existing operator-only outbox boundary (25 passed/1 failed):
+source retention succeeded but task creation returned an opaque 503. Confirmation
+now checks that permission explicitly and returns 403; an operator can confirm the
+retained source. Outbox permissions were not widened. Added designer retention,
+operator handoff and cross-client refusal; the policy, document intake, migration replay
+and real Core startup group passed **4 files / 26 tests**. Including the operator
+refusal UI and manual-intake recovery, the final correction group passed **6 files /
+37 tests**. The final source is resealed
+and the full suite rerun; results below replace no failed-run history.
+
 ### Scope and remaining work
 
 This is Desk document-to-request admission, with a human-reviewed copy boundary.
