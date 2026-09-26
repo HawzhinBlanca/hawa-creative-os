@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { isAuthorizedReviewerRole, parseCompleteRevisionRequest, parseOfficeApprovalProof, type OfficeApprovalProof, type PinnedExport } from '@hawa/domain';
+import { isAuthorizedReviewerRole, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, type OfficeApprovalProof, type PinnedExport } from '@hawa/domain';
 import { withRlsContext, sql } from '@hawa/db';
 import { HumanApprovalManager, signLifecycleOfficeEvent } from '@hawa/integrations';
 import type { Context } from 'hono';
@@ -74,14 +74,18 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         'A request-owned office decision needs a UUID Idempotency-Key for safe retry');
       const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
       const isOwnedApproval = body?.action === 'approve';
-      const revisionRequest = isOwnedApproval ? null : parseCompleteRevisionRequest(body?.revisionRequest);
+      const isOwnedRejection = body?.action === 'reject';
+      const revisionRequest = !isOwnedApproval && !isOwnedRejection ? parseCompleteRevisionRequest(body?.revisionRequest) : null;
+      const rejectionCategory = isOwnedRejection ? parseRejectionCategory(body?.rejectionCategory) : null;
       const parsedPins = isOwnedApproval ? parsePinnedExportIds(body?.pinnedExportIds) : null;
-      if (!body || Array.isArray(body) || !['revision_requested', 'approve'].includes(String(body.action)) ||
+      if (!body || Array.isArray(body) || !['revision_requested', 'approve', 'reject'].includes(String(body.action)) ||
           (isOwnedApproval && (Object.keys(body).some((key) => !['action', 'reason', 'pinnedExportIds', 'rtlVisualReview'].includes(key)) ||
             typeof body.reason !== 'string' || !body.reason.trim() || body.reason.length > 2000 || !parsedPins?.ok || parsedPins.ids.length === 0)) ||
-          (!isOwnedApproval && (Object.keys(body).some((key) => key !== 'action' && key !== 'revisionRequest') || !revisionRequest))) {
+          (isOwnedRejection && (Object.keys(body).some((key) => !['action', 'reason', 'rejectionCategory'].includes(key)) ||
+            !rejectionCategory || typeof body.reason !== 'string' || !body.reason.trim() || body.reason.length > 2000)) ||
+          (!isOwnedApproval && !isOwnedRejection && (Object.keys(body).some((key) => key !== 'action' && key !== 'revisionRequest') || !revisionRequest))) {
         return problem(c, 422, 'Unsupported Lifecycle Decision',
-          'Use a complete structured revision request, or approve with a reason and selected stored exports');
+          'Use a structured revision request, approval with selected exports, or rejection with category and reason');
       }
       const pinIds = parsedPins?.ok ? parsedPins.ids : [];
       const officeRole = (auth.role || '').toLowerCase().trim();
@@ -110,7 +114,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       if (review.receipt && (receiptResult?.requestId !== requestId || receiptResult?.actionId !== actionId ||
           receiptResult?.taskId !== taskId || receiptResult?.revisionId !== revisionId ||
           receiptResult?.approvalId !== review.prior?.id || receiptResult?.rev !== Number(review.receipt.rev) ||
-          receiptResult?.stage !== (isOwnedApproval ? 'approved' : 'manual'))) {
+          receiptResult?.stage !== (isOwnedApproval ? 'approved' : isOwnedRejection ? 'rejected' : 'manual'))) {
         return problem(c, 409, 'Action Key Conflict', 'Idempotency-Key was already used for another lifecycle decision');
       }
       const expectedRev = review.receipt ? Number(review.receipt.rev) - 1 : Number(review.request.rev);
@@ -123,7 +127,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         .update(JSON.stringify({ taskId, revisionId, actorUserId: auth.userId, body })).digest('hex');
       let approvalProof: OfficeApprovalProof | null = null;
       let eventRole = officeRole;
-      let eventReason = isOwnedApproval ? (body.reason as string).trim() : revisionRequest!.comment;
+      let eventReason = isOwnedApproval || isOwnedRejection ? (body.reason as string).trim() : revisionRequest!.comment;
       if (isOwnedApproval) {
         const prior = review.prior;
         if (prior) {
@@ -190,6 +194,17 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
             ...(rtlVisualReview ? { rtlVisualReview } : {}) });
           if (!approvalProof) return problem(c, 422, 'Invalid Approval Proof', 'Stored QA or export evidence is malformed');
         }
+      } else if (isOwnedRejection && review.prior) {
+        const prior = review.prior;
+        const saved = prior.decision_payload as Record<string, unknown>;
+        if (prior.decision !== 'rejected' || prior.design_revision_id !== revisionId ||
+            prior.decided_by !== auth.userId || prior.reason !== eventReason ||
+            saved.rejectionCategory !== rejectionCategory ||
+            typeof saved.approverRole !== 'string') {
+          return problem(c, 409, 'Action Key Conflict', 'Idempotency-Key was already used for a different decision');
+        }
+        eventRole = saved.approverRole;
+        eventReason = prior.reason;
       } else if (review.prior) {
         const prior = review.prior;
         const saved = prior.decision_payload as Record<string, unknown>;
@@ -207,7 +222,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         // The request owner has moved past this decision. The committed approval and matching
         // projection receipt are sufficient to answer an exact old-action retry without replaying it.
         return c.json({ decisionId: review.prior!.id, taskId, designRevisionId: revisionId,
-          decision: isOwnedApproval ? 'approved' : 'revision_requested',
+          decision: isOwnedApproval ? 'approved' : isOwnedRejection ? 'rejected' : 'revision_requested',
           actor: { userId: auth.userId, role: eventRole, verifiedServerSide: true },
           requestId, requestRev: decisionRev }, 201);
       }
@@ -216,9 +231,10 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
       if (!ingress || !secret) return problem(c, 503, 'Lifecycle Decision Unavailable',
         'The decision gateway is not configured; retry this action later');
       const event = { v: 1 as const, eventId: `desk:${actionId}`, requestId, taskId, revisionId,
-        actionId, expectedRev, kind: isOwnedApproval ? 'approve' as const : 'revise' as const,
+        actionId, expectedRev, kind: isOwnedApproval ? 'approve' as const : isOwnedRejection ? 'reject' as const : 'revise' as const,
         actor: { userId: auth.userId, role: eventRole }, reason: eventReason,
-        ...(isOwnedApproval ? { approvalProof: approvalProof!, deskRequestFingerprint } : { revisionRequest: revisionRequest! }) };
+        ...(isOwnedApproval ? { approvalProof: approvalProof!, deskRequestFingerprint } :
+          isOwnedRejection ? { rejectionCategory } : { revisionRequest: revisionRequest! }) };
       const signature = signLifecycleOfficeEvent(secret, event);
       try {
         const response = await fetch(`${ingress}/OfficeDecisionGateway/decide`, {
@@ -229,9 +245,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
         if (response.ok && result?.accepted === true && result.requestId === requestId &&
             result.taskId === taskId && result.revisionId === revisionId && result.actionId === actionId &&
             isValidUuid(result.approvalId as string) && result.rev === decisionRev &&
-            result.stage === (isOwnedApproval ? 'approved' : 'manual')) {
+            result.stage === (isOwnedApproval ? 'approved' : isOwnedRejection ? 'rejected' : 'manual')) {
           return c.json({ decisionId: result.approvalId, taskId, designRevisionId: revisionId,
-            decision: isOwnedApproval ? 'approved' : 'revision_requested',
+            decision: isOwnedApproval ? 'approved' : isOwnedRejection ? 'rejected' : 'revision_requested',
             actor: { userId: auth.userId, role: eventRole, verifiedServerSide: true },
             requestId, requestRev: decisionRev }, 201);
         }
@@ -306,6 +322,11 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     }
     const isApproved = dbDecision === 'approved';
     const isRejected = dbDecision === 'rejected';
+    const legacyRejectionCategory = isRejected && body.rejectionCategory !== undefined
+      ? parseRejectionCategory(body.rejectionCategory) : null;
+    if (isRejected && body.rejectionCategory !== undefined && !legacyRejectionCategory) {
+      return problem(c, 422, 'Invalid Rejection Category', 'Choose concept, content, brand direction, or task');
+    }
     const isEscalated = dbDecision === 'escalated';
     const decisionType = dbDecision;
     const storedDecision = isApproved ? 'approved' : isRejected ? 'rejected' : 'revision_requested';
@@ -558,6 +579,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
               requiredFormats: task?.requiredFormats || ['png'],
               approverId: actorUserId,
               approverRole: actorRole,
+              ...(legacyRejectionCategory ? { rejectionCategory: legacyRejectionCategory } : {}),
               ...(requestFingerprint ? { requestFingerprint } : {}),
               approvedAt: new Date().toISOString(),
               ...(rtlVisualReviewHash !== null ? { rtlVisualReview: {

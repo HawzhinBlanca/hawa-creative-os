@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef } from '@hawa/contracts';
-import { parseCompleteRevisionRequest, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
+import { parseCompleteRevisionRequest, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
 import { IdempotencyConflictError, OUTBOX_SEND_MARK_SOURCE, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
@@ -43,7 +43,8 @@ export interface OfficeDecisionProjection {
   requestId: string; tenantId: string; taskId: string; revisionId: string;
   actionId: string; actor: { userId: string; role: string }; reason: string;
   revisionRequest?: StructuredRevisionRequest;
-  decision?: 'revision_requested' | 'approved';
+  decision?: 'revision_requested' | 'approved' | 'rejected';
+  rejectionCategory?: RejectionCategory;
   approvalProof?: OfficeApprovalProof;
   deskRequestFingerprint?: string;
   /** expectedRev ≥ 2: first decision is at 2→3; subsequent rounds are at (2+2k)→(3+2k). */
@@ -52,7 +53,7 @@ export interface OfficeDecisionProjection {
 
 export interface OfficeDecisionResult {
   requestId: string; taskId: string; revisionId: string; actionId: string;
-  approvalId: string; taskState: string; rev: number; stage: 'manual' | 'approved';
+  approvalId: string; taskState: string; rev: number; stage: 'manual' | 'approved' | 'rejected';
 }
 
 const OFFICE_REVISION_ROLES = new Set(['art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
@@ -74,7 +75,9 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
   const revisionRequest = input.revisionRequest === undefined ? undefined : parseCompleteRevisionRequest(input.revisionRequest);
   if ((input.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== reason)) ||
       (decision === 'approved' && (!input.approvalProof || !/^[a-f0-9]{64}$/.test(input.deskRequestFingerprint || '') || revisionRequest)) ||
-      (decision === 'revision_requested' && input.approvalProof)) {
+      (decision === 'revision_requested' && (input.approvalProof || input.rejectionCategory)) ||
+      (decision === 'rejected' && (!parseRejectionCategory(input.rejectionCategory) || input.approvalProof || revisionRequest)) ||
+      (decision === 'approved' && input.rejectionCategory)) {
     throw new LifecycleProjectionConflict('WRONG_STAGE', 'Structured revision feedback is invalid or differs from the reason');
   }
   const hash = createHash('sha256').update(canonical(input)).digest('hex');
@@ -107,7 +110,7 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
     if (task.state !== 'human_review') {
       throw new LifecycleProjectionConflict('WRONG_STAGE', 'The current draft is no longer awaiting office review');
     }
-    if (!(decision === 'approved' ? OFFICE_APPROVAL_ROLES : OFFICE_REVISION_ROLES).has(actor.role)) {
+    if (!(decision === 'approved' || decision === 'rejected' ? OFFICE_APPROVAL_ROLES : OFFICE_REVISION_ROLES).has(actor.role)) {
       throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR', 'An authorized office reviewer must request this revision');
     }
     let approval: Awaited<ReturnType<RevisionRepository['recordApproval']>>;
@@ -118,6 +121,7 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
       expectedTaskVersion: Number(task.version),
       decisionPayload: { lifecycleRequestId: requestId, approverRole: actor.role,
         actionId, requestFingerprint: hash, ...(revisionRequest ? { revisionRequest } : {}),
+        ...(input.rejectionCategory ? { rejectionCategory: input.rejectionCategory } : {}),
         ...(input.approvalProof ? { officeApprovalProof: input.approvalProof,
           deskRequestFingerprint: input.deskRequestFingerprint,
           qcRunId: input.approvalProof.qcRunId, qcReportHash: input.approvalProof.qcReportHash,
@@ -136,7 +140,7 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
       }
       throw error;
     }
-    const stage = decision === 'approved' ? 'approved' : 'manual';
+    const stage = decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 'manual';
     const changed = await trx.updateTable('requests').set({ stage, rev, updated_at: new Date() })
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
       .returning('request_id').executeTakeFirst();

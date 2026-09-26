@@ -1,6 +1,6 @@
 import * as restate from '@restatedev/restate-sdk';
 import { verifyLifecycleOfficeEvent } from '@hawa/integrations';
-import { parseCompleteRevisionRequest, parseOfficeApprovalProof } from '@hawa/domain';
+import { parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
 import { RequestLifecycleApi, type OfficeDeliveryStartEvent, type OfficeDeliveryStartReply,
   type OfficeRevisionEvent, type OfficeRevisionReply } from './request-lifecycle.js';
@@ -16,7 +16,7 @@ export interface SignedOfficeDecision {
 /** Only signed review decisions are exposed; the request object itself remains ingress-private. */
 export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: string): 'ok' | 'invalid' | 'unauthorized' {
   if (input?.v !== 1 || !input.event || typeof input.event !== 'object' || Array.isArray(input.event) ||
-      input.event.v !== 1 || !['revise', 'approve', 'deliver'].includes(input.event.kind) ||
+      input.event.v !== 1 || !['revise', 'approve', 'reject', 'deliver'].includes(input.event.kind) ||
       (input.event.kind === 'deliver'
         ? (!Number.isInteger(input.event.expectedRev) || input.event.expectedRev < 3 ||
           !UUID.test(input.event.approvalId) ||
@@ -34,9 +34,13 @@ export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: s
         (!parseCompleteRevisionRequest(input.event.revisionRequest) ||
           input.event.revisionRequest.comment.trim() !== input.event.reason.trim())) ||
       (input.event.kind === 'approve' && (!parseOfficeApprovalProof(input.event.approvalProof) ||
-        !/^[a-f0-9]{64}$/.test(input.event.deskRequestFingerprint || '') || input.event.revisionRequest !== undefined)) ||
+        !/^[a-f0-9]{64}$/.test(input.event.deskRequestFingerprint || '') || input.event.revisionRequest !== undefined ||
+        input.event.rejectionCategory !== undefined)) ||
+      (input.event.kind === 'reject' && (!parseRejectionCategory(input.event.rejectionCategory) ||
+        input.event.approvalProof !== undefined || input.event.deskRequestFingerprint !== undefined ||
+        input.event.revisionRequest !== undefined)) ||
       (input.event.kind === 'revise' && (input.event.approvalProof !== undefined ||
-        input.event.deskRequestFingerprint !== undefined))) return 'invalid';
+        input.event.deskRequestFingerprint !== undefined || input.event.rejectionCategory !== undefined))) return 'invalid';
   return verifyLifecycleOfficeEvent(secret, input.event, input.signature) ? 'ok' : 'unauthorized';
 }
 

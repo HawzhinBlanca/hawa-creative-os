@@ -20,7 +20,7 @@ import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, parseBlobRef, type DeliveryOutcome } from '@hawa/contracts';
-import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof } from '@hawa/domain';
+import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
@@ -665,12 +665,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const revisionRequest = op?.revisionRequest === undefined ? undefined : parseCompleteRevisionRequest(op.revisionRequest);
     const approvalProof = op?.approvalProof === undefined ? undefined : parseOfficeApprovalProof(op.approvalProof);
     const isApproval = op?.kind === 'recordOfficeApproval';
+    const isRejection = op?.kind === 'recordOfficeRejection';
     // Flexible rev: first office decision is expectedRev=2, rev=3; later rounds follow the same +1 pattern.
     const expectedRev = Number(body?.expectedRev);
     const rev = Number(body?.rev);
     if (!UUID.test(requestId) || body?.v !== 1 ||
         !Number.isInteger(expectedRev) || expectedRev < 2 || rev !== expectedRev + 1 ||
-        (!isApproval && op?.kind !== 'recordOfficeRevision') || typeof op.taskId !== 'string' || !UUID.test(op.taskId) ||
+        (!isApproval && !isRejection && op?.kind !== 'recordOfficeRevision') || typeof op.taskId !== 'string' || !UUID.test(op.taskId) ||
         typeof op.revisionId !== 'string' || !UUID.test(op.revisionId) ||
         typeof actionId !== 'string' || !UUID.test(actionId) ||
         body.key !== `${requestId}:${rev}:officeDecision:desk:${actionId}` ||
@@ -678,8 +679,10 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         typeof actor.role !== 'string' || actor.role.length > 60 ||
         typeof op.reason !== 'string' || !op.reason.trim() || op.reason.length > 2000 ||
         (op.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== op.reason.trim())) ||
-        (isApproval && (!approvalProof || revisionRequest || !/^[a-f0-9]{64}$/.test(String(op.deskRequestFingerprint || '')))) ||
-        (!isApproval && (op.approvalProof !== undefined || op.deskRequestFingerprint !== undefined))) {
+        (isApproval && (!approvalProof || revisionRequest || op.rejectionCategory !== undefined || !/^[a-f0-9]{64}$/.test(String(op.deskRequestFingerprint || '')))) ||
+        (isRejection && (!parseRejectionCategory(op.rejectionCategory) || revisionRequest || op.revisionRequest !== undefined)) ||
+        (!isApproval && (op.approvalProof !== undefined || op.deskRequestFingerprint !== undefined)) ||
+        (!isRejection && op.rejectionCategory !== undefined)) {
       return problem(c, 400, 'Invalid office decision', 'Expected one versioned attributed review decision for the current draft');
     }
     if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
@@ -690,6 +693,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         actor: { userId: actor.userId as string, role: actor.role as string },
         reason: (op.reason as string).trim(), expectedRev, rev, key: body.key as string,
         ...(revisionRequest ? { revisionRequest } : {}),
+        ...(isRejection ? { decision: 'rejected', rejectionCategory: parseRejectionCategory(op.rejectionCategory)! } : {}),
         ...(approvalProof ? { decision: 'approved', approvalProof,
           deskRequestFingerprint: op.deskRequestFingerprint as string } : {}),
       });

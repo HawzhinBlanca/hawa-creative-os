@@ -241,7 +241,7 @@ export interface RequestsTable {
   current_task_id: string;
   parent_request_id: string | null;
   owner: 'core' | 'restate';
-  stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'delivering' | 'delivered' | 'expired' | 'cancelled';
+  stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'delivering' | 'delivered' | 'expired' | 'cancelled' | 'rejected';
   rev: number;
   chat_id: string | null;
   draft_sent_at: Date | null;

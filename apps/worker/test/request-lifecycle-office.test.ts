@@ -178,4 +178,34 @@ describe('RequestLifecycle office revision', () => {
       ...proof, pinnedExports: [{ ...proof.pinnedExports[0], sha256: 'd'.repeat(64) }],
     } })).rejects.toThrow('different content');
   });
+
+  it('records a signed terminal rejection once without a revision reminder', async () => {
+    const { ctx, event: revision } = setup();
+    const event: OfficeRevisionEvent = { ...revision, kind: 'reject', revisionRequest: undefined,
+      rejectionCategory: 'brand_direction', reason: 'The direction conflicts with the brief' };
+    const secret = ['rejection', 'fixture'].join('-');
+    const signed = { v: 1 as const, event, signature: signLifecycleOfficeEvent(secret, event) };
+    expect(checkSignedOfficeDecision(signed, secret)).toBe('ok');
+    expect(checkSignedOfficeDecision({ ...signed, event: { ...event, rejectionCategory: 'task' as const } }, secret))
+      .toBe('unauthorized');
+    expect(checkSignedOfficeDecision({ ...signed, event: { ...event, rejectionCategory: undefined } }, secret))
+      .toBe('invalid');
+    const approvalId = randomUUID();
+    const core = { post: vi.fn().mockResolvedValue({ v: 1, requestId: event.requestId,
+      taskId: event.taskId, revisionId: event.revisionId, actionId: event.actionId,
+      approvalId, taskState: 'rejected', rev: 3, stage: 'rejected' }) };
+    ctx.crashAfterSet = true;
+    await expect(recordOfficeRevision(ctx, core, event)).rejects.toThrow('worker stopped');
+    expect(await recordOfficeRevision(ctx, core, event)).toMatchObject({
+      accepted: true, stage: 'rejected', rev: 3, approvalId });
+    expect(core.post).toHaveBeenCalledTimes(1);
+    expect(core.post.mock.calls[0][1]).toMatchObject({ ops: [{ kind: 'recordOfficeRejection',
+      rejectionCategory: 'brand_direction' }] });
+    expect(ctx.sent).toEqual([]);
+    expect(ctx.reminders).toEqual([]);
+    await expect(recordOfficeRevision(ctx, core, { ...event, reason: 'Changed reason' }))
+      .rejects.toThrow('different content');
+    await expect(recordOfficeRevision(ctx, core, { ...event, eventId: `desk:${randomUUID()}` }))
+      .rejects.toThrow('invalid office revision');
+  });
 });

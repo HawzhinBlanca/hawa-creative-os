@@ -3,6 +3,12 @@ import crypto from 'node:crypto';
 
 export type ApprovalState = 'approved' | 'revision_requested' | 'rejected';
 
+export type RejectionCategory = 'concept' | 'content' | 'brand_direction' | 'task';
+export function parseRejectionCategory(input: unknown): RejectionCategory | null {
+  return input === 'concept' || input === 'content' || input === 'brand_direction' || input === 'task'
+    ? input : null;
+}
+
 export type StandardReviewerRole =
   | 'art_director'
   | 'creative_director'

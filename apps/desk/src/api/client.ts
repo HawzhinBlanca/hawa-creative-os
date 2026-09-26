@@ -66,6 +66,7 @@ export interface TaskListResponse<T = any> {
 export interface DecisionPayload {
   action: 'approve' | 'revision_requested' | 'reject' | 'escalate';
   reason?: string;
+  rejectionCategory?: 'concept' | 'content' | 'brand_direction' | 'task';
   expectedTaskVersion?: number;
   capturedArtifactSetHash?: string;
   qcReportHash?: string;

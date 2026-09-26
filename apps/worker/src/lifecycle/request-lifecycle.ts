@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 import * as restate from '@restatedev/restate-sdk';
 import type { BlobRef, DeliveryInput, DeliveryOutcome, OutboundMessage } from '@hawa/contracts';
-import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProof, type OfficeApprovalProof, type StructuredRevisionRequest } from '@hawa/domain';
+import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
 import { coreInternalFromEnv, DeliveryApi, type CoreInternal } from './delivery.js';
 import { TelegramSenderApi } from './telegram-sender.js';
@@ -67,7 +67,7 @@ export interface OpenAutomaticEvent extends Omit<OpenManualEvent, 'draft'> {
 }
 
 export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'stage' | 'rev'> {
-  stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'delivering' | 'delivered';
+  stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'rejected' | 'delivering' | 'delivered';
   rev: number;
   runId: string;
   /** Current design round (0 = original, 1+ = revision rounds). */
@@ -79,7 +79,7 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
     /** Derived from the confirmed Telegram send mark, never from outcome projection time. */
     sentAtMs?: number; messageId?: string };
   officeRevision?: { eventId: string; sha256: string; actionId: string; revisionId: string; approvalId: string;
-    kind?: 'revise' | 'approve' };
+    kind?: 'revise' | 'approve' | 'reject' };
   /** Filled when the requester submits a revision directive after the office marks "revise". */
   revisionRound?: { eventId: string; sha256: string; round: number; newTaskId: string; runId: string };
   delivery?: { startEventId: string; startSha256: string; actionId: string; input: DeliveryInput;
@@ -90,8 +90,9 @@ export interface OfficeRevisionEvent {
   v: 1; eventId: string; requestId: string; taskId: string; revisionId: string;
   actionId: string;
   /** expectedRev ≥ 2: first decision is at 2; subsequent revision rounds use 2+2k. */
-  expectedRev: number; kind: 'revise' | 'approve';
+  expectedRev: number; kind: 'revise' | 'approve' | 'reject';
   actor: { userId: string; role: string }; reason: string;
+  rejectionCategory?: RejectionCategory;
   /** Optional only for signed decisions already in flight before the structured-feedback rollout. */
   revisionRequest?: StructuredRevisionRequest;
   approvalProof?: OfficeApprovalProof;
@@ -100,7 +101,7 @@ export interface OfficeRevisionEvent {
 
 export type OfficeRevisionReply =
   | { accepted: true; requestId: string; taskId: string; revisionId: string; actionId: string;
-      approvalId: string; stage: 'manual' | 'approved'; rev: number }
+      approvalId: string; stage: 'manual' | 'approved' | 'rejected'; rev: number }
   | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
 
 export interface OfficeDeliveryStartEvent {
@@ -444,17 +445,20 @@ const APPROVAL_ROLES = new Set(['art_director', 'creative_director', 'office_adm
 export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: CoreInternal, event: OfficeRevisionEvent): Promise<OfficeRevisionReply> {
   if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
       !UUID.test(event.taskId) || !UUID.test(event.revisionId) || !UUID.test(event.actionId) ||
-      event.eventId !== `desk:${event.actionId}` || !['revise', 'approve'].includes(event.kind) ||
+      event.eventId !== `desk:${event.actionId}` || !['revise', 'approve', 'reject'].includes(event.kind) ||
       !Number.isInteger(event.expectedRev) || event.expectedRev < 2 ||
       !event.actor || !UUID.test(event.actor.userId) ||
-      !(event.kind === 'approve' ? APPROVAL_ROLES : OFFICE_ROLES).has(event.actor.role) || typeof event.reason !== 'string' ||
+      !(event.kind === 'approve' || event.kind === 'reject' ? APPROVAL_ROLES : OFFICE_ROLES).has(event.actor.role) || typeof event.reason !== 'string' ||
       !event.reason.trim() || event.reason.length > 2000 ||
       (event.revisionRequest !== undefined &&
         (!parseCompleteRevisionRequest(event.revisionRequest) ||
           event.revisionRequest.comment.trim() !== event.reason.trim())) ||
       (event.kind === 'approve' && (!parseOfficeApprovalProof(event.approvalProof) ||
         !/^[a-f0-9]{64}$/.test(event.deskRequestFingerprint || '') || event.revisionRequest !== undefined)) ||
-      (event.kind === 'revise' && (event.approvalProof !== undefined || event.deskRequestFingerprint !== undefined))) {
+      (event.kind === 'revise' && (event.approvalProof !== undefined || event.deskRequestFingerprint !== undefined || event.rejectionCategory !== undefined)) ||
+      (event.kind === 'reject' && (!parseRejectionCategory(event.rejectionCategory) ||
+        event.approvalProof !== undefined || event.deskRequestFingerprint !== undefined || event.revisionRequest !== undefined)) ||
+      (event.kind === 'approve' && event.rejectionCategory !== undefined)) {
     throw invalid('invalid office revision identity, reviewer or audit reason');
   }
   const fingerprint = hashOf(event);
@@ -471,7 +475,7 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
     if (event.kind === 'revise') sendOfficeRevisionNotice(ctx, prior, event);
     return { accepted: true, requestId: prior.requestId, taskId: prior.taskId,
       revisionId: prior.officeRevision.revisionId, actionId: prior.officeRevision.actionId,
-      approvalId: prior.officeRevision.approvalId, stage: prior.stage as 'manual' | 'approved', rev: nextRev };
+      approvalId: prior.officeRevision.approvalId, stage: prior.stage as 'manual' | 'approved' | 'rejected', rev: nextRev };
   }
   if (prior.rev !== expectedRev || prior.stage !== 'in_review') return { accepted: false, code: 'WRONG_STAGE' };
   if (prior.taskId !== event.taskId || prior.outcome?.revisionId !== event.revisionId) {
@@ -479,18 +483,19 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
   }
   const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
     v: 1; requestId: string; taskId: string; revisionId: string; actionId: string;
-    approvalId: string; taskState: string; rev: number; stage: 'manual' | 'approved';
+    approvalId: string; taskState: string; rev: number; stage: 'manual' | 'approved' | 'rejected';
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/office-decision`, {
     v: 1, expectedRev, rev: nextRev,
     key: `${event.requestId}:${nextRev}:officeDecision:${event.eventId}`,
-    ops: [{ kind: event.kind === 'approve' ? 'recordOfficeApproval' : 'recordOfficeRevision', taskId: event.taskId, revisionId: event.revisionId,
+    ops: [{ kind: event.kind === 'approve' ? 'recordOfficeApproval' : event.kind === 'reject' ? 'recordOfficeRejection' : 'recordOfficeRevision', taskId: event.taskId, revisionId: event.revisionId,
       actionId: event.actionId, actor: event.actor, reason: event.reason.trim(),
+      ...(event.rejectionCategory ? { rejectionCategory: event.rejectionCategory } : {}),
       ...(event.revisionRequest ? { revisionRequest: parseCompleteRevisionRequest(event.revisionRequest) } : {}),
       ...(event.approvalProof ? { approvalProof: parseOfficeApprovalProof(event.approvalProof),
         deskRequestFingerprint: event.deskRequestFingerprint } : {}) }],
   }));
-  const expectedStage = event.kind === 'approve' ? 'approved' : 'manual';
-  const expectedTaskState = event.kind === 'approve' ? 'approved' : 'revision_requested';
+  const expectedStage = event.kind === 'approve' ? 'approved' : event.kind === 'reject' ? 'rejected' : 'manual';
+  const expectedTaskState = event.kind === 'approve' ? 'approved' : event.kind === 'reject' ? 'rejected' : 'revision_requested';
   if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
       projected.revisionId !== event.revisionId || projected.actionId !== event.actionId ||
       !UUID.test(projected.approvalId) || projected.taskState !== expectedTaskState ||

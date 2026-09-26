@@ -136,6 +136,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const [revisionPriority, setRevisionPriority] = useState<NonNullable<DecisionPayload['revisionRequest']>['priority'] | ''>('');
   const [revisionReusable, setRevisionReusable] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
+  const [rejectionCategory, setRejectionCategory] = useState<DecisionPayload['rejectionCategory']>();
+  const [rejectionReason, setRejectionReason] = useState('');
   // The stored exports the reviewer can pin to the approval; delivery sends exactly the pinned files.
   const [approvalExports, setApprovalExports] = useState<Reading<StoredExport[]>>({ state: 'loading' });
   const [pinnedExportIds, setPinnedExportIds] = useState<string[]>([]);
@@ -441,6 +444,41 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     finally { decisionStarting.current = false; }
   };
 
+  const reject = useMutation({
+    mutationFn: (input: { taskId: string; revisionId: string; category: NonNullable<DecisionPayload['rejectionCategory']>;
+      reason: string; actionKey: string; reservation: ReservedDecisionAction }) =>
+      apiClient.tasks.recordDecision(input.taskId, input.revisionId, {
+        action: 'reject', rejectionCategory: input.category, reason: input.reason,
+      }, input.reservation.actionId),
+    onSuccess: async (_result, input) => {
+      completeDecisionAction(input.actionKey, input.reservation);
+      setIsRejectionModalOpen(false);
+      setRejectionCategory(undefined);
+      setRejectionReason('');
+      const refreshed = await readTaskAgain(input.taskId);
+      showToast(refreshed ? `Rejection recorded. Core reports ${taskStatusView(refreshed.status).pill}.`
+        : 'Rejection recorded. Refresh the task to see its final state.', 'success');
+    },
+    onError: (err: Error) => showToast(`Rejection could not be confirmed: ${err.message}. Keep this dialog open and retry.`, 'error'),
+  });
+
+  const handleReject = async () => {
+    if (decisionStarting.current || reject.isPending || !selectedTask?.latestRevisionId || !rejectionCategory || !rejectionReason.trim()) return;
+    if (selectedTask.status !== 'AWAITING_APPROVAL' || approvalRoleBlocker(sessionUser?.role)) {
+      showToast('This draft is no longer available for this reviewer. Refresh the task.', 'error');
+      return;
+    }
+    const actionKey = JSON.stringify([sessionUser?.id, selectedTask.id, selectedTask.latestRevisionId,
+      'reject', rejectionCategory, rejectionReason.trim()]);
+    decisionStarting.current = true;
+    try {
+      const reservation = await reserveDecisionAction(actionKey);
+      reject.mutate({ taskId: selectedTask.id, revisionId: selectedTask.latestRevisionId,
+        category: rejectionCategory, reason: rejectionReason.trim(), actionKey, reservation });
+    } catch (err) { showToast(`Rejection could not start: ${reasonOf(err)}`, 'error'); }
+    finally { decisionStarting.current = false; }
+  };
+
   // Primary Action 4: Approve captured files (FR-078, CV-15, H02, H03). The modal lists the exports
   // Core has stored for the task; the ones the reviewer keeps selected are pinned to the approval.
   const openApprovalModal = async () => {
@@ -517,7 +555,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   };
 
   // Every action button waits while one runs.
-  const busy = actionLoading || approve.isPending || requestRevision.isPending;
+  const busy = actionLoading || approve.isPending || reject.isPending || requestRevision.isPending;
 
   // Primary Action 5: Deliver approved files (FR-078, CV-16, H02)
   const handleDeliver = async () => {
@@ -987,6 +1025,15 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     >
                       <span className="btn-icon" aria-hidden="true">✅</span>
                       <span>{approve.isPending ? 'Approving…' : 'Approve Captured Files'}</span>
+                    </button>
+                  )}
+
+                  {selectedTask.status === 'AWAITING_APPROVAL' && selectedTask.latestRevisionId && (
+                    <button id="btn-reject-design" className="action-btn revision-btn"
+                      onClick={() => setIsRejectionModalOpen(true)} disabled={busy || Boolean(approvalRoleBlocker(sessionUser?.role))}
+                      title="Stop this request and record why the current design is rejected">
+                      <span className="btn-icon" aria-hidden="true">⛔</span>
+                      <span>{reject.isPending ? 'Rejecting…' : 'Reject Design'}</span>
                     </button>
                   )}
 
@@ -1480,6 +1527,34 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 }
               >
                 {approve.isPending ? 'Approving…' : 'Confirm Approval'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isRejectionModalOpen && selectedTask?.latestRevisionId && (
+        <div className="hawa-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-reject-title">
+          <div className="hawa-modal-box">
+            <h3 id="modal-reject-title">Reject this design</h3>
+            <p>This stops production for this request. Record which part is rejected and why.</p>
+            <label className="hawa-revision-label" htmlFor="rejection-category">What is rejected?</label>
+            <select id="rejection-category" className="hawa-input" value={rejectionCategory || ''}
+              onChange={(event) => setRejectionCategory(event.target.value as DecisionPayload['rejectionCategory'])}>
+              <option value="">Select a category</option>
+              <option value="concept">Concept</option>
+              <option value="content">Content</option>
+              <option value="brand_direction">Brand direction</option>
+              <option value="task">The whole task</option>
+            </select>
+            <label className="hawa-revision-label" htmlFor="rejection-reason">Reason</label>
+            <textarea id="rejection-reason" className="hawa-textarea" rows={4} maxLength={2000}
+              value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button className="btn" onClick={() => setIsRejectionModalOpen(false)}>Cancel</button>
+              <button className="btn primary" onClick={handleReject}
+                disabled={busy || !rejectionCategory || !rejectionReason.trim()}>
+                {reject.isPending ? 'Recording…' : 'Confirm Rejection'}
               </button>
             </div>
           </div>

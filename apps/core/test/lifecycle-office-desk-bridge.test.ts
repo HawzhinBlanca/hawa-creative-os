@@ -138,6 +138,61 @@ async function recordClaimedReceipts(taskId: string, options: { sheet?: boolean;
 }
 
 describe('authenticated Desk to private lifecycle office decision', () => {
+  it('rejects through the signed owner and replays a lost Desk answer without another decision', async () => {
+    const { requestId, taskId, revisionId, chatId, runId } = await reviewableRequest();
+    let state = { v: 1, requestId, tenantId, chatId, owner: 'restate', stage: 'in_review', rev: 2,
+      taskId, runId, outcome: { revisionId } } as unknown as AutomaticLifecycleState;
+    const object: AutomaticOpenContext = {
+      key: requestId, get: async () => state, run: async (_name, action) => action(),
+      set: (_name, value) => { state = value as AutomaticLifecycleState; },
+      send: () => { throw new Error('rejection starts no revision notice'); },
+      startDesign: () => { throw new Error('rejection starts no design'); },
+    };
+    const internal = createApp({ db } as any);
+    const core = { post: async <T>(path: string, payload: unknown): Promise<T> => {
+      const answer = await internal.request(`/v1${path}`, { method: 'POST',
+        headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload) });
+      if (!answer.ok) throw new Error(`Core projection HTTP ${answer.status}`);
+      return answer.json() as Promise<T>;
+    } };
+    let loseAnswer = true;
+    const transport = vi.fn(async (_url: string, init?: RequestInit) => {
+      const envelope = JSON.parse(String(init?.body)) as SignedOfficeDecision;
+      expect(checkSignedOfficeDecision(envelope, secret)).toBe('ok');
+      const result = await recordOfficeRevision(object, core, envelope.event);
+      if (loseAnswer) { loseAnswer = false; throw new Error('Desk answer lost'); }
+      return Response.json(result);
+    });
+    vi.stubGlobal('fetch', transport);
+    const path = `/v1/tasks/${taskId}/revisions/${revisionId}/decisions`;
+    const director = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+    const operator = createApp({ db, testAuth: { principal: { role: 'operator', userId } } });
+    const actionId = randomUUID();
+    const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': actionId };
+    const body = { action: 'reject', rejectionCategory: 'concept', reason: 'The concept misses the brief' };
+    expect((await operator.request(path, { method: 'POST', headers, body: JSON.stringify(body) })).status).toBe(403);
+    expect((await director.request(path, { method: 'POST', headers, body: JSON.stringify({
+      ...body, rejectionCategory: 'other' }) })).status).toBe(422);
+    expect(transport).not.toHaveBeenCalled();
+    expect((await director.request(path, { method: 'POST', headers, body: JSON.stringify(body) })).status).toBe(503);
+    const restarted = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+    const accepted = await restarted.request(path, { method: 'POST', headers, body: JSON.stringify(body) });
+    expect(accepted.status).toBe(201);
+    expect(await accepted.json()).toMatchObject({ decision: 'rejected', requestRev: 3 });
+    expect((await restarted.request(path, { method: 'POST', headers,
+      body: JSON.stringify({ ...body, reason: 'Changed reason' }) })).status).toBe(409);
+    expect(transport).toHaveBeenCalledTimes(2);
+    const rows = await withRlsContext(db, scope, async (trx) => ({
+      request: await trx.selectFrom('requests').select(['stage', 'rev']).where('request_id', '=', requestId).executeTakeFirst(),
+      approvals: await trx.selectFrom('approvals').select(['decision', 'decision_payload'])
+        .where('task_id', '=', taskId).execute(),
+    }));
+    expect(rows.request).toMatchObject({ stage: 'rejected', rev: '3' });
+    expect(rows.approvals).toMatchObject([{ decision: 'rejected',
+      decision_payload: { rejectionCategory: 'concept' } }]);
+  });
+
   it('keeps a possible Drive archive open through a failed worker report and a new request-owned run', async () => {
     const { requestId, taskId, approval, store, start } = await approvedForDelivery();
     const first = await projectLifecycleDeliveryStart(db, store, start);

@@ -151,6 +151,30 @@ describe('Request Revision (WorkScreen handleSendRevisionRequest)', () => {
   });
 });
 
+describe('Reject Design (WorkScreen handleReject)', () => {
+  it('requires a current review draft and reserves one action bound to category and reason', async () => {
+    const reserveDecisionAction = vi.fn(async () => ({ actionId: 'action-1' }));
+    const mutate = vi.fn();
+    const base = { selectedTask: { id: 'task-1', status: 'AWAITING_APPROVAL', latestRevisionId: 'rev-1' },
+      sessionUser: { id: 'reviewer-1', role: 'art_director' }, rejectionCategory: 'brand_direction',
+      rejectionReason: 'Wrong brand direction', decisionStarting: { current: false },
+      reject: { isPending: false, mutate }, approvalRoleBlocker: () => null,
+      reserveDecisionAction, showToast: vi.fn() };
+    const send = lift<() => Promise<void>>('handleReject', base);
+    await send();
+    expect(reserveDecisionAction).toHaveBeenCalledWith(JSON.stringify([
+      'reviewer-1', 'task-1', 'rev-1', 'reject', 'brand_direction', 'Wrong brand direction',
+    ]));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'brand_direction', reason: 'Wrong brand direction', reservation: { actionId: 'action-1' },
+    }));
+    const stale = lift<() => Promise<void>>('handleReject', { ...base,
+      selectedTask: { ...base.selectedTask, status: 'APPROVED' } });
+    await stale();
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('the task queue (WorkScreen readQueuePage, the list query\'s one request)', () => {
   // 180 tasks, newest first; the ten oldest await approval. Core filters by `statuses` and pages by
   // cursor as GET /tasks does.

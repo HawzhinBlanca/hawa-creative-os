@@ -177,4 +177,54 @@ describe('versioned lifecycle design outcome', () => {
       qc_run_id: rows.qcRuns[0]?.id })]);
     expect(rows.receipts.map((r) => Number(r.rev)).sort()).toEqual([1, 2, 3]);
   });
+
+  it('atomically rejects the current draft with a category and refuses changed or stale retries', async () => {
+    const { requestId, taskId } = await opened();
+    const designId = `DA${randomUUID().replaceAll('-', '').slice(0, 12)}`;
+    await withRlsContext(db, scope, (trx) => new CanvaBindingRepository(trx).createBinding({
+      tenantId, taskId, clientId, canvaDesignId: designId,
+      editUrl: `https://www.canva.com/design/${designId}/edit`,
+    }, trx));
+    const designed = await post(requestId, 'design-outcome', outcome(requestId, taskId,
+      { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId }));
+    expect(designed.status).toBe(200);
+    const revisionId = designed.body.revisionId as string;
+    const actionId = randomUUID();
+    const decision = { v: 1, expectedRev: 2, rev: 3,
+      key: `${requestId}:3:officeDecision:desk:${actionId}`,
+      ops: [{ kind: 'recordOfficeRejection', taskId, revisionId, actionId,
+        actor: { userId: scope.userId, role: 'art_director' },
+        reason: 'Concept does not meet the brief', rejectionCategory: 'concept' }],
+    };
+    expect((await post(requestId, 'office-decision', { ...decision, ops: [{ ...decision.ops[0],
+      rejectionCategory: 'other' }] })).status).toBe(400);
+    expect(await post(requestId, 'office-decision', { ...decision, ops: [{ ...decision.ops[0],
+      actor: { userId: scope.userId, role: 'operator' } }] })).toMatchObject({
+      status: 409, body: { code: 'UNAUTHORIZED_ACTOR' },
+    });
+    const [first, concurrent] = await Promise.all([
+      post(requestId, 'office-decision', decision), post(requestId, 'office-decision', decision),
+    ]);
+    expect(first).toMatchObject({ status: 200, body: { stage: 'rejected', rev: 3,
+      taskState: 'rejected', approvalId: expect.any(String) } });
+    expect(concurrent).toEqual(first);
+    expect(await post(requestId, 'office-decision', decision)).toEqual(first);
+    expect(await post(requestId, 'office-decision', { ...decision, ops: [{ ...decision.ops[0],
+      reason: 'A different decision' }] })).toMatchObject({
+      status: 409, body: { code: 'IDEMPOTENCY_CONFLICT' },
+    });
+    const rows = await withRlsContext(db, scope, async (trx) => ({
+      request: await trx.selectFrom('requests').select(['rev', 'stage']).where('request_id', '=', requestId).executeTakeFirst(),
+      task: await trx.selectFrom('tasks').select(['state']).where('id', '=', taskId).executeTakeFirst(),
+      approval: await trx.selectFrom('approvals').select(['decision', 'reason', 'decision_payload'])
+        .where('task_id', '=', taskId).executeTakeFirst(),
+      events: await trx.selectFrom('task_events').select(['event_type'])
+        .where('task_id', '=', taskId).where('event_type', '=', 'design.rejected').execute(),
+    }));
+    expect(rows.request).toMatchObject({ rev: '3', stage: 'rejected' });
+    expect(rows.task).toMatchObject({ state: 'rejected' });
+    expect(rows.approval).toMatchObject({ decision: 'rejected', reason: decision.ops[0].reason,
+      decision_payload: { rejectionCategory: 'concept' } });
+    expect(rows.events).toHaveLength(1);
+  });
 });
