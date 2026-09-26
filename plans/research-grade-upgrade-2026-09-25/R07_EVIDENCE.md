@@ -1,5 +1,16 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — legacy receipt wins across a chat flag change (ADR-059 addendum)
+
+After the first-brief checkpoint, a second cutover replay was found: an update already
+committed by the Core poller could be seen again by ChatInbox after the chat flag
+changed. Core now checks the existing Telegram intake receipt before preparing a
+lifecycle open, and returns that old task as a duplicate. The focused PostgreSQL
+intake file passed **21 tests**, including old-update replay after flag change;
+Core TypeScript passed. The earlier **425 files / 3,280 tests** source result belongs
+to the immediately preceding `99eb6b0` checkpoint and was not rerun for this
+small follow-up. Live cutover and killed-process evidence remain open.
+
 ## 2026-09-26 — first and concurrent Telegram briefs reach the request owner (ADR-059)
 
 Before this change, no production ChatInbox path called `RequestLifecycle.open`. A flagged

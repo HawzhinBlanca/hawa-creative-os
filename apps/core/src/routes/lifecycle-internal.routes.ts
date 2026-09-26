@@ -24,6 +24,7 @@ import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeAppr
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { classifyWithHeuristics } from '../services/telegram-classifier.js';
+import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
 import { linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
@@ -233,6 +234,15 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               }
               return handled(409, { code: priorRefusal.code,
                 lifecycleAction: actionFor(priorRefusal.code), chatId });
+            }
+            // The Core poller may have committed this update before the chat flag or worker
+            // poller changed. Its old receipt wins; reopening it under Restate would duplicate
+            // a task even though this update ID is the same.
+            const oldIntake = await createTelegramUpdateState(ctx)
+              .telegramUpdateHandled(chatId, String(update.update_id));
+            if (oldIntake) {
+              return handled(200, { duplicate: true,
+                ...(oldIntake.taskId ? { taskIds: [oldIntake.taskId] } : {}) });
             }
             // A lost answer from Core must replay before reading today's stage. The original
             // projection already moved manual → designing; falling through would create a legacy task.

@@ -188,9 +188,14 @@ describe('POST /v1/internal/telegram/intake', () => {
     fakeTelegram();
     const chat = chatId();
     const app = createApp({ db } as any);
-    const old = await intake(app, brief(updateId(), chat));
+    const oldUpdate = brief(updateId(), chat);
+    const old = await intake(app, oldUpdate);
     expect(old.body.taskIds).toHaveLength(1);
     vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const replay = await intake(createApp({ db } as any), oldUpdate);
+    expect(replay.body).toMatchObject({ duplicate: true, taskIds: old.body.taskIds });
+    expect(replay.body.lifecycleAction).toBeUndefined();
+    expect(await tasksInChat(chat)).toHaveLength(1);
     const ordinary = brief(updateId(), chat);
     ordinary.message.text = 'KAAE follow-up event\n---\nDecember 9, 2026';
     const legacy = await intake(app, ordinary);

@@ -14,6 +14,12 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 
 ## Current result (2026-09-26 — R07 new-brief admission worktree)
 
+**Cutover replay follow-up:** Core now checks whether the same Telegram update was
+already committed by legacy intake before preparing a lifecycle request. The focused
+PostgreSQL intake file passed 21 tests and Core TypeScript passed. The wider 3,280-test
+source result below belongs to the preceding `99eb6b0` checkpoint; it was not rerun
+for this follow-up.
+
 **The missing first-brief handoff is now locally wired.** Core stores a hash-bound,
 prepared Telegram brief, then ChatInbox sends one keyed `RequestLifecycle.open` so the
 request owner creates the task. `/new <brief>` opens a separate request in a busy chat;

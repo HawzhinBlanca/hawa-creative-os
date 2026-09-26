@@ -29,6 +29,9 @@ busy chat can be misread as a revision directive.
   request by accident.
 - Existing core-owned tasks remain on legacy intake. Disabling the lifecycle flag
   affects only future new requests; it does not change a request's stored owner.
+- A legacy intake receipt for the Telegram update takes precedence over a new lifecycle
+  decision when the chat flag changes between deliveries. The same update must not
+  create a second task across executor cutover.
 
 ## Consequences
 
