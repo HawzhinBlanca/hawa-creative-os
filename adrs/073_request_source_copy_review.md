@@ -1,7 +1,7 @@
 # ADR-073: Bind requester-reviewed source copy to the existing lifecycle
 
 Date: 2026-09-27
-Status: implemented with focused acceptance; sealed regression and production admission pending
+Status: locally qualified by focused, process-crash, Restate transport and sealed regression evidence; production admission pending
 Requirements: FR-001, FR-002, FR-004, FR-009, FR-010, FR-011, FR-018, FR-060, NFR-006, NFR-014
 Sources: docs/09_MESSAGING_AND_OFFICE_INBOX.md §§3–10; docs/10_WORKFLOW_RELIABILITY.md §§1–7; docs/08_MEMORY_RAG_CLIENT_DNA.md §§2–6; ADR-061, ADR-069–072.
 

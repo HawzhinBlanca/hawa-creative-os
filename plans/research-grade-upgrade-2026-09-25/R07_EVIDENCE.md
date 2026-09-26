@@ -44,12 +44,11 @@ denial. An additional red-before test then reproduced a real policy bypass after
 raw replay of migration 019. Migration 043 now adds **restrictive** client policies
 over the original tenant gate, so a restored permissive policy cannot bypass them.
 The policy/upgrade/source set passed **5 files / 30 tests**, including a fresh pass
-of the 26-invariant Core crash drill. Final sealed regression remains pending.
+of the 26-invariant Core crash drill. Final sealed regression: source `f4adf23`, tested seal `0fd198b` passed **444 files / 3469 tests**, with **6 files / 58 tests skipped**. Blueprint **851/0/0** and release manifest verified. The opt-in Core and Docker/Restate proofs passed separately as recorded above. No production deployment or flag change.
 
 The crash result, source hashes, limits and earlier failed runs are in
 `R07_SOURCE_RECOVERY_PROOF.json`; usage/recovery is in
-`runbooks/REQUEST_SOURCE_REVIEW.md`. Sealed full regression is pending for this
-source checkpoint. The standard suite skips this opt-in drill; its explicit pass
+`runbooks/REQUEST_SOURCE_REVIEW.md`. The final sealed regression is recorded above. The standard suite skips this opt-in drill; its explicit pass
 is recorded above. Voice, real office source fidelity, live Telegram/Restate/Canva
 export, clean-host recovery and independent human quality remain open. No request
 copy confirmation promotes knowledge or approves a design.

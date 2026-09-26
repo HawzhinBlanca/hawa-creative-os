@@ -154,7 +154,16 @@
     "lint": "passed",
     "deskBuild": "passed",
     "secretScan": "passed; zero secrets",
-    "sealedRegression": "pending",
+    "sealedRegression": {
+      "status": "passed",
+      "commit": "0fd198b",
+      "sourceCommit": "f4adf23",
+      "filesPassed": 444,
+      "filesSkipped": 6,
+      "testsPassed": 3469,
+      "testsSkipped": 58,
+      "log": "/private/tmp/hawa-telegram-source-full-final.log"
+    },
     "policyFollowup": {
       "filesPassed": 5,
       "testsPassed": 30,
@@ -168,7 +177,13 @@
       "testsFailed": 1,
       "testsSkipped": 58,
       "cause": "The old blob fixture assumed tenant identity alone authorizes task-file access. It now requires an authorized actor and asserts tenant-only denial."
-    }
+    },
+    "blueprint": {
+      "passed": 851,
+      "warnings": 0,
+      "failed": 0
+    },
+    "releaseManifest": "verified"
   },
   "earlierRuns": [
     "Downloader red-before: 7 failed / 7 passed. An earlier infinite test stream was interrupted and replaced by finite chunks.",

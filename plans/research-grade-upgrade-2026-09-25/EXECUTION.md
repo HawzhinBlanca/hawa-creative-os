@@ -27,13 +27,15 @@ PDF correction-notice scenario passed 5/5 invariants with two completed invocati
 and one critical requester prompt. The first full suite passed 3468 tests with one
 old tenant-only fixture failure (58 skipped). A follow-up test exposed old-migration
 policy replay bypass; mandatory client restrictions and updated actor fixtures now
-pass 5 files/30 tests, including the Core crash drill again. Final full regression
-is pending. See ADR-073, R07_EVIDENCE.md, R12_EVIDENCE.md,
+pass 5 files/30 tests, including the Core crash drill again. Final sealed regression: source `f4adf23`, tested seal `0fd198b` passed **444 files / 3469 tests**, with **6 files / 58 tests skipped**. Blueprint **851/0/0** and release manifest verified. The opt-in Core and Docker/Restate proofs passed separately as recorded above. No production deployment or flag change. See ADR-073, R07_EVIDENCE.md, R12_EVIDENCE.md,
 R07_SOURCE_RECOVERY_PROOF.json and runbooks/REQUEST_SOURCE_REVIEW.md.
 
-Next: seal and qualify this coherent PDF workflow; then voice with reviewed copy,
+Next: voice with reviewed copy,
 locked client egress and durable paid-call uncertainty, followed by the complete
 real request → editable design → revision → approval → export/delivery journey.
+Prepare the qualified Core/Desk/worker/Docling candidate for an isolated office-work
+canary: the running production containers were healthy on inspection, but the new
+source candidate and PDF sidecar have not been deployed.
 Cited Design Plans and retrieval relevance/latency, clean-host/WAL/PITR/Restate
 recovery and independent human creative-quality admission remain in scope.
 Production services and enrolment flags are unchanged; app-wide 10/10 is unproven.
