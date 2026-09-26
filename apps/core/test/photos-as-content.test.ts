@@ -1,6 +1,6 @@
 import { describe, expect, it, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { createDb } from '@hawa/db';
+import { createDb, sql, withRlsContext } from '@hawa/db';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { DesignStudioService, asksForPictures, contentPhotoFromDataUrl } from '../src/services/design-studio/design-studio-service.js';
 import { photosBrief } from '../src/services/design-studio/stages/layouts.stage.js';
@@ -95,6 +95,47 @@ describe.skipIf(!url)('the request carries every image sent with it', () => {
       designInstructions: '', exactCopy: [], designStudio: true,
     })).task.id as string;
     expect(await (service() as any).requestImages(scope, other)).toEqual([]);
+  });
+
+  it('does not borrow a nearby unbound photo for a request-owned design', async () => {
+    const channel = `owned-photos-${randomUUID().slice(0, 8)}`;
+    await persistChatIntake(db, {
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: channel, clientId: null,
+      title: 'Unbound photo', rawText: 'reference', designInstructions: '', exactCopy: [],
+      isInstructionOnly: true, autoGenerate: false,
+      studioOptions: { referenceImageBase64: photo },
+    });
+    const owned = await persistChatIntake(db, {
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: channel, clientId,
+      title: 'A separate owned request', rawText: 'New design', designInstructions: 'New design',
+      exactCopy: [], designStudio: true,
+    });
+    const requestId = randomUUID();
+    await withRlsContext(db, { tenantId: scope.tenantId, userId: scope.actorId, role: 'operator' }, async (trx) => {
+      await sql`INSERT INTO hawa.requests (request_id, tenant_id, root_task_id, current_task_id,
+        parent_request_id, owner, stage, rev, chat_id)
+        VALUES (${requestId}::uuid, ${scope.tenantId}::uuid, ${owned.task.id}::uuid,
+          ${owned.task.id}::uuid, null, 'restate', 'manual', 1, ${channel})`.execute(trx);
+      await sql`UPDATE hawa.tasks SET request_id = ${requestId}::uuid
+        WHERE tenant_id = ${scope.tenantId}::uuid AND id = ${owned.task.id}::uuid`.execute(trx);
+    });
+    expect(await (service() as any).requestImages(scope, owned.task.id)).toEqual([]);
+
+    const attached = await persistChatIntake(db, {
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: channel, clientId,
+      title: 'Request with its own photo', rawText: 'Another design', designInstructions: 'Another design',
+      exactCopy: [], designStudio: true, studioOptions: { referenceImageBase64: photo },
+    });
+    const attachedRequestId = randomUUID();
+    await withRlsContext(db, { tenantId: scope.tenantId, userId: scope.actorId, role: 'operator' }, async (trx) => {
+      await sql`INSERT INTO hawa.requests (request_id, tenant_id, root_task_id, current_task_id,
+        parent_request_id, owner, stage, rev, chat_id)
+        VALUES (${attachedRequestId}::uuid, ${scope.tenantId}::uuid, ${attached.task.id}::uuid,
+          ${attached.task.id}::uuid, null, 'restate', 'manual', 1, ${channel})`.execute(trx);
+      await sql`UPDATE hawa.tasks SET request_id = ${attachedRequestId}::uuid
+        WHERE tenant_id = ${scope.tenantId}::uuid AND id = ${attached.task.id}::uuid`.execute(trx);
+    });
+    expect(await (service() as any).requestImages(scope, attached.task.id)).toEqual([photo]);
   });
 });
 

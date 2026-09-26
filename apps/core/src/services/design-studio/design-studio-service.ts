@@ -237,7 +237,7 @@ export class DesignStudioService {
     const valid = (url: unknown): url is string => typeof url === 'string' && /^data:image\/(png|jpe?g|webp);base64,/.test(url);
     const source = await this.tx(s, async (db) =>
       (
-        await sql<{ data: any; created_at: string }>`SELECT e.data, t.created_at FROM hawa.task_events e
+        await sql<{ data: any; created_at: string; request_id: string | null }>`SELECT e.data, t.created_at, t.request_id FROM hawa.task_events e
         JOIN hawa.tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id
         WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid AND e.event_type='task.created'
         ORDER BY e.aggregate_version LIMIT 1`.execute(db)
@@ -249,6 +249,10 @@ export class DesignStudioService {
 
     const own = payload.studioOptions?.referenceImageBase64 || payload.referenceImageBase64;
     if (valid(own)) found.push({ at: myTime, url: own });
+
+    // RequestLifecycle fixes scope when it creates the task. Nearby unbound photos have no
+    // verified request identity, so only images attached to this task may enter its design.
+    if (source?.request_id) return found.map((item) => item.url);
 
     const channel = payload.sourceChannelId;
     // An hour back, not a day: a day's window let pictures from the day's earlier attempts, failed

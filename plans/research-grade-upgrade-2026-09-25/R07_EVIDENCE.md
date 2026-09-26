@@ -1,5 +1,29 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — owned designs cannot borrow nearby unbound photos (ADR-060)
+
+Studio's legacy image lookup inferred that a photo belonged to a task from the same
+chat and nearby time. A red-before isolated PostgreSQL test linked a design task to
+a Restate-owned request, left a prior chat photo unbound, and showed that Studio
+returned that photo as input anyway. Studio now reads only images attached to the
+owned task's creation event when `tasks.request_id` is set. A second fixture proves
+an image explicitly attached to that task remains usable. Core-owned tasks retain
+their existing photo behavior. ADR-060 records the scope decision and the required
+explicit media binding for later lifecycle intake. Requirements: FR-011, NFR-006.
+
+**Verification:** the focused Studio and adjacent legacy-reference set passed
+**4 files / 16 tests** after the red run. Repository lint and full source/test
+typecheck passed. The source suite, excluding only the intentionally unsealed
+release-manifest gate, passed **425 files / 3,286 tests**, with **4 files / 50 tests
+skipped**. Blueprint validation passed **799/0/0**. The sealed-tree release gate
+follows the evidence commit.
+
+**Limit:** This prevents inferred cross-request photos in an owned design; it does
+not supply a lifecycle image. The media update is still parked under ADR-059 until
+Core can retain a verified, request-bound image reference and DesignRun can read it.
+Live image admission, album grouping, voice/PDF use, killed-process replay and human
+quality review remain open. The production lifecycle flag remains off.
+
 ## 2026-09-26 — text refusal survives a chat flag rollback
 
 The media replay review exposed the same cutover problem for existing text refusals.
