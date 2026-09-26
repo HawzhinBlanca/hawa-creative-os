@@ -313,11 +313,11 @@ describe.skipIf(!appUrl || !ownerUrl)('blob garbage collection against PostgreSQ
       WHERE view_schema = 'hawa' AND view_name = 'blob_references'`);
     const inView = new Set(used.rows.map((r) => `${String(r.tbl).replace(/^hawa\./, '')}.${r.col}`));
     const withFk = fks.rows.map((r) => `${String(r.tbl).replace(/^hawa\./, '')}.${r.col}`);
-    expect(withFk.sort()).toEqual([...WITH_FOREIGN_KEY].sort());
+    expect(withFk.sort()).toEqual([...WITH_FOREIGN_KEY, 'client_documents.source_sha256'].sort());
     for (const column of withFk) expect(inView, `${column} has a foreign key to hawa.blobs but blob_references does not read it`).toContain(column);
     // ADR-061 also retains a pending lifecycle decision's JSON blob reference before its
     // task_files row exists. The intake test exercises that branch; it has no foreign key.
     expect([...inView].sort()).toEqual([...BRANCHES,
-      'inbox_events.event_kind', 'inbox_events.payload', 'inbox_events.source_account_id'].sort());
+      'client_documents.source_sha256', 'inbox_events.event_kind', 'inbox_events.payload', 'inbox_events.source_account_id'].sort());
   });
 });

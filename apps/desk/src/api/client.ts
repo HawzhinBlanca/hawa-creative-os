@@ -5,7 +5,7 @@
  * using authenticated sessions. No hardcoded development bearer fallbacks.
  */
 
-import { getAuthToken, setAuthToken, clearAuthToken, getCsrfToken } from '../services/auth.js';
+import { getAuthToken, setAuthToken, clearAuthToken, getCsrfToken, getAuthHeaders } from '../services/auth.js';
 
 export interface ApiSessionUser {
   id: string;
@@ -146,6 +146,14 @@ export interface DocumentInspection {
     chunks: Array<{ chunkId: string; pageNumber: number | null; text: string }>;
     extraction: { version: string; pageCount: number | null; limitations: string[] };
   };
+}
+
+export interface DocumentReceipt {
+  id: string; clientId: string; sourceSha256: string; extractionSha256: string;
+  extractorVersion: string; createdAt: string; contentUrl: string;
+}
+export interface SavedDocumentInspection extends Omit<DocumentInspection, 'sourceSaved'> {
+  sourceSaved: true; receipt: DocumentReceipt;
 }
 
 class HawaApiClient {
@@ -310,6 +318,17 @@ class HawaApiClient {
     inspectDocument: (clientId: string, file: File, signal?: AbortSignal) =>
       this.request<DocumentInspection>(`/clients/${encodeURIComponent(clientId)}/documents/inspect`,
         { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file, signal }),
+    saveDocument: (clientId: string, file: File, signal?: AbortSignal) =>
+      this.request<SavedDocumentInspection>(`/clients/${encodeURIComponent(clientId)}/documents`,
+        { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file, signal }),
+    documents: (clientId: string) => this.request<{ items: DocumentReceipt[] }>(`/clients/${encodeURIComponent(clientId)}/documents`),
+    document: (clientId: string, id: string, signal?: AbortSignal) =>
+      this.request<SavedDocumentInspection>(`/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}`, { signal }),
+    documentContent: async (clientId: string, id: string): Promise<Blob> => {
+      const response = await fetch(`/v1/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}/content`, { headers: getAuthHeaders() });
+      if (!response.ok) throw new ApiError(response.status, 'The original PDF could not be downloaded.');
+      return response.blob();
+    },
     dna: (clientId: string) => this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`),
     saveDna: (clientId: string, dna: unknown) =>
       this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`, { method: 'POST', body: JSON.stringify(dna) }),

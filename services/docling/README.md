@@ -66,5 +66,25 @@ rejects redirects. The API is `POST /v1/clients/{clientId}/documents/inspect` wi
 raw `application/pdf` bytes. Missing configuration or service yields a visible
 503, and the original document remains with the user.
 
-Rollback: remove Core's parser URL and stop the sidecar. No schema, retained
-knowledge, Client DNA, source document or task migration needs reversal.
+## Retained request sources (ADR-071)
+
+Desk also offers **Save PDF for a request** through `POST /v1/clients/{clientId}/documents`.
+Migration 041, PostgreSQL and `HAWA_BLOB_DIR` are required. Original bytes are retained
+in the existing blob store; immutable client-scoped extraction receipts become GC
+roots before task creation. Re-uploading the same source/version reuses its receipt.
+Recent saved sources can be reopened, and original downloads verify their hashes.
+Missing or corrupt storage refuses new request creation; it never substitutes text.
+
+The operator explicitly enters/edits copy and confirms it against the original.
+The existing manual Desk task transaction binds the receipt hashes, authenticated
+actor and exact copy to one task/event/outbox with a stable request key. This neither
+indexes the document nor approves knowledge or publication. A lost reply keeps the
+frozen browser request for an unchanged retry. Browser storage is tied to that browser;
+clearing it discards pending reconciliation identity, so check Work before creating
+another request. Originals/receipts follow the current append-only audit retention;
+there is no automatic expiry or source-purge UI in this slice.
+
+Rollback: remove Core's parser URL and stop the sidecar to stop new extraction.
+Retained evidence, source downloads and exact task retries remain available. Keep
+migration 041 and the blob roots; never drop saved originals as a rollback step.
+Production activation and a real office PDF quality review remain separate gates.

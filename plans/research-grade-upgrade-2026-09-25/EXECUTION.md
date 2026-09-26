@@ -12,7 +12,23 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R12 local PDF inspection)
+## Current result (2026-09-26 — retained PDF request handoff)
+
+Desk can retain an original PDF and its immutable local extraction, reopen saved
+sources, explicitly confirm exact copy, and save one request with original-source
+evidence. Lost-response retries preserve the complete request/key. Client isolation,
+actual byte hashes, append-only receipts, GC roots, task/event/outbox atomicity and
+exact copy into the Canva planner are checked. See ADR-071, `R12_EVIDENCE.md` and
+`R12_DOCUMENT_HANDOFF_PROOF.json`.
+
+Focused verification: **9 files / 103 tests passed**; source/test typecheck, lint,
+Desk build and secret scan passed. Full regression and release verification follow
+source sealing. Production remains unchanged. Telegram PDF/voice, governed knowledge
+indexing, actual office PDF fidelity, live provider/Workspace/export/reopen/restore
+and independent human quality remain open. This is another completed local slice,
+not application-wide release admission.
+
+## Prior result (2026-09-26 — R12 local PDF inspection)
 
 Desk's client Brand DNA view can inspect PDFs through a client-authorized local
 Docling service. The parser preserves source-byte hashes, actual page coordinates
@@ -25,10 +41,11 @@ parser container limit resource use. See ADR-070, `R12_EVIDENCE.md`,
 Six parser defects were reproduced before implementation. The real isolated
 container/TypeScript probe passed six checks, and outbound access was refused.
 Final focused checks passed **5 files / 39 tests**; full typecheck, lint, Desk
-build and zero-secret scan passed. Exact sealing and full regression follow this
-source/evidence commit. Native text
+build and zero-secret scan passed. The final source `dab5623`, seal `d6f2612`,
+passed 438 files / 3,410 tests with 4 files / 56 tests skipped, release manifest
+verification and blueprint 835/0/0. Native text
 order is unverified; OCR, tables and images are not extracted. Retained/approved
-PDF ingestion, lifecycle PDF/voice intake, live Workspace/provider/export/recovery
+knowledge ingestion, lifecycle PDF/voice intake, live Workspace/provider/export/recovery
 and independent quality admission remain open. No production configuration or
 flag changed.
 

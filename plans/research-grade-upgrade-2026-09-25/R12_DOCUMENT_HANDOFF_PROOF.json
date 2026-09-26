@@ -1,0 +1,57 @@
+{
+  "date": "2026-09-26",
+  "requirements": [
+    "FR-001",
+    "FR-002",
+    "FR-004",
+    "FR-006",
+    "FR-011",
+    "FR-018",
+    "FR-019",
+    "NFR-006",
+    "NFR-014"
+  ],
+  "adr": "071",
+  "focused": {
+    "files": 9,
+    "passed": 103,
+    "skipped": 0
+  },
+  "verification": {
+    "source_and_test_typecheck": "passed",
+    "lint": "passed",
+    "desk_build": "passed",
+    "secret_scan": "passed",
+    "blueprint": {
+      "passed": 839,
+      "warnings": 0,
+      "failures": 0
+    }
+  },
+  "environment": "Isolated real PostgreSQL runtime RLS, filesystem blob store, Core app instances, mocked extraction and React/jsdom; no live production calls",
+  "limitations": [
+    "No production activation",
+    "No new real PDF extraction proof in this turn; see ADR-070",
+    "New app instances are not a process SIGKILL or backup restore drill",
+    "No Telegram PDF/voice or governed indexing admission",
+    "No independent native-language creative quality admission"
+  ],
+  "sha256": {
+    "adrs/071_document_request_handoff.md": "acd92fa411e601a0b5979b8ab31396df72a5214ab9e12c5a74ad37868969371c",
+    "packages/db/migrations/041_client_documents.sql": "c345d4493747190d5a610beaaee3a4a4640393935d401e64a08e18fa915cf86f",
+    "apps/core/src/routes/documents.routes.ts": "bf91ebf4d5a1f01f1b70df3ae144929c04a2ac3a14c1217aa9a884877eef421a",
+    "apps/core/src/routes/tasks.routes.ts": "2cf5dea36ce92e0bd259698a10b9d2718c422f5774f840159d92dcdc816bda49",
+    "apps/core/src/services/client-documents.ts": "9867db87663df3bee42cbe5da080d923d98ac96c6b582a1f5ffa516edd64ad57",
+    "apps/core/src/services/canva-design-planner.ts": "f1c6493c0203ce5f7cf51ddaa5c8f3823ca3ab1a5f92c4f435a1851989660f12",
+    "apps/desk/src/components/DocumentInspectionPanel.tsx": "af4a9b70a00f3a0b0b51e92b25da8d0b55d570ecacb7b94a2c52a3a621d51b83",
+    "apps/desk/src/components/DocumentRequestForm.tsx": "0d038601c4e52602065df023c3ae0ab4f1a7fa3c25ef42dee570b7a2e9b443d3",
+    "apps/desk/src/services/manualTaskIntake.ts": "50551fac0e312059eb1176fe47b0aafb86a85c0940b8c6495ff4bf8b0ade5b69",
+    "apps/core/test/document-intake.test.ts": "fa452fa2503b6e6884bfea07506daef03c78b702a8a74a2468931e45b0fe587b",
+    "apps/desk/test/document-request.test.ts": "e730cd2275b1bf26f5177b065d2de18e053329a40faf83ea4233688cde6a2599"
+  },
+  "migration_checks": {
+    "files": 2,
+    "passed": 11,
+    "skipped": 0
+  }
+}

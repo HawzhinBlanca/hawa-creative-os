@@ -1,3 +1,4 @@
+import { DocumentIntakeError, prepareDocumentIntake } from '../services/client-documents.js';
 import { ManualIntakeScopeError, prepareManualIntake } from '../services/manual-intake-scope.js';
 import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
@@ -223,6 +224,17 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     }
 
     const manualIntake = body.workflow === 'canva_manual';
+    const documentIntake = body.sourceDocument !== undefined;
+    if (documentIntake && (!db || !taskRepo)) return problem(c, 503, 'Durable Storage Unavailable', 'PDF requests require PostgreSQL and retained source evidence.');
+    if (documentIntake && (!manualIntake || !auth.userId || auth.role === 'service' || auth.role === 'adapter' ||
+        !c.req.header('Idempotency-Key') || c.req.header('Idempotency-Key')!.length > 256 ||
+        typeof body.title !== 'string' || !body.title.trim() || body.title.length > 200 ||
+        typeof body.copyEn !== 'string' || body.copyEn.length > 20000 ||
+        typeof body.copyCkb !== 'string' || body.copyCkb.length > 20000 ||
+        !(body.copyEn.trim() || body.copyCkb.trim()) ||
+        typeof body.designInstructions !== 'string' || body.designInstructions.length > 4000)) {
+      return problem(c, 422, 'Document Request Invalid', 'Use the reviewed PDF request form with exact copy and a stable request key.');
+    }
     if (manualIntake && (!body.clientId || typeof body.clientId !== 'string')) {
       return problem(c, 422, 'Client Selection Required', 'Choose a registered client before saving this request');
     }
@@ -267,6 +279,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           db,
           { tenantId, userId, role: auth.role || 'operator' },
           async (trx) => {
+            if (documentIntake) await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`document-request:${tenantId}:${idempotencyKey}`},0))`.execute(trx);
             if (!manualIntake) clientDnaVersion ||= (await resolveClientDna(body.clientId, undefined, trx))?.version || 1;
             return await taskRepo.createTaskAggregate(
               {
@@ -289,8 +302,11 @@ export function registerTasksRoutes(ctx: RouteContext): void {
                   clientDnaVersion,
                 },
                 enqueueOutbox: true,
-                ...(manualIntake ? { requestBody: body, prepareCreatePayload: (lockedTrx: Parameters<typeof prepareManualIntake>[0]) =>
-                  prepareManualIntake(lockedTrx, { tenantId, clientId: body.clientId, projectId: body.projectId }) } : {}),
+                ...(manualIntake ? { requestBody: body, prepareCreatePayload: async (lockedTrx: Parameters<typeof prepareManualIntake>[0]) => ({
+                  ...await prepareManualIntake(lockedTrx, { tenantId, clientId: body.clientId, projectId: body.projectId }),
+                  ...(documentIntake ? await prepareDocumentIntake(lockedTrx, blobStore, { tenantId,
+                    clientId: body.clientId, userId, source: body.sourceDocument }) : {}),
+                }) } : {}),
               },
               trx
             );
@@ -331,6 +347,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           return c.json(normalizedTask, 200);
         }
       } catch (err: any) {
+        if (err instanceof DocumentIntakeError) return problem(c, err.status, 'Document Request Refused', err.message);
         if (err instanceof ManualIntakeScopeError) return problem(c, 403, 'Client Scope Unavailable', err.message);
         if (err instanceof IdempotencyConflictError) {
           return problem(
@@ -493,8 +510,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
 
           const headlineEn = payload.headlineEn || payload.body?.headlineEn || dbTask.title;
           const headlineCkb = payload.headlineCkb || payload.body?.headlineCkb || null;
-          const copyEn = payload.copyEn || payload.body?.copyEn || dbTask.description;
-          const copyCkb = payload.copyCkb || payload.body?.copyCkb || null;
+          const copyEn = payload.sourceDocument ? (payload.copyEn ?? '') : (payload.copyEn || payload.body?.copyEn || dbTask.description);
+          const copyCkb = payload.sourceDocument ? (payload.copyCkb ?? '') : (payload.copyCkb || payload.body?.copyCkb || null);
 
           const latestRevisionId = dbTask.current_design_revision_id || undefined;
 
@@ -591,6 +608,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             sourceChannelId: payload.sourceChannelId || 'hawa_desk',
             designInstructions: payload.designInstructions || payload.body?.designInstructions || '',
             referenceAssets: payload.referenceAssets || payload.body?.referenceAssets || '',
+            sourceDocument: payload.sourceDocument || null,
             clientScopeLocked: Boolean(dbTask.client_id),
             clientDnaVersion:
               payload.clientDnaVersion ||

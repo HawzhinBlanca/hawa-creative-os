@@ -1,5 +1,76 @@
 # R12 — Retrieval truth and scope, first slice
 
+## 2026-09-26 — Retained PDF to reviewed Desk request (ADR-071)
+
+The next vertical slice retains original PDFs and their immutable extraction
+receipts, then binds explicitly reviewed copy into the existing manual Desk task
+transaction. The read-only preview remains available. Saving a document alone
+creates no task, knowledge index, DNA version or approval.
+
+- Migration **041** adds append-only client documents with source and extraction
+  hashes, extractor version, authenticated creator, client RLS and a blob GC root.
+  Original bytes use the existing file store. Receipt identity is unique per
+  tenant/client/source hash/extractor version; replay reuses the first extraction.
+  Both original downloads and task handoff verify actual stored bytes. A same-size
+  corrupt file cannot be acknowledged as retained even if blob `put` finds it.
+- `POST /clients/:clientId/documents` saves; GET list/receipt/content reopens evidence.
+  The latest 20 receipts are available in Desk; any known receipt remains addressable.
+  Read-only/foreign-client/foreign-tenant identities cannot write or cross scope.
+  Source saving rechecks client access after parsing and under the receipt transaction.
+- Explicit PDF confirmation extends `POST /tasks` using the existing task repository.
+  Receipt ID, source/extraction hashes, active writable client and verified bytes
+  are required. Server-authored provenance binds the real actor and reviewed copy.
+  Task/event/outbox commit together; keyed concurrent retries produce one task.
+  Changed payload conflicts; exact retries retain original evidence after a client
+  becomes inactive or the parser is stopped. Blob metadata uses the same transaction
+  connection, avoiding pool exhaustion from nested connection reservations.
+- Desk requires human-selected copy and a confirmation checkbox. Edits reset
+  confirmation. An uncertain response freezes the complete request/key in its own
+  browser recovery slot and restores the saved source on reopening that client.
+  Client switches discard stale responses. The task brief exposes the original PDF.
+  The planner reads confirmed strings without legacy chat divider/remark/emoji
+  cleanup; blank English remains blank for Sorani-only requests.
+
+Requirements: **FR-001, FR-002, FR-004, FR-006, FR-011, FR-018, FR-019,
+NFR-006, NFR-014**; linked normative documents in traceability and ADR-071.
+
+### Executed verification
+
+- Focused final run: **9 files / 103 tests passed**, no skips. PostgreSQL tests use
+  the actual runtime RLS role and filesystem blob store. Extraction is mocked in
+  these handoff tests; ADR-070's six real isolated Docling checks remain the separate
+  parser proof. This turn did not rerun or claim new real-PDF quality admission.
+- New Core coverage: retained byte/hash round trip, stable extraction reuse in new
+  app instances without the parser, GC protection, receipt immutability, concurrent
+  task replay, changed-payload conflict, unconfirmed/wrong-hash/cross-client refusal,
+  corrupt bytes, missing store/database, revoked access, read-only identity,
+  foreign tenant, transaction fault rollback and exact Sorani-only planner input.
+- New Desk coverage: empty initial copy, explicit confirmation and reset on edit,
+  exact user-selected strings, independent recovery slot, unchanged key/body retry
+  after remount, saved-source browsing and recovery without automatic submission.
+- Migration replay and real Core entrypoint schema refusal: **2 files / 11 tests passed**.
+  Explicit migration inventories now include 041. Blueprint validation: **839 pass / 0 warn / 0 fail**.
+- Full source/test typecheck, lint, Desk production build and secret scan passed.
+  Lint remains 1,006 `any` uses against ceiling 1,053 and 9 pre-existing provider
+  egress exceptions. Exact full-suite and manifest results follow source sealing.
+- One initial typecheck reached the sandbox IPC restriction (`EPERM`) before test
+  types ran. It was rerun with permitted IPC access and passed. No failed application
+  assertion is hidden; the rollback test deliberately injects/logs a commit-boundary
+  failure and verifies absence of the task/outbox before successful replay.
+
+### Scope and remaining work
+
+This is Desk document-to-request admission, with a human-reviewed copy boundary.
+It does not admit Telegram PDF/voice, OCR, image/table extraction, approved knowledge
+indexing, production parser activation, a real process-kill/restore drill for this
+new document receipt, live Canva/Google export/reopen, native Sorani PDF fidelity or
+independent creative quality. Restart evidence uses new Core app instances and
+unchanged PostgreSQL/file storage. Source receipts follow existing append-only audit
+retention; no expiry/purge UI is added. Pending browser identity survives reload,
+but clearing browser storage requires checking Work before creating another task.
+No production service, flag or configuration changed. R12 remains **in progress**.
+
+
 ## 2026-09-26 — Local PDF inspection with real provenance (ADR-070)
 
 The unused `DoclingParser` still decoded binary documents as UTF-8, invented page

@@ -111,8 +111,24 @@ paths:
                 language: {type: [string, 'null']}
                 direction: {enum: [ltr, rtl, auto]}
                 dueAt: {type: [string, 'null'], format: date-time}
-                priority: {type: integer, minimum: 1, maximum: 5}
+                priority: {oneOf: [{type: integer, minimum: 1, maximum: 5}, {enum: [routine, rush, urgent]}]}
                 attachmentIds: {type: array, items: {type: string, format: uuid}}
+                workflow: {type: string, enum: [canva_manual]}
+                copyEn: {type: string, maxLength: 20000}
+                copyCkb: {type: string, maxLength: 20000}
+                designInstructions: {type: string, maxLength: 4000}
+                referenceAssets: {type: string}
+                source: {type: object}
+                sourceDocument: {$ref: '#/components/schemas/DocumentConfirmation'}
+              allOf:
+                - if: {required: [sourceDocument]}
+                  then:
+                    required: [workflow, clientId, copyEn, copyCkb, designInstructions]
+                    properties:
+                      workflow: {const: canva_manual}
+                      title: {type: string, minLength: 1, maxLength: 200}
+                    description: Requires an authenticated user, explicit Idempotency-Key and nonblank exact copy in at least one language. Checks retained PDF bytes and receipt hashes atomically with task/event/outbox. Exact retries reuse the first task; changed payload with the same key conflicts.
+
       responses:
         '201':
           description: Task created
@@ -362,6 +378,52 @@ paths:
       responses:
         '201': {description: Draft DNA version created, content: {application/json: {schema: {$ref: '../schemas/ClientDNA.schema.json'}}}}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/documents:
+    post:
+      tags: [Clients]
+      operationId: saveClientPdf
+      summary: Retain an original PDF and its native extraction for an explicit Desk request
+      description: Active writable client required. Source bytes are content-addressed; client/source hash/extractor version replays reuse an immutable receipt. Never indexes knowledge, creates a task or approves a design. Requires local blob storage and, for new sources, the isolated PDF parser. Limits match inspection.
+      parameters: [{$ref: '#/components/parameters/ClientId'}]
+      requestBody:
+        required: true
+        content: {application/pdf: {schema: {type: string, format: binary}}}
+      responses:
+        '201': {description: Original bytes and extraction retained, content: {application/json: {schema: {$ref: '#/components/schemas/SavedClientDocument'}}}}
+        '200': {description: Existing retained receipt reused, content: {application/json: {schema: {$ref: '#/components/schemas/SavedClientDocument'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+    get:
+      tags: [Clients]
+      operationId: listClientPdfs
+      summary: List the latest 20 saved PDF receipts in authorized client scope
+      parameters: [{$ref: '#/components/parameters/ClientId'}]
+      responses:
+        '200': {description: Recent receipts without extraction bodies, content: {application/json: {schema: {type: object, properties: {items: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/ClientDocumentReceipt'}}}}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/documents/{documentId}:
+    get:
+      tags: [Clients]
+      operationId: getClientPdf
+      summary: Reopen retained extraction and capability limits
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: documentId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Saved source receipt and extraction, content: {application/json: {schema: {$ref: '#/components/schemas/SavedClientDocument'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/documents/{documentId}/content:
+    get:
+      tags: [Clients]
+      operationId: downloadClientPdf
+      summary: Download hash-verified original bytes after client authorization
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: documentId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Original PDF attachment with private no-store caching, content: {application/pdf: {schema: {type: string, format: binary}}}}
+        '404': {description: Receipt outside authorized client scope or unavailable}
+        '503': {description: File store unavailable or original bytes missing or corrupt}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/clients/{clientId}/documents/inspect:
     post:
       tags: [Clients]
@@ -530,6 +592,34 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    DocumentConfirmation:
+      type: object
+      required: [id, sourceSha256, extractionSha256, confirmed]
+      properties:
+        id: {type: string, format: uuid}
+        sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        extractionSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        confirmed: {const: true, description: Human reviewed the chosen exact request copy against the original. This is not design or knowledge approval.}
+    ClientDocumentReceipt:
+      type: object
+      required: [id, clientId, sourceSha256, extractionSha256, extractorVersion, createdAt, contentUrl]
+      properties:
+        id: {type: string, format: uuid}
+        clientId: {type: string, format: uuid}
+        sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        extractionSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        extractorVersion: {type: string}
+        createdAt: {type: string, format: date-time}
+        contentUrl: {type: string}
+    SavedClientDocument:
+      type: object
+      required: [clientId, sourceSaved, approved, receipt, document]
+      properties:
+        clientId: {type: string, format: uuid}
+        sourceSaved: {const: true}
+        approved: {const: false}
+        receipt: {$ref: '#/components/schemas/ClientDocumentReceipt'}
+        document: {type: object, description: Immutable source-byte SHA-256, chunks with measured page provenance and extractor capability limits.}
     Problem:
       type: object
       required: [type, title, status, code, detail, safe_action]

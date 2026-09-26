@@ -156,6 +156,14 @@ export function withoutEmoji(text:string):string{
 }
 
 export function savedDesignCopy(payload:any,description:string):{copy:string[];instructions:string} {
+  // ADR-071: server-confirmed Desk copy is already separated from source evidence/instructions.
+  // Do not apply the legacy chat divider/remark/emoji cleanup to explicitly reviewed strings.
+  const p=payload?.payload||payload||{},body=p.body||p;
+  if(p.sourceDocument?.confirmation==='request_copy_reviewed'){
+    const copy=[body.copyEn,body.copyCkb].filter((text):text is string=>typeof text==='string'&&Boolean(text.trim()));
+    if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','The reviewed PDF request has no exact copy.');
+    return {copy,instructions:typeof body.designInstructions==='string'?body.designInstructions:''};
+  }
   const saved=savedDesignCopyAsSent(payload,description);
   const copy=saved.copy.map(withoutEmoji).filter(Boolean);
   if(!copy.length)throw new CanvaFlowError(422,'COPY_REQUIRED','The request carries no design copy apart from emoji. Send the exact text to set; no placeholder copy will be invented.');

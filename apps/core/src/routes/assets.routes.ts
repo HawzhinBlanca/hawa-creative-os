@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { registerDocumentRoutes } from './documents.routes.js';
 import { validateUploadedAsset, sanitizeSvg } from '@hawa/domain';
 import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
@@ -6,8 +7,6 @@ import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { findClientRowId } from '../services/client-row.js';
 import { listUploadedAssets, saveUploadedAsset } from '../services/uploaded-assets.js';
 import { log } from '../logging.js';
-import { withRlsContext } from '@hawa/db';
-import { DoclingParser, DocumentExtractionError, DOCUMENT_MAX_BYTES, localPdfExtractor } from '@hawa/retrieval';
 
 /**
  * Asset upload and SVG sanitising, and the voice-brief transcriber. Moved out of app.ts by group G1
@@ -20,70 +19,7 @@ export function registerAssetsRoutes(ctx: RouteContext): void {
     return { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId || OPERATOR_USER_ID, role: auth.role || 'operator', actorId: auth.actorId || 'operator' };
   };
 
-  // One bounded upload/conversion per Core process, without a queue of buffered documents.
-  let documentInspectionActive = false;
-  // Inspection only: no persistent source, knowledge approval or task creation.
-  registerRoute('post', '/clients/:clientId/documents/inspect', async (c: Context) => {
-    const auth = verifyRequestAuth(c);
-    if (!auth.authenticated || !auth.userId || auth.role === 'service')
-      return problem(c, 401, 'Authentication Required', 'Sign in to inspect a client document.');
-    if (!db) return problem(c, 503, 'Database Unavailable', 'Client authorization could not be checked.');
-    const clientId = c.req.param('clientId') ?? '';
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId))
-      return problem(c, 404, 'Client Not Found', 'Select an available client.');
-    const scope = scopeOf(c);
-    const allowed = () => withRlsContext(db, scope, trx => trx.selectFrom('clients')
-      .select('id').where('id', '=', clientId).where('tenant_id', '=', scope.tenantId)
-      .where('status', '=', 'active').executeTakeFirst());
-    let ownsSlot = false;
-    try {
-      if (!await allowed()) return problem(c, 404, 'Client Not Found', 'Select an available client.');
-      if (documentInspectionActive) return problem(c, 503, 'DOCUMENT_PARSER_BUSY', 'Another PDF is being inspected. Retry shortly.');
-      documentInspectionActive = true;
-      ownsSlot = true;
-      if (!process.env.HAWA_DOCLING_URL) return problem(c, 503, 'DOCUMENT_PARSER_NOT_CONFIGURED',
-        'Local PDF inspection is not configured. Keep the original file and ask the office operator to enable it.');
-      const parser = new DoclingParser(localPdfExtractor(process.env.HAWA_DOCLING_URL));
-      if (c.req.header('Content-Type') !== 'application/pdf')
-        return problem(c, 415, 'DOCUMENT_MEDIA_UNSUPPORTED', 'Upload a PDF file.');
-      const declared = c.req.header('Content-Length');
-      if (declared !== undefined && (!/^\d+$/.test(declared) || Number(declared) > DOCUMENT_MAX_BYTES))
-        return problem(c, 413, 'DOCUMENT_SIZE_LIMIT', 'PDF files must be at most 20 MiB.');
-      const reader = c.req.raw.body?.getReader();
-      if (!reader) return problem(c, 400, 'DOCUMENT_INPUT_EMPTY', 'Choose a PDF file.');
-      const parts: Uint8Array[] = [];
-      let size = 0;
-      let timedOut = false;
-      const deadline = setTimeout(() => { timedOut = true; void reader.cancel().catch(() => undefined); }, 10_000);
-      try {
-        while (true) {
-          const part = await reader.read();
-          if (part.done) break;
-          size += part.value.byteLength;
-          if (size > DOCUMENT_MAX_BYTES) return problem(c, 413, 'DOCUMENT_SIZE_LIMIT', 'PDF files must be at most 20 MiB.');
-          parts.push(part.value);
-        }
-      } finally { clearTimeout(deadline); await reader.cancel().catch(() => undefined); }
-      if (timedOut) return problem(c, 408, 'DOCUMENT_INPUT_TIMEOUT', 'The PDF upload took too long. Retry the complete file.');
-      const bytes = Buffer.concat(parts);
-      const digest = crypto.createHash('sha256').update(bytes).digest('hex');
-      const document = await parser.parse(`${clientId}:${digest}`, bytes, 'application/pdf', 'uploaded.pdf');
-      if (!await allowed()) return problem(c, 404, 'Client Not Found', 'Client access changed during inspection.');
-      return c.json({ clientId, sourceSaved: false, approved: false, document });
-    } catch (error) {
-      if (error instanceof DocumentExtractionError) {
-        const unavailable = /CONFIG|UNAVAILABLE|BUSY|TIMEOUT/.test(error.code);
-        return problem(c, unavailable ? 503 : 422, error.code,
-          error.code === 'DOCUMENT_OCR_REQUIRED'
-            ? 'A page has no extractable text. Supply a text PDF or transcribe every page for review.'
-            : `PDF inspection stopped (${error.code}). Keep the original and review it manually; no content was saved.`);
-      }
-      log.warn('[core:documents] Client document inspection unavailable');
-      return problem(c, 503, 'DOCUMENT_INSPECTION_UNAVAILABLE', 'The document could not be inspected. Retry after the local service is available.');
-    } finally {
-      if (ownsSlot) documentInspectionActive = false;
-    }
-  });
+  registerDocumentRoutes(ctx);
 
   // Asset Security & Ingestion
   registerRoute('post', '/assets/upload', async (c: any) => {

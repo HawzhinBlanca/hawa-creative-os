@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { apiClient, type DocumentInspection } from '../api/client.js';
+import { apiClient, type DocumentInspection, type SavedDocumentInspection, type DocumentReceipt } from '../api/client.js';
+
+import { DocumentRequestForm } from './DocumentRequestForm.js';
+import { getPendingDocumentDraft } from '../services/manualTaskIntake.js';
 
 /** Each client owns its own preview lifetime. Extracted text is untrusted, rendered only as text. */
 export function DocumentInspectionPanel({ clientId }: { clientId: string }) {
   const [file, setFile] = useState<File | null>(null);
-  const [result, setResult] = useState<DocumentInspection | null>(null);
+  const [result, setResult] = useState<DocumentInspection | SavedDocumentInspection | null>(null);
+  const [saved, setSaved] = useState<DocumentReceipt[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(1);
@@ -15,11 +19,13 @@ export function DocumentInspectionPanel({ clientId }: { clientId: string }) {
   useEffect(() => {
     generation.current++;
     controller.current?.abort();
-    setFile(null); setResult(null); setError(''); setBusy(false);
+    setFile(null); setResult(null); setError(''); setBusy(false); setSaved([]);
     if (input.current) input.current.value = '';
+    const pending = getPendingDocumentDraft();
+    if (pending?.clientId === clientId && pending.sourceDocument) void openSaved(pending.sourceDocument.id);
     return () => { generation.current++; controller.current?.abort(); };
   }, [clientId]);
-  const inspect = async () => {
+  const inspect = async (retain = false) => {
     if (!file || !clientId) return;
     const current = ++generation.current;
     controller.current?.abort();
@@ -27,14 +33,37 @@ export function DocumentInspectionPanel({ clientId }: { clientId: string }) {
     controller.current = request;
     setBusy(true); setResult(null); setError('');
     try {
-      const answer = await apiClient.clients.inspectDocument(clientId, file, request.signal);
+      const answer = retain ? await apiClient.clients.saveDocument(clientId, file, request.signal)
+        : await apiClient.clients.inspectDocument(clientId, file, request.signal);
       if (current !== generation.current) return;
-      if (answer.clientId !== clientId || answer.sourceSaved !== false || answer.approved !== false ||
-          !answer.document?.chunks?.length) throw new Error('The document preview could not be verified.');
+      if (answer.clientId !== clientId || answer.sourceSaved !== retain || answer.approved !== false ||
+          !answer.document?.chunks?.length || (answer.sourceSaved &&
+            (answer.receipt?.clientId !== clientId || answer.receipt.sourceSha256 !== answer.document.sourceSha256))) throw new Error('The document preview could not be verified.');
       setResult(answer); setPage(1); setVisible(100);
     } catch (err) {
       if (current === generation.current) setError(err instanceof Error ? err.message : 'PDF inspection failed.');
     } finally { if (current === generation.current) setBusy(false); }
+  };
+  const openSaved = async (id: string) => {
+    const current = ++generation.current;
+    controller.current?.abort();
+    const request = new AbortController(); controller.current = request;
+    setBusy(true); setResult(null); setError('');
+    try {
+      const answer = await apiClient.clients.document(clientId, id, request.signal);
+      if (current !== generation.current) return;
+      if (answer.clientId !== clientId || answer.sourceSaved !== true || answer.approved !== false || answer.receipt.id !== id || answer.receipt.clientId !== clientId || answer.receipt.sourceSha256 !== answer.document.sourceSha256)
+        throw new Error('The saved PDF scope could not be verified.');
+      setResult(answer); setPage(1); setVisible(100);
+    } catch (err) { if (current === generation.current) setError(err instanceof Error ? err.message : 'Saved PDF unavailable.'); }
+    finally { if (current === generation.current) setBusy(false); }
+  };
+  const browse = async () => {
+    const current = generation.current;
+    try {
+      const answer = await apiClient.clients.documents(clientId);
+      if (current === generation.current) { setSaved(answer.items); if (!answer.items.length) setError('No saved PDFs for this client.'); }
+    } catch (err) { if (current === generation.current) setError(err instanceof Error ? err.message : 'Saved PDFs unavailable.'); }
   };
   const chunks = result?.document.chunks.filter(chunk => chunk.pageNumber === page) ?? [];
   return <section aria-label="PDF text inspection" style={{ borderTop: '1px solid var(--line)', marginTop: 16, paddingTop: 12 }}>
@@ -49,13 +78,19 @@ export function DocumentInspectionPanel({ clientId }: { clientId: string }) {
         } else setFile(next);
       }} />
     </label>
-    <button type="button" className="btn" disabled={!file || !clientId || busy} onClick={() => void inspect()}>
+    <button type="button" className="btn" disabled={!file || !clientId || busy} onClick={() => void inspect(false)}>
       {busy ? 'Inspecting PDF…' : 'Preview PDF text'}
     </button>
+    <button type="button" className="btn" disabled={!file || !clientId || busy} onClick={() => void inspect(true)}>Save PDF for a request</button>
+    <button type="button" className="btn" disabled={!clientId || busy} onClick={() => void browse()}>Browse saved PDFs</button>
+    <p>Save retains the original and its extraction for this client. It does not create a request until you confirm the copy.</p>
+    {saved.length > 0 && <label>Recent saved PDFs (latest 20)<select aria-label="Saved PDF" value={result?.sourceSaved ? result.receipt.id : ''} disabled={busy} onChange={e => { if (e.target.value) void openSaved(e.target.value); }}>
+      <option value="">Choose a saved PDF</option>{saved.map(item => <option key={item.id} value={item.id}>{new Date(item.createdAt).toLocaleString()} · {item.sourceSha256.slice(0, 12)}</option>)}
+    </select></label>}
     {busy && <p role="status">Reading the PDF locally…</p>}
     {error && <p role="alert">{error}</p>}
     {result && <div>
-      <p role="status">Preview only. The file and extracted text have not been saved or approved.</p>
+      <p role="status">{result.sourceSaved ? 'Original PDF and extraction saved. Review the copy below to create a request; this does not approve brand knowledge.' : 'Preview only. The file and extracted text have not been saved or approved.'}</p>
       <ul>{result.document.extraction.limitations.map(limit => <li key={limit}>{limit}</li>)}</ul>
       <label>Page <select aria-label="PDF page" value={page} onChange={event => { setPage(Number(event.target.value)); setVisible(100); }}>
         {Array.from({ length: result.document.extraction.pageCount ?? 0 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
@@ -67,6 +102,7 @@ export function DocumentInspectionPanel({ clientId }: { clientId: string }) {
         <p style={{ overflowWrap: 'anywhere' }}>SHA-256: {result.document.sourceSha256}</p>
         <p>Extractor: {result.document.extraction.version}</p>
       </details>
+      {result.sourceSaved && <DocumentRequestForm key={result.receipt.id} source={result} />}
     </div>}
   </section>;
 }

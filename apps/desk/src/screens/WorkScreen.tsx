@@ -5,6 +5,7 @@ import { StudioPanel } from '../components/StudioPanel.js';
 import { AskLedgerPanel } from '../components/AskLedger.js';
 import { RequesterSendEvidencePanel } from '../components/RequesterSendEvidencePanel.js';
 import { VectorInspector } from '../components/VectorInspector.js';
+import { OriginalDocument } from '../components/DocumentRequestForm.js';
 import { SubmittedCopy } from '../components/SubmittedCopy.js';
 import { apiClient, ApiError, type DecisionPayload, type TaskListParams, type TaskListResponse, type TaskTimelineEvent } from '../api/client.js';
 import { captureForReview } from '../services/canvaCapture.js';
@@ -23,6 +24,7 @@ const QUEUE_PAGE_SIZE = 50;
 const SEARCH_PAUSE_MS = 300;
 
 export interface LiveTask {
+  sourceDocument?: { id: string; clientId: string; sourceSha256: string } | null;
   id: string;
   requestId?: string | null;
   clientId?: string;
@@ -1231,6 +1233,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   {activeTab === 'brief' && (
                     <div className="tab-pane-content" role="tabpanel" aria-label="Brief and Copy">
                   {selectedTask.designInstructions && <div className="rule"><h4>Design instructions</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedTask.designInstructions}</p></div>}
+                  {selectedTask.sourceDocument && <div className="rule"><h4>Original request PDF</h4><OriginalDocument receipt={selectedTask.sourceDocument} /></div>}
                   {selectedTask.referenceAssets && <div className="rule"><h4>Reference notes</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedTask.referenceAssets}</p></div>}
                       <div className="exact-copy-notice">
                         <b>Exact Copy Invariant (#1):</b> Compare this content with the captured design. The server must validate exact copy before approval.
