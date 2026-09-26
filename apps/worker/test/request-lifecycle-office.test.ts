@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { signLifecycleOfficeEvent } from '@hawa/integrations';
-import { recordOfficeRevision, type AutomaticLifecycleState, type AutomaticOpenContext,
+import { recordOfficeRevision, recordReminderTick, type AutomaticLifecycleState, type AutomaticOpenContext,
   type ManualLifecycleState, type OfficeRevisionEvent } from '../src/lifecycle/request-lifecycle.js';
 import { checkSignedOfficeDecision } from '../src/lifecycle/office-decision-gateway.js';
 
@@ -23,7 +23,12 @@ class Context implements AutomaticOpenContext {
     this.state = value as AutomaticLifecycleState;
     if (this.crashAfterSet) { this.crashAfterSet = false; throw new Error('worker stopped after state save'); }
   }
-  send(): void { throw new Error('office revision sends no message'); }
+  sent: unknown[] = [];
+  send(msg: unknown): void { this.sent.push(msg); }
+  reminders: Array<{ requestId: string; rev: number; delayMs: number }> = [];
+  scheduleReminder(requestId: string, rev: number, delayMs: number): void {
+    this.reminders.push({ requestId, rev, delayMs });
+  }
   startDesign(): void { throw new Error('office revision starts no design'); }
 }
 
@@ -83,6 +88,13 @@ describe('RequestLifecycle office revision', () => {
       officeRevision: { approvalId, actionId: event.actionId } });
     expect(await recordOfficeRevision(ctx, core, event)).toMatchObject({
       accepted: true, approvalId, stage: 'manual', rev: 3 });
+    expect(ctx.sent).toMatchObject([{ key: `${event.requestId}:3:office-revision-notify`,
+      chatId: ctx.state.chatId, class: 'critical' }]);
+    expect(ctx.reminders).toEqual([{ requestId: event.requestId, rev: 3, delayMs: 24 * 60 * 60_000 }]);
+    await recordOfficeRevision(ctx, core, event);
+    expect(ctx.sent).toHaveLength(2);
+    expect(ctx.sent[0]).toEqual(ctx.sent[1]);
+    expect(ctx.reminders).toHaveLength(2);
     expect(core.post).toHaveBeenCalledTimes(2);
     expect(core.post.mock.calls[0]).toEqual(core.post.mock.calls[1]);
     expect(core.post.mock.calls[0][0]).toBe(`/internal/lifecycle/${event.requestId}/office-decision`);
@@ -92,6 +104,28 @@ describe('RequestLifecycle office revision', () => {
     await expect(recordOfficeRevision(ctx, core, { ...event,
       revisionRequest: { ...event.revisionRequest!, priority: 'critical' } }))
       .rejects.toThrow('different content');
+  });
+
+  it('sends office comments as literal text and suppresses stale reminders', async () => {
+    const { ctx, event } = setup();
+    const comment = '<b>Keep this literal</b> & correct the venue';
+    const revised = { ...event, reason: comment,
+      revisionRequest: { ...event.revisionRequest!, comment } };
+    const core = { post: vi.fn().mockResolvedValue({ v: 1, requestId: event.requestId,
+      taskId: event.taskId, revisionId: event.revisionId, actionId: event.actionId,
+      approvalId: randomUUID(), taskState: 'revision_requested', rev: 3, stage: 'manual' }) };
+    await recordOfficeRevision(ctx, core, revised);
+    expect(ctx.sent[0]).toMatchObject({ text: expect.stringContaining(comment), class: 'critical' });
+    expect(ctx.sent[0]).not.toHaveProperty('parseMode');
+    expect(await recordReminderTick(ctx, { v: 1, requestId: event.requestId, expectedRev: 3 }))
+      .toEqual({ reminded: true });
+    expect(ctx.sent[1]).toMatchObject({ key: `${event.requestId}:3:revision-reminder`, class: 'critical' });
+    ctx.state = { ...ctx.state, stage: 'designing', rev: 4 };
+    expect(await recordReminderTick(ctx, { v: 1, requestId: event.requestId, expectedRev: 3 }))
+      .toEqual({ skipped: true });
+    expect(ctx.sent).toHaveLength(2);
+    await expect(recordReminderTick(ctx, { v: 1, requestId: randomUUID(), expectedRev: 3 }))
+      .rejects.toThrow('invalid revision reminder identity');
   });
 
   it('refuses a stale draft or untrusted reviewer before a Core effect', async () => {

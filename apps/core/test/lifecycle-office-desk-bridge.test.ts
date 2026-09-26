@@ -518,12 +518,13 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     const { requestId, taskId, revisionId, chatId, runId } = await reviewableRequest();
     let state = { v: 1, requestId, tenantId, chatId, owner: 'restate', stage: 'in_review', rev: 2,
       taskId, runId, outcome: { revisionId } } as unknown as AutomaticLifecycleState;
+    const sentMessages: unknown[] = [];
     const object: AutomaticOpenContext = {
       key: requestId,
       get: async () => state,
       run: async (_name, action) => action(),
       set: (_name, value) => { state = value as AutomaticLifecycleState; },
-      send: () => { throw new Error('no message expected'); },
+      send: (msg) => { sentMessages.push(msg); },
       startDesign: () => { throw new Error('no design expected'); },
     };
     const internal = createApp({ db } as any);
@@ -588,6 +589,10 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect(rows.approvals).toMatchObject([{ id: result.decisionId, decided_by: userId,
       decision_payload: { revisionRequest: feedback } }]);
     expect(rows.receipts.map((row) => Number(row.rev)).sort()).toEqual([1, 2, 3]);
+    // A replay reissues the same fenced key, so a crash between state save and send cannot lose it.
+    expect(sentMessages).toHaveLength(2);
+    expect(sentMessages[0]).toMatchObject({ kind: 'text', chatId, class: 'critical' });
+    expect(sentMessages[0]).toEqual(sentMessages[1]);
     expect(transport).toHaveBeenCalledTimes(3);
   });
 

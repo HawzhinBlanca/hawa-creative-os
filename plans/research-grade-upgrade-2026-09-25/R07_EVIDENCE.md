@@ -1,5 +1,40 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — requester notice and delayed reminder hardening
+
+An office `revise` decision now sends a critical requester notice and schedules a revision-bound 24-hour
+reminder through Restate. The persisted-state replay branch reissues both operations under stable
+idempotency keys; TelegramSender's critical send mark prevents an uncertain transport result from becoming
+a second message. The reminder checks the exact request revision and `manual` stage before sending, and
+uses a critical send mark. Reviewer text is sent as literal Telegram text, so angle brackets and ampersands
+cannot break HTML formatting or create markup. Requirements: FR-060, NFR-001; R07 remains in progress.
+
+**Verification:** `pnpm exec vitest run apps/worker/test/request-lifecycle-office.test.ts
+apps/core/test/lifecycle-office-desk-bridge.test.ts` passed **2 files / 16 tests** on the working tree;
+`pnpm --filter @hawa/worker exec tsc --noEmit` passed. The tests cover a lost Core answer, crash after
+state save, stable replay keys, literal reviewer text, matching and stale reminder ticks, and the
+authenticated Desk projection. The initial sandbox run could not connect to local PostgreSQL (`EPERM`);
+the same focused test command then passed with local service access. No live 24-hour timer, deployed
+restart, or production Telegram receipt was measured. Clarification questions, late answers and full
+requester Q/A remain open.
+
+## 2026-09-26 — chat mode persistence and decision handoff
+
+Review found `ChatInbox.handleUpdate` replaced its stored view without `mode` or `requestId` after both
+handled and parked updates. A lifecycle chat therefore reverted to legacy intake on its next update.
+The handler now retains both fields. Its requester-decision dispatch previously used a dynamic import
+after the handler returned and swallowed errors, risking a committed Core projection with no lifecycle
+signal. The import and keyed object send are now awaited inside the handler; a failure replays the
+journaled intake answer and retries the same decision key. Requirements: FR-060, NFR-001. This is a
+local repair; the per-chat pointer still needs design for a second open request in the same chat.
+
+**Verification:** `pnpm exec vitest run apps/worker/test/chat-inbox.test.ts
+apps/worker/test/request-lifecycle-office.test.ts apps/core/test/lifecycle-office-desk-bridge.test.ts`
+passed **3 files / 34 tests**, including consecutive lifecycle updates, failed decision dispatch and
+journal replay, a parked update, office state-save crash, and the Desk projection. Worker TypeScript
+and repository lint passed. The first lint attempt was blocked by the sandbox's local IPC policy;
+the same command passed with local access. No live Telegram or delayed Restate reminder was exercised.
+
 **Date:** 2026-09-25. **Status:** in progress. This is a containment step, not RequestLifecycle completion.
 
 ADR-034 and `output/plans/2026-09-24-architecture-programme/PHASE2_DESIGN.md` define `RequestLifecycle` as the durable owner of a request after slice 2.3. The current worker binds TaskService, TaskWorkflow, ChatInbox, Delivery and TelegramSender, but does not bind RequestLifecycle. Core currently starts Delivery with `reportTo: 'core'`. A caller could nevertheless submit the reserved `reportTo: 'lifecycle'` input to the public workflow. Previously Delivery would prepare an archive and send files, then emit a one-way completion event to a service this worker did not host. That could leave the request without an authoritative completion record.

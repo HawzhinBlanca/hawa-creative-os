@@ -19,6 +19,7 @@ class FakeContext implements InboxContext {
   state = new Map<string, unknown>();
   runs: string[] = [];
   lifecycleDecisions: Array<{ requestId: string; event: unknown }> = [];
+  failDecisionOnce = false;
   constructor(readonly key = '555') {}
   async get<T>(name: string): Promise<T | null> {
     return (this.state.get(name) as T) ?? null;
@@ -39,7 +40,11 @@ class FakeContext implements InboxContext {
     this.state.set(name, value);
   }
   async now() { return 1_790_000_000_000; }
-  sendLifecycleDecision(requestId: string, event: unknown) {
+  async sendLifecycleDecision(requestId: string, event: unknown) {
+    if (this.failDecisionOnce) {
+      this.failDecisionOnce = false;
+      throw new Error('decision dispatch interrupted');
+    }
     this.lifecycleDecisions.push({ requestId, event });
   }
 }
@@ -228,6 +233,41 @@ describe('ChatInbox.setMode', () => {
     expect(ctx.journal.get('mode')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x' });
     // Core's intake should have been called with mode='lifecycle'
     expect(c.intake.mock.calls[0][1]).toBe('lifecycle');
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x' });
+  });
+
+  it('keeps lifecycle routing across updates and retries a decision send from the journaled intake answer', async () => {
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+      mode: 'lifecycle', requestId: 'req-x' } satisfies ChatInboxView);
+    const answer = { kind: 'done' as const, intakeStatus: 200, lifecycleAction: 'requester-revision' as const,
+      requestId: 'req-x', newTaskId: 'task-new', round: 1, directive: 'Move the venue',
+      priorTaskId: 'task-old' };
+    const c = core([async () => answer, async () => ({ kind: 'done', intakeStatus: 200 })]);
+    ctx.failDecisionOnce = true;
+    await expect(handleUpdate(ctx, input, c)).rejects.toThrow('decision dispatch interrupted');
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x', lastUpdateId: 0 });
+    await handleUpdate(ctx, input, c);
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(ctx.lifecycleDecisions).toMatchObject([{ requestId: 'req-x',
+      event: { eventId: `chatinbox:revision:${update.update_id}`, newTaskId: 'task-new' } }]);
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x', lastUpdateId: update.update_id });
+
+    // A new Restate invocation gets a fresh journal but the same persisted chat state.
+    ctx.journal.clear();
+    const next = { v: 1 as const, update: { ...update, update_id: update.update_id + 1 } };
+    await handleUpdate(ctx, next, c);
+    expect(c.intake.mock.calls[1]).toEqual([next.update, 'lifecycle', 'req-x']);
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x', lastUpdateId: next.update.update_id });
+  });
+
+  it('keeps lifecycle mode when an update is parked', async () => {
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+      mode: 'lifecycle', requestId: 'req-x' } satisfies ChatInboxView);
+    const c = core(Array.from({ length: INTAKE_ATTEMPTS }, () => async () => ({ kind: 'retry', reason: 'Core busy' })));
+    expect(await handleUpdate(ctx, input, c)).toMatchObject({ outcome: 'parked' });
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x', lastOutcome: 'parked' });
   });
 });
-

@@ -138,6 +138,16 @@ export interface DeliveryFinishedReply {
   deliveryId: string; stage: 'approved' | 'delivering' | 'delivered'; taskState: string; rev: number;
 }
 
+/** Delayed self-message to remind the requester if they haven't submitted a directive. */
+export interface ReminderTickEvent {
+  v: 1;
+  requestId: string;
+  /** Rev at the time the reminder was scheduled; stale if the request has advanced. */
+  expectedRev: number;
+}
+
+const REVISION_REMINDER_DELAY_MS = 24 * 60 * 60_000;
+
 export interface AutomaticOpenContext {
   key: string;
   get(name: string): Promise<ManualLifecycleState | AutomaticLifecycleState | null>;
@@ -148,6 +158,8 @@ export interface AutomaticOpenContext {
   startDelivery?(input: DeliveryInput): void;
   /** Fire-and-forget: upgrade a Telegram chat to lifecycle mode (exclusive, idempotent). */
   setChatMode?(chatId: string, requestId: string): void;
+  /** Schedule a delayed self-call to send a requester reminder if still waiting. */
+  scheduleReminder?(requestId: string, rev: number, delayMs: number): void;
 }
 
 export interface DesignFinishedEvent {
@@ -375,6 +387,9 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
     if (prior.officeRevision?.eventId !== event.eventId || prior.officeRevision.sha256 !== fingerprint) {
       throw invalid('this office decision was already recorded with different content');
     }
+    // A worker can stop after saving state and before sending either message. Reissue the same
+    // stable keys on replay; TelegramSender fences the critical send in Postgres.
+    if (event.kind === 'revise') sendOfficeRevisionNotice(ctx, prior, event);
     return { accepted: true, requestId: prior.requestId, taskId: prior.taskId,
       revisionId: prior.officeRevision.revisionId, actionId: prior.officeRevision.actionId,
       approvalId: prior.officeRevision.approvalId, stage: prior.stage as 'manual' | 'approved', rev: nextRev };
@@ -407,8 +422,38 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
     officeRevision: { eventId: event.eventId, sha256: fingerprint,
       actionId: event.actionId, revisionId: event.revisionId, approvalId: projected.approvalId, kind: event.kind } };
   ctx.set('lc', next);
+  if (event.kind === 'revise') sendOfficeRevisionNotice(ctx, next, event);
   return { accepted: true, requestId: event.requestId, taskId: event.taskId, revisionId: event.revisionId,
     actionId: event.actionId, approvalId: projected.approvalId, stage: expectedStage, rev: nextRev };
+}
+
+function sendOfficeRevisionNotice(ctx: AutomaticOpenContext, state: AutomaticLifecycleState,
+  event: OfficeRevisionEvent): void {
+  const comment = event.revisionRequest?.comment?.trim() || event.reason.trim();
+  const round = Math.floor((state.rev - 1) / 2);
+  ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:office-revision-notify`,
+    chatId: state.chatId, kind: 'text',
+    text: `Your design needs adjustments (revision ${round}).\n\n${comment}\n\nPlease reply with your updated direction or the changes you want.`,
+    class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+  ctx.scheduleReminder?.(state.requestId, state.rev, REVISION_REMINDER_DELAY_MS);
+}
+
+/** A delayed tick only has an effect while this exact revision still awaits the requester. */
+export async function recordReminderTick(ctx: Pick<AutomaticOpenContext, 'key' | 'get' | 'send'>,
+  event: ReminderTickEvent): Promise<{ skipped: true } | { reminded: true }> {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      !Number.isInteger(event.expectedRev) || event.expectedRev < 3) {
+    throw invalid('invalid revision reminder identity');
+  }
+  const state = await ctx.get('lc');
+  if (!state || !('runId' in state) || state.rev !== event.expectedRev || state.stage !== 'manual') {
+    return { skipped: true };
+  }
+  ctx.send({ v: 1, key: `${state.requestId}:${event.expectedRev}:revision-reminder`,
+    chatId: state.chatId, kind: 'text',
+    text: 'Reminder: Your design is waiting for your revision direction. Please reply when you are ready.',
+    class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+  return { reminded: true };
 }
 
 /** A signed office action claims a publication in Core before the workflow can prepare any effect. */
@@ -663,9 +708,17 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
             get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
             run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
             set: (name, value) => ctx.set(name, value),
-            send: () => { throw new Error('officeDecision cannot send from this transition'); },
+            send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+              .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
             startDesign: () => { throw new Error('officeDecision cannot start a run from this transition'); },
             startDelivery: (input) => ctx.workflowSendClient(DeliveryApi, input.deliveryId).run(input),
+            scheduleReminder: (requestId, rev, delayMs) =>
+              ctx.objectSendClient(RequestLifecycleApi, requestId)
+                .reminderTick({ v: 1, requestId, expectedRev: rev },
+                  restate.rpc.sendOpts({
+                    idempotencyKey: `lifecycle:reminder:${requestId}:${rev}`,
+                    delay: delayMs,
+                  })),
             };
             return event?.kind === 'deliver'
               ? recordOfficeDeliveryStart(handlers, core, event)
@@ -699,6 +752,18 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
       ),
       get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ManualLifecycleState | AutomaticLifecycleState | null> =>
         (await ctx.get<ManualLifecycleState | AutomaticLifecycleState>('lc')) ?? null),
+      /** Fires after a delay when the requester has not submitted a revision directive. */
+      reminderTick: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 2 }, journalRetention: { days: 2 } },
+        async (ctx: restate.ObjectContext, event: ReminderTickEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, async () => {
+            return recordReminderTick({ key: ctx.key,
+              get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+              send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+                .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+            }, event);
+          }),
+      ),
     },
     options: {
       ingressPrivate: true,

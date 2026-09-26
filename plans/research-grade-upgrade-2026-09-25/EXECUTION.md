@@ -12,33 +12,49 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — source `1902c32`)
+## Current result (2026-09-26 — source `78d1cce`)
 
-**ChatInbox per-chat mode cutover is now fully implemented and tested:**
+**Requester revision directive routing is implemented and locally tested:**
 
-- **Per-chat mode flag (`ChatInboxView.mode`)**: once a chat is switched to `'lifecycle'`, the exclusive
-  `setMode` handler stores the flag on the inbox object and it never reverts. Existing inbox fields are
-  preserved on upgrade from legacy.
-- **`handleUpdate` reads mode from state**: the mode is read inside a journaled `ctx.run('mode', ...)` step,
-  so any Restate replay — across all colour shifts — sees the same value that was recorded on the first run.
-- **`RequestLifecycle.open` wires the cutover**: both `openManualRequest` and `openAutomaticRequest` call
-  `ctx.setChatMode?(chatId, requestId)` after persisting the lifecycle state, using an idempotent
-  fire-and-forget `objectSendClient(chatInbox, chatId).setMode(requestId, ...)` with a stable key.
-- **Bug fix: `recordDesignFinished` replay detection**: the generalized `prior.rev >= nextRev` check was
-  always false (prior.rev = nextRev - 1). Fixed to `prior.outcome?.eventId === event.eventId`, which
-  correctly detects a crash-after-set replay at any revision round.
-- **16/16 chat-inbox tests pass** (12 existing + 4 new `setMode` tests covering: fresh chat, idempotency,
-  field preservation on legacy upgrade, and `handleUpdate` reading `'lifecycle'` from state).
-- **233/233 worker tests pass**; `tsc --noEmit` clean.
+- **`projectLifecycleRequesterRevisionWithIntake`** (Core `lifecycle-projection.ts`): atomically persists a
+  requester's revision task from the raw Telegram update text and advances the request `manual → designing` in
+  one idempotent transaction. Guarded by `pg_advisory_xact_lock` on the request; has idempotency receipt and
+  conflict detection identical to the office-side projection.
+- **Core intake route now accepts `mode=lifecycle`**: when mode is `lifecycle` and the chat has an open
+  restate-owned manual-stage request at `rev ≥ 3`, Core extracts the directive text from the update, calls
+  the projection above, and returns `lifecycleAction: 'requester-revision'` with the new task ID, round,
+  directive, and priorTaskId. If no matching request is found it falls through to legacy intake.
+- **Worker `ChatInboxCore.intake` passes `requestId`**: the worker reads `requestId` from the journaled mode
+  object (alongside `mode: 'lifecycle'`) and passes it to Core so the intake can locate the request.
+- **`ChatInboxView.requestId`** stored by `setMode` so the mode journal already carries it; no extra DB lookup
+  on the hot path.
+- **`InboxContext.sendLifecycleDecision`**: when Core returns `lifecycleAction: 'requester-revision'`,
+  `handleUpdate` calls this method, which uses `ctx.objectSendClient(RequestLifecycleApi, requestId)` to fire
+  `RequestLifecycle.requesterDecision` (the VO's state machine advances to `designing` and starts the next
+  design run). The call is idempotent via `chatinbox:revision:<update_id>` key.
+- **292 lifecycle tests pass** (`worker + core/lifecycle`); `tsc --noEmit` clean on both packages.
+- **Integration evidence**: new test `routes a requester revision directive to the open lifecycle request
+  (Q/A loop)` in `lifecycle-internal-intake.test.ts` seeds a manual-stage lifecycle request in the DB,
+  sends a Telegram text update in lifecycle mode, and verifies the full projection response.
 
-Prior milestones still hold: multi-round journey integration-proved (8 tests, commit `f25ebf1`); delivery
-routes implemented and covered; full suite 421 files / 3,237 tests green.
+**R07 reminder and notice hardening (current working tree):** An office revision emits a critical,
+keyed requester notice and schedules a 24-hour reminder for that exact request revision. A replay after
+state save reissues the same keys, so a worker crash cannot silently drop the notice or timer. The reminder
+checks the current revision and stage and uses the critical sender's PostgreSQL send mark. Office comments
+are sent as literal text, avoiding Telegram HTML parsing of untrusted content. ChatInbox now preserves its
+lifecycle mode and request ID after both handled and parked updates; a requester decision send is awaited
+inside the Restate handler, so a failed dispatch replays from its journaled Core answer. Focused worker/Core
+tests: 3 files / 34 tests passed; worker TypeScript passed. This is local proof, not a live delayed-send drill.
+
+Prior milestones still hold: ChatInbox cutover (`1902c32`); multi-round journey (`f25ebf1`); delivery routes;
+the last full suite passed 421 files / 3,237 tests before the reminder changes.
 
 ## Next useful milestone
 
-1. **Q/A loop**: route clarifying questions from the design studio back to the requester via the lifecycle chat.
-2. **Canary & admission**: full canary deployment and blind human admission acceptance tests.
-3. **Final exports and provider boundaries**: qualify R11–R19 exports and R20–R23 provider boundaries.
-
-
-
+1. **Complete R07 Q/A**: route `NEEDS_CLARIFICATION` questions into lifecycle chat, bind answers to the
+   waiting request, and prove restart, duplicate, late-answer and reminder behavior end to end. Resolve
+   the per-chat request pointer for a second open request before canary: `setMode` currently retains its
+   first request ID, so another request in the same chat has ambiguous answer routing.
+2. **Final exports and provider boundaries**: qualify R11–R19 exports and R20–R23 provider boundaries.
+3. **Canary & admission**: deploy only after a coherent release gate, then run live recovery and blind human
+   creative-quality acceptance. No current source or local test result establishes production admission.
