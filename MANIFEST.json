@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T08:19:43Z",
+  "generatedAt": "2026-09-26T08:55:33Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 328,
+  "fileCount": 329,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "a9600c6af060ad4b2a7717d64d56b0760abc432e8dfd9b50e97c83ae42b73d01",
-      "bytes": 3987
+      "sha256": "1d628e8cc1a556d163b6ded91b44e5ef0c213b6a0b2aecfe80f0044d98b99d75",
+      "bytes": 3985
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -388,6 +388,11 @@
       "bytes": 1398
     },
     {
+      "path": "adrs/064_named_office_reviewer_authority.md",
+      "sha256": "5b6ac77e79f16885131ca64dc062e1835f7dcf736c8dc38c89eb6401d62b7844",
+      "bytes": 4218
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "54ca6b1554c988f5a2405991660047ded612d8d96c93dd3e88bc849cc09c2b7a",
       "bytes": 21896
@@ -499,8 +504,8 @@
     },
     {
       "path": "deployment/Caddyfile",
-      "sha256": "1b5282bc21582d2b7cb9439244b23bdcebc2bec06816ff534b68ff9431e02ef6",
-      "bytes": 660
+      "sha256": "6561f11202742eded3d5c1014be8fefd3c7fcb8dbc458aac946b61c0d63aa980",
+      "bytes": 927
     },
     {
       "path": "deployment/Dockerfile.hawa",
@@ -519,8 +524,8 @@
     },
     {
       "path": "deployment/env.example",
-      "sha256": "2110b13166361c172bedced864e987f6a83e28f67c17ed718df3506ad7235918",
-      "bytes": 2508
+      "sha256": "edf11653dafcd03059a70ee5fd6ffa378af95ca551bc21dd0b03b80320fd6b78",
+      "bytes": 2699
     },
     {
       "path": "deployment/init-databases.sh",
@@ -879,8 +884,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_EVIDENCE.md",
-      "sha256": "ccd4cba50f4f43283bdea5b303374c6d78380fcf472ecc91a4e1eff7bdfdad88",
-      "bytes": 26938
+      "sha256": "9bb89fd09fd7b069b0191b4ddfe111d8fed31bc896c5d23c0eba065f76b676ac",
+      "bytes": 30652
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R08_RESTATE_KILL_DRILL.md",
@@ -974,8 +979,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "83ec092ab1825e81fbebea82243df54c59282d339f27c9b4f02977ac43af93cb",
-      "bytes": 184859
+      "sha256": "5ddd1345e3955c571a055e65e152c1380f83a5664f20dc2fb41ca4634fa5d48a",
+      "bytes": 185280
     },
     {
       "path": "plans/user-stories.csv",
