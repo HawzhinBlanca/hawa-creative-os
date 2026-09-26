@@ -39,6 +39,12 @@ in-place Core/Desk development rebuild, refresh nginx after recreating upstream
 containers so its cached addresses do not point at the old containers. Normal
 production deployment already reloads/restarts nginx for this boundary.
 
+Reset explicitly includes both the `green` and `candidate` profiles and propagates
+teardown failure before deleting temporary credentials. Inactive profiles are
+known to Compose and are not removed by `--remove-orphans` alone. The candidate
+asserts that all eight service containers were created after the rehearsal began;
+their creation times are included in the receipt.
+
 ## PDF source review transport (2026-09-27)
 
 `pnpm exec tsx packages/testkit/chaos/run.ts --only R1.S3.MEDIA --poller worker`

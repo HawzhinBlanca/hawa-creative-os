@@ -174,7 +174,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   }, 10 * 60_000);
 
   if (candidate) scenario('R1.S3.SOURCES', 'full-app PDF source to voice revision and simulated approved delivery', async (chat, events) => ({
-    delivered: false, skipRequestChecks: true, skipQuiescence: true, extra: await candidateSources(chat, events),
+    delivered: false, skipRequestChecks: true, skipQuiescence: true, extra: await candidateSources(chat, events, suiteStarted),
   }), 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('R1.0', 'happy path: brief, draft, approve, deliver, no faults', async (chat, events) => {

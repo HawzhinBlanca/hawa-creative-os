@@ -11,13 +11,17 @@ const origin = 'http://127.0.0.1:56081';
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 type Request = { request_id: string; current_task_id: string; rev: string; stage: string };
 
-export async function candidateSources(chat: string, events: string[]): Promise<InvariantResult[]> {
+export async function candidateSources(chat: string, events: string[], suiteStarted: number): Promise<InvariantResult[]> {
   const checks: InvariantResult[] = [];
   const check = (name: string, ok: boolean, detail: string) => {
     checks.push({ name, ok, detail });
     if (!ok) throw new Error(`${name}: ${detail}`);
   };
   const deployment = deploymentReceipt();
+  check('every candidate container was created after this rehearsal started',
+    ['core', 'worker-blue', 'desk', 'docling', 'nginx', 'restate', 'postgres', 'fakes'].every(service =>
+      Date.parse(deployment.containers[service]?.createdAt) >= suiteStarted),
+    `rehearsal started ${new Date(suiteStarted).toISOString()}`);
   check('Core, worker and Desk image labels match the candidate checkout', ['core', 'worker-blue', 'desk'].every(service =>
     deployment.containers[service]?.buildCommit === deployment.commit && /^sha256:[0-9a-f]{64}$/.test(deployment.containers[service]?.imageId)),
     `build ${deployment.commit}; changed source files=${Object.keys(deployment.sourceChanges).length}`);

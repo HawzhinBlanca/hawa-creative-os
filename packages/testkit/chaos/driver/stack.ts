@@ -124,7 +124,9 @@ export function up(options: { build?: boolean; services?: Service[] } = {}): voi
  * The results of the last run (.run/last-run.json) stay.
  */
 export function down(options: { volumes?: boolean } = {}): void {
-  compose(['--profile', 'green', 'down', '--remove-orphans', ...(options.volumes ? ['-v'] : [])], { allowFail: true });
+  // Compose knows inactive-profile containers, so --remove-orphans does not remove them.
+  // Include every profile: otherwise candidate nginx keeps the blob volume alive across resets.
+  compose(['--profile', 'green', '--profile', 'candidate', 'down', '--remove-orphans', ...(options.volumes ? ['-v'] : [])]);
   if (options.volumes) rmSync(ENV_FILE, { force: true });
 }
 
@@ -244,11 +246,11 @@ export function deploymentReceipt() {
     ? createHash('sha256').update(readFileSync(join(REPO_ROOT, p))).digest('hex') : 'deleted']));
   const containers = Object.fromEntries(SERVICES.flatMap(service => {
     const result = run('docker', ['inspect', '--format',
-      '{{.Image}}|{{index .Config.Labels "org.opencontainers.image.revision"}}|{{range $name, $net := .NetworkSettings.Networks}}{{$name}} {{end}}',
+      '{{.Image}}|{{index .Config.Labels "org.opencontainers.image.revision"}}|{{range $name, $net := .NetworkSettings.Networks}}{{$name}} {{end}}|{{.Created}}',
       containerOf(service)], { allowFail: true });
     if (result.status !== 0) return [];
-    const [imageId, buildCommit, networks] = result.stdout.trim().split('|');
-    return [[service, { imageId, buildCommit, networks: networks.trim().split(/\s+/) }]];
+    const [imageId, buildCommit, networks, createdAt] = result.stdout.trim().split('|');
+    return [[service, { imageId, buildCommit, networks: networks.trim().split(/\s+/), createdAt }]];
   }));
   const networks = run('docker', ['network', 'inspect', `${PROJECT}_chaos`, `${PROJECT}_parser`,
     '--format', '{{.Name}}|{{.Internal}}'], { allowFail: true }).stdout.trim().split('\n');
