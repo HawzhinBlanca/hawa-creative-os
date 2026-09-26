@@ -22,8 +22,9 @@ A demonstrated cross-client task-file download hole is fixed in migration 043.
 
 Affected checks passed **14 files / 180 tests**, including **26 invariants** across
 five actual Core kills and six starts, one download/extraction/task/event/outbox.
-Typecheck, lint, Desk build and zero-secret scan passed. Full sealed regression is
-pending. See ADR-073, R07_EVIDENCE.md, R12_EVIDENCE.md,
+Typecheck, lint, Desk build and zero-secret scan passed. The separate Docker/Restate
+PDF correction-notice scenario passed 5/5 invariants with two completed invocations
+and one critical requester prompt. Full sealed regression is pending. See ADR-073, R07_EVIDENCE.md, R12_EVIDENCE.md,
 R07_SOURCE_RECOVERY_PROOF.json and runbooks/REQUEST_SOURCE_REVIEW.md.
 
 Next: seal and qualify this coherent PDF workflow; then voice with reviewed copy,

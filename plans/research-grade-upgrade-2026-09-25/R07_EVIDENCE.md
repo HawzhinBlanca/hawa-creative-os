@@ -30,6 +30,13 @@ fixture is served through a bounded local HTTP bridge; the real downloader recei
 two fixed Telegram-shaped responses. Child processes use a fresh cwd, synthetic
 session/config and an outbound fetch guard. Production was not changed.
 
+The updated Docker/Restate `R1.S3.MEDIA` scenario separately passed **5/5
+invariants** with the real worker poller: one immutable missing-client refusal,
+one critical requester correction prompt, no task or failure parking, and two
+completed ChatInbox invocations under different Restate idempotency keys. Its
+fake-provider receipt is included in the same proof file. Earlier dated all-PDF
+hold results are historical; the current scenario reflects explicit PDF admission.
+
 The crash result, source hashes, limits and earlier failed runs are in
 `R07_SOURCE_RECOVERY_PROOF.json`; usage/recovery is in
 `runbooks/REQUEST_SOURCE_REVIEW.md`. Sealed full regression is pending for this

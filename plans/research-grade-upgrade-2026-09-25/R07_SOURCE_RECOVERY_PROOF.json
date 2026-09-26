@@ -133,7 +133,10 @@
     "apps/core/src/routes/source-files.routes.ts": "518186f61d16aa8cdba81df558ed7f2c03838f558d881cb704150470bc1b1a1d",
     "packages/domain/src/telegram-source-review.ts": "ee4689e9462dd686257eaa975bbf52e23c43078b65ffe30ed7c95166c986185f",
     "packages/integrations/src/telegram-bridge.ts": "2028c34ccd696ce416eaca8317bed0dcef68cb20655b290a467ad78447a4dd91",
-    "packages/db/migrations/043_lifecycle_source_retention.sql": "c93e40bf4ddcf1725f5f3516b27b394abf78f076d105cc385da9f1e06cd012db"
+    "packages/db/migrations/043_lifecycle_source_retention.sql": "c93e40bf4ddcf1725f5f3516b27b394abf78f076d105cc385da9f1e06cd012db",
+    "packages/testkit/chaos/chaos.test.ts": "434846fdc773f5dd01e742d2bc60976cfb572fb367f7809adb35f2d4a90a502d",
+    "apps/worker/src/lifecycle/chat-inbox.ts": "0dc572f6da9a7a43962953dc4f006d6eb18edac6fa16e65f06bf72211f7a9cc1",
+    "apps/worker/src/lifecycle/core-client.ts": "bad7a33bc43bafa1bad655a22f8bb5e5a1f42cb215793ac5ebd135848b7b2774"
   },
   "limits": [
     "Disposable same-host PostgreSQL and blob directory; not clean-host restore or production RPO/RTO",
@@ -161,5 +164,59 @@
     "One UI acceptance run used stale compiled domain exports: 15 failed / 29 passed. Rebuilt workspace packages; subsequent runs passed.",
     "The first wide affected run: 4 failed / 176 passed. Two failures found filename-based PDF dispatch overriding images; two assertions still expected the prior all-PDF hold. Names no longer choose the extractor; explicit PDF without a client gets an actionable refusal.",
     "The first secret scan flagged a hard-coded test webhook value; replaced with a per-run generated fixture. Final scan passed without a new allowlist entry."
-  ]
+  ],
+  "restateTransport": {
+    "status": "passed",
+    "scope": "Actual isolated Core, worker, Restate and PostgreSQL with fake provider transport; missing-client PDF correction notice only",
+    "finishedAt": "2026-09-26T22:15:12.001Z",
+    "telegramPoller": "worker",
+    "totalMs": 45354,
+    "peakMemoryMiB": {
+      "hawa-chaos-core-1": 90,
+      "hawa-chaos-worker-blue-1": 44,
+      "hawa-chaos-postgres-1": 42,
+      "hawa-chaos-fakes-1": 52,
+      "hawa-chaos-restate-1": 584
+    },
+    "peakTotalMiB": 787,
+    "uncoveredModelCalls": [],
+    "scenarios": [
+      {
+        "name": "R1.S3.MEDIA",
+        "what": "flagged chat: a PDF without client selection gets one durable review prompt and no task",
+        "ms": 8135,
+        "invariants": [
+          {
+            "name": "second media update accepted for replay",
+            "ok": true,
+            "detail": "HTTP 202"
+          },
+          {
+            "name": "no legacy task created",
+            "ok": true,
+            "detail": "tasks=0"
+          },
+          {
+            "name": "one admission refusal and no parked update",
+            "ok": true,
+            "detail": "[{\"source_account_id\":\"lifecycle_source_admission\"}]"
+          },
+          {
+            "name": "one requester correction prompt without an office failure alert",
+            "ok": true,
+            "detail": "sender=1 office=0"
+          },
+          {
+            "name": "both media intake invocations completed",
+            "ok": true,
+            "detail": "[{\"id\":\"inv_1hvUuXij6tHU0YNsUMXXFaL4SoHLxS4x64\",\"status\":\"completed\",\"idempotency_key\":\"tg-90460889244\"},{\"id\":\"inv_1hvUuXij6tHU5RY5H6aKY72rxEmS7ajF6o\",\"status\":\"completed\",\"idempotency_key\":\"chaos-media-replay-90460889244\"}]"
+          }
+        ],
+        "events": [
+          "captioned PDF update 90460889244 in flagged chat 9300001",
+          "duplicate media update under a second Restate key: HTTP 202"
+        ]
+      }
+    ]
+  }
 }

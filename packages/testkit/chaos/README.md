@@ -7,6 +7,16 @@ request. It covers the legacy path (Core intake → outbox → `TaskWorkflow` �
 outcome → Desk approval → delivery) and the admitted Restate lifecycle slices.
 The dated run histories below preserve their original scope and limitations.
 
+## PDF source review transport (2026-09-27)
+
+`pnpm exec tsx packages/testkit/chaos/run.ts --only R1.S3.MEDIA --poller worker`
+now checks that a PDF without explicit client selection gets one durable source
+review prompt, one admission refusal, no legacy task and no failure parking/office
+alert. A second Restate idempotency key must still produce one requester prompt.
+ADR-073 replaces the old blanket PDF hold; the dated results below retain the old
+contract and their original counts. The separate `lifecycle-source-recovery.test.ts`
+drill proves actual PDF extraction, copy confirmation and five Core crash boundaries.
+
 ## Confirmed album recovery (2026-09-26)
 
 For original image files, run:

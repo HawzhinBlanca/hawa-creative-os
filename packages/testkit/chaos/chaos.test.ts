@@ -772,18 +772,19 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
 
   }
 
-  scenario('R1.S3.MEDIA', 'flagged chat: a captioned PDF is parked once, alerted, and never creates a legacy task', async (chat, events) => {
+  scenario('R1.S3.MEDIA', 'flagged chat: a PDF without client selection gets one durable review prompt and no task', async (chat, events) => {
     const update = imageDocumentUpdate(chat, 'lifecycle-pdf', 128,
       'KAAE members evening\n---\nDecember 4, 2026\nErbil');
     update.message.document.mime_type = 'application/pdf';
     update.message.document.file_name = 'brief.pdf';
     const [updateId] = await fakes.updates([update]);
     const polled = { ...update, update_id: updateId };
-    events.push(`captioned image update ${updateId} in flagged chat ${chat}`);
-    await waitUntil('the media update to be parked', async () => {
+    events.push(`captioned PDF update ${updateId} in flagged chat ${chat}`);
+    await waitUntil('the PDF review prompt to be sent', async () => {
       const rows = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
-        WHERE source_account_id = 'telegram' AND source_event_id = ${`parked-update-${updateId}`}`);
-      return Number(rows[0]?.n) === 1 ? true : null;
+        WHERE source_account_id = 'lifecycle_source_admission' AND source_event_id = ${String(updateId)}`);
+      const notices = (await sentTo(chat)).filter(s => s.method === 'sendMessage' && s.text?.includes('Name one active client'));
+      return Number(rows[0]?.n) === 1 && notices.length === 1 ? true : null;
     });
     const replay = await sendToChatInbox(chat, polled, `chaos-media-replay-${updateId}`);
     events.push(`duplicate media update under a second Restate key: HTTP ${replay}`);
@@ -794,20 +795,19 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         const tasks = await tasksOfChat(chat);
         const rows = await query<{ source_account_id: string }>(sql`SELECT source_account_id
           FROM hawa.inbox_events WHERE source_event_id IN (${String(updateId)}, ${`parked-update-${updateId}`})
-            AND source_account_id IN ('lifecycle_chat_routing', 'telegram')`);
+            AND source_account_id IN ('lifecycle_source_admission', 'telegram')`);
         const notices = (await sentTo(chat)).filter((s) => s.method === 'sendMessage' &&
-          s.text?.includes('could not process it automatically'));
+          s.text?.includes('Name one active client'));
         const alerts = (await sentTo(OFFICE_CHAT)).filter((s) => s.method === 'sendMessage' &&
           s.text?.includes(String(updateId)));
         const inbox = (await chatInboxInvocations(chat)).filter((item) =>
           item.idempotency_key === `tg-${updateId}` || item.idempotency_key === `chaos-media-replay-${updateId}`);
         return [
           { name: 'no legacy task created', ok: tasks.length === 0, detail: `tasks=${tasks.length}` },
-          { name: 'one routing receipt and one parked update', ok: rows.length === 2 &&
-            rows.filter((r) => r.source_account_id === 'telegram').length === 1 &&
-            rows.filter((r) => r.source_account_id === 'lifecycle_chat_routing').length === 1,
+          { name: 'one admission refusal and no parked update', ok: rows.length === 1 &&
+            rows[0].source_account_id === 'lifecycle_source_admission',
             detail: JSON.stringify(rows) },
-          { name: 'one sender notice and one office alert', ok: notices.length === 1 && alerts.length === 1,
+          { name: 'one requester correction prompt without an office failure alert', ok: notices.length === 1 && alerts.length === 0,
             detail: `sender=${notices.length} office=${alerts.length}` },
           { name: 'both media intake invocations completed', ok: inbox.length === 2 &&
             inbox.every((item) => item.status === 'completed'), detail: JSON.stringify(inbox) },
