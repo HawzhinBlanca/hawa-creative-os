@@ -30,7 +30,17 @@
   },
   "typecheck": "passed source, scripts and included tests",
   "lint": "passed; 9 existing direct-provider exceptions remain",
-  "fullRegression": "pending release seal",
+  "fullRegression": {
+    "sourceCommit": "a03f2fb",
+    "testedSeal": "d19abb6",
+    "filesPassed": 445,
+    "filesSkipped": 6,
+    "testsPassed": 3498,
+    "testsSkipped": 58,
+    "testsFailed": 0,
+    "durationSeconds": 98.16,
+    "logSha256": "6cd80465abec1470f5085247fe8eb225b862c9591bf687ce0f6b3e354d1586c7"
+  },
   "limits": [
     "Synthetic provider responses do not measure transcription accuracy.",
     "No trusted database-backed voice policy or durable paid-call admission wired yet.",
@@ -45,5 +55,15 @@
     "apps/core/src/routes/assets.routes.ts": "562d3898bab1b07a1e82d0a27b3a3e514529d25ba3b18eff801c00dbf267eb56",
     "apps/core/test/transcribe.test.ts": "eea96f03aaf25095f99a49dffbdb6ebf8684771c34fb74a78709c3ad662bf9e9",
     "apps/core/test/voice-ingress-and-webhook.test.ts": "60288011d9ab07c4984836e8c7760aef07d3b4c72140b91e2311759f20e6d997"
+  },
+  "release": {
+    "blueprint": {
+      "passed": 855,
+      "warnings": 0,
+      "failed": 0
+    },
+    "manifest": "verified",
+    "secretScan": "0 secrets; existing justified allowlist only",
+    "deployment": "unchanged"
   }
 }

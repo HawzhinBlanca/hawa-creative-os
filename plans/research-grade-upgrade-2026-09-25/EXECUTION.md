@@ -18,9 +18,10 @@ ADR-074 removes fabricated confidence/language/duration and automatic price rewr
 from voice evidence, separates captions, bounds provider transport and holds legacy
 voice before download so missing audio cannot turn into a caption-only design.
 The standalone text-inspection route preserves exact text and still refuses audio.
-Affected checks: **5 files / 55 tests**, source/test types and lint passed. Full
-regression/seal is pending; the prior PDF checkpoint below remains the last sealed
-full-suite result. No deployment, provider-model or flag change.
+Affected checks: **5 files / 55 tests**, source/test types and lint passed. Source
+`a03f2fb` / tested seal `d19abb6`: **445 files / 3,498 tests passed**, **6 files /
+58 tests skipped**; blueprint **855/0/0**, zero-secret scan and release manifest
+verified. No deployment, provider-model or flag change.
 
 Next is the complete retained-audio → trusted locked-client policy → durable paid
 transcription → requester copy review journey, with unknown call outcomes preserved

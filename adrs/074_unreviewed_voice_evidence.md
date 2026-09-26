@@ -1,7 +1,7 @@
 # ADR-074: Keep voice candidates separate from confirmed copy
 
 Date: 2026-09-27
-Status: implemented; local regression qualification in progress
+Status: locally qualified; durable scoped voice and production admission remain open
 Requirements: FR-013, FR-014, FR-060, FR-066, FR-067, NFR-006, NFR-007
 Sources: docs/09_MESSAGING_AND_OFFICE_INBOX.md §§6–10;
 docs/08_MEMORY_RAG_CLIENT_DNA.md §7; docs/10_WORKFLOW_RELIABILITY.md §§4–6;

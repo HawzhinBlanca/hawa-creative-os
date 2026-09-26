@@ -64,8 +64,10 @@ The initial sandbox run could not connect to the isolated database and executed 
 tests. The negative-size fetch spy initially delegated to native fetch with synthetic
 bytes and a synthetic key; it now rejects explicitly, and all final provider fixtures
 are mocked. Final affected regression: **5 files / 55 tests passed**. Source, script
-and included-test types and lint passed. Full release regression is pending the new
-seal. Exact file hashes and results: `R20_VOICE_EVIDENCE_PROOF.json`.
+and included-test types and lint passed. Sealed source `a03f2fb` / seal `d19abb6`: **445 files / 3,498 tests passed**,
+with **6 files / 58 tests skipped**, in 98.16 seconds. Blueprint **855/0/0**,
+zero-secret scan and release manifest verification passed. No live transcription
+or voice process-crash admission is claimed. Exact file hashes and results: `R20_VOICE_EVIDENCE_PROOF.json`.
 
 This is an adapter and unsafe-intake correction, not completed voice admission.
 Retained audio, current locked client policy, model/cost admission, durable paid-call

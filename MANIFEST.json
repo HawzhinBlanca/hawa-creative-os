@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-26T22:39:04Z",
+  "generatedAt": "2026-09-26T22:41:51Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -439,8 +439,8 @@
     },
     {
       "path": "adrs/074_unreviewed_voice_evidence.md",
-      "sha256": "c3e2d3d270b263e791a3b97978e79a3efc32fe048316b42e15426913d9b802c6",
-      "bytes": 3200
+      "sha256": "0fa5130144f67ab0884d62840711dd1c40edd5cc9fcca4e4fe9649916a7d3d09",
+      "bytes": 3221
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -889,8 +889,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "5228d8238ca9d791d7af6797da3ec42a10df9c51794a1b0d2543a9a90e6cd90e",
-      "bytes": 27632
+      "sha256": "c84c53b0eb6e33e38f9066d78edae8521b9589145459b152229d2b47e2f255de",
+      "bytes": 27706
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1049,13 +1049,13 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_EVIDENCE.md",
-      "sha256": "9ca2e48e966506d4e8a7abf4f2c073089272445bb70d58d3a1b2b8e5cc80d692",
-      "bytes": 10811
+      "sha256": "18292d5d0cc3e26256be79e8c19fb07711244071a5e4d650a2d1925e0249284e",
+      "bytes": 11044
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_VOICE_EVIDENCE_PROOF.json",
-      "sha256": "b9df46beec6e219b511cd1d7a9093b1f7e9454ebbf5bd4e1bcee783145e282a4",
-      "bytes": 2136
+      "sha256": "4cd8af0e2187d1e5caa5133a56e426d1c225ea7cc295f79890e315f48ea7d2c0",
+      "bytes": 2641
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
@@ -1079,8 +1079,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "5c54092e2f9d59596297f3f77116e5cf52064f0bc77e62afa806927beafe8701",
-      "bytes": 232790
+      "sha256": "e89d7ba794d215346dfd4d35b6b6a410af428ee90593fe0dbf4c6db6567e3538",
+      "bytes": 233609
     },
     {
       "path": "plans/user-stories.csv",
