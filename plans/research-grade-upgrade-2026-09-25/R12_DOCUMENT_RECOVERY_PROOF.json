@@ -189,7 +189,7 @@
     "lint": "passed",
     "deskBuild": "passed",
     "secretScan": "passed_zero_secrets",
-    "fullRegression": "pending_sealed_run"
+    "fullRegression": "passed_on_sealed_source_candidate"
   },
   "productionChanged": false,
   "priorFailedRuns": [
@@ -214,6 +214,23 @@
     "types-final": "4d197d29898f91b1ad1f8a6e148d451b549947f8580b26bca3c8515c31abced9",
     "lint": "5984de6934a7db84ee4a6d7011c820798382119ba5acf0fa8d8ac07a5b1dece6",
     "desk": "8c801d80d1dd51529ac3dc0d52f88a9f25bd42110232e81670d98587e64aff90",
-    "security": "2326d2626fe4728800a41c19e154accd75acec0b817eb884ab2278d41cee437f"
+    "security": "2326d2626fe4728800a41c19e154accd75acec0b817eb884ab2278d41cee437f",
+    "full": "2a0ffac2b0a3d64a14e8fa470fdb02109279178cc0137d68e7e5e79d7601a7cd",
+    "manifest": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6",
+    "blueprint": "3d999b9f201c301823e8211197f0225e5977b7a71d7749f992d9cca941dff814"
+  },
+  "sealedRegression": {
+    "sourceCommit": "9e3c3b9297901118760ff1dc04aefa6f0c57db4c",
+    "testedSealCommit": "bec199845b7e7d38fcdedaaaafb79a043c73e1aa",
+    "filesPassed": 442,
+    "filesSkipped": 5,
+    "testsPassed": 3440,
+    "testsSkipped": 57,
+    "blueprintPassed": 845,
+    "blueprintWarnings": 0,
+    "blueprintFailed": 0,
+    "releaseManifest": "verified",
+    "productionFlags": "off",
+    "optInDrill": "31 invariants passed separately within 8 files/76 focused tests; explicitly skipped in normal full regression"
   }
 }

@@ -30,7 +30,7 @@ The drill checks both actual pages by chunk identity rather than assuming result
 **Acceptance:** **8 files / 76 tests passed**, including the opt-in drill with **31
 invariants**, four process kills and six starts. Source/included-test typecheck, lint
 (1006 existing `any`, 9 existing provider-egress exceptions), Desk build and a
-zero-secret scan passed. Full regression and candidate sealing follow the source commit.
+zero-secret scan passed. **Sealed regression:** source `9e3c3b9`, seal `bec1998` passed **442 files / 3440 tests**, with **5 files / 57 tests skipped**. The opt-in crash/restore drill passed separately in the 76-test focused run. Blueprint **845/0/0** and clean-tree release manifest verified. Production remains unchanged.
 See `R12_DOCUMENT_RECOVERY_PROOF.json` for actual hashes and
 `services/docling/README.md` for the guarded reproduction command.
 

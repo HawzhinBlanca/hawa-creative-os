@@ -23,7 +23,7 @@ fixtures now describe the real parser's coordinate object; Desk exposes its type
 
 Focused acceptance passed **8 files / 76 tests**, including the opt-in drill's **31
 invariants**, four kills and six Core starts. Typecheck, lint, Desk build and secret
-scan passed. Full regression and candidate sealing follow the source commit.
+scan passed. **Sealed regression:** source `9e3c3b9`, seal `bec1998` passed **442 files / 3440 tests**, with **5 files / 57 tests skipped**. The opt-in crash/restore drill passed separately in the 76-test focused run. Blueprint **845/0/0** and clean-tree release manifest verified. Production remains unchanged.
 See `R12_EVIDENCE.md`, `R12_DOCUMENT_RECOVERY_PROOF.json` and the Docling runbook.
 The normal full suite reports this gated drill as skipped; its explicit passing run
 is recorded separately. No production service, configuration or flag changed.
