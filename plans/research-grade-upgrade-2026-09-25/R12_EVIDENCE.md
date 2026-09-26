@@ -43,6 +43,13 @@ first Compose run failed because tmpfs commas needed quoting. The host could not
 reach the internal Docker network, so the real probe was moved into that same
 private network without giving the parser an egress route.
 
+The first full run on source `3749845` / seal `edb83d5` passed **3,409 tests**
+and failed one route-inventory test (56 skipped). Its only diff was the four
+intentional prefixes of the new inspection endpoint; the inventory fixture had
+not been updated. The follow-up adds exactly those four entries, retains the
+failure here, and reruns the inventory and sealed release checks. Runtime and
+real-container proof sources are unchanged.
+
 Limits remain explicit: native text ordering is unverified; OCR, table structure
 and images are not extracted. Textless pages are held, and visual information on
 otherwise text-bearing pages can still be absent. English fixtures do not qualify

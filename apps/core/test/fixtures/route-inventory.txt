@@ -367,6 +367,7 @@ POST /api/clients/:clientId/candidate-rules/:ruleId/rollback
 POST /api/clients/:clientId/candidate-rules/propose
 POST /api/clients/:clientId/dna
 POST /api/clients/:clientId/dna/rollback
+POST /api/clients/:clientId/documents/inspect
 POST /api/clients/:clientId/negative-feedback
 POST /api/clients/:clientId/snapshots
 POST /api/comparisons
@@ -460,6 +461,7 @@ POST /api/v1/clients/:clientId/candidate-rules/:ruleId/rollback
 POST /api/v1/clients/:clientId/candidate-rules/propose
 POST /api/v1/clients/:clientId/dna
 POST /api/v1/clients/:clientId/dna/rollback
+POST /api/v1/clients/:clientId/documents/inspect
 POST /api/v1/clients/:clientId/negative-feedback
 POST /api/v1/clients/:clientId/snapshots
 POST /api/v1/comparisons
@@ -556,6 +558,7 @@ POST /clients/:clientId/candidate-rules/:ruleId/rollback
 POST /clients/:clientId/candidate-rules/propose
 POST /clients/:clientId/dna
 POST /clients/:clientId/dna/rollback
+POST /clients/:clientId/documents/inspect
 POST /clients/:clientId/negative-feedback
 POST /clients/:clientId/snapshots
 POST /comparisons
@@ -649,6 +652,7 @@ POST /v1/clients/:clientId/candidate-rules/:ruleId/rollback
 POST /v1/clients/:clientId/candidate-rules/propose
 POST /v1/clients/:clientId/dna
 POST /v1/clients/:clientId/dna/rollback
+POST /v1/clients/:clientId/documents/inspect
 POST /v1/clients/:clientId/negative-feedback
 POST /v1/clients/:clientId/snapshots
 POST /v1/comparisons
