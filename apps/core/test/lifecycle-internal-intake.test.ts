@@ -54,6 +54,15 @@ const brief = (id: number, chat: number) => ({
   message: { message_id: id % 100000, from: { id: OFFICE, is_bot: false, first_name: 'Owner' }, chat: { id: chat, type: 'private' }, date: 1790000000, text: 'KAAE members evening\n---\nDecember 4, 2026\nErbil' },
 });
 
+/** Preserve the source file, including a thumbnail that must never replace it. */
+function asImageDocument(update: { message: unknown }): void {
+  const message = update.message as Record<string, unknown>;
+  const photos = message.photo as Array<{ file_id: string; file_size?: number }>;
+  message.document = { ...photos[photos.length - 1], file_name: 'original.png', mime_type: 'image/png',
+    thumbnail: { file_id: 'thumbnail-must-not-download' } };
+  delete message.photo;
+}
+
 /** Telegram's sendMessage, recorded; anything else goes to the real fetch. */
 function fakeTelegram() {
   const realFetch = globalThis.fetch;
@@ -197,7 +206,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
-  it('admits a captioned photo through its owned task without image bytes in Restate', async () => {
+  it.each(['photo', 'document'] as const)('admits a captioned %s through its owned task without image bytes in Restate', async (carrier) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
@@ -205,6 +214,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     delete (update.message as any).text;
     (update.message as any).caption = 'KAAE members evening\n---\nDecember 4, 2026\nErbil';
     (update.message as any).photo = [{ file_id: 'photo-fixture', file_size: 128 }];
+    if (carrier === 'document') asImageDocument(update);
     const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64');
     const bridge = { downloadFile: vi.fn(async () => photo),
       dispatchOutboundMessage: vi.fn(async () => ({ success: true })) };
@@ -221,6 +231,12 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(pendingRefs.rows).toHaveLength(1);
     expect(await tasksInChat(chat)).toHaveLength(0);
     expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
+    expect(bridge.downloadFile).toHaveBeenCalledWith('photo-fixture');
+    expect(result.body.draft.rawJson).toBeUndefined();
+    const storedSource = await withRlsContext(db, scope, (trx) => trx.selectFrom('inbox_events')
+      .select('payload').where('source_account_id', '=', 'lifecycle_chat_open')
+      .where('source_event_id', '=', String(update.update_id)).executeTakeFirstOrThrow());
+    expect(storedSource.payload).toMatchObject({ sourceUpdate: update });
     vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect((await intake(createApp({ db } as any), update)).body).toMatchObject({
       intakeStatus: 200, duplicate: true, lifecycleAction: 'open-request',
@@ -248,6 +264,10 @@ describe('POST /v1/internal/telegram/intake', () => {
     const projectedBody = await projected.json();
     expect(projectedBody.stage).toBe('designing');
     const taskId = projectedBody.taskId;
+    const taskSource = await withRlsContext(db, scope, (trx) => trx.selectFrom('inbox_events')
+      .select('payload').where('source_account_id', '=', 'telegram')
+      .where('source_event_id', '=', `${chat}:${result.body.draft.sourceEventId}`).executeTakeFirstOrThrow());
+    expect(taskSource.payload).toEqual(update);
     const rows = await withRlsContext(db, scope, (trx) => sql<{ sha256: string }>`SELECT sha256
       FROM hawa.task_files WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
         AND role = 'reference_image'`.execute(trx));
@@ -286,6 +306,77 @@ describe('POST /v1/internal/telegram/intake', () => {
         lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
       expect(await tasksInChat(chat)).toHaveLength(0);
     }
+  });
+
+  it.each([undefined, 'application/octet-stream', 'image/jpeg'])(
+    'verifies original image-file bytes with MIME hint %s and ignores the filename', async (mime) => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const update = brief(updateId(), chat);
+    const message = update.message as Record<string, unknown>;
+    message.caption = message.text;
+    delete message.text;
+    message.document = { file_id: 'original-image', file_name: '../../wrong.pdf',
+      ...(mime ? { mime_type: mime } : {}), thumbnail: { file_id: 'wrong-thumbnail' } };
+    const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64');
+    const bridge = { downloadFile: vi.fn(async () => bytes), dispatchOutboundMessage: vi.fn() };
+    const result = await intake(createApp({ db, telegramBridge: bridge } as any), update);
+    expect(result.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'open-request',
+      draft: { lifecycleImage: { mediaType: 'image/png', size: bytes.length,
+        sha256: createHash('sha256').update(bytes).digest('hex') } } });
+    expect(bridge.downloadFile.mock.calls).toEqual([['original-image']]);
+  });
+
+  it.each(['pdf', 'oversized-metadata', 'invalid-size', 'animation', 'live-photo', 'mixed', 'spoofed-bytes', 'oversized-bytes'] as const)(
+    'holds an image-file submission with %s intact and never designs from its caption', async (fault) => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const update = brief(updateId(), chat);
+    const message = update.message as Record<string, unknown>;
+    message.caption = message.text;
+    delete message.text;
+    const document: Record<string, unknown> = { file_id: 'image-looking-file', file_name: 'photo.png', mime_type: 'image/png' };
+    message.document = document;
+    if (fault === 'pdf') document.mime_type = 'application/pdf';
+    if (fault === 'oversized-metadata') document.file_size = 20 * 1024 * 1024 + 1;
+    if (fault === 'invalid-size') document.file_size = '20';
+    if (fault === 'animation') message.animation = { file_id: 'animated' };
+    if (fault === 'live-photo') message.live_photo = { file_id: 'movie' };
+    if (fault === 'mixed') message.photo = [{ file_id: 'other-image' }];
+    const bytes = fault === 'oversized-bytes' ? Buffer.alloc(20 * 1024 * 1024 + 1) : Buffer.from('%PDF-1.7\nnot an image');
+    const bridge = { downloadFile: vi.fn(async () => bytes), dispatchOutboundMessage: vi.fn() };
+    const expected = { intakeStatus: 422, lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' };
+    expect((await intake(createApp({ db, telegramBridge: bridge } as any), update)).body).toMatchObject(expected);
+    expect(bridge.downloadFile).toHaveBeenCalledTimes(fault.endsWith('bytes') ? 1 : 0);
+    expect(await tasksInChat(chat)).toHaveLength(0);
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
+    expect((await intake(createApp({ db } as any), update)).body).toMatchObject(expected);
+    expect(await tasksInChat(chat)).toHaveLength(0);
+  });
+
+  it('replays a pre-admission image-file hold after upgrading instead of starting a task', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const chat = chatId();
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const update = brief(updateId(), chat);
+    const message = update.message as Record<string, unknown>;
+    message.caption = message.text;
+    delete message.text;
+    message.document = { file_id: 'previously-held', mime_type: 'image/png' };
+    const digest = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+    await withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.inbox_events
+      (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
+      VALUES (${tenantId}::uuid, 'lifecycle_chat_routing', ${String(update.update_id)}, 'lifecycle_media_not_admitted',
+        ${JSON.stringify({ code: 'LIFECYCLE_MEDIA_NOT_ADMITTED', chatId: String(chat) })}::jsonb, ${digest}, true)`.execute(trx));
+    const bridge = { downloadFile: vi.fn(), dispatchOutboundMessage: vi.fn() };
+    const app = createApp({ db, telegramBridge: bridge } as any);
+    expect((await intake(app, update)).body).toMatchObject({ intakeStatus: 422, lifecycleAction: 'park-update' });
+    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
+    expect((await intake(app, update)).body).toMatchObject({ intakeStatus: 422, lifecycleAction: 'park-update' });
+    expect(bridge.downloadFile).not.toHaveBeenCalled();
+    expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
   it('waits without downloading when durable photo storage is unavailable', async () => {
@@ -441,7 +532,8 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect((child?.payload as any).designInstructions).toContain('Make the approved event design');
   });
 
-  it.each(['captioned', 'captionless'] as const)('binds a %s reply photo to only its selected revision task and replays after flag rollback', async (kind) => {
+  it.each([['captioned', 'photo'], ['captionless', 'photo'], ['captioned', 'document'], ['captionless', 'document']] as const)(
+    'binds a %s reply %s to only its selected revision task and replays after flag rollback', async (kind, carrier) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     const app = createApp({ db } as any);
@@ -458,6 +550,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     delete (update.message as any).text;
     if (kind === 'captioned') (update.message as any).caption = 'Please use this photo and a blue background';
     (update.message as any).photo = [{ file_id: 'revision-photo', file_size: 128 }];
+    if (carrier === 'document') asImageDocument(update);
     (update.message as any).reply_to_message = { message_id: 843 };
     const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64');
     const bridge = { downloadFile: vi.fn(async () => photo),
@@ -473,6 +566,7 @@ describe('POST /v1/internal/telegram/intake', () => {
       expect(child?.payload).toMatchObject({ exactCopy: [{ text: 'December 4, 2026' }] });
     }
     expect(bridge.downloadFile).toHaveBeenCalledTimes(1);
+    expect(bridge.downloadFile).toHaveBeenCalledWith('revision-photo');
     expect((await tasksInChat(chat))).toHaveLength(3);
     const decision = await withRlsContext(db, scope, (trx) => sql<{ payload: any }>`SELECT payload
       FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
@@ -537,7 +631,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
 
-  it('checks the exact captionless reply again at the task projection boundary', async () => {
+  it.each(['photo', 'document'] as const)('checks the exact captionless %s reply again at the task projection boundary', async (carrier) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
     const app = createApp({ db } as any);
@@ -546,6 +640,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     const update = brief(updateId(), chat);
     delete (update.message as any).text;
     (update.message as any).photo = [{ file_id: 'wrong-request-photo' }];
+    if (carrier === 'document') asImageDocument(update);
     (update.message as any).reply_to_message = { message_id: 936 };
     await withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.inbox_events
       (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified)
@@ -557,13 +652,17 @@ describe('POST /v1/internal/telegram/intake', () => {
     await withRlsContext(db, scope, (trx) => recordRevisionPhotoDecision(trx,
       tenantId, update.update_id, { requestId: first.requestId, chatId: String(chat), payloadHash, image }));
     const directive = lifecyclePhotoInput(update)!.directive;
-    await expect(projectLifecycleRequesterRevisionWithIntake(db, {
+    const projection = {
       requestId: first.requestId, tenantId, priorTaskId: first.taskId, round: 1, directive,
       sourceEventId: `lc-${first.requestId}-r1-u${update.update_id}`, sourceChannelId: String(chat),
       rawText: directive, sourceUpdateHash: payloadHash, sourceUpdate: update,
       lifecycleImage: image, clientId, expectedRev: 3, rev: 4,
       key: `${first.requestId}:4:requesterRevisionIntake:u${update.update_id}`,
-    })).rejects.toMatchObject({ code: 'NOT_CURRENT_DRAFT' });
+    };
+    await expect(projectLifecycleRequesterRevisionWithIntake(db, { ...projection, lifecycleImage: undefined }))
+      .rejects.toMatchObject({ code: 'UNVERIFIED_DESIGN' });
+    await expect(projectLifecycleRequesterRevisionWithIntake(db, projection))
+      .rejects.toMatchObject({ code: 'NOT_CURRENT_DRAFT' });
     expect(await tasksInChat(chat)).toHaveLength(2);
     const request = await withRlsContext(db, scope, (trx) => trx.selectFrom('requests')
       .select(['rev', 'current_task_id']).where('request_id', '=', first.requestId).executeTakeFirstOrThrow());
@@ -785,7 +884,8 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(3);
   });
 
-  it.each(['captioned', 'captionless'] as const)('asks a verified Studio question, resumes from a %s photo answer, and rejects a late second answer', async (kind) => {
+  it.each([['captioned', 'photo'], ['captionless', 'photo'], ['captioned', 'document'], ['captionless', 'document']] as const)(
+    'asks a verified Studio question, resumes from a %s %s answer, and rejects a late second answer', async (kind, carrier) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
@@ -859,6 +959,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     delete (answer.message as any).text;
     if (kind === 'captioned') (answer.message as any).caption = 'Larger headline';
     (answer.message as any).photo = [{ file_id: 'clarification-photo' }];
+    if (carrier === 'document') asImageDocument(answer);
     (answer.message as Record<string, unknown>).reply_to_message = { message_id: 735 };
     const resumed = await intake(app, answer, 'lifecycle', requestId);
     expect(resumed.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'requester-answer',

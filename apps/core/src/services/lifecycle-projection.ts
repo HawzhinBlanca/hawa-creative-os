@@ -226,12 +226,14 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
       .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
     if (prior) throw new LifecycleProjectionConflict('STALE_REVISION', `Request already has revision ${prior.rev}`);
 
+    let admittedSource: unknown;
     if (draft.lifecycleAlbum) {
       const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleAlbum.updateId);
       if (draft.lifecycleImage || !decision || decision.requestId !== requestId ||
           decision.chatId !== draft.sourceChannelId || canonical(decision.draft) !== canonical(draft))
         throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The album is not bound to this new brief');
       await checkAlbum(trx, tenantId, draft.sourceChannelId, draft.lifecycleAlbum);
+      admittedSource = decision.sourceUpdate;
     }
 
     if (draft.lifecycleImage) {
@@ -246,11 +248,13 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
           blob.media_type !== draft.lifecycleImage.mediaType) {
         throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The admitted image is not stored');
       }
+      admittedSource = decision.sourceUpdate;
     }
 
     let persisted: Awaited<ReturnType<typeof persistChatIntake>>;
     try {
-      persisted = await persistChatIntake(trx, { ...draft, tenantId }, { outboxState: 'recorded' });
+      persisted = await persistChatIntake(trx, { ...draft, tenantId,
+        ...(admittedSource !== undefined ? { rawJson: admittedSource } : {}) }, { outboxState: 'recorded' });
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
         throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The source event already belongs to a different executor');
@@ -650,7 +654,7 @@ export async function projectLifecycleRequesterRevisionWithIntake(
     ? input.sourceUpdate as Record<string, unknown> : null;
   const sourceMessage = source?.message && typeof source.message === 'object'
     ? source.message as Record<string, unknown> : null;
-  const sourceImage = sourceMessage?.photo;
+  const sourceImage = sourceMessage?.photo ?? sourceMessage?.document;
   const photoInput = lifecyclePhotoInput(input.sourceUpdate);
   if (input.lifecycleAlbum && (input.lifecycleImage || sourceImage ||
       sourceMessage?.text !== directive || input.lifecycleAlbum.updateId !== source?.update_id)) {

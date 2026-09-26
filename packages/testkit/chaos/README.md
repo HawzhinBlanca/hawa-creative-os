@@ -9,6 +9,21 @@ The dated run histories below preserve their original scope and limitations.
 
 ## Confirmed album recovery (2026-09-26)
 
+For original image files, run:
+
+```sh
+pnpm exec tsx packages/testkit/chaos/run.ts --only R1.S3.IMAGE_DOCUMENT,R1.S3.DOCUMENT_ALBUM,R1.S3.MEDIA --poller worker
+```
+
+This batch covers a captionless file reply, a confirmed image-file album, and an
+unsupported PDF. The original document file must be used, never its thumbnail.
+The final three-scenario batch passed 25 invariants, including Core SIGKILL and
+simulated delivery for both image cases. Its source-bound report is
+`plans/research-grade-upgrade-2026-09-25/R07_IMAGE_DOCUMENT_DRILL.json`.
+The generic idle check allows scheduled `RequestLifecycle.reminderTick` timers;
+all other unfinished invocations, ready outbox work and recent Telegram activity
+still prevent quiescence.
+
 `pnpm exec tsx packages/testkit/chaos/run.ts --only R1.S3.ALBUM --poller worker`
 sends two photos as a reply to a recorded office revision notice, confirms the
 album, kills Core after freezing it and replays the confirmation after restart.

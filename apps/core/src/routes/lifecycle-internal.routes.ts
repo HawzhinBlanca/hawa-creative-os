@@ -313,9 +313,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         const senderAllowed = !ctx.isProduction || isIntakeOpen ||
           (ctx.telegramIntakeUsers.length > 0 && ctx.telegramIntakeUsers.includes(senderId));
         const holdMedia = async () => {
-          // The current lifecycle open/answer wire shape cannot carry an album, voice note
-          // or PDF without silently discarding it. Hold the whole update for an operator until
-          // Core has a durable media reference and RequestLifecycle can use that reference.
+          // Hold unsupported input as a whole; a caption cannot replace an unavailable file.
           if (!senderAllowed) {
             return handled(403, { code: 'SENDER_NOT_ALLOWED' });
           }
@@ -332,7 +330,7 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             reason: 'A lifecycle chat media update needs operator review; no task was started' });
         };
         if (media && chatId && (media.photo || media.voice || media.audio || media.document ||
-            media.video || media.video_note || media.animation || media.caption) && !photoInput) {
+            media.video || media.video_note || media.animation || media.live_photo || media.caption) && !photoInput) {
           return holdMedia();
         }
         const rawText: string = (() => {
@@ -463,7 +461,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   const stored = await withRlsContext(db,
                     { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
                     (trx) => recordNewBriefDecision(trx, TENANT, update.update_id,
-                      { requestId, chatId, payloadHash, draft }));
+                      { requestId, chatId, payloadHash, draft,
+                        ...((lifecycleImage || admittedAlbum) ? { sourceUpdate: update } : {}) }));
                   if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
                       stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
                   await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });

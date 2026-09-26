@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { parseLifecycleAlbumRef, type BlobRef, type LifecycleAlbumRef } from '@hawa/contracts';
 import { sql, type Database, type Kysely, type BlobStore } from '@hawa/db';
-import { retainLifecyclePhoto } from './lifecycle-photo.js';
+import { lifecycleStillImageFile, retainLifecyclePhoto } from './lifecycle-photo.js';
 
 type Update = { update_id: number; [key: string]: unknown };
 type Message = Record<string, unknown>;
@@ -148,16 +148,13 @@ export async function retainAlbumPart(tx: <T>(fn: (trx: Tx) => Promise<T>) => Pr
     await save(trx, tenant, 'lifecycle_album_pending', String(update.update_id), base, hash(update));
     return error;
   });
-  const photos = Array.isArray(msg.photo) ? msg.photo : [];
-  const photo = record(photos[photos.length - 1]);
-  if (!error && (typeof photo?.file_id !== 'string' || !photo.file_id.trim() || photo.file_id.length > 512 ||
-      msg.document || msg.voice || msg.audio || msg.video || msg.video_note || msg.animation || msg.live_photo ||
-      msg.text || (msg.caption !== undefined && typeof msg.caption !== 'string'))) {
+  const fileId = lifecycleStillImageFile(msg, true);
+  if (!error && !fileId) {
     error = 'This album contains unsupported media. Send only still photos in a new album; no design has started.';
   }
   let image: BlobRef | null = null;
   if (!error) {
-    const retained = await retainLifecyclePhoto(store, download, photo!.file_id as string);
+    const retained = await retainLifecyclePhoto(store, download, fileId!);
     if (retained.kind === 'download_unavailable') throw new Error('ALBUM_PHOTO_UNAVAILABLE');
     if (retained.kind === 'store_unavailable') throw new Error('ALBUM_STORE_UNAVAILABLE');
     if (retained.kind === 'unsupported') error = 'An album photo is unsupported or too large. Send a corrected album; no design has started.';

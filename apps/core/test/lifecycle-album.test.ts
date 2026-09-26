@@ -92,10 +92,17 @@ describe('confirmed lifecycle photo albums', () => {
     expect(await f.tasks()).toHaveLength(0);
   });
 
-  it('collects out-of-order photos without a task, then binds every ordered image to one replayable new request', async () => {
+  it.each(['photo', 'document'] as const)('collects out-of-order %s images without a task, then binds every ordered image to one replayable new request', async (carrier) => {
     const f = setup();
     const second = f.part(202, 2, caption);
     const first = f.part(201, 1);
+    if (carrier === 'document') for (const update of [first, second]) {
+      const message = update.message as Record<string, unknown>;
+      const photo = update.message.photo[0];
+      delete message.photo;
+      message.document = { ...photo, file_name: 'original.png', mime_type: 'image/png',
+        thumbnail: { file_id: 'not-the-original' } };
+    }
     expect(await f.intake(second)).toMatchObject({ intakeStatus: 202, lifecycleAction: 'album-message' });
     expect(await f.intake(first)).toMatchObject({ intakeStatus: 202 });
     expect(await f.tasks()).toHaveLength(0);

@@ -12,7 +12,31 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R07 confirmed photo albums)
+## Current result (2026-09-26 — R07 original image files)
+
+Images sent through Telegram's file/document option now work as first briefs,
+current request revision/clarification replies and confirmed albums. Intake uses
+the original file, verifies actual bytes and size, and preserves the original
+source metadata in Core. Both design paths use the existing task-owned image
+bindings. Invalid or unsupported files cannot become caption-only requests.
+Historical holds replay unchanged. See ADR-069, `R07_EVIDENCE.md` and
+`runbooks/CONFIRMED_PHOTO_ALBUMS.md`.
+
+The focused group passed **5 files / 125 tests**, after reproducing six media
+admission failures and the missing new-photo source record. Full typecheck, lint
+and zero-secret scan passed. The final disposable recovery batch passed **3
+scenarios / 25 invariants**: singleton and album image files reached one child
+and simulated delivery after Core SIGKILL/replay; a PDF stayed held with one
+sender notice and office alert. No unmatched model calls. The first batch exposed
+a harness wait on future reminders; the corrected final batch preserves those
+timers while checking ready work. Exact source hashes and results are in
+`R07_IMAGE_DOCUMENT_DRILL.json`. Source sealing and the full regression suite
+follow this source/evidence commit.
+Live Workspace/provider workflow, PDF/voice intake, export/reopen/recovery and
+independent creative-quality gates remain open. No production flag or deployment
+changed.
+
+## Prior result (2026-09-26 — R07 confirmed photo albums)
 
 Album parts are saved without starting a task. The sender replies to one photo
 with `/use_album` to freeze two to ten supported images and hand the complete
@@ -28,8 +52,9 @@ The affected group passed **6 files / 110 tests**, then the album file passed
 passed. The disposable Core SIGKILL drill passed **10/10 invariants**: one child,
 two image bindings/downloads, one projection and one successful planner call with
 both photo hashes; simulated review/delivery reached rev 8 `delivered`. Exact
-source hashes and results are in `R07_ALBUM_DRILL.json`. The release seal and full
-regression suite follow this source/evidence commit.
+source hashes and results are in `R07_ALBUM_DRILL.json`. Seal `14f1166` (source
+`cbb81ca`) passed **435 files / 3,366 tests**, with **4 files / 54 tests skipped**;
+release manifest and blueprint **827/0/0** verified.
 
 Next admission remains the live Workspace reviewer/provider journey, other media,
 clean-host recovery and independent creative-quality evaluation described in

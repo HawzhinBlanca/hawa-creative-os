@@ -1,5 +1,63 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — original image files and preserved source evidence (ADR-069)
+
+Telegram images sent as documents now follow the same request-owned path as
+photos: a captioned first brief, a captioned or captionless exact current revision
+or clarification reply, and an explicitly confirmed album. One shared parser
+selects the original document file ID and excludes its thumbnail. File names
+never become local paths. Explicit unsupported types and excessive declared sizes
+are refused before download; actual byte signatures and byte counts determine
+the retained type, hash and size. Absent/generic MIME hints are allowed for
+inspection. A misleading image name/MIME cannot admit PDF or oversized bytes.
+Mixed carriers, animation/live-photo payloads and unsupported files hold the whole
+input instead of starting a design from only its caption.
+
+The work also found that first-image briefs dropped the original Telegram update
+while constructing the small worker draft. Core now stores that update alongside
+its new-brief decision and copies the stored record into the task's inbox event
+inside projection. The worker still receives only the typed image reference; it
+cannot supply replacement source evidence. Older decisions keep their original
+replay behavior without invented metadata. Revision projection independently
+requires a saved image decision for either file carrier. No dependency, table or
+new workflow was added. Requirements: FR-002, FR-004, FR-011, FR-060, NFR-001,
+NFR-006. Usage is in `runbooks/CONFIRMED_PHOTO_ALBUMS.md`.
+
+**Verification:** before the runtime changes, six image-file cases failed
+with 422 holds, and one photo control exposed the missing stored source update
+(7 failed / 47 passed). The first assertion mistakenly looked for the source in
+the deliberately small worker draft; it was corrected to inspect Core's actual
+decision, and that missing-record failure was reproduced before implementation.
+The final focused group passed **5 files / 125 tests**. It covers first briefs,
+both revision/answer forms, albums, exact copy, original-file selection, stored
+source, changed intent, forged/missing file proof, unknown MIME, unsafe filenames,
+spoofed/oversized bytes, mixed media and historical holds after flag rollback.
+Full source/test typecheck, lint and zero-secret scan passed.
+
+The final disposable Docker batch passed **3 scenarios / 25 invariants**, with
+40 scenarios skipped by selection: `R1.S3.IMAGE_DOCUMENT`,
+`R1.S3.DOCUMENT_ALBUM` and `R1.S3.MEDIA` using the worker poller. The singleton
+and album each survived Core SIGKILL after its durable decision/confirmation but
+before child projection. Retry and a second Restate key produced one owned child,
+one projection, one download per original file, all selected content hashes in
+one successful revision planner call and simulated approval/delivery at request
+rev 8 `delivered`. The PDF remained held with one sender notice and office alert;
+no task was created. There were no unmatched model calls. The complete report and
+13 tested source hashes are in `R07_IMAGE_DOCUMENT_DRILL.json`.
+
+The first batch was stopped after a read-only check showed only two future
+`RequestLifecycle.reminderTick` invocations remained. The old generic idle check
+counted those scheduled reminders as active work, preventing the following PDF
+scenario from settling. The corrected check excludes only that scheduled service
+handler; running/backing-off invocations, ready outbox commands and recent
+Telegram calls still prevent quiescence. The final batch passed with reminders
+retained. This is a harness correction, not cancellation of production reminders.
+
+Exact candidate sealing and its full regression suite follow this source/evidence
+commit. Real Workspace/provider output, PDF/voice intake, clean-host recovery and
+independent visual-quality admission remain open. No production flag or deployment
+changed.
+
 ## 2026-09-26 — confirmed photo albums through one owned request (ADR-068)
 
 Core now saves each album part before any task or paid design starts. The sender

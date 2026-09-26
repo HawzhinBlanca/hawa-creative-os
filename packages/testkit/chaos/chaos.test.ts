@@ -560,10 +560,12 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     };
   }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
-  for (const mediaKind of ['captioned', 'captionless', 'album'] as const) {
-  const album = mediaKind === 'album';
-  const captionless = mediaKind === 'captionless';
-  const scenarioId = album ? 'R1.S3.ALBUM' : captionless ? 'R1.S3.CAPTIONLESS_PHOTO' : 'R1.S3.REVISION_PHOTO';
+  for (const mediaKind of ['captioned', 'captionless', 'album', 'document', 'document-album'] as const) {
+  const document = mediaKind === 'document' || mediaKind === 'document-album';
+  const album = mediaKind === 'album' || mediaKind === 'document-album';
+  const captionless = mediaKind === 'captionless' || mediaKind === 'document';
+  const scenarioId = document ? (album ? 'R1.S3.DOCUMENT_ALBUM' : 'R1.S3.IMAGE_DOCUMENT')
+    : album ? 'R1.S3.ALBUM' : captionless ? 'R1.S3.CAPTIONLESS_PHOTO' : 'R1.S3.REVISION_PHOTO';
   scenario(scenarioId, `flagged chat: ${mediaKind} photo input survives Core SIGKILL before task projection`, async (chat, events) => {
     await sendBrief(chat, scenarioId);
     const request = await waitUntil('the first draft to enter lifecycle review', async () => {
@@ -595,6 +597,12 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await fakes.file({ file_id: fileId, size, mime: 'image/jpeg' });
     let update: { message: Record<string, unknown> } = captionedPhotoUpdate(chat, fileId, size,
       'Please use this photo as the reference and change the background to navy.');
+    const asDocument = (part: { message: Record<string, unknown> }, id: string, bytes: number) => {
+      delete part.message.photo;
+      part.message.document = { file_id: id, file_name: 'original.jpg', mime_type: 'image/jpeg', file_size: bytes,
+        thumbnail: { file_id: `${id}-thumbnail` } };
+    };
+    if (document) asDocument(update, fileId, size);
     if (captionless || album) {
       const noticeId = await waitUntil('the current office revision notice to be confirmed', async () => {
         const [mark] = await query<{ message_id: string }>(sql`SELECT payload->>'messageId' AS message_id
@@ -609,6 +617,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       if (album) {
         await fakes.file({ file_id: secondFileId, size: size + 1, mime: 'image/jpeg' });
         const second: { message: Record<string, unknown> } = captionedPhotoUpdate(chat, secondFileId, size + 1, '');
+        if (document) asDocument(second, secondFileId, size + 1);
         delete second.message.caption;
         const groupId = `chaos-album-${chat}`;
         update.message.media_group_id = groupId;
@@ -705,7 +714,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
           WHERE source_account_id = ${album ? 'lifecycle_album_confirm' : 'lifecycle_chat_revision_photo'}
             AND source_event_id = ${String(updateId)}`);
         const downloads = (await fakes.polls()).downloads?.filter((id: string) =>
-          id === fileId || (album && id === secondFileId)) ?? [];
+          id.startsWith(fileId)) ?? [];
         const parked = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
           WHERE source_event_id = ${`parked-update-${updateId}`}`);
         const inbox = (await chatInboxInvocations(chat)).filter((item) =>
@@ -763,9 +772,11 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
 
   }
 
-  scenario('R1.S3.MEDIA', 'flagged chat: a captioned image is parked once, alerted, and never creates a legacy task', async (chat, events) => {
-    const update = imageDocumentUpdate(chat, 'lifecycle-photo', 128,
+  scenario('R1.S3.MEDIA', 'flagged chat: a captioned PDF is parked once, alerted, and never creates a legacy task', async (chat, events) => {
+    const update = imageDocumentUpdate(chat, 'lifecycle-pdf', 128,
       'KAAE members evening\n---\nDecember 4, 2026\nErbil');
+    update.message.document.mime_type = 'application/pdf';
+    update.message.document.file_name = 'brief.pdf';
     const [updateId] = await fakes.updates([update]);
     const polled = { ...update, update_id: updateId };
     events.push(`captioned image update ${updateId} in flagged chat ${chat}`);

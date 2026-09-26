@@ -23,6 +23,8 @@ export interface NewBriefDecision {
   chatId: string;
   payloadHash: string;
   draft: ChatIntake;
+  /** Original image intake evidence stays in Core, outside the Restate draft contract. */
+  sourceUpdate?: unknown;
 }
 
 export interface RevisionPhotoDecision {
@@ -74,7 +76,8 @@ export async function readNewBriefDecision(trx: Kysely<Database>, tenantId: stri
   const { requestId, chatId, draft } = row.payload;
   if (typeof requestId !== 'string' || typeof chatId !== 'string' ||
       !draft || typeof draft !== 'object') throw new Error('Invalid stored new-brief decision');
-  return { requestId, chatId, payloadHash: row.payload_hash, draft: draft as ChatIntake };
+  return { requestId, chatId, payloadHash: row.payload_hash, draft: draft as ChatIntake,
+    ...(row.payload.sourceUpdate !== undefined ? { sourceUpdate: row.payload.sourceUpdate } : {}) };
 }
 
 export async function recordNewBriefDecision(trx: Kysely<Database>, tenantId: string,
@@ -84,7 +87,8 @@ export async function recordNewBriefDecision(trx: Kysely<Database>, tenantId: st
     VALUES (${tenantId}::uuid, 'lifecycle_chat_open', ${String(updateId)},
       'lifecycle_new_brief_decision',
       ${JSON.stringify({ requestId: decision.requestId, chatId: decision.chatId,
-        draft: decision.draft })}::jsonb, ${decision.payloadHash}, true)
+        draft: decision.draft,
+        ...(decision.sourceUpdate !== undefined ? { sourceUpdate: decision.sourceUpdate } : {}) })}::jsonb, ${decision.payloadHash}, true)
     ON CONFLICT DO NOTHING`.execute(trx);
   const stored = await readNewBriefDecision(trx, tenantId, updateId);
   if (!stored) throw new Error('New-brief decision was not stored');
