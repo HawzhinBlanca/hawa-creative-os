@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-26T12:27:45+03:00",
+  "generatedAt": "2026-09-26T13:15:35+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "325085d0942ffa1e76c7bdbe4a28ecbc404c19f5",
+    "commit": "d6c6e766e27ebfce9b20add9a24ca9b3e1db9fe3",
     "treeClean": true,
-    "commitTimestamp": "2026-09-26T12:27:45+03:00",
+    "commitTimestamp": "2026-09-26T13:15:35+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
-    "targetVersion": "037_office_review_assignments",
-    "latestMigrationFile": "037_office_review_assignments.sql",
-    "totalMigrations": 37
+    "targetVersion": "038_office_review_assignment_audit",
+    "latestMigrationFile": "038_office_review_assignment_audit.sql",
+    "totalMigrations": 38
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "2a113b6a43e6765804939ac9026075fcb38bb1fcbaa67062ba4a78a619b666fe",
+        "apps/core/src/app.ts": "ce48b3177a2a07f3ccf801733cc8440c7270b909137c2beb046db21f5e84d79b",
         "apps/core/src/index.ts": "6950c3318ab08ddfd7e455bd09c460262572a82e7767dd2afd8e39448635a2e5",
         "packages/integrations/src/google-publisher.ts": "3eaff2f4000d08afeeaf5bd850bd3401615dbd1d09550ced7589f2854fba95cf"
       }
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "a35ca593ded7a77becb472653370061b404a9ca527a752ec4b7fb530d071d12f"
+  "sha256": "cca5863af2196614e9066216c65addeeeb3bfc982a810e1c3255b4cefab7f94e"
 }
