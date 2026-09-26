@@ -12,7 +12,21 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-26 — R07 new-brief admission worktree)
+## Current result (2026-09-26 — R07 revision-photo restart drill)
+
+The disposable worker-poller/Restate stack passed `R1.S3.REVISION_PHOTO`:
+an authenticated office revision left a request waiting, Core stored the
+requester's photo decision, was killed before creating the child task, and
+restarted. Retry plus a second Restate key yielded one rev-4 projection,
+one child-owned attachment and one download; all eight invariants passed.
+The source suite passed 425 files / 3,292 tests with 4 files / 52 tests
+skipped, lint/typecheck passed, and blueprint validation was 803/0/0.
+The fake model server does not cover the image Design Studio call, so this
+drill does not qualify a successful revised design or live operation. See
+`R07_EVIDENCE.md`. A release seal proves this source snapshot only; it does
+not change the open creative and live-operation admissions.
+
+## Prior result (2026-09-26 — R07 new-brief admission worktree)
 
 **Cutover replay follow-up:** Core now checks whether the same Telegram update was
 already committed by legacy intake before preparing a lifecycle request. The focused

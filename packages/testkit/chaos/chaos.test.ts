@@ -15,7 +15,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, sql, start, up, waitHealthy } from './driver/stack.js';
+import { randomUUID } from 'node:crypto';
+import { build, CHAOS_DIR, closeDb, down, fakes, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
   approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
@@ -63,6 +64,8 @@ const flaggedChat = () => {
  */
 interface Expectation {
   delivered: boolean;
+  /** An open lifecycle request keeps a future reminder scheduled in Restate. */
+  skipQuiescence?: boolean;
   classifierAllowance?: number;
   /** Sends the scenario makes uncertain (each must end with one office alert and no resend). */
   uncertainSends?: number;
@@ -91,7 +94,7 @@ function scenario(name: string, what: string, script: (chat: string, events: str
       const ledgerSince = Math.max(0, ...(ledger.ledger as any[]).map((l) => l.seq));
       const expectation = await script(chat, events);
       await fakes.release();
-      await quiescent();
+      if (!expectation.skipQuiescence) await quiescent();
       report.invariants = [
         ...(expectation.skipRequestChecks ? [] : await checkRequest(chat, { ...expectation, ledgerSince })),
         ...(expectation.extra || []),
@@ -552,6 +555,114 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
             detail: `acknowledgements=${acks.length} parked=${parked[0]?.n ?? 0}` },
           { name: 'both photo intake invocations completed', ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
             detail: JSON.stringify(inbox) },
+        ];
+      },
+    };
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+
+  scenario('R1.S3.REVISION_PHOTO', 'flagged chat: an office revision photo survives Core SIGKILL before task projection', async (chat, events) => {
+    await sendBrief(chat, 'R1.S3.REVISION_PHOTO');
+    const request = await waitUntil('the first draft to enter lifecycle review', async () => {
+      const [row] = await query<{ request_id: string; current_task_id: string; rev: string; stage: string }>(sql`
+        SELECT request_id, current_task_id, rev, stage FROM hawa.requests WHERE chat_id = ${chat}`);
+      return row?.stage === 'in_review' && Number(row.rev) === 2 ? row : null;
+    });
+    const rootTaskId = request.current_task_id;
+    const [root] = await query<{ revision_id: string }>(sql`
+      SELECT current_design_revision_id AS revision_id FROM hawa.tasks WHERE id = ${rootTaskId}::uuid`);
+    if (!root?.revision_id) throw new Error(`task ${rootTaskId} has no reviewable revision`);
+    const office = await fakes.core(`/tasks/${rootTaskId}/revisions/${root.revision_id}/decisions`,
+      secrets().CHAOS_REVIEWER_KEY, { headers: { 'Idempotency-Key': randomUUID() }, body: {
+        action: 'revision_requested', revisionRequest: {
+          scope: 'copy', category: 'factual_error', targetNodes: ['venue'], priority: 'high',
+          isReusableFeedback: false, comment: 'Use the new image as the visual reference',
+        },
+      } });
+    events.push(`office revision: HTTP ${office.status}`);
+    if (office.status !== 201) throw new Error(`office revision refused: ${JSON.stringify(office.json).slice(0, 400)}`);
+    await waitUntil('request waiting for a revision at rev 3', async () => {
+      const [row] = await query<{ rev: string; stage: string }>(sql`
+        SELECT rev, stage FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+      return row?.stage === 'manual' && Number(row.rev) === 3 ? row : null;
+    });
+    const fileId = `lifecycle-revision-${chat}`;
+    const size = 1024;
+    await fakes.file({ file_id: fileId, size, mime: 'image/jpeg' });
+    const killed = await killAtPoint('core.intake.after-revision-photo-decision', { chat });
+    const update = captionedPhotoUpdate(chat, fileId, size,
+      'Please use this photo as the reference and change the background to navy.');
+    const [updateId] = await fakes.updates([update]);
+    const polled = { ...update, update_id: updateId };
+    events.push(`revision photo update ${updateId} in request ${request.request_id}`);
+    events.push(`killed ${(await killed.done).killed} after photo decision, before child task projection`);
+    const child = await waitUntil('one revision task after Core restart', async () => {
+      const tasks = await tasksOfChat(chat);
+      const [row] = await query<{ rev: string; current_task_id: string }>(sql`
+        SELECT rev, current_task_id FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+      return tasks.length === 2 && Number(row?.rev) >= 4 && row?.current_task_id !== rootTaskId
+        ? row.current_task_id : null;
+    });
+    events.push(`child task ${child} after restart`);
+    const replay = await sendToChatInbox(chat, polled, `chaos-revision-photo-replay-${updateId}`);
+    events.push(`same update under a second Restate key: HTTP ${replay}`);
+    await waitUntil('both photo intakes to complete', async () => {
+      const inbox = (await chatInboxInvocations(chat)).filter((item) =>
+        item.idempotency_key === `tg-${updateId}` ||
+        item.idempotency_key === `chaos-revision-photo-replay-${updateId}`);
+      return inbox.length === 2 && inbox.every((item) => item.status === 'completed') ? inbox : null;
+    });
+    return { delivered: false, skipRequestChecks: true, skipQuiescence: true,
+      extra: [{ name: 'second revision photo update accepted for replay',
+        ok: replay === 200 || replay === 202, detail: `HTTP ${replay}` }],
+      after: async () => {
+        const tasks = await tasksOfChat(chat);
+        const [state] = await query<{ current_task_id: string; rev: string; owner: string }>(sql`
+          SELECT current_task_id, rev, owner FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+        const projections = await query<{ rev: string }>(sql`
+          SELECT rev FROM hawa.lifecycle_projections WHERE request_id = ${request.request_id}::uuid ORDER BY rev`);
+        const files = await query<{ task_id: string; sha256: string; role: string; size: string; media_type: string }>(sql`
+          SELECT f.task_id, f.sha256, f.role, b.size, b.media_type FROM hawa.task_files f
+          JOIN hawa.blobs b ON b.sha256 = f.sha256 WHERE f.task_id IN (${rootTaskId}::uuid, ${child}::uuid)`);
+        const decisions = await query<{ payload: any }>(sql`SELECT payload FROM hawa.inbox_events
+          WHERE source_account_id = 'lifecycle_chat_revision_photo' AND source_event_id = ${String(updateId)}`);
+        const downloads = (await fakes.polls()).downloads?.filter((id: string) => id === fileId) ?? [];
+        const parked = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
+          WHERE source_event_id = ${`parked-update-${updateId}`}`);
+        const inbox = (await chatInboxInvocations(chat)).filter((item) =>
+          item.idempotency_key === `tg-${updateId}` ||
+          item.idempotency_key === `chaos-revision-photo-replay-${updateId}`);
+        const unfinished = await restateQuery<{ status: string; target_service_name: string; target_handler_name: string }>(
+          `SELECT status, target_service_name, target_handler_name FROM sys_invocation WHERE status NOT IN ('completed')`);
+        const active = unfinished.filter((item) => !(item.status === 'scheduled' &&
+          item.target_service_name === 'RequestLifecycle' && item.target_handler_name === 'reminderTick'));
+        const [outbox] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands
+          WHERE state IN ('pending', 'leased') AND available_at <= now() + interval '5 seconds'`);
+        return [
+          { name: 'one owned child task after the office revision',
+            ok: tasks.length === 2 && tasks[0].id === rootTaskId && tasks[1].id === child &&
+              state?.owner === 'restate' && state.current_task_id === child && Number(state.rev) >= 4,
+            detail: JSON.stringify({ tasks, state }) },
+          { name: 'requester revision projection recorded exactly once',
+            ok: projections.filter((row) => Number(row.rev) === 4).length === 1,
+            detail: JSON.stringify(projections) },
+          { name: 'photo bound only to the child task', ok: files.length === 1 &&
+              files[0].task_id === child && files[0].role === 'reference_image' &&
+              files[0].media_type === 'image/jpeg' && Number(files[0].size) === size,
+            detail: JSON.stringify(files) },
+          { name: 'hash-bound photo decision, with no image bytes in the event',
+            ok: decisions.length === 1 && decisions[0].payload?.requestId === request.request_id &&
+              decisions[0].payload?.image?.sha256 === files[0]?.sha256 &&
+              !JSON.stringify(decisions[0].payload).includes('/9j/'),
+            detail: JSON.stringify(decisions[0]?.payload) },
+          { name: 'one download and no parked update across kill and replay',
+            ok: downloads.length === 1 && Number(parked[0]?.n ?? 0) === 0,
+            detail: `downloads=${downloads.length} parked=${parked[0]?.n ?? 0}` },
+          { name: 'both ChatInbox invocations completed',
+            ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
+            detail: JSON.stringify(inbox) },
+          { name: 'only future lifecycle reminders remain scheduled',
+            ok: active.length === 0 && Number(outbox?.n ?? -1) === 0,
+            detail: JSON.stringify({ unfinished, readyOutbox: outbox?.n }) },
         ];
       },
     };

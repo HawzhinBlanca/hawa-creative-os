@@ -1,5 +1,41 @@
 # R07 — RequestLifecycle ownership and projection (in progress)
 
+## 2026-09-26 — revision photo survives a killed Core process
+
+The disposable `hawa-chaos` stack now exercises the full entry path for a
+requester revision photo: a first brief reaches `in_review` at request rev 2,
+an authenticated Desk art director requests revision at rev 3, and the worker
+poller hands a captioned Telegram photo to ChatInbox. Core commits the
+hash-bound photo decision and is then killed with SIGKILL before creating the
+child task. On restart, ChatInbox retries the same update; a second Restate
+key replays it again. The drill checks one rev-4 requester projection, one
+owned child task, a file attached only to that child, one photo download, no
+parked update, and two completed ChatInbox invocations. It separately permits
+only the future lifecycle reminder to remain scheduled, with no ready outbox
+command. This adds a real
+process-crash proof to ADR-062 for FR-011, FR-060, NFR-001 and NFR-006.
+
+**Verification:** `pnpm exec tsx packages/testkit/chaos/run.ts --only
+R1.S3.REVISION_PHOTO --poller worker` passed **1 scenario / 8 invariants**
+on a newly built, disposable stack at 2026-09-26 06:51 UTC. The runner log
+records the Core kill between the decision and projection, revs 1–5, the
+child's sole 1,024-byte JPEG attachment, one download, and both completed
+intakes. Repository lint and TypeScript source/test checks passed. The full
+source suite excluding only the unsealed release-manifest gate passed **425
+files / 3,292 tests**, with **4 files / 52 tests skipped**. Blueprint
+validation passed **803/0/0**. The first two attempts
+found harness assumptions: a legacy draft-button wait did not describe a
+lifecycle review, and generic quiescence waited on a deliberately scheduled
+future reminder. The corrected drill checks the persisted request state and
+immediately actionable work.
+
+**Limit:** The fake model server intentionally has no Design Studio model
+fixture for this image revision. It recorded one unmatched model call, and
+the child ended `failed_operator`; this drill proves durable ownership and
+replay, **not** a successful revised design, live Telegram receipt, or human
+creative quality. Those admissions remain open. The production lifecycle
+chat flag stays off.
+
 ## 2026-09-26 — requester revision and clarification photos stay with their request (ADR-062)
 
 Core now admits a captioned single Telegram photo as a requester revision or Studio

@@ -453,6 +453,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
                       stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
                   lifecycleImage = stored.image;
+                  await chaosPoint('core.intake.after-revision-photo-decision',
+                    { updateId: update.update_id, chat: chatId, requestId });
                 }
                 const sourceEventId = `lc-${requestId}-r${round}-u${update.update_id}`;
                 const key = `${requestId}:${nextRev}:requesterRevisionIntake:u${update.update_id}`;
