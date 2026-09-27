@@ -175,6 +175,8 @@ export interface StageContext {
   ledger?: DesignStudioRepository;
   /** This run executes the v3 pipeline. Fixed at run creation; see isPipelineV3Run. */
   pipelineV3?: boolean;
+  /** Brief decision applied to optional artwork; required client photos remain content. */
+  imageryStrategy?: CreativeBrief['imageryStrategy'];
   /** The palette colour the client asked for as the background, applied to every layout in code. */
   requestedBackground?: string;
   /** An image the requester attached (data: URL), whatever it shows. The brief says what it is. */
@@ -205,6 +207,8 @@ export interface StageContext {
 export type ImageRole = 'content_photo' | 'style_reference' | 'logo' | 'unrelated';
 
 export interface ContentPhoto {
+  /** Subject/crop meaning from the same brief that classified this image as content. */
+  notes?: string;
   dataUrl: string;
   bytes: Buffer;
   mimeType: 'image/png' | 'image/jpeg' | 'image/webp';

@@ -13,7 +13,7 @@ No package is complete merely because a smaller test passes.
 | Package | Scope | Status | Evidence |
 | --- | --- | --- | --- |
 | 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty slice locally qualified; native revision preservation open | ADR-108; CANVA_UNCERTAINTY_PROOF.json |
-| 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | Open | Research probe identifies current losses |
+| 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs locally qualified; authorized visual-order contract, multilingual retrieval and human comparison open | ADR-109; CREATIVE_HANDOFF_PROOF.json |
 | 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | Open | No new implementation evidence |
 | 4 | Amend/Adapt routing and actual Canva account capability qualification | Open | Official documentation is not account admission |
 | 5 | Relationship-led composition, calibrated selection, governed edit learning and equal-budget human comparisons | Open | Existing R04–R06/R13/R22–R25 study machinery must be reused |
@@ -57,3 +57,33 @@ recovery or human-quality study occurred. See `CANVA_UNCERTAINTY_PROOF.json`.
 Next: qualify current native revision admission and preservation, then complete
 brief/visual handoffs and remove unnecessary creative work. The full six-package
 objective remains active; this checkpoint is not a completion claim.
+
+## 2026-09-28 — Creative handoff checkpoint
+
+ADR-109 preserves the full structured brief and complete exact copy in the existing
+layout call. Importance and subject/crop notes survive. At most two approved scoped
+examples and every classified content photo arrive as pixels, capped at 768px per
+edge, with original hashes. Retrieval uses the actual request and saved copy;
+the layout stage no longer performs an independent global lookup. Explicit client
+references remain last. Source-copy order remains protected: the model brief's
+readingOrder is a proposal, not authorization to override client copy ordering.
+
+Rendering, refinement, fallback comparison and both sides of a comparison canary
+share the candidate's real logo/art/photos/cutouts. Saved artwork is reloaded for
+critique/revision/judging. Refinement also receives the explicit client reference.
+No-imagery briefs suppress optional art, including after refinement preparation;
+required client photos are retained.
+
+Qualification: 13 affected files passed, 162 tests passed, zero failed, one optional
+12 MP external-photo test skipped because HUNT_PHOTO is unset. All 515 strict test
+roots, source/scripts types, any-ratchet, provider egress and security scan pass.
+The first red run contains four reproduced input losses and one invalid test
+fixture setup; the fixture was corrected. A local pixel comparison proves canary
+asset fidelity. No extra model calls were added; image conditioning adds input
+cost, which has not been measured with a paid provider.
+
+Open: multilingual retrieval experiment; explicit authorized visual order;
+durable asset derivation pinning; equal-budget human quality comparison; native
+revision preservation; the remaining packages. This is local source qualification,
+not a deployment or completion of the six-package goal. Next independent work:
+free feasibility before optional artwork and eligible-only comparative judging.

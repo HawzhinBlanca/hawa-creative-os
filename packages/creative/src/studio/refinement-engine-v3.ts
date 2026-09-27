@@ -1,4 +1,5 @@
 import { measureWrappedLines, type RenderLayoutOptions } from './render-layout-v2.js';
+import type { ClientReference } from './client-reference.js';
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
 import {
@@ -84,6 +85,7 @@ export interface RefineOptions {
   copyText?: Record<number, string>;
   /** Explicit scoped assets used when the critique renders a candidate. */
   renderOptions?: RenderLayoutOptions;
+  reference?: ClientReference;
   /**
    * Refine even when the metric gate would skip: the caller knows of a failure the metrics do not
    * see — a hard-QA defect, for instance.
@@ -406,6 +408,7 @@ export async function refineCandidate(
   for (let r = 1; r <= maxRounds; r++) {
     // a. Obtain box-grounded visual critique
     const critiqueResult = await generateBoxGroundedCritique(currentLayout, {
+      reference: options.reference,
       client,
       deterministicMetrics: currentMetrics,
       model,

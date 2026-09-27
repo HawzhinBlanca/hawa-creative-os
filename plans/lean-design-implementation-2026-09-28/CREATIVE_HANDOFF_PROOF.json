@@ -1,0 +1,139 @@
+{
+  "date": "2026-09-28",
+  "status": "LOCAL_HANDOFF_SLICE_QUALIFIED_NOT_FULL_GOAL_OR_RELEASE",
+  "base_commit": "07a5f4e8",
+  "branch": "codex/research-grade-design-system",
+  "adr": "109",
+  "requirements": [
+    "FR-013",
+    "FR-014",
+    "FR-026",
+    "FR-040",
+    "FR-041"
+  ],
+  "source_files": [
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "e538fe68cb5163949adf5a228f590e9743eca82ace29b2d6e6329be716b92872"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/art.stage.ts",
+      "sha256": "f57c5224ef44e39908f9ba9d90edfe63b42839d0df4839f1450f343af9527d5a"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/asset-inputs.ts",
+      "sha256": "a34d8bc0d2b3ce3702530b33d5be17600fa6149aef377e29c520f8ad4a25d9a6"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/layouts.stage.ts",
+      "sha256": "f74628fd253a0f6ca2a8fbfdb8d9e824807cffaecec353eb05bd7ebb26de61c1"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/render.stage.ts",
+      "sha256": "8ad75ed070ec063afbe47faeccd31797642dd807d570122643cf6baa6f57c66f"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/v3.stage.ts",
+      "sha256": "6fafc552b7edc52c7c76a874f690faf94f0c36856164ae1781edcfb935463c6d"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/types.ts",
+      "sha256": "44555868b9af4968412fc52b0b7128348bfe1fa3872f27d40a38f564f6ac65bf"
+    },
+    {
+      "path": "apps/core/test/client-direction.test.ts",
+      "sha256": "2c9b7662086bc7179efa341e92f274e2fc59cbb41704a4b6ecdb4b69c13b1ac0"
+    },
+    {
+      "path": "apps/core/test/studio-creative-handoff.test.ts",
+      "sha256": "443e45104e06586c34bbfc9eb261b5391bc3b2567bd285dd1d6d5c42fc1b66f7"
+    },
+    {
+      "path": "packages/creative/src/index.ts",
+      "sha256": "968becebcc78a25023bcc09dfdceb2b0f8159fba303d35cece0582846bef5d5a"
+    },
+    {
+      "path": "packages/creative/src/studio/layout-generator-v3.ts",
+      "sha256": "e2e888608a678a98275528bd708294b15ab5755bf835573cff11252d4c544cd9"
+    },
+    {
+      "path": "packages/creative/src/studio/pipeline-v3.ts",
+      "sha256": "448f3fbf4810dc21da4f1b77a6b3990ee81a3d78ad5da25b02606562363c97a7"
+    },
+    {
+      "path": "packages/creative/src/studio/refinement-engine-v3.ts",
+      "sha256": "c5d58c8ca0dc5d183592b5977c5127c0b528c8ee5a7273116da19b2e09057630"
+    },
+    {
+      "path": "packages/creative/src/studio/visual-conditioning.ts",
+      "sha256": "2e7855d53b80e397e86e833f00fa3af02e6551c8362a30a773408b7a61edae6c"
+    },
+    {
+      "path": "packages/creative/test/layout-generator-v3.test.ts",
+      "sha256": "5cf88337b2bb1493fa59b3646b92e7a300140e64d774d61e47c77b86994d93f6"
+    },
+    {
+      "path": "packages/creative/test/pipeline-v3.test.ts",
+      "sha256": "e6eadf5d390bfc58b5fe8957c56dcfc6e446c0a513674e70317c09fd95a705dc"
+    }
+  ],
+  "checks": [
+    {
+      "kind": "red-before",
+      "passed": 9,
+      "failed": 5,
+      "interpretation": "Four failures reproduce source defects; the fifth is an undeclared sharp dependency in the new test fixture, subsequently removed.",
+      "evidence": "output/acceptance/2026-09-28-creative-handoff/red.log"
+    },
+    {
+      "kind": "affected-acceptance",
+      "passed_files": 13,
+      "skipped_files": 1,
+      "passed": 162,
+      "failed": 0,
+      "skipped": 1,
+      "evidence": "output/acceptance/2026-09-28-creative-handoff/final.log",
+      "skip_reason": "Optional 12 MP external-photo regression requires HUNT_PHOTO, which was unset."
+    },
+    {
+      "kind": "source-scripts-strict-tests",
+      "commands": [
+        "pnpm exec tsc -b",
+        "pnpm exec tsc -p tsconfig.scripts.json",
+        "node --import tsx scripts/typecheck_tests.ts"
+      ],
+      "test_roots": 515,
+      "result": "passed",
+      "evidence": "output/acceptance/2026-09-28-creative-handoff/types.log"
+    },
+    {
+      "kind": "architecture",
+      "any_count": 957,
+      "any_ceiling": 1053,
+      "existing_egress_exceptions": 9,
+      "result": "passed",
+      "evidence": "output/acceptance/2026-09-28-creative-handoff/architecture.log"
+    },
+    {
+      "kind": "security",
+      "result": "passed",
+      "secrets": 0,
+      "evidence": "output/acceptance/2026-09-28-creative-handoff/security.log"
+    }
+  ],
+  "confirmed": [
+    "Full structured brief and nontruncated copy reach the existing layout call, including noncontiguous identities.",
+    "Run-scoped exemplar images and subject-aware content photos reach the generator; mismatched scope/hash refuses.",
+    "Conditioning is bounded at 768px per edge, with original SHA-256 identity.",
+    "Real artwork/photos/cutouts/logo reach refinement; explicit client reference remains last.",
+    "Pixel-level fake-judge test recognizes candidate and degraded canary rendered with the same artwork.",
+    "No-imagery suppresses optional artwork through initial and refinement preparation without discarding required content photos."
+  ],
+  "limits": [
+    "No paid calls or measured input-token/cost delta. No extra model calls added.",
+    "No full release suite, deployment, live native edit trial, blind human comparison or independent recovery.",
+    "Brief readingOrder is retained as a proposal; existing source-copy order protection remains until explicit authorized-order contract.",
+    "Multilingual lexical retrieval remains incomplete; durable derivation pinning remains package 3.",
+    "First intermediate green attempt found a too-small PNG renderer fixture; conditioning now reuses already-small admitted inputs. Intermediate type failures were corrected before final 515-root pass."
+  ]
+}

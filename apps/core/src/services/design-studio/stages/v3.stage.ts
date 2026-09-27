@@ -13,6 +13,7 @@ import {
   type HardQaContext,
 } from '@hawa/creative';
 import type { StageContext, CandidateState, Concept, Archetype, MotifKind } from '../types.js';
+import { candidateRenderOptions } from './asset-inputs.js';
 
 /**
  * The studio's v3 stages. Each is a thin adapter: the decisions are made by the shared functions
@@ -298,9 +299,8 @@ export async function runReviseStageV3(
   const ranked = rankStudioCandidatesV3(ctx, candidates);
   const outcome = await refineCandidateV3(ranked[0], copyForStageV3(ctx), {
     client: ctx.client,
-    renderOptions: ctx.logo
-      ? { logoDataUri: `data:${ctx.logo.mimeType};base64,${ctx.logo.bytes.toString('base64')}` }
-      : undefined,
+    reference: ctx.reference,
+    renderOptions: candidateRenderOptions(ctx, ranked[0].candidate),
     canvas: {
       width: ctx.width,
       height: ctx.height,
@@ -309,6 +309,7 @@ export async function runReviseStageV3(
       background: ctx.requestedBackground,
       ornament: ctx.ornament,
       style: ctx.style,
+      allowArt: ctx.imageryStrategy !== 'none',
     },
     qa: hardQaContextFor(ctx),
   });
@@ -330,9 +331,7 @@ export async function runJudgeStageV3(
   const selection = await selectWinnerV3(ranked, copyForStageV3(ctx), {
     client: ctx.client,
     reference: ctx.reference,
-    renderOptions: ctx.logo
-      ? { logoDataUri: `data:${ctx.logo.mimeType};base64,${ctx.logo.bytes.toString('base64')}` }
-      : undefined,
+    renderOptionsForCandidate: (candidate) => candidateRenderOptions(ctx, ranked.find((r) => r.sourceIndex === candidate.sourceIndex)!.candidate),
   });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;

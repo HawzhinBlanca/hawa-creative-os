@@ -22,6 +22,14 @@ export async function runArtStage(
   candidates: CandidateState[]
 ): Promise<CandidateState[]> {
   for (const cand of candidates) {
+    if (ctx.imageryStrategy === 'none') {
+      delete cand.currentLayout.art;
+      cand.artPng = null;
+      cand.artSha256 = null;
+      cand.artProvenance = null;
+      cand.concept.artStrategy = 'none';
+      continue;
+    }
     const artConfig = cand.currentLayout.art;
     if (!artConfig) continue;
 

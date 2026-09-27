@@ -7,6 +7,7 @@ import {
   rankCandidatesV3,
   selectWinnerV3,
   refineCandidateV3,
+  prepareGeneratedLayoutV3,
   createDegradedCanaryLayout,
   renderLayoutV2,
   renderAnnotatedLayoutV2,
@@ -207,6 +208,13 @@ describe('pipeline v3 — fonts', () => {
 });
 
 describe('pipeline v3 — ranking', () => {
+  it('cannot restore prohibited artwork through preparation or brand ornament', () => {
+    const prepared = prepareGeneratedLayoutV3(centred(), COPY, {
+      width: W, height: H, allowArt: false, palette: ['#0A1628', '#FFFFFF', '#F7B500'],
+      ornament: { texture: 'sun-rays', textureOpacity: 0.1, dividers: true, balance: true },
+    });
+    expect(prepared.art).toBeUndefined();
+  });
   it('puts passing candidates first, then orders by composite', () => {
     const ranked = rankCandidatesV3(
       [
@@ -224,6 +232,34 @@ describe('pipeline v3 — ranking', () => {
 
 // Render-heavy: each rsvg render takes 0.2-0.5s, so the 5s default is too tight under load.
 describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
+  it('renders each candidate and both sides of its canary with that candidate’s actual assets', async () => {
+    const layouts = [centred(), asymmetric()];
+    layouts.forEach((layout, i) => {
+      layout.art = { source: 'generated', box: { x: 100, y: 100, width: 700, height: 700 },
+        calmRegion: { x: 100, y: 100, width: 700, height: 700 }, opacity: i ? 0.3 : 0.15 };
+    });
+    const options = { logoDataUri: KAAE_TEST_LOGO, artImagePath: KAAE_TEST_LOGO, copyText: COPY.text };
+    const names: Record<string, string> = {};
+    layouts.forEach((layout, i) => {
+      names[b64(renderLayoutV2(layout, options).png)] = `actual-${i}`;
+      names[b64(renderLayoutV2(createDegradedCanaryLayout(layout), options).png)] = 'degraded';
+    });
+    const ranked = rankCandidatesV3(layouts.map((layout, sourceIndex) => ({ sourceIndex, layout })), COPY);
+    const preferred = `actual-${ranked[1].sourceIndex}`;
+    const seen: string[] = [];
+    const { client } = mockClient({ names, prefer: (a, b) => {
+      seen.push(a, b);
+      return a === 'degraded' || b === preferred ? 'B' : 'A';
+    } });
+    const result = await selectWinnerV3(ranked, COPY, {
+      client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, renderOptionsForCandidate: () => options,
+    });
+    expect(result.winner.sourceIndex).toBe(ranked[1].sourceIndex);
+    expect(result.canary?.passed).toBe(true);
+    expect(seen).toHaveLength(8);
+    expect(seen.every((name) => ['actual-0', 'actual-1', 'degraded'].includes(name))).toBe(true);
+  });
+
   const named = () => {
     const a = centred();
     const b = asymmetric();

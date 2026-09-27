@@ -1099,9 +1099,8 @@ export class DesignStudioService {
     if (packagedKaae) try {
       const retrievalIndex = new ExemplarRetrievalIndex();
       const briefQuery = {
-        text: (s as any).instructions || (s as any).title || (run as any).title || '',
-        format: (s as any).format,
-        category: (s as any).topic,
+        text: [request.instructions, ...request.copyBlocks.map((b: CopyBlock) => b.text)].join('\n'),
+        format: request.width === request.height ? '1:1' : request.width / request.height === 0.8 ? '4:5' : undefined,
       };
       const retrieval = retrievalIndex.retrieveTopExemplars(briefQuery, 3);
       for (const item of retrieval.retrievedExemplars) {
@@ -1113,11 +1112,12 @@ export class DesignStudioService {
           creativeAssetPath(`exemplars/${item.filename}`, { optional: true }) ??
           (existsSync(archived) ? archived : undefined);
         if (imgPath) {
+          const bytes = readFileSync(imgPath);
           exemplars.push({
             path: imgPath,
-            label: item.filename || item.descriptor || 'KAAE Exemplar',
-            bytes: readFileSync(imgPath),
-            mimeType: 'image/png',
+            label: `${item.filename}: ${item.descriptor}`,
+            bytes,
+            sha256: hash(bytes),
           });
         }
       }
@@ -1159,6 +1159,7 @@ export class DesignStudioService {
       client: ledgerClient as any,
       artProvider: ledgerArtProvider as any,
       pipelineV3: isPipelineV3Run(run),
+      imageryStrategy: (runStages(run).brief as CreativeBrief | undefined)?.imageryStrategy,
       requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
       ornament: packagedKaae ? ornamentSettings() : undefined,
       style: (runStages(run).brief as CreativeBrief | undefined)?.styleSpec,
@@ -1307,7 +1308,7 @@ export class DesignStudioService {
       const rolesNow = briefSoFar?.imageRoles;
       if (rolesNow && images.length > 0 && rolesNow.length === images.length) {
         classified = true;
-        ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => contentPhotoFromDataUrl(images[r.index]));
+        ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => ({ ...contentPhotoFromDataUrl(images[r.index]), notes: r.notes }));
         const ref = rolesNow.find((r) => r.role === 'style_reference');
         ctx.attachedImage = ref ? images[ref.index] : undefined;
         if (ref) ctx.reference = { dataUrl: images[ref.index], notes: ref.notes || briefSoFar?.referenceNotes || '' };
@@ -1637,6 +1638,8 @@ export class DesignStudioService {
               concept: typeof row.concept === 'string' ? JSON.parse(row.concept) : row.concept,
               layouts,
               currentLayout: layouts[layouts.length - 1],
+              artPng: row.art_png ? Buffer.from(row.art_png) : undefined,
+              artSha256: row.art_sha256,
               metrics: typeof row.metrics === 'string' ? JSON.parse(row.metrics) : row.metrics,
               previewPng: row.preview_png ? Buffer.from(row.preview_png) : undefined,
               compositePng: row.composite_png ? Buffer.from(row.composite_png) : undefined,
@@ -1738,6 +1741,8 @@ export class DesignStudioService {
               concept: typeof row.concept === 'string' ? JSON.parse(row.concept) : row.concept,
               layouts,
               currentLayout: layouts[layouts.length - 1],
+              artPng: row.art_png ? Buffer.from(row.art_png) : undefined,
+              artSha256: row.art_sha256,
               metrics: typeof row.metrics === 'string' ? JSON.parse(row.metrics) : row.metrics,
               previewPng: row.preview_png ? Buffer.from(row.preview_png) : undefined,
               compositePng: row.composite_png ? Buffer.from(row.composite_png) : undefined,
@@ -1836,6 +1841,8 @@ export class DesignStudioService {
               concept: typeof row.concept === 'string' ? JSON.parse(row.concept) : row.concept,
               layouts,
               currentLayout: layouts[layouts.length - 1],
+              artPng: row.art_png ? Buffer.from(row.art_png) : undefined,
+              artSha256: row.art_sha256,
               metrics: typeof row.metrics === 'string' ? JSON.parse(row.metrics) : row.metrics,
               previewPng: row.preview_png ? Buffer.from(row.preview_png) : undefined,
               compositePng: row.composite_png ? Buffer.from(row.composite_png) : undefined,

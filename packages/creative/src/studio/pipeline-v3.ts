@@ -64,6 +64,8 @@ export interface PipelineV3CallOptions {
   reference?: ClientReference;
   /** Exact client logo for fallback and canary renders. */
   renderOptions?: RenderLayoutOptions;
+  /** Candidate-specific assets, also used for its degraded canary. */
+  renderOptionsForCandidate?: (candidate: RankedCandidateV3) => RenderLayoutOptions;
 }
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
@@ -736,6 +738,8 @@ export function prepareGeneratedLayoutV3(
     background?: string;
     /** Brand ornament added when the generator left it out: a texture and gold dividers. */
     ornament?: OrnamentSettings;
+    /** False enforces a brief's no-imagery decision even after style/ornament preparation. */
+    allowArt?: boolean;
     /** What the client's reference and instructions decide; enforced over the generator's choices. */
     style?: StyleSpec;
   }
@@ -753,7 +757,11 @@ export function prepareGeneratedLayoutV3(
     : conformToHouseRules(fonted, copy, canvas.palette);
   const balance = canvas.ornament?.balance ?? true;
   const spread = canvas.style?.composition === 'spread';
-  const finish = (l: StudioLayoutV2) => settlePhotos(balanceLineBreaks(compose(l), copy));
+  const finish = (l: StudioLayoutV2) => {
+    const finished = settlePhotos(balanceLineBreaks(compose(l), copy));
+    if (canvas.allowArt === false) delete finished.art;
+    return finished;
+  };
   const compose = (l: StudioLayoutV2) => {
     if (!spread) return balance ? balanceVertically(l, copy) : l;
     // The reference's composition, kept unless it adds a real defect. The measure here is the hard
@@ -1310,7 +1318,7 @@ export interface RefineV3Options extends PipelineV3CallOptions {
    * a freshly generated layout — logo at its real aspect, margins, collision clean-up — before it
    * is measured, so adoption is decided on the layout that will actually be stored.
    */
-  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[]; background?: string; ornament?: OrnamentSettings; style?: StyleSpec };
+  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[]; background?: string; ornament?: OrnamentSettings; style?: StyleSpec; allowArt?: boolean };
   /** Production's hard-QA context. A candidate QA rejects is refined even if its metrics pass. */
   qa?: HardQaContext;
 }
@@ -1322,6 +1330,7 @@ export async function refineCandidateV3(
 ): Promise<RefinementOutcomeV3> {
   const failsQa = candidate.hardQa ? !candidate.hardQa.passed : false;
   const result = await refineCandidate(candidate.sourceIndex, candidate.layout, {
+    reference: options.reference,
     client: options.client,
     model: options.model || resolveModel('layout'),
     maxRounds: 2,
@@ -1420,11 +1429,14 @@ export async function selectWinnerV3(
     model: options.model || resolveModel('judge'),
     renderOptions: { ...options.renderOptions, copyText: copy.text },
   };
+  const renderOptionsFor = (candidate: RankedCandidateV3): RenderLayoutOptions => ({
+    ...options.renderOptions, ...options.renderOptionsForCandidate?.(candidate), copyText: copy.text,
+  });
   const asJudgeInput = (c: RankedCandidateV3, id: string): CandidateJudgeInput => ({
     id,
     layout: c.layout,
     deterministicMetrics: c.metrics,
-    renderedPng: c.renderedPng || renderLayoutV2(c.layout, judgeOptions.renderOptions).png,
+    renderedPng: c.renderedPng || renderLayoutV2(c.layout, renderOptionsFor(c)).png,
   });
 
   const [first, second] = ranked;
@@ -1435,22 +1447,21 @@ export async function selectWinnerV3(
   const judgePick = match.winnerId === firstId ? first : match.winnerId === secondId ? second : null;
   const tentative = judgePick ?? first;
 
-  // Both sides of the canary are rendered the same way, from the layout alone. Handing the judge
-  // the chosen design's own render — which may carry art — against a plain render of the degraded
-  // copy would let the art, not the judge's eye for the defect, win the canary.
+  // Both sides use the tentative winner's identical asset bundle; only the layout is degraded.
+  const canaryRenderOptions = renderOptionsFor(tentative);
   const canaryLayout = createDegradedCanaryLayout(tentative.layout);
   const canaryMatch = await comparePairWithOrderSwap(
     {
       id: 'chosen',
       layout: tentative.layout,
       deterministicMetrics: tentative.metrics,
-      renderedPng: renderLayoutV2(tentative.layout, judgeOptions.renderOptions).png,
+      renderedPng: renderLayoutV2(tentative.layout, canaryRenderOptions).png,
     },
     {
       id: 'degraded_canary',
       layout: canaryLayout,
       deterministicMetrics: measureDesignV3(canaryLayout, copy),
-      renderedPng: renderLayoutV2(canaryLayout, judgeOptions.renderOptions).png,
+      renderedPng: renderLayoutV2(canaryLayout, canaryRenderOptions).png,
     },
     judgeOptions
   );
