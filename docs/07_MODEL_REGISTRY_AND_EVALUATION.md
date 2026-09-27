@@ -342,3 +342,22 @@ latency and timestamps come from retained evidence. Candidate ranking, native
 editability, canary results and human scores remain unknown unless independently
 measured. Reading these views sends no generation request. Existing retained-action
 retry, shared spending, and named settlement boundaries remain authoritative.
+
+
+### Durable paid health probes (ADR-100, 2026-09-27)
+
+Scheduled OpenAI health probes reserve their exact bounded request against the
+shared office and `health_probe` role allowance before transport. PostgreSQL
+serializes admission across Core instances and restarts, enforcing the longer of
+the previous/current intervals and retaining uncertain calls across configuration
+changes and midnight. Each attempt has a stable call ID, protocol, request hash,
+reservation/policy version and one immutable outcome with actual receipt metadata,
+latency and complete usage. Unknown facts remain null. Health GETs never dispatch.
+
+Timeouts, ambiguous HTTP failures, invalid successful receipts, model mismatches
+and bound overruns require reconciliation. A named administrator can append exact
+terminal cost evidence through existing Operations accounting. After the interval,
+this allows a new scheduled probe within current limits; it never replays the old
+call or converts financial evidence into provider health. Original observations
+remain immutable. Pre-ledger observations gain no fabricated costs. See
+runbooks/PAID_HEALTH_PROBES.md and R21_PAID_HEALTH_PROBES_PROOF.json for qualification.

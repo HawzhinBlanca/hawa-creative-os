@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T12:03:26Z",
+  "generatedAt": "2026-09-27T12:22:42Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 422,
+  "fileCount": 425,
   "files": [
     {
       "path": ".dockerignore",
@@ -568,6 +568,11 @@
       "bytes": 1872
     },
     {
+      "path": "adrs/100_durable_paid_health_probes.md",
+      "sha256": "d1c7a7631b92709e4a8eaeadbf1e996476783999b55c23e38e58a5eab96e041c",
+      "bytes": 2957
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -579,8 +584,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "cc199865289719d474b5c4b201fbeba7be84789e0afd21cf6e9061e2d757de01",
-      "bytes": 69468
+      "sha256": "785e83e4b51fa46bc0df3a1684e96e44538cc5325e34e28979b6f697dd295518",
+      "bytes": 69510
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -819,8 +824,8 @@
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
-      "sha256": "09130ca8958e0746a634a7512065b1c37e7362d90852d4811a3cc1b12fc59013",
-      "bytes": 16803
+      "sha256": "9d11f4aca5ee29782ed03fe0963d2d31037af86fe84d5be05dfffe5bd86ecfe1",
+      "bytes": 17994
     },
     {
       "path": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
@@ -834,8 +839,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "092f2bac06033f5c2b751cd192c23f36926e825d28dd5700833ed2fb1847667c",
-      "bytes": 24996
+      "sha256": "7f2c5ff3c30c1aa43e801c935c1324dcc9471a8f4078767303c99356f3b72d0a",
+      "bytes": 26187
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -869,8 +874,8 @@
     },
     {
       "path": "docs/17_UI_UX.md",
-      "sha256": "0e789a6858284ed38015b7f75ecb846bbbd8182ea13942dc5ab2da09316f2fa0",
-      "bytes": 8567
+      "sha256": "1684a8e2e43272058a9437b373cb8e11e828895efd4802ac6fcd5e4f6a329ea0",
+      "bytes": 9758
     },
     {
       "path": "docs/18_FEEDBACK_LEARNING.md",
@@ -1019,8 +1024,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "5a3076c2ad5aee6ad70aa8a261d8449999d41d7e873c3db96c354879fb9e0b42",
-      "bytes": 88957
+      "sha256": "faaacadcba5ff8eaa5cc96d6fe98526522eac1513e6d20b36ac2c0749590e65d",
+      "bytes": 90221
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1274,8 +1279,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "2b1c7eb8bd420524627d211789b1f093dd80cb1943b3097939d1614457e3d969",
-      "bytes": 58067
+      "sha256": "8cb3af8105a51aad83eaeb96ac001b6f0fc9c8c71987087764cdf129128a4b34",
+      "bytes": 59331
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json",
@@ -1296,6 +1301,11 @@
       "path": "plans/research-grade-upgrade-2026-09-25/R21_NAMED_SPENDING_POLICY_PROOF.json",
       "sha256": "99556929f965615171b37b68b808e05331e96c36e16bff0dd8b7d0b0f68cc927",
       "bytes": 10861
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R21_PAID_HEALTH_PROBES_PROOF.json",
+      "sha256": "8cecffad305ac77f977d5a9e9cc62e01df28f1bd4cf9f3d591e83ceead3c43a5",
+      "bytes": 5584
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_SHARED_SPENDING_PROOF.json",
@@ -1394,8 +1404,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "450b7f138d1f30f0fd7ea50e1ec3acf1cadefb0f2c7d438b1b19db859257f9ae",
-      "bytes": 359064
+      "sha256": "dc5e86f86a4e683b35d98a28ae29e36400e0ff61163241d0db90218cff815bf3",
+      "bytes": 360424
     },
     {
       "path": "plans/user-stories.csv",
@@ -1489,8 +1499,8 @@
     },
     {
       "path": "runbooks/CALL_COST_ACCOUNTING.md",
-      "sha256": "80c006ee97075e20377a8ef4421e5c93b348853ef06eb460ea97dca1c652b57f",
-      "bytes": 3227
+      "sha256": "7043296750bf030bbfbff86616c0ee9b8f4bcf64cca36e032c4c3d7f4fc1c6c7",
+      "bytes": 3623
     },
     {
       "path": "runbooks/CHAT_REVIEW_ACCEPTANCE.md",
@@ -1511,6 +1521,11 @@
       "path": "runbooks/LIVE_PILOT.md",
       "sha256": "c83229c1dec6c242aafc074224265a3b74c65a2c20f3d0504a3c721356c2c9f1",
       "bytes": 3987
+    },
+    {
+      "path": "runbooks/PAID_HEALTH_PROBES.md",
+      "sha256": "188b2e303e21a43dd3d70881fd20ac60ff857e36d93172727390e1a71b2c7af8",
+      "bytes": 3180
     },
     {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",
@@ -1794,8 +1809,8 @@
     },
     {
       "path": "scripts/lint_provider_egress.ts",
-      "sha256": "222246440b3980c902e97add48a17c03536b0b58eb1f10c0c025a17650caeffc",
-      "bytes": 3607
+      "sha256": "937bb5a93639415be94edb245de2175d1b680f9cf27ea5f865f12ebf1041bb5e",
+      "bytes": 3629
     },
     {
       "path": "scripts/measure_operations_slo.ts",

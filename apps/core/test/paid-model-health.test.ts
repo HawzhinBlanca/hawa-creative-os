@@ -26,11 +26,11 @@ function healthReader() {
 describe('paid provider observations', () => {
   it('retains the latest actual result across Core instances, without exposing credentials or provider errors', async () => {
     process.env.OPENAI_API_KEY = ['test', 'credential', 'one'].join('-');
-    process.env.OPENAI_MODEL = 'probe-model-one';
+    process.env.OPENAI_MODEL = 'gpt-4.1-mini';
     const fingerprint = paidModelConfigFingerprint(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL);
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       expect(String(input)).toBe('https://api.openai.com/v1/chat/completions');
-      return new Response(JSON.stringify({ id: 'completion-test', model: 'probe-model-one', choices: [{}], usage: { total_tokens: 8 } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ id: 'completion-test', model: 'gpt-4.1-mini', choices: [{}], usage: { prompt_tokens: 7, completion_tokens: 1, total_tokens: 8 } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
     try {
       createApp({ db, enableBillingProbeSchedule: true, skipPaidModelProbe: false });
@@ -70,14 +70,14 @@ describe('paid provider observations', () => {
 
   it('refuses a prior success after the key or model changes, or when scheduled probing is disabled', async () => {
     process.env.OPENAI_API_KEY = ['test', 'credential', 'two'].join('-');
-    process.env.OPENAI_MODEL = 'probe-model-one';
+    process.env.OPENAI_MODEL = 'gpt-4.1-mini';
     const changedKey = await (await healthReader().request('/v1/health')).json();
     expect(changedKey.dependencies.modelProvider).toBe('unverified');
     expect(changedKey.lastPaidProbe.at).toBeNull();
 
     const fingerprint = paidModelConfigFingerprint(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL);
     await recordPaidModelObservation(db, tenantId, SYSTEM_AUTOMATION_USER_ID, fingerprint, 'connected');
-    process.env.OPENAI_MODEL = 'probe-model-two';
+    process.env.OPENAI_MODEL = 'gpt-4o-mini';
     const changedModel = await (await healthReader().request('/v1/health')).json();
     expect(changedModel.dependencies.modelProvider).toBe('unverified');
     const disabled = await (await createApp({ db, enableBillingProbeSchedule: false }).request('/v1/health')).json();

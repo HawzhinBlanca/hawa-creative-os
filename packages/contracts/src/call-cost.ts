@@ -1,5 +1,5 @@
 /** Sanitized accounting transport. Original provider bodies never belong here. */
-export type CallCostKind = 'studio' | 'evaluation' | 'voice';
+export type CallCostKind = 'studio' | 'evaluation' | 'voice' | 'health_probe';
 export interface CallCostAttestation {
   id: string; revision: number; actorUserId: string; recordedAt: string; reason: string;
   conclusion: 'provider_finished' | 'provider_not_accepted'; reportedCostUsd: number;

@@ -91,7 +91,8 @@ import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.
 import { isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
 import { telegramPollerOf } from './services/telegram-poller-owner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
-import { evaluatePaidModelHealth, isBillableChatCompletion, paidModelConfigFingerprint, readLatestPaidModelObservation, recordPaidModelObservation, type PaidModelHealth, type PaidModelProbeResult } from './services/paid-model-health.js';
+import { PaidModelProbeService } from './services/paid-model-probe.js';
+import { evaluatePaidModelHealth, paidModelConfigFingerprint, readLatestPaidModelObservation, type PaidModelHealth } from './services/paid-model-health.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
 import { remindUnansweredDrafts } from './services/draft-reminders.js';
 import { createStreamTicketStore } from './services/stream-tickets.js';
@@ -568,64 +569,18 @@ export function createApp(options?: CreateAppOptions) {
   }
   let lastPaidProbe: PaidProbeState = {};
 
-  const executePaidModelProbe = async (): Promise<{ status: PaidModelProbeResult | 'unconfigured' | 'unverified'; configSha256?: string }> => {
+  const paidProbeScope = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' };
+  const paidProbeService = db ? new PaidModelProbeService(db) : null;
+  const executePaidModelProbe = async () => {
     const key = process.env.OPENAI_API_KEY;
     if (!key) return { status: 'unconfigured' };
-    if (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule) {
-      return { status: 'unverified' };
-    }
-    const model = process.env.OPENAI_MODEL || resolveModel('text');
-    const configSha256 = paidModelConfigFingerprint(key, model);
-
-    try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${key}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: 'ping' }],
-          // A successful response proves this configured model accepted a billable request.
-          // A provider error, including an output-limit error, is not a successful probe.
-          max_completion_tokens: 1,
-        }),
-        signal: AbortSignal.timeout(7000),
-      });
-
-      if (res.status === 401 || res.status === 403) {
-        return { status: 'unauthorized', configSha256 };
-      } else if (res.status === 429) {
-        const errJson: any = await res.json().catch(() => ({}));
-        const code = errJson?.error?.code;
-        const type = errJson?.error?.type;
-        const isBilling = code === 'credit_balance_exhausted' || type === 'insufficient_quota';
-        return {
-          status: isBilling ? 'billing_exhausted' : 'rate_limited',
-          configSha256,
-        };
-      } else if (res.ok) {
-        const body: unknown = await res.json().catch(() => null);
-        return { status: isBillableChatCompletion(body) ? 'connected' : 'http_error', configSha256 };
-      } else {
-        return { status: 'http_error', configSha256 };
-      }
-    } catch {
-      return { status: 'unreachable', configSha256 };
-    }
+    if (!paidProbeService || (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule)) return { status: 'unverified' };
+    const result = await paidProbeService.execute(paidProbeScope, key, process.env.OPENAI_MODEL || resolveModel('text'), billingProbeMs);
+    if (result.dispatched) lastVerifiedProgressAt = new Date().toISOString();
+    return result;
   };
 
-  const checkAndAlertBilling = async (probeResult: { status: PaidModelProbeResult | 'unconfigured' | 'unverified'; configSha256?: string }) => {
-    if (db && probeResult.configSha256 && probeResult.status !== 'unconfigured' && probeResult.status !== 'unverified') {
-      try {
-        await recordPaidModelObservation(db, DEFAULT_TENANT_ID, SYSTEM_AUTOMATION_USER_ID, probeResult.configSha256, probeResult.status);
-        lastVerifiedProgressAt = new Date().toISOString();
-      } catch (err) {
-        log.error('[HealthProbe] Paid observation write failed:', err);
-      }
-    }
-
+  const checkAndAlertBilling = async (probeResult: { status: string }) => {
     if (probeResult.status === 'billing_exhausted' || probeResult.status === 'unauthorized') {
       const now = Date.now();
       const cooldownMs = 15 * 60 * 1000;
@@ -641,7 +596,7 @@ export function createApp(options?: CreateAppOptions) {
               text: alertText,
               parse_mode: 'HTML',
             });
-            lastPaidProbe.lastAlertMessageId = outRes?.messageId ? String(outRes.messageId) : (outRes?.message_id ? String(outRes.message_id) : `alert_${now}`);
+            lastPaidProbe.lastAlertMessageId = outRes?.messageId ? String(outRes.messageId) : (outRes?.message_id ? String(outRes.message_id) : undefined);
           } catch (err) {
             log.error('[HealthProbe] Watchdog alert delivery failed:', err);
           }
@@ -657,7 +612,10 @@ export function createApp(options?: CreateAppOptions) {
     if (!configSha256 || !enabled || !db) return evaluatePaidModelHealth(null, configSha256, enabled, 2 * billingProbeMs);
     try {
       const observation = await readLatestPaidModelObservation(db, DEFAULT_TENANT_ID, SYSTEM_AUTOMATION_USER_ID);
-      return evaluatePaidModelHealth(observation, configSha256, enabled, 2 * billingProbeMs);
+      const health = evaluatePaidModelHealth(observation, configSha256, enabled, 2 * billingProbeMs);
+      const spending = await paidProbeService!.admissionHealth(paidProbeScope, key!, process.env.OPENAI_MODEL || resolveModel('text'));
+      return { ...health, ...spending, status: spending.spendingStatus === 'ready' ? health.status :
+        spending.spendingStatus === 'reconciliation_required' ? 'reconciliation_required' : 'budget_held' };
     } catch (err) {
       log.error('[HealthProbe] Paid observation read failed:', err);
       return { status: 'unknown', observedStatus: null, at: null, schemaVersion: null };
@@ -669,7 +627,7 @@ export function createApp(options?: CreateAppOptions) {
   // under 5. It ran every 3 minutes with up to 100 output tokens on gpt-6-astra from 2026-09-16:
   // 480 paid calls a day, up to ~$2.40, recorded nowhere. A design that hits exhausted credit
   // already fails with INSUFFICIENT_QUOTA and tells the requester; this only warns the owner early.
-  const billingProbeMs = Math.max(5, Number(process.env.HAWA_BILLING_PROBE_MINUTES) || 30) * 60_000;
+  const billingProbeMs = Math.round(Math.min(1440, Math.max(5, Number(process.env.HAWA_BILLING_PROBE_MINUTES) || 30)) * 60_000);
   if (options?.enableBillingProbeSchedule && !options?.skipPaidModelProbe) {
     const initialProbeTimer = setTimeout(async () => {
       try {
@@ -791,7 +749,7 @@ export function createApp(options?: CreateAppOptions) {
       || (isProduction && modelProviderStatus !== 'connected')
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable'
       || modelProviderStatus === 'billing_exhausted' || modelProviderStatus === 'rate_limited'
-      || modelProviderStatus === 'http_error'
+      || modelProviderStatus === 'http_error' || modelProviderStatus === 'budget_held' || modelProviderStatus === 'reconciliation_required'
       || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded'
       || restateStatus === 'unregistered' || restateStatus === 'unreachable'
       || funnelStatus === 'stalled' || (Boolean(db) && funnelStatus === 'unknown')
@@ -813,7 +771,8 @@ export function createApp(options?: CreateAppOptions) {
         status: modelHealth.status,
         observedStatus: modelHealth.observedStatus,
         schemaVersion: modelHealth.schemaVersion,
-        detail: null,
+        detail: modelHealth.spendingStatus || null,
+        callId: modelHealth.callId || null,
         lastAlertMessageId: lastPaidProbe.lastAlertMessageId || null,
         everyMinutes: billingProbeMs / 60_000,
       },

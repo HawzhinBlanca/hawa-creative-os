@@ -36,6 +36,24 @@ function family(model: string): string {
     ?? refuse('No reservation policy exists for the requested model.');
 }
 
+/** Complete native usage priced at the same conservative rates as admission, never an invoice. */
+export function studioTextUsage(requested: string, served: string | null, raw: unknown): {
+  inputTokens: number; outputTokens: number; estimatedCostUsd: number; modelMatches: boolean;
+} | null {
+  if (!served || !raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const usage = raw as Record<string, unknown>;
+  const count = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
+  const input = usage.prompt_tokens, output = usage.completion_tokens;
+  if (!count(input) || !count(output) || !count(usage.total_tokens) || usage.total_tokens !== input + output) return null;
+  try {
+    const model = family(served);
+    const [inputRate, outputRate] = model === 'gpt-6-astra' && input <= 272000 ? [22.5, 50] : TEXT_RATES[model]!;
+    return { inputTokens: input, outputTokens: output,
+      estimatedCostUsd: studioUsdMicros((input * inputRate + output * outputRate) / 1_000_000) / 1_000_000,
+      modelMatches: requested === served || requested === model };
+  } catch { return null; }
+}
+
 function visionTokens(model: string, image: Record<string, unknown>): number {
   const detail = image.detail ?? 'auto';
   if (!['auto', 'low', 'high', 'original'].includes(String(detail))) refuse('Unpriced image detail.');

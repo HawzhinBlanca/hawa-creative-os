@@ -411,12 +411,16 @@ export function registerSystemRoutes(ctx: RouteContext) {
       configured: configuredModel,
       reachability: reachedModel ? 'reachable' : model.status === 'unreachable' ? 'unreachable' : 'unknown',
       paidVerification: model.status === 'connected' ? 'paid_verified' : model.status === 'stale' ? 'stale'
-        : model.status === 'unknown' ? 'unknown'
+        : ['unknown','budget_held','reconciliation_required'].includes(model.status) ? 'unknown'
         : model.status === 'unverified' || model.status === 'unconfigured' ? 'not_run' : 'failed',
       lastVerifiedAt: model.status === 'connected' ? model.at : null,
       lastObservedAt: model.at,
       checkedAt: observedAt,
-      nextAction: model.status === 'connected' ? 'Monitor the next scheduled paid probe.'
+      callId: model.callId || null,
+      spendingStatus: model.spendingStatus || null,
+      nextAction: model.status === 'reconciliation_required' ? 'Review the held health probe in Operations call cost accounting. Record terminal provider evidence before another scheduled probe.'
+        : model.status === 'budget_held' ? 'Review the shared spending policy, price policy or incomplete cost history in Operations. No probe was sent.'
+        : model.status === 'connected' ? 'Monitor the next scheduled paid probe.'
         : model.status === 'unconfigured' ? 'Configure the model provider before using it.'
           : model.status === 'unverified' ? 'Enable and run the paid probe before relying on model health.'
             : model.status === 'stale' ? 'Check why the scheduled paid probe stopped running.'

@@ -5,7 +5,7 @@ Applies to ADR-097, migration 053, FR-059/060/062/065/079 and NFR-001.
 ## Review and record
 
 1. In Desk **Operations → Call cost accounting → Review call costs**, locate the
-   exact Studio, evaluation or voice call. Older calls use the next page. Original
+   exact Studio, evaluation, voice or scheduled health probe call. Older calls use the next page. Original
    unknown cost is shown as **Unknown**, never as a zero invoice.
 2. Review its original outcome, provider reference and existing accounting history.
    Retain a final provider receipt or support confirmation in the office evidence
@@ -54,3 +54,10 @@ refuses that mismatch for cookie-authenticated writes. Production OAuth settings
 still define the approved public origin. Diagnose a CSRF refusal by checking proxy
 authority and configured origin; never disable CSRF or convert the browser action
 to a privileged shared-key request.
+
+
+ADR-100 adds `health_probe` calls. Terminal evidence permits a new scheduled probe
+after its interval within the current spending policy. The old call is never
+replayed and its health outcome remains unchanged. To retain a stop on new probes,
+set the `health_probe` role allowance to zero before recording evidence. See
+[scheduled health probes](PAID_HEALTH_PROBES.md).

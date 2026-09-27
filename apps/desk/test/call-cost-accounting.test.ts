@@ -56,3 +56,16 @@ it('shows read-only evidence to unnamed sessions and allows reload and close',as
   await click(byText(view.container,'button','Close call'));expect(view.container.querySelector('[aria-label="Selected call accounting"]')).toBeNull();
   await view.unmount();
 });
+
+it('explains the scheduled-probe recovery boundary and posts evidence to its own call',async()=>{
+  const probe={...detail,kind:'health_probe' as const,model:'gpt-4.1-mini',status:'unreachable',originalAccepted:false};
+  const calls=stubCore(c=>json(c.method==='POST'?{replayed:false}:c.path==='/v1/spending/calls'?{items:[probe],nextCursor:null}:probe));
+  const view=await mount(React.createElement(CallCostAccountingPanel));await open(view);
+  expect(view.text()).toContain('Terminal evidence permits a new scheduled health probe');
+  expect(view.text()).toContain('It does not retry this call or establish provider health');
+  await enter(view.container,'Call 1 final cost','0');await enter(view.container,'Call 1 evidence reference','synthetic-probe');
+  await enter(view.container,'Call 1 evidence hash','c'.repeat(64));await enter(view.container,'Settlement reason','Provider confirmed terminal probe');
+  await act(async()=>{view.container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});await flush();
+  expect(calls.filter(c=>c.method==='POST').map(c=>c.path)).toEqual([`/v1/spending/calls/health_probe/${id}/evidence`]);
+  await view.unmount();
+});

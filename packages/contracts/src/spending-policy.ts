@@ -1,6 +1,6 @@
 export type SpendingRole = 'creative_director' | 'visual_judge' | 'asset_photoreal' |
   'intake_router' | 'brief_builder' | 'feedback_classifier' | 'rule_miner' |
-  'embedding_multimodal' | 'reranker_multimodal' | 'voice_transcriber';
+  'embedding_multimodal' | 'reranker_multimodal' | 'voice_transcriber' | 'health_probe';
 
 export interface SpendingLimits {
   officeUsd: number; clientUsd: number; roleUsd: number;

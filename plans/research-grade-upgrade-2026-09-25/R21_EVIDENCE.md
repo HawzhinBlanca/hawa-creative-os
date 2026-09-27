@@ -1,5 +1,26 @@
 # R21 — Unknown model acceptance is not a free retry
 
+## 2026-09-27 — Durable paid health probes (ADR-100, qualification in progress)
+
+Migration 055 admits original scheduled probe calls against shared office and
+health_probe limits, with a database interval and unresolved-call hold across
+restarts, credential changes and midnight. Outcomes and observations commit
+atomically. Real usage/IDs remain separate from conservative quotes and named
+terminal evidence. The existing Operations accounting screen supports this call
+kind and explicitly explains that evidence may permit a later new scheduled probe;
+it never retries the original call or establishes provider health.
+
+Focused qualification: 94 tests passed across eight files, including three actual
+SIGKILL boundaries. Types, lint, Desk build and security checks passed; final strict
+compilation, full regression, fresh candidate and Chrome qualification pending.
+First sandbox refusals are retained. No real provider calls or production change.
+
+Remaining: Telegram classifier and Canva planner spending, typed completed-result
+recovery, real office/provider/native Canva/human multilingual/design and held-out
+quality acceptance, independent-host restore and controlled rollout. See
+R21_PAID_HEALTH_PROBES_PROOF.json and runbooks/PAID_HEALTH_PROBES.md.
+
+
 ## 2026-09-27 — Named budget policy administration (ADR-098, locally qualified)
 
 Desk Operations now reads current shared limits, consistent daily usage and

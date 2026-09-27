@@ -1,7 +1,7 @@
 import type { SpendingLimits, SpendingPolicyChange, SpendingRole } from '@hawa/contracts';
 
 export const SPENDING_ROLES: readonly SpendingRole[] = ['creative_director','visual_judge','asset_photoreal',
-  'intake_router','brief_builder','feedback_classifier','rule_miner','embedding_multimodal','reranker_multimodal','voice_transcriber'];
+  'intake_router','brief_builder','feedback_classifier','rule_miner','embedding_multimodal','reranker_multimodal','voice_transcriber','health_probe'];
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const exact = (v: Record<string, unknown>, keys: string[]) => Object.keys(v).length === keys.length && keys.every(k => Object.hasOwn(v,k));
 export const isSpendingUsd = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 &&
