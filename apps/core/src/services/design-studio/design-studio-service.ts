@@ -25,6 +25,8 @@ import {
   OpenAiImageProvider,
   requestStudioArtImage,
   StudioArtAccountingError,
+  NoEligibleCandidateError,
+  eligibleCandidatesV3,
   type StudioLayoutV2,
   ExemplarRetrievalIndex,
   studioReferenceFromRaw,
@@ -1558,27 +1560,7 @@ export class DesignStudioService {
           for (const cand of candidateStates) alignFramedHeads(cand.currentLayout, focus, sizes);
           const artCandidates = await runArtStage(ctx, candidateStates);
 
-          for (const row of candidateRows) {
-            const cand = artCandidates.find((c) => c.ordinal === row.ordinal);
-            if (cand) {
-              await this.repo.updateCandidate(row.id, s.tenantId, {
-                layouts: [cand.currentLayout] as any,
-                status: 'draft',
-                artPng: cand.artPng,
-                artSha256: cand.artSha256,
-                artProvenance: cand.artProvenance as any,
-                ...(ctx.pipelineV3 ? { concept: cand.concept as any } : {}),
-              });
-            } else {
-              await this.repo.updateCandidate(row.id, s.tenantId, {
-                status: 'eliminated',
-              });
-            }
-          }
-
-          stages.layouts = { count: artCandidates.length };
-          await this.repo.updateRunStatus(runId, s.tenantId, 'rendering', { stages, budget });
-          return { runId, status: 'rendering', stage: 'layouts', spentUsd: budget.spentUsd };
+          return await this.finishLayoutsStage(s, runId, stages, budget, candidateRows, artCandidates, Boolean(ctx.pipelineV3));
         }
 
         case 'rendering': {
@@ -2332,6 +2314,43 @@ export class DesignStudioService {
     };
   }
 
+  /** Persist the pre-art gate, including refused source layouts, before advancing the run. */
+  private async finishLayoutsStage(
+    s: Scope, runId: string, stages: Record<string, unknown>,
+    budget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
+    candidateRows: Array<{ id: string; ordinal: number }>, artCandidates: CandidateState[], pipelineV3: boolean,
+  ): Promise<StudioResumeResult> {
+    for (const row of candidateRows) {
+      const cand = artCandidates.find((c) => c.ordinal === row.ordinal);
+      if (cand) {
+        await this.repo.updateCandidate(row.id, s.tenantId, {
+          layouts: [cand.currentLayout] as any,
+          status: cand.status === 'eliminated' ? 'eliminated' : 'draft',
+          artPng: cand.artPng,
+          artSha256: cand.artSha256,
+          artProvenance: cand.artProvenance as any,
+          ...(pipelineV3 ? { concept: cand.concept as any } : {}),
+        });
+      } else {
+        await this.repo.updateCandidate(row.id, s.tenantId, {
+          status: 'eliminated',
+        });
+      }
+    }
+
+    const survivors = artCandidates.filter((candidate) => candidate.status !== 'eliminated');
+    stages.layouts = { count: survivors.length, preArtRejected: artCandidates
+      .filter((candidate) => candidate.status === 'eliminated')
+      .map((candidate) => ({ candidateId: candidate.id, ordinal: candidate.ordinal, defectCodes: candidate.diagnostics ?? [] })) };
+    if (!survivors.length) {
+      const diagnostic = 'NO_FEASIBLE_CANDIDATE: geometry/copy preflight rejected every candidate before artwork; review the recorded defects.';
+      await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
+      return { runId, status: 'failed', stage: 'layouts', diagnostic, spentUsd: budget.spentUsd };
+    }
+    await this.repo.updateRunStatus(runId, s.tenantId, 'rendering', { stages, budget });
+    return { runId, status: 'rendering', stage: 'layouts', spentUsd: budget.spentUsd };
+  }
+
   /**
    * P07 for a v3 run, as the qualification runs it: the judge compares the top two candidates in
    * both orders, and its pick stands only if it holds in both and the judge then beats a degraded
@@ -2346,17 +2365,29 @@ export class DesignStudioService {
     candidateStates: CandidateState[]
   ): Promise<StudioResumeResult> {
     let outcome: Awaited<ReturnType<typeof runJudgeStageV3>>;
+    const stopWithoutEligible = async (error: NoEligibleCandidateError): Promise<StudioResumeResult> => {
+      stages.tournament = { pipeline: 'v3', decidedBy: 'no_eligible_candidate', candidates: error.candidates };
+      for (const candidate of candidateStates) await this.repo.updateCandidate(candidate.id, s.tenantId, { status: 'eliminated', rank: null });
+      await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', { stages, budget, diagnostic: error.message, judgeStatus: 'SKIPPED', winnerCandidateId: null });
+      return { runId: run.id, status: 'failed', stage: 'judging', diagnostic: error.message, judgeStatus: 'SKIPPED', spentUsd: budget.spentUsd };
+    };
+    const excludedEvidence = (ranked: ReturnType<typeof rankStudioCandidatesV3>) => ranked
+      .filter((r) => r.hardQa?.passed !== true)
+      .map((r) => ({ candidateId: r.candidate.id, sourceIndex: r.sourceIndex, qa: r.hardQa ? 'failed' : 'unknown', defectCodes: r.hardQa?.defectCodes ?? [] }));
     try {
       outcome = await runJudgeStageV3(ctx, candidateStates);
     } catch (err) {
       if (isModelCallHoldError(err)) throw err;
       if (err instanceof StudioBudgetExhaustedError) throw err;
-      // Judge unavailable: the higher composite stands, and the run says so.
+      if (err instanceof NoEligibleCandidateError) return stopWithoutEligible(err);
+      // Judge unavailable: only an explicitly eligible candidate may stand on its metrics.
       const message = err instanceof Error ? err.message : String(err);
-      const ranked = rankStudioCandidatesV3(ctx, candidateStates).map((r) => r.candidate);
+      const allRanked = rankStudioCandidatesV3(ctx, candidateStates);
+      if (!allRanked.some((r) => r.hardQa?.passed === true)) return stopWithoutEligible(new NoEligibleCandidateError(allRanked));
+      const ranked = eligibleCandidatesV3(allRanked).map((r) => r.candidate);
       const winner = ranked[0];
-      await this.recordV3Ranking(s, ranked, winner);
-      stages.tournament = { pipeline: 'v3', winnerId: winner.id, decidedBy: 'composite_judge_unavailable', error: message };
+      await this.recordV3Ranking(s, ranked, winner, allRanked.filter((r) => r.hardQa?.passed !== true).map((r) => r.candidate));
+      stages.tournament = { pipeline: 'v3', winnerId: winner.id, decidedBy: 'composite_judge_unavailable', error: message, excludedCandidates: excludedEvidence(allRanked) };
       await this.repo.updateRunStatus(run.id, s.tenantId, 'qa', {
         stages,
         budget,
@@ -2417,7 +2448,8 @@ export class DesignStudioService {
       });
     }
 
-    await this.recordV3Ranking(s, [winner, ...ranked.map((r) => r.candidate).filter((c) => c.id !== winner.id)], winner);
+    await this.recordV3Ranking(s, [winner, ...eligibleCandidatesV3(ranked).map((r) => r.candidate).filter((c) => c.id !== winner.id)], winner,
+      ranked.filter((r) => r.hardQa?.passed !== true).map((r) => r.candidate));
 
     const judgeStatus: DesignStudioJudgeStatus =
       selection.judgeReliable === null ? 'SKIPPED' : selection.judgeReliable ? 'RELIABLE' : 'UNRELIABLE';
@@ -2427,6 +2459,7 @@ export class DesignStudioService {
       decidedBy: selection.decidedBy,
       judgeWinner: selection.match ? idFor(selection.match.winnerId) ?? selection.match.winnerId : null,
       consistent: selection.match?.isConsistent ?? null,
+      excludedCandidates: excludedEvidence(ranked),
     };
     stages.canary = { passed: selection.canary?.passed ?? null };
 
@@ -2444,7 +2477,8 @@ export class DesignStudioService {
   }
 
   /** Winner first, then the rest in the order given; every candidate keeps a rank. */
-  private async recordV3Ranking(s: Scope, ordered: CandidateState[], winner: CandidateState): Promise<void> {
+  private async recordV3Ranking(s: Scope, ordered: CandidateState[], winner: CandidateState, excluded: CandidateState[] = []): Promise<void> {
+    for (const candidate of excluded) await this.repo.updateCandidate(candidate.id, s.tenantId, { status: 'eliminated', rank: null });
     for (let i = 0; i < ordered.length; i++) {
       await this.repo.updateCandidate(ordered[i].id, s.tenantId, {
         status: ordered[i].id === winner.id ? 'winner' : 'runner_up',

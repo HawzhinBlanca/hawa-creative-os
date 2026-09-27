@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T23:43:07Z",
+  "generatedAt": "2026-09-27T23:53:05Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 451,
+  "fileCount": 453,
   "files": [
     {
       "path": ".dockerignore",
@@ -618,6 +618,11 @@
       "bytes": 2278
     },
     {
+      "path": "adrs/110_studio_compute_eligibility.md",
+      "sha256": "27d63603cd47efbe2b97ac102dcdd1bda235d768f63c91890077e276b9c205e2",
+      "bytes": 1697
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -1058,14 +1063,19 @@
       "bytes": 5034
     },
     {
+      "path": "plans/lean-design-implementation-2026-09-28/COMPUTE_ELIGIBILITY_PROOF.json",
+      "sha256": "d8c761673cd6b2c787d2a14dd60ce13a06ca8b91b3895c560d4876d7c83ecbb7",
+      "bytes": 4870
+    },
+    {
       "path": "plans/lean-design-implementation-2026-09-28/CREATIVE_HANDOFF_PROOF.json",
       "sha256": "6ee86494508f9e269be0551a57e61ef0f37c8e000556fbee16f697e5fd39298b",
       "bytes": 5703
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
-      "sha256": "5bf94eea366108219daa27c174ef0cdde6af17c9d6b337155b0dc111538afe79",
-      "bytes": 6039
+      "sha256": "d1bded6d46ecbec72a415678eb0bc9415247b9170e74c7b9fde15e636f109803",
+      "bytes": 8042
     },
     {
       "path": "plans/mvp-checklist.md",
@@ -1499,8 +1509,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "94f6ed0da7d47b7aa62ea126f997c5d0354bc00a2238cd8f7317d5a22d8fd49b",
-      "bytes": 389688
+      "sha256": "aa81211d2dc80706404d34babd8df262f0ac1ea63ce6986133e6e416d1292af3",
+      "bytes": 390706
     },
     {
       "path": "plans/user-stories.csv",

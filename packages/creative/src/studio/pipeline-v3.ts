@@ -56,6 +56,23 @@ export interface RankedCandidateV3 {
   hardQa?: HardQaOutcome;
 }
 
+export class NoEligibleCandidateError extends Error {
+  readonly code = 'NO_ELIGIBLE_CANDIDATE';
+  readonly candidates: Array<{ sourceIndex: number; qa: 'failed' | 'unknown'; defectCodes: string[] }>;
+  constructor(ranked: RankedCandidateV3[]) {
+    super('NO_ELIGIBLE_CANDIDATE: no candidate has explicit passing hard QA; review or repair the recorded defects.');
+    this.name = 'NoEligibleCandidateError';
+    this.candidates = ranked.map((c) => ({ sourceIndex: c.sourceIndex, qa: c.hardQa ? 'failed' : 'unknown', defectCodes: c.hardQa?.defectCodes ?? [] }));
+  }
+}
+
+/** Missing QA never grants spending or winner authority. Keep the caller's established rank. */
+export function eligibleCandidatesV3<T extends RankedCandidateV3>(ranked: T[]): T[] {
+  const eligible = ranked.filter((candidate) => candidate.hardQa?.passed === true);
+  if (!eligible.length) throw new NoEligibleCandidateError(ranked);
+  return eligible;
+}
+
 export interface PipelineV3CallOptions {
   client?: OpenAiStudioClient;
   /** Overrides the active tier's model for this role. */
@@ -1242,10 +1259,8 @@ function compareCandidatesV3(
 }
 
 /**
- * Ranks candidates for the judge. With a QA context, production's hard QA is a filter, not an
- * afterthought: a candidate that QA would reject cannot outrank one it would accept. Without it,
- * the ranking would crown a design production then refuses, and the run would fail while a
- * passing candidate sat unused.
+ * Ranks candidates for repair and selection. Selection separately excludes failed/unknown QA;
+ * retaining failed candidates here lets the bounded refinement stage inspect their defects.
  */
 export function rankCandidatesV3(
   candidates: Array<{ sourceIndex: number; layout: StudioLayoutV2; renderedPng?: Buffer }>,
@@ -1411,7 +1426,7 @@ export async function selectWinnerV3(
   copy: PipelineV3Copy,
   options: PipelineV3CallOptions = {}
 ): Promise<WinnerSelectionV3> {
-  if (ranked.length === 0) throw new Error('selectWinnerV3 needs at least one candidate');
+  ranked = eligibleCandidatesV3(ranked);
   if (ranked.length === 1) {
     return {
       winner: ranked[0],

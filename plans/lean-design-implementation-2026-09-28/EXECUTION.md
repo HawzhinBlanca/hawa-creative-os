@@ -14,7 +14,7 @@ No package is complete merely because a smaller test passes.
 | --- | --- | --- | --- |
 | 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty slice locally qualified; native revision preservation open | ADR-108; CANVA_UNCERTAINTY_PROOF.json |
 | 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs locally qualified; authorized visual-order contract, multilingual retrieval and human comparison open | ADR-109; CREATIVE_HANDOFF_PROOF.json |
-| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | Open | No new implementation evidence |
+| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility locally qualified; retained results, pinned derivations, reserved-region mapping and concurrency open | ADR-110; COMPUTE_ELIGIBILITY_PROOF.json |
 | 4 | Amend/Adapt routing and actual Canva account capability qualification | Open | Official documentation is not account admission |
 | 5 | Relationship-led composition, calibrated selection, governed edit learning and equal-budget human comparisons | Open | Existing R04–R06/R13/R22–R25 study machinery must be reused |
 | 6 | Complete supervised native review/delivery, release qualification and independent recovery | Open | Prior qualification remains scoped to its own candidate |
@@ -87,3 +87,32 @@ durable asset derivation pinning; equal-budget human quality comparison; native
 revision preservation; the remaining packages. This is local source qualification,
 not a deployment or completion of the six-package goal. Next independent work:
 free feasibility before optional artwork and eligible-only comparative judging.
+
+## 2026-09-28 — Creative compute eligibility checkpoint
+
+ADR-110 moves free geometry/copy/font checks ahead of optional artwork on v3
+candidates that request art. Proven failures retain their source layouts and
+recorded defect codes, are eliminated, and never enter the image provider.
+No-art candidates retain the existing bounded refinement route. Contrast over
+unfinished imagery is deferred; preflight is explicitly not final hard QA.
+Zero survivors stop with NO_FEASIBLE_CANDIDATE and no automatic fresh generation.
+
+Comparison admits only explicit hard-QA passes. Missing evidence is unknown.
+One eligible candidate skips pairwise and canary calls. Zero eligible candidates
+record NO_ELIGIBLE_CANDIDATE, clear any winner identity and stop. Provider-error
+fallback and runner-up recording also exclude failed/unknown candidates.
+
+Evidence: 9 affected files / 138 tests passed, zero failed/skipped. The initial
+red run reproduced three selection defects and an artwork status defect. A
+corrected generateArt-boundary test was replayed against the committed previous
+art stage and proves the unwanted paid invocation (one failed, two passed);
+current source was restored exactly. Existing judge-protocol unit fixtures now
+carry explicitly synthetic QA; Core service tests use actual hard-QA calculation
+and mocked repository writes. Source/scripts/516 strict test roots, architecture
+checks and security pass. See COMPUTE_ELIGIBILITY_PROOF.json.
+
+No paid calls, current-runtime deployment, full-suite release qualification or
+human quality comparison. Earlier rejection can increase manual finishing or
+refusal; the human experiment must measure this alongside cost. Remaining package
+3 work is durable typed paid results, pinned derivations, actual provider-region
+mapping and safe concurrency. Native preservation and other packages remain open.

@@ -2,6 +2,7 @@ import {
   rankCandidatesV3,
   refineCandidateV3,
   selectWinnerV3,
+  eligibleCandidatesV3,
   type PipelineV3Copy,
   type RankedCandidateV3,
   type BoxCritiqueResult,
@@ -327,7 +328,7 @@ export async function runJudgeStageV3(
   ranked: Array<RankedCandidateV3 & { candidate: CandidateState }>;
 }> {
   const ranked = rankStudioCandidatesV3(ctx, candidates);
-  assertJudgeSeesText(ranked);
+  assertJudgeSeesText(eligibleCandidatesV3(ranked));
   const selection = await selectWinnerV3(ranked, copyForStageV3(ctx), {
     client: ctx.client,
     reference: ctx.reference,

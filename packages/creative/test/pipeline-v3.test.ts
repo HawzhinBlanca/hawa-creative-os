@@ -1,5 +1,5 @@
 import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   admittedFontFor,
   sanitizeFontsV3,
@@ -8,6 +8,7 @@ import {
   selectWinnerV3,
   refineCandidateV3,
   prepareGeneratedLayoutV3,
+  computeLayoutMetrics,
   createDegradedCanaryLayout,
   renderLayoutV2,
   renderAnnotatedLayoutV2,
@@ -208,6 +209,25 @@ describe('pipeline v3 — fonts', () => {
 });
 
 describe('pipeline v3 — ranking', () => {
+  it('selects the sole hard-QA eligible candidate without a comparison or canary call', async () => {
+    const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }, { sourceIndex: 1, layout: asymmetric() }], COPY);
+    ranked[0].hardQa = { passed: false, defectCodes: ['COPY_OVERFLOW'], messages: ['Too long'], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
+    ranked[1].hardQa = { passed: true, defectCodes: [], messages: [], layout: ranked[1].layout, metrics: computeLayoutMetrics(ranked[1].layout) };
+    const createStructuredCompletion = vi.fn().mockRejectedValue(new Error('unexpected paid comparison'));
+    const result = await selectWinnerV3(ranked, COPY, { client: { createStructuredCompletion } as unknown as OpenAiStudioClient });
+    expect(result.winner).toBe(ranked[1]);
+    expect(result.decidedBy).toBe('single_candidate');
+    expect(result.canary).toBeNull();
+    expect(createStructuredCompletion).not.toHaveBeenCalled();
+  });
+
+  it.each([false, undefined])('refuses a sole candidate when hard-QA pass is %s', async (passed) => {
+    const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }], COPY);
+    if (passed === false) ranked[0].hardQa = { passed, defectCodes: ['COPY_OVERFLOW'], messages: [], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
+    const createStructuredCompletion = vi.fn().mockRejectedValue(new Error('unexpected paid comparison'));
+    await expect(selectWinnerV3(ranked, COPY, { client: { createStructuredCompletion } as unknown as OpenAiStudioClient })).rejects.toThrow('NO_ELIGIBLE_CANDIDATE');
+    expect(createStructuredCompletion).not.toHaveBeenCalled();
+  });
   it('cannot restore prohibited artwork through preparation or brand ornament', () => {
     const prepared = prepareGeneratedLayoutV3(centred(), COPY, {
       width: W, height: H, allowArt: false, palette: ['#0A1628', '#FFFFFF', '#F7B500'],
@@ -231,6 +251,12 @@ describe('pipeline v3 — ranking', () => {
 });
 
 // Render-heavy: each rsvg render takes 0.2-0.5s, so the 5s default is too tight under load.
+// These isolate judge protocol/rendering, using explicit synthetic QA evidence. Production
+// and the qualification script compute hard QA from the actual client context.
+function admitForJudgeFixture(candidate: ReturnType<typeof rankCandidatesV3>[number]): void {
+  candidate.hardQa = { passed: true, defectCodes: [], messages: [], layout: candidate.layout, metrics: computeLayoutMetrics(candidate.layout) };
+}
+
 describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
   it('renders each candidate and both sides of its canary with that candidate’s actual assets', async () => {
     const layouts = [centred(), asymmetric()];
@@ -245,6 +271,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
       names[b64(renderLayoutV2(createDegradedCanaryLayout(layout), options).png)] = 'degraded';
     });
     const ranked = rankCandidatesV3(layouts.map((layout, sourceIndex) => ({ sourceIndex, layout })), COPY);
+    ranked.forEach(admitForJudgeFixture);
     const preferred = `actual-${ranked[1].sourceIndex}`;
     const seen: string[] = [];
     const { client } = mockClient({ names, prefer: (a, b) => {
@@ -276,6 +303,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
       ],
       COPY
     );
+    ranked.forEach(admitForJudgeFixture);
     return { names, ranked };
   };
 
@@ -345,6 +373,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
   it('spends nothing when only one candidate is left', async () => {
     const { client, calls } = mockClient({});
     const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }], COPY);
+    ranked.forEach(admitForJudgeFixture);
     const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.decidedBy).toBe('single_candidate');
     expect(calls).toHaveLength(0);

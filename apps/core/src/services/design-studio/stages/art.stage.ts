@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { isModelCallHoldError, type StageContext, type CandidateState } from '../types.js';
-import { FORBIDDEN_ART_WORDS, renderMotifPng, type ProceduralMotifType } from '@hawa/creative';
+import { FORBIDDEN_ART_WORDS, renderMotifPng, evaluateHardQa, type ProceduralMotifType } from '@hawa/creative';
+import { hardQaContextFor } from './v3.stage.js';
 import { log } from '../../../logging.js';
 
 function assertArtPromptSafe(prompt: string, ctx: StageContext): void {
@@ -22,6 +23,17 @@ export async function runArtStage(
   candidates: CandidateState[]
 ): Promise<CandidateState[]> {
   for (const cand of candidates) {
+    if (ctx.pipelineV3 && cand.currentLayout.art && ctx.imageryStrategy !== 'none') {
+      // Artwork cannot repair overflowing copy, illegal fonts or broken geometry. Contrast is
+      // evaluated again against completed imagery; this preflight is not a final QA certificate.
+      const qa = evaluateHardQa(cand.currentLayout, hardQaContextFor(ctx));
+      const defects = qa.defectCodes.filter((code) => code !== 'CONTRAST');
+      if (defects.length) {
+        cand.status = 'eliminated';
+        cand.diagnostics = [...new Set([...(cand.diagnostics ?? []), ...defects])];
+        continue;
+      }
+    }
     if (ctx.imageryStrategy === 'none') {
       delete cand.currentLayout.art;
       cand.artPng = null;
