@@ -1,6 +1,6 @@
 health_probe call · gpt-4.1-mini
 
-Call ID: e318f2ed-a5b9-4137-a008-e864d7009bda
+Call ID: 1ef18856-1daf-4d81-b790-52781ab251b1
 Original outcome: unreachable
 Provider reference: Not reported
 
@@ -21,7 +21,7 @@ Provider finished · synthetic-loopback-unbilled
 
 Synthetic provider accounting evidence; no real billing
 
-Attested by 2faa85b4-a508-47e9-98aa-149f84a43d13 at 9/27/2026, 3:28:51 PM
+Attested by 5a500010-0916-4061-8eb2-1bcdc8af8972 at 9/27/2026, 3:33:28 PM
 
 Evidence SHA-256: 112f52b78cdbda5cb4c0f606485145d647e15ef3893a5de0652f67ac256c2052
 
@@ -35,7 +35,7 @@ Record the provider’s final charge for this exact call. This releases unused r
 
 Call 1
 
-Saved call: e318f2ed-a5b9-4137-a008-e864d7009bda · openai / gpt-4.1-mini
+Saved call: 1ef18856-1daf-4d81-b790-52781ab251b1 · openai / gpt-4.1-mini
 
 Provider conclusion
 Provider confirms processing finished

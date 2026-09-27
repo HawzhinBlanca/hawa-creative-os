@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "FOCUSED_PASS_CANDIDATE_PENDING",
+  "status": "LOCALLY_QUALIFIED_LIVE_ADMISSION_PENDING",
   "adr": "100_durable_paid_health_probes",
   "requirements": [
     "FR-060",
@@ -23,9 +23,10 @@
   "realProviderCalls": false,
   "productionChanged": false,
   "notQualified": [
-    "Full candidate/runtime/browser qualification pending",
     "Telegram classifier and Canva planner spending",
     "Typed completed-result recovery",
+    "Legacy Operations SLO/latency and monthly budget defaults",
+    "Pre-ledger probe billing history and live invoice qualification",
     "Real provider/native Canva/human multilingual and design admission",
     "Independent-host restore and rollout"
   ],
@@ -52,7 +53,7 @@
     "packages/domain/src/spending-policy.ts": "550610e3fccba4659e76026500c71146259ea4dd67fcef081a3a9509646c751f",
     "runbooks/CALL_COST_ACCOUNTING.md": "7043296750bf030bbfbff86616c0ee9b8f4bcf64cca36e032c4c3d7f4fc1c6c7",
     "scripts/lint_provider_egress.ts": "937bb5a93639415be94edb245de2175d1b680f9cf27ea5f865f12ebf1041bb5e",
-    "adrs/100_durable_paid_health_probes.md": "d1c7a7631b92709e4a8eaeadbf1e996476783999b55c23e38e58a5eab96e041c",
+    "adrs/100_durable_paid_health_probes.md": "5ac51b9b9a7d874e34ce7d35821968d5395900c92536e462383c8676c1576d60",
     "apps/core/src/services/paid-model-probe.ts": "cad531a77edc5a407f83d72636f45d4c48e5d65dff105db5dee505d7a898ec06",
     "apps/core/test/fixtures/paid-probe-kill-child.ts": "511e0680a0d9ea02f8b025ee0c317d436b4f031045be33159b344240c88de18b",
     "apps/core/test/paid-model-probe.test.ts": "01bdc59d709eed8037a4a49d8ca816a75a3bb8229bef9cacf6b6d2a4476a81b2",
@@ -62,23 +63,40 @@
     "packages/db/test/schema-upgrade.test.ts": "70e3bb5cba5a5a7e9ec83678ce2b944df589db3b750c0152976287e84272d12a"
   },
   "evidenceHashes": {
-    "output/acceptance/2026-09-27-paid-health-probes/check-deployed.mts": "33fe57248a2db796ddae2de7be3da0f7f1d349494ecf6f391c6196213cca17d8",
+    "output/acceptance/2026-09-27-paid-health-probes/STATUS.md": "97814a713cdd17ab054cd257a2b448b0abe765ea27338b728c5b205376ca31d4",
+    "output/acceptance/2026-09-27-paid-health-probes/accounting-browser-first.png": "74f8ca800f8226942bf8b24ac0781cf344bb0dd91e31321572a38e554bcd3098",
+    "output/acceptance/2026-09-27-paid-health-probes/accounting-browser.png": "c609d201453e4e79ba9b855a4d850443afc8d23341c590418531f728b148df1c",
+    "output/acceptance/2026-09-27-paid-health-probes/blueprint-correction.log": "c7708f2d82923b8c1362bbe37e3c2cc4a4b7f272d8d4dc7009595833e02448b3",
+    "output/acceptance/2026-09-27-paid-health-probes/blueprint-final.log": "c7708f2d82923b8c1362bbe37e3c2cc4a4b7f272d8d4dc7009595833e02448b3",
+    "output/acceptance/2026-09-27-paid-health-probes/blueprint-source.log": "c7708f2d82923b8c1362bbe37e3c2cc4a4b7f272d8d4dc7009595833e02448b3",
+    "output/acceptance/2026-09-27-paid-health-probes/browser-accounting.txt": "2579e59c2c7e4b248f7585e0bc08a9a7f3cc0ca1b1425b6346d85abc6bce79c9",
+    "output/acceptance/2026-09-27-paid-health-probes/browser-final.log": "89f1ab86a56bc72c11acbd4994d1bcb41d1d6ff0b2fee8f12d5a04923cca1708",
+    "output/acceptance/2026-09-27-paid-health-probes/browser-first.log": "89f1ab86a56bc72c11acbd4994d1bcb41d1d6ff0b2fee8f12d5a04923cca1708",
+    "output/acceptance/2026-09-27-paid-health-probes/candidate-final.json": "d18bd3f94e7ca70ffb5c249cc29d0b7d1c7c6cfb634f86ca626327de4998cdd9",
+    "output/acceptance/2026-09-27-paid-health-probes/candidate-final.log": "7c3417481ebd0ad3f1713d4650c8b307e83a042225aba7022704782bb376ca91",
+    "output/acceptance/2026-09-27-paid-health-probes/candidate-first.json": "8766d75ec8bc4460da581b88303906d4a7d9e2a17cb595677996842f72d20135",
+    "output/acceptance/2026-09-27-paid-health-probes/candidate-first.log": "dcf04302fddfc15c4b693bbcb5a1648d7291b85cd42ddcc89527e42b2730a741",
+    "output/acceptance/2026-09-27-paid-health-probes/candidate.log": "dcf04302fddfc15c4b693bbcb5a1648d7291b85cd42ddcc89527e42b2730a741",
+    "output/acceptance/2026-09-27-paid-health-probes/check-deployed.mts": "4ef22026df8b65c6573c773825ace214b723416b937e19b605e585e1a24013bb",
+    "output/acceptance/2026-09-27-paid-health-probes/deployed-first.json": "06a019fad559d4a785f8382b14d8061383642a48c756cd716a2851bbbb29b324",
+    "output/acceptance/2026-09-27-paid-health-probes/deployed-paid-probe.json": "dc773b07cdc99b0cab19b98d0beacec0330fffc951294a3adf3a18323837c290",
     "output/acceptance/2026-09-27-paid-health-probes/desk-build.log": "b569b4ad5594fba44a0938c00cb155393d2df3f2deb1d828b8028a966aa84881",
     "output/acceptance/2026-09-27-paid-health-probes/first-health.log": "855504336dc9fd0dc804997031bb871dbdc7faa2574a9a2d7aa4df1357fad4eb",
     "output/acceptance/2026-09-27-paid-health-probes/focused-final.log": "5dede6eb129a040d5fe85a51e6db03b20bf326cfeeba3071e11bb03cbc31c175",
     "output/acceptance/2026-09-27-paid-health-probes/focused-first.log": "9c2c64f4b794dedb3caf3b645c7f23702eda30294b2089867a40adcbe7c4c6d3",
     "output/acceptance/2026-09-27-paid-health-probes/focused.log": "d7be0bb7d42c4a95d5a2341bf0c1da7115cfa514c88d26cb2d802f17abd72eff",
+    "output/acceptance/2026-09-27-paid-health-probes/full-candidate.log": "6573182417df605787da4c73c4832ac6d24874c6938d682b5eaee903e233059e",
+    "output/acceptance/2026-09-27-paid-health-probes/full-final-candidate.log": "2bfcc83a0b10e80a743648891dc90fabd72d6f4123ce543d05557d8f6102be1d",
+    "output/acceptance/2026-09-27-paid-health-probes/full-first.log": "6573182417df605787da4c73c4832ac6d24874c6938d682b5eaee903e233059e",
     "output/acceptance/2026-09-27-paid-health-probes/kill-boundaries.log": "fdbf6ba611fec6b6d22a6c9fcca287b84e6edc0fd1636306910d85c3af873abe",
     "output/acceptance/2026-09-27-paid-health-probes/lint.log": "8f8a9f774a9d6d127160b609d261fb680262431b2e203f2a9ee66b09d0c0490f",
+    "output/acceptance/2026-09-27-paid-health-probes/migration-correction.log": "8811440080f2a2ab003d111810accbb846727a0a27df26d478201b1033d620db",
+    "output/acceptance/2026-09-27-paid-health-probes/runtime-health.json": "b8d0a51a33c6c5730af4a538a42487cc85d548c5d49522f8f7d8df8d914bb44e",
     "output/acceptance/2026-09-27-paid-health-probes/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
     "output/acceptance/2026-09-27-paid-health-probes/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
     "output/acceptance/2026-09-27-paid-health-probes/types-final.log": "98205bdfd9cf43cc7182e7b5f3d2cb26e5fb8167dd044d6b6d0a18a52e77b65d",
     "output/acceptance/2026-09-27-paid-health-probes/types-sandbox-refusal.log": "a7bf66aac691243eb43a350ad58679333357c9d3c4d15c5134a1171dd7e294ac",
-    "output/acceptance/2026-09-27-paid-health-probes/types.log": "98205bdfd9cf43cc7182e7b5f3d2cb26e5fb8167dd044d6b6d0a18a52e77b65d",
-    "output/acceptance/2026-09-27-paid-health-probes/candidate-first.json": "8766d75ec8bc4460da581b88303906d4a7d9e2a17cb595677996842f72d20135",
-    "output/acceptance/2026-09-27-paid-health-probes/candidate-first.log": "dcf04302fddfc15c4b693bbcb5a1648d7291b85cd42ddcc89527e42b2730a741",
-    "output/acceptance/2026-09-27-paid-health-probes/full-first.log": "6573182417df605787da4c73c4832ac6d24874c6938d682b5eaee903e233059e",
-    "output/acceptance/2026-09-27-paid-health-probes/migration-correction.log": "8811440080f2a2ab003d111810accbb846727a0a27df26d478201b1033d620db"
+    "output/acceptance/2026-09-27-paid-health-probes/types.log": "98205bdfd9cf43cc7182e7b5f3d2cb26e5fb8167dd044d6b6d0a18a52e77b65d"
   },
   "implementationCommit": "01aed175903e7edd84032677195de5b8b1c7a413",
   "firstCandidateCommit": "4cfb5b04818c9088993fc2144502ad2997356b1c",
@@ -94,5 +112,81 @@
     "failed": 0,
     "files": 4,
     "log": "output/acceptance/2026-09-27-paid-health-probes/migration-correction.log"
+  },
+  "correctionCommit": "18868247104cfdece331d9abdda8918aa1d127b7",
+  "testedCommit": "ec31d95e4cbc83b80c225c52a7c89271f3f4e2e7",
+  "fullRegression": {
+    "passed": 4065,
+    "failed": 0,
+    "skipped": 59,
+    "filesPassed": 487,
+    "filesSkipped": 7,
+    "durationSeconds": 121.81,
+    "log": "output/acceptance/2026-09-27-paid-health-probes/full-final-candidate.log"
+  },
+  "checks": {
+    "strictTestRoots": 495,
+    "sourceAndScriptTypes": "passed",
+    "lintAny": 979,
+    "existingProviderEgressExceptions": 9,
+    "deskBuild": "passed",
+    "securityScan": "passed",
+    "securitySelfTestPatterns": 11,
+    "blueprint": {
+      "passed": 1001,
+      "warned": 0,
+      "failed": 0
+    }
+  },
+  "runtime": {
+    "buildCommit": "ec31d95e4cbc83b80c225c52a7c89271f3f4e2e7",
+    "sourceChanges": {},
+    "workflowChecksPassed": 63,
+    "workflowChecksFailed": 0,
+    "scenariosExecuted": 1,
+    "scenariosNotSelected": 43,
+    "browserChecksPassed": 24,
+    "browserChecksFailed": 0,
+    "probeRequestsReceived": 1,
+    "additionalProbeRequestsAfterRestartAndReconciliation": 0,
+    "scope": "Disposable full app and actual Chrome; only synthetic provider and administrator evidence. Three separate PostgreSQL process-kill boundaries also pass.",
+    "unmatchedSyntheticProviderPaths": [
+      "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent ",
+      "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent "
+    ],
+    "screenshotsVisuallyInspected": true,
+    "sourceFile": "output/acceptance/2026-09-27-paid-health-probes/candidate-final.json",
+    "browserProof": "output/acceptance/2026-09-27-paid-health-probes/deployed-paid-probe.json"
+  },
+  "runtimeHealth": {
+    "timestamp": "2026-09-27T12:33:30.682Z",
+    "status": "degraded",
+    "buildCommit": "ec31d95e4cbc83b80c225c52a7c89271f3f4e2e7",
+    "restateInvocations": {
+      "status": "ok",
+      "paused": 0,
+      "backingOff": 0,
+      "inbox": 0,
+      "checkedAt": "2026-09-27T12:33:30.662Z"
+    },
+    "dependencies": {
+      "postgres": "connected",
+      "parkedClientMessages": 0,
+      "canva": "unverified",
+      "canvaCircuitBreaker": "CLOSED",
+      "telegram": "active",
+      "waha": "unconfigured",
+      "disk": "writable",
+      "restate": "connected",
+      "restatePausedInvocations": 0,
+      "modelProvider": "unverified",
+      "telegramApi": "unverified",
+      "funnel": "healthy",
+      "cutout": "unconfigured"
+    },
+    "flags": {
+      "DESIGN_PIPELINE_V3": "off",
+      "DESIGN_STUDIO_V2": "off"
+    }
   }
 }

@@ -1,7 +1,7 @@
 # ADR-100: Durable admission and accounting for scheduled paid health probes
 
 Date: 2026-09-27
-Status: Implementing; qualification pending
+Status: Accepted; locally qualified, live admission pending
 Requirements: FR-060, FR-064, FR-065, FR-079
 
 ## Problem

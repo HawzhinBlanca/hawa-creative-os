@@ -1,7 +1,7 @@
 {
   "completed": true,
-  "checkedAt": "2026-09-27T12:28:53.931Z",
-  "buildCommit": "4cfb5b04818c9088993fc2144502ad2997356b1c",
+  "checkedAt": "2026-09-27T12:33:30.688Z",
+  "buildCommit": "ec31d95e4cbc83b80c225c52a7c89271f3f4e2e7",
   "checks": [
     {
       "name": "exact candidate is deployed",

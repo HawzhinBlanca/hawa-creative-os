@@ -1,12 +1,12 @@
 {
   "status": "degraded",
-  "timestamp": "2026-09-27T12:28:53.925Z",
-  "buildCommit": "4cfb5b04818c9088993fc2144502ad2997356b1c",
+  "timestamp": "2026-09-27T12:33:30.682Z",
+  "buildCommit": "ec31d95e4cbc83b80c225c52a7c89271f3f4e2e7",
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
     "DESIGN_STUDIO_V2": "off"
   },
-  "lastVerifiedProgressAt": "2026-09-27T12:28:52.864Z",
+  "lastVerifiedProgressAt": "2026-09-27T12:33:29.618Z",
   "lastPaidProbe": {
     "at": null,
     "status": "unverified",
@@ -47,14 +47,14 @@
       }
     },
     "nextAction": null,
-    "measuredAt": "2026-09-27T12:28:53.914Z"
+    "measuredAt": "2026-09-27T12:33:30.672Z"
   },
   "restateInvocations": {
     "status": "ok",
     "paused": 0,
     "backingOff": 0,
     "inbox": 0,
-    "checkedAt": "2026-09-27T12:28:53.903Z"
+    "checkedAt": "2026-09-27T12:33:30.662Z"
   },
   "models": {
     "tier": "production",
