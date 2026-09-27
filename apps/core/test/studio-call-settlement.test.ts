@@ -28,9 +28,13 @@ async function fixture(office=false,status:string|null='abandoned'){
 it('settles exact calls, preserves original outcomes and stopped run, survives a fresh service and releases only new work',async()=>{
   const f=await fixture(),action=randomUUID();
   const before=await f.repo.getRunById(f.runId,f.scope.tenantId);
+  expect((await f.repo.getBudgetUsage(f.runId,f.scope.tenantId,f.scope.userId))?.daily?.scopes)
+    .toContainEqual(expect.objectContaining({scope:'office',heldUsd:0.5,spentUsd:0}));
   await expect(withRlsContext(db,f.scope,tx=>assertStudioCallsResolved(tx,f.scope.tenantId,f.taskId))).rejects.toMatchObject({code:'MODEL_CALL_UNCERTAIN'});
   const first=await f.service.settle(f.scope,f.taskId,f.runId,action,f.body);
   expect(first.replayed).toBe(false);
+  expect((await f.repo.getBudgetUsage(f.runId,f.scope.tenantId,f.scope.userId))?.daily?.scopes)
+    .toContainEqual(expect.objectContaining({scope:'office',heldUsd:0,spentUsd:0.125}));
   expect(await new StudioCallSettlementService(db).settle(f.scope,f.taskId,f.runId,action,f.body)).toMatchObject({replayed:true,settlement:first.settlement});
   expect(await f.repo.getRunById(f.runId,f.scope.tenantId)).toEqual(before);
   expect(await f.repo.getCallsForRun(f.runId,f.scope.tenantId)).toMatchObject([{id:f.callId,status:'uncertain',finished_at:null}]);

@@ -78,6 +78,7 @@ export function validateStudioReservation(value: StudioCallReservation): void {
 }
 
 export interface StudioBudgetUsage {
+  daily?: StudioDailyBudget | null;
   maxUsd: number | null;
   maxCalls: number | null;
   admittedCalls: number;
@@ -89,6 +90,15 @@ export interface StudioBudgetUsage {
   remainingUsd: number | null;
   unresolvedCalls: number;
   blocker: 'STUDIO_BUDGET_INVALID' | 'STUDIO_BUDGET_HISTORY_INCOMPLETE' | 'STUDIO_BUDGET_RESERVATION_EXCEEDED' | 'BUDGET_EXHAUSTED' | null;
+}
+
+/** Studio-only aggregates; other paid paths are not included in these limits yet. */
+export interface StudioDailyBudget {
+  day: string;
+  timezone: 'Asia/Baghdad';
+  policyVersion: number;
+  scopes: Array<{ scope: 'office' | 'client' | 'role'; subject: string; maxUsd: number;
+    spentUsd: number; heldUsd: number; remainingUsd: number; historyIncomplete: boolean }>;
 }
 
 export function studioBudgetUsage(snapshot: unknown, calls: readonly StudioBudgetCall[]): StudioBudgetUsage {

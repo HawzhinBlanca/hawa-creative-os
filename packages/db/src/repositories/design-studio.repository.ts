@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { createHash } from 'node:crypto';
 import { withRlsContext } from '../client.js';
-import { assertStudioBudgetAdmission, studioBudgetUsage, type StudioBudgetUsage, validateStudioReservation, type StudioCallReservation, type StudioCostBasis } from '@hawa/domain';
+import { assertStudioBudgetAdmission, studioBudgetUsage, StudioBudgetExhaustedError, StudioBudgetEvidenceError, type StudioDailyBudget, type StudioBudgetUsage, validateStudioReservation, type StudioCallReservation, type StudioCostBasis } from '@hawa/domain';
 import { parseBlobRef, sniffBlobMediaType, taskGenerationBlocker, type BlobRef } from '@hawa/contracts';
 import { BlobCorruptError, BlobMissingError, type BlobStore } from '../blobs/store.js';
 import type {
@@ -619,6 +619,13 @@ export class DesignStudioRepository {
         .execute();
       if (!row) throw new ModelCallAdmissionConflictError();
       return row;
+    }).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : '';
+      if (message.startsWith('STUDIO_SCOPE_BUDGET_EXHAUSTED:')) throw new StudioBudgetExhaustedError(message);
+      for (const code of ['STUDIO_BUDGET_INVALID', 'STUDIO_BUDGET_HISTORY_INCOMPLETE'] as const) {
+        if (message.startsWith(`${code}:`)) throw new StudioBudgetEvidenceError(code, message);
+      }
+      throw error;
     });
   }
 
@@ -698,9 +705,12 @@ export class DesignStudioRepository {
 
   async getBudgetUsage(runId: string, tenantId: string, actorId?: string): Promise<StudioBudgetUsage | null> {
     return withRlsContext(this.db, { tenantId, userId: actorId }, async client => {
-      const run = await client.selectFrom('design_studio_runs').select('budget')
+      const run = await client.selectFrom('design_studio_runs').select(['budget', 'client_id'])
         .where('tenant_id', '=', tenantId).where('id', '=', runId).executeTakeFirst();
-      return run ? this.readBudgetUsage(client, runId, tenantId, run.budget) : null;
+      if (!run) return null;
+      const usage = await this.readBudgetUsage(client, runId, tenantId, run.budget);
+      const daily = await sql<{ daily: StudioDailyBudget | null }>`SELECT hawa.studio_scope_budget(${run.client_id}::uuid) AS daily`.execute(client);
+      return { ...usage, daily: daily.rows[0]?.daily ?? null };
     });
   }
 

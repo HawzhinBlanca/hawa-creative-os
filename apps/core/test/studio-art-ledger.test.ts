@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { renderMotifPng } from '@hawa/creative';
 import type { Database, Kysely, DesignStudioRepository, RecordCallStartParams, FinalizeCallParams } from '@hawa/db';
+import { createDb, sql, withRlsContext, DesignStudioRepository as SqlStudioRepository } from '@hawa/db';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
 import type { StageContext } from '../src/services/design-studio/types.js';
@@ -57,6 +58,33 @@ async function harness(fetcher: typeof fetch, options: { maxCalls?: number; maxU
 
 describe('each Studio art request has its own durable admission', () => {
   afterEach(() => vi.unstubAllEnvs());
+
+  it('makes zero text or image transports when PostgreSQL refuses the office daily allocation', async () => {
+    const db = createDb(process.env.HAWA_ISOLATED_TEST_DB!);
+    const scope: Scope = { tenantId: '00000000-0000-4000-a000-000000000001', actorId: randomUUID(), role: 'operator' };
+    const clientId = 'c1000000-0000-4000-8000-000000000002', taskId = randomUUID(), runId = randomUUID();
+    try {
+      await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${scope.actorId}::uuid,${scope.actorId+'@example.test'},'Daily cap fixture')`.execute(db);
+      await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES(${scope.tenantId}::uuid,${scope.actorId}::uuid,'operator')`.execute(db);
+      await withRlsContext(db, { tenantId: scope.tenantId, userId: scope.actorId }, async tx => {
+        await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${clientId}::uuid,${scope.tenantId}::uuid,'daily-budget-kaae','Synthetic KAAE') ON CONFLICT(id) DO NOTHING`.execute(tx);
+        await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title) VALUES(${taskId}::uuid,${scope.tenantId}::uuid,${clientId}::uuid,'Daily refusal')`.execute(tx);
+        await sql`INSERT INTO hawa.studio_spending_policies(tenant_id,version,reason,limits)
+          SELECT ${scope.tenantId}::uuid,max(version)+1,'Synthetic daily stop','{"officeUsd":0,"clientUsd":30,"roleUsd":30,"clients":{},"roles":{}}'::jsonb
+          FROM hawa.studio_spending_policies WHERE tenant_id=${scope.tenantId}::uuid`.execute(tx);
+      });
+      const repository = new SqlStudioRepository(db);
+      await repository.createRun({ id: runId, taskId, tenantId: scope.tenantId, clientId, actorId: scope.actorId,
+        requestKey: runId, requestHash: 'a'.repeat(64), request: {}, tier: 'premium' });
+      const fetcher = vi.fn<typeof fetch>(async () => { throw new Error('Unexpected provider transport'); });
+      const h = await harness(fetcher, { scope, runId, repository });
+      await expect(h.ctx.client.completeJson({ prompt: 'Synthetic request', schema: { type: 'object' }, model: 'gpt-6-astra' }))
+        .rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
+      await expect(h.ctx.artProvider!.generateArt(request)).rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(await repository.getCallsForRun(runId, scope.tenantId)).toHaveLength(0);
+    } finally { await db.destroy(); }
+  });
 
   it('admits and charges the image and its vision check separately before each transport', async () => {
     vi.stubEnv('HAWA_MODEL_TIER', 'production');

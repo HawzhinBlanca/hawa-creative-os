@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { sql } from 'kysely';
 import { createDb, withRlsContext } from '../src/client.js';
@@ -8,8 +8,9 @@ const url = process.env.HAWA_ISOLATED_TEST_DB;
 describe.skipIf(!url)('durable Studio budget admission', () => {
   const db = createDb(url || 'postgres://localhost/hawa_repair');
   const repo = new DesignStudioRepository(db);
-  const tenantId = randomUUID(), clientId = randomUUID();
-  beforeAll(async () => {
+  let tenantId: string, clientId: string;
+  beforeEach(async () => {
+    tenantId = randomUUID(); clientId = randomUUID();
     await sql`INSERT INTO hawa.tenants(id,name,slug) VALUES(${tenantId}::uuid,'Budget fixture',${tenantId})`.execute(db);
     await withRlsContext(db, { tenantId }, trx => sql`INSERT INTO hawa.clients(id,tenant_id,code,name)
       VALUES(${clientId}::uuid,${tenantId}::uuid,'budget','Budget fixture')`.execute(trx));

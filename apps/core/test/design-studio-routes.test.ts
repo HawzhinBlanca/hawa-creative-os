@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, sql } from '@hawa/db';
+import { createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { CanvaFlowError } from '../src/services/canva-connect-service.js';
@@ -28,6 +28,15 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
 
   const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02]);
   const fakeSha = createHash('sha256').update(fakePng).digest('hex');
+
+  // This suite intentionally has an incomplete historical budget. Importing old receipt
+  // fixtures is an owner-only setup operation, not authorization for new provider dispatch.
+  const historicalReceipt = (insert: (tx: Kysely<Database>) => Promise<unknown>) =>
+    withRlsContext(db, { tenantId, userId: actorId }, async tx => {
+      await sql`ALTER TABLE hawa.design_studio_calls DISABLE TRIGGER enforce_studio_scope_budget`.execute(tx);
+      await insert(tx);
+      await sql`ALTER TABLE hawa.design_studio_calls ENABLE TRIGGER enforce_studio_scope_budget`.execute(tx);
+    });
 
   beforeAll(async () => {
     runId = randomUUID();
@@ -311,10 +320,11 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
     });
 
     it('reports unknown model spend without presenting it as zero dollars', async () => {
-      await sql`INSERT INTO hawa.design_studio_calls
-        (id, run_id, tenant_id, stage, provider, model, requested_model, status, error_code)
+      await historicalReceipt(tx => sql`INSERT INTO hawa.design_studio_calls
+        (id, run_id, tenant_id, stage, provider, model, requested_model, status, error_code, reservation)
         VALUES (${randomUUID()}::uuid, ${runId}::uuid, ${tenantId}::uuid,
-          'laying_out', 'openai', 'gpt-6-astra', 'gpt-6-astra', 'uncertain', 'UNCERTAIN_ACCEPTANCE')`.execute(db);
+          'laying_out', 'openai', 'gpt-6-astra', 'gpt-6-astra', 'uncertain', 'UNCERTAIN_ACCEPTANCE',
+          ${JSON.stringify({ version: 1, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.1, inputTokens: 100, outputTokens: 100 })}::jsonb)`.execute(tx));
       const res = await app.request(`/v1/tasks/${taskId}/canva/studio/${runId}`, { headers });
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -328,12 +338,13 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
 
     it('shows provider receipt metadata separately from the requested model without response content', async () => {
       const digest = 'a'.repeat(64);
-      await sql`INSERT INTO hawa.design_studio_calls
+      await historicalReceipt(tx => sql`INSERT INTO hawa.design_studio_calls
         (id, run_id, tenant_id, stage, provider, model, requested_model, status,
-          response_id, served_model, provider_request_id, response_sha256, latency_ms, attempts)
+          response_id, served_model, provider_request_id, response_sha256, latency_ms, attempts, reservation)
         VALUES (${randomUUID()}::uuid, ${runId}::uuid, ${tenantId}::uuid,
           'briefing', 'openai', 'gpt-6-astra', 'gpt-6-astra', 'ok',
-          'resp_route', 'gpt-6-astra-snapshot', 'req_route', ${digest}, 42, 1)`.execute(db);
+          'resp_route', 'gpt-6-astra-snapshot', 'req_route', ${digest}, 42, 1,
+          ${JSON.stringify({ version: 1, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.1, inputTokens: 100, outputTokens: 100 })}::jsonb)`.execute(tx));
       const res = await app.request(`/v1/tasks/${taskId}/canva/studio/${runId}`, { headers });
       expect(res.status).toBe(200);
       const data = await res.json();

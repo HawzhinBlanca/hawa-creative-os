@@ -296,3 +296,16 @@ requests even below the run cap. Quotes are operating estimates, not invoice
 ceilings. Historical calls retain absent reservation facts. No prompt or image
 bytes are stored in the quote. Role/office/day budgets, live invoice qualification
 and typed completed-stage replay remain separate requirements.
+
+### Studio daily scope admission (ADR-092, 2026-09-27)
+
+Migration 051 serializes Studio call admission, finalization, settlement and policy
+revisions in PostgreSQL across all runs in an office. Each request must fit the
+office, client and model-role daily caps as well as its run cap. Day boundaries use
+Asia/Baghdad; unfinished and estimated obligations carry forward until exact
+evidence releases them. New tasks, cancellation and process restart cannot reset
+spend. Missing historical quotes on unresolved calls or a run snapshot ahead of its
+ledger hold admission. Policy revisions and admitted policy/role identities are
+immutable; trusted deployment-owner configuration uses expected revisions and action
+IDs. See runbooks/STUDIO_DAILY_BUDGETS.md. Evaluation, voice and other paid paths
+remain separate work before any app-wide spending claim.

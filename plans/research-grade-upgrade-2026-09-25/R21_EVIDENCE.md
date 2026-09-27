@@ -1,5 +1,29 @@
 # R21 — Unknown model acceptance is not a free retry
 
+## 2026-09-27 — Studio daily scope budgets (ADR-092, qualification in progress)
+
+Migration 051 derives office/client/model-role daily obligations from the existing
+call and settlement ledgers. Database admission serializes across tasks and Core
+connections, retains estimated/uncertain obligations across office midnight, fixes
+admission timestamps and policy/role identities, and refuses missing historical
+accounting. Append-only policy revisions use expected versions and action IDs;
+Desk exposes the Studio daily balances and holds. Default daily scope ceilings
+inherit the existing USD 30 office ceiling; owner-configured overrides are supported.
+
+Initial 22 DB tests passed. Diagnostic full run: 3869 passed, 6 failed, 59 skipped.
+Failures identified old schema expectations/manifest, a membership-check hoisting
+regression, retained-policy cleanup and direct receipt fixtures without scope.
+After corrections and historical-ledger checks, 10 files/91 tests passed, including
+Core zero-transport refusal and the existing actual Core-kill recovery tests. A final
+allocation/identity negative test and final Desk wording await the sealed full run.
+Strict checking covers all 482 test roots. See R21_DAILY_STUDIO_BUDGET_PROOF.json.
+
+The former R03 PostgreSQL-budget claim was broader than its actual file-controller
+test. This evidence qualifies Studio only. Evaluation/voice/gateway budgets, named
+Desk policy administration, historical accounting repair tooling, completed-result
+recovery, fresh runtime/browser qualification and real office pilot remain open.
+Production and the prior isolated runtime are unchanged; schema 051 is local source.
+
 ## 2026-09-27 — Studio pre-dispatch spending reservations (ADR-091, locally qualified)
 
 Migration050 stores immutable request-body quotes. Under the task lock, admission

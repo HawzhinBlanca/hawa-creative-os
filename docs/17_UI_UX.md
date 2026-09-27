@@ -65,6 +65,12 @@ Provider billing can differ from the quote; an overrun blocks further calls for
 pricing review. Preserve original snapshots and receipts. See ADRs 088/091 and
 runbooks/STUDIO_RECOVERY.md.
 
+The Studio spending panel also shows office, client and model-role daily limits,
+recorded charges, held obligations and remaining allocations in the Asia/Baghdad
+office day (ADR-092). It distinguishes the run balance from the daily balances,
+flags historical accounting gaps and exposes no other client identifiers. These
+are Studio-only limits until the remaining provider paths are integrated.
+
 ## 5. Client DNA screen
 
 Tabs:
