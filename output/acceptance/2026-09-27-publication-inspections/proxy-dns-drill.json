@@ -1,0 +1,46 @@
+{
+  "scope": "Disposable internal Docker network only; existing nginx image; real changed backend IP; no production service changed.",
+  "checks": [
+    {
+      "name": "old routes to original Core",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "old routes to original Desk",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "new routes to original Core",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "new routes to original Desk",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "static configuration reproduces stale-address failure",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "dynamic configuration recovers Core at changed address",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "dynamic configuration recovers Desk at changed address",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "proxy process was not restarted",
+      "ok": true,
+      "detail": null
+    }
+  ],
+  "imageId": "sha256:b947b2630c97622793113555e13332eec85bdc7a0ac6ab697159af78942bb856"
+}

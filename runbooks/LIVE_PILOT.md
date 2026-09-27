@@ -1,5 +1,19 @@
 # Supervised real-office pilot
 
+## Latest preflight correction — 2026-09-27
+
+Production's proxy returned 502 while Core itself was healthy: it retained Core's
+old Docker IP. Validated graceful reload restored HTTP 200. The same installed nginx
+1.27.5 now uses Docker DNS with five-second refresh and shared upstream zones; a
+real disposable changed-IP drill verifies Core/Desk recovery without a proxy restart.
+Only proxy configuration changed; production application images, schema and flags
+remain on their earlier version. Reviewer OIDC configuration is still absent.
+
+The isolated candidate includes scheduled external inspection (migration 060).
+Final source/runtime qualification is recorded in
+`plans/research-grade-upgrade-2026-09-25/R09_PUBLICATION_INSPECTIONS_PROOF.json`.
+Historical checkpoints below are evidence for their own versions, not this candidate.
+
 Requirements: NFR-013/015/020/024; current Canva contract, ADR-064/065/076/077.
 Latest bounded evidence: `plans/research-grade-upgrade-2026-09-25/R26_LIVE_PREFLIGHT_PROOF.json`.
 

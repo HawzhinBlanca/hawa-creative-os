@@ -40,3 +40,28 @@ slice, verify the running candidate, then prioritize one real approved job and f
 pilot blockers. Avoid another broad architecture cycle. Real reviewer login is not
 configured in production or the isolated candidate (read-only container check on
 2026-09-27). Office domain/reviewer input is requested; no credentials were displayed.
+
+## Pilot blockers found and corrected
+
+The first full regression had **4234 passed, 1 failed, 60 skipped**. The concurrent
+100-task fixture demanded immediate Sheet completion while other tasks inserted
+rows. Row movement correctly refused inconsistent readback. The adapter now retries
+only that read up to three times within its deadline. Continuous movement remains
+unconfirmed. The simulation then reconciles the same pending receipts after each
+batch answers: 100/100 complete, exactly 300 uploaded files and one row per task.
+The first bounded-read-only correction reached 96/100; the final protocol tests plus
+explicit reconciliation pass 48 tests/3 files. This synthetic fixture is not a human
+pilot, Canva quality evidence or a real-office latency measurement.
+
+The isolated full-app rehearsal passed before the final read refinement: 63 invariants,
+1 selected scenario, 43 unselected; external services simulated. First rehearsal
+refused an image-label mismatch because the manifest commit finished during build;
+rerun used stable source 76e1e592. Fresh final-correction qualification follows.
+
+A read-only production check also found HTTP 502 despite healthy Core: nginx cached
+172.20.0.8 while Core moved to 172.20.0.7. Validated graceful reload restored HTTP 200.
+A disposable network reproduced the old failure and proved dynamic DNS recovery for
+Core and Desk at changed IPs without proxy restart (8 checks). The exact tested
+configuration was validated and gracefully reloaded in production. App images, data,
+flags and schema were not upgraded. nginx 1.27.5 supports the existing-image fix.
+Reference: https://nginx.org/en/docs/http/ngx_http_upstream_module.html#server

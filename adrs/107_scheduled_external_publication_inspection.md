@@ -56,3 +56,16 @@ are not inferred as an archive destination.
 - [Drive file resource](https://developers.google.com/workspace/drive/api/reference/rest/v3/files)
 - [Drive permissions.list](https://developers.google.com/workspace/drive/api/reference/rest/v3/permissions/list)
   requires following every next-page token before treating the list as complete.
+
+## Qualification follow-up
+
+Concurrent Sheet insertions exposed a transient read conflict in the 100-task simulation.
+Repeat only `SHEETS_ROW_MOVED_DURING_READ` observations, at most three times under
+the same deadline; never replay a mutation. A continuously moving row remains held.
+The simulation explicitly reconciles pending receipts after its batch finishes and
+checks that files and reporting rows are not duplicated. This is synthetic evidence.
+
+The pilot preflight found a separate real nginx stale-address outage. Existing nginx
+1.27.5, Docker DNS, upstream zones and `resolve` restore service discovery without
+changing the proxy foundation. A disposable changed-IP negative/positive drill
+passes eight checks; a validated graceful reload applies only this configuration.

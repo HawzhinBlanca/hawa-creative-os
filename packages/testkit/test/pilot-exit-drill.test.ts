@@ -235,9 +235,14 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
     const BATCH_SIZE = 20;
     for (let batchStart = 0; batchStart < TOTAL_TASKS; batchStart += BATCH_SIZE) {
       const batch = taskDescriptors.slice(batchStart, batchStart + BATCH_SIZE);
+      let publicationsAnswered=0;
+      let releaseReadback!:()=>void;
+      const batchWritten=new Promise<void>(resolve=>{releaseReadback=resolve;});
 
       await Promise.all(
         batch.map(async ({ index, scenario, prompt }) => {
+          let announced=false;
+          const publicationAnswered=()=>{if(!announced){announced=true;if(++publicationsAnswered===batch.length)releaseReadback();}};
           const tStart = Date.now();
           const taskId = crypto.randomUUID();
           const correlationId = `corr-pilot-${index}-${Date.now()}`;
@@ -462,9 +467,19 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
               },
             });
 
+            // Concurrent insertions may move an otherwise correct row during readback.
+            // Once this batch has answered, reconcile the same receipts without new writes.
+            publicationAnswered();
+            await batchWritten;
             expect(publishRes.ok).toBe(true); assert(publishRes.ok);
             if (!publishRes.ok) throw new Error('Publisher failed');
-            const receipt = publishRes.value;
+            let receipt = publishRes.value;
+            if(receipt.state==='drive_complete'){
+              const priorFileIds=receipt.driveFiles.map(file=>file.fileId);
+              const readback=await publisher.reconcile(ctx,receipt.publicationId);
+              expect(readback.ok).toBe(true);assert(readback.ok);receipt=readback.value;
+              expect(receipt.driveFiles.map(file=>file.fileId)).toEqual(priorFileIds);
+            }
             expect(receipt.state).toBe('complete');
             expect(receipt.driveFiles.length).toBe(3);
             expect(receipt.sheet.synced).toBe(true);
@@ -500,7 +515,7 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
               executionTimeMs: Date.now() - tStart,
               error: err.message,
             });
-          }
+          } finally { publicationAnswered(); }
         })
       );
     }
@@ -540,6 +555,12 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
     expect(totalCrossTenantLeaks).toBe(0); // Invariant #6: Zero cross-tenant leaks
     expect(allQAPassed).toBe(true); // Gate E: Deterministic QA 100%
     expect(store.outbox.length).toBe(TOTAL_TASKS); // Invariant #13: Transactional outbox
+    expect(fakeServer.getUploadedFiles()).toHaveLength(TOTAL_TASKS*3);
+    for(const scenario of SCENARIOS){
+      const ids=fakeServer.getSheetRows(`sheet_${scenario.clientId}`).slice(1).map(row=>row[0]);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids.length).toBe(taskResults.filter(task=>task.clientId===scenario.clientId).length);
+    }
 
     await fakeServer.close();
   }, 120000);

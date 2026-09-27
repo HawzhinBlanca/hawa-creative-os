@@ -107,7 +107,7 @@ export class GoogleSheetRow {
     return rows as unknown[][];
   }
 
-  private async observe(scope: SheetRowScope): Promise<Observation> {
+  private async observeOnce(scope: SheetRowScope): Promise<Observation> {
     this.validateScope(scope);
     const before = await this.metadata(scope);
     const rows = await this.rows(scope);
@@ -121,6 +121,17 @@ export class GoogleSheetRow {
     }
     if (positions.length !== 1 || positions[0] !== after.row) throw new Error('SHEETS_ROW_IDENTITY_CONFLICT');
     return { metadata: after, values: rows[after.row - 1] };
+  }
+
+  private async observe(scope: SheetRowScope): Promise<Observation> {
+    // Concurrent insertions can move an intact row between our reads. Repeat only
+    // the read, within the same deadline; never replay a mutation here.
+    for (let attempt = 0; ; attempt++) {
+      try { return await this.observeOnce(scope); }
+      catch (error) {
+        if (attempt >= 2 || !(error instanceof Error) || error.message !== 'SHEETS_ROW_MOVED_DURING_READ') throw error;
+      }
+    }
   }
 
   private result(observation: Observation, expected: string[]): SheetRowResult {

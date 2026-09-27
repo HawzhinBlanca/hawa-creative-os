@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T19:25:44Z",
+  "generatedAt": "2026-09-27T19:35:13Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -604,8 +604,8 @@
     },
     {
       "path": "adrs/107_scheduled_external_publication_inspection.md",
-      "sha256": "90bce305eb2e3a2f213efe97a0f650f79d5339bd7b76768af0e3173858a85dee",
-      "bytes": 3611
+      "sha256": "df49a0f6752b865121b522e82ad749895c73bccab578d7c16d972fa5b2bdec0f",
+      "bytes": 4395
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1179,8 +1179,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_PUBLICATION_INSPECTIONS_PROOF.json",
-      "sha256": "595528c5411b726c6d60ffbc1241bbe8131e480f5864aebafe00a7aa3fd063c2",
-      "bytes": 6629
+      "sha256": "00fd7d98214245f16c06f9091f5c530819b17c8ae564c49b7a2376181888b609",
+      "bytes": 9549
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_RESTATE_DELIVERY_KILL_DRILL.md",
@@ -1604,13 +1604,13 @@
     },
     {
       "path": "runbooks/GOOGLE_SHEET_ROW_IDENTITY.md",
-      "sha256": "9721debb0d1054dfab3e0517acf624dc967c5bdec11cd65e88d049ff6051a4f0",
-      "bytes": 3899
+      "sha256": "2b94b705d69e0ff4f0f074f42fadb16e73b252fc6539f60de1967737594c2947",
+      "bytes": 4347
     },
     {
       "path": "runbooks/LIVE_PILOT.md",
-      "sha256": "c83229c1dec6c242aafc074224265a3b74c65a2c20f3d0504a3c721356c2c9f1",
-      "bytes": 3987
+      "sha256": "74e1a1a8a9c74771e6d97cb0de5d7056606d09e34e644a32cf9b866eb088289a",
+      "bytes": 4827
     },
     {
       "path": "runbooks/OPERATIONS_EVIDENCE.md",

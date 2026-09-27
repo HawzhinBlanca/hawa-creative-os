@@ -139,6 +139,23 @@ describe('Sheets row protocol failure boundaries', () => {
     expect(sheets.tabs.get(7)?.[2][5]).toBe('=literal-not-a-formula');
   });
 
+  it.each([false,true])('repeats only a moved-row read, bounded even when movement continues (%s)', async continuous => {
+    const sheets=protocol();await client().sync(scope,values,true);sheets.tabs.get(7)!.push(['other']);sheets.calls.length=0;
+    let reads=0;
+    vi.stubGlobal('fetch',async (input:string|URL|Request,init?:RequestInit)=>{
+      const response=await sheets.fetch(input,init);
+      if(String(input).includes('/values:batchGetByDataFilter')) {
+        reads++;
+        if(continuous||reads===1){const row=sheets.metadata.get(sheetRowIdentity(scope).id)!.location.dimensionRange.startIndex;sheets.move(7,row,row===1?2:1);}
+      }
+      return response;
+    });
+    const result=await client().verify(scope,values);
+    expect(writes(sheets)).toHaveLength(0);
+    if(continuous){expect(result).toMatchObject({synced:false,problem:'SHEETS_ROW_MOVED_DURING_READ'});expect(reads).toBe(3);}
+    else {expect(result).toMatchObject({synced:true,rowNumber:3});expect(reads).toBe(2);}
+  });
+
   it('does not follow metadata moved to a different tab between check and update', async () => {
     const sheets = protocol(); await client().sync(scope, values);
     sheets.tabs.get(0)!.push(['another-task', 'protected']);

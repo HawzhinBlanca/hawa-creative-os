@@ -61,3 +61,11 @@ permissions or expectations must remain unknown unless supported by real evidenc
 
 Reproducible local checks and the real SIGKILL drill are recorded in
 `plans/research-grade-upgrade-2026-09-25/R09_SHEET_IDENTITY_PROOF.json`.
+
+### Concurrent row movement (2026-09-27)
+
+Readback may span another task inserting a row. The adapter retries only that read
+up to three times within its existing deadline. Persistent movement remains pending;
+reconcile the original publication after writes settle. Never generate another key
+or count an unverified row as completion. The 100-task protocol simulation checks
+convergence, exactly 300 original files and one reporting row per task.

@@ -12,7 +12,7 @@
     "NFR-006"
   ],
   "sourceHashes": {
-    "adrs/107_scheduled_external_publication_inspection.md": "90bce305eb2e3a2f213efe97a0f650f79d5339bd7b76768af0e3173858a85dee",
+    "adrs/107_scheduled_external_publication_inspection.md": "df49a0f6752b865121b522e82ad749895c73bccab578d7c16d972fa5b2bdec0f",
     "api/openapi.yaml": "b2ad479f5a2cdd1eb8552fb7809f1579665ab53433094d410af20c1b558a52ed",
     "apps/core/src/app.ts": "18314949a98f00e53bc6541ff824d6ff04c271e953eaba706342c59b2f79917c",
     "apps/core/src/core-helpers.ts": "59f35c4e8227690dfac8856c220da265f2b53e0c16c1cd41fc946083c031606d",
@@ -40,22 +40,40 @@
     "packages/integrations/src/google-publication-inspector.ts": "c50d7e773edcc906b0136fc20b0e2a49d7e39b5f6bca25ffb251ff313ac25037",
     "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3",
     "packages/integrations/test/google-publication-inspector.test.ts": "357aa8975abecc54f3b0ffee688997939b99802f860a1e740ec76ea9fc2907ff",
-    "runbooks/GOOGLE_PUBLICATION_CHECKS.md": "024eefd5fa63801e1a74cfc53768231ba2b98a9382ee1a8019715b7045b7dd82"
+    "runbooks/GOOGLE_PUBLICATION_CHECKS.md": "024eefd5fa63801e1a74cfc53768231ba2b98a9382ee1a8019715b7045b7dd82",
+    "packages/integrations/src/google-sheet-row.ts": "4fef8d40b0ea20700e077453a6a0a18a694e85ebab368d8a08f9cfb67188c13d",
+    "packages/integrations/test/google-sheet-identity.test.ts": "def654be3e8eb8a9f4ca216690d3ef6f2febb5e2a4eeacce72f071aed0c86b99",
+    "packages/testkit/test/pilot-exit-drill.test.ts": "b016d65b27256a7736a28e16ea324b471e9e8df8728b11720926ee747a0ed080",
+    "infra/docker/nginx.conf": "b1bab311ff10ff434af23ba7882ad4993cef2fb6cd57cf032a2b57e2ff557f00",
+    "runbooks/GOOGLE_SHEET_ROW_IDENTITY.md": "2b94b705d69e0ff4f0f074f42fadb16e73b252fc6539f60de1967737594c2947",
+    "runbooks/LIVE_PILOT.md": "74e1a1a8a9c74771e6d97cb0de5d7056606d09e34e644a32cf9b866eb088289a"
   },
   "evidenceHashes": {
-    "output/acceptance/2026-09-27-publication-inspections/STATUS.md": "964cdbcdfc1293c0b562bdef60f8fedc6d8f232dafb8c5061887e925e361cbdb",
+    "output/acceptance/2026-09-27-publication-inspections/STATUS.md": "1ae64bf2a71325ff4be3978fc01689c3463cf36c0839ec920c78be8a23d678a0",
     "output/acceptance/2026-09-27-publication-inspections/build.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
     "output/acceptance/2026-09-27-publication-inspections/build1.log": "2f730f93d5dbf683b4652020273940ebe7990808d0794bdd602dfbc6b7b50e98",
     "output/acceptance/2026-09-27-publication-inspections/build2.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
     "output/acceptance/2026-09-27-publication-inspections/build3.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
     "output/acceptance/2026-09-27-publication-inspections/build4.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
     "output/acceptance/2026-09-27-publication-inspections/build5.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-publication-inspections/candidate-before-final-corrections.json": "12679f636053f811bd981bf0264af35749b09346efd86f083eb60721318cd367",
+    "output/acceptance/2026-09-27-publication-inspections/candidate-before-final-corrections.log": "b1253203db12c528b4ea8bfe923c1ba3fd3e83f05636193a407cd30dfe3dd121",
+    "output/acceptance/2026-09-27-publication-inspections/candidate-first.log": "531550857648bde8679e983308e13cd43b6ad457d8d36a752b8b991aafdab1bf",
+    "output/acceptance/2026-09-27-publication-inspections/concurrency-corrected.log": "93eee0330f0f56a9a29798929e05a0ad0eb3b0bbafca519163c8e3786fdae222",
+    "output/acceptance/2026-09-27-publication-inspections/concurrency-first.log": "d6454571119b1bbaca089ffed988517ca2f1a110421c16c04f22efee14011d51",
+    "output/acceptance/2026-09-27-publication-inspections/correction-build.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-publication-inspections/correction-types.log": "30e66586091116f998700b4b33a43421e9a7dfdb7ec5b2f67bec595d7edfa9c9",
     "output/acceptance/2026-09-27-publication-inspections/crash.log": "6b0b3adfe6edb259abe6c32c01c80fa87092ae464bcb9e9aa53ea4c88b997ef3",
     "output/acceptance/2026-09-27-publication-inspections/db-corrected.log": "ec9a0dad4294ed5d100646080f0f3ab477e0a2dfd707dd7d3b71f92a4dadfba7",
     "output/acceptance/2026-09-27-publication-inspections/db-first.log": "02db6a27878b0aa39ed0913db1e42a5cc0677563df9bb5b18805ec3000a03e2d",
     "output/acceptance/2026-09-27-publication-inspections/focused-final.log": "aab8548482d94e7cec4ba701ecd7e34c54cb714f07abcd663743c9431e9d639b",
+    "output/acceptance/2026-09-27-publication-inspections/full-first.log": "fc5c2bd08b1078bde92193cadf352843514c4c7b8e0d5766878a05428968d067",
     "output/acceptance/2026-09-27-publication-inspections/lint.log": "d899edf631e5ced5db5f4227294e1b9510019a980e20f6b06b8c3846d4ddeb4b",
+    "output/acceptance/2026-09-27-publication-inspections/production-preflight-before.json": "1e298b33de1438531ce6776ee3bb2d48bb014549f020638f23ad0436a9ce7db2",
+    "output/acceptance/2026-09-27-publication-inspections/production-proxy-fix.json": "801e77d0e2c756ce74d978c24b596afa5035e0c91693610436a9c342545e11bf",
     "output/acceptance/2026-09-27-publication-inspections/provider-ui-first.log": "ddfc2747946e0420e41976e2a41907b62196052728333fcf4d803668a92e2658",
+    "output/acceptance/2026-09-27-publication-inspections/proxy-dns-drill.json": "f875304bb2c6e4961a8c07d9402c5ee9df6fddeb0f865e6adfd8e920547ed419",
+    "output/acceptance/2026-09-27-publication-inspections/proxy-dns-drill.py": "af5056cd99b0ba0a2c8d77582a01e28198506631a951918021c0566380da4fdb",
     "output/acceptance/2026-09-27-publication-inspections/security.log": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d",
     "output/acceptance/2026-09-27-publication-inspections/types.log": "30e66586091116f998700b4b33a43421e9a7dfdb7ec5b2f67bec595d7edfa9c9",
     "output/acceptance/2026-09-27-publication-inspections/ui-corrected.log": "94407191d64b62dd54177a2bf034d03b9e007a66a426e5fbb4adeb79f4299cdf"
@@ -75,13 +93,29 @@
     "strictTestRoots": 513,
     "sourceBuild": true,
     "lint": true,
-    "securityFindings": 0
+    "securityFindings": 0,
+    "firstFullRegression": {
+      "passed": 4234,
+      "failed": 1,
+      "skipped": 60
+    },
+    "concurrencyCorrection": {
+      "passed": 48,
+      "failed": 0,
+      "syntheticTasks": 100,
+      "files": 300
+    },
+    "proxyDnsDrill": {
+      "passed": 8,
+      "failed": 0,
+      "productionConfigOnlyApplied": true
+    }
   },
   "limits": [
     "Full regression and deployed browser qualification pending",
-    "No live Google or production change",
     "Approved permission baselines unavailable",
     "Historical migration and full reporting columns open",
-    "Whole-app and human-quality admission open"
+    "Whole-app and human-quality admission open",
+    "No live Google inspection or production app/schema upgrade; nginx config-only outage repair applied"
   ]
 }

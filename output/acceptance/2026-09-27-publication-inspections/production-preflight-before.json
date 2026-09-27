@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-09-27T19:26:35.413198+00:00",
+  "scope": "Read-only running production HTTP health and configuration presence; no database connection, provider job, message, approval or migration.",
+  "reviewLogin": {
+    "HAWA_GOOGLE_OIDC_CLIENT_ID": false,
+    "HAWA_GOOGLE_OIDC_CLIENT_SECRET": false,
+    "HAWA_GOOGLE_OIDC_REDIRECT_URI": false,
+    "HAWA_GOOGLE_OIDC_HOSTED_DOMAINS": false
+  },
+  "health": {
+    "httpStatus": 502
+  },
+  "canva": {
+    "httpStatus": 502
+  }
+}
