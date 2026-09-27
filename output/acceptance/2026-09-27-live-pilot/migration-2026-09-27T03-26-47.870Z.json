@@ -1,0 +1,523 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-09-27T03:26:47.870Z",
+  "sourceCommit": "be2b70c023720866221dc79e2501b4a886494f4b",
+  "scope": "Consistent live-data migration rehearsal on separate disposable PostgreSQL; no provider callers or human actions.",
+  "source": {
+    "container": "hawa-production-postgres-1",
+    "imageId": "sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+    "access": "repeatable-read read-only exported snapshot",
+    "bytes": 352736947,
+    "version": "17.11 (Debian 17.11-1.pgdg12+2)"
+  },
+  "target": {
+    "container": "hawa-test-postgres",
+    "imageId": "sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+    "database": "hawa_drill_live_upgrade_062b18f19507",
+    "removed": true
+  },
+  "dataExposure": "No dump or row contents written to host files, logs or evidence; private copy removed in finally.",
+  "rowFingerprint": "SHA-256 of ordered SHA-256 JSON row fingerprints; source columns frozen before migration.",
+  "phases": [
+    {
+      "name": "fingerprint-live-snapshot",
+      "tables": 76,
+      "passed": true
+    },
+    {
+      "name": "compare-restored-snapshot",
+      "tables": 76,
+      "passed": true
+    }
+  ],
+  "status": "passed",
+  "productionMigrated": false,
+  "productionDeployed": false,
+  "limits": [
+    "Same host and nondurable test PostgreSQL: not independent-host recovery or RPO/RTO evidence.",
+    "No blob filesystem, Restate journal, Google sign-in, real approval or delivery was exercised.",
+    "No rollback archive is retained; production needs its own verified backup before migration."
+  ],
+  "migrationsBefore": [
+    "001_canva_bindings.sql",
+    "002_canva_binding_isolation.sql",
+    "003_canva_connect.sql",
+    "004_canva_task_scope_lock.sql",
+    "005_canva_runtime_permissions.sql",
+    "006_canva_editable_sources.sql",
+    "007_canva_design_plans.sql",
+    "008_canva_roundtrip_checks.sql",
+    "009_correct_kaae_identity.sql",
+    "010_canva_plan_abandon.sql",
+    "011_desk_sessions.sql",
+    "012_service_identities.sql",
+    "013_design_studio.sql",
+    "014_photo_cutouts.sql",
+    "015_comparison_studies.sql",
+    "016_rls_hoisted_membership_checks.sql",
+    "017_comparison_link_reissue.sql",
+    "018_desk_list_indexes.sql",
+    "019_blob_store.sql",
+    "020_inbox_event_dedupe.sql",
+    "021_review_comments.sql",
+    "022_publication_executor.sql"
+  ],
+  "stream": {
+    "bytes": 338707264,
+    "sha256": "66fdab77dd66676df5059ffc5332358e43fcddff20f52c342aa9a29d7b28d38a",
+    "dumpExit": 0,
+    "restoreExit": 0
+  },
+  "upgrade": {
+    "applied": [
+      "023_request_lifecycle_projection.sql",
+      "024_paid_model_health_observations.sql",
+      "025_nullable_nonapproval_qa.sql",
+      "026_publication_task_reconciliation_index.sql",
+      "027_drive_upload_reservations.sql",
+      "028_studio_call_admission.sql",
+      "029_studio_provider_receipt_provenance.sql",
+      "030_studio_call_receipt_immutability.sql",
+      "031_task_delivery_executor_pin.sql",
+      "032_lifecycle_photo_retention.sql",
+      "033_lifecycle_revision_photo_retention.sql",
+      "034_request_lifecycle_rejection.sql",
+      "035_office_oidc_sessions.sql",
+      "036_office_oidc_subject_lookup.sql",
+      "037_office_review_assignments.sql",
+      "038_office_review_assignment_audit.sql",
+      "039_office_review_return.sql",
+      "040_lifecycle_album_retention.sql",
+      "041_client_documents.sql",
+      "042_document_knowledge.sql",
+      "043_lifecycle_source_retention.sql",
+      "044_voice_source_admission.sql",
+      "045_canva_review_checkpoints.sql",
+      "046_canva_export_policy.sql"
+    ],
+    "verified": [
+      "001_canva_bindings.sql",
+      "002_canva_binding_isolation.sql",
+      "003_canva_connect.sql",
+      "004_canva_task_scope_lock.sql",
+      "005_canva_runtime_permissions.sql",
+      "006_canva_editable_sources.sql",
+      "007_canva_design_plans.sql",
+      "008_canva_roundtrip_checks.sql",
+      "009_correct_kaae_identity.sql",
+      "010_canva_plan_abandon.sql",
+      "011_desk_sessions.sql",
+      "012_service_identities.sql",
+      "013_design_studio.sql",
+      "014_photo_cutouts.sql",
+      "015_comparison_studies.sql",
+      "016_rls_hoisted_membership_checks.sql",
+      "017_comparison_link_reissue.sql",
+      "018_desk_list_indexes.sql",
+      "019_blob_store.sql",
+      "020_inbox_event_dedupe.sql",
+      "021_review_comments.sql",
+      "022_publication_executor.sql"
+    ],
+    "durationMs": 81
+  },
+  "tables": [
+    {
+      "name": "approvals",
+      "existingRows": 110,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "artifacts",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "audit_events",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "backup_drills",
+      "existingRows": 5,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "blobs",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "brand_assets",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "canva_bindings",
+      "existingRows": 77,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "canva_capture_sets",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "canva_connections",
+      "existingRows": 1,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "canva_design_plans",
+      "existingRows": 109,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "canva_editable_sources",
+      "existingRows": 73,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "canva_export_bytes",
+      "existingRows": 116,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "canva_oauth_states",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "canva_remote_operations",
+      "existingRows": 238,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "channel_routes",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "client_dna_versions",
+      "existingRows": 1,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "client_memberships",
+      "existingRows": 4,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "client_rules",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "clients",
+      "existingRows": 4,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "comparison_judges",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "comparison_judgments",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "comparison_pairs",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "comparison_studies",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_briefs",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_documents",
+      "existingRows": 196,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_feedback",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_jobs",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_operations",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_plans",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_revisions",
+      "existingRows": 198,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_studio_calls",
+      "existingRows": 429,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_studio_candidates",
+      "existingRows": 170,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_studio_judgments",
+      "existingRows": 168,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "design_studio_runs",
+      "existingRows": 66,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "desk_sessions",
+      "existingRows": 11,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "drive_refs",
+      "existingRows": 47,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "eval_cases",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "eval_datasets",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "eval_results",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "eval_runs",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "feedback_events",
+      "existingRows": 24,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "figma_leases",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "figma_mutations",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "glossary_terms",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "inbox_event_duplicates",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "inbox_events",
+      "existingRows": 152,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "integration_health",
+      "existingRows": 1,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "integrations",
+      "existingRows": 1,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "knowledge_chunks",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "knowledge_documents",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "message_attachments",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "message_events",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "model_deployments",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "model_invocations",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "model_roles",
+      "existingRows": 11,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "outbox_commands",
+      "existingRows": 1626,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "photo_cutouts",
+      "existingRows": 2,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "projects",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "prompt_versions",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "publications",
+      "existingRows": 47,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "qc_findings",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "qc_profiles",
+      "existingRows": 2,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "qc_runs",
+      "existingRows": 117,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "review_comments",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "review_requests",
+      "existingRows": 110,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "rule_evidence",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "schema_upgrades",
+      "existingRows": 22,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "sheet_syncs",
+      "existingRows": 47,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "task_events",
+      "existingRows": 2090,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "task_files",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "tasks",
+      "existingRows": 1612,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "templates",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "tenant_memberships",
+      "existingRows": 4,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "tenants",
+      "existingRows": 1,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "users",
+      "existingRows": 4,
+      "originalColumnsUnchanged": true
+    },
+    {
+      "name": "visual_examples",
+      "existingRows": 0,
+      "originalColumnsUnchanged": true
+    }
+  ],
+  "expectedNewVoiceRole": true,
+  "replay": {
+    "applied": 0,
+    "verified": 46
+  },
+  "legacyDefaults": {
+    "unexpected_legacy_owner": 0,
+    "invented_named_sessions": 0,
+    "invented_review_assignments": 0
+  },
+  "taskProjection": {
+    "returned": 20,
+    "total": 1600,
+    "runtimeRole": "hawa_app",
+    "passed": true
+  },
+  "completedAt": "2026-09-27T03:27:08.518Z"
+}

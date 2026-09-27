@@ -1,5 +1,30 @@
 # R10 — Legacy delivery cutover pin
 
+## 2026-09-27 — Restored live-data upgrade compatibility
+
+Runtime source `be2b70c`; NFR-013/015/020. Production currently has 22 migrations.
+A repeatable-read, read-only exported snapshot was streamed into a new isolated
+database in the separate test PostgreSQL server. The current upgrade runner
+applied migrations 023–046 and then verified all 46 on replay with zero new writes.
+SHA-256 aggregate row comparisons preserved the original columns/rows of all
+76 existing tables, including 1,612 tasks, 110 approvals, 47 publications,
+198 revisions and 117 QC runs. Expected new migration receipts and the added
+voice-transcriber role are explicitly excluded from historical-row comparison.
+
+Legacy executor/auth defaults are correct; no named session or reviewer assignment
+was invented. The current task-list query succeeds under the application role/RLS
+scope (20 returned / 1,600 visible). Both private clones were removed; no dump or
+row contents entered host files or evidence. The first MD5-based comparison is
+retained as historical; the accepted repeat uses SHA-256. No production migration,
+restart, approval, delivery or provider/model call occurred in the migration drill.
+
+This closes a bounded live-data migration rehearsal gap, not production rollout or
+recovery admission. The same-host test database has durability disabled; 21 seconds
+for the drill and 81 ms for SQL upgrades are not RPO/RTO/downtime promises. Blobs,
+Restate, off-host storage, clean-host restore and rollback package are separate.
+Proof: `R26_LIVE_PREFLIGHT_PROOF.json` and
+`output/acceptance/2026-09-27-live-pilot/README.md`.
+
 **Date:** 2026-09-25. **Status:** in progress. **Branch:** `codex/research-grade-design-system`. **Decision:** ADR-052. **Requirements exercised:** FR-060, FR-061, FR-070, NFR-003, NFR-013. Linked contracts: `docs/10_WORKFLOW_RELIABILITY.md`, `docs/14_SECURITY_THREAT_MODEL.md`, `MASTER_SPEC.md`; earlier slice design in `output/plans/2026-09-24-architecture-programme/PHASE2_DESIGN.md`.
 
 ## Finding and local change

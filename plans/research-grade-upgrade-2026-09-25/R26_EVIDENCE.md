@@ -318,3 +318,22 @@ edit/reopen and multilingual/human review; a supervised live intake-to-delivery 
 retrieval relevance/latency and role-model quality/cost measurements. Synthetic
 external services and office identities do not qualify those gates. No 10/10 claim.
 
+## 2026-09-27 — Live prerequisite inspection and refreshed candidate
+
+Candidate `be2b70c` (runtime fix `67c8ce8`) passed **36/36 deployed workflow
+invariants**. The selected scenario passed with 43 other scenarios unselected;
+the full app regression was not repeated. Four checked tasks read through the
+deployed nginx/Core confirm list/detail font-family and RTL-review agreement,
+with glyph coverage unknown. Core, Desk and worker image labels match; runtime
+source changes are empty. External providers and office identities remain synthetic.
+
+Read-only production inspection found healthy HTTP/Canva, migrations **22/46**,
+no configured Google reviewer OIDC fields and no recorded production image revision.
+The current branch therefore cannot be described as the current live app. See
+`R26_LIVE_PREFLIGHT_PROOF.json` and `runbooks/LIVE_PILOT.md`. The domain/configuration,
+real human review and real delivery gates remain open. Production was not deployed.
+
+The actual production-data migration rehearsal is recorded with R10: all pending
+24 upgrades applied to an isolated consistent snapshot; 76 historical tables
+matched, migration replay applied zero, and the private copy was removed. This
+advances compatibility qualification without claiming clean-host recovery.

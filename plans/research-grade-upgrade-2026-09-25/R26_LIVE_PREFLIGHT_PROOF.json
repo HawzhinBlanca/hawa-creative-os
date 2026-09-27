@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "runtimeCandidate": "be2b70c023720866221dc79e2501b4a886494f4b",
+  "requirements": [
+    "NFR-013",
+    "NFR-015",
+    "NFR-020",
+    "NFR-024"
+  ],
+  "status": "partial",
+  "production": {
+    "healthy": true,
+    "canvaConnected": true,
+    "migrationsApplied": 22,
+    "migrationsRequired": 46,
+    "namedGoogleReviewConfigured": false,
+    "sourceRevision": "unknown",
+    "imagesUnchanged": true,
+    "schemaUnchanged": true
+  },
+  "migrationRehearsal": {
+    "acceptedReceipt": "output/acceptance/2026-09-27-live-pilot/migration-2026-09-27T03-26-47.870Z.json",
+    "historicalTablesMatched": 76,
+    "migrationsApplied": 24,
+    "replayApplied": 0,
+    "replayVerified": 46,
+    "privateCloneRemoved": true,
+    "realSourceData": true,
+    "independentHost": false
+  },
+  "candidate": {
+    "workflowInvariantsPassed": 36,
+    "workflowInvariantsFailed": 0,
+    "selectedScenariosPassed": 1,
+    "unselectedScenarios": 43,
+    "deployedFontQaReads": 4,
+    "imageCommitMatches": true,
+    "realExternalProviders": false
+  },
+  "productionDeployed": false,
+  "humanApproval": "not_run",
+  "fullRealOfficePilot": "not_run",
+  "fullRegression": "not_rerun; runtime unchanged from prior tested font fix",
+  "sourceHashes": {
+    "packages/db/src/upgrade.ts": "4b9bec4bf6ce64f1da652012b31e098beca1c2cb1406effe97b63382d8ebfa13",
+    "packages/db/src/test-database-guard.ts": "ddd8e6239ba2f75b49e081da7749467791a39efacb34b9854215734d79dc6622",
+    "packages/db/src/repositories/task.repository.ts": "75432773d682a313a6e7a3da92e4e2594a9cd59869b3fcc61803f14bfb27a1f4",
+    "packages/db/migrations/001_canva_bindings.sql": "5bc8f74da02e44e41149b0e36b19275f13c7ca227ff88e299f4caba2e1a6c8c2",
+    "packages/db/migrations/002_canva_binding_isolation.sql": "59b1c4d3c0b20516d785569b6e87fd809964ac69c69d5e7e63b05627fc5296b3",
+    "packages/db/migrations/003_canva_connect.sql": "b7c873e3958298b7a51fcb5fd59317b1f723a5ffcd8c7cbebea80178ba705a8e",
+    "packages/db/migrations/004_canva_task_scope_lock.sql": "dfcc515ea5682abaea5f6aaffd27dab576b95e0fb1f5037a912df72a0bced3c8",
+    "packages/db/migrations/005_canva_runtime_permissions.sql": "6c330144e40d79e3d8b0a126751304a111740b168426977144dedd08c16c0331",
+    "packages/db/migrations/006_canva_editable_sources.sql": "1c344ab68c99c8f108496a10586df2a90e5d9805675311ed2d09826a787fd656",
+    "packages/db/migrations/007_canva_design_plans.sql": "b5cd2f301f5f275f61778479b344bb4c3ee0e428cd6b5e7e1893098a797c1dbf",
+    "packages/db/migrations/008_canva_roundtrip_checks.sql": "66f7dea86ae9aefdc82e8ff28e187a7c0827f8bf18266ba51623cac31cc21b99",
+    "packages/db/migrations/009_correct_kaae_identity.sql": "719ca368ed679a43cf10a6836b0b6d97f241e5101a5f8c6e965bff5970cbcbee",
+    "packages/db/migrations/010_canva_plan_abandon.sql": "1caeb58ce78b3b1b0f0aa9b7c119feadd6f69b834c0ed73722aacbac269e3083",
+    "packages/db/migrations/011_desk_sessions.sql": "b9a40b6bbcba1b5ee06fb7062a9476d5c7c28dab7445c90f0714133c2aa276b2",
+    "packages/db/migrations/012_service_identities.sql": "780d822b1c7d1ecce07b42820b5157f86550de70d86e75185d9c91ab3dc16a52",
+    "packages/db/migrations/013_design_studio.sql": "c8db4875e8d0e01e57ef6a3d161bcb9c275294f2b7f2be962961ed2ef1868b76",
+    "packages/db/migrations/014_photo_cutouts.sql": "4f10698d30a30a53442b5871774e98d895fec12d8d11a7a748fad25482c17e40",
+    "packages/db/migrations/015_comparison_studies.sql": "da2760efc428d8f989d390ffb25dfb546aa19561e29e7b060f3d9dbd18bc087e",
+    "packages/db/migrations/016_rls_hoisted_membership_checks.sql": "31cf000d95abc4f5dac4d0c45dbe84e0c9514500507b4a9aaed66ec128ea979d",
+    "packages/db/migrations/017_comparison_link_reissue.sql": "a2531f739eef0d648a18a1f777bf3a78d1f0c387410f59c5f1cb62417a1f6cf6",
+    "packages/db/migrations/018_desk_list_indexes.sql": "05fa94238be0681232ea0ab472a9ef3fa68e7c15c9d6089a0638fac0dbb8c367",
+    "packages/db/migrations/019_blob_store.sql": "d029f56ab85fba0561bb1f0979ab54134240f18bd6bb9318f4b5f2fe4be9b42e",
+    "packages/db/migrations/020_inbox_event_dedupe.sql": "57ef0c67fe7f6815bd3a6fb336f08811b0cc8d8e5452cde79d0efe885846f409",
+    "packages/db/migrations/021_review_comments.sql": "b3e4c8ac36a2d5f70ecd0346fecb87d91fb41f1df0f65d54176a81c4736830f6",
+    "packages/db/migrations/022_publication_executor.sql": "6c780c53486e5920b0b43afdd957890964d64955ba004dce82d4765441d1e6e9",
+    "packages/db/migrations/023_request_lifecycle_projection.sql": "20ebb00a146e100470874804fa06b13e8eff3c9fbce232cde7baabb80b2c1a93",
+    "packages/db/migrations/024_paid_model_health_observations.sql": "b6c33d29db95417c58c9b279849acb286447a2da1f08dbc7bd441f3242d18507",
+    "packages/db/migrations/025_nullable_nonapproval_qa.sql": "781cca02ea72b62afcaff94b4a6c76cf33184c373ffc0f574ddad993d7c32bdb",
+    "packages/db/migrations/026_publication_task_reconciliation_index.sql": "406d6fdcb64e3f96cb7df946166489b5f838719eb2025ae2912f183be4a60ba2",
+    "packages/db/migrations/027_drive_upload_reservations.sql": "7482838e784c4fb2ce070f0a356216fb5c407cb186a797f536e241583362479d",
+    "packages/db/migrations/028_studio_call_admission.sql": "4c0f42699178ea09bb6721edba2114d6c3e22014c626d362e1b5ea2f5566af38",
+    "packages/db/migrations/029_studio_provider_receipt_provenance.sql": "c46441556a04fe3bdbfda92c040c79b11f3f6c98804a280d6a99a1d9e739a672",
+    "packages/db/migrations/030_studio_call_receipt_immutability.sql": "245cbc3a995b1b9d9926fb28c09e9bf7b4edae3adf91c6588902957f90fc2ec3",
+    "packages/db/migrations/031_task_delivery_executor_pin.sql": "b86d671c563e20b1a3aa299693a4875d028ea349a25c874df69119e1e55c391e",
+    "packages/db/migrations/032_lifecycle_photo_retention.sql": "8935ae90f3ba7b83ff3bd5d23549ea82ad42e3725ec5ac2f9472bf5c75d5ce69",
+    "packages/db/migrations/033_lifecycle_revision_photo_retention.sql": "4b632419b3ab673476db61ce511081e693fddd49063d038ca0c55a8aae664e5d",
+    "packages/db/migrations/034_request_lifecycle_rejection.sql": "65b163710a08e0394bd770fd067644de305212bc817ee9877acbc6423e8de205",
+    "packages/db/migrations/035_office_oidc_sessions.sql": "443782bc7588b941549cd5cc7a44b6681d87c697d2e1a1a4968e8aee5f92b93f",
+    "packages/db/migrations/036_office_oidc_subject_lookup.sql": "2580edde15b8c68ba4a83a503a6ed031650ebefcec035ebfaeba483922ddf950",
+    "packages/db/migrations/037_office_review_assignments.sql": "0309a6f65dba5bb9dce559fcef8825bf452f44c25a12146b75e11e0ee227e9a9",
+    "packages/db/migrations/038_office_review_assignment_audit.sql": "f29b5c780716f7d0cde3e506b46c225a171bf8f04cfa60a5f9a33ef176430283",
+    "packages/db/migrations/039_office_review_return.sql": "10dc2ee53ee7b486f8a829c294a94d9e6de88956a6336b309de2e2b8fe1097e6",
+    "packages/db/migrations/040_lifecycle_album_retention.sql": "368a18b5f3fa7e0fe258d2054d427f15db57ab02ff3f1c3e5ab4dfadf4e1f7b3",
+    "packages/db/migrations/041_client_documents.sql": "222d881f59892d10dd662b5e4a63ba06498c88e349b88d274be352bc0d93ade9",
+    "packages/db/migrations/042_document_knowledge.sql": "afeee006079d5446bcb1377b60c68f05878c65db47c3c22f576ea219f2749020",
+    "packages/db/migrations/043_lifecycle_source_retention.sql": "db03433d4754bee29d306d9f952362306077ecf55dff324cba251773e4039d4a",
+    "packages/db/migrations/044_voice_source_admission.sql": "2d148acb20ae8e547c8a23551effc269de665226dbf4f39e4249e62d63f86ab3",
+    "packages/db/migrations/045_canva_review_checkpoints.sql": "3ec1599cc12a338bb9656e0080b7cb5d4ba5a3fb672d382c1c057d42abd3c950",
+    "packages/db/migrations/046_canva_export_policy.sql": "63b5d8f54df2c2eabf49e08ced24736514935c176631bb916460bade19f54d00"
+  },
+  "artifacts": {
+    "output/acceptance/2026-09-27-live-pilot/README.md": {
+      "sha256": "97ea68fd5371f3b10a6158c0551a9155f31cb0633f7c9a571f964384d143105b",
+      "bytes": 5571
+    },
+    "output/acceptance/2026-09-27-live-pilot/candidate-font-qa.json": {
+      "sha256": "434222f846c83a045fee4191605856cdbbae3238d1812b9f47173226625016da",
+      "bytes": 2426
+    },
+    "output/acceptance/2026-09-27-live-pilot/candidate-rehearsal.json": {
+      "sha256": "8c9fe8f897e589b531194e69ef0bf4dd5ec6a3c959e269e12f2503910d9b32ba",
+      "bytes": 11968
+    },
+    "output/acceptance/2026-09-27-live-pilot/candidate-run.log": {
+      "sha256": "ade98e9d75b7c5aea296cfb566abe6883510c2dda6200633bed6b0af7ac0e050",
+      "bytes": 389
+    },
+    "output/acceptance/2026-09-27-live-pilot/check-candidate.mts": {
+      "sha256": "15c1871535936c91b389581c64255033e69caa94bd254e0c219e18bfe041d88d",
+      "bytes": 3713
+    },
+    "output/acceptance/2026-09-27-live-pilot/migration-2026-09-27T03-25-11.833Z.json": {
+      "sha256": "519a03a059406793741e78df0ac2242e5304895a903f479bd8597c7d2a3c7d40",
+      "bytes": 13123
+    },
+    "output/acceptance/2026-09-27-live-pilot/migration-2026-09-27T03-26-47.870Z.json": {
+      "sha256": "3d131dff33d13df68a0bc7f082f1c9f7d6cdf8096d8b871ef46baba9864359bb",
+      "bytes": 13236
+    },
+    "output/acceptance/2026-09-27-live-pilot/migration-rehearsal.mts": {
+      "sha256": "7624d26dd5a6d7876a2e93a66945ee74a133343bb1d25528c35db5613023f3ea",
+      "bytes": 12595
+    },
+    "output/acceptance/2026-09-27-live-pilot/preflight-before-rehearsal.json": {
+      "sha256": "19faac1b994c8b720aa18b5f468b4280eb95751e61256e8baf34604723a50c3c",
+      "bytes": 4134
+    },
+    "output/acceptance/2026-09-27-live-pilot/preflight-initial.json": {
+      "sha256": "becab6f8a60eb1c6f42afb69b0eaf2f3e68f9a40b32c07db1f76c14a339b8a85",
+      "bytes": 4062
+    },
+    "output/acceptance/2026-09-27-live-pilot/preflight.json": {
+      "sha256": "06662ad43666c5e3a8cf7921e9ca50d0bac3c1be0e8f95a7f9de5f7e5636d0d2",
+      "bytes": 4134
+    },
+    "output/acceptance/2026-09-27-live-pilot/preflight.mts": {
+      "sha256": "c785551b88d2076b4b620143e22ad1f7248caf2cf5391cc1a898da8783f1944c",
+      "bytes": 4924
+    }
+  },
+  "next": [
+    "Configure verified Workspace reviewer identity and client/project assignment",
+    "Prepare and verify production recovery/rollback set",
+    "Qualify exact production cutover and supervised real office job",
+    "Finish native multilingual and held-out quality/cost acceptance",
+    "Independent-host/off-host recovery"
+  ]
+}
