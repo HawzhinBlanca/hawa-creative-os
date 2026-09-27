@@ -11,6 +11,7 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus } from '@hawa/contracts';
 import { log } from '../logging.js';
 import { telegramPollerOf } from '../services/telegram-poller-owner.js';
+import { registerAvailabilityRoutes, availabilityConfig, AvailabilityError, readAvailabilityReport } from './availability.routes.js';
 
 /**
  * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors
@@ -19,6 +20,7 @@ import { telegramPollerOf } from '../services/telegram-poller-owner.js';
 const OUTBOX_UNCERTAIN_SEND = 'DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID|TIMEOUT_AFTER_SEND|KILL_AFTER_SEND|SOCKET_HANGUP_AFTER_WRITE';
 
 export function registerSystemRoutes(ctx: RouteContext) {
+  registerAvailabilityRoutes(ctx);
   const {
     app,
     db,
@@ -440,8 +442,22 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   // Fixture timings cannot establish monthly office availability (ADR-102).
-  registerRoute('get', '/operations/slo', (c: any) => {
+  registerRoute('get', '/operations/slo', async (c: Context) => {
     c.header('Cache-Control', 'no-store');
+    const config = availabilityConfig();
+    if (!config && ['HAWA_AVAILABILITY_MONITOR_ID','HAWA_AVAILABILITY_TARGET_ORIGIN','HAWA_AVAILABILITY_MONITOR_SECRET'].some(key => process.env[key]))
+      return problem(c, 503, 'Availability Monitor Misconfigured', 'Correct the monitor identity, origin and distinct credential before reading its observations.');
+    if (config) {
+      if (!db) return problem(c, 503, 'Availability Evidence Unavailable', 'Stored observations require PostgreSQL.');
+      const auth = verifyRequestAuth(c);
+      if (!auth.authenticated || !auth.tenantId || !auth.userId || !auth.role)
+        return problem(c, 403, 'Office Identity Required', 'Active office membership is required.');
+      try { return c.json(await readAvailabilityReport(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, config, c.req.query('month'))); }
+      catch (error) {
+        if (error instanceof AvailabilityError) return problem(c, error.status, 'Availability Evidence Refused', error.message);
+        return problem(c, 503, 'Availability Evidence Unavailable', 'Stored observations could not be read.');
+      }
+    }
     const report: OperationsReliabilityReport = {
       schemaVersion: 1, evidenceKind: 'unmeasured', checkedAt: new Date().toISOString(),
       availability: { targetPercent: 99.5, window: 'calendar_month', timeZone: 'Asia/Baghdad',

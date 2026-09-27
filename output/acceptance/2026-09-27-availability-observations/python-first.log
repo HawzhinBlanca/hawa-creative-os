@@ -1,0 +1,36 @@
+test_actual_assets_and_office_nonce_are_checked_without_third_party_requests (test_availability_collector.CollectorTests.test_actual_assets_and_office_nonce_are_checked_without_third_party_requests) ... ok
+test_bad_receipt_never_acknowledges_or_discards_original (test_availability_collector.CollectorTests.test_bad_receipt_never_acknowledges_or_discards_original) ... ok
+test_batch_is_bounded (test_availability_collector.CollectorTests.test_batch_is_bounded) ... ok
+test_claim_is_durable_unique_and_clock_rollback_never_backfills (test_availability_collector.CollectorTests.test_claim_is_durable_unique_and_clock_rollback_never_backfills) ... ok
+test_disk_write_failure_stops_before_any_network_request (test_availability_collector.CollectorTests.test_disk_write_failure_stops_before_any_network_request) ... ok
+test_lost_successful_upload_replays_exact_bytes_after_restart (test_availability_collector.CollectorTests.test_lost_successful_upload_replays_exact_bytes_after_restart) ... ok
+test_missing_or_untrusted_built_assets_cannot_pass (test_availability_collector.CollectorTests.test_missing_or_untrusted_built_assets_cannot_pass) ... ok
+test_os_lock_and_configuration_binding_survive_restart (test_availability_collector.CollectorTests.test_os_lock_and_configuration_binding_survive_restart) ... ok
+test_outage_survives_restart_and_backlog_recovers_without_fabricated_success (test_availability_collector.CollectorTests.test_outage_survives_restart_and_backlog_recovers_without_fabricated_success) ... ok
+test_process_death_after_durable_claim_recovers_same_identity (test_availability_collector.CollectorTests.test_process_death_after_durable_claim_recovers_same_identity) ... ok
+test_restart_recovers_incomplete_claim_as_unknown_without_another_probe (test_availability_collector.CollectorTests.test_restart_recovers_incomplete_claim_as_unknown_without_another_probe) ... ok
+test_unauthorized_is_unknown_and_old_nonce_is_not_accepted (test_availability_collector.CollectorTests.test_unauthorized_is_unknown_and_old_nonce_is_not_accepted) ... ok
+test_actual_http_redirect_and_oversized_bodies_are_not_followed_or_accepted (test_availability_collector.TransportTests.test_actual_http_redirect_and_oversized_bodies_are_not_followed_or_accepted) ... ERROR
+test_origin_refuses_credentials_paths_queries_fragments_and_remote_cleartext (test_availability_collector.TransportTests.test_origin_refuses_credentials_paths_queries_fragments_and_remote_cleartext) ... ok
+
+======================================================================
+ERROR: test_actual_http_redirect_and_oversized_bodies_are_not_followed_or_accepted (test_availability_collector.TransportTests.test_actual_http_redirect_and_oversized_bodies_are_not_followed_or_accepted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/hawzhin/Hawdesign/infra/monitoring/test_availability_collector.py", line 207, in test_actual_http_redirect_and_oversized_bodies_are_not_followed_or_accepted
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/socketserver.py", line 457, in __init__
+    self.server_bind()
+    ~~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/http/server.py", line 148, in server_bind
+    socketserver.TCPServer.server_bind(self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/socketserver.py", line 478, in server_bind
+    self.socket.bind(self.server_address)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.072s
+
+FAILED (errors=1)

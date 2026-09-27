@@ -19,6 +19,6 @@ export * from './call-cost.js';
 export * from './spending-policy.js';
 export * from './evaluation-evidence.js';
 
-export type { OperationsReliabilityReport } from './operations-reliability.js';
+export * from './operations-reliability.js';
 
 export * from './publication-audit.js';

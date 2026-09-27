@@ -210,6 +210,11 @@ services:
       <<: *app-environment
       PORT: 3001
       HAWA_CHAOS_SERVICE: core
+      # Standalone host collector: no scheduled monitor runs unless the qualification driver starts it.
+      HAWA_AVAILABILITY_MONITOR_ID: "00000000-0000-4000-a000-000000000104"
+      HAWA_AVAILABILITY_TARGET_ORIGIN: http://127.0.0.1:56081
+      HAWA_AVAILABILITY_MONITOR_SECRET: ${CHAOS_AVAILABILITY_SECRET:?}
+      HAWA_AVAILABILITY_WORKER_URLS: http://worker-blue:9080/health,http://worker-green:9080/health
       HAWA_BLOB_DIR: /var/lib/hawa/blobs
       HAWA_DOCLING_URL: ${CHAOS_DOCLING_URL:-}
     volumes:

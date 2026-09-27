@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "status": "implemented; full regression and fresh deployed qualification pending",
+  "requirements": [
+    "NFR-002",
+    "FR-064",
+    "NFR-006"
+  ],
+  "adr": "adrs/104_independent_availability_observations.md",
+  "migration": "058_availability_observations.sql",
+  "focused": {
+    "passed": 53,
+    "failed": 0,
+    "files": 9,
+    "note": "Includes the Python control wrapper; overlapping earlier and later focused runs are not additive"
+  },
+  "finalUi": {
+    "passed": 9,
+    "failed": 0,
+    "files": 2
+  },
+  "collectorPython": {
+    "passed": 14,
+    "failed": 0,
+    "includes": [
+      "real SIGKILL after durable claim",
+      "lost successful upload response",
+      "loopback redirects and oversized bodies",
+      "SQLite query-only write refusal"
+    ]
+  },
+  "strictTestRoots": 507,
+  "sourceTypes": "passed",
+  "scriptTypes": "passed",
+  "lintAny": 975,
+  "egressExceptions": 9,
+  "deskBuild": "passed before final refresh adjustment; final build pending",
+  "security": "passed after replacing constant synthetic fixture credential with random test-only values",
+  "firstFailures": [
+    "Unused React import in AvailabilityPanel; removed and source build passed.",
+    "Loopback HTTP test was denied by sandbox; authorized isolated retry passed all 14 Python tests.",
+    "Security scanner rejected a literal synthetic fixture credential; changed to randomly generated test values.",
+    "Blueprint validation before manifest refresh found expected stale hashes; final manifest validation pending."
+  ],
+  "qualificationPending": [
+    "final full source regression",
+    "fresh candidate deployment and actual Core/PostgreSQL outage replay",
+    "Chrome desktop/mobile evidence",
+    "final source manifest"
+  ],
+  "notQualified": [
+    "independent-host installation and monthly production availability",
+    "full external Drive/Sheets reconciliation",
+    "live provider/native Canva and pending after-preview approval",
+    "human Sorani/Arabic/design and held-out quality/cost evaluation",
+    "independent-host restore and controlled rollout"
+  ]
+}

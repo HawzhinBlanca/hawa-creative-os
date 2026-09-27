@@ -278,3 +278,13 @@ across reload. Clearing it is an explicit local action and never changes databas
 history. Refused or failed reads clear prior evidence; older responses cannot
 replace a newer authorized scope. Work not yet due for publication is displayed
 separately from confirmed delivery consistency. Reports remain after Core restart.
+
+### Availability evidence (ADR-104)
+
+Operations separates sampled office readiness from real workflow and creative
+quality. Its month selector reads authoritative observations with no-store transport.
+Show target, month completeness, current collector freshness, observation/receipt
+times, coverage, successful/failed/unknown/missing slots, uncertainty bounds and
+successful readiness-probe latency. No samples means unknown measurements. Failed,
+malformed or mismatched-month reads clear earlier evidence; stale replies cannot
+replace a newer selection. Never turn partial coverage into a compliant month.

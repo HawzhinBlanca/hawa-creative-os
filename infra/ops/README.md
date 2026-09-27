@@ -213,3 +213,10 @@ Then recreate core and the worker (step 4 above, which picks up a changed `.env.
 a real request in the Desk, and check the file in the Drive folder. `GET /v1/integrations/health`
 reports `google_drive: healthy` as soon as the variable is set; it does not test the key, so only a
 real delivery proves it.
+
+## Availability evidence
+
+The watchdog's latest alert state does not measure monthly uptime. ADR-104 provides
+an independent read-only readiness collector with a durable upload spool; deployment,
+credentials, recovery and interpretation are in `runbooks/AVAILABILITY_MONITORING.md`.
+Run that collector on a separate host before making monthly availability claims.

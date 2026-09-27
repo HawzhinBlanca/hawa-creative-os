@@ -1,6 +1,5 @@
+import { AvailabilityPanel } from '../components/AvailabilityPanel.js';
 import { ReceiptAuditPanel } from '../components/ReceiptAuditPanel.js';
-import type { OperationsReliabilityReport } from '@hawa/contracts';
-import { parseOperationsReliability } from '../services/operationsEvidence.js';
 import { SpendingPolicyPanel } from '../components/SpendingPolicyPanel.js';
 import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../api/client.js';
@@ -73,7 +72,6 @@ export const OpsScreen: React.FC = () => {
   const [integrations, setIntegrations] = useState<IntegrationHealth[]>([]);
   const [funnel, setFunnel] = useState<FunnelHealth | null>(null);
   const [failures, setFailures] = useState<FailureItem[]>([]);
-  const [reliability, setReliability] = useState<OperationsReliabilityReport | null>(null);
   const refreshSequence = useRef(0);
   const [auditRefresh, setAuditRefresh] = useState(0);
   const [unreadable, setUnreadable] = useState<Record<string, string>>({});
@@ -86,11 +84,10 @@ export const OpsScreen: React.FC = () => {
   const fetchOpsData = async () => {
     const sequence = ++refreshSequence.current;
     setLoading(true);
-    const [healthRes, funnelRes, failRes, sloRes] = await Promise.all([
+    const [healthRes, funnelRes, failRes] = await Promise.all([
       read(() => apiClient.operations.integrationsHealth()),
       read(() => apiClient.operations.funnelHealth()),
       read(() => apiClient.operations.failures()),
-      read(() => apiClient.operations.slo()),
     ]);
     if (sequence !== refreshSequence.current) return;
     const gaps: Record<string, string> = {};
@@ -100,7 +97,6 @@ export const OpsScreen: React.FC = () => {
     note('integrations', healthRes);
     note('design funnel', funnelRes);
     note('failures', failRes);
-    note('slo', sloRes);
 
     const nextIntegrations = healthRes.state === 'known' ? integrationItems(healthRes.value) : null;
     const nextFailures = failRes.state === 'known' ? failureItems(failRes.value) : null;
@@ -111,9 +107,6 @@ export const OpsScreen: React.FC = () => {
     setIntegrations(nextIntegrations || []);
     setFailures(nextFailures || []);
     setFunnel(nextFunnel);
-    const nextReliability = sloRes.state === 'known' ? parseOperationsReliability(sloRes.value) : null;
-    if (!nextReliability && sloRes.state === 'known') gaps.slo = 'Unsupported or incomplete reliability evidence';
-    setReliability(nextReliability);
     setUnreadable(gaps);
     setLastCheck(new Date().toLocaleTimeString());
     setLoading(false);
@@ -173,16 +166,7 @@ export const OpsScreen: React.FC = () => {
         ) : <p>Design progress unknown. {unreadable['design funnel'] || 'No result has been read yet.'}</p>}
       </div>
 
-      <section className="panel" aria-label="Office reliability" style={{padding:16,marginTop:16}}>
-        <h2>Office availability and latency</h2>
-        {reliability ? <>
-          <p><span className="pill warn">Availability unmeasured</span></p>
-          <p>Target: {reliability.availability.targetPercent}% monthly availability for office intake and review (Asia/Baghdad).</p>
-          <p>No independent availability observations or measured office latency are recorded. Compliance, error budget and latency are unknown.</p>
-          <p>{reliability.nextAction}</p>
-          <small>Evidence checked {reliability.checkedAt}. This time records the status read, not a successful operation.</small>
-        </> : <p>Reliability evidence unavailable. {unreadable.slo || 'No report has been read yet.'}</p>}
-      </section>
+      <AvailabilityPanel refreshKey={auditRefresh} />
 
       <ReceiptAuditPanel refreshKey={auditRefresh} />
 

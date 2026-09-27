@@ -473,3 +473,15 @@ call or result broadcast occurs. Membership changes invalidate the prior scope
 view; database failure cannot fall back to a process-local report. Current-revision
 receipt lineage, artifact manifest matching and separately unconfirmed Sheet row
 hashes prevent a false clean result. See runbooks/SCOPED_RECEIPT_AUDITS.md.
+
+### ADR-104 — Independent minute observations
+
+The dedicated collector claims a UTC minute in its durable transport spool before
+probing the office edge, Desk assets, actual scoped storage operations (rolled back)
+and current workflow/worker readiness. Append-only PostgreSQL observations bind the
+monitor, target, slot and original UUID; replay returns the original content receipt.
+Missing/interrupted time stays unknown. Calendar reports use Asia/Baghdad, expose
+coverage and uncertainty bounds, and only evaluate monthly compliance on a completed,
+fully observed month. Successful probe latency is not end-to-end user latency.
+An independent physical host and real observation period remain admission gates.
+See `runbooks/AVAILABILITY_MONITORING.md`; implementation is undergoing qualification.

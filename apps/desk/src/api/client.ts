@@ -417,7 +417,7 @@ class HawaApiClient {
     integrationsHealth: () => this.request<any>('/integrations/health'),
     funnelHealth: () => this.request<any>('/system/funnel/health'),
     failures: () => this.request<any>('/operations/failures'),
-    slo: () => this.request<OperationsReliabilityReport>('/operations/slo'),
+    slo: (month?: string) => this.request<OperationsReliabilityReport>('/operations/slo' + (month ? '?month=' + encodeURIComponent(month) : '')),
     reconciliation: (beforeRevision?:number) => this.request<ReceiptAuditState>('/operations/reconciliation'+(beforeRevision===undefined?'':`?beforeRevision=${beforeRevision}`)),
     // Audit only. Core refuses auto-repair (422): it cannot upload to Drive or write Sheets.
     auditReconciliation: (action:ReceiptAuditAction) =>

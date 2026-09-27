@@ -76,14 +76,79 @@ paths:
       tags: [Operations]
       operationId: readOfficeReliabilityEvidence
       summary: Read the monthly availability target and current measurement status
-      description: No independent durable availability or office latency series is installed. Observed values and compliance remain null. This read never runs a model, publishes synthetic work, or treats a fixture benchmark as production evidence.
+      description: Reads scoped immutable sampled-readiness observations. No configured collector returns explicit unmeasured v1; a configured collector returns v2 with coverage and uncertainty bounds. Compliance requires a completed fully observed month. Probe latency is not complete user-journey latency. Cache-Control is no-store.
+      parameters:
+        - in: query
+          name: month
+          required: false
+          schema: {type: string, pattern: '^20[0-9]{2}-(0[1-9]|1[0-2])$'}
+          description: Asia/Baghdad month; defaults to current month. Future months are refused.
       responses:
         '200':
-          description: Explicit unmeasured office reliability
+          description: Unmeasured status or independently recorded sampled readiness
           content:
             application/json:
               schema: {$ref: '#/components/schemas/OperationsReliabilityReport'}
         '401': {description: Authentication required}
+  /v1/monitoring/availability/probe:
+    get:
+      tags: [Operations]
+      operationId: probeOfficeReadiness
+      security: [{availabilityMonitor: []}]
+      summary: Read scoped storage and worker readiness without creating office work
+      description: Dedicated monitor credential only. Storage witness always rolls back. No provider calls or client content. Replies bind the fresh nonce and use Cache-Control no-store.
+      parameters:
+        - in: header
+          name: X-Hawa-Probe-Nonce
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Storage, workflow registration and an active worker are ready
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AvailabilityReadiness'}
+        '400': {description: Missing or invalid nonce}
+        '401': {description: Distinct monitor authentication required; office cookies and credentials are refused}
+        '503':
+          description: One or more required checks failed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AvailabilityReadiness'}
+  /v1/monitoring/availability/observations:
+    post:
+      tags: [Operations]
+      operationId: appendAvailabilityObservation
+      security: [{availabilityMonitor: []}]
+      summary: Append or replay one immutable independent observation
+      description: Original collector UUID, minute and configured target must match. Body maximum 8192 bytes. Exact replay returns the original receipt. Changed content or a competing identity for one slot conflicts. No office actions or provider calls. Retain the original spool record on any unconfirmed outcome.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, format: uuid}
+          description: Must match observationId exactly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AvailabilityObservation'}
+      responses:
+        '201':
+          description: Observation appended
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AvailabilityObservationReceipt'}
+        '200':
+          description: Original immutable observation replayed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AvailabilityObservationReceipt'}
+        '400': {description: Invalid observation, identity, clock or retention window}
+        '401': {description: Dedicated configured monitor credential required}
+        '409': {description: Conflicting observation, slot or configured monitor scope}
+        '413': {description: Body exceeds 8192 bytes}
+        '503': {description: Outcome unconfirmed; retain and retry the exact saved observation}
   /v1/operations/slo/run:
     post:
       tags: [Operations]
@@ -1112,6 +1177,10 @@ paths:
         default: {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
+    availabilityMonitor:
+      type: http
+      scheme: bearer
+      description: Dedicated independent collector secret. Opens only the two availability monitoring routes; grants no office or worker authority.
     officeBearer:
       $ref: './canva-connect.openapi.json#/components/securitySchemes/officeBearer'
     oidc:
@@ -1244,6 +1313,10 @@ components:
           items: {$ref: '#/components/schemas/StoredReceiptAudit'}
         nextBeforeRevision: {type: [integer, 'null'], minimum: 1, description: Pass as beforeRevision for the next page; null when exhausted}
     OperationsReliabilityReport:
+      oneOf:
+        - {$ref: '#/components/schemas/UnmeasuredOperationsReliabilityReport'}
+        - {$ref: '#/components/schemas/ObservedOperationsReliabilityReport'}
+    UnmeasuredOperationsReliabilityReport:
       type: object
       additionalProperties: false
       required: [schemaVersion, evidenceKind, checkedAt, availability, latency, nextAction]
@@ -1271,6 +1344,128 @@ components:
             p95Ms: {type: 'null'}
             p99Ms: {type: 'null'}
             observationCount: {type: integer, const: 0}
+        nextAction: {type: string, minLength: 1}
+    AvailabilityProbeResult:
+      type: object
+      additionalProperties: false
+      required: [outcome, error, httpStatus, durationMs]
+      properties:
+        outcome: {type: string, enum: [available, unavailable, unknown]}
+        error: {type: string, enum: [none, http_error, network_error, invalid_response, unauthorized, interrupted]}
+        httpStatus: {type: [integer, 'null'], minimum: 100, maximum: 599}
+        durationMs: {type: [integer, 'null'], minimum: 0, maximum: 60000}
+    AvailabilityProbes:
+      type: object
+      additionalProperties: false
+      required: [desk, office]
+      properties:
+        desk: {$ref: '#/components/schemas/AvailabilityProbeResult'}
+        office: {$ref: '#/components/schemas/AvailabilityProbeResult'}
+    AvailabilityObservation:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, observationId, monitorId, targetOrigin, slotStart, observedAt, completedAt, durationMs, probes, buildCommit]
+      properties:
+        schemaVersion: {type: integer, const: 1}
+        observationId: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        targetOrigin: {type: string, format: uri, maxLength: 300, description: Exact configured HTTPS origin; loopback HTTP only for local qualification}
+        slotStart: {type: string, format: date-time, description: Canonical UTC ISO timestamp at an exact minute}
+        observedAt: {type: string, format: date-time, description: Actual start within the claimed minute}
+        completedAt: {type: [string, 'null'], format: date-time, description: Null for interrupted observations}
+        durationMs: {type: [integer, 'null'], minimum: 0, maximum: 60000}
+        probes: {$ref: '#/components/schemas/AvailabilityProbes'}
+        buildCommit: {type: [string, 'null'], pattern: '^[a-f0-9]{40}$'}
+    AvailabilityObservationReceipt:
+      type: object
+      required: [observationId, monitorId, slotStart, payloadSha256, observationSha256, recordedAt, replayed]
+      properties:
+        observationId: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        slotStart: {type: string, format: date-time}
+        payloadSha256: {type: string, pattern: '^[a-f0-9]{64}$', description: SQL hash of stored JSONB text}
+        observationSha256: {type: string, pattern: '^[a-f0-9]{64}$', description: SHA-256 of UTF-8 recursively key-sorted compact JSON for cross-language receipt verification}
+        recordedAt: {type: string, format: date-time}
+        replayed: {type: boolean}
+    AvailabilityReadiness:
+      type: object
+      required: [schemaVersion, nonce, monitorId, targetOrigin, checkedAt, ready, intakeStorage, reviewStorage, workflowRegistration, activeWorker, buildCommit]
+      properties:
+        schemaVersion: {type: integer, const: 1}
+        nonce: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        targetOrigin: {type: string, format: uri}
+        checkedAt: {type: string, format: date-time}
+        ready: {type: boolean}
+        intakeStorage: {type: boolean}
+        reviewStorage: {type: boolean}
+        workflowRegistration: {type: boolean}
+        activeWorker: {type: boolean}
+        buildCommit: {type: [string, 'null'], pattern: '^[a-f0-9]{40}$'}
+    ObservedOperationsReliabilityReport:
+      type: object
+      required: [schemaVersion, evidenceKind, checkedAt, basis, period, monitor, availability, latency, recentFailures, nextAction]
+      properties:
+        schemaVersion: {type: integer, const: 2}
+        evidenceKind: {type: string, const: independent_probe}
+        checkedAt: {type: string, format: date-time}
+        basis: {type: string, const: sampled_office_readiness}
+        period:
+          type: object
+          required: [month, startAt, endAt, throughAt, complete]
+          properties:
+            month: {type: string, pattern: '^20[0-9]{2}-(0[1-9]|1[0-2])$'}
+            startAt: {type: string, format: date-time}
+            endAt: {type: string, format: date-time}
+            throughAt: {type: string, format: date-time, description: Only closed minute slots contribute}
+            complete: {type: boolean}
+        monitor:
+          type: object
+          required: [id, targetOrigin, scopeSha256, intervalSeconds, status, lastObservedAt, lastReceivedAt]
+          properties:
+            id: {type: string, format: uuid}
+            targetOrigin: {type: string, format: uri}
+            scopeSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+            intervalSeconds: {type: integer, const: 60}
+            status: {type: string, enum: [awaiting_observations, fresh, stale]}
+            lastObservedAt: {type: [string, 'null'], format: date-time}
+            lastReceivedAt: {type: [string, 'null'], format: date-time}
+        availability:
+          type: object
+          required: [targetPercent, window, timeZone, elapsedSlots, observationCount, availableSlots, unavailableSlots, unknownSlots, missingSlots, coveragePercent, observedPercent, minimumPercent, maximumPercent, sloCompliant]
+          properties:
+            targetPercent: {type: number, const: 99.5}
+            window: {type: string, const: calendar_month}
+            timeZone: {type: string, const: Asia/Baghdad}
+            elapsedSlots: {type: integer, minimum: 0}
+            observationCount: {type: integer, minimum: 0}
+            availableSlots: {type: integer, minimum: 0}
+            unavailableSlots: {type: integer, minimum: 0}
+            unknownSlots: {type: integer, minimum: 0, description: Explicitly unknown plus missing slots}
+            missingSlots: {type: integer, minimum: 0}
+            coveragePercent: {type: [number, 'null'], minimum: 0, maximum: 100}
+            observedPercent: {type: [number, 'null'], minimum: 0, maximum: 100}
+            minimumPercent: {type: [number, 'null'], minimum: 0, maximum: 100}
+            maximumPercent: {type: [number, 'null'], minimum: 0, maximum: 100}
+            sloCompliant: {type: [boolean, 'null'], description: Null until the month is complete and all slots have known outcomes}
+        latency:
+          type: object
+          required: [scope, p50Ms, p95Ms, p99Ms, observationCount]
+          properties:
+            scope: {type: string, const: successful_readiness_probe_round_trip}
+            p50Ms: {type: [integer, 'null'], minimum: 0, maximum: 60000}
+            p95Ms: {type: [integer, 'null'], minimum: 0, maximum: 60000}
+            p99Ms: {type: [integer, 'null'], minimum: 0, maximum: 60000}
+            observationCount: {type: integer, minimum: 0}
+        recentFailures:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            required: [slotStart, probes]
+            properties:
+              slotStart: {type: string, format: date-time}
+              probes: {$ref: '#/components/schemas/AvailabilityProbes'}
         nextAction: {type: string, minLength: 1}
     EvaluationDatasetSource:
       type: object

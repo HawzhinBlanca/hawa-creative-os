@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T15:30:16Z",
+  "generatedAt": "2026-09-27T16:02:36Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 434,
+  "fileCount": 437,
   "files": [
     {
       "path": ".dockerignore",
@@ -588,6 +588,11 @@
       "bytes": 5317
     },
     {
+      "path": "adrs/104_independent_availability_observations.md",
+      "sha256": "86211e39da66e8d85f6025be51eaec6aaa2f6f5b4b9e949bc82444e2d3199fa0",
+      "bytes": 6130
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -599,8 +604,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "11f86eb379ac699d5660442102b76b92d3cfc86aad6c78f1841c90bc2bc11535",
-      "bytes": 81038
+      "sha256": "bd6943d70a6ecfcc6ab617cae119d90c13c82d8c0b38b17360a7c2ecfe058c5d",
+      "bytes": 91701
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -854,8 +859,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "46eccc15e09851ab2c622a1e6f0c41ea91aee694e664e29e2b24610c42fcc16a",
-      "bytes": 29060
+      "sha256": "b6878d2b27b0fcf3f054c6eea07298c5884c09cd36d895e2895211e88035ad42",
+      "bytes": 29862
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -889,8 +894,8 @@
     },
     {
       "path": "docs/17_UI_UX.md",
-      "sha256": "8e750e8c4e3dcf00e4bd5022b4860f1fe2ea52805c415f3bf6b3931d4e08b48a",
-      "bytes": 12526
+      "sha256": "2731aa66ba0253792cb03d7376025bf70b7ca69dbb97cfac8d17985a3a2f03e0",
+      "bytes": 13134
     },
     {
       "path": "docs/18_FEEDBACK_LEARNING.md",
@@ -1066,6 +1071,11 @@
       "path": "plans/research-grade-upgrade-2026-09-25/R01_TEST_TYPE_GATE_PROOF.json",
       "sha256": "dfa32fa0d8d59baff70696f8e77f34b6eb75e5c9370aac7da4b0874996484fd6",
       "bytes": 22911
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R02_AVAILABILITY_PROOF.json",
+      "sha256": "9371c6e292c32537f679e8f5938b235e22df90e8e64363a634309ac87a1ea582",
+      "bytes": 2127
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R02_EVIDENCE.md",
@@ -1434,8 +1444,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "8c5aa976f1015ef276b536ad956af8a5dc4632041aa8018d883c3236b66ebf1f",
-      "bytes": 372908
+      "sha256": "7d48e3159f128927f9fa6ed42ff0f0779cb271a5efab3c6e3c0081b97a9a9d8f",
+      "bytes": 374543
     },
     {
       "path": "plans/user-stories.csv",
@@ -1526,6 +1536,11 @@
       "path": "runbooks/12_emergency_manual_mode.md",
       "sha256": "f1ff18fde60ac30a3f2859838806073fa05012e7ee176a3bca39486ca9acee57",
       "bytes": 809
+    },
+    {
+      "path": "runbooks/AVAILABILITY_MONITORING.md",
+      "sha256": "68991ee9fa87462b892fc145dd27599be8230bb206c1e91c0e686d688ff2bc04",
+      "bytes": 6918
     },
     {
       "path": "runbooks/CALL_COST_ACCOUNTING.md",

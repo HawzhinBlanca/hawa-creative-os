@@ -23,3 +23,4 @@ export * from './studio-budget.js';
 export * from './spending-policy.js';
 
 export {auditPublicationReceipts} from './publication-audit.js';
+export * from './availability.js';

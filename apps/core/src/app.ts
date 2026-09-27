@@ -860,10 +860,12 @@ export function createApp(options?: CreateAppOptions) {
 
   // Routes that authenticate the request themselves, with more than the bearer header: the event
   // stream also takes a one-use ticket, since EventSource cannot send a header (ADR-037).
-  const SELF_AUTHENTICATED_READS = new Set(['/events/stream']);
+  const SELF_AUTHENTICATED_READS = new Set(['/events/stream', '/monitoring/availability/probe']);
+  const SELF_AUTHENTICATED_WRITES = new Set(['/monitoring/availability/observations']);
 
   const registerRoute = (method: 'get' | 'post' | 'put' | 'delete', path: string, handler: any) => {
-    const isPublic = method === 'get' ? isPublicRead(path) || SELF_AUTHENTICATED_READS.has(path) : isPublicMutation(path);
+    const isPublic = method === 'get' ? isPublicRead(path) || SELF_AUTHENTICATED_READS.has(path) :
+      isPublicMutation(path) || method === 'post' && SELF_AUTHENTICATED_WRITES.has(path);
     const guarded = isPublic
       ? handler
         : async (c: any, next: any) => {

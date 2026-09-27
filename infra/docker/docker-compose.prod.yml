@@ -113,6 +113,7 @@ services:
       PORT: 3001
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/docker/.env (see infra/docker/.env.example)}
       RESTATE_INGRESS_URL: http://restate:8080
+      HAWA_AVAILABILITY_WORKER_URLS: http://worker-blue:9080/health,http://worker-green:9080/health
       HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
       # People cut out of client photos (ADR-032). Optional: without it a photo is placed framed.
       CUTOUT_URL: http://cutout:8090

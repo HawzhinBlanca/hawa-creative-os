@@ -1,0 +1,4 @@
+self-test passed: 11 patterns detect their fixtures and ignore benign text.
+SECURITY SCAN FAILED: 2 committable file(s) contain credential material:
+  - apps/core/test/availability-observations.test.ts:10 quoted_secret_assignment
+  - apps/core/test/availability-observations.test.ts:10 long_credential_assignment
