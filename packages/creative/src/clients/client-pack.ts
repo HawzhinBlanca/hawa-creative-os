@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { z } from 'zod';
 import { creativeAssetPath } from '../studio/asset-paths.js';
+import { ExemplarRetrievalIndex } from '../studio/exemplar-retrieval.js';
 
 /**
  * Client packs (ADR-038): one JSON file per client in packages/creative/assets/clients, saying who
@@ -28,6 +30,7 @@ const onboardingItem = z.enum([
   'palette',
   'fonts',
   'reference-pack',
+  'exemplars',
   'telegram-chats',
   'language',
   'kurdish-aliases',
@@ -73,6 +76,12 @@ export const clientPackSchema = z
     playbook: z.enum(['institutional-announcement', 'video-thumbnail']),
     /** Asset paths under packages/creative/assets, or null until the office supplies them. */
     reference: z.object({ pack: z.string().min(1), logo: z.string().min(1) }).nullable(),
+    /**
+     * The client's own owner-confirmed exemplars: an exemplar manifest under
+     * packages/creative/assets, or null until the office has confirmed some. The studio conditions
+     * this client's designs on these and on no other client's.
+     */
+    exemplars: z.string().min(1).nullable(),
     onboarding: z.object({ missing: z.array(onboardingItem) }),
   })
   .superRefine((pack, ctx) => {
@@ -135,6 +144,49 @@ export function loadClientReference(pack: ClientPack): { reference: ClientRefere
   return { reference, logo, logoPath };
 }
 
+/** A client's own exemplar set, ready to retrieve from (ADR-038). */
+export interface ClientExemplars {
+  clientId: string;
+  code: string;
+  index: ExemplarRetrievalIndex;
+  /** The image of a retrieved exemplar, or undefined when it is not on disk. */
+  imageOf(item: { filename: string; path: string }): string | undefined;
+}
+
+/** A pack's exemplar manifest, checked to be the pack's own. Undefined when it names none. */
+function clientExemplarManifest(pack: ClientPack): { manifestPath: string; imageDir: string } | undefined {
+  if (!pack.exemplars) return undefined;
+  const manifestPath = creativeAssetPath(pack.exemplars);
+  const raw = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (raw.clientId !== pack.id) {
+    throw new ClientPackError(`${pack.exemplars} belongs to client ${raw.clientId ?? '(none named)'}, not ${pack.code} (${pack.id})`);
+  }
+  return { manifestPath, imageDir: typeof raw.imageDir === 'string' ? raw.imageDir : `exemplars/${pack.code}` };
+}
+
+/**
+ * The client's own confirmed exemplars, or undefined when it has none yet. A design is conditioned
+ * on these only: every client used to be given KAAE's. A set recorded for another client is refused.
+ */
+export function loadClientExemplars(pack: ClientPack): ClientExemplars | undefined {
+  const manifest = clientExemplarManifest(pack);
+  if (!manifest) return undefined;
+  const index = new ExemplarRetrievalIndex(undefined, manifest.manifestPath);
+  return {
+    clientId: pack.id,
+    code: pack.code,
+    index,
+    imageOf: (item) => {
+      // The copy under the package's assets is the one that ships in the image. KAAE's manifest
+      // also records the archive each exemplar was curated from, which exists only in a checkout.
+      const shipped = creativeAssetPath(`${manifest.imageDir}/${item.filename}`, { optional: true });
+      if (shipped) return shipped;
+      const archived = item.path ? resolve(process.cwd(), item.path) : '';
+      return archived && existsSync(archived) ? archived : undefined;
+    },
+  };
+}
+
 /** Parses and cross-checks a set of pack documents. A live pack's reference is verified too. */
 export function parseClientPacks(documents: Array<{ source: string; json: unknown }>): ClientPack[] {
   const packs = documents.map(({ source, json }) => {
@@ -148,7 +200,10 @@ export function parseClientPacks(documents: Array<{ source: string; json: unknow
     return parsed.data;
   });
   assertPacksConsistent(packs);
-  for (const pack of packs) if (pack.status === 'live') loadClientReference(pack);
+  for (const pack of packs) {
+    if (pack.status === 'live') loadClientReference(pack);
+    clientExemplarManifest(pack);
+  }
   return packs.sort((a, b) => a.code.localeCompare(b.code));
 }
 

@@ -13,7 +13,7 @@ import {
 } from './pairwise-judge-v3.js';
 import type { OpenAiStudioClient } from './openai-studio-client.js';
 import { normalizeStudioLayout, fitLogoToAspect } from './studio-normalize.js';
-import { ExemplarRetrievalIndex, type ExemplarRetrievalMatch } from './exemplar-retrieval.js';
+import type { ExemplarRetrievalIndex, ExemplarRetrievalMatch } from './exemplar-retrieval.js';
 import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-qa.js';
 import { computeLayoutMetrics } from './layout-metrics.js';
 import type { ClientReference } from './client-reference.js';
@@ -157,15 +157,20 @@ export function formatKeyV3(width: number, height: number): string {
   return r < 1 ? 'portrait' : 'landscape';
 }
 
-let sharedRetrievalIndex: ExemplarRetrievalIndex | null = null;
-
-/** P02: the top owner-confirmed exemplars for a brief, by local embedding. Free. */
+/**
+ * P02: the top owner-confirmed exemplars for a brief, by local embedding. Free.
+ *
+ * Only from the index given, which is the client's own set (loadClientExemplars, ADR-038). With none
+ * there are no exemplars: this used to fall back to KAAE's set for every client. The query's
+ * category is the set's own standing subject; it was "standards", KAAE's, for everyone.
+ */
 export function retrieveExemplarsV3(
-  query: { text: string; width: number; height: number },
-  index?: ExemplarRetrievalIndex
+  query: { text: string; width: number; height: number; category?: string },
+  index: ExemplarRetrievalIndex | undefined
 ): ExemplarRetrievalMatch[] {
-  const retrieval = (index || (sharedRetrievalIndex ??= new ExemplarRetrievalIndex())).retrieveTopExemplars(
-    { text: query.text, format: formatKeyV3(query.width, query.height), category: 'standards' },
+  if (!index) return [];
+  const retrieval = index.retrieveTopExemplars(
+    { text: query.text, format: formatKeyV3(query.width, query.height), category: query.category },
     3
   );
   return retrieval.retrievedExemplars;

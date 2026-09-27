@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ExemplarRetrievalIndex } from './exemplar-retrieval.js';
+import type { ClientPack } from '../clients/client-pack.js';
 
 export interface ImageDimensions {
   width: number;
@@ -39,6 +40,10 @@ export interface ExemplarEntry {
 
 export interface KaaeExemplarsManifest {
   version: string;
+  /** The client the set belongs to (ADR-038); a pack refuses a set recorded for another client. */
+  clientId?: string;
+  /** Where the set's images ship, under packages/creative/assets. */
+  imageDir?: string;
   status: string;
   curator: string;
   confirmedAt: string;
@@ -169,8 +174,59 @@ export class ReferenceLibraryManager {
       path.resolve(this.workspaceRoot, 'data/kaae-graphics/references');
   }
 
+  /**
+   * The library of one client (ADR-038): its manifest and the directory its images are kept in.
+   * A client whose pack names no set yet starts one under packages/creative/assets/exemplars/<code>,
+   * where the images ship with the package.
+   */
+  public static forClient(
+    pack: Pick<ClientPack, 'id' | 'code' | 'exemplars'>,
+    workspaceRoot: string = process.cwd()
+  ): ReferenceLibraryManager {
+    const assets = path.resolve(workspaceRoot, 'packages/creative/assets');
+    const manifestPath = path.resolve(assets, pack.exemplars ?? `exemplars/${pack.code}/exemplars.json`);
+    let imageDir = `exemplars/${pack.code}`;
+    if (fs.existsSync(manifestPath)) {
+      const raw = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (raw.clientId !== pack.id) {
+        throw new Error(`${path.relative(workspaceRoot, manifestPath)} belongs to client ${raw.clientId ?? '(none named)'}, not ${pack.code}`);
+      }
+      if (typeof raw.imageDir === 'string') imageDir = raw.imageDir;
+    }
+    // KAAE's images were curated in its archive; every other client's are kept where they ship.
+    const referencesDir =
+      imageDir === 'exemplars' ? path.resolve(workspaceRoot, 'data/kaae-graphics/references') : path.resolve(assets, imageDir);
+    const manager = new ReferenceLibraryManager(workspaceRoot, manifestPath, referencesDir);
+    manager.newManifest = { clientId: pack.id, imageDir };
+    return manager;
+  }
+
+  /** Set by forClient: what a client's first manifest records when none exists yet. */
+  private newManifest?: { clientId: string; imageDir: string };
+
+  public get manifestFile(): string {
+    return this.manifestPath;
+  }
+
   public getManifest(): KaaeExemplarsManifest {
     if (!fs.existsSync(this.manifestPath)) {
+      if (this.newManifest) {
+        return {
+          version: new Date().toISOString().split('T')[0],
+          clientId: this.newManifest.clientId,
+          imageDir: this.newManifest.imageDir,
+          status: 'IN_REVIEW',
+          curator: 'Art Director (owner)',
+          confirmedAt: '',
+          confirmationMethod: 'Each exemplar is confirmed by the owner with scripts/add_exemplar.ts --confirm.',
+          totalExemplars: 0,
+          notice: "Owner-confirmed exemplars of this client, for its own designs only. Exemplars set the standard and are never copied.",
+          additionsPolicy:
+            'New files enter as status "pending" and only become active after the owner confirms them. Output produced by this system must never be added as a reference.',
+          exemplars: [],
+          droppedInReview: { reviewedAt: '', reviewedBy: '', entries: [] },
+        };
+      }
       throw new Error(`Manifest not found at: ${this.manifestPath}`);
     }
     return JSON.parse(fs.readFileSync(this.manifestPath, 'utf8'));
@@ -305,7 +361,7 @@ export class ReferenceLibraryManager {
       rank: manifest.exemplars.length + 1,
       status: 'pending',
       sha256,
-      path: `data/kaae-graphics/references/${params.filename}`,
+      path: path.relative(this.workspaceRoot, destPath).split(path.sep).join('/'),
       filename: params.filename,
       dimensions: dims,
       aspectRatio: aspect,
@@ -390,9 +446,9 @@ export class ReferenceLibraryManager {
 
     this.saveManifest(manifest);
 
-    // Invalidate / rebuild vector cache so retrieval picks it up
+    // Rebuild this set's index so a malformed manifest fails here, not in a design run.
     try {
-      new ExemplarRetrievalIndex();
+      new ExemplarRetrievalIndex(undefined, this.manifestPath);
     } catch {
       // cache will reload on next call
     }

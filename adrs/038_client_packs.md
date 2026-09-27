@@ -86,8 +86,19 @@ Behaviour:
   - Still there on purpose:
     - KAAE hex values used only as points in colour space, to find the nearest colour in a client's own palette. They are never drawn.
     - The KAAE persona in `cost-architecture-v3.ts` `STABLE_SYSTEM_PROMPT_PREFIX`, which no production call sends; only a test and a proof script read it.
+- **Per-client exemplars (2026-09-27).** The owner-confirmed designs a client's designs are conditioned on are now that client's own. Every client used to be given KAAE's six.
+  - A pack names its exemplar manifest (`exemplars`, an asset path) or `null` until the office has confirmed some. The manifest records its `clientId`. A pack whose manifest belongs to another client is refused at load, and so is a library filed under the wrong client.
+  - Retrieval reads only the index it is given: the studio's stage context, the v3 layout stage (`retrieveExemplarsV3`) and the Canva planner take the task's client's set. A client with none gets no exemplars, and the run logs that it is conditioned on none.
+  - Two KAAE-specific retrieval settings moved into KAAE's manifest:
+    - the query category `standards`, which the v3 retrieval added for every client (now the manifest's `retrievalHint`);
+    - its image directory (`imageDir: exemplars`).
+  - A manifest may add its own words to the base vocabulary (`vocabulary`), which was built from KAAE's set. Without them, a thumbnail brief and every thumbnail exemplar would score only on format.
+  - Intake: `scripts/add_exemplar.ts --client <code>` for every command, with no default client. A new client's first exemplar starts its library at `packages/creative/assets/exemplars/<code>/exemplars.json`, where the images ship with the package, and points the pack at it. Pending exemplars are never retrieved; the owner confirms each one.
+  - `exemplars` is an onboarding item. The four new clients list it; the office removes it when the set is complete (15–30 approved designs).
+  - The Canva planner's prompt still named KAAE's six colours as "the client reference palette", and its colour correction snapped stray colours to KAAE's navy, cream and gold. The prompt now states the client's own palette (`plannerPaletteRule`), refusing a reference with none. The correction snaps to the nearest colour of the client's palette.
+  - Retrieval also rebuilds KAAE's embedding cache when an exemplar is missing from it. Before this, one confirmed after the cache was written was never retrieved.
+  - Tests: `packages/creative/test/client-exemplars.test.ts`, `apps/core/test/client-exemplars.test.ts`.
 - **Deferred:**
-  - per-client reference retrieval: the studio and the planner still read `kaae-exemplars.json`, which is harmless while KAAE is the only live client;
   - retiring the v1 KAAE templates (`packages/creative/src/templates/kaae-*`), which serve only the legacy preview;
   - a thumbnail proof set per client, run on its real assets once the office supplies them.
 

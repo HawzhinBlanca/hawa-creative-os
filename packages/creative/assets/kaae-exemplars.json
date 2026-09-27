@@ -1,6 +1,9 @@
 {
   "version": "2026-09-17.1",
   "status": "CONFIRMED",
+  "clientId": "c1000000-0000-4000-8000-000000000002",
+  "imageDir": "exemplars",
+  "retrievalHint": "standards",
   "curator": "Art Director (owner), confirmed by visual review of all twelve candidates",
   "confirmedAt": "2026-09-17",
   "confirmationMethod": "The owner was shown all twelve candidate images and confirmed these six for reference conditioning; six were dropped with the reasons recorded below.",

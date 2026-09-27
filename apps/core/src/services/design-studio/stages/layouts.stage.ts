@@ -214,7 +214,7 @@ export async function runLayoutsStage(
       canvasWidth: ctx.width,
       canvasHeight: ctx.height,
       isRtl: ctx.copyBlocks.some((b) => b.script === 'arabic'),
-      exemplars: retrieveExemplarsV3({ text: briefSummary, width: ctx.width, height: ctx.height }),
+      exemplars: retrieveExemplarsV3({ text: briefSummary, width: ctx.width, height: ctx.height }, ctx.exemplarIndex),
       logoAspect: ctx.logoAspect || 1.0,
       reference: ctx.reference,
       clientProfile: ctx.clientProfile,

@@ -1,4 +1,4 @@
-import { creativeAssetPath, findClientPack, loadClientPacks, matchClientPack, type ClientMatch, type ClientPack } from '@hawa/creative';
+import { creativeAssetPath, findClientPack, loadClientExemplars, loadClientPacks, matchClientPack, type ClientExemplars, type ClientMatch, type ClientPack } from '@hawa/creative';
 import { log } from '../logging.js';
 
 /**
@@ -56,4 +56,14 @@ export function clientReferenceOf(clientId: string | null | undefined):
     };
   }
   return { referencePath: creativeAssetPath(pack.reference.pack), logoPath: creativeAssetPath(pack.reference.logo), code: pack.code };
+}
+
+/**
+ * The client's own confirmed exemplars, or undefined when it has none yet (ADR-038). Every client's
+ * designs used to be conditioned on KAAE's; a client without its own set is conditioned on none.
+ * Throws when the pack names a set recorded for another client.
+ */
+export function clientExemplarsOf(clientId: string | null | undefined): ClientExemplars | undefined {
+  const pack = clientPackOf(clientId);
+  return pack ? loadClientExemplars(pack) : undefined;
 }
