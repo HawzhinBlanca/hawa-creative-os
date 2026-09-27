@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T04:50:49Z",
+  "generatedAt": "2026-09-27T04:55:48Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -944,8 +944,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "f06b52ee685df8c9d05987276d03df55dd748980c1cdb81eaddc069301478be8",
-      "bytes": 63021
+      "sha256": "650d4fb083f21cd9f6bd5e30c9690e84f07a253f9634de3f48cde16c6c3fcf67",
+      "bytes": 63992
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1154,8 +1154,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_EVIDENCE.md",
-      "sha256": "37ab074f92a26769136edefef887045ea0015d8bb8bcf3bec0685e9d4226f787",
-      "bytes": 19743
+      "sha256": "83b4ebdbdb064a8c230aa1ec409d0ee9cc94657d49e29d61e36027690c6e1f27",
+      "bytes": 20714
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_VOICE_EVIDENCE_PROOF.json",
@@ -1164,13 +1164,13 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_DURABLE_EVALUATION_PROOF.json",
-      "sha256": "474854cd1d252c6b0c3403da6f66c17646db5783b638e00efa7d2e5a0dbf7900",
-      "bytes": 10419
+      "sha256": "8b9486cc56329b378fdc30ced13658ae2bf600e63113bbb0206d20d6b5c33015",
+      "bytes": 13034
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "70b1192f02da8067ddc87bea0799276d47a47d6a85eeabab46dee49906827e35",
-      "bytes": 25893
+      "sha256": "b81f5fe32f8fd3a5fad9f9e28aa4f56d924264733bc80bc2875f4b2f366bb8e2",
+      "bytes": 26864
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json",

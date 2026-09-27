@@ -26,7 +26,7 @@
     "packages/evals/src/index.ts": "9f5fbd6f234d4811d0bac9ec716d05dc225be17f05a23448434b6a446baec7c0",
     "apps/desk/src/services/evaluation-action.ts": "b40b7dcbb28db59a344fe37069b697e2b9b801fae5db1b35b5d79569d0ec9b92",
     "apps/desk/src/api/client.ts": "2dc616b91c157e0561f332bb7c2f0da200ad6d0e76a011d921515541a199df4e",
-    "apps/desk/src/screens/EvalScreen.tsx": "2542e670012b33d6cd9ffcec0bd87293239b727b7dcadd4524f57102133ee0b5",
+    "apps/desk/src/screens/EvalScreen.tsx": "a4a4a33e22246cecf232e77cdf592b159086ade4bf69b54ecadca1183eaaa624",
     "api/openapi.yaml": "dd464f7b68faf3c159c554cfc4f19b1ce894819635a5c08ea7a5e2612223c5ab",
     "apps/core/test/durable-evaluations.test.ts": "0c658d4222e298d8e4d9cb75c3dfe52879857f9aa96541064ba60c2de7cfc7e6",
     "apps/core/test/evaluation-kill-recovery.test.ts": "20fc82099c67f53157c585881ee2a3e2d87fe217023ecd54b8806e9261ad86e9",
@@ -100,15 +100,36 @@
       "runtimeRls": true,
       "provider": "localhost synthetic HTTP endpoint"
     },
-    "fullRegression": "First sealed run: 3739 passed, 6 failed, 59 skipped. All six are retained outdated schema/migration or database-unavailable expectations; corrected follow-up passed 33 tests. Final full regression follows the packaging correction.",
-    "candidateDeployment": "Initial 448c79c workflow passed 36 invariants, but evaluation failed closed with HTTP503 and zero provider calls because the image omitted its three fixture files and release manifest. Dockerfile now includes them and verifies replay identity during build; refreshed deployment follows.",
+    "fullRegression": "Final full suite passes 3745 tests with 59 skipped; first six failures and their correction retained.",
+    "candidateDeployment": "Packaged candidate34d10d5 passes36workflow invariants plus14evaluation controls across one Core restart and exactly one synthetic provider call. Final CSS-only layout refresh follows.",
     "developmentCorrections": [
       "Initial typecheck found two missing required safeAction fields; corrected before final typecheck.",
       "Recovery now reads existing call evidence before mutable provider resolution, including when that provider is subsequently unavailable.",
       "Provider/model display uses observed receipt facts; a pending call stays unknown.",
       "Replay identity also binds the fixed visual image hash.",
       "The initial negative image probe used the wrong fake-ledger URL; corrected to /__fakes/models/ledger before measuring zero provider calls. No runtime change was needed for that probe."
-    ]
+    ],
+    "finalFullRegression": {
+      "sourceCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1",
+      "files": 470,
+      "passed": 3745,
+      "failed": 0,
+      "skipped": 59,
+      "receipt": "output/acceptance/2026-09-27-durable-evaluations/full-tests-final.json",
+      "scope": "All runtime logic. A subsequent CSS-only correction pins the evaluation panel beside its sidebar; Desk build passes separately."
+    },
+    "finalCandidate": {
+      "sourceCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1",
+      "workflowInvariants": 36,
+      "checks": 14,
+      "allPassed": true,
+      "receipt": "output/acceptance/2026-09-27-durable-evaluations/candidate-evaluation-before-layout.json",
+      "scope": "Before final CSS-only receipt layout correction; refresh follows."
+    },
+    "uiLayoutFollowup": {
+      "change": "Pin evaluation panel to grid column2/row1 so the full-width call receipt section cannot push it into the narrow sidebar column.",
+      "verification": "output/acceptance/2026-09-27-durable-evaluations/desk-layout-build.log"
+    }
   },
   "limits": [
     "No live provider acceptance/billing reconciliation or operator settlement API",
@@ -122,6 +143,22 @@
       "bytes": 6,
       "sha256": "5ac71a99decf5b92dbfe798066cbe8ea317395f8f764f5a8879fd3511ca99454"
     },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-check-final-before-layout.log": {
+      "bytes": 157,
+      "sha256": "c5fe748a4859dc038f1866533aeb1d4e9be90573474e914231c1f7856f7aa74b"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-check-final.log": {
+      "bytes": 157,
+      "sha256": "c5fe748a4859dc038f1866533aeb1d4e9be90573474e914231c1f7856f7aa74b"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-evaluation-before-layout.json": {
+      "bytes": 2167,
+      "sha256": "ab75bcf4cb1e13833bf80ab73215ac1605e0a33271f63ccc0329ed4e09a007b0"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-evaluation.json": {
+      "bytes": 2167,
+      "sha256": "ab75bcf4cb1e13833bf80ab73215ac1605e0a33271f63ccc0329ed4e09a007b0"
+    },
     "output/acceptance/2026-09-27-durable-evaluations/candidate-first-check.log": {
       "bytes": 664,
       "sha256": "e2502f08c32d53c05c12db8aaf62759c2f54bf62ab0a9e3e8a75b30da36a5042"
@@ -129,6 +166,14 @@
     "output/acceptance/2026-09-27-durable-evaluations/candidate-first-rehearsal.json": {
       "bytes": 11968,
       "sha256": "f97446e755ac8a402610ecebe8ce2f1ab2c1aa75467183addd94fe3e118a3757"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-rehearsal-before-layout.json": {
+      "bytes": 11965,
+      "sha256": "a85c6844631378969b4a7576faa338a79d7e2be9b73b49128293958fc4b23097"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-rehearsal.json": {
+      "bytes": 11965,
+      "sha256": "a85c6844631378969b4a7576faa338a79d7e2be9b73b49128293958fc4b23097"
     },
     "output/acceptance/2026-09-27-durable-evaluations/check-candidate.mts": {
       "bytes": 5038,
@@ -146,6 +191,10 @@
       "bytes": 228,
       "sha256": "b122d0bb513b7250acc0b983badb0d4d750173ee98ed7cfa600d8079031f223d"
     },
+    "output/acceptance/2026-09-27-durable-evaluations/desk-layout-build.log": {
+      "bytes": 745,
+      "sha256": "5de6cb8b8c43534d94a4c0008c34f05a8dcc3924bc517d79b389c410dc38fd2a"
+    },
     "output/acceptance/2026-09-27-durable-evaluations/final-tests.json": {
       "bytes": 72914,
       "sha256": "73d25060f7b3d7817ae68ea7293f031e15fb9fc7c37042fbffc56cc81fd2d8ef"
@@ -161,6 +210,14 @@
     "output/acceptance/2026-09-27-durable-evaluations/first-tests.log": {
       "bytes": 1193,
       "sha256": "83de7c31a993a37ee06c606dcf3a840fab58974546447f5471a9c9046feb01df"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/full-tests-final.json": {
+      "bytes": 1562303,
+      "sha256": "619ec126aa9fda957633504292785005f41436fd17cfeb39f9d5e236f903efe8"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/full-tests-final.log": {
+      "bytes": 132061,
+      "sha256": "f1fb5bbba5ad201b98e3e660002e1ae51a86f08202280b439ade2aa4815cd17d"
     },
     "output/acceptance/2026-09-27-durable-evaluations/full-tests.json": {
       "bytes": 1566754,

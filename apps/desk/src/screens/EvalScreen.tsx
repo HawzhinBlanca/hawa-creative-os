@@ -257,8 +257,8 @@ export const EvalScreen: React.FC = () => {
           <button onClick={() => setCallEvidence(null)}>Close receipts</button>
         </section>}
 
-        {/* Right Content Area */}
-        <div className="panel" style={{ padding: 20 }}>
+        {/* Keep the evaluation beside its sidebar when the full-width receipt row is open. */}
+        <div className="panel" style={{ padding: 20, gridColumn: 2, gridRow: 1, minWidth: 0 }}>
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
             <div>

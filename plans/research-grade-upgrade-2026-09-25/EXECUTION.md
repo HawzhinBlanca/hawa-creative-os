@@ -898,3 +898,19 @@ policy by name. Base RLS now covers the ledger before versioned migrations too.
 The schema text check is explicitly labeled as inventory, not a recovery drill.
 Affected follow-up: **8 files/33 passed**, including runtime RLS and both actual
 process-kill cases. Final full regression and corrected image checks follow.
+
+### Final full regression and deployed evaluation proof
+
+Packaged source2d1e56b, sealed candidate34d10d5: **3,745 tests pass, zero fail,
+59 are skipped**. The rebuilt candidate passes36workflow invariants and14additional
+evaluation controls. Its one synthetic Google request receives a held failure;
+Core restarts, the same action returns the identical saved report, and fresh or
+changed actions cannot bypass that outcome. Call details retain unknown cost and
+observed provider facts without saved model output. Image source labels agree.
+
+A final CSS-only follow-up pins the evaluation panel to its right-hand grid cell:
+opening the full-width call-receipt section must not move it into the narrow
+sidebar column. The Desk build passes; the full regression above covers the prior
+layout and unchanged runtime logic. A final candidate refresh follows this visual
+layout correction. Production and real provider/approval/quality admission are
+unchanged and unqualified.
