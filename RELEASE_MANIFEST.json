@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-27T13:23:35+03:00",
+  "generatedAt": "2026-09-27T13:43:19+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "21fe7e21f80b4c64d2d346b695dc1286bef99348",
+    "commit": "390c88904cdafc083b0dc32b109e3ba2219d0020",
     "treeClean": true,
-    "commitTimestamp": "2026-09-27T13:23:35+03:00",
+    "commitTimestamp": "2026-09-27T13:43:19+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
-    "targetVersion": "052_shared_office_spending",
-    "latestMigrationFile": "052_shared_office_spending.sql",
-    "totalMigrations": 52
+    "targetVersion": "053_exact_call_cost_accounting",
+    "latestMigrationFile": "053_exact_call_cost_accounting.sql",
+    "totalMigrations": 53
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "07db4e831462ea63c38e7a3bbc0a0aede98dbff48f4bc1d254703ac5f50d4a09",
+        "apps/core/src/app.ts": "18472d29479b75ab51a08bc8508dda0c92ae8498f4f4fbe648cc2da86e474d29",
         "apps/core/src/index.ts": "6950c3318ab08ddfd7e455bd09c460262572a82e7767dd2afd8e39448635a2e5",
         "packages/integrations/src/google-publisher.ts": "3eaff2f4000d08afeeaf5bd850bd3401615dbd1d09550ced7589f2854fba95cf"
       }
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "74967155c8f7a8ab5e41feaadda2feed442d5b3f0a3e5e26991cc45838d3eea3"
+  "sha256": "5e61efb956f05124d8568b8e3c20df7b576fc31f8dc947560230a0a931479a14"
 }
