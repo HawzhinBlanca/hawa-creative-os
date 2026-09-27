@@ -20,12 +20,13 @@ async function open(view:Awaited<ReturnType<typeof mount>>){
   await click(byText(view.container,'button','Review aaaaaaaa'));await flush();
 }
 it('shows unknown original billing, original outcome and separate accounting history',async()=>{
-  const recorded={...detail,revision:1,requiresCostEvidence:false,attestedCostUsd:0,
+  const recorded={...detail,revision:1,requiresCostEvidence:false,attestedCostUsd:0,settledCostUsd:.2,accountedCostUsd:.2,evidenceConflict:true,
     attestations:[{id,revision:1,actorUserId:'named-admin',recordedAt:detail.startedAt,reason:'No charge confirmed',conclusion:'provider_finished',reportedCostUsd:0,evidenceReference:'support-123',evidenceSha256:'c'.repeat(64)}]};
   stubCore(c=>json(c.path==='/v1/spending/calls'?{items:[recorded],nextCursor:null}:recorded));
   const view=await mount(React.createElement(CallCostAccountingPanel));await open(view);
   expect(view.text()).toContain('Unknown');expect(view.text()).toContain('Original outcome: received');
   expect(view.text()).toContain('$0.000000');expect(view.text()).toContain('Attested by named-admin');
+  expect(view.text()).toContain('Prior run settlement$0.200000');expect(view.text()).toContain('Retained evidence disagrees');
   expect(view.text()).toContain('Record final call cost');expect(view.text()).not.toContain('Close held evaluation');
   await view.unmount();
 });

@@ -2,6 +2,7 @@ import { afterAll, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext, DesignStudioRepository, assertStudioCallsResolved } from '@hawa/db';
 import { CallCostAccountingService } from '../src/services/call-cost-accounting.js';
+import { StudioCallSettlementService } from '../src/services/studio-call-settlement.js';
 import { createApp } from '../src/app.js';
 import type { CallCostKind } from '@hawa/contracts';
 const owner=createDb(process.env.TEST_DATABASE_OWNER_URL!), db=createDb(process.env.TEST_DATABASE_URL!);
@@ -202,4 +203,16 @@ it('does not relabel a schema-invalid provider response as a non-accepted reques
     .rejects.toMatchObject({code:'CALL_COST_CONTRADICTORY_EVIDENCE'});
   const errored=await f.evaluation({ok:false,error:{code:'MODEL_RESPONSE_SCHEMA_INVALID',detail:{acceptance:'response_received',estimatedCostUsd:0,costBasis:'usage',requiresReconciliation:true}}});
   expect(await f.service.get(f.scope,'evaluation',errored)).toMatchObject({originalAccepted:true,requiresCostEvidence:true});
+});
+
+it('counts a prior run settlement once and resolves the current conflict only with matching higher evidence',async()=>{
+  const f=await fixture(),id=await f.studio(false),recovery=new StudioCallSettlementService(db);
+  await f.repo.updateRunStatus(f.runId,f.tenantId,'abandoned');
+  const prior=await recovery.get(f.scope,f.taskId,f.runId),body=await f.body('studio',id,.3);
+  await recovery.settle(f.scope,f.taskId,f.runId,randomUUID(),{...body,expectedSnapshot:prior.snapshotHash});
+  await f.service.record(f.scope,'studio',id,randomUUID(),await f.body('studio',id,.1));
+  expect(await f.service.get(f.scope,'studio',id)).toMatchObject({settledCostUsd:.3,attestedCostUsd:.1,accountedCostUsd:.3,evidenceConflict:true});
+  await f.service.record(f.scope,'studio',id,randomUUID(),await f.body('studio',id,.3));
+  expect(await f.service.get(f.scope,'studio',id)).toMatchObject({revision:2,accountedCostUsd:.3,evidenceConflict:false,attestations:expect.any(Array)});
+  expect(await f.daily()).toMatchObject({spentUsd:.3,heldUsd:0});
 });

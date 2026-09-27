@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "AFFECTED_TESTS_PASSED_RELEASE_AND_RUNTIME_PENDING",
+  "status": "CORRECTED_CANDIDATE_FULL_REGRESSION_PENDING",
   "requirements": [
     "FR-059",
     "FR-060",
@@ -12,10 +12,11 @@
   "adr": "097_exact_call_cost_accounting",
   "evidenceDirectory": "output/acceptance/2026-09-27-call-cost-accounting",
   "focused": {
-    "passed": 73,
+    "passed": 112,
     "failed": 0,
     "skipped": 0,
-    "files": 7
+    "files": 11,
+    "log": "output/acceptance/2026-09-27-call-cost-accounting/focused-corrected.log"
   },
   "checks": {
     "strictTestRoots": 488,
@@ -32,13 +33,15 @@
     "securitySelfTestPatterns": 11
   },
   "fullRegression": "pending",
-  "runtimeChanged": false,
+  "runtimeChanged": true,
   "productionChanged": false,
   "realProviderCalls": false,
   "failedFirstEvidence": [
     "Initial strict build rejected optional Hono path parameters; invalid IDs now reach explicit validation.",
     "Next build rejected an unused React import; removed.",
-    "Expanded suite initially passed70/failed2: historical fixture used a function name instead of the immutable trigger name; designer fixture lacked its explicit client assignment. Both corrected; final72 pass."
+    "Expanded suite initially passed70/failed2: historical fixture used a function name instead of the immutable trigger name; designer fixture lacked its explicit client assignment. Both corrected; final72 pass.",
+    "First full suite failed three route/migration inventory expectations and the RLS membership-hoisting gate. Inventories now name the new routes/migration; policy membership checks are hoisted without loosening client scope. 112 focused follow-up tests pass.",
+    "Code review made prior run-settlement charges explicit in Desk and allowed a later matching attestation to resolve the current cost-conflict flag while retaining full history."
   ],
   "notQualified": [
     "Live provider billing or invoices",
@@ -55,19 +58,22 @@
     "apps/core/src/app.ts": "18472d29479b75ab51a08bc8508dda0c92ae8498f4f4fbe648cc2da86e474d29",
     "apps/core/src/routes/call-cost.routes.ts": "50c1cf327a7c0384fd53c356f5a5ee3ce6af3a16138b8bcc767983e396d36e81",
     "apps/core/src/services/call-cost-accounting.ts": "bb528832d47fbf0432a067ec8847264889d49a53dd113a3c3edfacb7ecae069f",
-    "apps/core/test/call-cost-accounting.test.ts": "efabd1a2752188de819df643e495accd03c750082fd995d725183850e95b3120",
+    "apps/core/test/call-cost-accounting.test.ts": "06d5f8d0c3ecc4b5553909daaf1c499d2d0ab1087ccaac5ddb605cc8a94abb25",
+    "apps/core/test/fixtures/route-inventory.txt": "1391a7f73b19f60d357fb6d489d249d1630b546f3977e4322cd421e8219f5b39",
+    "apps/core/test/startup-schema-check.test.ts": "22d51a159c715f16202a2932dfce5e3ae725153d3e0c668a9e80d040cad95d67",
     "apps/desk/src/api/client.ts": "6f9087a7c4dca6e958b1b5515bd13d1986004980733fff25ad2028419fad1aa1",
-    "apps/desk/src/components/CallCostAccountingPanel.tsx": "a2b3c67b5e6e6ec072954c7382e2ad2feab937fd5ff1533e8463d5a13908c4ee",
+    "apps/desk/src/components/CallCostAccountingPanel.tsx": "5abdfe8a707727b1f18db914525145572374aaa4af150900729f2d633a490a77",
     "apps/desk/src/components/EvaluationSettlementPanel.tsx": "f36456e74052c2c306225db12425befb61dfffb5de09d7a72cd8dde656b8b422",
     "apps/desk/src/screens/OpsScreen.tsx": "8e6aad6c24365853fb3467f98f2370bb994e4385c63eaebd97e10a1c99e702f1",
-    "apps/desk/test/call-cost-accounting.test.ts": "ac7f7e2932728e92227ca8ffd12204d435d6ba136c55ff2d598e0127389f0baf",
+    "apps/desk/test/call-cost-accounting.test.ts": "01011a5a30994265b0a17f74748e484349eb5dd433cfaf5ce6badd87f1a4d813",
     "docs/07_MODEL_REGISTRY_AND_EVALUATION.md": "08d474dbea59b2865dad11a4af97cea4c57fdd50cb5d0eff8dc99986d45e3cdb",
     "docs/10_WORKFLOW_RELIABILITY.md": "dd2ab78c97aac7ddf535a50ae2fc518b1bc5b031822874702b024309fd17de1d",
     "docs/17_UI_UX.md": "2800a6655ce649e2792b25b27cc3a62276c9069902f2d4a3c18c9ae1679c51ec",
     "packages/contracts/src/call-cost.ts": "76225e9861092c65266553e9ac14c80a17387ba7b4467ad226d6c7ee207c77df",
     "packages/contracts/src/index.ts": "08be5e3b3f6cfb5aca51a150fafcecd6f7dbdc8b16c39860b172f4ed77f24032",
-    "packages/db/migrations/053_exact_call_cost_accounting.sql": "b101b8d2b2dfaee8b2f66f759b99622e9cccb13e2ee1f5a97e374da27f408f3c",
+    "packages/db/migrations/053_exact_call_cost_accounting.sql": "9ca52bbf9c88df4a3196d3729e6a86f2fad5742c70bde4ad1e71ea76307d2f15",
     "packages/db/src/repositories/design-studio.repository.ts": "eb2af8bbc694edeed687e2d156c85e2fff55eed1d0608f850fefe94553591fc6",
+    "packages/db/test/schema-upgrade.test.ts": "d59e4fc339ad3eeb3c1441ac0a6d63b0ea8710e21f9f8ae7f749989eb16e5d31",
     "packages/domain/src/studio-budget.ts": "d2676bb56bd943c520e8acbc8524f656a4fb7b08a65bab415be3e6d3931c910b",
     "runbooks/CALL_COST_ACCOUNTING.md": "eba0c40d1346279343de7526d5766ae083f6b5f8b437cfc92f223817f3e4ba13"
   },
@@ -89,5 +95,18 @@
     "output/acceptance/2026-09-27-call-cost-accounting/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
     "output/acceptance/2026-09-27-call-cost-accounting/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
     "output/acceptance/2026-09-27-call-cost-accounting/types-first.log": "b5e37022b480bbe1f13dfe55de0ec583345167cb7e2b5bc4c8bf9dfc31f39bca"
+  },
+  "implementationCommit": "390c889",
+  "firstTestedCommit": "0d7af612ed0a2fc69f92eecaa921de2fd79833c4",
+  "firstFullRegression": {
+    "passed": 3997,
+    "failed": 4,
+    "skipped": 59,
+    "log": "output/acceptance/2026-09-27-call-cost-accounting/full-candidate.log"
+  },
+  "firstRuntime": {
+    "buildCommit": "0d7af612ed0a2fc69f92eecaa921de2fd79833c4",
+    "workflowChecksPassed": 63,
+    "sourceFile": "output/acceptance/2026-09-27-call-cost-accounting/candidate-rehearsal.json"
   }
 }

@@ -31,7 +31,7 @@ export function CallCostAccountingPanel() {
       {notice&&<p role="alert">{notice}</p>}
       {busy&&<p role="status">Loading call evidence…</p>}
       {page&&<div style={{overflowX:'auto'}}><table style={{width:'100%',marginTop:12}}>
-        <caption>Newest calls first · final cost evidence is attested by a named administrator</caption>
+        <caption>Newest calls first · administrator attestations are shown separately from original receipts</caption>
         <thead><tr><th>Call</th><th>Original cost</th><th>Reserved</th><th>Accounting</th><th>Evidence</th></tr></thead>
         <tbody>{page.items.map(call=><tr key={`${call.kind}:${call.id}`}>
           <td>{call.kind} · {call.model||'Model not reported'}<br/><small>{new Date(call.startedAt).toLocaleString()} · {call.id.slice(0,8)}</small></td>
@@ -45,8 +45,10 @@ export function CallCostAccountingPanel() {
         <h3>{detail.kind} call · {detail.model||'Model not reported'}</h3>
         <p style={{overflowWrap:'anywhere'}}>Call ID: {detail.id}<br/>Original outcome: {detail.status}<br/>Provider reference: {detail.providerRequestId||'Not reported'}</p>
         <dl><dt>Original recorded cost</dt><dd>{usd(detail.originalCostUsd)}</dd>
+          <dt>Original allocation</dt><dd>{usd(detail.reservedUsd)}</dd>
+          <dt>Prior run settlement</dt><dd>{detail.settledCostUsd===null?'None recorded':usd(detail.settledCostUsd)}</dd>
           <dt>Highest administrator-attested cost</dt><dd>{usd(detail.attestedCostUsd)}</dd>
-          <dt>Conservative cost used for admission</dt><dd>{usd(detail.accountedCostUsd)}{detail.requiresCostEvidence?' · unused allocation remains held':''}</dd></dl>
+          <dt>Known minimum charge</dt><dd>{usd(detail.accountedCostUsd)}{detail.requiresCostEvidence?' · unused allocation remains held':''}</dd></dl>
         {detail.evidenceConflict&&<p role="alert">Retained evidence disagrees. The highest recorded charge still counts toward spending. Review the original provider evidence before appending a correction.</p>}
         {detail.attestations.length>0&&<details><summary>Accounting history ({detail.attestations.length})</summary>
           {detail.attestations.map(a=><article key={a.id}><h4>Revision {a.revision} · {usd(a.reportedCostUsd)}</h4>

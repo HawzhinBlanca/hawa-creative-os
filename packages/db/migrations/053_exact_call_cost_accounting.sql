@@ -24,14 +24,15 @@ CREATE TABLE hawa.call_cost_attestations (
 ALTER TABLE hawa.call_cost_attestations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hawa.call_cost_attestations FORCE ROW LEVEL SECURITY;
 CREATE POLICY call_cost_read ON hawa.call_cost_attestations FOR SELECT USING
-  (tenant_id=hawa.current_tenant_id() AND (hawa.has_tenant_role(tenant_id,
-    ARRAY['administrator','operator','auditor']::hawa.membership_role[]) OR
-    (call_kind='studio' AND hawa.has_tenant_role(tenant_id,ARRAY['designer']::hawa.membership_role[]) AND EXISTS(
+  (tenant_id=hawa.current_tenant_id() AND ((SELECT hawa.has_tenant_role(hawa.current_tenant_id(),
+    ARRAY['administrator','operator','auditor']::hawa.membership_role[])) OR
+    (call_kind='studio' AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['designer']::hawa.membership_role[])) AND EXISTS(
       SELECT 1 FROM hawa.design_studio_calls c JOIN hawa.design_studio_runs r ON r.id=c.run_id AND r.tenant_id=c.tenant_id
-      WHERE c.tenant_id=call_cost_attestations.tenant_id AND c.id=call_cost_attestations.call_id AND hawa.can_access_client(c.tenant_id,r.client_id)))));
+      WHERE c.tenant_id=call_cost_attestations.tenant_id AND c.id=call_cost_attestations.call_id
+        AND r.client_id=ANY((SELECT hawa.member_client_ids(false))::uuid[])))));
 CREATE POLICY call_cost_insert ON hawa.call_cost_attestations FOR INSERT WITH CHECK
-  (tenant_id=hawa.current_tenant_id() AND actor_user_id=hawa.current_user_id() AND hawa.has_tenant_role(tenant_id,
-    ARRAY['administrator']::hawa.membership_role[]));
+  (tenant_id=hawa.current_tenant_id() AND actor_user_id=hawa.current_user_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),
+    ARRAY['administrator']::hawa.membership_role[])));
 GRANT SELECT,INSERT ON hawa.call_cost_attestations TO hawa_app;
 REVOKE UPDATE,DELETE ON hawa.call_cost_attestations FROM hawa_app;
 
@@ -99,8 +100,8 @@ BEGIN
     'settledCostUsd',settled,'attestedCostUsd',attested,'accountedCostUsd',greatest(coalesce(original,0),coalesce(settled,0),coalesce(attested,0)),
     'originalAccepted',coalesce(accepted,false),'requiresCostEvidence',NOT(coalesce(final,false) OR settled IS NOT NULL OR attested IS NOT NULL),
     'revision',revision,'attestations',receipts,
-    'evidenceConflict',EXISTS(SELECT 1 FROM jsonb_array_elements(receipts) a WHERE
-      (coalesce(accepted,false) AND a->>'conclusion'='provider_not_accepted') OR original>(a->>'reportedCostUsd')::numeric));
+    'evidenceConflict',coalesce((accepted AND receipts->-1->>'conclusion'='provider_not_accepted') OR
+      greatest(coalesce(original,0),coalesce(settled,0),coalesce(attested,0))>(receipts->-1->>'reportedCostUsd')::numeric,false));
   RETURN result||jsonb_build_object('snapshotHash',encode(sha256(convert_to(jsonb_build_array(src,extra,receipts)::text,'UTF8')),'hex'));
 END $$;
 REVOKE ALL ON FUNCTION hawa.office_call_cost_evidence(text,uuid) FROM PUBLIC;
