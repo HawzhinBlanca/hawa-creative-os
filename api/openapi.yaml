@@ -642,10 +642,21 @@ paths:
                         detail: {type: object}
         default: {$ref: '#/components/responses/Problem'}
   /v1/evaluations/runs:
+    get:
+      tags: [Evaluations]
+      operationId: listEvaluationRuns
+      responses:
+        '200': {description: Tenant-scoped durable fixture runs, content: {application/json: {schema: {type: array, items: {type: object}}}}}
+        default: {$ref: '#/components/responses/Problem'}
     post:
       tags: [Evaluations]
       operationId: startEvaluation
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      description: Run or resume the same fixture evaluation using a stable action UUID. Results are diagnostics, not model admission evidence.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
       requestBody:
         required: true
         content:
@@ -653,13 +664,13 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [datasetId, candidate]
+              required: [name]
               properties:
-                datasetId: {type: string, format: uuid}
-                candidate: {type: object}
-                blindReview: {type: boolean, default: true}
+                name: {type: string, minLength: 1, maxLength: 160}
       responses:
-        '202': {description: Evaluation started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        '200': {description: Saved completed or stopped evaluation result, content: {application/json: {schema: {type: object}}}}
+        '409': {description: Running, unsettled, version mismatch or changed action inputs}
+        '503': {description: Durable storage or outcome unavailable; retry only the same action}
         default: {$ref: '#/components/responses/Problem'}
   /v1/evaluations/runs/{runId}:
     get:
@@ -672,17 +683,19 @@ paths:
           schema: {type: string, format: uuid}
       responses:
         '200':
-          description: Evaluation run
+          description: Saved tenant-scoped evaluation run
           content:
             application/json:
               schema:
                 type: object
-                required: [id, status, candidate, summary]
+                required: [runId, actionId, status, name, report, resumable]
                 properties:
-                  id: {type: string, format: uuid}
-                  status: {enum: [queued, running, completed, failed, cancelled]}
-                  candidate: {type: object}
-                  summary: {type: object}
+                  runId: {type: string, format: uuid}
+                  actionId: {type: string, format: uuid}
+                  name: {type: string}
+                  status: {enum: [running, completed, failed]}
+                  report: {type: [object, 'null']}
+                  resumable: {type: boolean}
         default: {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:

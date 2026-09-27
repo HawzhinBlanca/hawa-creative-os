@@ -210,3 +210,19 @@ attempted failures from unexecuted cases. A stopped tournament has no aggregate
 pass percentage and is not admission evidence. The current implementation enforces
 this during one process; a durable evaluation-call ledger, restart recovery and
 provider reconciliation remain required before qualifying resumable evaluations.
+
+### Durable fixture evaluation recovery (ADR-084, 2026-09-27)
+
+Fixture tournaments use the existing tenant-scoped eval_runs table and a per-run
+ordinal call ledger. The action UUID, request hash, corpus/image/protocol/source
+identity and first call outcomes are immutable. Save admission before transport;
+replay only the retained scoring projection and gateway receipt metadata. Raw
+prompts and free-text responses are excluded. This narrow fixture retention rule
+does not authorize storing general client model output.
+
+A repeated action returns or resumes its saved run. A pending or uncertain call
+holds the run and blocks fresh actions until reconciliation; provider availability
+changes cannot bypass the saved admission. A version conflict requires the original
+candidate. Database unavailability must not invoke an in-memory model path. Desk
+retains the action through HTTP failure/refresh and exposes incomplete status and
+sanitized call receipts. Provider settlement and live billing remain unqualified.

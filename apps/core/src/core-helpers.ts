@@ -61,6 +61,7 @@ export class TaskStoreUnavailableError extends Error {
 }
 
 export interface CreateAppOptions {
+  evaluationGateway?: import('@hawa/contracts').ModelGateway;
   canvaOptions?: CanvaServiceOptions;
   canvaConnectService?: CanvaConnectService;
   designStudioOptions?: DesignStudioServiceOptions;

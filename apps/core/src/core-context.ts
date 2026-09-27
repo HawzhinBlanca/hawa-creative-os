@@ -29,7 +29,7 @@ import type {
 } from '@hawa/integrations';
 import type { CreativeDirectorRunner } from '@hawa/creative';
 import type { SyntheticTrafficDaemon } from '@hawa/testkit';
-import type { EvaluationRunner } from '@hawa/evals';
+import type { DurableEvaluationService } from './services/durable-evaluations.js';
 import type { PaidModelHealth } from './services/paid-model-health.js';
 import type { AuthContext, ClientDnaSnapshot } from './routes/types.js';
 import type { CreateAppOptions } from './core-helpers.js';
@@ -65,7 +65,7 @@ export interface CoreContext {
   telegramBridge?: TelegramBridgeDaemon;
   telegramActionTokenService?: TelegramActionTokenService;
   sloDaemon: SyntheticTrafficDaemon;
-  evaluationRunner: EvaluationRunner;
+  evaluationService: DurableEvaluationService | null;
   reconciliationService: ReconciliationService;
   canvaConnectService: CanvaConnectService | null;
   /** Where approved exports are read from (pinned-deliverables.ts). */
@@ -90,8 +90,6 @@ export interface CoreContext {
   uploadedAssets: Map<string, any>;
   /** Client DNA as this process loaded it; Postgres answers first (services/client-dna-resolver.ts). */
   clientDnas: Map<string, ClientDNA>;
-  /** Evaluation runs: no table yet (SPLIT_PLAN.md section 7 leaves them to the owner). */
-  evalRuns: Map<string, any>;
 
   historicalMigrator: HistoricalDesignMigrator;
   globalCanvaNativeAdapter: CanvaNativeAdapter;

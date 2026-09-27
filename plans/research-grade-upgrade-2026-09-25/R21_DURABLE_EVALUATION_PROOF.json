@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "requirements": [
+    "FR-059",
+    "FR-060",
+    "FR-065",
+    "FR-067",
+    "FR-079",
+    "NFR-001"
+  ],
+  "adr": "adrs/084_durable_evaluation_calls.md",
+  "migration": "047_durable_evaluation_calls",
+  "status": "DURABLE_FIXTURE_REPLAY_AND_TWO_PROCESS_KILL_BOUNDARIES_VERIFIED",
+  "captureBaseCommit": "410e6bf94a3a813d5e325dfee94e730b0c49d607",
+  "captureSourceTreeClean": false,
+  "sourceHashes": {
+    "packages/db/migrations/047_durable_evaluation_calls.sql": "3171cbc8708bcfca2052b0ce85e3108f361726603918a2d608077c285a61b83a",
+    "db/schema.sql": "d230c2c3a471622505a1edf489f340d382ea187a30c3ff600f6c66498a4e46fe",
+    "apps/core/src/services/durable-evaluations.ts": "43ef801c29cb27fca45451371ef967b3eda16a3011c72cbede1a4d9c8e7ea7fb",
+    "apps/core/src/routes/evals.routes.ts": "8563bcf8dfbf293503879e7e736a0613fb3e96f1e704062623d02774e7fde0e1",
+    "apps/core/src/app.ts": "b98381023e232ea0755433ffcf2ccb62c029f97c597f42433389704fce3fb448",
+    "apps/core/src/core-context.ts": "b1eef06dc4b20dc7705f9346d054a8fdbdc8be26c4dd75cf5721e62f7813a570",
+    "apps/core/src/core-helpers.ts": "a65436145715233f670bcd5da5358ac8fedd60acd4886229832f6b28e8e12ad1",
+    "packages/evals/src/fixture-replay.ts": "a7e504c0018f855daa6183bbff720dba1e6983f950c45ddaec52c2daf7343c4a",
+    "packages/evals/src/index.ts": "9f5fbd6f234d4811d0bac9ec716d05dc225be17f05a23448434b6a446baec7c0",
+    "apps/desk/src/services/evaluation-action.ts": "b40b7dcbb28db59a344fe37069b697e2b9b801fae5db1b35b5d79569d0ec9b92",
+    "apps/desk/src/api/client.ts": "2dc616b91c157e0561f332bb7c2f0da200ad6d0e76a011d921515541a199df4e",
+    "apps/desk/src/screens/EvalScreen.tsx": "2542e670012b33d6cd9ffcec0bd87293239b727b7dcadd4524f57102133ee0b5",
+    "api/openapi.yaml": "dd464f7b68faf3c159c554cfc4f19b1ce894819635a5c08ea7a5e2612223c5ab",
+    "apps/core/test/durable-evaluations.test.ts": "0c658d4222e298d8e4d9cb75c3dfe52879857f9aa96541064ba60c2de7cfc7e6",
+    "apps/core/test/evaluation-kill-recovery.test.ts": "20fc82099c67f53157c585881ee2a3e2d87fe217023ecd54b8806e9261ad86e9",
+    "apps/core/test/fixtures/evaluation-kill-child.ts": "f4ca80c7f3c971f98e01c7957b404ffb15055b424a1c3e83fc626d06e66b741c",
+    "packages/evals/test/fixture-replay.test.ts": "684fbb201f25b60fbc5b6510a67ffa40a6fbc47e4ff595e50ce9170446fe6ecc",
+    "apps/desk/test/evaluation-action.test.ts": "417c8766b3b2deff8efae32233e7525ffce072c1ea82f3b50feedae1ca04ea06",
+    "apps/desk/test/desk-auth.test.ts": "07e8ccf808de4d75aec4a4e6d88ee5ae4a5d7255e328346d0c33df358808e030"
+  },
+  "verification": {
+    "testRuns": {
+      "first-tests": {
+        "files": 5,
+        "passed": 55,
+        "failed": 0,
+        "skipped": 0,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/first-tests.json"
+      },
+      "kill-tests": {
+        "files": 2,
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/kill-tests.json"
+      },
+      "final-tests": {
+        "files": 23,
+        "passed": 181,
+        "failed": 0,
+        "skipped": 0,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/final-tests.json"
+      },
+      "current-tests": {
+        "files": 4,
+        "passed": 14,
+        "failed": 0,
+        "skipped": 0,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/current-tests.json"
+      }
+    },
+    "typesLintDeskBuild": "output/acceptance/2026-09-27-durable-evaluations/types-lint-desk-build.log",
+    "processKill": {
+      "boundaries": [
+        "after provider reads request, before response",
+        "after first reply is committed, before the next admission"
+      ],
+      "actualSigkills": 2,
+      "providerRequestsPerScenario": 1,
+      "unknownOutcomeReplayProviderCalls": 0,
+      "recordedOutcomeReplay": "Saved first call is reused; later never-admitted calls proceed.",
+      "runtimeRls": true,
+      "provider": "localhost synthetic HTTP endpoint"
+    },
+    "fullRegression": "Not yet run on the sealed candidate.",
+    "candidateDeployment": "Not refreshed for this change yet.",
+    "developmentCorrections": [
+      "Initial typecheck found two missing required safeAction fields; corrected before final typecheck.",
+      "Recovery now reads existing call evidence before mutable provider resolution, including when that provider is subsequently unavailable.",
+      "Provider/model display uses observed receipt facts; a pending call stays unknown.",
+      "Replay identity also binds the fixed visual image hash."
+    ]
+  },
+  "limits": [
+    "No live provider acceptance/billing reconciliation or operator settlement API",
+    "Fixture diagnostics only; admissionEligible remains false",
+    "No general client prompt or response persistence authorization",
+    "No production change, real approval or message",
+    "Independent-host recovery, human visual quality and real end-to-end pilot remain open"
+  ],
+  "artifacts": {
+    "output/acceptance/2026-09-27-durable-evaluations/build.log": {
+      "bytes": 6,
+      "sha256": "5ac71a99decf5b92dbfe798066cbe8ea317395f8f764f5a8879fd3511ca99454"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/current-tests.json": {
+      "bytes": 5958,
+      "sha256": "a2820e9537ba35f3e1bee53feb1850f8ebe4b87e11924b47d46ed8274aa00495"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/current-tests.log": {
+      "bytes": 228,
+      "sha256": "b122d0bb513b7250acc0b983badb0d4d750173ee98ed7cfa600d8079031f223d"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/final-tests.json": {
+      "bytes": 72914,
+      "sha256": "73d25060f7b3d7817ae68ea7293f031e15fb9fc7c37042fbffc56cc81fd2d8ef"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/final-tests.log": {
+      "bytes": 1193,
+      "sha256": "986a545e23a58f43af55833f69938428fb57c11129e2d0614b077562e101435d"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/first-tests.json": {
+      "bytes": 20574,
+      "sha256": "80f3479354d56ad990da3f3efd5ffc5916c5a4cb0f9f14b8372dd6bb1f54d61f"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/first-tests.log": {
+      "bytes": 1193,
+      "sha256": "83de7c31a993a37ee06c606dcf3a840fab58974546447f5471a9c9046feb01df"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/kill-tests.json": {
+      "bytes": 1713,
+      "sha256": "39772c73b3a79db79e408b3956b98d323ed71da96d7a85d2adabe8c586b04e54"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/kill-tests.log": {
+      "bytes": 225,
+      "sha256": "dc725ca63dfe32704827b785195191253ed42007e80cdfb8152ad53c5edabbbe"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/types-lint-desk-build.log": {
+      "bytes": 1177,
+      "sha256": "5548afe53969f9b76c053daf5ccd814f7412afc68d04c470efe7decbe7d884ea"
+    }
+  }
+}

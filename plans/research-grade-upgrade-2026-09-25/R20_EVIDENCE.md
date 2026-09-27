@@ -154,3 +154,35 @@ by the real named-review/edit/revision/delivery pilot, independent recovery and
 held-out quality/cost qualification.
 
 Initial pre-commit scanner rejected a synthetic response marker named secret. Renamed it privateBody without changing runtime behavior or the marker value; the gateway follow-up passed 41 tests, zero failures. Final acceptance of the commit hook is checked separately.
+
+## 2026-09-27 — Durable fixture evaluation replay and recovery (ADR-084)
+
+Migration 047 and the existing evaluation tables replace Core's in-memory history.
+A stable Desk action UUID admits one tenant-scoped run; a changed name conflicts.
+Each model request is recorded before transport. Completed calls replay an
+allowlisted scoring projection and receipt metadata; raw prompt/free-text output
+is not stored. Corpus, visual image, evaluator protocol and source seal bind replay.
+Database loss starts no fallback work, and a new action cannot bypass an incomplete
+run or pending/uncertain call. The call admission and first outcome are immutable.
+
+Desk retains a failed HTTP action through refresh, offers resume on incomplete
+history, and exposes observed provider/model facts, estimated costs and unknown
+amounts. Fixture diagnostics remain admissionEligible:false. Recovery checks the
+saved admission before current provider availability, so removing a provider cannot
+skip an earlier uncertain call.
+
+Connected checks: 23 files/181 passed, zero failed/skipped; final affected follow-up
+4 files/14 passed including the new version-mismatch refusal. Two real SIGKILL
+boundaries each observed one localhost provider request: the missing answer stays
+held with no replay fetch; a committed reply is reused and subsequent never-admitted
+calls can proceed. Runtime-RLS tests also cover tenant isolation, concurrency,
+immutable outcomes, HTTP retry/fresh Core history and a database failure before the
+next admission. Types, lint and Desk build pass. The initial typecheck's two missing
+safeAction fields were corrected. Full regression and refreshed candidate follow
+source sealing; earlier source/candidate results do not qualify this migration.
+
+Provider billing lookup/settlement, independent-host recovery, the real named-review
+Canva/revision/delivery pilot, and human quality/cost qualification remain open.
+No production change, real model call, human approval or message. R20/R21 remain
+in progress. Proof: `R21_DURABLE_EVALUATION_PROOF.json`;
+operation: `runbooks/EVALUATION_RECOVERY.md`.

@@ -137,7 +137,7 @@ const CALLS: Array<{ name: string; call: () => Promise<unknown>; method: string;
   { name: 'Eval: dataset cases', call: () => apiClient.evaluations.cases('rtl'), method: 'GET', path: '/v1/evaluations/datasets/rtl/cases' },
   {
     name: 'Eval: tournament run',
-    call: () => apiClient.evaluations.run('RTL Golden Suite Automated Tournament'),
+    call: () => apiClient.evaluations.run('RTL Golden Suite Automated Tournament', '12345678-1234-4234-8234-123456789abc'),
     method: 'POST',
     path: '/v1/evaluations/runs',
     body: { name: 'RTL Golden Suite Automated Tournament' },

@@ -1,42 +1,40 @@
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { RouteContext } from './types.js';
+import { EvaluationError } from '../services/durable-evaluations.js';
 
 export function registerEvalsRoutes(ctx: RouteContext) {
-  const { registerRoute, evaluationRunner, evalRuns, problem } = ctx;
-
-  // Evaluation Runs
+  const { registerRoute, evaluationService, verifyRequestAuth, problem } = ctx;
+  const scope = (c: any) => {
+    const auth = verifyRequestAuth(c);
+    return { tenantId: auth.tenantId!, userId: auth.userId!, role: auth.role };
+  };
   registerRoute('post', '/evaluations/runs', async (c: any) => {
-    const body = await c.req.json().catch(() => ({}));
-    const runId = crypto.randomUUID();
-
-    const evalReport = await evaluationRunner.runFullTournament();
-    const run = {
-      runId,
-      name: body.name || 'Hawa Creative Full Tournament',
-      report: evalReport,
-      createdAt: new Date().toISOString(),
-    };
-    evalRuns.set(runId, run);
-
-    return c.json(run, 201);
+    if (!evaluationService) return problem(c, 503, 'Evaluation Database Required', 'No model work started; durable evaluation storage is unavailable.');
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return problem(c,400,'Evaluation Input Invalid');
+    try {
+      const actionId = c.req.header('Idempotency-Key');
+      if (body.actionId && body.actionId !== actionId) return problem(c,400,'Conflicting Action IDs');
+      return c.json(await evaluationService.run(scope(c), {actionId, name:body.name}), 200);
+    } catch (error) {
+      if (error instanceof EvaluationError) return problem(c,error.status,error.code,error.message);
+      return problem(c,503,'Evaluation Outcome Unavailable','Reload or retry the same action. A request may already have been admitted; do not start a fresh run.');
+    }
   });
-
-  registerRoute('get', '/evaluations/runs', (c: any) => {
-    return c.json(Array.from(evalRuns.values()));
+  registerRoute('get', '/evaluations/runs', async (c: any) => {
+    if (!evaluationService) return problem(c,503,'Evaluation Database Required');
+    return c.json(await evaluationService.list(scope(c)));
   });
-
-  registerRoute('get', '/evaluations/runs/:runId', (c: any) => {
-    const runId = c.req.param('runId');
-    const run = evalRuns.get(runId);
-    if (!run) return problem(c, 404, 'Evaluation Run Not Found');
-    return c.json(run);
+  registerRoute('get', '/evaluations/runs/:runId', async (c: any) => {
+    if (!evaluationService) return problem(c,503,'Evaluation Database Required');
+    const run = await evaluationService.get(scope(c),c.req.param('runId'));
+    return run ? c.json(run) : problem(c,404,'Evaluation Run Not Found');
   });
 
   registerRoute('get', '/evaluations/datasets', (c: any) => {
     return c.json([
-      { id: 'brief', name: 'Brief Builder', casesCount: 200, status: 'ok', file: 'evals/routing_brief.jsonl', description: 'Blind holdout · exact versions · no production state mutation' },
+      { id: 'brief', name: 'Brief Builder', casesCount: 200, status: 'ok', file: 'evals/routing_brief.jsonl', description: 'Fixture diagnostics · not model admission evidence' },
       { id: 'rtl', name: 'RTL Golden Suite', casesCount: 40, status: 'ok', file: 'evals/rtl_golden_cases.jsonl', description: 'UAX #9 bidi paragraph embedding, isolate formatting, and Sorani numerals' },
       { id: 'retrieval', name: 'Retrieval & Leakage', casesCount: 20, status: 'ok', file: 'evals/retrieval_eval.jsonl', description: 'Cross-client leakage tests, negative context filtering, and scope locks' },
     ]);

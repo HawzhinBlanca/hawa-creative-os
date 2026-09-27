@@ -417,8 +417,9 @@ class HawaApiClient {
   public readonly evaluations = {
     datasets: () => this.request<any[]>('/evaluations/datasets'),
     runs: () => this.request<any[]>('/evaluations/runs'),
+    get: (runId: string) => this.request<any>(`/evaluations/runs/${encodeURIComponent(runId)}`),
     cases: (datasetId: string) => this.request<any>(`/evaluations/datasets/${encodeURIComponent(datasetId)}/cases`),
-    run: (name: string) => this.request<any>('/evaluations/runs', { method: 'POST', body: JSON.stringify({ name }) }),
+    run: (name: string, actionId: string) => this.request<any>('/evaluations/runs', { method: 'POST', headers: { 'Idempotency-Key': actionId }, body: JSON.stringify({ name }) }),
   };
 
   // The blinded comparison with the office designer (Core: routes/comparison.routes.ts). The judges'

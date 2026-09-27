@@ -823,7 +823,31 @@ CREATE TABLE eval_runs (
   status text NOT NULL CHECK (status IN ('queued','running','completed','failed','cancelled')),
   summary jsonb NOT NULL DEFAULT '{}'::jsonb,
   started_at timestamptz NOT NULL DEFAULT now(),
-  completed_at timestamptz
+  completed_at timestamptz,
+  action_id uuid,
+  request_hash text,
+  actor_id uuid REFERENCES users(id),
+  name text
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS eval_runs_action_key ON eval_runs(tenant_id,action_id);
+CREATE UNIQUE INDEX IF NOT EXISTS eval_runs_tenant_identity ON eval_runs(tenant_id,id);
+CREATE TABLE eval_model_calls (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  run_id uuid NOT NULL,
+  ordinal integer NOT NULL CHECK (ordinal > 0),
+  request_hash text NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
+  role text NOT NULL,
+  deployment jsonb NOT NULL,
+  status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','completed','uncertain')),
+  outcome jsonb,
+  started_at timestamptz NOT NULL DEFAULT now(),
+  finished_at timestamptz,
+  FOREIGN KEY(tenant_id,run_id) REFERENCES eval_runs(tenant_id,id),
+  UNIQUE(tenant_id,run_id,ordinal),
+  CHECK ((status='pending' AND outcome IS NULL AND finished_at IS NULL) OR
+         (status<>'pending' AND outcome IS NOT NULL AND finished_at IS NOT NULL))
 );
 
 CREATE TABLE eval_results (

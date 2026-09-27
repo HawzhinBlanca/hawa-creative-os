@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '../api/client.js';
 import { reasonOf } from '../services/statusReport.js';
+import { pendingEvaluation, retainEvaluation, clearEvaluation, type EvaluationAction } from '../services/evaluation-action.js';
 
 interface DatasetInfo {
   id: string;
@@ -13,7 +14,7 @@ interface DatasetInfo {
 // Names only, so the screen can be navigated before Core answers. Case counts are unknown until
 // Core reports them; a count shown here would be invented.
 const FALLBACK_DATASETS: DatasetInfo[] = [
-  { id: 'brief', name: 'Brief Builder', cases: 'count unknown', status: 'normal', description: 'Blind holdout · exact versions · no production state mutation' },
+  { id: 'brief', name: 'Brief Builder', cases: 'count unknown', status: 'normal', description: 'Fixture diagnostics · not model admission evidence' },
   { id: 'rtl', name: 'RTL Golden Suite', cases: 'count unknown', status: 'normal', description: 'UAX #9 bidi paragraph embedding, isolate formatting, and Sorani numerals' },
   { id: 'retrieval', name: 'Retrieval & Leakage', cases: 'count unknown', status: 'normal', description: 'Cross-client leakage tests, negative context filtering, and scope locks' },
 ];
@@ -54,9 +55,11 @@ export const EvalScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'cases' | 'candidates' | 'suites'>('cases');
 
   const [runningTournament, setRunningTournament] = useState(false);
+  const [pendingAction, setPendingAction] = useState<EvaluationAction | null>(pendingEvaluation);
   const [lastRunTime, setLastRunTime] = useState<string | null>(null);
   const [lastRunId, setLastRunId] = useState<string | null>(null);
   const [pastRuns, setPastRuns] = useState<any[]>([]);
+  const [callEvidence, setCallEvidence] = useState<{runId:string;calls:any[]} | null>(null);
   // No run loaded means no numbers: the cards show — until Core returns a report.
   const [runStats, setRunStats] = useState<RunStats | null>(null);
   const [evalNotice, setEvalNotice] = useState<string | null>(null);
@@ -136,18 +139,22 @@ export const EvalScreen: React.FC = () => {
     });
   }, [cases, searchQuery, langFilter]);
 
-  const handleRunTournament = async () => {
+  const handleRunTournament = async (selected?: EvaluationAction) => {
     setRunningTournament(true);
     try {
-      const data = await apiClient.evaluations.run(`${currentDataset?.name ?? 'Evaluation'} Automated Tournament`);
+      const action = selected || pendingAction || {actionId: crypto.randomUUID(), name: `${currentDataset?.name ?? 'Evaluation'} Automated Tournament`};
+      retainEvaluation(action);
+      setPendingAction(action);
+      const data = await apiClient.evaluations.run(action.name, action.actionId);
+      if (data.completedAt) { clearEvaluation(action.actionId); setPendingAction(null); }
       const now = new Date();
       setLastRunTime(now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
       setLastRunId(data.runId);
-      setPastRuns((prev) => [...prev, data]);
+      setPastRuns((prev) => [...prev.filter(run => run.runId !== data.runId), data]);
       setRunStats(statsFromReport(data.report));
       if (data.report?.executionStatus === 'stopped') addEvalNotice(`Evaluation stopped. ${data.report.modelCallHold?.safeAction || 'Review the provider outcome before starting another run.'}`);
     } catch (err) {
-      addEvalNotice(`The tournament did not run: ${reasonOf(err)}.`);
+      addEvalNotice(`Evaluation outcome unavailable: ${reasonOf(err)}. Retry this same action to read or resume its saved run.`);
     } finally {
       setRunningTournament(false);
     }
@@ -190,9 +197,9 @@ export const EvalScreen: React.FC = () => {
             className="btn primary"
             style={{ width: '100%', marginTop: 16, padding: '10px 12px', fontWeight: 700, fontSize: 13 }}
             disabled={runningTournament}
-            onClick={handleRunTournament}
+            onClick={() => void handleRunTournament()}
           >
-            {runningTournament ? 'Running Multi-Pass...' : '⚡ Run Multi-Pass Tournament'}
+            {runningTournament ? 'Running evaluation...' : pendingAction ? 'Retry saved evaluation' : 'Run fixture evaluation'}
           </button>
 
           {lastRunTime && (
@@ -224,15 +231,31 @@ export const EvalScreen: React.FC = () => {
                     }}
                   >
                     <span style={{ fontFamily: 'monospace', fontSize: 10 }}>{run.runId.substring(0, 8)}</span>
-                    <span className={`pill ${run.report?.executionStatus === 'stopped' ? '' : 'ok'}`} style={{ fontSize: 10 }}>
-                      {run.report?.executionStatus === 'stopped' ? 'Stopped · review required' : `${percent(run.report?.overallPassRate)} pass`}
+                    <span className={`pill ${run.status === 'running' || run.report?.executionStatus === 'stopped' ? '' : 'ok'}`} style={{ fontSize: 10 }}>
+                      {run.status === 'running' ? 'Incomplete' : run.report?.executionStatus === 'stopped' ? 'Stopped · review required' : `${percent(run.report?.overallPassRate)} pass`}
                     </span>
+                    <button onClick={() => { setCallEvidence(null); void apiClient.evaluations.get(run.runId).then(setCallEvidence).catch(error => addEvalNotice(`Could not load call receipts: ${reasonOf(error)}`)); }}>Calls</button>
+                    {run.resumable && <button disabled={runningTournament} onClick={() => void handleRunTournament({actionId:run.actionId,name:run.name})}>Resume</button>}
                   </div>
                 ))}
               </div>
             </div>
           )}
         </div>
+
+        {callEvidence && <section className="panel" style={{padding:16,gridColumn:'1 / -1'}} aria-label="Evaluation call receipts">
+          <h3>Saved calls · {callEvidence.runId.substring(0,8)}</h3>
+          <p>Costs are recorded estimates. An unknown amount remains unknown; these receipts do not establish the provider’s final bill.</p>
+          <div style={{maxHeight:260,overflow:'auto'}}><table style={{width:'100%',textAlign:'left'}}>
+            <thead><tr><th>Call</th><th>Model</th><th>Outcome</th><th>Estimated cost</th></tr></thead>
+            <tbody>{callEvidence.calls.map(call => <tr key={call.ordinal}>
+              <td>{call.ordinal}</td><td>{call.provider || 'Unknown provider'} / {call.model || 'Unknown model'}</td>
+              <td>{call.status === 'pending' ? 'Unconfirmed · review required' : call.status}{call.error && <div>{call.error.code} {call.error.detail?.providerRequestId || ''}</div>}</td>
+              <td>{typeof call.estimatedCostUsd === 'number' ? `$${call.estimatedCostUsd.toFixed(4)}` : 'Unknown'}</td>
+            </tr>)}</tbody>
+          </table></div>
+          <button onClick={() => setCallEvidence(null)}>Close receipts</button>
+        </section>}
 
         {/* Right Content Area */}
         <div className="panel" style={{ padding: 20 }}>
@@ -241,7 +264,7 @@ export const EvalScreen: React.FC = () => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <h2 style={{ margin: 0, fontSize: 18 }}>{currentDataset?.name}</h2>
-                <span className="pill ok" style={{ fontSize: 10 }}>Holdout v2026.09</span>
+                <span className="pill ok" style={{ fontSize: 10 }}>Fixture diagnostics</span>
               </div>
               <p style={{ color: 'var(--muted)', fontSize: 12, margin: '4px 0 0' }}>{currentDataset?.description}</p>
             </div>
