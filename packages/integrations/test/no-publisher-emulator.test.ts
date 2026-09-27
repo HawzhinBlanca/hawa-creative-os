@@ -86,8 +86,8 @@ describe('Task 2: Elimination of emulateNetworkForTesting and Verification of fa
       // Verify fakeServer actually received and stored the file and sheet row over HTTP
       expect(fakeServer.getUploadedFiles().length).toBeGreaterThan(0);
       const sheetRows = fakeServer.getSheetRows('fake-spreadsheet-1');
-      expect(sheetRows).toHaveLength(1);
-      expect(sheetRows[0][0]).toBe('task-fake-drive-test-1');
+      expect(sheetRows).toHaveLength(2);
+      expect(sheetRows[1][0]).toBe('task-fake-drive-test-1');
     });
   });
 });

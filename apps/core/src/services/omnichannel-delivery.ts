@@ -795,6 +795,11 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     }
     // No fallback sheet or Shared Drive: a client without one gets no Sheets row, reported as unsynced.
     const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '';
+    const reportingSheetId = client?.destinations?.sheetId;
+    if (spreadsheetId && (!Number.isSafeInteger(reportingSheetId) || Number(reportingSheetId) < 0)) {
+      return failBeforeDrive({ status: 400, code: 'INVALID_SHEET_DESTINATION', message: 'Configure an explicit numeric reporting tab ID in Client DNA before publication.' });
+    }
+
 
     // Persist publication intent before provider calls (Task R06)
     let dbPub: any = null;
@@ -855,7 +860,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         productionRootFolderId: targetFolderId,
         relativeFolderParts: ['Clients', client?.name || 'Hawa', new Date().getFullYear().toString()],
         spreadsheetId,
-        sheetId: 0,
+        sheetId: reportingSheetId ?? 0,
       },
       sheetRow: {
         taskId,
@@ -888,7 +893,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         message: 'Drive has not verified every approved file; reconcile the publication before requester delivery' });
     }
     const receiptCheck = validatePublicationReceipt(publishResult.value, {
-      publicationKey, taskId, packageHash: deliverables.packageHash, spreadsheetId, files,
+      publicationKey, taskId, packageHash: deliverables.packageHash, spreadsheetId, sheetId: reportingSheetId ?? 0, files,
     });
     if (!receiptCheck.ok) {
       return holdArchive({ status: 409, code: 'PUBLICATION_RECEIPT_INVALID',
@@ -967,7 +972,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
               tenantId: pubTenantId,
               publicationId: dbPub.id,
               spreadsheetId: publishResult.value.sheet.spreadsheetId,
-              sheetId: publishResult.value.sheet.sheetId || 0,
+              sheetId: publishResult.value.sheet.sheetId,
               taskId,
               rowKey: taskId,
               rowNumber: publishResult.value.sheet.rowNumber,
@@ -1081,7 +1086,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
         sheetRowUrl:
           spreadsheetId && receipt.sheet.rowNumber !== undefined
-            ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=0&range=A${receipt.sheet.rowNumber}`
+            ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}#gid=${receipt.sheet.sheetId}&range=A${receipt.sheet.rowNumber}`
             : null,
         filesCount: verifiedFiles.length,
         publishedAt: new Date().toISOString(),

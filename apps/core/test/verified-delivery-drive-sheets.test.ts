@@ -1,3 +1,4 @@
+import { FakeSheets } from '../../../packages/integrations/test/fake-sheets.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createDb } from '@hawa/db';
 import http from 'node:http';
@@ -38,7 +39,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
   const receivedSheetAppends: any[] = [];
   const receivedSheetUpdates: any[] = [];
   const receivedSheetReadbacks: string[] = [];
-  let lastAppendedTaskId: string | null = null;
+  const sheets = new FakeSheets();
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-cv16-test-'));
   const testFilePng = path.join(tempDir, 'banner.png');
@@ -115,90 +116,17 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
         return;
       }
 
-      // 3. Google Sheets Append (First insertion)
-      if (req.method === 'POST' && url.includes('/values/') && url.includes(':append')) {
+      if (url.includes('/v4/spreadsheets/')) {
         let body = '';
-        req.on('data', (chunk) => { body += chunk; });
-        req.on('end', () => {
-          const parsed = JSON.parse(body);
-          receivedSheetAppends.push({
-            authHeader: req.headers.authorization,
-            values: parsed.values,
-          });
-          if (parsed.values?.[0]?.[0]) {
-            lastAppendedTaskId = parsed.values[0][0];
-          }
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            spreadsheetId: 'sheet_hawa_office_reporting',
-            updates: {
-              updatedRange: 'Sheet1!A42:G42',
-              updatedRows: 1,
-              updatedColumns: 7,
-            },
-          }));
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', async () => {
+          const parsed = body ? JSON.parse(body) : {};
+          if (url.endsWith(':batchUpdate')) receivedSheetAppends.push({ values: [parsed.requests[1].updateCells.rows[0].values.map((v: any) => v.userEnteredValue.stringValue)] });
+          if (url.endsWith('/values:batchUpdateByDataFilter')) receivedSheetUpdates.push({ url, values: parsed.data[0].values });
+          if (url.endsWith('/values:batchGetByDataFilter')) receivedSheetReadbacks.push(url);
+          const response = await sheets.fetch(`http://localhost${url}`, { method: req.method, ...(body ? { body } : {}) });
+          res.writeHead(response.status, { 'Content-Type': 'application/json' }); res.end(await response.text());
         });
-        return;
-      }
-
-      // 3b. Google Sheets Row identity verification & search
-      if (req.method === 'GET' && url.includes('/values/A') && (url.includes(':A') || url.includes('A42:A42'))) {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        if (url.includes('/values/A:A')) {
-          const colA = new Array(41).fill(['dummy_task']);
-          if (lastAppendedTaskId) {
-            colA.push([lastAppendedTaskId]);
-          }
-          res.end(JSON.stringify({ range: 'Sheet1!A:A', values: colA }));
-        } else {
-          res.end(JSON.stringify({
-            range: 'Sheet1!A42:A42',
-            values: [ [ lastAppendedTaskId || 'task_cv16_test_001' ] ],
-          }));
-        }
-        return;
-      }
-
-      // 4. Google Sheets Update / Upsert (Idempotent update for existing task)
-      if (req.method === 'PUT' && url.includes('/values/A') && url.includes(':G')) {
-        let body = '';
-        req.on('data', (chunk) => { body += chunk; });
-        req.on('end', () => {
-          const parsed = JSON.parse(body);
-          receivedSheetUpdates.push({
-            authHeader: req.headers.authorization,
-            url,
-            values: parsed.values,
-          });
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            spreadsheetId: 'sheet_hawa_office_reporting',
-            updatedRange: 'Sheet1!A42:G42',
-            updatedRows: 1,
-            updatedColumns: 7,
-          }));
-        });
-        return;
-      }
-
-      // 5. Google Sheets Readback
-      if (req.method === 'GET' && url.includes('/values/A42:G42')) {
-        receivedSheetReadbacks.push(url);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          range: 'Sheet1!A42:G42',
-          values: [
-            [
-              'task_cv16_test_001',
-              'c1000000-0000-4000-8000-000000000002',
-              'folder_kaae_prod_2026',
-              '2026-09-11T20:00:00Z',
-              'COMPLETE',
-              'https://drive.google.com/file/d/gdrive_verified/view',
-              'pkg_hash_cv16_valid',
-            ],
-          ],
-        }));
         return;
       }
 
@@ -474,7 +402,7 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
         sheetRow: { taskId: taskAId },
       };
 
-      // 1. First publish appends row 42
+      // 1. First publication creates an identified row
       const res1 = await publisher.publish(dummyCtx, req1);
       expect(res1.ok).toBe(true);
 
@@ -490,10 +418,12 @@ describe('CV-16: Keep verified Drive, Sheets and channel delivery (FR-046..FR-05
       const res2 = await publisher.publish(dummyCtx, req2);
       expect(res2.ok).toBe(true);
 
-      // Assert that second publication updated row 42 (PUT) rather than blind-appending (POST)
+      // The next revision updates the existing metadata identity without inserting another row.
       expect(receivedSheetAppends.length).toBe(initialAppendCount); // No new append
       expect(receivedSheetUpdates.length).toBeGreaterThanOrEqual(1); // Row was updated
-      expect(receivedSheetUpdates[0].url).toContain('/values/A42:G42');
+      expect(receivedSheetUpdates.at(-1).url).toContain('/values:batchUpdateByDataFilter');
+      expect(res2.ok && res2.value.sheet.synced).toBe(true);
+      expect(sheets.tabs.get(0)?.filter(row => row[0] === taskAId)).toHaveLength(1);
     });
   });
 

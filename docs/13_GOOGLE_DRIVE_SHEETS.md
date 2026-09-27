@@ -104,6 +104,31 @@ The Sheets publisher treats a blank or unreadable cached row identity as untrust
 
 ## 6. Sheet columns
 
+### Current row identity protocol (ADR-105, 2026-09-27)
+
+The metadata protocol supersedes the process-cached row-number upsert described
+above. Core carries the configured numeric tab ID through the publisher, receipt
+validation, persistence and staff link. Reads use numeric grid data filters.
+Existing rows are updated by an exact tenant/spreadsheet/tab/task metadata identity,
+including the full identity value in the update filter. New rows are inserted,
+written as literal values, and assigned that unique metadata ID in one atomic
+Google batch. A rejected duplicate ID or uncertain response is independently
+read back; it never authorizes a blind append.
+
+Readback compares all seven currently implemented columns and returns a separate
+whole-row hash alongside the existing package-hash field. Duplicate tasks,
+conflicting metadata, unavailable or malformed reads, oversized grids and changed
+links cannot qualify. A row number is an observed position, not write authority.
+Legacy rows lacking metadata need a supervised migration, which is still an open
+release gate. The wider visible/hidden column schema below remains required.
+
+The provider identity survives process death, but durable PostgreSQL storage of
+the complete expected row and scheduled external observations remain FR-050 work.
+The adapter's old receipt-ID-only reconcile API is still process-local and must
+not be used as the scheduled reconciler. The new stateless Sheet verifier accepts
+explicit scoped expected values. Live Google sorting/metadata behavior and
+permission checks still need provider qualification.
+
 Required visible columns:
 
 ```text

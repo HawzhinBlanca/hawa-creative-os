@@ -175,6 +175,7 @@ services:
     volumes:
       - ./:/repo/packages/testkit/chaos:ro
       - ../../integrations/test/fake-drive-server.ts:/repo/packages/integrations/test/fake-drive-server.ts:ro
+      - ../../integrations/test/fake-sheets.ts:/repo/packages/integrations/test/fake-sheets.ts:ro
       - chaos_ca:/chaos-ca
     networks:
       chaos:

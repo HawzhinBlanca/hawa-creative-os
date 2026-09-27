@@ -32,11 +32,11 @@ async function setup() {
 
   // A client whose DNA names a Drive folder but no spreadsheet, so Sheets can never confirm a row.
   const kaaeDna = await (await app.request(`/clients/${KAAE}/dna`)).json();
-  const saveDna = async (spreadsheetId: string) => {
+  const saveDna = async (spreadsheetId: string, sheetId = 0) => {
     const res = await app.request(`/clients/${NO_SHEET_CLIENT}/dna`, {
       method: 'POST',
       headers: auth,
-      body: JSON.stringify({ ...kaaeDna, clientId: NO_SHEET_CLIENT, code: 'NOSHEET', name: 'No Sheet Client', destinations: { ...kaaeDna.destinations, spreadsheetId } }),
+      body: JSON.stringify({ ...kaaeDna, clientId: NO_SHEET_CLIENT, code: 'NOSHEET', name: 'No Sheet Client', destinations: { ...kaaeDna.destinations, spreadsheetId, sheetId } }),
     });
     expect(res.status).toBe(201);
   };
@@ -150,5 +150,19 @@ describe('the Desk\'s Deliver route with the Sheets row unconfirmed', () => {
     expect(done.status).toBe('COMPLETE');
     expect(done).not.toHaveProperty('sheetProblem');
     expect(await status(taskId)).toBe('COMPLETE');
+  });
+});
+
+
+describe('configured reporting tab propagation', () => {
+  it('uses the DNA tab in the provider request, receipt and staff link', async () => {
+    const { app, saveDna, approvedTask } = await setup();
+    await saveDna('sheet-for-no-sheet-client', 2);
+    const taskId = await approvedTask();
+    const response = await app.request(`/tasks/${taskId}/publish-omnichannel`, { method: 'POST', headers: json });
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.publicationReceipt.sheet).toMatchObject({ sheetId: 2, synced: true });
+    expect(result.sheetRowUrl).toContain('#gid=2&range=');
   });
 });

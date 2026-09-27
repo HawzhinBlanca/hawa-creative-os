@@ -1,0 +1,12 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_c3bf33c83bd68d08 and hawa_tpl_repair_c3bf33c83bd68d08 (32 ms)
+{"level":"warn","time":"2026-09-27T16:36:20.405Z","service":"core","requestId":"a1632910-a700-4b28-9665-3790730c8809","chatId":"888","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"error","time":"2026-09-27T16:36:20.791Z","service":"core","requestId":"8a7b88c5-b58e-4539-9e49-84fed9b9642e","taskId":"bb374fa8-2712-4c6c-96bc-45373b8910ea","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Task bb374fa8-2712-4c6c-96bc-45373b8910ea is cancelled; publication completion requires publishing or complete","stack":"Error: Task bb374fa8-2712-4c6c-96bc-45373b8910ea is cancelled; publication completion requires publishing or complete\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:346:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PublicationRepository.markComplete (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:405:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:997:13\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at doPublish (/Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:954:9)\n    at /Users/hawzhin/Hawdesign/packages/db/src/session-lock.ts:30:39"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+
+ Test Files  39 passed (39)
+      Tests  440 passed (440)
+   Start at  19:36:18
+   Duration  8.25s (transform 3.16s, setup 1.30s, import 4.93s, tests 14.76s, environment 2ms)
+

@@ -1,0 +1,90 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_c3bf33c83bd68d08 and hawa_tpl_repair_c3bf33c83bd68d08 (19 ms)
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts (4 tests | 3 failed) 922ms
+     × delivers the files but does not mark the task COMPLETE, and says why 234ms
+     × reports the partial delivery with its reason instead of "unverified files", then completes on retry 155ms
+     × uses the DNA tab in the provider request, receipt and staff link 168ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/publish-sheets-unconfirmed.test.ts > publish-omnichannel with the Sheets row unconfirmed > delivers the files but does not mark the task COMPLETE, and says why
+AssertionError: expected { ok: true, …(8) } to match object { ok: true, …(5) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "complete": false,
+    "filesCount": 1,
+    "ok": true,
+-   "sheetProblem": "No spreadsheet is configured for this client",
++   "sheetProblem": "SHEETS_SCOPE_INVALID",
+    "sheetRowUrl": null,
+    "status": "PUBLISH_RECONCILIATION",
+  }
+
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts:90:18
+     88|     expect(res.status).toBe(202);
+     89|     const body = await res.json();
+     90|     expect(body).toMatchObject({
+       |                  ^
+     91|       ok: true,
+     92|       status: 'PUBLISH_RECONCILIATION',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  apps/core/test/publish-sheets-unconfirmed.test.ts > the Desk's Deliver route with the Sheets row unconfirmed > reports the partial delivery with its reason instead of "unverified files", then completes on retry
+AssertionError: expected { …(8) } to match object { …(2) }
+(15 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "sheetProblem": "No spreadsheet is configured for this client",
++   "sheetProblem": "SHEETS_SCOPE_INVALID",
+    "status": "PUBLISH_RECONCILIATION",
+  }
+
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts:143:32
+    141|     const first = await deliver();
+    142|     expect(first.status).toBe(202);
+    143|     expect(await first.json()).toMatchObject({ status: 'PUBLISH_RECONC…
+       |                                ^
+    144|     await reconciling(taskId);
+    145|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  apps/core/test/publish-sheets-unconfirmed.test.ts > configured reporting tab propagation > uses the DNA tab in the provider request, receipt and staff link
+AssertionError: expected { …(11) } to match object { sheetId: 2, synced: true }
+(9 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "sheetId": 2,
++   "sheetId": 0,
+    "synced": true,
+  }
+
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts:165:45
+    163|     expect(response.status).toBe(200);
+    164|     const result = await response.json();
+    165|     expect(result.publicationReceipt.sheet).toMatchObject({ sheetId: 2…
+       |                                             ^
+    166|     expect(result.sheetRowUrl).toContain('#gid=2&range=');
+    167|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  19:30:38
+   Duration  2.42s (transform 967ms, setup 95ms, import 1.27s, tests 922ms, environment 0ms)
+

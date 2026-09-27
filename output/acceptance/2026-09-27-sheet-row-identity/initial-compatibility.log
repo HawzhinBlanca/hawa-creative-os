@@ -1,0 +1,196 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_c3bf33c83bd68d08 and hawa_tpl_repair_c3bf33c83bd68d08 (23 ms)
+ ❯ packages/integrations/test/no-publisher-emulator.test.ts (2 tests | 1 failed) 23ms
+       × publishes deliverable via real HTTP to fake-drive without in-memory short-circuits 18ms
+ ❯ packages/integrations/test/real-google-operations.test.ts (5 tests | 2 failed) 30ms
+     × 4. Real Operation: performs real Google Drive multipart upload, independent readback, Google Sheets append and readback 18ms
+     × 5. Re-reconciliation: independently verifies publication and identifies missing assets if purged 7ms
+ ❯ packages/integrations/test/google-publisher-bytes.test.ts (14 tests | 4 failed) 31ms
+     × records no Sheets row number that Sheets did not report, and then calls the row unsynced 5ms
+     × an emulated receipt is never reported consistent: nothing was sent to verify 2ms
+     × reports a Drive file whose content, size or trash state no longer matches, and a missing Sheets row 1ms
+     × records why, and a replay retries only the row: nothing is uploaded again 1ms
+ ❯ packages/integrations/test/integrations.test.ts (4 tests | 1 failed) 22ms
+     × GooglePublisher: publishes idempotently to Google Drive and Sheets 20ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/integrations/test/google-publisher-bytes.test.ts > GooglePublisher uploads nothing it cannot verify > records no Sheets row number that Sheets did not report, and then calls the row unsynced
+AssertionError: expected "vi.fn()" to be called 5 times, but got 4 times
+ ❯ packages/integrations/test/google-publisher-bytes.test.ts:105:23
+    103|     expect(res.value.emulated).toBe(false);
+    104|     // Drive lookup, upload, Drive readback, pre-append task identity …
+    105|     expect(fetchMock).toHaveBeenCalledTimes(5);
+       |                       ^
+    106|   });
+    107|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  packages/integrations/test/google-publisher-bytes.test.ts > GooglePublisher.verify reads the publication back > an emulated receipt is never reported consistent: nothing was sent to verify
+AssertionError: expected { consistent: false, …(1) } to deeply equal { consistent: false, …(1) }
+
+- Expected
++ Received
+
+  {
+    "consistent": false,
+    "differences": [
+      {
+-       "check": "emulated",
+-       "detail": "No Google call was made for this publication, so there is nothing to verify",
++       "error": "not_found",
+      },
+    ],
+  }
+
+ ❯ packages/integrations/test/google-publisher-bytes.test.ts:240:43
+    238|     });
+    239|     const verified = await publisher.verify(ctx, receiptId);
+    240|     expect(verified.ok && verified.value).toEqual({
+       |                                           ^
+    241|       consistent: false,
+    242|       differences: [{ check: 'emulated', detail: 'No Google call was m…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  packages/integrations/test/google-publisher-bytes.test.ts > GooglePublisher.verify reads the publication back > reports a Drive file whose content, size or trash state no longer matches, and a missing Sheets row
+AssertionError: expected { consistent: false, …(1) } to deeply equal { consistent: false, …(1) }
+
+- Expected
++ Received
+
+@@ -20,9 +20,10 @@
+        "fileId": "drive-file-1",
+        "observed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      },
+      {
+        "check": "sheets",
+-       "detail": "No Sheets row was recorded for this publication",
++       "detail": "SHEETS_EXPECTATION_UNAVAILABLE",
++       "row": null,
+      },
+    ],
+  }
+
+ ❯ packages/integrations/test/google-publisher-bytes.test.ts:264:43
+    262|     driveNow = { ...driveNow, size: '999', sha256Checksum: 'f'.repeat(…
+    263|     const verified = await publisher.verify(ctx, res.value.publication…
+    264|     expect(verified.ok && verified.value).toEqual({
+       |                                           ^
+    265|       consistent: false,
+    266|       differences: [
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  packages/integrations/test/google-publisher-bytes.test.ts > a publication whose Sheets row was not confirmed > records why, and a replay retries only the row: nothing is uploaded again
+AssertionError: expected { tenantId: 'tenant-default', …(3) } to match object { verified: true, …(1) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "sheetProblem": "Sheets write failed: HTTP 500",
++   "sheetProblem": "SHEETS_READ_OR_WRITE_UNCONFIRMED",
+    "verified": true,
+  }
+
+ ❯ packages/integrations/test/google-publisher-bytes.test.ts:307:32
+    305|     expect(first.value.sheet.observedHash).toBeUndefined();
+    306|     expect(first.value.completedAt).toBeUndefined();
+    307|     expect(first.value.detail).toMatchObject({ verified: true, sheetPr…
+       |                                ^
+    308|
+    309|     appendFails = false;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  packages/integrations/test/integrations.test.ts > Integrations: Real Adapters & Providers > GooglePublisher: publishes idempotently to Google Drive and Sheets
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ packages/integrations/test/integrations.test.ts:126:41
+    124|       if (pub1.ok && pub2.ok) {
+    125|         expect(pub1.value.publicationId).toBe(pub2.value.publicationId…
+    126|         expect(pub1.value.sheet.synced).toBe(true);
+       |                                         ^
+    127|         // Genuine HTTP call to fake-drive
+    128|         expect(pub1.value.emulated).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  packages/integrations/test/no-publisher-emulator.test.ts > Task 2: Elimination of emulateNetworkForTesting and Verification of fake-drive over HTTP > fake-drive HTTP integration > publishes deliverable via real HTTP to fake-drive without in-memory short-circuits
+AssertionError: expected 'drive_complete' to be 'complete' // Object.is equality
+
+Expected: "complete"
+Received: "drive_complete"
+
+ ❯ packages/integrations/test/no-publisher-emulator.test.ts:80:31
+     78|       if (!res.ok) return;
+     79|
+     80|       expect(res.value.state).toBe('complete');
+       |                               ^
+     81|       expect(res.value.emulated).toBe(false);
+     82|       expect(res.value.driveFiles).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  packages/integrations/test/real-google-operations.test.ts > Real External Operations: Google Drive & Google Sheets Qualification > 4. Real Operation: performs real Google Drive multipart upload, independent readback, Google Sheets append and readback
+AssertionError: expected 'drive_complete' to be 'complete' // Object.is equality
+
+Expected: "complete"
+Received: "drive_complete"
+
+ ❯ packages/integrations/test/real-google-operations.test.ts:307:29
+    305|     if (res.ok) {
+    306|       const receipt = res.value;
+    307|       expect(receipt.state).toBe('complete');
+       |                             ^
+    308|       expect(receipt.detail?.verified).toBe(true);
+    309|       expect(receipt.driveFiles).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  packages/integrations/test/real-google-operations.test.ts > Real External Operations: Google Drive & Google Sheets Qualification > 5. Re-reconciliation: independently verifies publication and identifies missing assets if purged
+AssertionError: expected { consistent: false, …(1) } to deeply equal { consistent: true, differences: [] }
+
+- Expected
++ Received
+
+  {
+-   "consistent": true,
+-   "differences": [],
++   "consistent": false,
++   "differences": [
++     {
++       "check": "sheets",
++       "detail": "SHEETS_EXPECTATION_UNAVAILABLE",
++       "row": null,
++     },
++   ],
+  }
+
+ ❯ packages/integrations/test/real-google-operations.test.ts:381:31
+    379|     expect(verifyRes.ok).toBe(true); assert(verifyRes.ok);
+    380|     if (verifyRes.ok) {
+    381|       expect(verifyRes.value).toEqual({ consistent: true, differences:…
+       |                               ^
+    382|     }
+    383|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  4 failed | 1 passed (5)
+      Tests  8 failed | 21 passed (29)
+   Start at  19:27:53
+   Duration  616ms (transform 370ms, setup 217ms, import 382ms, tests 115ms, environment 0ms)
+

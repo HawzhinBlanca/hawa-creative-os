@@ -1,5 +1,23 @@
 # Completion checkpoint
 
+## 2026-09-27 — Stable Google Sheet row identity (ADR-105), partial
+
+Exact DNA tab propagation, metadata-bound writes, atomic row creation, duplicate
+checks and complete seven-column readback are implemented. Four original-adapter
+regressions and one Core tab regression reproduced before correction. Final affected
+checks: 440 passed / 39 files; includes actual publisher SIGKILL after accepted row
+creation and a fresh process recovering one row. Source build, 509 strict roots,
+lint and security pass. Full suite/release seal and deployed/live qualification
+were not repeated for this prerequisite. See R09_SHEET_IDENTITY_PROOF.json and
+output/acceptance/2026-09-27-sheet-row-identity/STATUS.md for retained failures.
+
+Next: persist immutable publication destinations/expected row/metadata evidence,
+then schedule durable external Drive/Sheets observations and scoped staff resolution.
+Legacy unbound rows require supervised migration; no unsafe automatic adoption.
+The receipt-ID-only reconcile API is still process-local. Wider reporting columns,
+live/human/independent-host admission remain open; whole-app goal active.
+
+
 ## 2026-09-27 — Durable scoped receipt audits qualified locally (ADR-103)
 
 Source **19627b4**, content/UUID correction **1700682**, tested and deployed

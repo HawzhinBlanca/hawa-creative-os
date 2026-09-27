@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PackageFile, PublishRequest, RequestContext } from '@hawa/contracts';
 import { GooglePublisher } from '../src/google-publisher.js';
 import { startFakeDriveServer } from './fake-drive-server.js';
+import { FakeSheets } from './fake-sheets.js';
 
 /**
  * The publisher sends only real bytes. Until 2026-09-19 a file it could not read became
@@ -102,7 +103,7 @@ describe('GooglePublisher uploads nothing it cannot verify', () => {
     expect(res.value.state).toBe('drive_complete');
     expect(res.value.emulated).toBe(false);
     // Drive lookup, upload, Drive readback, pre-append task identity check, and the append.
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it('marks published receipts as not emulated (genuine HTTP)', async () => {
@@ -233,7 +234,7 @@ describe('GooglePublisher.verify reads the publication back', () => {
       driveFiles: [],
       sheet: { spreadsheetId: 'sheet', sheetId: 0, rowKey: 'task', synced: false, expectedHash: 'hash' },
       state: 'complete',
-      detail: {},
+      detail: { tenantId: ctx.tenantId },
       emulated: true,
     });
     const verified = await publisher.verify(ctx, receiptId);
@@ -245,13 +246,14 @@ describe('GooglePublisher.verify reads the publication back', () => {
 
   it('reports a Drive file whose content, size or trash state no longer matches, and a missing Sheets row', async () => {
     const f = file('a.png', 'aaa');
+    const sheets = new FakeSheets(); sheets.failCreate = true;
     let driveNow: any = { id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png', sha256Checksum: f.sha256 };
-    const fetchMock = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.startsWith('https://upload.test')) return json({ id: 'drive-file-1' });
       // The lookup the publisher makes before every upload: nothing delivered yet.
       if (url.startsWith('https://drive.test/drive/v3/files?q=')) return json({ files: [] });
       if (url.startsWith('https://drive.test')) return json(driveNow);
-      if (url.includes(':append')) return json({ updates: {} }); // Sheets reports no row
+      if (url.includes('/v4/spreadsheets/')) return sheets.fetch(url, init);
       throw new Error(`unexpected call ${url}`);
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -267,7 +269,7 @@ describe('GooglePublisher.verify reads the publication back', () => {
         { check: 'drive', fileId: 'drive-file-1', detail: 'The file is in the Drive trash' },
         { check: 'drive', fileId: 'drive-file-1', field: 'size', expected: f.byteSize, observed: '999' },
         { check: 'drive', fileId: 'drive-file-1', field: 'sha256', expected: f.sha256, observed: 'f'.repeat(64) },
-        { check: 'sheets', detail: 'No Sheets row was recorded for this publication' },
+        { check: 'sheets', detail: 'SHEETS_ROW_NOT_FOUND', row: null },
       ],
     });
   });
@@ -277,8 +279,7 @@ describe('a publication whose Sheets row was not confirmed', () => {
   it('records why, and a replay retries only the row: nothing is uploaded again', async () => {
     const f = file('a.png', 'aaa');
     const req = request([f], 'pub-sheet-retry');
-    let appendFails = true;
-    let storedRow: string[] | undefined;
+    const sheets = new FakeSheets(); sheets.failCreate = true;
     const calls: string[] = [];
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push(`${init?.method || 'GET'} ${url.split('?')[0]}`);
@@ -286,13 +287,7 @@ describe('a publication whose Sheets row was not confirmed', () => {
       // The lookup the publisher makes before every upload: nothing delivered yet.
       if (url.startsWith('https://drive.test/drive/v3/files?q=')) return json({ files: [] });
       if (url.startsWith('https://drive.test')) return json({ id: 'drive-file-1', name: 'a.png', size: String(f.byteSize), mimeType: 'image/png', sha256Checksum: f.sha256 });
-      if (url.includes('/values/A:A')) return json({ values: [] });
-      if (url.includes(':append')) {
-        if (appendFails) return new Response('backend error', { status: 500 });
-        storedRow = JSON.parse(String(init?.body)).values[0];
-        return json({ updates: { updatedRange: 'Sheet1!A7:G7' } });
-      }
-      if (url.includes('/values/A7:G7')) return json({ values: storedRow ? [storedRow] : [] });
+      if (url.includes('/v4/spreadsheets/')) return sheets.fetch(url, init);
       throw new Error(`unexpected call ${url}`);
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -304,21 +299,19 @@ describe('a publication whose Sheets row was not confirmed', () => {
     expect(first.value.sheet).toMatchObject({ synced: false, rowNumber: undefined });
     expect(first.value.sheet.observedHash).toBeUndefined();
     expect(first.value.completedAt).toBeUndefined();
-    expect(first.value.detail).toMatchObject({ verified: true, sheetProblem: 'Sheets write failed: HTTP 500' });
+    expect(first.value.detail).toMatchObject({ verified: true, sheetProblem: 'SHEETS_ROW_NOT_FOUND' });
 
-    appendFails = false;
+    sheets.failCreate = false;
     calls.length = 0;
     const retry = await publisher.publish(ctx, req);
     if (!retry.ok) throw new Error('retry failed');
     expect(retry.value.publicationId).toBe(first.value.publicationId);
     expect(retry.value.state).toBe('complete');
-    expect(retry.value.sheet).toMatchObject({ synced: true, rowNumber: 7 });
+    expect(retry.value.sheet).toMatchObject({ synced: true, rowNumber: 2 });
     expect(retry.value.sheet.observedHash).toBe(req.packageHash);
     expect(retry.value.detail).not.toHaveProperty('sheetProblem');
-    expect(calls).toEqual([
-      'GET https://sheets.test/v4/spreadsheets/sheet-kaae/values/A:A',
-      'POST https://sheets.test/v4/spreadsheets/sheet-kaae/values/A1:append',
-      'GET https://sheets.test/v4/spreadsheets/sheet-kaae/values/A7:G7',
-    ]);
+    expect(calls.every(call => call.includes('https://sheets.test/'))).toBe(true);
+    expect(sheets.metadata.size).toBe(1);
+    expect(sheets.tabs.get(0)?.filter(row => row[0] === req.taskId)).toHaveLength(1);
   });
 });

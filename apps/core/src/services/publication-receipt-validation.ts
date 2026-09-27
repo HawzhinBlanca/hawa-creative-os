@@ -3,7 +3,7 @@ import type { PackageFile, PublicationReceipt } from '@hawa/contracts';
 /** Check the publisher's answer against the exact approved package before Core records any receipt. */
 export function validatePublicationReceipt(
   receipt: PublicationReceipt,
-  expected: { publicationKey: string; taskId: string; packageHash: string; spreadsheetId: string; files: readonly PackageFile[] },
+  expected: { publicationKey: string; taskId: string; packageHash: string; spreadsheetId: string; sheetId: number; files: readonly PackageFile[] },
 ): { ok: true } | { ok: false; reason: string } {
   if ((receipt.emulated !== undefined && receipt.emulated !== false) ||
       !receipt.publicationId || !receipt.driveFolderId ||
@@ -34,7 +34,7 @@ export function validatePublicationReceipt(
     seenFileIds.add(file.fileId);
   }
   const sheet = receipt.sheet;
-  if (!sheet || sheet.spreadsheetId !== expected.spreadsheetId || sheet.rowKey !== expected.taskId ||
+  if (!sheet || sheet.spreadsheetId !== expected.spreadsheetId || sheet.sheetId !== expected.sheetId || sheet.rowKey !== expected.taskId ||
       sheet.expectedHash !== expected.packageHash) {
     return { ok: false, reason: 'Sheet receipt does not name the approved task and package' };
   }

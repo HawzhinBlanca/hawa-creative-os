@@ -12,6 +12,7 @@ import type {
 
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import { GoogleSheetRow, type SheetRowResult } from './google-sheet-row.js';
 
 export interface GooglePublisherConfig {
   serviceAccountEmail?: string;
@@ -70,8 +71,7 @@ function normalisePem(pem: string): string {
 
 export class GooglePublisher implements Publisher {
   private inMemoryLedger = new Map<string, PublicationReceipt>();
-  private taskRowMap = new Map<string, number>();
-  private inFlight = new Map<string, Promise<Result<PublicationReceipt, AppError>>>();
+  private inFlight = new Map<string, { fingerprint: string; promise: Promise<Result<PublicationReceipt, AppError>> }>();
   private driveApiBaseUrl: string;
   private driveUploadBaseUrl: string;
   private sheetsApiBaseUrl: string;
@@ -367,29 +367,39 @@ export class GooglePublisher implements Publisher {
   }
 
   async publish(ctx: RequestContext, request: PublishRequest): Promise<Result<PublicationReceipt, AppError>> {
-    const active = this.inFlight.get(request.publicationKey);
+    const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
+      tenantId: ctx.tenantId, taskId: request.taskId, clientId: request.clientId, approvalId: request.approvalId,
+      designRevisionId: request.designRevisionId, packageHash: request.packageHash, destination: request.destination,
+      files: request.files.map(({ content: _content, ...identity }) => identity),
+    })).digest('hex');
+    const active = this.inFlight.get(JSON.stringify([ctx.tenantId, request.publicationKey]));
     if (active) {
-      return await active;
+      if (active.fingerprint !== fingerprint) return { ok: false, error: {
+        code: 'IDEMPOTENCY_CONFLICT', message: 'Concurrent publication has a different identity or destination',
+        retryable: false, safeAction: 'Use the original approved publication inputs',
+      } };
+      return await active.promise;
     }
     const pubPromise = this.executePublish(ctx, request);
-    this.inFlight.set(request.publicationKey, pubPromise);
+    this.inFlight.set(JSON.stringify([ctx.tenantId, request.publicationKey]), { fingerprint, promise: pubPromise });
     try {
       return await pubPromise;
     } finally {
-      this.inFlight.delete(request.publicationKey);
+      this.inFlight.delete(JSON.stringify([ctx.tenantId, request.publicationKey]));
     }
   }
 
   private async executePublish(ctx: RequestContext, request: PublishRequest): Promise<Result<PublicationReceipt, AppError>> {
     // 1. Idempotency Check (FR-050)
-    if (this.inMemoryLedger.has(request.publicationKey)) {
-      const existing = this.inMemoryLedger.get(request.publicationKey)!;
+    if (this.inMemoryLedger.has(JSON.stringify([ctx.tenantId, request.publicationKey]))) {
+      const existing = this.inMemoryLedger.get(JSON.stringify([ctx.tenantId, request.publicationKey]))!;
       if (
         (existing.sheet?.expectedHash && existing.sheet.expectedHash !== request.packageHash) ||
         ((existing as any).clientId && request.clientId && (existing as any).clientId !== request.clientId) ||
         existing.sheet.rowKey !== request.taskId ||
         (request.destination?.productionRootFolderId && existing.driveFolderId && existing.driveFolderId !== request.destination.productionRootFolderId) ||
-        (request.destination?.spreadsheetId && existing.sheet?.spreadsheetId && existing.sheet.spreadsheetId !== request.destination.spreadsheetId)
+        (request.destination?.spreadsheetId && existing.sheet?.spreadsheetId && existing.sheet.spreadsheetId !== request.destination.spreadsheetId) ||
+        existing.sheet.sheetId !== request.destination.sheetId
       ) {
         return {
           ok: false,
@@ -402,8 +412,9 @@ export class GooglePublisher implements Publisher {
       // The files are delivered but the Sheets row was not confirmed: retry only the row, never re-upload.
       if (existing.state === 'drive_complete') {
         const token = await this.getAccessToken();
-        const retry = await this.syncSheetRow(request, token, existing.driveFiles);
+        const retry = await this.syncSheetRow(ctx, request, token, existing.driveFiles);
         existing.sheet.spreadsheetId = request.destination.spreadsheetId || existing.sheet.spreadsheetId;
+        Object.assign(existing.sheet, this.sheetEvidence(retry));
         existing.sheet.rowNumber = retry.rowNumber;
         existing.sheet.synced = retry.synced;
         existing.sheet.observedHash = retry.observedHash;
@@ -415,7 +426,7 @@ export class GooglePublisher implements Publisher {
           existing.state = 'complete';
           existing.completedAt = new Date().toISOString();
         }
-        this.inMemoryLedger.set(request.publicationKey, existing);
+        this.inMemoryLedger.set(JSON.stringify([ctx.tenantId, request.publicationKey]), existing);
       }
       return { ok: true, value: existing };
     }
@@ -455,7 +466,7 @@ export class GooglePublisher implements Publisher {
         detail: { verified: false, filesUploaded: 0 },
         emulated: false,
       };
-      this.inMemoryLedger.set(request.publicationKey, emptyReceipt);
+      this.inMemoryLedger.set(JSON.stringify([ctx.tenantId, request.publicationKey]), emptyReceipt);
       return { ok: true, value: emptyReceipt };
     }
 
@@ -738,7 +749,7 @@ export class GooglePublisher implements Publisher {
     const allFilesVerified = driveFiles.length > 0 && driveFiles.every((f) => f.verified);
 
     // Step 8: Google Sheets row upsert (FR-049).
-    const sheetResult = await this.syncSheetRow(request, token, driveFiles);
+    const sheetResult = await this.syncSheetRow(ctx, request, token, driveFiles);
     const sheetRowNumber = sheetResult.rowNumber;
     const sheetSynced = sheetResult.synced;
 
@@ -752,6 +763,7 @@ export class GooglePublisher implements Publisher {
         spreadsheetId: request.destination.spreadsheetId || '',
         sheetId: request.destination.sheetId || 0,
         rowKey: request.taskId,
+        ...this.sheetEvidence(sheetResult),
         rowNumber: sheetRowNumber,
         expectedHash: request.packageHash,
         observedHash: sheetResult.observedHash,
@@ -760,6 +772,7 @@ export class GooglePublisher implements Publisher {
       ...(isFullyComplete ? { completedAt: new Date().toISOString() } : {}),
       state: isFullyComplete ? 'complete' : driveFiles.length > 0 ? 'drive_complete' : 'failed',
       detail: {
+        tenantId: ctx.tenantId,
         verified: allFilesVerified,
         filesUploaded: driveFiles.length,
         ...(sheetResult.problem ? { sheetProblem: sheetResult.problem } : {}),
@@ -768,7 +781,7 @@ export class GooglePublisher implements Publisher {
     };
     (receipt as any).clientId = request.clientId;
 
-    this.inMemoryLedger.set(request.publicationKey, receipt);
+    this.inMemoryLedger.set(JSON.stringify([ctx.tenantId, request.publicationKey]), receipt);
     return { ok: true, value: receipt };
   }
 
@@ -776,206 +789,44 @@ export class GooglePublisher implements Publisher {
    * Writes (or updates) this task's Sheets row and reads it back. The row number is only ever one
    * Sheets reported; when the row is not confirmed, `problem` says why.
    */
-  private async syncSheetRow(
-    request: PublishRequest,
-    token: string | null | undefined,
-    driveFiles: DriveFileReceipt[]
-  ): Promise<{ rowNumber?: number; observedHash?: string; synced: boolean; problem?: string }> {
-    let rowNumber = this.taskRowMap.get(request.taskId);
-    const spreadsheetId = request.destination.spreadsheetId;
-    if (!spreadsheetId) return { rowNumber, synced: false, problem: 'No spreadsheet is configured for this client' };
-
-    const rowValues = [
-      request.taskId,
-      request.clientId,
-      request.destination.productionRootFolderId,
-      new Date().toISOString(),
-      'COMPLETE',
-      driveFiles[0]?.webViewLink || '',
-      request.packageHash,
-    ];
-
-    if (!token) return { rowNumber, synced: false, problem: 'Google Workspace credentials are not configured' };
-
-    try {
-      let sheetRes: Response;
-      
-      // Step 1: If rowNumber is not cached, check if row already exists for this taskId before appending
-      if (rowNumber === undefined) {
-        try {
-          const foundRow = await this.findRowByTaskId(spreadsheetId, token, request.taskId);
-          if (foundRow !== undefined) {
-            rowNumber = foundRow;
-            this.taskRowMap.set(request.taskId, rowNumber);
-          }
-        } catch (findErr: any) {
-          return { rowNumber, synced: false, problem: `Task identity search failed: ${findErr.message}` };
-        }
-      }
-
-      // Step 2: If a rowNumber was found or cached, ALWAYS verify task identity at rowNumber before overwriting
-      if (rowNumber !== undefined) {
-        try {
-          const verifyRes = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${rowNumber}:A${rowNumber}`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-          });
-          if (!verifyRes.ok) {
-            return { rowNumber, synced: false, problem: `Row identity verification failed: HTTP ${verifyRes.status}` };
-          }
-          const verifyData = (await verifyRes.json()) as any;
-          const readTaskId = verifyData.values?.[0]?.[0];
-          if (readTaskId !== request.taskId) {
-            // Row position drifted (e.g. rows were moved, inserted, or sorted)! Find actual row by immutable taskId
-            try {
-              const reFound = await this.findRowByTaskId(spreadsheetId, token, request.taskId);
-              if (reFound !== undefined) {
-                // Verify the newly found row before writing
-                const verify2 = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${reFound}:A${reFound}`, {
-                  headers: { 'Authorization': `Bearer ${token}` },
-                });
-                const val2 = ((await verify2.json()) as any).values?.[0]?.[0];
-                if (val2 === request.taskId) {
-                  rowNumber = reFound;
-                  this.taskRowMap.set(request.taskId, rowNumber);
-                } else {
-                  rowNumber = undefined; // Do not overwrite an unrelated row!
-                }
-              } else {
-                rowNumber = undefined; // Need to append a new row
-              }
-            } catch (findErr: any) {
-              return { rowNumber, synced: false, problem: `Task identity search failed: ${findErr.message}` };
-            }
-          }
-        } catch (err: any) {
-          return { rowNumber, synced: false, problem: `Row identity verification error: ${err.message}` };
-        }
-      }
-
-      if (rowNumber !== undefined) {
-        // Idempotent upsert: update this task's verified existing row
-        sheetRes = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${rowNumber}:G${rowNumber}?valueInputOption=USER_ENTERED`, {
-          method: 'PUT',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ values: [rowValues] }),
-        });
-      } else {
-        // First publication: append the row and record the index Sheets reports
-        sheetRes = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A1:append?valueInputOption=USER_ENTERED`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ values: [rowValues] }),
-        });
-        if (sheetRes.ok) {
-          const sheetData = (await sheetRes.json()) as any;
-          const match = String(sheetData.updates?.updatedRange || '').match(/!A(\d+)/);
-          if (match) {
-            rowNumber = parseInt(match[1], 10);
-            this.taskRowMap.set(request.taskId, rowNumber);
-          }
-        }
-      }
-      if (!sheetRes.ok) return { rowNumber, synced: false, problem: `Sheets write failed: HTTP ${sheetRes.status}` };
-      // Without a row number from Sheets there is nothing to read back, so the row is not synced.
-      if (rowNumber === undefined) return { synced: false, problem: 'Sheets did not report which row it wrote' };
-
-      const readback = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${rowNumber}:G${rowNumber}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!readback.ok) return { rowNumber, synced: false, problem: `Sheets readback failed: HTTP ${readback.status}` };
-      const readRow = ((await readback.json()) as any).values?.[0];
-      const observedHash = typeof readRow?.[6] === 'string' ? readRow[6] : undefined;
-      const matches =
-        readRow &&
-        readRow[0] === request.taskId &&
-        readRow[1] === request.clientId &&
-        readRow[4] === 'COMPLETE' &&
-        readRow[6] === request.packageHash;
-      return matches ? { rowNumber, observedHash, synced: true } :
-        { rowNumber, observedHash, synced: false, problem: `Row ${rowNumber} read back from Sheets does not match this publication` };
-    } catch (err: any) {
-      return { rowNumber, synced: false, problem: `Sheets could not be reached: ${err?.message || String(err)}` };
-    }
+  private sheetEvidence(result: SheetRowResult) {
+    return { metadataId: result.metadataId, expectedValues: result.expectedValues,
+      expectedRowHash: result.expectedRowHash, observedRowHash: result.observedRowHash };
   }
 
-  /**
-   * Scans column A of a Google Sheet to locate the row containing a given taskId.
-   * Ensures immutable task identity even when rows are moved, sorted, or inserted externally.
-   */
-  async findRowByTaskId(spreadsheetId: string, token: string, taskId: string): Promise<number | undefined> {
-    const res = await fetch(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A:A`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    const data = (await res.json()) as any;
-    const rows = data.values || [];
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i]?.[0] === taskId) {
-        return i + 1; // 1-indexed row number in Google Sheets
-      }
-    }
-    return undefined;
+  private async syncSheetRow(ctx: RequestContext, request: PublishRequest, token: string | null | undefined, driveFiles: DriveFileReceipt[]): Promise<SheetRowResult> {
+    if (!request.destination.spreadsheetId) return { synced: false, problem: 'No spreadsheet is configured for this client' };
+    if (!token) return { synced: false, problem: 'Google Workspace credentials are not configured' };
+    return new GoogleSheetRow(this.sheetsApiBaseUrl, token, ctx.deadline).sync({
+      tenantId: ctx.tenantId, spreadsheetId: request.destination.spreadsheetId, sheetId: request.destination.sheetId, taskId: request.taskId,
+    }, [request.taskId, request.clientId, request.destination.productionRootFolderId,
+      typeof request.sheetRow.publishedAt === 'string' ? request.sheetRow.publishedAt : new Date().toISOString(),
+      'COMPLETE', driveFiles[0]?.webViewLink || '', request.packageHash], typeof request.sheetRow.publishedAt === 'string');
   }
 
-  async reconcile(_ctx: RequestContext, publicationId: UUID): Promise<Result<PublicationReceipt>> {
-    const token = await this.getAccessToken();
-    for (const receipt of this.inMemoryLedger.values()) {
-      if (receipt.publicationId === publicationId) {
-        if (receipt.state === 'failed' || !receipt.detail?.verified) {
-          return { ok: true, value: receipt };
-        }
-        const unconfirmSheet = (observedHash?: string) => {
-          receipt.sheet.observedHash = observedHash;
-          receipt.sheet.synced = false;
-          receipt.state = 'drive_complete';
-          delete receipt.completedAt;
-          return { ok: true as const, value: receipt };
-        };
-        if (receipt.sheet.rowNumber === undefined || !receipt.sheet.spreadsheetId || !token) {
-          return unconfirmSheet();
-        }
+  private async inspectSheet(ctx: RequestContext, receipt: PublicationReceipt, token: string | null): Promise<SheetRowResult> {
+    if (!token) return { synced: false, problem: 'SHEETS_CREDENTIALS_UNAVAILABLE' };
+    if (receipt.detail.tenantId !== ctx.tenantId || !receipt.sheet.expectedValues) return { synced: false, problem: 'SHEETS_EXPECTATION_UNAVAILABLE' };
+    return new GoogleSheetRow(this.sheetsApiBaseUrl, token, ctx.deadline).verify({
+      tenantId: ctx.tenantId, spreadsheetId: receipt.sheet.spreadsheetId, sheetId: receipt.sheet.sheetId, taskId: receipt.sheet.rowKey,
+    }, receipt.sheet.expectedValues);
+  }
 
-        // Perform genuine network call to Google Sheets to reconcile sync state
-        const spreadsheetId = receipt.sheet.spreadsheetId;
-        const readbackSheetUrl = `${this.sheetsApiBaseUrl}/v4/spreadsheets/${spreadsheetId}/values/A${receipt.sheet.rowNumber}:G${receipt.sheet.rowNumber}`;
-        let observedHash: string | undefined;
-        try {
-          const res = await fetch(readbackSheetUrl, {
-            headers: { 'Authorization': `Bearer ${token}` },
-          });
-          if (res.ok) {
-            const data = await res.json() as any;
-            const row = data.values?.[0];
-            observedHash = typeof row?.[6] === 'string' ? row[6] : undefined;
-            if (
-              row &&
-              row[0] === receipt.sheet.rowKey &&
-              row[4] === 'COMPLETE' &&
-              row[6] === receipt.sheet.expectedHash
-            ) {
-              receipt.sheet.observedHash = observedHash;
-              receipt.sheet.synced = true;
-              receipt.state = 'complete';
-              receipt.completedAt ??= new Date().toISOString();
-              return { ok: true, value: receipt };
-            }
-          }
-        } catch (e) {}
-        // A prior completion cannot remain current when this row has changed or is unreadable.
-        return unconfirmSheet(observedHash);
-      }
+  async reconcile(ctx: RequestContext, publicationId: UUID): Promise<Result<PublicationReceipt>> {
+    const receipt = Array.from(this.inMemoryLedger.values()).find(r => r.publicationId === publicationId && r.detail.tenantId === ctx.tenantId);
+    if (!receipt) return { ok: false, error: { code: 'PUBLICATION_RECEIPT_NOT_FOUND', message: 'Publication receipt is not available in this process and scope', retryable: false, safeAction: 'Read the durable publication record before reconciling' } };
+    if (receipt.state === 'failed' || !receipt.detail.verified) return { ok: true, value: receipt };
+    const read = await this.inspectSheet(ctx, receipt, await this.getAccessToken());
+    receipt.sheet.synced = read.synced;
+    receipt.sheet.observedHash = read.observedHash;
+    receipt.sheet.observedRowHash = read.observedRowHash;
+    receipt.sheet.rowNumber = read.rowNumber;
+    if (read.synced) {
+      receipt.state = 'complete'; receipt.completedAt ??= new Date().toISOString(); delete receipt.detail.sheetProblem;
+    } else {
+      receipt.state = 'drive_complete'; delete receipt.completedAt; receipt.detail.sheetProblem = read.problem || 'SHEETS_UNCONFIRMED';
     }
-    return {
-      ok: false,
-      error: {
-        code: 'PUBLICATION_RECEIPT_NOT_FOUND',
-        message: `Publication receipt ${publicationId} not found in ledger`,
-        retryable: false,
-        safeAction: 'Verify publication ID exists before reconciling',
-      },
-    };
+    return { ok: true, value: receipt };
   }
 
   /**
@@ -984,8 +835,8 @@ export class GooglePublisher implements Publisher {
    * every recorded Drive file is still there with its name, type, size and (when Drive reports one)
    * SHA-256, and the recorded Sheets row still carries this task, COMPLETE and the package hash.
    */
-  async verify(_ctx: RequestContext, publicationId: UUID): Promise<Result<{ consistent: boolean; differences: Record<string, unknown>[] }>> {
-    const receipt = Array.from(this.inMemoryLedger.values()).find((r) => r.publicationId === publicationId);
+  async verify(ctx: RequestContext, publicationId: UUID): Promise<Result<{ consistent: boolean; differences: Record<string, unknown>[] }>> {
+    const receipt = Array.from(this.inMemoryLedger.values()).find((r) => r.publicationId === publicationId && r.detail.tenantId === ctx.tenantId);
     if (!receipt) {
       return { ok: true, value: { consistent: false, differences: [{ error: 'not_found' }] } };
     }
@@ -1033,25 +884,8 @@ export class GooglePublisher implements Publisher {
       }
     }
 
-    const sheet = receipt.sheet;
-    if (!sheet.spreadsheetId) {
-      differences.push({ check: 'sheets', detail: 'No spreadsheet is recorded for this publication' });
-    } else if (sheet.rowNumber === undefined) {
-      differences.push({ check: 'sheets', detail: 'No Sheets row was recorded for this publication' });
-    } else {
-      const range = `A${sheet.rowNumber}:G${sheet.rowNumber}`;
-      const read = await get(`${this.sheetsApiBaseUrl}/v4/spreadsheets/${encodeURIComponent(sheet.spreadsheetId)}/values/${range}`);
-      const row = read.body?.values?.[0];
-      if (!read.body) {
-        differences.push({ check: 'sheets', row: sheet.rowNumber, detail: `Sheets could not be read (${read.error || `HTTP ${read.status}`})` });
-      } else if (!row) {
-        differences.push({ check: 'sheets', row: sheet.rowNumber, detail: 'The recorded row is empty' });
-      } else {
-        if (row[0] !== sheet.rowKey) differences.push({ check: 'sheets', row: sheet.rowNumber, field: 'taskId', expected: sheet.rowKey, observed: row[0] ?? null });
-        if (row[4] !== 'COMPLETE') differences.push({ check: 'sheets', row: sheet.rowNumber, field: 'status', expected: 'COMPLETE', observed: row[4] ?? null });
-        if (row[6] !== sheet.expectedHash) differences.push({ check: 'sheets', row: sheet.rowNumber, field: 'packageHash', expected: sheet.expectedHash, observed: row[6] ?? null });
-      }
-    }
+    const sheet = await this.inspectSheet(ctx, receipt, token);
+    if (!sheet.synced) differences.push({ check: 'sheets', detail: sheet.problem || 'SHEETS_UNCONFIRMED', row: sheet.rowNumber ?? null });
 
     return inconsistent(differences);
   }

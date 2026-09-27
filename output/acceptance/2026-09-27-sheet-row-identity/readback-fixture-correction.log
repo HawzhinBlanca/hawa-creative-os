@@ -1,0 +1,46 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_c3bf33c83bd68d08 and hawa_tpl_repair_c3bf33c83bd68d08 (25 ms)
+{"level":"warn","time":"2026-09-27T16:35:28.086Z","service":"core","requestId":"f758d0c8-c6fd-4510-8826-1ad6048aa1d0","chatId":"888","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"error","time":"2026-09-27T16:35:28.437Z","service":"core","requestId":"d36967cf-e162-46f4-8058-a0f747b1f13e","taskId":"e6dd8e8c-2239-4166-88b0-063e1b550617","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Task e6dd8e8c-2239-4166-88b0-063e1b550617 is cancelled; publication completion requires publishing or complete","stack":"Error: Task e6dd8e8c-2239-4166-88b0-063e1b550617 is cancelled; publication completion requires publishing or complete\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:346:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PublicationRepository.markComplete (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:405:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:997:13\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at doPublish (/Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:954:9)\n    at /Users/hawzhin/Hawdesign/packages/db/src/session-lock.ts:30:39"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+ ❯ packages/integrations/test/google-publisher-bytes.test.ts (14 tests | 1 failed) 38ms
+     × reports a Drive file whose content, size or trash state no longer matches, and a missing Sheets row 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/integrations/test/google-publisher-bytes.test.ts > GooglePublisher.verify reads the publication back > reports a Drive file whose content, size or trash state no longer matches, and a missing Sheets row
+AssertionError: expected { consistent: false, …(1) } to deeply equal { consistent: false, …(1) }
+
+- Expected
++ Received
+
+@@ -20,10 +20,10 @@
+        "fileId": "drive-file-1",
+        "observed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      },
+      {
+        "check": "sheets",
+-       "detail": "SHEETS_EXPECTATION_UNAVAILABLE",
++       "detail": "SHEETS_READ_OR_WRITE_UNCONFIRMED",
+        "row": null,
+      },
+    ],
+  }
+
+ ❯ packages/integrations/test/google-publisher-bytes.test.ts:265:43
+    263|     driveNow = { ...driveNow, size: '999', sha256Checksum: 'f'.repeat(…
+    264|     const verified = await publisher.verify(ctx, res.value.publication…
+    265|     expect(verified.ok && verified.value).toEqual({
+       |                                           ^
+    266|       consistent: false,
+    267|       differences: [
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 38 passed (39)
+      Tests  1 failed | 439 passed (440)
+   Start at  19:35:26
+   Duration  8.25s (transform 3.32s, setup 1.43s, import 5.17s, tests 14.67s, environment 2ms)
+

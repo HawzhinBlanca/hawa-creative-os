@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T16:16:48Z",
+  "generatedAt": "2026-09-27T16:38:33Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 437,
+  "fileCount": 440,
   "files": [
     {
       "path": ".dockerignore",
@@ -593,6 +593,11 @@
       "bytes": 6787
     },
     {
+      "path": "adrs/105_stable_google_sheet_row_identity.md",
+      "sha256": "27e00602eb32c6f524899251845bb83093bce035476062435800878a74275779",
+      "bytes": 3583
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -669,8 +674,8 @@
     },
     {
       "path": "contracts/publisher.ts",
-      "sha256": "368b18033131ef48f5257deb13b8a5268e6d9380368259ebad5dbd808529a3af",
-      "bytes": 1705
+      "sha256": "a54bd196d0d3b76a3ec53223590e3fe678e17aa0fb5f40ff8fffddee087090c1",
+      "bytes": 1820
     },
     {
       "path": "contracts/qa-engine.ts",
@@ -874,8 +879,8 @@
     },
     {
       "path": "docs/13_GOOGLE_DRIVE_SHEETS.md",
-      "sha256": "741ed248eaebb57c5027a3ef698d8eea5f1797b867fa3afc329de503ed3b45e0",
-      "bytes": 14764
+      "sha256": "fe9ec565457d378463b0e6641d494563055d3d21e66c67ca722ab4069a8299d6",
+      "bytes": 16357
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
@@ -1044,8 +1049,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "aab40359e933212e870cb60801d16754b1fad0be78fc8313786eb4210a92f0c5",
-      "bytes": 109975
+      "sha256": "ae2ad26d4fb076f83a701521b0441d06a26fd4d22ad99576c64d94d9cea1943e",
+      "bytes": 111105
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1154,13 +1159,18 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_EVIDENCE.md",
-      "sha256": "dd9b637b98be05762b7c8c2119556fb89abfddeb98671479b9993851f682799e",
-      "bytes": 43614
+      "sha256": "3200c73f084ae8c090dde256af967321bc84cad291609fa2e323c18f51bf181f",
+      "bytes": 44743
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_RESTATE_DELIVERY_KILL_DRILL.md",
       "sha256": "9cc1455e248bebb1ed6b96cc8a82eddb66749916fd3b1a942a65a3a02f755a24",
       "bytes": 4822
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R09_SHEET_IDENTITY_PROOF.json",
+      "sha256": "d6568187ef0bb35c5b61fc72fed631ae6d0aa915fce839f89a39b5f5657cfeea",
+      "bytes": 4941
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R10_ARCHIVE_INTEGRITY_PROOF.json",
@@ -1444,8 +1454,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "15eb9c9080f28514dc02c8c1ee1ba733fcb34ef5fd89b809eefeac1e7430905d",
-      "bytes": 376043
+      "sha256": "2ab137adf4bf682fa0e59f95a2a6011222c07fe88c4ed21a91678d1c16244abb",
+      "bytes": 376909
     },
     {
       "path": "plans/user-stories.csv",
@@ -1566,6 +1576,11 @@
       "path": "runbooks/EVALUATION_RECOVERY.md",
       "sha256": "e7edc55f1e342c15bc593aa94d2078fa7f1ca0828b0a64c0b559c74c4c3a5f04",
       "bytes": 6107
+    },
+    {
+      "path": "runbooks/GOOGLE_SHEET_ROW_IDENTITY.md",
+      "sha256": "be859c7367d7f69f515bc85e695483266fee17a82ba4bf72de1f067fc86b1c5c",
+      "bytes": 2352
     },
     {
       "path": "runbooks/LIVE_PILOT.md",

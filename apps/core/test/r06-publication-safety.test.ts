@@ -201,6 +201,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     ['empty Drive receipt', (receipt: any) => { receipt.driveFiles = []; }],
     ['changed Drive checksum', (receipt: any) => { receipt.driveFiles[0].expectedSha256 = '0'.repeat(64); }],
     ['extra Drive receipt', (receipt: any) => { receipt.driveFiles.push({ ...receipt.driveFiles[0], artifactId: crypto.randomUUID() }); }],
+    ['wrong Sheet tab', (receipt: any) => { receipt.sheet.sheetId = 456; }],
     ['wrong Sheet task identity', (receipt: any) => { receipt.sheet.rowKey = crypto.randomUUID(); }],
     ['Sheet without row identity', (receipt: any) => { delete receipt.sheet.rowNumber; }],
     ['non-boolean Sheet sync', (receipt: any) => { receipt.sheet.synced = 'true'; }],
@@ -421,7 +422,8 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     const resB = await publisher.publish(ctx, reqB);
     expect(resB.ok).toBe(true); assert(resB.ok);
     if (!resB.ok) return;
-    expect(resB.value.sheet.rowNumber).toBe(3);
+    expect(resB.value.sheet.rowNumber).toBe(2);
+    fakeServer.moveSheetRow(spreadsheetId, 2, 1);
 
     // Inspect sheet: row 2 is Task A, row 3 is Task B
     let sheetRows = fakeServer.getSheetRows(spreadsheetId);
@@ -431,12 +433,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
 
     // 3. Simulate an external user inserting an unrelated task or shifting rows in the Sheet!
     // Row 2 is now an unrelated task! Task A was shifted down to row 3, Task B to row 4!
-    fakeServer.setSheetRows(spreadsheetId, [
-      ['Task ID', 'Client ID', 'Folder ID', 'Date', 'Status', 'Link', 'Hash'],
-      ['task-unrelated-external', 'client-x', 'folder-x', 'date', 'COMPLETE', 'link', 'hash-x'],
-      sheetRows[1], // task-a moved to row 3
-      sheetRows[2], // task-b moved to row 4
-    ]);
+    fakeServer.insertSheetRow(spreadsheetId, 1, ['task-unrelated-external', 'client-x', 'folder-x', 'date', 'COMPLETE', 'link', 'hash-x']);
 
     // 4. Update/re-publish Task A with a new package hash
     const reqA2: PublishRequest = {
@@ -459,8 +456,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
 
     // The cached Task A row can become blank after a user inserts or clears a row. Blank is
     // not proof of task identity: find Task A again instead of overwriting the blank row.
-    fakeServer.setSheetRows(spreadsheetId, [sheetRows[0], sheetRows[1], ['', '', '', '', '', '', ''],
-      sheetRows[2], sheetRows[3]]);
+    fakeServer.insertSheetRow(spreadsheetId, 2, ['', '', '', '', '', '', '']);
     const resA3 = await publisher.publish(ctx, { ...reqA, packageHash: 'hash-a-third', publicationKey: 'pub_a_third' });
     expect(resA3.ok).toBe(true); assert(resA3.ok);
     if (!resA3.ok) return;

@@ -1,0 +1,54 @@
+Security scan passed: 0 secrets in committable files; 53 justified allowlist hit(s).
+  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 29): Fixture value beginning with "mock-" passed to an in-memory provider configuration test.
+  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 1020): Fixture value beginning with "mock-" passed to an in-memory provider configuration test.
+  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 1041): Fixture value beginning with "mock-" passed to an in-memory provider configuration test.
+  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 1081): Fixture value beginning with "mock-" passed to an in-memory provider configuration test.
+  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 1092): Fixture value beginning with "mock-" passed to an in-memory provider configuration test.
+  allow: apps/core/test/core.test.ts|quoted_secret_assignment (line 1093): Fixture value beginning with "mock-" passed to an in-memory provider configuration test.
+  allow: apps/core/test/core.test.ts|long_credential_assignment (line 29): Fixture provider key beginning with "mock-" for the settings-screen provider test.
+  allow: apps/core/test/core.test.ts|long_credential_assignment (line 1020): Fixture provider key beginning with "mock-" for the settings-screen provider test.
+  allow: apps/core/test/core.test.ts|long_credential_assignment (line 1093): Fixture provider key beginning with "mock-" for the settings-screen provider test.
+  allow: apps/core/test/h11-governed-learning-scope.test.ts|quoted_secret_assignment (line 11): Fixture bearer token beginning with "test_" accepted only when NODE_ENV=test and VITEST are set.
+  allow: apps/core/test/h11-governed-learning-scope.test.ts|quoted_secret_assignment (line 12): Fixture bearer token beginning with "test_" accepted only when NODE_ENV=test and VITEST are set.
+  allow: apps/core/test/unauthenticated-route-escalations.test.ts|quoted_secret_assignment (line 7): Fixture admin/operator keys beginning with "cfg_" set on process.env for an in-memory app only.
+  allow: apps/desk/src/services/manualTaskIntake.ts|long_credential_assignment (line 4): localStorage key name for the pending manual draft; not a credential.
+  allow: apps/desk/src/services/manualTaskIntake.ts|long_credential_assignment (line 5): localStorage key name for the pending manual draft; not a credential.
+  allow: apps/desk/test/desk-auth.test.ts|quoted_secret_assignment (line 19): Synthetic test fixture token used to verify browser localStorage authorization header injection in isolated unit test.
+  allow: apps/desk/test/desk-auth.test.ts|quoted_secret_assignment (line 157): Synthetic test fixture token used to verify browser localStorage authorization header injection in isolated unit test.
+  allow: output/acceptance/2026-09-27-canva-planner-calls/check-deployed.mts|quoted_secret_assignment (line 30): Synthetic Canva access/refresh strings used only by the isolated hawa-chaos fake provider; no live credentials.
+  allow: output/acceptance/2026-09-27-canva-planner-calls/check-deployed.mts|quoted_secret_assignment (line 30): Synthetic Canva access/refresh strings used only by the isolated hawa-chaos fake provider; no live credentials.
+  allow: output/audits/2026-09-10-deep-audit/probes.mjs|quoted_secret_assignment (line 102): Audit probe fixture ("isolated…") for the emulated Google publisher; no live credential.
+  allow: output/audits/2026-09-10-deep-audit/probes.mjs|quoted_secret_assignment (line 110): Audit probe fixture ("isolated…") for the emulated Google publisher; no live credential.
+  allow: output/audits/2026-09-10-deep-audit/probes.mjs|quoted_secret_assignment (line 113): Audit probe fixture ("isolated…") for the emulated Google publisher; no live credential.
+  allow: output/audits/2026-09-10-deep-audit/probes.mjs|quoted_secret_assignment (line 115): Audit probe fixture ("isolated…") for the emulated Google publisher; no live credential.
+  allow: output/audits/2026-09-10-deep-audit/probes.mjs|quoted_secret_assignment (line 119): Audit probe fixture ("isolated…") for the emulated Google publisher; no live credential.
+  allow: output/audits/2026-09-12-canva-reality-check/probe.ts|quoted_secret_assignment (line 33): Audit probe sets a fake "audit-…" model key to prove the gateway fails closed.
+  allow: output/audits/2026-09-12-followup-bug-hunt/adversarial-probes.ts|quoted_secret_assignment (line 29): Audit probe sets a fake "audit-…" model key to prove the gateway fails closed.
+  allow: output/audits/2026-09-12-followup-bug-hunt/adversarial-probes.ts|quoted_secret_assignment (line 33): Audit probe sets a fake "audit-…" model key to prove the gateway fails closed.
+  allow: output/audits/2026-09-12-followup-bug-hunt/adversarial-probes.ts|quoted_secret_assignment (line 33): Audit probe sets a fake "audit-…" model key to prove the gateway fails closed.
+  allow: output/audits/2026-09-12-followup-bug-hunt/baseline-retest.ts|quoted_secret_assignment (line 33): Audit probe sets a fake "audit-…" model key to prove the gateway fails closed.
+  allow: output/audits/2026-09-12-followup-bug-hunt/core-probes.ts|quoted_secret_assignment (line 5): Audit probe sets a fake "audit-…" bearer token for an isolated in-process app.
+  allow: output/audits/2026-09-13-ship-readiness/adversarial-probes.ts|quoted_secret_assignment (line 29): Audit probe sets a fake "audit-…" model key to prove the gateway fails closed.
+  allow: output/audits/2026-09-13-ship-readiness/adversarial-probes.ts|quoted_secret_assignment (line 33): Audit probe sets a fake "audit-…" model key to prove the gateway fails closed.
+  allow: output/audits/2026-09-13-ship-readiness/adversarial-probes.ts|quoted_secret_assignment (line 33): Audit probe sets a fake "audit-…" model key to prove the gateway fails closed.
+  allow: output/audits/2026-09-19-architecture-reliability/PUBLICATION_PROBE.mjs|quoted_secret_assignment (line 26): Offline audit probe fixture token passed to emulated Google publisher; no live credential.
+  allow: output/audits/2026-09-19-architecture-reliability/offline-architecture-probe.ts|quoted_secret_assignment (line 13): Offline audit probe fixture bearer token for isolated in-process app; no live credential.
+  allow: output/audits/2026-09-19-architecture-reliability/offline-architecture-probe.ts|quoted_secret_assignment (line 14): Offline audit probe fixture bearer token for isolated in-process app; no live credential.
+  allow: output/audits/2026-09-19-architecture-reliability/offline-architecture-probe.ts|long_credential_assignment (line 13): Offline audit probe fixture bearer token for isolated in-process app; no live credential.
+  allow: output/audits/2026-09-19-architecture-reliability/offline-architecture-probe.ts|long_credential_assignment (line 14): Offline audit probe fixture bearer token for isolated in-process app; no live credential.
+  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 42): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.
+  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 64): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.
+  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 97): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.
+  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 148): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.
+  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 185): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.
+  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 239): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.
+  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 240): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.
+  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 266): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.
+  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 267): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.
+  allow: packages/integrations/test/canva-connect-client.test.ts|quoted_secret_assignment (line 269): Synthetic fixture string passed to a mocked fetch; no such Canva credential exists.
+  allow: packages/integrations/test/canva-connect-client.test.ts|long_credential_assignment (line 239): Synthetic fixture credential passed to a mocked Canva transport; no such credential exists.
+  allow: scripts/publish_kaae_omnichannel.ts|long_credential_assignment (line 426): Idempotency key label for a publication request; not a credential.
+  allow: scripts/publish_kaae_omnichannel.ts|long_credential_assignment (line 434): Idempotency key label for a publication request; not a credential.
+  allow: scripts/run_independent_completion_audit.ts|quoted_secret_assignment (line 343): Synthetic "canva_…" client credentials for a configuration-shape check against a mocked transport.
+  allow: scripts/verify_all_h01_h14.ts|quoted_secret_assignment (line 197): Synthetic "canva-…" client secret for a configuration-shape check against a mocked transport.
+  allow: scripts/verify_live_h04_h05_h10.ts|quoted_secret_assignment (line 108): Synthetic "audit_…" client secret for a configuration-shape check against a mocked transport.

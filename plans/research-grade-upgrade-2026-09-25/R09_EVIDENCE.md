@@ -169,3 +169,20 @@ These controls use a fake sender and isolated PostgreSQL. A Bot API message ID i
 The extended `R1.S3.REVISION_PHOTO` disposable-stack drill first reached request revision 8 (`delivered`) and child task `complete`, yet Restate left `Delivery.run` backing off with journal error 570. The worker had nested a Restate `RequestLifecycle.deliveryFinished` RPC inside `ctx.run('report')`; the journal could not replay that command sequence. The request-owned report now calls the private object directly. The object performs its own durable, expected-revision Core projection; legacy Core reporting keeps its `ctx.run` retry step. A static module import removes an asynchronous loader from this replay path.
 
 The focused delivery/Desk tests passed **2 files / 22 tests** after the repair. The broad source suite excluding the unsealed release-gate file passed **425 files / 3,294 tests**, with **4 files / 52 tests skipped**. TypeScript, lint and the security scan passed. A clean Core SIGKILL and second-key replay then passed **10/10** Docker invariants, including one revision-8 delivery, no unmatched model calls, zero ready outbox commands and no active invocation other than a future lifecycle reminder. The earlier database-complete/Restate-retry run remains a failed control, not passing evidence. This is a fake-provider recovery result; live Google and Telegram receipts, requester receipt, permanent conflict repair, clean-host restore and production canary admission remain open. R09 stays **in progress** with production flags off.
+
+## 2026-09-27 — Stable Google Sheet row identity (ADR-105), partial
+
+Exact DNA tab propagation, metadata-bound writes, atomic row creation, duplicate
+checks and complete seven-column readback are implemented. Four original-adapter
+regressions and one Core tab regression reproduced before correction. Final affected
+checks: 440 passed / 39 files; includes actual publisher SIGKILL after accepted row
+creation and a fresh process recovering one row. Source build, 509 strict roots,
+lint and security pass. Full suite/release seal and deployed/live qualification
+were not repeated for this prerequisite. See R09_SHEET_IDENTITY_PROOF.json and
+output/acceptance/2026-09-27-sheet-row-identity/STATUS.md for retained failures.
+
+Next: persist immutable publication destinations/expected row/metadata evidence,
+then schedule durable external Drive/Sheets observations and scoped staff resolution.
+Legacy unbound rows require supervised migration; no unsafe automatic adoption.
+The receipt-ID-only reconcile API is still process-local. Wider reporting columns,
+live/human/independent-host admission remain open; whole-app goal active.
