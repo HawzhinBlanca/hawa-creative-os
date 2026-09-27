@@ -30,7 +30,7 @@ import {
   probeFontScripts,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
-import { resolveModel, resolveImageSettings } from '@hawa/domain';
+import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
@@ -635,19 +635,14 @@ export class DesignStudioService {
       const runId = randomUUID();
       // A finished design costs $0.33-0.78 in at most 10 calls (2026-09-23), so a cap of $6 and 40
       // calls let a run that was going wrong spend eight designs' worth before it stopped.
-      const maxUsd =
-        this.options.maxUsd ||
-        (process.env.DESIGN_STUDIO_MAX_USD ? parseFloat(process.env.DESIGN_STUDIO_MAX_USD) : 2.0);
-      const maxCalls =
-        this.options.maxCalls ||
-        (process.env.DESIGN_STUDIO_MAX_CALLS ? parseInt(process.env.DESIGN_STUDIO_MAX_CALLS, 10) : 24);
-
-      const budget = {
-        maxUsd,
-        maxCalls,
-        spentUsd: 0.0,
-        calls: 0,
-      };
+      let budget;
+      try {
+        budget = newStudioBudget(this.options.maxUsd ?? process.env.DESIGN_STUDIO_MAX_USD,
+          this.options.maxCalls ?? process.env.DESIGN_STUDIO_MAX_CALLS);
+      } catch (error) {
+        if (error instanceof StudioBudgetEvidenceError) throw new CanvaFlowError(503, error.code, error.message);
+        throw error;
+      }
 
       const [run] = await db
         .insertInto('design_studio_runs')
@@ -931,7 +926,7 @@ export class DesignStudioService {
           logicalCallSha256,
         });
       } catch (error) {
-        if (error instanceof TaskGenerationBlockedError) {
+        if (error instanceof TaskGenerationBlockedError || error instanceof StudioBudgetEvidenceError) {
           throw new CanvaFlowError(409, error.code, error.message);
         }
         throw error;
@@ -2207,8 +2202,8 @@ export class DesignStudioService {
           return { runId, status: run.status };
       }
     } catch (err: any) {
-      if (err?.code === 'TASK_GENERATION_BLOCKED') {
-        throw new CanvaFlowError(409, 'TASK_GENERATION_BLOCKED', err.message);
+      if (['TASK_GENERATION_BLOCKED', 'STUDIO_BUDGET_INVALID', 'STUDIO_BUDGET_HISTORY_INCOMPLETE'].includes(err?.code)) {
+        throw new CanvaFlowError(409, err.code, err.message);
       }
       if (isModelCallHoldError(err)) {
         const code = err?.code === 'MODEL_CALL_ADMISSION_CONFLICT' || err?.code === 'MODEL_CALL_FINALIZATION_CONFLICT'
@@ -2712,7 +2707,7 @@ export class DesignStudioService {
         ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0]?.content_check
     );
 
-    const budget = typeof run.budget === 'string' ? JSON.parse(run.budget) : (run.budget || { maxUsd: 5.0, maxCalls: 30, spentUsd: 0, calls: 0 });
+    const budget = parseStudioBudget(run.budget);
     // The parity call's cost reaches the run's stored budget, as every stage's does (doResume's
     // onSpendUpdate). It was added to this in-memory copy only until 2026-09-24, and counted as a
     // second call on top of the ledger wrapper's own count. The budget alone is written: the run's

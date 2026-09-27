@@ -4,20 +4,15 @@ import type { OpenAiStudioClient } from '@hawa/creative';
 import type { OpenAiImageProvider } from '@hawa/creative';
 import type { DesignStudioRepository } from '@hawa/db';
 
-export class StudioBudgetExhaustedError extends Error {
-  readonly code = 'BUDGET_EXHAUSTED';
-  constructor(message = 'BUDGET_EXHAUSTED') {
-    super(message);
-    this.name = 'StudioBudgetExhaustedError';
-  }
-}
+export { StudioBudgetExhaustedError } from '@hawa/domain';
 
 /** Stop every fallback when task authority ends or a paid call requires reconciliation. */
 export function isModelCallHoldError(err: unknown): boolean {
   return !!err && typeof err === 'object' &&
     ('isUncertain' in err && err.isUncertain === true ||
       'code' in err && (err.code === 'MODEL_CALL_ADMISSION_CONFLICT' ||
-        err.code === 'MODEL_CALL_FINALIZATION_CONFLICT' || err.code === 'TASK_GENERATION_BLOCKED'));
+        err.code === 'MODEL_CALL_FINALIZATION_CONFLICT' || err.code === 'TASK_GENERATION_BLOCKED' ||
+        err.code === 'STUDIO_BUDGET_INVALID' || err.code === 'STUDIO_BUDGET_HISTORY_INCOMPLETE'));
 }
 
 export interface CreativeBriefRole {

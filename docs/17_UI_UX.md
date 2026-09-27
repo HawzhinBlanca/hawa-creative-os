@@ -55,6 +55,14 @@ Required affordances:
 - cost/latency/provenance collapsible—not cluttering primary review;
 - safe next action on every blocked state.
 
+Studio spending uses cumulative call-ledger totals, including checks after Canva
+transfer. Display recorded estimates, additional administrator-reported cost,
+unknown costs, admitted call count and admission refusal separately. Missing
+accounting is unavailable, never an invented zero or default cap. Explain that
+the spending threshold blocks new requests after recorded costs reach it; calls
+already admitted may add cost. Preserve the original run snapshot and receipts.
+See ADR-088 and runbooks/STUDIO_RECOVERY.md.
+
 ## 5. Client DNA screen
 
 Tabs:

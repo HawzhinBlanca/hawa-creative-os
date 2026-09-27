@@ -1,6 +1,6 @@
 # Recovering held Studio model calls
 
-Requirements FR-060/065/067/079 and NFR-001. ADRs 086 and 087.
+Requirements FR-060/065/067/079 and NFR-001. ADRs 086, 087 and 088.
 
 ## Inspect and stop
 
@@ -50,3 +50,26 @@ under locks. Evidence is append-only with FORCE RLS and SQL authority checks.
 General model-response replay and automated provider lookup are not implemented.
 Synthetic test identities and provider fixtures do not constitute live billing,
 human design review, or production readiness evidence.
+
+## Spending and call limits
+
+Desk shows the cumulative number of admitted calls and spending counted from the
+run's receipts, including later parity checks on a transferred design. The saved
+run budget is a historical snapshot; it is not permission to reset those totals.
+Administrator-reported additional cost is displayed separately. A late receipt
+cannot reduce a higher settled amount used for admission.
+
+- `BUDGET_EXHAUSTED`: no further model call can be admitted on this run. Calls
+  already admitted can still finish and record costs. Review the current result
+  before explicitly requesting separately billable work.
+- `STUDIO_BUDGET_HISTORY_INCOMPLETE`: the saved spend or call count exceeds the
+  available ledger. Preserve the history; do not lower the counters or erase calls.
+  Inspect the evidence and resolve uncertainty before a separately requested new run.
+- `STUDIO_BUDGET_INVALID`: fix invalid configured limits before requesting new work.
+  USD must be finite and positive; the call cap must be a positive safe integer.
+  Missing historical settings do not authorize default spending.
+
+The USD limit stops new requests after recorded spending reaches it. It is not a
+guaranteed invoice ceiling: final costs for admitted calls may exceed the remaining
+amount. Strict cost reservations and office/day/role budget qualification remain open.
+No settlement automatically supplies a missing stage result or retries its model.

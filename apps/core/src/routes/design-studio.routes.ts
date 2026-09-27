@@ -7,6 +7,7 @@ import {
 import { CanvaConnectService, CanvaFlowError } from '../services/canva-connect-service.js';
 import { DesignStudioRepository, withRlsContext, type CandidateImageKind } from '@hawa/db';
 import { isSha256Hex } from '@hawa/contracts';
+import { StudioBudgetEvidenceError, StudioBudgetExhaustedError } from '@hawa/domain';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { blobStoreFor, storedFileLost } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
@@ -86,6 +87,9 @@ export function registerDesignStudioRoutes(
     } catch (error: any) {
       if (error instanceof CanvaFlowError) {
         return ctx.problem(c, error.status, error.code, error.message);
+      }
+      if (error instanceof StudioBudgetEvidenceError || error instanceof StudioBudgetExhaustedError) {
+        return ctx.problem(c, 409, error.code, error.message);
       }
       return ctx.problem(
         c,
@@ -171,6 +175,7 @@ export function registerDesignStudioRoutes(
       const candidateRows = await r.getCandidatesForRun(runId, s.tenantId, undefined, { images: false });
       const judgments = await r.getJudgmentsForRun(runId, s.tenantId);
       const calls = await r.getCallsForRun(runId, s.tenantId);
+      const budgetUsage = await r.getBudgetUsage(runId, s.tenantId, s.actorId);
 
       const candidates = candidateRows.map((row) => ({
         id: row.id,
@@ -202,6 +207,7 @@ export function registerDesignStudioRoutes(
           winnerCandidateId: run.winner_candidate_id,
           judgeStatus: run.judge_status,
           budget: typeof run.budget === 'string' ? JSON.parse(run.budget) : run.budget,
+          budgetUsage,
           stages: typeof run.stages === 'string' ? JSON.parse(run.stages || '{}') : run.stages,
           diagnostic: run.diagnostic,
           createdAt: run.created_at,

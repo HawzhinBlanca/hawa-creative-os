@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client.js';
 import { AuthorizedImage } from './AuthorizedImage.js';
 import { StudioRecoveryPanel } from './StudioRecoveryPanel.js';
+import { StudioBudgetSummary, type StudioBudgetUsage } from './StudioBudgetSummary.js';
 
 interface CritiqueDetail {
   overall?: number;
@@ -86,6 +87,7 @@ interface RunData {
     spentUsd: number;
     calls: number;
   };
+  budgetUsage?: StudioBudgetUsage | null;
   stages?: Record<string, any>;
   diagnostic?: string;
   createdAt?: string;
@@ -562,12 +564,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
           >
             <div>
               <strong>Run ID:</strong> <code>{run.id.slice(0, 8)}...</code>
-              <span style={{ marginLeft: 14 }}>
-                <strong>Budget:</strong> ${run.budget?.spentUsd?.toFixed(3) || '0.000'} / ${run.budget?.maxUsd?.toFixed(2) || '6.00'}
-              </span>
-              <span style={{ marginLeft: 14 }}>
-                <strong>Calls:</strong> {run.budget?.calls || 0} / {run.budget?.maxCalls || 40}
-              </span>
+              <StudioBudgetSummary usage={run.budgetUsage}/>
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>

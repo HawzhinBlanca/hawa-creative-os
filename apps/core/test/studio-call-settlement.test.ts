@@ -128,3 +128,17 @@ it('SQL rejects unknown costs even for a named administrator bypassing applicati
         ${'a'.repeat(64)},${f.body.expectedSnapshot},'Direct named SQL',${JSON.stringify([{...f.body.calls[0],reportedCostUsd:null}])}::jsonb)`.execute(tx);
   })).rejects.toThrow(/Terminal provider evidence/);
 });
+
+it('counts exact-call settlement cost towards parity admission and never discounts it after a late reply',async()=>{
+  const f=await fixture(false,'transferred');
+  await f.service.settle(f.scope,f.taskId,f.runId,randomUUID(),{...f.body,calls:[{...f.body.calls[0],reportedCostUsd:6}]});
+  const admit=()=>f.repo.recordCallStart({id:randomUUID(),runId:f.runId,tenantId:f.scope.tenantId,actorId:f.scope.userId,
+    stage:'parity',provider:'openai',model:'synthetic',requestedModel:'synthetic',callOrdinal:null,logicalCallSha256:'f'.repeat(64)});
+  await expect(admit()).rejects.toMatchObject({code:'BUDGET_EXHAUSTED'});
+  expect(await f.repo.getBudgetUsage(f.runId,f.scope.tenantId,f.scope.userId))
+    .toMatchObject({knownUsdEstimate:0,attestedAdditionalUsd:6,accountedUsd:6,unresolvedCalls:0});
+  await f.repo.finalizeCall({id:f.callId,tenantId:f.scope.tenantId,inputTokens:1,outputTokens:1,usdEstimate:0.25,status:'ok'});
+  await expect(admit()).rejects.toMatchObject({code:'BUDGET_EXHAUSTED'});
+  expect(await f.repo.getBudgetUsage(f.runId,f.scope.tenantId,f.scope.userId))
+    .toMatchObject({knownUsdEstimate:0.25,attestedAdditionalUsd:5.75,accountedUsd:6});
+});

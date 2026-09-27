@@ -302,3 +302,38 @@ Final candidate b641928 (source f14c7cc, migration049) passes63 deployed checks:
 First full regression:3774 passed/1 failed/59 skipped because startup-schema-check still expected migration048. Corrected the literal to049 without changing runtime. Final full regression:3775 passed/0 failed/59 skipped,474 files. Initial failure retained. Native browser navigation reached candidate sign-in only; no authenticated visual inspection is claimed. Desk behavior is covered by rendered DOM tests and its production build.
 
 Follow-up: prove cumulative parity-call budgets across distinct exports on a transferred run; its immutable run budget and later call ledger are currently separate. General typed-stage reply recovery, live named pilot, native/human quality, independent restore and held-out measurements remain open.
+
+## 2026-09-27 — Cumulative Studio budget admission (ADR-088)
+
+Four red PostgreSQL cases reproduced unlimited distinct parity checks after
+transfer, admission after a paid receipt whose run snapshot was not saved, two
+processes taking one remaining slot, and incomplete historical spend treated as
+admissible. The task-locked repository now checks the full run ledger before each
+call. It retains all attempts, exact-call settlement costs and higher late/partial
+charges; original snapshots and receipts remain unchanged. Limits are validated
+before creating a run, and corrupt or incomplete accounting refuses dispatch.
+Desk displays derived usage, unknown costs and separately reported amounts.
+
+Connected tests: 119 passed across 10 files, including actual process kills,
+runtime RLS, concurrent admission, settlement, zero transport on refusal and
+rendered Desk behavior. Full regression: 3807 passed /0 failed /59 skipped in
+477 files. A final red policy case then exposed a positive partial charge being
+dropped while the final outcome was uncertain. The conservative correction
+retains that amount; final connected regression: 120 passed across the same 10
+files. Source build, Desk build, script types, any ratchet and egress lint pass.
+Full regression was not repeated after that final correction; no new candidate
+image or production deployment is claimed.
+
+Verification limitation discovered: direct compilation of tsconfig.test.json
+reports 88 imported-source errors, while scripts/typecheck_tests.ts filters these
+out and reports zero test-file errors. A separate connected configuration with
+strictNullChecks reports five imported-source errors. Both failed command logs
+are retained. The test typing configuration and wrapper need their own repair;
+these commands are not a clean whole-program type check.
+
+Proof: `R21_STUDIO_BUDGET_PROOF.json`; artifacts:
+`output/acceptance/2026-09-27-studio-budget/`. No schema migration or framework.
+The USD cap remains a recorded-cost stop threshold, not a guaranteed invoice
+ceiling. Conservative pre-dispatch reservations, office/day/role budgets, typed
+stage recovery, the named live pilot, native/human quality, independent restore
+and held-out quality/cost qualification remain open.

@@ -2,6 +2,7 @@ import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { createHash } from 'node:crypto';
 import { withRlsContext } from '../client.js';
+import { assertStudioBudgetAdmission, studioBudgetUsage, type StudioBudgetUsage } from '@hawa/domain';
 import { parseBlobRef, sniffBlobMediaType, taskGenerationBlocker, type BlobRef } from '@hawa/contracts';
 import { BlobCorruptError, BlobMissingError, type BlobStore } from '../blobs/store.js';
 import type {
@@ -585,13 +586,16 @@ export class DesignStudioRepository {
       const blocker = taskGenerationBlocker(task?.state);
       if (blocker) throw new TaskGenerationBlockedError(blocker);
       // Read after acquiring the task lock: abandonment may have committed while we waited.
-      const run = await client.selectFrom('design_studio_runs').select('status')
+      const run = await client.selectFrom('design_studio_runs').select(['status', 'budget'])
         .where('id', '=', params.runId).where('tenant_id', '=', params.tenantId).executeTakeFirst();
       if (!run || ['abandoned', 'failed', 'degraded'].includes(run.status) ||
           (run.status === 'transferred' && params.stage !== 'parity')) {
         throw new TaskGenerationBlockedError('This Studio run is closed to new model requests.');
       }
       await assertStudioCallsResolved(client, params.tenantId, task!.id, params.runId);
+      // Different logical calls must compete for the same remaining slots under the task lock.
+      // The run JSON may be stale after a crash or permanently frozen after Canva transfer.
+      assertStudioBudgetAdmission(await this.readBudgetUsage(client, params.runId, params.tenantId, run.budget));
       const [row] = await client
         .insertInto('design_studio_calls')
         .values({
@@ -618,6 +622,10 @@ export class DesignStudioRepository {
    * Finalizes the call in the ledger with exact tokens and USD spend.
    */
   async finalizeCall(params: FinalizeCallParams, trx?: Kysely<Database>) {
+    const usdEstimate = typeof params.usdEstimate === 'string' && !params.usdEstimate.trim() ? NaN : Number(params.usdEstimate);
+    if (!Number.isFinite(usdEstimate) || usdEstimate < 0) {
+      throw new TypeError('Studio call cost must be a finite nonnegative estimate.');
+    }
     if (params.responseSha256 != null && !/^[0-9a-f]{64}$/.test(params.responseSha256)) {
       throw new TypeError('Studio response identity must be a SHA-256 digest.');
     }
@@ -641,7 +649,7 @@ export class DesignStudioRepository {
           cached_input_tokens: params.cachedInputTokens || 0,
           output_tokens: params.outputTokens,
           images: params.images || 0,
-          usd_estimate: params.usdEstimate.toString(),
+          usd_estimate: usdEstimate.toString(),
           status: params.status,
           error_code: params.errorCode || null,
           finished_at: params.finishedAt || new Date(),
@@ -667,6 +675,26 @@ export class DesignStudioRepository {
         query = query.where('tenant_id', '=', tenantId);
       }
       return await query.execute();
+    });
+  }
+
+  private async readBudgetUsage(client: Kysely<Database>, runId: string, tenantId: string, snapshot: unknown): Promise<StudioBudgetUsage> {
+    const calls = await sql<{ status: 'ok' | 'error' | 'uncertain'; estimated_usd: string; settled_usd: string | null }>`
+      SELECT c.status, c.usd_estimate AS estimated_usd,
+        (SELECT max((e.value->>'reportedCostUsd')::numeric)
+         FROM hawa.studio_run_settlements s CROSS JOIN LATERAL jsonb_array_elements(s.calls) e
+         WHERE s.tenant_id=c.tenant_id AND s.run_id=c.run_id AND e.value->>'callId'=c.id::text) AS settled_usd
+      FROM hawa.design_studio_calls c WHERE c.tenant_id=${tenantId}::uuid AND c.run_id=${runId}::uuid
+      ORDER BY c.started_at,c.id`.execute(client);
+    return studioBudgetUsage(snapshot, calls.rows.map(c => ({ status: c.status,
+      estimatedUsd: Number(c.estimated_usd), settledUsd: c.settled_usd === null ? null : Number(c.settled_usd) })));
+  }
+
+  async getBudgetUsage(runId: string, tenantId: string, actorId?: string): Promise<StudioBudgetUsage | null> {
+    return withRlsContext(this.db, { tenantId, userId: actorId }, async client => {
+      const run = await client.selectFrom('design_studio_runs').select('budget')
+        .where('tenant_id', '=', tenantId).where('id', '=', runId).executeTakeFirst();
+      return run ? this.readBudgetUsage(client, runId, tenantId, run.budget) : null;
     });
   }
 

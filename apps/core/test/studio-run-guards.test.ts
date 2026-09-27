@@ -107,6 +107,34 @@ describe.skipIf(!url)('studio run guards', () => {
     await svc.abandon(scope, taskId, run.id, 'test cleanup');
   });
 
+  it('refuses model transport with a stale local budget after the durable spending limit is reached', async () => {
+    const taskId = await task(), fetcher = vi.fn(), repo = new DesignStudioRepository(db);
+    const svc = new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher, staleRunMinutes: 0 });
+    const { run } = await svc.createOrGetRun(scope, taskId, `budget-${randomUUID()}`, { width: 1080, height: 1350 });
+    const id = randomUUID();
+    await repo.recordCallStart({ id, runId: run.id, ...scope, stage: 'parity', provider: 'openai',
+      model: 'synthetic', requestedModel: 'synthetic', callOrdinal: null, logicalCallSha256: 'e'.repeat(64) });
+    await repo.finalizeCall({ id, tenantId: scope.tenantId, inputTokens: 1, outputTokens: 1, usdEstimate: 2, status: 'ok' });
+    await repo.updateRunStatus(run.id, scope.tenantId, 'transferred');
+    const budget = { maxUsd: 2, maxCalls: 24, spentUsd: 0, calls: 0 };
+    const ctx = await (svc as any).createStageContext(scope, run, 'parity', budget, async () => {});
+    await expect(ctx.client.completeJson({ prompt: 'new distinct parity request', schema: { type: 'object' } }))
+      .rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(await repo.getCallsForRun(run.id, scope.tenantId)).toHaveLength(1);
+    expect(budget.calls).toBe(0);
+  });
+
+  it('rejects malformed configured limits before creating a run', async () => {
+    const taskId = await task();
+    process.env.DESIGN_STUDIO_MAX_USD = '2dollars';
+    try {
+      await expect(service().createOrGetRun(scope, taskId, `invalid-${randomUUID()}`, { width: 1080, height: 1350 }))
+        .rejects.toMatchObject({ code: 'STUDIO_BUDGET_INVALID', status: 503 });
+      expect(await new DesignStudioRepository(db).getLatestRunForTask(taskId, scope.tenantId)).toBeUndefined();
+    } finally { delete process.env.DESIGN_STUDIO_MAX_USD; }
+  });
+
   it('preserves candidate selection evidence when the task has closed', async () => {
     const taskId = await task(), svc = service(), repo = new DesignStudioRepository(db), candidateId = randomUUID();
     const { run } = await svc.createOrGetRun(scope, taskId, `select-${randomUUID()}`, { width: 1080, height: 1350 });

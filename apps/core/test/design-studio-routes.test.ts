@@ -297,6 +297,9 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       expect(data.run).toBeDefined();
       expect(data.run.id).toBe(runId);
       expect(data.run.taskId).toBe(taskId);
+      // The fixture's old spend has no matching ledger: it must remain visible and block admission.
+      expect(data.run.budgetUsage).toMatchObject({ accountedUsd: 0.25, admittedCalls: 0,
+        blocker: 'STUDIO_BUDGET_HISTORY_INCOMPLETE' });
       expect(data.candidates).toBeInstanceOf(Array);
       expect(data.candidates.length).toBe(1);
 

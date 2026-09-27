@@ -261,3 +261,14 @@ New generation remains a separate action; evidence covers exact calls, never fut
 parity requests. Earlier admitted calls may still record a late first outcome.
 See runbooks/STUDIO_RECOVERY.md. Administrator attestation remains distinct from
 machine-verified provider billing and from human design approval.
+
+### Cumulative Studio admission (ADR-088, 2026-09-27)
+
+The task lock serializes budget evaluation and call insertion. Admission counts
+all run call receipts, including distinct parity inputs after transfer; stale or
+immutable run budget snapshots cannot reset limits. Exact-call settlement cost
+counts once, conservatively retaining the greater of receipt and reported cost.
+Malformed limits and incomplete historical accounting refuse dispatch. The USD
+limit is a recorded-cost stop threshold. Strict pre-dispatch USD reservations for
+unknown final costs and office/day/role limits remain separately qualified work.
+See runbooks/STUDIO_RECOVERY.md and R21_STUDIO_BUDGET_PROOF.json.

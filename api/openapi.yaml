@@ -34,6 +34,50 @@ paths:
                   runId: {type: [string, 'null'], format: uuid}
                   status: {type: [string, 'null']}
         '404': {description: Task unavailable in the caller's scope}
+  /v1/tasks/{taskId}/canva/studio/{runId}:
+    get:
+      tags: [Designs]
+      operationId: readStudioRunEvidence
+      summary: Read saved Studio evidence and cumulative budget accounting
+      description: Budget admission counts all run calls, including parity after transfer. The original budget snapshot is preserved. Reported settlement costs remain distinct from provider estimates. The USD limit stops further admission after recorded spending reaches it; it is not a guaranteed invoice ceiling.
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - name: runId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Run, candidates, judgments and sanitized call receipts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run, candidates, judgments, calls]
+                properties:
+                  run:
+                    type: object
+                    required: [id, taskId, status, budget, budgetUsage]
+                    properties:
+                      id: {type: string, format: uuid}
+                      taskId: {type: string, format: uuid}
+                      status: {type: string}
+                      budget: {type: object, description: Original saved budget snapshot}
+                      budgetUsage:
+                        type: [object, 'null']
+                        properties:
+                          maxUsd: {type: [number, 'null']}
+                          maxCalls: {type: [integer, 'null']}
+                          admittedCalls: {type: integer, minimum: 0}
+                          knownUsdEstimate: {type: number, minimum: 0}
+                          attestedAdditionalUsd: {type: number, minimum: 0}
+                          accountedUsd: {type: [number, 'null'], description: Amount used for admission; incomplete while unresolved calls remain}
+                          unresolvedCalls: {type: integer, minimum: 0}
+                          blocker: {type: [string, 'null'], enum: [STUDIO_BUDGET_INVALID, STUDIO_BUDGET_HISTORY_INCOMPLETE, BUDGET_EXHAUSTED, null]}
+                  candidates: {type: array, items: {type: object}}
+                  judgments: {type: array, items: {type: object}}
+                  calls: {type: array, items: {type: object}}
+        '404': {description: Run unavailable in the caller's task and tenant scope}
   /v1/tasks/{taskId}/pause:
     $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1pause'
   /v1/tasks/{taskId}/resume:
