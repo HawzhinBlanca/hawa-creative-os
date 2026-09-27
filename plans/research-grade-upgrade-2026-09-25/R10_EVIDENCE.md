@@ -208,3 +208,12 @@ restore timings or production RTO. Store receipts deliberately state
 Production and automatic Restate backup admission are unchanged. Independent-host,
 off-host, capture-gap, real-provider and human acceptance remain open; R10 remains
 in progress.
+
+### Coordinated-recovery source seal
+
+Candidate `a3de8c3`, evidence `ccbd005`, tested seal `10a8087`: all 11 qualified
+source hashes match the clean sealed checkout; release-manifest verification,
+security (zero secrets), blueprint **895/0/0** and diff checks pass. The actual
+57-check candidate above provides the deployed synthetic proof. No full app-suite
+rerun, independent-host recovery, real-provider/human acceptance or production
+activation is implied by this source seal.

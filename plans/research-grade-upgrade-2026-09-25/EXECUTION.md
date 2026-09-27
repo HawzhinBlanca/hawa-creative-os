@@ -14,7 +14,7 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 
 ## Current result (2026-09-27 — coordinated application recovery)
 
-Source `a3de8c3`: **57/57 deployed checks pass** in the selected full-app recovery
+Source `a3de8c3`, tested seal `10a8087`: **57/57 deployed checks pass** in the selected full-app recovery
 scenario; 43 other chaos scenarios are intentionally unselected. At two external
 effect boundaries, authenticated encrypted PostgreSQL/Restate/blob copies restore
 to fresh volumes. Both restores match **86 tables / 133 RLS policies / 4 registered
@@ -30,7 +30,8 @@ runs and the presence-only counterexample are retained in
 `R10_COORDINATED_RESTORE_PROOF.json`. No credential contents were read.
 
 **50 backup Python tests**, **11 fake-wire tests**, harness types, lint and blueprint
-**895/0/0** pass. No runtime app logic changed; the prior 3,634-pass / 59-skip full
+**895/0/0**, security and release-manifest verification pass. All 11 qualified
+source hashes match the clean sealed checkout. No runtime app logic changed; the prior 3,634-pass / 59-skip full
 app regression remains historical. Temporary helpers/private archives are removed;
 original and both restored store sets remain for the retained disposable candidate.
 Production is unchanged. This is coherent same-host synthetic recovery; R10 remains

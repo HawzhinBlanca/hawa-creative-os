@@ -714,6 +714,9 @@
       "failures": 0
     },
     "sourceHashes": "matched",
-    "releaseManifest": "pending seal"
-  }
+    "releaseManifest": "passed",
+    "security": "passed: zero secrets in committable files; 51 justified allowlist matches",
+    "diffCheck": "passed"
+  },
+  "testedSeal": "10a808725b7badf2bed03e3f6d3f573a226d65a9"
 }
