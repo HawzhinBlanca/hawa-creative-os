@@ -289,3 +289,32 @@ Those isolated harnesses now explicitly stub task authority, preserving their st
 assertions. Real task locking/RLS tests remain unchanged and ran alongside them:
 12 files / 143 passed. No production guard was weakened. Repeat the full sealed
 suite before qualification; final counts belong in R26_TASK_CONTROL_PROOF.json.
+
+
+## Qualified local result (2026-09-27 — durable controls and saved Studio recovery)
+
+Source e09438a, browser corrections e1468e4, test correction
+fbb44d5, tested seal dd62672: **34/34 deployed checks** and
+**452 files / 3,634 full tests passed; 7 files / 59 skipped**.
+Types, lint, production Desk image, security, blueprint 881/0/0 and release manifest
+passed. Runtime sources are unchanged from the deployed candidate; production is
+unchanged. R26_TASK_CONTROL_PROOF.json retains earlier failures and exact receipts.
+
+Pause/resume/cancel now commit expected-version, keyed, actor-attributed receipts
+with task state. Resume restores the operator checkpoint; cancel closes the task.
+New paid/design admissions lock current task authority and refuse paused, closed or
+approved/publishing tasks. Previously admitted outcomes remain recordable. Saved
+Studio runs survive reload; Desk reports recorded models and accurate status/actions.
+
+Browser created one unadvanced Studio run, restored it after reload, paused and
+resumed to the prior state, then cancelled and reloaded. Advancement was disabled
+while paused/cancelled. Three durable controls, one retained run, zero model calls.
+R26_TASK_CONTROLS.png and R26_TASK_PAUSED.png record the visible state. The first
+full run failed 52 tests (51 stage-only stubs plus one route inventory); unchanged
+database guard tests and all repaired harnesses passed before the full rerun.
+
+Next: clean-host WAL/PITR and Restate recovery qualification; real native Canva
+edit/reopen and multilingual/human review; a supervised live intake-to-delivery pilot;
+retrieval relevance/latency and role-model quality/cost measurements. Synthetic
+external services and office identities do not qualify those gates. No 10/10 claim.
+
