@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CHAOS_DIR, REPO_ROOT, deploymentReceipt, fakes, kill, query, secrets, sql, start, waitHealthy } from './stack.js';
+import { CHAOS_DIR, REPO_ROOT, compose, deploymentReceipt, fakes, kill, query, secrets, sql, start, waitHealthy } from './stack.js';
 import { KAAE_CLIENT_ID } from './provision.js';
 import { captureForReview } from '../../../../apps/desk/src/services/canvaCapture.js';
 import { checkedCanvaExportFixture } from '../../src/canva-export-fixture.js';
@@ -29,6 +29,13 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   check('Core, worker and Desk image labels match the candidate checkout', ['core', 'worker-blue', 'desk'].every(service =>
     deployment.containers[service]?.buildCommit === deployment.commit && /^sha256:[0-9a-f]{64}$/.test(deployment.containers[service]?.imageId)),
     `build ${deployment.commit}; changed source files=${Object.keys(deployment.sourceChanges).length}`);
+  for (const service of ['core', 'worker-blue']) {
+    const probe = compose(['exec', '-T', service, 'node', '-e',
+      "process.stdout.write(JSON.stringify({privateRunDirectory:require('node:fs').existsSync('/app/packages/testkit/chaos/.run')}))"]);
+    const observed = JSON.parse(probe.stdout) as {privateRunDirectory: boolean};
+    check(`${service} image excludes private test-run files`, observed.privateRunDirectory === false,
+      `privateRunDirectory=${observed.privateRunDirectory}`);
+  }
   check('provider callers and the real parser have only internal networks',
     deployment.networks.includes('hawa-chaos_chaos|true') && deployment.networks.includes('hawa-chaos_parser|true') &&
     ['core', 'worker-blue', 'docling'].every(service => deployment.containers[service]?.networks.length > 0 &&

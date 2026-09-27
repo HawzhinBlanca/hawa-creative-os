@@ -46,13 +46,16 @@ generation action, unchanged intake/generation retries and the saved copy/source
 hash. Image labels, immutable image IDs, changed source hashes and internal
 networks are recorded in `.run/last-run.json` without credentials. Use a clean
 source commit for qualification; a dirty build is only a development observation.
+Private `.run` files and backup snapshots are excluded from the Docker context;
+the candidate checks that both Core and worker images omit the private run directory.
 
 Provider/model/Telegram/Canva replies and office identity are synthetic. The parser
 and app processes are real. The voice fixture is silence: this proves manual
 fallback and duration handling, not speech quality. This does not admit native
 Canva editability, human approval identity, real delivery or creative quality.
-The topology also keeps chaos PostgreSQL's `fsync=off`; this is not a power-loss,
-WAL/PITR or clean-host proof. The source content route uses direct Core bytes;
+Ordinary chaos runs use PostgreSQL's `fsync=off`; recovery mode enables `fsync` and
+`full_page_writes`. Neither mode is a power-loss, WAL/PITR or clean-host proof.
+The source content route uses direct Core bytes;
 production X-Accel delivery requires its separate gate. Memory values are sparse
 samples, not continuous resource peaks.
 
@@ -154,7 +157,7 @@ Typecheck this directory with `npx tsc -p packages/testkit/chaos/tsconfig.json`.
 
 | Service | Image | Notes |
 |---|---|---|
-| `postgres` | `pgvector/pgvector:pg17` | Init scripts as production (`00-init-roles.sql`, schema, RLS, `03-grants.sql`, seed); `fsync=off` (process kills only). The driver then runs the versioned upgrades through deploy.sh's runner (`packages/db/src/upgrade.ts`), with no grants of its own, stores the operator's Canva connection (sealed with the chaos key) and KAAE's client DNA with a Drive folder and sheet. |
+| `postgres` | `pgvector/pgvector:pg17` | Init scripts as production (`00-init-roles.sql`, schema, RLS, `03-grants.sql`, seed); `fsync=off` normally, with `fsync` and `full_page_writes` enabled for `--recovery`. The driver then runs the versioned upgrades through deploy.sh's runner (`packages/db/src/upgrade.ts`), with no grants of its own, stores the operator's Canva connection (sealed with the chaos key) and KAAE's client DNA with a Drive folder and sheet. |
 | `restate` | `ghcr.io/restatedev/restate:1.7.10` | The blue worker is registered by `scripts/restate-bluegreen.ts register blue --admin http://127.0.0.1:56070`, the deploy's own code. |
 | `core` | `infra/docker/Dockerfile.core` | `NODE_ENV=production`, polls the fake Telegram, `DESIGN_PIPELINE_V3=off` (planner path), `CANVA_BASE_URL` and `GOOGLE_*_BASE_URL` at the fakes, `GOOGLE_APPLICATION_CREDENTIALS` a throwaway key the fakes write. |
 | `worker-blue`, `worker-green` | `infra/docker/Dockerfile.worker` | `HAWA_WORKER_SELF_URI` per colour; the outbox runs in the live colour only. |

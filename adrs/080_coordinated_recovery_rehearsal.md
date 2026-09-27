@@ -2,7 +2,7 @@
 
 Date: 2026-09-27
 Status: Accepted for isolated qualification; production admission pending
-Requirements: FR-060, FR-061, FR-070, NFR-003, NFR-013, NFR-020
+Requirements: FR-060, FR-061, FR-070, NFR-003, NFR-006, NFR-013, NFR-020
 
 ## Finding
 
@@ -52,3 +52,14 @@ rehearsal records no automatic completion: it checks operator refusal, then uses
 an explicit synthetic administrator observation of the original fake-chat message
 IDs to settle the request. The observation and its replay must cause no new send.
 This exercises the existing ADR-046 contract and does not qualify real staff review.
+
+## Candidate build privacy
+
+The first rebuilt candidate included ignored `packages/testkit/chaos/.run` files
+because Docker's package copy did not use Git's ignore rules. A presence-only probe
+in the Core image confirmed both the private run directory and its synthetic
+environment file; no credential contents were read. Exclude all `.run` directories
+and backup snapshots from the Docker context. The candidate must inspect the actual
+Core and worker filesystems and refuse qualification if private run files remain.
+This prevents fixture sessions and recovery keys from entering new application
+images. It does not assess historical production images or remove cached images.

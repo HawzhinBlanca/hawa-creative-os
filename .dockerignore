@@ -7,6 +7,9 @@ data
 evidence
 .env*
 **/.env*
+.run
+**/.run
+infra/backup/snapshots
 **/*.log
 **/.DS_Store
 
