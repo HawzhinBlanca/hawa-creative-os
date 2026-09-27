@@ -123,5 +123,21 @@
     "coordinated database/blob/Restate capture-gap reconciliation",
     "external side-effect deduplication after restore",
     "production activation and measured production RPO/RTO"
-  ]
+  ],
+  "sourceCommit": "c02ed26830ab3e485ad14bfd3edd04955e50f708",
+  "testedSeal": "de5ad14aa8a8ec8ad90c575f48729c8595512b56",
+  "qualificationGates": {
+    "sourceHashesMatch": 7,
+    "releaseManifest": "passed",
+    "blueprint": {
+      "passed": 891,
+      "warnings": 0,
+      "failed": 0
+    },
+    "securityScan": {
+      "secrets": 0
+    },
+    "diffCheck": "passed",
+    "fullAppRegressionRerun": false
+  }
 }

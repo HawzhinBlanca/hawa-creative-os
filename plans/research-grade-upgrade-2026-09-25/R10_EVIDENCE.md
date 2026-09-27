@@ -134,3 +134,11 @@ journal replay, database/file/workflow capture-gap reconciliation, restored exte
 effect deduplication and production activation remain unproved. Production is
 unchanged. Real Canva/human review, supervised delivery and retrieval/model-quality
 measurements remain separate app completion gates.
+
+### Sealed isolated-PITR checkpoint
+
+Source `c02ed26`, tested seal `de5ad14`: all seven qualified source hashes match
+the sealed checkout. Release-manifest verification and blueprint **891/0/0** pass;
+the security scan finds zero secrets and the diff check passes. The real drill and
+43-test backup suite above qualify this unchanged source. No full application
+regression, production activation or full-system recovery is claimed for this slice.
