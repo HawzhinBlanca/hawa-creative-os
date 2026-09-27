@@ -160,7 +160,7 @@ export const STATUS_VIEWS: Readonly<Record<TaskApiStatus, View>> = {
   },
   PAUSED: {
     pillClass: 'pill-waiting',
-    message: 'Waiting for the requester to answer a question about their request. Nothing is designed until they answer.',
+    message: 'This task is paused. Review its history, then resume an operator pause or resolve the requester’s pending question.',
     primaryButton: 'none',
     group: 'waiting',
   },
@@ -178,7 +178,7 @@ export const STATUS_VIEWS: Readonly<Record<TaskApiStatus, View>> = {
   },
   CANCELLED: {
     pillClass: 'pill-complete',
-    message: 'Cancelled. Nothing more happens on this task.',
+    message: 'Cancelled. New design work is blocked. Work already admitted may still finish; its results and history remain available.',
     primaryButton: 'none',
     group: 'closed',
   },

@@ -466,7 +466,7 @@ export const App: React.FC = () => {
               </small>
             </div>
 
-            <p style={{ color: 'var(--muted)', fontSize: 13 }}>Save your instructions and exact copy, then create or link a Canva design for manual editing. Automatic composition is not connected.</p>
+            <p style={{ color: 'var(--muted)', fontSize: 13 }}>Save your instructions and exact copy, then use the task’s design controls to generate a draft or create or link a Canva design.</p>
             {taskSubmissionError && <p role="alert" style={{ color: '#f87171' }}>{taskSubmissionError}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
               <button className="btn" disabled={isSubmitting} onClick={() => setShowNewTaskModal(false)}>

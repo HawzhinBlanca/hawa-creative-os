@@ -52,9 +52,10 @@ const approval = { decisionId: 'd-old', role: 'art_director', decidedAt: '2026-0
 describe('the status an office member sees for each state Core reports (WorkScreen getNextActionPrompt)', () => {
   // Core emits these itself: toApiTaskStatus (packages/db task.repository.ts) and the canva-status
   // handler's broadcast (apps/core/src/app.ts: deskStatus = 'OPERATOR_REQUIRED' | 'PAUSED' | 'AWAITING_APPROVAL').
-  it('a task waiting for the requester to answer a question (PAUSED) is not shown as a new request to design', () => {
+  it('a paused task does not assume a requester question or invite new design work', () => {
     const p = nextAction({ id: 't', title: 't', status: 'PAUSED' });
-    expect(p.pill).not.toBe('RECEIVED');
+    expect(p.pill).toBe('PAUSED');
+    expect(p.message).toContain('resume an operator pause');
     expect(p.message).not.toMatch(/Use the Canva controls below to design/);
   });
 
