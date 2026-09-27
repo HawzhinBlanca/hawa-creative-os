@@ -363,17 +363,24 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     // after a failed first attempt always died on the key and the ledger row could never be closed.
     const repo = new PublicationRepository(db);
     const rowKey = `retry-${randomUUID()}`;
+    const asOperator = <T>(fn: (trx: any) => Promise<T>) => withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, fn);
+    // Exercise historical receipts separately; the real delivery above has immutable Sheet
+    // expectations and correctly refuses a fabricated destination/hash for that publication.
+    const receiptFixturePublication = await asOperator(async trx => (await sql<{ id: string }>`
+      INSERT INTO hawa.publications(tenant_id,task_id,design_revision_id,approval_id,publication_key,package_manifest,package_sha256,state,input_protocol)
+      SELECT tenant_id,task_id,design_revision_id,approval_id,${`receipt-fixture-${randomUUID()}`},package_manifest,package_sha256,'drive_complete',0
+      FROM hawa.publications WHERE id=${dbPub.id}::uuid RETURNING id`.execute(trx)).rows[0].id);
     const base = {
-      tenantId, publicationId: dbPub.id, spreadsheetId: 'sheet_retry_fixture', sheetId: 0, taskId, rowKey,
+      tenantId, publicationId: receiptFixturePublication, spreadsheetId: 'sheet_retry_fixture', sheetId: 0, taskId, rowKey,
       expectedHash: 'a'.repeat(64),
     };
-    const asOperator = <T>(fn: (trx: any) => Promise<T>) => withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, fn);
 
     const first = await asOperator((trx) => repo.recordSheetSync({ ...base, status: 'pending', lastError: 'Sheets 503' }, trx));
     expect(first.status).toBe('pending');
     expect(first.attempts).toBe(1);
 
-    const retried = await asOperator((trx) => repo.recordSheetSync({ ...base, status: 'synced', rowNumber: 42, observedHash: 'a'.repeat(64) }, trx));
+    const rowEvidence = { metadataId: 123, expectedValues: ['task', 'client', 'folder', 'time', 'COMPLETE', 'link', 'hash'], expectedRowHash: 'b'.repeat(64), observedRowHash: 'b'.repeat(64) };
+    const retried = await asOperator((trx) => repo.recordSheetSync({ ...base, ...rowEvidence, status: 'synced', rowNumber: 42, observedHash: 'a'.repeat(64) }, trx));
     expect(retried.id).toBe(first.id);
     expect(retried.status).toBe('synced');
     expect(retried.attempts).toBe(2);
@@ -386,6 +393,10 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(late.status).toBe('synced');
     expect(Number(late.row_number)).toBe(42);
     expect(late.attempts).toBe(3);
+    expect(late.metadata_id).toBe(rowEvidence.metadataId);
+    expect(late.expected_values).toEqual(rowEvidence.expectedValues);
+    expect(late.expected_row_hash).toBe(rowEvidence.expectedRowHash);
+    expect(late.observed_row_hash).toBe(rowEvidence.observedRowHash);
 
     const rows = await asOperator(async (trx) => (await sql<any>`SELECT count(*)::int AS n FROM hawa.sheet_syncs WHERE row_key = ${rowKey}`.execute(trx)).rows[0].n);
     expect(rows).toBe(1);
@@ -399,6 +410,17 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     const untouched = await asOperator(async (trx) => (await sql<any>`SELECT task_id, status FROM hawa.sheet_syncs WHERE row_key = ${rowKey}`.execute(trx)).rows[0]);
     expect(untouched.task_id).toBe(taskId);
     expect(untouched.status).toBe('synced');
+
+    // A new failed observation must be visible, even for the same package.
+    const stale = await asOperator((trx) => repo.recordSheetSync({ ...base, ...rowEvidence, status: 'stale', observedRowHash: 'c'.repeat(64), lastError: 'Link changed' }, trx));
+    expect(stale.status).toBe('stale');
+    expect(stale.synced_at).toBeNull();
+    // A different package cannot inherit the previous package's readback evidence.
+    const next = await asOperator((trx) => repo.recordSheetSync({ ...base, expectedHash: 'd'.repeat(64), status: 'pending' }, trx));
+    expect(next.status).toBe('pending');
+    expect(next.observed_hash).toBeNull();
+    expect(next.observed_row_hash).toBeNull();
+    expect(next.synced_at).toBeNull();
   });
 
   it('fails closed when exported copy is corrupted: records failed QC run and refuses approval (HTTP 412)', async () => {

@@ -1,0 +1,132 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] hawa_tpl_build_test_c97d1cbd: applied db/schema.sql
+[test databases] hawa_tpl_build_test_c97d1cbd: applied db/rls.sql
+[test databases] hawa_tpl_build_test_c97d1cbd: applied db/seed.sql
+[test databases] hawa_tpl_build_test_c97d1cbd: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_test_c97d1cbd: versioned upgrades applied=59 verified=0
+[test databases] hawa_tpl_build_test_c97d1cbd: applied db/test-fixtures.sql
+[test databases] built template hawa_tpl_test_171c38cd7c04a589
+[test databases] hawa_tpl_build_repair_b845b144: applied db/schema.sql
+[test databases] hawa_tpl_build_repair_b845b144: applied db/rls.sql
+[test databases] hawa_tpl_build_repair_b845b144: applied db/seed.sql
+[test databases] hawa_tpl_build_repair_b845b144: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_repair_b845b144: versioned upgrades applied=59 verified=0
+[test databases] built template hawa_tpl_repair_171c38cd7c04a589
+[test databases] per-file clones of hawa_tpl_test_171c38cd7c04a589 and hawa_tpl_repair_171c38cd7c04a589 (645 ms)
+{"level":"error","time":"2026-09-27T16:48:17.813Z","service":"core","requestId":"e61c6941-8631-4ade-9922-84bbcc0db5a6","taskId":"6a02f14c-1c5d-4034-9c1f-7dee5ec9e8a9","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"insert or update on table \"drive_refs\" violates foreign key constraint \"drive_refs_tenant_id_artifact_id_fkey\"","stack":"error: insert or update on table \"drive_refs\" violates foreign key constraint \"drive_refs_tenant_id_artifact_id_fkey\"\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at InsertQueryBuilder.execute (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24)\n    at InsertQueryBuilder.executeTakeFirst (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:205:24)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:254:14)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at InsertQueryBuilder.execute (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24)\n    at InsertQueryBuilder.executeTakeFirst (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:205:24)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:254:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:967:13","length":278,"name":"error","severity":"ERROR","code":"23503","detail":"Key is not present in table \"artifacts\".","schema":"hawa","table":"drive_refs","constraint":"drive_refs_tenant_id_artifact_id_fkey","file":"ri_triggers.c","line":"2599","routine":"ri_ReportViolation"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+{"level":"error","time":"2026-09-27T16:48:17.997Z","service":"core","requestId":"7c73c139-379c-49e0-a2f4-73dfaabf7df3","taskId":"1dc5cd6b-352b-4048-95f7-0843951cb803","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"insert or update on table \"drive_refs\" violates foreign key constraint \"drive_refs_tenant_id_artifact_id_fkey\"","stack":"error: insert or update on table \"drive_refs\" violates foreign key constraint \"drive_refs_tenant_id_artifact_id_fkey\"\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at InsertQueryBuilder.execute (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24)\n    at InsertQueryBuilder.executeTakeFirst (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:205:24)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:254:14)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at InsertQueryBuilder.execute (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24)\n    at InsertQueryBuilder.executeTakeFirst (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:205:24)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:254:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:967:13","length":278,"name":"error","severity":"ERROR","code":"23503","detail":"Key is not present in table \"artifacts\".","schema":"hawa","table":"drive_refs","constraint":"drive_refs_tenant_id_artifact_id_fkey","file":"ri_triggers.c","line":"2599","routine":"ri_ReportViolation"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+{"level":"error","time":"2026-09-27T16:48:18.182Z","service":"core","requestId":"af9e0019-8c2a-4e68-bdc1-a42942fcd3c7","taskId":"6a250c19-3700-402e-8e7a-41efcd63fc04","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"insert or update on table \"drive_refs\" violates foreign key constraint \"drive_refs_tenant_id_artifact_id_fkey\"","stack":"error: insert or update on table \"drive_refs\" violates foreign key constraint \"drive_refs_tenant_id_artifact_id_fkey\"\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at InsertQueryBuilder.execute (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24)\n    at InsertQueryBuilder.executeTakeFirst (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:205:24)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:254:14)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at InsertQueryBuilder.execute (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24)\n    at InsertQueryBuilder.executeTakeFirst (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:205:24)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:254:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:967:13","length":278,"name":"error","severity":"ERROR","code":"23503","detail":"Key is not present in table \"artifacts\".","schema":"hawa","table":"drive_refs","constraint":"drive_refs_tenant_id_artifact_id_fkey","file":"ri_triggers.c","line":"2599","routine":"ri_ReportViolation"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+{"level":"error","time":"2026-09-27T16:48:18.367Z","service":"core","requestId":"85a55b3d-22b5-4d20-a9f5-9e3464f3a576","taskId":"cce51a80-6b88-4444-b659-a43004ca4a6c","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"insert or update on table \"drive_refs\" violates foreign key constraint \"drive_refs_tenant_id_artifact_id_fkey\"","stack":"error: insert or update on table \"drive_refs\" violates foreign key constraint \"drive_refs_tenant_id_artifact_id_fkey\"\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at InsertQueryBuilder.execute (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24)\n    at InsertQueryBuilder.executeTakeFirst (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:205:24)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:254:14)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at InsertQueryBuilder.execute (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24)\n    at InsertQueryBuilder.executeTakeFirst (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:205:24)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:254:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:967:13","length":278,"name":"error","severity":"ERROR","code":"23503","detail":"Key is not present in table \"artifacts\".","schema":"hawa","table":"drive_refs","constraint":"drive_refs_tenant_id_artifact_id_fkey","file":"ri_triggers.c","line":"2599","routine":"ri_ReportViolation"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+{"level":"error","time":"2026-09-27T16:48:18.538Z","service":"core","requestId":"2b092164-1079-4f5e-84af-cf02d8ca14ed","taskId":"070d156b-be01-4f21-baa8-e222a82c04fb","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"insert or update on table \"drive_refs\" violates foreign key constraint \"drive_refs_tenant_id_artifact_id_fkey\"","stack":"error: insert or update on table \"drive_refs\" violates foreign key constraint \"drive_refs_tenant_id_artifact_id_fkey\"\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at InsertQueryBuilder.execute (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24)\n    at InsertQueryBuilder.executeTakeFirst (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:205:24)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:254:14)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at InsertQueryBuilder.execute (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24)\n    at InsertQueryBuilder.executeTakeFirst (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:205:24)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:254:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:967:13","length":278,"name":"error","severity":"ERROR","code":"23503","detail":"Key is not present in table \"artifacts\".","schema":"hawa","table":"drive_refs","constraint":"drive_refs_tenant_id_artifact_id_fkey","file":"ri_triggers.c","line":"2599","routine":"ri_ReportViolation"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts (5 tests | 5 failed) 1025ms
+     × delivers the files but does not mark the task COMPLETE, and says why 258ms
+     × publishing again retries only the Sheets row, and completes once Sheets confirms it 183ms
+     × reports the partial delivery with its reason instead of "unverified files", then completes on retry 183ms
+     × uses the DNA tab in the provider request, receipt and staff link 185ms
+     × keeps the original destination, filenames and timestamp after DNA changes and Core restart 171ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/publish-sheets-unconfirmed.test.ts > publish-omnichannel with the Sheets row unconfirmed > delivers the files but does not mark the task COMPLETE, and says why
+AssertionError: expected 503 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 503
+
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts:90:24
+     88|
+     89|     const res = await app.request(`/tasks/${taskId}/publish-omnichanne…
+     90|     expect(res.status).toBe(202);
+       |                        ^
+     91|     const body = await res.json();
+     92|     expect(body).toMatchObject({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  apps/core/test/publish-sheets-unconfirmed.test.ts > publish-omnichannel with the Sheets row unconfirmed > publishing again retries only the Sheets row, and completes once Sheets confirms it
+AssertionError: expected 503 to be 'PUBLISH_RECONCILIATION' // Object.is equality
+
+- Expected:
+"PUBLISH_RECONCILIATION"
+
++ Received:
+503
+
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts:115:26
+    113|     const taskId = await approvedTask();
+    114|     const first = await (await app.request(`/tasks/${taskId}/publish-o…
+    115|     expect(first.status).toBe('PUBLISH_RECONCILIATION');
+       |                          ^
+    116|
+    117|     // Still no spreadsheet: the retry stays in reconciliation.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  apps/core/test/publish-sheets-unconfirmed.test.ts > the Desk's Deliver route with the Sheets row unconfirmed > reports the partial delivery with its reason instead of "unverified files", then completes on retry
+AssertionError: expected 503 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 503
+
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts:144:26
+    142|
+    143|     const first = await deliver();
+    144|     expect(first.status).toBe(202);
+       |                          ^
+    145|     expect(await first.json()).toMatchObject({ status: 'PUBLISH_RECONC…
+    146|     await reconciling(taskId);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  apps/core/test/publish-sheets-unconfirmed.test.ts > configured reporting tab propagation > uses the DNA tab in the provider request, receipt and staff link
+AssertionError: expected 503 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 503
+
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts:165:29
+    163|     const taskId = await approvedTask();
+    164|     const response = await app.request(`/tasks/${taskId}/publish-omnic…
+    165|     expect(response.status).toBe(200);
+       |                             ^
+    166|     const result = await response.json();
+    167|     expect(result.publicationReceipt.sheet).toMatchObject({ sheetId: 2…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  apps/core/test/publish-sheets-unconfirmed.test.ts > durable publication expectation > keeps the original destination, filenames and timestamp after DNA changes and Core restart
+AssertionError: expected 503 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 503
+
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts:180:26
+    178|     const taskId = await approvedTask();
+    179|     const first = await app.request(`/tasks/${taskId}/publish-omnichan…
+    180|     expect(first.status).toBe(202);
+       |                          ^
+    181|     const original = firstCall.mock.calls[0][1];
+    182|     await saveDna('changed-sheet', 1, 'changed-folder', 'Renamed Clien…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  5 failed | 25 passed (30)
+   Start at  19:48:15
+   Duration  3.34s (transform 1.12s, setup 158ms, import 1.46s, tests 1.05s, environment 0ms)
+

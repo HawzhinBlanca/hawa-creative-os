@@ -14,6 +14,8 @@ import {
   TASK_TRANSITIONED_EVENT,
   deliveryWorkflowId,
   taskTransitioned,
+  publicationRequestFromExpectation,
+  type PublishRequest,
   type DeliveryInput,
   type DeliveryOutcome,
   type PreparedDelivery,
@@ -37,6 +39,7 @@ import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { loadPinnedDeliverables, type DeliverableStore } from './pinned-deliverables.js';
 import { validatePublicationReceipt } from './publication-receipt-validation.js';
+import { PublicationExpectations, PublicationExpectationConflict } from './publication-expectations.js';
 import { pendingChangeOf } from './pending-change.js';
 import type { ClientDnaResolver } from './client-dna-resolver.js';
 import type { TaskReader } from './task-reader.js';
@@ -625,7 +628,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         }
       }
 
-      const files = deliverables.files;
+      let files = deliverables.files;
 
       const ctx: RequestContext = {
         tenantId: tenantOf(task),
@@ -785,21 +788,37 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       };
     };
 
-    const targetFolderId = client?.destinations?.productionFolderId || (client as any)?.productionDestinations?.googleDriveFolderId;
-    if (!targetFolderId || targetFolderId === 'unauthorized_folder' || targetFolderId.includes('audit-invented') || targetFolderId.includes('nonexistent')) {
-      return failBeforeDrive({
-        status: 400,
-        code: 'INVALID_DESTINATION',
-        message: `Client '${task.clientId}' has no authorized Google Drive production destination folder configured in Client DNA. Refusing publication to unconfigured destination.`,
-      });
+    let publicationRequest: PublishRequest = {
+      taskId, clientId: task.clientId || DEFAULT_CLIENT_ID, designRevisionId: approval.designRevisionId,
+      approvalId: approval.approvalId, publicationKey, packageHash: deliverables.packageHash, files,
+      destination: {
+        sharedDriveId: client?.destinations?.googleSharedDriveId || client?.productionDestinations?.googleSharedDriveId || '',
+        productionRootFolderId: client?.destinations?.productionFolderId || client?.productionDestinations?.googleDriveFolderId || '',
+        relativeFolderParts: ['Clients', client?.name || 'Hawa', new Date().getFullYear().toString()],
+        spreadsheetId: client?.destinations?.spreadsheetId || client?.productionDestinations?.googleSheetId || '',
+        sheetId: client?.destinations?.sheetId ?? -1,
+      },
+      sheetRow: { taskId, client: task.clientId || DEFAULT_CLIENT_ID, status: 'COMPLETE', publishedAt: new Date().toISOString() },
+    };
+    const expectationStore = db && isValidUuid(taskId) ? new PublicationExpectations(db) : null;
+    try {
+      const stored = await expectationStore?.read(ctx.tenantId, publicationKey);
+      if (stored) publicationRequest = publicationRequestFromExpectation(stored.original, publicationRequest, stored.sheet);
+    } catch {
+      return { ok: false, status: 503, code: 'PUBLICATION_EXPECTATION_UNAVAILABLE',
+        message: 'The original publication inputs could not be verified; delivery remains held' };
     }
-    // No fallback sheet or Shared Drive: a client without one gets no Sheets row, reported as unsynced.
-    const spreadsheetId = client?.destinations?.spreadsheetId || (client as any)?.productionDestinations?.googleSheetId || '';
-    const reportingSheetId = client?.destinations?.sheetId;
-    if (spreadsheetId && (!Number.isSafeInteger(reportingSheetId) || Number(reportingSheetId) < 0)) {
+    let targetFolderId = publicationRequest.destination.productionRootFolderId;
+    let spreadsheetId = publicationRequest.destination.spreadsheetId;
+    let reportingSheetId = publicationRequest.destination.sheetId;
+    files = publicationRequest.files;
+    if (!targetFolderId || targetFolderId === 'unauthorized_folder' || targetFolderId.includes('audit-invented') || targetFolderId.includes('nonexistent')) {
+      return failBeforeDrive({ status: 400, code: 'INVALID_DESTINATION',
+        message: `Client '${task.clientId}' has no authorized Google Drive production destination folder configured in Client DNA. Refusing publication to unconfigured destination.` });
+    }
+    if (!Number.isSafeInteger(reportingSheetId) || reportingSheetId < 0) {
       return failBeforeDrive({ status: 400, code: 'INVALID_SHEET_DESTINATION', message: 'Configure an explicit numeric reporting tab ID in Client DNA before publication.' });
     }
-
 
     // Persist publication intent before provider calls (Task R06)
     let dbPub: any = null;
@@ -847,28 +866,21 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       return alreadyDeliveredAnswer(dbPub);
     }
 
-    const publishResult: any = await publisher.publish(ctx, {
-      taskId,
-      clientId: task.clientId || DEFAULT_CLIENT_ID,
-      designRevisionId: approval.designRevisionId,
-      approvalId: approval.approvalId,
-      publicationKey,
-      packageHash: deliverables.packageHash,
-      files,
-      destination: {
-        sharedDriveId: client?.destinations?.googleSharedDriveId || (client as any)?.productionDestinations?.googleSharedDriveId || '',
-        productionRootFolderId: targetFolderId,
-        relativeFolderParts: ['Clients', client?.name || 'Hawa', new Date().getFullYear().toString()],
-        spreadsheetId,
-        sheetId: reportingSheetId ?? 0,
-      },
-      sheetRow: {
-        taskId,
-        client: task.clientId || DEFAULT_CLIENT_ID,
-        status: 'COMPLETE',
-        publishedAt: new Date().toISOString(),
-      },
-    });
+    if (expectationStore && dbPub) {
+      try {
+        publicationRequest = await expectationStore.freeze(ctx.tenantId, dbPub.id, publicationRequest);
+        files = publicationRequest.files;
+        targetFolderId = publicationRequest.destination.productionRootFolderId;
+        spreadsheetId = publicationRequest.destination.spreadsheetId;
+        reportingSheetId = publicationRequest.destination.sheetId;
+      } catch (error) {
+        log.error('[core:publication-expectation:freeze] Durable input freeze failed', error);
+        return holdArchive({ status: error instanceof PublicationExpectationConflict ? 409 : 503,
+          code: error instanceof PublicationExpectationConflict ? error.message : 'PUBLICATION_EXPECTATION_NOT_RECORDED',
+          message: 'The original publication inputs could not be durably confirmed; provider writes and requester delivery remain held' });
+      }
+    }
+    const publishResult: any = await publisher.publish(ctx, publicationRequest);
 
     if (!publishResult.ok) {
       // A Drive error is not proof that no file reached Drive: an upload can commit before its
@@ -956,7 +968,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
             await publicationRepo.recordDriveRef({
               tenantId: pubTenantId,
               publicationId: dbPub.id,
-              sharedDriveId: client?.destinations?.googleSharedDriveId || '',
+              publicationArtifactId: file.artifactId,
+              sharedDriveId: publicationRequest.destination.sharedDriveId,
               folderId: file.folderId || targetFolderId,
               fileId: file.fileId,
               fileName: file.name,
@@ -978,6 +991,10 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
               rowNumber: publishResult.value.sheet.rowNumber,
               expectedHash: publishResult.value.sheet.expectedHash,
               observedHash: publishResult.value.sheet.observedHash,
+              metadataId: publishResult.value.sheet.metadataId,
+              expectedValues: publishResult.value.sheet.expectedValues,
+              expectedRowHash: publishResult.value.sheet.expectedRowHash,
+              observedRowHash: publishResult.value.sheet.observedRowHash,
               status: publishResult.value.sheet.synced ? 'synced' : 'pending',
             }, trx);
           }

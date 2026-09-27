@@ -152,7 +152,9 @@ it('old-revision receipts and partial manifests cannot qualify the current compl
  const pub=await publishedReceiptTask(db),f=await fixture(),s=actor(f),service=new ReceiptAuditService(db);
  await sql`INSERT INTO hawa.client_memberships(tenant_id,client_id,user_id,role) VALUES(${f.tenantId}::uuid,${pub.clientId}::uuid,${f.a.userId}::uuid,'designer')`.execute(owner);
  let report=await service.record(s,await action(service,s));expect(report.anomalies.filter(a=>a.taskId===pub.taskId)).toEqual([]);
- await sql`UPDATE hawa.drive_refs SET expected_sha256=repeat('0',64) WHERE publication_id IN(SELECT id FROM hawa.publications WHERE task_id=${pub.taskId}::uuid)`.execute(owner);
+ await expect(sql`UPDATE hawa.drive_refs SET expected_sha256=repeat('0',64) WHERE publication_id IN(SELECT id FROM hawa.publications WHERE task_id=${pub.taskId}::uuid)`.execute(owner)).rejects.toThrow('DRIVE_EXPECTATION_CONFLICT');
+ // Current inputs are immutable; a failed observation can still invalidate its receipt.
+ await sql`UPDATE hawa.drive_refs SET status='mismatch' WHERE publication_id IN(SELECT id FROM hawa.publications WHERE task_id=${pub.taskId}::uuid)`.execute(owner);
  report=await service.record(s,await action(service,s));expect(report.anomalies).toContainEqual(expect.objectContaining({taskId:pub.taskId,kind:'CHECKSUM_MISMATCH'}));
  const result=await pub.app.request(`/tasks/${pub.taskId}/revisions`,{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify({document:{id:'new-revision',pages:[{id:'p',name:'main',width:1080,height:1080,unit:'px'}],nodes:[{id:'copy',type:'text',text:'New copy'}]}})});

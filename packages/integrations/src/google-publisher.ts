@@ -12,7 +12,7 @@ import type {
 
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { GoogleSheetRow, type SheetRowResult } from './google-sheet-row.js';
+import { GoogleSheetRow, sheetRowIdentity, type SheetRowResult } from './google-sheet-row.js';
 
 export interface GooglePublisherConfig {
   serviceAccountEmail?: string;
@@ -23,7 +23,14 @@ export interface GooglePublisherConfig {
   driveUploadBaseUrl?: string;
   sheetsApiBaseUrl?: string;
   uploadIdentityStore?: DriveUploadIdentityStore;
+  sheetExpectationStore?: SheetExpectationStore;
 }
+
+export interface SheetWriteIdentity {
+  tenantId: string; taskId: string; clientId: string; publicationKey: string;
+  spreadsheetId: string; sheetId: number; metadataId: number; metadataValue: string; expectedValues: string[];
+}
+export interface SheetExpectationStore { prepare(identity: SheetWriteIdentity): Promise<void> }
 
 export interface DriveUploadIdentity {
   tenantId: string;
@@ -540,6 +547,22 @@ export class GooglePublisher implements Publisher {
         uploadedFileId = lookup.value.id;
         readbackData = lookup.value;
         webViewLink = lookup.value.webViewLink || `https://drive.google.com/file/d/${uploadedFileId}/view`;
+        // A discovered upload still needs the same durable identity as a newly created one.
+        // Otherwise a restarted publisher could bind the Sheet to an unreserved duplicate.
+        if (this.config.uploadIdentityStore) {
+          try {
+            const adoptedId = await this.config.uploadIdentityStore.reserve({
+              tenantId: ctx.tenantId, publicationKey: request.publicationKey, taskId: request.taskId,
+              artifactId: file.artifactId, packageHash: request.packageHash, folderId: driveFolderId,
+              filename: file.filename, mimeType: file.mimeType, sha256: file.sha256,
+            }, async () => uploadedFileId);
+            if (adoptedId !== uploadedFileId) throw new DriveUploadIdentityConflict('Discovered Drive file differs from its reserved identity');
+          } catch (error: unknown) {
+            return { ok: false, error: { code: error instanceof DriveUploadIdentityConflict ? 'DRIVE_ARTIFACT_CONFLICT' : 'DRIVE_RESERVATION_FAILED',
+              message: 'The discovered Drive file could not be bound to this publication',
+              retryable: !(error instanceof DriveUploadIdentityConflict), safeAction: 'Reconcile the stored Drive reservation before retrying' } };
+          }
+        }
       }
 
       if (!uploadedFileId) {
@@ -797,11 +820,22 @@ export class GooglePublisher implements Publisher {
   private async syncSheetRow(ctx: RequestContext, request: PublishRequest, token: string | null | undefined, driveFiles: DriveFileReceipt[]): Promise<SheetRowResult> {
     if (!request.destination.spreadsheetId) return { synced: false, problem: 'No spreadsheet is configured for this client' };
     if (!token) return { synced: false, problem: 'Google Workspace credentials are not configured' };
-    return new GoogleSheetRow(this.sheetsApiBaseUrl, token, ctx.deadline).sync({
+    const scope = {
       tenantId: ctx.tenantId, spreadsheetId: request.destination.spreadsheetId, sheetId: request.destination.sheetId, taskId: request.taskId,
-    }, [request.taskId, request.clientId, request.destination.productionRootFolderId,
+    };
+    const values = [request.taskId, request.clientId, request.destination.productionRootFolderId,
       typeof request.sheetRow.publishedAt === 'string' ? request.sheetRow.publishedAt : new Date().toISOString(),
-      'COMPLETE', driveFiles[0]?.webViewLink || '', request.packageHash], typeof request.sheetRow.publishedAt === 'string');
+      'COMPLETE', driveFiles[0] ? `https://drive.google.com/file/d/${driveFiles[0].fileId}/view` : '', request.packageHash];
+    if (this.config.sheetExpectationStore) {
+      const identity = sheetRowIdentity(scope);
+      try {
+        await this.config.sheetExpectationStore.prepare({ ...scope, clientId: request.clientId,
+          publicationKey: request.publicationKey, metadataId: identity.id, metadataValue: identity.value, expectedValues: values });
+      } catch {
+        return { synced: false, problem: 'SHEETS_EXPECTATION_NOT_RECORDED' };
+      }
+    }
+    return new GoogleSheetRow(this.sheetsApiBaseUrl, token, ctx.deadline).sync(scope, values, typeof request.sheetRow.publishedAt === 'string');
   }
 
   private async inspectSheet(ctx: RequestContext, receipt: PublicationReceipt, token: string | null): Promise<SheetRowResult> {

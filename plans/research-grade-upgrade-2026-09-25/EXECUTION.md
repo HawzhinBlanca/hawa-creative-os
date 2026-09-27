@@ -1,5 +1,26 @@
 # Completion checkpoint
 
+## 2026-09-27 — Immutable publication expectations (ADR-106), local checkpoint
+
+Migration 059 freezes original publication inputs before provider effects and exact
+Sheet values/metadata before any Sheet call. Retries preserve destinations, filenames
+and timestamp after DNA changes or a new Core instance. Reserved Drive identity also
+binds discovered files and the first Sheet link. SQL validates receipts, retains
+whole-row evidence, enforces immutability/current client access, and refuses unfinished
+historical publications without original inputs. Delayed pending answers cannot erase
+confirmed evidence; failed observations cannot retain a synced claim.
+
+Final affected Core/integrations/database suites: **2390 passed, 0 failed, 15 skipped**
+(268 passing/5 skipped files). Source build, 509 strict test roots, lint and security
+pass. Initial regressions and compatibility failures are retained in
+`output/acceptance/2026-09-27-publication-expectations/STATUS.md` and the accompanying
+logs; `R09_PUBLICATION_EXPECTATIONS_PROOF.json` binds source and evidence hashes.
+No new full release seal, runtime image, production change or live-provider proof.
+
+Next: scheduled external Drive/Sheets observations and scoped staffed resolution;
+historical migration/full reporting columns, remaining result recovery and live,
+human, held-out and independent-host acceptance remain open. Whole-app goal active.
+
 ## 2026-09-27 — Stable Google Sheet row identity (ADR-105), partial
 
 Exact DNA tab propagation, metadata-bound writes, atomic row creation, duplicate

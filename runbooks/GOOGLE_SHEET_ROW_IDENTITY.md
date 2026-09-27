@@ -2,6 +2,31 @@
 
 ADR-105, FR-049 and FR-050 prerequisite. Local fake-provider qualification only.
 
+## Durable expectations (ADR-106)
+
+New publication records freeze their original input before provider effects. Changing
+Client DNA does not move an attempted archive or rename its files on retry. A Sheet
+that was absent originally can be configured once; its first attempted write saves
+the destination, all seven values, timestamp and stable metadata identity before
+contacting Sheets. Later retries use that saved record, including after Core restarts.
+
+`SHEETS_EXPECTATION_NOT_RECORDED` means the publisher could not durably bind the row;
+that attempt contacted no Sheets API. Inspect PostgreSQL connectivity and the
+publication's expectation before retrying the same publication. A mismatch with an
+existing expectation requires reconciliation, not editing the immutable record.
+
+`LEGACY_PUBLICATION_EXPECTATION_UNAVAILABLE` identifies an unfinished protocol-0
+publication. Current DNA cannot establish its original destination or file names.
+Retain the hold and inspect the original approval, receipts and actual provider
+state. The supervised migration/resolution path remains unimplemented. Completed
+historical receipts remain historical evidence; they are not upgraded into fresh
+external observations.
+
+The new receipt fields retain metadata ID, expected values and complete row hashes.
+A SQL `SHEET_RECEIPT_EXPECTATION_CONFLICT` or `DRIVE_EXPECTATION_CONFLICT` refuses
+evidence inconsistent with the frozen input. These checks do not measure current
+Google permissions or replace the scheduled reconciliation still to be implemented.
+
 ## Behavior
 
 Core uses Client DNA's numeric `destinations.sheetId`. Publication creates a row

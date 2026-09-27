@@ -115,6 +115,7 @@ import { createClientDnaResolver } from './services/client-dna-resolver.js';
 import { noDatabaseStore } from './services/no-database-store.js';
 import { createOmnichannelDelivery } from './services/omnichannel-delivery.js';
 import { PostgresDriveUploadIdentityStore } from './services/drive-upload-reservation.js';
+import { PostgresSheetExpectationStore } from './services/publication-expectations.js';
 
 // What app.ts exported before its helpers moved to core-helpers.ts; tests and scripts import them from here.
 export { canonicalJson, computeDnaHash, isValidUuid, inlineTemplateCopyMissing, qaReportSha256, secretsEqual, probeDatabase, evaluateCanvaExportQc };
@@ -218,6 +219,7 @@ export function createApp(options?: CreateAppOptions) {
   const qaEngine: QAEngine = options?.qaEngine || new DeterministicQAEngine();
   const publisher = options?.publisher || new GooglePublisher({
     uploadIdentityStore: db ? new PostgresDriveUploadIdentityStore(db) : undefined,
+    sheetExpectationStore: db ? new PostgresSheetExpectationStore(db) : undefined,
   });
   const modelGateway = new ResilientModelGateway();
   const evaluationService = db ? new DurableEvaluationService(db, options?.evaluationGateway || modelGateway) : null;

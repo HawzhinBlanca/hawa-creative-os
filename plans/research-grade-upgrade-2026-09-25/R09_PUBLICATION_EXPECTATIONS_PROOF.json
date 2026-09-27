@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-27",
+  "status": "locally_verified_partial_not_release_qualified",
+  "requirements": [
+    "FR-047",
+    "FR-048",
+    "FR-049",
+    "FR-050"
+  ],
+  "baseCommit": "18176f608ebf123008d13c1602659a1b2d81b7bc",
+  "sourceHashes": {
+    "adrs/106_immutable_publication_expectations.md": "c0c5ca08c280f77daefc620b12efd700659e1293f5f354666000a53394a21c2b",
+    "apps/core/src/app.ts": "aac2fe5168bcfd33e13713ba267a576ebade27bd2b3d654db33259b693e6fbec",
+    "apps/core/src/services/omnichannel-delivery.ts": "639cf8ae5c553dcf67b81396c74cc99ff0851a5bc837c081f05193a3873bb6fc",
+    "apps/core/src/services/publication-expectations.ts": "dbcdc73d18ddb0de087047cccfac9231f8924d5cbf132584080e89ed5bede3c5",
+    "apps/core/test/canva-planner-accounting.test.ts": "4f294dcc67d822a80336be616c16e1213f10adb3e01aae1fc465b5cd77c0351b",
+    "apps/core/test/delivery-workflow.test.ts": "9f94f9c1d0b7f616a0bc8544a5398b275cae2e0cbab6e73af34f06fac36e4c7d",
+    "apps/core/test/e2e-canva-to-delivery-chain.test.ts": "d835bd60d9568c0dbf3f5d2c1d9ebd3471aaa6b0fec75ac79c71e76ae59bcbe4",
+    "apps/core/test/publish-sheets-unconfirmed.test.ts": "32d56a5618cbed8604228dad93307230232485e0d7b3c17ac96cdf9400208550",
+    "apps/core/test/scoped-receipt-audits.test.ts": "9e24b4e1f88d916fb4b46b7cbf81d684678c886d5b52417abde294f82d38cfe7",
+    "apps/core/test/startup-schema-check.test.ts": "6f58d6724933251abd6191b34622b4b7d3f0e8a724222412d8cbc816777e2feb",
+    "docs/13_GOOGLE_DRIVE_SHEETS.md": "9f6260b274b0aa6b1625414a39918dd146565a337f3f649ccb9c4cf14f3f881c",
+    "packages/contracts/src/index.ts": "a5b4b0a9afcfe63815c6d1f202577094c79c50296ad89dcb3bb90757f5977257",
+    "packages/contracts/src/publication-expectation.ts": "f49e3a499fc49f2e6cb868cb8545022778c9a1bdd09e5f8f662b6e984c7473c7",
+    "packages/db/migrations/059_publication_expectations.sql": "040d8b0e7b96e4a1c377fa7d47b4b4c575a3feb9efd3f83019dd8d26e86a441c",
+    "packages/db/src/repositories/publication.repository.ts": "3756dc112518aaeeb9a2cec66a56bd17da03049a1733a31300834c8f2793bf5a",
+    "packages/db/src/types.ts": "c289dc71b2592ae60d56144cea2671e4cdcc34a9318430574209b73c1483c510",
+    "packages/db/test/schema-upgrade.test.ts": "8c445d5e769cc7c1c93994e8f8bc5baa0b55fdc72a899a84c84a31f0c331d9eb",
+    "packages/integrations/src/google-publisher.ts": "c04b40d9c91d3fcbaa403da22c2d048fad80d86b3b2e8aca2cae083d9b2fc1d3",
+    "packages/integrations/test/google-sheet-identity.test.ts": "03a0341d32ccc5c05194f95148a998ec0570fb79de16938d80c77396e5242e09",
+    "packages/testkit/src/fake-publisher.ts": "a9b1064ef4f8bd9faeb98b958823a879b0b5c12d97f07946006be2d2b1d8aa78",
+    "runbooks/GOOGLE_SHEET_ROW_IDENTITY.md": "9721debb0d1054dfab3e0517acf624dc967c5bdec11cd65e88d049ff6051a4f0"
+  },
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-publication-expectations/STATUS.md": "6352883147ac42609bf0007539685652e5e67dac1f85e6d944957144c174e5bf",
+    "output/acceptance/2026-09-27-publication-expectations/affected-final.log": "d109c25793a2cf5a3a8a6d26a8e1cd63fdb99488df1c1824206e8f0433d0c13e",
+    "output/acceptance/2026-09-27-publication-expectations/affected-initial.log": "bf9f47a4cd8bade56e0b9e908aae1f887e672db083f08be071fc4cff36da985f",
+    "output/acceptance/2026-09-27-publication-expectations/build.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-publication-expectations/corrections.log": "4e8c7df6a73a09cfff3c9c9e70a6768a2cadef53d947b469a4857eb4c4c8a9d7",
+    "output/acceptance/2026-09-27-publication-expectations/destination-red.log": "0865f7fe1a09fc0e363b20df5efef145393ff53bc9f56ba6f556b08e3e67274b",
+    "output/acceptance/2026-09-27-publication-expectations/fixture-binding-failure.log": "2d47650024ff8cccc46ba86b95b9a974889399686f96d918afafa6d002982fa0",
+    "output/acceptance/2026-09-27-publication-expectations/focused.log": "0b663d3b15f178f7472d8eaacd482c63dd3b6e173159a89d10582b8042fa6b6f",
+    "output/acceptance/2026-09-27-publication-expectations/initial-artifact-identity-failure.log": "5f3a861bc944234b3d6fba3b35f3aa8f3c7578f3c4ff42b37006c51a108ad8db",
+    "output/acceptance/2026-09-27-publication-expectations/initial-focused.log": "9cfe5bd8da1af36d964335d950fd093e6456cc3bdc1ea07af6a18e1c09a2389b",
+    "output/acceptance/2026-09-27-publication-expectations/lint-sandbox-refusal.log": "597d8d7313919486f29662f9fbb13d25a6830e6f7720ed366e7aaa3ebe1f496f",
+    "output/acceptance/2026-09-27-publication-expectations/lint.log": "d899edf631e5ced5db5f4227294e1b9510019a980e20f6b06b8c3846d4ddeb4b",
+    "output/acceptance/2026-09-27-publication-expectations/receipt-evidence-red.log": "d2aad48d04048a656e0588a5279e0ea942d56ce8f2a5b97c527d0bcf5fc14a55",
+    "output/acceptance/2026-09-27-publication-expectations/security-selftest.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
+    "output/acceptance/2026-09-27-publication-expectations/security.log": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d",
+    "output/acceptance/2026-09-27-publication-expectations/strict-tests.log": "dd6d4ad9db20d2a36b2befdb17fec4caecebc5567699bdb8c40a76328d791da0",
+    "output/acceptance/2026-09-27-publication-expectations/blueprint.log": "786907ea43b9a7e9ecde29a6d60ae79885d83e299312a379c8ce14485e652068"
+  },
+  "verification": {
+    "affectedTests": {
+      "passed": 2390,
+      "failed": 0,
+      "skipped": 15,
+      "passingFiles": 268,
+      "skippedFiles": 5,
+      "durationSeconds": 92.2
+    },
+    "strictTestRoots": 509,
+    "freshCoreRecovery": true,
+    "newActualCoreKillDrill": false,
+    "fullSuiteRunForThisSource": false,
+    "deployedForThisSource": false,
+    "liveGoogleQualification": false,
+    "blueprint": {
+      "passed": 1035,
+      "warnings": 0,
+      "failed": 0
+    }
+  },
+  "open": [
+    "scheduled external Drive/Sheets inspections",
+    "staff resolution and legacy migration",
+    "full reporting columns and observed permission baselines",
+    "full release and live qualification"
+  ]
+}

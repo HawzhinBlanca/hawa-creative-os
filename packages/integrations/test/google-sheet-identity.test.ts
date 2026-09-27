@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
-import { GooglePublisher } from '../src/google-publisher.js';
+import { GooglePublisher, type SheetWriteIdentity } from '../src/google-publisher.js';
 import { FakeSheets, fakePublicationFetch } from './fake-sheets.js';
 import { GoogleSheetRow, sheetRowIdentity } from '../src/google-sheet-row.js';
 
@@ -22,6 +22,32 @@ function setup() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('FR-049 stable Google Sheet identity', () => {
+  it('leaves Sheets untouched when its durable expectation cannot be recorded', async () => {
+    const sheets = setup();
+    const prepare = vi.fn(async () => { throw new Error('Synthetic database failure'); });
+    const p = new GooglePublisher({ oauthToken: 'synthetic', driveApiBaseUrl: 'https://drive.test', driveUploadBaseUrl: 'https://upload.test', sheetsApiBaseUrl: 'https://sheets.test', sheetExpectationStore: { prepare } });
+    const result = await p.publish(ctx, request());
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(result.ok && result.value.driveFiles[0].verified).toBe(true);
+    expect(result.ok && result.value.sheet.synced).toBe(false);
+    expect(result.ok && result.value.detail.sheetProblem).toBe('SHEETS_EXPECTATION_NOT_RECORDED');
+    expect(sheets.calls).toHaveLength(0);
+    expect(sheets.metadata.size).toBe(0);
+  });
+
+  it('records exact row identity and values before its first Sheets request', async () => {
+    const sheets = setup(); let recorded: SheetWriteIdentity | undefined;
+    const p = new GooglePublisher({ oauthToken: 'synthetic', driveApiBaseUrl: 'https://drive.test', driveUploadBaseUrl: 'https://upload.test', sheetsApiBaseUrl: 'https://sheets.test', sheetExpectationStore: { prepare: async input => {
+      expect(sheets.calls).toHaveLength(0); recorded = structuredClone(input);
+    } } });
+    const result = await p.publish(ctx, request());
+    expect(result.ok && result.value.sheet.synced).toBe(true);
+    expect(recorded).toMatchObject({ tenantId: ctx.tenantId, taskId: 'task-a', clientId: 'client-a', publicationKey: 'pub-a', spreadsheetId: 'spreadsheet-a', sheetId: 7 });
+    expect(recorded?.expectedValues).toEqual(sheets.tabs.get(7)?.[1]);
+    expect(recorded?.expectedValues[3]).toBe(request().sheetRow.publishedAt);
+    expect(sheets.metadata.get(recorded!.metadataId)?.metadataValue).toBe(recorded?.metadataValue);
+  });
+
   it('publishes to the configured nonzero tab and leaves the first tab unchanged', async () => {
     const sheets = setup(); const initial = structuredClone(sheets.tabs.get(0));
     const result = await publisher().publish(ctx, request());

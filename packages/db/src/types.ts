@@ -267,6 +267,7 @@ export interface PublicationsTable {
   design_revision_id: string;
   approval_id: string;
   publication_key: string;
+  input_protocol: Generated<number>;
   state: 'pending' | 'staging' | 'drive_pending' | 'drive_complete' | 'sheet_pending' | 'complete' | 'failed' | 'cancelled';
   package_manifest: Record<string, unknown>;
   package_sha256: string;
@@ -288,6 +289,7 @@ export interface DriveRefsTable {
   tenant_id: string;
   publication_id: string;
   artifact_id: string | null;
+  publication_artifact_id: string | null;
   shared_drive_id: string;
   folder_id: string;
   file_id: string;
@@ -327,6 +329,10 @@ export interface SheetSyncsTable {
   row_number: number | null;
   expected_hash: string;
   observed_hash: string | null;
+  metadata_id: number | null;
+  expected_values: string[] | null;
+  expected_row_hash: string | null;
+  observed_row_hash: string | null;
   status: 'pending' | 'synced' | 'stale' | 'missing' | 'failed';
   attempts: Generated<number>;
   last_error: string | null;

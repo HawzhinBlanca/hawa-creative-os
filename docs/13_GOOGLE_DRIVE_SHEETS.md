@@ -104,6 +104,28 @@ The Sheets publisher treats a blank or unreadable cached row identity as untrust
 
 ## 6. Sheet columns
 
+### Durable original inputs (ADR-106, 2026-09-27)
+
+Before the publisher can perform an external effect, Core freezes the approved
+publication input in PostgreSQL. The record binds tenant/task/client/project,
+approval/revision, exact file metadata and hashes, Drive destination, configured
+Sheet destination and timestamp. Retries rehydrate approved bytes against this
+record. Changed client names or destinations do not redirect an attempted archive.
+
+After verified Drive readback and before contacting Sheets, the Google adapter
+stores the exact seven expected values and metadata identity. Its Drive link must
+match the first artifact's durable reserved file ID. Discovered existing uploads
+also adopt or verify that reservation. If the original Sheet destination was empty,
+the first configured attempt binds it; subsequent attempts use the saved binding.
+Failure to persist this expectation leaves Sheets untouched and completion held.
+
+SQL hashes these immutable records and checks current receipt metadata and complete
+row hashes against them. A delayed pending receipt for the same publication retains
+confirmed evidence; a failed observation or another package cannot inherit it.
+Historical protocol-0 publications have no fabricated original input. An unfinished
+one requires supervised reconciliation. This prerequisite does not implement the
+scheduled external inspection or establish current provider permissions.
+
 ### Current row identity protocol (ADR-105, 2026-09-27)
 
 The metadata protocol supersedes the process-cached row-number upsert described

@@ -62,7 +62,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
         state: 'complete',
         driveFiles: req.files.map((f: any) => ({
           artifactId: f.artifactId, fileId: `drv_${f.artifactId.slice(0, 8)}`, name: f.filename, mimeType: f.mimeType,
-          expectedSha256: f.sha256, observedSize: f.byteSize, verified: true, folderId: 'kaae-folder',
+          expectedSha256: f.sha256, observedSize: f.byteSize, verified: true, folderId: req.destination.productionRootFolderId,
         })),
         sheet: { spreadsheetId: req.destination.spreadsheetId, sheetId: 0, rowKey: req.taskId,
           rowNumber: 12, expectedHash: req.packageHash, observedHash: req.packageHash, synced: true },
@@ -397,7 +397,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
       sharedDriveId: String(file?.shared_drive_id), folderId: String(file?.folder_id),
       fileName: String(file?.file_name), mimeType: String(file?.mime_type),
       expectedSha256: 'f'.repeat(64), observedSize: Number(file?.observed_size), status: 'verified',
-    }, trx))).rejects.toThrow(/conflicts with its stored publication receipt/);
+    }, trx))).rejects.toThrow(/conflicts with its stored publication receipt|DRIVE_EXPECTATION_CONFLICT/);
   });
 
   it('a refused Telegram file cannot complete an archived publication with a confirmed Sheet row', async () => {

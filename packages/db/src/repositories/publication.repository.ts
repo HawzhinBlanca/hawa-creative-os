@@ -18,6 +18,7 @@ export interface RecordDriveRefParams {
   tenantId: string;
   publicationId: string;
   artifactId?: string | null;
+  publicationArtifactId?: string | null;
   sharedDriveId: string;
   folderId: string;
   fileId: string;
@@ -40,6 +41,10 @@ export interface RecordSheetSyncParams {
   rowNumber?: number | null;
   expectedHash: string;
   observedHash?: string | null;
+  metadataId?: number | null;
+  expectedValues?: string[] | null;
+  expectedRowHash?: string | null;
+  observedRowHash?: string | null;
   status: 'pending' | 'synced' | 'stale' | 'missing' | 'failed';
   lastError?: string | null;
 }
@@ -204,6 +209,7 @@ export class PublicationRepository {
           tenant_id: params.tenantId,
           publication_id: params.publicationId,
           artifact_id: params.artifactId || null,
+          publication_artifact_id: params.publicationArtifactId || null,
           shared_drive_id: params.sharedDriveId,
           folder_id: params.folderId,
           file_id: params.fileId,
@@ -222,7 +228,9 @@ export class PublicationRepository {
           status: sql`CASE WHEN drive_refs.status = 'verified' THEN 'verified' ELSE excluded.status END`,
           verified_at: sql`COALESCE(drive_refs.verified_at, excluded.verified_at)`,
         } as any).where(sql<boolean>`drive_refs.tenant_id = excluded.tenant_id
+          AND drive_refs.shared_drive_id = excluded.shared_drive_id
           AND drive_refs.folder_id = excluded.folder_id
+          AND drive_refs.publication_artifact_id IS NOT DISTINCT FROM excluded.publication_artifact_id
           AND drive_refs.file_name = excluded.file_name
           AND drive_refs.mime_type = excluded.mime_type
           AND drive_refs.expected_sha256 IS NOT DISTINCT FROM excluded.expected_sha256
@@ -254,6 +262,12 @@ export class PublicationRepository {
 
   async recordSheetSync(params: RecordSheetSyncParams, trx?: Kysely<Database>) {
     const runner = async (dbClient: Kysely<Database>) => {
+      // Only a delayed pending answer for this exact publication can retain confirmed evidence.
+      // A failed observation or another publication must expose its own uncertainty.
+      const keepConfirmed = sql<boolean>`sheet_syncs.status = 'synced' AND excluded.status = 'pending'
+        AND sheet_syncs.publication_id = excluded.publication_id
+        AND sheet_syncs.expected_hash = excluded.expected_hash
+        AND (excluded.expected_row_hash IS NULL OR sheet_syncs.expected_row_hash = excluded.expected_row_hash)`;
       const sheetSync = await dbClient
         .insertInto('sheet_syncs')
         .values({
@@ -266,6 +280,10 @@ export class PublicationRepository {
           row_number: params.rowNumber || null,
           expected_hash: params.expectedHash,
           observed_hash: params.observedHash || null,
+          metadata_id: params.metadataId ?? null,
+          expected_values: params.expectedValues ? sql`${JSON.stringify(params.expectedValues)}::jsonb` : null,
+          expected_row_hash: params.expectedRowHash ?? null,
+          observed_row_hash: params.observedRowHash ?? null,
           status: params.status,
           attempts: 1,
           last_error: params.lastError || null,
@@ -282,13 +300,17 @@ export class PublicationRepository {
             .columns(['spreadsheet_id', 'sheet_id', 'row_key'])
             .doUpdateSet({
               publication_id: sql`excluded.publication_id`,
-              row_number: sql`COALESCE(excluded.row_number, sheet_syncs.row_number)`,
+              row_number: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.row_number ELSE excluded.row_number END`,
               expected_hash: sql`excluded.expected_hash`,
-              observed_hash: sql`COALESCE(excluded.observed_hash, sheet_syncs.observed_hash)`,
-              status: sql`CASE WHEN sheet_syncs.status = 'synced' AND sheet_syncs.expected_hash = excluded.expected_hash THEN 'synced' ELSE excluded.status END`,
+              observed_hash: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.observed_hash ELSE excluded.observed_hash END`,
+              metadata_id: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.metadata_id ELSE excluded.metadata_id END`,
+              expected_values: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.expected_values ELSE excluded.expected_values END`,
+              expected_row_hash: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.expected_row_hash ELSE excluded.expected_row_hash END`,
+              observed_row_hash: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.observed_row_hash ELSE excluded.observed_row_hash END`,
+              status: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.status ELSE excluded.status END`,
               attempts: sql`sheet_syncs.attempts + 1`,
-              last_error: sql`excluded.last_error`,
-              synced_at: sql`CASE WHEN excluded.status = 'synced' THEN now() ELSE sheet_syncs.synced_at END`,
+              last_error: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.last_error ELSE excluded.last_error END`,
+              synced_at: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.synced_at ELSE excluded.synced_at END`,
             } as any)
             .where(sql<boolean>`sheet_syncs.tenant_id = excluded.tenant_id AND sheet_syncs.task_id = excluded.task_id`)
         )
