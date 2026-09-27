@@ -16,9 +16,11 @@ import type {
   AppError,
   JsonObject,
   SHA256,
+  GatewaySpendingReservation,
 } from '@hawa/contracts';
 import { CircuitBreaker, type CircuitBreakerSnapshot } from './circuit-breaker.js';
 import { OfficeTracer, PhoenixClient } from '@hawa/observability';
+import { GATEWAY_DEFAULT_OUTPUT_TOKENS, GatewaySpendingError, gatewayServedModelMatches, gatewayUsage, quoteGatewayRequest } from './gateway-spending.js';
 
 export interface ProviderCandidate {
   provider: string;
@@ -174,14 +176,6 @@ export class ResilientModelGateway implements ModelGateway {
     return map;
   }
 
-  // Pricing Table ($ per 1M tokens)
-  private readonly pricing: Record<string, ModelPricing> = {
-    google: { inputPer1M: 0.10, outputPer1M: 0.40 },
-    anthropic: { inputPer1M: 3.00, outputPer1M: 15.00 },
-    openai: { inputPer1M: 2.50, outputPer1M: 10.00 },
-    local: { inputPer1M: 0.00, outputPer1M: 0.00 },
-  };
-
   // Provider Fallback Cascades per Role
   private readonly fallbackRegistry: Record<ModelRole, ProviderCandidate[]> = {
     intake_router: [
@@ -288,6 +282,10 @@ export class ResilientModelGateway implements ModelGateway {
   }
 
   async generateStructured<T>(_ctx: RequestContext, request: StructuredModelRequest, preferredProvider?: string): Promise<Result<StructuredModelResponse<T>, AppError>> {
+    // The allowance, client egress policy and input facts cannot change between paid attempts.
+    try { request = structuredClone(request); }
+    catch { return {ok:false,error:{code:'MODEL_INPUT_PREPARATION_FAILED',message:'The request could not be frozen before dispatch.',
+      retryable:false,safeAction:'Provide serializable model inputs.',detail:{acceptance:'not_dispatched',requiresReconciliation:false,estimatedCostUsd:0}}}; }
     const startTime = Date.now();
     const cascade = this.fallbackRegistry[request.role] || [{ provider: 'google', model: 'gemini-3.8-flash' }];
 
@@ -313,7 +311,7 @@ export class ResilientModelGateway implements ModelGateway {
 
     // Visual Judge Invariant (H07): Visual judge requires readable image input bytes.
     // If there is no verified image, no route may produce a visual pass.
-    if (request.role === 'visual_judge') {
+    if (request.role === 'visual_judge' || request.inputs.some(i => i.kind === 'image')) {
       const imageInputs = (request.inputs || []).filter((i) => i.kind === 'image');
       if (imageInputs.length === 0) {
         span.end({ 'error.failed': true, 'error.message': 'Visual judge requires readable image input bytes' });
@@ -380,9 +378,27 @@ export class ResilientModelGateway implements ModelGateway {
       }
     }
 
-    const maxAttempts = request.budget?.maxAttempts ?? Infinity;
+    const budget = request.budget;
+    const outputLimit = request.maxOutputTokens ?? GATEWAY_DEFAULT_OUTPUT_TOKENS;
+    if (!budget || !Number.isFinite(budget.maxCostUsd) || budget.maxCostUsd < 0 || budget.maxCostUsd > 9007199254 ||
+      !Number.isSafeInteger(budget.maxAttempts) || budget.maxAttempts < 0 ||
+      !Number.isSafeInteger(budget.maxLatencyMs) || budget.maxLatencyMs <= 0 || budget.maxLatencyMs > 2147483647 ||
+      !Number.isSafeInteger(outputLimit) || outputLimit <= 0) {
+      span.end({ 'error.failed': true, 'error.code': 'MODEL_BUDGET_INVALID' });
+      return { ok:false,error:{code:'MODEL_BUDGET_INVALID',message:'Finite cost, time, attempt and output limits are required.',
+        retryable:false,safeAction:'Correct the request budget before starting model work.',
+        detail:{acceptance:'not_dispatched',requiresReconciliation:false,estimatedCostUsd:0}} };
+    }
+    const deadline = Math.min(startTime + budget.maxLatencyMs, Date.parse(_ctx.deadline));
+    if (!Number.isFinite(deadline) || deadline <= Date.now()) {
+      span.end({ 'error.failed': true, 'error.code': 'MODEL_DEADLINE_EXCEEDED' });
+      return {ok:false,error:{code:'MODEL_DEADLINE_EXCEEDED',message:'The request deadline has expired.',retryable:false,safeAction:'Start a new authorized request with a current deadline.',
+        detail:{acceptance:'not_dispatched',requiresReconciliation:false,estimatedCostUsd:0}}};
+    }
+    const maxAttempts = budget.maxAttempts;
     let attempts = 0;
     let lastError: any = null;
+    let rejectedRequests = 0;
 
     for (const candidate of cascade) {
       if (attempts >= maxAttempts) {
@@ -477,17 +493,26 @@ export class ResilientModelGateway implements ModelGateway {
 
       let output: unknown;
       let liveSuccess = false;
-      let actualInputTokens: number | undefined;
-      let actualOutputTokens: number | undefined;
+      let reportedUsage: ReturnType<typeof gatewayUsage> = null;
+      let reservation: GatewaySpendingReservation | undefined;
+      let servedModelId: string | null = null;
 
-      const promptText = (request.inputs || []).map((i) => i.text || '').join('\n') || (request as any).prompt || '';
+      const promptText = (request.inputs || []).map((i) => i.kind === 'json' ? JSON.stringify(i.json) : i.text || '').join('\n') || (request as any).prompt || '';
 
       let dispatched = false;
       let httpStatus: number | null = null;
       let providerRequestId: string | null = null;
       const providerFetch = async (url: string, init: RequestInit): Promise<Response> => {
+        if (request.tools?.length || request.allowedToolNames?.length || request.inputs.some(i => i.kind === 'document' && !i.text)) {
+          throw new GatewaySpendingError('MODEL_BUDGET_UNQUOTABLE', 'This input or tool needs an explicit spending policy.');
+        }
+        if (typeof init.body !== 'string') throw new GatewaySpendingError('MODEL_BUDGET_UNQUOTABLE','The provider body must be frozen before admission.');
+        reservation = quoteGatewayRequest(candidate.provider, candidate.model, init.body);
+        if (reservation.usd > budget.maxCostUsd) throw new GatewaySpendingError('MODEL_BUDGET_EXHAUSTED','This request exceeds the allocated cost budget; no output limit or model was reduced.');
+        const remainingMs = deadline - Date.now();
+        if (remainingMs <= 0) throw new GatewaySpendingError('MODEL_DEADLINE_EXCEEDED','The request deadline has expired.');
         dispatched = true;
-        const response = await fetch(url, init);
+        const response = await fetch(url, { ...init, signal: AbortSignal.timeout(remainingMs) });
         httpStatus = response.status;
         const id = response.headers?.get('x-request-id') || response.headers?.get('request-id');
         providerRequestId = id && /^[A-Za-z0-9_.:-]{1,200}$/.test(id) ? id : null;
@@ -504,7 +529,9 @@ export class ResilientModelGateway implements ModelGateway {
           safeAction: dispatched ? 'Inspect the provider receipt and call outcome before starting new model work'
             : 'Correct the input before starting model work',
           detail: { provider: candidate.provider, model: candidate.model, attempts, httpStatus, providerRequestId,
-            acceptance, requiresReconciliation: dispatched, estimatedCostUsd: null },
+            acceptance, requiresReconciliation: dispatched, estimatedCostUsd: dispatched ? reportedUsage?.estimatedCostUsd ?? null : 0,
+            costBasis: reportedUsage ? 'usage' : 'unknown',
+            ...(reservation ? { spending: { ...reservation } } : {}), servedModelId },
         } };
       };
 
@@ -513,7 +540,7 @@ export class ResilientModelGateway implements ModelGateway {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate.model}:generateContent`;
 
-          const parts: any[] = [{ text: promptText }];
+          const parts: any[] = [{ text: `${promptText}\n\nRespond ONLY with valid JSON conforming to this schema:\n${JSON.stringify(request.responseSchema || {})}` }];
           const imageParts = (request.inputs || []).filter((i) => i.kind === 'image');
           for (const img of imageParts) {
             let base64Data: string | undefined = img.data || (img as any).base64;
@@ -536,14 +563,24 @@ export class ResilientModelGateway implements ModelGateway {
               'Content-Type': 'application/json',
               'x-goog-api-key': googleKey!,
             },
-            signal: AbortSignal.timeout((request as any).timeoutMs || 30000),
             body: JSON.stringify({
               contents: [{ role: 'user', parts }],
-              generationConfig: { responseMimeType: 'application/json' },
+              generationConfig: { responseMimeType: 'application/json', maxOutputTokens: outputLimit, candidateCount: 1 },
+              serviceTier: 'standard',
             }),
           });
           if (apiRes.ok) {
             const body: any = await apiRes.json();
+            const reportedModel = body.modelVersion;
+            servedModelId = typeof reportedModel === 'string' && /^[A-Za-z0-9_.:-]{1,200}$/.test(reportedModel) ? reportedModel : null;
+            if (reportedModel !== undefined && (!servedModelId || !gatewayServedModelMatches(candidate.provider,candidate.model,servedModelId))) {
+              return stopProviderCall('MODEL_MISMATCH','Provider response model did not match the priced model; no fallback was called');
+            }
+            reportedUsage = gatewayUsage(candidate.provider,candidate.model,body.usageMetadata);
+            if (reportedUsage && reservation && (reportedUsage.inputTokens > reservation.inputTokens ||
+              reportedUsage.outputTokens > reservation.outputTokens || reportedUsage.estimatedCostUsd > reservation.usd)) {
+              return stopProviderCall('MODEL_SPENDING_BOUND_EXCEEDED','Provider usage exceeded the admitted bound; reconcile before further model work');
+            }
             const textPart = body.candidates?.[0]?.content?.parts?.[0]?.text;
             if (!textPart || body.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
               return stopProviderCall('MODEL_OUTPUT_UNUSABLE', 'Provider returned absent or truncated output; no fallback was called');
@@ -557,10 +594,6 @@ export class ResilientModelGateway implements ModelGateway {
               output = parsed;
               liveSuccess = true;
               breaker?.recordSuccess();
-              if (body.usageMetadata) {
-                actualInputTokens = body.usageMetadata.promptTokenCount;
-                actualOutputTokens = body.usageMetadata.candidatesTokenCount;
-              }
             }
           } else {
             span.addEvent('provider_http_error', { provider: 'google', model: candidate.model, status: apiRes.status });
@@ -568,12 +601,14 @@ export class ResilientModelGateway implements ModelGateway {
               breaker?.recordFailure(`HTTP_${apiRes.status}`);
               return stopProviderCall('MODEL_ACCEPTANCE_UNKNOWN', 'Provider acceptance and billing are unknown after the HTTP response; no fallback was called');
             }
+            rejectedRequests++;
             await apiRes.text().catch(() => '');
             lastError = { code: `GOOGLE_HTTP_${apiRes.status}`, message: `Google returned HTTP ${apiRes.status}` };
             if (attempts >= maxAttempts) break;
             continue;
           }
-        } catch {
+        } catch (error) {
+          if (error instanceof GatewaySpendingError) return stopProviderCall(error.code,error.message);
           breaker?.recordFailure('Provider outcome could not be verified');
           const code = !dispatched ? 'MODEL_INPUT_PREPARATION_FAILED'
             : httpStatus !== null && httpStatus >= 200 && httpStatus < 300 ? 'MODEL_RESPONSE_UNREADABLE' : 'MODEL_ACCEPTANCE_UNKNOWN';
@@ -584,7 +619,7 @@ export class ResilientModelGateway implements ModelGateway {
           const imageParts = (request.inputs || []).filter((i) => i.kind === 'image');
           const contentBlocks: any[] = [];
 
-          if (request.role === 'visual_judge') {
+          if (imageParts.length > 0) {
             for (const img of imageParts) {
               let base64Data: string | undefined;
               if (img.data) base64Data = img.data;
@@ -617,19 +652,25 @@ export class ResilientModelGateway implements ModelGateway {
               'x-api-key': process.env.ANTHROPIC_API_KEY,
               'anthropic-version': '2023-06-01',
             },
-            signal: AbortSignal.timeout((request as any).timeoutMs || 30000),
             body: JSON.stringify({
               model: candidate.model,
-              max_tokens: request.maxOutputTokens || 2048,
+              max_tokens: outputLimit,
+              service_tier: 'standard_only',
               messages: [{ role: 'user', content: contentBlocks }],
             }),
           });
 
           if (apiRes.ok) {
             const body: any = await apiRes.json();
-            if (body.model && body.model !== candidate.model && !body.model.startsWith(candidate.model)) {
-              span.addEvent('response_model_mismatch', { requested: candidate.model });
-              return stopProviderCall('MODEL_MISMATCH', 'Provider response model did not match the requested model; no fallback was called');
+            const reportedModel = body.model;
+            servedModelId = typeof reportedModel === 'string' && /^[A-Za-z0-9_.:-]{1,200}$/.test(reportedModel) ? reportedModel : null;
+            if (reportedModel !== undefined && (!servedModelId || !gatewayServedModelMatches(candidate.provider,candidate.model,servedModelId))) {
+              return stopProviderCall('MODEL_MISMATCH','Provider response model did not match the priced model; no fallback was called');
+            }
+            reportedUsage = gatewayUsage(candidate.provider,candidate.model,body.usage);
+            if (reportedUsage && reservation && (reportedUsage.inputTokens > reservation.inputTokens ||
+              reportedUsage.outputTokens > reservation.outputTokens || reportedUsage.estimatedCostUsd > reservation.usd)) {
+              return stopProviderCall('MODEL_SPENDING_BOUND_EXCEEDED','Provider usage exceeded the admitted bound; reconcile before further model work');
             }
             const textBlock = body.content?.find((c: any) => c.type === 'text');
             if (!textBlock?.text || body.stop_reason === 'max_tokens') {
@@ -644,10 +685,6 @@ export class ResilientModelGateway implements ModelGateway {
               output = parsed;
               liveSuccess = true;
               breaker?.recordSuccess();
-              if (body.usage) {
-                actualInputTokens = body.usage.input_tokens;
-                actualOutputTokens = body.usage.output_tokens;
-              }
             }
           } else {
             span.addEvent('provider_http_error', { provider: 'anthropic', model: candidate.model, status: apiRes.status });
@@ -655,12 +692,14 @@ export class ResilientModelGateway implements ModelGateway {
               breaker?.recordFailure(`HTTP_${apiRes.status}`);
               return stopProviderCall('MODEL_ACCEPTANCE_UNKNOWN', 'Provider acceptance and billing are unknown after the HTTP response; no fallback was called');
             }
+            rejectedRequests++;
             await apiRes.text().catch(() => '');
             lastError = { code: `ANTHROPIC_HTTP_${apiRes.status}`, message: `Anthropic returned HTTP ${apiRes.status}` };
             if (attempts >= maxAttempts) break;
             continue;
           }
-        } catch {
+        } catch (error) {
+          if (error instanceof GatewaySpendingError) return stopProviderCall(error.code,error.message);
           breaker?.recordFailure('Provider outcome could not be verified');
           const code = !dispatched ? 'MODEL_INPUT_PREPARATION_FAILED'
             : httpStatus !== null && httpStatus >= 200 && httpStatus < 300 ? 'MODEL_RESPONSE_UNREADABLE' : 'MODEL_ACCEPTANCE_UNKNOWN';
@@ -669,8 +708,8 @@ export class ResilientModelGateway implements ModelGateway {
       } else if (candidate.provider === 'openai' && process.env.OPENAI_API_KEY) {
         try {
           const imageParts = (request.inputs || []).filter((i) => i.kind === 'image');
-          let openaiContent: any = `${promptText}\n\nRespond ONLY with a valid JSON object.`;
-          if (request.role === 'visual_judge' && imageParts.length > 0) {
+          let openaiContent: any = `${promptText}\n\nRespond ONLY with valid JSON conforming to this schema:\n${JSON.stringify(request.responseSchema || {})}`;
+          if (imageParts.length > 0) {
             const contentBlocks: any[] = [{ type: 'text', text: openaiContent }];
             for (const img of imageParts) {
               let base64Data: string | undefined = img.data || (img as any).base64;
@@ -695,19 +734,26 @@ export class ResilientModelGateway implements ModelGateway {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
             },
-            signal: AbortSignal.timeout((request as any).timeoutMs || 30000),
             body: JSON.stringify({
               model: candidate.model,
               messages: [{ role: 'user', content: openaiContent }],
               response_format: { type: 'json_object' },
+              max_completion_tokens: outputLimit,
+              service_tier: 'default',
             }),
           });
 
           if (apiRes.ok) {
             const body: any = await apiRes.json();
-            if (body.model && body.model !== candidate.model && !body.model.startsWith(candidate.model)) {
-              span.addEvent('response_model_mismatch', { requested: candidate.model });
-              return stopProviderCall('MODEL_MISMATCH', 'Provider response model did not match the requested model; no fallback was called');
+            const reportedModel = body.model;
+            servedModelId = typeof reportedModel === 'string' && /^[A-Za-z0-9_.:-]{1,200}$/.test(reportedModel) ? reportedModel : null;
+            if (reportedModel !== undefined && (!servedModelId || !gatewayServedModelMatches(candidate.provider,candidate.model,servedModelId))) {
+              return stopProviderCall('MODEL_MISMATCH','Provider response model did not match the priced model; no fallback was called');
+            }
+            reportedUsage = gatewayUsage(candidate.provider,candidate.model,body.usage);
+            if (reportedUsage && reservation && (reportedUsage.inputTokens > reservation.inputTokens ||
+              reportedUsage.outputTokens > reservation.outputTokens || reportedUsage.estimatedCostUsd > reservation.usd)) {
+              return stopProviderCall('MODEL_SPENDING_BOUND_EXCEEDED','Provider usage exceeded the admitted bound; reconcile before further model work');
             }
             const content = body.choices?.[0]?.message?.content;
             if (!content || body.choices?.[0]?.finish_reason === 'length' || body.choices?.[0]?.message?.refusal) {
@@ -722,10 +768,6 @@ export class ResilientModelGateway implements ModelGateway {
               output = parsed;
               liveSuccess = true;
               breaker?.recordSuccess();
-              if (body.usage) {
-                actualInputTokens = body.usage.prompt_tokens;
-                actualOutputTokens = body.usage.completion_tokens;
-              }
             }
           } else {
             span.addEvent('provider_http_error', { provider: 'openai', model: candidate.model, status: apiRes.status });
@@ -733,12 +775,14 @@ export class ResilientModelGateway implements ModelGateway {
               breaker?.recordFailure(`HTTP_${apiRes.status}`);
               return stopProviderCall('MODEL_ACCEPTANCE_UNKNOWN', 'Provider acceptance and billing are unknown after the HTTP response; no fallback was called');
             }
+            rejectedRequests++;
             await apiRes.text().catch(() => '');
             lastError = { code: `OPENAI_HTTP_${apiRes.status}`, message: `OpenAI returned HTTP ${apiRes.status}` };
             if (attempts >= maxAttempts) break;
             continue;
           }
-        } catch {
+        } catch (error) {
+          if (error instanceof GatewaySpendingError) return stopProviderCall(error.code,error.message);
           breaker?.recordFailure('Provider outcome could not be verified');
           const code = !dispatched ? 'MODEL_INPUT_PREPARATION_FAILED'
             : httpStatus !== null && httpStatus >= 200 && httpStatus < 300 ? 'MODEL_RESPONSE_UNREADABLE' : 'MODEL_ACCEPTANCE_UNKNOWN';
@@ -872,10 +916,9 @@ export class ResilientModelGateway implements ModelGateway {
         const isLocalExecution = isLocal;
         const actualProvider = isLocalExecution ? 'local' : candidate.provider;
         const actualModel = candidate.model;
-        const inputTokens = isLocalExecution ? 0 : (actualInputTokens ?? (request as any).usage?.inputTokens ?? 520);
-        const outputTokens = isLocalExecution ? 0 : (actualOutputTokens ?? (request as any).usage?.outputTokens ?? 140);
-        const rates = this.pricing[actualProvider] || { inputPer1M: 0.1, outputPer1M: 0.4 };
-        const estimatedCostUsd = isLocalExecution ? 0 : Number(((inputTokens * rates.inputPer1M + outputTokens * rates.outputPer1M) / 1_000_000).toFixed(6));
+        const usage: StructuredModelResponse<T>['usage'] = isLocalExecution
+          ? {inputTokens:0,outputTokens:0,estimatedCostUsd:0,costBasis:'local'}
+          : {...(reportedUsage ?? {}),costBasis:reportedUsage && servedModelId ? 'usage' : 'unknown'};
         const latencyMs = Date.now() - startTime;
 
         const contentJson = JSON.stringify(output);
@@ -892,7 +935,8 @@ export class ResilientModelGateway implements ModelGateway {
           value: output as T,
           responseHash,
           invocationId: crypto.randomUUID(),
-          usage: { inputTokens, outputTokens, estimatedCostUsd },
+          usage,
+          ...(reservation ? {spending:{...reservation,providerRequestId,servedModelId}} : {}),
           latencyMs,
           attempts,
           completedAt: new Date().toISOString(),
@@ -902,7 +946,8 @@ export class ResilientModelGateway implements ModelGateway {
         span.end({
           'model.provider': actualProvider,
           'model.exactModelId': actualModel,
-          'model.cost_usd': estimatedCostUsd,
+          ...(usage.estimatedCostUsd !== undefined ? {'model.cost_usd': usage.estimatedCostUsd} : {}),
+          'model.cost_basis': usage.costBasis ?? 'unknown',
           'model.latency_ms': latencyMs,
           'model.attempts': attempts,
         });
@@ -930,6 +975,7 @@ export class ResilientModelGateway implements ModelGateway {
         message: lastError?.message || 'All model providers in cascade failed or circuits are OPEN',
         retryable: finalCode === 'MODEL_CASCADE_EXHAUSTED',
         safeAction: 'Wait for circuit breaker cooldown or check provider API quotas',
+        detail:{acceptance:rejectedRequests ? 'not_accepted' : 'not_dispatched',requiresReconciliation:false,estimatedCostUsd:0,attempts},
       },
     };
   }

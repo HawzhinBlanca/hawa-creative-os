@@ -3,6 +3,7 @@ import { apiClient } from '../api/client.js';
 import { reasonOf } from '../services/statusReport.js';
 import { pendingEvaluation, retainEvaluation, clearEvaluation, type EvaluationAction } from '../services/evaluation-action.js';
 import { EvaluationSettlementPanel } from '../components/EvaluationSettlementPanel.js';
+import { EvaluationCallCost } from '../components/EvaluationCallCost.js';
 
 interface DatasetInfo {
   id: string;
@@ -259,7 +260,7 @@ export const EvalScreen: React.FC = () => {
             <tbody>{callEvidence.calls.map(call => <tr key={call.ordinal}>
               <td>{call.ordinal}</td><td>{call.provider || 'Unknown provider'} / {call.model || 'Unknown model'}</td>
               <td>{call.status === 'pending' ? 'Unconfirmed · review required' : call.status}{call.error && <div>{call.error.code} {call.error.detail?.providerRequestId || ''}</div>}</td>
-              <td>{typeof call.estimatedCostUsd === 'number' ? `$${call.estimatedCostUsd.toFixed(4)}` : 'Unknown'}</td>
+              <td><EvaluationCallCost {...call} /></td>
             </tr>)}</tbody>
           </table></div>
           <EvaluationSettlementPanel key={`${callEvidence.runId}:${callEvidence.snapshotHash}`} detail={callEvidence} onSettled={async()=>{

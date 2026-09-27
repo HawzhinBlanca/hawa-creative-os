@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { FakeModelGateway } from '@hawa/testkit';
+import { ResilientModelGateway } from '@hawa/integrations';
 import { DurableEvaluationService, type EvaluationScope } from '../src/services/durable-evaluations.js';
 import { createApp } from '../src/app.js';
 
@@ -22,6 +23,38 @@ const newGateway=()=>{
   return {gateway,call};
 };
 describe('durable fixture evaluations under runtime RLS',()=>{
+  it('retains a native gateway overrun and its exact request bound through fresh Core replay',async()=>{
+    const s=await scope(),i=input(),gateway=new ResilientModelGateway();
+    vi.stubEnv('GEMINI_API_KEY','synthetic-gateway-key');
+    const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({modelVersion:'gemini-3.8-flash',
+      candidates:[{content:{parts:[{text:'{"decision":"route_matched","confidence":0.9}'}]}}],
+      usageMetadata:{promptTokenCount:1_000_000,candidatesTokenCount:100,totalTokenCount:1_000_100},
+    }),{status:200}));
+    try{
+      const service=new DurableEvaluationService(runtime,gateway),run=await service.run(s,i);
+      expect(run.report?.executionStatus).toBe('stopped');
+      const detail=await service.get(s,run.runId),call=detail!.calls[0];
+      expect(call.status).toBe('uncertain');expect(call.estimatedCostUsd).toBe(.750375);expect(call.costBasis).toBe('usage');
+      expect(call.spending).toMatchObject({requestSha256:createHash('sha256').update(String(fetcher.mock.calls[0]?.[1]?.body)).digest('hex'),outputTokens:2048});
+      const fresh=new DurableEvaluationService(runtime,new ResilientModelGateway());
+      expect(await fresh.run(s,i)).toEqual(run);expect(fetcher).toHaveBeenCalledTimes(1);
+      expect((await fresh.get(s,run.runId))?.calls[0]).toEqual(call);
+    }finally{vi.restoreAllMocks();vi.unstubAllEnvs();}
+  });
+  it('persists unknown usage and the original quote without inventing a final charge',async()=>{
+    const s=await scope(),i=input(),gateway=new ResilientModelGateway();
+    vi.stubEnv('GEMINI_API_KEY','synthetic-gateway-key');
+    const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(new Response(JSON.stringify({modelVersion:'gemini-3.8-flash',
+      candidates:[{content:{parts:[{text:'{"decision":"abstain","confidence":0.9}'}]}}],
+    }),{status:200})).mockResolvedValue(new Response('',{status:503}));
+    try{
+      const service=new DurableEvaluationService(runtime,gateway),run=await service.run(s,i),detail=await service.get(s,run.runId);
+      expect(detail?.calls[0]).toMatchObject({status:'completed',estimatedCostUsd:null,costBasis:'unknown',spending:{outputTokens:2048}});
+      expect(detail?.calls[0].spending?.usd).toBeGreaterThan(0);
+      expect(run.report?.executionStatus).toBe('stopped');expect(fetcher).toHaveBeenCalledTimes(2);
+      await new DurableEvaluationService(runtime,gateway).run(s,i);expect(fetcher).toHaveBeenCalledTimes(2);
+    }finally{vi.restoreAllMocks();vi.unstubAllEnvs();}
+  });
   it('saves the run, receipts and scoring projection and replays from a fresh Core without more model calls',async()=>{
     const s=await scope(),i=input(),{gateway,call}=newGateway();
     const service=new DurableEvaluationService(runtime,gateway);

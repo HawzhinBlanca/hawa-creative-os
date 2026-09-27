@@ -150,3 +150,10 @@ Users can choose Hawa Desk, Telegram, WhatsApp, or email notification routes, bu
 ## 11. Wireframes
 
 Browser-viewable wireframes are provided in `ui/wireframes.html`. They define information architecture and interactions, not final visual branding.
+
+
+Evaluation call receipts distinguish the original request cost bound and output
+cap from an estimate based on reported usage (ADR-093). Missing usage remains
+unknown, including historical receipts whose usage completeness was not recorded.
+An observed overrun stays visible beside the original bound. The displayed request
+bound does not imply that evaluation has joined the office's durable allocation.

@@ -242,3 +242,23 @@ remain unchanged, closed runs admit no new calls, and the settlement sends no mo
 request. Any subsequent evaluation is explicitly requested new billable work. See
 runbooks/EVALUATION_RECOVERY.md. Automatic provider lookup and general Studio reply
 recovery remain separate work.
+
+
+### Shared gateway request bounds (ADR-093, 2026-09-27)
+
+Each paid request must fit a quote for its exact serialized body before transport.
+The versioned policy prices the selected model, explicit native output cap and
+conservative text/image input bounds. Invalid, expired or unpriced requests stop;
+the gateway never reduces a supplied cap or chooses a cheaper model to fit. The
+default cap is 2,048 combined generated tokens, including thinking. Evaluations
+now declare that cap explicitly; their existing dollar allowances are unchanged.
+Client egress, inputs and allowance are frozen across authorized fallback attempts.
+One time budget covers the full call.
+
+Complete native usage records a conservative estimate with its cost basis; missing
+or malformed usage remains unknown. Google thought tokens and Anthropic cache
+categories count. Reported model mismatches or bound overruns require review and
+stop further calls. Evaluation runs retain the quote/hash and observed overrun,
+stop on budget refusal, and distinguish unexecuted cases. These provider estimates
+do not prove invoice amounts or office-wide durable allocation; that integration
+remains separate. Price policy expiry and sources are in ADR-093.

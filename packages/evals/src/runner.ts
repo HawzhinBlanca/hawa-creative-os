@@ -6,6 +6,9 @@ import { RetrievalService } from '@hawa/retrieval';
 import { checkKurdishTypographyClearance, validateKurdishOrthography } from '@hawa/qa';
 import type { RequestContext, ModelGateway, AppError } from '@hawa/contracts';
 
+const stopsModelBatch = (error: AppError) => error.detail?.requiresReconciliation === true ||
+  error.code.startsWith('MODEL_BUDGET_') || error.code === 'MODEL_DEADLINE_EXCEEDED';
+
 function resolveEvalPath(relPath: string): string {
   const p1 = resolve(process.cwd(), relPath);
   if (existsSync(p1)) return p1;
@@ -67,6 +70,7 @@ export class EvaluationRunner {
         inputs: [{ kind: 'text', text: c.input_text || c.message || '' }],
         systemPromptVersion: '1.0',
         responseSchema: {},
+        maxOutputTokens: 2048,
         budget: { maxCostUsd: 0.01, maxLatencyMs: 1000, maxAttempts: 1 },
         egressPolicy: { mode: 'approved_providers', allowedProviders: ['google'] },
         cachePolicy: 'disabled',
@@ -75,7 +79,7 @@ export class EvaluationRunner {
       if (!routeRes.ok) {
         failed += 1;
         if (c.critical) criticalViolations += 1;
-        if (routeRes.error.detail?.requiresReconciliation === true) {
+        if (stopsModelBatch(routeRes.error)) {
           stopReason = routeRes.error;
           break;
         }
@@ -388,6 +392,7 @@ export class EvaluationRunner {
       ],
       systemPromptVersion: '1.0',
       responseSchema: {},
+      maxOutputTokens: 2048,
       budget: { maxCostUsd: 0.05, maxLatencyMs: 5000, maxAttempts: 1 },
       egressPolicy: { mode: 'approved_providers', allowedProviders: ['google'] },
       cachePolicy: 'disabled',
@@ -401,7 +406,7 @@ export class EvaluationRunner {
         failedCases: rubricDimensions.length,
         passRate: 0,
         criticalViolations: 1,
-        ...(judgeRes.error.detail?.requiresReconciliation === true ? { execution: {
+        ...(stopsModelBatch(judgeRes.error) ? { execution: {
           status: 'stopped' as const, attemptedCases: rubricDimensions.length, unexecutedCases: 0, stopReason: judgeRes.error,
         } } : {}),
       };

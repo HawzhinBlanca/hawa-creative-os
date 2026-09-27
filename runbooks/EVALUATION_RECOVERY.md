@@ -58,3 +58,20 @@ Automatic provider lookup/invoice verification and general Studio response recov
 are not implemented by this control. Independent-host recovery and live billing remain
 separate qualification work. Synthetic administrator tests do not substitute for real
 provider evidence or a real human decision.
+
+
+## Request cost bounds (ADR-093)
+
+Calls show the original request bound/output cap separately from recorded cost.
+Unknown or malformed provider usage remains unknown even if the model returned a
+usable answer. A bound is an operating estimate, not a verified provider invoice.
+
+`MODEL_BUDGET_EXHAUSTED`, `MODEL_BUDGET_INVALID`, `MODEL_BUDGET_UNQUOTABLE` and
+`MODEL_DEADLINE_EXCEEDED` stop the batch. Inspect configuration and request size;
+pre-dispatch refusal is not an uncertain provider effect. Do not lower quality or
+raise dollar limits merely to turn a diagnostic green. The current price policy
+expires before 2026-11-22 UTC and needs a reviewed source update before further
+paid calls. `MODEL_SPENDING_BOUND_EXCEEDED` preserves an observed overrun and
+requires terminal provider evidence before more work. Existing settlement rules
+still apply. The gateway bound is not yet a shared office allocation for evaluation
+and voice; those paths remain an open release requirement.

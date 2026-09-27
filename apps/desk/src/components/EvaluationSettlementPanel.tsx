@@ -1,10 +1,11 @@
 import React, {useState} from 'react';
 import {ApiError,apiClient,type SettlementBody} from '../api/client.js';
 import {reasonOf} from '../services/statusReport.js';
+import type { EvaluationCallCostProps } from './EvaluationCallCost.js';
 
 interface Detail {
   runId:string; status:string; snapshotHash:string; canSettle:boolean;
-  calls:Array<{id:string;ordinal:number;status:string;provider?:string|null;model?:string|null;estimatedCostUsd?:number|null;error?:{code:string;detail?:{providerRequestId?:string|null}}|null}>;
+  calls:Array<EvaluationCallCostProps & {id:string;ordinal:number;status:string;provider?:string|null;model?:string|null;error?:{code:string;detail?:{providerRequestId?:string|null}}|null}>;
   settlement:null|{actorUserId:string;recordedAt:string;reason:string;calls:SettlementBody['calls']};
 }
 type Draft={conclusion:'provider_not_accepted'|'provider_finished';cost:string;reference:string;hash:string};

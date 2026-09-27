@@ -1,0 +1,72 @@
+{
+  "date": "2026-09-27",
+  "status": "GATEWAY_REQUEST_BOUNDS_CANDIDATE",
+  "requirements": [
+    "FR-059",
+    "FR-060",
+    "FR-062",
+    "FR-065",
+    "FR-079",
+    "NFR-001"
+  ],
+  "adr": "adrs/093_gateway_request_spending_bounds.md",
+  "sourceHashes": {
+    "adrs/093_gateway_request_spending_bounds.md": "3aef9b2df928b003b4707c5245593ca35e7db50d8762e06f57c0da60445f4189",
+    "packages/contracts/src/model-gateway.ts": "2f74e782876f2ff1d47386b892c64d5e20c979abd16577d57dbb605e7700f699",
+    "packages/integrations/src/gateway-spending.ts": "2947643fc5aa0422877e0ef66db3c02b41d09f12a107dd67c67ff73653121d42",
+    "packages/integrations/src/model-gateway.ts": "55a3531d514aef4c951848d7b41b1db0c0dcad6905555ead8b595ef422c9049d",
+    "packages/integrations/test/gateway-spending.test.ts": "405b9435061de805930808006f147920aece1c14ca748ccb681454c1054a0784",
+    "packages/integrations/test/model-gateway.test.ts": "9e2b9986c995109cea6b078ee362f7aca48918dfb8f33c41811d163f922a5295",
+    "packages/evals/src/runner.ts": "6bc0719688053a324a3d22d8469ab2bf7a03539288ab28465d28ff0aac144b4c",
+    "packages/evals/test/gateway-hold.test.ts": "7eab61f1b08b41f67340a90b00d0b2cfc9655c3cb2bf3df3e0478626867d3e59",
+    "apps/core/src/services/durable-evaluations.ts": "6300a34eb3d20ac76b25b52c0d9f0dffaf1b39a0614182a0bbc5369441028992",
+    "apps/core/test/durable-evaluations.test.ts": "c0205512c42fc0e817eff6b92391bba42d9aa11c8a5268353ba0b8a0f4970cd1",
+    "apps/desk/src/components/EvaluationCallCost.tsx": "27aea82c31882275f5241a89847b6aab17c04228b95597586b72fa717c00a50f",
+    "apps/desk/src/components/EvaluationSettlementPanel.tsx": "a84c8fb537b61298da8ac0a9e302e1fd47e39a87dafe570fcd8a8558ce29a1ee",
+    "apps/desk/src/screens/EvalScreen.tsx": "94cdead5d1e291bea59553d202e363b7e04234e558794e49264a2d91eb391fd3",
+    "apps/desk/test/evaluation-call-cost.test.ts": "dc93998b01e5dda991e9745cc55f500c41701e4af7511d54dfca7947d5b95610",
+    "docs/07_MODEL_REGISTRY_AND_EVALUATION.md": "924a3d44a60b005e6f528ea084cda73e68afde33ee3a6c4b4ad5e849bec5f819",
+    "docs/10_WORKFLOW_RELIABILITY.md": "0d065de15f2dfaaf8d155b835fa4264c63b0bd22e0b95b2edc32caba2c898d33",
+    "docs/17_UI_UX.md": "26a95c178dbf48f5a8ac3171f0bedcf01efbff015b1b778180b58aa82f18194c",
+    "runbooks/EVALUATION_RECOVERY.md": "19e7605535150baca2c1789f0699b7b49695fa3f570cffc4a1c600fc5431933c"
+  },
+  "evidenceDirectory": "output/acceptance/2026-09-27-gateway-spending",
+  "focused": {
+    "files": 12,
+    "passed": 150,
+    "failed": 0,
+    "skipped": 0
+  },
+  "checks": {
+    "sourceAndScriptsTypes": "passed",
+    "strictTestRoots": 484,
+    "lint": {
+      "any": 986,
+      "ceiling": 1053,
+      "existingEgressExceptions": 9
+    },
+    "deskBuild": "passed"
+  },
+  "fullRegression": {
+    "status": "pending"
+  },
+  "runtimeChanged": false,
+  "productionChanged": false,
+  "realProviderCalls": false,
+  "notQualified": [
+    "Shared durable evaluation/voice/other gateway office limits",
+    "Live provider invoice ceilings",
+    "Named Desk budget allocation and accounting repair",
+    "Typed completed-stage recovery",
+    "Fresh runtime/browser integration",
+    "Live office pilot and human quality admission",
+    "Independent-host restore",
+    "Production rollout"
+  ],
+  "failedFirstEvidence": [
+    "New gateway regression controls: 22 failed, eight passed before transport integration.",
+    "First connected run: 86 passed/two failed, because old pricing fixtures omitted Google total usage and expected obsolete provider-wide rates; corrected explicit fixtures.",
+    "Initial source compilation exposed local narrowing, required safeAction, and an unused React import; corrected without suppressions.",
+    "An exploratory image-sizing change was removed after primary documentation confirmed a sixteen-tile cap is conservative; no image parser/Studio policy change retained."
+  ]
+}

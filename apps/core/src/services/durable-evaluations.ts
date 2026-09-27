@@ -3,7 +3,7 @@ import { sql, withRlsContext, withSessionAdvisoryLock, type Database, type Kysel
 import { EvaluationRunner, fixtureEvaluationIdentity, projectFixtureScore } from '@hawa/evals';
 import { parseEvaluationSettlement, coversUnsettledEvaluationCalls, type EvaluationCallSettlement } from '@hawa/domain';
 import { lockNamedOfficeAdministrator } from './named-review-authority.js';
-import type { AppError, ModelGateway, RequestContext, Result, StructuredModelRequest, StructuredModelResponse } from '@hawa/contracts';
+import type { AppError, GatewaySpendingReservation, ModelGateway, RequestContext, Result, StructuredModelRequest, StructuredModelResponse } from '@hawa/contracts';
 
 type Report = Awaited<ReturnType<EvaluationRunner['runFullTournament']>>;
 type Settlement = { id:string; action_id:string; actor_user_id:string; request_hash:string; snapshot_hash:string; reason:string; calls:EvaluationCallSettlement[]; recorded_at:Date };
@@ -20,14 +20,25 @@ const uuid = (value: unknown): value is string => typeof value === 'string' && /
 const hold = (code: string): Outcome => ({ ok: false, error: { code, message: 'Evaluation model work is held pending reconciliation.', retryable: false,
   safeAction: 'Inspect the saved evaluation call before starting further model work.', detail: { requiresReconciliation: true, estimatedCostUsd: null } } });
 const safeWord = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_.:/-]{1,200}$/.test(value) ? value : null;
+const safeCost = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 9007199254 ? value : null;
+function safeSpending(value: unknown): GatewaySpendingReservation | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v=value as Record<string,unknown>;
+  if (!safeWord(v.policy) || typeof v.requestSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(v.requestSha256) || safeCost(v.usd) === null ||
+    typeof v.inputTokens !== 'number' || !Number.isSafeInteger(v.inputTokens) || v.inputTokens < 0 ||
+    typeof v.outputTokens !== 'number' || !Number.isSafeInteger(v.outputTokens) || v.outputTokens <= 0) return null;
+  return {policy:String(v.policy),requestSha256:v.requestSha256,usd:Number(v.usd),inputTokens:v.inputTokens,outputTokens:v.outputTokens};
+}
 function safeError(error: AppError): AppError {
   const detail = error.detail || {};
+  const spending=safeSpending(detail.spending);
   return { code: safeWord(error.code) || 'EVALUATION_MODEL_ERROR', message: 'Evaluation model call did not produce a usable result.', retryable: false,
     safeAction: detail.requiresReconciliation === true ? 'Inspect the saved evaluation call before starting further model work.' : 'Review the model configuration and evaluation result.',
-    detail: { requiresReconciliation: detail.requiresReconciliation === true, estimatedCostUsd: null,
+    detail: { requiresReconciliation: detail.requiresReconciliation === true, estimatedCostUsd: safeCost(detail.estimatedCostUsd),
+      costBasis:detail.costBasis === 'usage' ? 'usage' : 'unknown',...(spending ? {spending:{...spending}} : {}),
       provider: safeWord(detail.provider), model: safeWord(detail.model), providerRequestId: safeWord(detail.providerRequestId),
       httpStatus: typeof detail.httpStatus === 'number' ? detail.httpStatus : null, attempts: typeof detail.attempts === 'number' ? detail.attempts : null,
-      acceptance: ['unknown', 'response_received', 'not_dispatched'].includes(String(detail.acceptance)) ? detail.acceptance : null } };
+      acceptance: ['unknown', 'response_received', 'not_dispatched', 'not_accepted'].includes(String(detail.acceptance)) ? detail.acceptance : null } };
 }
 const settlementView = (row: Settlement) => ({id:row.id,actionId:row.action_id,actorUserId:row.actor_user_id,
   reason:row.reason,calls:row.calls,recordedAt:new Date(row.recorded_at).toISOString(),evidenceType:'administrator_attestation' as const});
@@ -59,7 +70,9 @@ export class DurableEvaluationService {
       requestedDeployment:call.deployment,
       provider:call.outcome?.ok ? call.outcome.value.deployment.provider : call.outcome?.error.detail?.provider ?? null,
       model:call.outcome?.ok ? call.outcome.value.deployment.exactModelId : call.outcome?.error.detail?.model ?? null,
-      estimatedCostUsd:call.outcome?.ok ? call.outcome.value.usage.estimatedCostUsd ?? null : null,
+      estimatedCostUsd:call.outcome?.ok ? call.outcome.value.usage.estimatedCostUsd ?? null : safeCost(call.outcome?.error.detail?.estimatedCostUsd),
+      costBasis:call.outcome?.ok ? call.outcome.value.usage.costBasis ?? null : call.outcome?.error.detail?.costBasis ?? null,
+      spending:call.outcome?.ok ? call.outcome.value.spending ?? null : safeSpending(call.outcome?.error.detail?.spending),
       latencyMs:call.outcome?.ok ? call.outcome.value.latencyMs : null,
       responseHash:call.outcome?.ok ? call.outcome.value.responseHash : null,
       error:call.outcome && !call.outcome.ok ? call.outcome.error : null,
@@ -172,7 +185,8 @@ export class DurableEvaluationService {
       if (response.ok) {
         const r=response.value;
         outcome={ok:true,value:{deployment:r.deployment,value:projectFixtureScore(r.value,request.role,identity),responseHash:r.responseHash,
-          invocationId:r.invocationId,usage:r.usage,latencyMs:r.latencyMs,attempts:r.attempts,completedAt:r.completedAt,...(r.traceId ? {traceId:r.traceId} : {})}};
+          invocationId:r.invocationId,usage:r.usage,latencyMs:r.latencyMs,attempts:r.attempts,completedAt:r.completedAt,
+          ...(r.spending ? {spending:r.spending} : {}),...(r.traceId ? {traceId:r.traceId} : {})}};
       } else outcome={ok:false,error:safeError(response.error)};
     } catch { outcome=hold('EVALUATION_CALL_OUTCOME_UNKNOWN'); }
     const status=!outcome.ok && outcome.error.detail?.requiresReconciliation===true ? 'uncertain' : 'completed';

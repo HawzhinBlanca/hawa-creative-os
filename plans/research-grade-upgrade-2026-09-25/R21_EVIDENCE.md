@@ -1,5 +1,28 @@
 # R21 — Unknown model acceptance is not a free retry
 
+## 2026-09-27 — Gateway request spending bounds (ADR-093, candidate)
+
+The shared gateway now quotes each exact serialized provider body at reviewed
+model-specific rates, applies native output caps and one total time allowance,
+freezes input/egress/budget across fallback, and refuses invalid/unpriced/expired
+or unaffordable work before dispatch. Missing usage stays unknown; Google thoughts,
+Anthropic cache input and Sol long-context/cache-writing bounds are accounted for.
+Reported overruns stop further work and survive evaluation ledger replay. Desk
+distinguishes request bounds from usage estimates. Existing caller dollar caps and
+model/reasoning/image selections remain unchanged; the now-documented shared
+default output cap is 2,048 and evaluation requests declare it explicitly.
+
+Regression controls first reproduced 22 failures. Connected final verification:
+12 files/150 tests passed, including actual evaluation process-kill/replay tests.
+Source/scripts, all484 strict test roots, lint986/1053 with9existing egress exceptions
+and Desk build pass. Full sealed regression is pending. No paid call, runtime image,
+browser qualification or production deployment was performed.
+
+This qualifies request bounds only. Shared evaluation/voice office admission,
+budget administration/accounting repair, completed-stage recovery, fresh candidate,
+real office/native Canva/human quality and independent-host restore remain open.
+See R21_GATEWAY_SPENDING_PROOF.json.
+
 ### Final ADR-092 source qualification, 2026-09-27
 
 Source `2ad54b1`, tested seal `32e31b4`: **3879 passed, zero failed,

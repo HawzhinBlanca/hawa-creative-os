@@ -33,7 +33,7 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
       const value = JSON.stringify({ status: 'ok' });
       if (url.includes('generativelanguage.googleapis.com')) return new Response(JSON.stringify({
         candidates: [{ content: { parts: [{ text: value }] } }],
-        usageMetadata: { promptTokenCount: 520, candidatesTokenCount: 140 },
+        modelVersion:'gemini-3.8-flash', usageMetadata: { promptTokenCount: 520, candidatesTokenCount: 140, totalTokenCount:660 },
       }), { status: 200 });
       if (url.includes('api.anthropic.com')) return new Response(JSON.stringify({
         model: 'claude-sonnet-5', content: [{ type: 'text', text: value }],
@@ -132,8 +132,8 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
         expect(res.value.attempts).toBe(1);
         expect(res.value.usage.inputTokens).toBe(520);
         expect(res.value.usage.outputTokens).toBe(140);
-        // Google pricing: (520 * 0.10 + 140 * 0.40) / 1,000,000 = (52 + 56) / 1,000,000 = $0.000108
-        expect(res.value.usage.estimatedCostUsd).toBe(0.000108);
+        // Exact Gemini 3.8 Flash standard rates: (520 * .75 + 140 * 3.75) / 1M.
+        expect(res.value.usage.estimatedCostUsd).toBe(0.000915);
         expect(res.value.traceId).toBeDefined();
       }
     });
@@ -153,8 +153,8 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
         expect(res.value.deployment.provider).toBe('anthropic');
         expect(res.value.deployment.exactModelId).toBe('claude-sonnet-5');
         expect(res.value.attempts).toBe(2);
-        // Anthropic pricing: (520 * 3.00 + 140 * 15.00) / 1,000,000 = (1560 + 2100) / 1,000,000 = $0.00366
-        expect(res.value.usage.estimatedCostUsd).toBe(0.00366);
+        // Exact Sonnet 5 standard rates: (520 * 2 + 140 * 10) / 1M.
+        expect(res.value.usage.estimatedCostUsd).toBe(0.00244);
       }
     });
 

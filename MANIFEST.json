@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T08:40:36Z",
+  "generatedAt": "2026-09-27T09:05:36Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 407,
+  "fileCount": 409,
   "files": [
     {
       "path": ".dockerignore",
@@ -533,6 +533,11 @@
       "bytes": 3364
     },
     {
+      "path": "adrs/093_gateway_request_spending_bounds.md",
+      "sha256": "3aef9b2df928b003b4707c5245593ca35e7db50d8762e06f57c0da60445f4189",
+      "bytes": 4113
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -784,8 +789,8 @@
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
-      "sha256": "3908853568d53499edb97fffb715926d9e5bfada2f456afefe194156fe06f98c",
-      "bytes": 10604
+      "sha256": "924a3d44a60b005e6f528ea084cda73e68afde33ee3a6c4b4ad5e849bec5f819",
+      "bytes": 11823
     },
     {
       "path": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
@@ -799,8 +804,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "c18b1a40e071eeb470a3411b1644909b914d026a948638373dcf1abf8ddf86b4",
-      "bytes": 18920
+      "sha256": "0d065de15f2dfaaf8d155b835fa4264c63b0bd22e0b95b2edc32caba2c898d33",
+      "bytes": 19658
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -834,8 +839,8 @@
     },
     {
       "path": "docs/17_UI_UX.md",
-      "sha256": "c5853b28fe8ebd02e803b7ae11a09e8139871544dd7416681aa3684f8dfbae6a",
-      "bytes": 4581
+      "sha256": "26a95c178dbf48f5a8ac3171f0bedcf01efbff015b1b778180b58aa82f18194c",
+      "bytes": 4987
     },
     {
       "path": "docs/18_FEEDBACK_LEARNING.md",
@@ -984,8 +989,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "a882694017dc607ffda1408992d8dd4bbe1886f9828893ce45b7a2b919bfbc1d",
-      "bytes": 73457
+      "sha256": "3d51d08bf67bb27911ed38cdbcbbf70e33423525b3cf6d489345469ee9bed71b",
+      "bytes": 74928
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1229,13 +1234,18 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "f0614c334c7acf6d0cd067a18ddb854362cb65ebceb74af5d346948e40fba124",
-      "bytes": 44414
+      "sha256": "b5e3afc458e92f869b40ce25d91e53d6098435920d335adb03ad6f245f4289b4",
+      "bytes": 45885
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json",
       "sha256": "d507467ae79801a525441c801d780062f1cb107be44ed561e119c50da9a62fd2",
       "bytes": 6282
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_SPENDING_PROOF.json",
+      "sha256": "9c2953f7cd73242161d45b7540a34fd2b28f1d7183772f165040752f5fd1c6a3",
+      "bytes": 3858
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_SPENDING_RESERVATIONS_PROOF.json",
@@ -1329,8 +1339,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "ba89277db8e459ea71a16c06d551b2e47eed9019c711e4b3e5e34db4c542f67c",
-      "bytes": 334913
+      "sha256": "53b930963125b23039d2017c33d57c4f9f3a4781c58afb4522ec7049b016bf3c",
+      "bytes": 337505
     },
     {
       "path": "plans/user-stories.csv",
@@ -1434,8 +1444,8 @@
     },
     {
       "path": "runbooks/EVALUATION_RECOVERY.md",
-      "sha256": "026c75dda0f86d33dcdcae18dc288062afa03c4b2b64b0e71cc56c66bc80c254",
-      "bytes": 4051
+      "sha256": "19e7605535150baca2c1789f0699b7b49695fa3f570cffc4a1c600fc5431933c",
+      "bytes": 5036
     },
     {
       "path": "runbooks/LIVE_PILOT.md",

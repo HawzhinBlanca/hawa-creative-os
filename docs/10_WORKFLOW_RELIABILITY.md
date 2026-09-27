@@ -309,3 +309,16 @@ ledger hold admission. Policy revisions and admitted policy/role identities are
 immutable; trusted deployment-owner configuration uses expected revisions and action
 IDs. See runbooks/STUDIO_DAILY_BUDGETS.md. Evaluation, voice and other paid paths
 remain separate work before any app-wide spending claim.
+
+
+### Shared gateway request spending (ADR-093)
+
+The shared gateway freezes caller inputs/egress/budget, quotes the exact provider
+body before dispatch, and enforces native output and cumulative elapsed-time caps.
+A positive dollar allowance is a real pre-transport limit. Unpriced or unaffordable
+work stops with a typed non-dispatched error; a reported overrun stops with its
+known estimate and original quote retained. Unknown usage does not become zero
+or a fabricated token count. Evaluation call outcomes persist this evidence and
+replay it after restart. Application-wide durable admission for evaluation/voice
+still requires integration with the Studio office ledger; a returned request quote
+alone is not a database reservation.
