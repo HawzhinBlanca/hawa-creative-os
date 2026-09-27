@@ -46,11 +46,22 @@ describe.skipIf(!ownerUrl || !appUrl)('migration 020: one inbox row per source e
     }
   }
 
+  /** The upgrade runner never reapplies 020 after 052. Restore its historical input schema.
+   * Migration 020 copies every original inbox column into its frozen duplicate archive;
+   * the later voice columns/trigger did not exist at that boundary. Transaction rollback
+   * restores today's schema, privileges and trigger after each historical replay. */
+  async function replayMigration020() {
+    await owner.query('DROP TRIGGER enforce_voice_spending ON hawa.inbox_events');
+    await owner.query(`ALTER TABLE hawa.inbox_events DROP COLUMN voice_reserved_usd,
+      DROP COLUMN voice_budget_client_id, DROP COLUMN voice_spending_policy_version`);
+    await owner.query(migration);
+  }
+
   it('applies to a database without duplicates and moves nothing', async () => {
     await rolledBack(async () => {
       await owner.query('DROP INDEX hawa.inbox_events_source_event_uidx');
       const before = Number((await owner.query('SELECT count(*) AS n FROM hawa.inbox_events')).rows[0].n);
-      await owner.query(migration);
+      await replayMigration020();
       const after = Number((await owner.query('SELECT count(*) AS n FROM hawa.inbox_events')).rows[0].n);
       const moved = Number((await owner.query('SELECT count(*) AS n FROM hawa.inbox_event_duplicates')).rows[0].n);
       const index = (await owner.query(`SELECT indexdef FROM pg_indexes WHERE schemaname = 'hawa' AND indexname = 'inbox_events_source_event_uidx'`)).rows[0]?.indexdef;
@@ -75,7 +86,7 @@ describe.skipIf(!ownerUrl || !appUrl)('migration 020: one inbox row per source e
       const message = (await owner.query(`INSERT INTO hawa.message_events (tenant_id, inbox_event_id, external_account_id, external_channel_id, external_message_id, text_original)
         VALUES ($1, $2, 'telegram', '9001', $3, 'x') RETURNING id`, [TENANT, oldest, randomUUID()])).rows[0].id;
 
-      await owner.query(migration);
+      await replayMigration020();
 
       const left = (await owner.query('SELECT id FROM hawa.inbox_events WHERE id = ANY($1::uuid[]) ORDER BY received_at, id', [[oldest, middle, newest, single, ...marks]])).rows.map((r) => r.id);
       expect(left.sort()).toEqual([newest, single, ...marks].sort());
@@ -91,7 +102,7 @@ describe.skipIf(!ownerUrl || !appUrl)('migration 020: one inbox row per source e
   it('leaves row-level security on for the migrations after it: the runner applies them all in one transaction', async () => {
     await rolledBack(async () => {
       await owner.query('DROP INDEX hawa.inbox_events_source_event_uidx');
-      await owner.query(migration);
+      await replayMigration020();
       // 021 and later run in this same transaction, and must not inherit 020's row_security = off.
       expect((await owner.query('SHOW row_security')).rows[0].row_security).toBe('on');
     });
