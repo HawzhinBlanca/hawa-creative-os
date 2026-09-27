@@ -24,3 +24,4 @@ export * from './spending-policy.js';
 
 export {auditPublicationReceipts} from './publication-audit.js';
 export * from './availability.js';
+export * from './publication-inspection.js';

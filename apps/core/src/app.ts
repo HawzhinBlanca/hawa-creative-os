@@ -116,6 +116,8 @@ import { noDatabaseStore } from './services/no-database-store.js';
 import { createOmnichannelDelivery } from './services/omnichannel-delivery.js';
 import { PostgresDriveUploadIdentityStore } from './services/drive-upload-reservation.js';
 import { PostgresSheetExpectationStore } from './services/publication-expectations.js';
+import { PublicationInspectionService, startPublicationInspectionSchedule } from './services/publication-inspections.js';
+import { registerPublicationInspectionRoutes } from './routes/publication-inspections.routes.js';
 
 // What app.ts exported before its helpers moved to core-helpers.ts; tests and scripts import them from here.
 export { canonicalJson, computeDnaHash, isValidUuid, inlineTemplateCopyMissing, qaReportSha256, secretsEqual, probeDatabase, evaluateCanvaExportQc };
@@ -971,6 +973,7 @@ export function createApp(options?: CreateAppOptions) {
   };
 
   registerSystemRoutes(routeContext);
+  registerPublicationInspectionRoutes(routeContext,Boolean(db && options?.enablePublicationInspections));
   registerCanvaRoutes(routeContext, options?.canvaOptions);
   registerDesignStudioRoutes(routeContext, options?.designStudioOptions, options?.designStudioService);
   registerStudioRecoveryRoutes(routeContext);
@@ -1007,6 +1010,11 @@ export function createApp(options?: CreateAppOptions) {
   registerSearchRoutes(routeContext);
   registerWhatsappRoutes(routeContext);
   registerTelegramWebhookRoutes(routeContext);
+
+  if (db && options?.enablePublicationInspections) {
+    const inspections = new PublicationInspectionService(db,options.publicationInspector || new GooglePublisher());
+    startPublicationInspectionSchedule(inspections,defaultTenantId,() => log.warn('[publication-inspections] Pass not confirmed; durable claims retain their state.'));
+  }
 
   // Reminders about drafts a requester has not answered: a pass every 15 minutes writes what is due to
   // the outbox, keyed by task and day, so a restart or a second process never sends one twice.

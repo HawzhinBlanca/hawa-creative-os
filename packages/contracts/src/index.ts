@@ -4,6 +4,7 @@ export * from './model-gateway.js';
 export * from './message-adapter.js';
 export * from './publisher.js';
 export * from './publication-expectation.js';
+export * from './publication-inspection.js';
 export * from './qa-engine.js';
 export * from './retrieval.js';
 export * from './asset-provider.js';

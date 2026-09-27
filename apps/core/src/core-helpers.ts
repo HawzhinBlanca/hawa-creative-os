@@ -97,6 +97,8 @@ export interface CreateAppOptions {
   enableDraftReminders?: boolean;
   /** Settle Canva imports and exports nobody is following any more (sweepStrandedOperations). */
   enableCanvaSweeper?: boolean;
+  enablePublicationInspections?: boolean;
+  publicationInspector?: import('@hawa/contracts').PublicationInspector;
   /** Reads brand guidelines PDFs sent on Telegram; defaults to the studio's model client. */
   guidelinesModel?: GuidelinesModel;
   persistDnaToDisk?: boolean;

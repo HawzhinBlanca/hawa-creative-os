@@ -62,6 +62,7 @@ GET /api/office/review-assignments
 GET /api/office/review-assignments/:assignmentId/events
 GET /api/office/review-directory
 GET /api/operations/failures
+GET /api/operations/publication-inspections
 GET /api/operations/reconciliation
 GET /api/operations/slo
 GET /api/outbox/failed
@@ -155,6 +156,7 @@ GET /api/v1/office/review-assignments
 GET /api/v1/office/review-assignments/:assignmentId/events
 GET /api/v1/office/review-directory
 GET /api/v1/operations/failures
+GET /api/v1/operations/publication-inspections
 GET /api/v1/operations/reconciliation
 GET /api/v1/operations/slo
 GET /api/v1/outbox/failed
@@ -251,6 +253,7 @@ GET /office/review-assignments
 GET /office/review-assignments/:assignmentId/events
 GET /office/review-directory
 GET /operations/failures
+GET /operations/publication-inspections
 GET /operations/reconciliation
 GET /operations/slo
 GET /outbox/failed
@@ -347,6 +350,7 @@ GET /v1/office/review-assignments
 GET /v1/office/review-assignments/:assignmentId/events
 GET /v1/office/review-directory
 GET /v1/operations/failures
+GET /v1/operations/publication-inspections
 GET /v1/operations/reconciliation
 GET /v1/operations/slo
 GET /v1/outbox/failed

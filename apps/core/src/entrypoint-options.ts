@@ -17,5 +17,6 @@ export function productionAppOptions(env: Record<string, string | undefined> = p
     enableBillingProbeSchedule: env.HAWA_BILLING_PROBE_ENABLED === 'on',
     enableDraftReminders: env.HAWA_DRAFT_REMINDERS !== 'off',
     enableCanvaSweeper: true,
+    enablePublicationInspections: env.HAWA_PUBLICATION_INSPECTIONS !== 'off',
   };
 }

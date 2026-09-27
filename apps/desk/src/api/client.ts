@@ -414,6 +414,7 @@ class HawaApiClient {
   };
 
   public readonly operations = {
+    publicationInspections: (after?:string) => this.request<unknown>('/operations/publication-inspections'+(after ? '?after='+encodeURIComponent(after) : '')),
     integrationsHealth: () => this.request<any>('/integrations/health'),
     funnelHealth: () => this.request<any>('/system/funnel/health'),
     failures: () => this.request<any>('/operations/failures'),

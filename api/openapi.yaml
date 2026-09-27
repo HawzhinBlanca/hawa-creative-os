@@ -16,6 +16,27 @@ tags:
   - name: Evaluations
   - name: Integrations
 paths:
+  /v1/operations/publication-inspections:
+    get:
+      tags: [Operations]
+      operationId: readPublicationInspections
+      summary: Read the latest independent Google observations for current publications
+      description: Current tenant and client membership filters immutable inspection evidence. Returns at most 50 current publications ordered by publication UUID. A read never dispatches provider work. Hourly checks use frozen original inputs; missing permission policy remains unverified. Results older than two hours cannot certify consistency. Cache-Control is no-store.
+      parameters:
+        - name: after
+          in: query
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Latest scoped observations and scheduler configuration
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PublicationInspectionState'}
+        '400': {description: Invalid publication cursor}
+        '401': {description: Authentication required}
+        '403': {description: Active office membership required}
+        '503': {description: Stored evidence unavailable}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/operations/reconciliation:
     get:
       tags: [Operations]
@@ -1232,6 +1253,51 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    PublicationInspectionState:
+      type: object
+      required: [schemaVersion, tenantId, userId, checkedAt, schedule, items, nextAfter]
+      properties:
+        schemaVersion: {type: integer, const: 1}
+        tenantId: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        checkedAt: {type: string, format: date-time}
+        nextAfter: {type: [string, 'null'], format: uuid}
+        schedule:
+          type: object
+          required: [enabled, intervalMinutes]
+          properties:
+            enabled: {type: boolean}
+            intervalMinutes: {type: integer, const: 60}
+        items:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            required: [publicationId, taskId, clientId, inspectionId, state, status, stale, startedAt, finishedAt, inputsSha256, resultSha256, checkedFiles, findings]
+            properties:
+              publicationId: {type: string, format: uuid}
+              taskId: {type: string, format: uuid}
+              clientId: {type: string, format: uuid}
+              inspectionId: {type: [string, 'null'], format: uuid}
+              state: {type: string, enum: [uninspected, running, finished, interrupted, superseded]}
+              status: {type: string, enum: [consistent, divergent, unverified]}
+              stale: {type: boolean}
+              startedAt: {type: [string, 'null'], format: date-time}
+              finishedAt: {type: [string, 'null'], format: date-time}
+              inputsSha256: {type: [string, 'null'], pattern: '^[a-f0-9]{64}$'}
+              resultSha256: {type: [string, 'null'], pattern: '^[a-f0-9]{64}$'}
+              checkedFiles: {type: integer, minimum: 0, maximum: 100}
+              findings:
+                type: array
+                maxItems: 2000
+                items:
+                  type: object
+                  required: [code, resource, resourceId, status]
+                  properties:
+                    code: {type: string, enum: [ORIGINAL_INPUT_UNAVAILABLE, DRIVE_ID_UNRESERVED, DRIVE_READ_UNAVAILABLE, DRIVE_METADATA_CHANGED, DRIVE_CHECKSUM_UNAVAILABLE, DRIVE_CHECKSUM_CHANGED, DRIVE_DUPLICATES_FOUND, DRIVE_DUPLICATES_UNVERIFIED, PERMISSIONS_BASELINE_UNAVAILABLE, PERMISSIONS_READ_UNAVAILABLE, PERMISSIONS_CHANGED, SHEET_EXPECTATION_UNAVAILABLE, SHEET_READ_UNAVAILABLE, SHEET_ROW_CHANGED]}
+                    resource: {type: string, enum: [publication, folder, file, sheet]}
+                    resourceId: {type: [string, 'null'], maxLength: 2000}
+                    status: {type: string, enum: [divergent, unverified]}
     ReceiptAuditAction:
       type: object
       additionalProperties: false

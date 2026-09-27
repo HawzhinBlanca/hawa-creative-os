@@ -13,6 +13,8 @@ import type {
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { GoogleSheetRow, sheetRowIdentity, type SheetRowResult } from './google-sheet-row.js';
+import { GooglePublicationInspector } from './google-publication-inspector.js';
+import type { PublicationInspectionInput, PublicationExternalObservation } from '@hawa/contracts';
 
 export interface GooglePublisherConfig {
   serviceAccountEmail?: string;
@@ -815,6 +817,13 @@ export class GooglePublisher implements Publisher {
   private sheetEvidence(result: SheetRowResult) {
     return { metadataId: result.metadataId, expectedValues: result.expectedValues,
       expectedRowHash: result.expectedRowHash, observedRowHash: result.observedRowHash };
+  }
+
+  async inspectPublication(ctx: RequestContext, input: PublicationInspectionInput): Promise<PublicationExternalObservation> {
+    // Scope is checked before credentials or network access.
+    if (ctx.tenantId !== input.tenantId) throw new Error('PUBLICATION_INSPECTION_SCOPE_CONFLICT');
+    return new GooglePublicationInspector({ driveBaseUrl: this.driveApiBaseUrl, sheetsBaseUrl: this.sheetsApiBaseUrl,
+      token: await this.getAccessToken(), deadline: ctx.deadline }).inspect(input);
   }
 
   private async syncSheetRow(ctx: RequestContext, request: PublishRequest, token: string | null | undefined, driveFiles: DriveFileReceipt[]): Promise<SheetRowResult> {

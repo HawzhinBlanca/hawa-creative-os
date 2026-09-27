@@ -1,5 +1,22 @@
 # Completion checkpoint
 
+## 2026-09-27 — Scheduled external publication inspections (ADR-107)
+
+Implemented durable hourly original-input snapshots, bounded read-only Drive/Sheets
+observations, pure comparisons and current-client-scoped Operations findings. First
+DB run 6 failed/1 passed exposed timestamp precision loss; corrected PostgreSQL-only
+comparison. Final focused 72 passed/0 failed/1 opt-in skipped; separate real SIGKILL
+recovery 8 passed; 513 strict roots, build/lint/security pass. Full regression and
+matching deployed candidate/browser qualification follow. See
+R09_PUBLICATION_INSPECTIONS_PROOF.json and runbooks/GOOGLE_PUBLICATION_CHECKS.md.
+
+User priority correction: reach a usable supervised pilot; avoid open-ended hardening.
+Production remains unchanged. Reviewer Google login is unconfigured in both running
+apps; domain/reviewer input requested. Approved permission policy, historical migration,
+full reporting, remaining result recovery, real pilot/human quality and independent-host
+recovery/monitoring remain open. No new ETA or whole-app completion claim.
+
+
 ## 2026-09-27 — Immutable publication expectations (ADR-106), local checkpoint
 
 Migration 059 freezes original publication inputs before provider effects and exact

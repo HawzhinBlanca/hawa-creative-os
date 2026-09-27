@@ -198,6 +198,14 @@ Drive and Sheets cannot share one transaction. Use a saga/reconciliation model:
 
 ## 8. Permissions
 
+ADR-107 adds bounded hourly independent inspection of current publications, with
+immutable PostgreSQL snapshots, leases and observations. Operations exposes current
+client-scoped findings and freshness. The saved original folder/file/row identities
+are authoritative; new reads never rewrite completion. Changed permissions are
+flagged against prior observations, while the absence of an approved access baseline
+remains unverified. See `runbooks/GOOGLE_PUBLICATION_CHECKS.md`. Full reporting
+columns, approved permission baselines and supervised historical migration remain open.
+
 Use a dedicated Google identity/service account with access only to required Shared Drives/folders and Sheets. Avoid domain-wide delegation unless a documented use case proves it necessary.
 
 The app must not inherit broad employee Drive access.

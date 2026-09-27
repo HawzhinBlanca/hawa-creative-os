@@ -1,5 +1,6 @@
 import { AvailabilityPanel } from '../components/AvailabilityPanel.js';
 import { ReceiptAuditPanel } from '../components/ReceiptAuditPanel.js';
+import { PublicationInspectionPanel } from '../components/PublicationInspectionPanel.js';
 import { SpendingPolicyPanel } from '../components/SpendingPolicyPanel.js';
 import React, { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../api/client.js';
@@ -169,6 +170,7 @@ export const OpsScreen: React.FC = () => {
       <AvailabilityPanel refreshKey={auditRefresh} />
 
       <ReceiptAuditPanel refreshKey={auditRefresh} />
+      <PublicationInspectionPanel refreshKey={auditRefresh} />
 
       <div className="ops" style={{ marginTop: 16 }}>
         <div className="panel" style={{ padding: 16 }}>
