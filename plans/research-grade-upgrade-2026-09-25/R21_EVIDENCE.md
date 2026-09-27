@@ -230,3 +230,25 @@ Release/candidate qualification is pending at this source checkpoint. See
 `R21_EVALUATION_SETTLEMENT_PROOF.json` and `runbooks/EVALUATION_RECOVERY.md`. This is
 synthetic staff evidence, not live provider reconciliation, automatic invoice
 verification, general Studio response replay or real human approval. R21 remains in progress.
+
+### Final settlement qualification — source69039f9, candidate571b522
+
+Final sealed source passes **472 files / 3,756 tests / zero failures / 59 skipped**.
+The packaged candidate passes **50 deployed checks** (36 workflow +14 settlement),
+including one Core restart after settlement, identical receipt replay, preserved
+original uncertainty/report, shared-key refusal, and two total fake provider calls:
+one original call plus one explicitly requested new evaluation. Settlement and its
+replay send zero requests. Candidate source changes are empty and image identities
+match571b522. No production changes or live provider/staff evidence.
+
+The first full run retained **3,753 passed/1 failed/59 skipped**: the new route's four
+prefixes were missing from its inventory fixture. After correction3,754 passed. Two
+additional red-before Desk tests then exposed discarded action IDs after busy/auth
+responses. The final guard retains frozen evidence and the original key while an
+earlier outcome is unknown; 34 focused tests and the final3,756-test suite pass.
+Desk/source/test/script/harness builds and checks pass; blueprint931/0/0 and release
+manifest verification pass. Failed runs remain in the proof's hashed artifact set.
+
+This qualifies staffed closure of fixture diagnostics. It does not settle general
+Studio calls, automatically verify invoices, establish a real Google sign-in or human
+approval, or complete independent recovery/model-quality/live-pilot gates.

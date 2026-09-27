@@ -3,6 +3,21 @@
 Updated 2026-09-27; retain the faster, more economical completion method.
 Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PLAN.md` and `WORK_ITEMS.csv`.
 
+## Latest checkpoint — 2026-09-27, named evaluation settlement
+
+Source69039f9 / sealed candidate571b522 implements ADR-085/migration048. Named staff
+can close held fixture evaluations with exact snapshot, terminal provider evidence
+and known reported costs. Original unknown outcomes and stopped reports remain
+unchanged; settlement/replay sends no model request. Desk retains pending keys through
+response loss, busy and authority errors. Final3756/0/59 full tests and50/50 deployed
+checks pass. Failed-first evidence is retained in R21_EVALUATION_SETTLEMENT_PROOF.json.
+
+Production is unchanged. Next engineering: general Studio provider reconciliation
+and response recovery. Continue the named live pilot, native save/reopen and human
+multilingual acceptance, independent/off-host recovery, and held-out model/retrieval
+measurements. Existing Workspace configuration and native-edit approval questions
+remain unresolved; do not invent their answers. R21 and whole-app admission remain open.
+
 ## Working method
 
 - Finish connected user journeys with their failure recovery and acceptance evidence. Keep the existing architecture.
