@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-27T03:33:54+03:00",
+  "generatedAt": "2026-09-27T04:04:50+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "4686e90a208c3442751cfed347a4e1fafdbc82ea",
+    "commit": "e09438a4361f64b7559c8304498bc16ede79751a",
     "treeClean": true,
-    "commitTimestamp": "2026-09-27T03:33:54+03:00",
+    "commitTimestamp": "2026-09-27T04:04:50+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
@@ -48,7 +48,7 @@
       "service": "desk",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/desk/src/App.tsx": "102e76394a7bbf617920e11fcb233a7f3362ca672631597a54428c89bbc10500",
+        "apps/desk/src/App.tsx": "b8d2fcead711a943d750665904a57f66b8c8c07ed05f39e73a56a6c5c5124c50",
         "apps/desk/src/main.tsx": "ee234aa0846b3baa9aed56ba633e50ff95f0d039343d052a8a7d7860feffa8c8"
       }
     },
@@ -73,7 +73,7 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "2f8be25c69146baccf00b4b63d7845cfa9c0ccf6cd1683ede8bc8408616ae6d3",
+      "apps/core/src/services/canva-design-planner.ts": "266cc7b18dedad389f7d87db73a156d6e152ecb2cd47d752ae8898fadc732ff4",
       "packages/creative/src/studio/layout-generator-v3.ts": "c0a14f8490fbebf171fd3c820acecf53f45255926e4ae9f0e55376bb3f469164",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "950d7d5f1701c9a80871f74843e59115b3440c73bade98b6d80a755f12d36889",
       "packages/creative/src/studio/box-critique-v3.ts": "34c2d9b4f8d194ee0e0d8cec0229c3d1a12fbf07a8a5be94c94461f2456672c4"
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "b255c88e5f8711ae2c81bdb2339a40e7eeb99c58004efd8c7563f442999cb179"
+  "sha256": "149974b93a33f73826670d97df2a68d812d3fffb02a787364109d469db0e7619"
 }
