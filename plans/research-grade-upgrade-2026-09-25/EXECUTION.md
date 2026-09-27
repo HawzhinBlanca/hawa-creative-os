@@ -12,7 +12,24 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-27 — durable controls and saved Studio recovery)
+## Current result (2026-09-27 — isolated encrypted database recovery)
+
+ADR-079 adds an opt-in pinned pgBackRest image/configuration and reproducible offline
+PITR drill. Final physical restore includes a post-backup task, excludes a later task,
+finishes recovery, matches **86 tables / 133 RLS policies**, and preserves tenant
+isolation. Natural WAL archive lag **59.573s**; restore/verification **6.632s**.
+Wrong-key and missing-WAL controls pass; temporary resources are removed. **43 backup
+Python tests pass** and Compose renders correctly. See `R10_PITR_PROOF.json` and
+`R10_EVIDENCE.md` for failures, exact hashes and limits. Production is unchanged.
+
+The full app regression below remains historical: no application source changed
+and it was not rerun for this infrastructure slice. This same-host synthetic result
+does not qualify production RPO/RTO or full-system recovery. Next: pending Restate
+journal replay with matched database/files and side-effect reconciliation; clean-host
+off-host recovery; real native Canva/multilingual human acceptance; supervised live
+delivery; retrieval relevance/latency and model quality/cost measurements.
+
+## Prior result (2026-09-27 — durable controls and saved Studio recovery)
 
 Source e09438a, browser corrections e1468e4, test correction
 fbb44d5, tested seal dd62672: **34/34 deployed checks** and

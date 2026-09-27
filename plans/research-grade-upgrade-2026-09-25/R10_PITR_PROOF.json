@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "requirements": [
+    "FR-070",
+    "NFR-003",
+    "NFR-013",
+    "NFR-020"
+  ],
+  "decision": "ADR-079",
+  "scope": "Same-host offline synthetic PostgreSQL PITR; R10 remains in progress",
+  "qualification": {
+    "schemaVersion": 1,
+    "status": "isolated_pitr_verified",
+    "startedAt": "2026-09-27T01:37:58.112667+00:00",
+    "finishedAt": "2026-09-27T01:39:17.812734+00:00",
+    "imageId": "sha256:3baa470dfaf100348c255d0123334e927c5057c0a7356c588ff80d6c1ca8a123",
+    "baseImageId": "sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+    "postgresVersion": "postgres (PostgreSQL) 17.11 (Debian 17.11-1.pgdg12+2)",
+    "pgBackRestVersion": "pgBackRest 2.59.1",
+    "sourceKind": "synthetic hawa-chaos logical fixture",
+    "backupKind": "encrypted physical base backup plus continuously archived WAL",
+    "cipher": "aes-256-cbc",
+    "backupLabel": "20260927-013805F",
+    "backupStopEpoch": 1790473087,
+    "backupCompletedBeforeMarker": true,
+    "targetTime": "2026-09-27 01:38:08.144882+00",
+    "includedTaskId": "931ad759-ec78-47b6-863e-c0409c6ee958",
+    "excludedLaterTaskId": "e67e9652-b459-426a-879a-e84dacdc3694",
+    "markerWal": "000000010000000000000006",
+    "archiveTimeoutSeconds": 60,
+    "forcedWalSwitchAfterMarker": false,
+    "observedArchiveLagSeconds": 59.573,
+    "restoreSeconds": 6.632,
+    "tableCount": 86,
+    "policyCount": 133,
+    "targetDataSha256": "8f122fa4b82133f76cadb91341f08168e0555d862250291385620b7b6507b13d",
+    "allTableRowsAndPolicyDefinitionsMatch": true,
+    "runtimeRoleRowsVisible": 7,
+    "crossTenantRowsVisible": 0,
+    "promotedAtTarget": true,
+    "wrongKeyRejected": true,
+    "missingWalTargetRejected": true,
+    "network": "none",
+    "publishedPorts": false,
+    "separateHostProved": false,
+    "offHostDurabilityProved": false,
+    "restateReplayProved": false,
+    "productionChanged": false,
+    "scriptSha256": "b4c91fbf3d7ea68b01c6fefae5bfe92a989355a7f1e4df49cdbe097a5de073e5",
+    "cleanupVerified": true
+  },
+  "composeRender": {
+    "renderedOnly": true,
+    "productionChanged": false,
+    "image": "sha256:3baa470dfaf100348c255d0123334e927c5057c0a7356c588ff80d6c1ca8a123",
+    "archiveMode": true,
+    "archiveTimeoutSeconds": 60,
+    "keyConfigurationReadOnly": true,
+    "existingDatabaseAndInitMountsPreserved": true
+  },
+  "backupRegression": {
+    "passed": 43,
+    "failed": 0,
+    "command": "python3 -m unittest discover -s infra/backup -p 'test_*.py' -v",
+    "logSha256": "4ad45999fa9194c1ef950eae8469cddcbbc42bd734cd3fd02de037c08a77cd99"
+  },
+  "independentCleanupCheck": {
+    "containers": 0,
+    "volumes": 0,
+    "label": "hawa.pitr-drill=14a84f10ed984885"
+  },
+  "earlierAttempts": [
+    {
+      "attempt": 1,
+      "result": "failed",
+      "detail": "Correct-key restore exited 75; stdout diagnostics were omitted. Original root cause unconfirmed. Later runs explicitly select the observed backup and use a target beyond whole-second backup-stop precision."
+    },
+    {
+      "attempts": [
+        2,
+        3
+      ],
+      "result": "failed",
+      "detail": "Wrong-key negative control refused qualification because only an outer invalid-backup error was visible; structured WARN diagnostics were being dropped."
+    },
+    {
+      "attempt": 4,
+      "result": "failed",
+      "detail": "Full diagnostics exposed a FormatError while reading encrypted backup.info with the wrong key. The negative control now follows a successful correct-key restore and requires CryptoError/FormatError on that same metadata; unrelated failures are refused and parser payloads are suppressed."
+    },
+    {
+      "attempt": 5,
+      "result": "passed_before_promotion_guard",
+      "observedArchiveLagSeconds": 60.442,
+      "restoreSeconds": 6.733,
+      "scriptSha256": "23dae324bde57ffa0c02f15c395d200d92914eb4360ec580ddd27fd7ffcd961a"
+    },
+    {
+      "scope": "initial_python_regression",
+      "result": "39 passed, 1 environment error",
+      "detail": "Sandbox denied the existing loopback HTTP test server. Rerun with local socket permission passed all 40 then-expanded tests; final suite passes 43."
+    }
+  ],
+  "historicalApplicationRegression": {
+    "source": "R26_TASK_CONTROL_PROOF.json",
+    "passedTests": 3634,
+    "skippedTests": 59,
+    "rerunForThisInfraOnlyChange": false
+  },
+  "sourceSha256": {
+    "adrs/079_postgres_continuous_recovery.md": "a52b0ef252ca9cd2bb1ab5fb4642df0a256140942dfe7dfbbaa232d7f9b28ceb",
+    "infra/backup/Dockerfile.postgres-pgbackrest": "cf70ed30a55f9a5444138a7cc6470edf3378618a6ed328808b37dd3a78051cdf",
+    "infra/backup/docker-compose.pgbackrest.yml": "e2c6c8243bad8d293b6f984c08a58e83cdebda8161cc59478518b831fbd9f8b2",
+    "infra/backup/pgbackrest.conf.example": "7de1b1a5f1f3dbfe513d7fac8d848bc162611e958796da7e2d685056bff33c57",
+    "infra/backup/drill_postgres_pitr.py": "b4c91fbf3d7ea68b01c6fefae5bfe92a989355a7f1e4df49cdbe097a5de073e5",
+    "infra/backup/test_postgres_pitr.py": "84f7f845a3d1b1011d71187ef116efbd8acaaa464ce222e808f14078da5539f3",
+    "runbooks/10_backup_restore.md": "fdedfde9f2c63321295c9ca08c1a0e011b67014cefa774493bcd792099dd2aef"
+  },
+  "remaining": [
+    "separate-host and off-host recovery",
+    "pending Restate journal replay",
+    "coordinated database/blob/Restate capture-gap reconciliation",
+    "external side-effect deduplication after restore",
+    "production activation and measured production RPO/RTO"
+  ]
+}

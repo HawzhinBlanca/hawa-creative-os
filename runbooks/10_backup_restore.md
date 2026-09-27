@@ -25,6 +25,67 @@
 
 A backup chain that has not been restored is unproven.
 
+## Continuous PostgreSQL recovery candidate (ADR-079, 2026-09-27)
+
+The current nightly logical dump does not supply continuous WAL or prove the
+15-minute database RPO. The pgBackRest candidate adds encrypted physical backups
+and synchronous WAL archival using the current PostgreSQL 17.11/pgvector base and
+pgBackRest 2.59.1. Production activation is pending; this section does not change
+the existing schedule, image, flags or repository.
+
+Build the pinned image explicitly:
+
+```bash
+docker build --pull=false -f infra/backup/Dockerfile.postgres-pgbackrest \
+  -t hawa-postgres-pgbackrest:17.11-2.59.1 .
+```
+
+Record its immutable image ID. With the synthetic `hawa-chaos` candidate available,
+run `python3 infra/backup/drill_postgres_pitr.py --image-id <sha256:image-id> --output <receipt.json>`.
+The drill accepts only that candidate as an input fixture. It creates offline
+database volumes, copies the synthetic schema/data, and takes an encrypted physical
+backup. It commits a task after the base backup and waits for the actual 60-second
+archive timeout, without forcing a WAL switch. Restoration must include that task
+and exclude a later task at the chosen timestamp. The drill selects the observed
+backup explicitly and waits for recovery to finish and the server to promote;
+a readable hot standby alone is insufficient. Every application table's rows
+and RLS policy definitions are compared, and the runtime role must see its tenant
+while seeing zero rows for another tenant. Wrong-key and missing-WAL checks must
+fail for their intended reasons. A wrong key must fail to decrypt or parse the
+same backup metadata that the correct key just restored; an unrelated restore
+error cannot satisfy that check. Privately labeled resources are removed on exit;
+cleanup failure makes the drill fail. SIGKILL or a Docker outage may require cleanup
+by the printed private run label.
+
+This proves only the measured fixture on the same Docker host. Its archive lag and
+restore duration are observations, not production RPO/RTO guarantees. It does not
+restore blobs, pending Restate journals or external effects and starts no worker.
+
+### Production activation prerequisites
+
+- Qualify the immutable image, existing PostgreSQL data compatibility, rollback and
+  backup first. Do not combine this with a PostgreSQL major upgrade.
+- Place `pgbackrest.conf.example` as `pgbackrest.conf` in a private config directory.
+  Match `pg1-path`, `pg1-user` and `pg1-database` to the deployment.
+  Supply the repository key separately in `conf.d/repository-key.conf`, under
+  `[global]` as `repo1-cipher-pass`. Restrict it to the PostgreSQL user/group. Keep
+  the key outside Git, image layers, shell arguments and Compose environment.
+- Supply `HAWA_PGBACKREST_IMAGE`, `HAWA_PGBACKREST_CONFIG_DIR` and
+  `HAWA_PGBACKREST_REPOSITORY` before merging the optional
+  `infra/backup/docker-compose.pgbackrest.yml` override with the production file.
+  A local path alone does not establish off-host protection; verify the actual
+  repository destination and recover the key independently on the recovery host.
+- After an approved maintenance activation, run `pgbackrest --stanza=hawa
+  stanza-create`, `check`, and `--type=full backup` as the container's PostgreSQL OS
+  user. Schedule backups explicitly and observe encrypted WAL arrival. Confirm
+  `pg_stat_archiver`, failed archive attempts, unarchived WAL growth, repository
+  capacity and actual backup ages. An archive timeout setting is not proof that
+  WAL reached durable off-host storage.
+- Restore a selected timestamp on a clean machine with the matched file and
+  Restate recovery set. Reconcile their different capture times before any worker
+  or delivery process can resume. Preserve existing logical dumps and file packs
+  during qualification; a database-only PITR pass cannot admit the whole app.
+
 ## The office's backups today (updated 2026-09-24, ADR-035)
 
 What actually runs on the office Mac, and how to restore from it. The sections above describe the

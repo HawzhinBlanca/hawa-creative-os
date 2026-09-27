@@ -1,0 +1,19 @@
+# Put this in the private configuration directory; give only postgres read access.
+# A separate conf.d/repository-key.conf must supply repo1-cipher-pass under [global].
+# No key belongs in this example, Compose environment, image, or command line.
+[hawa]
+pg1-path=/var/lib/postgresql/data/pgdata
+pg1-user=hawa_owner
+pg1-database=hawa
+
+[global]
+repo1-path=/var/lib/pgbackrest
+repo1-cipher-type=aes-256-cbc
+repo1-retention-full=14
+repo1-retention-full-type=count
+archive-async=n
+archive-timeout=60
+start-fast=y
+process-max=2
+log-level-console=info
+log-level-file=off

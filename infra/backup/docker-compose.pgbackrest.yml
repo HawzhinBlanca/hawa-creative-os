@@ -1,0 +1,22 @@
+# Opt-in only. Merge after infra/docker/docker-compose.prod.yml; production is unchanged.
+# Supply the qualified immutable image ID, a private config directory and repository mount.
+services:
+  postgres:
+    image: ${HAWA_PGBACKREST_IMAGE:?Set the qualified immutable pgBackRest image ID}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-100}
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_timeout=60s
+      - -c
+      - archive_command=pgbackrest --stanza=hawa archive-push %p
+    volumes:
+      - ${HAWA_PGBACKREST_CONFIG_DIR:?Set the private config directory}:/etc/pgbackrest:ro
+      - ${HAWA_PGBACKREST_REPOSITORY:?Set the qualified encrypted repository path}:/var/lib/pgbackrest

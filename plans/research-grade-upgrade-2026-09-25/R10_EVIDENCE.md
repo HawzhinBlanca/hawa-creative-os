@@ -96,3 +96,41 @@ The reproducible `infra/backup/drill_restate_restore.py` created an offline synt
 Initial fixture runs failed: the HTTP/1.1 worker required `use_http_11: true` during registration, and Restate 1.7.10 exposes its state as table `state`, not `sys_state`. The corrected fixture passed; failed runs cleaned their temporary resources. A direct baseline counterexample also showed that the previous tar inspector accepted two aliases of the same normalized journal path; the new inspector refused them. All seven restore-specific tests passed after correcting the negative fixture's file count so it tests the unsafe path itself, rather than an unrelated count mismatch.
 
 **Limits:** this is restored synthetic state on the same host. It does not prove a clean-host recovery, a pending invocation's journal replay, PostgreSQL/Restate capture-gap reconciliation, external send/Drive/Sheet idempotency after restore, off-host durability, or measured production RPO/RTO. The recorded Compose hash is not a full effective-configuration snapshot. R10 remains **in progress**; production build and flags remain unchanged.
+
+
+## 2026-09-27 — Encrypted PostgreSQL PITR (ADR-079)
+
+Nightly logical dumps did not provide continuous WAL or prove the 15-minute database
+RPO. The optional candidate now uses the cached PostgreSQL 17.11/pgvector base plus
+pgBackRest 2.59.1, both checked during image build and recorded by immutable image ID.
+A private file supplies the repository key; synchronous WAL archival uses a 60-second
+archive timeout. The production Compose file and running services are unchanged.
+
+`R10_PITR_PROOF.json` records a real encrypted physical backup and PITR into fresh,
+offline volumes. A task committed after the base backup is present, a later task is
+absent, **86 application tables and 133 RLS policies match**, and the server has
+finished recovery and promoted. The runtime role sees 7 permitted tasks and 0 across
+tenants. Natural WAL archival took **59.573s**; restore plus application/RLS
+verification took **6.632s**. Wrong-key metadata refusal and missing-WAL target
+refusal pass; a separate label query confirms zero leftover containers or volumes.
+These timings describe this synthetic same-host fixture, not production RPO/RTO.
+
+All **43 Python backup/retention/restore tests pass**. The optional Compose overlay
+renders with synthetic values and preserves existing database/init mounts. It
+adds no runtime application change; the prior 3,634-pass / 59-skip app regression
+is historical and was not rerun for this infrastructure slice. Source seal and
+final package checks follow in the checkpoint below.
+
+Failed-first evidence is retained in the receipt. The first restore returned 75
+with hidden stdout; its original cause is unconfirmed. Subsequent strict wrong-key
+controls exposed pgBackRest's metadata FormatError. Success with the correct key
+now precedes that control, and unrelated restore errors cannot qualify it. Parser
+payloads are suppressed. Readiness waits for promotion because a hot standby can
+answer SQL before reaching its target. The initial Python run also had one local
+socket permission error; the permitted rerun passed.
+
+**R10 remains in progress.** Separate-machine/off-host recovery, pending Restate
+journal replay, database/file/workflow capture-gap reconciliation, restored external
+effect deduplication and production activation remain unproved. Production is
+unchanged. Real Canva/human review, supervised delivery and retrieval/model-quality
+measurements remain separate app completion gates.
