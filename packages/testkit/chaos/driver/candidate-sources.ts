@@ -217,12 +217,17 @@ export async function candidateSources(chat: string, events: string[], suiteStar
 
   const blankClient=randomUUID(),tenantId='00000000-0000-4000-a000-000000000001';
   const blankDna={tenantId,clientId:blankClient,name:'Synthetic blank-design client',code:blankClient,version:1,status:'active',
-    fonts:[{family:'Verdana',license:'Synthetic rehearsal fixture',supportedLocales:['en']}],
+    defaultLocale:'en',defaultDirection:'ltr',updatedAt:new Date().toISOString(),colors:[],assets:[],
+    guidelines:{voiceAndTone:'Synthetic fixture',prohibitedPhrases:[],requiredDisclaimers:[],layoutRules:[]},
+    fonts:[{family:'Verdana',style:'Regular',weight:400,role:'body',license:'Synthetic rehearsal fixture',supportedLocales:['en']}],
     destinations:{productionFolderId:'chaos-blank-production',spreadsheetId:'chaos-blank-tracker',sheetId:0},
     approvalPolicy:{requiredRoles:['art_director'],allowAutoApproval:false,autoApprovalEligibleTemplates:[]}};
   await query(sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${blankClient}::uuid,${tenantId}::uuid,${blankClient},'Synthetic blank-design client')`);
   await query(sql`INSERT INTO hawa.client_dna_versions(tenant_id,client_id,version,status,dna,content_hash,created_by)
     VALUES(${tenantId}::uuid,${blankClient}::uuid,1,'active',${JSON.stringify(blankDna)}::jsonb,${computeDnaHash(blankDna)},'00000000-0000-4000-b000-000000000001'::uuid)`);
+  const directory=await (await get('/clients')).json() as Array<{clientId:string;name:string;code:string;defaultLocale:string;status:string}>;
+  check('synthetic blank client remains usable in the Desk directory',directory.some(client=>client.clientId===blankClient &&
+    client.name===blankDna.name && client.code===blankDna.code && client.defaultLocale==='en' && client.status==='active'),`client ${blankClient}`);
   const blank=await action('/tasks',{...intake,clientId:blankClient,title:'Candidate blank native design',copyEn:'Exact copy 123.45',copyCkb:'',
     description:'Exact copy 123.45'},randomUUID(),session.token);
   const created=await action(`/tasks/${blank.id}/canva/design`,{width:640,height:640},randomUUID(),session.token);

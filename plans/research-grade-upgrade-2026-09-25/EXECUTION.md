@@ -32,6 +32,12 @@ and security scan passed (the scanner first rejected a literal synthetic test to
 it now uses generated fixture tokens). Fresh deployed rehearsal, browser inspection, full sealed regression and
 release qualification are still pending for these changes. Production unchanged.
 
+The first source-196daf2 candidate passed 28/28 transport/workflow checks. Browser
+inspection then found its new synthetic Client DNA omitted defaultLocale, so Desk
+correctly refused the malformed directory. The fixture now supplies a complete
+listing identity and the rehearsal asserts directory usability. Runtime validation
+is unchanged. Repeat the fresh rehearsal and browser before final qualification.
+
 ## Prior result (2026-09-27 — source-backed manual review)
 
 Implementation `b78810a`, test correction `177c2c3`, tested seal `619827c`:
