@@ -246,6 +246,30 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !toolsBuilt)('nightly backu
     expect(fs.readdirSync(dirs.snapshots).filter(n => n.endsWith('.dump')).sort()).toEqual(before);
   }, 180_000);
 
+  it('a checksum command failure cannot publish a recovery set from two empty digests', async () => {
+    const bin=path.join(t,'fake-hash-bin');fs.mkdirSync(bin);
+    const flag=path.join(t,'hash-failure-started');
+    const real=spawnSync('bash',['-c','command -v shasum'],{encoding:'utf8'}).stdout.trim();
+    expect(real).toBeTruthy();
+    fs.writeFileSync(path.join(bin,'shasum'), [
+      '#!/usr/bin/env python3','import os,sys','from pathlib import Path',
+      "flag=Path(os.environ['HAWA_TEST_HASH_FAILURE'])",
+      "if flag.exists() or (len(sys.argv)>1 and Path(sys.argv[-1]).name=='manifest'):",
+      ' flag.touch();sys.exit(2)',
+      "real=os.environ['HAWA_TEST_REAL_SHASUM'];os.execv(real,[real,*sys.argv[1:]])",'',
+    ].join('\n'),{mode:0o700});
+    const before=fs.readdirSync(dirs.archive).sort();
+    const previous=lastOk();
+    const result=await run('infra/backup/nightly_backup.sh',[],{
+      PATH:`${bin}:${process.env.PATH}`,HAWA_TEST_HASH_FAILURE:flag,HAWA_TEST_REAL_SHASUM:real,
+    });
+    expect(result.code).toBe(1);
+    expect(result.out).toContain('could not checksum the archive source');
+    expect(lastOk()).toBe(previous);
+    expect(fs.readdirSync(dirs.archive).sort()).toEqual(before);
+    expect(backupStatus().status).toBe(1);
+  },180_000);
+
   it('fails the night when the dump references a file that is not on disk', async () => {
     const lost = await store.put(png(), 'image/png');
     await reference(lost.sha256);

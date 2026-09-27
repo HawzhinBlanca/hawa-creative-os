@@ -199,11 +199,13 @@ fi
 # is the recovery-set discovery marker; .part copies must never be selected by restore.
 mkdir -p "$ARCHIVE_DEST" && chmod 700 "$ARCHIVE_DEST" || fail "could not prepare the local archive"
 archive_publish() {
-  local source="$1" target="$2"
+  local source="$1" target="$2" expected actual
   [[ ! -e "$target" && ! -L "$target" ]] || fail "an archive member with this timestamp already exists"
   ARCHIVE_PART="$(mktemp "$ARCHIVE_DEST/.publish_${STAMP}.XXXXXX")" || fail "could not stage an archive member"
   cat "$source" > "$ARCHIVE_PART" || fail "could not copy an archive member"
-  [[ "$(shasum -a 256 "$source" | cut -d' ' -f1)" == "$(shasum -a 256 "$ARCHIVE_PART" | cut -d' ' -f1)" ]] \
+  expected="$(trap - ERR; shasum -a 256 "$source" | cut -d' ' -f1)" || fail "could not checksum the archive source"
+  actual="$(trap - ERR; shasum -a 256 "$ARCHIVE_PART" | cut -d' ' -f1)" || fail "could not checksum the staged archive copy"
+  [[ "$expected" =~ ^[0-9a-f]{64}$ && "$actual" == "$expected" ]] \
     || fail "archive copy checksum differs from its source"
   # Same-directory rename publishes atomically under the exclusive archive lock.
   mv "$ARCHIVE_PART" "$target" || fail "could not publish an archive member"

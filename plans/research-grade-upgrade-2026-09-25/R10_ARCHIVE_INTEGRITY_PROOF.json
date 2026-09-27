@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-09-27T02:36:51.372444+00:00",
+  "verifiedAt": "2026-09-27T02:42:57.863100+00:00",
   "decision": "ADR-081",
   "requirements": [
     "FR-070",
@@ -14,7 +14,7 @@
     "backupPythonPassed": 71,
     "backupPythonFailed": 0,
     "databaseLifecycleFilesPassed": 1,
-    "databaseLifecycleTestsPassed": 15,
+    "databaseLifecycleTestsPassed": 16,
     "databaseLifecycleTestsFailed": 0,
     "testsSkipped": 0,
     "testTypecheck": "passed",
@@ -32,7 +32,8 @@
     "Nested retention reuses the verified inherited descriptor; wrong directory/mode or forged descriptor refuses",
     "Failed/killed commands release the advisory lock; symlink lock refuses",
     "Actual watchdog status CLI sees complete backup success and archive failure despite a fresh local dump",
-    "Stale, malformed or future receipts and mismatched local metadata are refused"
+    "Stale, malformed or future receipts and mismatched local metadata are refused",
+    "Checksum process failure cannot pass publication by comparing empty strings"
   ],
   "failedFirst": {
     "integration": {
@@ -47,6 +48,16 @@
       "passed": 64,
       "failed": 1,
       "reason": "The extra Python-to-Bash test subprocess dropped the descriptor by default; explicit pass_fds now models the real shell inheritance."
+    },
+    "checksumPublication": {
+      "before": {
+        "exitCode": 0,
+        "finalArchivePublished": true
+      },
+      "after": {
+        "exitCode": 1,
+        "finalArchivePublished": false
+      }
     }
   },
   "commands": {
@@ -61,8 +72,8 @@
       "summary": "71 tests passed"
     },
     "integration": {
-      "sha256": "6fc46868616c7b9dc40065ef0c4e0cc14477a5650735e3d9e6bf24756b02253a",
-      "summary": "15 tests passed"
+      "sha256": "d5bed12a3fcdace67bd2a6f491f7ed591a8c7b5e3f1986eccd245480a3fa080c",
+      "summary": "16 tests passed"
     },
     "types": {
       "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
@@ -99,7 +110,7 @@
     "infra/backup/archive_lock.py": "611e63222776d62bfcc5610564fb4d78db7b2c5668f2b5c15023a2b35e1cc2ac",
     "infra/backup/blob_archive.py": "338bfcdb1b40e315d1271b2d5261b01a65fc4acf8b683652e02e5490ef785ed4",
     "infra/backup/backup_status.py": "a40b7e4c82f56bcc7f22f998d8b6656c0b85665f059d7c66ebd7b23a66fb54b6",
-    "infra/backup/nightly_backup.sh": "c20a2aecb888c7d700c2340a50e9013e6b65779b82ffdfc61e587c3e280d3f0c",
+    "infra/backup/nightly_backup.sh": "6a2b01c7bf9c7ef4693ea3936ad80dd41f34e0fe9a25f64ba718eacff32d3457",
     "infra/backup/restore_drill.sh": "6c08b9e5fbcab383549229502998b4383a15eaa8e96eef0d49386363edc4288c",
     "infra/backup/restate_nightly.py": "eda5c1129809f3bd4df9b6a8446f2883a2032d7d5759d50b86dfb381b29676d1",
     "infra/backup/restate_retention.py": "fe379aeeb81e253e56edca21a2f22cc6952aeea0a5df3eeeaf525c4efd04e688",
@@ -107,7 +118,7 @@
     "infra/backup/test_archive_lock.py": "fb42376c133e1044bfd82067e206b0a0fa88095d74315c1895f3f9f5303d4c9e",
     "infra/backup/test_blob_archive.py": "86b0a89fa5cb7c957ac1485c43b57a117858cd9578f5313d554bb8bffbd61fd6",
     "infra/backup/test_backup_status.py": "2660d79555697e1416aef472f4cc88a5c98b0c5a36928df046bcde4b2369b74e",
-    "packages/db/test/blob-backup.test.ts": "55cf1e8db77f522adef4f0ffde8895e31fc9636b3f4cc1e10cbe5bcc2828f5b0"
+    "packages/db/test/blob-backup.test.ts": "e053df9ec4527f710c033926286c2930a3d2ef77c381183bc7af110f16de3e8f"
   },
   "historicalAppRegression": {
     "passed": 3634,
@@ -127,6 +138,13 @@
       "warnings": 0,
       "failures": 0
     },
-    "releaseManifest": "pending source seal"
+    "releaseManifest": "pending checksum-follow-up seal",
+    "security": "passed: zero secrets; 51 justified allowlist matches"
+  },
+  "previousSourceQualification": {
+    "sourceCommit": "e2b6612aa7235470cf67aa3602dad8f5e0fc42c4",
+    "testedSeal": "de36c82a9c6da874b82115c8d495bd9ec9cbd4e0",
+    "databaseLifecycleTestsPassed": 15,
+    "supersededBy": "checked checksum-command exit status and a 16th fault test"
   }
 }

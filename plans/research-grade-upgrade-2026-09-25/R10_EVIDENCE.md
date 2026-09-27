@@ -243,7 +243,7 @@ failed archive despite a fresh local dump, touching an old dump, missing/mismatc
 metadata, malformed/future receipts and a separately reported GC warning. It does
 not periodically rehash the whole archive or qualify off-host durability.
 
-Final qualification passes **71 Python backup controls and 15 database-backed
+Final qualification passes **71 Python backup controls and 16 database-backed
 lifecycle tests**, zero skipped; test TypeScript and shell syntax pass. The first
 lock test run had one harness failure: an extra Python subprocess dropped the
 inherited descriptor; passing it explicitly models the real shell boundary.
@@ -259,3 +259,23 @@ Separate-host/off-host recovery, database/Restate capture-gap repair, production
 RPO/RTO, real Canva/human/live acceptance and retrieval/model measurements remain
 open. The legacy database archive format is unchanged; file-content checking adds
 no new authenticity claim for an unpaired historical database dump.
+
+### Initial archive-integrity source seal
+
+Source `e2b6612`, tested seal `de36c82`: all 12 qualified source hashes match the
+clean checkout; release-manifest verification, security (zero secrets), blueprint
+**899/0/0**, shell syntax and test TypeScript pass. The 71 Python/15 DB lifecycle
+results qualify this exact host-script source. Source sealing adds no production
+restore, independent-host/off-host or real-provider/human acceptance claim.
+
+### Checked checksum failure follow-up
+
+A bounded probe of the previously committed publication function made every
+checksum command exit 2. The old function compared the two empty outputs and
+published the archive with exit 0; the corrected function returned 1 and published
+nothing. Source and copy hashes now require successful commands and a valid digest
+before equality. The full isolated lifecycle passes **16 tests**, including a
+mid-publication checksum failure that leaves the previous archive set unchanged
+and the watchdog unhealthy. Test types and shell syntax pass. Python source is
+unchanged from the passing 71-test run. The final seal below supersedes the
+15-test source qualification for this additional refusal control.

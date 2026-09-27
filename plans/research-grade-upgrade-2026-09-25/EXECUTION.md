@@ -14,18 +14,19 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 
 ## Current result (2026-09-27 — nightly archive integrity and monitoring)
 
-ADR-081 qualifies **71 backup Python tests and 15 database lifecycle tests**, with
+ADR-081 qualifies **71 backup Python tests and 16 database lifecycle tests**, with
 no skips. A red-before run proved that a missing retained pack and a failed cloud
 upload both returned success. Every required old/new file pack is now checked
 before archive publication, retention or GC. Restore validates paths/types/hashes
 and stages only requested files before creating a scratch database. Dump publication
-is atomic and last. One archive lock covers backup, restore and retention; contention
+is atomic and last; failed checksum commands cannot pass by comparing empty results. One archive lock covers backup, restore and retention; contention
 preserves an active workspace, and crashes release the lock. The incomplete `gs://`
 transport refuses before a dump. Local encrypted archive support remains active.
 
 The watchdog now requires the latest successful whole-night receipt and original
 capture time with matching local dump/checksum metadata. A fresh dump from a failed
-archive attempt is unhealthy. Test types, shell syntax and blueprint **899/0/0** pass; full app regression
+archive attempt is unhealthy. Test types, shell syntax, security, blueprint
+**899/0/0** pass; the checksum follow-up source seal is pending. Full app regression
 was not rerun for these host scripts. See `R10_ARCHIVE_INTEGRITY_PROOF.json` for exact
 source hashes, failed-first evidence, scope and remaining gates.
 
