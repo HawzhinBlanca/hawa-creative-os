@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T13:16:08Z",
+  "generatedAt": "2026-09-27T13:25:41Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -574,8 +574,8 @@
     },
     {
       "path": "adrs/101_durable_canva_planner_calls.md",
-      "sha256": "06cf5d4baa04bb832d03e53f284a9a5db234e0d75438346ec3a5d329329d0e99",
-      "bytes": 3115
+      "sha256": "1fb1c3622408073d8a1be67db3c76fb70172a321b2ca38d39cc26fff7d2ea91e",
+      "bytes": 4290
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1029,8 +1029,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "73d2e12a2c2d8e9ff8757955e059a0682879c350b540b660bd721ea1c8771eaf",
-      "bytes": 94848
+      "sha256": "62963ae88775f19192dd0d97a558863ad4eb0a6e2d9d2e59047b22c032fcb7bd",
+      "bytes": 96991
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1269,8 +1269,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_CANVA_PLANNER_CALLS_PROOF.json",
-      "sha256": "908f13a8ca5c46b95ca534492a2b3fbeb774a1e875a5e61ede58a25da6dcafa0",
-      "bytes": 9317
+      "sha256": "71fb56a31bb42040af313a477924bc06a10f5f5271157ab5c779991654509db3",
+      "bytes": 14795
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_DAILY_STUDIO_BUDGET_PROOF.json",
@@ -1414,8 +1414,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "0bff86ce7f379beeb636b360837e0514e934e3d2a9a0f34d816a3f0d56bc55bc",
-      "bytes": 363260
+      "sha256": "6f25b151b04c8b9ca90fe54a093a219e4853faf363ff4d7c36a392b86d20ae7e",
+      "bytes": 365008
     },
     {
       "path": "plans/user-stories.csv",

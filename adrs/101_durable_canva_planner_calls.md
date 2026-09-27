@@ -1,7 +1,7 @@
 # ADR-101: Durable Canva planner calls and retained layout recovery
 
 Date: 2026-09-27
-Status: implemented; full regression and deployed qualification pending
+Status: locally qualified; real provider/native Canva admission pending
 Requirements: FR-060, FR-064, FR-065, FR-079
 Sources: docs/10_WORKFLOW_RELIABILITY.md; docs/17_UI_UX.md; docs/30_CURRENT_STUDIO_CONTRACT.md
 
@@ -50,3 +50,22 @@ model call; source/reference changes; browser accounting and runtime restart.
 Full regression, traceability and source/evidence hashes are required before this
 decision is called locally qualified. Real provider/native Canva admission remains
 a separate gate.
+
+## Local qualification — 2026-09-27
+
+Corrected candidate `6c1f8b5`: 4,104 tests passed, zero failed, 59 skipped; 498
+strict test roots and source/scripts compile. Lint, Desk build and security checks
+pass. Fresh matching Core/worker/Desk images pass 63 synthetic workflow invariants.
+Twenty-nine Chrome/runtime checks prove named terminal accounting, an unchanged
+original receipt, actual Core restart, saved-layout reconstruction and one Canva
+import operation with zero additional model requests. Three actual SIGKILL
+boundaries and a pre-056 database upgrade are covered by the full suite.
+
+The first full candidate had ten Studio failures: transfer artifacts share the
+plan table but already have Studio paid-call accounting. The explicit validated
+Studio origin and historical backfill fixed the misclassification. Initial
+failures and corrected results are retained in
+`plans/research-grade-upgrade-2026-09-25/R21_CANVA_PLANNER_CALLS_PROOF.json`.
+This qualification uses synthetic providers; 43 app scenarios were unselected
+and two unmatched fake Gemini paths remain. No real provider call or production
+change occurred. Live/human/full-app admission remains open.

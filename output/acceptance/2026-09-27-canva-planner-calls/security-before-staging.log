@@ -1,0 +1,2 @@
+SECURITY SCAN FAILED: stale allowlist entries (remove them so the gate stays honest):
+  - output/acceptance/2026-09-27-canva-planner-calls/check-deployed.mts|quoted_secret_assignment
