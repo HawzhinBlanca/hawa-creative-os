@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-27T03:13:09+03:00",
+  "generatedAt": "2026-09-27T03:30:38+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "177c2c398d3c4e26752df175f7adbba48d420b51",
+    "commit": "196daf268e25176f49317fafa303a918be80782d",
     "treeClean": true,
-    "commitTimestamp": "2026-09-27T03:13:09+03:00",
+    "commitTimestamp": "2026-09-27T03:30:38+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
-    "targetVersion": "045_canva_review_checkpoints",
-    "latestMigrationFile": "045_canva_review_checkpoints.sql",
-    "totalMigrations": 45
+    "targetVersion": "046_canva_export_policy",
+    "latestMigrationFile": "046_canva_export_policy.sql",
+    "totalMigrations": 46
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -73,7 +73,7 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "7157c58241a8cf5ec8edd8dd2dd5f2d279735c2b7ddf78b24d0e4149bff749ab",
+      "apps/core/src/services/canva-design-planner.ts": "2f8be25c69146baccf00b4b63d7845cfa9c0ccf6cd1683ede8bc8408616ae6d3",
       "packages/creative/src/studio/layout-generator-v3.ts": "c0a14f8490fbebf171fd3c820acecf53f45255926e4ae9f0e55376bb3f469164",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "950d7d5f1701c9a80871f74843e59115b3440c73bade98b6d80a755f12d36889",
       "packages/creative/src/studio/box-critique-v3.ts": "34c2d9b4f8d194ee0e0d8cec0229c3d1a12fbf07a8a5be94c94461f2456672c4"
@@ -84,11 +84,11 @@
     "sourceHashes": {
       "packages/qa/src/engine.ts": "e9cb28d14f14396b6696fc2862f3fb9d2607396e55d38479ae408d24c7eea7f7",
       "packages/qa/src/vision-rubric.ts": "f625a23ca531f5e800fa0ef9a216b2ff9ba16382f75bbd5ab4e0eee3934e0276",
-      "packages/qa/src/canva-pptx-check.ts": "4f2203297d6ab4fcc4ce95cb24ced4f2ed97fe01f1c5b77a300da950556062a8",
+      "packages/qa/src/canva-pptx-check.ts": "a5f429abd38974584a4111938108def252c3427284a68064d29a711929300e9e",
       "packages/qa/src/rtl-validator.ts": "9ee174c4d0b028a19e0de618b87de2115ac6b81d04ebac194e8b03b220724562",
       "packages/qa/src/contrast.ts": "2e8ba1d08f63474f920732ad1335082e7980dcde3f0f3fec8bdce9b40f679f71",
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "db3d7c1ce646a35305623f9b3d04f439550618889242ff23343499eb0d136cde"
+  "sha256": "2226906cbdcda88d96e8d8094dde55c07dbd7bd07ada62e4e08561b8303e9775"
 }
