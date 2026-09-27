@@ -15,6 +15,10 @@ import { join } from 'node:path';
 import { REPO_ROOT, down } from './driver/stack.js';
 
 const args = process.argv.slice(2);
+if (args.includes('--recovery') && !args.includes('--candidate')) {
+  console.error('--recovery requires the isolated --candidate rehearsal');
+  process.exit(2);
+}
 if (args.includes('--down')) {
   down({ volumes: true });
   console.log('hawa-chaos is down; its volumes and throwaway secrets are gone.');
@@ -35,6 +39,7 @@ const env = {
   HAWA_CHAOS: '1',
   CHAOS_BUILD_COMMIT: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim(),
   ...(args.includes('--candidate') ? { HAWA_CHAOS_CANDIDATE: '1', CHAOS_DOCLING_URL: 'http://docling:8091' } : {}),
+  ...(args.includes('--recovery') ? { HAWA_CHAOS_RECOVERY: '1', CHAOS_PG_FSYNC: 'on', CHAOS_PG_FULL_PAGE_WRITES: 'on' } : {}),
   ...(args.includes('--keep') ? { HAWA_CHAOS_KEEP: '1' } : {}),
   ...(onlyAt >= 0 && args[onlyAt + 1] ? { HAWA_CHAOS_ONLY: args[onlyAt + 1] } : {}),
   // Who polls Telegram in the stack: core (as production today) or worker (Phase 2.1). Compose reads

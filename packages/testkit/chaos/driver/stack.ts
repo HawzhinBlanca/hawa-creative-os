@@ -19,6 +19,7 @@ export const REPO_ROOT = resolve(CHAOS_DIR, '..', '..', '..');
 const COMPOSE_FILE = join(CHAOS_DIR, 'docker-compose.chaos.yml');
 const RUN_DIR = join(CHAOS_DIR, '.run');
 const ENV_FILE = join(RUN_DIR, 'chaos.env');
+export const RECOVERY_OVERRIDE = join(RUN_DIR, 'recovery.compose.json');
 
 export const PORTS = { postgres: 56432, restateAdmin: 56070, restateIngress: 56080, fakes: 56090 } as const;
 export const FAKES_URL = `http://127.0.0.1:${PORTS.fakes}`;
@@ -94,7 +95,8 @@ function run(cmd: string, args: string[], options: { allowFail?: boolean; timeou
 
 export function compose(args: string[], options: { allowFail?: boolean; timeoutMs?: number } = {}) {
   secrets();
-  return run('docker', ['compose', '-p', PROJECT, '-f', COMPOSE_FILE, '--env-file', ENV_FILE, ...args], options);
+  return run('docker', ['compose', '-p', PROJECT, '-f', COMPOSE_FILE,
+    ...(existsSync(RECOVERY_OVERRIDE) ? ['-f', RECOVERY_OVERRIDE] : []), '--env-file', ENV_FILE, ...args], options);
 }
 
 function containerOf(service: Service): string {
@@ -127,6 +129,19 @@ export function down(options: { volumes?: boolean } = {}): void {
   // Compose knows inactive-profile containers, so --remove-orphans does not remove them.
   // Include every profile: otherwise candidate nginx keeps the blob volume alive across resets.
   compose(['--profile', 'green', '--profile', 'candidate', 'down', '--remove-orphans', ...(options.volumes ? ['-v'] : [])]);
+  if (existsSync(RECOVERY_OVERRIDE) && options.volumes) {
+    rmSync(RECOVERY_OVERRIDE);
+    // The original stores stay untouched during recovery; remove them only with explicit teardown.
+    compose(['--profile', 'green', '--profile', 'candidate', 'down', '--remove-orphans', '-v']);
+  }
+  if (options.volumes) {
+    const old = run('docker', ['volume', 'ls', '-q', '--filter', 'label=com.docker.compose.project=hawa-chaos',
+      '--filter', 'label=hawa.recovery-drill']).stdout.trim().split('\n').filter(Boolean);
+    for (const volume of old) {
+      if (!/^hawa-recovery-[0-9a-f]{16}-(postgres|restate|blobs)$/.test(volume)) throw new Error('Unexpected recovery volume identity');
+      run('docker', ['volume', 'rm', volume]);
+    }
+  }
   if (options.volumes) rmSync(ENV_FILE, { force: true });
 }
 

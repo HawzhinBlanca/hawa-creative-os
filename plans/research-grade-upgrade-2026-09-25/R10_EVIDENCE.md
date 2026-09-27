@@ -142,3 +142,20 @@ the sealed checkout. Release-manifest verification and blueprint **891/0/0** pas
 the security scan finds zero secrets and the diff check passes. The real drill and
 43-test backup suite above qualify this unchanged source. No full application
 regression, production activation or full-system recovery is claimed for this slice.
+
+## Coordinated application recovery implementation (ADR-080, 2026-09-27)
+
+The existing nightly pair does not freeze every writer throughout its capture gap.
+The new candidate-only cold-capture helper stops Core, workers, Restate and PostgreSQL,
+authenticates/encrypts each store, restores fresh volumes at observed immutable images,
+and verifies all rows/RLS, complete file contents, registered blob hashes and pending
+Delivery identity before writer admission. Original stores are retained during the
+rehearsal. External fakes remain alive so restore cannot erase their side effects.
+
+The full-app source scenario now optionally invokes this helper after a Drive effect
+and after an unconfirmed Telegram send. Qualification must prove one completed
+publication and sheet row, adoption of the original Drive file, no repeated Telegram
+file, and one uncertain-send office alert. These are intended checks, not results:
+the actual deployed rehearsal is pending. The Python backup suite passes **50 tests**
+(seven new recovery refusal controls); the candidate harness typecheck passes.
+Production and unattended Restate backup remain unchanged; R10 remains in progress.

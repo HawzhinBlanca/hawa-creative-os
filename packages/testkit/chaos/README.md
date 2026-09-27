@@ -9,6 +9,29 @@ The dated run histories below preserve their original scope and limitations.
 
 ## Isolated full-app candidate rehearsal (2026-09-27)
 
+### Coordinated recovery mode (ADR-080)
+
+```sh
+pnpm exec tsx packages/testkit/chaos/run.ts --candidate --recovery --only R1.S3.SOURCES --poller worker --keep
+```
+
+This mode uses `fsync=on` and `full_page_writes=on`. It stops all candidate writers,
+Restate and PostgreSQL at two delivery boundaries: after the Drive effect and after
+Telegram accepts a file but before its receipt. Authenticated encrypted copies of
+PostgreSQL, Restate and blobs are restored into new named volumes with exact image
+IDs. Data, RLS, file hashes and pending invocation identity are checked before app
+writers restart. The external fakes survive both restores; their ledgers detect
+duplicate effects. Reports are `.run/recovery-drive.json`,
+`.run/recovery-telegram.json` and `.run/last-run.json`.
+
+Original store volumes remain untouched until explicit candidate teardown. The
+private Compose override points at recovered volumes and is also used by `--down`;
+teardown removes original and recovered candidate stores. A failed restore leaves
+writers stopped and private recovery artifacts in `.run/recovery-private-*` for
+diagnosis. Do not resume the original stores after external effects have advanced.
+This proves coherent same-host recovery only, not independent-host/off-host recovery,
+arbitrary database-PITR/Restate capture-gap repair or real provider acceptance.
+
 ```sh
 pnpm exec tsx packages/testkit/chaos/run.ts --candidate --only R1.S3.SOURCES --poller worker --keep
 ```

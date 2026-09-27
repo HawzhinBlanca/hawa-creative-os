@@ -7,6 +7,7 @@ import { KAAE_CLIENT_ID } from './provision.js';
 import { captureForReview } from '../../../../apps/desk/src/services/canvaCapture.js';
 import { checkedCanvaExportFixture } from '../../src/canva-export-fixture.js';
 import { computeDnaHash } from '../../../../apps/core/src/core-helpers.js';
+import { restorePendingDelivery } from './candidate-recovery.js';
 import { chatInboxInvocations, imageDocumentUpdate, sendToChatInbox, tasksOfChat, textUpdate, waitUntil,
   type InvariantResult } from './scenario.js';
 
@@ -142,7 +143,10 @@ export async function candidateSources(chat: string, events: string[], suiteStar
     action: 'approve', reason: 'Synthetic workflow qualification; not a human creative-quality review.', pinnedExportIds: [qc.report.exportArtifactId],
   });
   await waitUntil('owned approval committed', async () => { const [r] = await requests(); return r?.stage === 'approved' && Number(r.rev) === 6 ? r : null; });
+  const recovery = process.env.HAWA_CHAOS_RECOVERY === '1';
+  if (recovery) await fakes.hold('core.delivery.after-drive', {mode: 'workflow'});
   await action(`/tasks/${child.current_task_id}/publish`, { approvalId: approval.decisionId });
+  if (recovery) checks.push(...await restorePendingDelivery(child.current_task_id, chat, suiteStarted, events));
   const delivered = await waitUntil('reviewed source request delivered', async () => { const [r] = await requests(); return r?.stage === 'delivered' ? r : null; });
   const tasks = await tasksOfChat(chat);
   check('PDF new request and voice revision reach one logical simulated delivery', tasks.length === 2 && tasks[1].state === 'complete' &&

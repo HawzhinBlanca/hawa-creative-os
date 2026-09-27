@@ -12,7 +12,17 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-27 — isolated encrypted database recovery)
+## In progress (2026-09-27 — coordinated application recovery)
+
+ADR-080 adds a recovery mode to the existing full-app candidate. It freezes every
+application writer, captures authenticated encrypted PostgreSQL/Restate/blob stores,
+restores fresh volumes at exact image IDs, validates data/files/journal identity
+before restarting writers, and keeps external fakes alive to detect duplicates.
+Two boundaries are planned: Drive effect without its receipt, then an unconfirmed
+Telegram file send. The **50-test backup suite** and harness TypeScript pass;
+the actual candidate recovery rehearsal is pending. Production remains unchanged.
+
+## Prior result (2026-09-27 — isolated encrypted database recovery)
 
 ADR-079 adds an opt-in pinned pgBackRest image/configuration and reproducible offline
 PITR drill. Final physical restore includes a post-backup task, excludes a later task,
