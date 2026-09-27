@@ -1,3 +1,4 @@
+import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { describe, it, expect, afterAll } from 'vitest';
 import { createDb } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
@@ -518,7 +519,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     // 1. Before any audit there is no report, not an invented clean one
     const getRes = await dbApp.request('/v1/operations/reconciliation');
     expect(getRes.status).toBe(200);
-    expect(await getRes.json()).toBeNull();
+    expect((await getRes.json()).latest).toBeNull();
 
     // 2. Auto-repair is refused: Core cannot upload to Drive or write Sheets from here
     const repairRes = await dbApp.request('/v1/operations/reconciliation/run', {
@@ -530,11 +531,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect((await repairRes.json()).title).toBe('Auto-Repair Not Available');
 
     // 3. The audit runs and says what it compared
-    const runRes = await dbApp.request('/v1/operations/reconciliation/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
+    const runRes = await runReceiptAudit(dbApp);
     expect(runRes.status).toBe(201);
     const runReport = await runRes.json();
     expect(runReport.auditId).toBeDefined();
@@ -545,7 +542,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(runReport.totalTasksAudited).toBeGreaterThanOrEqual(1);
 
     const latest = await (await dbApp.request('/v1/operations/reconciliation')).json();
-    expect(latest.auditId).toBe(runReport.auditId);
+    expect(latest.latest.auditId).toBe(runReport.auditId);
   });
 
   it('GET /v1/clients lists seeded client tenants with color & rule metrics', async () => {

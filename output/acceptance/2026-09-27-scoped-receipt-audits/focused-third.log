@@ -1,0 +1,293 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] hawa_tpl_build_test_77c9c784: applied db/schema.sql
+[test databases] hawa_tpl_build_test_77c9c784: applied db/rls.sql
+[test databases] hawa_tpl_build_test_77c9c784: applied db/seed.sql
+[test databases] hawa_tpl_build_test_77c9c784: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_test_77c9c784: versioned upgrades applied=57 verified=0
+[test databases] hawa_tpl_build_test_77c9c784: applied db/test-fixtures.sql
+[test databases] built template hawa_tpl_test_5fc9ebd2cea84e4b
+[test databases] hawa_tpl_build_repair_464118f6: applied db/schema.sql
+[test databases] hawa_tpl_build_repair_464118f6: applied db/rls.sql
+[test databases] hawa_tpl_build_repair_464118f6: applied db/seed.sql
+[test databases] hawa_tpl_build_repair_464118f6: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_repair_464118f6: versioned upgrades applied=57 verified=0
+[test databases] built template hawa_tpl_repair_5fc9ebd2cea84e4b
+[test databases] per-file clones of hawa_tpl_test_5fc9ebd2cea84e4b and hawa_tpl_repair_5fc9ebd2cea84e4b (692 ms)
+{"level":"warn","time":"2026-09-27T14:59:07.064Z","service":"core","requestId":"a2bb565d-7036-46ac-918f-4bcc954e80f9","chatId":"777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T14:59:07.115Z","service":"core","requestId":"03566744-2bfd-4797-b0e6-46aaead552f3","chatId":"9988","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T14:59:07.137Z","service":"core","requestId":"8cbc1697-9591-451d-bdcc-c62c79fa3e96","chatId":"777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T14:59:07.141Z","service":"core","requestId":"790246d7-f01f-4bf7-ab77-3ff6726f778b","chatId":"-777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T14:59:07.174Z","service":"core","requestId":"6a935aff-6d04-4501-931e-acf2a799d246","chatId":"-779","msg":"[Core] Telegram reply referenced unknown task UUID 11111111-1111-4111-8111-111111111111; reading the message on its own."}
+{"level":"error","time":"2026-09-27T14:59:07.265Z","service":"core","requestId":"4e1f52c6-81bb-4b51-ad35-1f0edebc1c9e","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+{"level":"error","time":"2026-09-27T14:59:07.328Z","service":"core","requestId":"bb316193-2299-4d8f-b0b2-9f504107fc6e","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+{"level":"error","time":"2026-09-27T14:59:07.382Z","service":"core","requestId":"0d0fc3a3-919e-4557-848c-070376c5bae6","taskId":"4d791f2f-92ef-4146-b906-ab44834d0c18","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Cannot approve stale revision 981d92a1-b834-44fb-b512-86d1819db08b. Current revision is 96d26f9a-f392-4876-9174-c4ca93319f45","stack":"Error: Cannot approve stale revision 981d92a1-b834-44fb-b512-86d1819db08b. Current revision is 96d26f9a-f392-4876-9174-c4ca93319f45\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:341:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at RevisionRepository.recordApproval (/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:603:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/routes/decisions.routes.ts:581:26\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at /Users/hawzhin/Hawdesign/apps/core/src/routes/decisions.routes.ts:577:22\n    at dispatch (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/hono@4.13.5/node_modules/hono/dist/compose.js:22:17)"},"msg":"[core:approvals:create] DB approval error:"}
+{"level":"error","time":"2026-09-27T14:59:07.457Z","service":"core","requestId":"21b881fb-367c-4320-9fab-a22a94174e9c","taskId":"a4a80766-70e0-483d-bf4f-755f7541730f","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Task a4a80766-70e0-483d-bf4f-755f7541730f is cancelled; publication completion requires publishing or complete","stack":"Error: Task a4a80766-70e0-483d-bf4f-755f7541730f is cancelled; publication completion requires publishing or complete\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:346:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PublicationRepository.markComplete (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:405:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:992:13\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at doPublish (/Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:949:9)\n    at /Users/hawzhin/Hawdesign/packages/db/src/session-lock.ts:30:39"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+{"level":"error","time":"2026-09-27T14:59:07.466Z","service":"core","requestId":"75a45a6c-a243-4ce7-96ad-a1e1a5aa4e2a","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+{"level":"error","time":"2026-09-27T14:59:07.510Z","service":"core","requestId":"f03b6591-f204-4433-83fe-f6a395fa366f","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+{"level":"error","time":"2026-09-27T14:59:07.533Z","service":"core","requestId":"0d8cd724-f908-4942-9923-1d8f5517640b","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+ ❯ apps/core/test/core.test.ts (34 tests | 1 failed) 865ms
+     × GET /v1/operations/reconciliation & POST /v1/operations/reconciliation/run audit drift and refuse auto-repair (FR-049, FR-050) 24ms
+{"level":"error","time":"2026-09-27T14:59:07.873Z","service":"core","requestId":"d10c7f34-520f-4744-9144-382269542aa3","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+ ❯ apps/core/test/gate-g-reconciliation.test.ts (4 tests | 3 failed) 905ms
+     × reports in-sync status when every published task has its recorded deliveries 281ms
+     × reports a missing Drive delivery, refuses auto-repair, and invents no receipt 220ms
+     × reports a status divergence without changing the recorded Sheets row 203ms
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts (3 tests | 1 failed) 1107ms
+     × delivers the files but does not mark the task COMPLETE, and says why 355ms
+{"level":"error","time":"2026-09-27T14:59:08.453Z","service":"core","requestId":"547fe7cf-c0c3-44da-9ee4-7e7752a6465f","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+{"level":"error","time":"2026-09-27T14:59:08.496Z","service":"core","requestId":"2d96cbf1-c910-4e1d-be17-8d103997704a","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+{"level":"error","time":"2026-09-27T14:59:08.503Z","service":"core","requestId":"93d1b3a7-c66f-4b4c-8ea5-11ed3ff7f3c2","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+{"level":"error","time":"2026-09-27T14:59:08.524Z","service":"core","requestId":"5397c390-464b-46f6-a82e-2ace74eb0afd","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+ ❯ apps/core/test/scoped-receipt-audits.test.ts (8 tests | 8 failed) 268ms
+   × never returns another user's client audit through the shared Core process 79ms
+   × keeps a completed audit when a fresh Core instance reads PostgreSQL 40ms
+   × hides an old audit immediately when the actor loses one of its recorded clients 28ms
+   × replays the exact original result after a lost reply and a later audit, with one immutable identity 20ms
+   × serializes duplicate actions and refuses a competing stale predecessor 19ms
+   × RLS rechecks current scope and identity for reads and actor-spoofed writes 21ms
+   × returns bounded history and does not reuse a report after newly granted client access 19ms
+   × a failed report insert never replaces the last committed result 23ms
+{"level":"error","time":"2026-09-27T14:59:08.705Z","service":"core","requestId":"aeead3df-c285-4f83-b689-e0be24b69f5c","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+ ❯ apps/core/test/r06-publication-safety.test.ts (14 tests | 2 failed) 2092ms
+     × does not complete a task cancelled after the Drive upload but before receipt commit 247ms
+     × holds requester delivery after a lost Drive reply, then reconciles the same reserved file 182ms
+ ❯ apps/core/test/split-cleanup-no-memory-truth.test.ts (13 tests | 1 failed) 690ms
+     × audits the tasks Postgres holds, not only those this Core touched 43ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 16 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/core.test.ts > Core API: Ingress & Task Lifecycle > GET /v1/operations/reconciliation & POST /v1/operations/reconciliation/run audit drift and refuse auto-repair (FR-049, FR-050)
+AssertionError: expected 503 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 503
+
+ ❯ apps/core/test/core.test.ts:535:27
+    533|     // 3. The audit runs and says what it compared
+    534|     const runRes = await runReceiptAudit(dbApp);
+    535|     expect(runRes.status).toBe(201);
+       |                           ^
+    536|     const runReport = await runRes.json();
+    537|     expect(runReport.auditId).toBeDefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/16]⎯
+
+ FAIL  apps/core/test/gate-g-reconciliation.test.ts > Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR-048, FR-049, FR-050, Invariant #12) > reports in-sync status when every published task has its recorded deliveries
+AssertionError: expected 503 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 503
+
+ ❯ apps/core/test/gate-g-reconciliation.test.ts:92:24
+     90|
+     91|     const res = await runAudit();
+     92|     expect(res.status).toBe(201);
+       |                        ^
+     93|     const report = await res.json();
+     94|     expect(report.auditId).toBeDefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/16]⎯
+
+ FAIL  apps/core/test/gate-g-reconciliation.test.ts > Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR-048, FR-049, FR-050, Invariant #12) > reports a missing Drive delivery, refuses auto-repair, and invents no receipt
+TypeError: Cannot read properties of null (reading 'auditId')
+ ❯ apps/core/test/gate-g-reconciliation.test.ts:121:26
+    119|     // 2. A simulation is never kept as the latest audit the Desk shows
+    120|     const latest = await (await app.request('/operations/reconciliatio…
+    121|     expect(latest.latest.auditId).toBe(baseline.auditId);
+       |                          ^
+    122|
+    123|     // 3. Auto-repair is refused, and the stored receipt is untouched …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/16]⎯
+
+ FAIL  apps/core/test/gate-g-reconciliation.test.ts > Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR-048, FR-049, FR-050, Invariant #12) > reports a status divergence without changing the recorded Sheets row
+AssertionError: expected 503 to be 'clean' // Object.is equality
+
+- Expected:
+"clean"
+
++ Received:
+503
+
+ ❯ apps/core/test/gate-g-reconciliation.test.ts:153:54
+    151|     // The simulation used to overwrite the stored receipt's row statu…
+    152|     expect((await storedReceipt(taskId)).sheetRow.status).toBe('COMPLE…
+    153|     expect((await (await runAudit()).json()).status).toBe('clean');
+       |                                                      ^
+    154|
+    155|     const repairRes = await runAudit({ autoRepair: true, simulateDrift…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/16]⎯
+
+ FAIL  apps/core/test/publish-sheets-unconfirmed.test.ts > publish-omnichannel with the Sheets row unconfirmed > delivers the files but does not mark the task COMPLETE, and says why
+TypeError: undefined is not iterable (cannot read property Symbol(Symbol.iterator))
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts:106:29
+    104|     expect(stored.sheetRow).toBeUndefined();
+    105|     const audit = await (await runReceiptAudit(app,json)).json();
+    106|     expect(audit.anomalies).toContainEqual(expect.objectContaining({ t…
+       |                             ^
+    107|   });
+    108|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/16]⎯
+
+ FAIL  apps/core/test/r06-publication-safety.test.ts > R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–050, FR-059–060, NFR-001, NFR-014, NFR-020) > does not complete a task cancelled after the Drive upload but before receipt commit
+AssertionError: expected undefined to deeply equal ArrayContaining{…}
+
+- Expected:
+ArrayContaining [
+  ObjectContaining {
+    "kind": "ARCHIVE_OUTCOME_UNCONFIRMED",
+    "severity": "high",
+    "taskId": "a4a80766-70e0-483d-bf4f-755f7541730f",
+  },
+]
+
++ Received:
+undefined
+
+ ❯ apps/core/test/r06-publication-safety.test.ts:187:31
+    185|       expect(publicationState.actionableRecovery).toMatch(/do not retr…
+    186|       const audit = await (await runReceiptAudit(app,operatorHeaders))…
+    187|       expect(audit.anomalies).toEqual(expect.arrayContaining([expect.o…
+       |                               ^
+    188|         taskId: task.id, kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity…
+    189|       })]));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/16]⎯
+
+ FAIL  apps/core/test/r06-publication-safety.test.ts > R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–050, FR-059–060, NFR-001, NFR-014, NFR-020) > holds requester delivery after a lost Drive reply, then reconciles the same reserved file
+TypeError: actual value must be number or bigint, received "undefined"
+ ❯ apps/core/test/r06-publication-safety.test.ts:286:39
+    284|         .not.toEqual(expect.arrayContaining([expect.objectContaining({…
+    285|       const audit = await (await runReceiptAudit(app,operatorHeaders))…
+    286|       expect(audit.totalTasksAudited).toBeGreaterThan(0);
+       |                                       ^
+    287|       expect(audit.anomalies).toEqual(expect.arrayContaining([expect.o…
+    288|         taskId: task.id, kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/16]⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > never returns another user's client audit through the shared Core process
+AssertionError: expected 503 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 503
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:33:52
+     31| it("never returns another user's client audit through the shared Core …
+     32|  const f=await fixture(),g=await fixture(true),app=createApp({db});
+     33|  const r=await run(app,f.a.token);expect(r.status).toBe(201);const rep…
+       |                                                    ^
+     34|  expect(report.anomalies.some((a:any)=>a.taskId===f.a.taskId)).toBe(tr…
+     35|  expect(JSON.stringify(report)).not.toContain(f.b.taskId);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/16]⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > keeps a completed audit when a fresh Core instance reads PostgreSQL
+AssertionError: expected 503 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 503
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:40:82
+     38| });
+     39| it('keeps a completed audit when a fresh Core instance reads PostgreSQ…
+     40|  const f=await fixture(),r=await run(createApp({db}),f.a.token);expect…
+       |                                                                                  ^
+     41|  const read=await get(createApp({db}),f.a.token);expect(read.status).t…
+     42| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/16]⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > hides an old audit immediately when the actor loses one of its recorded clients
+AssertionError: expected 503 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 503
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:44:88
+     42| });
+     43| it('hides an old audit immediately when the actor loses one of its rec…
+     44|  const f=await fixture(),app=createApp({db});expect((await run(app,f.a…
+       |                                                                                        ^
+     45|  await sql`UPDATE hawa.client_memberships SET active=false WHERE tenan…
+     46|  const r=await get(app,f.a.token);expect(r.status).toBe(200);expect(la…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/16]⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > replays the exact original result after a lost reply and a later audit, with one immutable identity
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > serializes duplicate actions and refuses a competing stale predecessor
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > RLS rechecks current scope and identity for reads and actor-spoofed writes
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > returns bounded history and does not reuse a report after newly granted client access
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > a failed report insert never replaces the last committed result
+error: RECEIPT_AUDIT_INVALID
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ PostgresConnection.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28
+ ❯ SingleConnectionProvider.#run node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16
+ ❯ DefaultQueryExecutor.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16
+ ❯ apps/core/src/services/receipt-audits.ts:90:20
+     88|         const timestamp=new Date((await sql<{at:Date}>`SELECT transact…
+     89|         const report=auditPublicationReceipts(inputs.tasks,inputs.driv…
+     90|         const row=(await sql<AuditRow>`INSERT INTO hawa.receipt_audits…
+       |                    ^
+     91|           reason,request,request_sha256,scope,inputs,inputs_sha256,rep…
+     92|           VALUES(${actor.tenantId}::uuid,${actor.userId}::uuid,${actio…
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ withRlsContext packages/db/src/client.ts:71:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ PostgresConnection.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28
+ ❯ SingleConnectionProvider.#run node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16
+ ❯ DefaultQueryExecutor.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16
+ ❯ apps/core/src/services/receipt-audits.ts:90:20
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ withRlsContext packages/db/src/client.ts:71:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/16]⎯
+
+ FAIL  apps/core/test/split-cleanup-no-memory-truth.test.ts > with a database, tasks are read from Postgres only > audits the tasks Postgres holds, not only those this Core touched
+AssertionError: expected 503 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 503
+
+ ❯ apps/core/test/split-cleanup-no-memory-truth.test.ts:52:24
+     50|     await newTask(core(), { title: 'Cleanup: audited elsewhere', clien…
+     51|     const res = await runReceiptAudit(core(),json);
+     52|     expect(res.status).toBe(201);
+       |                        ^
+     53|     expect((await res.json()).totalTasksAudited).toBeGreaterThanOrEqua…
+     54|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/16]⎯
+
+
+ Test Files  6 failed | 5 passed (11)
+      Tests  16 failed | 106 passed (122)
+   Start at  17:59:04
+   Duration  4.64s (transform 4.23s, setup 840ms, import 6.77s, tests 6.13s, environment 741ms)
+

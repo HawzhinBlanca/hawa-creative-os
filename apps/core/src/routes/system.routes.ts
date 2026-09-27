@@ -6,7 +6,7 @@ import type { Context } from 'hono';
 import { checkProductionFunnelHealth } from '../services/funnel-monitor.js';
 // A function declaration, read only when a request arrives, so the import cycle with app.ts is harmless.
 import { probeDatabase } from '../core-helpers.js';
-import { readDeliveredRecords } from '../services/publication-receipt.js';
+import { ReceiptAuditService, ReceiptAuditError } from '../services/receipt-audits.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus } from '@hawa/contracts';
 import { log } from '../logging.js';
@@ -29,7 +29,6 @@ export function registerSystemRoutes(ctx: RouteContext) {
     broadcastEvent,
     verifyRequestAuth,
     problem,
-    reconciliationService,
     channelKillSwitches,
     globalCanvaCircuitBreaker,
     handleDecommissionedFigmaRoute,
@@ -456,94 +455,34 @@ export function registerSystemRoutes(ctx: RouteContext) {
     'Synthetic Operational Probe Retired',
     'Synthetic benchmarks remain in testkit. They cannot establish office availability or publish work through Operations.'));
 
-  // Operations Reconciliation & Drift Audit (FR-049, FR-050). Audit only: see ReconciliationService.
-  registerRoute('get', '/operations/reconciliation', (c: any) => {
-    // null until an audit of Core's own state has run; no report is invented in its place.
-    return c.json(reconciliationService.getLastReport());
-  });
-
-  registerRoute('post', '/operations/reconciliation/run', async (c: any) => {
-    const body = await c.req.json().catch(() => ({}));
-    if (body.autoRepair === true) {
-      return problem(
-        c,
-        422,
-        'Auto-Repair Not Available',
-        'Core cannot upload to Google Drive or write Google Sheets from reconciliation, so it repairs nothing. Run the audit without autoRepair and republish the tasks it reports.'
-      );
-    }
-
-    // The tasks, and the Drive files and Sheets rows each delivery confirmed, as Postgres holds them
-    // (services/publication-receipt.ts). They were the tasks this process held in memory and the
-    // receipts it kept, so an audit after a restart found no task, or every delivered task
-    // undelivered. Without a database there is nothing to compare.
-    if (!db) return problem(c, 503, 'Database Unavailable', 'The audit compares the tasks and delivery records PostgreSQL holds');
+  // Stored receipt snapshots only; source reads and append are one authorized transaction.
+  const auditService = db ? new ReceiptAuditService(db) : null;
+  const auditRequest = async (c: any, record: boolean) => {
+    c.header('Cache-Control', 'no-store');
+    if (!auditService) return problem(c, 503, 'Database Unavailable', 'Stored receipt audits require PostgreSQL.');
     const auth = verifyRequestAuth(c);
-    const scope = { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId || SYSTEM_AUTOMATION_USER_ID, role: auth.role || 'operator' };
-    const stored = await Promise.all([
-      withRlsContext(db, scope, (trx) =>
-        trx.selectFrom('tasks').select(['id', 'state', 'client_id', 'current_design_revision_id', 'updated_at',
-          sql<string | null>`(SELECT p.error_class FROM hawa.publications p
-            WHERE p.tenant_id = tasks.tenant_id AND p.task_id = tasks.id
-            ORDER BY p.created_at DESC LIMIT 1)`.as('delivery_error_class')])
-          .where('tenant_id', '=', scope.tenantId).execute()),
-      readDeliveredRecords(db, scope),
-    ]).catch((err: unknown) => {
-      log.error('[core:reconciliation] Could not read the tasks or their delivery records:', err);
-      return null;
-    });
-    if (!stored) return problem(c, 503, 'Database Unavailable', 'The tasks and their delivery records could not be read; try again');
-    const [taskRows, delivered] = stored;
-    const allTasks = taskRows.map((t) => ({
-      id: t.id,
-      status: publicationAwareTaskStatus(t.state, { errorClass: t.delivery_error_class }),
-      publicationErrorClass: t.delivery_error_class,
-      clientId: t.client_id || undefined,
-      latestRevisionId: t.current_design_revision_id || undefined,
-      updatedAt: t.updated_at instanceof Date ? t.updated_at.toISOString() : String(t.updated_at),
-    }));
-    const driveFiles: Array<{ taskId: string; fileId: string; folderId: string; sha256: string; byteSize: number }> = [...delivered.driveFiles];
-    const sheetRows: Array<{ taskId: string; rowNumber: number; status: string; packageHash: string; syncedAt: string }> = [...delivered.sheetRows];
-
-    // Rows supplied or altered by the caller make the report a simulation, which is returned but
-    // never kept as the latest audit the Desk shows.
-    const simulated = Boolean(body.simulateDrift) || Array.isArray(body.driveFiles) || Array.isArray(body.sheetRows);
-    if (Array.isArray(body.driveFiles)) driveFiles.push(...body.driveFiles);
-    if (Array.isArray(body.sheetRows)) sheetRows.push(...body.sheetRows);
-
-    if (body.simulateDrift) {
-      if (body.simulateDrift.missingDriveTaskId) {
-        const targetId = body.simulateDrift.missingDriveTaskId;
-        const remaining = driveFiles.filter((d) => d.taskId !== targetId);
-        driveFiles.length = 0;
-        driveFiles.push(...remaining);
-      }
-      if (body.simulateDrift.missingSheetTaskId) {
-        const targetId = body.simulateDrift.missingSheetTaskId;
-        const remaining = sheetRows.filter((s) => s.taskId !== targetId);
-        sheetRows.length = 0;
-        sheetRows.push(...remaining);
-      }
-      if (body.simulateDrift.divergentTaskId) {
-        const row = sheetRows.find((s) => s.taskId === body.simulateDrift.divergentTaskId);
-        if (row) {
-          row.status = body.simulateDrift.divergentStatus || 'IN_PROGRESS';
-        }
-      }
+    if (!auth.authenticated || !auth.tenantId || !auth.userId || !auth.role)
+      return problem(c, 403, 'RECEIPT_AUDIT_FORBIDDEN', 'An authorized office identity is required.');
+    const actor = {tenantId:auth.tenantId,userId:auth.userId,role:auth.role};
+    try {
+      if (!record) return c.json(await auditService.get(actor,c.req.query('beforeRevision')));
+      const body = await c.req.json().catch(() => null);
+      if (body && typeof body === 'object' && body.autoRepair === true)
+        return problem(c,422,'Auto-Repair Not Available','This audit compares stored receipts and repairs nothing.');
+      if (body && typeof body === 'object' && ('simulateDrift' in body || 'driveFiles' in body || 'sheetRows' in body))
+        return problem(c,422,'Receipt Simulation Retired','Production audits use PostgreSQL records only. Fixture comparisons belong in testkit.');
+      if (!body || c.req.header('Idempotency-Key') !== body.actionId)
+        return problem(c,400,'RECEIPT_AUDIT_INVALID','Idempotency-Key must match the saved audit action ID.');
+      const result = await auditService.record(actor,body);
+      return c.json(result,result.replayed ? 200 : 201);
+    } catch (error) {
+      if (error instanceof ReceiptAuditError) return problem(c,error.status,error.code,error.message);
+      log.error('[core:reconciliation] Could not read or record the scoped audit:',error);
+      return problem(c,503,'RECEIPT_AUDIT_UNAVAILABLE','The audit result is not available. Retry the exact saved action after access is restored.');
     }
-
-    const report = reconciliationService.audit(allTasks, driveFiles, sheetRows, { simulated });
-
-    broadcastEvent('reconciliation:completed', {
-      auditId: report.auditId,
-      status: report.status,
-      driftCount: report.driftCount,
-      inSyncCount: report.inSyncCount,
-      simulated: report.simulated,
-    });
-
-    return c.json(report, 201);
-  });
+  };
+  registerRoute('get','/operations/reconciliation',(c: any)=>auditRequest(c,false));
+  registerRoute('post','/operations/reconciliation/run',(c: any)=>auditRequest(c,true));
 
   // Operational Security & Outage Simulation (CV-20, FR-065, FR-071)
   registerRoute('post', '/operations/kill-switch', async (c: any) => {

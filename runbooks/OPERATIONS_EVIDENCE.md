@@ -1,6 +1,6 @@
 # Reading Operations evidence
 
-Authority: ADR-102; FR-064/079 and the NFR-002 measurement boundary.
+Authority: ADR-102 and ADR-103; FR-064/079 and the NFR-002 measurement boundary.
 
 ## Reliability
 
@@ -32,10 +32,13 @@ audit does not check current external Drive or Sheets content. Refresh failures
 must remove the prior displayed result, and late older responses cannot replace
 newer evidence.
 
+Audit history and exact-action recovery use the actor/scope-bound PostgreSQL ledger
+described in SCOPED_RECEIPT_AUDITS.md. This supersedes the earlier process-local
+latest-report limitation; live external storage checks remain open.
+
 ## Admission still required
 
-Independent availability monitoring, durable scope-bound audit history, external
-storage verification, native Canva editing, live office integrations, human design
+Independent availability monitoring, external storage verification, native Canva editing, live office integrations, human design
 and multilingual review, held-out evaluation, independent-host recovery and
 controlled rollout remain separate requirements. This correction does not qualify
 the full app for production or satisfy the monthly availability target.

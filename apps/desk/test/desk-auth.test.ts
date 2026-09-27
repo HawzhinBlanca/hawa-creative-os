@@ -1,3 +1,4 @@
+import {receiptAuditAction} from './support/receipt-audit-fixture.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import React from 'react';
@@ -118,10 +119,10 @@ const CALLS: Array<{ name: string; call: () => Promise<unknown>; method: string;
   { name: 'Ops: last reconciliation', call: () => apiClient.operations.reconciliation(), method: 'GET', path: '/v1/operations/reconciliation' },
   {
     name: 'Ops: reconciliation audit (never auto-repair)',
-    call: () => apiClient.operations.auditReconciliation(),
+    call: () => apiClient.operations.auditReconciliation(receiptAuditAction),
     method: 'POST',
     path: '/v1/operations/reconciliation/run',
-    body: { autoRepair: false },
+    body: receiptAuditAction,
   },
   // Eval
   { name: 'Eval: datasets', call: () => apiClient.evaluations.datasets(), method: 'GET', path: '/v1/evaluations/datasets' },
@@ -177,7 +178,7 @@ describe('the DNA, Ops and Eval screens send the operator token', () => {
     browserWithToken(null);
     vi.stubGlobal('document', { cookie: `hawa_csrf=${'a'.repeat(64)}` });
     const fetchMock = stubFetch();
-    await apiClient.operations.auditReconciliation();
+    await apiClient.operations.auditReconciliation(receiptAuditAction);
     const sent = sentRequest(fetchMock);
     expect(sent.headers.has('Authorization')).toBe(false);
     expect(sent.headers.get('x-hawa-csrf')).toBe('a'.repeat(64));
@@ -188,7 +189,7 @@ describe('the DNA, Ops and Eval screens send the operator token', () => {
     browserWithToken(TOKEN);
     vi.stubGlobal('document', { cookie: `hawa_csrf=${'b'.repeat(64)}` });
     const fetchMock = stubFetch();
-    await apiClient.operations.auditReconciliation();
+    await apiClient.operations.auditReconciliation(receiptAuditAction);
     const sent = sentRequest(fetchMock);
     expect(sent.headers.has('Authorization')).toBe(false);
     expect(sent.headers.get('x-hawa-csrf')).toBe('b'.repeat(64));
@@ -218,7 +219,7 @@ describe('actions the owner did not enable make no request', () => {
   it('synthetic operational execution is absent and tenant onboarding stays disabled', () => {
     const ops = renderToStaticMarkup(React.createElement(OpsScreen));
     expect(ops).not.toContain('Run Synthetic Benchmark');
-    expect(ops).toContain('External Drive and Sheets state is not checked, and nothing is repaired.');
+    expect(ops).toContain('Google Drive and Sheets are not read; nothing is repaired.');
 
     const dna = renderToStaticMarkup(React.createElement(DnaScreen));
     expect(dna).toMatch(/<button[^>]*disabled=""[^>]*><span>\+<\/span><span>Onboard Client Tenant \(not enabled\)<\/span><\/button>/);

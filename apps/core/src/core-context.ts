@@ -23,7 +23,6 @@ import type {
   CircuitBreaker,
   CanvaNativeAdapter,
   HistoricalDesignMigrator,
-  ReconciliationService,
   TelegramActionTokenService,
   KurdishVoiceTranscriber,
 } from '@hawa/integrations';
@@ -64,7 +63,6 @@ export interface CoreContext {
   telegramBridge?: TelegramBridgeDaemon;
   telegramActionTokenService?: TelegramActionTokenService;
   evaluationService: DurableEvaluationService | null;
-  reconciliationService: ReconciliationService;
   canvaConnectService: CanvaConnectService | null;
   /** Where approved exports are read from (pinned-deliverables.ts). */
   deliverableStore: DeliverableStore;

@@ -1,10 +1,10 @@
+import { ReceiptAuditPanel } from '../components/ReceiptAuditPanel.js';
 import type { OperationsReliabilityReport } from '@hawa/contracts';
 import { parseOperationsReliability } from '../services/operationsEvidence.js';
 import { SpendingPolicyPanel } from '../components/SpendingPolicyPanel.js';
 import React, { useState, useEffect, useRef } from 'react';
-import { eventStream } from '../services/eventStream';
 import { apiClient } from '../api/client.js';
-import { read, reasonOf } from '../services/statusReport.js';
+import { read } from '../services/statusReport.js';
 import { CallCostAccountingPanel } from '../components/CallCostAccountingPanel.js';
 
 interface IntegrationHealth {
@@ -41,19 +41,6 @@ interface FailureItem {
   createdAt?: string;
 }
 
-export interface ReconciliationReport {
-  auditId: string;
-  timestamp: string;
-  basis: string;
-  simulated: boolean;
-  totalTasksAudited: number;
-  totalDriveDeliverablesChecked: number;
-  totalSheetRowsAudited: number;
-  inSyncCount: number;
-  driftCount: number;
-  status: 'clean' | 'divergent';
-}
-
 const record = (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === 'object' && !Array.isArray(v));
 const nonnegative = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 const count = (v: unknown) => nonnegative(v) && Number.isSafeInteger(v);
@@ -82,46 +69,28 @@ function parseFunnel(value: unknown): FunnelHealth | null {
   return value as unknown as FunnelHealth;
 }
 
-function parseAudit(value: unknown): ReconciliationReport | null {
-  if (!value || typeof value !== 'object') return null;
-  const v = value as Record<string, unknown>;
-  if (typeof v.auditId !== 'string' || !v.auditId || typeof v.timestamp !== 'string' || !Number.isFinite(Date.parse(v.timestamp)) ||
-      typeof v.basis !== 'string' || !v.basis || v.simulated !== false || !['clean','divergent'].includes(String(v.status))) return null;
-  if (['totalTasksAudited','totalDriveDeliverablesChecked','totalSheetRowsAudited','inSyncCount','driftCount'].some(k =>
-      typeof v[k] !== 'number' || !Number.isSafeInteger(v[k]) || (v[k] as number) < 0)) return null;
-  if ((v.status === 'clean') !== (v.driftCount === 0) || (v.inSyncCount as number) > (v.totalTasksAudited as number)) return null;
-  return v as unknown as ReconciliationReport;
-}
-
 export const OpsScreen: React.FC = () => {
   const [integrations, setIntegrations] = useState<IntegrationHealth[]>([]);
   const [funnel, setFunnel] = useState<FunnelHealth | null>(null);
   const [failures, setFailures] = useState<FailureItem[]>([]);
   const [reliability, setReliability] = useState<OperationsReliabilityReport | null>(null);
   const refreshSequence = useRef(0);
-  const [reconciliation, setReconciliation] = useState<ReconciliationReport | null>(null);
+  const [auditRefresh, setAuditRefresh] = useState(0);
   const [unreadable, setUnreadable] = useState<Record<string, string>>({});
 
   const [loading, setLoading] = useState(false);
-  const [runningReconciliation, setRunningReconciliation] = useState(false);
   const [lastCheck, setLastCheck] = useState<string | null>(null);
-  const [reconcileToast, setReconcileToast] = useState<string | null>(null);
   const [opsToast, setOpsToast] = useState<string | null>(null);
-  const showOpsToast = (text: string) => {
-    setOpsToast(text);
-    setTimeout(() => setOpsToast(null), 6000);
-  };
   const [inspectingFailure, setInspectingFailure] = useState<FailureItem | null>(null);
 
   const fetchOpsData = async () => {
     const sequence = ++refreshSequence.current;
     setLoading(true);
-    const [healthRes, funnelRes, failRes, sloRes, reconRes] = await Promise.all([
+    const [healthRes, funnelRes, failRes, sloRes] = await Promise.all([
       read(() => apiClient.operations.integrationsHealth()),
       read(() => apiClient.operations.funnelHealth()),
       read(() => apiClient.operations.failures()),
       read(() => apiClient.operations.slo()),
-      read(() => apiClient.operations.reconciliation()),
     ]);
     if (sequence !== refreshSequence.current) return;
     const gaps: Record<string, string> = {};
@@ -132,7 +101,6 @@ export const OpsScreen: React.FC = () => {
     note('design funnel', funnelRes);
     note('failures', failRes);
     note('slo', sloRes);
-    note('reconciliation', reconRes);
 
     const nextIntegrations = healthRes.state === 'known' ? integrationItems(healthRes.value) : null;
     const nextFailures = failRes.state === 'known' ? failureItems(failRes.value) : null;
@@ -146,50 +114,15 @@ export const OpsScreen: React.FC = () => {
     const nextReliability = sloRes.state === 'known' ? parseOperationsReliability(sloRes.value) : null;
     if (!nextReliability && sloRes.state === 'known') gaps.slo = 'Unsupported or incomplete reliability evidence';
     setReliability(nextReliability);
-    const nextAudit = reconRes.state === 'known' ? parseAudit(reconRes.value) : null;
-    if (!nextAudit && reconRes.state === 'known' && reconRes.value !== null) gaps.reconciliation = 'Unsupported or incomplete audit evidence';
-    setReconciliation(nextAudit);
     setUnreadable(gaps);
     setLastCheck(new Date().toLocaleTimeString());
     setLoading(false);
   };
 
-  // Audit only: the Desk never asks Core to auto-repair (see apiClient.operations.auditReconciliation).
-  const runReconciliation = async () => {
-    const sequence = ++refreshSequence.current;
-    setLoading(false);
-    setRunningReconciliation(true);
-    setReconcileToast(null);
-    try {
-      const data = await apiClient.operations.auditReconciliation();
-      if (sequence !== refreshSequence.current) return;
-      const audit = parseAudit(data);
-      if (!audit) throw new Error('Unsupported or incomplete audit evidence');
-      setReconciliation(audit);
-      setUnreadable(old => Object.fromEntries(Object.entries(old).filter(([key]) => key !== 'reconciliation')));
-      setReconcileToast(`✓ Stored receipt audit: ${data.inSyncCount} in sync, ${data.driftCount} drift(s) found, none repaired`);
-      setTimeout(() => setReconcileToast(null), 6000);
-    } catch (err) {
-      if (sequence !== refreshSequence.current) return;
-      setReconciliation(null);
-      setUnreadable(old => ({...old,reconciliation:reasonOf(err)}));
-      showOpsToast(`✗ Reconciliation audit did not run: ${reasonOf(err)}`);
-    } finally {
-      setRunningReconciliation(false);
-    }
-  };
-
   useEffect(() => {
     fetchOpsData();
 
-    const unsubReconcile = eventStream.on('reconciliation:completed', () => {
-      fetchOpsData();
-    });
-
-    return () => {
-      refreshSequence.current++;
-      unsubReconcile();
-    };
+    return () => { refreshSequence.current++; };
   }, []);
 
   const degradedCount = integrations.filter((i) => i.state !== 'paid_verified').length;
@@ -213,7 +146,7 @@ export const OpsScreen: React.FC = () => {
                 : `Telemetry read · last checked ${lastCheck}`}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={fetchOpsData}>Refresh telemetry</button>
+          <button className="btn" onClick={() => { setAuditRefresh(value => value + 1); void fetchOpsData(); }}>Refresh telemetry</button>
         </div>
       </div>
 
@@ -251,71 +184,7 @@ export const OpsScreen: React.FC = () => {
         </> : <p>Reliability evidence unavailable. {unreadable.slo || 'No report has been read yet.'}</p>}
       </section>
 
-      {/* Reconciliation & Storage Drift Audit Panel (FR-049, FR-050) */}
-      <div className="panel" style={{ padding: 16, marginTop: 16, borderLeft: '4px solid var(--border)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-          <div>
-            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, fontSize: 16 }}>
-              <span>🔄 Stored publication receipt audit</span>
-              <span className={`pill ${!reconciliation || reconciliation.totalTasksAudited === 0 ? '' : reconciliation.status === 'clean' ? 'ok' : 'bad'}`} style={{ fontSize: 11 }}>
-                {!reconciliation
-                  ? lastCheck && !unreadable.reconciliation
-                    ? 'No audit since Core started'
-                    : 'No audit read'
-                  : reconciliation.totalTasksAudited === 0
-                    ? 'No tasks audited'
-                    : reconciliation.status === 'clean'
-                    ? 'Stored receipts consistent'
-                    : 'Drift found'}
-              </span>
-            </h2>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              {reconciliation?.basis || 'Compares PostgreSQL tasks with stored publication receipts. External Drive and Sheets state is not checked, and nothing is repaired.'}
-            </div>
-          </div>
-          <button
-            className="btn"
-            style={{ fontSize: 12, padding: '4px 10px', background: 'rgba(22, 101, 52, 0.08)', color: 'var(--ok-text, #166534)', borderColor: 'var(--ok-text, #166534)', fontWeight: 600 }}
-            onClick={runReconciliation}
-            disabled={runningReconciliation}
-          >
-            {runningReconciliation ? 'Running Audit…' : 'Run Reconciliation Audit'}
-          </button>
-        </div>
-
-        {reconciliation && <p>Audit recorded {reconciliation.timestamp} · {reconciliation.simulated ? 'Simulated evidence' : 'Stored receipt evidence'}</p>}
-
-        {reconcileToast && (
-          <div style={{ background: 'rgba(22, 101, 52, 0.08)', border: '1px solid rgba(22, 101, 52, 0.25)', borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--ok-text, #166534)' }}>
-            {reconcileToast}
-          </div>
-        )}
-
-        <div className="ops-audit-stats">
-          <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18 }}>{reconciliation?.totalTasksAudited ?? '—'}</b>
-            <span style={{ fontSize: 11 }}>Tasks Audited</span>
-          </div>
-          <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18 }}>{reconciliation?.totalDriveDeliverablesChecked ?? '—'}</b>
-            <span style={{ fontSize: 11 }}>Drive receipts</span>
-          </div>
-          <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18 }}>{reconciliation?.totalSheetRowsAudited ?? '—'}</b>
-            <span style={{ fontSize: 11 }}>Sheet receipts</span>
-          </div>
-          <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18, color: 'var(--ok-text, #166534)' }}>{reconciliation?.inSyncCount ?? '—'}</b>
-            <span style={{ fontSize: 11 }}>In Sync</span>
-          </div>
-          <div className="stat" style={{ padding: '8px 10px' }}>
-            <b style={{ fontSize: 18, color: (reconciliation?.driftCount || 0) > 0 ? 'var(--warn-text, #854d0e)' : 'var(--ok-text, #166534)' }}>
-              {reconciliation?.driftCount ?? '—'}
-            </b>
-            <span style={{ fontSize: 11 }}>Anomalies found</span>
-          </div>
-        </div>
-      </div>
+      <ReceiptAuditPanel refreshKey={auditRefresh} />
 
       <div className="ops" style={{ marginTop: 16 }}>
         <div className="panel" style={{ padding: 16 }}>

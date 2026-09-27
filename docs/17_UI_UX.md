@@ -267,3 +267,14 @@ on narrow screens. Failure rows become labelled cards; inspection stays within
 the viewport. Browser qualification checks their actual bounds and the inspection
 interaction, followed by screenshot review. A document-width assertion alone does
 not detect children clipped by an overflow rule.
+
+### Scoped audit history and recovery (ADR-103, 2026-09-27)
+
+Operations shows the current actor/client scope, latest stored snapshot, bounded
+history and actual anomalies. A reason is required for a new audit. Save its exact
+UUID/scope/predecessor in browser session storage before transport, verify that
+write, and refuse dispatch if it fails. A lost response retains the same action
+across reload. Clearing it is an explicit local action and never changes database
+history. Refused or failed reads clear prior evidence; older responses cannot
+replace a newer authorized scope. Work not yet due for publication is displayed
+separately from confirmed delivery consistency. Reports remain after Core restart.

@@ -1,3 +1,4 @@
+import type { ReceiptAuditAction, ReceiptAuditState, ReceiptAuditResult } from '@hawa/contracts';
 import type { OperationsReliabilityReport } from '@hawa/contracts';
 import type { SpendingPolicyDetail, SpendingPolicyChange, SpendingPolicyResult } from '@hawa/contracts';
 /**
@@ -417,10 +418,10 @@ class HawaApiClient {
     funnelHealth: () => this.request<any>('/system/funnel/health'),
     failures: () => this.request<any>('/operations/failures'),
     slo: () => this.request<OperationsReliabilityReport>('/operations/slo'),
-    reconciliation: () => this.request<any>('/operations/reconciliation'),
+    reconciliation: (beforeRevision?:number) => this.request<ReceiptAuditState>('/operations/reconciliation'+(beforeRevision===undefined?'':`?beforeRevision=${beforeRevision}`)),
     // Audit only. Core refuses auto-repair (422): it cannot upload to Drive or write Sheets.
-    auditReconciliation: () =>
-      this.request<any>('/operations/reconciliation/run', { method: 'POST', body: JSON.stringify({ autoRepair: false }) }),
+    auditReconciliation: (action:ReceiptAuditAction) =>
+      this.request<ReceiptAuditResult>('/operations/reconciliation/run', { method: 'POST', headers: {'Idempotency-Key':action.actionId}, body: JSON.stringify(action) }),
   };
 
   public readonly evaluations = {

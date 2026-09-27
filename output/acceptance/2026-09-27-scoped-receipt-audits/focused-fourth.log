@@ -1,0 +1,30 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] hawa_tpl_build_test_6a483db8: applied db/schema.sql
+[test databases] hawa_tpl_build_test_6a483db8: applied db/rls.sql
+[test databases] hawa_tpl_build_test_6a483db8: applied db/seed.sql
+[test databases] hawa_tpl_build_test_6a483db8: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_test_6a483db8: versioned upgrades applied=57 verified=0
+[test databases] hawa_tpl_build_test_6a483db8: applied db/test-fixtures.sql
+[test databases] built template hawa_tpl_test_81895134343cebfe
+[test databases] hawa_tpl_build_repair_318f5432: applied db/schema.sql
+[test databases] hawa_tpl_build_repair_318f5432: applied db/rls.sql
+[test databases] hawa_tpl_build_repair_318f5432: applied db/seed.sql
+[test databases] hawa_tpl_build_repair_318f5432: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_repair_318f5432: versioned upgrades applied=57 verified=0
+[test databases] built template hawa_tpl_repair_81895134343cebfe
+[test databases] per-file clones of hawa_tpl_test_81895134343cebfe and hawa_tpl_repair_81895134343cebfe (624 ms)
+{"level":"warn","time":"2026-09-27T15:01:15.172Z","service":"core","requestId":"20660951-f5bf-401c-92af-64b88fe32781","chatId":"777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T15:01:15.222Z","service":"core","requestId":"5c10ca73-5b85-45c5-9982-dc91f43767f5","chatId":"9988","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T15:01:15.243Z","service":"core","requestId":"03dbf8ba-e6c2-4439-828b-63a68d0ba58e","chatId":"777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T15:01:15.248Z","service":"core","requestId":"76c419d7-fb0a-4c50-9ced-6375739325de","chatId":"-777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T15:01:15.278Z","service":"core","requestId":"660402c9-fe3e-49c1-b6aa-e9c92e5ec2d0","chatId":"-779","msg":"[Core] Telegram reply referenced unknown task UUID 11111111-1111-4111-8111-111111111111; reading the message on its own."}
+{"level":"error","time":"2026-09-27T15:01:15.494Z","service":"core","requestId":"0b0b45bc-356c-4d41-afa1-8f3033077297","taskId":"3b1f7faf-dc8f-4bc2-bd88-9dfc0e0ce93f","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Cannot approve stale revision 2f022919-d502-47d1-aabd-8a4f6775f39a. Current revision is bd5d42fe-ec01-44df-ad72-327c54d4f885","stack":"Error: Cannot approve stale revision 2f022919-d502-47d1-aabd-8a4f6775f39a. Current revision is bd5d42fe-ec01-44df-ad72-327c54d4f885\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:341:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at RevisionRepository.recordApproval (/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:603:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/routes/decisions.routes.ts:581:26\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at /Users/hawzhin/Hawdesign/apps/core/src/routes/decisions.routes.ts:577:22\n    at dispatch (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/hono@4.13.5/node_modules/hono/dist/compose.js:22:17)"},"msg":"[core:approvals:create] DB approval error:"}
+{"level":"error","time":"2026-09-27T15:01:15.574Z","service":"core","requestId":"9ac30d32-40c7-4874-91c1-d129d26b77de","taskId":"f2e05123-d9e7-421d-a2ac-e9522f95466a","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Task f2e05123-d9e7-421d-a2ac-e9522f95466a is cancelled; publication completion requires publishing or complete","stack":"Error: Task f2e05123-d9e7-421d-a2ac-e9522f95466a is cancelled; publication completion requires publishing or complete\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:346:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PublicationRepository.markComplete (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:405:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:992:13\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at doPublish (/Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:949:9)\n    at /Users/hawzhin/Hawdesign/packages/db/src/session-lock.ts:30:39"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+
+ Test Files  11 passed (11)
+      Tests  123 passed (123)
+   Start at  18:01:12
+   Duration  4.94s (transform 4.45s, setup 870ms, import 7.03s, tests 7.32s, environment 749ms)
+

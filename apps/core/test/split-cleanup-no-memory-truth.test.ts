@@ -1,3 +1,4 @@
+import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDb, TaskRepository, withRlsContext } from '@hawa/db';
 import { kaaeClientDNA } from '@hawa/domain';
@@ -47,7 +48,7 @@ describe('with a database, tasks are read from Postgres only', () => {
 
   it('audits the tasks Postgres holds, not only those this Core touched', async () => {
     await newTask(core(), { title: 'Cleanup: audited elsewhere', clientId: KAAE });
-    const res = await core().request('/v1/operations/reconciliation/run', { method: 'POST', headers: json, body: '{}' });
+    const res = await runReceiptAudit(core(),json);
     expect(res.status).toBe(201);
     expect((await res.json()).totalTasksAudited).toBeGreaterThanOrEqual(1);
   });

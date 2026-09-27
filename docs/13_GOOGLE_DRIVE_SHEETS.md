@@ -171,3 +171,19 @@ Only configured curated folders are indexed. File changes are detected by Drive 
 - task is republished after approved revision change.
 
 All must converge without duplicate logical artifacts.
+
+## Stored receipt audit snapshots (ADR-103, 2026-09-27)
+
+The internal Operations audit is immutable PostgreSQL evidence for one actor and
+exact current authorized client set. Tasks, current-revision publications and
+receipts are read and the report appended in one serializable transaction. Exact
+action replay returns the original result; a changed scope/body/predecessor is
+refused. Reports retain input/report hashes and a database timestamp, survive Core
+restart and are protected by current membership RLS. Process-wide cached reports
+and audit-result broadcasts are removed.
+
+Not-yet-published tasks are counted separately. Current manifest artifacts must
+match verified receipt names, hashes and sizes; old-revision receipts cannot mask
+missing current evidence. Sheet expected and observed hashes remain distinct.
+Caller-supplied simulation rows cannot enter the operational audit. This stored
+comparison does not complete the scheduled external checks in section 7.

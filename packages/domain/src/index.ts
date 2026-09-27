@@ -21,3 +21,5 @@ export * from './evaluation-settlement.js';
 export * from './studio-budget.js';
 
 export * from './spending-policy.js';
+
+export {auditPublicationReceipts} from './publication-audit.js';

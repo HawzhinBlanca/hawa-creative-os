@@ -111,12 +111,13 @@ it('upgrades actual pre-ledger Studio artifacts without inventing or duplicating
   await sql`INSERT INTO hawa.canva_design_plans(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,status)
    VALUES(${legacy}::uuid,${tenant}::uuid,${task}::uuid,${client}::uuid,'synthetic-actor',${legacy},${requestHash},'{}','failed')`.execute(fresh);
   const before=(await sql<{result:unknown;source_content:Buffer;source_sha256:string}>`SELECT result,source_content,source_sha256 FROM hawa.canva_design_plans WHERE id=${plan}::uuid`.execute(fresh)).rows[0];
-  expect((await upgradeCanvaSchema(ownerUrl.toString())).applied).toEqual(['056_durable_canva_planner_calls.sql']);
+  expect((await upgradeCanvaSchema(ownerUrl.toString())).applied).toEqual(['056_durable_canva_planner_calls.sql','057_scoped_receipt_audits.sql']);
   expect((await sql<{paid_protocol:string;studio_run_id:string}>`SELECT paid_protocol,studio_run_id FROM hawa.canva_design_plans WHERE id=${plan}::uuid`.execute(fresh)).rows[0])
    .toEqual({paid_protocol:'studio-transfer-v1',studio_run_id:run});
   expect((await sql`SELECT result,source_content,source_sha256 FROM hawa.canva_design_plans WHERE id=${plan}::uuid`.execute(fresh)).rows[0]).toEqual(before);
   expect((await sql<{paid_protocol:null}>`SELECT paid_protocol FROM hawa.canva_design_plans WHERE id=${legacy}::uuid`.execute(fresh)).rows[0].paid_protocol).toBeNull();
   expect((await sql`SELECT id FROM hawa.canva_planner_calls`.execute(fresh)).rows).toHaveLength(0);
+  expect((await sql`SELECT id FROM hawa.receipt_audits`.execute(fresh)).rows).toHaveLength(0);
   await expect(sql`UPDATE hawa.canva_design_plans SET studio_run_id=NULL,paid_protocol=NULL WHERE id=${plan}::uuid`.execute(fresh)).rejects.toThrow('immutable');
  }finally{await fresh?.destroy();await sql`DROP DATABASE IF EXISTS ${sql.id(name)} WITH (FORCE)`.execute(server);await server.destroy();}
 },30000);

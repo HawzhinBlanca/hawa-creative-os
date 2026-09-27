@@ -1,0 +1,3 @@
+apps/desk/src/screens/OpsScreen.tsx(6,1): error TS6133: 'eventStream' is declared but its value is never read.
+apps/desk/src/screens/OpsScreen.tsx(8,16): error TS6133: 'reasonOf' is declared but its value is never read.
+apps/desk/src/screens/OpsScreen.tsx(85,9): error TS6133: 'showOpsToast' is declared but its value is never read.

@@ -461,3 +461,15 @@ Private API responses are excluded from service-worker caching. Activation purge
 legacy Hawa API caches; Desk JSON requests use HTTP no-store. Offline shell/font
 caching does not authorize replay of task, policy or health data from another
 session or an older successful read (ADR-102 browser correction).
+
+### Durable scoped receipt audits (ADR-103, 2026-09-27)
+
+An audit action carries a UUID, exact authorized-scope hash, expected predecessor
+and reason. Idempotency-Key must match the UUID. One serializable transaction reads
+source facts and appends an immutable actor/scope revision; only bounded database
+conflicts are retried. Replaying a committed action rechecks authorization and
+returns the original result before checking the current predecessor. No provider
+call or result broadcast occurs. Membership changes invalidate the prior scope
+view; database failure cannot fall back to a process-local report. Current-revision
+receipt lineage, artifact manifest matching and separately unconfirmed Sheet row
+hashes prevent a false clean result. See runbooks/SCOPED_RECEIPT_AUDITS.md.

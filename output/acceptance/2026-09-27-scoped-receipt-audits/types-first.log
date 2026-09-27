@@ -1,0 +1,1 @@
+apps/core/src/services/receipt-audits.ts(50,84): error TS2345: Argument of type 'string' is not assignable to parameter of type '"received" | "promotion_pending" | "routing" | "routing_review" | "brief_draft" | "brief_review" | "context_ready" | "design_planning" | "asset_production" | "studio_composition" | ... 11 more ... | "rejected"'.

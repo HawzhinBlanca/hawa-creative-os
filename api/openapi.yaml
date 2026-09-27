@@ -16,6 +16,61 @@ tags:
   - name: Evaluations
   - name: Integrations
 paths:
+  /v1/operations/reconciliation:
+    get:
+      tags: [Operations]
+      operationId: readScopedReceiptAudits
+      summary: Read durable receipt audits for the current identity and client scope
+      description: Reads one authorized PostgreSQL snapshot. Scope is recalculated from active office membership and current client access. Earlier reports are hidden when that scope changes. The latest report is independent of the history cursor. Responses use Cache-Control no-store.
+      parameters:
+        - name: beforeRevision
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 2147483647}
+      responses:
+        '200':
+          description: Current scope, latest immutable report and up to 20 history entries
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReceiptAuditState'}
+        '400': {description: Invalid history cursor}
+        '401': {description: Authentication required}
+        '403': {description: Active named office membership required}
+        '503': {description: Durable evidence unavailable; no cached report is returned}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operations/reconciliation/run:
+    post:
+      tags: [Operations]
+      operationId: recordScopedReceiptAudit
+      summary: Record a named immutable audit of stored publication receipts
+      description: The action, current scope and expected predecessor are checked in one serializable transaction with source reads and the append. Idempotency-Key must equal actionId. An exact retry returns the original result, including after a restart or later audit. Current-revision manifests are compared with verified Drive receipts and observed Sheet row hashes. Pending tasks are not counted as consistent deliveries. No external service is read, no provider is called and nothing is repaired. Responses use Cache-Control no-store.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReceiptAuditAction'}
+      responses:
+        '201':
+          description: New audit recorded; replayed is false
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReceiptAuditResult'}
+        '200':
+          description: Exact stored result recovered; replayed is true
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReceiptAuditResult'}
+        '400': {description: Invalid action or header does not match actionId}
+        '401': {description: Authentication required}
+        '403': {description: Current named office membership and CSRF protection required}
+        '409': {description: Scope or predecessor changed, action identity conflict, or concurrent audit; retry only the original saved action}
+        '422': {description: Caller-supplied receipt rows, drift simulation and automatic repair are refused}
+        '503': {description: Outcome unconfirmed; retain the exact saved action for recovery}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/operations/slo:
     get:
       tags: [Operations]
@@ -1108,6 +1163,86 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    ReceiptAuditAction:
+      type: object
+      additionalProperties: false
+      required: [actionId, expectedScopeSha256, expectedLatestAuditId, reason]
+      properties:
+        actionId: {type: string, format: uuid, description: Stable browser-saved identity; equals Idempotency-Key}
+        expectedScopeSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        expectedLatestAuditId: {type: [string, 'null'], format: uuid}
+        reason: {type: string, minLength: 1, maxLength: 500, description: Trimmed nonempty explanation retained with the audit}
+    ReceiptAuditScope:
+      type: object
+      additionalProperties: false
+      required: [sha256, clientIds, includesUnassigned]
+      properties:
+        sha256: {type: string, pattern: '^[a-f0-9]{64}$', description: Database hash binds tenant, actor, protocol and exact authorized client IDs}
+        clientIds:
+          type: array
+          uniqueItems: true
+          items: {type: string, format: uuid}
+        includesUnassigned: {type: boolean, const: true}
+    ReceiptAuditAnomaly:
+      type: object
+      additionalProperties: false
+      required: [taskId, kind, severity, description, detectedAt]
+      properties:
+        taskId: {type: string, format: uuid}
+        kind: {enum: [ARCHIVE_OUTCOME_UNCONFIRMED, INCOMPLETE_PUBLICATION_EVIDENCE, RECEIPT_HASH_UNCONFIRMED, MISSING_DRIVE_ASSET, MISSING_SHEET_ROW, CHECKSUM_MISMATCH, STATUS_DIVERGENCE]}
+        severity: {enum: [high, medium]}
+        description: {type: string, minLength: 1}
+        detectedAt: {type: string, format: date-time, description: Equals the audit snapshot timestamp}
+    StoredReceiptAudit:
+      type: object
+      required: [auditId, timestamp, basis, simulated, revision, actorUserId, reason, scopeSha256, inputsSha256, reportSha256, totalTasksAudited, totalDriveDeliverablesChecked, totalSheetRowsAudited, inSyncCount, pendingTaskCount, driftCount, anomalies, status]
+      properties:
+        auditId: {type: string, format: uuid}
+        timestamp: {type: string, format: date-time, description: Database transaction time truncated to milliseconds}
+        basis: {type: string, minLength: 1, description: Stored PostgreSQL receipt comparison; external Drive and Sheets were not read}
+        simulated: {type: boolean, const: false}
+        revision: {type: integer, minimum: 1}
+        actorUserId: {type: string, format: uuid}
+        reason: {type: string, minLength: 1, maxLength: 500}
+        scopeSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        inputsSha256: {type: string, pattern: '^[a-f0-9]{64}$', description: SHA-256 of PostgreSQL JSONB input text}
+        reportSha256: {type: string, pattern: '^[a-f0-9]{64}$', description: SHA-256 of PostgreSQL JSONB report text before transport metadata}
+        totalTasksAudited: {type: integer, minimum: 0}
+        totalDriveDeliverablesChecked: {type: integer, minimum: 0}
+        totalSheetRowsAudited: {type: integer, minimum: 0}
+        inSyncCount: {type: integer, minimum: 0, description: Completed deliveries with consistent current-publication receipts}
+        pendingTaskCount: {type: integer, minimum: 0, description: Tasks whose delivery is not yet due}
+        driftCount: {type: integer, minimum: 0, description: Number of anomalies; multiple anomalies may belong to one task}
+        anomalies:
+          type: array
+          items: {$ref: '#/components/schemas/ReceiptAuditAnomaly'}
+        status: {enum: [clean, divergent], description: Clean means zero detected stored-receipt anomalies; it does not verify external delivery}
+    ReceiptAuditResult:
+      allOf:
+        - {$ref: '#/components/schemas/StoredReceiptAudit'}
+        - type: object
+          required: [replayed]
+          properties:
+            replayed: {type: boolean}
+    ReceiptAuditState:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, tenantId, userId, scope, latest, history, nextBeforeRevision]
+      properties:
+        schemaVersion: {type: integer, const: 1}
+        tenantId: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        scope: {$ref: '#/components/schemas/ReceiptAuditScope'}
+        latest:
+          anyOf:
+            - {$ref: '#/components/schemas/StoredReceiptAudit'}
+            - {type: 'null'}
+        history:
+          type: array
+          maxItems: 20
+          description: Descending revisions for the current actor and exact current scope
+          items: {$ref: '#/components/schemas/StoredReceiptAudit'}
+        nextBeforeRevision: {type: [integer, 'null'], minimum: 1, description: Pass as beforeRevision for the next page; null when exhausted}
     OperationsReliabilityReport:
       type: object
       additionalProperties: false

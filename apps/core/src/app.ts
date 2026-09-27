@@ -39,7 +39,6 @@ import { CreativeDirectorRunner, resolveOrnamentSettings } from '@hawa/creative'
 import { DeterministicQAEngine } from '@hawa/qa';
 import {
   GooglePublisher,
-  ReconciliationService,
   KurdishVoiceTranscriber,
   ResilientModelGateway,
   TelegramBridgeDaemon,
@@ -222,7 +221,6 @@ export function createApp(options?: CreateAppOptions) {
   });
   const modelGateway = new ResilientModelGateway();
   const evaluationService = db ? new DurableEvaluationService(db, options?.evaluationGateway || modelGateway) : null;
-  const reconciliationService = new ReconciliationService();
   const voiceTranscriber = new KurdishVoiceTranscriber();
   const telegramActionTokenService =
     options?.telegramActionTokenService || new TelegramActionTokenService(process.env.HAWA_ACTION_HMAC_SECRET);
@@ -925,7 +923,6 @@ export function createApp(options?: CreateAppOptions) {
     telegramBridge,
     telegramActionTokenService,
     evaluationService,
-    reconciliationService,
     canvaConnectService,
     deliverableStore,
     qaEngine,

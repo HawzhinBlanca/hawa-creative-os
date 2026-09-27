@@ -1,3 +1,4 @@
+import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { assert, describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createDb, PublicationRepository, TaskRepository, sql, withRlsContext } from '@hawa/db';
 import crypto from 'node:crypto';
@@ -182,9 +183,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       expect(publicationState).toMatchObject({ status: 'CANCELLED', state: 'archive_reconciliation',
         notification: { status: 'not_enqueued' } });
       expect(publicationState.actionableRecovery).toMatch(/do not retry requester delivery/i);
-      const audit = await (await app.request('/v1/operations/reconciliation/run', {
-        method: 'POST', headers: operatorHeaders, body: '{}',
-      })).json();
+      const audit = await (await runReceiptAudit(app,operatorHeaders)).json();
       expect(audit.anomalies).toEqual(expect.arrayContaining([expect.objectContaining({
         taskId: task.id, kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity: 'high',
       })]));
@@ -283,9 +282,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       expect(archiveQueue.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: task.id, status: 'ARCHIVE_RECONCILIATION' })]));
       expect((await (await app.request('/v1/tasks?statuses=PUBLISHING', { headers: operatorHeaders })).json()).items)
         .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: task.id })]));
-      const audit = await (await app.request('/v1/operations/reconciliation/run', {
-        method: 'POST', headers: operatorHeaders, body: '{}',
-      })).json();
+      const audit = await (await runReceiptAudit(app,operatorHeaders)).json();
       expect(audit.totalTasksAudited).toBeGreaterThan(0);
       expect(audit.anomalies).toEqual(expect.arrayContaining([expect.objectContaining({
         taskId: task.id, kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity: 'high',

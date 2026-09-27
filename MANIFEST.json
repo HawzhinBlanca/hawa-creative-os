@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T14:14:36Z",
+  "generatedAt": "2026-09-27T15:14:24Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 431,
+  "fileCount": 434,
   "files": [
     {
       "path": ".dockerignore",
@@ -583,6 +583,11 @@
       "bytes": 4992
     },
     {
+      "path": "adrs/103_durable_scoped_receipt_audits.md",
+      "sha256": "83ed1b91c204bf4f676590cba1c3b3cf3768fd33be511a54ee6f7f6d0768fdae",
+      "bytes": 4454
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -594,8 +599,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "4e65f56c67809373d4cdef5e7842beeb2fdbf0086515335073803ea927bae8b7",
-      "bytes": 73111
+      "sha256": "11f86eb379ac699d5660442102b76b92d3cfc86aad6c78f1841c90bc2bc11535",
+      "bytes": 81038
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -849,8 +854,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "bb07034e50133dd09196a87c5e5bbf88e9f235b7502e9c0add9159262db00aac",
-      "bytes": 28274
+      "sha256": "46eccc15e09851ab2c622a1e6f0c41ea91aee694e664e29e2b24610c42fcc16a",
+      "bytes": 29060
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -864,8 +869,8 @@
     },
     {
       "path": "docs/13_GOOGLE_DRIVE_SHEETS.md",
-      "sha256": "f05e2574052ccd82e065b5b8a4c3ad1c18c67bf5e440332461c678539e95902b",
-      "bytes": 13717
+      "sha256": "0a08d5e8a0d8c6234838854825ea4f7b07310d983752941a5882d1364a5a332d",
+      "bytes": 14693
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
@@ -884,8 +889,8 @@
     },
     {
       "path": "docs/17_UI_UX.md",
-      "sha256": "033334a8571594a2a938f3257883447d50bef1e76c81f132e3e1027d411ab8da",
-      "bytes": 11817
+      "sha256": "8e750e8c4e3dcf00e4bd5022b4860f1fe2ea52805c415f3bf6b3931d4e08b48a",
+      "bytes": 12526
     },
     {
       "path": "docs/18_FEEDBACK_LEARNING.md",
@@ -1034,8 +1039,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "7de33ffd38a0476c155771d1715709d3ab63eaf49e7e8da62c9be4d07aa16b00",
-      "bytes": 103098
+      "sha256": "38636321a47f4253e27047fcc5e1b277790d62e5c94e384e9e361607900a28f0",
+      "bytes": 104569
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1071,6 +1076,11 @@
       "path": "plans/research-grade-upgrade-2026-09-25/R02_OPERATIONS_EVIDENCE_PROOF.json",
       "sha256": "f9b379a6066afac347c725847e5f6b4141992af60647b2e5501f377a44d542c0",
       "bytes": 21540
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R02_SCOPED_RECEIPT_AUDITS_PROOF.json",
+      "sha256": "fc8924f372d6db5918a7f7ce1c93ba670cb30b131a6ac53c2a809609ef36d693",
+      "bytes": 10241
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R03_EVIDENCE.md",
@@ -1424,8 +1434,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "f15f7f1354650ca1cf41a94481a055d4bd1774e8311ea770fe4ee26ba1638118",
-      "bytes": 369083
+      "sha256": "5d628f28cc0f86b74ff6dcdfeaa01f7e7a084597257fd60578129fbf5618e995",
+      "bytes": 370919
     },
     {
       "path": "plans/user-stories.csv",
@@ -1549,8 +1559,8 @@
     },
     {
       "path": "runbooks/OPERATIONS_EVIDENCE.md",
-      "sha256": "e225a7c60a1b9e65926f922a3951f3f6731024b9a2040e5e2e6b9f75b25f9a7a",
-      "bytes": 2574
+      "sha256": "a1f49163a2e8c31b95368c28fe0bf6603f01968ae5ab4bf962f06ac5d568acb2",
+      "bytes": 2785
     },
     {
       "path": "runbooks/PAID_HEALTH_PROBES.md",
@@ -1561,6 +1571,11 @@
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",
       "sha256": "9029fdbb6a6610da10319988521f1e4d94f60dab28e0a9764e8e2400228b299e",
       "bytes": 9814
+    },
+    {
+      "path": "runbooks/SCOPED_RECEIPT_AUDITS.md",
+      "sha256": "0e23258dc516a499e91e5945d119e18970c4ca7c94f4d59743c3f0db975f7bbe",
+      "bytes": 2736
     },
     {
       "path": "runbooks/SPENDING_POLICY.md",

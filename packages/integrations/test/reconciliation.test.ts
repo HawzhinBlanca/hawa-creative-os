@@ -34,7 +34,8 @@ describe('ReconciliationService (FR-049, FR-050)', () => {
     const report = service.audit(tasks, drive, sheets);
     expect(report.status).toBe('clean');
     expect(report.driftCount).toBe(0);
-    expect(report.inSyncCount).toBe(2);
+    expect(report.inSyncCount).toBe(1);
+    expect(report.pendingTaskCount).toBe(1);
   });
 
   it('reports a missing Drive delivery and repairs nothing: no row is invented', () => {
@@ -88,20 +89,19 @@ describe('ReconciliationService (FR-049, FR-050)', () => {
     ]);
   });
 
-  it('has no latest audit until one runs, and never keeps a simulated audit as the latest', () => {
+  it('marks caller simulations and keeps each returned comparison independent', () => {
     const service = new ReconciliationService();
     // Formerly an invented clean report (12 tasks, 24 Drive files, all in sync) before any audit ran.
-    expect(service.getLastReport()).toBeNull();
 
     const tasks: TaskRecord[] = [{ id: 'task-1', status: 'COMPLETE', updatedAt: new Date().toISOString() }];
     const simulated = service.audit(tasks, [], [], { simulated: true });
     expect(simulated.simulated).toBe(true);
     expect(simulated.basis).toContain('Rows supplied or altered by the caller were included.');
-    expect(service.getLastReport()).toBeNull();
 
     const real = service.audit(tasks, [], []);
     expect(real.simulated).toBe(false);
-    expect(service.getLastReport()).toBe(real);
+    expect(simulated.simulated).toBe(true);
+    expect(real.auditId).not.toBe(simulated.auditId);
   });
 
   it('handles GooglePublisher reconciliation without throwing unhandled exceptions', async () => {

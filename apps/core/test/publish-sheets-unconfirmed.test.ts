@@ -1,3 +1,4 @@
+import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { describe, expect, it, afterAll } from 'vitest';
 import { createDb } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
@@ -101,7 +102,7 @@ describe('publish-omnichannel with the Sheets row unconfirmed', () => {
     const stored = (await (await app.request(`/tasks/${taskId}/publication-receipt`)).json()).receipt;
     expect(stored.files).toHaveLength(1);
     expect(stored.sheetRow).toBeUndefined();
-    const audit = await (await app.request('/operations/reconciliation/run', { method: 'POST', headers: json, body: '{}' })).json();
+    const audit = await (await runReceiptAudit(app,json)).json();
     expect(audit.anomalies).toContainEqual(expect.objectContaining({ taskId, kind: 'MISSING_SHEET_ROW' }));
   });
 

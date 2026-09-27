@@ -1,3 +1,4 @@
+import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { describe, it, expect, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import { createDb } from '@hawa/db';
@@ -75,11 +76,7 @@ describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR
   }
 
   async function runAudit(body: Record<string, unknown> = {}) {
-    return app.request('/operations/reconciliation/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    return runReceiptAudit(app,{},body);
   }
 
   async function storedReceipt(taskId: string) {
@@ -105,8 +102,8 @@ describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR
     const getRes = await app.request('/operations/reconciliation');
     expect(getRes.status).toBe(200);
     const latest = await getRes.json();
-    expect(latest.auditId).toBe(report.auditId);
-    expect(latest.status).toBe('clean');
+    expect(latest.latest.auditId).toBe(report.auditId);
+    expect(latest.latest.status).toBe('clean');
   });
 
   it('reports a missing Drive delivery, refuses auto-repair, and invents no receipt', async () => {
@@ -116,17 +113,12 @@ describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR
 
     // 1. Simulated drift is reported
     const auditRes = await runAudit({ simulateDrift: { missingDriveTaskId: taskId } });
-    expect(auditRes.status).toBe(201);
-    const auditReport = await auditRes.json();
-    expect(auditReport.status).toBe('divergent');
-    expect(auditReport.simulated).toBe(true);
-    const driveAnomaly = auditReport.anomalies.find((a: any) => a.taskId === taskId && a.kind === 'MISSING_DRIVE_ASSET');
-    expect(driveAnomaly).toMatchObject({ severity: 'high', description: `Task ${taskId} is COMPLETE but no Drive delivery is recorded for it` });
-    expect(driveAnomaly).not.toHaveProperty('repaired');
+    expect(auditRes.status).toBe(422);
+    expect((await auditRes.json()).title).toBe('Receipt Simulation Retired');
 
     // 2. A simulation is never kept as the latest audit the Desk shows
     const latest = await (await app.request('/operations/reconciliation')).json();
-    expect(latest.auditId).toBe(baseline.auditId);
+    expect(latest.latest.auditId).toBe(baseline.auditId);
 
     // 3. Auto-repair is refused, and the stored receipt is untouched (it used to gain drive_repaired_* rows)
     const repairRes = await runAudit({ autoRepair: true, simulateDrift: { missingDriveTaskId: taskId } });
@@ -143,10 +135,8 @@ describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR
   it('reports a missing Sheets row and refuses to invent one', async () => {
     const taskId = await createPublishedTask('Korek Telecom');
 
-    const report = await (await runAudit({ simulateDrift: { missingSheetTaskId: taskId } })).json();
-    const sheetAnomaly = report.anomalies.find((a: any) => a.taskId === taskId && a.kind === 'MISSING_SHEET_ROW');
-    expect(sheetAnomaly).toMatchObject({ severity: 'medium', description: `Task ${taskId} has no Sheets reporting row recorded` });
-    expect(sheetAnomaly).not.toHaveProperty('repaired');
+    const simulated = await runAudit({ simulateDrift: { missingSheetTaskId: taskId } });
+    expect(simulated.status).toBe(422);
 
     const repairRes = await runAudit({ autoRepair: true, simulateDrift: { missingSheetTaskId: taskId } });
     expect(repairRes.status).toBe(422);
@@ -155,13 +145,8 @@ describe('Gate G: reconciliation audit of recorded Drive & Sheets deliveries (FR
   it('reports a status divergence without changing the recorded Sheets row', async () => {
     const taskId = await createPublishedTask('FastPay Kurdistan');
 
-    const report = await (
-      await runAudit({ simulateDrift: { divergentTaskId: taskId, divergentStatus: 'IN_PROGRESS' } })
-    ).json();
-    const divAnomaly = report.anomalies.find((a: any) => a.taskId === taskId && a.kind === 'STATUS_DIVERGENCE');
-    expect(divAnomaly).toBeDefined();
-    expect(divAnomaly.description).toMatch(/^Task status \(COMPLETE\) disagrees with the recorded Sheets row \d+ \(IN_PROGRESS\)$/);
-    expect(divAnomaly).not.toHaveProperty('repaired');
+    const simulated = await runAudit({ simulateDrift: { divergentTaskId: taskId, divergentStatus: 'IN_PROGRESS' } });
+    expect(simulated.status).toBe(422);
 
     // The simulation used to overwrite the stored receipt's row status in place.
     expect((await storedReceipt(taskId)).sheetRow.status).toBe('COMPLETE');
