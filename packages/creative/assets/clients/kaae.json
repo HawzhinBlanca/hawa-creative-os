@@ -39,6 +39,7 @@
     "pack": "kaae-reference.json",
     "logo": "logos/kaae-official-logo.png"
   },
+  "exemplars": "kaae-exemplars.json",
   "onboarding": {
     "missing": []
   }

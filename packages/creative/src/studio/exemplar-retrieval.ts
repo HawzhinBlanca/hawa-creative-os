@@ -12,6 +12,8 @@ export interface ExemplarMetadata {
   reason: string;
   recommendedFor: string[];
   status?: 'CONFIRMED' | 'pending' | 'dropped';
+  /** The image's checksum as confirmed, which evidence records. */
+  sha256?: string;
 }
 
 export interface ExemplarRetrievalMatch {
@@ -57,16 +59,20 @@ function tokenize(text: string): string[] {
     .filter(Boolean);
 }
 
-export function computeLocalEmbeddingVector(text: string): number[] {
+/**
+ * The base vocabulary was built from KAAE's set. A client's exemplar manifest may add its own words
+ * ("vocabulary"), so a thumbnail client's briefs and exemplars are not all zero vectors.
+ */
+export function computeLocalEmbeddingVector(text: string, vocabulary: readonly string[] = VOCABULARY): number[] {
   const tokens = tokenize(text);
   const tf = new Map<string, number>();
   for (const t of tokens) {
     tf.set(t, (tf.get(t) || 0) + 1);
   }
 
-  const vec = new Array(VOCABULARY.length).fill(0);
-  for (let i = 0; i < VOCABULARY.length; i++) {
-    const word = VOCABULARY[i];
+  const vec = new Array(vocabulary.length).fill(0);
+  for (let i = 0; i < vocabulary.length; i++) {
+    const word = vocabulary[i];
     const count = tf.get(word) || 0;
     if (count > 0) {
       // Sublinear TF scaling
@@ -99,15 +105,34 @@ export function cosineSimilarity(vecA: number[], vecB: number[]): number {
   return parseFloat((dot / (Math.sqrt(normA) * Math.sqrt(normB))).toFixed(4));
 }
 
+/** What a client's exemplar manifest says about itself, beyond its entries (ADR-038). */
+export interface ExemplarManifestInfo {
+  /** The client the set belongs to, as its client pack's id. */
+  clientId?: string;
+  /** Where the set's images ship, under packages/creative/assets. */
+  imageDir?: string;
+  /** The query's category when the caller names none: the set's standing subject ("standards" for KAAE). */
+  retrievalHint?: string;
+}
+
 export class ExemplarRetrievalIndex {
   private exemplars: ExemplarMetadata[] = [];
   private vectors: Map<string, number[]> = new Map();
-  private cachePath: string;
+  private cachePath: string | undefined;
+  private manifestPath: string | undefined;
+  private vocabulary: string[] = VOCABULARY;
+  public info: ExemplarManifestInfo = {};
 
-  constructor(customCachePath?: string) {
+  /**
+   * With no manifest, KAAE's legacy set and its embedding cache, which the proof scripts read.
+   * Production reads a client's own set through loadClientExemplars (client-pack.ts), which passes
+   * that client's manifest; its vectors are computed in memory and never written to the cache.
+   */
+  constructor(customCachePath?: string, manifestPath?: string) {
+    this.manifestPath = manifestPath;
     this.cachePath =
       customCachePath ||
-      path.resolve(import.meta.dirname, '../../assets/exemplar-embeddings.json');
+      (manifestPath ? undefined : path.resolve(import.meta.dirname, '../../assets/exemplar-embeddings.json'));
     this.loadExemplarsAndEmbeddings();
   }
 
@@ -116,19 +141,30 @@ export class ExemplarRetrievalIndex {
   }
 
   private loadExemplarsAndEmbeddings(): void {
-    // 1. Load kaae-exemplars.json
-    const jsonPaths = [
-      path.resolve(import.meta.dirname, '../../assets/kaae-exemplars.json'),
-      path.resolve(process.cwd(), 'packages/creative/assets/kaae-exemplars.json'),
-      path.resolve(process.cwd(), 'assets/kaae-exemplars.json'),
-      path.resolve(import.meta.dirname, '../../../packages/creative/assets/kaae-exemplars.json'),
-    ];
+    // 1. Load the manifest: the one given, or KAAE's legacy set.
+    const jsonPaths = this.manifestPath
+      ? [this.manifestPath]
+      : [
+          path.resolve(import.meta.dirname, '../../assets/kaae-exemplars.json'),
+          path.resolve(process.cwd(), 'packages/creative/assets/kaae-exemplars.json'),
+          path.resolve(process.cwd(), 'assets/kaae-exemplars.json'),
+          path.resolve(import.meta.dirname, '../../../packages/creative/assets/kaae-exemplars.json'),
+        ];
     const targetJson = jsonPaths.find(p => fs.existsSync(p));
     if (!targetJson) {
-      throw new Error(`Cannot locate kaae-exemplars.json in expected paths: ${jsonPaths.join(', ')}`);
+      throw new Error(`Cannot locate the exemplar manifest in expected paths: ${jsonPaths.join(', ')}`);
     }
 
     const raw = JSON.parse(fs.readFileSync(targetJson, 'utf8'));
+    this.info = {
+      clientId: typeof raw.clientId === 'string' ? raw.clientId : undefined,
+      imageDir: typeof raw.imageDir === 'string' ? raw.imageDir : undefined,
+      retrievalHint: typeof raw.retrievalHint === 'string' ? raw.retrievalHint : undefined,
+    };
+    const extraWords: string[] = Array.isArray(raw.vocabulary)
+      ? raw.vocabulary.map((w: unknown) => String(w).toLowerCase()).filter((w: string) => w && !VOCABULARY.includes(w))
+      : [];
+    this.vocabulary = extraWords.length ? [...VOCABULARY, ...new Set(extraWords)] : VOCABULARY;
     // Strictly filter out any dropped or pending entries
     this.exemplars = (raw.exemplars || []).filter((e: any) => e.status !== 'pending' && e.status !== 'dropped').map((e: any) => {
       const id = path.basename(e.filename, path.extname(e.filename)).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -142,19 +178,22 @@ export class ExemplarRetrievalIndex {
         reason: e.reason,
         recommendedFor: e.recommendedFor || [],
         status: 'CONFIRMED' as const,
+        ...(typeof e.sha256 === 'string' ? { sha256: e.sha256 } : {}),
       };
     });
 
     // 2. Load or Compute Vector Embeddings
     let cacheLoaded = false;
-    if (fs.existsSync(this.cachePath)) {
+    if (this.cachePath && fs.existsSync(this.cachePath)) {
       try {
         const cache = JSON.parse(fs.readFileSync(this.cachePath, 'utf8'));
         if (cache && typeof cache === 'object' && cache.version === '2026-09-17' && cache.vectors) {
           for (const [id, vec] of Object.entries(cache.vectors)) {
             this.vectors.set(id, vec as number[]);
           }
-          cacheLoaded = true;
+          // An exemplar confirmed after the cache was written has no vector in it and would never
+          // be retrieved; rebuild instead.
+          cacheLoaded = this.exemplars.every((ex) => this.vectors.has(ex.id));
         }
       } catch {
         cacheLoaded = false;
@@ -166,16 +205,17 @@ export class ExemplarRetrievalIndex {
       const cacheObj: any = {
         version: '2026-09-17',
         updatedAt: new Date().toISOString(),
-        vocabulary: VOCABULARY,
+        vocabulary: this.vocabulary,
         vectors: {},
       };
 
       for (const ex of this.exemplars) {
         const textToEmbed = `${ex.filename} ${ex.format} ${ex.recommendedFor.join(' ')} ${ex.reason}`;
-        const vec = computeLocalEmbeddingVector(textToEmbed);
+        const vec = computeLocalEmbeddingVector(textToEmbed, this.vocabulary);
         this.vectors.set(ex.id, vec);
         cacheObj.vectors[ex.id] = vec;
       }
+      if (!this.cachePath) return;
 
       // The cache only saves recomputing six small vectors. The vectors are already in memory, so
       // a read-only disk must not fail a production design run over it.
@@ -196,8 +236,8 @@ export class ExemplarRetrievalIndex {
     k = 3
   ): ExemplarRetrievalResult {
     const startTime = performance.now();
-    const briefText = `${brief.text} ${brief.format || ''} ${brief.category || ''}`;
-    const queryVec = computeLocalEmbeddingVector(briefText);
+    const briefText = `${brief.text} ${brief.format || ''} ${brief.category || this.info.retrievalHint || ''}`;
+    const queryVec = computeLocalEmbeddingVector(briefText, this.vocabulary);
 
     const scored: Array<{ exemplar: ExemplarMetadata; score: number }> = [];
 

@@ -1,9 +1,8 @@
-import { clientPackOf, clientReferenceOf } from '../client-packs.js';
+import { clientExemplarsOf, clientPackOf, clientReferenceOf } from '../client-packs.js';
 import { thumbnailPlaybookPrompt } from '@hawa/creative';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import {
   sql,
   withRlsContext,
@@ -22,7 +21,6 @@ import {
   OpenAiStudioClient,
   OpenAiImageProvider,
   type StudioLayoutV2,
-  ExemplarRetrievalIndex,
   studioReferenceFromRaw,
   creativeAssetPath,
 } from '@hawa/creative';
@@ -1055,32 +1053,29 @@ export class DesignStudioService {
     }
 
     const exemplars: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }> = [];
+    // The client's own exemplars only (ADR-038): every client used to be conditioned on KAAE's.
+    let clientExemplars: ReturnType<typeof clientExemplarsOf>;
     try {
-      const retrievalIndex = new ExemplarRetrievalIndex();
+      clientExemplars = clientExemplarsOf(run.client_id);
       const briefQuery = {
         text: (s as any).instructions || (s as any).title || (run as any).title || '',
         format: (s as any).format,
         category: (s as any).topic,
       };
-      const retrieval = retrievalIndex.retrieveTopExemplars(briefQuery, 3);
-      for (const item of retrieval.retrievedExemplars) {
-        // The manifest still records the archive path the exemplar was curated from, which is
-        // outside the package and absent from the image; the copy in the package's own assets is
-        // the one that travels.
-        const archived = resolve(process.cwd(), item.path);
-        const imgPath =
-          creativeAssetPath(`exemplars/${item.filename}`, { optional: true }) ??
-          (existsSync(archived) ? archived : undefined);
+      const retrieval = clientExemplars?.index.retrieveTopExemplars(briefQuery, 3);
+      for (const item of retrieval?.retrievedExemplars ?? []) {
+        const imgPath = clientExemplars!.imageOf(item);
         if (imgPath) {
           exemplars.push({
             path: imgPath,
-            label: item.filename || item.descriptor || 'KAAE Exemplar',
+            label: item.filename || item.descriptor || 'Client exemplar',
             bytes: readFileSync(imgPath),
-            mimeType: 'image/png',
+            mimeType: /\.jpe?g$/i.test(imgPath) ? 'image/jpeg' : 'image/png',
           });
         }
       }
     } catch (err: any) {
+      clientExemplars = undefined;
       log.error(
         `[design-studio] Exemplar images could not be loaded (${err?.message || err}); ` +
           `this design is being generated without exemplar conditioning.`
@@ -1090,8 +1085,9 @@ export class DesignStudioService {
       // In production this was silent: the layout model was conditioned on nothing and no one
       // could tell from the logs that the run had seen no exemplar at all.
       log.error(
-        `[design-studio] No exemplar image resolved under ${creativeAssetPath('exemplars', { optional: true }) || 'packages/creative/assets/exemplars'}; ` +
-          `run ${run.id} is being conditioned on no exemplar.`
+        clientExemplars
+          ? `[design-studio] No exemplar image of client ${clientExemplars.code} resolved; run ${run.id} is being conditioned on no exemplar.`
+          : `[design-studio] Client ${run.client_id} has no confirmed exemplars yet; run ${run.id} is being conditioned on none rather than another client's.`
       );
     }
 
@@ -1138,6 +1134,7 @@ export class DesignStudioService {
       logoAspect: request.logoAspect || 1.0,
       logo,
       exemplars,
+      ...(clientExemplars ? { exemplarIndex: clientExemplars.index } : {}),
       client: ledgerClient as any,
       artProvider: ledgerArtProvider as any,
       pipelineV3: isPipelineV3Run(run),

@@ -2,6 +2,7 @@ import type { StudioLayoutV2 } from '@hawa/creative';
 import type { LayoutMetrics } from '@hawa/creative';
 import type { OpenAiStudioClient } from '@hawa/creative';
 import type { OpenAiImageProvider } from '@hawa/creative';
+import type { ExemplarRetrievalIndex } from '@hawa/creative';
 import type { DesignStudioRepository } from '@hawa/db';
 
 export class StudioBudgetExhaustedError extends Error {
@@ -162,6 +163,8 @@ export interface StageContext {
   logoAspect?: number;
   logo?: { bytes: Buffer; sha256: string; mimeType: 'image/png' | 'image/jpeg' };
   exemplars?: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }>;
+  /** The client's own exemplar set to retrieve from (ADR-038); absent when it has none yet. */
+  exemplarIndex?: ExemplarRetrievalIndex;
   client: OpenAiStudioClient;
   artProvider?: OpenAiImageProvider;
   ledger?: DesignStudioRepository;

@@ -2,6 +2,9 @@
 /**
  * Hawa Creative OS — Reference Exemplar Addition & Confirmation CLI (P11)
  * 
+ * Every command names the client whose library it changes (ADR-038): --client <code>, as in
+ * packages/creative/assets/clients/<code>.json. A client's exemplars condition its own designs only.
+ *
  * Supports:
  *   --drop <file-path>               Folder drop intake (adds as status: "pending")
  *   --telegram <file-path> --sender <id>  Telegram intake (adds as status: "pending" with sender)
@@ -14,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ReferenceLibraryManager } from '../packages/creative/src/studio/reference-manager.js';
+import { findClientPack, loadClientPacks } from '../packages/creative/src/clients/client-pack.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,24 +25,44 @@ const rootDir = path.resolve(__dirname, '..');
 
 async function main() {
   const args = process.argv.slice(2);
-  const manager = new ReferenceLibraryManager(rootDir);
 
   if (args.length === 0 || args.includes('--help')) {
     console.log(`
-Usage:
-  npx tsx scripts/add_exemplar.ts --drop <path-to-image>
-  npx tsx scripts/add_exemplar.ts --telegram <path-to-image> --sender <telegram-user-or-chat-id>
-  npx tsx scripts/add_exemplar.ts --desk <path-to-image> --user <user-id>
-  npx tsx scripts/add_exemplar.ts --confirm <filename> --rank <number> --by <owner-name>
-  npx tsx scripts/add_exemplar.ts --list
+Usage (every command names the client, by its pack code):
+  npx tsx scripts/add_exemplar.ts --client <code> --drop <path-to-image>
+  npx tsx scripts/add_exemplar.ts --client <code> --telegram <path-to-image> --sender <telegram-user-or-chat-id>
+  npx tsx scripts/add_exemplar.ts --client <code> --desk <path-to-image> --user <user-id>
+  npx tsx scripts/add_exemplar.ts --client <code> --confirm <filename> --rank <number> --by <owner-name>
+  npx tsx scripts/add_exemplar.ts --client <code> --list
+
+Clients: ${loadClientPacks().map((p) => p.code).join(', ')}
     `);
     process.exit(0);
   }
 
+  // No default client: an exemplar filed under the wrong client would condition its designs.
+  const clientIdx = args.indexOf('--client');
+  const pack = clientIdx >= 0 ? findClientPack(args[clientIdx + 1]) : undefined;
+  if (!pack) {
+    console.error(`Error: name the client with --client <code> (one of: ${loadClientPacks().map((p) => p.code).join(', ')}).`);
+    process.exit(1);
+  }
+  const manager = ReferenceLibraryManager.forClient(pack, rootDir);
+
+  /** A client's first exemplar starts its library; its pack then points at it. */
+  const pointPackAtLibrary = () => {
+    if (pack.exemplars) return;
+    const packFile = path.resolve(rootDir, `packages/creative/assets/clients/${pack.code}.json`);
+    const doc = JSON.parse(fs.readFileSync(packFile, 'utf8'));
+    doc.exemplars = path.relative(path.resolve(rootDir, 'packages/creative/assets'), manager.manifestFile).split(path.sep).join('/');
+    fs.writeFileSync(packFile, JSON.stringify(doc, null, 2) + '\n', 'utf8');
+    console.log(`  ${pack.code}'s pack now points at its library: ${doc.exemplars}`);
+  };
+
   if (args.includes('--list')) {
     const manifest = manager.getManifest();
     console.log(`\n======================================================`);
-    console.log(`KAAE REFERENCE LIBRARY (Total Confirmed: ${manifest.totalExemplars})`);
+    console.log(`${pack.displayName.toUpperCase()} REFERENCE LIBRARY (Total Confirmed: ${manifest.totalExemplars})`);
     console.log(`======================================================\n`);
     console.log(`[CONFIRMED REFERENCES]`);
     const confirmed = manifest.exemplars.filter(e => e.status !== 'pending' && e.status !== 'dropped');
@@ -83,6 +107,7 @@ Usage:
       process.exit(2);
     }
     console.log(`✓ Added as status "pending" (SHA256: ${res.entry?.sha256})`);
+    pointPackAtLibrary();
     console.log(`  Dimensions: ${res.entry?.dimensions.width}x${res.entry?.dimensions.height} (${res.entry?.format})`);
     console.log(`  Notice: This reference will NOT be retrieved until confirmed by the owner.`);
     return;
@@ -113,6 +138,7 @@ Usage:
       process.exit(2);
     }
     console.log(`✓ Added from Telegram as status "pending" with sender "${sender}"`);
+    pointPackAtLibrary();
     return;
   }
 
@@ -141,6 +167,7 @@ Usage:
       process.exit(2);
     }
     console.log(`✓ Added from Desk as status "pending" for user "${user}"`);
+    pointPackAtLibrary();
     return;
   }
 
@@ -165,7 +192,10 @@ Usage:
     console.log(`✓ Reference confirmed by ${by}!`);
     console.log(`  Assigned rank: #${res.entry?.rank}`);
     console.log(`  Total confirmed references now: ${res.confirmedCount}`);
-    console.log(`  Reference is now active and retrievable by P02 retrieval index.`);
+    console.log(`  Reference is now active and retrievable for ${pack.displayName}'s designs only.`);
+    if (pack.onboarding.missing.includes('exemplars')) {
+      console.log(`  When the set is complete (15–30 approved designs, ADR-038), remove "exemplars" from onboarding.missing in clients/${pack.code}.json.`);
+    }
     return;
   }
 }

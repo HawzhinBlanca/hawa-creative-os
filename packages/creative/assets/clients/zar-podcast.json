@@ -26,12 +26,14 @@
   "defaultFormat": "youtube-thumbnail",
   "playbook": "video-thumbnail",
   "reference": null,
+  "exemplars": null,
   "onboarding": {
     "missing": [
       "logo",
       "palette",
       "fonts",
       "reference-pack",
+      "exemplars",
       "telegram-chats",
       "language",
       "kurdish-aliases",
