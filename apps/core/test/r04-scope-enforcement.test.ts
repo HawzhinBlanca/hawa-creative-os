@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
+import type { Database, Kysely } from '@hawa/db';
+import { createQueryOnlyDb } from '../../../packages/db/test-support/query-only-db.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { DesignStudioService, type Scope } from '../src/services/design-studio/design-studio-service.js';
 import { CanvaFlowError } from '../src/services/canva-connect-service.js';
@@ -81,7 +83,11 @@ describe('R04: Enforce Principal, Tenant, Client, Task, and Run Scope Everywhere
 
     const service = Object.create(DesignStudioService.prototype);
     service.repo = mockRepo;
-    service.tx = async (_scope: unknown, fn: (db: any) => any) => fn({});
+    // Compile the admission lock through Kysely without connecting to a database.
+    // Real lock ordering is exercised in design-studio.test.ts, not this authorization fixture.
+    const queryDb = createQueryOnlyDb();
+    afterAll(() => queryDb.destroy());
+    service.tx = async (_scope: unknown, fn: (db: Kysely<Database>) => unknown) => fn(queryDb);
 
     it('rejects abandon when supplied taskId does not match the run task_id', async () => {
       const scope: Scope = { tenantId: defaultTenantId, actorId: 'user-designer-1', role: 'operator' };

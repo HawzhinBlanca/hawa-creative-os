@@ -271,3 +271,5 @@ Proof: `R21_STUDIO_TASK_HOLD_PROOF.json`; artifacts:
 This is a qualified local safety slice. General Studio settlement, live pilot,
 human design review and independent-host recovery remain open. No production
 change and no new isolated image deployment are claimed.
+
+Full regression on sealed runtime ab78c1d initially returned 3758 passed /5 failed /59 skipped. The five scope tests used an empty transaction stub; a query-only Kysely fixture retains their original authorization assertions. Its first import from Core was unavailable and was moved to DB test support; both failure logs are retained. Corrected scope file:13 passed. Final full regression:3763 passed /0 failed /59 skipped,472 files. Runtime source is unchanged. Release verification, any ratchet and provider egress lint passed.
