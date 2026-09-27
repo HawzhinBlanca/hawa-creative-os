@@ -46,3 +46,4 @@ export * from './studio/house-rules.js';
 export * from './studio/cost-architecture-v3.js';
 export * from './studio/reference-manager.js';
 export * from './studio/asset-paths.js';
+export * from './clients/client-pack.js';

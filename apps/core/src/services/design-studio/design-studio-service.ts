@@ -1,3 +1,4 @@
+import { clientReferenceOf } from '../client-packs.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
@@ -361,15 +362,20 @@ export class DesignStudioService {
       throw new CanvaFlowError(422, 'CLIENT_REQUIRED', 'Select the client before retrieving brand references.');
     }
 
+    // The task's own client pack names its reference pack and logo (ADR-038).
+    const clientReference = clientReferenceOf(task.client_id);
+    if ('refusal' in clientReference) {
+      throw new CanvaFlowError(422, 'CLIENT_REFERENCE_REQUIRED', clientReference.refusal);
+    }
     const reference: ReferencePack & { clientId: string; logoSha256: string } = JSON.parse(
-      await readFile(creativeAssetPath('kaae-reference.json'), 'utf8')
+      await readFile(clientReference.referencePath, 'utf8')
     );
 
     if (task.client_id !== reference.clientId) {
       throw new CanvaFlowError(
         422,
         'CLIENT_REFERENCE_REQUIRED',
-        'This client needs its own verified reference pack. KAAE references cannot be used for another client.'
+        'This client needs its own verified reference pack. Another client\'s references cannot be used for it.'
       );
     }
 
@@ -387,7 +393,7 @@ export class DesignStudioService {
       );
     }
 
-    const logo = await readFile(officialLogoPath());
+    const logo = await readFile(clientReference.logoPath);
     if (hash(logo) !== reference.logoSha256) {
       throw new CanvaFlowError(409, 'LOGO_CHANGED', 'The official logo checksum changed; review the reference pack.');
     }
@@ -1026,7 +1032,9 @@ export class DesignStudioService {
     let arabicFont: string;
 
     try {
-      const rawRef = JSON.parse(readFileSync(creativeAssetPath('kaae-reference.json'), 'utf8'));
+      const stageReference = clientReferenceOf(run.client_id);
+      if ('refusal' in stageReference) throw new Error(stageReference.refusal);
+      const rawRef = JSON.parse(readFileSync(stageReference.referencePath, 'utf8'));
       // Read the way the qualification reads it (shared), so both design with the same rules.
       const rules = studioReferenceFromRaw(rawRef);
       referencePack.palette = rules.palette;
@@ -1095,7 +1103,8 @@ export class DesignStudioService {
     // A KAAE design without the KAAE logo is not deliverable, so a missing or changed logo stops the
     // run. It used to pass silently: the only path tried did not exist in the image, and the design
     // went to Canva with the logo box empty.
-    const logoBytes = readFileSync(officialLogoPath());
+    const runReference = clientReferenceOf(run.client_id);
+    const logoBytes = readFileSync('refusal' in runReference ? officialLogoPath() : runReference.logoPath);
     const logoSha256 = createHash('sha256').update(logoBytes).digest('hex');
     if (request.logoSha256 && logoSha256 !== request.logoSha256) {
       throw new CanvaFlowError(409, 'LOGO_CHANGED', 'The official logo changed after this run started; review the reference pack.');
