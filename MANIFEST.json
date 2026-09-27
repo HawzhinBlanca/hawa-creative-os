@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T11:29:55Z",
+  "generatedAt": "2026-09-27T11:47:15Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 420,
+  "fileCount": 422,
   "files": [
     {
       "path": ".dockerignore",
@@ -563,6 +563,11 @@
       "bytes": 3418
     },
     {
+      "path": "adrs/099_fixture_evaluation_evidence.md",
+      "sha256": "be77a265ada545e6ba66990f6973996b5e4d3f2c20c61fbb15a4e4aca7887599",
+      "bytes": 1834
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -574,8 +579,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "d59fa770f44be916766cae4ec8224763d4cc180eb36099284d6b771c331b7207",
-      "bytes": 65513
+      "sha256": "cc199865289719d474b5c4b201fbeba7be84789e0afd21cf6e9061e2d757de01",
+      "bytes": 69468
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -814,8 +819,8 @@
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
-      "sha256": "08d474dbea59b2865dad11a4af97cea4c57fdd50cb5d0eff8dc99986d45e3cdb",
-      "bytes": 15784
+      "sha256": "09130ca8958e0746a634a7512065b1c37e7362d90852d4811a3cc1b12fc59013",
+      "bytes": 16803
     },
     {
       "path": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
@@ -829,8 +834,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "d79ec8576b9291cd24de4f47288fb0e503830cd94d35e6c9e3dde4110c9de9b3",
-      "bytes": 23977
+      "sha256": "092f2bac06033f5c2b751cd192c23f36926e825d28dd5700833ed2fb1847667c",
+      "bytes": 24996
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -864,8 +869,8 @@
     },
     {
       "path": "docs/17_UI_UX.md",
-      "sha256": "35efb617f61583a6a7a9130fbc4f62f63cc739520147a786f059b2a8846885ea",
-      "bytes": 7548
+      "sha256": "0e789a6858284ed38015b7f75ecb846bbbd8182ea13942dc5ab2da09316f2fa0",
+      "bytes": 8567
     },
     {
       "path": "docs/18_FEEDBACK_LEARNING.md",
@@ -1014,8 +1019,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "115158c1fa4c497b48bab7fb4668ba0fd2b1902f8b18430b44da643a61657b74",
-      "bytes": 87110
+      "sha256": "f9793d887154c3b470ec76d6cd018e9ef0da0d235b08bdd8104f426132531fc3",
+      "bytes": 88049
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1028,9 +1033,14 @@
       "bytes": 1314
     },
     {
+      "path": "plans/research-grade-upgrade-2026-09-25/R01_EVALUATION_EVIDENCE_PROOF.json",
+      "sha256": "dc7d67917aa11e4542743dcf2e2c8b074e2b92829edbada31ce96393c65f9c0b",
+      "bytes": 5480
+    },
+    {
       "path": "plans/research-grade-upgrade-2026-09-25/R01_EVIDENCE.md",
-      "sha256": "e3ee338ac2eee2cafa79cba16057bd0ab01bc26d176889e865f5157baab8f09f",
-      "bytes": 4977
+      "sha256": "a97121d79a1ba2664a889d71fefbbe073f383bf0c989b8757498fb62731dc930",
+      "bytes": 5916
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R01_TEST_TYPE_GATE_PROOF.json",
@@ -1384,8 +1394,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "697977fae94946e0af26957adcd2ad73cb3904757d4c05acd6830ac4871856f0",
-      "bytes": 355214
+      "sha256": "4f3fc7ac5e4e347a02eb92c6cca7fee432db49072f2492a369c94751f51f1d10",
+      "bytes": 357019
     },
     {
       "path": "plans/user-stories.csv",
@@ -1954,8 +1964,8 @@
     },
     {
       "path": "scripts/run_model_tournament.ts",
-      "sha256": "536d728ef8164cce057b214287fd5edb46964975ffbf2048ff1ca1753c090520",
-      "bytes": 13036
+      "sha256": "6c28fbc9e6727a54b46aced5389d95f592fd4b65fe9f0993d43b33ebfc22090b",
+      "bytes": 13238
     },
     {
       "path": "scripts/run_p10_qualification.ts",

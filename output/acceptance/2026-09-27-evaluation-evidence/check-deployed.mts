@@ -1,0 +1,51 @@
+// Read-only browser checks on the disposable candidate. No evaluation or provider call is started.
+import {writeFileSync} from 'node:fs';
+import {chromium} from '../../../apps/desk/node_modules/@playwright/test/index.mjs';
+import {secrets,FAKES_URL} from '../../../packages/testkit/chaos/driver/stack.js';
+const expected=process.argv[2];if(!/^[a-f0-9]{40}$/.test(expected||''))throw new Error('Supply the exact candidate commit');
+const origin='http://127.0.0.1:56081',out=new URL('./',import.meta.url),checks:Array<{name:string;passed:boolean}>=[];
+const check=(name:string,passed:boolean)=>{checks.push({name,passed});if(!passed)throw new Error(name);};
+const api=async(path:string)=>{const response=await fetch(origin+'/v1'+path,{headers:{Authorization:`Bearer ${secrets().CHAOS_BEARER_TOKEN}`}});if(!response.ok)throw new Error(`Read failed ${response.status}`);return response.json();};
+const ledger=async()=>((await(await fetch(FAKES_URL+'/__fakes/models/ledger')).json()) as {ledger:unknown[]}).ledger.length;
+const before=await ledger(),health=await api('/health');check('exact candidate is running',health.buildCommit===expected);
+const runs=await api('/evaluations/runs');const latest=runs.at(-1);check('candidate includes saved stopped evaluation',latest?.report?.executionStatus==='stopped');
+const dataset=await api('/evaluations/datasets/brief/cases');
+check('saved case evidence matches the served corpus',latest.report.routing.source.sha256===dataset.source.sha256);
+check('saved case evidence covers every routing definition',latest.report.routing.caseResults.length===dataset.cases.length);
+check('stopped routing case evidence separates attempted failure from unexecuted',latest.report.routing.caseResults[0].status==='failed'&&latest.report.routing.caseResults.slice(1).every((r:{status:string})=>r.status==='not_executed'));
+const browser=await chromium.launch({headless:true,channel:'chrome'});
+try {
+ const context=await browser.newContext({viewport:{width:1500,height:1300},extraHTTPHeaders:{Authorization:`Bearer ${secrets().CHAOS_BEARER_TOKEN}`}});
+ const page=await context.newPage(),errors:string[]=[];let mutations=0;
+ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method())&&r.url().includes('/evaluations/'))mutations++;});
+ await page.goto(origin+'/#/eval');
+ const panel=page.locator('#eval');await panel.getByText('Selected saved run:',{exact:false}).waitFor();
+ await panel.locator('tbody tr').first().waitFor();
+ check('first case displays its saved failure',(await panel.locator('tbody tr').first().locator('td').nth(4).innerText()).trim()==='Failed');
+ check('second case displays not executed',(await panel.locator('tbody tr').nth(1).locator('td').nth(4).innerText()).trim()==='Not executed');
+ check('stopped report has no aggregate pass rate',(await panel.locator('.score .stat').nth(2).locator('b').innerText())==='—');
+ await panel.screenshot({path:new URL('case-results.png',out).pathname});
+ await panel.getByRole('button',{name:'Suite Breakdown',exact:true}).click();
+ check('suite breakdown uses saved counts',(await panel.innerText()).includes('Passed: 0 · Failed: 1 · Total: 200'));
+ check('suite breakdown has no sample latency or contrast',!(/420ms|7.2:1|0.988|40\/40 Passed/.test(await panel.innerText())));
+ await panel.screenshot({path:new URL('suite-results.png',out).pathname});
+ await panel.getByRole('button',{name:'Candidates',exact:true}).click();
+ check('candidate ranking remains unreported',(await panel.innerText()).includes('Candidate ranking, human scores and canary status: Not reported'));
+ await panel.getByRole('button',{name:'Load calls for selected run',exact:true}).click();
+ await panel.getByRole('region',{name:'Evaluation call receipts',exact:true}).waitFor();
+ check('candidate evidence displays recorded calls',await panel.getByRole('region',{name:'Recorded model evidence',exact:true}).locator('tbody tr').count()>0);
+ await panel.screenshot({path:new URL('model-evidence.png',out).pathname});
+ await panel.getByRole('button',{name:/^Cases/}).click();
+ await panel.locator('.listitem').filter({hasText:'RTL Golden Suite'}).click();
+ await panel.locator('tbody tr').filter({hasText:'RTL-001'}).waitFor();
+ check('RTL definitions are explicitly unexecuted',(await panel.locator('tbody tr').first().locator('td').nth(4).innerText()).includes('Not executed by this tournament'));
+ await page.reload();await panel.locator('tbody tr').first().waitFor();
+ check('reload retains saved case outcomes',(await panel.locator('tbody tr').first().locator('td').nth(4).innerText()).trim()==='Failed');
+ check('no browser execution errors',errors.length===0);check('browsing starts no evaluation mutation',mutations===0);
+ check('browsing causes zero additional provider calls',await ledger()===before);
+ writeFileSync(new URL('runtime-health.json',out),JSON.stringify(await api('/health'),null,2)+'\n');
+} finally {
+ await browser.close();
+ writeFileSync(new URL('deployed-evaluation-evidence.json',out),JSON.stringify({checkedAt:new Date().toISOString(),buildCommit:expected,checks,realProviderCalls:false,productionChanged:false,scope:'Disposable candidate with synthetic provider outcomes'},null,2)+'\n');
+}
+console.log(JSON.stringify({passed:checks.filter(c=>c.passed).length,failed:checks.filter(c=>!c.passed).length}));

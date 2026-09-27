@@ -90,6 +90,8 @@ describe('durable fixture evaluations under runtime RLS',()=>{
     const service=new DurableEvaluationService(runtime,gateway);
     const run=await service.run(s,i);
     expect(run.status).toBe('completed');expect(run.report?.admissionEligible).toBe(false);
+    expect(run.report?.routing.caseResults).toHaveLength(200);
+    expect(run.report?.routing.source?.sha256).toMatch(/^[a-f0-9]{64}$/);
     const before=call.mock.calls.length;expect(before).toBeGreaterThan(1);
     const freshDb=createDb(process.env.TEST_DATABASE_URL!);
     try{
@@ -175,4 +177,16 @@ describe('durable fixture evaluations under runtime RLS',()=>{
     const response=await app.request('/v1/evaluations/runs',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':randomUUID()},body:JSON.stringify({name:'Test'})});
     expect(response.status).toBe(503);expect(call).not.toHaveBeenCalled();
   });
+});
+
+ it('serves source-bound actual corpus counts and refuses unknown dataset identities',async()=>{
+  const app=createApp({testAuth:{principal:{role:'operator'}},skipPaidModelProbe:true,skipTelegramProbe:true,enableTelegramPolling:false});
+  const catalog=await (await app.request('/v1/evaluations/datasets')).json();
+  for (const definition of catalog) {
+    const response=await app.request(`/v1/evaluations/datasets/${definition.id}/cases`);
+    expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toBe('no-store');
+    const dataset=await response.json();expect(dataset.total).toBe(dataset.cases.length);expect(definition.casesCount).toBe(dataset.total);
+    expect(dataset.source).toEqual(definition.source);expect(dataset.source.sha256).toMatch(/^[a-f0-9]{64}$/);
+  }
+  expect((await app.request('/v1/evaluations/datasets/missing/cases')).status).toBe(404);
 });

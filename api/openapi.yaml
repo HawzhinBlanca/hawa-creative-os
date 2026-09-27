@@ -692,6 +692,36 @@ paths:
                         checkedAt: {type: string, format: date-time}
                         detail: {type: object}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/evaluations/datasets:
+    get:
+      tags: [Evaluations]
+      operationId: listFixtureDatasets
+      description: Allowlisted corpus definitions with measured counts and SHA-256 of the exact file bytes. Availability does not indicate passing tests. Unreadable datasets have null count and source.
+      responses:
+        '200': {description: Dataset metadata; no-store, content: {application/json: {schema: {type: array, items: {type: object}}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/evaluations/datasets/{datasetId}/cases:
+    get:
+      tags: [Evaluations]
+      operationId: readFixtureCases
+      parameters:
+        - {name: datasetId, in: path, required: true, schema: {type: string, enum: [brief, rtl, retrieval]}}
+      responses:
+        '200':
+          description: Case definitions and source identity; these are not execution outcomes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [datasetId, total, source, cases]
+                properties:
+                  datasetId: {type: string}
+                  total: {type: integer, minimum: 0}
+                  source: {$ref: '#/components/schemas/EvaluationDatasetSource'}
+                  cases: {type: array, items: {type: object}}
+        '404': {description: Unknown dataset identity}
+        '503': {description: Corpus unavailable or invalid; internal filesystem details excluded}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/evaluations/runs:
     get:
       tags: [Evaluations]
@@ -745,7 +775,7 @@ paths:
                   actionId: {type: string, format: uuid}
                   name: {type: string}
                   status: {enum: [running, completed, failed, closed]}
-                  report: {type: [object, 'null']}
+                  report: {anyOf: [{$ref: '#/components/schemas/FixtureEvaluationReport'}, {type: 'null'}]}
                   resumable: {type: boolean}
                   snapshotHash: {type: string, pattern: '^[a-f0-9]{64}$'}
                   canSettle: {type: boolean}
@@ -1022,6 +1052,53 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    EvaluationDatasetSource:
+      type: object
+      required: [file, sha256]
+      properties:
+        file: {type: string, description: Allowlisted corpus path or builtin fixture identity}
+        sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+    FixtureEvaluationSummary:
+      type: object
+      description: Synthetic diagnostics. Legacy reports may omit source, caseResults and execution details; missing fields stay unknown.
+      properties:
+        dataset: {type: string}
+        admissionEligible: {type: boolean}
+        source: {$ref: '#/components/schemas/EvaluationDatasetSource'}
+        totalCases: {type: integer, minimum: 0}
+        passedCases: {type: integer, minimum: 0}
+        failedCases: {type: integer, minimum: 0}
+        unreportedCases: {type: integer, minimum: 0}
+        passRate: {type: [number, 'null'], minimum: 0, maximum: 100, description: Null when case execution or required scoring evidence is incomplete}
+        criticalViolations: {type: integer, minimum: 0}
+        execution:
+          type: object
+          properties:
+            status: {enum: [complete, stopped]}
+            attemptedCases: {type: integer, minimum: 0}
+            unexecutedCases: {type: integer, minimum: 0}
+            stopReason: {type: object}
+        caseResults:
+          type: array
+          items:
+            type: object
+            required: [caseId, status, criticalViolations]
+            properties:
+              caseId: {type: string}
+              status: {enum: [passed, failed, not_executed, unreported]}
+              criticalViolations: {type: integer, minimum: 0}
+    FixtureEvaluationReport:
+      type: object
+      description: Fixed synthetic tournament. RTL corpus browsing, model promotion and native editor admission are outside its execution scope.
+      properties:
+        routing: {$ref: '#/components/schemas/FixtureEvaluationSummary'}
+        retrieval: {$ref: '#/components/schemas/FixtureEvaluationSummary'}
+        copyGuard: {$ref: '#/components/schemas/FixtureEvaluationSummary'}
+        visualJudge: {$ref: '#/components/schemas/FixtureEvaluationSummary'}
+        adversarialSafety: {$ref: '#/components/schemas/FixtureEvaluationSummary'}
+        overallPassRate: {type: [number, 'null'], minimum: 0, maximum: 100}
+        executionStatus: {enum: [complete, stopped]}
+        admissionEligible: {const: false}
     SharedDailySpending:
       type: object
       required: [day, timezone, policyVersion, scopes]

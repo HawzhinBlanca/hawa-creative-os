@@ -1,5 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import { fixtureDatasetCatalog, readFixtureDataset } from '@hawa/evals';
 import { createHash } from 'node:crypto';
 import type { RouteContext } from './types.js';
 import { EvaluationError } from '../services/durable-evaluations.js';
@@ -45,31 +44,18 @@ export function registerEvalsRoutes(ctx: RouteContext) {
   });
 
   registerRoute('get', '/evaluations/datasets', (c: any) => {
-    return c.json([
-      { id: 'brief', name: 'Brief Builder', casesCount: 200, status: 'ok', file: 'evals/routing_brief.jsonl', description: 'Fixture diagnostics · not model admission evidence' },
-      { id: 'rtl', name: 'RTL Golden Suite', casesCount: 40, status: 'ok', file: 'evals/rtl_golden_cases.jsonl', description: 'UAX #9 bidi paragraph embedding, isolate formatting, and Sorani numerals' },
-      { id: 'retrieval', name: 'Retrieval & Leakage', casesCount: 20, status: 'ok', file: 'evals/retrieval_eval.jsonl', description: 'Cross-client leakage tests, negative context filtering, and scope locks' },
-    ]);
+    c.header('Cache-Control', 'no-store');
+    return c.json(fixtureDatasetCatalog());
   });
 
   registerRoute('get', '/evaluations/datasets/:datasetId/cases', (c: any) => {
-    const datasetId = c.req.param('datasetId');
-    let relFile = 'evals/routing_brief.jsonl';
-    if (datasetId === 'rtl') relFile = 'evals/rtl_golden_cases.jsonl';
-    else if (datasetId === 'retrieval') relFile = 'evals/retrieval_eval.jsonl';
-
+    c.header('Cache-Control', 'no-store');
     try {
-      const p1 = path.resolve(process.cwd(), relFile);
-      const p2 = path.resolve(process.cwd(), '../../', relFile);
-      const targetPath = fs.existsSync(p1) ? p1 : p2;
-      const content = fs.readFileSync(targetPath, 'utf-8');
-      const cases = content
-        .split('\n')
-        .filter((line) => line.trim().length > 0)
-        .map((line) => JSON.parse(line));
-      return c.json({ datasetId, total: cases.length, cases });
-    } catch (err: any) {
-      return problem(c, 500, 'Dataset Read Error', `Unable to load dataset ${datasetId}: ${err.message}`);
+      const dataset = readFixtureDataset(c.req.param('datasetId'));
+      if (!dataset) return problem(c, 404, 'Dataset Not Found');
+      return c.json({ datasetId: dataset.id, total: dataset.cases.length, source: dataset.source, cases: dataset.cases });
+    } catch {
+      return problem(c, 503, 'Dataset Unavailable', 'The fixture corpus could not be read or validated. No case results are available.');
     }
   });
 }

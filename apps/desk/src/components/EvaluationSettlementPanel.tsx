@@ -7,7 +7,7 @@ import type { EvaluationCallCostProps } from './EvaluationCallCost.js';
 interface Detail {
   daily?:DailySpendingUsage|null;
   runId:string; status:string; snapshotHash:string; canSettle:boolean;
-  calls:Array<EvaluationCallCostProps & {id:string;ordinal:number;status:string;provider?:string|null;model?:string|null;error?:{code:string;detail?:{providerRequestId?:string|null}}|null}>;
+  calls:Array<EvaluationCallCostProps & {id:string;ordinal:number;status:string;latencyMs?:number|null;provenance?:string|null;provider?:string|null;model?:string|null;error?:{code:string;detail?:{providerRequestId?:string|null}}|null}>;
   settlement:null|{actorUserId:string;recordedAt:string;reason:string;calls:SettlementBody['calls']};
 }
 type Draft={conclusion:'provider_not_accepted'|'provider_finished';cost:string;reference:string;hash:string};

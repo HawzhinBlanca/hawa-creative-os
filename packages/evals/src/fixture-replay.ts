@@ -10,7 +10,7 @@ export function fixtureEvaluationIdentity() {
   const files = names.map(name => readFileSync(locate(name), 'utf8'));
   const seal = readFileSync(locate('RELEASE_MANIFEST.json'), 'utf8');
   const imageHash = createHash('sha256').update(readFileSync(locate('packages/creative/assets/logos/kaae-official-logo.png'))).digest('hex');
-  const hash = createHash('sha256').update(JSON.stringify({ protocol: 'fixture-replay-v2', files, imageHash, seal,
+  const hash = createHash('sha256').update(JSON.stringify({ protocol: 'fixture-replay-v3', files, imageHash, seal,
     responseSchemas: [ROUTING_RESPONSE_SCHEMA, VISUAL_RESPONSE_SCHEMA] })).digest('hex');
   const routing = files[0].split('\n').filter(Boolean).map(line => JSON.parse(line));
   const normalize = (value: unknown, prefix: string) => String(value).trim().toUpperCase().replace(new RegExp(`^${prefix}-`), '');

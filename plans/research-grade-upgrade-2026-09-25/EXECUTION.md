@@ -1270,3 +1270,10 @@ unchanged afterward and the CSS follow-up has a separate successful Desk build.
 No production upgrade, live provider bill, human approval or message occurred.
 Provider settlement, real office workflow, independent recovery and human creative
 qualification remain open. Final proof: R21_DURABLE_EVALUATION_PROOF.json.
+
+
+## 2026-09-27 — Truthful fixture evaluation evidence (ADR-099)
+
+2026-09-27 ADR-099 source candidate: corpus-bound per-case diagnostics, missing visual scores remain unreported, actual suite/call data and selected-run UI; 61 focused tests and 494 strict roots pass. Full sealed/runtime qualification pending. See plans/research-grade-upgrade-2026-09-25/R01_EVALUATION_EVIDENCE_PROOF.json. Live/human admission remains open.
+
+The old UI hard-coded passing cases, model scores, latency and canary states. The visual evaluator invented optional numeric scores. New reports retain case outcomes and exact corpus hashes, while old reports remain aggregate-only. Unavailable rubric evidence is distinct from measured failure; incomplete scoring has no pass percentage. The fixture protocol is v3. Dataset counts come from validated files, unknown IDs refuse, and UI reads do not dispatch generation. First failures are retained in the proof.

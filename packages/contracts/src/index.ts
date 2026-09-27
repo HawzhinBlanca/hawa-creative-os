@@ -17,3 +17,4 @@ export * from './lifecycle-source.js';
 export * from './call-cost.js';
 
 export * from './spending-policy.js';
+export * from './evaluation-evidence.js';

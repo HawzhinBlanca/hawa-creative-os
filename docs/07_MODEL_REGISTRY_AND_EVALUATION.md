@@ -325,3 +325,20 @@ Desk Operations shows paginated original costs, reserved amounts, attributed
 history and conflicts. Unknown cost remains unknown; evidence files stay local.
 See runbooks/CALL_COST_ACCOUNTING.md. Live billing, policy administration and typed
 result recovery retain separate acceptance gates.
+
+
+### Source-bound fixture evidence (ADR-099, 2026-09-27)
+
+Saved fixture reports identify corpus bytes by SHA-256 and individual cases as
+passed, failed, not executed or unreported. Missing visual rubric scores cannot
+be replaced by numeric defaults; incomplete scoring has no aggregate pass rate.
+The replay protocol is v3. Completed legacy reports remain immutable and can
+supply only their recorded aggregates, not reconstructed per-case outcomes.
+
+Desk selects a saved run explicitly and matches case evidence to the exact corpus
+identity. Dataset counts are measured from validated files, not fixture constants.
+Browsing RTL definitions does not run the RTL corpus. Suite counts, call models,
+latency and timestamps come from retained evidence. Candidate ranking, native
+editability, canary results and human scores remain unknown unless independently
+measured. Reading these views sends no generation request. Existing retained-action
+retry, shared spending, and named settlement boundaries remain authoritative.

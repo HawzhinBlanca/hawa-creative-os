@@ -24,3 +24,10 @@ The 2026-09-25 baseline in `output/audits/2026-09-25-architecture-design-reality
 ## Later gate repair — reminder cutoff fixture
 
 The exact sealed `38e0955` suite on 2026-09-25 passed 419 files and 3,142 tests but failed one test in `apps/core/test/draft-reminders.test.ts` (4 files/48 tests skipped). Its “sent before reminders existed” fixture used `now() - 30 hours` against the fixed production cutoff `2026-09-24T06:00:00Z`. As wall time passed noon UTC on September 25, that draft's simulated send time crossed the fixed cutoff and the test ceased to represent its stated case. Source `091ec57` now reads the recorded draft send timestamp and supplies a cutoff one second later. The night-hours negative control remains separate. The focused file passed 6 tests; the full source suite excluding only the unsealed release-manifest test passed 419 files/3,137 tests (4 files/48 skipped), with typecheck, lint and blueprint 757/0/0 passing. This changes test construction, not reminder production behavior. The red run is retained in `/private/tmp/hawdesign-delivery-drill-sealed-test.log`; the subsequent exact seal `fd79219` passed 420 files/3,143 tests (4 files/48 skipped). R01's remote-tracked seven-stage gate remains open.
+
+
+## 2026-09-27 — Truthful fixture evaluation evidence (ADR-099)
+
+2026-09-27 ADR-099 source candidate: corpus-bound per-case diagnostics, missing visual scores remain unreported, actual suite/call data and selected-run UI; 61 focused tests and 494 strict roots pass. Full sealed/runtime qualification pending. See plans/research-grade-upgrade-2026-09-25/R01_EVALUATION_EVIDENCE_PROOF.json. Live/human admission remains open.
+
+The old UI hard-coded passing cases, model scores, latency and canary states. The visual evaluator invented optional numeric scores. New reports retain case outcomes and exact corpus hashes, while old reports remain aggregate-only. Unavailable rubric evidence is distinct from measured failure; incomplete scoring has no pass percentage. The fixture protocol is v3. Dataset counts come from validated files, unknown IDs refuse, and UI reads do not dispatch generation. First failures are retained in the proof.

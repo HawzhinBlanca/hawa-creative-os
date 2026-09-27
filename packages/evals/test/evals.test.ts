@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { EvaluationRunner } from '../src/runner.js';
 import { ResilientModelGateway } from '@hawa/integrations';
 
-describe('Evals: Tournament & Acceptance Benchmarks', () => {
+describe('Evals: Synthetic fixture diagnostics', () => {
   const runner = new EvaluationRunner();
 
-  it('evaluates routing and brief holdout cases with 0 critical violations', async () => {
+  it('evaluates routing and brief fixture cases with 0 critical violations', async () => {
     const summary = await runner.runRoutingAndBriefTournament();
     expect(summary.totalCases).toBe(200);
     expect(summary.passRate).toBe(100);
@@ -62,7 +62,8 @@ describe('Evals: Tournament & Acceptance Benchmarks', () => {
       const full = await new EvaluationRunner(new ResilientModelGateway()).runFullTournament();
       expect(full.routing.failedCases).toBe(full.routing.totalCases);
       expect(full.routing.passRate).toBe(0);
-      expect(full.overallPassRate).toBeLessThan(95);
+      expect(full.overallPassRate).toBeNull();
+      expect(full.visualJudge.unreportedCases).toBe(full.visualJudge.totalCases);
       expect(full.admissionEligible).toBe(false);
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
