@@ -1099,7 +1099,7 @@ const DnaClientScreen: React.FC<{
             <div>
               <h3>Kurdish Typography Registry (Invariant #8)</h3>
               <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 0 }}>
-                Kurdish Sorani and Arabic RTL text rendering with guaranteed Unicode UAX #9 Directional Isolation.
+                Set the client's language and typography rules. Verify Arabic and Sorani reading order in final exports.
               </p>
 
               {/* Kurdish WebFont Ingestion & Diacritic Coverage Inspector (Google Fonts & Font Bakery Grade) */}

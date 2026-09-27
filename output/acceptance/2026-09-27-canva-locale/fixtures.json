@@ -1,0 +1,712 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "aefeabca7e38c782148503ce8defc8fb2e68e8fd",
+  "corpus": {
+    "path": "evals/rtl_golden_cases.jsonl",
+    "sha256": "903601e57d2570a58545ef93b0dda45c2b6d01d7be01880a7df803990eee1148",
+    "caseCount": 14
+  },
+  "sourceHashes": {
+    "packages/creative/src/editable-transfer.ts": "f3ee3f99e6a48a89c4aebc683f3923b532cf5d712ca224f2236d3ebe17c4efc6",
+    "packages/creative/src/studio/transfer-v2.ts": "394bc5fb3035514673fe52339e9707310b9be944e96d00279d9f22172a4518fa",
+    "packages/qa/src/canva-pptx-check.ts": "a5f429abd38974584a4111938108def252c3427284a68064d29a711929300e9e",
+    "packages/integrations/src/canva-connect-client.ts": "3fe7ec3e9b0883213c0f1b8e941178454c155a87a46512be35c3db8676e6e8ac",
+    "apps/core/src/services/canva-connect-service.ts": "1d20812e9290ec73ccf9d0c27fb85d90930f7a07e06ed020fe4903e71804aab4"
+  },
+  "groups": [
+    {
+      "id": "locale-v1",
+      "file": "locale-v1-input.pptx",
+      "bytes": 57085,
+      "sha256": "b00ba2785401ce2597727b15d4807aa9f4125d06ef7160c9568c938bf0f21dfe",
+      "cases": [
+        {
+          "id": "RTL-001",
+          "language": "ckb",
+          "text": "سڵاو جیهان",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "glyphs",
+            "joining",
+            "right_alignment",
+            "roundtrip"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ],
+          "locale": "ckb"
+        },
+        {
+          "id": "RTL-002",
+          "language": "ar",
+          "text": "مرحبا بالعالم",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "glyphs",
+            "joining",
+            "right_alignment",
+            "roundtrip"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ],
+          "locale": "ar"
+        },
+        {
+          "id": "RTL-003",
+          "language": "en",
+          "text": "Hello world",
+          "declared_direction": "auto",
+          "expected_base_direction": "ltr",
+          "critical": true,
+          "checks": [
+            "left_alignment",
+            "roundtrip"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ],
+          "locale": "en"
+        },
+        {
+          "id": "RTL-004",
+          "language": "ckb",
+          "text": "نرخی تایبەت: ٢٥٬٠٠٠ دینار",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "digits",
+            "thousands_separator",
+            "colon",
+            "joining",
+            "wrap"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ],
+          "locale": "ckb"
+        },
+        {
+          "id": "RTL-005",
+          "language": "ar",
+          "text": "السعر الخاص: ٢٥٬٠٠٠ دينار",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "digits",
+            "thousands_separator",
+            "colon",
+            "joining",
+            "wrap"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ],
+          "locale": "ar"
+        },
+        {
+          "id": "RTL-006",
+          "language": "mixed",
+          "text": "NOVA ONE — بۆ هەنگاوی داهاتوو",
+          "declared_direction": "auto",
+          "expected_base_direction": "ltr",
+          "critical": true,
+          "checks": [
+            "latin_product",
+            "rtl_phrase",
+            "dash",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ],
+          "locale": "und"
+        },
+        {
+          "id": "RTL-007",
+          "language": "mixed",
+          "text": "بۆ هەنگاوی داهاتوو — NOVA ONE",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "rtl_phrase",
+            "latin_product",
+            "dash",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ],
+          "locale": "und"
+        },
+        {
+          "id": "RTL-008",
+          "language": "mixed",
+          "text": "کاتژمێر 8:30 PM",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "latin_digits",
+            "colon",
+            "latin_suffix",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ],
+          "locale": "und"
+        },
+        {
+          "id": "RTL-009",
+          "language": "mixed",
+          "text": "الساعة 8:30 PM",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "latin_digits",
+            "colon",
+            "latin_suffix",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ],
+          "locale": "und"
+        },
+        {
+          "id": "RTL-010",
+          "language": "ckb",
+          "text": "ژمارە: ٠٧٥٠ ١٢٣ ٤٥٦٧",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "phone_digits",
+            "spaces",
+            "selection"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ],
+          "locale": "ckb"
+        }
+      ],
+      "manifest": {
+        "width": 1200,
+        "height": 2000,
+        "copy": [
+          "سڵاو جیهان",
+          "مرحبا بالعالم",
+          "Hello world",
+          "نرخی تایبەت: ٢٥٬٠٠٠ دینار",
+          "السعر الخاص: ٢٥٬٠٠٠ دينار",
+          "NOVA ONE — بۆ هەنگاوی داهاتوو",
+          "بۆ هەنگاوی داهاتوو — NOVA ONE",
+          "کاتژمێر 8:30 PM",
+          "الساعة 8:30 PM",
+          "ژمارە: ٠٧٥٠ ١٢٣ ٤٥٦٧"
+        ],
+        "copyLocales": [
+          "ckb",
+          "ar",
+          "en",
+          "ckb",
+          "ar",
+          "und",
+          "und",
+          "und",
+          "und",
+          "ckb"
+        ],
+        "copySha256": "de80fe3fc648aee26557e65e47ed22ee01a9b7cb443d4dce34097a406b51e6fc",
+        "logoSha256": null,
+        "plan": {
+          "width": 1200,
+          "height": 2000,
+          "background": "#F6F8FC",
+          "text": [
+            {
+              "copyIndex": 0,
+              "x": 80,
+              "y": 60,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 1,
+              "x": 80,
+              "y": 250,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 2,
+              "x": 80,
+              "y": 440,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "rtl": false,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 3,
+              "x": 80,
+              "y": 630,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 4,
+              "x": 80,
+              "y": 820,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 5,
+              "x": 80,
+              "y": 1010,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "rtl": false,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 6,
+              "x": 80,
+              "y": 1200,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 7,
+              "x": 80,
+              "y": 1390,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 8,
+              "x": 80,
+              "y": 1580,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 9,
+              "x": 80,
+              "y": 1770,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            }
+          ],
+          "shapes": [
+            {
+              "x": 80,
+              "y": 242,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 432,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 622,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 812,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1002,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1192,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1382,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1572,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1762,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            }
+          ]
+        },
+        "rtlBlocks": [
+          0,
+          1,
+          3,
+          4,
+          6,
+          7,
+          8,
+          9
+        ],
+        "nativeVerification": "required",
+        "qaStatus": "not_run"
+      },
+      "baseline": "output/acceptance/2026-09-27-canva-multilingual/group-1-round-2-canva.png",
+      "baselineSha256": "9867c1f667f2925280bd1a4ea447973c3b6ef2f568cee89c0b967cfdf3ae560b",
+      "scope": "Prior ten-string layout and exact strings, only import language tags changed."
+    },
+    {
+      "id": "locale-v2",
+      "file": "locale-v2-input.pptx",
+      "bytes": 50920,
+      "sha256": "e79365cac642e4b8842891beeaada84a9f0ca4366f27e0ea301a716a24a6d39b",
+      "cases": [
+        {
+          "id": "STYLE-AR",
+          "text": "مرحبا NOVA بالعالم\nالسعر الخاص: ٢٥٬٠٠٠ دينار",
+          "language": "ar",
+          "locale": "ar-IQ",
+          "font": "Noto Sans Arabic",
+          "rtl": true,
+          "align": "right",
+          "accentColor": "#A23E16"
+        },
+        {
+          "id": "STYLE-CKB",
+          "text": "سڵاو NOVA جیهان\nنرخی تایبەت: ٢٥٬٠٠٠ دینار",
+          "language": "ckb",
+          "locale": "ckb",
+          "font": "Cairo",
+          "rtl": true,
+          "align": "center",
+          "accentColor": "#A23E16"
+        },
+        {
+          "id": "STYLE-EN",
+          "text": "MEET NOVA AT\nWorkshop 2026",
+          "language": "en",
+          "locale": "en-GB",
+          "font": "Verdana",
+          "rtl": false,
+          "align": "left",
+          "accentColor": "#A23E16",
+          "accentText": "NOVA"
+        },
+        {
+          "id": "STYLE-MIXED",
+          "text": "NOVA ONE — بۆ هەنگاوی داهاتوو\nکاتژمێر 8:30 PM",
+          "language": "mixed",
+          "locale": "und",
+          "font": "Noto Sans Arabic",
+          "rtl": false,
+          "align": "left"
+        }
+      ],
+      "manifest": {
+        "width": 1080,
+        "height": 1200,
+        "copy": [
+          "مرحبا NOVA بالعالم\nالسعر الخاص: ٢٥٬٠٠٠ دينار",
+          "سڵاو NOVA جیهان\nنرخی تایبەت: ٢٥٬٠٠٠ دینار",
+          "MEET NOVA AT\nWorkshop 2026",
+          "NOVA ONE — بۆ هەنگاوی داهاتوو\nکاتژمێر 8:30 PM"
+        ],
+        "copyLocales": [
+          "ar-IQ",
+          "ckb",
+          "en-GB",
+          "und"
+        ],
+        "copySha256": "cef6a03342d15d537c8124e38381d2d5cfb8a494210d530de3bbd05355f0cfce",
+        "logoSha256": null,
+        "artSha256": null,
+        "plan": {
+          "width": 1080,
+          "height": 1200,
+          "background": "#F6F8FC",
+          "shapes": [],
+          "text": [
+            {
+              "copyIndex": 0,
+              "x": 60,
+              "y": 80,
+              "width": 460,
+              "height": 410,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "bold": false,
+              "italic": false,
+              "letterSpacing": 0,
+              "lineHeight": 1.7,
+              "rtl": true
+            },
+            {
+              "copyIndex": 1,
+              "x": 560,
+              "y": 80,
+              "width": 460,
+              "height": 410,
+              "fontSize": 32,
+              "fontFamily": "Cairo",
+              "color": "#14253D",
+              "align": "center",
+              "bold": false,
+              "italic": false,
+              "letterSpacing": 0,
+              "lineHeight": 1.7,
+              "rtl": true
+            },
+            {
+              "copyIndex": 2,
+              "x": 60,
+              "y": 620,
+              "width": 460,
+              "height": 410,
+              "fontSize": 32,
+              "fontFamily": "Verdana",
+              "color": "#14253D",
+              "align": "left",
+              "bold": false,
+              "italic": false,
+              "letterSpacing": 0,
+              "lineHeight": 1.7,
+              "rtl": false
+            },
+            {
+              "copyIndex": 3,
+              "x": 560,
+              "y": 620,
+              "width": 460,
+              "height": 410,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "bold": false,
+              "italic": false,
+              "letterSpacing": 0,
+              "lineHeight": 1.7,
+              "rtl": true
+            }
+          ],
+          "logo": {
+            "x": 0,
+            "y": 0,
+            "width": 10,
+            "height": 10
+          }
+        },
+        "pptxSha256": "e79365cac642e4b8842891beeaada84a9f0ca4366f27e0ea301a716a24a6d39b",
+        "version": 2
+      },
+      "layout": {
+        "version": 2,
+        "width": 1080,
+        "height": 1200,
+        "background": {
+          "color": "#F6F8FC"
+        },
+        "grid": {
+          "margin": 60,
+          "columns": 12,
+          "gutter": 24,
+          "baseline": 8
+        },
+        "shapes": [],
+        "logo": {
+          "x": 0,
+          "y": 0,
+          "width": 10,
+          "height": 10
+        },
+        "text": [
+          {
+            "copyIndex": 0,
+            "role": "body",
+            "x": 60,
+            "y": 80,
+            "width": 460,
+            "height": 410,
+            "fontSize": 32,
+            "lineHeight": 1.7,
+            "fontFamily": "Noto Sans Arabic",
+            "color": "#14253D",
+            "align": "right",
+            "rtl": true,
+            "accentColor": "#A23E16"
+          },
+          {
+            "copyIndex": 1,
+            "role": "body",
+            "x": 560,
+            "y": 80,
+            "width": 460,
+            "height": 410,
+            "fontSize": 32,
+            "lineHeight": 1.7,
+            "fontFamily": "Cairo",
+            "color": "#14253D",
+            "align": "center",
+            "rtl": true,
+            "accentColor": "#A23E16"
+          },
+          {
+            "copyIndex": 2,
+            "role": "body",
+            "x": 60,
+            "y": 620,
+            "width": 460,
+            "height": 410,
+            "fontSize": 32,
+            "lineHeight": 1.7,
+            "fontFamily": "Verdana",
+            "color": "#14253D",
+            "align": "left",
+            "rtl": false,
+            "accentColor": "#A23E16",
+            "accentText": "NOVA"
+          },
+          {
+            "copyIndex": 3,
+            "role": "body",
+            "x": 560,
+            "y": 620,
+            "width": 460,
+            "height": 410,
+            "fontSize": 32,
+            "lineHeight": 1.7,
+            "fontFamily": "Noto Sans Arabic",
+            "color": "#14253D",
+            "align": "left",
+            "rtl": false
+          }
+        ]
+      },
+      "scope": "Four synthetic blocks, 460px boxes, three declared families, RTL paragraph accents and Latin inline color runs. Explicit false RTL retained as a negative direction control; not human language approval."
+    }
+  ],
+  "fullMultilingualAdmission": false
+}

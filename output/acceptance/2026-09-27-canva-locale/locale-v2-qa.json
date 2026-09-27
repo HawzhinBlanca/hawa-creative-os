@@ -1,0 +1,94 @@
+{
+  "checkVersion": 5,
+  "sourceTextObjects": [
+    {
+      "id": "ppt/slides/slide1.xml#4",
+      "type": "text",
+      "text": "مرحبا NOVA بالعالم\nالسعر الخاص: ٢٥٬٠٠٠ دينار",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "4"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#7",
+      "type": "text",
+      "text": "سڵاو NOVA جیهان\nنرخی تایبەت: ٢٥٬٠٠٠ دینار",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "7"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#10",
+      "type": "text",
+      "text": "MEET NOVA AT\nWorkshop 2026",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "10"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#13",
+      "type": "text",
+      "text": "NOVA ONE — بۆ هەنگاوی داهاتوو\nکاتژمێر 8:30 PM",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "13"
+      }
+    }
+  ],
+  "source": "canva_exported_pptx",
+  "canvaDesignId": "DAHWW7M4nIw",
+  "documentKind": "unspecified",
+  "copyPass": true,
+  "fontPass": true,
+  "rtlPass": true,
+  "rtlNote": "Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.",
+  "requiredFont": "Verdana",
+  "scriptFonts": null,
+  "fontsByIndex": null,
+  "allowedFontsByScript": {
+    "latin": [
+      "Noto Sans Arabic",
+      "Cairo",
+      "Verdana"
+    ],
+    "arabic": [
+      "Noto Sans Arabic",
+      "Cairo"
+    ]
+  },
+  "admittedFonts": [
+    "Cinzel",
+    "Playfair Display",
+    "Montserrat",
+    "Lora",
+    "Bodoni Moda",
+    "Cairo",
+    "Plus Jakarta Sans",
+    "Vazirmatn",
+    "Inter",
+    "Verdana",
+    "Noto Sans Arabic"
+  ],
+  "arabicTextObjectCount": 3,
+  "rtlTextObjectCount": 0,
+  "observedFonts": [
+    "Noto Sans Arabic",
+    "Cairo",
+    "Verdana"
+  ],
+  "textObjectCount": 4,
+  "expectedTextObjectCount": 4,
+  "offendingObjects": [],
+  "comparisonPolicy": "exact words and punctuation; layout whitespace folded",
+  "fullReleasePass": false,
+  "logoVerification": "not_qualified",
+  "layoutVerification": "visual_review_required",
+  "printQualified": false
+}

@@ -86,6 +86,13 @@ Golden tests include:
 
 Canva's actual native edit and final export are the subject of these proof tests. Isolate controls, paired brackets, mixed style runs, glyph fallback and Sorani punctuation must be inspected in the captured export and by a native reader. If inspection is unavailable, the result is unknown and requires operator review; another renderer's success does not establish Canva export fidelity.
 
+ADR-082 separates paragraph direction metadata from rendered bidi/isolation. Inspect
+every paragraph and both XML boolean spellings; pin explicit source directions with
+the export checking policy. An explicit conflict or malformed value fails. Mixed
+text without a saved direction stays unspecified. Matching flags still require the
+hash-bound visual assertion for Arabic/Sorani approval. Retain source language
+provenance: real Canva exports rewrite language tags and cannot establish it.
+
 ## 4. Spelling and terminology
 
 No current generic checker is accepted as authoritative for Sorani.

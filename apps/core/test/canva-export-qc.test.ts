@@ -58,7 +58,7 @@ const COPY = ['KAAE Summit', 'کۆنفرانسی نیشتمانی'];
 const SENT = { fontsByIndex: ['Cinzel', 'Amiri'] };
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
-function pptx(opts: { title?: string; sorani?: string; titleFont?: string; soraniFont?: string; rtl?: boolean; madeHere?: boolean } = {}) {
+function pptx(opts: { title?: string; sorani?: string; titleFont?: string; soraniFont?: string; rtl?: boolean | 'true' | 'false' | '0' | 'invalid'; madeHere?: boolean } = {}) {
   const { title = COPY[0], sorani = COPY[1], titleFont = 'Cinzel', soraniFont = 'Amiri', rtl = true } = opts;
   return zipSync({
     'ppt/presentation.xml': strToU8('<p:presentation/>'),
@@ -66,7 +66,7 @@ function pptx(opts: { title?: string; sorani?: string; titleFont?: string; soran
     'ppt/slides/slide1.xml': strToU8(
       '<p:sld>' +
         `<p:sp><p:txBody><a:p><a:r><a:rPr><a:latin typeface="${titleFont}"/></a:rPr><a:t>${title}</a:t></a:r></a:p></p:txBody></p:sp>` +
-        `<p:sp><p:txBody><a:p>${rtl ? '<a:pPr rtl="1"/>' : ''}<a:r><a:rPr><a:cs typeface="${soraniFont}"/></a:rPr><a:t>${sorani}</a:t></a:r></a:p></p:txBody></p:sp>` +
+        `<p:sp><p:txBody><a:p>${rtl === false ? '' : `<a:pPr rtl="${rtl === true ? '1' : rtl}"/>`}<a:r><a:rPr><a:cs typeface="${soraniFont}"/></a:rPr><a:t>${sorani}</a:t></a:r></a:p></p:txBody></p:sp>` +
         '</p:sld>'
     ),
   });
@@ -88,7 +88,8 @@ describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
     expect(r.qaReport.copyFidelity).toBe(true);
     expect(r.qaReport.fontFamilyPass).toBe(true);
     expect(r.qaReport.fontCoverage).toBeNull();
-    expect(r.qaReport.bidiIsolation).toBe(true);
+    expect(r.qaReport.bidiIsolation).toBeNull();
+    expect(r.qaReport.rtlVisualReviewRequired).toBe(true);
     expect(r.qaReport.errors).toEqual([]);
     expect(r.qaReport.exportSha256).toBe(sha256(storedRow(pptx()).content));
     // A PPTX read measures neither pixels nor geometry. Reporting true here would be the old fabrication.
@@ -136,6 +137,28 @@ describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
     expect(r.qaReport.bidiIsolation).toBe(false);
     expect(r.qaReport.rtlVisualReviewRequired).toBe(false);
     expect(r.qaReport.errors.join(' ')).toMatch(/RTL/);
+  });
+
+  it.each(['false', '0', 'invalid'] as const)('never waives explicit %s direction because no true flags remain', rtl => {
+    const row = storedRow(pptx({ rtl }));
+    // A legacy stored pass cannot override the current parse of pinned bytes.
+    row.content_check.rtlPass = true;
+    const result = evaluateCanvaExportQc(row, COPY);
+    expect(result.criticalPass).toBe(false);
+    expect(result.qaReport.errors.join(' ')).toMatch(/RTL/);
+  });
+
+  it('rechecks the frozen explicit direction policy instead of dropping it at QC', () => {
+    const row = storedRow(pptx({ rtl: 'true' }));
+    const check = { ...row.content_check, directionsByIndex: ['ltr', 'ltr'] };
+    expect(evaluateCanvaExportQc({ ...row, content_check: check }, COPY).criticalPass).toBe(false);
+  });
+
+  it('reads canonical exact-copy blocks without replacing task copy with a passing capture receipt', () => {
+    const row = storedRow(pptx());
+    expect(evaluateCanvaExportQc(row, COPY.map(text => ({ text }))).criticalPass).toBe(true);
+    expect(evaluateCanvaExportQc(row, [{ text: 'Wrong task title' }, { text: COPY[1] }]).criticalPass).toBe(false);
+    expect(evaluateCanvaExportQc(row, [{ text: COPY[0] }, { text: 123 } as unknown as { text: string }]).criticalPass).toBe(false);
   });
 
   it('fails when no export was retrieved', () => {

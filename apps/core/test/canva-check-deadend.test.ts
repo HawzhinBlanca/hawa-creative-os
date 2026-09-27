@@ -1,5 +1,7 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { checkCanvaPptx } from '@hawa/qa';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
@@ -84,40 +86,40 @@ describe.skipIf(!url)('HUNT: a draft whose automatic check ran out of time', () 
     expect({ status: approve.status, title: body.title }).toEqual({ status: 201, title: undefined });
   });
 
-  it('requires a reviewer and selected final PNG when the checked source cannot prove RTL direction', async () => {
+  it('requires hash-bound visual approval even when the real Canva export has valid RTL flags', async () => {
     const app = createApp({ testAuth: { roleHeader: true }, db,
       deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)) } as any);
     const taskId = randomUUID();
-    const designId = `canva_rtl_${randomUUID().slice(0, 8)}`;
+    const designId = 'DAHWW0iRrsI';
+    const fixtureRoot = new URL('../../../output/acceptance/2026-09-27-canva-locale/', import.meta.url);
+    const fixture = JSON.parse(readFileSync(new URL('fixtures.json', fixtureRoot), 'utf8')).groups[0];
+    const copy = fixture.cases.map((item: { text: string }) => item.text);
     await withRlsContext(db, operator, async (trx) => {
       await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
         VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'RTL visual review', 'x', 'received', 3, 1, now(), now())`.execute(trx);
       await sql`INSERT INTO hawa.task_events (id, tenant_id, task_id, aggregate_version, event_type, actor_type, actor_id, correlation_id, data, occurred_at)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, 1, 'task.created', 'user', ${operator.userId}, ${randomUUID()}::uuid,
-          ${JSON.stringify({ payload: { sourcePlatform: 'telegram', sourceChannelId: '61234567', copyEn: 'x' } })}::jsonb, now())`.execute(trx);
+          ${JSON.stringify({ payload: { sourcePlatform: 'telegram', sourceChannelId: '61234567', rawRequestText: 'Fixture instructions\n---\n' + copy.join('\n\n'), exactCopy: copy.map((text: string) => ({ text })) } })}::jsonb, now())`.execute(trx);
       await sql`INSERT INTO hawa.canva_bindings (id, tenant_id, task_id, client_id, canva_design_id, edit_url, status, version, created_at, updated_at)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${designId}, ${`https://www.canva.com/design/${designId}/edit`}, 'bound', 1, now(), now())`.execute(trx);
     });
-    const checked = await checkedCanvaExportFixture('x');
+    const bytes = readFileSync(new URL('locale-v1-canva.pptx', fixtureRoot));
+    const contentCheck = { ...checkCanvaPptx(bytes, copy, { fontsByIndex: copy.map(() => 'Noto Sans Arabic') }), expectedCopy: copy };
+    expect(contentCheck.rtlTextObjectCount).toBe(8);
+    const checked = { bytes, contentCheck };
     const checkedId = await storeExport(taskId, designId, 'pptx', checked.bytes, checked.contentCheck);
-    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(randomUUID())]);
+    const png = readFileSync(new URL('locale-v1-canva.png', fixtureRoot));
     const pngId = await storeExport(taskId, designId, 'png', png, null);
     expect((await app.request(`/tasks/${taskId}/notifications/canva-status`, {
       method: 'POST', headers, body: JSON.stringify({ status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId, notifyRequester: false }),
     })).status).toBe(200);
     const detail = await (await app.request(`/tasks/${taskId}`, { headers })).json();
     const checkedHash = createHash('sha256').update(checked.bytes).digest('hex');
-    // The evaluator's separate unit case proves when this flag is emitted from a Canva PPTX.
-    // This row tests the durable decision gate against that reported unknown state.
-    await withRlsContext(db, operator, async (trx) => {
-      const prior = (await sql<any>`SELECT qc_profile_id, report FROM hawa.qc_runs
-        WHERE tenant_id=${tenantId}::uuid AND task_id=${taskId}::uuid ORDER BY started_at DESC LIMIT 1`.execute(trx)).rows[0];
-      const report = { ...prior.report, rtlVisualReviewRequired: true, bidiIsolation: null,
-        exportArtifactId: checkedId, exportSha256: checkedHash, captureVersion: '200' };
-      await sql`INSERT INTO hawa.qc_runs (tenant_id,task_id,design_revision_id,qc_profile_id,attempt,status,critical_pass,report,report_sha256,started_at)
-        VALUES (${tenantId}::uuid,${taskId}::uuid,${detail.latestRevisionId}::uuid,${prior.qc_profile_id}::uuid,2,'passed',true,
-          ${JSON.stringify(report)}::jsonb,${createHash('sha256').update(JSON.stringify(report)).digest('hex')},now()+interval '1 second')`.execute(trx);
-    });
+    const measured = await withRlsContext(db, operator, async trx =>
+      (await sql<any>`SELECT report FROM hawa.qc_runs WHERE tenant_id=${tenantId}::uuid AND task_id=${taskId}::uuid
+        ORDER BY started_at DESC LIMIT 1`.execute(trx)).rows[0].report);
+    expect(measured, JSON.stringify(measured)).toMatchObject({ criticalPass: true, rtlVisualReviewRequired: true, bidiIsolation: null,
+      exportArtifactId: checkedId, exportSha256: checkedHash });
     const approve = (pins: string[], rtlVisualReview?: { confirmed: true; exportSha256: string }) =>
       app.request(`/tasks/${taskId}/revisions/${detail.latestRevisionId}/decisions`, {
         method: 'POST', headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' },

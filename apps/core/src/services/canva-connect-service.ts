@@ -76,6 +76,16 @@ export function studioSentBlocks(manifest: any): Array<{ fontFamily: string; rol
   return blocks.every((t: any) => typeof t.fontFamily === 'string' && t.fontFamily) ? blocks : null;
 }
 
+/** Only explicit booleans on each uniquely indexed source block establish a direction. */
+export function importedSourceDirections(manifest: { copy?: unknown; plan?: { text?: unknown } } | null): Array<'ltr' | 'rtl' | null> | undefined {
+  if (!Array.isArray(manifest?.copy) || !Array.isArray(manifest.plan?.text)) return undefined;
+  const blocks = manifest.plan.text as Array<{ copyIndex?: unknown; rtl?: unknown }>;
+  if (blocks.length !== manifest.copy.length || blocks.some(block => !block || typeof block !== 'object')) return undefined;
+  const ordered = [...blocks].sort((a, b) => Number(a.copyIndex) - Number(b.copyIndex));
+  if (ordered.some((block, index) => block.copyIndex !== index)) return undefined;
+  return ordered.map(block => block.rtl === true ? 'rtl' : block.rtl === false ? 'ltr' : null);
+}
+
 export class CanvaConnectService {
   private options: CanvaServiceOptions;
   constructor(private db: Kysely<Database>, options: CanvaServiceOptions = {}) {
@@ -482,12 +492,13 @@ export class CanvaConnectService {
         const source = await this.editableSource(s,taskId,binding.client_id,design.id,db);
         if (source) {
           const manifest=source.manifest, blocks=studioSentBlocks(manifest);
+          const directionsByIndex=importedSourceDirections(manifest);
           if (!Array.isArray(manifest?.copy) || !manifest.copy.length || !manifest.copy.every((part:unknown)=>typeof part==='string') ||
               (!blocks && !manifest.reference?.rules?.fontFamily))
             fail(422,'SOURCE_REQUIRED','The imported source has no complete saved copy and font policy');
           metadata.checkingPolicy={version:1,kind:'imported_source',sourceId:source.id,copy:manifest.copy,
-            ...(blocks ? {options:{fontsByIndex:blocks.map(t=>t.fontFamily),roles:blocks.map(t=>t.role||'body')}} :
-              {requiredFont:manifest.reference.rules.fontFamily,options:{scriptFonts:manifest.reference.rules.scriptFonts}})};
+            ...(blocks ? {options:{fontsByIndex:blocks.map(t=>t.fontFamily),roles:blocks.map(t=>t.role||'body'),directionsByIndex}} :
+              {requiredFont:manifest.reference.rules.fontFamily,options:{scriptFonts:manifest.reference.rules.scriptFonts,directionsByIndex}})};
         } else {
           const inaccessible = (await sql`SELECT e.id FROM hawa.canva_editable_sources e JOIN hawa.canva_remote_operations o
             ON o.id=e.operation_id AND o.tenant_id=e.tenant_id WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid
@@ -565,11 +576,12 @@ export class CanvaConnectService {
             // 2026-09-18, the first live pilot, because only the planner's single-font check existed.
             const manifest=source?.manifest;
             const sentBlocks=studioSentBlocks(manifest);
+            const directionsByIndex=importedSourceDirections(manifest);
             if(sentBlocks){
-              contentCheck={...checkCanvaPptx(bytes,manifest.copy,{fontsByIndex:sentBlocks.map(t=>t.fontFamily),roles:sentBlocks.map(t=>t.role||'body')}),expectedCopy:manifest.copy};
+              contentCheck={...checkCanvaPptx(bytes,manifest.copy,{fontsByIndex:sentBlocks.map(t=>t.fontFamily),roles:sentBlocks.map(t=>t.role||'body'),directionsByIndex}),expectedCopy:manifest.copy};
             }else{
               if(!manifest?.copy||!manifest.reference?.rules?.fontFamily)fail(422,'SOURCE_REQUIRED','No saved copy and brand font are available for this task');
-              contentCheck={...checkCanvaPptx(bytes,manifest.copy,manifest.reference.rules.fontFamily,{scriptFonts:manifest.reference.rules.scriptFonts}),expectedCopy:manifest.copy};
+              contentCheck={...checkCanvaPptx(bytes,manifest.copy,manifest.reference.rules.fontFamily,{scriptFonts:manifest.reference.rules.scriptFonts,directionsByIndex}),expectedCopy:manifest.copy};
             }
           }
         }else{

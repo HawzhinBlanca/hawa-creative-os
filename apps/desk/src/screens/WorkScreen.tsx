@@ -1292,14 +1292,14 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                               <div className={`qa-item ${bidiPass === true ? 'passed' : bidiPass === false ? 'failed' : 'pending'}`}>
                                 <span className="qa-status-icon">{bidiPass === true ? '✓' : bidiPass === false ? '✗' : '○'}</span>
                                 <div style={{ flex: 1 }}>
-                                  <strong>Kurdish Sorani Bidi Isolation (UAX #9)</strong>
+                                  <strong>Arabic/Sorani reading direction</strong>
                                   <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
                                     {bidiPass === true
-                                      ? 'Readable text-direction metadata passed in the exported source.'
+                                      ? 'No Arabic/Sorani direction issue was identified in the checked source.'
                                       : bidiPass === false
-                                      ? 'Bidi directional isolation missing or corrupted for RTL Arabic script segments.'
+                                      ? 'The checked source conflicts with the required text direction.'
                                       : qa?.rtlVisualReviewRequired
-                                      ? 'Canva did not export readable RTL direction metadata. Inspect the final PNG before approval.'
+                                      ? 'Paragraph flags cannot prove rendered reading order. Inspect the final PNG before approval.'
                                       : 'Automated direction check has not been measured.'}
                                   </p>
                                 </div>
@@ -1550,7 +1550,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               <fieldset style={{ margin: '0 0 14px', padding: 12 }}>
                 <legend style={{ fontSize: 12, fontWeight: 600 }}>Kurdish/Arabic visual review required</legend>
                 <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 0 }}>
-                  Canva's editable export has no readable direction flag. Inspect the final PNG for letter shape,
+                  Inspect the selected final PNG for letter shape,
                   reading order, mixed numbers and clipping. Select that PNG above before approving.
                 </p>
                 <label style={{ display: 'flex', gap: 8, alignItems: 'start', fontSize: 12 }}>

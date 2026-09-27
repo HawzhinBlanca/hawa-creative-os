@@ -167,7 +167,7 @@ export interface CanvaQcEvaluationResult {
     criticalPass: boolean;
     passed: boolean;
     bidiIsolation: boolean | null;
-    /** True when Canva's PPTX lacks readable RTL direction metadata; a person must inspect the final image. */
+    /** Paragraph flags never prove rendered Arabic/Sorani order; a person must inspect the final image. */
     rtlVisualReviewRequired: boolean;
     /** Checks declared PPTX families against the captured policy, not actual rendered fonts. */
     fontFamilyPass: boolean | null;
@@ -192,7 +192,7 @@ export interface CanvaQcEvaluationResult {
 
 export function evaluateCanvaExportQc(
   exportRow?: { sha256?: string; format?: string; content?: any; content_check?: any },
-  expectedCopy?: string[],
+  expectedCopy?: Array<string | { text: string }>,
   requiredFont?: string
 ): CanvaQcEvaluationResult {
   const contentCheck = exportRow?.content_check;
@@ -231,10 +231,14 @@ export function evaluateCanvaExportQc(
   const actualSha256 = bytes && crypto.createHash('sha256').update(bytes).digest('hex');
   // Manual Desk recaptures can have no design-plan row. In that case the source copy saved with the
   // capture's inspection is the expected text. A current approved/plan copy always takes priority.
-  const copyToCheck = expectedCopy?.length ? expectedCopy : contentCheck?.expectedCopy;
+  const savedCopy = expectedCopy?.length ? expectedCopy : contentCheck?.expectedCopy;
+  // Task creation stores canonical copy blocks; imported manifests store strings. Read their
+  // exact text without trimming or dropping malformed entries, and keep task copy authoritative.
+  const copyToCheck = Array.isArray(savedCopy) ? savedCopy.map((part: unknown) =>
+    typeof part === 'string' ? part : part && typeof part === 'object' && 'text' in part && typeof part.text === 'string' ? part.text : undefined) : undefined;
   if (exportRow.format !== 'pptx' || !bytes?.length ||
       !Array.isArray(copyToCheck) || !copyToCheck.length ||
-      !copyToCheck.every((part: unknown) => typeof part === 'string') ||
+      !copyToCheck.every((part): part is string => typeof part === 'string') ||
       !/^[0-9a-f]{64}$/.test(exportRow.sha256 || '') ||
       actualSha256 !== exportRow.sha256) {
     errors.push('Canva PPTX export bytes, expected copy, or stored SHA-256 are missing or inconsistent');
@@ -265,11 +269,12 @@ export function evaluateCanvaExportQc(
     if (perBlockFonts && (!Array.isArray(perBlockFonts) || !perBlockFonts.every((face: unknown) => typeof face === 'string'))) {
       throw new Error('Invalid captured font policy');
     }
+    const directionOptions = contentCheck?.directionsByIndex == null ? {} : { directionsByIndex: contentCheck.directionsByIndex };
     resolvedCheck = checkCanvaPptx(bytes, copyToCheck,
-      contentCheck?.allowedFontsByScript ? { allowedFontsByScript: contentCheck.allowedFontsByScript }
-        : perBlockFonts ? { fontsByIndex: perBlockFonts, scriptFonts: contentCheck?.scriptFonts || undefined }
+      contentCheck?.allowedFontsByScript ? { allowedFontsByScript: contentCheck.allowedFontsByScript, ...directionOptions }
+        : perBlockFonts ? { fontsByIndex: perBlockFonts, scriptFonts: contentCheck?.scriptFonts || undefined, ...directionOptions }
         : (requiredFont || contentCheck?.requiredFont || 'Verdana'),
-      perBlockFonts ? {} : { scriptFonts: contentCheck?.scriptFonts || undefined });
+      perBlockFonts ? {} : { scriptFonts: contentCheck?.scriptFonts || undefined, ...directionOptions });
   } catch (err: any) {
     errors.push(`PPTX slide check failed: ${err.message || String(err)}`);
   }
@@ -305,15 +310,11 @@ export function evaluateCanvaExportQc(
 
   const copyPass = resolvedCheck.copyPass === true;
   const fontPass = resolvedCheck.fontPass === true;
-  // checkCanvaPptx always reports rtlPass as a boolean, so an absent value means the record is not
-  // one of its results. Absence is a failure here, never a pass.
-  // A Canva export with no rtl attribute at all is left to the visual review (checkCanvaPptx says so
-  // since 2026-09-23); checks stored before that recorded it as a failure, and are read the same way.
-  const rtlVisualReviewRequired = Boolean(resolvedCheck.rtlNote && resolvedCheck.source === 'canva_exported_pptx'
-    && Number(resolvedCheck.arabicTextObjectCount) > 0 && Number(resolvedCheck.rtlTextObjectCount) === 0);
-  const rtlPass = resolvedCheck.rtlPass === true
-    || (resolvedCheck.rtlPass === false && resolvedCheck.source === 'canva_exported_pptx'
-      && Number(resolvedCheck.arabicTextObjectCount) > 0 && Number(resolvedCheck.rtlTextObjectCount) === 0);
+  // The parser distinguishes absent metadata from explicit conflicts. Never waive a real
+  // false/invalid flag just because the count of true flags is zero. Even correct flags do not
+  // prove rendered bidi/isolation, so every eligible Arabic-script design needs visual review.
+  const rtlPass = resolvedCheck.rtlPass === true;
+  const rtlVisualReviewRequired = rtlPass && resolvedCheck.rtlVisualReviewRequired === true;
   const checkStatus = contentCheck?.status !== 'failed' && contentCheck?.copyPass !== false &&
     contentCheck?.fontPass !== false && contentCheck?.rtlPass !== false;
   const criticalPass = copyPass && fontPass && rtlPass && checkStatus;
@@ -358,6 +359,7 @@ export function evaluateCanvaExportQc(
         { name: 'exportRetrieved', passed: true },
         { name: 'copyPass', passed: copyPass, details: resolvedCheck.offendingObjects || [] },
         { name: 'fontPass', passed: fontPass, observedFonts: resolvedCheck.observedFonts || [] },
+        { name: 'paragraphDirectionMetadata', passed: resolvedCheck.rtlMetadataPass, details: resolvedCheck.paragraphDirections },
         { name: 'bidiIsolation', passed: rtlVisualReviewRequired ? null : rtlPass,
           details: rtlVisualReviewRequired ? 'Unmeasured in Canva PPTX; final image needs human visual review' : undefined },
       ],

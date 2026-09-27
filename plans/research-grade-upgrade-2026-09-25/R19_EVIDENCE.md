@@ -64,3 +64,38 @@ normalization policy remain unqualified. Existing word-joiner/paragraph formatti
 and font-based direction heuristics remain separate work. Source tags do not prove
 native Canva metadata retention, rendered language quality or human acceptance.
 See `R19_LOCALE_PROOF.json`; production is unchanged, and R19 remains in progress.
+
+
+## 2026-09-27 — native locale/style capture and paragraph direction truth (ADR-082)
+
+Capture source `aefeabc`: two real imports and six exports preserve fourteen exact
+PPTX strings, Studio line breaks and per-character text colors across three declared
+font families. The ten-string sheet has zero changed decoded pixels out of 2.4M
+against its older capture. Canva rewrites locales to ar-EG/en-US, so source language
+provenance must remain in Hawa. The read-only content tool concatenates paragraph
+breaks and supplies no native element IDs/style spans; it is not an exact source map.
+
+Actual `rtl="true"` paragraph attributes exposed the old parser's false absent-metadata
+claim. New checks read both XML boolean spellings, inspect each paragraph, preserve
+explicit source directions in the frozen export policy, and separate metadata from
+rendered bidi. Mixed text is not automatically RTL. Core no longer waives explicit
+false/invalid flags when no true flags remain. Every eligible Arabic/Sorani export
+requires the existing hash-bound visual assertion, even with correct metadata. Desk
+and Client DNA copy now describe that boundary without promising rendered isolation.
+
+The real-file approval test exposed another production bug: canonical task-copy
+objects were passed to a string-only evaluator. Both saved shapes are now read
+exactly; wrong/malformed task copy cannot be replaced by a passing capture receipt.
+The isolated gate rejects no assertion, wrong hash and absent selected PNG, then
+accepts the correct synthetic reviewer assertion. This is not a real human approval.
+
+Red: 10 failed/16 passed. Final connected group: **8 files/128 passed, zero skips**.
+Project/script/test TypeScript, lint and Desk build pass. Intermediate native-gate
+failures are retained. Full regression and deployed-image qualification were not rerun.
+
+A retained negative control remains open: Studio's Arabic-font fallback overrides
+explicit rtl:false before import. Current QA detects it against requested direction.
+Next repair: respect explicit direction in the transfer and verify the real round trip.
+Human typography review, committed native edit/save/reopen, broad office corpus and
+full live workflow remain open. No production deployment/migration, model call or
+message occurred. See `R19_LOCALE_CANVA_PROOF.json`; full admission remains false.

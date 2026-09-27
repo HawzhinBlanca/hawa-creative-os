@@ -1,0 +1,715 @@
+{
+  "schemaVersion": 1,
+  "captureSourceCommit": "aefeabca7e38c782148503ce8defc8fb2e68e8fd",
+  "imports": 2,
+  "exports": 6,
+  "exactPptxStrings": 14,
+  "groups": [
+    {
+      "id": "locale-v1",
+      "designId": "DAHWW0iRrsI",
+      "pngDimensions": [
+        1200,
+        2000
+      ],
+      "blocks": [
+        {
+          "caseId": "RTL-001",
+          "exactPptxText": true,
+          "source": {
+            "text": "سڵاو جیهان",
+            "shapeId": "11",
+            "geometryPx": [
+              80.0,
+              60.0,
+              1040.0,
+              174.0
+            ],
+            "languages": [
+              "ckb"
+            ],
+            "paragraphRtl": [
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "سڵاو جیهان",
+            "shapeId": "13",
+            "geometryPx": [
+              0.0,
+              -4.0,
+              1386.6666666666667,
+              236.0
+            ],
+            "languages": [
+              "ar-EG"
+            ],
+            "paragraphRtl": [
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "RTL-002",
+          "exactPptxText": true,
+          "source": {
+            "text": "مرحبا بالعالم",
+            "shapeId": "12",
+            "geometryPx": [
+              80.0,
+              250.0,
+              1040.0,
+              174.0
+            ],
+            "languages": [
+              "ar"
+            ],
+            "paragraphRtl": [
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "مرحبا بالعالم",
+            "shapeId": "16",
+            "geometryPx": [
+              0.0,
+              -4.0,
+              1386.6666666666667,
+              236.0
+            ],
+            "languages": [
+              "ar-EG"
+            ],
+            "paragraphRtl": [
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "RTL-003",
+          "exactPptxText": true,
+          "source": {
+            "text": "Hello world",
+            "shapeId": "13",
+            "geometryPx": [
+              80.0,
+              440.0,
+              1040.0,
+              174.0
+            ],
+            "languages": [
+              "en"
+            ],
+            "paragraphRtl": [
+              null
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "Hello world",
+            "shapeId": "19",
+            "geometryPx": [
+              0.0,
+              -4.0,
+              1386.6666666666667,
+              236.0
+            ],
+            "languages": [
+              "en-US"
+            ],
+            "paragraphRtl": [
+              null
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "RTL-004",
+          "exactPptxText": true,
+          "source": {
+            "text": "نرخی تایبەت: ٢٥٬٠٠٠ دینار",
+            "shapeId": "14",
+            "geometryPx": [
+              80.0,
+              630.0,
+              1040.0,
+              174.0
+            ],
+            "languages": [
+              "ckb"
+            ],
+            "paragraphRtl": [
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "نرخی تایبەت: ٢٥٬٠٠٠ دینار",
+            "shapeId": "22",
+            "geometryPx": [
+              0.0,
+              -4.0,
+              1386.6666666666667,
+              236.0
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "RTL-005",
+          "exactPptxText": true,
+          "source": {
+            "text": "السعر الخاص: ٢٥٬٠٠٠ دينار",
+            "shapeId": "15",
+            "geometryPx": [
+              80.0,
+              820.0,
+              1040.0,
+              174.0
+            ],
+            "languages": [
+              "ar"
+            ],
+            "paragraphRtl": [
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "السعر الخاص: ٢٥٬٠٠٠ دينار",
+            "shapeId": "25",
+            "geometryPx": [
+              0.0,
+              -4.0,
+              1386.6666666666667,
+              236.0
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "RTL-006",
+          "exactPptxText": true,
+          "source": {
+            "text": "NOVA ONE — بۆ هەنگاوی داهاتوو",
+            "shapeId": "16",
+            "geometryPx": [
+              80.0,
+              1010.0,
+              1040.0,
+              174.0
+            ],
+            "languages": [
+              "und"
+            ],
+            "paragraphRtl": [
+              null
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "NOVA ONE — بۆ هەنگاوی داهاتوو",
+            "shapeId": "28",
+            "geometryPx": [
+              0.0,
+              -4.0,
+              1386.6666666666667,
+              236.0
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              null
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "RTL-007",
+          "exactPptxText": true,
+          "source": {
+            "text": "بۆ هەنگاوی داهاتوو — NOVA ONE",
+            "shapeId": "17",
+            "geometryPx": [
+              80.0,
+              1200.0,
+              1040.0,
+              174.0
+            ],
+            "languages": [
+              "und"
+            ],
+            "paragraphRtl": [
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "بۆ هەنگاوی داهاتوو — NOVA ONE",
+            "shapeId": "31",
+            "geometryPx": [
+              0.0,
+              -4.0,
+              1386.6666666666667,
+              236.0
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "RTL-008",
+          "exactPptxText": true,
+          "source": {
+            "text": "کاتژمێر 8:30 PM",
+            "shapeId": "18",
+            "geometryPx": [
+              80.0,
+              1390.0,
+              1040.0,
+              174.0
+            ],
+            "languages": [
+              "und"
+            ],
+            "paragraphRtl": [
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "کاتژمێر 8:30 PM",
+            "shapeId": "34",
+            "geometryPx": [
+              0.0,
+              -4.0,
+              1386.6666666666667,
+              236.0
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "RTL-009",
+          "exactPptxText": true,
+          "source": {
+            "text": "الساعة 8:30 PM",
+            "shapeId": "19",
+            "geometryPx": [
+              80.0,
+              1580.0,
+              1040.0,
+              174.0
+            ],
+            "languages": [
+              "und"
+            ],
+            "paragraphRtl": [
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "الساعة 8:30 PM",
+            "shapeId": "37",
+            "geometryPx": [
+              0.0,
+              -4.0,
+              1386.6666666666667,
+              236.0
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "RTL-010",
+          "exactPptxText": true,
+          "source": {
+            "text": "ژمارە: ٠٧٥٠ ١٢٣ ٤٥٦٧",
+            "shapeId": "20",
+            "geometryPx": [
+              80.0,
+              1770.0,
+              1040.0,
+              174.0
+            ],
+            "languages": [
+              "ckb"
+            ],
+            "paragraphRtl": [
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "ژمارە: ٠٧٥٠ ١٢٣ ٤٥٦٧",
+            "shapeId": "40",
+            "geometryPx": [
+              0.0,
+              -4.0,
+              1386.6666666666667,
+              236.0
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        }
+      ],
+      "pdfFontResources": [
+        {
+          "name": "/AAAAAA+NotoSansArabic-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "name": "/BAAAAA+NotoSans-Regular",
+          "subtype": "/Type0"
+        }
+      ],
+      "nativeFlatTextMatchesWithoutParagraphBreaks": true,
+      "nativeElementIdentityAndLineBreaks": "unavailable_from_read_tool",
+      "humanVisualReview": "not_run",
+      "baselineComparison": {
+        "changedPixels": 0,
+        "totalPixels": 2400000,
+        "pngFileBytesIdentical": false
+      }
+    },
+    {
+      "id": "locale-v2",
+      "designId": "DAHWW7M4nIw",
+      "pngDimensions": [
+        1080,
+        1200
+      ],
+      "blocks": [
+        {
+          "caseId": "STYLE-AR",
+          "exactPptxText": true,
+          "source": {
+            "text": "مرحبا NOVA بالعالم\nالسعر الخاص: ٢٥٬٠٠٠ دينار",
+            "shapeId": "2",
+            "geometryPx": [
+              60.0,
+              80.0,
+              460.0,
+              410.0
+            ],
+            "languages": [
+              "ar-IQ"
+            ],
+            "paragraphRtl": [
+              "1",
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "مرحبا NOVA بالعالم\nالسعر الخاص: ٢٥٬٠٠٠ دينار",
+            "shapeId": "4",
+            "geometryPx": [
+              0.0,
+              -12.0,
+              613.3333333333334,
+              558.6666666666666
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true",
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "STYLE-CKB",
+          "exactPptxText": true,
+          "source": {
+            "text": "سڵاو NOVA جیهان\nنرخی تایبەت: ٢٥٬٠٠٠ دینار",
+            "shapeId": "3",
+            "geometryPx": [
+              560.0,
+              80.0,
+              460.0,
+              410.0
+            ],
+            "languages": [
+              "ckb"
+            ],
+            "paragraphRtl": [
+              "1",
+              "1"
+            ],
+            "declaredFonts": [
+              "Cairo"
+            ]
+          },
+          "exported": {
+            "text": "سڵاو NOVA جیهان\nنرخی تایبەت: ٢٥٬٠٠٠ دینار",
+            "shapeId": "7",
+            "geometryPx": [
+              0.0,
+              -12.0,
+              613.3333333333334,
+              558.6666666666666
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true",
+              "true"
+            ],
+            "declaredFonts": [
+              "Cairo"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "STYLE-EN",
+          "exactPptxText": true,
+          "source": {
+            "text": "MEET NOVA AT\nWorkshop 2026",
+            "shapeId": "4",
+            "geometryPx": [
+              60.0,
+              620.0,
+              460.0,
+              410.0
+            ],
+            "languages": [
+              "en-GB"
+            ],
+            "paragraphRtl": [
+              null,
+              null
+            ],
+            "declaredFonts": [
+              "Verdana"
+            ]
+          },
+          "exported": {
+            "text": "MEET NOVA AT\nWorkshop 2026",
+            "shapeId": "10",
+            "geometryPx": [
+              0.0,
+              -11.0,
+              613.3333333333334,
+              557.6666666666666
+            ],
+            "languages": [
+              "en-US"
+            ],
+            "paragraphRtl": [
+              null,
+              null
+            ],
+            "declaredFonts": [
+              "Verdana"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "STYLE-MIXED",
+          "exactPptxText": true,
+          "source": {
+            "text": "NOVA ONE — بۆ هەنگاوی داهاتوو\nکاتژمێر 8:30 PM",
+            "shapeId": "5",
+            "geometryPx": [
+              560.0,
+              620.0,
+              460.0,
+              410.0
+            ],
+            "languages": [
+              "und"
+            ],
+            "paragraphRtl": [
+              "1",
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "NOVA ONE — بۆ هەنگاوی داهاتوو\nکاتژمێر 8:30 PM",
+            "shapeId": "13",
+            "geometryPx": [
+              0.0,
+              -12.0,
+              613.3333333333334,
+              558.6666666666666
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true",
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        }
+      ],
+      "pdfFontResources": [
+        {
+          "name": "/AAAAAA+NotoSansArabic-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "name": "/BAAAAA+NotoSans-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "name": "/CAAAAA+Cairo-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "name": "/DAAAAA+NotoSansArabic-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "name": "/EAAAAA+Verdana",
+          "subtype": "/Type0"
+        }
+      ],
+      "nativeFlatTextMatchesWithoutParagraphBreaks": true,
+      "nativeElementIdentityAndLineBreaks": "unavailable_from_read_tool",
+      "humanVisualReview": "not_run"
+    }
+  ],
+  "fullMultilingualAdmission": false,
+  "limits": [
+    "Canva rewrites language tags; retain original language provenance outside its exports.",
+    "Read-only native text tool concatenates internal paragraphs and gives no element IDs or style spans.",
+    "Explicit false RTL on the mixed Studio block was overridden by the font-family fallback before import; requested direction is not met.",
+    "Human native-language review, committed edit/save/reopen, full office corpus and deployed-image qualification are not run.",
+    "Font-family/resource names do not establish actual font-file glyph coverage or licenses.",
+    "Equal provider timestamps are not an atomic revision lock."
+  ]
+}
