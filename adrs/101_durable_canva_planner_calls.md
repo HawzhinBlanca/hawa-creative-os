@@ -31,7 +31,12 @@ before creating a new editable source/import. A changed model setting does not
 invalidate retained results. Concurrent resumes may compute source locally but only
 one source wins; subsequent imports use the existing stable plan operation key.
 
-Old plans without paid-call records remain visibly incomplete accounting evidence.
+Studio-produced transfer files carry an immutable foreign key to their scoped Studio run;
+that run owns their paid-call accounting. Matching historical Studio receipts are
+classified by their actual tenant/task/client/run/hash relationship. This avoids
+counting transfer files as second planner calls.
+
+Old planner plans without paid-call records remain visibly incomplete accounting evidence.
 They are not assigned invented usage or zero costs. They can be reconciled through
 the same named accounting surface before more office spending is admitted.
 

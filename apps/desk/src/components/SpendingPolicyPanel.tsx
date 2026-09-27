@@ -107,7 +107,7 @@ export function SpendingPolicyPanel() {
   };
   return <section className="card" aria-label="Daily spending policy" style={{padding:16,marginBottom:16}}>
     <h2>Daily spending policy</h2>
-    <p>Shared limits for Studio, fixture evaluation and retained voice. Other paid paths still require budget integration.</p>
+    <p>Shared limits for Studio, Canva planning, fixture evaluation, retained voice and scheduled health probes. Unresolved costs keep their allocation reserved.</p>
     <button className="btn" disabled={busy} aria-expanded={open} onClick={()=>{setOpen(!open);if(!open&&!detail)void load();}}>{open?'Hide budget policy':'Review budget policy'}</button>
     {open&&<>
       <button className="btn" style={{marginInlineStart:8}} disabled={busy} onClick={()=>void load()}>Reload budget policy</button>

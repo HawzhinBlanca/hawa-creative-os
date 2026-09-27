@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { studioTextUsage } from '@hawa/creative';
+import { studioTextUsage, studioTextModelMatches } from '@hawa/creative';
 import type { StudioCallReservation } from '@hawa/domain';
 
 const box={x:z.number().finite().nonnegative(),y:z.number().finite().nonnegative(),width:z.number().finite().positive(),height:z.number().finite().positive()};
@@ -48,7 +48,7 @@ export async function executePlannerCall(key:string,body:string,model:string,res
     const data=object(JSON.parse(raw));out.responseId=id(data.id);out.servedModel=id(data.model,160);
     const usage=studioTextUsage(model,out.servedModel,data.usage);
     if(usage){out.inputTokens=usage.inputTokens;out.outputTokens=usage.outputTokens;out.costUsd=usage.estimatedCostUsd;out.costBasis='usage';}
-    const modelMatches=out.servedModel===model||Boolean(usage?.modelMatches);
+    const modelMatches=studioTextModelMatches(model,out.servedModel);
     if(!out.responseId||!modelMatches){out.diagnostic='MODEL_RECEIPT_INVALID';return out;}
     const withinBound=usage&&usage.outputTokens>0&&usage.inputTokens<=reservation.inputTokens&&usage.outputTokens<=reservation.outputTokens&&usage.estimatedCostUsd<=reservation.usd;
     out.requiresReconciliation=!withinBound;

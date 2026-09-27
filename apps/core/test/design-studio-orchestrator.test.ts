@@ -810,6 +810,9 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     ).rows[0];
 
     expect(planRow).toBeDefined();
+    expect(planRow.paid_protocol).toBe('studio-transfer-v1');
+    expect(planRow.studio_run_id).toBe(run.id);
+    expect((await sql`SELECT id FROM hawa.canva_planner_calls WHERE id=${planRow.id}::uuid`.execute(db)).rows).toHaveLength(0);
     expect(planRow.source_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(planRow.source_content).toBeDefined();
     expect(run.request.copyBlocks.every((block: { locale?: string; localeCopySha256?: string; text: string }) =>

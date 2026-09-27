@@ -2084,11 +2084,11 @@ export class DesignStudioService {
                   AND request_key LIKE 'studio-%' AND request_key <> ${planKey}`.execute(db);
               await sql`INSERT INTO hawa.canva_design_plans(
                 id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request,
-                status, result, source_content, source_sha256
+                status, result, source_content, source_sha256, paid_protocol, studio_run_id
               ) VALUES(
                 ${planId}::uuid, ${s.tenantId}::uuid, ${run.task_id}::uuid, ${run.client_id}::uuid, ${s.actorId},
                 ${planKey}, ${run.request_hash}, ${JSON.stringify(transferResult.plan)}::jsonb,
-                'planned', ${JSON.stringify(evidence)}::jsonb, ${transferResult.pptxBytes}, ${transferResult.sha256}
+                'planned', ${JSON.stringify(evidence)}::jsonb, ${transferResult.pptxBytes}, ${transferResult.sha256}, 'studio-transfer-v1', ${run.id}::uuid
               )`.execute(db);
             });
             source = { bytes: transferResult.pptxBytes, sha256: transferResult.sha256, manifest: transferResult.manifest };

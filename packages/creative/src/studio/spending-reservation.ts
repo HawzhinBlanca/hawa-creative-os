@@ -36,6 +36,12 @@ function family(model: string): string {
     ?? refuse('No reservation policy exists for the requested model.');
 }
 
+/** Only reviewed families and their dated snapshots can satisfy the requested identity. */
+export function studioTextModelMatches(requested:string,served:string|null):boolean {
+  if(!served)return false;
+  try {const admitted=family(served);return requested===served||requested===admitted;} catch{return false;}
+}
+
 /** Complete native usage priced at the same conservative rates as admission, never an invoice. */
 export function studioTextUsage(requested: string, served: string | null, raw: unknown): {
   inputTokens: number; outputTokens: number; estimatedCostUsd: number; modelMatches: boolean;
@@ -50,7 +56,7 @@ export function studioTextUsage(requested: string, served: string | null, raw: u
     const [inputRate, outputRate] = model === 'gpt-6-astra' && input <= 272000 ? [22.5, 50] : TEXT_RATES[model]!;
     return { inputTokens: input, outputTokens: output,
       estimatedCostUsd: studioUsdMicros((input * inputRate + output * outputRate) / 1_000_000) / 1_000_000,
-      modelMatches: requested === served || requested === model };
+      modelMatches: studioTextModelMatches(requested,served) };
   } catch { return null; }
 }
 

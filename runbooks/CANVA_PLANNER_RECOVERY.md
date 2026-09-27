@@ -37,7 +37,9 @@ an unresolved obligation. An unconfigured or unquotable model sends no request.
 
 ## Historical plans
 
-Plans created before ADR-101 have no invented paid-call records. Missing accounting
+Studio transfer artifacts are linked to their actual Studio run and use its call
+ledger. They are not a second planner charge. Older planner plans have no invented
+paid-call records. Missing accounting
 appears as history_incomplete and blocks further shared spending until named
 terminal evidence is recorded. Historical model replies cannot be reconstructed
 from costs or health observations. Existing editable sources remain readable.

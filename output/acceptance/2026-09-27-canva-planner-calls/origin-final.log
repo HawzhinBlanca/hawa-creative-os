@@ -1,0 +1,38 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (73 ms)
+ ❯ apps/core/test/canva-planner-accounting.test.ts (6 tests | 1 failed) 393ms
+   × upgrades actual pre-ledger Studio artifacts without inventing or duplicating planner calls 170ms
+{"level":"warn","time":"2026-09-27T13:13:12.446Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-27T13:13:12.460Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-27T13:13:14.694Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-27T13:13:14.702Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-27T13:13:15.601Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-27T13:13:15.609Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/canva-planner-accounting.test.ts > upgrades actual pre-ledger Studio artifacts without inventing or duplicating planner calls
+error: relation "hawa.schema_upgrades" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ PostgresConnection.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ DefaultQueryExecutor.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16
+ ❯ apps/core/test/canva-planner-accounting.test.ts:97:4
+
+ ❯ PostgresConnection.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ DefaultQueryExecutor.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16
+ ❯ apps/core/test/canva-planner-accounting.test.ts:97:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 4 passed (5)
+      Tests  1 failed | 89 passed (90)
+   Start at  16:13:10
+   Duration  8.46s (transform 2.03s, setup 506ms, import 3.10s, tests 12.14s, environment 0ms)
+

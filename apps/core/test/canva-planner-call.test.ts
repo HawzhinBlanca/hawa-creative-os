@@ -55,3 +55,8 @@ it('retains the allowance when a layout claims zero output tokens',async()=>{
  const p=payload();p.usage={prompt_tokens:100,completion_tokens:0,total_tokens:100};
  expect(await run(vi.fn(async()=>Response.json(p)))).toMatchObject({requiresReconciliation:true,outputTokens:0});
 });
+
+it('preserves a valid dated model reply even when its usage is missing',async()=>{
+ const p:Record<string,unknown>={...payload(),model:model+'-2025-04-14'};delete p.usage;
+ expect(await run(vi.fn(async()=>Response.json(p)))).toMatchObject({requiresReconciliation:true,layout,costUsd:null,servedModel:model+'-2025-04-14'});
+});

@@ -48,7 +48,7 @@ export function CallCostAccountingPanel() {
           <dt>Original allocation</dt><dd>{usd(detail.reservedUsd)}</dd>
           <dt>Prior run settlement</dt><dd>{detail.settledCostUsd===null?'None recorded':usd(detail.settledCostUsd)}</dd>
           <dt>Highest administrator-attested cost</dt><dd>{usd(detail.attestedCostUsd)}</dd>
-          <dt>Known minimum charge</dt><dd>{usd(detail.accountedCostUsd)}{detail.requiresCostEvidence?' · unused allocation remains held':''}</dd></dl>
+          <dt>Cost counted toward limits</dt><dd>{usd(detail.accountedCostUsd)}{detail.requiresCostEvidence?' · unused allocation remains held':''}</dd></dl>
         {detail.evidenceConflict&&<p role="alert">Retained evidence disagrees. The highest recorded charge still counts toward spending. Review the original provider evidence before appending a correction.</p>}
         {detail.attestations.length>0&&<details><summary>Accounting history ({detail.attestations.length})</summary>
           {detail.attestations.map(a=><article key={a.id}><h4>Revision {a.revision} · {usd(a.reportedCostUsd)}</h4>

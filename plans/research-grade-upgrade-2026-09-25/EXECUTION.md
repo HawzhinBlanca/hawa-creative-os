@@ -2,6 +2,14 @@
 
 ## 2026-09-27 — Durable Canva planner calls (ADR-101, qualification in progress)
 
+First full candidate bedbb50:4092 passed/10 failed/59 skipped. The failures exposed
+Studio transfers sharing the plan table; they now carry a validated immutable
+Studio-run origin and use that existing ledger. Historical matching sources are
+backfilled without changing bytes or inventing planner calls. Six accounting and
+actual pre-056 upgrade tests pass after fixing the upgrade fixture; the four other
+affected suites already passed. Final full/runtime qualification remains pending.
+
+
 The planner commits a shared office/client/creative_director reservation before
 transport, retains one immutable outcome and typed layout before encoding, and
 never repeats a same-key request. Redrive and retirement preserve unresolved

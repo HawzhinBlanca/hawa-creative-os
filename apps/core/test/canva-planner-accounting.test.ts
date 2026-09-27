@@ -1,7 +1,10 @@
 import {afterAll,expect,it} from 'vitest';
+import {readFileSync,readdirSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import {randomUUID,createHash} from 'node:crypto';
 import {createDb,sql,withRlsContext,assertStudioCallsResolved} from '@hawa/db';
 import {reserveStudioText} from '@hawa/creative';
+import {upgradeCanvaSchema} from '../../../packages/db/src/upgrade.js';
 import {CallCostAccountingService} from '../src/services/call-cost-accounting.js';
 const owner=createDb(process.env.TEST_DATABASE_OWNER_URL!),db=createDb(process.env.TEST_DATABASE_URL!);
 afterAll(async()=>{await db.destroy();await owner.destroy();});
@@ -80,3 +83,40 @@ it('one original outcome is immutable and cross-office accounting cannot read it
  expect(await f.daily()).toMatchObject({heldUsd:0,spentUsd:0});
  await expect(f.tx(q=>sql`UPDATE hawa.canva_design_plans SET paid_protocol=NULL WHERE id=${id}::uuid`.execute(q))).rejects.toThrow('immutable');
 });
+
+it('upgrades actual pre-ledger Studio artifacts without inventing or duplicating planner calls',async()=>{
+ const name='hawa_t_canva_upgrade_'+randomUUID().replaceAll('-',''),ownerUrl=new URL(process.env.TEST_DATABASE_OWNER_URL!);
+ ownerUrl.pathname='/postgres';const server=createDb(ownerUrl.toString(),{max:1});
+ ownerUrl.pathname='/'+name;let fresh:ReturnType<typeof createDb>|undefined;
+ try{
+  await sql`CREATE DATABASE ${sql.id(name)} TEMPLATE template0 ENCODING 'UTF8'`.execute(server);
+  fresh=createDb(ownerUrl.toString(),{max:1});
+  const root=fileURLToPath(new URL('../../../',import.meta.url));
+  for(const file of ['db/schema.sql','db/rls.sql','db/seed.sql'])await sql.raw(readFileSync(root+file,'utf8')).execute(fresh);
+  const dir=root+'packages/db/migrations/';
+  await sql`CREATE TABLE hawa.schema_upgrades(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())`.execute(fresh);
+  for(const file of readdirSync(dir).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&!f.endsWith('_down.sql')&&f<'056_').sort()){
+   const source=readFileSync(dir+file,'utf8');await sql.raw(source).execute(fresh);
+   await sql`INSERT INTO hawa.schema_upgrades(name,sha256) VALUES(${file},${hash(source)})`.execute(fresh);
+  }
+  const tenant=randomUUID(),client=randomUUID(),task=randomUUID(),run=randomUUID(),plan=randomUUID(),legacy=randomUUID(),bytes=Buffer.from('synthetic saved transfer'),requestHash=hash('frozen request');
+  await sql`INSERT INTO hawa.tenants(id,name,slug) VALUES(${tenant}::uuid,'Migration fixture',${tenant})`.execute(fresh);
+  await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${client}::uuid,${tenant}::uuid,${client},'Migration fixture')`.execute(fresh);
+  await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title) VALUES(${task}::uuid,${tenant}::uuid,${client}::uuid,'Historical transfer')`.execute(fresh);
+  await sql`INSERT INTO hawa.design_studio_runs(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,tier,status)
+   VALUES(${run}::uuid,${tenant}::uuid,${task}::uuid,${client}::uuid,'synthetic-actor',${run},${requestHash},'{}','standard','transferred')`.execute(fresh);
+  await sql`INSERT INTO hawa.canva_design_plans(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,status,result,source_content,source_sha256)
+   VALUES(${plan}::uuid,${tenant}::uuid,${task}::uuid,${client}::uuid,'synthetic-actor',${plan},${requestHash},'{}','planned',
+     ${JSON.stringify({receipt:{source:'design_studio_v2',runId:run}})}::jsonb,${bytes},${createHash('sha256').update(bytes).digest('hex')})`.execute(fresh);
+  await sql`INSERT INTO hawa.canva_design_plans(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,status)
+   VALUES(${legacy}::uuid,${tenant}::uuid,${task}::uuid,${client}::uuid,'synthetic-actor',${legacy},${requestHash},'{}','failed')`.execute(fresh);
+  const before=(await sql<{result:unknown;source_content:Buffer;source_sha256:string}>`SELECT result,source_content,source_sha256 FROM hawa.canva_design_plans WHERE id=${plan}::uuid`.execute(fresh)).rows[0];
+  expect((await upgradeCanvaSchema(ownerUrl.toString())).applied).toEqual(['056_durable_canva_planner_calls.sql']);
+  expect((await sql<{paid_protocol:string;studio_run_id:string}>`SELECT paid_protocol,studio_run_id FROM hawa.canva_design_plans WHERE id=${plan}::uuid`.execute(fresh)).rows[0])
+   .toEqual({paid_protocol:'studio-transfer-v1',studio_run_id:run});
+  expect((await sql`SELECT result,source_content,source_sha256 FROM hawa.canva_design_plans WHERE id=${plan}::uuid`.execute(fresh)).rows[0]).toEqual(before);
+  expect((await sql<{paid_protocol:null}>`SELECT paid_protocol FROM hawa.canva_design_plans WHERE id=${legacy}::uuid`.execute(fresh)).rows[0].paid_protocol).toBeNull();
+  expect((await sql`SELECT id FROM hawa.canva_planner_calls`.execute(fresh)).rows).toHaveLength(0);
+  await expect(sql`UPDATE hawa.canva_design_plans SET studio_run_id=NULL,paid_protocol=NULL WHERE id=${plan}::uuid`.execute(fresh)).rejects.toThrow('immutable');
+ }finally{await fresh?.destroy();await sql`DROP DATABASE IF EXISTS ${sql.id(name)} WITH (FORCE)`.execute(server);await server.destroy();}
+},30000);

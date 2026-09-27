@@ -1,6 +1,16 @@
 -- ADR-101: one paid attempt per immutable Canva plan; typed results survive source encoding.
 BEGIN;
-ALTER TABLE hawa.canva_design_plans ADD COLUMN paid_protocol text CHECK(paid_protocol='canva-planner-v1');
+ALTER TABLE hawa.canva_design_plans ADD COLUMN paid_protocol text CHECK(paid_protocol IN ('canva-planner-v1','studio-transfer-v1'));
+ALTER TABLE hawa.canva_design_plans ADD COLUMN studio_run_id uuid REFERENCES hawa.design_studio_runs(id);
+ALTER TABLE hawa.canva_design_plans ADD CONSTRAINT canva_plan_studio_origin CHECK((paid_protocol='studio-transfer-v1') IS NOT DISTINCT FROM (studio_run_id IS NOT NULL) OR paid_protocol IS NULL AND studio_run_id IS NULL);
+-- Existing Studio source artifacts have receipts naming their actual scoped run. They are
+-- charged by that run's existing ledger, not a second planner call. Preserve all source bytes.
+ALTER TABLE hawa.canva_design_plans DISABLE TRIGGER immutable_canva_plan;
+UPDATE hawa.canva_design_plans p SET paid_protocol='studio-transfer-v1',studio_run_id=r.id
+  FROM hawa.design_studio_runs r WHERE p.tenant_id=r.tenant_id AND p.task_id=r.task_id
+    AND p.client_id=r.client_id AND p.request_hash=r.request_hash
+    AND p.result#>>'{receipt,source}'='design_studio_v2' AND p.result#>>'{receipt,runId}'=r.id::text;
+ALTER TABLE hawa.canva_design_plans ENABLE TRIGGER immutable_canva_plan;
 ALTER TABLE hawa.canva_design_plans ADD CONSTRAINT canva_plan_tenant_id_unique UNIQUE(tenant_id,id);
 CREATE TABLE hawa.canva_planner_calls (
   id uuid PRIMARY KEY,
@@ -315,8 +325,8 @@ END $$;
 CREATE OR REPLACE FUNCTION hawa.protect_canva_plan_source() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Design planning evidence is append-only'; END IF;
-  IF (NEW.id,NEW.tenant_id,NEW.task_id,NEW.client_id,NEW.actor_id,NEW.request_key,NEW.request_hash,NEW.request,NEW.paid_protocol,NEW.created_at)
-    IS DISTINCT FROM (OLD.id,OLD.tenant_id,OLD.task_id,OLD.client_id,OLD.actor_id,OLD.request_key,OLD.request_hash,OLD.request,OLD.paid_protocol,OLD.created_at)
+  IF (NEW.id,NEW.tenant_id,NEW.task_id,NEW.client_id,NEW.actor_id,NEW.request_key,NEW.request_hash,NEW.request,NEW.paid_protocol,NEW.studio_run_id,NEW.created_at)
+    IS DISTINCT FROM (OLD.id,OLD.tenant_id,OLD.task_id,OLD.client_id,OLD.actor_id,OLD.request_key,OLD.request_hash,OLD.request,OLD.paid_protocol,OLD.studio_run_id,OLD.created_at)
     THEN RAISE EXCEPTION 'Design planning source or completed result is immutable'; END IF;
   IF OLD.status IN ('planned','failed','uncertain') THEN
     IF NEW.status='abandoned'
@@ -329,6 +339,19 @@ BEGIN
   IF OLD.status='abandoned' THEN RAISE EXCEPTION 'An abandoned plan is final'; END IF;
   RETURN NEW;
 END $$;
+
+CREATE FUNCTION hawa.check_canva_plan_origin() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hawa AS $$
+BEGIN
+  IF NEW.studio_run_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM hawa.design_studio_runs r
+    WHERE r.id=NEW.studio_run_id AND r.tenant_id=NEW.tenant_id AND r.task_id=NEW.task_id
+      AND r.client_id=NEW.client_id AND r.request_hash=NEW.request_hash
+      AND NEW.result#>>'{receipt,runId}'=r.id::text AND NEW.result#>>'{receipt,source}'='design_studio_v2') THEN
+    RAISE EXCEPTION 'CANVA_PLAN_STUDIO_ORIGIN_INVALID'; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER check_canva_plan_origin BEFORE INSERT ON hawa.canva_design_plans
+  FOR EACH ROW EXECUTE FUNCTION hawa.check_canva_plan_origin();
 
 CREATE FUNCTION hawa.enforce_canva_planner_call() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hawa AS $$
