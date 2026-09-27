@@ -6,7 +6,15 @@ import {
   VdpInvitationBatchRunner,
   type VdpGuestRecord,
 } from '../src/vdp-personalizer.js';
-import { buildKaaeInvitationOperations } from '../src/templates/kaae-invitation.template.js';
+import type { StudioOperation } from '@hawa/contracts';
+
+/** An invitation's personalised nodes, as the personalizer finds them by id. */
+const invitationOps = (): StudioOperation[] =>
+  [
+    { op: 'addText', nodeId: 'inv_title', pageId: 'p', text: 'Invitation', role: 'headline', x: 80, y: 120, width: 920, height: 80, style: { fontSize: 40, fontFamily: 'Verdana', color: '#FFFFFF' }, locked: false },
+    { op: 'addText', nodeId: 'inv_salutation', pageId: 'p', text: '[Guest Name]', role: 'body', x: 80, y: 260, width: 920, height: 60, style: { fontSize: 22, fontFamily: 'Verdana', color: '#FFFFFF' }, locked: false },
+    { op: 'addText', nodeId: 'inv_affiliation', pageId: 'p', text: '[Affiliation]', role: 'body', x: 80, y: 330, width: 920, height: 40, style: { fontSize: 18, fontFamily: 'Verdana', color: '#FFFFFF' }, locked: false },
+  ] as unknown as StudioOperation[];
 
 describe('VdpInvitationBatchRunner & Personalization Engine', () => {
   it('calculates dynamic font size scaling to prevent container overflow', () => {
@@ -33,9 +41,7 @@ describe('VdpInvitationBatchRunner & Personalization Engine', () => {
   });
 
   it('personalizes template operations and applies protocol gold tier', () => {
-    const baseOps = buildKaaeInvitationOperations({
-      clientName: 'Kurdistan Accrediting Association for Education',
-    });
+    const baseOps = invitationOps();
 
     const guest: VdpGuestRecord = {
       id: 'vip_001',
@@ -59,9 +65,7 @@ describe('VdpInvitationBatchRunner & Personalization Engine', () => {
   });
 
   it('processes a multi-guest batch with distinct cryptographic manifests', () => {
-    const baseOps = buildKaaeInvitationOperations({
-      clientName: 'Kurdistan Accrediting Association for Education',
-    });
+    const baseOps = invitationOps();
 
     const roster: VdpGuestRecord[] = [
       { id: 'g1', honorific: 'Dr.', fullName: 'Aram Mohammad' },

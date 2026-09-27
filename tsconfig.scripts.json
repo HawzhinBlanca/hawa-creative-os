@@ -27,20 +27,13 @@
     "scripts/**/*.ts"
   ],
   "exclude": [
-    "scripts/execute_independent_live_vertical_slice.ts",
-    "scripts/execute_live_vertical_slice.ts",
-    "scripts/export_kaae_deliverables.ts",
     "scripts/generate-p01-proof.ts",
     "scripts/generate-p04-proof.ts",
     "scripts/generate-p05-proof.ts",
     "scripts/generate-p08-proof.ts",
-    "scripts/publish_kaae_omnichannel.ts",
     "scripts/render_10_out_of_10_designs.ts",
-    "scripts/run_independent_completion_audit.ts",
     "scripts/studio_fault_injection.ts",
     "scripts/test_gateway_models.ts",
-    "scripts/verify_all_h01_h14.ts",
-    "scripts/verify_live_h01_h03.ts",
-    "scripts/verify_live_h04_h05_h10.ts"
+    "scripts/verify_live_h01_h03.ts"
   ]
 }

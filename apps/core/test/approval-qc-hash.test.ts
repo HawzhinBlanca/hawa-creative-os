@@ -28,6 +28,9 @@ function approve(app: ReturnType<typeof createApp>, taskId: string, revisionId: 
   });
 }
 
+/** A seeded client the legacy generator still drafts: KAAE's designs are made in the studio (ADR-038). */
+const HAWA_STUDIO = 'c1000000-0000-4000-8000-000000000001';
+
 describe('an approval without a QA report', () => {
   it('invents no QC hash: the review desk says QA did not run, and the approval is refused', async () => {
     const app = createApp({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
@@ -61,11 +64,9 @@ describe('an approval without a QA report', () => {
 describe('an approval after QA ran', () => {
   it('shows the report\'s own SHA-256; echoing it passes the hash check, and the failing QA then refuses approval', async () => {
     const app = createApp({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true } });
-    // The headline the client sent: KAAE's template draws nothing without one. The task's title used
-    // to stand in for it on the copy of the task the creating Core kept in memory.
     const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'With QA', headlineCkb: 'داشکاندنی ٢٥٪' }) })).json();
     const taskId: string = created.id;
-    await app.request(`/v1/tasks/${taskId}/route`, { method: 'POST', headers: json, body: JSON.stringify({ clientId: 'client-office-1', reason: 'Client assigned' }) });
+    await app.request(`/v1/tasks/${taskId}/route`, { method: 'POST', headers: json, body: JSON.stringify({ clientId: HAWA_STUDIO, reason: 'Client assigned' }) });
     await app.request(`/v1/tasks/${taskId}/briefs`, {
       method: 'POST',
       headers: json,
@@ -94,7 +95,7 @@ describe('an approval after QA ran', () => {
     const app = createApp({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true }, qaEngine: passing as never });
     const created = await (await app.request('/v1/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title: 'Forged QA', headlineCkb: 'داشکاندنی ٢٥٪' }) })).json();
     const taskId: string = created.id;
-    await app.request(`/v1/tasks/${taskId}/route`, { method: 'POST', headers: json, body: JSON.stringify({ clientId: 'client-office-1', reason: 'Client assigned' }) });
+    await app.request(`/v1/tasks/${taskId}/route`, { method: 'POST', headers: json, body: JSON.stringify({ clientId: HAWA_STUDIO, reason: 'Client assigned' }) });
     await app.request(`/v1/tasks/${taskId}/briefs`, {
       method: 'POST',
       headers: json,

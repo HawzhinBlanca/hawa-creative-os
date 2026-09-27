@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T20:17:46Z",
+  "generatedAt": "2026-09-27T21:20:36Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 279,
+  "fileCount": 272,
   "files": [
     {
       "path": ".dockerignore",
@@ -259,8 +259,8 @@
     },
     {
       "path": "adrs/038_client_packs.md",
-      "sha256": "224aa59bf12ebaf8b51ce279e3f579edf908b46de0a952789ffe73763adc56c6",
-      "bytes": 10880
+      "sha256": "91c76e42de3017471eeae5667811ea47470f46648acf7334eb2e2716b0dcd140",
+      "bytes": 11984
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -274,8 +274,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "4b97382a2ea5fe4ecffba2f0c78f695d95bcac392ce27afa2d2bea356cc61fab",
-      "bytes": 24780
+      "sha256": "b9f7551c45b4dd3fa40b7a8de43bcd10bad5f862a0f8142e30c34dd3371c2b4f",
+      "bytes": 24991
     },
     {
       "path": "config/asset-workflows.example.yaml",
@@ -913,16 +913,6 @@
       "bytes": 18228
     },
     {
-      "path": "scripts/execute_independent_live_vertical_slice.ts",
-      "sha256": "3eb9fda23c2e9af3a53e3bb557243e70c14874b53d6c1e73d9421b742f418d08",
-      "bytes": 16177
-    },
-    {
-      "path": "scripts/execute_live_vertical_slice.ts",
-      "sha256": "74ac53d5f068c7fb6c7b663353de01582464abcea065a57fa565a997ef43cb05",
-      "bytes": 19421
-    },
-    {
       "path": "scripts/experiments/judge-model-agreement.ts",
       "sha256": "9dd15a3e95d726ebb6b37591751f30bf5e3afeeec53b0e51bd7dce01821d28c6",
       "bytes": 11715
@@ -936,11 +926,6 @@
       "path": "scripts/experiments/prompt-cache-probe.ts",
       "sha256": "79578a670a1853cffd4ebdf717f3cda131daaac52a273a034a730066d32fd8f0",
       "bytes": 3239
-    },
-    {
-      "path": "scripts/export_kaae_deliverables.ts",
-      "sha256": "4c5c40bb5c8e77e2297028203ffc9521312fbbb7de9232d2a9c6e89e167d01d6",
-      "bytes": 24113
     },
     {
       "path": "scripts/export_live_f04_proof.ts",
@@ -1178,11 +1163,6 @@
       "bytes": 5585
     },
     {
-      "path": "scripts/publish_kaae_omnichannel.ts",
-      "sha256": "0d3fc797145ad7d3fa43a1eb4868fd96c251e03feaf489c82e507b6d3a11c0ff",
-      "bytes": 24216
-    },
-    {
       "path": "scripts/ratchet_any.ts",
       "sha256": "0a052e5b249767339c9ffa33c9fbdcf1560032a749c2770bfc447864e44aef11",
       "bytes": 2991
@@ -1251,11 +1231,6 @@
       "path": "scripts/run_f07_live_eval.ts",
       "sha256": "c24a6eab3bac1ed611ceaa36d63b8b0a66e43f770e4d3147a81a40dcddfa2d08",
       "bytes": 7464
-    },
-    {
-      "path": "scripts/run_independent_completion_audit.ts",
-      "sha256": "633110bedd284ce4fa4c1f70ec06808b7b510afec2d88f4ea4db2cd42b4e1752",
-      "bytes": 75127
     },
     {
       "path": "scripts/run_model_tournament.ts",
@@ -1358,19 +1333,9 @@
       "bytes": 24047
     },
     {
-      "path": "scripts/verify_all_h01_h14.ts",
-      "sha256": "e93e3c7cef38f91313185a75685cd01f37d24c07a5ac8580a2b4284b08770d96",
-      "bytes": 25071
-    },
-    {
       "path": "scripts/verify_live_h01_h03.ts",
       "sha256": "2eeef4b5962c5e178f04447532af5aa0b9f10040ba1af932d8a05542050a975a",
       "bytes": 10084
-    },
-    {
-      "path": "scripts/verify_live_h04_h05_h10.ts",
-      "sha256": "1a82c0e6124450372c915da9578f7472dbe5569e2872a9de881c72e163bca504",
-      "bytes": 6915
     },
     {
       "path": "scripts/verify_release_manifest.ts",
@@ -1384,8 +1349,8 @@
     },
     {
       "path": "tsconfig.scripts.json",
-      "sha256": "1cd9520eec6389219a1422796c8498f3f069d5fc20e4504da5d4d2a8b0fe3165",
-      "bytes": 1712
+      "sha256": "ec827f51b257582f6477f8a1f0eda2ca9922aa9440158e09ee67f9ded4768e5c",
+      "bytes": 1392
     },
     {
       "path": "tsconfig.test.json",
