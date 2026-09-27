@@ -73,7 +73,8 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
   check('restored unconfirmed Telegram send was never repeated', afterDocs.length === 1 &&
     afterDocs[0].documentSha256 === docs[0].documentSha256, `${afterDocs.length} documents`);
   const alerts = await waitUntil('one uncertain-send alert', async () => {
-    const messages = (await sentTo('9000001')).filter(item=>item.text?.includes(taskId));
+    const messages = (await sentTo('9000001')).filter(item=>item.text?.includes(taskId) &&
+      item.text.startsWith('Hawa alert: Telegram did not confirm'));
     return messages.length ? messages : null;
   });
   check('restored uncertain send is surfaced once to the office', alerts.length === 1, `${alerts.length} alerts`);
@@ -105,6 +106,10 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
   check('explicit synthetic staff observation settles once with stable replay',settled.status === 200 && repeated.status === 200 &&
     settled.json.confirmationSource === 'staff_visible' && settled.json.requestRev === repeated.json.requestRev,
     `HTTP ${settled.status}/${repeated.status}; rev ${settled.json.requestRev}`);
+  const afterObservation = await sentTo(chat);
+  check('staff settlement and its replay create no additional requester sends',
+    JSON.stringify(afterObservation.map(item=>item.seq)) === JSON.stringify(visible.map(item=>item.seq)),
+    `before=${visible.length}; after=${afterObservation.length}`);
   events.push('Synthetic administrator explicitly reconciled the restored uncertain send using IDs from the surviving fake chat; no real human/provider acceptance implied');
   const publications = await query<{id:string;state:string}>(sql`SELECT id,state FROM hawa.publications WHERE task_id=${taskId}::uuid`);
   check('restored delivery records exactly one completed publication', publications.length === 1 && publications[0].state === 'complete',

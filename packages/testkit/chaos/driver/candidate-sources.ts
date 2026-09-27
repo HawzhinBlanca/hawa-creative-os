@@ -150,7 +150,7 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   const delivered = await waitUntil('reviewed source request delivered', async () => { const [r] = await requests(); return r?.stage === 'delivered' ? r : null; });
   const tasks = await tasksOfChat(chat);
   check('PDF new request and voice revision reach one logical simulated delivery', tasks.length === 2 && tasks[1].state === 'complete' &&
-    Number(delivered.rev) === 8 && delivered.current_task_id === child.current_task_id, JSON.stringify({tasks, delivered}));
+    Number(delivered.rev) === (recovery ? 9 : 8) && delivered.current_task_id === child.current_task_id, JSON.stringify({tasks, delivered}));
   const confirmations = await query<{payload: {copy: string; confirmationUpdateId: number}}>(sql`SELECT payload FROM hawa.inbox_events
     WHERE source_account_id='lifecycle_source_confirmation' AND source_event_id IN (${String(pdfId)},${String(voiceId)})`);
   check('retained confirmations preserve exact source copy', confirmations.length === 2 && confirmations.some(c => c.payload.copy === copy) &&
