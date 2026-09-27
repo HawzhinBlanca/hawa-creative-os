@@ -1,0 +1,93 @@
+{
+  "date": "2026-09-27",
+  "status": "AFFECTED_TESTS_PASSED_RELEASE_AND_RUNTIME_PENDING",
+  "requirements": [
+    "FR-059",
+    "FR-060",
+    "FR-062",
+    "FR-065",
+    "FR-079",
+    "NFR-001"
+  ],
+  "adr": "097_exact_call_cost_accounting",
+  "evidenceDirectory": "output/acceptance/2026-09-27-call-cost-accounting",
+  "focused": {
+    "passed": 73,
+    "failed": 0,
+    "skipped": 0,
+    "files": 7
+  },
+  "checks": {
+    "strictTestRoots": 488,
+    "sourceAndScriptTypes": "passed",
+    "lintAny": 981,
+    "existingProviderEgressExceptions": 9,
+    "deskBuild": "passed",
+    "securityScan": "passed",
+    "blueprint": {
+      "passed": 985,
+      "warned": 0,
+      "failed": 0
+    },
+    "securitySelfTestPatterns": 11
+  },
+  "fullRegression": "pending",
+  "runtimeChanged": false,
+  "productionChanged": false,
+  "realProviderCalls": false,
+  "failedFirstEvidence": [
+    "Initial strict build rejected optional Hono path parameters; invalid IDs now reach explicit validation.",
+    "Next build rejected an unused React import; removed.",
+    "Expanded suite initially passed70/failed2: historical fixture used a function name instead of the immutable trigger name; designer fixture lacked its explicit client assignment. Both corrected; final72 pass."
+  ],
+  "notQualified": [
+    "Live provider billing or invoices",
+    "Named budget policy administration",
+    "Other provider-egress paths",
+    "Typed completed-result recovery",
+    "Truthful fixture case presentation",
+    "Live office/native Canva/human multilingual/design and held-out quality admission",
+    "Independent-host restore and controlled rollout"
+  ],
+  "sourceHashes": {
+    "adrs/097_exact_call_cost_accounting.md": "eaba21fe98f9f8bf2d5144d781fd581fb4bb35425c4ec2db8f11cdbc2a5bc7e9",
+    "api/openapi.yaml": "6254b014ce617d5912c7cad69c5cbaf26930400112ed6ad01e39b88ffff44d5d",
+    "apps/core/src/app.ts": "18472d29479b75ab51a08bc8508dda0c92ae8498f4f4fbe648cc2da86e474d29",
+    "apps/core/src/routes/call-cost.routes.ts": "50c1cf327a7c0384fd53c356f5a5ee3ce6af3a16138b8bcc767983e396d36e81",
+    "apps/core/src/services/call-cost-accounting.ts": "bb528832d47fbf0432a067ec8847264889d49a53dd113a3c3edfacb7ecae069f",
+    "apps/core/test/call-cost-accounting.test.ts": "efabd1a2752188de819df643e495accd03c750082fd995d725183850e95b3120",
+    "apps/desk/src/api/client.ts": "6f9087a7c4dca6e958b1b5515bd13d1986004980733fff25ad2028419fad1aa1",
+    "apps/desk/src/components/CallCostAccountingPanel.tsx": "a2b3c67b5e6e6ec072954c7382e2ad2feab937fd5ff1533e8463d5a13908c4ee",
+    "apps/desk/src/components/EvaluationSettlementPanel.tsx": "f36456e74052c2c306225db12425befb61dfffb5de09d7a72cd8dde656b8b422",
+    "apps/desk/src/screens/OpsScreen.tsx": "8e6aad6c24365853fb3467f98f2370bb994e4385c63eaebd97e10a1c99e702f1",
+    "apps/desk/test/call-cost-accounting.test.ts": "ac7f7e2932728e92227ca8ffd12204d435d6ba136c55ff2d598e0127389f0baf",
+    "docs/07_MODEL_REGISTRY_AND_EVALUATION.md": "08d474dbea59b2865dad11a4af97cea4c57fdd50cb5d0eff8dc99986d45e3cdb",
+    "docs/10_WORKFLOW_RELIABILITY.md": "dd2ab78c97aac7ddf535a50ae2fc518b1bc5b031822874702b024309fd17de1d",
+    "docs/17_UI_UX.md": "2800a6655ce649e2792b25b27cc3a62276c9069902f2d4a3c18c9ae1679c51ec",
+    "packages/contracts/src/call-cost.ts": "76225e9861092c65266553e9ac14c80a17387ba7b4467ad226d6c7ee207c77df",
+    "packages/contracts/src/index.ts": "08be5e3b3f6cfb5aca51a150fafcecd6f7dbdc8b16c39860b172f4ed77f24032",
+    "packages/db/migrations/053_exact_call_cost_accounting.sql": "b101b8d2b2dfaee8b2f66f759b99622e9cccb13e2ee1f5a97e374da27f408f3c",
+    "packages/db/src/repositories/design-studio.repository.ts": "eb2af8bbc694edeed687e2d156c85e2fff55eed1d0608f850fefe94553591fc6",
+    "packages/domain/src/studio-budget.ts": "d2676bb56bd943c520e8acbc8524f656a4fb7b08a65bab415be3e6d3931c910b",
+    "runbooks/CALL_COST_ACCOUNTING.md": "eba0c40d1346279343de7526d5766ae083f6b5f8b437cfc92f223817f3e4ba13"
+  },
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-call-cost-accounting/blueprint-candidate.log": "171687bb8fd5ce0f446b5e290264ed48fde7455eca85e58badc400b05b4f68ca",
+    "output/acceptance/2026-09-27-call-cost-accounting/build-final.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-call-cost-accounting/build-first.log": "7fe850c70ecc75a6ffd92bfdb22861cf1cf178b38e97a68875b9542b8eafa880",
+    "output/acceptance/2026-09-27-call-cost-accounting/build-fourth.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-call-cost-accounting/build-second.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-call-cost-accounting/build-third.log": "861e666139b74edc8f5b74f7c08d38c5ff883bd5b58d3de9fccb45a2fcddd754",
+    "output/acceptance/2026-09-27-call-cost-accounting/desk-build.log": "9357139208da5b85c6b23501f78873f7c2e6de3a811815ce18b0734d14377067",
+    "output/acceptance/2026-09-27-call-cost-accounting/focused-acceptance-final.log": "e9c8ff432ba0161e2df17b848d5d3b34740636d5c8632a1687cd0b65331c3165",
+    "output/acceptance/2026-09-27-call-cost-accounting/focused-complete.log": "3ad197dabaa0b08e75ec018ca42ba330a322abb473e66be355aee94e922e361b",
+    "output/acceptance/2026-09-27-call-cost-accounting/focused-final.log": "b107b21f536d03309a20d2436673445ab7b88f04b0330c61ec6026f6314b0bd4",
+    "output/acceptance/2026-09-27-call-cost-accounting/focused-first.log": "60fcb2f0a69d727cd62d8642e3409827ae729e0677c72d368c6bac617c946350",
+    "output/acceptance/2026-09-27-call-cost-accounting/focused-third.log": "ab805b6a5f2d973dbe55421e9b62826339faec5562670a8638f74050d0440c0b",
+    "output/acceptance/2026-09-27-call-cost-accounting/lint.log": "36deb7821a552124e408f9796ce7fab95c1b191500fd2f7c1a10d90428a78f8e",
+    "output/acceptance/2026-09-27-call-cost-accounting/refresh-candidate.log": "bc1267b15a6d45c21fb059bb77aeac61572b88b72d4335ae32ed58b3281bf9ab",
+    "output/acceptance/2026-09-27-call-cost-accounting/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
+    "output/acceptance/2026-09-27-call-cost-accounting/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+    "output/acceptance/2026-09-27-call-cost-accounting/types-first.log": "b5e37022b480bbe1f13dfe55de0ec583345167cb7e2b5bc4c8bf9dfc31f39bca"
+  }
+}

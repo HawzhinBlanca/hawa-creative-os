@@ -57,6 +57,7 @@ import { SyntheticTrafficDaemon } from '@hawa/testkit';
 import { registerCanvaRoutes } from './routes/canva.routes.js';
 import { registerDesignStudioRoutes } from './routes/design-studio.routes.js';
 import { registerStudioRecoveryRoutes } from './routes/studio-recovery.routes.js';
+import { registerCallCostRoutes } from './routes/call-cost.routes.js';
 import { CanvaConnectService } from './services/canva-connect-service.js';
 import { canvaDeliverableStore, EMPTY_DELIVERABLE_STORE, type DeliverableStore } from './services/pinned-deliverables.js';
 import { registerSystemRoutes } from './routes/system.routes.js';
@@ -1016,6 +1017,7 @@ export function createApp(options?: CreateAppOptions) {
   registerCanvaRoutes(routeContext, options?.canvaOptions);
   registerDesignStudioRoutes(routeContext, options?.designStudioOptions, options?.designStudioService);
   registerStudioRecoveryRoutes(routeContext);
+  registerCallCostRoutes(routeContext);
   registerAuthRoutes(routeContext);
   registerClientsRoutes(routeContext);
   registerEvalsRoutes(routeContext);

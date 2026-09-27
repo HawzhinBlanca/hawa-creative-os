@@ -161,3 +161,19 @@ cap from an estimate based on reported usage (ADR-093). Missing usage remains
 unknown, including historical receipts whose usage completeness was not recorded.
 An observed overrun stays visible beside the original bound. The displayed request
 bound does not imply that evaluation has joined the office's durable allocation.
+
+
+### Exact-call cost evidence (ADR-097, 2026-09-27)
+
+A named administrator can append snapshot-bound terminal cost evidence for an
+exact Studio, evaluation or retained-voice call, including completed replies with
+missing billing data. SQL verifies current authority, source identity, revision,
+terminal evidence and the observed snapshot under parent/source and office locks.
+Original receipts and all earlier attestations remain immutable. Shared daily and
+Studio run admission retain the highest original, settled or attested cost; unused
+reservations can then be released. A late receipt preserves any higher charge and
+shows disagreement. Accounting does not clear execution holds or replay paid work.
+Desk Operations shows paginated original costs, reserved amounts, attributed
+history and conflicts. Unknown cost remains unknown; evidence files stay local.
+See runbooks/CALL_COST_ACCOUNTING.md. Live billing, policy administration and typed
+result recovery retain separate acceptance gates.

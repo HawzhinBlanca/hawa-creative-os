@@ -47,6 +47,8 @@ export interface StudioBudgetCall {
   status: 'ok' | 'error' | 'uncertain';
   estimatedUsd: number;
   settledUsd: number | null;
+  /** Financial evidence alone never clears an execution-uncertainty hold. */
+  attestedUsd?: number | null;
   reservedUsd?: number | null;
   costBasis?: StudioCostBasis | null;
 }
@@ -110,7 +112,8 @@ export function studioBudgetUsage(snapshot: unknown, calls: readonly StudioBudge
   usage.maxUsd = budget.maxUsd; usage.maxCalls = budget.maxCalls;
   for (const call of calls) {
     if (!Number.isFinite(call.estimatedUsd) || call.estimatedUsd < 0 || call.estimatedUsd > Number.MAX_SAFE_INTEGER / 1_000_000 ||
-        (call.settledUsd !== null && (!Number.isFinite(call.settledUsd) || call.settledUsd < 0 || call.settledUsd > Number.MAX_SAFE_INTEGER / 1_000_000))) {
+        (call.settledUsd !== null && (!Number.isFinite(call.settledUsd) || call.settledUsd < 0 || call.settledUsd > Number.MAX_SAFE_INTEGER / 1_000_000)) ||
+        (call.attestedUsd != null && (!Number.isFinite(call.attestedUsd) || call.attestedUsd < 0 || call.attestedUsd > Number.MAX_SAFE_INTEGER / 1_000_000))) {
       return { ...usage, blocker: 'STUDIO_BUDGET_INVALID' };
     }
     // Uncertainty can coexist with an already reported partial charge. The zero placeholder
@@ -120,13 +123,14 @@ export function studioBudgetUsage(snapshot: unknown, calls: readonly StudioBudge
       return { ...usage, blocker: 'STUDIO_BUDGET_INVALID' };
     }
     usage.knownUsdEstimate += known;
-    usage.attestedAdditionalUsd += Math.max(0, (call.settledUsd ?? 0) - known);
+    const attributed = Math.max(call.settledUsd ?? 0, call.attestedUsd ?? 0);
+    usage.attestedAdditionalUsd += Math.max(0, attributed - known);
     if (call.status === 'uncertain' && call.settledUsd === null) usage.unresolvedCalls++;
     if (call.reservedUsd != null) {
-      const finalCost = call.settledUsd !== null ||
+      const finalCost = call.settledUsd !== null || call.attestedUsd != null ||
         (call.status !== 'uncertain' && (call.costBasis === 'usage' || call.costBasis === 'not_accepted'));
       if (!finalCost) usage.reservedAdditionalUsd += Math.max(0, call.reservedUsd - known);
-      if (studioUsdMicros(Math.max(known, call.settledUsd ?? 0)) > studioUsdMicros(call.reservedUsd)) {
+      if (studioUsdMicros(Math.max(known, attributed)) > studioUsdMicros(call.reservedUsd)) {
         usage.blocker = 'STUDIO_BUDGET_RESERVATION_EXCEEDED';
       }
     }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { eventStream } from '../services/eventStream';
 import { apiClient } from '../api/client.js';
 import { read, reasonOf } from '../services/statusReport.js';
+import { CallCostAccountingPanel } from '../components/CallCostAccountingPanel.js';
 
 interface IntegrationHealth {
   integrationId: string;
@@ -248,6 +249,7 @@ export const OpsScreen: React.FC = () => {
 
   return (
     <section id="ops" className="screen active">
+      <CallCostAccountingPanel />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ fontSize: 13, color: 'var(--muted)' }}>
           {loading

@@ -691,16 +691,19 @@ export class DesignStudioRepository {
   }
 
   private async readBudgetUsage(client: Kysely<Database>, runId: string, tenantId: string, snapshot: unknown): Promise<StudioBudgetUsage> {
-    const calls = await sql<{ status: 'ok' | 'error' | 'uncertain'; estimated_usd: string; settled_usd: string | null; reservation: StudioCallReservation | null; cost_basis: StudioCostBasis | null }>`
+    const calls = await sql<{ status: 'ok' | 'error' | 'uncertain'; estimated_usd: string; settled_usd: string | null; attested_usd: string | null; reservation: StudioCallReservation | null; cost_basis: StudioCostBasis | null }>`
       SELECT c.status, c.reservation, c.cost_basis, c.usd_estimate AS estimated_usd,
         (SELECT max((e.value->>'reportedCostUsd')::numeric)
          FROM hawa.studio_run_settlements s CROSS JOIN LATERAL jsonb_array_elements(s.calls) e
-         WHERE s.tenant_id=c.tenant_id AND s.run_id=c.run_id AND e.value->>'callId'=c.id::text) AS settled_usd
+         WHERE s.tenant_id=c.tenant_id AND s.run_id=c.run_id AND e.value->>'callId'=c.id::text) AS settled_usd,
+        (SELECT max(a.reported_cost_usd) FROM hawa.call_cost_attestations a
+         WHERE a.tenant_id=c.tenant_id AND a.call_kind='studio' AND a.call_id=c.id) AS attested_usd
       FROM hawa.design_studio_calls c WHERE c.tenant_id=${tenantId}::uuid AND c.run_id=${runId}::uuid
       ORDER BY c.started_at,c.id`.execute(client);
     return studioBudgetUsage(snapshot, calls.rows.map(c => ({ status: c.status,
       reservedUsd: c.reservation?.usd ?? null, costBasis: c.cost_basis,
-      estimatedUsd: Number(c.estimated_usd), settledUsd: c.settled_usd === null ? null : Number(c.settled_usd) })));
+      estimatedUsd: Number(c.estimated_usd), settledUsd: c.settled_usd === null ? null : Number(c.settled_usd),
+      attestedUsd: c.attested_usd === null ? null : Number(c.attested_usd) })));
   }
 
   async getBudgetUsage(runId: string, tenantId: string, actorId?: string): Promise<StudioBudgetUsage | null> {

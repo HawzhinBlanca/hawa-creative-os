@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T10:23:57Z",
+  "generatedAt": "2026-09-27T10:43:05Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 414,
+  "fileCount": 417,
   "files": [
     {
       "path": ".dockerignore",
@@ -553,6 +553,11 @@
       "bytes": 3191
     },
     {
+      "path": "adrs/097_exact_call_cost_accounting.md",
+      "sha256": "eaba21fe98f9f8bf2d5144d781fd581fb4bb35425c4ec2db8f11cdbc2a5bc7e9",
+      "bytes": 2856
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -564,8 +569,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "dc42838e605464bd666c3e2f9366fc6f5fec96110ac2c5b97013241f0ae58e91",
-      "bytes": 57902
+      "sha256": "6254b014ce617d5912c7cad69c5cbaf26930400112ed6ad01e39b88ffff44d5d",
+      "bytes": 61953
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -804,8 +809,8 @@
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
-      "sha256": "31790de5a7f6909533e25312f9f56ee7f76b409adb8a4d2ed25855336fef6799",
-      "bytes": 14786
+      "sha256": "08d474dbea59b2865dad11a4af97cea4c57fdd50cb5d0eff8dc99986d45e3cdb",
+      "bytes": 15784
     },
     {
       "path": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
@@ -819,8 +824,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "055aa3cf1ac6f469b52a0e94a9b6bbdb8fd73ad526fb354537cbcf819236ed04",
-      "bytes": 21713
+      "sha256": "dd2ab78c97aac7ddf535a50ae2fc518b1bc5b031822874702b024309fd17de1d",
+      "bytes": 22711
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -854,8 +859,8 @@
     },
     {
       "path": "docs/17_UI_UX.md",
-      "sha256": "44180b595a9668744e042a515e3065f0cca23897d5370a01f41c545daab32515",
-      "bytes": 5284
+      "sha256": "2800a6655ce649e2792b25b27cc3a62276c9069902f2d4a3c18c9ae1679c51ec",
+      "bytes": 6282
     },
     {
       "path": "docs/18_FEEDBACK_LEARNING.md",
@@ -1004,8 +1009,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "1d9544385a228816c5855183c5c92d21eb5e2d9698b1d23b269c909c815579ae",
-      "bytes": 82000
+      "sha256": "23084a484ce3c4c57b9b9169b3a68bdcfb8230fa47e16b26c0fc11d0cb63638d",
+      "bytes": 83215
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1233,6 +1238,11 @@
       "bytes": 7224
     },
     {
+      "path": "plans/research-grade-upgrade-2026-09-25/R21_CALL_COST_ACCOUNTING_PROOF.json",
+      "sha256": "8d705638edb377ebccb03901c56c53afc67af09dfd96f8641cabcafa58e49c9a",
+      "bytes": 6385
+    },
+    {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_DAILY_STUDIO_BUDGET_PROOF.json",
       "sha256": "ff870df6038d7a78670ba674ea8a5aaaf49d550c058061fe6f00ea243797d079",
       "bytes": 8050
@@ -1249,8 +1259,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "2b48172ac24c78e5a1a93bf7d95bff5ed6f5c2c4e2d00545250d7443db050b3a",
-      "bytes": 52957
+      "sha256": "56f618683c826b5daa5c7670713c460dfe5ce5c22420247c27e78df41234918c",
+      "bytes": 54172
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json",
@@ -1364,8 +1374,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "d4303ccd74c8302db73e6109484fe59b1d2217c82fa20992851c1367d355631e",
-      "bytes": 346844
+      "sha256": "20eff201c21a0dac1bde79dd4caafc1871aa7fd813d7b4c727915aa2e5c4e62a",
+      "bytes": 349136
     },
     {
       "path": "plans/user-stories.csv",
@@ -1456,6 +1466,11 @@
       "path": "runbooks/12_emergency_manual_mode.md",
       "sha256": "f1ff18fde60ac30a3f2859838806073fa05012e7ee176a3bca39486ca9acee57",
       "bytes": 809
+    },
+    {
+      "path": "runbooks/CALL_COST_ACCOUNTING.md",
+      "sha256": "eba0c40d1346279343de7526d5766ae083f6b5f8b437cfc92f223817f3e4ba13",
+      "bytes": 2767
     },
     {
       "path": "runbooks/CHAT_REVIEW_ACCEPTANCE.md",

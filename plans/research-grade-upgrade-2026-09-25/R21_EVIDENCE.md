@@ -1,5 +1,24 @@
 # R21 — Unknown model acceptance is not a free retry
 
+## 2026-09-27 — Exact-call accounting (ADR-097, candidate)
+
+Migration 053 adds named, immutable revisions of exact Studio/evaluation/voice
+cost evidence. Original outcomes and execution holds remain; unused allocations
+can be released using terminal evidence while the greatest retained cost counts.
+Snapshot checks include late outcomes and prior attestations. Foreign-key scope,
+SQL authority/immutability, concurrent revisions, exact keyed replay and original
+receipt preservation are covered. Desk Operations exposes paginated call costs,
+local evidence-file hashing, attributed history, conflict notices and saved retries.
+
+Affected suites: 73 passed across seven files, no failures or skips. All 488 test
+roots and source/scripts compile; lint remains 981/1053 with nine existing provider
+egress exceptions; Desk build and scanner pass. Initial build and fixture failures
+are preserved. Full sealed regression and deployed browser qualification are pending.
+No production change or real provider request. Budget policy administration, other
+paid paths, typed result recovery and real operational/quality admission remain open.
+See R21_CALL_COST_ACCOUNTING_PROOF.json and runbooks/CALL_COST_ACCOUNTING.md.
+
+
 ### Final ADR-096 source and runtime qualification, 2026-09-27
 
 Shared office/client/role admission is locally qualified for Studio, fixture

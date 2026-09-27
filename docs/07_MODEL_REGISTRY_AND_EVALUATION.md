@@ -309,3 +309,19 @@ This covers Studio, fixture evaluations and retained voice. Other provider-egres
 paths, named policy administration/accounting repair, typed completed-stage replay,
 fresh runtime qualification and live billing/office admission remain open. See
 runbooks/STUDIO_DAILY_BUDGETS.md and R21_SHARED_SPENDING_PROOF.json.
+
+
+### Exact-call cost evidence (ADR-097, 2026-09-27)
+
+A named administrator can append snapshot-bound terminal cost evidence for an
+exact Studio, evaluation or retained-voice call, including completed replies with
+missing billing data. SQL verifies current authority, source identity, revision,
+terminal evidence and the observed snapshot under parent/source and office locks.
+Original receipts and all earlier attestations remain immutable. Shared daily and
+Studio run admission retain the highest original, settled or attested cost; unused
+reservations can then be released. A late receipt preserves any higher charge and
+shows disagreement. Accounting does not clear execution holds or replay paid work.
+Desk Operations shows paginated original costs, reserved amounts, attributed
+history and conflicts. Unknown cost remains unknown; evidence files stay local.
+See runbooks/CALL_COST_ACCOUNTING.md. Live billing, policy administration and typed
+result recovery retain separate acceptance gates.

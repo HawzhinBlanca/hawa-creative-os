@@ -6,6 +6,7 @@
  */
 
 import { getAuthToken, setAuthToken, clearAuthToken, getCsrfToken, getAuthHeaders } from '../services/auth.js';
+import type { CallCostDetail, CallCostKind, CallCostPage } from '@hawa/contracts';
 export interface SettlementBody {
   expectedSnapshot:string; reason:string;
   calls:Array<{callId:string;conclusion:'provider_not_accepted'|'provider_finished';reportedCostUsd:number;evidenceReference:string;evidenceSha256:string}>;
@@ -433,6 +434,13 @@ class HawaApiClient {
     settle: (runId: string, actionId:string, body:SettlementBody) => this.request<unknown>(`/evaluations/runs/${encodeURIComponent(runId)}/settlement`, {method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
     cases: (datasetId: string) => this.request<any>(`/evaluations/datasets/${encodeURIComponent(datasetId)}/cases`),
     run: (name: string, actionId: string) => this.request<any>('/evaluations/runs', { method: 'POST', headers: { 'Idempotency-Key': actionId }, body: JSON.stringify({ name }) }),
+  };
+
+  public readonly callCosts = {
+    list: (cursor?:string|null) => this.request<CallCostPage>(`/spending/calls${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`),
+    get: (kind:CallCostKind,id:string) => this.request<CallCostDetail>(`/spending/calls/${kind}/${encodeURIComponent(id)}`),
+    record: (kind:CallCostKind,id:string,actionId:string,body:SettlementBody) => this.request<unknown>(
+      `/spending/calls/${kind}/${encodeURIComponent(id)}/evidence`,{method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
   };
 
   // The blinded comparison with the office designer (Core: routes/comparison.routes.ts). The judges'

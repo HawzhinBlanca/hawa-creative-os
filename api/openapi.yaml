@@ -852,6 +852,70 @@ paths:
         '409': {description: Run not stopped, changed snapshot/action or incomplete evidence}
         '503': {description: Outcome unavailable; retry the same settlement action}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/spending/calls:
+    get:
+      tags: [Operations]
+      operationId: listCallCostEvidence
+      description: Office administrator, operator or auditor reads sanitized Studio, evaluation and voice call costs. At most 50 newest records per page; opaque keyset cursor retains timestamp precision. No provider call or raw answer is exposed.
+      parameters:
+        - {name: cursor, in: query, schema: {type: string, maxLength: 500}}
+      responses:
+        '200': {description: Call cost evidence items and nextCursor; original unknown costs remain null}
+        '403': {description: Authorized office role required}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/spending/calls/{kind}/{callId}:
+    get:
+      tags: [Operations]
+      operationId: readCallCostEvidence
+      parameters:
+        - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice]}}
+        - {name: callId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Exact snapshotHash, original cost and outcome, reserved USD, conservative accounted USD, attributed revision history, conflicts and current canRecord authority}
+        '404': {description: Call absent from this office}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/spending/calls/{kind}/{callId}/evidence:
+    post:
+      tags: [Operations]
+      operationId: recordCallCostEvidence
+      description: Appends a named administrator cost attestation for one exact call. Snapshot and authority are checked again in SQL. The highest original, settled or attested charge remains counted. Terminal evidence releases unused reserves; this changes no outcome, score, workflow state or execution hold and dispatches no provider request. Corrections append revisions. Same-action retries return the saved receipt.
+      parameters:
+        - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice]}}
+        - {name: callId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedSnapshot, reason, calls]
+              properties:
+                expectedSnapshot: {type: string, pattern: '^[a-f0-9]{64}$'}
+                reason: {type: string, minLength: 1, maxLength: 500}
+                calls:
+                  type: array
+                  minItems: 1
+                  maxItems: 1
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [callId, conclusion, reportedCostUsd, evidenceReference, evidenceSha256]
+                    properties:
+                      callId: {type: string, format: uuid, description: Must equal the path callId}
+                      conclusion: {enum: [provider_not_accepted, provider_finished]}
+                      reportedCostUsd: {type: number, minimum: 0, maximum: 1000000, description: Known administrator-attested final charge; not_accepted requires zero and no contrary original evidence}
+                      evidenceReference: {type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,199}$'}
+                      evidenceSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+      responses:
+        '200': {description: Immutable receipt identity/revision/actor/time and replay indicator}
+        '400': {description: Invalid or unknown cost evidence}
+        '403': {description: Current named administrator and CSRF protection required}
+        '404': {description: Call absent from this office}
+        '409': {description: Changed snapshot/action or contradictory non-acceptance evidence}
+        '503': {description: Outcome unconfirmed; retry the same saved action}
+        default: {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     officeBearer:
