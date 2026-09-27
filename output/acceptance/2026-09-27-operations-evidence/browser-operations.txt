@@ -8,7 +8,7 @@ Call cost accounting
 Review Studio, Canva planning, evaluation, voice and scheduled health probe charges. Calls without complete billing evidence keep their remaining allocation reserved.
 
 Review call costs
-Telemetry read · last checked 5:02:40 PM
+Telemetry read · last checked 5:10:43 PM
 Refresh telemetry
 Operations & Telemetry Overview
 1
@@ -39,13 +39,13 @@ No independent availability observations or measured office latency are recorded
 
 Collect independent availability observations for office intake and review before evaluating the monthly target.
 
-Evidence checked 2026-09-27T14:02:40.555Z. This time records the status read, not a successful operation.
+Evidence checked 2026-09-27T14:10:43.523Z. This time records the status read, not a successful operation.
 🔄 Stored publication receipt audit
 Stored receipts consistent
 PostgreSQL task and publication records against the verified delivery receipts Core stored. Google Drive and Google Sheets were not read, and nothing was repaired.
 Run Reconciliation Audit
 
-Audit recorded 2026-09-27T14:02:40.332Z · Stored receipt evidence
+Audit recorded 2026-09-27T14:10:43.313Z · Stored receipt evidence
 
 6
 Tasks Audited
@@ -65,40 +65,40 @@ MODEL PROVIDER (int_openai_model)
 
 Setup: configured · Reachability: unknown · Paid verification: not run · Local state: configured
 
-Next: Enable and run the paid probe before relying on model health. · Configuration observed 14:02:40 UTC
+Next: Enable and run the paid probe before relying on model health. · Configuration observed 14:10:43 UTC
 
 CANVA NATIVE_STUDIO (int_canva_studio)
 
 Setup: unknown · Reachability: unknown · Paid verification: not run · Local state: unknown
 
-Next: Verify this adapter with a scoped real operation before relying on it. · Configuration observed 14:02:40 UTC
+Next: Verify this adapter with a scoped real operation before relying on it. · Configuration observed 14:10:43 UTC
 
 TELEGRAM (int_telegram)
 
 Setup: configured · Reachability: unknown · Paid verification: not run · Local state: configured
 
-Next: Verify this adapter with a scoped real operation before relying on it. · Configuration observed 14:02:40 UTC
+Next: Verify this adapter with a scoped real operation before relying on it. · Configuration observed 14:10:43 UTC
 
 WAHA (int_waha)
 
 Setup: missing · Reachability: unknown · Paid verification: not run · Local state: unconfigured
 
-Next: Complete server setup before using this adapter. · Configuration observed 14:02:40 UTC
+Next: Complete server setup before using this adapter. · Configuration observed 14:10:43 UTC
 
 GOOGLE DRIVE (int_google_drive)
 
 Setup: missing · Reachability: unknown · Paid verification: not run · Local state: unconfigured
 
-Next: Complete server setup before using this adapter. · Configuration observed 14:02:40 UTC
+Next: Complete server setup before using this adapter. · Configuration observed 14:10:43 UTC
 
 GOOGLE SHEETS (int_google_sheets)
 
 Setup: missing · Reachability: unknown · Paid verification: not run · Local state: unconfigured
 
-Next: Complete server setup before using this adapter. · Configuration observed 14:02:40 UTC
+Next: Complete server setup before using this adapter. · Configuration observed 14:10:43 UTC
 
 PHOENIX (int_phoenix)
 
 Setup: missing · Reachability: unknown · Paid verification: not run · Local state: unconfigured
 
-Next: Complete server setup before using this adapter. · Configuration observed 14:02:40 UTC
+Next: Complete server setup before using this adapter. · Configuration observed 14:10:43 UTC

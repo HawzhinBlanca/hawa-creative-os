@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "IMPLEMENTED_QUALIFICATION_IN_PROGRESS",
+  "status": "LOCALLY_QUALIFIED_LIVE_ADMISSION_PENDING",
   "adr": "102_operations_evidence_authority",
   "requirements": [
     "FR-064",
@@ -27,9 +27,12 @@
     }
   },
   "pending": [
-    "Final full regression",
-    "Fresh runtime and Chrome qualification",
-    "Release sealing"
+    "Independent durable availability monitoring and monthly NFR-002 admission",
+    "Durable scope-bound audit history and external storage verification",
+    "Other typed completed-result recovery",
+    "Real office/provider/native Canva and pending after-preview approval",
+    "Human multilingual/design and held-out quality/retrieval/cost study",
+    "Independent-host restore and controlled rollout"
   ],
   "notQualified": [
     "Independent durable availability monitoring and monthly NFR-002 admission",
@@ -40,7 +43,7 @@
     "Independent-host restore and controlled rollout"
   ],
   "sourceHashes": {
-    "adrs/102_operations_evidence_authority.md": "79c082676922d0055702daa9331c2a1c04c7b63a6c3ef69d5fc1ae97c0fb620b",
+    "adrs/102_operations_evidence_authority.md": "30cc4a6290913b9094f0b2f7aa81cedd0f2d13dcae46c7d8e5188b74955027a2",
     "api/openapi.yaml": "4e65f56c67809373d4cdef5e7842beeb2fdbf0086515335073803ea927bae8b7",
     "apps/core/src/app.ts": "18d384e009fdaaebe73f1cf3efa6e38d74fe1ea956005d787664652782b107a7",
     "apps/core/src/core-context.ts": "95b39981d389b632e18758b672e4019e4defa517c2678891d4bf0fd5d45194c0",
@@ -71,6 +74,7 @@
     "apps/desk/src/services/i18n.ts": "6cb364b4fd04b97f36ca81de4b2b8344bdefe88d6ca992f954acbdecccd2c1d0"
   },
   "evidenceHashes": {
+    "output/acceptance/2026-09-27-operations-evidence/STATUS.md": "130bd7f759db834158bf4d95318174da9afd345d700e4124dbe26bb5e116f07f",
     "output/acceptance/2026-09-27-operations-evidence/before-mobile-candidate-final.json": "1e656f0524505a5945757fd9ca4a97f811d5a8efb3c12637bb85d70736896fb7",
     "output/acceptance/2026-09-27-operations-evidence/before-mobile-candidate-final.log": "28363adfb89fa9ddf04f5effa1b361aae7ba7cca617ef8257968006f5cb1b86c",
     "output/acceptance/2026-09-27-operations-evidence/before-mobile-deployed-operations.json": "ba4e47d7322e73288474c6795db030c55c7102fb5f3cf3834dbd2f9b908dbe56",
@@ -85,18 +89,19 @@
     "output/acceptance/2026-09-27-operations-evidence/browser-diagnostic.log": "3dad2d068e5072932eb3f73d0b0934b25ecadc540164a1760aab79c6625d3391",
     "output/acceptance/2026-09-27-operations-evidence/browser-final.log": "ab9e63b0ba102f0ffdd7ad41cfbb8250809da8b57268bd3316167e506275ad14",
     "output/acceptance/2026-09-27-operations-evidence/browser-first.log": "4f014584a916c16fbbe0c7bdee135fd4f5726f3f2df55356f8c373712446368c",
+    "output/acceptance/2026-09-27-operations-evidence/browser-mobile-final.log": "9fe4cbbf9fc9de9b1eb2becc6cb713caeef04d416a95ac3a86e25ab13b6f850a",
     "output/acceptance/2026-09-27-operations-evidence/browser-mobile-red.log": "ff6a0dc8834d8b590dbc6ebdcb41a46c8caa3dcae8d5b5a55cd23a4a326b3384",
-    "output/acceptance/2026-09-27-operations-evidence/browser-operations.txt": "efb812feaed4dfc649b80a835411d4eab0ff36b795fd81c652e31b3e31375cab",
+    "output/acceptance/2026-09-27-operations-evidence/browser-operations.txt": "c4db788e1dbc2e4e938d48c9080d055141cd9a413744ef1784c7af1ba5f7c359",
     "output/acceptance/2026-09-27-operations-evidence/browser-refresh-first.log": "ab9e63b0ba102f0ffdd7ad41cfbb8250809da8b57268bd3316167e506275ad14",
     "output/acceptance/2026-09-27-operations-evidence/cache-focused.log": "0d1a27d05f1b56d8f46ce19b8f109be0b813097b43cdfc2b514e763eda701805",
     "output/acceptance/2026-09-27-operations-evidence/candidate-before-cache-correction.json": "7131368bf97ad4de64c3f32fb032ff70712cda806d04b8925496a9a3fa8ff273",
-    "output/acceptance/2026-09-27-operations-evidence/candidate-final.json": "1e656f0524505a5945757fd9ca4a97f811d5a8efb3c12637bb85d70736896fb7",
-    "output/acceptance/2026-09-27-operations-evidence/candidate-final.log": "28363adfb89fa9ddf04f5effa1b361aae7ba7cca617ef8257968006f5cb1b86c",
+    "output/acceptance/2026-09-27-operations-evidence/candidate-final.json": "a98f5912dffa6c4701c7bc12cd4ad8b161dcb9c35fafea596777623a50555ce7",
+    "output/acceptance/2026-09-27-operations-evidence/candidate-final.log": "7f629d0e5398a08c3395f0f248c15e46be375069b6457181eb1b881a3daa178a",
     "output/acceptance/2026-09-27-operations-evidence/candidate.json": "7131368bf97ad4de64c3f32fb032ff70712cda806d04b8925496a9a3fa8ff273",
     "output/acceptance/2026-09-27-operations-evidence/candidate.log": "41e7f550b49e64c57b08d845f1014de534ca1e6b24a2ffcd31ad4756d1ac67f1",
-    "output/acceptance/2026-09-27-operations-evidence/check-deployed.mts": "b57294289f1714a0f13775b2f6fe5fb2e36906dedeb5ffee8d2f0e9c1ada7476",
+    "output/acceptance/2026-09-27-operations-evidence/check-deployed.mts": "8e2f9015e68f746299ab5aafaedf921dcfda1a3c6d04833b97672c5bc87fe7ef",
     "output/acceptance/2026-09-27-operations-evidence/deployed-first.json": "7a7744606d839ef65c30781bc23c3a6086018b3690d1185b185c89af6af6fc3e",
-    "output/acceptance/2026-09-27-operations-evidence/deployed-operations.json": "a47d225d3feb67b386b5e837541d701af4734b9fdfccd708ef33b271e27b978f",
+    "output/acceptance/2026-09-27-operations-evidence/deployed-operations.json": "4adb3e8cee4d6c310505cf641e8e68053f486148d45d014c0d6ec2ca9f9db512",
     "output/acceptance/2026-09-27-operations-evidence/deployed-refresh-first.json": "e6ae3f250c0d2fe19acecfa21fa8c10d6b066a30ccb644fbd6f5e44c7ab3248c",
     "output/acceptance/2026-09-27-operations-evidence/desk-build.log": "bf7b5305b0d838a8f14df5c8afd1b3cd3d1ff7d4082cf0830f199b336c76fe92",
     "output/acceptance/2026-09-27-operations-evidence/desk-cache-final.log": "0a0f0864d2217f2568f1eb6c5ead3b933919909f4ac89586aab6a22989b77120",
@@ -108,17 +113,24 @@
     "output/acceptance/2026-09-27-operations-evidence/focused-qualified.log": "557427b5059a11daf2f1ee63d1e4d7b0582a5994370c108a0030cb074c6031b0",
     "output/acceptance/2026-09-27-operations-evidence/full-before-cache-correction.log": "62e936a60f964f7fe8b2fb0a7c6cda2e5af8544d301b16905ebf84fabd82e9b5",
     "output/acceptance/2026-09-27-operations-evidence/full-candidate.log": "62e936a60f964f7fe8b2fb0a7c6cda2e5af8544d301b16905ebf84fabd82e9b5",
-    "output/acceptance/2026-09-27-operations-evidence/full-final-candidate.log": "fbdbfc515cd1ba934686ac3393ac08e38e8e9bd9b15934d33761619b28008353",
+    "output/acceptance/2026-09-27-operations-evidence/full-final-candidate.log": "14dd1a5c09f1c1160610dc74b5186d20cb99bb23fbc670a7cc19be13245817d7",
+    "output/acceptance/2026-09-27-operations-evidence/full-tracked-log-failure.log": "836b19ab9beb117de53a4f86aff2e6a0ccb5a0a92b1d1ee66b4e79b709058638",
     "output/acceptance/2026-09-27-operations-evidence/lint-cache-final.log": "074126387065070c3e678034c7081eec7911aafe9877d6296cc6269e02a5d91d",
     "output/acceptance/2026-09-27-operations-evidence/lint-final.log": "074126387065070c3e678034c7081eec7911aafe9877d6296cc6269e02a5d91d",
     "output/acceptance/2026-09-27-operations-evidence/lint.log": "074126387065070c3e678034c7081eec7911aafe9877d6296cc6269e02a5d91d",
-    "output/acceptance/2026-09-27-operations-evidence/mobile-bounds.json": "934f4911efe14ad8b675ede31ac5b2eb9872fa8a4fc15696b26cdbd5bed8524c",
+    "output/acceptance/2026-09-27-operations-evidence/mobile-audit.png": "b15e45dfdcd8fc08939d8ab65c00087df729649f13a31efd614fb84d17ded22f",
+    "output/acceptance/2026-09-27-operations-evidence/mobile-blueprint.log": "9803541c288aec4ae88a151bb9c7a98526bde970aa0ff6abb3f04c27c4bf8868",
+    "output/acceptance/2026-09-27-operations-evidence/mobile-bounds.json": "ccfb8761cdf12494021fe1b408e0ed6d12cf0f8175a4851b0ce82433a0035b54",
     "output/acceptance/2026-09-27-operations-evidence/mobile-build.log": "e901d30f960f60bb1e9a57dcc5f190902ecf7088c00333becbc5c6c7ee7cf313",
+    "output/acceptance/2026-09-27-operations-evidence/mobile-component-health.png": "8694428fb2ec1d6cfc69ec3a32a243dd802086cbb791cbaf0122e39fd541b7e0",
     "output/acceptance/2026-09-27-operations-evidence/mobile-focused-final.log": "24f8270864fa01aa8fd3c5d950807b1ce0e91653b5fec8b40aaf83d8f430522f",
     "output/acceptance/2026-09-27-operations-evidence/mobile-focused.log": "6824e22c9a9f7beefec5418c6eb2dffb7ea4122ecb6dddd10988d0946f0860bc",
-    "output/acceptance/2026-09-27-operations-evidence/operations-browser.png": "16efeb373dddeb244b8261cf77e6dc8ed66b8971f03193b6e94082a1d4337d6f",
-    "output/acceptance/2026-09-27-operations-evidence/operations-mobile.png": "7b7f74b9223a33ed1cb62deb20536ee59c684650d7a40ce26393ee05cc4da603",
-    "output/acceptance/2026-09-27-operations-evidence/policy-browser.png": "7b53689735361cf40c5a97db8cbb0989ab8f70b3c6afa1da811f7a1a0c7eef96",
+    "output/acceptance/2026-09-27-operations-evidence/mobile-fullpage-capture-artifact.png": "fb3d5932f517c8bf777cf8aeac96358bf9b2c288fe4150ba0eb493d473e0ca80",
+    "output/acceptance/2026-09-27-operations-evidence/mobile-inspection.png": "0cafaf028026a34b4f75fa105efe09ae10508496027d52c73f0c90c91dcfc6f6",
+    "output/acceptance/2026-09-27-operations-evidence/mobile-manifest.log": "3ab9f2707400d6df80aa6efc146cc7cf7eb8514902d06386bd8f2d4d742151d3",
+    "output/acceptance/2026-09-27-operations-evidence/operations-browser.png": "d04d7b65bb3634b598e769bb3944a66a6b31f18375ca6ca5ebbe2f185ef4f4a2",
+    "output/acceptance/2026-09-27-operations-evidence/operations-mobile.png": "36e7dd468a2bfb1b0d96d76724d547ad436d0bd778dbd5e65bbf70d3693aaeee",
+    "output/acceptance/2026-09-27-operations-evidence/policy-browser.png": "5d0215d3fd203f49499e75aaf99e9c67627affa78d2697fde1c831fa2ce67ffa",
     "output/acceptance/2026-09-27-operations-evidence/red-before.log": "9b7e35fbffcc351022a47f0ac5efce6f03e8cb847b9f7709ef7cfa2e03acecda",
     "output/acceptance/2026-09-27-operations-evidence/red-budget-refresh.log": "04880055651844863d04cb34a5fef4493f6eab88e59a5392f7e45080b2de4c9e",
     "output/acceptance/2026-09-27-operations-evidence/red-core-authenticated.log": "5413c381905d0e39c73e597d2bb8a4c3a1ecb513f5d572a35ffcbc41eb726f52",
@@ -126,13 +138,14 @@
     "output/acceptance/2026-09-27-operations-evidence/red-mobile-mobile-bounds.json": "934f4911efe14ad8b675ede31ac5b2eb9872fa8a4fc15696b26cdbd5bed8524c",
     "output/acceptance/2026-09-27-operations-evidence/red-selected-reload.log": "6277dff29a0bff9254d3be4090cc762154263f4148475a7fc6a94ee788b340f2",
     "output/acceptance/2026-09-27-operations-evidence/red-service-worker.log": "b6b7552a0847616b27452bbf2e8a43c3a81c36545d07b9d643f1d20beddb30e8",
-    "output/acceptance/2026-09-27-operations-evidence/runtime-health.json": "ea4fc7dea0dfb5572eb454fd48dccfb4e01e9db3fbc3242cae8e179c047bc8c3",
+    "output/acceptance/2026-09-27-operations-evidence/runtime-health.json": "7fdafcc97d2426742c24ff42eaab0a9c0bb6ac7329076e537a2c3f61e70df627",
     "output/acceptance/2026-09-27-operations-evidence/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
     "output/acceptance/2026-09-27-operations-evidence/security.log": "6003da6752ae333179aefc17e983a71daa1ac5a10aff4566ac3f26ba194f56c5",
     "output/acceptance/2026-09-27-operations-evidence/selected-reload-final.log": "7bbae6d1d4316c7cb9d903e024a501367ded6a6356af5b9b83d685cfb8314c96",
     "output/acceptance/2026-09-27-operations-evidence/types-cache-final.log": "82cfc27e3230c3e8770e76ff96b6d191466ec3cc56a6d7ec08a0599067fbc0b4",
     "output/acceptance/2026-09-27-operations-evidence/types-cache-source.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "output/acceptance/2026-09-27-operations-evidence/types-final-source.log": "82cfc27e3230c3e8770e76ff96b6d191466ec3cc56a6d7ec08a0599067fbc0b4",
+    "output/acceptance/2026-09-27-operations-evidence/types-mobile-final.log": "82cfc27e3230c3e8770e76ff96b6d191466ec3cc56a6d7ec08a0599067fbc0b4",
     "output/acceptance/2026-09-27-operations-evidence/types-qualified-final.log": "82cfc27e3230c3e8770e76ff96b6d191466ec3cc56a6d7ec08a0599067fbc0b4",
     "output/acceptance/2026-09-27-operations-evidence/types-qualified.log": "82cfc27e3230c3e8770e76ff96b6d191466ec3cc56a6d7ec08a0599067fbc0b4",
     "output/acceptance/2026-09-27-operations-evidence/types-source-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -151,7 +164,12 @@
     "existingProviderEgressExceptions": 9,
     "deskBuild": "passed",
     "securityScan": "passed",
-    "securitySelfTestPatterns": 11
+    "securitySelfTestPatterns": 11,
+    "blueprint": {
+      "passed": 1013,
+      "warnings": 0,
+      "failed": 0
+    }
   },
   "firstFailures": [
     "New Core fixtures initially lacked explicit authenticated test authority; corrected and rerun against original Core, where all three behavioral checks fail.",
@@ -159,7 +177,8 @@
     "Final review reproduced selected accounting evidence disappearing after successful saved action; refresh the list first, then reread the selected call.",
     "Chrome initially counted the authenticated stream-ticket POST as an operational mutation; corrected to permit only that observed authentication endpoint.",
     "Chrome refresh fault injection exposed service-worker-owned authenticated JSON fetching and offline cache replay. Removed private API caching, purged legacy API caches on worker activation and made JSON HTTP requests no-store. Two targeted original-worker tests fail; six corrected affected suites pass. The browser check keeps the real worker enabled.",
-    "Visual inspection found clipped mobile metric cards, component health and Inspect controls despite the original document-width assertion passing. A stronger actual-element bounds check fails against e84d814; responsive layout and inspection verification follow."
+    "Visual inspection found clipped mobile metric cards, component health and Inspect controls despite the original document-width assertion passing. A stronger actual-element bounds check fails against e84d814; responsive layout and inspection verification follow.",
+    "The final regression initially had 4113 passed/1 failed/59 skipped because its no-test-output-writes guard observed the redirected full-run log changing inside tracked output. Retained full-tracked-log-failure.log; reran with temporary logs and no concurrent tracked-evidence writes."
   ],
   "firstCandidateCommit": "4b6a900a67bd7f6300372ee358eaa352f79073ad",
   "firstFullRegression": {
@@ -178,12 +197,87 @@
     "files": 6,
     "log": "output/acceptance/2026-09-27-operations-evidence/cache-focused.log"
   },
-  "mobileQualification": "IN_PROGRESS; earlier document-width assertion did not detect hidden child overflow",
+  "mobileQualification": "QUALIFIED: actual element bounds, inspection interaction and screenshot review",
   "mobileCorrection": {
     "focusedPassed": 44,
     "focusedFailed": 0,
     "focusedFiles": 4,
     "build": "passed",
-    "runtime": "pending"
+    "runtime": "passed"
+  },
+  "implementationCommit": "e69ef71df6df773f53261f54ce5d7a8ecbd19213",
+  "correctionCommit": "01727711951ec255b63bc7e0f9b82d8db8bd4092",
+  "testedCommit": "d5a5e7d82e51fe5093ddf02a4a309944ab1529f6",
+  "mobileCorrectionCommit": "c0dd9ca749859d03651eaf537e94e2ff8f147f4b",
+  "fullRegression": {
+    "passed": 4114,
+    "failed": 0,
+    "skipped": 59,
+    "filesPassed": 492,
+    "filesSkipped": 7,
+    "durationSeconds": 116.94,
+    "log": "output/acceptance/2026-09-27-operations-evidence/full-final-candidate.log"
+  },
+  "runtime": {
+    "commit": "d5a5e7d82e51fe5093ddf02a4a309944ab1529f6",
+    "sourceChanges": {},
+    "finishedAt": "2026-09-27T14:08:38.388Z",
+    "selectedScenarios": 1,
+    "unselectedScenarios": 43,
+    "workflowInvariantsPassed": 63,
+    "workflowInvariantsFailed": 0,
+    "browserChecksPassed": 27,
+    "browserChecksFailed": 0,
+    "browserCheckedAt": "2026-09-27T14:10:44.406Z",
+    "uncoveredModelCalls": [
+      "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent ",
+      "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent "
+    ],
+    "serviceWorkerEnabled": true,
+    "legacyPrivateCachePurged": true,
+    "offlineWarmApiReplayRefused": true,
+    "mobileViewportWidth": 390,
+    "screenshotsVisuallyInspected": true,
+    "revokedSyntheticAdministrator": true,
+    "qualifiedScreenshots": [
+      "operations-browser.png",
+      "policy-browser.png",
+      "operations-mobile.png",
+      "mobile-audit.png",
+      "mobile-component-health.png",
+      "mobile-inspection.png"
+    ],
+    "rejectedScreenshot": "mobile-fullpage-capture-artifact.png: full-page capture repeated viewport tiles; replaced by actual scrolled viewport captures"
+  },
+  "runtimeHealth": {
+    "checkedAt": "2026-09-27T14:10:44.403Z",
+    "status": "degraded",
+    "buildCommit": "d5a5e7d82e51fe5093ddf02a4a309944ab1529f6",
+    "flags": {
+      "DESIGN_PIPELINE_V3": "off",
+      "DESIGN_STUDIO_V2": "off"
+    },
+    "dependencies": {
+      "postgres": "connected",
+      "parkedClientMessages": 0,
+      "canva": "unverified",
+      "canvaCircuitBreaker": "CLOSED",
+      "telegram": "active",
+      "waha": "unconfigured",
+      "disk": "writable",
+      "restate": "connected",
+      "restatePausedInvocations": 0,
+      "modelProvider": "unverified",
+      "telegramApi": "unverified",
+      "funnel": "healthy",
+      "cutout": "unconfigured"
+    },
+    "restateInvocations": {
+      "status": "ok",
+      "paused": 0,
+      "backingOff": 0,
+      "inbox": 0,
+      "checkedAt": "2026-09-27T14:10:41.826Z"
+    }
   }
 }

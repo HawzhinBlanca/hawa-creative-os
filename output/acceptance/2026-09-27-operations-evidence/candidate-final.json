@@ -1,8 +1,8 @@
 {
-  "finishedAt": "2026-09-27T13:57:52.600Z",
+  "finishedAt": "2026-09-27T14:08:38.388Z",
   "telegramPoller": "worker",
   "deployment": {
-    "commit": "e84d814cc1068d9a0ae7d1716f18205a1ae5713c",
+    "commit": "d5a5e7d82e51fe5093ddf02a4a309944ab1529f6",
     "sourceChanges": {},
     "containers": {
       "postgres": {
@@ -12,7 +12,7 @@
           "hawa-chaos_chaos",
           "hawa-chaos_chaos-edge"
         ],
-        "createdAt": "2026-09-27T13:56:53.316181258Z"
+        "createdAt": "2026-09-27T14:07:39.046760959Z"
       },
       "restate": {
         "imageId": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
@@ -21,49 +21,49 @@
           "hawa-chaos_chaos",
           "hawa-chaos_chaos-edge"
         ],
-        "createdAt": "2026-09-27T13:56:53.313270799Z"
+        "createdAt": "2026-09-27T14:07:39.043338001Z"
       },
       "core": {
-        "imageId": "sha256:81f46ccd7398f620d5a94b87d2d650c314db555b8dd1bbd709007e63f7550f88",
-        "buildCommit": "e84d814cc1068d9a0ae7d1716f18205a1ae5713c",
+        "imageId": "sha256:c0aeab500cb44738fa0417ec73d1ce527e04ad962fa859a83b6964d6d6639c37",
+        "buildCommit": "d5a5e7d82e51fe5093ddf02a4a309944ab1529f6",
         "networks": [
           "hawa-chaos_chaos",
           "hawa-chaos_parser"
         ],
-        "createdAt": "2026-09-27T13:56:56.753556968Z"
+        "createdAt": "2026-09-27T14:07:42.490379169Z"
       },
       "worker-blue": {
-        "imageId": "sha256:d8d750487e4f0cd5779ab2775350ff987749ad354660122d68903839097d74a7",
-        "buildCommit": "e84d814cc1068d9a0ae7d1716f18205a1ae5713c",
+        "imageId": "sha256:ff9f1743bb5b14c0bf73f94c52c6fae0ff22b14e86ee20bfcc2ee78988194724",
+        "buildCommit": "d5a5e7d82e51fe5093ddf02a4a309944ab1529f6",
         "networks": [
           "hawa-chaos_chaos"
         ],
-        "createdAt": "2026-09-27T13:56:56.631323218Z"
+        "createdAt": "2026-09-27T14:07:42.349586711Z"
       },
       "fakes": {
-        "imageId": "sha256:f1b7505d67708a80ca09cc6a97d3cfbc9cc3eebe475cab66d9ec42a51f5fc16d",
+        "imageId": "sha256:40ce0e3f7bb4155feaeed8cdcec2d1d5d2e124b722657d1ff0f304e944acf17b",
         "buildCommit": "",
         "networks": [
           "hawa-chaos_chaos",
           "hawa-chaos_chaos-edge"
         ],
-        "createdAt": "2026-09-27T13:56:53.312651674Z"
+        "createdAt": "2026-09-27T14:07:39.042025584Z"
       },
       "docling": {
-        "imageId": "sha256:b12b54c5003060e0031454c9b4d1a52a85578d2297cfad70ea12abcc69a16d91",
+        "imageId": "sha256:f1066e954d6b86a8b48dc8a822cc55bd5ac06e816d1c51c9e6c945329d3611cd",
         "buildCommit": "",
         "networks": [
           "hawa-chaos_parser"
         ],
-        "createdAt": "2026-09-27T13:57:03.125600596Z"
+        "createdAt": "2026-09-27T14:07:48.888660505Z"
       },
       "desk": {
-        "imageId": "sha256:025d293affe87b2720cfa736773cbc4a0bc4b65affa06fe154521fa893d2dc34",
-        "buildCommit": "e84d814cc1068d9a0ae7d1716f18205a1ae5713c",
+        "imageId": "sha256:9932d09de28239f1d4c369d0b15ba7fefbd06a58e0a21e05121763195b1bfb32",
+        "buildCommit": "d5a5e7d82e51fe5093ddf02a4a309944ab1529f6",
         "networks": [
           "hawa-chaos_chaos"
         ],
-        "createdAt": "2026-09-27T13:57:03.125534596Z"
+        "createdAt": "2026-09-27T14:07:48.888203755Z"
       },
       "nginx": {
         "imageId": "sha256:b947b2630c97622793113555e13332eec85bdc7a0ac6ab697159af78942bb856",
@@ -72,7 +72,7 @@
           "hawa-chaos_chaos",
           "hawa-chaos_chaos-edge"
         ],
-        "createdAt": "2026-09-27T13:57:03.293121429Z"
+        "createdAt": "2026-09-27T14:07:49.064500714Z"
       }
     },
     "networks": [
@@ -83,19 +83,19 @@
     "parser": "real pinned offline Docling",
     "productionChanged": false
   },
-  "totalMs": 77091,
+  "totalMs": 78584,
   "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
   "peakMemoryMiB": {
     "hawa-chaos-nginx-1": 8,
-    "hawa-chaos-docling-1": 61,
+    "hawa-chaos-docling-1": 14,
     "hawa-chaos-desk-1": 7,
-    "hawa-chaos-core-1": 73,
-    "hawa-chaos-worker-blue-1": 67,
-    "hawa-chaos-postgres-1": 70,
-    "hawa-chaos-restate-1": 172,
-    "hawa-chaos-fakes-1": 74
+    "hawa-chaos-core-1": 74,
+    "hawa-chaos-worker-blue-1": 74,
+    "hawa-chaos-postgres-1": 74,
+    "hawa-chaos-restate-1": 164,
+    "hawa-chaos-fakes-1": 64
   },
-  "peakTotalMiB": 526,
+  "peakTotalMiB": 471,
   "uncoveredModelCalls": [
     "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent ",
     "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent "
@@ -104,17 +104,17 @@
     {
       "name": "R1.S3.SOURCES",
       "what": "full-app PDF source to voice revision and simulated approved delivery",
-      "ms": 29847,
+      "ms": 30990,
       "invariants": [
         {
           "name": "every candidate container was created after this rehearsal started",
           "ok": true,
-          "detail": "rehearsal started 2026-09-27T13:56:35.728Z"
+          "detail": "rehearsal started 2026-09-27T14:07:20.046Z"
         },
         {
           "name": "Core, worker and Desk image labels match the candidate checkout",
           "ok": true,
-          "detail": "build e84d814cc1068d9a0ae7d1716f18205a1ae5713c; changed source files=0"
+          "detail": "build d5a5e7d82e51fe5093ddf02a4a309944ab1529f6; changed source files=0"
         },
         {
           "name": "core image excludes private test-run files",
@@ -149,7 +149,7 @@
         {
           "name": "PDF source review creates no premature task",
           "ok": true,
-          "detail": "source 90517413709"
+          "detail": "source 90518059544"
         },
         {
           "name": "application/pdf original crosses nginx byte-identically",
@@ -169,7 +169,7 @@
         {
           "name": "review wait survives Restate and worker process restart",
           "ok": true,
-          "detail": "request 4f9c4562-32b1-4c70-acd7-e71f90489859; rev 2"
+          "detail": "request 580d692a-1e2d-4329-a53d-8c235c10a192; rev 2"
         },
         {
           "name": "audio/ogg original crosses nginx byte-identically",
@@ -179,12 +179,12 @@
         {
           "name": "unapproved voice model remains manual with honest timing and billing",
           "ok": true,
-          "detail": "{\"clientId\":\"c1000000-0000-4000-8000-000000000002\",\"updateId\":90517413711,\"sourceSha256\":\"e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2\",\"audio\":{\"version\":\"ogg-opus-v1\",\"channels\":1,\"mediaType\":\"audio/ogg\",\"sampleRate\":48000,\"encodedSamples\":48960,\"durationSeconds\":1},\"state\":\"manual\",\"message\":\"Client privacy does not authorize cloud transcription. The original is retained for manual copy review; no audio was sent to a model.\",\"transcript\":null,\"estimatedUsd\":null,\"actualUsd\":null}"
+          "detail": "{\"clientId\":\"c1000000-0000-4000-8000-000000000002\",\"updateId\":90518059546,\"sourceSha256\":\"e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2\",\"audio\":{\"version\":\"ogg-opus-v1\",\"channels\":1,\"mediaType\":\"audio/ogg\",\"sampleRate\":48000,\"encodedSamples\":48960,\"durationSeconds\":1},\"state\":\"manual\",\"message\":\"Client privacy does not authorize cloud transcription. The original is retained for manual copy review; no audio was sent to a model.\",\"transcript\":null,\"estimatedUsd\":null,\"actualUsd\":null}"
         },
         {
           "name": "voice source does not create a child before exact-copy review",
           "ok": true,
-          "detail": "voice source 90517413711"
+          "detail": "voice source 90518059546"
         },
         {
           "name": "revised simulated Canva export passes configured QA",
@@ -194,7 +194,7 @@
         {
           "name": "PDF new request and voice revision reach one logical simulated delivery",
           "ok": true,
-          "detail": "{\"tasks\":[{\"id\":\"a3e02313-f5fa-4c85-8fcd-365486b0ed25\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"7be17198-9b76-4e34-9082-e9fbcc246ebb\",\"state\":\"complete\",\"version\":\"8\"}],\"delivered\":{\"request_id\":\"4f9c4562-32b1-4c70-acd7-e71f90489859\",\"current_task_id\":\"7be17198-9b76-4e34-9082-e9fbcc246ebb\",\"rev\":\"8\",\"stage\":\"delivered\"}}"
+          "detail": "{\"tasks\":[{\"id\":\"db0c383b-31cc-4a80-9159-dd4167b67e5d\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"d710ee68-7829-4bc3-bef9-95613ca68eca\",\"state\":\"complete\",\"version\":\"8\"}],\"delivered\":{\"request_id\":\"580d692a-1e2d-4329-a53d-8c235c10a192\",\"current_task_id\":\"d710ee68-7829-4bc3-bef9-95613ca68eca\",\"rev\":\"8\",\"stage\":\"delivered\"}}"
         },
         {
           "name": "retained confirmations preserve exact source copy",
@@ -214,7 +214,7 @@
         {
           "name": "bilingual Desk intake replay returns one task",
           "ok": true,
-          "detail": "task 3b68954b-8911-42b6-b635-bd5504af71dd"
+          "detail": "task c8af1ca0-c463-4c0e-a68d-1120835b4c8b"
         },
         {
           "name": "saved bilingual Desk copy imports through the explicit generation action",
@@ -224,7 +224,7 @@
         {
           "name": "the saved plan preserves both exact copy blocks and separate instructions",
           "ok": true,
-          "detail": "plans=1; source=17084b01f2a2737b7d7557e7bdd4ea9ef5621c8b326a3d1ddcd3a6635b8faa5e"
+          "detail": "plans=1; source=1bc7cd203eca26a34b7fe32770943bbdee9fea939ba8b601e24d49489187835b"
         },
         {
           "name": "Desk capture records a review from retained PNG and checked live text",
@@ -244,7 +244,7 @@
         {
           "name": "cancel commits terminal state and replays the same durable receipt",
           "ok": true,
-          "detail": "task 6f7044b7-bf37-403e-8988-e75e75f8f4dd"
+          "detail": "task c9b9b096-5ecf-4fe5-950d-732c08c93927"
         },
         {
           "name": "cancelled task refuses deployed studio admission",
@@ -269,12 +269,12 @@
         {
           "name": "synthetic blank client remains usable in the Desk directory",
           "ok": true,
-          "detail": "client 4d940d43-ca4d-4a0a-bb74-fee7e26c3483"
+          "detail": "client 801f471a-c92f-46fd-a5d4-fbd7698f0573"
         },
         {
           "name": "blank design is created through the deployed Canva adapter",
           "ok": true,
-          "detail": "task c09b7f09-e7b5-4ee3-b9b3-8621aa56fdab; design DAchaosmujvu6ha000016"
+          "detail": "task ab218369-0786-4939-9923-0c56cd818339; design DAchaosmujw80t6000016"
         },
         {
           "name": "blank design reaches checked review using DNA and no invented imported source",
@@ -284,7 +284,7 @@
         {
           "name": "blank capture completes simulated publication with one explicit manual edit and no import",
           "ok": true,
-          "detail": "task c09b7f09-e7b5-4ee3-b9b3-8621aa56fdab"
+          "detail": "task ab218369-0786-4939-9923-0c56cd818339"
         },
         {
           "name": "evaluation uncertainty produces a stopped saved report",
@@ -423,14 +423,14 @@
         }
       ],
       "events": [
-        "PDF 90517413709 → request 4f9c4562-32b1-4c70-acd7-e71f90489859 → task a3e02313-f5fa-4c85-8fcd-365486b0ed25",
+        "PDF 90518059544 → request 580d692a-1e2d-4329-a53d-8c235c10a192 → task db0c383b-31cc-4a80-9159-dd4167b67e5d",
         "Restate and worker SIGKILL/restart at the PDF review waitpoint",
-        "voice 90517413711 → reviewed revision task 7be17198-9b76-4e34-9082-e9fbcc246ebb",
-        "Desk bilingual request 3b68954b-8911-42b6-b635-bd5504af71dd → saved plan cf100b63-4fec-4b12-8d52-6d5449056371 → simulated Canva import → captured review → simulated approval/publication",
-        "Synthetic cancelled task 6f7044b7-bf37-403e-8988-e75e75f8f4dd: all three deployed generation entry points refused",
-        "Blank design c09b7f09-e7b5-4ee3-b9b3-8621aa56fdab → explicit simulated manual edit → DNA-checked review → simulated approval/publication; real native editing remains unverified",
+        "voice 90518059546 → reviewed revision task d710ee68-7829-4bc3-bef9-95613ca68eca",
+        "Desk bilingual request c8af1ca0-c463-4c0e-a68d-1120835b4c8b → saved plan 750669e8-ea0b-43c5-be03-329c9414069b → simulated Canva import → captured review → simulated approval/publication",
+        "Synthetic cancelled task c9b9b096-5ecf-4fe5-950d-732c08c93927: all three deployed generation entry points refused",
+        "Blank design ab218369-0786-4939-9923-0c56cd818339 → explicit simulated manual edit → DNA-checked review → simulated approval/publication; real native editing remains unverified",
         "Held fixture evaluation → synthetic named settlement → Core restart → identical receipt → explicitly new evaluation. No live provider or human evidence.",
-        "Studio 7902ed9b-ff85-4072-ad46-236de9242315: synthetic unresolved admission → abandoned run → named settlement → Core restart → identical receipt → explicit new run. No live provider/human evidence."
+        "Studio 27ad4aab-0442-4346-874c-9bc032af888c: synthetic unresolved admission → abandoned run → named settlement → Core restart → identical receipt → explicit new run. No live provider/human evidence."
       ]
     }
   ]

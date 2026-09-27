@@ -1,7 +1,7 @@
 # ADR-102: Operations uses only evidence from the stated authority
 
 Date: 2026-09-27
-Status: implementation and qualification in progress
+Status: locally qualified; production availability and live admission remain unqualified
 Requirements: FR-064, FR-079, NFR-002, NFR-006
 Sources: docs/10_WORKFLOW_RELIABILITY.md; docs/17_UI_UX.md; MASTER_SPEC.md
 
@@ -77,3 +77,7 @@ container, render labelled failure rows on narrow screens, and bound the inspect
 dialog to the viewport. Verify the actual card/field bounds and opening/closing an
 inspection in Chrome, then inspect screenshots; document width alone is insufficient.
 The earlier browser assertion is retained as incomplete evidence, not a mobile pass.
+
+## Local qualification
+
+Candidate d5a5e7d: 4114 passed/0 failed/59 skipped, 500 strict roots, 63 synthetic workflow and 27 actual Chrome checks. Legacy API cache removal and offline non-replay were verified with the service worker enabled. See R02_OPERATIONS_EVIDENCE_PROOF.json for hashes, initial failures and the still-open full-app gates.

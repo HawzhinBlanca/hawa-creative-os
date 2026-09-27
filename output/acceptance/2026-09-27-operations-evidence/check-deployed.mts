@@ -81,7 +81,10 @@ try{
   await page.screenshot({path:new URL('operations-browser.png',out).pathname,fullPage:true});
   writeFileSync(new URL('browser-operations.txt',out),await page.locator('#ops').innerText());
   await page.setViewportSize({width:390,height:844});
-  await page.screenshot({path:new URL('operations-mobile.png',out).pathname,fullPage:true});
+  await page.locator('#ops > .grid4').scrollIntoViewIfNeeded();
+  await page.screenshot({path:new URL('operations-mobile.png',out).pathname});
+  await page.locator('#ops .ops-audit-stats').scrollIntoViewIfNeeded();
+  await page.screenshot({path:new URL('mobile-audit.png',out).pathname});
   check('mobile Operations fits the viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
   const bounds=await page.locator('#ops > .grid4 > .stat, #ops .ops > .panel, #ops .ops .table td, #ops .ops .table button').evaluateAll(elements=>elements.map(element=>{
     const rect=element.getBoundingClientRect();return {label:element.textContent?.trim().slice(0,80),left:rect.left,right:rect.right,width:rect.width,viewport:window.innerWidth};
@@ -99,7 +102,7 @@ try{
   check('mobile failure inspection fits on screen',Boolean(dialogBounds&&dialogBounds.x>=0&&dialogBounds.y>=0&&dialogBounds.x+dialogBounds.width<=390&&dialogBounds.y+dialogBounds.height<=844));
   await page.screenshot({path:new URL('mobile-inspection.png',out).pathname});
   await dialog.getByRole('button',{name:'Close',exact:true}).click();
-  check('mobile failure inspection closes without replaying the task',await dialog.count()===0);
+  check('mobile failure inspection closes without replaying the task',await dialog.count()===0&&!requests.some(r=>r.method==='POST'&&new URL(r.url).pathname.endsWith('/redrive')));
 
   check('Chrome has no execution errors',errors.length===0);
  }finally{await browser.close();}

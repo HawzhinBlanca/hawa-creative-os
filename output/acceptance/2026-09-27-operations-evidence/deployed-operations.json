@@ -1,7 +1,7 @@
 {
-  "completed": false,
-  "checkedAt": "2026-09-27T14:02:40.945Z",
-  "buildCommit": "e84d814cc1068d9a0ae7d1716f18205a1ae5713c",
+  "completed": true,
+  "checkedAt": "2026-09-27T14:10:44.406Z",
+  "buildCommit": "d5a5e7d82e51fe5093ddf02a4a309944ab1529f6",
   "checks": [
     {
       "name": "exact candidate is deployed",
@@ -89,7 +89,27 @@
     },
     {
       "name": "mobile metrics, both Operations panels and every failure field fit without hidden clipping",
-      "passed": false
+      "passed": true
+    },
+    {
+      "name": "synthetic candidate includes an inspectable failure",
+      "passed": true
+    },
+    {
+      "name": "mobile failure inspection fits on screen",
+      "passed": true
+    },
+    {
+      "name": "mobile failure inspection closes without replaying the task",
+      "passed": true
+    },
+    {
+      "name": "Chrome has no execution errors",
+      "passed": true
+    },
+    {
+      "name": "Operations checks send no model requests",
+      "passed": true
     }
   ],
   "revokedSyntheticAdministrator": true,
