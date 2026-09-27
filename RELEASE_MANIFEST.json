@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-27T02:41:00+03:00",
+  "generatedAt": "2026-09-27T03:07:06+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "196d4151ee5d35a2b14fe4ec53f02becfc347396",
+    "commit": "b78810a2e17aedeecfb47e183577c1474b1da011",
     "treeClean": true,
-    "commitTimestamp": "2026-09-27T02:41:00+03:00",
+    "commitTimestamp": "2026-09-27T03:07:06+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
-    "targetVersion": "044_voice_source_admission",
-    "latestMigrationFile": "044_voice_source_admission.sql",
-    "totalMigrations": 44
+    "targetVersion": "045_canva_review_checkpoints",
+    "latestMigrationFile": "045_canva_review_checkpoints.sql",
+    "totalMigrations": 45
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -84,11 +84,11 @@
     "sourceHashes": {
       "packages/qa/src/engine.ts": "e9cb28d14f14396b6696fc2862f3fb9d2607396e55d38479ae408d24c7eea7f7",
       "packages/qa/src/vision-rubric.ts": "f625a23ca531f5e800fa0ef9a216b2ff9ba16382f75bbd5ab4e0eee3934e0276",
-      "packages/qa/src/canva-pptx-check.ts": "3dfaa56755c8b9190db1380c4809ab79e323728447700d348b4a356aeaebf8c7",
+      "packages/qa/src/canva-pptx-check.ts": "4f2203297d6ab4fcc4ce95cb24ced4f2ed97fe01f1c5b77a300da950556062a8",
       "packages/qa/src/rtl-validator.ts": "9ee174c4d0b028a19e0de618b87de2115ac6b81d04ebac194e8b03b220724562",
       "packages/qa/src/contrast.ts": "2e8ba1d08f63474f920732ad1335082e7980dcde3f0f3fec8bdce9b40f679f71",
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "7a157c01736eada38b3faf1a78b1f0a4e8f0170a7bdcc8b7c1302bf8a7feec1e"
+  "sha256": "61cd484fa0249952f96d905fc167f2d53000adcc0c6adfa30948756232c7f843"
 }
