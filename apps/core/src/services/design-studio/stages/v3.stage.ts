@@ -31,7 +31,8 @@ export function pendingV3Concept(index: number): Concept {
     archetype: 'editorial-centered',
     artStrategy: 'none',
     typographicScale: { ratio: 1, titleSize: 0, bodySize: 0 },
-    colourRoles: { background: '#0A1628', title: '#FFFFFF', body: '#FFFFFF', accent: '#C5A059', rule: '#C5A059' },
+    // A placeholder until the generator's archetype replaces it: neutral, never a client's colours.
+    colourRoles: { background: '#111111', title: '#FFFFFF', body: '#FFFFFF', accent: '#BDBDBD', rule: '#BDBDBD' },
     layoutIdea: 'pending',
     whyDifferent: 'pending',
   };
@@ -100,8 +101,9 @@ export function conceptFromV3Candidate(
       background: layout.background.color,
       title: colourOf('title') || colourOf('eyebrow') || '#FFFFFF',
       body: colourOf('body') || '#FFFFFF',
-      accent: shapeColour('accent') || shapeColour('rule') || '#C5A059',
-      rule: shapeColour('rule') || shapeColour('accent') || '#C5A059',
+      // With no accent or rule in the layout, its title colour: never a colour the client does not use.
+      accent: shapeColour('accent') || shapeColour('rule') || colourOf('title') || '#FFFFFF',
+      rule: shapeColour('rule') || shapeColour('accent') || colourOf('title') || '#FFFFFF',
     },
     layoutIdea: `v3 ${v3Archetype}`,
     whyDifferent: `One of ${total} deliberately distinct v3 archetypes from a single generation`,
@@ -335,7 +337,7 @@ export async function runJudgeStageV3(
 }> {
   const ranked = rankStudioCandidatesV3(ctx, candidates);
   assertJudgeSeesText(ranked);
-  const selection = await selectWinnerV3(ranked, copyForStageV3(ctx), { client: ctx.client, reference: ctx.reference, render: clientRenderAssetsFor(ctx) });
+  const selection = await selectWinnerV3(ranked, copyForStageV3(ctx), { client: ctx.client, reference: ctx.reference, render: clientRenderAssetsFor(ctx), clientProfile: ctx.clientProfile });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;
   return { selection, winner: find(selection.winner)!, runnerUp: find(selection.runnerUp), ranked };

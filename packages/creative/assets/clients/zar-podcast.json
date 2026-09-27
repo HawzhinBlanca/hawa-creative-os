@@ -5,6 +5,7 @@
   "status": "onboarding",
   "kind": "podcast",
   "displayName": "ZAR Podcast",
+  "profile": "ZAR Podcast, a podcast. Its designs are mostly video thumbnails for YouTube (landscape) and for reels and shorts (vertical), built around the episode's guest or host. Its tone, palette and type are not set yet.",
   "names": {
     "en": "ZAR Podcast"
   },

@@ -96,6 +96,8 @@ export interface TournamentResult {
 export interface JudgeOptions {
   /** The client's style reference: of two sound designs, the one closer to it wins. */
   reference?: ClientReference;
+  /** Who the client is (its client pack's profile, ADR-038): brand fit is judged against it. */
+  clientProfile?: string;
   client?: OpenAiStudioClient;
   openaiApiKey?: string;
   fetchFn?: typeof fetch;
@@ -268,13 +270,16 @@ You must judge them INDEPENDENTLY across EXACTLY FIVE NAMED DIMENSIONS:
 1. hierarchy: clear dominance of title over subtitle and body; logical reading order.
 2. composition: balance, grid discipline, alignment, negative space, framing.
 3. typographic_craft: font pairings, type scale consistency, tracking, line length and height.
-4. brand_fit: institutional prestige, elegance, academic gravitas.
+4. brand_fit: how well it fits the CLIENT described below: its voice, formality and colours. Never another client's.
 5. legibility: instant readability, comfortable reading rhythm, no crowding.
 
 RULES:
 - Deterministic layout metrics are provided as objective facts. You must take them into account.
 - For EACH dimension, vote either 'A' or 'B' and provide a specific rationale. Ties are not permitted per dimension.
-- The overall winner is determined strictly by majority vote across the five dimensions (at least 3 votes).`;
+- The overall winner is determined strictly by majority vote across the five dimensions (at least 3 votes).
+
+CLIENT:
+${options.clientProfile || 'Not named. Judge brand fit on restraint and coherence with the palette only.'}`;
 
   const factsPrompt = `GROUND TRUTH DETERMINISTIC METRICS (arXiv:2402.06945 & LaySPA):
 

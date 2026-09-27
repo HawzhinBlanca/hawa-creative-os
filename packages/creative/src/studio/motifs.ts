@@ -16,15 +16,11 @@ export interface MotifOptions {
   opacity?: number;
 }
 
-const DEFAULT_PALETTE: Hex[] = [
-  '#0A1628', // Midnight Navy
-  '#1E3A5F', // Royal Navy
-  '#4770A3', // KAAE Primary Blue
-  '#D4E2F0', // Sky Ice Blue
-  '#F7B500', // Kurdistan Sun Gold
-  '#FDF8F3', // Academic Cream
-  '#FFFFFF', // Pure White
-];
+/**
+ * Neutral greys for a motif drawn without a palette. It was KAAE's palette, so a motif for any
+ * client that passed none came out in KAAE's navy and gold (ADR-038). Callers pass the client's.
+ */
+const DEFAULT_PALETTE: Hex[] = ['#1A1A1A', '#3A3A3A', '#6B6B6B', '#BDBDBD', '#FFFFFF'];
 
 /**
  * Deterministic pseudo-random number generator (Mulberry32).
@@ -195,9 +191,9 @@ function generateGradientWashSvg(
   globalOpacity: number
 ): string {
   const gradId = `wash-grad-${Math.floor(prng() * 100000)}`;
-  const c1 = palette[0] || '#0A1628';
-  const c2 = palette[1 % palette.length] || '#1E3A5F';
-  const c3 = palette[2 % palette.length] || '#4770A3';
+  const c1 = palette[0] || DEFAULT_PALETTE[0];
+  const c2 = palette[1 % palette.length] || DEFAULT_PALETTE[1];
+  const c3 = palette[2 % palette.length] || DEFAULT_PALETTE[2];
 
   const isRadial = prng() > 0.5;
 
@@ -224,8 +220,9 @@ function generateGradientWashSvg(
  * step lighter than the field. The texture of the owner's K-12 reference (task 89c242f2).
  */
 function generateDiagonalLinesSvg(width: number, height: number, palette: Hex[], globalOpacity: number): string {
-  // The brand's royal navy for the lighter plane and its primary blue for the lines, or the palette
-  // colours nearest them (sorting by lightness picked a near-black from the KAAE palette).
+  // The palette colours nearest a deep blue (the lighter plane) and a mid blue (the lines). The two
+  // are only points in colour space: what is drawn is always the client's own colours. (Sorting by
+  // lightness instead picked a near-black from a palette with several dark tones.)
   const plane = nearestTo('#1E3A5F', palette);
   const line = nearestTo('#4770A3', palette);
   const spacing = Math.max(14, Math.round(Math.min(width, height) / 60));
