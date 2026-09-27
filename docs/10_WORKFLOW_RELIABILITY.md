@@ -441,3 +441,18 @@ invent a result. Resume can reconstruct a retained layout without another model
 call, rechecking task ownership, revisions and active references before import.
 Historical unledgered plans remain incomplete accounting history. See
 runbooks/CANVA_PLANNER_RECOVERY.md for operator actions and failure drills.
+
+### Operations evidence authority (ADR-102, 2026-09-27)
+
+Office intake/review availability targets 99.5% per calendar month. Without a
+durable independent observation series, observed availability, compliance and
+latency remain null. Fixture timings and local circuit breakers cannot establish
+production availability. The synthetic operational execution endpoint is retired.
+
+Operations uses the existing audited daily spending policy and original paid-call
+accounting. Legacy monthly fixture-budget routes return 410; no sample balance or
+monthly cap is converted into the daily ledger. Unknown telemetry stays unknown,
+failed reads clear prior successful results, and late older refreshes cannot
+replace newer evidence. Stored publication receipt audits show their scope,
+timestamp and anomalies; no-task audits are empty, not proof of external storage
+consistency. No audit claims to repair a drift or read live Drive/Sheets state.

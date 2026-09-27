@@ -28,7 +28,6 @@ import type {
   KurdishVoiceTranscriber,
 } from '@hawa/integrations';
 import type { CreativeDirectorRunner } from '@hawa/creative';
-import type { SyntheticTrafficDaemon } from '@hawa/testkit';
 import type { DurableEvaluationService } from './services/durable-evaluations.js';
 import type { PaidModelHealth } from './services/paid-model-health.js';
 import type { AuthContext, ClientDnaSnapshot } from './routes/types.js';
@@ -64,7 +63,6 @@ export interface CoreContext {
   unifiedIngress: UnifiedIngressService;
   telegramBridge?: TelegramBridgeDaemon;
   telegramActionTokenService?: TelegramActionTokenService;
-  sloDaemon: SyntheticTrafficDaemon;
   evaluationService: DurableEvaluationService | null;
   reconciliationService: ReconciliationService;
   canvaConnectService: CanvaConnectService | null;

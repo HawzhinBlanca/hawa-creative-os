@@ -68,3 +68,12 @@ it('does not send a budget mutation if the action cannot be saved locally',async
   await click(byText(view.container,'button','Apply reviewed limits'));await flush();
   expect(calls.filter(c=>c.method==='POST')).toHaveLength(0);expect(view.text()).toContain('No new request was sent');await view.unmount();
 });
+it('clears a previously loaded policy after a failed refresh without deleting a saved action',async()=>{
+ let fail=false;stubCore(()=>fail?json({detail:'Database unavailable'},503):json(detail));
+ const view=await mount(React.createElement(SpendingPolicyPanel));await open(view);
+ const key=`hawa.spending-policy.${id}.named-admin`;sessionStorage.setItem(key,'retained pending action');
+ expect(view.text()).toContain('Current policy · revision');fail=true;
+ await click(byText(view.container,'button','Reload budget policy'));await flush();
+ expect(view.text()).toContain('Spending policy unavailable');expect(view.text()).not.toContain('Current policy · revision');
+ expect(view.container.querySelector('form')).toBeNull();expect(sessionStorage.getItem(key)).toBe('retained pending action');await view.unmount();
+});

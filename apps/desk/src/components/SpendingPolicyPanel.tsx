@@ -103,7 +103,7 @@ export function SpendingPolicyPanel() {
     setBusy(true);setNotice('');
     try{const data=await apiClient.spendingPolicy.get(more?detail?.nextBeforeVersion:undefined);
       setDetail(old=>({...data,history:more?[...(old?.history||[]),...data.history]:data.history}));
-    }catch(error){setNotice(`Spending policy unavailable: ${reasonOf(error)}`);}finally{setBusy(false);}
+    }catch(error){setDetail(null);setNotice(`Spending policy unavailable: ${reasonOf(error)}`);}finally{setBusy(false);}
   };
   return <section className="card" aria-label="Daily spending policy" style={{padding:16,marginBottom:16}}>
     <h2>Daily spending policy</h2>

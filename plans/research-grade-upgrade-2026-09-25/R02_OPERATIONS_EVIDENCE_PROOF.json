@@ -1,0 +1,111 @@
+{
+  "date": "2026-09-27",
+  "status": "IMPLEMENTED_QUALIFICATION_IN_PROGRESS",
+  "adr": "102_operations_evidence_authority",
+  "requirements": [
+    "FR-064",
+    "FR-079",
+    "NFR-002"
+  ],
+  "scope": "Truthful Operations evidence and retirement of fixture operational authority; NFR-002 availability itself remains unmeasured",
+  "productionChanged": false,
+  "realProviderCalls": false,
+  "redBefore": {
+    "initial": {
+      "failed": 7,
+      "passed": 5,
+      "note": "Four UI/testkit failures reproduced behavior; three new Core tests initially lacked authenticated fixture authority."
+    },
+    "authenticatedOriginalCore": {
+      "failed": 3,
+      "passed": 0
+    },
+    "staleAccountingPanels": {
+      "failed": 2,
+      "passed": 9
+    }
+  },
+  "pending": [
+    "Final full regression",
+    "Fresh runtime and Chrome qualification",
+    "Release sealing"
+  ],
+  "notQualified": [
+    "Independent durable availability monitoring and monthly NFR-002 admission",
+    "Durable scope-bound audit history and external storage verification",
+    "Other typed completed-result recovery",
+    "Real office/provider/native Canva and pending after-preview approval",
+    "Human multilingual/design and held-out quality/retrieval/cost study",
+    "Independent-host restore and controlled rollout"
+  ],
+  "sourceHashes": {
+    "adrs/102_operations_evidence_authority.md": "ea91bc8e5b94eb4e9a926a78c75baaa7ad26874f97547a3c85664871645b98aa",
+    "api/openapi.yaml": "4e65f56c67809373d4cdef5e7842beeb2fdbf0086515335073803ea927bae8b7",
+    "apps/core/src/app.ts": "18d384e009fdaaebe73f1cf3efa6e38d74fe1ea956005d787664652782b107a7",
+    "apps/core/src/core-context.ts": "95b39981d389b632e18758b672e4019e4defa517c2678891d4bf0fd5d45194c0",
+    "apps/core/src/routes/client-learning.routes.ts": "ad3b7b24fc2940c82e9cf6bc5e942ec91710aad93fd7b2fbb93ddceaf19281eb",
+    "apps/core/src/routes/system.routes.ts": "c82caad3b57429e87ec2f1e83f9e754a4a3d5c215ed1094dbdee76b6136c96ae",
+    "apps/core/test/core.test.ts": "234ad5fe058dc59f1ef4229ac6fbbd8ed6a458aed94d26621632624a6ecd0688",
+    "apps/core/test/operations-evidence.test.ts": "04f5396227154a1a90dd8ad91acc7703586f399197e4fc049603cf3cacb704c6",
+    "apps/desk/src/api/client.ts": "3753251650f5a9ee252a71e046d363e7c7cc9b267fdefb04ba1fc69891276121",
+    "apps/desk/src/components/CallCostAccountingPanel.tsx": "36970850629991465f64720e794a14b5457aee3e087fc03832d0d8997e3ea4a0",
+    "apps/desk/src/components/SpendingPolicyPanel.tsx": "a1f5656ec1974b203c252c8eee25fab7e88aef92d8670a17f97f1774f7bb7fdb",
+    "apps/desk/src/screens/OpsScreen.tsx": "804939c4e87b7e852c1eb6c96e7614fe46a29aaabac19898ee3df1ea9d329006",
+    "apps/desk/src/services/operationsEvidence.ts": "23484aa839afdbdeb6baa3b9579856d66c89a01fd235178f3c47b3347d531137",
+    "apps/desk/test/call-cost-accounting.test.ts": "4b9ed93976071a89af82fb371946383b4d228b825e477b51e79817cc41d3312b",
+    "apps/desk/test/desk-auth.test.ts": "81c7f3c25e69c31acda291a6a34be7bf2561c51c1b23c1ccd7d6f7a079d68aa3",
+    "apps/desk/test/operations-evidence.test.ts": "bb70a75d31a79140bd346bfa85206dd6a6632f094442d7edac74e80b7bb5b907",
+    "apps/desk/test/spending-policy.test.ts": "10f560dc48d7e61d48ef8d5da40ed939e90020c73b6a88e78c5547994bf11f39",
+    "docs/10_WORKFLOW_RELIABILITY.md": "1c8afbed931ebd4f28c38744c940b193dc15e7b1daa7dc7425cf66d24e95b441",
+    "docs/17_UI_UX.md": "303b279b772a00f75a2bf395e032194ee1f652371091b0208e2d39782c04d47e",
+    "packages/contracts/src/index.ts": "178f0597c5ad48745155bffcc06c10aa0079e853f8a25759cd0be8aee27716ef",
+    "packages/contracts/src/operations-reliability.ts": "a43479cbf8d4bd435e008fb0f081c4ee97ebdcb0219859da548938c306cf96ba",
+    "packages/testkit/src/slo-daemon.ts": "76ad49cedfb97869da61c84fc3be1685713457bb0d2ee7fa1fbcb7bdadcc078f",
+    "packages/testkit/test/slo-traffic.test.ts": "7a6396cca70a2373e8bb418ceef1535caf88093cbec619b887585602254eedff",
+    "runbooks/OPERATIONS_EVIDENCE.md": "53679d854bb58f66eb3e21cae62b032b3e965f0c58769b0877241daa5c4d5ad5"
+  },
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-operations-evidence/blueprint-source.log": "9803541c288aec4ae88a151bb9c7a98526bde970aa0ff6abb3f04c27c4bf8868",
+    "output/acceptance/2026-09-27-operations-evidence/check-deployed.mts": "6a0889575b60f52b056661e45e30e1c4818c0c4ea9d083b1db0b1086698b9580",
+    "output/acceptance/2026-09-27-operations-evidence/desk-build.log": "bf7b5305b0d838a8f14df5c8afd1b3cd3d1ff7d4082cf0830f199b336c76fe92",
+    "output/acceptance/2026-09-27-operations-evidence/desk-final.log": "143cfd97f2ec33ffef3804c12925a878035bcbfa3756318d9630ccaec8ec8c04",
+    "output/acceptance/2026-09-27-operations-evidence/desk-qualified-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-operations-evidence/focused-final-source.log": "70512723842634f91360589817a4035adfd4d2824651bae23130cc8c0840bb4d",
+    "output/acceptance/2026-09-27-operations-evidence/focused-final.log": "f62bdc6953ec3c9126936e91eefef0f08853f13dfec342f2dfac9f263fd62bb5",
+    "output/acceptance/2026-09-27-operations-evidence/focused-first.log": "4bb5177249b3aabcc7a1fb2a4503ba757f5888b786ffab5be57ebff7ebd4d217",
+    "output/acceptance/2026-09-27-operations-evidence/focused-qualified.log": "557427b5059a11daf2f1ee63d1e4d7b0582a5994370c108a0030cb074c6031b0",
+    "output/acceptance/2026-09-27-operations-evidence/lint-final.log": "074126387065070c3e678034c7081eec7911aafe9877d6296cc6269e02a5d91d",
+    "output/acceptance/2026-09-27-operations-evidence/lint.log": "074126387065070c3e678034c7081eec7911aafe9877d6296cc6269e02a5d91d",
+    "output/acceptance/2026-09-27-operations-evidence/red-before.log": "9b7e35fbffcc351022a47f0ac5efce6f03e8cb847b9f7709ef7cfa2e03acecda",
+    "output/acceptance/2026-09-27-operations-evidence/red-budget-refresh.log": "04880055651844863d04cb34a5fef4493f6eab88e59a5392f7e45080b2de4c9e",
+    "output/acceptance/2026-09-27-operations-evidence/red-core-authenticated.log": "5413c381905d0e39c73e597d2bb8a4c3a1ecb513f5d572a35ffcbc41eb726f52",
+    "output/acceptance/2026-09-27-operations-evidence/red-selected-reload.log": "6277dff29a0bff9254d3be4090cc762154263f4148475a7fc6a94ee788b340f2",
+    "output/acceptance/2026-09-27-operations-evidence/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
+    "output/acceptance/2026-09-27-operations-evidence/security.log": "6003da6752ae333179aefc17e983a71daa1ac5a10aff4566ac3f26ba194f56c5",
+    "output/acceptance/2026-09-27-operations-evidence/selected-reload-final.log": "7bbae6d1d4316c7cb9d903e024a501367ded6a6356af5b9b83d685cfb8314c96",
+    "output/acceptance/2026-09-27-operations-evidence/types-final-source.log": "82cfc27e3230c3e8770e76ff96b6d191466ec3cc56a6d7ec08a0599067fbc0b4",
+    "output/acceptance/2026-09-27-operations-evidence/types-qualified.log": "82cfc27e3230c3e8770e76ff96b6d191466ec3cc56a6d7ec08a0599067fbc0b4",
+    "output/acceptance/2026-09-27-operations-evidence/types-source-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-operations-evidence/types-source.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "focused": {
+    "passed": 115,
+    "failed": 0,
+    "files": 10,
+    "log": "output/acceptance/2026-09-27-operations-evidence/focused-final-source.log"
+  },
+  "checks": {
+    "strictTestRoots": 500,
+    "sourceAndScriptsTypes": "passed",
+    "lintAny": 977,
+    "existingProviderEgressExceptions": 9,
+    "deskBuild": "passed",
+    "securityScan": "passed",
+    "securitySelfTestPatterns": 11
+  },
+  "firstFailures": [
+    "New Core fixtures initially lacked explicit authenticated test authority; corrected and rerun against original Core, where all three behavioral checks fail.",
+    "An old Desk assertion required the now-retired disabled benchmark button; updated to assert absence and preserved unavailable onboarding.",
+    "Final review reproduced selected accounting evidence disappearing after successful saved action; refresh the list first, then reread the selected call."
+  ]
+}

@@ -505,28 +505,11 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     await reader!.cancel();
   });
 
-  it('GET /v1/operations/slo & POST /v1/operations/slo/run tracks synthetic latency & percentiles', async () => {
-    // 1. Get initial SLO summary
+  it('reports office availability as unmeasured and refuses synthetic operational execution', async () => {
     const getRes = await app.request('/v1/operations/slo');
     expect(getRes.status).toBe(200);
-    const slo = await getRes.json();
-    // No seeded probes: the daemon starts empty and every data point comes from a probe that ran.
-    expect(slo.summary.totalProbes).toBe(0);
-    expect(slo.summary.circuitBreakers.length).toBe(4);
-
-    // 2. Trigger on-demand synthetic campaign benchmark
-    const runRes = await app.request('/v1/operations/slo/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenario: 'nawroz_spring' }),
-    });
-    expect(runRes.status).toBe(201);
-    const runBody = await runRes.json();
-    expect(runBody.result.success).toBe(true);
-    expect(runBody.result.invariantsVerified.deterministicQaPassed).toBe(true);
-    expect(runBody.summary.totalProbes).toBe(slo.summary.totalProbes + 1);
-    expect(runBody.summary.successRate).toBe(100);
-    expect(runBody.summary.p99DurationMs).toBeGreaterThan(0);
+    expect(await getRes.json()).toMatchObject({evidenceKind:'unmeasured',availability:{observedPercent:null,sloCompliant:null},latency:{p99Ms:null}});
+    expect((await app.request('/v1/operations/slo/run',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status).toBe(410);
   });
 
   it('GET /v1/operations/reconciliation & POST /v1/operations/reconciliation/run audit drift and refuse auto-repair (FR-049, FR-050)', async () => {
@@ -776,21 +759,14 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(fontData.hasZwnj).toBe(true);
     expect(fontData.diacriticClearanceRatio).toBe(1.52);
 
-    // 2. Budget Inspection and Allocation
+    // Legacy fixture budgets cannot represent office paid-call accounting (ADR-102).
     const budgetRes = await app.request('/v1/clients/client-drustee/budget');
-    expect(budgetRes.status).toBe(200);
-    const budgetData = await budgetRes.json();
-    expect(budgetData.capUsd).toBe(10.0);
-    expect(budgetData.status).toBe('HEALTHY');
-
+    expect(budgetRes.status).toBe(410);
+    expect((await budgetRes.json()).detail).toContain('/spending/policy');
     const allocRes = await app.request('/v1/clients/client-drustee/budget/allocate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ capUsd: 15.0 }),
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({capUsd:15})
     });
-    expect(allocRes.status).toBe(200);
-    const allocData = await allocRes.json();
-    expect(allocData.capUsd).toBe(15.0);
+    expect(allocRes.status).toBe(410);
 
     // 3. Governed Learning & Feedback Mining
     const mineRes = await app.request('/v1/feedback/mine', {

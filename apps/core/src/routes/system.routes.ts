@@ -1,3 +1,4 @@
+import type { OperationsReliabilityReport } from '@hawa/contracts';
 import type { RouteContext } from './types.js';
 import { OutboxRepository, sql, withRlsContext, dbStatesForApiStatuses, toApiTaskStatus } from '@hawa/db';
 import { streamSSE } from 'hono/streaming';
@@ -28,7 +29,6 @@ export function registerSystemRoutes(ctx: RouteContext) {
     broadcastEvent,
     verifyRequestAuth,
     problem,
-    sloDaemon,
     reconciliationService,
     channelKillSwitches,
     globalCanvaCircuitBreaker,
@@ -440,36 +440,21 @@ export function registerSystemRoutes(ctx: RouteContext) {
     });
   });
 
-  // SLO Performance & Synthetic Heartbeat Telemetry
+  // Fixture timings cannot establish monthly office availability (ADR-102).
   registerRoute('get', '/operations/slo', (c: any) => {
-    const summary = sloDaemon.getSummary();
-    const recent = sloDaemon.getRecentProbes(10);
-    return c.json({
-      summary,
-      recentProbes: recent,
-    });
+    c.header('Cache-Control', 'no-store');
+    const report: OperationsReliabilityReport = {
+      schemaVersion: 1, evidenceKind: 'unmeasured', checkedAt: new Date().toISOString(),
+      availability: { targetPercent: 99.5, window: 'calendar_month', timeZone: 'Asia/Baghdad',
+        observedPercent: null, sloCompliant: null, observationCount: 0 },
+      latency: { p50Ms: null, p95Ms: null, p99Ms: null, observationCount: 0 },
+      nextAction: 'Collect independent availability observations for office intake and review before evaluating the monthly target.',
+    };
+    return c.json(report);
   });
-
-  registerRoute('post', '/operations/slo/run', async (c: any) => {
-    const body = await c.req.json().catch(() => ({}));
-    const scenarioKey = body.scenario || 'nawroz_spring';
-    const result = await sloDaemon.runProbe(scenarioKey);
-    const summary = sloDaemon.getSummary();
-
-    broadcastEvent('slo:probe_completed', {
-      probeId: result.probeId,
-      scenario: result.scenario,
-      totalDurationMs: result.totalDurationMs,
-      success: result.success,
-      p99DurationMs: summary.p99DurationMs,
-      successRate: summary.successRate,
-    });
-
-    return c.json({
-      result,
-      summary,
-    }, 201);
-  });
+  registerRoute('post', '/operations/slo/run', (c: any) => problem(c, 410,
+    'Synthetic Operational Probe Retired',
+    'Synthetic benchmarks remain in testkit. They cannot establish office availability or publish work through Operations.'));
 
   // Operations Reconciliation & Drift Audit (FR-049, FR-050). Audit only: see ReconciliationService.
   registerRoute('get', '/operations/reconciliation', (c: any) => {

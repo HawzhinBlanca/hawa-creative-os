@@ -1,3 +1,4 @@
+import type { OperationsReliabilityReport } from '@hawa/contracts';
 import type { SpendingPolicyDetail, SpendingPolicyChange, SpendingPolicyResult } from '@hawa/contracts';
 /**
  * Hawa Desk Typed API Client
@@ -408,20 +409,13 @@ class HawaApiClient {
         `/clients/${encodeURIComponent(clientId)}/candidate-rules/${encodeURIComponent(ruleId)}/dismiss`,
         { method: 'POST', body: JSON.stringify({ reason }) }
       ),
-    budgets: () => this.request<any>('/clients/budgets'),
-    // Core reads `capUsd`; under any other name the cap silently becomes its USD 10 default.
-    allocateBudget: (clientId: string, capUsd: number) =>
-      this.request<any>(`/clients/${encodeURIComponent(clientId)}/budget/allocate`, {
-        method: 'POST',
-        body: JSON.stringify({ capUsd }),
-      }),
   };
 
   public readonly operations = {
     integrationsHealth: () => this.request<any>('/integrations/health'),
     funnelHealth: () => this.request<any>('/system/funnel/health'),
     failures: () => this.request<any>('/operations/failures'),
-    slo: () => this.request<any>('/operations/slo'),
+    slo: () => this.request<OperationsReliabilityReport>('/operations/slo'),
     reconciliation: () => this.request<any>('/operations/reconciliation'),
     // Audit only. Core refuses auto-repair (422): it cannot upload to Drive or write Sheets.
     auditReconciliation: () =>

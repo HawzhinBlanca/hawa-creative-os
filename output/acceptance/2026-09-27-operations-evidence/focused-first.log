@@ -1,0 +1,96 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (23 ms)
+ ❯ apps/core/test/operations-evidence.test.ts (3 tests | 3 failed) 34ms
+   × reports unmeasured production availability without substituting a fake benchmark 22ms
+   × refuses synthetic publication through the operational probe endpoint 5ms
+   × retires sample monthly budget inspection and mutation without changing stored governor state 6ms
+{"level":"warn","time":"2026-09-27T13:33:04.824Z","service":"core","requestId":"12ed0064-7672-48c8-837b-819570c89099","chatId":"777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T13:33:04.869Z","service":"core","requestId":"8bdbf058-489f-41ea-9da4-5d6537b893f2","chatId":"9988","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T13:33:04.890Z","service":"core","requestId":"83753b8f-98e3-4f0d-a2d6-f778bf93b79a","chatId":"777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T13:33:04.893Z","service":"core","requestId":"8574a71f-ad4d-4e76-b7e1-46a5af46cb20","chatId":"-777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+ ❯ apps/desk/test/desk-auth.test.ts (29 tests | 1 failed) 30ms
+     × the SLO run and tenant onboarding buttons are disabled and say why 9ms
+{"level":"warn","time":"2026-09-27T13:33:04.925Z","service":"core","requestId":"9b7f93ed-7f80-46c5-9e5d-d9ce74d49c79","chatId":"-779","msg":"[Core] Telegram reply referenced unknown task UUID 11111111-1111-4111-8111-111111111111; reading the message on its own."}
+{"level":"error","time":"2026-09-27T13:33:05.134Z","service":"core","requestId":"e1fe7f42-1319-43fa-bab2-850e0b274b61","taskId":"1355ade4-4057-4aa9-9c04-9ca8f564bd5f","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Cannot approve stale revision 0a551f53-cd49-4096-9732-1d049a44eed7. Current revision is 168b71af-8244-4e94-9904-b58445d6ac11","stack":"Error: Cannot approve stale revision 0a551f53-cd49-4096-9732-1d049a44eed7. Current revision is 168b71af-8244-4e94-9904-b58445d6ac11\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:341:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at RevisionRepository.recordApproval (/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:603:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/routes/decisions.routes.ts:581:26\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at /Users/hawzhin/Hawdesign/apps/core/src/routes/decisions.routes.ts:577:22\n    at dispatch (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/hono@4.13.5/node_modules/hono/dist/compose.js:22:17)"},"msg":"[core:approvals:create] DB approval error:"}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desk/test/desk-auth.test.ts > actions the owner did not enable make no request > the SLO run and tenant onboarding buttons are disabled and say why
+AssertionError: expected '<section id="ops" class="screen activ…' to match /<button[^>]*disabled=""[^>]*ti…/button>
+
+- Expected:
+/<button[^>]*disabled=""[^>]*title="Not enabled: Core&#x27;s SLO probe runs against a fake design studio[^"]*"[^>]*>⚡ Run Synthetic Benchmark \(not enabled\)<\/button>/
+
++ Received:
+"<section id=\"ops\" class=\"screen active\"><section class=\"card\" aria-label=\"Daily spending policy\" style=\"padding:16px;margin-bottom:16px\"><h2>Daily spending policy</h2><p>Shared limits for Studio, Canva planning, fixture evaluation, retained voice and scheduled health probes. Unresolved costs keep their allocation reserved.</p><button class=\"btn\" aria-expanded=\"false\">Review budget policy</button></section><section class=\"card\" aria-label=\"Call cost accounting\" style=\"margin-bottom:16px;padding:16px\"><h2>Call cost accounting</h2><p>Review Studio, Canva planning, evaluation, voice and scheduled health probe charges. Calls without complete billing evidence keep their remaining allocation reserved.</p><button class=\"btn\" aria-expanded=\"false\">Review call costs</button></section><div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:12px\"><div style=\"font-size:13px;color:var(--muted)\">Telemetry not read yet</div><div style=\"display:flex;gap:8px\"><button class=\"btn\">Refresh telemetry</button></div></div><h1 class=\"sr-only\">Operations &amp; Telemetry Overview</h1><div class=\"grid4\"><div class=\"stat\"><b>—</b><span>critical incidents</span></div><div class=\"stat\"><b>—</b><span>recoverable failures</span></div><div class=\"stat\"><b>—</b><span>adapters not verified</span></div><div class=\"stat\"><b>—</b><span>last backup age (not reported to the Desk)</span></div></div><div class=\"panel\" style=\"padding:16px;margin-top:16px\"><h2>Design request progress</h2><p>Design progress unknown. No result has been read yet.</p></div><section class=\"panel\" aria-label=\"Office reliability\" style=\"padding:16px;margin-top:16px\"><h2>Office availability and latency</h2><p>Reliability evidence unavailable. No report has been read yet.</p></section><div class=\"panel\" style=\"padding:16px;margin-top:16px;border-left:4px solid var(--border)\"><div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:12px\"><div><h2 style=\"margin:0;display:flex;align-items:center;gap:8px;font-size:16px\"><span>🔄 Stored publication receipt audit</span><span class=\"pill \" style=\"font-size:11px\">No audit read</span></h2><div style=\"font-size:12px;color:var(--muted);margin-top:4px\">Compares PostgreSQL tasks with stored publication receipts. External Drive and Sheets state is not checked, and nothing is repaired.</div></div><button class=\"btn\" style=\"font-size:12px;padding:4px 10px;background:rgba(22, 101, 52, 0.08);color:var(--ok-text, #166534);border-color:var(--ok-text, #166534);font-weight:600\">Run Reconciliation Audit</button></div><div class=\"stats\" style=\"grid-template-columns:repeat(5, 1fr);gap:10px\"><div class=\"stat\" style=\"padding:8px 10px\"><b style=\"font-size:18px\">—</b><span style=\"font-size:11px\">Tasks Audited</span></div><div class=\"stat\" style=\"padding:8px 10px\"><b style=\"font-size:18px\">—</b><span style=\"font-size:11px\">Drive receipts</span></div><div class=\"stat\" style=\"padding:8px 10px\"><b style=\"font-size:18px\">—</b><span style=\"font-size:11px\">Sheet receipts</span></div><div class=\"stat\" style=\"padding:8px 10px\"><b style=\"font-size:18px;color:var(--ok-text, #166534)\">—</b><span style=\"font-size:11px\">In Sync</span></div><div class=\"stat\" style=\"padding:8px 10px\"><b style=\"font-size:18px;color:var(--ok-text, #166534)\">—</b><span style=\"font-size:11px\">Anomalies found</span></div></div></div><div class=\"ops\" style=\"margin-top:16px\"><div class=\"panel\" style=\"padding:16px\"><h2>Actionable operations</h2><table class=\"table\"><thead><tr><th>Component / Task</th><th>State</th><th>Evidence</th><th>Safe action</th></tr></thead><tbody></tbody></table></div><div class=\"panel\" style=\"padding:16px\"><h2>Component health</h2><div class=\"rule\"><b>Not read yet</b></div></div></div></section>"
+
+ ❯ apps/desk/test/desk-auth.test.ts:220:17
+    218|   it('the SLO run and tenant onboarding buttons are disabled and say w…
+    219|     const ops = renderToStaticMarkup(React.createElement(OpsScreen));
+    220|     expect(ops).toMatch(/<button[^>]*disabled=""[^>]*title="Not enable…
+       |                 ^
+    221|     expect(ops).toContain('It does not read Google Drive or Google She…
+    222|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  apps/core/test/operations-evidence.test.ts > reports unmeasured production availability without substituting a fake benchmark
+AssertionError: expected 401 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 401
+
+ ❯ apps/core/test/operations-evidence.test.ts:10:67
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  apps/core/test/operations-evidence.test.ts > refuses synthetic publication through the operational probe endpoint
+AssertionError: expected 401 to be 410 // Object.is equality
+
+- Expected
++ Received
+
+- 410
++ 401
+
+ ❯ apps/core/test/operations-evidence.test.ts:17:19
+     15|  const app=createAppWithClientFixtures();const probe=vi.spyOn(Syntheti…
+     16|  const r=await app.request('/v1/operations/slo/run',{method:'POST',hea…
+     17|  expect(r.status).toBe(410);expect(probe).not.toHaveBeenCalled();
+       |                   ^
+     18| });
+     19| it('retires sample monthly budget inspection and mutation without chan…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  apps/core/test/operations-evidence.test.ts > retires sample monthly budget inspection and mutation without changing stored governor state
+AssertionError: expected 401 to be 410 // Object.is equality
+
+- Expected
++ Received
+
+- 410
++ 401
+
+ ❯ apps/core/test/operations-evidence.test.ts:23:20
+     21|  for(const [path,method] of [['/clients/budgets','GET'],['/clients/cli…
+     22|   const r=await app.request('/v1'+path,{method,headers:{'Content-Type'…
+     23|   expect(r.status).toBe(410);expect((await r.json()).detail).toContain…
+       |                    ^
+     24|  }
+     25|  expect(JSON.stringify(globalCostGovernor.exportState())).toBe(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  2 failed | 7 passed (9)
+      Tests  4 failed | 104 passed (108)
+   Start at  16:33:03
+   Duration  2.45s (transform 2.93s, setup 479ms, import 4.97s, tests 1.93s, environment 756ms)
+

@@ -10,10 +10,10 @@ export function CallCostAccountingPanel() {
   const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
   const [page,setPage]=useState<CallCostPage|null>(null),[detail,setDetail]=useState<CallCostDetail|null>(null);
   const load=async(more=false)=>{
-    setBusy(true);setNotice('');
+    setBusy(true);setNotice('');setDetail(null);
     try {const next=await apiClient.callCosts.list(more?page?.nextCursor:undefined);
       setPage(old=>({...next,items:more?[...(old?.items||[]),...next.items]:next.items}));
-    }catch(error){setNotice(`Call costs unavailable: ${reasonOf(error)}`);}finally{setBusy(false);}
+    }catch(error){setPage(null);setNotice(`Call costs unavailable: ${reasonOf(error)}`);}finally{setBusy(false);}
   };
   const inspect=async(call:CallCostEvidence)=>{
     setBusy(true);setNotice('');setDetail(null);
@@ -62,7 +62,7 @@ export function CallCostAccountingPanel() {
           detail={{runId:`${detail.kind}:${detail.id}`,status:detail.status,snapshotHash:detail.snapshotHash,canSettle:detail.canRecord,settlement:null,
             calls:[{id:detail.id,ordinal:1,status:detail.status,provider:detail.provider,model:detail.model}]}}
           recordSettlement={(action,body)=>apiClient.callCosts.record(detail.kind,detail.id,action,body)}
-          onSettled={async()=>{setDetail(await apiClient.callCosts.get(detail.kind,detail.id));await load();}}/>
+          onSettled={async()=>{await load();await inspect(detail);}}/>
         <div style={{display:'flex',gap:8,marginTop:12}}>
           <button className="btn btn-sm" disabled={busy} onClick={()=>void inspect(detail)}>Reload selected call</button>
           <button className="btn btn-sm" onClick={()=>setDetail(null)}>Close call</button>

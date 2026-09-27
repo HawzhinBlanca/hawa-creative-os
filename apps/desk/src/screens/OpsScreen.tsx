@@ -1,5 +1,7 @@
+import type { OperationsReliabilityReport } from '@hawa/contracts';
+import { parseOperationsReliability } from '../services/operationsEvidence.js';
 import { SpendingPolicyPanel } from '../components/SpendingPolicyPanel.js';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { eventStream } from '../services/eventStream';
 import { apiClient } from '../api/client.js';
 import { read, reasonOf } from '../services/statusReport.js';
@@ -39,58 +41,11 @@ interface FailureItem {
   createdAt?: string;
 }
 
-interface CircuitBreakerInfo {
-  name: string;
-  state: string;
-  consecutiveFailures: number;
-  totalTrips: number;
-}
-
-interface SloSummary {
-  totalProbes: number;
-  successfulProbes: number;
-  failedProbes: number;
-  successRate: number;
-  errorBudgetRemaining: number;
-  p50DurationMs: number;
-  p95DurationMs: number;
-  p99DurationMs: number;
-  targetP99Ms: number;
-  sloCompliant: boolean;
-  circuitBreakers: CircuitBreakerInfo[];
-  lastProbeAt?: string;
-}
-
-interface SloProbeResult {
-  probeId: string;
-  timestamp: string;
-  scenario: string;
-  totalDurationMs: number;
-  success: boolean;
-  stages: {
-    ingressMs: number;
-    routingMs: number;
-    briefMs: number;
-    composingMs: number;
-    qaMs: number;
-    approvalMs: number;
-    publishMs: number;
-  };
-  taskId?: string;
-  invariantsVerified?: {
-    deskCanonical: boolean;
-    clientScopeLocked: boolean;
-    protectedTokensPreserved: boolean;
-    editableDocumentMaintained: boolean;
-    deterministicQaPassed: boolean;
-    idempotentPublication: boolean;
-  };
-}
-
 export interface ReconciliationReport {
   auditId: string;
   timestamp: string;
   basis: string;
+  simulated: boolean;
   totalTasksAudited: number;
   totalDriveDeliverablesChecked: number;
   totalSheetRowsAudited: number;
@@ -99,31 +54,53 @@ export interface ReconciliationReport {
   status: 'clean' | 'divergent';
 }
 
-export interface ClientBudgetReport {
-  clientId: string;
-  clientName: string;
-  monthlyCapUsd: number;
-  currentSpendUsd: number;
-  remainingUsd: number;
-  percentUsed: number;
-  quotaStatus: 'HEALTHY' | 'WARNING' | 'EXCEEDED';
-  currency: string;
-  billingCycle: string;
+const record = (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === 'object' && !Array.isArray(v));
+const nonnegative = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+const count = (v: unknown) => nonnegative(v) && Number.isSafeInteger(v);
+function integrationItems(value: unknown): IntegrationHealth[] | null {
+  if (!record(value) || !Array.isArray(value.items) || !value.items.every(v => record(v) &&
+      ['integrationId','kind','state','checkedAt','nextAction'].every(k => typeof v[k] === 'string' && v[k]) &&
+      (v.configured === null || typeof v.configured === 'boolean') &&
+      ['unknown','reachable','unreachable'].includes(String(v.reachability)) &&
+      ['not_run','paid_verified','failed','stale','unknown'].includes(String(v.paidVerification)))) return null;
+  return value.items as IntegrationHealth[];
+}
+function failureItems(value: unknown): FailureItem[] | null {
+  if (!record(value) || !Array.isArray(value.items) || !value.items.every(v => record(v) &&
+      typeof v.id === 'string' && v.id && typeof v.status === 'string' && v.status &&
+      ['title','clientId','reason','createdAt'].every(k => v[k] === undefined || typeof v[k] === 'string'))) return null;
+  return value.items as FailureItem[];
+}
+function parseFunnel(value: unknown): FunnelHealth | null {
+  if (!record(value) || !['healthy','idle','in_progress','stalled','unknown'].includes(String(value.status)) ||
+      !nonnegative(value.windowHours) || !['briefsCount','draftsCount','stalledTaskCount'].every(k => value[k] === null || count(value[k]))) return null;
+  if (value.stageDurations !== undefined && value.stageDurations !== null && (!record(value.stageDurations) ||
+      !Object.values(value.stageDurations).every(v => record(v) && count(v.samples) &&
+        (v.p50Hours === null || nonnegative(v.p50Hours)) && (v.p95Hours === null || nonnegative(v.p95Hours))))) return null;
+  if (!['oldestStalledTaskId','nextAction'].every(k => value[k] === undefined || value[k] === null || typeof value[k] === 'string') ||
+      !(value.oldestStalledTaskHours === undefined || value.oldestStalledTaskHours === null || nonnegative(value.oldestStalledTaskHours))) return null;
+  return value as unknown as FunnelHealth;
+}
+
+function parseAudit(value: unknown): ReconciliationReport | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.auditId !== 'string' || !v.auditId || typeof v.timestamp !== 'string' || !Number.isFinite(Date.parse(v.timestamp)) ||
+      typeof v.basis !== 'string' || !v.basis || v.simulated !== false || !['clean','divergent'].includes(String(v.status))) return null;
+  if (['totalTasksAudited','totalDriveDeliverablesChecked','totalSheetRowsAudited','inSyncCount','driftCount'].some(k =>
+      typeof v[k] !== 'number' || !Number.isSafeInteger(v[k]) || (v[k] as number) < 0)) return null;
+  if ((v.status === 'clean') !== (v.driftCount === 0) || (v.inSyncCount as number) > (v.totalTasksAudited as number)) return null;
+  return v as unknown as ReconciliationReport;
 }
 
 export const OpsScreen: React.FC = () => {
   const [integrations, setIntegrations] = useState<IntegrationHealth[]>([]);
   const [funnel, setFunnel] = useState<FunnelHealth | null>(null);
   const [failures, setFailures] = useState<FailureItem[]>([]);
-  const [sloSummary, setSloSummary] = useState<SloSummary | null>(null);
-  const [recentProbes, setRecentProbes] = useState<SloProbeResult[]>([]);
+  const [reliability, setReliability] = useState<OperationsReliabilityReport | null>(null);
+  const refreshSequence = useRef(0);
   const [reconciliation, setReconciliation] = useState<ReconciliationReport | null>(null);
-  // Budgets come only from Core. Until it answers there is nothing to show, not a sample.
-  const [clientBudgets, setClientBudgets] = useState<ClientBudgetReport[]>([]);
-  // Reads that failed on the last refresh, by name, with the reason. A failed read is never shown as zero.
   const [unreadable, setUnreadable] = useState<Record<string, string>>({});
-  const [editingBudgetClient, setEditingBudgetClient] = useState<ClientBudgetReport | null>(null);
-  const [newAllocatedCap, setNewAllocatedCap] = useState<number>(300);
 
   const [loading, setLoading] = useState(false);
   const [runningReconciliation, setRunningReconciliation] = useState(false);
@@ -137,15 +114,16 @@ export const OpsScreen: React.FC = () => {
   const [inspectingFailure, setInspectingFailure] = useState<FailureItem | null>(null);
 
   const fetchOpsData = async () => {
+    const sequence = ++refreshSequence.current;
     setLoading(true);
-    const [healthRes, funnelRes, failRes, sloRes, reconRes, budgetsRes] = await Promise.all([
+    const [healthRes, funnelRes, failRes, sloRes, reconRes] = await Promise.all([
       read(() => apiClient.operations.integrationsHealth()),
       read(() => apiClient.operations.funnelHealth()),
       read(() => apiClient.operations.failures()),
       read(() => apiClient.operations.slo()),
       read(() => apiClient.operations.reconciliation()),
-      read(() => apiClient.clients.budgets()),
     ]);
+    if (sequence !== refreshSequence.current) return;
     const gaps: Record<string, string> = {};
     const note = (name: string, r: { state: string; reason?: string }) => {
       if (r.state === 'unknown') gaps[name] = r.reason || 'unknown error';
@@ -155,53 +133,46 @@ export const OpsScreen: React.FC = () => {
     note('failures', failRes);
     note('slo', sloRes);
     note('reconciliation', reconRes);
-    note('budgets', budgetsRes);
-    setUnreadable(gaps);
 
-    setIntegrations(healthRes.state === 'known' && Array.isArray(healthRes.value?.items) ? healthRes.value.items : []);
-    setFunnel(funnelRes.state === 'known' && funnelRes.value?.status ? funnelRes.value as FunnelHealth : null);
-    setFailures(failRes.state === 'known' && Array.isArray(failRes.value?.items) ? failRes.value.items : []);
-    if (sloRes.state === 'known' && sloRes.value?.summary) {
-      setSloSummary(sloRes.value.summary);
-      setRecentProbes(sloRes.value.recentProbes || []);
-    }
-    if (reconRes.state === 'known' && reconRes.value?.auditId) {
-      setReconciliation(reconRes.value);
-    }
-    const budgets = budgetsRes.state === 'known' && Array.isArray(budgetsRes.value?.budgets) ? budgetsRes.value.budgets : [];
-    setClientBudgets(
-      budgets.map((b: any): ClientBudgetReport => {
-        const cap = Number(b.monthlyCapUsd ?? b.capUsd ?? 250);
-        const spent = Number(b.currentSpendUsd ?? b.spentUsd ?? 0);
-        const remaining = Number(b.remainingUsd ?? Math.max(0, cap - spent));
-        const pct = Number(b.percentUsed ?? (cap > 0 ? (spent / cap) * 100 : 0));
-        return {
-          clientId: b.clientId || 'client-unknown',
-          clientName: b.clientName || b.clientId || 'Client Brand',
-          monthlyCapUsd: cap,
-          currentSpendUsd: spent,
-          remainingUsd: remaining,
-          percentUsed: pct,
-          quotaStatus: b.quotaStatus || b.status || (pct >= 100 ? 'EXCEEDED' : pct >= 80 ? 'WARNING' : 'HEALTHY'),
-          currency: b.currency || 'USD',
-          billingCycle: b.billingCycle || b.month || '2026-09',
-        };
-      })
-    );
+    const nextIntegrations = healthRes.state === 'known' ? integrationItems(healthRes.value) : null;
+    const nextFailures = failRes.state === 'known' ? failureItems(failRes.value) : null;
+    const nextFunnel = funnelRes.state === 'known' ? parseFunnel(funnelRes.value) : null;
+    if (!nextIntegrations && healthRes.state === 'known') gaps.integrations = 'Integration results were not reported';
+    if (!nextFailures && failRes.state === 'known') gaps.failures = 'Failure results were not reported';
+    if (!nextFunnel && funnelRes.state === 'known') gaps['design funnel'] = 'Progress evidence was not reported';
+    setIntegrations(nextIntegrations || []);
+    setFailures(nextFailures || []);
+    setFunnel(nextFunnel);
+    const nextReliability = sloRes.state === 'known' ? parseOperationsReliability(sloRes.value) : null;
+    if (!nextReliability && sloRes.state === 'known') gaps.slo = 'Unsupported or incomplete reliability evidence';
+    setReliability(nextReliability);
+    const nextAudit = reconRes.state === 'known' ? parseAudit(reconRes.value) : null;
+    if (!nextAudit && reconRes.state === 'known' && reconRes.value !== null) gaps.reconciliation = 'Unsupported or incomplete audit evidence';
+    setReconciliation(nextAudit);
+    setUnreadable(gaps);
     setLastCheck(new Date().toLocaleTimeString());
     setLoading(false);
   };
 
   // Audit only: the Desk never asks Core to auto-repair (see apiClient.operations.auditReconciliation).
   const runReconciliation = async () => {
+    const sequence = ++refreshSequence.current;
+    setLoading(false);
     setRunningReconciliation(true);
     setReconcileToast(null);
     try {
       const data = await apiClient.operations.auditReconciliation();
-      setReconciliation(data);
-      setReconcileToast(`✓ Storage audit: ${data.inSyncCount} in sync, ${data.driftCount} drift(s) found, none repaired`);
+      if (sequence !== refreshSequence.current) return;
+      const audit = parseAudit(data);
+      if (!audit) throw new Error('Unsupported or incomplete audit evidence');
+      setReconciliation(audit);
+      setUnreadable(old => Object.fromEntries(Object.entries(old).filter(([key]) => key !== 'reconciliation')));
+      setReconcileToast(`✓ Stored receipt audit: ${data.inSyncCount} in sync, ${data.driftCount} drift(s) found, none repaired`);
       setTimeout(() => setReconcileToast(null), 6000);
     } catch (err) {
+      if (sequence !== refreshSequence.current) return;
+      setReconciliation(null);
+      setUnreadable(old => ({...old,reconciliation:reasonOf(err)}));
       showOpsToast(`✗ Reconciliation audit did not run: ${reasonOf(err)}`);
     } finally {
       setRunningReconciliation(false);
@@ -214,33 +185,12 @@ export const OpsScreen: React.FC = () => {
     const unsubReconcile = eventStream.on('reconciliation:completed', () => {
       fetchOpsData();
     });
-    const unsubSlo = eventStream.on('slo:probe_completed', () => {
-      fetchOpsData();
-    });
 
     return () => {
+      refreshSequence.current++;
       unsubReconcile();
-      unsubSlo();
     };
   }, []);
-
-  const handleAllocateBudget = async (clientId: string, newCap: number) => {
-    try {
-      const updated = await apiClient.clients.allocateBudget(clientId, newCap);
-      // Core clamps the cap, so the toast reports the cap it stored, not the one typed.
-      const stored = Number(updated?.capUsd);
-      showOpsToast(
-        Number.isFinite(stored)
-          ? `✓ Core set the monthly budget cap for ${clientId} to $${stored.toFixed(2)}`
-          : `✓ Core accepted the budget change for ${clientId} but did not report the cap it stored`
-      );
-      setEditingBudgetClient(null);
-      fetchOpsData();
-    } catch (err) {
-      // Core did not change the cap, so the screen keeps showing the one it has.
-      showOpsToast(`✗ Budget cap for ${clientId} was not changed: ${reasonOf(err)}`);
-    }
-  };
 
   const degradedCount = integrations.filter((i) => i.state !== 'paid_verified').length;
   const criticalCount = failures.filter((f) => f.status === 'OPERATOR_REQUIRED').length;
@@ -252,7 +202,7 @@ export const OpsScreen: React.FC = () => {
     <section id="ops" className="screen active">
       <SpendingPolicyPanel />
       <CallCostAccountingPanel />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
         <div style={{ fontSize: 13, color: 'var(--muted)' }}>
           {loading
             ? 'Polling infrastructure telemetry…'
@@ -263,24 +213,7 @@ export const OpsScreen: React.FC = () => {
                 : `Telemetry read · last checked ${lastCheck}`}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {/* Not enabled (owner decision, 2026-09-19): Core's probe runs a fake design studio, so its
-              timings describe no real pipeline. */}
-          <button
-            className="btn"
-            style={{ fontSize: 12, padding: '4px 10px' }}
-            disabled
-            title="Not enabled: Core's SLO probe runs against a fake design studio, so its timings would not describe the real pipeline."
-          >
-            ⚡ Run Synthetic Benchmark (not enabled)
-          </button>
-          <button
-            className="btn"
-            style={{ fontSize: 12, padding: '4px 10px' }}
-            onClick={fetchOpsData}
-            disabled={loading}
-          >
-            {loading ? 'Checking…' : '↻ Refresh'}
-          </button>
+          <button className="btn" onClick={fetchOpsData}>Refresh telemetry</button>
         </div>
       </div>
 
@@ -298,7 +231,7 @@ export const OpsScreen: React.FC = () => {
         <h2>Design request progress</h2>
         {funnel ? (
           <>
-            <p>Last {funnel.windowHours} hours: {funnel.briefsCount} requests · {funnel.draftsCount} Canva drafts · {funnel.stalledTaskCount} overdue automatic requests · {funnel.status.replace('_', ' ')}</p>
+            <p>Last {funnel.windowHours} hours: {funnel.briefsCount ?? '—'} requests · {funnel.draftsCount ?? '—'} Canva drafts · {funnel.stalledTaskCount ?? '—'} overdue automatic requests · {funnel.status.replace('_', ' ')}</p>
             {funnel.oldestStalledTaskId && <p>Oldest overdue task: {funnel.oldestStalledTaskId} ({funnel.oldestStalledTaskHours} hours). {funnel.nextAction}</p>}
             {funnel.stageDurations && Object.entries(funnel.stageDurations).map(([stage, timing]) => (
               <p key={stage}>{stage.replace(/([A-Z])/g, ' $1')}: {timing.samples} completed · p50 {timing.p50Hours === null ? '—' : `${timing.p50Hours}h`} · p95 {timing.p95Hours === null ? '—' : `${timing.p95Hours}h`}</p>
@@ -307,137 +240,37 @@ export const OpsScreen: React.FC = () => {
         ) : <p>Design progress unknown. {unreadable['design funnel'] || 'No result has been read yet.'}</p>}
       </div>
 
-      {/* SLO Latency & Synthetic Heartbeat Dashboard */}
-      {sloSummary && (
-        <div className="panel" style={{ padding: 16, marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h2 style={{ margin: 0 }}>SLO & Latency Performance Telemetry</h2>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <span className={`pill ${sloSummary.sloCompliant ? 'ok' : 'bad'}`}>
-                {sloSummary.sloCompliant ? `P99 < ${sloSummary.targetP99Ms}ms SLO: COMPLIANT` : 'SLO BREACHED'}
-              </span>
-              <span className="pill ok" style={{ fontSize: 11 }}>
-                Error Budget: {sloSummary.errorBudgetRemaining}%
-              </span>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 14 }}>
-            <div className="stat" style={{ padding: '10px 12px' }}>
-              <b style={{ fontSize: 20 }}>{sloSummary.p50DurationMs}ms</b>
-              <span style={{ fontSize: 11 }}>P50 Latency (Median)</span>
-            </div>
-            <div className="stat" style={{ padding: '10px 12px' }}>
-              <b style={{ fontSize: 20 }}>{sloSummary.p95DurationMs}ms</b>
-              <span style={{ fontSize: 11 }}>P95 Latency</span>
-            </div>
-            <div className="stat" style={{ padding: '10px 12px' }}>
-              <b style={{ fontSize: 20, color: sloSummary.p99DurationMs < 1500 ? 'var(--accent-text, #0369a1)' : '#b91c1c' }}>
-                {sloSummary.p99DurationMs}ms
-              </b>
-              <span style={{ fontSize: 11 }}>P99 Latency (&lt;1500ms)</span>
-            </div>
-            <div className="stat" style={{ padding: '10px 12px' }}>
-              <b style={{ fontSize: 20 }}>{sloSummary.totalProbes}</b>
-              <span style={{ fontSize: 11 }}>Synthetic Probes</span>
-            </div>
-            <div className="stat" style={{ padding: '10px 12px' }}>
-              <b style={{ fontSize: 20, color: 'var(--ok-text, #166534)' }}>{sloSummary.successRate}%</b>
-              <span style={{ fontSize: 11 }}>Success Rate</span>
-            </div>
-          </div>
-
-          {/* Model Circuit Breakers */}
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 8 }}>
-              MULTI-MODEL PROVIDER CIRCUIT BREAKERS
-            </div>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              {sloSummary.circuitBreakers.map((cb) => (
-                <div
-                  key={cb.name}
-                  style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 6,
-                    padding: '6px 12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                  }}
-                >
-                  <span className={`dot ${cb.state === 'CLOSED' ? '' : cb.state === 'HALF_OPEN' ? 'warn' : 'bad'}`} />
-                  <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>{cb.name}</span>
-                  <span className={`pill ${cb.state === 'CLOSED' ? 'ok' : 'warn'}`} style={{ fontSize: 10, padding: '2px 6px' }}>
-                    {cb.state}
-                  </span>
-                  {cb.consecutiveFailures > 0 && (
-                    <span style={{ fontSize: 11, color: '#EF4444' }}>Failures: {cb.consecutiveFailures}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Recent Synthetic Runs */}
-          {recentProbes.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>
-                RECENT SYNTHETIC CAMPAIGN PROBES
-              </div>
-              <table className="table" style={{ fontSize: 11 }}>
-                <thead>
-                  <tr>
-                    <th>Probe ID</th>
-                    <th>Scenario</th>
-                    <th>Total Latency</th>
-                    <th>Stages (Ingress / Compose / QA / Publish)</th>
-                    <th>Invariants</th>
-                    <th>Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentProbes.slice(0, 5).map((p) => (
-                    <tr key={p.probeId}>
-                      <td><code>{p.probeId.substring(0, 16)}</code></td>
-                      <td><b>{p.scenario.replace('_', ' ').toUpperCase()}</b></td>
-                      <td>
-                        <span className="pill ok" style={{ fontSize: 10 }}>{p.totalDurationMs}ms</span>
-                      </td>
-                      <td style={{ color: 'var(--muted)' }}>
-                        {p.stages.ingressMs}ms / {p.stages.composingMs}ms / {p.stages.qaMs}ms / {p.stages.publishMs}ms
-                      </td>
-                      <td>
-                        <span className="pill ok" style={{ fontSize: 10 }}>✓ 6/6 Invariants</span>
-                      </td>
-                      <td style={{ color: 'var(--muted)' }}>{p.timestamp.substring(11, 19)} UTC</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+      <section className="panel" aria-label="Office reliability" style={{padding:16,marginTop:16}}>
+        <h2>Office availability and latency</h2>
+        {reliability ? <>
+          <p><span className="pill warn">Availability unmeasured</span></p>
+          <p>Target: {reliability.availability.targetPercent}% monthly availability for office intake and review (Asia/Baghdad).</p>
+          <p>No independent availability observations or measured office latency are recorded. Compliance, error budget and latency are unknown.</p>
+          <p>{reliability.nextAction}</p>
+          <small>Evidence checked {reliability.checkedAt}. This time records the status read, not a successful operation.</small>
+        </> : <p>Reliability evidence unavailable. {unreadable.slo || 'No report has been read yet.'}</p>}
+      </section>
 
       {/* Reconciliation & Storage Drift Audit Panel (FR-049, FR-050) */}
-      <div className="panel" style={{ padding: 16, marginTop: 16, borderLeft: '4px solid #166534' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div className="panel" style={{ padding: 16, marginTop: 16, borderLeft: '4px solid var(--border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
           <div>
             <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}>
-              <span>🔄 PostgreSQL · Drive · Sheets Reconciliation Ledger</span>
-              <span className={`pill ${!reconciliation ? '' : reconciliation.status === 'clean' ? 'ok' : 'bad'}`} style={{ fontSize: 11 }}>
+              <span>🔄 Stored publication receipt audit</span>
+              <span className={`pill ${!reconciliation || reconciliation.totalTasksAudited === 0 ? '' : reconciliation.status === 'clean' ? 'ok' : 'bad'}`} style={{ fontSize: 11 }}>
                 {!reconciliation
                   ? lastCheck && !unreadable.reconciliation
                     ? 'No audit since Core started'
                     : 'No audit read'
-                  : reconciliation.status === 'clean'
-                    ? '100% In Sync'
+                  : reconciliation.totalTasksAudited === 0
+                    ? 'No tasks audited'
+                    : reconciliation.status === 'clean'
+                    ? 'Stored receipts consistent'
                     : 'Drift found'}
               </span>
             </h2>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              Compares Core's task list with the publication receipts Core holds in memory. It does not read Google Drive or Google Sheets, and repairs nothing.
+              {reconciliation?.basis || 'Compares PostgreSQL tasks with stored publication receipts. External Drive and Sheets state is not checked, and nothing is repaired.'}
             </div>
           </div>
           <button
@@ -450,24 +283,26 @@ export const OpsScreen: React.FC = () => {
           </button>
         </div>
 
+        {reconciliation && <p>Audit recorded {reconciliation.timestamp} · {reconciliation.simulated ? 'Simulated evidence' : 'Stored receipt evidence'}</p>}
+
         {reconcileToast && (
           <div style={{ background: 'rgba(22, 101, 52, 0.08)', border: '1px solid rgba(22, 101, 52, 0.25)', borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--ok-text, #166534)' }}>
             {reconcileToast}
           </div>
         )}
 
-        <div className="stats" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        <div className="stats" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: 10 }}>
           <div className="stat" style={{ padding: '8px 10px' }}>
             <b style={{ fontSize: 18 }}>{reconciliation?.totalTasksAudited ?? '—'}</b>
             <span style={{ fontSize: 11 }}>Tasks Audited</span>
           </div>
           <div className="stat" style={{ padding: '8px 10px' }}>
             <b style={{ fontSize: 18 }}>{reconciliation?.totalDriveDeliverablesChecked ?? '—'}</b>
-            <span style={{ fontSize: 11 }}>Drive Files</span>
+            <span style={{ fontSize: 11 }}>Drive receipts</span>
           </div>
           <div className="stat" style={{ padding: '8px 10px' }}>
             <b style={{ fontSize: 18 }}>{reconciliation?.totalSheetRowsAudited ?? '—'}</b>
-            <span style={{ fontSize: 11 }}>Sheet Rows</span>
+            <span style={{ fontSize: 11 }}>Sheet receipts</span>
           </div>
           <div className="stat" style={{ padding: '8px 10px' }}>
             <b style={{ fontSize: 18, color: 'var(--ok-text, #166534)' }}>{reconciliation?.inSyncCount ?? '—'}</b>
@@ -477,105 +312,8 @@ export const OpsScreen: React.FC = () => {
             <b style={{ fontSize: 18, color: (reconciliation?.driftCount || 0) > 0 ? 'var(--warn-text, #854d0e)' : 'var(--ok-text, #166534)' }}>
               {reconciliation?.driftCount ?? '—'}
             </b>
-            <span style={{ fontSize: 11 }}>Drifts Repaired</span>
+            <span style={{ fontSize: 11 }}>Anomalies found</span>
           </div>
-        </div>
-      </div>
-
-      {/* Client AI Generation Budgets & Token/GPU Cost Controller (Langfuse / Helicone Grade) */}
-      <div className="panel" style={{ padding: 16, marginTop: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div>
-            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>⚡</span>
-              <span>Client AI Generation Budgets & Cost Governance</span>
-              <span className="pill blue" style={{ fontSize: 10 }}>Langfuse / Helicone Grade</span>
-            </h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>
-              Real-time token & GPU spend meters, automated quota enforcement, and tenant margin protection.
-            </p>
-          </div>
-          <button
-            className="btn"
-            style={{ fontSize: 12, padding: '4px 10px' }}
-            onClick={fetchOpsData}
-          >
-            🔄 Refresh Budgets
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {unreadable.budgets && (
-            <div className="rule"><b>Budgets unknown</b><p>Could not read client budgets: {unreadable.budgets}</p></div>
-          )}
-          {clientBudgets.map((b) => {
-            const isExceeded = b.quotaStatus === 'EXCEEDED';
-            const isWarning = b.quotaStatus === 'WARNING';
-            const barColor = isExceeded ? '#b91c1c' : isWarning ? '#92400e' : '#166534';
-
-            return (
-              <div
-                key={b.clientId}
-                style={{
-                  padding: 14,
-                  background: 'var(--soft)',
-                  border: `1px solid ${isExceeded ? 'rgba(239, 68, 68, 0.4)' : 'var(--line)'}`,
-                  borderRadius: 8,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <div>
-                    <b style={{ fontSize: 13, color: 'var(--text)' }}>{b.clientName}</b>
-                    <code style={{ fontSize: 11, marginLeft: 8, color: 'var(--muted)' }}>{b.clientId}</code>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span
-                      className="pill"
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        background: barColor,
-                        color: '#fff',
-                      }}
-                    >
-                      {b.quotaStatus}
-                    </span>
-                    <button
-                      className="btn"
-                      style={{ fontSize: 11, padding: '3px 8px' }}
-                      onClick={() => {
-                        setEditingBudgetClient(b);
-                        setNewAllocatedCap(b.monthlyCapUsd);
-                      }}
-                    >
-                      ⚙ Adjust Cap
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                  <span style={{ color: 'var(--muted)' }}>
-                    Monthly Spend: <b>${Number(b.currentSpendUsd || 0).toFixed(2)}</b> of <b>${Number(b.monthlyCapUsd || 0).toFixed(2)}</b>
-                  </span>
-                  <span style={{ fontWeight: 600, color: barColor }}>
-                    {Number(b.percentUsed || 0).toFixed(1)}% Used (Remaining: ${Number(b.remainingUsd || 0).toFixed(2)})
-                  </span>
-                </div>
-
-                {/* Visual Meter */}
-                <div style={{ width: '100%', height: 7, background: 'rgba(255, 255, 255, 0.08)', borderRadius: 4, overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      width: `${Math.min(100, b.percentUsed)}%`,
-                      height: '100%',
-                      background: barColor,
-                      transition: 'width 0.3s ease',
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
 
@@ -674,11 +412,11 @@ export const OpsScreen: React.FC = () => {
               </div>
               <div className="rule">
                 <b>Client Context & Reason</b>
-                <p>Client: <b>{inspectingFailure.clientId || 'Office'}</b> · {inspectingFailure.reason || 'Manual human operator intervention requested for ambiguous brief'}</p>
+                <p>Client: <b>{inspectingFailure.clientId || 'Office'}</b> · {inspectingFailure.reason || 'No failure reason recorded'}</p>
               </div>
               <div className="rule">
                 <b>Invariant Audit State</b>
-                <p>Status: <span className="pill warn">{inspectingFailure.status}</span> · Scope and design history locked.</p>
+                <p>Status: <span className="pill warn">{inspectingFailure.status}</span></p>
               </div>
             </div>
 
@@ -700,72 +438,6 @@ export const OpsScreen: React.FC = () => {
                 }}
               >
                 Re-Queue Task
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Client Monthly Budget Cap Allocation Modal */}
-      {editingBudgetClient && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-          }}
-        >
-          <div
-            className="panel"
-            style={{
-              width: 440,
-              padding: 24,
-              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>Adjust AI Generation Budget</h2>
-            <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -4 }}>
-              Set monthly spend cap for <b>{editingBudgetClient.clientName}</b> (<code>{editingBudgetClient.clientId}</code>).
-            </p>
-
-            <div style={{ margin: '16px 0' }}>
-              <label htmlFor="ops-monthly-cap-input" style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                Monthly Cap (USD)
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--muted)' }}>$</span>
-                <input
-                  id="ops-monthly-cap-input"
-                  name="opsMonthlyCapInput"
-                  aria-label="Monthly Cap in USD"
-                  type="number"
-                  step="25"
-                  min="50"
-                  max="5000"
-                  className="search"
-                  style={{ flex: 1, fontSize: 14 }}
-                  value={newAllocatedCap}
-                  onChange={(e) => setNewAllocatedCap(parseFloat(e.target.value) || 0)}
-                />
-              </div>
-              <small style={{ color: 'var(--muted)', display: 'block', marginTop: 6 }}>
-                Current month spend: ${Number(editingBudgetClient.currentSpendUsd || 0).toFixed(2)}. Hard ceiling triggers at 100% cap.
-              </small>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
-              <button className="btn" onClick={() => setEditingBudgetClient(null)}>
-                Cancel
-              </button>
-              <button
-                className="btn primary"
-                onClick={() => handleAllocateBudget(editingBudgetClient.clientId, newAllocatedCap)}
-              >
-                Save Budget Allocation
               </button>
             </div>
           </div>

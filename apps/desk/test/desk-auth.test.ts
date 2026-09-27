@@ -116,14 +116,6 @@ const CALLS: Array<{ name: string; call: () => Promise<unknown>; method: string;
   { name: 'Ops: failures', call: () => apiClient.operations.failures(), method: 'GET', path: '/v1/operations/failures' },
   { name: 'Ops: SLO summary', call: () => apiClient.operations.slo(), method: 'GET', path: '/v1/operations/slo' },
   { name: 'Ops: last reconciliation', call: () => apiClient.operations.reconciliation(), method: 'GET', path: '/v1/operations/reconciliation' },
-  { name: 'Ops: budgets', call: () => apiClient.clients.budgets(), method: 'GET', path: '/v1/clients/budgets' },
-  {
-    name: 'Ops: budget allocate (sends capUsd, the field Core reads)',
-    call: () => apiClient.clients.allocateBudget(KAAE, 500),
-    method: 'POST',
-    path: `/v1/clients/${KAAE}/budget/allocate`,
-    body: { capUsd: 500 },
-  },
   {
     name: 'Ops: reconciliation audit (never auto-repair)',
     call: () => apiClient.operations.auditReconciliation(),
@@ -185,7 +177,7 @@ describe('the DNA, Ops and Eval screens send the operator token', () => {
     browserWithToken(null);
     vi.stubGlobal('document', { cookie: `hawa_csrf=${'a'.repeat(64)}` });
     const fetchMock = stubFetch();
-    await apiClient.clients.allocateBudget(KAAE, 500);
+    await apiClient.operations.auditReconciliation();
     const sent = sentRequest(fetchMock);
     expect(sent.headers.has('Authorization')).toBe(false);
     expect(sent.headers.get('x-hawa-csrf')).toBe('a'.repeat(64));
@@ -196,7 +188,7 @@ describe('the DNA, Ops and Eval screens send the operator token', () => {
     browserWithToken(TOKEN);
     vi.stubGlobal('document', { cookie: `hawa_csrf=${'b'.repeat(64)}` });
     const fetchMock = stubFetch();
-    await apiClient.clients.allocateBudget(KAAE, 500);
+    await apiClient.operations.auditReconciliation();
     const sent = sentRequest(fetchMock);
     expect(sent.headers.has('Authorization')).toBe(false);
     expect(sent.headers.get('x-hawa-csrf')).toBe('b'.repeat(64));
@@ -223,10 +215,10 @@ describe('actions the owner did not enable make no request', () => {
     expect(offenders.map((f) => path.relative(DESK_SRC, f))).toEqual([]);
   });
 
-  it('the SLO run and tenant onboarding buttons are disabled and say why', () => {
+  it('synthetic operational execution is absent and tenant onboarding stays disabled', () => {
     const ops = renderToStaticMarkup(React.createElement(OpsScreen));
-    expect(ops).toMatch(/<button[^>]*disabled=""[^>]*title="Not enabled: Core&#x27;s SLO probe runs against a fake design studio[^"]*"[^>]*>⚡ Run Synthetic Benchmark \(not enabled\)<\/button>/);
-    expect(ops).toContain('It does not read Google Drive or Google Sheets, and repairs nothing.');
+    expect(ops).not.toContain('Run Synthetic Benchmark');
+    expect(ops).toContain('External Drive and Sheets state is not checked, and nothing is repaired.');
 
     const dna = renderToStaticMarkup(React.createElement(DnaScreen));
     expect(dna).toMatch(/<button[^>]*disabled=""[^>]*><span>\+<\/span><span>Onboard Client Tenant \(not enabled\)<\/span><\/button>/);

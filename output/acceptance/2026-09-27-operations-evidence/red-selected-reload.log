@@ -1,0 +1,31 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (25 ms)
+ ❯ apps/desk/test/call-cost-accounting.test.ts (5 tests | 1 failed) 115ms
+   × retries identical cost evidence after a lost response and remount 29ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desk/test/call-cost-accounting.test.ts > retries identical cost evidence after a lost response and remount
+AssertionError: expected 'Call cost accountingReview Studio, Ca…' to contain 'Original recorded cost'
+
+Expected: "Original recorded cost"
+Received: "Call cost accountingReview Studio, Canva planning, evaluation, voice and scheduled health probe charges. Calls without complete billing evidence keep their remaining allocation reserved.Hide call costsReload costsNewest calls first · administrator attestations are shown separately from original receiptsCallOriginal costReservedAccountingEvidencevoice · whisper-19/27/2026, 1:00:00 PM · aaaaaaaaUnknown$0.006000Cost evidence neededReview aaaaaaaa"
+
+ ❯ apps/desk/test/call-cost-accounting.test.ts:46:70
+     44|   await act(async()=>{view.container.querySelector('form')!.dispatchEv…
+     45|   const writes=calls.filter(c=>c.method==='POST');expect(writes).toHav…
+     46|   expect(sessionStorage.getItem(key)).toBeNull();expect(view.text()).t…
+       |                                                                      ^
+     47|   const fetches=(fetch as ReturnType<typeof vi.fn>).mock.calls.filter(…
+     48|   expect(fetches[0][1].headers).toEqual(fetches[1][1].headers);await v…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  16:41:57
+   Duration  763ms (transform 63ms, setup 41ms, import 81ms, tests 115ms, environment 384ms)
+

@@ -43,7 +43,7 @@ it('retries identical cost evidence after a lost response and remount',async()=>
   expect(view.text()).toContain('Retry saved settlement');expect(view.container.querySelector('fieldset')!.disabled).toBe(true);
   await act(async()=>{view.container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});await flush();
   const writes=calls.filter(c=>c.method==='POST');expect(writes).toHaveLength(2);expect(writes[1]).toEqual(writes[0]);
-  expect(sessionStorage.getItem(key)).toBeNull();expect(writes[0].path).toBe(`/v1/spending/calls/voice/${id}/evidence`);
+  expect(sessionStorage.getItem(key)).toBeNull();expect(view.text()).toContain('Original recorded cost');expect(writes[0].path).toBe(`/v1/spending/calls/voice/${id}/evidence`);
   const fetches=(fetch as ReturnType<typeof vi.fn>).mock.calls.filter(c=>c[1]?.method==='POST');
   expect(fetches[0][1].headers).toEqual(fetches[1][1].headers);await view.unmount();
 });
@@ -68,4 +68,12 @@ it('explains the scheduled-probe recovery boundary and posts evidence to its own
   await act(async()=>{view.container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});await flush();
   expect(calls.filter(c=>c.method==='POST').map(c=>c.path)).toEqual([`/v1/spending/calls/health_probe/${id}/evidence`]);
   await view.unmount();
+});
+it('clears stale list and selected accounting evidence when refreshing fails',async()=>{
+ let fail=false;stubCore(c=>fail?json({detail:'Database unavailable'},503):json(c.path.endsWith('/calls')?{items:[detail],nextCursor:null}:detail));
+ const view=await mount(React.createElement(CallCostAccountingPanel));await open(view);
+ expect(view.text()).toContain('Original recorded cost');fail=true;
+ await click(byText(view.container,'button','Reload costs'));await flush();
+ expect(view.text()).toContain('Call costs unavailable');expect(view.text()).not.toContain('Original recorded cost');
+ expect(view.container.querySelector('table')).toBeNull();await view.unmount();
 });

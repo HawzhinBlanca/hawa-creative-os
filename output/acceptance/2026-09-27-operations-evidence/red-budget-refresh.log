@@ -1,0 +1,49 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (22 ms)
+ ❯ apps/desk/test/call-cost-accounting.test.ts (5 tests | 1 failed) 116ms
+   × clears stale list and selected accounting evidence when refreshing fails 11ms
+ ❯ apps/desk/test/spending-policy.test.ts (6 tests | 1 failed) 128ms
+   × clears a previously loaded policy after a failed refresh without deleting a saved action 11ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desk/test/call-cost-accounting.test.ts > clears stale list and selected accounting evidence when refreshing fails
+AssertionError: expected 'Call cost accountingReview Studio, Ca…' not to contain 'Original recorded cost'
+
+Expected: "Original recorded cost"
+Received: "Call cost accountingReview Studio, Canva planning, evaluation, voice and scheduled health probe charges. Calls without complete billing evidence keep their remaining allocation reserved.Hide call costsReload costsCall costs unavailable: Database unavailableNewest calls first · administrator attestations are shown separately from original receiptsCallOriginal costReservedAccountingEvidencevoice · whisper-19/27/2026, 1:00:00 PM · aaaaaaaaUnknown$0.006000Cost evidence neededReview aaaaaaaavoice call · whisper-1Call ID: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaaOriginal outcome: receivedProvider reference: Not reportedOriginal recorded costUnknownOriginal allocation$0.006000Prior run settlementNone recordedHighest administrator-attested costUnknownCost counted toward limits$0.000000 · unused allocation remains heldRecord final call costUse a final provider receipt or support confirmation for every unresolved call. A timeout or request ID alone is insufficient. Unknown costs must remain held.Record the provider’s final charge for this exact call. This releases unused reserved funds while retaining the highest known or attested cost. The original result and any workflow hold remain. Corrections append to the history.Call 1Saved call: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa · openai / whisper-1Provider conclusion Provider confirms processing finishedProvider confirms request was not acceptedReported final cost (USD) Provider or support reference Evidence SHA-256 Or select the evidence file to calculate its hash The file stays on this device. Keep it in the office’s evidence archive.Reason Record cost evidenceReload selected callClose call"
+
+ ❯ apps/desk/test/call-cost-accounting.test.ts:77:82
+     75|  expect(view.text()).toContain('Original recorded cost');fail=true;
+     76|  await click(byText(view.container,'button','Reload costs'));await flu…
+     77|  expect(view.text()).toContain('Call costs unavailable');expect(view.t…
+       |                                                                                  ^
+     78|  expect(view.container.querySelector('table')).toBeNull();await view.u…
+     79| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/desk/test/spending-policy.test.ts > clears a previously loaded policy after a failed refresh without deleting a saved action
+AssertionError: expected 'Daily spending policyShared limits fo…' not to contain 'Current policy · revision'
+
+Expected: "Current policy · revision"
+Received: "Daily spending policyShared limits for Studio, Canva planning, fixture evaluation, retained voice and scheduled health probes. Unresolved costs keep their allocation reserved.Hide budget policyReload budget policySpending policy unavailable: Database unavailableCurrent policy · revision 1Office: $30.000000 · Default client: $20.000000 · Default role: $10.000000Office client: $5.000000visual judge: $2.000000Shared daily limits · 2026-09-27 (Asia/Baghdad)These limits combine Studio, evaluation and retained-voice calls. Unfinished or estimated charges from earlier days remain held.office: $27.000 available / $30.000; $1.000 recorded today, $2.000 held.Change daily limitsZero stops new spending within that scope. Lower limits preserve existing charges and reservations. Defaults apply to clients and roles without an override.Office daily limit (USD)Default client daily limit (USD)Default role daily limit (USD)Role overridesLeave a role blank to use the default role limit.creative director (USD)visual judge (USD)asset photoreal (USD)intake router (USD)brief builder (USD)feedback classifier (USD)rule miner (USD)embedding multimodal (USD)reranker multimodal (USD)voice transcriber (USD)health probe (USD)Client overridesOffice client (USD)Use default for Office clientClientSelect a clientAdd client overrideReasonReview budget changesBudget policy history"
+
+ ❯ apps/desk/test/spending-policy.test.ts:77:87
+     75|  expect(view.text()).toContain('Current policy · revision');fail=true;
+     76|  await click(byText(view.container,'button','Reload budget policy'));a…
+     77|  expect(view.text()).toContain('Spending policy unavailable');expect(v…
+       |                                                                                       ^
+     78|  expect(view.container.querySelector('form')).toBeNull();expect(sessio…
+     79| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 9 passed (11)
+   Start at  16:37:50
+   Duration  793ms (transform 123ms, setup 75ms, import 171ms, tests 244ms, environment 791ms)
+

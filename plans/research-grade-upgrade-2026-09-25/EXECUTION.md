@@ -1,5 +1,24 @@
 # Completion checkpoint
 
+## 2026-09-27 — Operations evidence authority (ADR-102, qualification in progress)
+
+Core no longer owns a synthetic studio benchmark. Reliability GET reports the
+99.5% monthly availability target with null observations/compliance/latency; the
+synthetic HTTP run is retired. Old seeded monthly-budget endpoints return 410;
+Desk uses the existing audited daily policy and original paid-call ledger. No
+historical balances are relabeled or copied. Failed/malformed reads clear prior
+results, older refreshes cannot overwrite newer evidence, and receipt audits show
+their real basis, timestamp and anomalies without claiming external checks/repairs.
+Failed budget/accounting reloads clear stale data and retain saved actions.
+
+Red-before evidence includes the original authenticated Core, rendered Operations,
+empty fixture statistics and stale budget/accounting views. Source/types/lint/build
+checks run during implementation; full regression and fresh Chrome qualification
+follow. NFR-002 remains unmeasured. Durable scope-bound audit history, external
+storage checks, remaining recovery and live/human/independent-host admission remain
+open. No real provider call or production change; whole-app goal active. See
+R02_OPERATIONS_EVIDENCE_PROOF.json and runbooks/OPERATIONS_EVIDENCE.md.
+
 ## 2026-09-27 — Durable Canva planning qualified locally (ADR-101)
 
 Source 63a0c85, accounting correction 4a65f74, tested and fresh runtime

@@ -1,0 +1,16 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (31 ms)
+{"level":"warn","time":"2026-09-27T13:39:43.799Z","service":"core","requestId":"bc75a64f-2f9a-438c-aeeb-678148521461","chatId":"777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T13:39:43.847Z","service":"core","requestId":"05da4a0e-8081-4ddf-a17f-d2a314104747","chatId":"9988","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T13:39:43.867Z","service":"core","requestId":"0ad32372-9888-4a28-884e-293ed74acdea","chatId":"777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T13:39:43.871Z","service":"core","requestId":"1c33ec72-d596-432b-b489-6568444640a8","chatId":"-777","msg":"[TelegramBridge] Request saved but notification failed: TELEGRAM_NOT_CONFIGURED"}
+{"level":"warn","time":"2026-09-27T13:39:43.905Z","service":"core","requestId":"460b375a-f5a2-48c6-9da8-1ac2116a47ef","chatId":"-779","msg":"[Core] Telegram reply referenced unknown task UUID 11111111-1111-4111-8111-111111111111; reading the message on its own."}
+{"level":"error","time":"2026-09-27T13:39:44.117Z","service":"core","requestId":"59db6e50-1a63-41a9-ab46-97f5ccb42bcb","taskId":"167b948b-fba7-49b7-86f4-b667bfc793d5","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Cannot approve stale revision ac08147e-2a27-4721-8829-93ef2cc1a98c. Current revision is 7ae1d6d9-55db-403e-ba12-0781fe12e10b","stack":"Error: Cannot approve stale revision ac08147e-2a27-4721-8829-93ef2cc1a98c. Current revision is 7ae1d6d9-55db-403e-ba12-0781fe12e10b\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:341:15)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at RevisionRepository.recordApproval (/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:603:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/routes/decisions.routes.ts:581:26\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at /Users/hawzhin/Hawdesign/apps/core/src/routes/decisions.routes.ts:577:22\n    at dispatch (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/hono@4.13.5/node_modules/hono/dist/compose.js:22:17)"},"msg":"[core:approvals:create] DB approval error:"}
+
+ Test Files  10 passed (10)
+      Tests  115 passed (115)
+   Start at  16:39:41
+   Duration  3.10s (transform 3.36s, setup 552ms, import 5.77s, tests 2.24s, environment 1.21s)
+

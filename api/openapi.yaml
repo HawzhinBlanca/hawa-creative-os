@@ -16,6 +16,62 @@ tags:
   - name: Evaluations
   - name: Integrations
 paths:
+  /v1/operations/slo:
+    get:
+      tags: [Operations]
+      operationId: readOfficeReliabilityEvidence
+      summary: Read the monthly availability target and current measurement status
+      description: No independent durable availability or office latency series is installed. Observed values and compliance remain null. This read never runs a model, publishes synthetic work, or treats a fixture benchmark as production evidence.
+      responses:
+        '200':
+          description: Explicit unmeasured office reliability
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OperationsReliabilityReport'}
+        '401': {description: Authentication required}
+  /v1/operations/slo/run:
+    post:
+      tags: [Operations]
+      operationId: retiredSyntheticOperationalProbe
+      deprecated: true
+      summary: Retired synthetic operational execution
+      responses:
+        '410': {description: Synthetic benchmarks remain in testkit and cannot execute through Operations}
+        '401': {description: Authentication required}
+  /v1/clients/budgets:
+    get:
+      tags: [Operations]
+      operationId: retiredMonthlyBudgets
+      deprecated: true
+      responses:
+        '410': {description: Use /v1/spending/policy and /v1/spending/calls; seeded monthly balances are not billing records}
+        '401': {description: Authentication required}
+  /v1/clients/{clientId}/budget:
+    get:
+      tags: [Operations]
+      operationId: retiredMonthlyClientBudget
+      deprecated: true
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '410': {description: Use /v1/spending/policy for authoritative daily limits}
+        '401': {description: Authentication required}
+  /v1/clients/{clientId}/budget/allocate:
+    post:
+      tags: [Operations]
+      operationId: retiredMonthlyBudgetAllocation
+      deprecated: true
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '410': {description: No local governor mutation; use the named audited /v1/spending/policy action}
+        '401': {description: Authentication required}
   /v1/tasks/{taskId}/canva/studio:
     get:
       tags: [Designs]
@@ -1052,6 +1108,35 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    OperationsReliabilityReport:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, evidenceKind, checkedAt, availability, latency, nextAction]
+      properties:
+        schemaVersion: {type: integer, const: 1}
+        evidenceKind: {type: string, const: unmeasured}
+        checkedAt: {type: string, format: date-time, description: Status read time; not a successful operation timestamp}
+        availability:
+          type: object
+          additionalProperties: false
+          required: [targetPercent, window, timeZone, observedPercent, sloCompliant, observationCount]
+          properties:
+            targetPercent: {type: number, const: 99.5}
+            window: {type: string, const: calendar_month}
+            timeZone: {type: string, const: Asia/Baghdad}
+            observedPercent: {type: 'null'}
+            sloCompliant: {type: 'null'}
+            observationCount: {type: integer, const: 0}
+        latency:
+          type: object
+          additionalProperties: false
+          required: [p50Ms, p95Ms, p99Ms, observationCount]
+          properties:
+            p50Ms: {type: 'null'}
+            p95Ms: {type: 'null'}
+            p99Ms: {type: 'null'}
+            observationCount: {type: integer, const: 0}
+        nextAction: {type: string, minLength: 1}
     EvaluationDatasetSource:
       type: object
       required: [file, sha256]

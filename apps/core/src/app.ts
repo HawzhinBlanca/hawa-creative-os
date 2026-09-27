@@ -53,7 +53,6 @@ import {
 } from '@hawa/integrations';
 import { PostgresIngressPersistenceAdapter } from './ingress-persistence-adapter.js';
 import { DurableEvaluationService } from './services/durable-evaluations.js';
-import { SyntheticTrafficDaemon } from '@hawa/testkit';
 import { registerCanvaRoutes } from './routes/canva.routes.js';
 import { registerDesignStudioRoutes } from './routes/design-studio.routes.js';
 import { registerStudioRecoveryRoutes } from './routes/studio-recovery.routes.js';
@@ -223,8 +222,6 @@ export function createApp(options?: CreateAppOptions) {
   });
   const modelGateway = new ResilientModelGateway();
   const evaluationService = db ? new DurableEvaluationService(db, options?.evaluationGateway || modelGateway) : null;
-  // Zero seed probes: every SLO data point must come from a probe that actually ran.
-  const sloDaemon = new SyntheticTrafficDaemon(0, { publisher });
   const reconciliationService = new ReconciliationService();
   const voiceTranscriber = new KurdishVoiceTranscriber();
   const telegramActionTokenService =
@@ -927,7 +924,6 @@ export function createApp(options?: CreateAppOptions) {
     unifiedIngress,
     telegramBridge,
     telegramActionTokenService,
-    sloDaemon,
     evaluationService,
     reconciliationService,
     canvaConnectService,
