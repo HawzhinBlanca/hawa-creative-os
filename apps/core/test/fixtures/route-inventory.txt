@@ -57,6 +57,7 @@ GET /api/judge/:token/image/:pairId/:side
 GET /api/judge/:token/next
 GET /api/migration/ledger
 GET /api/migration/reconciliation
+GET /api/monitoring/availability/probe
 GET /api/office/review-assignments
 GET /api/office/review-assignments/:assignmentId/events
 GET /api/office/review-directory
@@ -149,6 +150,7 @@ GET /api/v1/judge/:token/image/:pairId/:side
 GET /api/v1/judge/:token/next
 GET /api/v1/migration/ledger
 GET /api/v1/migration/reconciliation
+GET /api/v1/monitoring/availability/probe
 GET /api/v1/office/review-assignments
 GET /api/v1/office/review-assignments/:assignmentId/events
 GET /api/v1/office/review-directory
@@ -244,6 +246,7 @@ GET /judge/:token/image/:pairId/:side
 GET /judge/:token/next
 GET /migration/ledger
 GET /migration/reconciliation
+GET /monitoring/availability/probe
 GET /office/review-assignments
 GET /office/review-assignments/:assignmentId/events
 GET /office/review-directory
@@ -339,6 +342,7 @@ GET /v1/judge/:token/image/:pairId/:side
 GET /v1/judge/:token/next
 GET /v1/migration/ledger
 GET /v1/migration/reconciliation
+GET /v1/monitoring/availability/probe
 GET /v1/office/review-assignments
 GET /v1/office/review-assignments/:assignmentId/events
 GET /v1/office/review-directory
@@ -446,6 +450,7 @@ POST /api/migration/archive
 POST /api/migration/migrate
 POST /api/migration/reopen-sample
 POST /api/migration/rollback-sample
+POST /api/monitoring/availability/observations
 POST /api/operations/canva/simulate-outage
 POST /api/operations/canva/simulate-recovery
 POST /api/operations/kill-switch
@@ -545,6 +550,7 @@ POST /api/v1/migration/archive
 POST /api/v1/migration/migrate
 POST /api/v1/migration/reopen-sample
 POST /api/v1/migration/rollback-sample
+POST /api/v1/monitoring/availability/observations
 POST /api/v1/operations/canva/simulate-outage
 POST /api/v1/operations/canva/simulate-recovery
 POST /api/v1/operations/kill-switch
@@ -647,6 +653,7 @@ POST /migration/archive
 POST /migration/migrate
 POST /migration/reopen-sample
 POST /migration/rollback-sample
+POST /monitoring/availability/observations
 POST /operations/canva/simulate-outage
 POST /operations/canva/simulate-recovery
 POST /operations/kill-switch
@@ -758,6 +765,7 @@ POST /v1/migration/archive
 POST /v1/migration/migrate
 POST /v1/migration/reopen-sample
 POST /v1/migration/rollback-sample
+POST /v1/monitoring/availability/observations
 POST /v1/operations/canva/simulate-outage
 POST /v1/operations/canva/simulate-recovery
 POST /v1/operations/kill-switch
