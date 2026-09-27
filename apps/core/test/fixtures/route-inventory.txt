@@ -76,6 +76,7 @@ GET /api/tasks/:taskId/canva
 GET /api/tasks/:taskId/canva/artifacts/:artifactId
 GET /api/tasks/:taskId/canva/editor
 GET /api/tasks/:taskId/canva/plans
+GET /api/tasks/:taskId/canva/studio
 GET /api/tasks/:taskId/canva/studio/:runId
 GET /api/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/art.png
 GET /api/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/art/:file
@@ -163,6 +164,7 @@ GET /api/v1/tasks/:taskId/canva
 GET /api/v1/tasks/:taskId/canva/artifacts/:artifactId
 GET /api/v1/tasks/:taskId/canva/editor
 GET /api/v1/tasks/:taskId/canva/plans
+GET /api/v1/tasks/:taskId/canva/studio
 GET /api/v1/tasks/:taskId/canva/studio/:runId
 GET /api/v1/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/art.png
 GET /api/v1/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/art/:file
@@ -254,6 +256,7 @@ GET /tasks/:taskId/canva
 GET /tasks/:taskId/canva/artifacts/:artifactId
 GET /tasks/:taskId/canva/editor
 GET /tasks/:taskId/canva/plans
+GET /tasks/:taskId/canva/studio
 GET /tasks/:taskId/canva/studio/:runId
 GET /tasks/:taskId/canva/studio/:runId/candidates/:candidateId/art.png
 GET /tasks/:taskId/canva/studio/:runId/candidates/:candidateId/art/:file
@@ -346,6 +349,7 @@ GET /v1/tasks/:taskId/canva
 GET /v1/tasks/:taskId/canva/artifacts/:artifactId
 GET /v1/tasks/:taskId/canva/editor
 GET /v1/tasks/:taskId/canva/plans
+GET /v1/tasks/:taskId/canva/studio
 GET /v1/tasks/:taskId/canva/studio/:runId
 GET /v1/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/art.png
 GET /v1/tasks/:taskId/canva/studio/:runId/candidates/:candidateId/art/:file

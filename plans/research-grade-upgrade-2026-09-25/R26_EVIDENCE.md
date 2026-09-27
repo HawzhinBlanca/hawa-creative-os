@@ -268,3 +268,24 @@ actual manual intake. Two bigint string expectations were normalized explicitly.
 Source/test types, full milestone regression and deployed proof are recorded below
 only after execution. Native editability, human quality and live providers are not
 qualified by these synthetic tests.
+
+
+### Browser corrections and full-regression fixture repair
+
+Candidate e09438a passed 34/34 deployed checks. Browser pause/resume/cancel
+committed three actor-attributed controls and survived reload, but exposed the old
+requester-only pause label, a stale intake availability message and cancellation
+wording that overstated its effect on already admitted work. Source e1468e4 corrects
+those messages; rebuilding the shared contract resolved two stale-dist test failures,
+then all 68 affected checks passed. A fresh e1468e4 deployment again passed 34/34.
+Browser restored one unadvanced Studio run across reload, disabled Advance Stage on
+pause/cancel and restored it on resume; the database records zero model calls.
+
+The first full seal c35f162 run passed 3,582 tests, failed 52 and skipped 59.
+Fifty-one failures came from nine stage-only harnesses that replace database/repository
+and stage context but had no stub for the new task-admission boundary; the remaining
+failure was the expected route inventory missing four mounts of the saved-run GET.
+Those isolated harnesses now explicitly stub task authority, preserving their stage
+assertions. Real task locking/RLS tests remain unchanged and ran alongside them:
+12 files / 143 passed. No production guard was weakened. Repeat the full sealed
+suite before qualification; final counts belong in R26_TASK_CONTROL_PROOF.json.

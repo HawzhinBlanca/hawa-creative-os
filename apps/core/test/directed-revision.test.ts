@@ -96,6 +96,8 @@ const harness = (
     return { data: JSON.parse(JSON.stringify(reply ?? opts.editReply ?? { layout: movedLogo, changes: [{ element: 'logo', before: 'bottom-right', after: 'logo top-left', why: 'asked' }] })), receipt: {} };
   });
   const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+  // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+  vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
   (service as any).repo = repo;
   (service as any).attachedImage = async () => undefined;
   (service as any).activeRunsOfTask = async () => (opts.parentRunning ? 1 : 0);

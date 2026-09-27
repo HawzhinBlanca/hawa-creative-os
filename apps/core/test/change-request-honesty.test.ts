@@ -85,6 +85,8 @@ const harness = (opts: { parentLayout?: StudioLayoutV2; asks?: Ask[]; targets?: 
     };
   });
   const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+  // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+  vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
   (service as any).repo = repo;
   (service as any).attachedImage = async () => undefined;
   (service as any).imagesForRun = async () => [];
@@ -161,6 +163,8 @@ describe('a change keeps the photos of the design it changes', () => {
 
   it('finds the pictures of a change to a change back at the request that brought them', async () => {
     const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+    // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+    vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
     const own: Record<string, string[]> = { root: ['p1', 'p2', 'ref'], rev1: [], rev2: [] };
     const parentOf: Record<string, string | undefined> = { rev2: 'rev1', rev1: 'root', root: undefined };
     (service as any).requestImages = async (_s: unknown, id: string) => own[id] ?? [];

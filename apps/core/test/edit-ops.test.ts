@@ -140,6 +140,8 @@ describe('a request covered by rules', () => {
       throw new Error(`no ${params.schemaName} call expected`);
     });
     const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+    // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+    vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
     Object.assign(service as any, {
       repo, attachedImage: async () => undefined, imagesForRun: async () => [photo.dataUrl], activeRunsOfTask: async () => 0, earlierAsks: async () => [],
       parentWinner: async () => ({ runId: 'p', candidateId: 'pc', layout: structuredClone(parent), concept: { id: 'c', archetype: 'split-band' } }),
@@ -187,6 +189,8 @@ describe('the rules, after the review', () => {
       return { data: opts.reply ? opts.reply(params) : { layout: structuredClone(opts.parent), changes: [] }, receipt: {} };
     });
     const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+    // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+    vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
     Object.assign(service as any, {
       repo, attachedImage: async () => undefined, imagesForRun: async () => [], activeRunsOfTask: async () => 0, earlierAsks: async () => [],
       parentWinner: async () => ({ runId: 'p', candidateId: 'pc', layout: structuredClone(opts.parent), concept: { id: 'c', archetype: 'split-band' } }),

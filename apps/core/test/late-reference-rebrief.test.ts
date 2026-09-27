@@ -90,6 +90,8 @@ const harness = (over: { status?: string; stages?: Record<string, unknown>; atta
 
   const contexts: any[] = [];
   const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+  // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+  vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
   (service as any).repo = repo;
   (service as any).attachedImage = async () => ('attachedImage' in over ? over.attachedImage : photo);
   // The real context carries the stored brief's styleSpec (design-studio-service createStageContext),

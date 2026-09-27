@@ -97,6 +97,8 @@ describe('a size run', () => {
     };
     const completeJson = vi.fn(async () => ({ data: { layout: JSON.parse(JSON.stringify(story)), changes: [] }, receipt: {} }));
     const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+    // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+    vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
     (service as any).repo = repo;
     (service as any).attachedImage = async () => undefined;
     (service as any).imagesForRun = async () => [];

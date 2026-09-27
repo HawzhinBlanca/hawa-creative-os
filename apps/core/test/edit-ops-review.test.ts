@@ -57,6 +57,8 @@ const runEdit = async (opts: { parent: StudioLayoutV2; asks: unknown[]; reply?: 
     return { data: opts.reply ? opts.reply(params) : { layout: structuredClone(opts.parent), changes: [] }, receipt: {} };
   });
   const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+  // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+  vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
   Object.assign(service as any, {
     repo, attachedImage: async () => undefined, imagesForRun: async () => [], activeRunsOfTask: async () => 0, earlierAsks: async () => [],
     parentWinner: async () => ({ runId: 'p', candidateId: 'pc', layout: structuredClone(opts.parent), concept: { id: 'c', archetype: 'split-band' } }),

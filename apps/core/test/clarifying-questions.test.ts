@@ -80,6 +80,8 @@ const harness = (opts: { asks: unknown[]; clarified?: boolean; frustrated?: bool
     };
   });
   const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+  // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+  vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
   (service as any).repo = repo;
   (service as any).attachedImage = async () => undefined;
   (service as any).imagesForRun = async () => [];

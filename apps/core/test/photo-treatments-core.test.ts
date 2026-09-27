@@ -137,6 +137,8 @@ describe('a change that asks for a treatment', () => {
       params.schemaName === 'EditTargets' ? { data: { targets: ['photos'], asks: [ask], frustrated: false }, receipt: {} } : { data: { layout: structuredClone(answer), changes: [] }, receipt: {} }
     );
     const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+    // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+    vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
     Object.assign(service as any, {
       repo, attachedImage: async () => undefined, imagesForRun: async () => [photo.dataUrl], activeRunsOfTask: async () => 0, earlierAsks: async () => [],
       parentWinner: async () => ({ runId: 'p', candidateId: 'pc', layout: structuredClone(parent), concept: { id: 'c', archetype: 'split-band' } }),
