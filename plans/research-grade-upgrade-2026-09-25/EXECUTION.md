@@ -1,5 +1,15 @@
 # Completion checkpoint
 
+## 2026-09-27 — Mobile visual correction, final qualification pending
+
+Candidate e84d814 passed 4114 tests and 23 browser checks, but screenshot review
+found metric, component-health and safe-action clipping. The document-width check
+was insufficient: overflow hidden concealed overflowing children. A stronger actual
+element-bounds check fails on that candidate. Responsive grids, labelled mobile
+failure rows and a bounded inspection dialog are implemented; 44 affected Desk tests
+and the production build pass. Fresh runtime/browser qualification follows.
+Prior evidence and the failing bounds are preserved; whole-app goal stays active.
+
 ## 2026-09-27 — Operations browser cache correction, final qualification pending
 
 The first sealed candidate 4b6a900 passed 4113 tests/0 failed/59 skipped and the

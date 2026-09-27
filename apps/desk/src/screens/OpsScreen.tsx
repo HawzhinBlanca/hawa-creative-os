@@ -255,7 +255,7 @@ export const OpsScreen: React.FC = () => {
       <div className="panel" style={{ padding: 16, marginTop: 16, borderLeft: '4px solid var(--border)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
           <div>
-            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: 16 }}>
+            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, fontSize: 16 }}>
               <span>🔄 Stored publication receipt audit</span>
               <span className={`pill ${!reconciliation || reconciliation.totalTasksAudited === 0 ? '' : reconciliation.status === 'clean' ? 'ok' : 'bad'}`} style={{ fontSize: 11 }}>
                 {!reconciliation
@@ -291,7 +291,7 @@ export const OpsScreen: React.FC = () => {
           </div>
         )}
 
-        <div className="stats" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: 10 }}>
+        <div className="ops-audit-stats">
           <div className="stat" style={{ padding: '8px 10px' }}>
             <b style={{ fontSize: 18 }}>{reconciliation?.totalTasksAudited ?? '—'}</b>
             <span style={{ fontSize: 11 }}>Tasks Audited</span>
@@ -332,14 +332,14 @@ export const OpsScreen: React.FC = () => {
             <tbody>
               {failures.map((f) => (
                 <tr key={f.id}>
-                  <td><b>{f.title || f.id.substring(0, 8)}</b></td>
-                  <td>
+                  <td data-label="Component / Task"><b>{f.title || f.id.substring(0, 8)}</b></td>
+                  <td data-label="State">
                     <span className={`pill ${f.status === 'OPERATOR_REQUIRED' ? 'bad' : 'warn'}`}>
                       {f.status}
                     </span>
                   </td>
-                  <td>Client: {f.clientId || 'Office'} · Invariant #7 check</td>
-                  <td>
+                  <td data-label="Evidence">Client: {f.clientId || 'Office'} · Invariant #7 check</td>
+                  <td data-label="Safe action">
                     <button
                       className="btn"
                       style={{ fontSize: 11 }}
@@ -394,13 +394,18 @@ export const OpsScreen: React.FC = () => {
         >
           <div
             className="panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ops-inspection-title"
             style={{
-              width: 520,
+              width: 'min(520px, calc(100vw - 24px))',
+              maxHeight: 'calc(100dvh - 24px)',
+              overflowY: 'auto',
               padding: 24,
               boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
             }}
           >
-            <h2 style={{ marginTop: 0 }}>Intervention Inspection</h2>
+            <h2 id="ops-inspection-title" style={{ marginTop: 0 }}>Intervention Inspection</h2>
             <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -4 }}>
               Deterministic operational failure inspection (Invariant #7).
             </p>

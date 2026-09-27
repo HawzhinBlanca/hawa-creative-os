@@ -261,3 +261,9 @@ Private API responses are excluded from service-worker caching. Activation purge
 legacy Hawa API caches; Desk JSON requests use HTTP no-store. Offline shell/font
 caching does not authorize replay of task, policy or health data from another
 session or an older successful read (ADR-102 browser correction).
+
+Operations metric cards, component health and safe actions must remain reachable
+on narrow screens. Failure rows become labelled cards; inspection stays within
+the viewport. Browser qualification checks their actual bounds and the inspection
+interaction, followed by screenshot review. A document-width assertion alone does
+not detect children clipped by an overflow rule.

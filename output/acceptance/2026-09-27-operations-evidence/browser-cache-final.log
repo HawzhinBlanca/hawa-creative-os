@@ -1,0 +1,2 @@
+Browser POST paths [ '/v1/auth/stream-ticket' ]
+{"passed":23,"failed":0}

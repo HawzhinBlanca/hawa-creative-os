@@ -628,6 +628,58 @@ input, select, textarea {
   gap: 14px;
 }
 
+/* Bound the cards themselves: a clipped outer screen can conceal grid overflow. */
+#ops {
+  overflow-wrap: anywhere;
+}
+
+#ops > .grid4, .ops-audit-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 12px;
+}
+
+#ops .ops {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  align-items: start;
+}
+
+#ops .ops > .panel {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  #ops .table, #ops .table tbody, #ops .table tr, #ops .table td {
+    display: block;
+  }
+
+  #ops .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  #ops .table tr {
+    margin-top: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+  }
+
+  #ops .table td:last-child {
+    border-bottom: 0;
+  }
+
+  #ops .table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

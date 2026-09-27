@@ -67,3 +67,13 @@ avoid a separate HTTP-cache fallback. Verify actual service-worker activation,
 legacy-cache removal and offline refusal in Chrome; do not disable the worker to
 make the browser test pass. The prior candidate's full suite remains recorded but
 does not qualify this correction.
+
+## Visual review finding — clipped mobile evidence
+
+The 390px document-width assertion passed while fixed-width inner grids were
+hidden by the screen's overflow rule. Screenshot review found inaccessible metric
+cards, component health and inspection actions. Bound the Operations grids to their
+container, render labelled failure rows on narrow screens, and bound the inspection
+dialog to the viewport. Verify the actual card/field bounds and opening/closing an
+inspection in Chrome, then inspect screenshots; document width alone is insufficient.
+The earlier browser assertion is retained as incomplete evidence, not a mobile pass.

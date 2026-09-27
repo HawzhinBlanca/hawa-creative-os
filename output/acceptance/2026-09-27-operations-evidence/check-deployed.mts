@@ -83,6 +83,24 @@ try{
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:new URL('operations-mobile.png',out).pathname,fullPage:true});
   check('mobile Operations fits the viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
+  const bounds=await page.locator('#ops > .grid4 > .stat, #ops .ops > .panel, #ops .ops .table td, #ops .ops .table button').evaluateAll(elements=>elements.map(element=>{
+    const rect=element.getBoundingClientRect();return {label:element.textContent?.trim().slice(0,80),left:rect.left,right:rect.right,width:rect.width,viewport:window.innerWidth};
+  }));
+  writeFileSync(new URL('mobile-bounds.json',out),JSON.stringify(bounds,null,2)+'\n');
+  check('mobile metrics, both Operations panels and every failure field fit without hidden clipping',bounds.length>=6&&bounds.every(b=>b.width>0&&b.left>=0&&b.right<=b.viewport+1));
+  await page.getByRole('heading',{name:'Component health',exact:true}).scrollIntoViewIfNeeded();
+  await page.screenshot({path:new URL('mobile-component-health.png',out).pathname});
+  const inspect=page.getByRole('button',{name:'Inspect',exact:true}).first();
+  check('synthetic candidate includes an inspectable failure',await inspect.count()===1);
+  await inspect.click();
+  const dialog=page.getByRole('dialog',{name:'Intervention Inspection',exact:true});
+  await dialog.waitFor();
+  const dialogBounds=await dialog.boundingBox();
+  check('mobile failure inspection fits on screen',Boolean(dialogBounds&&dialogBounds.x>=0&&dialogBounds.y>=0&&dialogBounds.x+dialogBounds.width<=390&&dialogBounds.y+dialogBounds.height<=844));
+  await page.screenshot({path:new URL('mobile-inspection.png',out).pathname});
+  await dialog.getByRole('button',{name:'Close',exact:true}).click();
+  check('mobile failure inspection closes without replaying the task',await dialog.count()===0);
+
   check('Chrome has no execution errors',errors.length===0);
  }finally{await browser.close();}
  check('Operations checks send no model requests',await ledger()===before);

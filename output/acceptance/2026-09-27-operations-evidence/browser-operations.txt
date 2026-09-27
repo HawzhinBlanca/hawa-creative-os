@@ -1,0 +1,104 @@
+Daily spending policy
+
+Shared limits for Studio, Canva planning, fixture evaluation, retained voice and scheduled health probes. Unresolved costs keep their allocation reserved.
+
+Review budget policy
+Call cost accounting
+
+Review Studio, Canva planning, evaluation, voice and scheduled health probe charges. Calls without complete billing evidence keep their remaining allocation reserved.
+
+Review call costs
+Telemetry read · last checked 5:02:40 PM
+Refresh telemetry
+Operations & Telemetry Overview
+1
+critical incidents
+1
+recoverable failures
+7
+adapters not verified
+—
+last backup age (not reported to the Desk)
+Design request progress
+
+Last 48 hours: 6 requests · 4 Canva drafts · 0 overdue automatic requests · healthy
+
+brief To Draft: 4 completed · p50 0h · p95 0h
+
+draft To Approval: 3 completed · p50 0h · p95 0h
+
+approval To Delivery: 3 completed · p50 0h · p95 0h
+
+Office availability and latency
+
+Availability unmeasured
+
+Target: 99.5% monthly availability for office intake and review (Asia/Baghdad).
+
+No independent availability observations or measured office latency are recorded. Compliance, error budget and latency are unknown.
+
+Collect independent availability observations for office intake and review before evaluating the monthly target.
+
+Evidence checked 2026-09-27T14:02:40.555Z. This time records the status read, not a successful operation.
+🔄 Stored publication receipt audit
+Stored receipts consistent
+PostgreSQL task and publication records against the verified delivery receipts Core stored. Google Drive and Google Sheets were not read, and nothing was repaired.
+Run Reconciliation Audit
+
+Audit recorded 2026-09-27T14:02:40.332Z · Stored receipt evidence
+
+6
+Tasks Audited
+5
+Drive receipts
+3
+Sheet receipts
+6
+In Sync
+0
+Anomalies found
+Actionable operations
+Component / Task	State	Evidence	Safe action
+Synthetic Studio recovery	OPERATOR_REQUIRED	Client: c1000000-0000-4000-8000-000000000002 · Invariant #7 check	Inspect
+Component health
+MODEL PROVIDER (int_openai_model)
+
+Setup: configured · Reachability: unknown · Paid verification: not run · Local state: configured
+
+Next: Enable and run the paid probe before relying on model health. · Configuration observed 14:02:40 UTC
+
+CANVA NATIVE_STUDIO (int_canva_studio)
+
+Setup: unknown · Reachability: unknown · Paid verification: not run · Local state: unknown
+
+Next: Verify this adapter with a scoped real operation before relying on it. · Configuration observed 14:02:40 UTC
+
+TELEGRAM (int_telegram)
+
+Setup: configured · Reachability: unknown · Paid verification: not run · Local state: configured
+
+Next: Verify this adapter with a scoped real operation before relying on it. · Configuration observed 14:02:40 UTC
+
+WAHA (int_waha)
+
+Setup: missing · Reachability: unknown · Paid verification: not run · Local state: unconfigured
+
+Next: Complete server setup before using this adapter. · Configuration observed 14:02:40 UTC
+
+GOOGLE DRIVE (int_google_drive)
+
+Setup: missing · Reachability: unknown · Paid verification: not run · Local state: unconfigured
+
+Next: Complete server setup before using this adapter. · Configuration observed 14:02:40 UTC
+
+GOOGLE SHEETS (int_google_sheets)
+
+Setup: missing · Reachability: unknown · Paid verification: not run · Local state: unconfigured
+
+Next: Complete server setup before using this adapter. · Configuration observed 14:02:40 UTC
+
+PHOENIX (int_phoenix)
+
+Setup: missing · Reachability: unknown · Paid verification: not run · Local state: unconfigured
+
+Next: Complete server setup before using this adapter. · Configuration observed 14:02:40 UTC
