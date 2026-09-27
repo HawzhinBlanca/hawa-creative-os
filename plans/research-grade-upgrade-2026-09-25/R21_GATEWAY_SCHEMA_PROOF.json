@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "CANDIDATE_FULL_REGRESSION_PENDING",
+  "status": "LOCALLY_QUALIFIED_GATEWAY_SCHEMA_AND_PARSER_PATCH",
   "requirements": [
     "FR-059",
     "FR-062",
@@ -59,9 +59,25 @@
       "knownVulnerabilities": 0,
       "exclusions": 0
     },
-    "sbomComponents": 314
+    "sbomComponents": 314,
+    "sourceManifest": "verified",
+    "securityScanFindings": 0,
+    "blueprint": {
+      "passed": 975,
+      "warned": 0,
+      "failed": 0
+    }
   },
-  "fullRegression": null,
+  "fullRegression": {
+    "passed": 3973,
+    "failed": 0,
+    "skipped": 59,
+    "filesPassed": 477,
+    "filesSkipped": 7,
+    "filesTotal": 484,
+    "durationSeconds": 114.96,
+    "log": "output/acceptance/2026-09-27-gateway-schema/full-sealed.log"
+  },
   "runtimeChanged": false,
   "productionChanged": false,
   "realProviderCalls": false,
@@ -81,5 +97,45 @@
     "Held-out model/retrieval/cost qualification",
     "Independent-host restore",
     "Backup/canary/rollback and production rollout"
-  ]
+  ],
+  "sourceCommit": "78c90945550e97ac9bb332b4e09f4dff3caeba35",
+  "testedCommit": "2fbedf9ca2b4196e659dfa94204496a3c8083d53",
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-gateway-schema/blueprint.log": "e877f2a470eea46a70c3480c2599ecb9b46d6f2e54d560f7d633fc0122652f3c",
+    "output/acceptance/2026-09-27-gateway-schema/candidate-seal.log": "d3d2847472772b096acb828cd13b47ec4a5dcd63d12bd5eecf1c3eb371403b90",
+    "output/acceptance/2026-09-27-gateway-schema/dependency-audit-final.json": "75ca1ae4d89d77a6c222ad0f1978ae46ce8b281a336069a6ff40b61727613924",
+    "output/acceptance/2026-09-27-gateway-schema/dependency-audit-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-gateway-schema/dependency-audit.json": "7888208c030e853fa3a67781491f3551ddbe7ddc3060222d32ab62e2ab2c3821",
+    "output/acceptance/2026-09-27-gateway-schema/dependency-audit.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-gateway-schema/dependency-install.log": "1df6064f285a21ebad51a5ffbeb2334c641521775252d3c19ee54f2dfe4a5075",
+    "output/acceptance/2026-09-27-gateway-schema/desk-build.log": "d66c4521e09781973f4adc5b9c4458446b93af26ada7e75890964819908582fc",
+    "output/acceptance/2026-09-27-gateway-schema/focused-final.log": "9f4950c305c0e5a7244f2741d991a1bc3ce3bb1cd68daf3fe06007e7494f3005",
+    "output/acceptance/2026-09-27-gateway-schema/focused-first.log": "693779b977ff53dff54d17e65295b316c90f7f639cf63ea631bc15a57ba15686",
+    "output/acceptance/2026-09-27-gateway-schema/focused-second.log": "127dc34e7a916bf8c97d8c7adfd4d8a97b2b5a291bd708fb07366d7f98650ea0",
+    "output/acceptance/2026-09-27-gateway-schema/full-sealed.log": "0bad3f32cbc882faf9850c303f628857b1530d638fc7e9f0617184e2529cacbb",
+    "output/acceptance/2026-09-27-gateway-schema/generate-release.log": "56c2b60e8cd9d82bb69992daf03a229bb1e78d18449877aef1d687e43f2c1c0e",
+    "output/acceptance/2026-09-27-gateway-schema/image-parser-install.log": "ba220c46f2e10a18939eac42a9a2baf8953216b915f9cb1f34a268f5c763821b",
+    "output/acceptance/2026-09-27-gateway-schema/image-parser-lock.log": "d83bde6cd0313fb6c9ac12b02f4052fc8058bee3fb53821a3361f86f53c3ffb7",
+    "output/acceptance/2026-09-27-gateway-schema/image-size-version.log": "137f467241023dadfa605db00e630b25a9394d0fc7232718812983ba24b93945",
+    "output/acceptance/2026-09-27-gateway-schema/lint-final.log": "36deb7821a552124e408f9796ce7fab95c1b191500fd2f7c1a10d90428a78f8e",
+    "output/acceptance/2026-09-27-gateway-schema/lint.log": "ae5f0922aecf7d2ca66dd3f941a2556131a165e08102d4428e67dee131416d81",
+    "output/acceptance/2026-09-27-gateway-schema/red-controls.log": "01da5ebb05f7bbbed499bafdbf134bc04460102450a0b83982c5773abcca03a5",
+    "output/acceptance/2026-09-27-gateway-schema/red-first.log": "29d846152bed762ac9f6dd5d916afe33c7fa78799902b19505bb241bb7c5728e",
+    "output/acceptance/2026-09-27-gateway-schema/refresh-candidate.log": "90db302776b6e014f3e0bd6eed89a40170b4f8242bef15f9575d21fbc1a3740b",
+    "output/acceptance/2026-09-27-gateway-schema/refresh-source.log": "90db302776b6e014f3e0bd6eed89a40170b4f8242bef15f9575d21fbc1a3740b",
+    "output/acceptance/2026-09-27-gateway-schema/release-verify.log": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6",
+    "output/acceptance/2026-09-27-gateway-schema/sbom-final.json": "125059945bb0b1391aa8c795b9fbca4e8d9a7b67f11da40284fa539dbe53d0a1",
+    "output/acceptance/2026-09-27-gateway-schema/sbom-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-gateway-schema/sbom.json": "28bfab321a0b5576888bfa1ebba95b657e6628800a12bc4eb9cd487403f7612e",
+    "output/acceptance/2026-09-27-gateway-schema/sbom.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-gateway-schema/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
+    "output/acceptance/2026-09-27-gateway-schema/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+    "output/acceptance/2026-09-27-gateway-schema/source-commit.log": "f3f54b012ab65d24b9ceae59d4da06fef69f11a94d9b60f7a8e962be9e83fea9",
+    "output/acceptance/2026-09-27-gateway-schema/source-types-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-gateway-schema/source-types-first.log": "cf47e7bd8d6544b16cf34697ebcac2a6dfe9fd7d435577c7fc3e72d385f27e8a",
+    "output/acceptance/2026-09-27-gateway-schema/source-types-second.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-gateway-schema/test-types-first.log": "6f7a6f56665c536c826528f6cd754497d4f355de953dc4a5840add95303d70cc",
+    "output/acceptance/2026-09-27-gateway-schema/transfer-compatibility.log": "26ff03fdfc269e00763bd1abb13781fb0975c7ad218ad2f6eaddbecf85c42834",
+    "output/acceptance/2026-09-27-gateway-schema/types-final.log": "ae12745874efdffac94c9b382ee1fbdf00c313722e39a7e2ac0ceddc861e5be9"
+  }
 }

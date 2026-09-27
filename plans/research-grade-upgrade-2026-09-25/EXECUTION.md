@@ -1,5 +1,21 @@
 # Completion checkpoint
 
+### Final ADR-094/095 source qualification, 2026-09-27
+
+Source `78c9094`, tested seal `2fbedf9`: **3,973 passed, zero failed, 59 skipped**
+across 484 files (477 passing /7 skipped), 114.96 seconds. All 485 strict test
+roots, source/scripts, lint (981 any /1053; nine existing egress exceptions),
+Desk build, security scanner/11-pattern self-test, blueprint 975/0/0 and source
+manifest pass. All 18 source hashes matched. Production dependency audit reports
+zero known vulnerabilities with no exclusions; CycloneDX lists 314 components.
+
+This qualifies the shared schema repair and candidate parser compatibility. The
+app still needs shared evaluation/voice daily budgets, administration/accounting
+repair, typed completed-stage recovery, fresh runtime/browser and real office/
+Canva/human quality/independent-host qualification. Runtime and production are
+unchanged. See R21_GATEWAY_SCHEMA_PROOF.json.
+
+
 ## 2026-09-27 — Shared response schemas and parser patch (ADRs 094–095, candidate)
 
 Replaced the partial gateway checker with pinned Ajv and format validation.
