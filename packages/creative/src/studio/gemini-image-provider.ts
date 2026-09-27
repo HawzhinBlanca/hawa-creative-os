@@ -9,6 +9,7 @@ import {
   type PaletteVerificationResult,
 } from './color-science.js';
 import { renderMotifPng, requireClientPalette, type ProceduralMotifType } from './motifs.js';
+import { OpenAiStudioClient, type OpenAiStructuredResponse } from './openai-studio-client.js';
 import {
   assertModelAllowed,
   assertImageModelAllowed,
@@ -32,6 +33,25 @@ export interface GenerateArtOptions {
   motifFallbackType?: ProceduralMotifType;
   /** Provider, model, size, quality and aspect. Defaults to the environment's (resolveImageSettings). */
   settings?: ImageSettings;
+  /** Core supplies these adapters to admit every paid request through its durable ledger. */
+  requestImage?: (settings: ImageSettings, prompt: string) => Promise<ProviderImage | null>;
+  visionClient?: Pick<OpenAiStudioClient, 'createStructuredCompletion'>;
+}
+
+/** Local accounting failure must not be converted into another paid attempt or a clean fallback. */
+export class StudioArtAccountingError extends Error {
+  readonly code = 'MODEL_CALL_ACCOUNTING_FAILED';
+  constructor(cause: unknown) {
+    super('The paid call could not be accounted for. Reconcile its saved evidence before continuing.', { cause });
+    this.name = 'StudioArtAccountingError';
+  }
+}
+
+export function isStudioArtHoldError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  if ('isUncertain' in error && error.isUncertain === true) return true;
+  return 'code' in error && typeof error.code === 'string' &&
+    /^(MODEL_CALL_|TASK_GENERATION_BLOCKED$|STUDIO_BUDGET_|BUDGET_EXHAUSTED$)/.test(error.code);
 }
 
 export interface ArtVerificationReport {
@@ -148,8 +168,10 @@ export async function runVisionCheck(
     anthropicApiKey?: string;
     model?: string;
     fetchFn?: typeof fetch;
+    client?: Pick<OpenAiStudioClient, 'createStructuredCompletion'>;
   }
-): Promise<{ passed: boolean; containsForbidden: boolean; what: string }> {
+): Promise<{ passed: boolean; containsForbidden: boolean; what: string;
+  receipt: OpenAiStructuredResponse<unknown>['receipt'] }> {
   const fetcher = options.fetchFn || fetch;
 
   if (options.anthropicApiKey) {
@@ -160,16 +182,18 @@ export async function runVisionCheck(
   assertModelAllowed(model);
 
   const apiKey = options.openaiApiKey || process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  if (!apiKey && !options.client) {
     throw new Error('OPENAI_API_KEY is required for art vision verification');
   }
 
   const base64Data = imageBuffer.toString('base64');
   const safeMime = mimeType === 'image/jpeg' ? 'image/jpeg' : 'image/png';
 
-  const payload = {
+  const client = options.client ?? new OpenAiStudioClient({ apiKey, fetcher, timeoutMs: 30_000 });
+  const result = await client.createStructuredCompletion<unknown>({
     model,
-    max_tokens: 300,
+    maxTokens: 300,
+    timeoutMs: 30_000,
     messages: [
       {
         role: 'system',
@@ -191,40 +215,21 @@ export async function runVisionCheck(
         ],
       },
     ],
-    response_format: { type: 'json_object' },
-  };
-
-  const res = await fetcher('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+    jsonSchema: {
+      name: 'ArtCompliance',
+      schema: { type: 'object', additionalProperties: false, required: ['containsForbidden', 'what'],
+        properties: { containsForbidden: { type: 'boolean' }, what: { type: 'string' } } },
     },
-    body: JSON.stringify(payload),
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`OpenAI vision check failed with HTTP ${res.status}: ${errText.substring(0, 200)}`);
+  const verdict = result.data;
+  if (!verdict || typeof verdict !== 'object' || Array.isArray(verdict) ||
+      !('containsForbidden' in verdict) || typeof verdict.containsForbidden !== 'boolean' ||
+      !('what' in verdict) || typeof verdict.what !== 'string' || !verdict.what.trim()) {
+    throw Object.assign(new Error('The art verifier returned an invalid verdict.'),
+      { code: 'ART_VERDICT_INVALID', costUsd: result.receipt.costUsd });
   }
-
-  const data = (await res.json()) as any;
-  const textContent = data.choices?.[0]?.message?.content || '{}';
-  const cleanJson = textContent.replace(/```json/g, '').replace(/```/g, '').trim();
-
-  try {
-    const parsed = JSON.parse(cleanJson);
-    const containsForbidden = Boolean(parsed.containsForbidden);
-    const what = String(parsed.what || (containsForbidden ? 'Forbidden content detected' : 'clean'));
-
-    return {
-      passed: !containsForbidden,
-      containsForbidden,
-      what,
-    };
-  } catch (err: any) {
-    throw new Error(`Failed to parse OpenAI vision response: ${cleanJson} (${err?.message})`);
-  }
+  return { passed: !verdict.containsForbidden, containsForbidden: verdict.containsForbidden,
+    what: verdict.what, receipt: result.receipt };
 }
 
 /**
@@ -271,7 +276,9 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
     for (let attempt = 1; attempt <= 2; attempt++) {
       attempts = attempt;
       try {
-        const image = await requestImage(settings, fullPrompt, imageKey, fetcher);
+        const image = await (options.requestImage
+          ? options.requestImage(settings, fullPrompt)
+          : requestStudioArtImage(settings, fullPrompt, imageKey, fetcher));
         if (!image) continue;
         const { imageBuffer, mimeType, responseId, xRequestId } = image;
         // Billed the moment the provider returned it, whether or not the checks below keep it.
@@ -299,15 +306,19 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
         }
 
         // Vision check with the active tier's critique model
-        let visionCheck: { passed: boolean; containsForbidden: boolean; what: string };
+        let visionCheck: Awaited<ReturnType<typeof runVisionCheck>>;
         try {
           visionCheck = await runVisionCheck(imageBuffer, mimeType, {
             openaiApiKey: openaiKey,
             model: resolveModel('critique'),
             fetchFn: fetcher,
+            client: options.visionClient,
           });
+          spentUsd += visionCheck.receipt.costUsd;
         } catch (vErr: any) {
-          console.warn(`[StudioArt] Vision check error:`, vErr.message);
+          if (isStudioArtHoldError(vErr)) throw vErr;
+          spentUsd += Number(vErr?.costUsd) > 0 ? Number(vErr.costUsd) : 0;
+          console.warn(`[StudioArt] Vision check unavailable:`, vErr?.code || 'VERIFIER_FAILED');
           // The image was already billed, but its pixels cannot be admitted without a verdict.
           // A second image call would pay again while the verifier is still unavailable.
           fallbackReason = 'vision_check_unavailable';
@@ -333,8 +344,8 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
           receipt: {
             provider: settings.provider,
             model: settings.model,
-            responseId,
-            id: responseId,
+            responseId: responseId ?? undefined,
+            id: responseId ?? undefined,
             xRequestId,
             bytes: imageBuffer.length,
             sha256,
@@ -355,13 +366,14 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
           },
         };
       } catch (err: any) {
-        console.warn(`[StudioArt] Error during generation attempt ${attempt}:`, err?.message);
+        console.warn(`[StudioArt] Generation attempt ${attempt} stopped:`, err?.code || 'ART_FAILED');
         // A generated image can be billed even when no answer reached us. Preserve the known cost
         // of earlier rejected images and leave the current attempt unresolved in Core's ledger.
         if (err?.isUncertain) {
-          err.costUsd = spentUsd;
+          err.costUsd = spentUsd + (Number(err.costUsd) > 0 ? Number(err.costUsd) : 0);
           throw err;
         }
+        if (isStudioArtHoldError(err)) throw err;
         if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || /timed?\s*out|aborted/i.test(String(err?.message || ''))) {
           const uncertain = new ImageAcceptanceUnknownError(settings.provider, err);
           uncertain.costUsd = spentUsd;
@@ -419,17 +431,20 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
  */
 const IMAGE_REQUEST_TIMEOUT_MS = 120_000;
 
-interface ProviderImage {
+export interface ProviderImage {
   imageBuffer: Buffer;
   mimeType: string;
-  responseId: string;
+  responseId: string | null;
   xRequestId: string | null;
+  servedModel: string | null;
+  inputTokens: number;
+  outputTokens: number;
   costUsd: number;
   costSource: 'usage' | 'price_list' | 'estimate';
 }
 
 /** One image from the configured provider, or null when it returned none (logged). */
-async function requestImage(
+export async function requestStudioArtImage(
   settings: ImageSettings,
   prompt: string,
   key: string,
@@ -465,7 +480,7 @@ async function requestImage(
     });
     if (!res.ok) {
       if (res.status >= 500) throw new ImageAcceptanceUnknownError(settings.provider);
-      console.warn(`[StudioArt] Google image generation failed HTTP ${res.status}: ${(await res.text()).substring(0, 150)}`);
+      console.warn(`[StudioArt] Google image generation failed HTTP ${res.status}`);
       return null;
     }
     const data = await readImageResponse(res);
@@ -481,8 +496,11 @@ async function requestImage(
     return {
       imageBuffer: Buffer.from(image.data, 'base64'),
       mimeType: image.mime_type || image.mimeType || 'image/png',
-      responseId: String(data.id || `google-img-${Date.now()}`),
+      responseId: typeof data.id === 'string' ? data.id : null,
       xRequestId: res.headers?.get?.('x-request-id') || null,
+      servedModel: typeof data.model === 'string' ? data.model : null,
+      inputTokens: data.usage?.total_input_tokens ?? 0,
+      outputTokens: data.usage?.total_output_tokens ?? 0,
       costUsd: typeof price === 'number' ? price : 0,
       costSource: 'price_list',
     };
@@ -496,7 +514,7 @@ async function requestImage(
   });
   if (!res.ok) {
     if (res.status >= 500) throw new ImageAcceptanceUnknownError(settings.provider);
-    console.warn(`[StudioArt] OpenAI image generation failed HTTP ${res.status}: ${(await res.text()).substring(0, 150)}`);
+    console.warn(`[StudioArt] OpenAI image generation failed HTTP ${res.status}`);
     return null;
   }
   const data = await readImageResponse(res);
@@ -513,8 +531,11 @@ async function requestImage(
   return {
     imageBuffer,
     mimeType: 'image/png',
-    responseId: xRequestId || `openai-img-${data.created || Date.now()}`,
+    responseId: typeof data.id === 'string' ? data.id : null,
     xRequestId,
+    servedModel: typeof data.model === 'string' ? data.model : null,
+    inputTokens: data.usage?.input_tokens ?? 0,
+    outputTokens: data.usage?.output_tokens ?? 0,
     ...openAiImageCost(settings, data.usage),
   };
 }

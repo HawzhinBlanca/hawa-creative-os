@@ -61,6 +61,15 @@ For new Studio calls, PostgreSQL admits a per-run ordinal and request digest bef
 
 The ledger seals a call's run/stage/model/ordinal/digest at admission. Its first outcome, including `uncertain`, is the last mutation allowed; a second finalization is a conflict and holds the Studio pipeline. Reconciliation must append separately attributed evidence rather than rewrite the original call (ADR-051).
 
+Studio art admits each image attempt and each vision verification separately
+(ADR-090). Verification uses the bounded structured text adapter and a runtime
+validated verdict. All individual receipts consume call slots and contribute
+known cost; the aggregate art result must not charge them again. Unknown provider
+acceptance and failed local accounting hold the pipeline, including when a
+procedural fallback could otherwise be rendered. A definite verifier failure may
+select a visibly reported procedural fallback. Historical aggregate art receipts
+are not rewritten to fabricate their missing verifier costs.
+
 Run replacement cannot clear uncertainty (ADR-086). Under the task row lock, a
 new Studio run or alternate planner reservation checks unresolved Studio calls
 across every run for that task, including stale, failed and abandoned runs.

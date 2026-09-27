@@ -53,6 +53,18 @@ human design review, or production readiness evidence.
 
 ## Spending and call limits
 
+New art work records each image attempt and its vision check as separate calls
+(ADR-090). A two-attempt art pass can therefore consume four call slots. Each
+request checks current limits before transport; a saved art aggregate is reporting
+only and does not add another charge. Older aggregate receipts may omit vision
+costs and are retained as historical evidence, not recalculated as complete bills.
+
+A lost vision reply holds the run even when the generated image is already saved
+in the receipt ledger. The receipt contains its hash, not recoverable image bytes.
+`MODEL_CALL_ACCOUNTING_FAILED` also holds the run: inspect the admitted calls and
+first outcomes before any new work. Never clear that condition by retrying art or
+selecting a procedural result. Completed-stage response recovery remains open.
+
 Desk shows the cumulative number of admitted calls and spending counted from the
 run's receipts, including later parity checks on a transferred design. The saved
 run budget is a historical snapshot; it is not permission to reset those totals.

@@ -3,7 +3,8 @@ import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { createDb, sql, withRlsContext } from '@hawa/db';
+import { createDb, sql, withRlsContext, DesignStudioRepository } from '@hawa/db';
+import { renderMotifPng } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { StudioCallSettlementService } from '../src/services/studio-call-settlement.js';
@@ -31,7 +32,7 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
   });
   afterAll(async () => { await db.destroy(); });
 
-  it('does not repeat a call accepted by a fake provider before Core was killed', async () => {
+  it.each(['text', 'art-vision'])('does not repeat %s work accepted before Core was killed', async kind => {
     const intake = await persistChatIntake(db, {
       platform: 'telegram', sourceEventId: randomUUID(),
       sourceChannelId: `studio-kill-${randomUUID().slice(0, 8)}`,
@@ -43,6 +44,8 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
     const service = new DesignStudioService(db, undefined, { apiKey: 'x' });
     const { run } = await service.createOrGetRun(scope, taskId, `studio-kill-${randomUUID()}`,
       { width: 1080, height: 1350, tier: 'standard' });
+    if (kind === 'art-vision') await new DesignStudioRepository(db).updateRunStatus(run.id, scope.tenantId, 'laying_out');
+    const expectedCalls = kind === 'art-vision' ? 2 : 1;
 
     let acceptedCount = 0;
     let resolveAccepted!: () => void;
@@ -51,10 +54,17 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
       resolveAccepted = resolve;
       rejectAccepted = reject;
     });
-    const provider = createServer((request, _response) => {
+    const provider = createServer((request, response) => {
       void (async () => {
         for await (const _chunk of request) { /* Read all bytes before reporting acceptance. */ }
         acceptedCount++;
+        if (kind === 'art-vision' && request.url === '/v1/images/generations') {
+          response.writeHead(200, { 'content-type': 'application/json', 'x-request-id': 'synthetic-image' });
+          response.end(JSON.stringify({ model: 'gpt-image-2.5-sunburst',
+            data: [{ b64_json: renderMotifPng('gradient-wash', { width: 16, height: 16, palette: ['#1E3A5F'], seed: 1 }).toString('base64') }],
+            usage: { input_tokens: 400, output_tokens: 1000, input_tokens_details: { text_tokens: 400 } } }));
+          return;
+        }
         resolveAccepted();
         // Deliberately withhold the response until after the caller has been killed.
       })().catch((error) => rejectAccepted(error as Error));
@@ -74,6 +84,7 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
         HAWA_STUDIO_DRILL_ACTOR_ID: scope.actorId,
         HAWA_STUDIO_DRILL_TASK_ID: taskId,
         HAWA_STUDIO_DRILL_RUN_ID: run.id,
+        HAWA_STUDIO_DRILL_KIND: kind,
       },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
@@ -95,17 +106,23 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
         exited.then(({ code, signal }) => { throw new Error(`Studio child exited ${code}/${signal}: ${childError}`); }),
         timeout,
       ]);
-      expect(acceptedCount).toBe(1);
+      expect(acceptedCount).toBe(expectedCalls);
       child.kill('SIGKILL');
       expect((await exited).signal).toBe('SIGKILL');
 
       const calls = await withRlsContext(db, scope, (tx) =>
         sql<{ status: string; usd_estimate: string; call_ordinal: number; logical_call_sha256: string }>`
           SELECT status,usd_estimate,call_ordinal,logical_call_sha256
-          FROM hawa.design_studio_calls WHERE run_id=${run.id}::uuid`.execute(tx));
-      expect(calls.rows).toHaveLength(1);
-      expect(calls.rows[0]).toMatchObject({ status: 'uncertain', call_ordinal: 1 });
-      expect(calls.rows[0].logical_call_sha256).toMatch(/^[0-9a-f]{64}$/);
+          FROM hawa.design_studio_calls WHERE run_id=${run.id}::uuid ORDER BY call_ordinal`.execute(tx));
+      expect(calls.rows).toHaveLength(expectedCalls);
+      expect(calls.rows.at(-1)).toMatchObject({ status: 'uncertain', call_ordinal: expectedCalls });
+      expect(calls.rows.at(-1)?.logical_call_sha256).toMatch(/^[0-9a-f]{64}$/);
+      if (kind === 'art-vision') {
+        expect(calls.rows[0].status).toBe('ok');
+        expect(Number(calls.rows[0].usd_estimate)).toBeCloseTo(0.032, 6);
+        expect(await new DesignStudioRepository(db).getBudgetUsage(run.id, scope.tenantId))
+          .toMatchObject({ admittedCalls: 2, unresolvedCalls: 1, accountedUsd: 0.032 });
+      }
 
       const freshDb = createDb(databaseUrl!);
       try {
@@ -126,16 +143,18 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
           VALUES(${sessionHash},${scope.tenantId}::uuid,${userId}::uuid,'oidc:drill','administrator','Synthetic recovery administrator',now()+interval '1 hour','google_oidc')`.execute(freshDb);
         const recoveryScope={tenantId:scope.tenantId,userId,role:'administrator',sessionHash};
         const recovery=new StudioCallSettlementService(freshDb),detail=await recovery.get(recoveryScope,taskId,run.id);
-        const evidence={expectedSnapshot:detail.snapshotHash,reason:'Synthetic provider terminal evidence after process kill',calls:detail.calls.map(c=>({
+        const evidence={expectedSnapshot:detail.snapshotHash,reason:'Synthetic provider terminal evidence after process kill',calls:detail.calls.filter(c=>c.status==='uncertain').map(c=>({
           callId:c.id,conclusion:'provider_finished',reportedCostUsd:0.125,evidenceReference:'synthetic-provider-terminal',evidenceSha256:'c'.repeat(64)}))};
         const action=randomUUID(),settled=await recovery.settle(recoveryScope,taskId,run.id,action,evidence);
         expect(await new StudioCallSettlementService(freshDb).settle(recoveryScope,taskId,run.id,action,evidence))
           .toMatchObject({replayed:true,settlement:settled.settlement});
-        expect((await recovery.get(recoveryScope,taskId,run.id)).calls[0]).toMatchObject({status:'uncertain',estimatedCostUsd:null});
-        await expect(fresh.createOrGetRun(scope,taskId,`explicit-after-settlement-${randomUUID()}`,
-          {width:1080,height:1350,tier:'standard'})).resolves.toMatchObject({created:true});
+        expect((await recovery.get(recoveryScope,taskId,run.id)).calls.find(c=>c.status==='uncertain')).toMatchObject({status:'uncertain',estimatedCostUsd:null});
+        const replacement = await fresh.createOrGetRun(scope,taskId,`explicit-after-settlement-${randomUUID()}`,
+          {width:1080,height:1350,tier:'standard'});
+        expect(replacement).toMatchObject({created:true});
+        await fresh.abandon(scope,taskId,replacement.run.id,'Completed synthetic admission drill');
         expect(replayFetch).not.toHaveBeenCalled();
-        expect(acceptedCount).toBe(1);
+        expect(acceptedCount).toBe(expectedCalls);
       } finally {
         await freshDb.destroy();
       }

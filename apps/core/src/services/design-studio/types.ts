@@ -11,7 +11,8 @@ export function isModelCallHoldError(err: unknown): boolean {
   return !!err && typeof err === 'object' &&
     ('isUncertain' in err && err.isUncertain === true ||
       'code' in err && (err.code === 'MODEL_CALL_ADMISSION_CONFLICT' ||
-        err.code === 'MODEL_CALL_FINALIZATION_CONFLICT' || err.code === 'TASK_GENERATION_BLOCKED' ||
+        err.code === 'MODEL_CALL_FINALIZATION_CONFLICT' || err.code === 'MODEL_CALL_ACCOUNTING_FAILED' ||
+        err.code === 'TASK_GENERATION_BLOCKED' ||
         err.code === 'STUDIO_BUDGET_INVALID' || err.code === 'STUDIO_BUDGET_HISTORY_INCOMPLETE'));
 }
 

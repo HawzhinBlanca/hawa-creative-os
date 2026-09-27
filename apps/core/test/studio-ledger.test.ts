@@ -117,7 +117,7 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
     const ctx = await (svc as any).createStageContext(s, run, 'laying_out', budget,
       async () => { throw new Error('budget write failed'); });
     await expect(ctx.client.completeJson({ prompt: 'paid call', schema: { type: 'object' }, model: 'gpt-6-astra' }))
-      .rejects.toThrow('budget write failed');
+      .rejects.toMatchObject({ code: 'MODEL_CALL_ACCOUNTING_FAILED', cause: { message: 'budget write failed' } });
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(finalized).toHaveLength(1);
     expect(finalized[0]).toMatchObject({ status: 'ok', responseId: 'chatcmpl_paid' });

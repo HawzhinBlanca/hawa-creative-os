@@ -340,7 +340,7 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     expect(result.receipt.verificationReport?.passed).toBe(true);
   });
 
-  it('does not ship generated pixels when visual safety verification is unavailable', async () => {
+  it('holds the art workflow when visual verification has unknown acceptance', async () => {
     const validBase64 = createSolidPng(64, 64, [30, 58, 95]).toString('base64');
     const imageCalls: string[] = [];
     const fakeFetcher: typeof fetch = vi.fn(async (url: any) => {
@@ -354,17 +354,36 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
       }
       throw new Error(`Unexpected URL: ${address}`);
     });
-    const result = await generateArtImage({
+    await expect(generateArtImage({
       artPrompt: 'Minimalist navy gradient textured backdrop', palette: PALETTE,
       openaiApiKey: 'mock-key', fetchFn: fakeFetcher,
-    });
-    expect(result.receipt.provider).toBe('procedural');
-    expect(result.receipt.artFallback).toBe('procedural');
-    expect(result.receipt.fallbackReason).toBe('vision_check_unavailable');
-    expect(result.receipt.attempts).toBe(1);
-    expect(result.receipt.costUsd).toBeGreaterThan(0);
-    expect(result.receipt.verificationReport?.passed).toBe(true);
+    })).rejects.toMatchObject({ code: 'UNCERTAIN_HTTP', isUncertain: true, costUsd: 0.04 });
     expect(imageCalls).toHaveLength(1);
+  });
+
+  it.each([{}, { containsForbidden: 'false', what: 'clean' }, { containsForbidden: false },
+    { containsForbidden: false, what: '' }, null, []])('does not accept malformed vision verdict %j', async verdict => {
+    const fetchFn = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      id: 'synthetic-verdict', model: 'gpt-6-astra', usage: { prompt_tokens: 1000, completion_tokens: 200 },
+      choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(verdict) } }],
+    })));
+    await expect(runVisionCheck(createSolidPng(16, 16, [30, 58, 95]), 'image/png', {
+      openaiApiKey: 'synthetic-key', fetchFn, model: 'gpt-6-astra',
+    })).rejects.toMatchObject({ code: 'ART_VERDICT_INVALID', costUsd: 0.02 });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps billed malformed vision cost when selecting a reported procedural fallback', async () => {
+    const fetchFn = vi.fn<typeof fetch>(async url => String(url).includes('/images/')
+      ? new Response(JSON.stringify({ data: [{ b64_json: createSolidPng(16, 16, [30, 58, 95]).toString('base64') }] }))
+      : new Response(JSON.stringify({ id: 'synthetic-verdict', model: 'gpt-6-astra',
+        usage: { prompt_tokens: 1000, completion_tokens: 200 },
+        choices: [{ finish_reason: 'stop', message: { content: '{}' } }] })));
+    const result = await generateArtImage({ artPrompt: 'Navy texture', palette: PALETTE,
+      openaiApiKey: 'synthetic-key', fetchFn, width: 16, height: 16 });
+    expect(result.receipt).toMatchObject({ provider: 'procedural', fallbackReason: 'vision_check_unavailable' });
+    expect(result.receipt.costUsd).toBeGreaterThan(0.04);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
   it('stops after one server error with unknown image acceptance', async () => {

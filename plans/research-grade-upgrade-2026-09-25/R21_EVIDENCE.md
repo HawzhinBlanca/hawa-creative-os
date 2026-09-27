@@ -337,3 +337,44 @@ The USD cap remains a recorded-cost stop threshold, not a guaranteed invoice
 ceiling. Conservative pre-dispatch reservations, office/day/role budgets, typed
 stage recovery, the named live pilot, native/human quality, independent restore
 and held-out quality/cost qualification remain open.
+
+
+## 2026-09-27 — Individual art requests and strict verification (ADR-090)
+
+During USD reservation design, four new failing regression cases exposed a
+prerequisite accounting gap: one Studio art admission could dispatch two images
+and two uncounted vision calls, swallow a lost verifier response, and cross the
+call cap. Core now admits each image attempt and each verifier request separately.
+Each successful or failed paid receipt updates the budget once. Aggregate art
+cost includes the verifier but is not charged a second time. Image receipts keep
+provider metadata, input/output tokens and image hash; missing image response IDs
+remain null. No historical receipt is rewritten.
+
+Vision now uses the existing bounded structured text client and validates actual
+boolean/explanation fields. Invalid verdicts cannot approve generated pixels.
+Definite failures can select an explicit procedural fallback; unknown acceptance,
+authority/budget refusal and local accounting failures cannot be swallowed by the
+art controller. A failed ledger or budget-snapshot write holds further work.
+
+The actual Core SIGKILL drill was expanded: a local fake provider completes the
+image, accepts the verifier request, then loses Core. PostgreSQL retains the image
+charge and unresolved verifier row. A fresh Core refuses resume/replacement; an
+explicit attributed settlement permits a new requested run without replaying the
+old image or verifier. The existing text kill and paid-reply-before-stage-save
+drills still pass. These are local synthetic-provider drills, not live billing.
+
+Final full regression: 3,830 passed /0 failed /59 skipped across479 files
+(472 passed,7 skipped),111.44 seconds. Strict test compilation covers480/480 roots
+with0 errors. Source build, script types, lint (996 any occurrences against1053
+ceiling;9 existing provider-egress exceptions), scanner and scanner self-test pass.
+Focused six-file proof passed54 tests before four final accounting controls were
+added; the full run includes all four. Initial fixture import failure, four red
+regressions, changed-behavior assertions, a fixture slot-cleanup failure and two
+fixture type errors are retained with their passing follow-ups.
+
+Proof: `R21_ART_CALL_ACCOUNTING_PROOF.json`. Artifacts:
+`output/acceptance/2026-09-27-art-call-accounting/`. No schema migration, image
+rebuild, live browser/provider request or production deployment. The USD limit
+remains a recorded-cost stop threshold. Hard reservations, office/day/role caps,
+typed completed-stage recovery, remaining egress migration, real pilot, human
+quality, held-out qualification and independent-host restore remain open.

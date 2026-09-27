@@ -1,0 +1,148 @@
+{
+  "date": "2026-09-27",
+  "status": "LOCALLY_QUALIFIED_INDIVIDUAL_ART_ACCOUNTING",
+  "decision": "ADR-090",
+  "baselineCommit": "8f7b09267ca8989f03b4b91f90848011edadcc63",
+  "requirements": [
+    "FR-059",
+    "FR-060",
+    "FR-062",
+    "FR-065",
+    "FR-079",
+    "NFR-001"
+  ],
+  "changes": [
+    "Admit and finalize each image attempt and each vision verification separately before transport.",
+    "Charge per-request receipts once; art aggregate includes verifier costs for reporting only.",
+    "Bounded structured vision adapter and actual verdict validation; missing or malformed fields do not approve art.",
+    "Uncertain responses and local accounting failures hold work; never swallow these in a procedural fallback.",
+    "Record image tokens, response hash and available provider metadata without invented image response IDs."
+  ],
+  "checks": {
+    "fixtureImportFirstAttempt": "Failed missing pngjs in Core test; replaced with existing creative renderer, no dependency added.",
+    "redBefore": {
+      "tests": 4,
+      "failed": 4,
+      "file": "red-2.log"
+    },
+    "initialFocused": {
+      "passed": 36,
+      "failed": 2,
+      "reason": "Prior tests expected unsafe fallback on 503 and unstructured local accounting error; assertions updated to preserve hold and original cause."
+    },
+    "secondFocused": {
+      "passed": 53,
+      "failed": 1,
+      "reason": "Expanded kill cases consumed two active fixture slots; explicitly abandon synthetic replacement run after admission assertion."
+    },
+    "secondStrictTypes": "Two fixture errors, recursive parameter type and record conversion; repaired without suppressions.",
+    "focusedBeforeFourFinalControls": {
+      "files": 6,
+      "passed": 54,
+      "failed": 0,
+      "skipped": 0,
+      "log": "focused-3.log"
+    },
+    "fullFinalBehavior": {
+      "files": 479,
+      "passedFiles": 472,
+      "skippedFiles": 7,
+      "passed": 3830,
+      "failed": 0,
+      "skipped": 59,
+      "seconds": 111.44,
+      "log": "full-1.log"
+    },
+    "finalSourceAndTestTypes": {
+      "roots": 480,
+      "errors": 0,
+      "result": "passed",
+      "log": "typecheck.log"
+    },
+    "lint": {
+      "result": "passed",
+      "productionAny": 996,
+      "ceiling": 1053,
+      "existingEgressExceptions": 9,
+      "log": "lint.log"
+    },
+    "security": "Scanner and 11-pattern self-test passed; zero findings.",
+    "processKill": "Real Core subprocess SIGKILL after local fake-provider image response and vision acceptance. Database retained separate image/vision rows; fresh Core refused replay/replacement until attributed settlement. Existing text send and completed-reply drills also passed.",
+    "blueprint": "PASS=955 WARN=0 FAIL=0\nHawa Creative OS blueprint validation passed."
+  },
+  "limits": [
+    "USD remains a recorded-cost stop threshold, not a provider invoice ceiling.",
+    "Hard pre-dispatch reservations, office/day/role caps and typed completed-stage recovery remain open.",
+    "Historical aggregate art receipts can omit verifier costs; they remain immutable.",
+    "Provider charges use existing price/usage estimates, not invoice reconciliation; missing usage and legacy text receipt metadata still need stronger provenance.",
+    "No new runtime image, browser execution, paid provider request or production change.",
+    "Named live pilot, native Canva editing, human multilingual/design review, held-out quality/cost qualification and independent-host restore remain open."
+  ],
+  "sourceHashes": {
+    "adrs/090_individual_art_call_accounting.md": "8885668bf0e86bc01a8c44d60923dc88508230c784ff7002aa6996a47faf0364",
+    "apps/core/src/services/design-studio/design-studio-service.ts": "f8ce383c5e7393f50262e4a811b093e63d956d550365e37e89d600b6902f1dde",
+    "apps/core/src/services/design-studio/types.ts": "f1be8d4532cc44553a0ef2c439ce57c3ff32f4f11d73cb626efb8031e0a692be",
+    "packages/creative/src/studio/gemini-image-provider.ts": "3f9e9d7d4c94f2b6fa86b9178ed6f2cd776d142ed992ceab2667c46202aa1f86",
+    "apps/core/test/studio-art-ledger.test.ts": "57e72ebc4615b760b5cf71c11d4ae89511c1193097ab4ef614f6c237c2f03dc4",
+    "apps/core/test/studio-ledger.test.ts": "c9b76555d26a155fe25029166642a8c2e1d3047fc76c600c384acefc32acc1b3",
+    "apps/core/test/studio-model-kill-recovery.test.ts": "363939ad4c357f31c872e7fc75f9158b464dddc294527b6ff21bc276dc6f514e",
+    "apps/core/test/fixtures/studio-model-kill-child.ts": "1dabbaa198ba659a17a84d612e4a040f05ba973008788ee3cb4301d8ff973a63",
+    "packages/creative/test/studio-art-provider.test.ts": "c2a523a3a8fb433c22c787ba2c16a5f1203cec3cdab4f05996dc6e507ea8cb86",
+    "docs/10_WORKFLOW_RELIABILITY.md": "8c011759202870a8c84afdbc925779eead61656845fd42cc8bc5a16b1b26dbd0",
+    "runbooks/STUDIO_RECOVERY.md": "a9b69cd835f09f67884ca2e1cb4813e6995236b71fce2b972cb15ffe556168bf"
+  },
+  "artifacts": {
+    "output/acceptance/2026-09-27-art-call-accounting/build-1.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/focused-1.log": {
+      "sha256": "ae0d4cc771d525f98c47efe4ced671e9855ae7f07b6da356f038943a7b22e533",
+      "bytes": 3001
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/focused-2.log": {
+      "sha256": "0a93759b754dbfdc48e0f7ee594208ce51a81a6d1ee7d79cbf2eb01cba1b572e",
+      "bytes": 1598
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/focused-3.log": {
+      "sha256": "9caa7236201e614809429a2a520f2dabbcc208ab6b459d6dfc108bde009f0aad",
+      "bytes": 325
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/full-1.log": {
+      "sha256": "5bd8f5a137b68b30d3d20eba31be55e847257ae138ef6227eda0ec430b6f6e42",
+      "bytes": 132244
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/lint.log": {
+      "sha256": "71752cab582b1376f35bc76131b4a373af6df63b99eb9cba296ed22f3dbd2ebb",
+      "bytes": 400
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/red-2.log": {
+      "sha256": "7d50d372845c0fe1888508084918a49c6830bdb89803fea7996f9533f04a4bbc",
+      "bytes": 11818
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/red.log": {
+      "sha256": "d76349520dd5f938a8300ab9e904a577f0cb2c25c59b943e5074468ed9e67b75",
+      "bytes": 1117
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/security-self-test.log": {
+      "sha256": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
+      "bytes": 76
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/security.log": {
+      "sha256": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+      "bytes": 9416
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/test-types-1.log": {
+      "sha256": "dcc8db17658c64bce2c576a67873088ab28eab67a45cafcad356331decb610e0",
+      "bytes": 122
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/test-types-2.log": {
+      "sha256": "9522a9419ea898747d35f5b4cd2b2cd1dc30f6787c50ada51b7aa1791d0a9710",
+      "bytes": 596
+    },
+    "output/acceptance/2026-09-27-art-call-accounting/typecheck.log": {
+      "sha256": "93bda584025a8952942f1212a6fbfb26adff63794c4fc5afcc2b606c6400ecbe",
+      "bytes": 197
+    }
+  }
+}

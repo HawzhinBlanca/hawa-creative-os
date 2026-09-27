@@ -3,6 +3,27 @@
 Updated 2026-09-27; retain the faster, more economical completion method.
 Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PLAN.md` and `WORK_ITEMS.csv`.
 
+## Latest checkpoint — 2026-09-27, individual art accounting qualified locally
+
+ADR-090 fixes hidden paid work discovered while designing USD reservations. Each
+image attempt and vision verdict now has its own ledger admission, receipt and
+budget update. Uncertain verification and failed accounting hold the pipeline;
+malformed verdicts cannot approve generated art. The actual image-complete /
+vision-accepted / Core-SIGKILL drill passed with durable accounting, restart
+refusal and explicit settlement, without replaying paid work.
+
+Full regression:3830 passed/0 failed/59 skipped across479 files. Strict typing:
+480/480 active test roots,0 errors. Source build, script types, lint and security
+checks pass. Proof: `R21_ART_CALL_ACCOUNTING_PROOF.json`. Production is unchanged;
+the isolated app still runs the earlierb641928 candidate/schema049.
+
+Next remains hard USD reservations at these individual paid boundaries, then typed
+completed-stage recovery. Price/input/output bounds must cover the actual provider
+request; current auto-quality image estimates are not an invoice ceiling. Live
+pilot, native Canva edit/save/reopen, human multilingual/design review, held-out
+model/retrieval/cost qualification and independent-host/offsite restore remain open.
+Existing Workspace/native-edit questions remain unanswered.
+
 ## Latest checkpoint — 2026-09-27, complete test type gate qualified locally
 
 ADR-089 replaces the wrapper that ignored compiler failures and filtered source

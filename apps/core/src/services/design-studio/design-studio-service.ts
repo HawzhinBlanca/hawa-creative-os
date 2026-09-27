@@ -21,6 +21,8 @@ import {
 import {
   OpenAiStudioClient,
   OpenAiImageProvider,
+  requestStudioArtImage,
+  StudioArtAccountingError,
   type StudioLayoutV2,
   ExemplarRetrievalIndex,
   studioReferenceFromRaw,
@@ -901,6 +903,18 @@ export class DesignStudioService {
 
     const baseArtProvider = new OpenAiImageProvider(apiKey, fetchFn);
 
+    // A failed local receipt/snapshot write cannot authorize provider retry or a clean fallback.
+    const account = async <T>(write: () => Promise<T>): Promise<T> => {
+      try { return await write(); }
+      catch (error) {
+        if (isModelCallHoldError(error) || error instanceof StudioBudgetExhaustedError) throw error;
+        throw new StudioArtAccountingError(error);
+      }
+    };
+    const finalizeCall = (params: Parameters<DesignStudioRepository['finalizeCall']>[0]) =>
+      account(() => this.repo.finalizeCall(params));
+    const recordSpend = (cost: number) => account(() => onSpendUpdate(cost));
+
     // PostgreSQL admits one logical call identity before transport. The ordinal fences two Core
     // processes that read the same run budget; parity is content-keyed because a transferred run's
     // budget is immutable and a changed Canva export must remain independently checkable.
@@ -929,7 +943,8 @@ export class DesignStudioService {
         if (error instanceof TaskGenerationBlockedError || error instanceof StudioBudgetEvidenceError) {
           throw new CanvaFlowError(409, error.code, error.message);
         }
-        throw error;
+        if (isModelCallHoldError(error) || error instanceof StudioBudgetExhaustedError) throw error;
+        throw new StudioArtAccountingError(error);
       }
       currentBudget.calls++;
     };
@@ -960,7 +975,7 @@ export class DesignStudioService {
           // what it cost. Recorded at $0 and left out of the budget until 2026-09-24.
           const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
           const uncertain = err?.isUncertain === true;
-          await this.repo.finalizeCall({
+          await finalizeCall({
             id: callId,
             tenantId: s.tenantId,
             responseId: err?.responseId,
@@ -970,14 +985,14 @@ export class DesignStudioService {
             status: uncertain ? 'uncertain' : 'error',
             errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.message || 'CALL_FAILED'),
           });
-          if (billedUsd > 0) await onSpendUpdate(billedUsd);
+          if (billedUsd > 0) await recordSpend(billedUsd);
           throw err;
         }
         const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
           input_tokens: result.receipt.inputTokens,
           output_tokens: result.receipt.outputTokens,
         });
-        await this.repo.finalizeCall({
+        await finalizeCall({
           id: callId,
           tenantId: s.tenantId,
           responseId: result.receipt.id,
@@ -992,7 +1007,7 @@ export class DesignStudioService {
           usdEstimate: cost,
           status: 'ok',
         });
-        await onSpendUpdate(cost);
+        await recordSpend(cost);
         return result;
       },
       createStructuredCompletion: async <T>(params: any): Promise<any> => {
@@ -1012,7 +1027,7 @@ export class DesignStudioService {
           // Billed failures carry their cost, as in completeJson above.
           const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
           const uncertain = err?.isUncertain === true;
-          await this.repo.finalizeCall({
+          await finalizeCall({
             id: callId,
             tenantId: s.tenantId,
             responseId: err?.responseId,
@@ -1022,14 +1037,14 @@ export class DesignStudioService {
             status: uncertain ? 'uncertain' : 'error',
             errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.message || 'CALL_FAILED'),
           });
-          if (billedUsd > 0) await onSpendUpdate(billedUsd);
+          if (billedUsd > 0) await recordSpend(billedUsd);
           throw err;
         }
         const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
           input_tokens: result.receipt.inputTokens,
           output_tokens: result.receipt.outputTokens,
         });
-        await this.repo.finalizeCall({
+        await finalizeCall({
           id: callId,
           tenantId: s.tenantId,
           responseId: result.receipt.id || result.receipt.responseId,
@@ -1044,61 +1059,49 @@ export class DesignStudioService {
           usdEstimate: cost,
           status: 'ok',
         });
-        await onSpendUpdate(cost);
+        await recordSpend(cost);
         return result;
       },
     };
 
-    const ledgerArtProvider: any = {
-      generateArt: async (params: any): Promise<any> => {
-        if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
-          throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
-        }
-
-        // The configured provider and model (HAWA_IMAGE_*), resolved once so the ledger and the
-        // request agree. An invalid setting throws here, and the art stage falls back to a motif.
+    const ledgerArtProvider: Pick<OpenAiImageProvider, 'generateArt'> = {
+      generateArt: async params => {
+        // One image per admission. The verifier uses the same ledger-backed text client;
+        // the bounded art controller cannot hide its second attempt inside the first receipt.
         const settings = resolveImageSettings();
-        const callId = randomUUID();
-        await admitCall({ id: callId, stage: 'art', provider: settings.provider, model: settings.model,
-          input: { ...params, settings } });
-
-        let result: Awaited<ReturnType<typeof baseArtProvider.generateArt>>;
-        try {
-          result = await baseArtProvider.generateArt({ ...params, settings });
-        } catch (err: any) {
-          const uncertain = err?.isUncertain === true;
-          const knownUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
-          await this.repo.finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            inputTokens: 0,
-            outputTokens: 0,
-            usdEstimate: knownUsd,
-            status: uncertain ? 'uncertain' : 'error',
-            errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.message || 'ART_FAILED'),
-          });
-          if (knownUsd > 0) await onSpendUpdate(knownUsd);
-          throw err;
-        }
-        // What the provider billed, across every attempt; never a made-up figure.
-        const cost = Number(result.receipt?.costUsd ?? 0);
-        await this.repo.finalizeCall({
-          id: callId,
-          tenantId: s.tenantId,
-          responseId: result.receipt?.responseId || result.receipt?.id || null,
-          servedModel: result.receipt?.provider === 'procedural' ? null : result.receipt?.model,
-          providerRequestId: result.receipt?.provider === 'procedural' ? null : result.receipt?.xRequestId,
-          responseSha256: result.receipt?.provider === 'procedural' ? null : result.receipt?.sha256,
-          attempts: Number.isSafeInteger(result.receipt?.attempts) && result.receipt.attempts > 0
-            ? result.receipt.attempts : null,
-          inputTokens: 0,
-          outputTokens: 0,
-          images: 1,
-          usdEstimate: cost,
-          status: 'ok',
+        return baseArtProvider.generateArt({ ...params, settings, visionClient: ledgerClient,
+          requestImage: async (selected, prompt) => {
+            if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
+              throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
+            }
+            const callId = randomUUID();
+            await admitCall({ id: callId, stage: 'art', provider: selected.provider, model: selected.model,
+              input: { prompt, settings: selected } });
+            const started = Date.now();
+            let result: Awaited<ReturnType<typeof requestStudioArtImage>>;
+            try {
+              result = await requestStudioArtImage(selected, prompt,
+                selected.provider === 'google' ? params.geminiApiKey || process.env.GEMINI_API_KEY || '' : apiKey,
+                fetchFn);
+            } catch (error) {
+              const uncertain = !!error && typeof error === 'object' && 'isUncertain' in error && error.isUncertain === true;
+              await finalizeCall({ id: callId, tenantId: s.tenantId, inputTokens: 0, outputTokens: 0,
+                usdEstimate: 0, status: uncertain ? 'uncertain' : 'error',
+                errorCode: uncertain ? 'ACCEPTANCE_UNKNOWN' : 'ART_FAILED', latencyMs: Date.now() - started, attempts: 1 });
+              throw error;
+            }
+            const cost = result?.costUsd ?? 0;
+            await finalizeCall({ id: callId, tenantId: s.tenantId,
+              responseId: result?.responseId, servedModel: result?.servedModel,
+              providerRequestId: result?.xRequestId,
+              responseSha256: result ? hash(result.imageBuffer) : null,
+              inputTokens: result?.inputTokens ?? 0, outputTokens: result?.outputTokens ?? 0,
+              images: result ? 1 : 0, usdEstimate: cost, status: result ? 'ok' : 'error',
+              errorCode: result ? null : 'IMAGE_REQUEST_REJECTED', latencyMs: Date.now() - started, attempts: 1 });
+            await recordSpend(cost);
+            return result;
+          },
         });
-        await onSpendUpdate(cost);
-        return result;
       },
     };
 
@@ -2206,7 +2209,7 @@ export class DesignStudioService {
         throw new CanvaFlowError(409, err.code, err.message);
       }
       if (isModelCallHoldError(err)) {
-        const code = err?.code === 'MODEL_CALL_ADMISSION_CONFLICT' || err?.code === 'MODEL_CALL_FINALIZATION_CONFLICT'
+        const code = ['MODEL_CALL_ADMISSION_CONFLICT', 'MODEL_CALL_FINALIZATION_CONFLICT', 'MODEL_CALL_ACCOUNTING_FAILED'].includes(err?.code)
           ? err.code : 'MODEL_CALL_UNCERTAIN';
         throw new CanvaFlowError(409, code,
           'A Studio model call may have been accepted or another process already recorded its outcome. Reconcile the call before continuing this run.');
