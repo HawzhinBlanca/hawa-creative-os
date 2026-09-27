@@ -1,10 +1,11 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {apiClient} from '../api/client.js';
+import {canvaPreviewEvidence} from '../services/canvaPreviewEvidence.js';
 export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
   const [state,setState]=useState<any>(null),[connected,setConnected]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
   const [width,setWidth]=useState('1200'),[height,setHeight]=useState('1697'),[results,setResults]=useState<Record<string,any>>({});
   const [plans,setPlans]=useState<any[]>([]);
-  const [preview,setPreview]=useState<string | null>(null);
+  const [preview,setPreview]=useState<{url:string;artifactId:string;taskId:string} | null>(null);
   const activeTask=useRef(taskId); activeTask.current=taskId;
   const keys=useRef<Record<string,string>>({});
   const exportRequests=useRef<Record<string,{format:string;key:string}>>({});
@@ -12,10 +13,11 @@ export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
   useEffect(()=>{setState(null);setPlans([]);setResults({});setMessage('');keys.current={};exportRequests.current={};void refresh().catch(e=>setMessage(e.message));},[taskId]);
   // A failed poll is retried in 5 s; a 401 among them reaches the Work screen's sign-in prompt through the API client (2026-09-24).
   useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});},5000);return()=>clearInterval(timer);},[taskId]);
-  const latestPng=state?.artifacts?.find((a:any)=>a.format==='png');
-  const latestCheck=state?.artifacts?.find((a:any)=>a.content_check)?.content_check;
+  const evidence=canvaPreviewEvidence(state?.artifacts);
+  const latestPng=evidence.preview;
+  const latestCheck=evidence.check;
   useEffect(()=>{let cancelled=false;let objectUrl:string|undefined;setPreview(null);
-    if(latestPng)void apiClient.canva.download(taskId,latestPng.id).then(blob=>{if(cancelled)return;objectUrl=URL.createObjectURL(blob);setPreview(objectUrl);}).catch(()=>{});
+    if(latestPng)void apiClient.canva.download(taskId,latestPng.id).then(blob=>{if(cancelled)return;objectUrl=URL.createObjectURL(blob);setPreview({url:objectUrl,artifactId:latestPng.id,taskId});}).catch(()=>{});
     return()=>{cancelled=true;if(objectUrl)URL.revokeObjectURL(objectUrl);};
   },[taskId,latestPng?.id]);
   const run=async(fn:()=>Promise<void>)=>{setBusy(true);setMessage('');try{await fn();await refresh();}catch(e:any){setMessage(e.message);await refresh().catch(()=>{});}finally{setBusy(false);}};
@@ -64,13 +66,13 @@ export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
       <button className="btn" disabled={busy||!connected} onClick={()=>capture('pptx')}>Check copy &amp; fonts</button>
     </div>}
     <p>Exports are stored as evidence pending QA. PDF here is a standard export, not a print certification.</p>
-    {latestCheck&&<div role="status" style={{padding:12,borderRadius:8,background:latestCheck.copyPass&&latestCheck.fontPass?'var(--surface)':'#3b2022',color:latestCheck.copyPass&&latestCheck.fontPass?'inherit':'#ffe1df',marginTop:12}}>
-      <strong>{!latestCheck.copyPass?'Copy needs correction':!latestCheck.fontPass?'Brand font needs correction':'Copy and font checks passed'}</strong>
-      <p>{!latestCheck.fontPass?`Canva used ${latestCheck.observedFonts.join(', ')}. Required: ${latestCheck.requiredFont}. Correct the font in Canva, then check again.`:'Review the logo and layout before release.'}</p>
+    {latestCheck&&<div role="status" style={{padding:12,borderRadius:8,background:evidence.passed?'var(--surface)':'#3b2022',color:evidence.passed?'inherit':'#ffe1df',marginTop:12}}>
+      <strong>{!latestCheck.copyPass?'Copy needs correction':!latestCheck.fontPass?'Brand font needs correction':!latestCheck.rtlPass?'Reading direction needs checking':'Captured text checks passed'}</strong>
+      <p>{!latestCheck.fontPass?`Observed fonts: ${latestCheck.observedFonts?.join(', ') || 'unavailable'}. Correct the font in Canva using the saved request, then check again.`:'Review the logo and layout before release.'}</p>
       <span>{latestCheck.copyPass?'All submitted copy matches.':'The exported copy differs from the saved request.'}</span>
     </div>}
     <div style={{display:'flex',gap:8,marginTop:12}}>{(state?.artifacts||[]).filter((a:any,i:number,all:any[])=>['png','pdf_standard'].includes(a.format)&&all.findIndex(b=>b.format===a.format)===i).map((a:any)=><button key={a.id} className="btn" disabled={busy} onClick={()=>download(a)}>Download {a.format==='png'?'PNG':'PDF'} draft</button>)}</div>
-    {preview&&<figure style={{margin:'12px 0'}}><img src={preview} alt="Retrieved Canva export, pending design QA" style={{maxWidth:'100%',maxHeight:600,objectFit:'contain'}}/><figcaption>Retrieved Canva export — QA pending</figcaption></figure>}
+    {preview?.taskId===taskId&&preview.artifactId===latestPng?.id&&<figure style={{margin:'12px 0'}}><img src={preview.url} alt="Retrieved Canva export for visual review" style={{maxWidth:'100%',maxHeight:600,objectFit:'contain'}}/><figcaption>{evidence.caption}</figcaption></figure>}
     {message&&<p role="status">{message}</p>}
     <details style={{marginTop:12}}><summary>Evidence and operation history</summary>
     {(state?.operations||[]).map((o:any)=>{const r=results[o.id];return <div key={o.id} style={{borderTop:'1px solid var(--border)',padding:'8px 0'}}>

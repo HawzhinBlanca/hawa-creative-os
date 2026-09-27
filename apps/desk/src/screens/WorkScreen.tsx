@@ -386,15 +386,19 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     } finally { setActionLoading(false); }
   };
 
-  // Primary Action 2: Capture for review (FR-078). Core exports the linked Canva design as PNG, then
-  // validates, hashes and stores it. No QA runs and no revision is created, so the task's status and
-  // QA result are whatever Core reports afterwards; nothing is set locally.
+  // Core records preview, checked source and the review receipt. Keep the action identity after
+  // a lost response; the browser never manufactures a revision or successful QA report.
   const handleCaptureForReview = async () => {
     if (!selectedTask) return;
     const taskId = selectedTask.id;
     setActionLoading(true);
     try {
-      const outcome = await captureForReview(apiClient.canva, taskId, { key: crypto.randomUUID() });
+      const state = await apiClient.canva.taskState(taskId);
+      const actionKey = JSON.stringify([sessionUser?.id,taskId,state.binding?.designId,state.binding?.version,'capture']);
+      const reservation = await reserveDecisionAction(actionKey);
+      const outcome = await captureForReview(apiClient.canva, taskId,
+        { key:reservation.actionId,expectedBinding:state.binding || undefined });
+      if (outcome.completed) completeDecisionAction(actionKey,reservation);
       showToast(outcome.text, outcome.tone);
       await readTaskAgain(taskId);
     } catch (err) {
@@ -1026,8 +1030,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     id="btn-capture-for-review"
                     className="action-btn capture-btn"
                     onClick={handleCaptureForReview}
-                    disabled={busy}
-                    title="Export the linked Canva design as PNG and store it, hashed, as review evidence. QA and approval are separate (FR-078)"
+                    disabled={busy || ['COMPLETE','CANCELLED','REJECTED'].includes(selectedTask.status)}
+                    title="Capture the PNG preview and checked source for a server-recorded review. Human approval is still required."
                   >
                     <span className="btn-icon" aria-hidden="true">📸</span>
                     <span>Capture for Review</span>

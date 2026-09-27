@@ -140,6 +140,7 @@ export interface ExportRow {
 }
 
 export interface CanvaQcEvaluation {
+  sourceTextObjects?: import('@hawa/qa').PptxTextObject[] | null;
   status: string;
   criticalPass: boolean;
   qaReport: Record<string, unknown> & { errors?: unknown; checks?: unknown };

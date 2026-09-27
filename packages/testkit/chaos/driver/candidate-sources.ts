@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CHAOS_DIR, REPO_ROOT, deploymentReceipt, fakes, kill, query, secrets, sql, start, waitHealthy } from './stack.js';
 import { KAAE_CLIENT_ID } from './provision.js';
+import { captureForReview } from '../../../../apps/desk/src/services/canvaCapture.js';
 import { chatInboxInvocations, imageDocumentUpdate, sendToChatInbox, tasksOfChat, textUpdate, waitUntil,
   type InvariantResult } from './scenario.js';
 
@@ -42,7 +43,7 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   // Temporary synthetic session for optional browser inspection, never release evidence or logs.
   writeFileSync(join(CHAOS_DIR, '.run', 'candidate-session.json'), JSON.stringify({ origin, token: session.token }), { mode: 0o600 });
   const get = (path: string) => fetch(`${origin}/v1${path}`, { headers: { Authorization: `Bearer ${session.token}` } });
-  const action = async (path: string, body: unknown, key = randomUUID(), token = secrets().CHAOS_REVIEWER_KEY) => {
+  const action = async (path: string, body: unknown, key: string = randomUUID(), token = secrets().CHAOS_REVIEWER_KEY) => {
     const response = await fetch(`${origin}/v1${path}`, { method: 'POST', headers: {
       Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Idempotency-Key': key,
     }, body: JSON.stringify(body) });
@@ -176,6 +177,40 @@ export async function candidateSources(chat: string, events: string[], suiteStar
     JSON.stringify(plans[0].request.copy) === JSON.stringify([deskBody.copyEn, deskBody.copyCkb]) &&
     plans[0].request.instructions === deskBody.designInstructions && /^[0-9a-f]{64}$/.test(plans[0].source_sha256),
     `plans=${plans.length}; source=${plans[0]?.source_sha256}`);
-  events.push(`Desk bilingual request ${manual.id} → saved plan ${generated.planId} → simulated Canva import`);
+  const captureKey = randomUUID();
+  const captureApi = {
+    taskState: async (id: string) => (await get(`/tasks/${id}/canva`)).json(),
+    export: (id: string, format: 'png' | 'pptx', expectedVersion: number, key: string) =>
+      action(`/tasks/${id}/canva/exports`, {format,expectedVersion}, key, session.token),
+    resume: (id: string, operationId: string) =>
+      action(`/tasks/${id}/canva/exports/${operationId}/resume`, {}, randomUUID(), session.token),
+  };
+  const captured = await captureForReview(captureApi, manual.id, {key:captureKey,waitMs:100});
+  check('Desk capture records a review from retained PNG and checked live text', captured.tone === 'success' && captured.completed === true, captured.text);
+  const repeatedCapture = await captureForReview(captureApi, manual.id, {key:captureKey,waitMs:100});
+  const [manualRevision] = await query<{id:string;neutral_manifest:{nativeVerification:string;nodes:unknown[]};count:string}>(sql`
+    SELECT r.id,r.neutral_manifest,(SELECT count(*) FROM hawa.design_revisions WHERE task_id=${manual.id}::uuid) AS count
+    FROM hawa.tasks t JOIN hawa.design_revisions r ON r.id=t.current_design_revision_id WHERE t.id=${manual.id}::uuid`);
+  check('capture replay preserves one revision without inventing native editability', repeatedCapture.tone === 'success' &&
+    Number(manualRevision.count) === 1 && manualRevision.neutral_manifest.nodes.length === 2 &&
+    manualRevision.neutral_manifest.nativeVerification === 'unverified', `revisions=${manualRevision.count}`);
+  const [manualQc] = await query<{report:{exportArtifactId:string;exportSha256:string;previewArtifactId:string;rtlVisualReviewRequired:boolean}}>(sql`
+    SELECT report FROM hawa.qc_runs WHERE design_revision_id=${manualRevision.id}::uuid ORDER BY started_at DESC LIMIT 1`);
+  const approved = await action(`/tasks/${manual.id}/revisions/${manualRevision.id}/decisions`, {action:'approve',
+    reason:'Synthetic manual workflow rehearsal, not a human creative-quality decision.',
+    pinnedExportIds:[manualQc.report.previewArtifactId,manualQc.report.exportArtifactId],
+    ...(manualQc.report.rtlVisualReviewRequired ? {rtlVisualReview:{confirmed:true,exportSha256:manualQc.report.exportSha256}} : {}),
+  });
+  await action(`/tasks/${manual.id}/publish`, {approvalId:approved.decisionId});
+  const final = await waitUntil('manual Desk task archived', async () => {
+    const [task] = await query<{state:string}>(sql`SELECT state FROM hawa.tasks WHERE id=${manual.id}::uuid`);
+    return task?.state === 'complete' ? task : null;
+  });
+  const [manualReceipts] = await query<{approvals:string;publications:string}>(sql`
+    SELECT (SELECT count(*) FROM hawa.approvals WHERE task_id=${manual.id}::uuid AND decision='approved') AS approvals,
+      (SELECT count(*) FROM hawa.publications WHERE task_id=${manual.id}::uuid AND state='complete') AS publications`);
+  check('manual review reaches one simulated approval and completed archive publication', final.state === 'complete' &&
+    Number(manualReceipts.approvals) === 1 && Number(manualReceipts.publications) === 1, JSON.stringify(manualReceipts));
+  events.push(`Desk bilingual request ${manual.id} → saved plan ${generated.planId} → simulated Canva import → captured review → simulated approval/publication`);
   return checks;
 }

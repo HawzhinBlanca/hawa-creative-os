@@ -6,6 +6,7 @@ import { withRlsContext } from '@hawa/db';
 import { TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
 import { log } from '../logging.js';
 import { rejectUnownedLifecycleDesignWrite } from './lifecycle-design-proof.js';
+import { recordManualCanvaReview, type CaptureReview } from '../services/manual-canva-review.js';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
   const service = ctx.db ? new CanvaConnectService(ctx.db,options) : null;
@@ -68,15 +69,21 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
   }));
   /**
    * A copy-and-font check retrieved here (the Desk's "Check copy & fonts", or the worker's own) becomes
-   * the draft's latest QC run when the task already has its Desk revision, so capturing again after a
+   * the manual task's captured revision, or the automatic draft's latest QC run, so capturing again after a
    * failed or timed-out check unblocks approval; after a revision request it becomes the new revision
    * (recordCheckedExportQc). Nothing recorded it until 2026-09-24. The evaluator lives in app.ts,
    * which has loaded by the time a request arrives.
    */
-  const recordCheck = async (s: {tenantId:string;actorId:string;role?:string}, taskId: string, result: { status?: string; artifact?: { format?: string; content_check?: unknown } | null }) => {
+  const recordCheck = async (s: {tenantId:string;actorId:string;role?:string}, taskId: string, result: { status?: string; artifact?: { id?: string; format?: string; content_check?: unknown } | null }): Promise<CaptureReview | undefined> => {
     if (result?.status!=='retrieved'||result.artifact?.format!=='pptx'||!result.artifact.content_check||!ctx.db) return;
     try {
       const [{ recordCheckedExportQc }, { evaluateCanvaExportQc }] = await Promise.all([import('../services/canva-task-outcome.js'), import('../core-helpers.js')]);
+      if (result.artifact?.id) {
+        const manual = await withRlsContext(ctx.db,
+          {tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'}, trx=>recordManualCanvaReview(trx,evaluateCanvaExportQc,
+            {tenantId:s.tenantId,taskId,actorId:s.actorId,artifactId:result.artifact!.id!}));
+        if (manual.status !== 'not_applicable') return manual;
+      }
       const recorded = await withRlsContext(ctx.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},(trx)=>recordCheckedExportQc(trx,evaluateCanvaExportQc,{tenantId:s.tenantId,taskId,actorId:s.actorId,rework:true}));
       // The revision, its QC run and the task's move are Postgres's; approval reads them there.
       if (recorded.recorded && recorded.transition?.changed) {
@@ -88,20 +95,24 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
           log.error(`[canva] Task ${taskId}: ${TASK_TRANSITIONED_EVENT} not sent:`, (err as Error)?.message || err);
         }
       }
+      if (recorded.recorded) return { status:'recorded',revisionId:recorded.revisionId,
+        qaPassed:recorded.qc.status==='passed'&&recorded.qc.criticalPass,
+        checkedArtifactId:String(recorded.qc.qaReport.exportArtifactId) };
     } catch (err) {
       log.warn(`[canva] Task ${taskId}: the retrieved check could not be recorded as a QC run:`, (err as Error)?.message || err);
+      return {status:'blocked',retryable:true,reason:'The export is retained, but its review could not be recorded. Resume this operation to retry safely.'};
     }
   };
   ctx.registerRoute('post','/tasks/:taskId/canva/exports',protect(async(c,s,api)=>{
     const body=await c.req.json().catch(()=>({}));
     const result=await api.startExport(s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body.format,body.expectedVersion);
-    await recordCheck(s,c.req.param('taskId'),result);
-    return c.json(result,202);
+    const review=await recordCheck(s,c.req.param('taskId'),result);
+    return c.json({...result,...(review?{review}:{})},202);
   }));
   ctx.registerRoute('post','/tasks/:taskId/canva/exports/:operationId/resume',protect(async(c,s,api)=>{
     const result=await api.exportStatus(s,c.req.param('taskId'),c.req.param('operationId'));
-    await recordCheck(s,c.req.param('taskId'),result);
-    return c.json(result);
+    const review=await recordCheck(s,c.req.param('taskId'),result);
+    return c.json({...result,...(review?{review}:{})});
   }));
   ctx.registerRoute('get','/tasks/:taskId/canva/artifacts/:artifactId',protect(async(c,s,api)=>{
     const file=await api.artifact(s,c.req.param('taskId'),c.req.param('artifactId'));

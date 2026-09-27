@@ -52,7 +52,7 @@ describe('the label and next step of every status Core reports', () => {
     for (const state of TASK_DB_STATES.filter((s) => s !== 'received')) {
       const view = taskStatusView(toApiTaskStatus(state));
       expect(view.pill, state).not.toBe('RECEIVED');
-      expect(view.group === 'needs_action' && view.primaryButton === 'edit' && /saved/.test(view.message), state).toBe(false);
+      expect(view.message, state).not.toBe(taskStatusView('RECEIVED').message);
     }
   });
 

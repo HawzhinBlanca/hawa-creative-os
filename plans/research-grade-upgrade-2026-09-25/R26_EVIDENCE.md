@@ -119,3 +119,35 @@ the release verifier and the final full regression: **447 files / 3,531 passed**
 the bilingual fix; this follow-up strengthens the test environment. The final
 proof links the deployed source and tested seal separately. All stated live,
 physical-recovery and human-quality limitations remain.
+
+## Manual capture/review implementation — ADR-076, 2026-09-27
+
+Requirements FR-001/041/043/064/069 and NFR-017/020. The first review was unreachable:
+PNG capture created no revision and the existing recorder required one. The new
+manual path creates a source-backed review from matching retained PNG/PPTX. It
+preserves submitted exact copy separately from the inspected source text, requires
+real unique PPTX object identities, and labels native Canva verification unknown.
+Stable per-action PNG/PPTX keys survive ambiguous responses and browser reloads.
+Manual recapture creates fresh evidence and invalidates approval once; an old
+capture cannot return a later decision to review. No auto-approval is introduced.
+
+A real integration failure initially exposed the missing editable object map (422).
+The next recapture check exposed the source-hash uniqueness constraint, which
+incorrectly treated identical bytes as identical review checkpoints. Migration 045
+keeps the true source hash and distinct revision identity. An existing Desk test
+also classified any occurrence of “saved” as the RECEIVED state; it now checks the
+actual RECEIVED message instead. Early fixture-size/hash and missing test-import
+errors were setup failures, not evidence of product defects. A sandbox DB socket
+refusal and tsx IPC refusal were rerun with the required local permissions.
+
+Final affected set: **14 files / 151 tests passed**. It includes first review,
+concurrent/replayed captures, HTTP resume across app instances, actual approval,
+copy-mismatch refusal, same-source recapture with one approval invalidation,
+requested changes, completed/cancelled tasks, binding change, tenant refusal,
+storage-integrity enforcement, source-identity verification and stale preview
+checks. Types, lint, production Desk build and security scan passed. The candidate
+scenario now exercises manual capture/review/approval/archive publication too;
+its fresh deployment and the final full suite are pending at this checkpoint.
+
+This is source implementation evidence. It does not qualify a production build,
+real Canva layer editability, human approval, visual/RTL quality or real delivery.

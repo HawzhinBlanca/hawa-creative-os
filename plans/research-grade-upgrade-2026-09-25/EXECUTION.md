@@ -12,7 +12,28 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-27 — full-app candidate and Desk copy repair)
+## Current implementation (2026-09-27 — manual captured review, ADR-076)
+
+Manual Desk capture now retains PNG and checked PPTX under stable action keys and
+records an attributable review using exact submitted copy and live text identities
+read from the retained source. Matching capture versions and byte hashes are
+required. Recapture updates source/preview evidence, invalidates approval once,
+and refuses stale or closed-task replay. Native Canva verification remains unknown.
+Migration 045 permits distinct Canva review checkpoints retaining the same PPTX
+hash; other studios retain source uniqueness. Preview checks match their image's
+capture version. Operator-required tasks no longer claim an automatic draft failed.
+
+Affected regression: **14 files / 151 tests passed**, including real Core resume
+and approval routes, concurrent replay, copy failure, changed binding, source
+identity refusal, recapture/invalidation, closed tasks and migration retry. Source
+and test types, lint, Desk production build and secret scan passed at the implementation
+checkpoint. Fresh deployed candidate and full sealed regression are still pending.
+The prior 3,531-test result below does not qualify these changes. Continue with the
+extended R1.S3.SOURCES candidate scenario, then browser and release qualification.
+Live native edit/reopen, human multilingual/creative acceptance, actual delivery,
+retrieval performance and clean-host recovery remain open. No production change.
+
+## Prior result (2026-09-27 — full-app candidate and Desk copy repair)
 
 The isolated Core/Desk/worker/PostgreSQL/Restate/nginx/real Docling rehearsal passed
 **22/22 checks**, including PDF exact-copy intake, manual voice revision, process

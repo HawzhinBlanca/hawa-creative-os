@@ -165,8 +165,8 @@ export const STATUS_VIEWS: Readonly<Record<TaskApiStatus, View>> = {
     group: 'waiting',
   },
   OPERATOR_REQUIRED: {
-    pillClass: 'pill-failed',
-    message: 'The automatic draft failed or stopped, so a designer must take this over. The panels below show what exists and why it stopped.',
+    pillClass: 'pill-action',
+    message: 'A designer needs to continue this task. Review the saved copy and evidence below, finish the design in Canva, then capture it for review.',
     primaryButton: 'edit',
     group: 'needs_action',
   },

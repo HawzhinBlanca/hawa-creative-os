@@ -24,6 +24,14 @@ export interface OffendingFontObject {
   reason: string;
 }
 
+/** Addressable live text observed in the retained PPTX; not a native Canva layer map. */
+export interface PptxTextObject {
+  id: string;
+  type: 'text';
+  text: string;
+  source: { format: 'pptx'; part: string; shapeId: string };
+}
+
 export interface PptxCheckOptions {
   /** Typeface expected on Arabic-script (Sorani) text objects; Latin objects must use requiredFont. */
   scriptFonts?: { arabic?: string };
@@ -135,6 +143,15 @@ export function checkCanvaPptx(
   find(doc, 'p:sp', shapes);
 
   const texts: string[] = [];
+  const sourceTextObjects: PptxTextObject[] = [];
+  const identities: Array<{ ':@'?: Record<string, unknown> }> = [];
+  findOwners(doc, 'p:cNvPr', identities);
+  const identityCounts = new Map<string, number>();
+  for (const owner of identities) {
+    const id = String(owner?.[':@']?.['@_id'] ?? '');
+    identityCounts.set(id, (identityCounts.get(id) || 0) + 1);
+  }
+  let unaddressableText = false;
   const fonts: string[] = [];
   const fontExpectations: string[] = [];
   const offendingObjects: OffendingFontObject[] = [];
@@ -163,6 +180,16 @@ export function checkCanvaPptx(
     if (!text.trim()) continue;
     const textIdx = texts.length;
     texts.push(text.trim());
+    const owners: Array<{ ':@'?: Record<string, unknown> }> = [];
+    findOwners(shape, 'p:cNvPr', owners);
+    const shapeId = String(owners[0]?.[':@']?.['@_id'] ?? '');
+    if (owners.length !== 1 || !/^(0|[1-9][0-9]*)$/.test(shapeId) || identityCounts.get(shapeId) !== 1) {
+      unaddressableText = true;
+    } else {
+      sourceTextObjects.push({ id: `${names[0]}#${shapeId}`, type: 'text',
+        // Drop only the final separator we inserted; retain the source's whitespace and Unicode.
+        text: text.slice(0, -1), source: { format: 'pptx', part: names[0], shapeId } });
+    }
 
     const isArabic = ARABIC_SCRIPT.test(text);
     if (isArabic) {
@@ -306,7 +333,8 @@ export function checkCanvaPptx(
     : null;
 
   return {
-    checkVersion: 3,
+    checkVersion: 4,
+    sourceTextObjects: unaddressableText ? null : sourceTextObjects,
     source: detectedSource,
     canvaDesignId,
     documentKind: options.documentKind || 'unspecified',

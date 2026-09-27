@@ -394,7 +394,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Operation result; no QA approval implied"
+            "description": "Operation result; no QA approval implied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvaExportResult"
+                }
+              }
+            }
           },
           "401": {
             "description": "Authentication required"
@@ -415,7 +422,14 @@
             "description": "Database or configuration required"
           },
           "202": {
-            "description": "Pending or uncertain operation; inspect status before retrying"
+            "description": "Export operation result, possibly already retrieved; inspect status and the optional server review receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvaExportResult"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -450,7 +464,8 @@
           {
             "officeBearer": []
           }
-        ]
+        ],
+        "description": "Retains export evidence. A retrieved checked PPTX can record a manual review when a PNG from the same Canva version is retained. Inspect the optional review receipt; missing or blocked review must not be presented as ready. No approval is created. Replay the same operation after an uncertain response."
       }
     },
     "/v1/tasks/{taskId}/canva/exports/{operationId}/resume": {
@@ -481,7 +496,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Operation result; no QA approval implied"
+            "description": "Operation result; no QA approval implied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvaExportResult"
+                }
+              }
+            }
           },
           "401": {
             "description": "Authentication required"
@@ -506,7 +528,8 @@
           {
             "officeBearer": []
           }
-        ]
+        ],
+        "description": "Retains export evidence. A retrieved checked PPTX can record a manual review when a PNG from the same Canva version is retained. Inspect the optional review receipt; missing or blocked review must not be presented as ready. No approval is created. Replay the same operation after an uncertain response."
       }
     },
     "/v1/tasks/{taskId}/canva/artifacts/{artifactId}": {
@@ -804,6 +827,85 @@
         "type": "http",
         "scheme": "bearer",
         "description": "Existing server-authenticated Hawa office actor; credentials never passed to Canva APIs from the browser."
+      }
+    },
+    "schemas": {
+      "CaptureReview": {
+        "description": "Server-recorded review outcome after a checked export. A recorded text check is not native Canva verification or human approval.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "revisionId",
+              "qaPassed",
+              "checkedArtifactId"
+            ],
+            "properties": {
+              "status": {
+                "const": "recorded"
+              },
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "qaPassed": {
+                "type": "boolean"
+              },
+              "checkedArtifactId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "blocked",
+                  "not_applicable"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "retryable": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "CanvaExportResult": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "status"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "enum": [
+              "creating",
+              "submitted",
+              "uncertain",
+              "retrieved",
+              "stale",
+              "failed"
+            ]
+          },
+          "review": {
+            "$ref": "#/components/schemas/CaptureReview"
+          }
+        }
       }
     }
   }

@@ -161,6 +161,7 @@ export async function probeDatabase(db: unknown, timeoutMs = 2000): Promise<Data
 }
 
 export interface CanvaQcEvaluationResult {
+  sourceTextObjects?: ReturnType<typeof checkCanvaPptx>['sourceTextObjects'];
   qaReport: {
     status: 'passed' | 'failed';
     criticalPass: boolean;
@@ -334,6 +335,7 @@ export function evaluateCanvaExportQc(
   return {
     status,
     criticalPass,
+    sourceTextObjects: resolvedCheck.sourceTextObjects,
     qaReport: {
       status,
       criticalPass,
