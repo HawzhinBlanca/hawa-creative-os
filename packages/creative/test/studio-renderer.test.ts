@@ -1,3 +1,4 @@
+import { getKaaeOfficialLogoDataUri } from '../src/operations-to-svg.js';
 import { describe, it, expect } from 'vitest';
 import {
   renderLayoutV2,
@@ -32,7 +33,8 @@ describe('Design Studio v2: Local Renderer (renderLayoutV2) & Goldens', () => {
   });
 
   it('renders Sorani Kurdish golden layout with Noto Sans Arabic, RTL bidi, and ≤ 1.0% diff', () => {
-    const res1 = renderLayoutV2(SORANI_LAYOUT, { copyText: SORANI_COPY });
+    // The golden design carries KAAE's logo, handed in as the studio hands a client's (ADR-038).
+    const res1 = renderLayoutV2(SORANI_LAYOUT, { copyText: SORANI_COPY, logoDataUri: getKaaeOfficialLogoDataUri() });
     expect(res1.png.length).toBeGreaterThan(20000);
     expect(res1.noTextPng.length).toBeGreaterThan(10000);
     expect(res1.wrappedLines).toEqual({ 0: 1, 1: 2, 2: 1, 3: 2, 4: 1 });
@@ -48,7 +50,7 @@ describe('Design Studio v2: Local Renderer (renderLayoutV2) & Goldens', () => {
     expect(res1.svg).toContain('\u202B');
     expect(res1.svg).toContain('Noto Sans Arabic');
 
-    const res2 = renderLayoutV2(SORANI_LAYOUT, { copyText: SORANI_COPY });
+    const res2 = renderLayoutV2(SORANI_LAYOUT, { copyText: SORANI_COPY, logoDataUri: getKaaeOfficialLogoDataUri() });
     const diff = comparePngBuffers(res1.png, res2.png);
     expect(diff.diffPercentage).toBeLessThanOrEqual(1.0);
     expect(diff.diffPercentage).toBe(0.0);

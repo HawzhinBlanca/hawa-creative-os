@@ -1,3 +1,4 @@
+import { evaluateThumbnailLayout } from './thumbnail-rules.js';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
 import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './layout-metrics.js';
@@ -29,6 +30,11 @@ export interface HardQaContext {
    * and refused every design that placed the client's photos (2026-09-22, run b7fc5555).
    */
   photoCount?: number;
+  /**
+   * The client's playbook (ADR-038). A video thumbnail also answers to the thumbnail rules: nothing
+   * under the platform's badge or buttons, and a hook legible at listing size.
+   */
+  playbook?: 'institutional-announcement' | 'video-thumbnail';
 }
 
 export interface HardQaOutcome {
@@ -243,6 +249,12 @@ export function evaluateHardQa(
         `${rewritten.join('; ')}. The layout measured and returned is the one that was judged; the ` +
         `rewrite is not applied, because applying it after judging ships a design nobody scored.`
     );
+  }
+
+  if (ctx.playbook === 'video-thumbnail') {
+    const thumbnail = evaluateThumbnailLayout(checked, { width: ctx.width, height: ctx.height });
+    for (const code of thumbnail.defectCodes) if (!defectCodes.includes(code)) defectCodes.push(code);
+    messages.push(...thumbnail.messages);
   }
 
   return { passed: defectCodes.length === 0, defectCodes, messages, metrics, layout };

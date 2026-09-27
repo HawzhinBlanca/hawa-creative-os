@@ -20,7 +20,7 @@ import {
   framedPhotoTreated,
   type PhotoFragment,
 } from './photo-treatments.js';
-import { getKaaeOfficialLogoDataUri, escapeXml } from '../operations-to-svg.js';
+import { escapeXml } from '../operations-to-svg.js';
 import { SvgFiles, checkInlineDataUris } from './svg-files.js';
 import { pinnedFontconfigFile, rasteriserEnv } from './font-environment.js';
 
@@ -1535,13 +1535,18 @@ function focusedPhotoSvg(
   return `<g clip-path="url(#${clipId})">${croppedPhotoSvg(id, href, box, pixels, crop)}</g>`;
 }
 
-/** The logo a render draws: the caller's data URI or file, else the KAAE logo, typed from its bytes. */
+/**
+ * The logo a render draws: the caller's data URI or file, typed from its bytes, or none. There is no
+ * default: this used to fall back to KAAE's logo, so a render that was not handed one (the judge's
+ * previews, the canary, any client other than KAAE) carried KAAE's emblem (ADR-038). A layout with a
+ * logo box and no logo given draws the box empty; the studio always passes the client's logo.
+ */
 function resolveLogoHref(options: RenderLayoutOptions): string {
   if (options.logoDataUri) return relabelDataUri(options.logoDataUri);
   if (options.logoPath && fs.existsSync(options.logoPath)) {
     return imageDataUri(fs.readFileSync(options.logoPath), `logo ${options.logoPath}`);
   }
-  return getKaaeOfficialLogoDataUri();
+  return '';
 }
 
 /**
@@ -1851,9 +1856,10 @@ export function renderLayoutV2ToSvg(
         `<image id="logo" xlink:href="${svgFiles.hrefFor(logoHref, 'logo')}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="xMidYMid meet"/>`
       );
     } else {
-      // Vector fallback logo box
+      // No logo was given: a neutral box marks where it goes. It was KAAE gold (#F7B500), which put
+      // KAAE's colour on any other client's preview (ADR-038).
       bodyPartsNoText.push(
-        `<rect id="logo-placeholder" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" fill="#F7B500" opacity="0.9" rx="8"/>`
+        `<rect id="logo-placeholder" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" fill="#9CA3AF" opacity="0.35" rx="8"/>`
       );
     }
   }
