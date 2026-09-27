@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Callable
+from archive_lock import inherited_lock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -412,6 +413,8 @@ class RestateBackup:
         c = self.c
         if not c.archive_dir.is_dir():
             raise BackupError("archive destination must already exist; no implicit off-host location")
+        if inherited_lock(c.archive_dir, 'exclusive'):
+            return self._apply_locked(pair_stamp)
         lock_path = c.archive_dir / ".restate-backup.lock"
         fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
         with os.fdopen(fd, "w") as lock:

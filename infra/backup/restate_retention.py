@@ -220,6 +220,11 @@ def apply_retention(archive_dir: Path, key_file: Path, keep: int,
                     now: datetime | None = None, min_age: timedelta = timedelta(hours=24)) -> RetentionPlan:
     if not archive_dir.is_dir():
         raise BackupError("paired archive directory is missing")
+    from archive_lock import inherited_lock
+    if inherited_lock(archive_dir, 'exclusive'):
+        plan = plan_retention(archive_dir, key_file, keep, now, min_age)
+        execute_plan(plan)
+        return plan
     lock_path = archive_dir / ".restate-backup.lock"
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
     with os.fdopen(fd, "w") as lock:

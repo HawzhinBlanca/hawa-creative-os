@@ -217,3 +217,45 @@ security (zero secrets), blueprint **895/0/0** and diff checks pass. The actual
 57-check candidate above provides the deployed synthetic proof. No full app-suite
 rerun, independent-host recovery, real-provider/human acceptance or production
 activation is implied by this source seal.
+
+## Nightly archive integrity and monitoring (ADR-081, 2026-09-27)
+
+The actual backup integration reproduced two false successes: a deleted retained
+pack still returned zero, and a failed synthetic `gsutil` command still returned
+zero. A shared archive reader now verifies all indexed required packs, including
+old ones, before publishing a new file manifest and the final dump. Unsafe tar
+members are never extracted directly: required files are privately staged, hashed,
+and published only after the complete selected set passes. Missing or corrupt
+bytes prevent new archive publication, pruning and collection.
+
+An inherited, inode- and mode-checked descriptor holds the existing archive lock
+across the whole nightly process; restores hold it shared, and nested Restate
+capture/retention reuse the owner's lock. The tested busy-lock path preserves
+snapshots, scratch databases and an older active workspace. Workspaces are unique;
+process failure and SIGKILL release the lock. No stale PID-file takeover is used.
+Incomplete cloud transport is refused before dump/transport; no off-host delivery
+is invented. Same-directory rename publishes verified copies, with the dump last.
+
+The watchdog previously used local dump mtime, which could look fresh after archive
+failure. Its actual status command now observes the completed nightly receipt and
+capture time, with matching local size/checksum metadata. Tests cover success,
+failed archive despite a fresh local dump, touching an old dump, missing/mismatched
+metadata, malformed/future receipts and a separately reported GC warning. It does
+not periodically rehash the whole archive or qualify off-host durability.
+
+Final qualification passes **71 Python backup controls and 15 database-backed
+lifecycle tests**, zero skipped; test TypeScript and shell syntax pass. The first
+lock test run had one harness failure: an extra Python subprocess dropped the
+inherited descriptor; passing it explicitly models the real shell boundary.
+`R10_ARCHIVE_INTEGRITY_PROOF.json` records exact source hashes and failed-first
+history. The earlier 3,634-pass/59-skip app regression is historical; no application
+runtime source changed and it was not rerun for this host-script slice.
+
+The loaded nightly backup and watchdog agents point to this checkout, so the next
+job invocation uses these source changes. Their definitions were not changed; app
+services were not restarted; tests used only temporary archives and isolated DB
+clones. No production backup, restore or notification command was launched.
+Separate-host/off-host recovery, database/Restate capture-gap repair, production
+RPO/RTO, real Canva/human/live acceptance and retrieval/model measurements remain
+open. The legacy database archive format is unchanged; file-content checking adds
+no new authenticity claim for an unpaired historical database dump.

@@ -28,7 +28,7 @@ NOW="$(date -u +%Y%m%dT%H%M%SZ)"; START_TS="$(date -u +%FT%TZ)"; START_S="$(date
 # tests in parallel) never share one. Letters and digits only.
 SCRATCH_SUFFIX="$(printf '%s' "${HAWA_SCRATCH_DB_SUFFIX:-$$}" | tr -cd 'a-z0-9' | cut -c1-16)"; SCRATCH_SUFFIX="${SCRATCH_SUFFIX:-$$}"
 DDB="hawa_drill_$(printf '%s' "$NOW" | tr '[:upper:]' '[:lower:]')_${SCRATCH_SUFFIX}"
-WORK="$DRILL_ROOT/$NOW"; DB_CREATED=0
+WORK=""; DB_CREATED=0
 DUMP_NAME=""; TARGET=""; BLOBS_CHECKED=""; MISSING=""; ROWS=""; WITHOUT_ROW=""; RESTATE_ARCHIVE=""; RESTATE_CHECK="off"
 
 notify() { # Telegram, operator chat; values read at call time, never logged
@@ -60,7 +60,7 @@ SQL
 }
 cleanup() {
   if [[ "$DB_CREATED" == 1 ]]; then docker exec "$PG" dropdb -U hawa_owner --if-exists "$DDB" >/dev/null 2>&1 || echo "WARNING: could not drop $DDB" >&2; fi
-  rm -rf "$WORK"
+  if [[ -n "$WORK" ]]; then rm -rf "$WORK"; fi
 }
 fail() {
   trap - ERR
@@ -83,7 +83,15 @@ decrypt() { # file -> stdout; every caller fails the drill on a non-zero status
 }
 
 [[ -d "$ARCHIVE_DEST" ]] || fail "no archive at ${ARCHIVE_DEST/#$HOME/~}"
-mkdir -p "$WORK/blobs"; chmod 700 "$DRILL_ROOT" "$WORK"
+if [[ -z "${HAWA_ARCHIVE_LOCK_FD:-}" ]]; then
+  python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode shared \
+    -- bash "$ROOT/infra/backup/restore_drill.sh" "$@" && exit 0
+  exit 1
+fi
+python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode shared --check \
+  || fail "restore drill does not own this archive lock"
+mkdir -p "$DRILL_ROOT"; chmod 700 "$DRILL_ROOT"
+WORK="$(mktemp -d "$DRILL_ROOT/${NOW}.XXXXXX")"; chmod 700 "$WORK"
 
 # 1. The newest archived dump, its checksum, and its file manifest.
 DUMP="$( { ls -1t "$ARCHIVE_DEST"/hawa_*.dump.enc "$ARCHIVE_DEST"/hawa_*.dump 2>/dev/null || true; } | head -1)"
@@ -96,31 +104,20 @@ if [[ -f "$DUMP.sha256" ]]; then
   [[ "$(shasum -a 256 "$DUMP" | cut -d' ' -f1)" == "$(cut -d' ' -f1 < "$DUMP.sha256")" ]] || fail "$DUMP_NAME does not match its checksum"
 fi
 
-# 2. The dump, restored into a scratch database on the same server.
+# 2. Verify all required packs and extract only validated regular files into a new
+# private directory before creating a scratch database. System tar never writes archive paths.
+NEEDED="$(wc -l < "$MANIFEST" | tr -d ' ')"
+HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" python3 "$ROOT/infra/backup/blob_archive.py" \
+  --archive "$ARCHIVE_DEST" --manifest "$MANIFEST" --destination "$WORK/blobs" \
+  > "$WORK/archive-verification.json" || fail "file archive verification failed before database restore"
+
+# 3. The dump, restored into a scratch database on the same server.
 decrypt "$DUMP" > "$WORK/dump" || fail "could not decrypt $DUMP_NAME (is HAWA_BACKUP_ARCHIVE_KEYFILE readable?)"
 docker exec "$PG" createdb -U hawa_owner "$DDB" || fail "could not create $DDB"
 DB_CREATED=1
 docker exec -i "$PG" pg_restore -U hawa_owner -d "$DDB" --no-owner --no-privileges --exit-on-error < "$WORK/dump" \
   || fail "pg_restore rejected $DUMP_NAME"
 rm -f "$WORK/dump"
-
-# 3. The files the manifest lists, unpacked from the packs that hold them (and only those packs).
-INDEX="$ARCHIVE_DEST/blobs/index.tsv"
-LC_ALL=C sort -u "$MANIFEST" > "$WORK/needed"
-NEEDED="$(wc -l < "$WORK/needed" | tr -d ' ')"
-if [[ "$NEEDED" -gt 0 ]]; then
-  [[ -f "$INDEX" ]] || fail "the manifest lists ${NEEDED} files but the archive has no pack index"
-  awk -F'\t' 'NR==FNR { need[$1] = 1; next } ($1 in need) { print $2 }' "$WORK/needed" "$INDEX" | LC_ALL=C sort -u > "$WORK/packs"
-  while read -r pack; do
-    [[ "$pack" =~ ^blobpack_[0-9]{8}T[0-9]{6}Z\.tar(\.enc)?$ && -f "$ARCHIVE_DEST/blobs/$pack" ]] || fail "pack $pack is missing from the archive"
-    # The ERR trap is dropped inside the subshell: bash can fire it there too, and fail() would then
-    # record and alert twice for one failure.
-    { trap - ERR; decrypt "$ARCHIVE_DEST/blobs/$pack"; } | tar -xf - -C "$WORK/blobs" || fail "pack $pack does not decrypt and unpack"
-  done < "$WORK/packs"
-  (cd "$WORK/blobs" && find sha256 -type f 2>/dev/null | LC_ALL=C sort) > "$WORK/unpacked" || true
-  NOT_PACKED="$(LC_ALL=C comm -23 "$WORK/needed" "$WORK/unpacked" | wc -l | tr -d ' ')"
-  [[ "$NOT_PACKED" == 0 ]] || { MISSING="$NOT_PACKED"; fail "${NOT_PACKED} file(s) of the manifest are in no pack"; }
-fi
 
 # 4. The store check against the restored database: every file row has its file, the file hashes to its
 #    name and has the row's size. A reference with no row is counted apart (packages/db/src/blobs/verify.ts).

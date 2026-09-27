@@ -12,7 +12,31 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-27 — coordinated application recovery)
+## Current result (2026-09-27 — nightly archive integrity and monitoring)
+
+ADR-081 qualifies **71 backup Python tests and 15 database lifecycle tests**, with
+no skips. A red-before run proved that a missing retained pack and a failed cloud
+upload both returned success. Every required old/new file pack is now checked
+before archive publication, retention or GC. Restore validates paths/types/hashes
+and stages only requested files before creating a scratch database. Dump publication
+is atomic and last. One archive lock covers backup, restore and retention; contention
+preserves an active workspace, and crashes release the lock. The incomplete `gs://`
+transport refuses before a dump. Local encrypted archive support remains active.
+
+The watchdog now requires the latest successful whole-night receipt and original
+capture time with matching local dump/checksum metadata. A fresh dump from a failed
+archive attempt is unhealthy. Test types, shell syntax and blueprint **899/0/0** pass; full app regression
+was not rerun for these host scripts. See `R10_ARCHIVE_INTEGRITY_PROOF.json` for exact
+source hashes, failed-first evidence, scope and remaining gates.
+
+Loaded host backup/watchdog jobs read this checkout on their next invocation. Job
+definitions were not changed, app services were not restarted, and qualification
+used only disposable test databases/archives. No production backup/restore or live
+notification command was launched. Off-host copying, an independent recovery host,
+coherent production capture, real Canva/human/live acceptance and retrieval/model
+measurements remain open; R10 and whole-app admission remain in progress.
+
+## Prior result (2026-09-27 — coordinated application recovery)
 
 Source `a3de8c3`, tested seal `10a8087`: **57/57 deployed checks pass** in the selected full-app recovery
 scenario; 43 other chaos scenarios are intentionally unselected. At two external

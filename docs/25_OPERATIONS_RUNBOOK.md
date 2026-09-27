@@ -118,6 +118,32 @@ own checks is renamed `hawa_<stamp>.dump.failed` (the newest two are kept to loo
 does not take it for a fresh backup; one whose archive copy failed stays, verified, and the alert says
 so. The encrypted copy is a temporary file and never outlives the run.
 
+Under ADR-081, the whole nightly operation owns the archive lock; restores hold
+the same lock for reading. A busy operation refuses before dump, pruning or orphan
+cleanup. The stored index is checked against every required pack, including packs
+from older nights: each file must hash to its content-addressed name. The file
+manifest and checksum are published before the dump, whose final name appears
+only after a verified copy. A missing or corrupt pack fails the night before
+retention or garbage collection. Preserve the failed run's evidence and repair
+the missing bytes from a separately verified copy before retrying.
+
+The monthly drill uses the same reader. Links, special files, unsafe paths,
+duplicate members and missing indexed files are refused before a scratch database
+is created. Only verified requested files are staged in a new private directory;
+an existing destination is never overwritten. Restore workspaces are unique.
+
+The watchdog reads the latest completed nightly outcome and capture time, with
+matching local dump/checksum metadata. A newly created dump from a failed archive
+attempt cannot report healthy; touching an older dump does not refresh its age.
+This observes local completion and freshness, not a periodic full content rehash
+or off-host/whole-system recovery admission. `gs://` is refused because the former
+path did not copy and verify the complete database/file set. A synchronized local
+archive still needs independent off-host readback and recovery qualification.
+
+The launch agents execute these host scripts from this checkout. Changes take
+effect when the next scheduled job invokes them; rebuilding app containers is
+not required. Run isolated backup tests before committing a script change.
+
 The deploy script writes `predeploy_<stamp>.dump` (same format, with its table of contents checked)
 before every migration. It is written as `.partial` and named, with its `.sha256`, only once checked;
 a failed one is removed and stops the deploy. Both live under the gitignored, owner-only `infra/backup/snapshots/`. Restore
@@ -225,4 +251,3 @@ GROUP BY r.id;
 ## Golden rule
 
 Do not “fix” an incident by manually editing database state or deleting evidence. Use audited repair/reconciliation commands or a documented migration reviewed by another operator.
-

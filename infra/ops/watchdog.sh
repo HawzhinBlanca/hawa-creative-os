@@ -114,13 +114,8 @@ if [[ "${used:-0}" -ge 88 && "$MODE" != "--status" ]] && (( NOW - last_cleanup >
 fi
 disk_full=0
 if [[ "${used:-0}" -ge 90 ]] || [[ "$disk_was_full" == 1 && "${used:-0}" -ge 88 ]]; then disk_full=1; fi
-newest="$(ls -t "$ROOT"/infra/backup/snapshots/hawa_*.dump 2>/dev/null | head -1 || true)"
-if [[ -n "$newest" ]]; then
-  age=$(( NOW - $(stat -f '%m' "$newest" 2>/dev/null || stat -c '%Y' "$newest") ))
-  [[ "$age" -lt $((26 * 3600)) ]] || problems+=("newest backup is $((age / 3600)) h old")
-else
-  problems+=("no nightly backup found in infra/backup/snapshots")
-fi
+backup_problem="$(python3 "$ROOT/infra/backup/backup_status.py" --snapshots "$ROOT/infra/backup/snapshots" 2>/dev/null)" \
+  || problems+=("${backup_problem:-nightly backup status unavailable}")
 
 if [[ ${#problems[@]} -eq 0 && "$disk_full" -eq 0 ]]; then
   echo "healthy"

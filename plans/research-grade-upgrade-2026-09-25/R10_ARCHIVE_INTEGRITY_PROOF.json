@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-09-27T02:36:51.372444+00:00",
+  "decision": "ADR-081",
+  "requirements": [
+    "FR-070",
+    "NFR-003",
+    "NFR-006",
+    "NFR-020"
+  ],
+  "sourceBaseCommit": "97057804eb79603f4fab7508b570d5576e5c2474",
+  "qualificationBy": "exact source hashes; isolated actual backup/restore scripts and hostile archive controls",
+  "qualification": {
+    "backupPythonPassed": 71,
+    "backupPythonFailed": 0,
+    "databaseLifecycleFilesPassed": 1,
+    "databaseLifecycleTestsPassed": 15,
+    "databaseLifecycleTestsFailed": 0,
+    "testsSkipped": 0,
+    "testTypecheck": "passed",
+    "shellSyntax": "passed",
+    "diffCheck": "passed"
+  },
+  "controls": [
+    "Missing and corrupt retained packs refuse publication, retention and GC",
+    "Cloud transport that omitted files or accepted failed upload is refused before dump/transport",
+    "Existing plaintext local archive compatibility and encrypted pack round-trip",
+    "Path traversal, absolute paths, links, special files, aliases, missing members and changed content are refused",
+    "Only required verified files are extracted; a later failure publishes no partial destination",
+    "Exclusive backup/retention and shared restore use one existing archive lock",
+    "Busy lock preserves snapshots, scratch databases and the older active workspace",
+    "Nested retention reuses the verified inherited descriptor; wrong directory/mode or forged descriptor refuses",
+    "Failed/killed commands release the advisory lock; symlink lock refuses",
+    "Actual watchdog status CLI sees complete backup success and archive failure despite a fresh local dump",
+    "Stale, malformed or future receipts and mismatched local metadata are refused"
+  ],
+  "failedFirst": {
+    "integration": {
+      "passed": 12,
+      "failed": 2,
+      "findings": [
+        "A missing retained pack still returned exit 0",
+        "A synthetic failed cloud upload still returned exit 0"
+      ]
+    },
+    "lockTestHarness": {
+      "passed": 64,
+      "failed": 1,
+      "reason": "The extra Python-to-Bash test subprocess dropped the descriptor by default; explicit pass_fds now models the real shell inheritance."
+    }
+  },
+  "commands": {
+    "python": "python3 -m unittest discover -s infra/backup -p 'test_*.py' -v",
+    "integration": "pnpm exec vitest run packages/db/test/blob-backup.test.ts",
+    "types": "pnpm exec tsx scripts/typecheck_tests.ts",
+    "syntax": "bash -n infra/backup/nightly_backup.sh infra/backup/restore_drill.sh infra/ops/watchdog.sh"
+  },
+  "logs": {
+    "python": {
+      "sha256": "fe81d5815349d5f895d4cc91d76531f2bf51a39da7011efbfeb97c2f4200ea68",
+      "summary": "71 tests passed"
+    },
+    "integration": {
+      "sha256": "6fc46868616c7b9dc40065ef0c4e0cc14477a5650735e3d9e6bf24756b02253a",
+      "summary": "15 tests passed"
+    },
+    "types": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "summary": "test TypeScript passed"
+    },
+    "red": {
+      "sha256": "608741ff72e7d93c8714a6cbd7f52905a3867645391138424677c88e32d474b6",
+      "summary": "2 reproduced failures; 12 existing tests passed"
+    }
+  },
+  "hostJobObservation": {
+    "design.hawa.nightly-backup": {
+      "loaded": true,
+      "state": "not running",
+      "program": "/bin/bash",
+      "last exit code": "0"
+    },
+    "design.hawa.watchdog": {
+      "loaded": true,
+      "state": "not running",
+      "program": "/bin/bash",
+      "last exit code": "0"
+    }
+  },
+  "activation": {
+    "hostJobsReadThisCheckout": true,
+    "launchAgentDefinitionsChanged": false,
+    "appServicesRestarted": false,
+    "liveArchiveAccessByTests": false,
+    "providerCallsByTests": false,
+    "scope": "Loaded nightly backup/watchdog agents use these scripts on their next invocation; no production backup, restore, deployment or notification command was launched for qualification."
+  },
+  "sourceSha256": {
+    "infra/backup/archive_lock.py": "611e63222776d62bfcc5610564fb4d78db7b2c5668f2b5c15023a2b35e1cc2ac",
+    "infra/backup/blob_archive.py": "338bfcdb1b40e315d1271b2d5261b01a65fc4acf8b683652e02e5490ef785ed4",
+    "infra/backup/backup_status.py": "a40b7e4c82f56bcc7f22f998d8b6656c0b85665f059d7c66ebd7b23a66fb54b6",
+    "infra/backup/nightly_backup.sh": "c20a2aecb888c7d700c2340a50e9013e6b65779b82ffdfc61e587c3e280d3f0c",
+    "infra/backup/restore_drill.sh": "6c08b9e5fbcab383549229502998b4383a15eaa8e96eef0d49386363edc4288c",
+    "infra/backup/restate_nightly.py": "eda5c1129809f3bd4df9b6a8446f2883a2032d7d5759d50b86dfb381b29676d1",
+    "infra/backup/restate_retention.py": "fe379aeeb81e253e56edca21a2f22cc6952aeea0a5df3eeeaf525c4efd04e688",
+    "infra/ops/watchdog.sh": "af88aeb3198d690783bcd4f5615ae315124f58ebcfd8150fa4739582d8a608a9",
+    "infra/backup/test_archive_lock.py": "fb42376c133e1044bfd82067e206b0a0fa88095d74315c1895f3f9f5303d4c9e",
+    "infra/backup/test_blob_archive.py": "86b0a89fa5cb7c957ac1485c43b57a117858cd9578f5313d554bb8bffbd61fd6",
+    "infra/backup/test_backup_status.py": "2660d79555697e1416aef472f4cc88a5c98b0c5a36928df046bcde4b2369b74e",
+    "packages/db/test/blob-backup.test.ts": "55cf1e8db77f522adef4f0ffde8895e31fc9636b3f4cc1e10cbe5bcc2828f5b0"
+  },
+  "historicalAppRegression": {
+    "passed": 3634,
+    "skipped": 59,
+    "rerunForThisHostScriptSlice": false
+  },
+  "limits": [
+    "Existing archive format preserved; legacy database dump authenticity is not added",
+    "Watchdog checks completed receipt age and matching local metadata, not a periodic full rehash",
+    "Same-host synthetic test archives; no independent-host/off-host recovery or production RPO/RTO admission",
+    "Production coherent PostgreSQL/Restate capture remains unqualified",
+    "Real native Canva/human/live delivery and retrieval/model quality measurements remain open"
+  ],
+  "qualificationGates": {
+    "blueprint": {
+      "passed": 899,
+      "warnings": 0,
+      "failures": 0
+    },
+    "releaseManifest": "pending source seal"
+  }
+}
