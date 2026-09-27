@@ -436,6 +436,10 @@ export class RevisionRepository {
           })) {
             throw new Error('Canva approval pins contain an export from another capture or revision');
           }
+          const policyCurrent=(await sql<{current:boolean}>`SELECT hawa.canva_export_policy_current(o.tenant_id,o.client_id,o.metadata) AS current
+            FROM hawa.canva_remote_operations o JOIN hawa.canva_export_bytes b ON b.operation_id=o.id AND b.tenant_id=o.tenant_id
+            WHERE b.id=${checkedId}::uuid AND b.tenant_id=${params.tenantId}::uuid`.execute(dbClient)).rows[0];
+          if (!policyCurrent?.current) throw new Error('Precondition failed: Client font policy changed; capture and review the design again before approval');
           approvedCanvaBinding = binding;
         }
       }

@@ -465,7 +465,7 @@
             "officeBearer": []
           }
         ],
-        "description": "Retains export evidence. A retrieved checked PPTX can record a manual review when a PNG from the same Canva version is retained. Inspect the optional review receipt; missing or blocked review must not be presented as ready. No approval is created. Replay the same operation after an uncertain response."
+        "description": "Retains export evidence. A retrieved checked PPTX can record a manual review when a PNG from the same Canva version is retained. Inspect the optional review receipt; missing or blocked review must not be presented as ready. No approval is created. Replay the same operation after an uncertain response. Checked PPTX admission freezes the matching imported source policy, or exact manual Desk copy with active human-authored Client DNA font families. Replay retains that original policy. Superseded manual policy cannot qualify new review, approval or publication; capture again using current Client DNA."
       }
     },
     "/v1/tasks/{taskId}/canva/exports/{operationId}/resume": {
@@ -529,7 +529,7 @@
             "officeBearer": []
           }
         ],
-        "description": "Retains export evidence. A retrieved checked PPTX can record a manual review when a PNG from the same Canva version is retained. Inspect the optional review receipt; missing or blocked review must not be presented as ready. No approval is created. Replay the same operation after an uncertain response."
+        "description": "Retains export evidence. A retrieved checked PPTX can record a manual review when a PNG from the same Canva version is retained. Inspect the optional review receipt; missing or blocked review must not be presented as ready. No approval is created. Replay the same operation after an uncertain response. Checked PPTX admission freezes the matching imported source policy, or exact manual Desk copy with active human-authored Client DNA font families. Replay retains that original policy. Superseded manual policy cannot qualify new review, approval or publication; capture again using current Client DNA."
       }
     },
     "/v1/tasks/{taskId}/canva/artifacts/{artifactId}": {

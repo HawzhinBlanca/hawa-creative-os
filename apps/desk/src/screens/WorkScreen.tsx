@@ -1546,7 +1546,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               <span style={{ fontWeight: 600 }}>Signing off as: </span>
               <span>{sessionUser ? `${sessionUser.displayName || 'Signed-in user'} (${roleLabel(sessionUser.role || 'unknown role')})` : 'the signed-in session'}</span>
               {approvalRoleBlocker(sessionUser?.role) && (
-                <p role="status" style={{ color: '#b91c1c', margin: '4px 0 0' }}>
+                <p role="status" style={{ color: 'var(--warn-text)', margin: '4px 0 0' }}>
                   {approvalRoleBlocker(sessionUser?.role)}
                 </p>
               )}
@@ -1557,7 +1557,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 Cancel
               </button>
               <button
-                className="btn primary"
+                className="btn primary approval-confirm"
                 style={{ background: '#166534', borderColor: '#166534' }}
                 onClick={handleApprove}
                 disabled={

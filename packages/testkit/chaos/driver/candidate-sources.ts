@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { CHAOS_DIR, REPO_ROOT, deploymentReceipt, fakes, kill, query, secrets, sql, start, waitHealthy } from './stack.js';
 import { KAAE_CLIENT_ID } from './provision.js';
 import { captureForReview } from '../../../../apps/desk/src/services/canvaCapture.js';
+import { checkedCanvaExportFixture } from '../../src/canva-export-fixture.js';
+import { computeDnaHash } from '../../../../apps/core/src/core-helpers.js';
 import { chatInboxInvocations, imageDocumentUpdate, sendToChatInbox, tasksOfChat, textUpdate, waitUntil,
   type InvariantResult } from './scenario.js';
 
@@ -212,5 +214,41 @@ export async function candidateSources(chat: string, events: string[], suiteStar
   check('manual review reaches one simulated approval and completed archive publication', final.state === 'complete' &&
     Number(manualReceipts.approvals) === 1 && Number(manualReceipts.publications) === 1, JSON.stringify(manualReceipts));
   events.push(`Desk bilingual request ${manual.id} → saved plan ${generated.planId} → simulated Canva import → captured review → simulated approval/publication`);
+
+  const blankClient=randomUUID(),tenantId='00000000-0000-4000-a000-000000000001';
+  const blankDna={tenantId,clientId:blankClient,name:'Synthetic blank-design client',code:blankClient,version:1,status:'active',
+    fonts:[{family:'Verdana',license:'Synthetic rehearsal fixture',supportedLocales:['en']}],
+    destinations:{productionFolderId:'chaos-blank-production',spreadsheetId:'chaos-blank-tracker',sheetId:0},
+    approvalPolicy:{requiredRoles:['art_director'],allowAutoApproval:false,autoApprovalEligibleTemplates:[]}};
+  await query(sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${blankClient}::uuid,${tenantId}::uuid,${blankClient},'Synthetic blank-design client')`);
+  await query(sql`INSERT INTO hawa.client_dna_versions(tenant_id,client_id,version,status,dna,content_hash,created_by)
+    VALUES(${tenantId}::uuid,${blankClient}::uuid,1,'active',${JSON.stringify(blankDna)}::jsonb,${computeDnaHash(blankDna)},'00000000-0000-4000-b000-000000000001'::uuid)`);
+  const blank=await action('/tasks',{...intake,clientId:blankClient,title:'Candidate blank native design',copyEn:'Exact copy 123.45',copyCkb:'',
+    description:'Exact copy 123.45'},randomUUID(),session.token);
+  const created=await action(`/tasks/${blank.id}/canva/design`,{width:640,height:640},randomUUID(),session.token);
+  check('blank design is created through the deployed Canva adapter',created.status==='retrieved' && !!created.designId,`task ${blank.id}; design ${created.designId}`);
+  const fixture=await checkedCanvaExportFixture('Exact copy 123.45');
+  await fakes.canvaManualEdit({designId:created.designId,contentBase64:fixture.bytes.toString('base64')});
+  const blankCapture=await captureForReview(captureApi,blank.id,{key:randomUUID(),waitMs:100});
+  const [blankReview]=await query<{revision_id:string;report:{exportArtifactId:string;previewArtifactId:string};sources:string;policy:{kind:string;dnaVersion:number}}>(sql`
+    SELECT t.current_design_revision_id AS revision_id,q.report,o.metadata->'checkingPolicy' AS policy,
+      (SELECT count(*) FROM hawa.canva_editable_sources WHERE task_id=t.id) AS sources
+    FROM hawa.tasks t JOIN hawa.qc_runs q ON q.design_revision_id=t.current_design_revision_id
+    JOIN hawa.canva_export_bytes b ON b.id=(q.report->>'exportArtifactId')::uuid
+    JOIN hawa.canva_remote_operations o ON o.id=b.operation_id WHERE t.id=${blank.id}::uuid`);
+  check('blank design reaches checked review using DNA and no invented imported source',blankCapture.tone==='success' &&
+    Number(blankReview?.sources)===0 && blankReview?.policy.kind==='manual_client_dna' && blankReview.policy.dnaVersion===1,blankCapture.text);
+  const blankApproval=await action(`/tasks/${blank.id}/revisions/${blankReview.revision_id}/decisions`,{action:'approve',
+    reason:'Synthetic blank-design rehearsal; native editability and human quality remain unqualified.',
+    pinnedExportIds:[blankReview.report.previewArtifactId,blankReview.report.exportArtifactId]});
+  await action(`/tasks/${blank.id}/publish`,{approvalId:blankApproval.decisionId});
+  await waitUntil('blank task publication',async()=>{
+    const [task]=await query<{state:string}>(sql`SELECT state FROM hawa.tasks WHERE id=${blank.id}::uuid`);
+    return task?.state==='complete'?task:null;
+  });
+  const ledger=(await fakes.canvaLedger()).filter(entry=>entry.designId===created.designId);
+  check('blank capture completes simulated publication with one explicit manual edit and no import',
+    ledger.filter(entry=>entry.kind==='manual_edit').length===1 && !ledger.some(entry=>entry.kind==='import'),`task ${blank.id}`);
+  events.push(`Blank design ${blank.id} → explicit simulated manual edit → DNA-checked review → simulated approval/publication; real native editing remains unverified`);
   return checks;
 }

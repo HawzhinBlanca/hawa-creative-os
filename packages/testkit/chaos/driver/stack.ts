@@ -224,6 +224,7 @@ export const fakes = {
   driveFiles: () => call('/__fakes/drive/files').then((r) => r.json.files as any[]),
   googleDelay: (delay: { path: string; delayMs: number; n?: number }) => call('/__fakes/google/faults', { body: delay }),
   canvaLedger: () => call('/__fakes/canva/ledger').then((r) => r.json.ledger as any[]),
+  canvaManualEdit: (body: {designId:string;contentBase64:string}) => call('/__fakes/canva/manual-edit', {body}),
   modelLedger: () => call('/__fakes/models/ledger').then((r) => r.json),
   modelDelay: (delay: { schema: string; delayMs: number; n?: number }) => call('/__fakes/models/delays', { body: delay }),
   hold: (point: string, match: Record<string, string> = {}, n = 1) => call('/__chaos/hold', { body: { point, match, n } }),

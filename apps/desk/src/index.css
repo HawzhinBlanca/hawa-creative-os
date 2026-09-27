@@ -2426,3 +2426,10 @@ input, select, textarea {
 .canva-binding-form p, .capture-availability { color: var(--muted); font-size: 13px; line-height: 1.5; }
 .canva-binding-form form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .canva-binding-form input { flex: 1 1 250px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+
+.btn.approval-confirm:disabled {
+  background: var(--soft) !important;
+  border-color: var(--line) !important;
+  color: var(--muted);
+  cursor: not-allowed;
+}

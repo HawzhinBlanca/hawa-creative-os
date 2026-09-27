@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { sql, RevisionRepository, TaskRepository, type Kysely, type Database } from '@hawa/db';
-import { savedDesignCopy } from './canva-design-planner.js';
+import { savedDesignCopy } from './saved-design-copy.js';
 import { resolveQcProfileId, type CanvaQcEvaluation, type ExportRow } from './canva-task-outcome.js';
 
 export type CaptureReview =
@@ -36,6 +36,10 @@ export async function recordManualCanvaReview(
   const checked = rows.find(row => row.id === p.artifactId && row.format === 'pptx' && row.content_check);
   const png = checked?.capture_version ? rows.find(row => row.format === 'png' && row.capture_version === checked.capture_version) : undefined;
   if (!checked || !png) return blocked('Capture PNG and check copy and fonts from the same saved Canva version before review.');
+  const policyCurrent=(await sql<{current:boolean}>`SELECT hawa.canva_export_policy_current(o.tenant_id,o.client_id,o.metadata) AS current
+    FROM hawa.canva_remote_operations o JOIN hawa.canva_export_bytes b ON b.operation_id=o.id AND b.tenant_id=o.tenant_id
+    WHERE b.id=${checked.id}::uuid AND b.tenant_id=${p.tenantId}::uuid`.execute(trx)).rows[0];
+  if (!policyCurrent?.current) return blocked('The client font policy changed. Capture and check the design with the active Client DNA before review.');
   const priorQc = task.current_design_revision_id ? (await sql<{ critical_pass: boolean; status: string; artifact_id: string; started_at: Date }>`
     SELECT critical_pass,status,report->>'exportArtifactId' AS artifact_id,started_at FROM hawa.qc_runs
     WHERE tenant_id=${p.tenantId}::uuid AND design_revision_id=${task.current_design_revision_id}::uuid
@@ -68,6 +72,7 @@ export async function recordManualCanvaReview(
     sourceStorageKey: `canva_export_bytes/${checked.id}`, previewSha256: png.sha256,
     neutralManifest: { studio: 'canva', documentId: binding.canva_design_id, designId: binding.canva_design_id,
       copy, nodes: qc.sourceTextObjects, semanticCoverage: 'pptx_live_text_only', nativeVerification: 'unverified',
+      checkingPolicy: (checked.content_check as {checkingPolicy?: unknown})?.checkingPolicy || null,
       capturedSource: { artifactId: checked.id, sha256: checked.sha256, format: 'pptx', captureVersion: checked.capture_version },
       preview: { artifactId: png.id, sha256: png.sha256 }, bindingId: binding.id, bindingVersion: binding.version,
       ...(task.current_design_revision_id ? { revisedFrom: task.current_design_revision_id } : {}) },

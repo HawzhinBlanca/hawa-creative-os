@@ -33,6 +33,8 @@ export interface PptxTextObject {
 }
 
 export interface PptxCheckOptions {
+  /** Manual designs: explicit active Client DNA families, with no inferred block roles. */
+  allowedFontsByScript?: { latin: string[]; arabic: string[] };
   /** Typeface expected on Arabic-script (Sorani) text objects; Latin objects must use requiredFont. */
   scriptFonts?: { arabic?: string };
   /** Intake classification: 'formal_document' (letters, certificates, agendas) or 'design_piece' (invitations, posters) */
@@ -215,12 +217,16 @@ export function checkCanvaPptx(
       const properties: any[] = [];
       find(run, 'a:rPr', properties);
       const runFaces: string[] = [];
+      const facesByTag: Record<string, string[]> = {};
       const inspectChild = (child: any) => {
         if (!child || typeof child !== 'object') return;
         for (const tag of ['a:latin', 'a:cs', 'a:ea']) {
           if (child[tag]) {
             const tf = child[':@']?.['@_typeface'] || (child[tag] as any)?.['@_typeface'];
-            if (tf && typeof tf === 'string' && tf.trim()) runFaces.push(tf.trim());
+            if (tf && typeof tf === 'string' && tf.trim()) {
+              runFaces.push(tf.trim());
+              (facesByTag[tag] ||= []).push(tf.trim());
+            }
           }
         }
       };
@@ -249,7 +255,24 @@ export function checkCanvaPptx(
         const role = options.roles?.[textIdx] || 'body';
         const isFormal = options.documentKind === 'formal_document';
 
-        if (options.fontsByIndex) {
+        if (options.allowedFontsByScript) {
+          const runTextNodes: any[] = [];
+          find(run, 'a:t', runTextNodes);
+          const runText = runTextNodes.flatMap(node => Array.isArray(node) ? node : [node])
+            .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join('');
+          const scripts: Array<'latin' | 'arabic'> = [];
+          if (ARABIC_SCRIPT.test(runText)) scripts.push('arabic');
+          if (/[A-Za-z\u00C0-\u024F]/u.test(runText) || !scripts.length) scripts.push('latin');
+          for (const script of scripts) {
+            const allowed = options.allowedFontsByScript[script] || [];
+            const declared = facesByTag[script === 'arabic' ? 'a:cs' : 'a:latin'] || [];
+            fontExpectations.push(...allowed);
+            if (!declared.length || !declared.every(face => allowed.some(font => face.toLowerCase() === font.toLowerCase()))) {
+              offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), observedFont: declared.join(', ') || 'unresolved',
+                reason: `The ${script} run must explicitly use an approved client font family` });
+            }
+          }
+        } else if (options.fontsByIndex) {
           const expectedFont = options.fontsByIndex[textIdx];
           fontExpectations.push(expectedFont || 'none sent');
           const sent = (expectedFont || '').toLowerCase();
@@ -333,7 +356,7 @@ export function checkCanvaPptx(
     : null;
 
   return {
-    checkVersion: 4,
+    checkVersion: 5,
     sourceTextObjects: unaddressableText ? null : sourceTextObjects,
     source: detectedSource,
     canvaDesignId,
@@ -345,6 +368,7 @@ export function checkCanvaPptx(
     requiredFont,
     scriptFonts: options.scriptFonts || null,
     fontsByIndex: options.fontsByIndex || null,
+    allowedFontsByScript: options.allowedFontsByScript || null,
     admittedFonts: options.admittedFonts || DEFAULT_ADMITTED_FONTS,
     arabicTextObjectCount: arabicObjects,
     rtlTextObjectCount: rtlObjects,

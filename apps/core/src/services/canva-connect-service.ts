@@ -1,3 +1,5 @@
+import { CanvaFlowError } from './canva-flow-error.js';
+import { resolveManualExportPolicy, type ExportCheckPolicy } from './canva-export-policy.js';
 import { checkCanvaPptx } from '@hawa/qa';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -9,9 +11,7 @@ type Scope = { tenantId: string; actorId: string; role?: string };
 export type CanvaPublicationVersionCheck =
   | { ok: true; capturedVersion: string; observedVersion: string }
   | { ok: false; code: 'CANVA_CAPTURE_UNVERIFIED' | 'CANVA_DESIGN_CHANGED' | 'CANVA_DESIGN_CHECK_UNAVAILABLE'; message: string; retryable: boolean };
-export class CanvaFlowError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) { super(message); }
-}
+export { CanvaFlowError } from './canva-flow-error.js';
 const fail = (status: number, code: string, message: string): never => { throw new CanvaFlowError(status, code, message); };
 const hash = (v: string | Buffer) => createHash('sha256').update(v).digest('hex');
 /**
@@ -458,7 +458,6 @@ export class CanvaConnectService {
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(key) || !['png','pdf','pptx'].includes(format) || !Number.isInteger(expectedVersion)) fail(422,'CANVA_EXPORT_REQUEST_INVALID','Use a stable request key, format and expected binding version');
     const binding = await this.binding(s,taskId);
     if (binding.version !== expectedVersion) fail(409,'CANVA_BINDING_STALE','Refresh the task binding before exporting');
-    if(format==='pptx'){const source=await this.editableSource(s,taskId,binding.client_id,binding.canva_design_id);if(!source)fail(422,'SOURCE_REQUIRED','Copy and font checking requires a Hawa-generated source for this task');}
     const requestHash = hash(JSON.stringify({ designId:binding.canva_design_id,format,expectedVersion }));
     const existing = await this.tx(s, async db => (await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows[0]);
     if (existing) { this.checkReplay(existing,s,requestHash); return this.exportStatus(s,taskId,existing.id); }
@@ -466,9 +465,34 @@ export class CanvaConnectService {
     const { design } = await client.getDesign(binding.canva_design_id);
     if (design.id !== binding.canva_design_id) fail(502,'CANVA_DESIGN_MISMATCH','Canva returned a different design');
     if (format === 'png' && design.page_count !== 1) fail(422,'CANVA_MULTIPAGE_PNG_UNSUPPORTED','Use PDF for multi-page designs; PNG capture currently requires exactly one page');
-    const id = randomUUID(), metadata = { format, designUpdatedAt:design.updated_at };
+    const id = randomUUID(), metadata: { format: string; designUpdatedAt: unknown; checkingPolicy?: ExportCheckPolicy } = { format, designUpdatedAt:design.updated_at };
     const inserted = await this.tx(s, async db => {
-      await sql`SELECT id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db);
+      const task = (await sql<{client_id:string}>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      const locked = (await sql<{version:number;canva_design_id:string}>`SELECT version,canva_design_id FROM hawa.canva_bindings
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${binding.id}::uuid AND status='bound' FOR SHARE`.execute(db)).rows[0];
+      if (!task || task.client_id !== binding.client_id || !locked || locked.version !== expectedVersion || locked.canva_design_id !== design.id)
+        fail(409,'CANVA_BINDING_STALE','The task or binding changed before export admission');
+      // A concurrent retry keeps the first receipt, without reading today's mutable font policy.
+      if ((await sql`SELECT id FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid
+        AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows.length) return undefined;
+      if (format === 'pptx') {
+        const source = await this.editableSource(s,taskId,binding.client_id,design.id,db);
+        if (source) {
+          const manifest=source.manifest, blocks=studioSentBlocks(manifest);
+          if (!Array.isArray(manifest?.copy) || !manifest.copy.length || !manifest.copy.every((part:unknown)=>typeof part==='string') ||
+              (!blocks && !manifest.reference?.rules?.fontFamily))
+            fail(422,'SOURCE_REQUIRED','The imported source has no complete saved copy and font policy');
+          metadata.checkingPolicy={version:1,kind:'imported_source',sourceId:source.id,copy:manifest.copy,
+            ...(blocks ? {options:{fontsByIndex:blocks.map(t=>t.fontFamily),roles:blocks.map(t=>t.role||'body')}} :
+              {requiredFont:manifest.reference.rules.fontFamily,options:{scriptFonts:manifest.reference.rules.scriptFonts}})};
+        } else {
+          const inaccessible = (await sql`SELECT e.id FROM hawa.canva_editable_sources e JOIN hawa.canva_remote_operations o
+            ON o.id=e.operation_id AND o.tenant_id=e.tenant_id WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid
+            AND e.client_id=${binding.client_id}::uuid AND o.design_id=${design.id} LIMIT 1`.execute(db)).rows.length;
+          if (inaccessible) fail(403,'SOURCE_FORBIDDEN','The imported source belongs to another actor; an art director or administrator must check this design');
+          metadata.checkingPolicy=await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id);
+        }
+      }
       const pending=(await sql<any>`SELECT id FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid
         AND kind='export' AND design_id=${design.id} AND metadata->>'format'=${format} AND status IN ('creating','submitted','uncertain') AND request_key<>${key} LIMIT 1`.execute(db)).rows[0];
       if(pending) fail(409,'CANVA_EXPORT_PENDING','An export of this format is already pending or uncertain; resume the existing operation');
@@ -498,14 +522,15 @@ export class CanvaConnectService {
    * The Hawa-made source a PPTX export of this task is checked against: the caller's own, or for an
    * art director or administrator the task's, whoever made it. The studio imports as the worker's
    * identity, so the Desk's "Check copy & fonts" failed SOURCE_REQUIRED on every studio design until
-   * 2026-09-24. The source the exported design was imported from comes first.
+   * 2026-09-24. Only the source imported into this exact design is eligible.
    */
-  private editableSource(s: Scope, taskId: string, clientId: string, designId: string) {
-    return this.tx(s, async db => (await sql<any>`SELECT e.id, e.manifest FROM hawa.canva_editable_sources e
-      LEFT JOIN hawa.canva_remote_operations o ON o.id = e.operation_id AND o.tenant_id = e.tenant_id
+  private editableSource(s: Scope, taskId: string, clientId: string, designId: string, transaction?: Kysely<Database>) {
+    const read = async (db: Kysely<Database>) => (await sql<any>`SELECT e.id, e.manifest FROM hawa.canva_editable_sources e
+      JOIN hawa.canva_remote_operations o ON o.id = e.operation_id AND o.tenant_id = e.tenant_id
       WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid AND e.client_id=${clientId}::uuid
-        AND (e.actor_id=${s.actorId} OR ${overrides(s)})
-      ORDER BY (o.design_id IS NOT DISTINCT FROM ${designId}) DESC, e.created_at DESC LIMIT 1`.execute(db)).rows[0]);
+        AND o.design_id=${designId} AND o.status='retrieved' AND (e.actor_id=${s.actorId} OR ${overrides(s)})
+      ORDER BY e.created_at DESC LIMIT 1`.execute(db)).rows[0];
+    return transaction ? read(transaction) : this.tx(s,read);
   }
   private checkReplay(row: any,s: Scope,requestHash: string) {
     if (!row || row.actor_id !== s.actorId || row.request_hash !== requestHash || row.kind !== 'export') fail(409,'CANVA_IDEMPOTENCY_CONFLICT','Request key already belongs to a different request or actor');
@@ -526,17 +551,23 @@ export class CanvaConnectService {
         const validator = new CanvaCapturePipeline();
         let contentCheck:any=null;
         if(row.metadata.format==='pptx'){
-          const source=await this.editableSource(s,taskId,row.client_id,row.design_id);
-          // A studio design carries no reference pack: it chooses a face per block, recorded in its plan,
-          // and Canva must keep each one. Every studio transfer failed SOURCE_REQUIRED here until
-          // 2026-09-18, the first live pilot, because only the planner's single-font check existed.
-          const manifest=source?.manifest;
-          const sentBlocks=studioSentBlocks(manifest);
-          if(sentBlocks){
-            contentCheck={...checkCanvaPptx(bytes,manifest.copy,{fontsByIndex:sentBlocks.map(t=>t.fontFamily),roles:sentBlocks.map(t=>t.role||'body')}),expectedCopy:manifest.copy};
-          }else{
-            if(!manifest?.copy||!manifest.reference?.rules?.fontFamily)fail(422,'SOURCE_REQUIRED','No saved copy and brand font are available for this task');
-            contentCheck={...checkCanvaPptx(bytes,manifest.copy,manifest.reference.rules.fontFamily,{scriptFonts:manifest.reference.rules.scriptFonts}),expectedCopy:manifest.copy};
+          const policy = row.metadata.checkingPolicy as ExportCheckPolicy | undefined;
+          if (policy) {
+            contentCheck={...checkCanvaPptx(bytes,policy.copy,policy.requiredFont || policy.options,policy.options),
+              expectedCopy:policy.copy,checkingPolicy:policy};
+          } else {
+            const source=await this.editableSource(s,taskId,row.client_id,row.design_id);
+            // A studio design carries no reference pack: it chooses a face per block, recorded in its plan,
+            // and Canva must keep each one. Every studio transfer failed SOURCE_REQUIRED here until
+            // 2026-09-18, the first live pilot, because only the planner's single-font check existed.
+            const manifest=source?.manifest;
+            const sentBlocks=studioSentBlocks(manifest);
+            if(sentBlocks){
+              contentCheck={...checkCanvaPptx(bytes,manifest.copy,{fontsByIndex:sentBlocks.map(t=>t.fontFamily),roles:sentBlocks.map(t=>t.role||'body')}),expectedCopy:manifest.copy};
+            }else{
+              if(!manifest?.copy||!manifest.reference?.rules?.fontFamily)fail(422,'SOURCE_REQUIRED','No saved copy and brand font are available for this task');
+              contentCheck={...checkCanvaPptx(bytes,manifest.copy,manifest.reference.rules.fontFamily,{scriptFonts:manifest.reference.rules.scriptFonts}),expectedCopy:manifest.copy};
+            }
           }
         }else{
           const validated=validator.validateArtifactBytes(bytes,row.metadata.format==='png'?'png':'pdf_standard');
@@ -662,6 +693,12 @@ export class CanvaConnectService {
           row.design_id !== binding.design_id || Number(row.binding_version) !== Number(binding.version)
           || row.capture_version !== approval.version)) return null;
         const checked = rows.find(row => row.id === approval.checked_id);
+        if (checked) {
+          const current=(await sql<{current:boolean}>`SELECT hawa.canva_export_policy_current(o.tenant_id,o.client_id,o.metadata) AS current
+            FROM hawa.canva_remote_operations o JOIN hawa.canva_export_bytes b ON b.operation_id=o.id AND b.tenant_id=o.tenant_id
+            WHERE b.id=${checked.id}::uuid AND b.tenant_id=${input.tenantId}::uuid`.execute(db)).rows[0];
+          if (!current?.current) return null;
+        }
         return checked ? { designId: binding.design_id, actorId: checked.actor_id, version: approval.version } : null;
       });
     } catch {

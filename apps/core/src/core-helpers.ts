@@ -262,7 +262,8 @@ export function evaluateCanvaExportQc(
       throw new Error('Invalid captured font policy');
     }
     resolvedCheck = checkCanvaPptx(bytes, copyToCheck,
-      perBlockFonts ? { fontsByIndex: perBlockFonts, scriptFonts: contentCheck?.scriptFonts || undefined }
+      contentCheck?.allowedFontsByScript ? { allowedFontsByScript: contentCheck.allowedFontsByScript }
+        : perBlockFonts ? { fontsByIndex: perBlockFonts, scriptFonts: contentCheck?.scriptFonts || undefined }
         : (requiredFont || contentCheck?.requiredFont || 'Verdana'),
       perBlockFonts ? {} : { scriptFonts: contentCheck?.scriptFonts || undefined });
   } catch (err: any) {

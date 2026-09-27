@@ -27,3 +27,13 @@ Before a task is called editable and ready for review, prove that the native Can
 ## Supersession map
 
 ADR 025 supersedes the studio selection, `.hyc` source, HyCanvas proof sprint, Penpot/Shotluma fallback, and backup-without-Canva promises in the initial versions of `AI_BUILD_PROMPT.md`, `DECISION_SUMMARY.md`, `MASTER_SPEC.md`, `docs/06_EDITABLE_DOCUMENT_STRATEGY.md`, and `docs/11_QA_RTL_MULTILINGUAL.md`. The historical baseline remains in Git before this reconciliation and in [ADR 025](../adrs/025_canva_only_archive.md); it must not be used to qualify the present system. A future foundation change requires a new ADR and new proof.
+
+## Manual designs without an import (ADR-077)
+
+A blank native design may be checked against the manual Desk request’s exact saved
+copy and active, hash-verified, human-authored Client DNA font families. The export
+operation freezes the policy and its version before submission. This creates no
+imported-source record. Superseded policy remains historical evidence but cannot
+qualify a new review, approval or publication. Family membership does not establish
+font-file glyph coverage, native editability or visual quality. See
+[ADR-077](../adrs/077_manual_canva_export_policy.md) for the boundary and acceptance.

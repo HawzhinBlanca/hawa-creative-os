@@ -12,7 +12,27 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-27 — source-backed manual review)
+## Current implementation (2026-09-27 — blank Canva checking, ADR-077)
+
+Blank manual designs now admit exact saved copy with active hash-verified,
+human-authored Client DNA font families. New export operations freeze checking
+policy before submission; only a matching design's imported source is eligible.
+Migration 046 protects policy immutability. Review, approval and publication check
+that manual policy remains active, while replay retains historical results.
+Manual font checking inspects declared Latin/complex-script faces per run, with no
+default-family or prefix match. Copy remains unchanged; native editability and
+font-file/glyph coverage remain separate. Approval warning and disabled appearance
+are corrected in source. The candidate harness now includes a synthetic native
+blank creation/manual edit/capture/review/publication path.
+
+Affected checks: 8 files / 139 tests passed; the expanded 19-case blank-export
+suite also passed, including restricted runtime-role admission/review. Initial new-suite failures were an invalid synthetic actor UUID and a reused
+synthetic design ID; fixes preserve the database constraints. Types/lint/Desk build
+and security scan passed (the scanner first rejected a literal synthetic test token;
+it now uses generated fixture tokens). Fresh deployed rehearsal, browser inspection, full sealed regression and
+release qualification are still pending for these changes. Production unchanged.
+
+## Prior result (2026-09-27 — source-backed manual review)
 
 Implementation `b78810a`, test correction `177c2c3`, tested seal `619827c`:
 manual Desk generation/import → Capture for Review → current source/preview review
