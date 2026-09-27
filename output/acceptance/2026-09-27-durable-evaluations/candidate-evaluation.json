@@ -1,6 +1,6 @@
 {
-  "sourceCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1",
-  "checkedAt": "2026-09-27T04:53:18.864Z",
+  "sourceCommit": "81ea4c3a51e40d62ed88f13e901102a4772fba06",
+  "checkedAt": "2026-09-27T04:59:02.633Z",
   "workflowInvariants": 36,
   "checks": [
     {
@@ -63,18 +63,18 @@
   "images": [
     {
       "service": "core",
-      "imageId": "sha256:35956b30640a828b8792fb6d94bc381fee444023c31d80e89edd6c60b3950135",
-      "buildCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1"
+      "imageId": "sha256:7deaff94405f5fd42a892d5f6e06e7249e8e79c0c70150619a9eb165fb2277f8",
+      "buildCommit": "81ea4c3a51e40d62ed88f13e901102a4772fba06"
     },
     {
       "service": "desk",
-      "imageId": "sha256:99ef96089472bd1cc12bdb8193e293ca17af3721f64734dc40f1c5197b08f63b",
-      "buildCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1"
+      "imageId": "sha256:ffd961460adf5ec2d4f3df00f16dbe8c50dee22443be44b58d46652388bd66b5",
+      "buildCommit": "81ea4c3a51e40d62ed88f13e901102a4772fba06"
     },
     {
       "service": "worker-blue",
-      "imageId": "sha256:193c51ba58875fee7be28ee422c14cb3baa5a956dc4f5da5f93c9ef8f940d021",
-      "buildCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1"
+      "imageId": "sha256:6edc04b08321800cfb05b25ef6acea93cf0c1c9ff43c06b1f19af87c416270d6",
+      "buildCommit": "81ea4c3a51e40d62ed88f13e901102a4772fba06"
     }
   ],
   "callCount": 1,

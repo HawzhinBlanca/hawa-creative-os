@@ -221,3 +221,15 @@ sidebar column. The Desk build passes; the full regression above covers the prio
 layout and unchanged runtime logic. A final candidate refresh follows this visual
 layout correction. Production and real provider/approval/quality admission are
 unchanged and unqualified.
+
+### Final packaged checkpoint
+
+Final sourcef057b1e (implementation2ffd37e, packaging2d1e56b), candidate81ea4c3:
+all36workflow invariants and14deployed evaluation controls pass, including one
+Core restart and exactly one synthetic provider request. The candidate includes
+the CSS-only receipt layout correction and all three runtime image source labels
+match. The full3,745-pass/59-skip regression belongs to34d10d5; backend logic is
+unchanged afterward and the CSS follow-up has a separate successful Desk build.
+No production upgrade, live provider bill, human approval or message occurred.
+Provider settlement, real office workflow, independent recovery and human creative
+qualification remain open. Final proof: R21_DURABLE_EVALUATION_PROOF.json.

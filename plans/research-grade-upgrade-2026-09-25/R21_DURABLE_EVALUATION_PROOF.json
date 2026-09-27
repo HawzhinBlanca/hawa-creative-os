@@ -11,7 +11,7 @@
   ],
   "adr": "adrs/084_durable_evaluation_calls.md",
   "migration": "047_durable_evaluation_calls",
-  "status": "DURABLE_FIXTURE_REPLAY_AND_TWO_PROCESS_KILL_BOUNDARIES_VERIFIED",
+  "status": "DURABLE_FIXTURE_REPLAY_PROCESS_KILLS_AND_PACKAGED_CANDIDATE_VERIFIED",
   "captureBaseCommit": "410e6bf94a3a813d5e325dfee94e730b0c49d607",
   "captureSourceTreeClean": false,
   "sourceHashes": {
@@ -101,7 +101,7 @@
       "provider": "localhost synthetic HTTP endpoint"
     },
     "fullRegression": "Final full suite passes 3745 tests with 59 skipped; first six failures and their correction retained.",
-    "candidateDeployment": "Packaged candidate34d10d5 passes36workflow invariants plus14evaluation controls across one Core restart and exactly one synthetic provider call. Final CSS-only layout refresh follows.",
+    "candidateDeployment": "Final81ea4c3 candidate passes36 workflow invariants and14 evaluation controls across one Core restart and exactly one synthetic provider call. Runtime source changes empty; image identities match. Production unchanged.",
     "developmentCorrections": [
       "Initial typecheck found two missing required safeAction fields; corrected before final typecheck.",
       "Recovery now reads existing call evidence before mutable provider resolution, including when that provider is subsequently unavailable.",
@@ -119,12 +119,14 @@
       "scope": "All runtime logic. A subsequent CSS-only correction pins the evaluation panel beside its sidebar; Desk build passes separately."
     },
     "finalCandidate": {
-      "sourceCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1",
+      "sourceCommit": "81ea4c3a51e40d62ed88f13e901102a4772fba06",
       "workflowInvariants": 36,
       "checks": 14,
       "allPassed": true,
-      "receipt": "output/acceptance/2026-09-27-durable-evaluations/candidate-evaluation-before-layout.json",
-      "scope": "Before final CSS-only receipt layout correction; refresh follows."
+      "providerCalls": 1,
+      "coreRestarts": 1,
+      "receipt": "output/acceptance/2026-09-27-durable-evaluations/candidate-evaluation.json",
+      "scope": "Final packaged Core, Desk and worker, including the CSS-only receipt layout correction; external providers/identities are synthetic."
     },
     "uiLayoutFollowup": {
       "change": "Pin evaluation panel to grid column2/row1 so the full-width call receipt section cannot push it into the narrow sidebar column.",
@@ -149,7 +151,7 @@
     },
     "output/acceptance/2026-09-27-durable-evaluations/candidate-check-final.log": {
       "bytes": 157,
-      "sha256": "c5fe748a4859dc038f1866533aeb1d4e9be90573474e914231c1f7856f7aa74b"
+      "sha256": "8678b2ce85b6506364e2396cb7894726e6c0bb3b285d6b32c693cbd3933a2079"
     },
     "output/acceptance/2026-09-27-durable-evaluations/candidate-evaluation-before-layout.json": {
       "bytes": 2167,
@@ -157,7 +159,7 @@
     },
     "output/acceptance/2026-09-27-durable-evaluations/candidate-evaluation.json": {
       "bytes": 2167,
-      "sha256": "ab75bcf4cb1e13833bf80ab73215ac1605e0a33271f63ccc0329ed4e09a007b0"
+      "sha256": "f53332fdef5c971ac3fde40dc2e786a0baf950c07b362f85dac8a621fc855f39"
     },
     "output/acceptance/2026-09-27-durable-evaluations/candidate-first-check.log": {
       "bytes": 664,
@@ -172,8 +174,8 @@
       "sha256": "a85c6844631378969b4a7576faa338a79d7e2be9b73b49128293958fc4b23097"
     },
     "output/acceptance/2026-09-27-durable-evaluations/candidate-rehearsal.json": {
-      "bytes": 11965,
-      "sha256": "a85c6844631378969b4a7576faa338a79d7e2be9b73b49128293958fc4b23097"
+      "bytes": 11966,
+      "sha256": "ff4783a6b63303bdb1e74a170046bce1ccbc42d80b3561dc668a99f47d857984"
     },
     "output/acceptance/2026-09-27-durable-evaluations/check-candidate.mts": {
       "bytes": 5038,
