@@ -1,7 +1,7 @@
 {
   "completed": true,
-  "checkedAt": "2026-09-27T15:18:30.181Z",
-  "buildCommit": "1933581de21e654f72ebd82b4b0f7f6a198e0bbd",
+  "checkedAt": "2026-09-27T15:27:23.799Z",
+  "buildCommit": "9cdeb25c06317cd831680bda7a695cd4fc90514b",
   "checks": [
     {
       "name": "exact candidate is deployed",
@@ -29,6 +29,10 @@
     },
     {
       "name": "current scope includes the synthetic incomplete delivery",
+      "passed": true
+    },
+    {
+      "name": "delivered content with archive display filenames is not falsely flagged",
       "passed": true
     },
     {
@@ -111,56 +115,49 @@
   "originalReport": {
     "basis": "PostgreSQL task and publication records against the verified delivery receipts Core stored. Google Drive and Google Sheets were not read, and nothing was repaired.",
     "status": "divergent",
-    "auditId": "11588a40-6b2f-4082-925b-ec506460a014",
+    "auditId": "71f1d09c-6932-4637-a256-14efac1841f8",
     "anomalies": [
       {
         "kind": "MISSING_DRIVE_ASSET",
-        "taskId": "6263e6f5-3680-462b-b5b4-3b5ff96a84f0",
+        "taskId": "6b79f2a6-d05f-4d9a-a646-6a3419403615",
         "severity": "high",
-        "detectedAt": "2026-09-27T15:18:24.403Z",
-        "description": "Task 6263e6f5-3680-462b-b5b4-3b5ff96a84f0 is COMPLETE but no Drive delivery is recorded for it"
+        "detectedAt": "2026-09-27T15:27:18.120Z",
+        "description": "Task 6b79f2a6-d05f-4d9a-a646-6a3419403615 is COMPLETE but no Drive delivery is recorded for it"
       },
       {
         "kind": "MISSING_SHEET_ROW",
-        "taskId": "6263e6f5-3680-462b-b5b4-3b5ff96a84f0",
+        "taskId": "6b79f2a6-d05f-4d9a-a646-6a3419403615",
         "severity": "medium",
-        "detectedAt": "2026-09-27T15:18:24.403Z",
-        "description": "Task 6263e6f5-3680-462b-b5b4-3b5ff96a84f0 has no Sheets reporting row recorded"
+        "detectedAt": "2026-09-27T15:27:18.120Z",
+        "description": "Task 6b79f2a6-d05f-4d9a-a646-6a3419403615 has no Sheets reporting row recorded"
       },
       {
         "kind": "INCOMPLETE_PUBLICATION_EVIDENCE",
-        "taskId": "6263e6f5-3680-462b-b5b4-3b5ff96a84f0",
+        "taskId": "6b79f2a6-d05f-4d9a-a646-6a3419403615",
         "severity": "high",
-        "detectedAt": "2026-09-27T15:18:24.403Z",
+        "detectedAt": "2026-09-27T15:27:18.120Z",
         "description": "The current publication has no usable artifact manifest."
-      },
-      {
-        "kind": "CHECKSUM_MISMATCH",
-        "taskId": "67b1b73c-5312-4761-9d89-741f5cabeda2",
-        "severity": "high",
-        "detectedAt": "2026-09-27T15:18:24.403Z",
-        "description": "No verified current-publication receipt matches artifact client-c1000000-017297e5.pptx, its hash and size."
       }
     ],
     "simulated": false,
-    "timestamp": "2026-09-27T15:18:24.403Z",
-    "driftCount": 4,
-    "inSyncCount": 2,
+    "timestamp": "2026-09-27T15:27:18.120Z",
+    "driftCount": 3,
+    "inSyncCount": 3,
     "pendingTaskCount": 3,
     "totalTasksAudited": 7,
     "totalSheetRowsAudited": 3,
     "totalDriveDeliverablesChecked": 5,
     "revision": 1,
-    "actorUserId": "78cf4855-3a07-40e3-bf29-0ba04d88f6e0",
+    "actorUserId": "8366781f-dd8b-4507-9a2c-95402ddba110",
     "reason": "Inspect stored receipts after an uncertain delivery",
-    "scopeSha256": "f77e41920701f294c24fdff1957cdde40a981f08ec51db9f7eef939e9f126ed9",
-    "inputsSha256": "ce1837c684ecf741e40ee13e3f2b27aa251d3a59256e9529db046b70e7bb73c4",
-    "reportSha256": "b228148113b7b5c9d21fce3cc9432f5fee2cb7563bc7ff4f7858b63481b93165",
+    "scopeSha256": "31b020b81eafad25621302a77be6ab00b942eaaf5e3574bdd3d04c0625049e08",
+    "inputsSha256": "1254c27500e682244cd383b19fe8583c09d11f18eab5742df62abaca685f2dc2",
+    "reportSha256": "e4f5b3e262924bd1ee651bb675b7ccdb23235c19fd8723683954fd03c6f621e2",
     "replayed": false
   },
   "originalAction": {
-    "actionId": "11588a40-6b2f-4082-925b-ec506460a014",
-    "expectedScopeSha256": "f77e41920701f294c24fdff1957cdde40a981f08ec51db9f7eef939e9f126ed9",
+    "actionId": "71f1d09c-6932-4637-a256-14efac1841f8",
+    "expectedScopeSha256": "31b020b81eafad25621302a77be6ab00b942eaaf5e3574bdd3d04c0625049e08",
     "expectedLatestAuditId": null,
     "reason": "Inspect stored receipts after an uncertain delivery"
   },

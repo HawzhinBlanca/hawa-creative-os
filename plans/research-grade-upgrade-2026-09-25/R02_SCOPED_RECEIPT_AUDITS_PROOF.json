@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "IMPLEMENTED_LOCAL_QUALIFICATION_PENDING",
+  "status": "LOCALLY_QUALIFIED_LIVE_ADMISSION_PENDING",
   "adr": "103_durable_scoped_receipt_audits",
   "requirements": [
     "FR-050 (stored-receipt subset only)",
@@ -60,8 +60,12 @@
     }
   },
   "pending": [
-    "Full regression on sealed source",
-    "Matching deployed candidate and actual Chrome/restart/revocation qualification"
+    "Scheduled external Drive/Sheets comparison and staffed repair (full FR-050)",
+    "Independent availability measurement (NFR-002)",
+    "Other typed completed-result recovery",
+    "Real office/provider/native Canva and pending after-preview approval",
+    "Human multilingual/design and held-out quality/retrieval/cost evaluation",
+    "Independent-host restore and controlled rollout"
   ],
   "notQualified": [
     "Scheduled external Drive/Sheets comparison and staffed repair (full FR-050)",
@@ -72,7 +76,7 @@
     "Independent-host restore and controlled rollout"
   ],
   "sourceHashes": {
-    "adrs/103_durable_scoped_receipt_audits.md": "31f4403c4335adfc760f7e9b7393cbd4a19722e25bde424176c468c3e9a212e5",
+    "adrs/103_durable_scoped_receipt_audits.md": "f95b5e41a67ae0a93f47a13c3be4ea128a4af62471c426d6b343adaf37b51744",
     "api/openapi.yaml": "11f86eb379ac699d5660442102b76b92d3cfc86aad6c78f1841c90bc2bc11535",
     "apps/core/src/app.ts": "5c38715ba2ad043627217f67446d54a761e19855465efcd276318ed75f5d6bf8",
     "apps/core/src/core-context.ts": "72610a42931e0a938ef029feadd2eaeeb9391efb2a98a28263c5737869e86a80",
@@ -111,11 +115,11 @@
     "runbooks/SCOPED_RECEIPT_AUDITS.md": "44f5030e67f8387194c977042b9c94bff1e7f8f412dfac78d2644580340b6f7f"
   },
   "evidenceHashes": {
-    "output/acceptance/2026-09-27-scoped-receipt-audits/STATUS.md": "23e6e7660fae3cddd3aec2e6925af439beba824f48bbd7396d411333aba238b4",
-    "output/acceptance/2026-09-27-scoped-receipt-audits/after-restart.png": "351512c34a40d7a12eea89cd17d93728e4ccfe7d0f77703b9478bb56ecd613d3",
-    "output/acceptance/2026-09-27-scoped-receipt-audits/audit-desktop.png": "70e158628fd737636bf371eccf32476183317e41dbce8319d007f535ff1b136f",
-    "output/acceptance/2026-09-27-scoped-receipt-audits/audit-mobile-form.png": "c39dc3ff3d99b7340b8992302d66930f4c6f252ccecf5a52bc9d0f0365ac21b8",
-    "output/acceptance/2026-09-27-scoped-receipt-audits/audit-mobile-report.png": "09ecef3882a7380d819546e8dbf4753b24f40388128167767b9112dbf13b6fd6",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/STATUS.md": "9947b71155b75ecb461c70fc1f75843625dfb6c4f4c51d0a8ae0ea549bb92d21",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/after-restart.png": "213325a4e302d3d8452d2ff4e389a991f8dfc196d5f1792d6a0146229590b7d7",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/audit-desktop.png": "4716e4b6b95791f6fc6d50f405e98bf0effa197badefd93e4c24141bec74b773",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/audit-mobile-form.png": "9246b0e2f1b577697707405705932fb1d7dabfe07dadf3e1c0dc77cfeb100dfc",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/audit-mobile-report.png": "c4f0d9731ed35e5dd4feac1864badc8b8e1ac65961c7039ad40dfad54318c22c",
     "output/acceptance/2026-09-27-scoped-receipt-audits/before-content-correction/after-restart.png": "351512c34a40d7a12eea89cd17d93728e4ccfe7d0f77703b9478bb56ecd613d3",
     "output/acceptance/2026-09-27-scoped-receipt-audits/before-content-correction/anomaly-inspection.json": "1a118c75b8cd30e6e3a64d42d5c35d69b7a01874fe28a8e8d3cefdc272864a43",
     "output/acceptance/2026-09-27-scoped-receipt-audits/before-content-correction/audit-desktop.png": "70e158628fd737636bf371eccf32476183317e41dbce8319d007f535ff1b136f",
@@ -130,6 +134,8 @@
     "output/acceptance/2026-09-27-scoped-receipt-audits/before-content-correction/mobile-bounds.json": "fc49bd92d227dd27eceab066e1549a57d164364f9a4f874cfa8cb9ccb7fd86fe",
     "output/acceptance/2026-09-27-scoped-receipt-audits/before-content-correction/runtime-health.json": "5ebb7a80dfcf868dd97a68e401894ea5d9be856c14a805b5039fba9dc88dfdc1",
     "output/acceptance/2026-09-27-scoped-receipt-audits/blueprint-source.log": "69417735211dc14eb5be64bb28b3337f650870dc57f72aee586d858e57fa2f32",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/browser-final.log": "b5a5610325907d42f7135cb413a2159498dee5bad1d29b2d15d3b9edac7f2141",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/candidate-final.json": "c5d43a41d2794cab0d382b10d430f6bdb9f02094c26dc25da44b21d957d5ff5a",
     "output/acceptance/2026-09-27-scoped-receipt-audits/check-deployed.mts": "11d564e7e55873f8f80db779687e71c37d3769a858297cf42561973289be251e",
     "output/acceptance/2026-09-27-scoped-receipt-audits/comparison-build.log": "8f9f752ddadf5b18382b6a0f2dbeda7bd86b087c6282d5d696c9580be5c14786",
     "output/acceptance/2026-09-27-scoped-receipt-audits/comparison-fixed.log": "af9bd9e783d1788b3ea26125c1af17a67b360a8309dfde8aea1ca20c4c1499d9",
@@ -138,21 +144,24 @@
     "output/acceptance/2026-09-27-scoped-receipt-audits/comparison-red.log": "4a4aba9c6aa63dba8ae9bb5fc4d160e8a75f96f386e0606f8d4b177bce2a1b3f",
     "output/acceptance/2026-09-27-scoped-receipt-audits/comparison-types-fixed.log": "b5c235f3cc2adf6a623c951d4668d53826139e4b0d8612476c05b90f740ffbae",
     "output/acceptance/2026-09-27-scoped-receipt-audits/comparison-types.log": "36f64b575e5e8d91aff63926e9218c6ece24568ee5326f500f7ab28eb6510ab0",
-    "output/acceptance/2026-09-27-scoped-receipt-audits/deployed-audits.json": "179808ac3fb62e6b0a80061e79d32a56bd9041eee19c95487b30ad4e9acf2c6d",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/deployed-audits.json": "072a73fc0526f21a52eebda9b07d030b435694acaa63aae4226c787c3d219a17",
     "output/acceptance/2026-09-27-scoped-receipt-audits/desk-build.log": "f4a18ed61238339cf6fd3db2ee9b0ec902579c2fd2c6946bfd7de8a2181985c6",
     "output/acceptance/2026-09-27-scoped-receipt-audits/final-focused.log": "9503414f472f14662a8ec58d5080fbc404b002561c7f0d9d5060479d25fbd1b1",
     "output/acceptance/2026-09-27-scoped-receipt-audits/final-lint.log": "26fa90274c611e2885ee8faf1244551e2e1828a91df26aa5df21c26b11b21164",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/final-manifest.log": "98df2681224429dd3270520b309dd8400a9e316f4173c0c36218e6a5d4a83157",
     "output/acceptance/2026-09-27-scoped-receipt-audits/final-types.log": "b5c235f3cc2adf6a623c951d4668d53826139e4b0d8612476c05b90f740ffbae",
     "output/acceptance/2026-09-27-scoped-receipt-audits/focused-first.log": "ebfeeed020f942189109a42e08e2af390f500b04a65b48a131cd08ccdc894f87",
     "output/acceptance/2026-09-27-scoped-receipt-audits/focused-fourth.log": "64cd7ca14640641164a328780a79c34ca195272d2d04b9e9af1c7d70af631438",
     "output/acceptance/2026-09-27-scoped-receipt-audits/focused-second.log": "5c922df10fb36a5f847a96ef9d27acb040443457637c684d5186a70f7fa2bd09",
     "output/acceptance/2026-09-27-scoped-receipt-audits/focused-third.log": "5f9429fa6f803accc3da232757936233b57e9dc49a0c068e43cbace8fbba7729",
-    "output/acceptance/2026-09-27-scoped-receipt-audits/lost-response.png": "af342a1fa9b95adcd1e9129b7d609158c7c8839cacd7e24a1bf2c4c2c19d1a48",
-    "output/acceptance/2026-09-27-scoped-receipt-audits/mobile-bounds.json": "fc49bd92d227dd27eceab066e1549a57d164364f9a4f874cfa8cb9ccb7fd86fe",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/full-final.log": "17399514d1157a0edb7dde0f7f0b38a412c220cb3382371c15499bac6089a2c6",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/lost-response.png": "f11700d70f423109909f7eb2178ff89d53edacee8019e25684c3da1776e3ec5b",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/mobile-bounds.json": "daf50580c94987a9a85fb2d1950240bbf349110239a8154aea3f329a1b364171",
     "output/acceptance/2026-09-27-scoped-receipt-audits/red-auth-fixture.log": "6f02874af6347be708518d122a4ea4ec1b1123b845a13f3bb3530e49f6119d05",
     "output/acceptance/2026-09-27-scoped-receipt-audits/red-authenticated.log": "5d9095238e61591091db11e5d7706e3553343e925affa1dbb9c43ac2444f0ef1",
     "output/acceptance/2026-09-27-scoped-receipt-audits/red.log": "6f02874af6347be708518d122a4ea4ec1b1123b845a13f3bb3530e49f6119d05",
-    "output/acceptance/2026-09-27-scoped-receipt-audits/runtime-health.json": "5ebb7a80dfcf868dd97a68e401894ea5d9be856c14a805b5039fba9dc88dfdc1",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/runtime-final.log": "ff410ab5ead093dbc919938a1c77fff58eaef6b796f09340c9dfdd162fef4e2c",
+    "output/acceptance/2026-09-27-scoped-receipt-audits/runtime-health.json": "f3d2fb3442b4b0fc49cddd31aaa63bcf5d7a95635e848247b5aff32421e057e4",
     "output/acceptance/2026-09-27-scoped-receipt-audits/security.log": "2438fef8771ccb66219a3210fb9be88d769b013498ac81535a22cf979c0fef7a",
     "output/acceptance/2026-09-27-scoped-receipt-audits/snapshot.log": "5b89851ab2e72a96da071c55d77ed55559682fd097be39d22adb5850712fe8a3",
     "output/acceptance/2026-09-27-scoped-receipt-audits/types-fifth.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -189,5 +198,72 @@
     "focusedFailed": 0,
     "focusedFiles": 4,
     "note": "Match hash/size multiset, permit archive labels, reject missing/surplus copies; normalize accepted UUID casing"
+  },
+  "correctionCommit": "170068249457d66d46f57116483171f0aab304cf",
+  "testedCommit": "9cdeb25c06317cd831680bda7a695cd4fc90514b",
+  "fullRegression": {
+    "passed": 4139,
+    "failed": 0,
+    "skipped": 59,
+    "filesPassed": 495,
+    "filesSkipped": 7,
+    "durationSeconds": 124.52,
+    "log": "output/acceptance/2026-09-27-scoped-receipt-audits/full-final.log"
+  },
+  "runtime": {
+    "commit": "9cdeb25c06317cd831680bda7a695cd4fc90514b",
+    "sourceChanges": {},
+    "finishedAt": "2026-09-27T15:26:35.292Z",
+    "selectedScenarios": 1,
+    "unselectedScenarios": 43,
+    "workflowInvariantsPassed": 63,
+    "workflowInvariantsFailed": 0,
+    "browserChecksPassed": 27,
+    "browserChecksFailed": 0,
+    "browserCheckedAt": "2026-09-27T15:27:23.799Z",
+    "uncoveredModelCalls": [
+      "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent ",
+      "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent "
+    ],
+    "revokedSyntheticSessions": true,
+    "screenshotsVisuallyInspected": true,
+    "qualifiedScreenshots": [
+      "audit-desktop.png",
+      "audit-mobile-form.png",
+      "audit-mobile-report.png",
+      "lost-response.png"
+    ],
+    "noProviderRequestsDuringAuditChecks": true
+  },
+  "runtimeHealth": {
+    "status": "degraded",
+    "timestamp": "2026-09-27T15:27:23.796Z",
+    "buildCommit": "9cdeb25c06317cd831680bda7a695cd4fc90514b",
+    "flags": {
+      "DESIGN_PIPELINE_V3": "off",
+      "DESIGN_STUDIO_V2": "off"
+    },
+    "dependencies": {
+      "postgres": "connected",
+      "parkedClientMessages": 0,
+      "canva": "unverified",
+      "canvaCircuitBreaker": "CLOSED",
+      "telegram": "active",
+      "waha": "unconfigured",
+      "disk": "writable",
+      "restate": "connected",
+      "restatePausedInvocations": 0,
+      "modelProvider": "unverified",
+      "telegramApi": "unverified",
+      "funnel": "healthy",
+      "cutout": "unconfigured"
+    },
+    "restateInvocations": {
+      "status": "ok",
+      "paused": 0,
+      "backingOff": 0,
+      "inbox": 0,
+      "checkedAt": "2026-09-27T15:27:22.606Z"
+    }
   }
 }

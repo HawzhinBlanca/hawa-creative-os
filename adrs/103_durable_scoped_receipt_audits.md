@@ -1,7 +1,7 @@
 # ADR-103: Immutable receipt audits from one authorized database snapshot
 
 Date: 2026-09-27
-Status: implementation and qualification in progress
+Status: locally qualified; external reconciliation and live admission remain pending
 Requirements: FR-050 (stored-receipt subset only), FR-064, NFR-006
 Sources: docs/13_GOOGLE_DRIVE_SHEETS.md; docs/10_WORKFLOW_RELIABILITY.md;
 docs/17_UI_UX.md; MASTER_SPEC.md
@@ -79,3 +79,11 @@ This does not finish FR-050: independent Drive/Sheets reads, scheduled external
 drift detection and staffed conflict resolution remain required. It also does not
 admit live providers, measure availability, approve native Canva, or replace human
 multilingual/design review and independent-host restore.
+
+## Recorded result — 2026-09-27
+
+Tested/runtime 9cdeb25: 4139 passed, zero failed, 59 skipped; 503 strict roots;
+63 selected synthetic workflow invariants and 27 actual Chrome/restart checks.
+Initial failures and the content-label correction remain in
+plans/research-grade-upgrade-2026-09-25/R02_SCOPED_RECEIPT_AUDITS_PROOF.json.
+No real provider or production change. Full FR-050 and whole-app gates remain open.

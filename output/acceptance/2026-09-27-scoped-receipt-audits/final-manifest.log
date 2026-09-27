@@ -1,0 +1,7 @@
+Generated release manifest at /Users/hawzhin/Hawdesign/RELEASE_MANIFEST.json (sha256: fe77c425e322dd0a8cb1ce5494660f3bbdf4b4bed2d68c3fd80a591685add493)
+Commit: 170068249457d66d46f57116483171f0aab304cf (Clean: true)
+Topology: infra/docker/docker-compose.prod.yml
+Flags: DESIGN_PIPELINE_V3=off, DESIGN_STUDIO_V2=off
+MANIFEST.json: 434 entries; SHA256SUMS.txt: 436 lines
+PASS=1019 WARN=0 FAIL=0
+Hawa Creative OS blueprint validation passed.
