@@ -337,3 +337,30 @@ The actual production-data migration rehearsal is recorded with R10: all pending
 24 upgrades applied to an isolated consistent snapshot; 76 historical tables
 matched, migration replay applied zero, and the private copy was removed. This
 advances compatibility qualification without claiming clean-host recovery.
+
+
+### Refreshed candidate and full regression qualification
+
+Implementation `34eac23`, sealed candidate `8dd04cc`: the refreshed isolated app
+passes all 36 workflow invariants, with real offline Docling and synthetic external
+providers/identities. Core/Desk/worker image labels match the candidate, runtime
+source changes are empty, and four list/detail QA reads agree. Compiled Core/QA
+evaluate two retained real Canva files: corrected direction requires visual review,
+old explicit direction conflict fails, and altered canonical task copy fails both.
+Compiled Studio respects all six requested directions. No provider/model call
+is needed for these compiled checks. The first probe used the wrong report-field
+name; that probe error was corrected without changing runtime code.
+
+First full regression: 3,685 passed/2 failed/59 skipped. Both failures were old
+backup expectations superseded by ADR-081. Updated tests require corrupt/locked
+packs to fail before restore with unknown store counts, and incomplete cloud
+transport to fail before a dump/upload/collection. Isolated backup follow-up 6/6
+passed; final full regression **3,687 passed, zero failed,
+59 skipped** across 464 files. Test types pass. Runtime is unchanged
+from candidate 8dd04cc; the final full run includes the uncommitted test-only correction.
+Earlier failed test receipts remain in the proof.
+
+This is engineering evidence for the isolated candidate. Production, actual human
+review, native edit/save/reopen, mixed-token isolation and live delivery remain
+unqualified; Workspace reviewer configuration, off-host/independent recovery and
+held-out creative quality/cost gates remain open. See R19_EXPLICIT_DIRECTION_PROOF.json.

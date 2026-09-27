@@ -11,6 +11,15 @@ configured named Google reviewer login. A live-data clone passed migration
 candidate passed 36 workflow invariants and four deployed font-QA reads with
 synthetic providers. This does not authorize a production cutover by itself.
 
+### Latest isolated candidate follow-up
+
+Candidate `8dd04cc` includes locale provenance, per-paragraph QA, canonical task-copy
+handling and explicit LTR transfer repairs. It passes 36 workflow invariants, four
+list/detail reads and compiled checks of retained real Canva bytes. Final source
+regression: 3,687 passed/59 skipped after correcting two obsolete backup
+test expectations; runtime unchanged from candidate. Production remains unchanged.
+See `R19_EXPLICIT_DIRECTION_PROOF.json`; human review and real delivery are open.
+
 ## Prepare the real pilot
 
 1. Confirm the office's Google Workspace domain. Configure

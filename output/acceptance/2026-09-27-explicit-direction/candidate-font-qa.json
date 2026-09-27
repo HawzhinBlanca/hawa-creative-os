@@ -1,0 +1,68 @@
+{
+  "checkedAt": "2026-09-27T04:13:05.425Z",
+  "sourceCommit": "8dd04ccb13e8e24ad8e409529452f25254c73246",
+  "fullWorkflowInvariants": 36,
+  "fontQaChecks": [
+    {
+      "taskId": "a903e5e5-26a2-414c-ac5b-4cdc81291d23",
+      "status": "COMPLETE",
+      "fontCoverage": null,
+      "fontFamilyPass": true,
+      "rtlVisualReviewRequired": false,
+      "listDetailAgree": true
+    },
+    {
+      "taskId": "c0610e05-5b67-4bab-b32b-847e681dcb22",
+      "status": "COMPLETE",
+      "fontCoverage": null,
+      "fontFamilyPass": true,
+      "rtlVisualReviewRequired": true,
+      "listDetailAgree": true
+    },
+    {
+      "taskId": "2ffd8d80-d22b-48c7-8e6b-35e2e9e6a29f",
+      "status": "COMPLETE",
+      "fontCoverage": null,
+      "fontFamilyPass": true,
+      "rtlVisualReviewRequired": false,
+      "listDetailAgree": true
+    },
+    {
+      "taskId": "789bad80-5071-442c-8af1-8e6155d639ca",
+      "status": "REVISION_REQUESTED",
+      "fontCoverage": null,
+      "fontFamilyPass": true,
+      "rtlVisualReviewRequired": false,
+      "listDetailAgree": true
+    }
+  ],
+  "providerScope": "synthetic external providers and synthetic office identities",
+  "images": [
+    {
+      "service": "core",
+      "imageId": "sha256:8143519ceb65932b1408ce35a65a6045043810a02aa330c16dc35d54cf42f1d8",
+      "buildCommit": "8dd04ccb13e8e24ad8e409529452f25254c73246"
+    },
+    {
+      "service": "desk",
+      "imageId": "sha256:10a656b308b4ddb59ead0ffad646ab8244bd5105ecea2a264eb6e1bbb49c8894",
+      "buildCommit": "8dd04ccb13e8e24ad8e409529452f25254c73246"
+    },
+    {
+      "service": "worker-blue",
+      "imageId": "sha256:dbf5992fb5b807d910f1384499976ec573d0cc643f412218ed5d01c23dc9756a",
+      "buildCommit": "8dd04ccb13e8e24ad8e409529452f25254c73246"
+    }
+  ],
+  "sourceHashes": {
+    "packages/creative/src/studio/transfer-v2.ts": "075a3dc7aed971502040edd5132e8d9bde1d9e5d9d27a0526b8adf6c7c310ad9",
+    "packages/qa/src/canva-pptx-check.ts": "739e6d00d19cb4bc2eceb7853810d13bc8bb7f47d060ba8c5d7827e0ff492c99",
+    "apps/core/src/core-helpers.ts": "96c6fcccc8ed3d4860d639bc5cd7a5f458017fce954f241cc6413ced4ef47abe",
+    "apps/core/src/routes/tasks.routes.ts": "a0e0310100af5b035fe00f516586f4a8755dd9206f97083129f4510b62dbb45c",
+    "apps/core/src/services/canva-font-evidence.ts": "bd46e8a35de56e803edeb6b6381922b9110f151b17317275d910741ac1e391fc",
+    "apps/desk/src/screens/WorkScreen.tsx": "a81dd5572151abe6c08b3e0adeffe4d99489dc1a498026d0b8780db902989c21",
+    "packages/db/src/repositories/task.repository.ts": "75432773d682a313a6e7a3da92e4e2594a9cd59869b3fcc61803f14bfb27a1f4"
+  },
+  "productionChanged": false,
+  "liveProviderAcceptance": false
+}

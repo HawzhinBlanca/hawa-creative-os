@@ -312,3 +312,15 @@ match the clean sealed checkout; release manifest, security, blueprint899/0/0,
 shell syntax and test TypeScript pass. The final lifecycle result is **16/16**;
 the unchanged Python source retains its **71/71** qualification. Production and
 independent-host/off-host restore admission remain outside these test results.
+
+
+### Full regression caught pre-ADR-081 expectations — 2026-09-27
+
+The first current full suite preserved two failing prebackfill expectations: corrupt
+pack detection after database restore and successful incomplete gs:// backup. Both
+contradict the measured ADR-081 refusal contract. The test now expects early archive
+refusal with null unmeasured counts and one failure receipt; unsupported cloud
+transport must create no dump, upload or collection. No recovery implementation was
+changed. Focused 6/6 and final full 3,687 tests pass (59 skipped).
+Failed-first and final receipts are retained in R19_EXPLICIT_DIRECTION_PROOF.json.
+Production activation and independent/off-host recovery remain open.

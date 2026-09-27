@@ -1,0 +1,191 @@
+{
+  "checkedAt": "2026-09-27T04:13:57.889Z",
+  "sourceCommit": "8dd04ccb13e8e24ad8e409529452f25254c73246",
+  "imageId": "sha256:8143519ceb65932b1408ce35a65a6045043810a02aa330c16dc35d54cf42f1d8",
+  "results": [
+    {
+      "name": "corrected",
+      "sha256": "d8f87c4388f60ec56b7d800e549dae24bd03c02df587ec6945451dd5a11f2e2b",
+      "criticalPass": true,
+      "visualReviewRequired": true,
+      "bidiIsolation": null,
+      "fontCoverage": null,
+      "copyMutationRejected": true,
+      "directionViolations": 0,
+      "paragraphs": [
+        {
+          "textObjectIndex": 0,
+          "paragraphIndex": 0,
+          "observed": "rtl",
+          "expected": "rtl",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 0,
+          "paragraphIndex": 1,
+          "observed": "rtl",
+          "expected": "rtl",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 1,
+          "paragraphIndex": 0,
+          "observed": "rtl",
+          "expected": "rtl",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 1,
+          "paragraphIndex": 1,
+          "observed": "rtl",
+          "expected": "rtl",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 2,
+          "paragraphIndex": 0,
+          "observed": "absent",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 2,
+          "paragraphIndex": 1,
+          "observed": "absent",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 3,
+          "paragraphIndex": 0,
+          "observed": "absent",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 3,
+          "paragraphIndex": 1,
+          "observed": "absent",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 4,
+          "paragraphIndex": 0,
+          "observed": "absent",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 4,
+          "paragraphIndex": 1,
+          "observed": "absent",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 5,
+          "paragraphIndex": 0,
+          "observed": "absent",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 5,
+          "paragraphIndex": 1,
+          "observed": "absent",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        }
+      ]
+    },
+    {
+      "name": "retained_direction_conflict",
+      "sha256": "a2caa800b2ee63934ea97989e05dd6680abf6a7b92fcd81b69ad6cc258a47c17",
+      "criticalPass": false,
+      "visualReviewRequired": false,
+      "bidiIsolation": false,
+      "fontCoverage": null,
+      "copyMutationRejected": true,
+      "directionViolations": 2,
+      "paragraphs": [
+        {
+          "textObjectIndex": 0,
+          "paragraphIndex": 0,
+          "observed": "rtl",
+          "expected": "rtl",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 0,
+          "paragraphIndex": 1,
+          "observed": "rtl",
+          "expected": "rtl",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 1,
+          "paragraphIndex": 0,
+          "observed": "rtl",
+          "expected": "rtl",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 1,
+          "paragraphIndex": 1,
+          "observed": "rtl",
+          "expected": "rtl",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 2,
+          "paragraphIndex": 0,
+          "observed": "absent",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 2,
+          "paragraphIndex": 1,
+          "observed": "absent",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 3,
+          "paragraphIndex": 0,
+          "observed": "rtl",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        },
+        {
+          "textObjectIndex": 3,
+          "paragraphIndex": 1,
+          "observed": "rtl",
+          "expected": "ltr",
+          "expectationSource": "imported_plan"
+        }
+      ]
+    }
+  ],
+  "compiledEncoder": {
+    "directions": [
+      "rtl",
+      "rtl",
+      "ltr",
+      "ltr",
+      "ltr",
+      "ltr"
+    ],
+    "copyPass": true,
+    "rtlPass": true,
+    "metadataPass": null
+  },
+  "providerCalls": 0,
+  "artifactHashes": {
+    "output/acceptance/2026-09-27-explicit-direction/direction-v2-canva.pptx": "d8f87c4388f60ec56b7d800e549dae24bd03c02df587ec6945451dd5a11f2e2b",
+    "output/acceptance/2026-09-27-canva-locale/locale-v2-canva.pptx": "a2caa800b2ee63934ea97989e05dd6680abf6a7b92fcd81b69ad6cc258a47c17"
+  },
+  "scope": "Actual retained Canva bytes evaluated by compiled candidate Core and QA; compiled Studio generates same fixture. No HTTP task mutation or human approval.",
+  "productionChanged": false
+}

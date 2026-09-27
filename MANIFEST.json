@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T04:10:13Z",
+  "generatedAt": "2026-09-27T04:16:29Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -934,8 +934,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "0d9f8a6b9732fd6c33136b4c859526abb12318836e7c4cfab79e72f5393bb9e1",
-      "bytes": 55772
+      "sha256": "5e1dfbbbdd0475ce19ec376510ca4a80b547f52d0c4e3e8a54dc88da27187746",
+      "bytes": 57473
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1039,8 +1039,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R10_EVIDENCE.md",
-      "sha256": "5ada472b2b0a9c47cf23ff8aa3357ad32b8908b916b8126e8088306f1c451597",
-      "bytes": 36814
+      "sha256": "0f1bd413c8b7af0ab77a04dcddfc529c3e19eea42e8f7a3007bf30ba657cc6e8",
+      "bytes": 37519
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R10_PITR_PROOF.json",
@@ -1109,18 +1109,18 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R18_EVIDENCE.md",
-      "sha256": "188d3921f975cf17e9ef9c1fc1fafa76c21fdee25bf61b6655a62772f394800b",
-      "bytes": 10125
+      "sha256": "769fe1d5edadf55300ac595b215c199978b763a5045795da6ec038c532ef2d90",
+      "bytes": 11826
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R19_EVIDENCE.md",
-      "sha256": "6fe709d00d750f0b567587ab2d4298386d96469348a95c0f8eb69d8e529cd320",
-      "bytes": 7825
+      "sha256": "a6e756406335b1ed870460d9a3a91db4d60ff1e00f48973228c44678346415da",
+      "bytes": 9526
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R19_EXPLICIT_DIRECTION_PROOF.json",
-      "sha256": "991ef0de4c9996fb52bb202d74720ebdfc5c4884ebef0d53b70a68778e38740a",
-      "bytes": 7122
+      "sha256": "dd0d91deb9d25f000fee2c592c02a1f5762a611157e603b222665c79b01817e2",
+      "bytes": 11504
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R19_LOCALE_CANVA_PROOF.json",
@@ -1179,8 +1179,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R26_EVIDENCE.md",
-      "sha256": "5fcdb03c23c78d1bf270c5237f575dc46cea6368f99c92ef4eccb623c5cf341a",
-      "bytes": 21471
+      "sha256": "c3ca2bf323085ee14bfb7ac1a396ce0311c21b9e4eb1404aaef83e84fc28660d",
+      "bytes": 23172
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R26_LIVE_PREFLIGHT_PROOF.json",
@@ -1229,8 +1229,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "0b92d4f681acf369db8e3b43a8796bb125512ca07fd7365d271cc81d8db7ec90",
-      "bytes": 300188
+      "sha256": "b0a16708c61f7b06e0bd5910d1965afec77c1b10834ec1e7a206fc2736951c25",
+      "bytes": 303448
     },
     {
       "path": "plans/user-stories.csv",
@@ -1334,8 +1334,8 @@
     },
     {
       "path": "runbooks/LIVE_PILOT.md",
-      "sha256": "ead920e8258231855e96f6c874c1787a451593f14d5247e42f34d92869b730a5",
-      "bytes": 3457
+      "sha256": "c83229c1dec6c242aafc074224265a3b74c65a2c20f3d0504a3c721356c2c9f1",
+      "bytes": 3987
     },
     {
       "path": "runbooks/REQUEST_SOURCE_REVIEW.md",
