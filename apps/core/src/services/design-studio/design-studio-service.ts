@@ -801,10 +801,18 @@ export class DesignStudioService {
    * critique and the judge alike. A read failure stops the run: designing without rules the office
    * set is the silent failure this replaced.
    */
-  private async withClientRules(s: Scope, ctx: StageContext): Promise<StageContext> {
+  private async withClientRules(s: Scope, ctx: StageContext, runStartedAt?: Date | string): Promise<StageContext> {
     // No database (a unit harness) means no rules to read; with one, a failed read stops the run.
     if (!ctx.clientId || typeof (this.db as { transaction?: unknown })?.transaction !== 'function') return ctx;
-    const rules = await this.tx(s, (db) => new ClientRulesRepository(db).listActive(s.tenantId, ctx.clientId));
+    // The rules as they stood when the run started: every stage re-read the current ones, so a rule
+    // sent mid-run changed the critique and the judge but not the brief (audit 2026-09-27 #16).
+    const startedAt = runStartedAt ? new Date(runStartedAt) : undefined;
+    const rules = await this.tx(s, (db) => {
+      const repo = new ClientRulesRepository(db);
+      return startedAt && !Number.isNaN(startedAt.getTime())
+        ? repo.listInForceAt(s.tenantId, ctx.clientId, startedAt)
+        : repo.listActive(s.tenantId, ctx.clientId);
+    });
     const text = formatClientRulesForPrompt(rules);
     if (!text) return ctx;
     ctx.clientRules = text;
@@ -1023,11 +1031,13 @@ export class DesignStudioService {
     let promotedRules: string;
     let latinFont: string;
     let arabicFont: string;
+    let referenceDrift = false;
 
     try {
       const stageReference = clientReferenceOf(run.client_id);
       if ('refusal' in stageReference) throw new Error(stageReference.refusal);
       const rawRef = JSON.parse(readFileSync(stageReference.referencePath, 'utf8'));
+      referenceDrift = Boolean(request?.referenceHash) && hash(JSON.stringify(rawRef)) !== request.referenceHash;
       // Read the way the qualification reads it (shared), so both design with the same rules.
       const rules = studioReferenceFromRaw(rawRef);
       referencePack.palette = rules.palette;
@@ -1049,6 +1059,18 @@ export class DesignStudioService {
         500,
         'REFERENCE_PACK_UNREADABLE',
         `The client's brand reference pack could not be read, so this design cannot be briefed. ${detail}`
+      );
+    }
+
+    // The client's scope is fixed once the run has retrieved its references (AGENTS.md): the pack was
+    // re-read on every stage, and a pack changed mid-run gave later stages other brand rules than the
+    // brief was written with (audit 2026-09-27 #16). The run stops rather than mixing the two.
+    if (referenceDrift) {
+      log.error(`[design-studio] The client's reference pack changed after run ${run.id} started; this run is stopping.`);
+      throw new CanvaFlowError(
+        409,
+        'CLIENT_SCOPE_CHANGED',
+        "The client's brand reference pack changed after this design was started. Start the design again to use the new one."
       );
     }
 
@@ -1212,7 +1234,7 @@ export class DesignStudioService {
     // worker to retry for ever, so it is marked failed here with the reason.
     let ctx: StageContext;
     try {
-      ctx = await this.withClientRules(s, this.createStageContext(s, run, run.status, budget, onSpendUpdate));
+      ctx = await this.withClientRules(s, this.createStageContext(s, run, run.status, budget, onSpendUpdate), run.created_at);
     } catch (err: any) {
       const diagnostic = `Stage context could not be built: ${err?.message || err}`;
       await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });

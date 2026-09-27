@@ -37,7 +37,7 @@ beforeAll(() => {
 afterEach(async () => {
   vi.restoreAllMocks();
   // The kill switch is one switch per Core process, shared by every app built in this file.
-  await createApp({ db } as any).request('/v1/operations/kill-switch', { method: 'POST', headers: operator, body: JSON.stringify({ channel: 'telegram', active: false }) });
+  await createApp({ db } as any).request('/v1/operations/kill-switch', { method: 'POST', headers: { ...operator, Authorization: 'Bearer test_admin_key' }, body: JSON.stringify({ channel: 'telegram', active: false }) });
   delete process.env.TELEGRAM_BOT_TOKEN;
 });
 afterAll(async () => {
@@ -174,7 +174,7 @@ describe('the getUpdates offset (Postgres, per bot)', () => {
 
 describe('the Telegram kill switch stops intake', () => {
   const killSwitch = (app: any, active: boolean) =>
-    app.request('/v1/operations/kill-switch', { method: 'POST', headers: operator, body: JSON.stringify({ channel: 'telegram', active }) });
+    app.request('/v1/operations/kill-switch', { method: 'POST', headers: { ...operator, Authorization: 'Bearer test_admin_key' }, body: JSON.stringify({ channel: 'telegram', active }) });
 
   it('at the poller: nothing is asked of Telegram, by the loop or by "poll now", until it is switched off', async () => {
     useFreshBot();

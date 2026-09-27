@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -90,5 +90,21 @@ describe('colours come from the client', () => {
   it('refuses a reference pack that names no palette instead of lending one', () => {
     expect(() => studioReferenceFromRaw({ rules: {} })).toThrow(/names no palette/);
     expect(studioReferenceFromRaw({ rules: { palette: ['#E10600', '#111111'] } }).palette).toEqual(['#E10600', '#111111']);
+  });
+});
+
+describe('shipped source', () => {
+  it("names no path on one person's Mac (audit 2026-09-27 #22)", () => {
+    const roots = [path.resolve(SRC, '..'), path.resolve(SRC, '../../../../apps/core/src')];
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (/\.(ts|tsx)$/.test(name) && readFileSync(full, 'utf8').includes('/Users/')) offenders.push(full);
+      }
+    };
+    roots.forEach(walk);
+    expect(offenders).toEqual([]);
   });
 });

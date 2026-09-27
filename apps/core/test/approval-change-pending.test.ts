@@ -123,4 +123,16 @@ describe.skipIf(!url)('review of 2026-09-24: the old design while the requester\
       (await sql<any>`SELECT count(*)::int AS n FROM hawa.outbox_commands WHERE aggregate_id = ${parent}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n);
     expect(queued).toBe(0);
   });
+
+  it('does not deliver it through publish-omnichannel either, which never checked (audit 2026-09-27 #3)', async () => {
+    const { app, parent, chat, approve } = await parentWithDraft();
+    expect((await approve()).status).toBe(201);
+    await requesterAskedForChange(parent, chat, 'received');
+    const res = await app.request(`/tasks/${parent}/publish-omnichannel`, { method: 'POST', headers, body: '{}' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).detail).toMatch(/not delivered/);
+    const queued = await withRlsContext(db, operator, async (trx) =>
+      (await sql<any>`SELECT count(*)::int AS n FROM hawa.outbox_commands WHERE aggregate_id = ${parent}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n);
+    expect(queued).toBe(0);
+  });
 });

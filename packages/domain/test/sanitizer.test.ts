@@ -202,4 +202,18 @@ describe('Asset Upload Validation & Security Engine', () => {
     expect(res.sanitizedContent).toBeDefined();
     expect(res.sanitizedContent).not.toContain('<script');
   });
+
+  it('leaves no script behind an input built to survive one pass (audit 2026-09-27 #11)', () => {
+    for (const attack of [
+      '<svg><scr<script/>ipt>alert(1)</scr<script/>ipt></svg>',
+      '<svg><scr<script></script>ipt>alert(1)</script></svg>',
+      '<svg><ifr<iframe/>ame src="x"></iframe></svg>',
+      '<svg><a hr<script/>ef="javascript:alert(1)">x</a></svg>',
+    ]) {
+      const res = sanitizeSvg(attack);
+      expect(res.sanitized ?? '', attack).not.toMatch(/<script|<iframe|javascript:/i);
+    }
+    const res = sanitizeSvg('<svg><scr<script/>ipt>alert(1)</scr<script/>ipt></svg>');
+    expect(res.violations).toContain('Blocked executable <script> element');
+  });
 });

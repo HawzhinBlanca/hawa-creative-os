@@ -32,6 +32,8 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${testBearer}`,
   };
+  /** The kill switch is an administrator's (system.routes.ts). */
+  const adminHeaders = { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' };
 
   it('1. Returns honest dynamic health checking real dependencies without hardcoded healthy (FR-064, FR-073)', async () => {
     const healthRes = await app.request('/v1/health');
@@ -51,7 +53,7 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     // 1. Enable Telegram kill switch
     const killRes = await app.request('/v1/operations/kill-switch', {
       method: 'POST',
-      headers: authHeaders,
+      headers: adminHeaders,
       body: JSON.stringify({ channel: 'telegram', active: true }),
     });
     expect(killRes.status).toBe(200);
@@ -67,7 +69,7 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     // 3. Disable kill switch
     await app.request('/v1/operations/kill-switch', {
       method: 'POST',
-      headers: authHeaders,
+      headers: adminHeaders,
       body: JSON.stringify({ channel: 'telegram', active: false }),
     });
   });
@@ -197,7 +199,7 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     // 2. Trigger a billing error record
     const errorRes = await app.request('/v1/operations/kill-switch', {
       method: 'POST',
-      headers: authHeaders,
+      headers: adminHeaders,
       body: JSON.stringify({ channel: 'telegram', active: true }),
     });
     expect(errorRes.status).toBe(200);
@@ -205,7 +207,7 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     // Reset kill switch
     await app.request('/v1/operations/kill-switch', {
       method: 'POST',
-      headers: authHeaders,
+      headers: adminHeaders,
       body: JSON.stringify({ channel: 'telegram', active: false }),
     });
   });
