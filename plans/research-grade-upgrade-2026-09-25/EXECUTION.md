@@ -12,7 +12,27 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current result (2026-09-27 — nightly archive integrity and monitoring)
+## Current result (2026-09-27 — real Canva export and partial reconstruction)
+
+Source `751556f`: current Hawa OAuth refresh/read and real PNG/PDF/PPTX export
+succeeded for a disposable copy of an existing Hawa import fixture. Three exact
+English blocks survive actual export and reimport as native addressable text.
+Current source QA passes exact copy and fixture fonts, and refuses wrong-copy and
+wrong-family controls. Reconstruction regenerates element IDs, shifts text boxes
+up 2–3 px and increases their height 2–3 px; 2.2452% of decoded PNG pixels differ.
+This establishes partial layout reconstruction, not a lossless or account-loss
+recovery claim. See `R19_NATIVE_CANVA_PROOF.json` and `R19_EVIDENCE.md`.
+
+A one-field native draft edit preserved other text and geometry. The commit tool's
+required approval did not arrive, so the draft was cancelled; committed edit/save/
+reopen remains NOT RUN. No native transactions are open. No Hawa task/binding,
+approval, publication or delivery was created. Two test designs, four export jobs
+and one import were created; the existing OAuth connection rotated normally.
+App services and flags were unchanged. R19 remains in progress. Next: approved
+save/reopen, real multilingual fixtures, current full-app live flow and human
+acceptance; independent-host recovery and measured model/retrieval gates remain open.
+
+## Prior result (2026-09-27 — nightly archive integrity and monitoring)
 
 Source `fdc1f5a`, tested seal `da69f21`: ADR-081 qualifies
 **71 backup Python tests and 16 database lifecycle tests**, with

@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "actual": {
+    "checkVersion": 5,
+    "sourceTextObjects": [
+      {
+        "id": "ppt/slides/slide1.xml#4",
+        "type": "text",
+        "text": "HAWA EDITABLE IMPORT TEST",
+        "source": {
+          "format": "pptx",
+          "part": "ppt/slides/slide1.xml",
+          "shapeId": "4"
+        }
+      },
+      {
+        "id": "ppt/slides/slide1.xml#5",
+        "type": "text",
+        "text": "Exact copy: Mr. / Ms. / Dr. [EDITABLE TEST]",
+        "source": {
+          "format": "pptx",
+          "part": "ppt/slides/slide1.xml",
+          "shapeId": "5"
+        }
+      },
+      {
+        "id": "ppt/slides/slide1.xml#6",
+        "type": "text",
+        "text": "13 September 2026 | 2:30 PM",
+        "source": {
+          "format": "pptx",
+          "part": "ppt/slides/slide1.xml",
+          "shapeId": "6"
+        }
+      }
+    ],
+    "source": "canva_exported_pptx",
+    "canvaDesignId": "DAHWWmZ3P3g",
+    "documentKind": "unspecified",
+    "copyPass": true,
+    "fontPass": true,
+    "rtlPass": true,
+    "rtlNote": null,
+    "requiredFont": "Verdana",
+    "scriptFonts": null,
+    "fontsByIndex": null,
+    "allowedFontsByScript": {
+      "latin": [
+        "Arial"
+      ],
+      "arabic": []
+    },
+    "admittedFonts": [
+      "Cinzel",
+      "Playfair Display",
+      "Montserrat",
+      "Lora",
+      "Bodoni Moda",
+      "Cairo",
+      "Plus Jakarta Sans",
+      "Vazirmatn",
+      "Inter",
+      "Verdana",
+      "Noto Sans Arabic"
+    ],
+    "arabicTextObjectCount": 0,
+    "rtlTextObjectCount": 0,
+    "observedFonts": [
+      "Arial"
+    ],
+    "textObjectCount": 3,
+    "expectedTextObjectCount": 3,
+    "offendingObjects": [],
+    "comparisonPolicy": "exact words and punctuation; layout whitespace folded",
+    "fullReleasePass": false,
+    "logoVerification": "not_qualified",
+    "layoutVerification": "visual_review_required",
+    "printQualified": false
+  },
+  "negativeControls": {
+    "uncommittedCopyRefused": true,
+    "wrongFamilyRefused": true
+  },
+  "scope": "Current source QA applied to an actual Canva export; no native editability or complete release verdict inferred."
+}

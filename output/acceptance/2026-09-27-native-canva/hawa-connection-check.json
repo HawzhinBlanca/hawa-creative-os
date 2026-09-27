@@ -1,0 +1,23 @@
+{
+  "before": {
+    "checkedAt": "2026-09-27T02:50:17.283Z",
+    "configured": true,
+    "status": "active",
+    "authorized": true,
+    "tokenExpired": true,
+    "providerRequestMade": false,
+    "source": "751556fb1feebe221a89129ed3ddabde44fe4d16"
+  },
+  "providerRead": {
+    "checkedAt": "2026-09-27T02:50:18.040Z",
+    "designId": "DAHWWmZ3P3g",
+    "title": "[TEST] Hawa editable transfer proof",
+    "pages": 1,
+    "createdAt": 1790477298,
+    "updatedAt": 1790477298,
+    "realProviderRead": true,
+    "source": "751556fb1feebe221a89129ed3ddabde44fe4d16"
+  },
+  "tokenRefresh": "Succeeded through current CanvaConnectService against the existing durable connection; no tokens recorded.",
+  "browserSession": "Expired office browser session observed separately; no bypassed UI approval."
+}

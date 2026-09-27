@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "sourceDesignId": "DAHVE6fjdhk",
+  "testDesignId": "DAHWWmZ3P3g",
+  "sourceProvenance": "output/repairs/2026-09-13-finish-system/import-probe-journal.json",
+  "testEditUrl": "https://www.canva.com/d/7xHKC8_li72LOXr",
+  "operations": [
+    {
+      "type": "update_title",
+      "title": "[TEST] Hawa native edit-reopen qualification 2026-09-27"
+    },
+    {
+      "type": "find_and_replace_text",
+      "find": "[EDITABLE TEST]",
+      "replace": "[REOPEN CHECK]"
+    }
+  ],
+  "pages": [
+    {
+      "page_id": "PBH9pgJtKzJc0XjK",
+      "page_number": 1,
+      "dimension": {
+        "width": 1024,
+        "height": 768
+      },
+      "is_responsive": false,
+      "is_empty": false,
+      "is_editable": true
+    }
+  ],
+  "before": [
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "HAWA EDITABLE IMPORT TEST"
+        }
+      ],
+      "containerElement": {
+        "type": "TEXT",
+        "position": {
+          "top": 213.27499999999998,
+          "left": 73.74599999999998
+        },
+        "dimension": {
+          "width": 878.846,
+          "height": 86.619
+        }
+      },
+      "element_id": "PBH9pgJtKzJc0XjK-LBzmrQScgsWtm22K"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "Exact copy: Mr. / Ms. / Dr. [EDITABLE TEST]"
+        }
+      ],
+      "containerElement": {
+        "type": "TEXT",
+        "position": {
+          "top": 325.531,
+          "left": 73.74599999999998
+        },
+        "dimension": {
+          "width": 878.846,
+          "height": 37
+        }
+      },
+      "element_id": "PBH9pgJtKzJc0XjK-LBGdMR2RSVkQttS7"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "13 September 2026 | 2:30 PM"
+        }
+      ],
+      "containerElement": {
+        "type": "TEXT",
+        "position": {
+          "top": 421.75,
+          "left": 73.74599999999998
+        },
+        "dimension": {
+          "width": 878.846,
+          "height": 86.619
+        }
+      },
+      "element_id": "PBH9pgJtKzJc0XjK-LB4h3dvX42c6S4R3"
+    }
+  ],
+  "draft": [
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "HAWA EDITABLE IMPORT TEST"
+        }
+      ],
+      "containerElement": {
+        "type": "TEXT",
+        "position": {
+          "top": 213.27499999999998,
+          "left": 73.74599999999998
+        },
+        "dimension": {
+          "width": 878.846,
+          "height": 86.619
+        }
+      },
+      "element_id": "PBH9pgJtKzJc0XjK-LBzmrQScgsWtm22K"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "Exact copy: Mr. / Ms. / Dr. [REOPEN CHECK]"
+        }
+      ],
+      "containerElement": {
+        "type": "TEXT",
+        "position": {
+          "top": 325.531,
+          "left": 73.74599999999998
+        },
+        "dimension": {
+          "width": 878.846,
+          "height": 37
+        }
+      },
+      "element_id": "PBH9pgJtKzJc0XjK-LBGdMR2RSVkQttS7"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "13 September 2026 | 2:30 PM"
+        }
+      ],
+      "containerElement": {
+        "type": "TEXT",
+        "position": {
+          "top": 421.75,
+          "left": 73.74599999999998
+        },
+        "dimension": {
+          "width": 878.846,
+          "height": 86.619
+        }
+      },
+      "element_id": "PBH9pgJtKzJc0XjK-LB4h3dvX42c6S4R3"
+    }
+  ],
+  "comparison": [
+    {
+      "elementId": "PBH9pgJtKzJc0XjK-LBzmrQScgsWtm22K",
+      "beforeText": "HAWA EDITABLE IMPORT TEST",
+      "draftText": "HAWA EDITABLE IMPORT TEST",
+      "geometryUnchanged": true,
+      "identityUnchanged": true
+    },
+    {
+      "elementId": "PBH9pgJtKzJc0XjK-LBGdMR2RSVkQttS7",
+      "beforeText": "Exact copy: Mr. / Ms. / Dr. [EDITABLE TEST]",
+      "draftText": "Exact copy: Mr. / Ms. / Dr. [REOPEN CHECK]",
+      "geometryUnchanged": true,
+      "identityUnchanged": true
+    },
+    {
+      "elementId": "PBH9pgJtKzJc0XjK-LB4h3dvX42c6S4R3",
+      "beforeText": "13 September 2026 | 2:30 PM",
+      "draftText": "13 September 2026 | 2:30 PM",
+      "geometryUnchanged": true,
+      "identityUnchanged": true
+    }
+  ],
+  "draftOperationResults": [
+    {
+      "status": "success",
+      "operation_info": {
+        "type": "update_title"
+      }
+    },
+    {
+      "status": "success",
+      "operation_info": {
+        "type": "find_and_replace_text",
+        "element_id": "PBH9pgJtKzJc0XjK-LBGdMR2RSVkQttS7"
+      }
+    }
+  ],
+  "commit": {
+    "status": "not_run",
+    "reason": "Explicit after-preview approval did not arrive; temporary edit transaction cancelled successfully."
+  },
+  "limits": [
+    "Connector-native capability only; copy is not bound to a Hawa task.",
+    "No human quality, multilingual, vector, logo, photo, account-loss or full-app qualification.",
+    "Preview URLs and transaction identifiers excluded from retained evidence."
+  ],
+  "transactionStatus": "cancelled",
+  "originalTextAfterTest": [
+    "HAWA EDITABLE IMPORT TEST",
+    "Exact copy: Mr. / Ms. / Dr. [EDITABLE TEST]",
+    "13 September 2026 | 2:30 PM"
+  ],
+  "originalTextUnchanged": true
+}

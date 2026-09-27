@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "sourceSha256": "73361fc1810373a274537715e819cb9a3795c4d2603c7e0d209aa1b2c1a363b6",
+  "sourceDesignId": "DAHWWmZ3P3g",
+  "sourceCommit": "751556fb1feebe221a89129ed3ddabde44fe4d16",
+  "status": "imported",
+  "claimedAt": "2026-09-27T02:53:35.841Z",
+  "jobId": "6a6b2fd5-8fff-4d0d-a6b7-387030c5a8a4",
+  "design": {
+    "id": "DAHWWrLK0so",
+    "title": "[TEST] Hawa PPTX reconstruction 2026-09-27",
+    "pages": 1,
+    "createdAt": 1790477617,
+    "updatedAt": 1790477617
+  },
+  "completedAt": "2026-09-27T02:53:38.684Z"
+}

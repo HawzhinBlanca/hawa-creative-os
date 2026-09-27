@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "designId": "DAHWWmZ3P3g",
+  "stage": "baseline",
+  "expectedUpdatedAt": 1790477298,
+  "sourceCommit": "751556fb1feebe221a89129ed3ddabde44fe4d16",
+  "startedAt": "2026-09-27T02:51:14.601Z",
+  "sourceHashes": {
+    "apps/core/src/services/canva-connect-service.ts": "1d20812e9290ec73ccf9d0c27fb85d90930f7a07e06ed020fe4903e71804aab4",
+    "packages/integrations/src/canva-connect-client.ts": "3fe7ec3e9b0883213c0f1b8e941178454c155a87a46512be35c3db8676e6e8ac"
+  },
+  "formats": {
+    "png": {
+      "status": "captured",
+      "claimedAt": "2026-09-27T02:51:14.924Z",
+      "jobId": "190575db-c1d4-4410-900f-d6891c2611b1",
+      "file": "baseline.png",
+      "sha256": "89f25b2dd9057202674c6005750eef3bd5f628d4ab1d984b4967a61b5aaf895f",
+      "bytes": 26524,
+      "capturedAt": "2026-09-27T02:51:19.766Z"
+    },
+    "pdf": {
+      "status": "captured",
+      "claimedAt": "2026-09-27T02:51:19.767Z",
+      "jobId": "ca387d11-f137-4f91-ae43-3f27de7bbcb2",
+      "file": "baseline.pdf",
+      "sha256": "b33eb17abd3dd613abb2db899ee332ccfa81a4c2e0a6806e42045ee4e99bbb88",
+      "bytes": 33400,
+      "capturedAt": "2026-09-27T02:51:24.469Z"
+    },
+    "pptx": {
+      "status": "captured",
+      "claimedAt": "2026-09-27T02:51:24.469Z",
+      "jobId": "33506c19-d821-46d0-9775-0418e7ea0cce",
+      "file": "baseline.pptx",
+      "sha256": "73361fc1810373a274537715e819cb9a3795c4d2603c7e0d209aa1b2c1a363b6",
+      "bytes": 572257,
+      "capturedAt": "2026-09-27T02:51:25.510Z"
+    }
+  },
+  "scope": "Real Connect API exports of a disposable connector-created copy; no Hawa task/binding, approval or delivery.",
+  "before": {
+    "id": "DAHWWmZ3P3g",
+    "title": "[TEST] Hawa editable transfer proof",
+    "pages": 1,
+    "createdAt": 1790477298,
+    "updatedAt": 1790477298
+  },
+  "after": {
+    "id": "DAHWWmZ3P3g",
+    "title": "[TEST] Hawa editable transfer proof",
+    "pages": 1,
+    "createdAt": 1790477298,
+    "updatedAt": 1790477298
+  },
+  "completedAt": "2026-09-27T02:51:25.744Z",
+  "status": "captured",
+  "limit": "Equal provider timestamps are a consistency observation, not an atomic Canva revision lock."
+}
