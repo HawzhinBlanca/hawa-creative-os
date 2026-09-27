@@ -279,3 +279,11 @@ mid-publication checksum failure that leaves the previous archive set unchanged
 and the watchdog unhealthy. Test types and shell syntax pass. Python source is
 unchanged from the passing 71-test run. The final seal below supersedes the
 15-test source qualification for this additional refusal control.
+
+### Final checked-publication seal
+
+Source `fdc1f5a`, tested seal `da69f21`: all 12 qualified source hashes
+match the clean sealed checkout; release manifest, security, blueprint899/0/0,
+shell syntax and test TypeScript pass. The final lifecycle result is **16/16**;
+the unchanged Python source retains its **71/71** qualification. Production and
+independent-host/off-host restore admission remain outside these test results.

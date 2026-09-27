@@ -138,13 +138,16 @@
       "warnings": 0,
       "failures": 0
     },
-    "releaseManifest": "pending checksum-follow-up seal",
-    "security": "passed: zero secrets; 51 justified allowlist matches"
+    "releaseManifest": "passed",
+    "security": "passed: zero secrets; 51 justified allowlist matches",
+    "qualifiedSourceHashes": "all 12 match clean sealed checkout"
   },
   "previousSourceQualification": {
     "sourceCommit": "e2b6612aa7235470cf67aa3602dad8f5e0fc42c4",
     "testedSeal": "de36c82a9c6da874b82115c8d495bd9ec9cbd4e0",
     "databaseLifecycleTestsPassed": 15,
     "supersededBy": "checked checksum-command exit status and a 16th fault test"
-  }
+  },
+  "sourceCommit": "fdc1f5a0be5c6713aebb3d10793c84e041b5b614",
+  "testedSeal": "da69f21ed2e4af1c8592b2c851da04cb65dcedc1"
 }
