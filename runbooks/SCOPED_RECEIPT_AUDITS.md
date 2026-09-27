@@ -33,8 +33,10 @@ attestations. Database timestamps are represented at millisecond precision.
   or a verified consistent delivery.
 - Only receipts belonging to the selected current-revision publication count.
   A previous design's Drive or Sheet receipt cannot cover its replacement.
-- Every current manifest artifact needs a verified receipt with matching name,
-  hash and size. A missing/unsupported manifest stays incomplete evidence.
+- Every current manifest artifact needs its own verified receipt with matching
+  hash and size, with no surplus copies. Filenames are labels: the archive may use
+  a client display name where the intent uses its stable ID. A missing/unsupported
+  manifest stays incomplete evidence.
 - A stored Sheet row needs a matching observed row hash. An expected hash alone
   does not confirm what Sheets returned.
 - Unconfirmed archive outcomes remain explicit; a missing local receipt never

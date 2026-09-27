@@ -66,6 +66,7 @@ try{
   check('one original durable audit has recomputable input and report hashes',integrity.count===1&&integrity.ok);
   const first=original!;
   check('current scope includes the synthetic incomplete delivery',first.anomalies.some(x=>x.taskId===foreignTaskId)&&first.simulated===false);
+  check('delivered content with archive display filenames is not falsely flagged',first.anomalies.every(x=>x.taskId===foreignTaskId));
   compose(['restart','core'],{timeoutMs:60000});
   let ready=false;for(let i=0;i<40;i++){
    try{ready=(await request('/health')).body.buildCommit===expected;}catch{}

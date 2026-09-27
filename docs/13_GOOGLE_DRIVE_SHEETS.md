@@ -183,7 +183,8 @@ restart and are protected by current membership RLS. Process-wide cached reports
 and audit-result broadcasts are removed.
 
 Not-yet-published tasks are counted separately. Current manifest artifacts must
-match verified receipt names, hashes and sizes; old-revision receipts cannot mask
+match verified receipt hashes, sizes and multiplicity; archive display filenames
+may differ from stable intent labels. Old-revision receipts cannot mask
 missing current evidence. Sheet expected and observed hashes remain distinct.
 Caller-supplied simulation rows cannot enter the operational audit. This stored
 comparison does not complete the scheduled external checks in section 7.

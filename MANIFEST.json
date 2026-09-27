@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T15:15:20Z",
+  "generatedAt": "2026-09-27T15:23:26Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -584,8 +584,8 @@
     },
     {
       "path": "adrs/103_durable_scoped_receipt_audits.md",
-      "sha256": "83ed1b91c204bf4f676590cba1c3b3cf3768fd33be511a54ee6f7f6d0768fdae",
-      "bytes": 4454
+      "sha256": "31f4403c4335adfc760f7e9b7393cbd4a19722e25bde424176c468c3e9a212e5",
+      "bytes": 4868
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -869,8 +869,8 @@
     },
     {
       "path": "docs/13_GOOGLE_DRIVE_SHEETS.md",
-      "sha256": "0a08d5e8a0d8c6234838854825ea4f7b07310d983752941a5882d1364a5a332d",
-      "bytes": 14693
+      "sha256": "741ed248eaebb57c5027a3ef698d8eea5f1797b867fa3afc329de503ed3b45e0",
+      "bytes": 14764
     },
     {
       "path": "docs/14_SECURITY_THREAT_MODEL.md",
@@ -1039,8 +1039,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "38636321a47f4253e27047fcc5e1b277790d62e5c94e384e9e361607900a28f0",
-      "bytes": 104569
+      "sha256": "46fa3775cee21fcd2d2a7cc0e8da855d0bfac03d3f03292c0b10204e6911e6ae",
+      "bytes": 105452
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1079,8 +1079,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R02_SCOPED_RECEIPT_AUDITS_PROOF.json",
-      "sha256": "fc8924f372d6db5918a7f7ce1c93ba670cb30b131a6ac53c2a809609ef36d693",
-      "bytes": 10241
+      "sha256": "1c4e489ddd790f4968125393d1579b61c5054570eb127d34b2d51a55d539ba23",
+      "bytes": 16324
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R03_EVIDENCE.md",
@@ -1574,8 +1574,8 @@
     },
     {
       "path": "runbooks/SCOPED_RECEIPT_AUDITS.md",
-      "sha256": "0e23258dc516a499e91e5945d119e18970c4ca7c94f4d59743c3f0db975f7bbe",
-      "bytes": 2736
+      "sha256": "44f5030e67f8387194c977042b9c94bff1e7f8f412dfac78d2644580340b6f7f",
+      "bytes": 2865
     },
     {
       "path": "runbooks/SPENDING_POLICY.md",

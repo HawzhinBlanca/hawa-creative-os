@@ -52,11 +52,16 @@ comparison remains a stateless deterministic domain function. No repair is added
 
 The old comparison also included approved/in-progress tasks as if reporting rows
 were already due, and collected receipts from every revision. Compare only the
-current-revision publication's verified receipts with its declared artifact names,
-hashes and sizes. Keep expected/observed Sheet row hashes separate. Missing source
+current-revision publication's verified receipts with the multiset of declared artifact
+hashes and sizes. Consume one receipt for each artifact, refusing missing or surplus
+copies. The deployed rehearsal exposed a false positive from comparing filenames:
+Lifecycle intent uses a client-ID prefix, while archive hydration uses a human-readable
+client name. Hash and size identify the approved content; filenames remain labels.
+Keep expected/observed Sheet row hashes separate. Missing source
 manifest evidence cannot qualify a delivery. Count not-yet-due tasks separately;
 preserve any unresolved archive marker without asserting external absence.
 Normalize the database timestamp to milliseconds explicitly at the SQL/API boundary.
+Normalize accepted UUID casing before binding the action to PostgreSQL's canonical UUID.
 
 ## Qualification
 

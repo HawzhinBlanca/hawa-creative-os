@@ -85,7 +85,8 @@ export function parseReceiptAuditAction(value:unknown):ReceiptAuditAction|null {
   if(!object(value)||Object.keys(value).length!==4||!uuid(value.actionId)||!digest(value.expectedScopeSha256)||
     !(value.expectedLatestAuditId===null||uuid(value.expectedLatestAuditId))||typeof value.reason!=='string'||
     value.reason.trim().length<1||value.reason.trim().length>500)return null;
-  return {actionId:value.actionId,expectedScopeSha256:value.expectedScopeSha256,expectedLatestAuditId:value.expectedLatestAuditId,reason:value.reason.trim()};
+  return {actionId:value.actionId.toLowerCase(),expectedScopeSha256:value.expectedScopeSha256,
+    expectedLatestAuditId:value.expectedLatestAuditId?.toLowerCase()??null,reason:value.reason.trim()};
 }
 
 export function parseStoredReceiptAudit(value:unknown):StoredReceiptAudit|null {

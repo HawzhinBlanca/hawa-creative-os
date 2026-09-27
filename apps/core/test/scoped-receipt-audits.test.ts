@@ -23,7 +23,7 @@ async function fixture(foreign=false){
 }
 const get=(app:ReturnType<typeof createApp>,token:string)=>app.request('/v1/operations/reconciliation',{headers:{Authorization:`Bearer ${token}`}});
 const latest=(body:any)=>body&&'latest' in body?body.latest:body;
-async function run(app:ReturnType<typeof createApp>,token:string,actionId=randomUUID()){
+async function run(app:ReturnType<typeof createApp>,token:string,actionId:string=randomUUID()){
  const state=await(await get(app,token)).json();
  return app.request('/v1/operations/reconciliation/run',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','Idempotency-Key':actionId},
   body:JSON.stringify({actionId,expectedScopeSha256:state?.scope?.sha256??'0'.repeat(64),expectedLatestAuditId:state?.latest?.auditId??null,reason:'Inspect synthetic publication receipts'})});
@@ -56,6 +56,13 @@ it('requires the browser action identity in the transport header before recordin
  }
  expect(latest(await(await get(app,f.a.token)).json())).toBeNull();
  const r=await run(app,f.a.token,actionId);expect(r.status).toBe(201);expect(r.headers.get('Cache-Control')).toBe('no-store');
+});
+it('canonicalizes accepted UUID casing before the database binds the immutable action',async()=>{
+ const f=await fixture(),app=createApp({db}),id=randomUUID();
+ const response=await run(app,f.a.token,id.toUpperCase());expect(response.status).toBe(201);
+ expect((await response.json()).auditId).toBe(id);
+ const service=new ReceiptAuditService(db),s=actor(f),next=await action(service,s);
+ expect((await service.record(s,{...next,expectedLatestAuditId:next.expectedLatestAuditId!.toUpperCase()})).revision).toBe(2);
 });
 
 const actor=(f:Awaited<ReturnType<typeof fixture>>,who=f.a)=>({tenantId:f.tenantId,userId:who.userId,role:'designer'});

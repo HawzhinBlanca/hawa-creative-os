@@ -71,11 +71,24 @@ export function auditPublicationReceipts(tasks:readonly TaskRecord[],driveFiles:
           taskHasDrift = true;
           anomalies.push({taskId:task.id,kind:'INCOMPLETE_PUBLICATION_EVIDENCE',severity:'high',description:'The current publication has no usable artifact manifest.',detectedAt:timestamp});
         } else if (task.expectedFiles) {
+          // Lifecycle intent uses a stable client-ID label; the archive may use the client's
+          // display name. Approved content and multiplicity identify deliveries, not that label.
+          const remaining = new Map<string, number>();
+          for (const file of driveEntries) {
+            const key = `${file.sha256}:${file.byteSize}`;
+            remaining.set(key, (remaining.get(key) ?? 0) + 1);
+          }
           for (const expected of task.expectedFiles) {
-            if (!driveEntries.some(f=>f.name===expected.name&&f.sha256===expected.sha256&&f.byteSize===expected.size)) {
+            const key = `${expected.sha256}:${expected.size}`, count = remaining.get(key) ?? 0;
+            if (count > 0) remaining.set(key, count - 1);
+            else {
               taskHasDrift = true;
-              anomalies.push({taskId:task.id,kind:'CHECKSUM_MISMATCH',severity:'high',description:`No verified current-publication receipt matches artifact ${expected.name}, its hash and size.`,detectedAt:timestamp});
+              anomalies.push({taskId:task.id,kind:'CHECKSUM_MISMATCH',severity:'high',description:`No unused verified current-publication receipt matches the hash and size of artifact ${expected.name}.`,detectedAt:timestamp});
             }
+          }
+          if ([...remaining.values()].some(count => count > 0)) {
+            taskHasDrift = true;
+            anomalies.push({taskId:task.id,kind:'CHECKSUM_MISMATCH',severity:'high',description:'Verified current-publication receipts include content or copies outside the declared artifact manifest.',detectedAt:timestamp});
           }
         }
         if (sheetEntry && task.packageHash && sheetEntry.packageHash !== task.packageHash) {

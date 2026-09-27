@@ -1,0 +1,4 @@
+[Typecheck:tests] Compiling 503/503 active test roots and their dependencies.
+apps/core/test/scoped-receipt-audits.test.ts(62,41): error TS2345: Argument of type 'string' is not assignable to parameter of type '`${string}-${string}-${string}-${string}-${string}`'.
+[Typecheck:tests] Compiler failed for tsconfig.test.json (exit=2, signal=none).
+[Typecheck:tests] FAILED. Preserve and repair every compiler error above.

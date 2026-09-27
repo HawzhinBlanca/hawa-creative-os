@@ -20,3 +20,12 @@ it('does not qualify a delivery whose source manifest or receipt package is unkn
   [{taskId:'t',rowNumber:1,status:'COMPLETE',packageHash:'old',syncedAt:time}],options);
  expect(report.anomalies.map(a=>a.kind)).toEqual(['INCOMPLETE_PUBLICATION_EVIDENCE','CHECKSUM_MISMATCH']);
 });
+it('matches the approved content once per artifact even when the archive uses a friendly filename',()=>{
+ const task={id:'t',status:'COMPLETE',updatedAt:time,packageHash:'package',expectedFiles:[{name:'client-id.pptx',sha256:'approved',size:12}]};
+ const drive=[{taskId:'t',fileId:'f',folderId:'folder',name:'client-name.pptx',sha256:'approved',byteSize:12}];
+ const sheet=[{taskId:'t',rowNumber:1,status:'COMPLETE',packageHash:'package',syncedAt:time,expectedRowHash:'row',observedRowHash:'row'}];
+ expect(auditPublicationReceipts([task],drive,sheet,options)).toMatchObject({inSyncCount:1,driftCount:0});
+ const duplicate={...task,expectedFiles:[task.expectedFiles[0],task.expectedFiles[0]]};
+ expect(auditPublicationReceipts([duplicate],[{...drive[0],name:'client-id.pptx'}],sheet,options)).toMatchObject({inSyncCount:0,driftCount:1});
+ expect(auditPublicationReceipts([task],[drive[0],{...drive[0],fileId:'extra'}],sheet,options)).toMatchObject({inSyncCount:0,driftCount:1});
+});

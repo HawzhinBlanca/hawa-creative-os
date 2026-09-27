@@ -1,5 +1,19 @@
 # Scoped receipt audit qualification — 2026-09-27
 
+## 2026-09-27 — Audit comparison correction, final qualification pending
+
+First candidate 1933581 passed 4137 tests/0 failed/59 skipped, the selected synthetic
+workflow and 26 Chrome/restart/revocation checks. Its real stored audit then exposed
+a false filename mismatch: intent used a stable client-ID prefix, while archive
+hydration used the client display name for identical approved bytes. Compare the
+hash/size multiset instead, consuming one receipt per expected artifact and refusing
+surplus copies. Accepted UUID casing is also normalized before immutable SQL binding.
+Both original regressions fail; corrected 31 affected tests/4 files pass. Final
+source/type/build and deployed qualification follow. Earlier evidence is retained in
+before-content-correction and is not claimed for corrected source. Whole-app goal
+remains active; no real provider or production change.
+
+
 ## 2026-09-27 — Durable scoped receipt audits (ADR-103), qualification pending
 
 PostgreSQL now retains immutable actor/current-client-scope audit history. Source

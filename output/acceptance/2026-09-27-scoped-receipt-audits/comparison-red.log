@@ -1,0 +1,61 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_81895134343cebfe and hawa_tpl_repair_81895134343cebfe (26 ms)
+ ❯ packages/domain/test/publication-audit.test.ts (4 tests | 1 failed) 5ms
+   × matches the approved content once per artifact even when the archive uses a friendly filename 3ms
+{"level":"error","time":"2026-09-27T15:20:44.172Z","service":"core","requestId":"24ab5d38-d5ea-40b0-951d-ac54043f9181","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+ ❯ apps/core/test/scoped-receipt-audits.test.ts (12 tests | 1 failed) 1229ms
+   × canonicalizes accepted UUID casing before the database binds the immutable action 29ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > canonicalizes accepted UUID casing before the database binds the immutable action
+AssertionError: expected 503 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 503
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:62:83
+     60| it('canonicalizes accepted UUID casing before the database binds the i…
+     61|  const f=await fixture(),app=createApp({db}),id=randomUUID();
+     62|  const response=await run(app,f.a.token,id.toUpperCase());expect(respo…
+       |                                                                                   ^
+     63|  expect((await response.json()).auditId).toBe(id);
+     64|  const service=new ReceiptAuditService(db),s=actor(f),next=await actio…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  packages/domain/test/publication-audit.test.ts > matches the approved content once per artifact even when the archive uses a friendly filename
+AssertionError: expected { auditId: 'fixture', …(11) } to match object { inSyncCount: 1, driftCount: +0 }
+(10 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "driftCount": 0,
+-   "inSyncCount": 1,
++   "driftCount": 1,
++   "inSyncCount": 0,
+  }
+
+ ❯ packages/domain/test/publication-audit.test.ts:27:63
+     25|  const drive=[{taskId:'t',fileId:'f',folderId:'folder',name:'client-na…
+     26|  const sheet=[{taskId:'t',rowNumber:1,status:'COMPLETE',packageHash:'p…
+     27|  expect(auditPublicationReceipts([task],drive,sheet,options)).toMatchO…
+       |                                                               ^
+     28|  const duplicate={...task,expectedFiles:[task.expectedFiles[0],task.ex…
+     29|  expect(auditPublicationReceipts([duplicate],[{...drive[0],name:'clien…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 14 passed (16)
+   Start at  18:20:42
+   Duration  2.83s (transform 1.06s, setup 143ms, import 1.40s, tests 1.23s, environment 0ms)
+
