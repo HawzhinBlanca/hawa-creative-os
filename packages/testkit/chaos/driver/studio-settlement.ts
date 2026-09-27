@@ -1,6 +1,7 @@
 /** Deployed API recovery with synthetic call admissions and synthetic administrator evidence. */
 import {createHash,randomUUID} from 'node:crypto';
-import {compose,FAKES_URL,query,secrets,sql} from './stack.js';
+import {withRlsContext} from '@hawa/db';
+import {compose,db,FAKES_URL,query,secrets,sql} from './stack.js';
 import {TENANT_ID,KAAE_CLIENT_ID} from './provision.js';
 import {waitUntil,type InvariantResult} from './scenario.js';
 
@@ -25,8 +26,9 @@ export async function candidateStudioSettlement(events:string[]):Promise<Invaria
   const first=await call(studio,input,randomUUID());
   check('deployed Studio admits a run without transport',first.status===202&&first.body.created===true&&await ledger()===before);
   const runId=first.body.runId,callId=randomUUID();
-  await query(sql`INSERT INTO hawa.design_studio_calls(id,tenant_id,run_id,stage,provider,model,requested_model,call_ordinal,logical_call_sha256,status)
-    VALUES(${callId}::uuid,${TENANT_ID}::uuid,${runId}::uuid,'briefing','openai','synthetic','synthetic',1,${'a'.repeat(64)},'uncertain')`);
+  const reservation={version:1,usd:.01,requestSha256:'a'.repeat(64),policy:'synthetic-runtime-proof',inputTokens:1,outputTokens:1};
+  await withRlsContext(db(),{tenantId:TENANT_ID},tx=>sql`INSERT INTO hawa.design_studio_calls(id,tenant_id,run_id,stage,provider,model,requested_model,call_ordinal,logical_call_sha256,status,reservation)
+    VALUES(${callId}::uuid,${TENANT_ID}::uuid,${runId}::uuid,'briefing','openai','synthetic','synthetic',1,${'a'.repeat(64)},'uncertain',${JSON.stringify(reservation)}::jsonb)`.execute(tx));
   await query(sql`UPDATE hawa.design_studio_runs SET status='abandoned',diagnostic='Synthetic interrupted-call fixture' WHERE id=${runId}::uuid`);
   check('deployed abandoned run cannot bypass unresolved spend',(await call(studio,input,randomUUID())).status===409);
   const path=`/tasks/${taskId}/studio-recovery/${runId}`,detail=await call(path);
