@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "CORRECTED_CANDIDATE_FULL_REGRESSION_PENDING",
+  "status": "LOCALLY_QUALIFIED_LIVE_ADMISSION_PENDING",
   "requirements": [
     "FR-059",
     "FR-060",
@@ -32,7 +32,15 @@
     },
     "securitySelfTestPatterns": 11
   },
-  "fullRegression": "pending",
+  "fullRegression": {
+    "passed": 4002,
+    "failed": 0,
+    "skipped": 59,
+    "filesPassed": 480,
+    "filesSkipped": 7,
+    "durationSeconds": 123.28,
+    "log": "output/acceptance/2026-09-27-call-cost-accounting/full-final.log"
+  },
   "runtimeChanged": true,
   "productionChanged": false,
   "realProviderCalls": false,
@@ -56,7 +64,7 @@
     "Independent-host restore and controlled rollout"
   ],
   "sourceHashes": {
-    "adrs/097_exact_call_cost_accounting.md": "6de99ac441654f4567fcbb55612d6384bf7024945c7dd736ed82f74488829205",
+    "adrs/097_exact_call_cost_accounting.md": "8babb71c5b49cdfa939953e7365fa0209d4e5d64154a7cf239fb07fe463b6d6d",
     "api/openapi.yaml": "6254b014ce617d5912c7cad69c5cbaf26930400112ed6ad01e39b88ffff44d5d",
     "apps/core/src/app.ts": "18472d29479b75ab51a08bc8508dda0c92ae8498f4f4fbe648cc2da86e474d29",
     "apps/core/src/routes/call-cost.routes.ts": "50c1cf327a7c0384fd53c356f5a5ee3ce6af3a16138b8bcc767983e396d36e81",
@@ -98,7 +106,46 @@
     "output/acceptance/2026-09-27-call-cost-accounting/refresh-candidate.log": "bc1267b15a6d45c21fb059bb77aeac61572b88b72d4335ae32ed58b3281bf9ab",
     "output/acceptance/2026-09-27-call-cost-accounting/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
     "output/acceptance/2026-09-27-call-cost-accounting/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
-    "output/acceptance/2026-09-27-call-cost-accounting/types-first.log": "b5e37022b480bbe1f13dfe55de0ec583345167cb7e2b5bc4c8bf9dfc31f39bca"
+    "output/acceptance/2026-09-27-call-cost-accounting/types-first.log": "b5e37022b480bbe1f13dfe55de0ec583345167cb7e2b5bc4c8bf9dfc31f39bca",
+    "output/acceptance/2026-09-27-call-cost-accounting/accounting-browser-refusal.png": "f684d80085893250fc53813e39000d8029ec182a52296358270e3cda26708bea",
+    "output/acceptance/2026-09-27-call-cost-accounting/accounting-browser.png": "7a48ddc80ade7f25b43567250e1f5a31858451e600636349724b6792206336d8",
+    "output/acceptance/2026-09-27-call-cost-accounting/browser-accounting.txt": "7d7d058106fb00903a3b75c12ffd23169419cf82bbec6056d21e4c9da841be01",
+    "output/acceptance/2026-09-27-call-cost-accounting/browser-final.log": "b5eb7e3b5cd74299903ba8c981868d75571ef237af5e24d77981503f09da350c",
+    "output/acceptance/2026-09-27-call-cost-accounting/browser-first.log": "a81df0ce3e376bd6123784352c2fee454b65219ce175afc01f410740c8598b94",
+    "output/acceptance/2026-09-27-call-cost-accounting/browser-fourth.log": "a0300e965de4a270e6518b68e00def06d25998dd756a45bd4d9ed938fb1906bf",
+    "output/acceptance/2026-09-27-call-cost-accounting/browser-proxy-fixed.log": "b5eb7e3b5cd74299903ba8c981868d75571ef237af5e24d77981503f09da350c",
+    "output/acceptance/2026-09-27-call-cost-accounting/browser-refusal.json": "6ca102fe828dbb7c1afe97eb43c951f60f8507db0b56855fb1911aa0f36e785c",
+    "output/acceptance/2026-09-27-call-cost-accounting/browser-second.log": "1916929a3248331e0bf2fedca67f2633a9392c51fcc46f711da33ca796b5194d",
+    "output/acceptance/2026-09-27-call-cost-accounting/browser-third.log": "f74dedae3e202ae22eb85ef4f0efded9adf978f431fc00a4f126712e03be58e4",
+    "output/acceptance/2026-09-27-call-cost-accounting/build-browser-fixes.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-call-cost-accounting/build-corrected.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-call-cost-accounting/candidate-rehearsal-final.json": "9975eb019a3c3f2c8eba64bb643b9460a2e26999b5867fd0bc4a3f6b093c8df1",
+    "output/acceptance/2026-09-27-call-cost-accounting/candidate-rehearsal-final.log": "a8d5e25f711ddaa3df3be5bdf19d5223b7ee0204bbe99293945db78dc9bbd32e",
+    "output/acceptance/2026-09-27-call-cost-accounting/candidate-rehearsal.json": "d480bc88badf6c8b93219dbd8d998f9ea3595c73d18fd4caf669b99fbd156894",
+    "output/acceptance/2026-09-27-call-cost-accounting/candidate-rehearsal.log": "dc739ea121918eb682ed9a4c1cf7dbf307091adcae902bf4a4301733c3db9147",
+    "output/acceptance/2026-09-27-call-cost-accounting/check-deployed.mts": "e723810788362aea528037ce71f5c3628d63956fd5d4cd0a9bd2e6de18f5f43e",
+    "output/acceptance/2026-09-27-call-cost-accounting/cookie-origin-tests.log": "79c494f403c8a8cad9b16300db47d8feb91fbe518d8954bbc4960b3868faebad",
+    "output/acceptance/2026-09-27-call-cost-accounting/deployed-accounting.json": "d4f89e24f5a1f2f6309151d4abbf22a3b98566bacec91119380dc7ff20632dc9",
+    "output/acceptance/2026-09-27-call-cost-accounting/deployed-browser-refusal.json": "b66ebb0d85ae474fcecc59fa87e5c902a63bdbc7e69c0704ebea0ee26cb33fb9",
+    "output/acceptance/2026-09-27-call-cost-accounting/deployed-fixture-failure.json": "1cc3da679a424da7829c5b366c8a8bfc74db4e16aee22920c442265b06b23078",
+    "output/acceptance/2026-09-27-call-cost-accounting/desk-browser-fixes-build.log": "48fd55cc47882ec27cb09f6b3a4d0dc4cec2a6048e26b6af51237cae99ea7252",
+    "output/acceptance/2026-09-27-call-cost-accounting/desk-browser-fixes.log": "f1f16583e7c3251a1fc805491e5428f7a948721da85d71c522ba2b28d969a35d",
+    "output/acceptance/2026-09-27-call-cost-accounting/desk-build-final.log": "3043398d5f76612caa79b803520c5097201d409c286622a723bb5f94a99a481b",
+    "output/acceptance/2026-09-27-call-cost-accounting/first-accounting-browser.png": "b2668da1650fa83cddd6b9d068c2ce7fa6bff27f382e4d9a3de2ad0a9f6fbd3d",
+    "output/acceptance/2026-09-27-call-cost-accounting/first-browser-accounting.txt": "879c24a01ba02ae9b20a7bf2af3bb7f26f136222668a6da21c5c7c3fd76d87e0",
+    "output/acceptance/2026-09-27-call-cost-accounting/first-deployed-accounting.json": "0835aaa118a99e4b6f8a8405044f4a17528fa9682d1e19ade76b6f7a93825c08",
+    "output/acceptance/2026-09-27-call-cost-accounting/first-runtime-health.json": "b88e11c1f51b5b93e4c72db5a809b44deb380420aed2289916cbbb1f3f98fe41",
+    "output/acceptance/2026-09-27-call-cost-accounting/focused-corrected.log": "fe752a9bd1147a3ff606d1c4b2da70e5cdb9f29e45ab83bfcb5ff5741b437fcb",
+    "output/acceptance/2026-09-27-call-cost-accounting/full-candidate.log": "17d8bfd4294a0d24da88e137ba2f02e0cb62dfcd0cf1d3d4c9c00d4367cdb471",
+    "output/acceptance/2026-09-27-call-cost-accounting/full-final.log": "fb0d7b55c7e1a9f33e035967a76353e96ae022120df6304fde1c05043c63a511",
+    "output/acceptance/2026-09-27-call-cost-accounting/nginx-check-fixed.log": "6be52e1282027fc4360f6d07fb96a5b257612a2e940b642843f693dc36a32963",
+    "output/acceptance/2026-09-27-call-cost-accounting/nginx-check.log": "0078b73b558c84bc62736c719aae051344941da8e6a469e409bfb14076efc2ea",
+    "output/acceptance/2026-09-27-call-cost-accounting/runtime-health.json": "fad7bf84a397dcb4086a560ae8370f7fdbe2ae6bade7dd094b475064e2a7e036",
+    "output/acceptance/2026-09-27-call-cost-accounting/types-final.log": "b5e37022b480bbe1f13dfe55de0ec583345167cb7e2b5bc4c8bf9dfc31f39bca",
+    "output/acceptance/2026-09-27-call-cost-accounting/validate-browser-source.log": "171687bb8fd5ce0f446b5e290264ed48fde7455eca85e58badc400b05b4f68ca",
+    "output/acceptance/2026-09-27-call-cost-accounting/validate-corrected.log": "171687bb8fd5ce0f446b5e290264ed48fde7455eca85e58badc400b05b4f68ca",
+    "output/acceptance/2026-09-27-call-cost-accounting/validate-source.log": "171687bb8fd5ce0f446b5e290264ed48fde7455eca85e58badc400b05b4f68ca",
+    "output/acceptance/2026-09-27-call-cost-accounting/blueprint-qualified.log": "171687bb8fd5ce0f446b5e290264ed48fde7455eca85e58badc400b05b4f68ca"
   },
   "implementationCommit": "390c889",
   "firstTestedCommit": "0d7af612ed0a2fc69f92eecaa921de2fd79833c4",
@@ -119,5 +166,54 @@
     "firstDeployedChecksPassed": 20,
     "firstBuildCommit": "0d7af612ed0a2fc69f92eecaa921de2fd79833c4",
     "firstRuntimeScope": "Old candidate images plus working-tree nginx Host-authority correction; fresh complete candidate still pending"
+  },
+  "testedCommit": "885779fee944f3c5dbed5d87c3c61b8fc2ea4aed",
+  "runtime": {
+    "buildCommit": "885779fee944f3c5dbed5d87c3c61b8fc2ea4aed",
+    "sourceChanges": {},
+    "workflowChecksPassed": 63,
+    "workflowChecksFailed": 0,
+    "scenariosExecuted": 1,
+    "scenariosNotSelected": 43,
+    "browserAccountingChecksPassed": 20,
+    "browserAccountingChecksFailed": 0,
+    "actualCoreRestart": true,
+    "additionalProviderRequests": 0,
+    "revokedSyntheticAdministrator": true,
+    "screenshotVisuallyInspected": true,
+    "sourceFile": "output/acceptance/2026-09-27-call-cost-accounting/candidate-rehearsal-final.json",
+    "browserProof": "output/acceptance/2026-09-27-call-cost-accounting/deployed-accounting.json",
+    "scope": "Disposable hawa-chaos synthetic source/provider/staff only"
+  },
+  "runtimeHealth": {
+    "status": "degraded",
+    "timestamp": "2026-09-27T11:02:50.191Z",
+    "buildCommit": "885779fee944f3c5dbed5d87c3c61b8fc2ea4aed",
+    "flags": {
+      "DESIGN_PIPELINE_V3": "off",
+      "DESIGN_STUDIO_V2": "off"
+    },
+    "restateInvocations": {
+      "status": "ok",
+      "paused": 0,
+      "backingOff": 0,
+      "inbox": 0,
+      "checkedAt": "2026-09-27T11:02:50.169Z"
+    },
+    "dependencies": {
+      "postgres": "connected",
+      "parkedClientMessages": 0,
+      "canva": "unverified",
+      "canvaCircuitBreaker": "CLOSED",
+      "telegram": "active",
+      "waha": "unconfigured",
+      "disk": "writable",
+      "restate": "connected",
+      "restatePausedInvocations": 0,
+      "modelProvider": "unverified",
+      "telegramApi": "unverified",
+      "funnel": "healthy",
+      "cutout": "unconfigured"
+    }
   }
 }

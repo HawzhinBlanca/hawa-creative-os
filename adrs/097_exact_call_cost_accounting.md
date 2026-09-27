@@ -1,7 +1,7 @@
 # ADR-097 — Attributed accounting for exact paid calls
 
 Date: 2026-09-27
-Status: Accepted for implementation; qualification pending
+Status: Locally qualified; live billing and office admission pending
 Requirements: FR-059, FR-060, FR-062, FR-065, FR-079, NFR-001.
 Sources: docs/07_MODEL_REGISTRY_AND_EVALUATION.md,
 docs/10_WORKFLOW_RELIABILITY.md, docs/14_SECURITY_THREAT_MODEL.md,

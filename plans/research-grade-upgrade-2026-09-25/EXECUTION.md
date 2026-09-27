@@ -1,6 +1,6 @@
 # Completion checkpoint
 
-## 2026-09-27 — Exact-call accounting (ADR-097, candidate)
+## 2026-09-27 — Exact-call accounting (ADR-097, locally qualified)
 
 Migration 053 adds named, immutable revisions of exact Studio/evaluation/voice
 cost evidence. Original outcomes and execution holds remain; unused allocations
@@ -10,12 +10,31 @@ SQL authority/immutability, concurrent revisions, exact keyed replay and origina
 receipt preservation are covered. Desk Operations exposes paginated call costs,
 local evidence-file hashing, attributed history, conflict notices and saved retries.
 
-Affected suites: 73 passed across seven files, no failures or skips. All 488 test
+Full regression on sealed candidate **885779f**: **4002 passed, zero failed,
+59 skipped** (480 passing and seven skipped files), 123.28 seconds. Focused
+correction suites passed 112 tests; named-cookie/origin controls passed 19 tests;
+the final form layout passed 12 Desk tests and its production build. All 488 test
 roots and source/scripts compile; lint remains 981/1053 with nine existing provider
-egress exceptions; Desk build and scanner pass. Initial build and fixture failures
-are preserved. Full sealed regression and deployed browser qualification are pending.
-No production change or real provider request. Budget policy administration, other
-paid paths, typed result recovery and real operational/quality admission remain open.
+egress exceptions. Scanner and its 11-pattern self-test pass. Initial failures
+remain in the proof: route/migration inventories, RLS helper hoisting, probe setup,
+and deployed nginx dropping the browser port. The proxy now preserves full Host
+authority while Core continues refusing a different-port browser origin.
+
+Fresh Core/worker/Desk images all identify **885779f**, with no changed source.
+The selected synthetic full-app rehearsal passed 63 workflow/recovery invariants
+(one scenario executed; 43 not selected). Twenty deployed Chrome/accounting checks
+passed, including cookie/CSRF, immutable original receipt, actual Core restart,
+exact action replay and zero additional provider requests. The temporary named
+administrator was revoked. Final screenshot inspection confirms readable form
+labels, cost history and controls. Evidence is local and synthetic; no real invoice,
+paid provider call, real delivery or production deployment was qualified.
+
+At 11:02:50 UTC /14:02 Baghdad, isolated health is degraded: PostgreSQL/Restate
+connect, paused/backoff/inbox and parked-message counts are zero, while live
+Canva/model/Telegram API checks remain unverified. Both new design flags stay off.
+Budget policy administration, other paid paths, typed result recovery, truthful
+fixture-case presentation, real operational/human/quality admission and independent
+restore/controlled rollout remain open. The whole-app goal is not complete.
 See R21_CALL_COST_ACCOUNTING_PROOF.json and runbooks/CALL_COST_ACCOUNTING.md.
 
 
