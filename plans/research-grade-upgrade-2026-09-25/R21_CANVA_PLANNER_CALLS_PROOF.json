@@ -1,0 +1,83 @@
+{
+  "date": "2026-09-27",
+  "status": "IMPLEMENTED_QUALIFICATION_IN_PROGRESS",
+  "adr": "101_durable_canva_planner_calls",
+  "requirements": [
+    "FR-060",
+    "FR-064",
+    "FR-065",
+    "FR-079"
+  ],
+  "realProviderCalls": false,
+  "productionChanged": false,
+  "focused": {
+    "passed": 127,
+    "failed": 0,
+    "files": 9,
+    "log": "output/acceptance/2026-09-27-canva-planner-calls/focused-final.log",
+    "actualSigkillBoundaries": [
+      "after-send",
+      "after-response-before-save",
+      "after-save"
+    ]
+  },
+  "pending": [
+    "Final source full regression",
+    "Fresh deployed/browser qualification",
+    "Release sealing",
+    "Real provider/native Canva admission"
+  ],
+  "firstFailures": [
+    "Stale compiled creative package lacked newly exported validation error; rebuild and affected tests pass.",
+    "Accounting test fixture assumed version1 despite tenant bootstrap policy; append next revision and five database tests pass."
+  ],
+  "sourceHashes": {
+    "api/openapi.yaml": "153f2f4b5bcb20398e44f32e91b9bcb739e293b2faf561e126017039f8f6d684",
+    "apps/core/src/services/call-cost-accounting.ts": "27024d55be0e1088673ef8caed2ed23858372577f8d6b5a5cf329b12ee998804",
+    "apps/core/src/services/canva-design-planner.ts": "2a2b34f2b03b8882d73e1788d49c93e53ccf538caabda7498e9dab0ca376a417",
+    "apps/core/src/services/task-generation-guard.ts": "a0a4b5e931f9f74bf45a67ad1d2df38c3eca566b57175568f9bfa6416767b2f6",
+    "apps/core/test/canva-design-planner.test.ts": "9a5d4569906a73b6190b78cf941c2a5e3e527c321c3592bc88587e058bdae197",
+    "apps/core/test/startup-schema-check.test.ts": "52ced21c31e902ed9e7c6ab60febe3dcf89187286efb42a23f1afb78d29a96db",
+    "apps/desk/src/api/client.ts": "fe3c69771c329b1851a8532570dbca3705a5a495dc08cc79e63f0c2d7ca99a24",
+    "apps/desk/src/components/CallCostAccountingPanel.tsx": "6f38cb3588ffb56a4a7d052718ee5c700fbc141b7e9f32ab72432842220a2eb3",
+    "apps/desk/src/components/CanvaTaskPanel.tsx": "4c304aa9aafb5fa4b15db390de8a5789b84d09573bfea31696ab92b34d353731",
+    "docs/10_WORKFLOW_RELIABILITY.md": "37c08e4bc6edc613a61c8e0db9280e653a18cbc27c117ca94353076c39e9305f",
+    "docs/17_UI_UX.md": "7e85e36261f392168b5dc56f46111878b09ce90d2e7f8ae7b486c3858b3be3b7",
+    "packages/contracts/src/call-cost.ts": "5f2dc3bbdd8d40106c36b81fb349572534ba0570eb110374106b6b4fd19d0706",
+    "packages/creative/src/editable-transfer.ts": "68b743878277ff5677a2fedf141a6d423f3f4c10169cc07294f9fc3c0252594d",
+    "packages/db/src/repositories/design-studio.repository.ts": "0bd88d24bf6bbf60ba272620703e136bc06ae15207da3dc79bc11d175ae18076",
+    "packages/db/test/schema-upgrade.test.ts": "6b32172eb06d0b37504a72a0fcbc5ee9c501936fb2781c4bd9635dfc9deb28df",
+    "scripts/lint_provider_egress.ts": "de8cdb5c708c37bce4990b91f75302f4a0ecd572d698d1637c2b63cf0c6ab7e6",
+    "adrs/101_durable_canva_planner_calls.md": "122e5235772dc1612dfdf76e5d336e70c7f7d5e1bf4a251f3dd3811bd98951e8",
+    "apps/core/src/services/canva-planner-call.ts": "a2c95d3d64bea4bbee86a68d42905c8a53546941c168b8ec00d0f2cb7c11ee20",
+    "apps/core/test/canva-planner-accounting.test.ts": "64cb9b5bb376cea4fe3d98805d7eb29ab9aec664b378af0e24050221798cc72a",
+    "apps/core/test/canva-planner-call.test.ts": "d0277669443d9d01f18c809ee72a3d32a6e36a6ee962e6e24c00b0ce21c559e8",
+    "apps/core/test/fixtures/canva-planner-kill-child.ts": "2d73ed46461dc11843afd62cb29977a1769323bb715156fafc0703998ddbe4b8",
+    "apps/desk/test/canva-planner-recovery.test.ts": "4a135b8f65f4f3257bd17e2526eaca406bcbc8476f5d4efde30d30d563ad2988",
+    "packages/db/migrations/056_durable_canva_planner_calls.sql": "a3ef7b4cccb85d2609180a89dd773acb5be37939242750fbb6ec0d3d06b5e90c",
+    "runbooks/CANVA_PLANNER_RECOVERY.md": "db3e5147c8df1744f24af70b4f2ec2b3e74d306812ba7fcc0db50ad5d852b837"
+  },
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-canva-planner-calls/recovery-first.log": "0d8eeaa615f85c1c490dc57684bf0b95817c351553d2cff9c4c7071ca8691f69",
+    "output/acceptance/2026-09-27-canva-planner-calls/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+    "output/acceptance/2026-09-27-canva-planner-calls/lint.log": "c4e73804056ec05dfae37b6c64ad2336a84ad50cc40e70ba111eca39fb820a73",
+    "output/acceptance/2026-09-27-canva-planner-calls/types-final.log": "442deead188e465040d1321aa203a95ede5b8f3bb8a376d54dea81b190259c2e",
+    "output/acceptance/2026-09-27-canva-planner-calls/focused-final.log": "849af012b45bfcccd5ffe641160cf451889000edc184fda15ae3f8c454fdd44c",
+    "output/acceptance/2026-09-27-canva-planner-calls/types-current.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-canva-planner-calls/accounting-first.log": "52466ec312c6a9eb73f49f8e3b460b49c5362adba6afcde02afa5d1907bf9a14",
+    "output/acceptance/2026-09-27-canva-planner-calls/focused-first.log": "d17108d24ab622c3cf3480e345f0c52af2aa144fc9e767873d8e57edaaa6fa66",
+    "output/acceptance/2026-09-27-canva-planner-calls/desk-build.log": "bc37ef7a501c247774d89d21dad59a87747c6ff9b1fbd9a31359265dd904ef75",
+    "output/acceptance/2026-09-27-canva-planner-calls/focused-third.log": "a95d2921568a7e68c68f89600105f0c672510d36816bea514f6d1a386c4d17d6",
+    "output/acceptance/2026-09-27-canva-planner-calls/types-source.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-canva-planner-calls/focused-second.log": "eb02d24f915e370e344d3dde0270f95de166660dbe32d5fede9d4399645dfd3d",
+    "output/acceptance/2026-09-27-canva-planner-calls/accounting-second.log": "d2fd1fcab3205dbffe9fda0b09afb0a77970bfaa84bad9fca5fab7fe38370fd4"
+  },
+  "checks": {
+    "strictTestRoots": 498,
+    "sourceAndScriptTypes": "passed",
+    "lintAny": 982,
+    "existingProviderEgressExceptions": 9,
+    "deskBuild": "passed",
+    "securityScan": "passed"
+  }
+}

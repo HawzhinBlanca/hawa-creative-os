@@ -9,8 +9,8 @@ export function assertTaskGenerationAllowed(state: unknown): void {
 }
 
 /** Preserve the established HTTP conflict contract for both Studio and planner admission. */
-export async function assertStudioCallsResolved(db: Kysely<Database>, tenantId: string, taskId: string): Promise<void> {
-  try { await assertLedgerResolved(db, tenantId, taskId); }
+export async function assertStudioCallsResolved(db: Kysely<Database>, tenantId: string, taskId: string, executingPlanId?: string): Promise<void> {
+  try { await assertLedgerResolved(db, tenantId, taskId, undefined, executingPlanId); }
   catch (error) {
     if (error instanceof StudioCallUncertainError) throw new CanvaFlowError(409, error.code, error.message);
     throw error;

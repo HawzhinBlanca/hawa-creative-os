@@ -951,7 +951,7 @@ paths:
       tags: [Operations]
       operationId: readCallCostEvidence
       parameters:
-        - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice, health_probe]}}
+        - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice, health_probe, canva_planner]}}
         - {name: callId, in: path, required: true, schema: {type: string, format: uuid}}
       responses:
         '200': {description: Exact snapshotHash, original cost and outcome, reserved USD, conservative accounted USD, attributed revision history, conflicts and current canRecord authority}
@@ -963,7 +963,7 @@ paths:
       operationId: recordCallCostEvidence
       description: Appends a named administrator cost attestation for one exact call. Snapshot and authority are checked again in SQL. The highest original, settled or attested charge remains counted. Terminal evidence releases unused reserves; this changes no outcome, score, workflow state or execution hold and dispatches no provider request. Corrections append revisions. Same-action retries return the saved receipt.
       parameters:
-        - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice, health_probe]}}
+        - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice, health_probe, canva_planner]}}
         - {name: callId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
       requestBody:

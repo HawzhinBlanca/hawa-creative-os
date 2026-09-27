@@ -1,3 +1,8 @@
+/** A deterministic input validation failure; storage/encoding exceptions remain retryable. */
+export class EditableTransferValidationError extends Error {
+  readonly code='EDITABLE_TRANSFER_INVALID';
+  constructor(message:string){super(message);this.name='EditableTransferValidationError';}
+}
 import { createRequire } from 'node:module';
 const PptxGenJS = createRequire(import.meta.url)('pptxgenjs');
 import { createHash } from 'node:crypto';
@@ -40,13 +45,13 @@ export interface TransferOptions {
 /** Validate before passing tags into DrawingML attributes; never derive language from script/font. */
 export function resolveTransferLocales(copy: readonly string[], locales?: readonly string[]): string[] {
   if (locales === undefined) return copy.map(() => 'und');
-  if (!Array.isArray(locales) || locales.length !== copy.length) throw new Error('Copy locales must match every exact-copy block');
+  if (!Array.isArray(locales) || locales.length !== copy.length) throw new EditableTransferValidationError('Copy locales must match every exact-copy block');
   return Array.from(locales, locale => {
     if (typeof locale !== 'string' || locale.length > 63 || !/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/.test(locale)) {
-      throw new Error('Invalid copy locale');
+      throw new EditableTransferValidationError('Invalid copy locale');
     }
     try { return Intl.getCanonicalLocales(locale)[0]; }
-    catch { throw new Error('Invalid copy locale'); }
+    catch { throw new EditableTransferValidationError('Invalid copy locale'); }
   });
 }
 export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: string[], logo?: TransferLogo, options: TransferOptions = {}) {
@@ -57,29 +62,29 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
       const raw = c.replace('#', '');
       c = `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`;
     }
-    if (!/^#?[a-fA-F0-9]{6}$/.test(c)) throw new Error('Invalid color');
+    if (!/^#?[a-fA-F0-9]{6}$/.test(c)) throw new EditableTransferValidationError('Invalid color');
     return c.replace('#', '');
   };
-  if (![plan.width,plan.height].every(n=>Number.isInteger(n)&&n>=320&&n<=4000)) throw new Error('Unsupported canvas dimensions');
-  if (!copy.length || copy.length>40 || copy.some(t=>!t || t.length>10000)) throw new Error('Missing or excessive factual copy');
+  if (![plan.width,plan.height].every(n=>Number.isInteger(n)&&n>=320&&n<=4000)) throw new EditableTransferValidationError('Unsupported canvas dimensions');
+  if (!copy.length || copy.length>40 || copy.some(t=>!t || t.length>10000)) throw new EditableTransferValidationError('Missing or excessive factual copy');
   if(plan.text.length!==copy.length || new Set(plan.text.map(t=>t.copyIndex)).size!==copy.length ||
-    plan.text.some(t=>!Number.isInteger(t.copyIndex)||t.copyIndex<0||t.copyIndex>=copy.length)) throw new Error('Every exact-copy block must appear once');
+    plan.text.some(t=>!Number.isInteger(t.copyIndex)||t.copyIndex<0||t.copyIndex>=copy.length)) throw new EditableTransferValidationError('Every exact-copy block must appear once');
   const bounds=(box:{x:number;y:number;width:number;height:number})=>{
     if(![box.x,box.y,box.width,box.height].every(Number.isFinite)||box.x<0||box.y<0||box.width<=0||box.height<=0||
-      box.x+box.width>plan.width||box.y+box.height>plan.height)throw new Error('Layout exceeds canvas bounds');
+      box.x+box.width>plan.width||box.y+box.height>plan.height)throw new EditableTransferValidationError('Layout exceeds canvas bounds');
   };
   for(const text of plan.text){bounds(text);hex(text.color);
-    if(!isFontAdmitted(text.fontFamily, options)||!Number.isFinite(text.fontSize)||text.fontSize<12||text.fontSize>120)throw new Error('Unsupported font or unreadable size');
-    if(!['left','center','right'].includes(text.align))throw new Error('Invalid text alignment');
+    if(!isFontAdmitted(text.fontFamily, options)||!Number.isFinite(text.fontSize)||text.fontSize<12||text.fontSize>120)throw new EditableTransferValidationError('Unsupported font or unreadable size');
+    if(!['left','center','right'].includes(text.align))throw new EditableTransferValidationError('Invalid text alignment');
   }
   for(let i=0;i<plan.text.length;i++)for(let j=i+1;j<plan.text.length;j++){
-    const a=plan.text[i],b=plan.text[j];if(a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y)throw new Error('Text boxes overlap');
+    const a=plan.text[i],b=plan.text[j];if(a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y)throw new EditableTransferValidationError('Text boxes overlap');
   }
-  if(plan.shapes.length>40)throw new Error('Excessive shapes');
+  if(plan.shapes.length>40)throw new EditableTransferValidationError('Excessive shapes');
   for(const shape of plan.shapes){bounds(shape);hex(shape.color);}
-  if(logo&&!plan.logo)throw new Error('Required logo omitted');
-  if(plan.logo){bounds(plan.logo);for(const t of plan.text)if(t.x<plan.logo.x+plan.logo.width&&t.x+t.width>plan.logo.x&&t.y<plan.logo.y+plan.logo.height&&t.y+t.height>plan.logo.y)throw new Error('Text overlaps logo');if(!logo)throw new Error('Requested logo is unavailable');
-    if(createHash('sha256').update(logo.bytes).digest('hex')!==logo.sha256)throw new Error('Logo hash mismatch');}
+  if(logo&&!plan.logo)throw new EditableTransferValidationError('Required logo omitted');
+  if(plan.logo){bounds(plan.logo);for(const t of plan.text)if(t.x<plan.logo.x+plan.logo.width&&t.x+t.width>plan.logo.x&&t.y<plan.logo.y+plan.logo.height&&t.y+t.height>plan.logo.y)throw new EditableTransferValidationError('Text overlaps logo');if(!logo)throw new EditableTransferValidationError('Requested logo is unavailable');
+    if(createHash('sha256').update(logo.bytes).digest('hex')!==logo.sha256)throw new EditableTransferValidationError('Logo hash mismatch');}
   const pptx=new PptxGenJS();pptx.defineLayout({name:'HAWA',width:plan.width/96,height:plan.height/96});pptx.layout='HAWA';
   pptx.author='Hawa';pptx.subject='Editable Canva transfer; source copy is immutable';
   const slide=pptx.addSlide();slide.background={color:hex(plan.background)};

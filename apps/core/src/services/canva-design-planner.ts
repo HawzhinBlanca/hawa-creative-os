@@ -4,9 +4,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { encodeEditableTransfer, creativeAssetPath, type EditableTransferPlan } from '@hawa/creative';
+import { encodeEditableTransfer, creativeAssetPath, reserveStudioText, EditableTransferValidationError, type EditableTransferPlan } from '@hawa/creative';
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import { z } from 'zod';
+import { plannerLayout as layout, executePlannerCall, type PlannerCallMetadata } from './canva-planner-call.js';
 import { CanvaConnectService, CanvaFlowError } from './canva-connect-service.js';
 import { savedDesignCopy, savedDesignCopyLocales, classifyCopyScript } from './saved-design-copy.js';
 export { savedDesignCopy, classifyCopyScript, unwrapCopyEnvelope, withoutEmoji } from './saved-design-copy.js';
@@ -20,10 +21,6 @@ type Scope={tenantId:string;actorId:string};
 const hash=(value:string|Buffer)=>createHash('sha256').update(value).digest('hex');
 const safeFontName=(value:unknown):value is string=>typeof value==='string'&&value.trim()===value&&
   /^[\p{L}\p{N} ._+()-]{1,80}$/u.test(value)&&/[\p{L}\p{N}]/u.test(value);
-const box={x:z.number().nonnegative(),y:z.number().nonnegative(),width:z.number().positive(),height:z.number().positive()};
-const layout=z.object({width:z.number().int(),height:z.number().int(),background:z.string(),
-  text:z.array(z.object({...box,copyIndex:z.number().int().nonnegative(),role:z.enum(['headline','title','subtitle','body','caption','date','location','meta']).optional(),fontSize:z.number(),fontFamily:z.string(),color:z.string(),align:z.enum(['left','center','right']),bold:z.boolean().optional()}).strict()).min(1).max(40),
-  shapes:z.array(z.object({...box,color:z.string()}).strict()).max(40),logo:z.object(box).strict()}).strict();
 export interface PlannerOptions {apiKey?:string;fetcher?:typeof fetch}
 
 /** Brand choices come from the task's scoped reference pack, never from this program's own palette. */
@@ -128,7 +125,7 @@ export class CanvaDesignPlanner {
   private tx<T>(s:Scope,fn:(db:Kysely<Database>)=>Promise<T>){return withRlsContext(this.db,{tenantId:s.tenantId,userId:s.actorId,role:'operator'},fn);}
   private async context(s:Scope,taskId:string,width:number,height:number){
     if(![width,height].every(n=>Number.isInteger(n)&&n>=640&&n<=2400))throw new CanvaFlowError(422,'DIMENSIONS_REQUIRED','Choose dimensions between 640 and 2400 pixels.');
-    const task=await this.tx(s,async db=>(await sql<any>`SELECT t.client_id,t.description,t.request_id,
+    const task=await this.tx(s,async db=>(await sql<any>`SELECT t.client_id,t.description,t.request_id,t.version,
       (SELECT e.data FROM hawa.task_events e WHERE e.task_id=t.id AND e.tenant_id=t.tenant_id AND e.event_type='task.created' ORDER BY e.aggregate_version LIMIT 1) AS source
       FROM hawa.tasks t WHERE t.tenant_id=${s.tenantId}::uuid AND t.id=${taskId}::uuid`.execute(db)).rows[0]);
     if(!task?.client_id)throw new CanvaFlowError(422,'CLIENT_REQUIRED','Select the client before retrieving brand references.');
@@ -223,33 +220,42 @@ export class CanvaDesignPlanner {
         model: resolveModel('text')
       },
       logo,
+      taskVersion:Number(task.version),
       ownedImageDataUrls
     };
   }
-  async state(s:Scope,taskId:string){return this.tx(s,async db=>(await sql<any>`SELECT id,status,diagnostic,request->>'model' AS requested_model,
-    result->'receipt' AS receipt,result->'manifest'->>'nativeVerification' AS native_verification,created_at
-    FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND actor_id=${s.actorId} ORDER BY created_at DESC LIMIT 10`.execute(db)).rows);}
+  async state(s:Scope,taskId:string){return this.tx(s,async db=>(await sql<any>`SELECT p.id,
+    CASE WHEN p.status='planning' AND c.status='completed' AND c.reconciliation_required THEN 'uncertain' ELSE p.status END AS status,
+    coalesce(p.diagnostic,c.diagnostic) AS diagnostic,p.request->>'model' AS requested_model,
+    p.result->'receipt' AS receipt,p.result->'manifest'->>'nativeVerification' AS native_verification,p.created_at,
+    c.id AS call_id,c.layout IS NOT NULL AS retained_layout,
+    coalesce(c.reconciliation_required AND NOT EXISTS(SELECT 1 FROM hawa.call_cost_attestations a
+      WHERE a.tenant_id=p.tenant_id AND a.call_kind='canva_planner' AND a.call_id=p.id),false) AS cost_evidence_required
+    FROM hawa.canva_design_plans p LEFT JOIN hawa.canva_planner_calls c ON c.id=p.id AND c.tenant_id=p.tenant_id
+    WHERE p.tenant_id=${s.tenantId}::uuid AND p.task_id=${taskId}::uuid AND p.actor_id=${s.actorId}
+    ORDER BY p.created_at DESC LIMIT 10`.execute(db)).rows);}
   async generate(s:Scope,taskId:string,key:string,width:number,height:number){
     if(!/^[A-Za-z0-9_-]{8,128}$/.test(key))throw new CanvaFlowError(422,'REQUEST_KEY_REQUIRED','Use a stable generation request key.');
-    const {request,logo,ownedImageDataUrls}=await this.context(s,taskId,width,height),requestHash=hash(JSON.stringify(request));
+    const existing=await this.tx(s,async db=>(await sql<any>`SELECT id,actor_id,request FROM hawa.canva_design_plans
+      WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows[0]);
+    if(existing){
+      if(existing.actor_id!==s.actorId||existing.request.width!==width||existing.request.height!==height)
+        throw new CanvaFlowError(409,'GENERATION_CONFLICT','This request key belongs to a different saved plan.');
+      return this.resume(s,taskId,existing.id);
+    }
+    const {request,ownedImageDataUrls,taskVersion}=await this.context(s,taskId,width,height),requestHash=hash(JSON.stringify(request));
     const claim=await this.tx(s,async db=>{
       await sql`SELECT pg_advisory_xact_lock(hashtextextended(${'canva-planning:'+s.tenantId},0))`.execute(db);
-      const locked=(await sql<any>`SELECT client_id,request_id,state FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      const locked=(await sql<any>`SELECT client_id,request_id,state,version FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      if(Number(locked?.version)!==taskVersion)throw new CanvaFlowError(409,'TASK_CHANGED','The task changed while planning inputs were loaded.');
       if(locked?.client_id!==request.clientId)throw new CanvaFlowError(409,'CLIENT_CHANGED','Client changed while references were retrieved.');
       if((locked.request_id||null)!==request.requestId)throw new CanvaFlowError(409,'REQUEST_CHANGED','Request ownership changed while references were retrieved.');
       await assertCurrentClientDesignReference(db,s,request.reference);
       const prior=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND (request_key=${key} OR status IN ('planning','planned','uncertain')) ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
       if(prior){
-        if (prior.status === 'failed' || prior.status === 'abandoned' || (key.startsWith('redrive_') && (prior.status === 'uncertain' || prior.status === 'planned'))) {
-          assertTaskGenerationAllowed(locked.state);
-          await assertStudioCallsResolved(db,s.tenantId,taskId);
-          if (prior.status !== 'abandoned') {
-            await sql`UPDATE hawa.canva_design_plans SET status='abandoned', diagnostic=${'Auto-abandoned for re-drive retry'}, updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${prior.id}::uuid`.execute(db);
-          }
-        } else {
-          if(prior.request_hash!==requestHash||prior.actor_id!==s.actorId)throw new CanvaFlowError(409,'GENERATION_CONFLICT','A different generation already exists. Inspect the saved plan.');
-          return {row:prior,created:false,priorPlanRow:null};
-        }
+        if(prior.request_hash!==requestHash||prior.actor_id!==s.actorId)
+          throw new CanvaFlowError(409,'GENERATION_CONFLICT','A different generation already exists. Inspect the saved plan.');
+        return {row:prior,created:false,priorPlanRow:null};
       }
       assertTaskGenerationAllowed(locked.state);
       await assertStudioCallsResolved(db,s.tenantId,taskId);
@@ -288,17 +294,13 @@ export class CanvaDesignPlanner {
         }
       }
 
-      const effectiveKey = (prior && prior.request_key === key)
-        ? `${key.slice(0, 96)}_retry_${Date.now()}`
-        : key;
-
       const id=randomUUID();
-      const row=(await sql<any>`INSERT INTO hawa.canva_design_plans(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,status)
-        VALUES(${id}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${request.clientId}::uuid,${s.actorId},${effectiveKey},${requestHash},${JSON.stringify(request)}::jsonb,'planning') RETURNING *`.execute(db)).rows[0];
+      const row=(await sql<any>`INSERT INTO hawa.canva_design_plans(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,request,status,paid_protocol)
+        VALUES(${id}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${request.clientId}::uuid,${s.actorId},${key},${requestHash},${JSON.stringify(request)}::jsonb,'planning','canva-planner-v1') RETURNING *`.execute(db)).rows[0];
       return {row,created:true,priorPlanRow,priorPreviewPng};
     });
     if(!claim.created)return this.resume(s,taskId,claim.row.id);
-    let responseReceived=false;let receipt:Record<string,unknown>|null=null;
+    let admitted=false;
     try{
       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY!;
       assertModelAllowed(request.model);
@@ -317,6 +319,7 @@ export class CanvaDesignPlanner {
       const isRedesignRequest = /bullshit|bullshot|stuck|redo|different|fresh|start over|new (one|design|concept|layout)|better|cleaner|less boxy|unstick|similar design|keep giving me|keep sending|never hardcode|change (the )?(whole|entire|all)|whole design|entire design|redesign|try another|completely|from scratch|looks? (basic|cheap|bad)|not what i want|dislike/i.test(rawDirective);
 
       const baseSystemPrompt = buildPlannerSystemPrompt(request);
+      const promptRequest={...request,referenceImageBase64:undefined};
 
       const schemaPrompt = `Output schema: {width:number,height:number,background:hex,text:[{copyIndex:number,role:"headline"|"title"|"subtitle"|"body"|"caption"|"date"|"location"|"meta",x:number,y:number,width:number,height:number,fontSize:number,fontFamily:string,color:hex,align:"left"|"center"|"right",bold?:boolean}],shapes:[{x:number,y:number,width:number,height:number,color:hex}],logo:{x:number,y:number,width:number,height:number}}`;
 
@@ -349,7 +352,7 @@ export class CanvaDesignPlanner {
         const userContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
           {
             type: 'text',
-            text: `Design Brief:\n${JSON.stringify(request)}\n\nOperator Revision Directive: "${revisionDirective}"\n\nRule: Change what the feedback asks; keep copy and brand.${referenceImageUrl?'\n\nThe new requester reference image is attached after any previous render. Use it as the visual reference for this revision.':''}`
+            text: `Design Brief:\n${JSON.stringify(promptRequest)}\n\nOperator Revision Directive: "${revisionDirective}"\n\nRule: Change what the feedback asks; keep copy and brand.${referenceImageUrl?'\n\nThe new requester reference image is attached after any previous render. Use it as the visual reference for this revision.':''}`
           }
         ];
         if (claim.priorPreviewPng) {
@@ -374,7 +377,7 @@ export class CanvaDesignPlanner {
         };
       } else if (isRedesignRequest) {
         // Redesign requested: completely break free from previous layout
-        const redesignPrompt = `Design Brief:\n${JSON.stringify(request)}\n\nOperator Redesign Directive: "${rawDirective}"\n\nCompose a completely new, bespoke layout breaking free from prior designs.`;
+        const redesignPrompt = `Design Brief:\n${JSON.stringify(promptRequest)}\n\nOperator Redesign Directive: "${rawDirective}"\n\nCompose a completely new, bespoke layout breaking free from prior designs.`;
         const userContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
           { type: 'text' as const, text: redesignPrompt }
         ];
@@ -402,11 +405,11 @@ export class CanvaDesignPlanner {
       } else {
         const userContent = (referenceImageUrl || request.includeExemplarImages)
           ? [
-              { type: 'text' as const, text: JSON.stringify(request) },
+              { type: 'text' as const, text: JSON.stringify(promptRequest) },
               ...referenceImageUrls.map(url=>({type:'image_url' as const,image_url:{url}})),
               ...exemplarImages
             ]
-          : JSON.stringify(request);
+          : JSON.stringify(promptRequest);
 
         openAiBody = {
           model: request.model,
@@ -423,11 +426,7 @@ export class CanvaDesignPlanner {
         };
       }
 
-      const response=await (this.options.fetcher||fetch)('https://api.openai.com/v1/chat/completions',{
-        method:'POST',
-        signal:AbortSignal.timeout(90000),
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-        body:JSON.stringify({
+      const body=JSON.stringify({
           ...openAiBody,
           response_format: {
             type: 'json_schema',
@@ -493,42 +492,69 @@ export class CanvaDesignPlanner {
               }
             }
           },
-          max_completion_tokens: 4000,
-        })
+          max_completion_tokens: 4000, service_tier:'default',
+        });
+      if(Date.now()>=Date.parse('2026-11-22T00:00:00Z'))throw new Error('SPENDING_POLICY_EXPIRED');
+      const reservation=reserveStudioText(body);
+      const metadata:PlannerCallMetadata={expectedTaskVersion:taskVersion,isRevision:Boolean(directiveMatch||request.parentTaskId),
+        conversationalRevision:Boolean(claim.priorPlanRow&&priorLayout&&!isRedesignRequest),
+        isRedesign:isRedesignRequest,hasReferenceImage:Boolean(referenceImageUrl),
+        exemplars:exemplars.map(e=>({label:e.label,sha256:e.sha256})),priorPlanId:claim.priorPlanRow?.id||null,turns:openAiBody.messages.length};
+      await this.tx(s,async db=>{
+        const task=(await sql<{state:string;client_id:string;request_id:string|null;version:string}>`SELECT state,client_id,request_id,version
+          FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+        assertTaskGenerationAllowed(task?.state);
+        if(Number(task.version)!==taskVersion)throw new CanvaFlowError(409,'TASK_CHANGED','The task changed before model admission.');
+        if(task.client_id!==request.clientId||(task.request_id||null)!==request.requestId)
+          throw new CanvaFlowError(409,'REQUEST_CHANGED','Task ownership changed before model admission.');
+        await assertStudioCallsResolved(db,s.tenantId,taskId,claim.row.id);
+        await assertCurrentClientDesignReference(db,s,request.reference);
+        await sql`INSERT INTO hawa.canva_planner_calls(id,tenant_id,task_id,client_id,model,reservation,metadata,spending_policy_version)
+          VALUES(${claim.row.id}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${request.clientId}::uuid,${request.model},
+            ${JSON.stringify(reservation)}::jsonb,${JSON.stringify(metadata)}::jsonb,1)`.execute(db);
       });
-      responseReceived=true;
-      if (!response.ok) {
-        let errDetail = `MODEL_HTTP_${response.status}`;
-        try {
-          const errBody = await response.json();
-          if (errBody?.error?.code === 'credit_balance_exhausted' || errBody?.error?.type === 'insufficient_quota') {
-            errDetail = 'MODEL_INSUFFICIENT_QUOTA (credit_balance_exhausted: add credits at platform.openai.com)';
-          } else if (errBody?.error?.message) {
-            errDetail = `${errDetail}: ${errBody.error.message.slice(0, 100)}`;
-          }
-        } catch {}
-        throw new Error(errDetail);
-      }
-      const result:any=await response.json();
-      if(result.model!==request.model&&!result.model?.startsWith(request.model))throw new Error('MODEL_RECEIPT_INVALID');
-      const inTokens=result.usage?.prompt_tokens??result.usage?.input_tokens??0;
-      const outTokens=result.usage?.completion_tokens??result.usage?.output_tokens??0;
-      if(!result.id||!Number.isFinite(inTokens)||!Number.isFinite(outTokens))throw new Error('MODEL_RECEIPT_INVALID');
-      receipt={provider:'openai',requestedModel:request.model,returnedModel:result.model,responseId:result.id,inputTokens:inTokens,outputTokens:outTokens,completedAt:new Date().toISOString()};
-      const raw=result.choices?.[0]?.message?.content??
-                (Array.isArray(result.content)?result.content.filter((b:any)=>b.type==='text').map((b:any)=>b.text).join(''):'');
-      let cleanJson = (raw || '').trim();
-      const codeBlockMatch = cleanJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (codeBlockMatch) {
-        cleanJson = codeBlockMatch[1].trim();
-      } else {
-        const firstBrace = cleanJson.indexOf('{');
-        const lastBrace = cleanJson.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-          cleanJson = cleanJson.slice(firstBrace, lastBrace + 1).trim();
-        }
-      }
-      const plan=layout.parse(JSON.parse(cleanJson)) as EditableTransferPlan;
+      admitted=true;
+      const outcome=await executePlannerCall(apiKey,body,request.model,reservation,this.options.fetcher||fetch);
+      await this.tx(s,async db=>{
+        await sql`SELECT id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db);
+        const updated=await sql`UPDATE hawa.canva_planner_calls SET status='completed',acceptance=${outcome.acceptance},
+          cost_basis=${outcome.costBasis},cost_usd=${outcome.costUsd},reconciliation_required=${outcome.requiresReconciliation},
+          input_tokens=${outcome.inputTokens},output_tokens=${outcome.outputTokens},provider_request_id=${outcome.providerRequestId},
+          response_id=${outcome.responseId},served_model=${outcome.servedModel},response_sha256=${outcome.responseSha256},
+          latency_ms=${outcome.latencyMs},diagnostic=${outcome.diagnostic},layout=${outcome.layout?JSON.stringify(outcome.layout):null}::jsonb
+          WHERE tenant_id=${s.tenantId}::uuid AND id=${claim.row.id}::uuid AND status='started'`.execute(db);
+        if(updated.numAffectedRows!==1n)throw new Error('PLANNER_OUTCOME_NOT_RECORDED');
+      });
+    }catch(error){
+      // A failed or ambiguous admission commit is never permission to send. If admission exists,
+      // leave it available for evidence/recovery; no error handler may erase the paid attempt.
+      const call=await this.tx(s,async db=>(await sql`SELECT id FROM hawa.canva_planner_calls
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${claim.row.id}::uuid`.execute(db)).rows[0]);
+      if(admitted||call)return {planId:claim.row.id,status:'uncertain',callId:claim.row.id,
+        message:'The paid attempt is retained. Resume its saved result or reconcile its outcome; do not repeat the request.'};
+      const code=error instanceof CanvaFlowError?error.code:
+        error instanceof Error&&error.message.startsWith('OFFICE_BUDGET_')?error.message.split(':')[0]:'PLANNER_NOT_DISPATCHED';
+      await this.tx(s,db=>sql`UPDATE hawa.canva_design_plans SET status='failed',diagnostic=${code},updated_at=now()
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${claim.row.id}::uuid AND status='planning'`.execute(db));
+      return {planId:claim.row.id,status:'failed',message:code};
+    }
+    return this.resume(s,taskId,claim.row.id);
+  }
+
+  /** Deterministic reconstruction from a committed typed reply. This method has no model transport. */
+  private async materialize(s:Scope,taskId:string,row:any,call:any){
+    const receipt={provider:'openai',requestedModel:call.model,returnedModel:call.served_model,responseId:call.response_id,
+      providerRequestId:call.provider_request_id,inputTokens:call.input_tokens===null?null:Number(call.input_tokens),
+      outputTokens:call.output_tokens===null?null:Number(call.output_tokens),costBasis:call.cost_basis,
+      estimatedCostUsd:call.cost_usd===null?null:Number(call.cost_usd),completedAt:new Date(call.finished_at).toISOString(),
+      responseSha256:call.response_sha256,latencyMs:call.latency_ms,callId:call.id};
+    try{
+      const current=await this.context(s,taskId,row.request.width,row.request.height);
+      current.request.model=row.request.model;
+      if(hash(JSON.stringify(current.request))!==row.request_hash)
+        throw new CanvaFlowError(409,'PLAN_INPUT_CHANGED','The saved layout belongs to earlier copy or references.');
+      const {request,logo}=current,{width,height}=request;
+      const plan=layout.parse(call.layout) as EditableTransferPlan;
       // Verify and enforce typography per role and admitted families (R2/F04/F12)
       // Body roles use the Latin or Sorani/Arabic fonts in this client's versioned reference.
       // Headline and display roles are free to use admitted Canva-native families.
@@ -569,7 +595,6 @@ export class CanvaDesignPlanner {
       const sourceExtraFonts = [...new Set([...(request.admittedFonts || []), request.rtlFont].filter((f): f is string => Boolean(f)))];
       const source=await encodeEditableTransfer(plan,request.copy,{bytes:logo,sha256:request.reference.logoSha256,mimeType:'image/png'},{extraFonts:sourceExtraFonts,copyLocales:request.copyLocales});
       await assertCurrentClientDesignReference(this.db,s,request.reference);
-      const isRevision = Boolean(directiveMatch || request.parentTaskId);
       const evidence={manifest:{
         ...source.manifest,
         reference:request.reference,
@@ -582,26 +607,35 @@ export class CanvaDesignPlanner {
         rtlFont:request.rtlFont,
         rtlFontProvisional:Boolean(request.rtlFont),
         rtlBlocks,
-        isRevision,
-        conversationalRevision:Boolean(claim.priorPlanRow && priorLayout && !isRedesignRequest),
-        isRedesign:Boolean(isRedesignRequest),
-        hasReferenceImage:Boolean(referenceImageUrl),
+        ...call.metadata,
         referenceImageSha256:request.ownedReferenceImage?.sha256||null,
         ...(request.ownedReferenceImages?{referenceImageSha256s:request.ownedReferenceImages.map(image=>image.sha256)}:{}),
-        exemplars: exemplars.map(e => ({ label: e.label, sha256: e.sha256 })),
-        priorPlanId:claim.priorPlanRow?.id||null,
-        turns:openAiBody.messages.length
       },receipt};
       // The source to the file store before the row names it (ADR-035); its bytes stay in the row too until the strip.
       await putToStore(blobStoreFor(this.db),source.bytes,PPTX_MEDIA_TYPE,'a plan source');
-      await this.tx(s,db=>sql`UPDATE hawa.canva_design_plans SET status='planned',result=${JSON.stringify(evidence)}::jsonb,source_content=${source.bytes},source_sha256=${source.sha256},updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claim.row.id}::uuid AND status='planning'`.execute(db));
+      await this.tx(s,async db=>{
+        const task=(await sql<{state:string;client_id:string;request_id:string|null;version:string}>`SELECT state,client_id,request_id,version FROM hawa.tasks
+          WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+        assertTaskGenerationAllowed(task?.state);
+        if(Number(task.version)!==current.taskVersion)throw new CanvaFlowError(409,'TASK_CHANGED','The task changed during layout recovery. Resume against its current state.');
+        if(task.client_id!==request.clientId||(task.request_id||null)!==request.requestId)
+          throw new CanvaFlowError(409,'REQUEST_CHANGED','Task ownership changed during layout recovery.');
+        await assertCurrentClientDesignReference(db,s,request.reference);
+        await sql`UPDATE hawa.canva_design_plans SET status='planned',result=${JSON.stringify(evidence)}::jsonb,
+          source_content=${source.bytes},source_sha256=${source.sha256},updated_at=now()
+          WHERE tenant_id=${s.tenantId}::uuid AND id=${row.id}::uuid AND status='planning'`.execute(db);
+      });
     }catch(error){
-      const reason=error instanceof z.ZodError?'LAYOUT_SCHEMA_INVALID':error instanceof Error?error.message:'UNKNOWN';
-      const diagnostic=responseReceived?`Model or layout validation failed (${reason.slice(0,140)}). No Canva document was created.`:'The model response is uncertain. This attempt will not be charged again automatically.';
-      await this.tx(s,db=>sql`UPDATE hawa.canva_design_plans SET status=${responseReceived?'failed':'uncertain'},diagnostic=${diagnostic},result=${JSON.stringify({receipt})}::jsonb,updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claim.row.id}::uuid AND status='planning'`.execute(db));
-      return {planId:claim.row.id,status:responseReceived?'failed':'uncertain',message:diagnostic};
+      // Durable model evidence remains recoverable on transient storage/DB/task-pause failures.
+      const reason=error instanceof z.ZodError?'LAYOUT_SCHEMA_INVALID':error instanceof Error?error.message:'';
+      const permanent=error instanceof EditableTransferValidationError||error instanceof CanvaFlowError&&
+        (error.status===422||['PLAN_INPUT_CHANGED','CLIENT_REFERENCE_CHANGED','LOGO_CHANGED'].includes(error.code))||
+        /^(PLAN_BRAND_OR_DIMENSIONS_CHANGED|LOGO_|LAYOUT_SCHEMA_INVALID|COPY_|TEXT_|FONT_|EXACT_|ELEMENT_)/.test(reason);
+      if(!permanent)throw error;
+      await this.tx(s,db=>sql`UPDATE hawa.canva_design_plans SET status='failed',diagnostic='LAYOUT_VALIDATION_FAILED',
+        result=${JSON.stringify({receipt})}::jsonb,updated_at=now()
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${row.id}::uuid AND status='planning'`.execute(db));
     }
-    return this.resume(s,taskId,claim.row.id);
   }
 
   /** Operator action: retire a planned/failed/uncertain plan so the task can be planned again. Evidence stays; nothing is deleted. */
@@ -609,16 +643,35 @@ export class CanvaDesignPlanner {
     const why=String(reason||'').trim();
     if(why.length<3||why.length>500)throw new CanvaFlowError(422,'REASON_REQUIRED','Give a short reason for abandoning this plan.');
     return this.tx(s,async db=>{
-      const row=(await sql<any>`SELECT id,status FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid FOR UPDATE`.execute(db)).rows[0];
+      await sql`SELECT id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db);
+      const row=(await sql<any>`SELECT id,status FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid AND actor_id=${s.actorId} FOR UPDATE`.execute(db)).rows[0];
       if(!row)throw new CanvaFlowError(404,'PLAN_NOT_FOUND','Saved plan not found.');
-      if(!['planned','failed','uncertain'].includes(row.status))throw new CanvaFlowError(409,'PLAN_NOT_ABANDONABLE',`A plan in status ${row.status} cannot be abandoned.`);
+      if(!['planning','planned','failed','uncertain'].includes(row.status))throw new CanvaFlowError(409,'PLAN_NOT_ABANDONABLE',`A plan in status ${row.status} cannot be abandoned.`);
       await sql`UPDATE hawa.canva_design_plans SET status='abandoned',diagnostic=${`Abandoned by ${s.actorId}: ${why}`},updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db);
-      return {planId:id,status:'abandoned',previousStatus:row.status,message:'Plan abandoned. A new generation may be requested; the abandoned evidence remains readable.'};
+      return {planId:id,status:'abandoned',previousStatus:row.status,message:'Plan retired. Its paid-call evidence and any unresolved charge remain. A new request requires resolved accounting and current spending admission.'};
     });
   }
   async resume(s:Scope,taskId:string,id:string){
-    const row=await this.tx(s,async db=>(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid AND actor_id=${s.actorId}`.execute(db)).rows[0]);
+    let row=await this.tx(s,async db=>(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid AND actor_id=${s.actorId}`.execute(db)).rows[0]);
     if(!row)throw new CanvaFlowError(404,'PLAN_NOT_FOUND','Saved plan not found.');
+    if(row.status==='planning'&&row.paid_protocol==='canva-planner-v1'){
+      const call=await this.tx(s,async db=>(await sql<any>`SELECT c.*,EXISTS(SELECT 1 FROM hawa.call_cost_attestations a
+        WHERE a.tenant_id=c.tenant_id AND a.call_kind='canva_planner' AND a.call_id=c.id) AS cost_attested
+        FROM hawa.canva_planner_calls c WHERE c.tenant_id=${s.tenantId}::uuid AND c.id=${id}::uuid`.execute(db)).rows[0]);
+      if(!call||call.status==='started')return {planId:id,status:'planning',callId:call?.id,
+        message:call?'This paid call has no saved outcome. Reconcile it before any new paid work.':'Planning is claimed but no paid call is recorded. It can be retired; this resume never dispatches a model.'};
+      if(call.reconciliation_required&&!call.cost_attested){
+        if(!call.layout)await this.tx(s,db=>sql`UPDATE hawa.canva_design_plans SET status='uncertain',diagnostic=${call.diagnostic},updated_at=now()
+          WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid AND status='planning'`.execute(db));
+        return {planId:id,status:'uncertain',callId:id,
+          message:'This call requires terminal cost evidence in Operations. Resume after reconciliation; the model is never called again.'};
+      }
+      if(call.layout)await this.materialize(s,taskId,row,call);
+      else await this.tx(s,db=>sql`UPDATE hawa.canva_design_plans SET status='failed',diagnostic=${call.diagnostic},updated_at=now()
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid AND status='planning'`.execute(db));
+      row=await this.tx(s,async db=>(await sql<any>`SELECT * FROM hawa.canva_design_plans
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db)).rows[0]);
+    }
     if(row.status!=='planned')return {planId:id,status:row.status,message:row.diagnostic||'Planning was claimed. If interrupted, do not start a second paid request.'};
     // A remote operation already claimed under this plan key must be reconciled even if the brand
     // changes later. Only a fresh external import is gated on the reference still being active.

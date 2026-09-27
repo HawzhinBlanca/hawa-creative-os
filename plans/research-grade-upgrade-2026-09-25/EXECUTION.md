@@ -1,5 +1,32 @@
 # Completion checkpoint
 
+## 2026-09-27 — Durable Canva planner calls (ADR-101, qualification in progress)
+
+The planner commits a shared office/client/creative_director reservation before
+transport, retains one immutable outcome and typed layout before encoding, and
+never repeats a same-key request. Redrive and retirement preserve unresolved
+charges. Alternate Studio admission sees the planner hold. Named terminal cost
+evidence can enable saved-layout recovery without changing the original receipt.
+Historical unledgered plans remain incomplete accounting history. Desk exposes
+resume, retirement reasons and call-cost guidance.
+
+Preliminary focused qualification: 127 tests/9 files pass, including three actual
+process-kill boundaries and fresh-instance recovery with zero repeated requests.
+Two additional native completion controls are included in the pending full suite.
+Source/scripts/498 strict roots, lint (982/1053 any;9 egress exceptions), Desk build
+and security checks have run; final verification and release qualification follow.
+The first tests exposed stale compiled package output and a synthetic policy
+revision error; both failure logs and passing follow-ups are retained.
+
+Full regression, fresh runtime/Chrome and release sealing are pending. No real
+provider call or production change. Remaining full-app gates include other typed
+result recovery, truthful Operations defaults, live office/provider/native Canva,
+human multilingual/design and held-out evaluation, independent-host restore and
+controlled rollout. The Telegram paid classifier is dormant in current callers;
+its client egress boundary must remain intact. See R21_CANVA_PLANNER_CALLS_PROOF.json
+and runbooks/CANVA_PLANNER_RECOVERY.md. Whole-app goal remains active.
+
+
 ## 2026-09-27 — Durable paid health probes qualified locally (ADR-100)
 
 Source 01aed17, RLS/migration correction 1886824, tested and fresh runtime

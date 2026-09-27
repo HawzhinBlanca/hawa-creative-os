@@ -504,6 +504,7 @@ class HawaApiClient {
     taskState: (id:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva`),
     plans: (id:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans`),
     generate: (id:string,width:number,height:number,key:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/generate`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({width,height})}),
+    abandonPlan: (id:string,planId:string,reason:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans/${encodeURIComponent(planId)}/abandon`,{method:'POST',body:JSON.stringify({reason})}),
     resumePlan: (id:string,planId:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans/${encodeURIComponent(planId)}/resume`,{method:'POST'}),
     resumeImport: (id:string,operationId:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/imports/${encodeURIComponent(operationId)}/resume`,{method:'POST'}),
     editor: (id:string) => this.request<{url:string}>(`/tasks/${encodeURIComponent(id)}/canva/editor`),

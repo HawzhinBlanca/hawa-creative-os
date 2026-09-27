@@ -101,14 +101,14 @@ export class StudioCallUncertainError extends Error {
   readonly status = 409;
   readonly isUncertain = true;
   constructor() {
-    super('This task has an unresolved Studio model call. Reconcile its outcome before starting more paid work.');
+    super('This task has an unresolved model call or active planner attempt. Reconcile its outcome before starting more paid work.');
     this.name = 'StudioCallUncertainError';
   }
 }
 
 /** Caller holds the task row lock, shared by run replacement, abandonment and call admission. */
 export async function assertStudioCallsResolved(
-  db: Kysely<Database>, tenantId: string, taskId: string, executingRunId?: string
+  db: Kysely<Database>, tenantId: string, taskId: string, executingRunId?: string, executingPlanId?: string
 ): Promise<void> {
   let query = db.selectFrom('design_studio_calls as c')
     .innerJoin('design_studio_runs as r', join => join.onRef('r.id', '=', 'c.run_id')
@@ -122,6 +122,14 @@ export async function assertStudioCallsResolved(
     eb('r.id', '!=', executingRunId), eb('c.finished_at', 'is not', null),
   ]));
   if (await query.executeTakeFirst()) throw new StudioCallUncertainError();
+  const planner=(await sql`SELECT p.id FROM hawa.canva_design_plans p
+    LEFT JOIN hawa.canva_planner_calls c ON c.tenant_id=p.tenant_id AND c.id=p.id
+    WHERE p.tenant_id=${tenantId}::uuid AND p.task_id=${taskId}::uuid
+      AND p.id IS DISTINCT FROM ${executingPlanId??null}::uuid AND (
+        p.status='planning' OR ((p.paid_protocol IS NULL OR c.reconciliation_required) AND NOT EXISTS(
+          SELECT 1 FROM hawa.call_cost_attestations a WHERE a.tenant_id=p.tenant_id
+            AND a.call_kind='canva_planner' AND a.call_id=p.id))) LIMIT 1`.execute(db)).rows[0];
+  if(planner)throw new StudioCallUncertainError();
 }
 
 export class ModelCallFinalizationConflictError extends Error {

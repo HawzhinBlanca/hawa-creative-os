@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T12:37:11Z",
+  "generatedAt": "2026-09-27T13:02:24Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 425,
+  "fileCount": 428,
   "files": [
     {
       "path": ".dockerignore",
@@ -573,6 +573,11 @@
       "bytes": 2973
     },
     {
+      "path": "adrs/101_durable_canva_planner_calls.md",
+      "sha256": "122e5235772dc1612dfdf76e5d336e70c7f7d5e1bf4a251f3dd3811bd98951e8",
+      "bytes": 2804
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -584,8 +589,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "785e83e4b51fa46bc0df3a1684e96e44538cc5325e34e28979b6f697dd295518",
-      "bytes": 69510
+      "sha256": "153f2f4b5bcb20398e44f32e91b9bcb739e293b2faf561e126017039f8f6d684",
+      "bytes": 69540
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -839,8 +844,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "7f2c5ff3c30c1aa43e801c935c1324dcc9471a8f4078767303c99356f3b72d0a",
-      "bytes": 26187
+      "sha256": "37c08e4bc6edc613a61c8e0db9280e653a18cbc27c117ca94353076c39e9305f",
+      "bytes": 27029
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -874,8 +879,8 @@
     },
     {
       "path": "docs/17_UI_UX.md",
-      "sha256": "1684a8e2e43272058a9437b373cb8e11e828895efd4802ac6fcd5e4f6a329ea0",
-      "bytes": 9758
+      "sha256": "7e85e36261f392168b5dc56f46111878b09ce90d2e7f8ae7b486c3858b3be3b7",
+      "bytes": 10198
     },
     {
       "path": "docs/18_FEEDBACK_LEARNING.md",
@@ -1024,8 +1029,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "41c015e5c7376a3b08630b27987b70fa9f53d32a8d4d56afbb87537106b46642",
-      "bytes": 92624
+      "sha256": "f112838a86bdd4e6ce4cbdc2d8659d21fe63f18cd25385638adf40e3a7040324",
+      "bytes": 94358
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1263,6 +1268,11 @@
       "bytes": 16421
     },
     {
+      "path": "plans/research-grade-upgrade-2026-09-25/R21_CANVA_PLANNER_CALLS_PROOF.json",
+      "sha256": "00ccb844d3da98e7b376e99a67d218c57a9f4634a070525f6d4d5c2fed24c39e",
+      "bytes": 5851
+    },
+    {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_DAILY_STUDIO_BUDGET_PROOF.json",
       "sha256": "ff870df6038d7a78670ba674ea8a5aaaf49d550c058061fe6f00ea243797d079",
       "bytes": 8050
@@ -1404,8 +1414,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "b37745dd88639816cacfc9ed0845ba93c95c0a33768974a44b8b919963a8ec2b",
-      "bytes": 361756
+      "sha256": "0bff86ce7f379beeb636b360837e0514e934e3d2a9a0f34d816a3f0d56bc55bc",
+      "bytes": 363260
     },
     {
       "path": "plans/user-stories.csv",
@@ -1501,6 +1511,11 @@
       "path": "runbooks/CALL_COST_ACCOUNTING.md",
       "sha256": "7043296750bf030bbfbff86616c0ee9b8f4bcf64cca36e032c4c3d7f4fc1c6c7",
       "bytes": 3623
+    },
+    {
+      "path": "runbooks/CANVA_PLANNER_RECOVERY.md",
+      "sha256": "db3e5147c8df1744f24af70b4f2ec2b3e74d306812ba7fcc0db50ad5d852b837",
+      "bytes": 2950
     },
     {
       "path": "runbooks/CHAT_REVIEW_ACCEPTANCE.md",
@@ -1809,8 +1824,8 @@
     },
     {
       "path": "scripts/lint_provider_egress.ts",
-      "sha256": "937bb5a93639415be94edb245de2175d1b680f9cf27ea5f865f12ebf1041bb5e",
-      "bytes": 3629
+      "sha256": "de8cdb5c708c37bce4990b91f75302f4a0ecd572d698d1637c2b63cf0c6ab7e6",
+      "bytes": 3627
     },
     {
       "path": "scripts/measure_operations_slo.ts",

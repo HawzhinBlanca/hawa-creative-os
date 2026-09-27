@@ -22,7 +22,7 @@ export function CallCostAccountingPanel() {
   };
   return <section className="card" aria-label="Call cost accounting" style={{marginBottom:16,padding:16}}>
     <h2>Call cost accounting</h2>
-    <p>Review Studio, evaluation, voice and scheduled health probe charges. Calls without complete billing evidence keep their remaining allocation reserved.</p>
+    <p>Review Studio, Canva planning, evaluation, voice and scheduled health probe charges. Calls without complete billing evidence keep their remaining allocation reserved.</p>
     <button className="btn" aria-expanded={open} disabled={busy} onClick={()=>{
       setOpen(!open);if(!open&&!page)void load();
     }}>{open?'Hide call costs':'Review call costs'}</button>
@@ -56,6 +56,7 @@ export function CallCostAccountingPanel() {
             <p>{a.reason}</p><p>Attested by {a.actorUserId} at {new Date(a.recordedAt).toLocaleString()}</p>
             <p style={{overflowWrap:'anywhere'}}>Evidence SHA-256: {a.evidenceSha256}</p></article>)}
         </details>}
+        {detail.kind==='canva_planner'&&<p role="note">Terminal cost evidence preserves the original call. Resume the saved plan to recover a retained layout without another model call. If no layout was saved, retire the plan before explicitly requesting a new one.</p>}
         {detail.kind==='health_probe'&&<p role="note">Terminal evidence permits a new scheduled health probe after its interval if spending limits allow it. It does not retry this call or establish provider health.</p>}
         <EvaluationSettlementPanel key={`${detail.kind}:${detail.id}:${detail.snapshotHash}`} kind="accounting"
           detail={{runId:`${detail.kind}:${detail.id}`,status:detail.status,snapshotHash:detail.snapshotHash,canSettle:detail.canRecord,settlement:null,

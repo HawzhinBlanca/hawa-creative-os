@@ -1,4 +1,8 @@
 import { describe,it,expect,vi,beforeAll,afterAll } from 'vitest';
+import { spawn } from 'node:child_process';
+import { createServer, type ServerResponse } from 'node:http';
+import { fileURLToPath } from 'node:url';
+import { CallCostAccountingService } from '../src/services/call-cost-accounting.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -101,7 +105,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     {copyIndex:1,x:100,y:750,width:1000,height:100,fontSize:24,fontFamily:'Verdana',color:'#fff2db',align:'left'}]};
   const intake=async()=> (await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Plan',rawText:'Use navy.\n---\nEXACT TITLE\n\nExact body. Never rewrite it.',designInstructions:'Use navy.',exactCopy:[]})).task.id;
   const make=(fetcher:any)=>{const api={importEditableDesign:vi.fn().mockResolvedValue({operationId:randomUUID(),status:'submitted'})} as unknown as CanvaConnectService;return {api,planner:new CanvaDesignPlanner(db,api,{apiKey:'test-only',fetcher})};};
-  const response=(model='gpt-6-astra',value:any=plan)=>Response.json({id:'chatcmpl-real-shaped-test',model,choices:[{message:{content:typeof value==='string'?value:JSON.stringify(value)}}],usage:{prompt_tokens:123,completion_tokens:456}});
+  const response=(model='gpt-6-astra',value:any=plan)=>Response.json({id:'chatcmpl-real-shaped-test',model,choices:[{finish_reason:'stop',message:{content:typeof value==='string'?value:JSON.stringify({...value,text:value.text?.map((t:any)=>({role:t.copyIndex===0?'headline':'body',bold:false,...t}))})}}],usage:{prompt_tokens:123,completion_tokens:456,total_tokens:579}});
   beforeAll(async()=>{await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${scope.actorId}::uuid,'isolated-operator@example.test','Test') ON CONFLICT DO NOTHING`.execute(db);
     await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${clientId}::uuid,${scope.tenantId}::uuid,'kaae','KAAE') ON CONFLICT DO NOTHING`.execute(db);});
   afterAll(()=>db.destroy());
@@ -275,7 +279,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     if(mode==='overlap')bad.text[1].y=bad.text[0].y;
     if(mode==='missing-block')bad.text.pop();
     const {api,planner}=make(vi.fn(async()=>response(mode==='wrong-model'?'another-model':'gpt-6-astra',bad)));
-    const result=await planner.generate(scope,id,'reject-key-01',1200,1697);expect(result.status).toBe('failed');expect(api.importEditableDesign).not.toHaveBeenCalled();
+    const result=await planner.generate(scope,id,'reject-key-01',1200,1697);expect(result.status).toBe(mode==='wrong-model'?'uncertain':'failed');expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
   it('does not repeat an uncertain model charge after a lost response',async()=>{
     const id=await intake(),remote=vi.fn<typeof fetch>(async()=>{throw new Error('lost');}),{api,planner}=make(remote);
@@ -283,7 +287,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect((await planner.generate(scope,id,'lost-key-002',1200,1697)).status).toBe('uncertain');
     expect(remote).toHaveBeenCalledTimes(1);expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
-  it('lets an operator abandon an uncertain plan so the task can be planned again; evidence stays',async()=>{
+  it('preserves an uncertain paid hold after abandonment; fresh keys cannot bypass it',async()=>{
     const id=await intake(),lost=vi.fn(async()=>{throw new Error('lost');}),{planner}=make(lost);
     const stuck=await planner.generate(scope,id,'abandon-key-01',1200,1697);expect(stuck.status).toBe('uncertain');
     await expect(planner.abandon(scope,id,stuck.planId,'')).rejects.toThrow('reason');
@@ -291,24 +295,24 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     await expect(planner.abandon(scope,id,stuck.planId,'twice')).rejects.toThrow('cannot be abandoned');
     await expect(sql`UPDATE hawa.canva_design_plans SET diagnostic='tamper' WHERE id=${stuck.planId}::uuid`.execute(db)).rejects.toThrow('final');
     const good=vi.fn(async()=>response()),{api:api2,planner:planner2}=make(good);
-    const fresh=await planner2.generate(scope,id,'abandon-key-02',1200,1697);
-    expect(good).toHaveBeenCalledTimes(1);expect(fresh.status).toBe('submitted');expect(api2.importEditableDesign).toHaveBeenCalledTimes(1);
-    const rows=(await sql<any>`SELECT status FROM hawa.canva_design_plans WHERE task_id=${id}::uuid ORDER BY created_at`.execute(db)).rows.map(r=>r.status);
-    expect(rows).toEqual(['abandoned','planned']);
+    await expect(planner2.generate(scope,id,'abandon-key-02',1200,1697)).rejects.toMatchObject({code:'MODEL_CALL_UNCERTAIN'});
+    expect(good).not.toHaveBeenCalled();expect(api2.importEditableDesign).not.toHaveBeenCalled();
+    expect((await planner2.generate(scope,id,'abandon-key-01',1200,1697)).status).toBe('abandoned');
+
   });
-  it('correctly parses model output wrapped in markdown codeblocks and conversational intro/outro',async()=>{
+  it('rejects prose wrapped around a strict structured response without creating a document',async()=>{
     const id=await intake();
     const conversationalText = `Here is the academic invitation design layout you requested:\n\n\`\`\`json\n${JSON.stringify(plan, null, 2)}\n\`\`\`\n\nI have followed all brand rules carefully.`;
     const remote = vi.fn<typeof fetch>(async() => Response.json({
       id:'chatcmpl-conversational-test',
       model:'gpt-6-astra',
-      usage:{prompt_tokens:120,completion_tokens:450},
-      choices:[{message:{content:conversationalText}}]
+      usage:{prompt_tokens:120,completion_tokens:450,total_tokens:570},
+      choices:[{finish_reason:'stop',message:{content:conversationalText}}]
     }));
     const {api,planner}=make(remote);
     const result=await planner.generate(scope,id,'conv-key-001',1200,1697);
-    expect(result.status).toBe('submitted');
-    expect(api.importEditableDesign).toHaveBeenCalled();
+    expect(result.status).toBe('failed');
+    expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
   it('threads prior layout and revision directive into a 4-turn conversational session for revisions',async()=>{
     // 1. First draft creates an initial plan
@@ -529,7 +533,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(redesignSaved.result.manifest.turns).toBe(2);
   });
 
-  it('re-drives a failed design plan without conflict and successfully plans a new design', async () => {
+  it('replays a failed key unchanged and requires an explicit new key for another paid plan', async () => {
     const taskId = (await persistChatIntake(db, {
       platform: 'telegram',
       sourceEventId: randomUUID(),
@@ -559,7 +563,10 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const { planner: workingPlanner } = make(workingFetch);
 
     const retryResult = await workingPlanner.generate(scope, taskId, 'plan-fail-key-01', 1200, 1697);
-    expect(retryResult.status).toBe('submitted');
+    expect(retryResult.status).toBe('failed');
+    expect(workingFetch).not.toHaveBeenCalled();
+    await workingPlanner.abandon(scope,taskId,firstResult.planId,'Explicit fresh attempt after definite provider rejection.');
+    expect((await workingPlanner.generate(scope,taskId,'plan-fail-key-02',1200,1697)).status).toBe('submitted');
 
     // Verify the prior failed plan was marked abandoned and a new planned row exists
     const allPlans = (await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid ORDER BY created_at ASC`.execute(db)).rows;
@@ -567,4 +574,103 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(allPlans[0].status).toBe('abandoned');
     expect(allPlans[1].status).toBe('planned');
   });
+  it('commits the exact request reservation before transport and refuses zero office allowance without dispatch',async()=>{
+    const taskId=await intake();
+    const fetcher=vi.fn<typeof fetch>(async(_url,init)=>{
+      const row=(await sql<any>`SELECT * FROM hawa.canva_planner_calls WHERE task_id=${taskId}::uuid`.execute(db)).rows[0];
+      expect(row.status).toBe('started');expect(row.reservation.requestSha256).toBe(createHash('sha256').update(String(init?.body)).digest('hex'));
+      expect(row.metadata.expectedTaskVersion).toBeGreaterThan(0);
+      expect(JSON.parse(String(init?.body))).toMatchObject({service_tier:'default',max_completion_tokens:4000});return response();
+    });
+    expect((await make(fetcher).planner.generate(scope,taskId,'quote-before-send-01',1200,1697)).status).toBe('submitted');
+    const prior=(await sql<any>`SELECT limits FROM hawa.studio_spending_policies WHERE tenant_id=${scope.tenantId}::uuid ORDER BY version DESC LIMIT 1`.execute(db)).rows[0].limits;
+    const policy=(limits:unknown)=>sql`INSERT INTO hawa.studio_spending_policies(tenant_id,version,reason,limits)
+      SELECT ${scope.tenantId}::uuid,coalesce(max(version),0)+1,'Synthetic zero allowance control',${JSON.stringify(limits)}::jsonb
+      FROM hawa.studio_spending_policies WHERE tenant_id=${scope.tenantId}::uuid`.execute(db);
+    await policy({...prior,officeUsd:0});
+    try{
+      const blocked=await intake(),never=vi.fn<typeof fetch>(),{planner}=make(never);
+      const result=await planner.generate(scope,blocked,'zero-allowance-01',1200,1697);
+      expect(result).toMatchObject({status:'failed',message:'OFFICE_BUDGET_EXHAUSTED'});
+      expect((await planner.generate(scope,blocked,'zero-allowance-01',1200,1697)).planId).toBe(result.planId);
+      expect(never).not.toHaveBeenCalled();
+      expect((await sql`SELECT id FROM hawa.canva_planner_calls WHERE task_id=${blocked}::uuid`.execute(db)).rows).toHaveLength(0);
+    }finally{await policy(prior);}
+  });
+
+  it('recovers a committed typed layout after a local failure with no repeat model call',async()=>{
+    const taskId=await intake(),fetcher=vi.fn(async()=>response()),first=make(fetcher);
+    const materialize=vi.spyOn(first.planner as any,'materialize').mockRejectedValueOnce(new Error('Synthetic local storage outage'));
+    await expect(first.planner.generate(scope,taskId,'recover-layout-01',1200,1697)).rejects.toThrow('storage outage');
+    materialize.mockRestore();
+    const before=(await sql<any>`SELECT * FROM hawa.canva_planner_calls WHERE task_id=${taskId}::uuid`.execute(db)).rows[0];
+    expect(before.status).toBe('completed');expect(before.layout.width).toBe(1200);
+    const never=vi.fn<typeof fetch>(async()=>{throw new Error('Must not dispatch');}),fresh=make(never);
+    expect((await fresh.planner.resume(scope,taskId,before.id)).status).toBe('submitted');
+    expect(never).not.toHaveBeenCalled();expect(fetcher).toHaveBeenCalledTimes(1);expect(fresh.api.importEditableDesign).toHaveBeenCalledTimes(1);
+    expect((await sql<any>`SELECT * FROM hawa.canva_planner_calls WHERE id=${before.id}::uuid`.execute(db)).rows[0]).toEqual(before);
+  });
+
+  it('recovers retained layout after named terminal usage evidence, without mutating the original receipt',async()=>{
+    const taskId=await intake(),fetcher=vi.fn(async()=>{const data=await response().json();delete data.usage;return Response.json(data);}),{planner,api}=make(fetcher);
+    const result=await planner.generate(scope,taskId,'reconcile-layout-01',1200,1697);expect(result.status).toBe('uncertain');
+    expect(api.importEditableDesign).not.toHaveBeenCalled();
+    const sessionHash=createHash('sha256').update(randomUUID()).digest('hex');
+    await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES(${scope.tenantId}::uuid,${scope.actorId}::uuid,'administrator') ON CONFLICT DO NOTHING`.execute(db);
+    await sql`INSERT INTO hawa.desk_sessions(token_hash,tenant_id,user_id,actor_id,role,display_name,expires_at,auth_method)
+      VALUES(${sessionHash},${scope.tenantId}::uuid,${scope.actorId}::uuid,'oidc:planner-fixture','administrator','Synthetic planner reviewer',now()+interval '1 hour','google_oidc')`.execute(db);
+    const accounting=new CallCostAccountingService(db),admin={tenantId:scope.tenantId,userId:scope.actorId,role:'administrator',sessionHash};
+    const evidence=await accounting.get(admin,'canva_planner',result.planId);
+    expect(evidence).toMatchObject({originalCostUsd:null,requiresCostEvidence:true,originalAccepted:true});
+    await accounting.record(admin,'canva_planner',result.planId,randomUUID(),{expectedSnapshot:evidence.snapshotHash,reason:'Synthetic terminal provider cost',
+      calls:[{callId:result.planId,conclusion:'provider_finished',reportedCostUsd:.02,evidenceReference:'synthetic-provider-confirmation',evidenceSha256:'a'.repeat(64)}]});
+    const never=vi.fn<typeof fetch>(),fresh=make(never);
+    expect((await fresh.planner.resume(scope,taskId,result.planId)).status).toBe('submitted');expect(never).not.toHaveBeenCalled();
+    expect(await accounting.get(admin,'canva_planner',result.planId)).toMatchObject({originalCostUsd:null,attestedCostUsd:.02,requiresCostEvidence:false});
+  });
+
+  it.each(['after-send','after-response-before-save','after-save'])('recovers actual SIGKILL %s without another model request',async boundary=>{
+    const taskId=await intake(),key='kill-'+randomUUID();let accepted=0,notify!:()=>void,responseStream:ServerResponse|undefined;
+    const received=new Promise<void>(resolve=>{notify=resolve;});
+    const server=createServer((request,res)=>{request.resume();request.on('end',()=>{accepted++;responseStream=res;notify();});});
+    await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const address=server.address();if(!address||typeof address==='string')throw new Error('Local port unavailable');
+    const child=spawn(process.execPath,['--import','tsx',fileURLToPath(new URL('./fixtures/canva-planner-kill-child.ts',import.meta.url))],{
+      cwd:process.cwd(),env:{...process.env,HAWA_PLANNER_DRILL_DB:process.env.HAWA_ISOLATED_RUNTIME_DB!,HAWA_PLANNER_DRILL_PORT:String(address.port),
+        HAWA_PLANNER_DRILL_TENANT:scope.tenantId,HAWA_PLANNER_DRILL_USER:scope.actorId,HAWA_PLANNER_DRILL_TASK:taskId,
+        HAWA_PLANNER_DRILL_KEY:key,HAWA_PLANNER_DRILL_BOUNDARY:boundary},stdio:['ignore','ignore','ignore','ipc']});
+    const exited=new Promise<string|null>((resolve,reject)=>{child.once('error',reject);child.once('exit',(_code,signal)=>resolve(signal));});
+    let bytesReceived!:()=>void,committed!:()=>void;
+    const bytes=new Promise<void>(resolve=>{bytesReceived=resolve;}),saved=new Promise<void>(resolve=>{committed=resolve;});
+    child.on('message',message=>{if(message==='received')bytesReceived();if(message==='committed')committed();});
+    let timer:NodeJS.Timeout|undefined;
+    const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Planner child did not reach the boundary')),15000);});
+    const guard=<T>(promise:Promise<T>)=>Promise.race([promise,timeout,exited.then(()=>{throw new Error('Planner child exited before boundary');})]);
+    let planId:string|undefined;
+    try{
+      await guard(received);const call=(await sql<any>`SELECT * FROM hawa.canva_planner_calls WHERE task_id=${taskId}::uuid`.execute(db)).rows[0];
+      planId=call.id;expect(call.status).toBe('started');
+      if(boundary!=='after-send'){
+        responseStream!.writeHead(200,{'content-type':'application/json'});responseStream!.end(await response().text());
+        await guard(boundary==='after-save'?saved:bytes);
+      }
+      child.kill('SIGKILL');expect(await exited).toBe('SIGKILL');
+      const never=vi.fn<typeof fetch>(),fresh=make(never);
+      const recovered=await fresh.planner.generate(scope,taskId,key,1200,1697);
+      expect(recovered.status).toBe(boundary==='after-save'?'submitted':'planning');
+      expect((await sql<any>`SELECT status FROM hawa.canva_planner_calls WHERE id=${planId}::uuid`.execute(db)).rows[0].status)
+        .toBe(boundary==='after-save'?'completed':'started');
+      expect(never).not.toHaveBeenCalled();expect(accepted).toBe(1);
+      expect(fresh.api.importEditableDesign).toHaveBeenCalledTimes(boundary==='after-save'?1:0);
+      if(boundary!=='after-save'){
+        expect((await fresh.planner.generate(scope,taskId,'redrive_'+randomUUID(),1200,1697)).status).toBe('planning');
+        await fresh.planner.abandon(scope,taskId,planId!,'Synthetic crash drill complete; keep original paid hold.');
+        await expect(fresh.planner.generate(scope,taskId,'new_'+randomUUID(),1200,1697)).rejects.toMatchObject({code:'MODEL_CALL_UNCERTAIN'});
+      }
+    }finally{
+      clearTimeout(timer);if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await exited;
+      server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));
+    }
+  },25000);
+
 });

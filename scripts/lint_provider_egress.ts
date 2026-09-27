@@ -28,7 +28,7 @@ const ALLOWED_EGRESS_FILES = new Set([
   'packages/creative/src/studio/openai-studio-client.ts',
   'apps/core/src/services/paid-model-probe.ts',
   'apps/core/src/routes/system.routes.ts',
-  'apps/core/src/services/canva-design-planner.ts',
+  'apps/core/src/services/canva-planner-call.ts',
   'apps/core/src/services/telegram-classifier.ts',
 ]);
 

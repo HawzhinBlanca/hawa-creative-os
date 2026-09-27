@@ -233,3 +233,11 @@ this allows a new scheduled probe within current limits; it never replays the ol
 call or converts financial evidence into provider health. Original observations
 remain immutable. Pre-ledger observations gain no fabricated costs. See
 runbooks/PAID_HEALTH_PROBES.md and R21_PAID_HEALTH_PROBES_PROOF.json for qualification.
+
+### Canva planner recovery (ADR-101)
+
+The task's Canva panel exposes retained layouts, original call IDs, missing cost
+evidence, resume, and retirement with a reason. Retirement preserves paid holds.
+Operations call accounting includes Canva planning and keeps original usage and
+named cost attestations separate. Resume uses a saved result; a fresh design is
+an explicit new request subject to current task authority and shared spending.

@@ -8,12 +8,13 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
   useEffect(()=>{setMessage('');},[taskStatus]);
   const [width,setWidth]=useState('1200'),[height,setHeight]=useState('1697'),[results,setResults]=useState<Record<string,any>>({});
   const [plans,setPlans]=useState<any[]>([]);
+  const [retirementReasons,setRetirementReasons]=useState<Record<string,string>>({});
   const [preview,setPreview]=useState<{url:string;artifactId:string;taskId:string} | null>(null);
   const activeTask=useRef(taskId); activeTask.current=taskId;
   const keys=useRef<Record<string,string>>({});
   const exportRequests=useRef<Record<string,{format:string;key:string}>>({});
   const refresh=async()=>{const [task,account,planning]=await Promise.all([apiClient.canva.taskState(taskId),apiClient.canva.status(),apiClient.canva.plans(taskId)]);if(activeTask.current!==taskId)return;setState(task);setPlans(planning.plans);setConnected(account.authorized===true);setResults(v=>({...v,...Object.fromEntries((task.artifacts||[]).map((a:any)=>[a.operation_id,{operationId:a.operation_id,status:'retrieved',artifact:a}]))}));};
-  useEffect(()=>{setState(null);setPlans([]);setResults({});setMessage('');keys.current={};exportRequests.current={};void refresh().catch(e=>setMessage(e.message));},[taskId]);
+  useEffect(()=>{setState(null);setPlans([]);setRetirementReasons({});setResults({});setMessage('');keys.current={};exportRequests.current={};void refresh().catch(e=>setMessage(e.message));},[taskId]);
   // A failed poll is retried in 5 s; a 401 among them reaches the Work screen's sign-in prompt through the API client (2026-09-24).
   useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});},5000);return()=>clearInterval(timer);},[taskId]);
   const evidence=canvaPreviewEvidence(state?.artifacts);
@@ -54,7 +55,16 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
       <button className="btn" disabled={busy||!connected||Boolean(generationBlocker)||plans.some(p=>['planning','planned','uncertain'].includes(p.status))||state.operations?.some((o:any)=>o.kind==='create')} onClick={generate}>Design in Canva</button>
     </div>}
     {plans.map(p=><div key={p.id}><p>Design plan · {p.status}{p.receipt?` · ${p.receipt.returnedModel}`:''}</p>{p.diagnostic&&<p>{p.diagnostic}</p>}
-      {p.status==='planned'&&!state?.binding&&<button className="btn" disabled={busy||!connected||Boolean(generationBlocker)} onClick={()=>run(async()=>{const r=await apiClient.canva.resumePlan(taskId,p.id);setMessage(r.message);})}>Resume saved design</button>}</div>)}
+      {p.cost_evidence_required&&<p role="note">Paid call {p.call_id} needs terminal cost evidence in Operations → Call cost accounting. Retiring this plan preserves that obligation.</p>}
+      {p.retained_layout&&<p>A validated layout is saved. Resume can recover it without another model call.</p>}
+      {['planning','planned','uncertain'].includes(p.status)&&!state?.binding&&<button className="btn" disabled={busy||!connected||Boolean(generationBlocker)} onClick={()=>run(async()=>{const r=await apiClient.canva.resumePlan(taskId,p.id);setMessage(r.message);})}>Resume saved design</button>}
+      {['planning','planned','uncertain','failed'].includes(p.status)&&!state?.binding&&<details><summary>Retire this plan</summary>
+        <p>Keep the original evidence and close this attempt. Unresolved paid calls still require reconciliation before new spending.</p>
+        <label>Reason for retiring plan <textarea maxLength={500} value={retirementReasons[p.id]||''}
+          onChange={e=>setRetirementReasons(old=>({...old,[p.id]:e.target.value}))}/></label>
+        <button className="btn" disabled={busy||(retirementReasons[p.id]||'').trim().length<3}
+          onClick={()=>run(async()=>{const r=await apiClient.canva.abandonPlan(taskId,p.id,retirementReasons[p.id]);delete keys.current.generate;setMessage(r.message);})}>Retire plan</button>
+      </details>}</div>)}
     {state&&!state.binding&&<details><summary>Create a blank Canva design</summary>
       <p>This creates an editable canvas. Add your approved content in Canva. Canva removes unused blank designs after seven days.</p>
       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>

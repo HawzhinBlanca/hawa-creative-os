@@ -428,3 +428,16 @@ this allows a new scheduled probe within current limits; it never replays the ol
 call or converts financial evidence into provider health. Original observations
 remain immutable. Pre-ledger observations gain no fabricated costs. See
 runbooks/PAID_HEALTH_PROBES.md and R21_PAID_HEALTH_PROBES_PROOF.json for qualification.
+
+### Durable Canva planner calls (ADR-101, 2026-09-27)
+
+Every planner request commits a quoted call under the shared office/client/role
+allowance before dispatch. Its immutable outcome stores real receipt metadata,
+complete native usage where reported, acceptance and uncertainty, and a typed
+layout before source encoding. Same-key replay never pays again. A redrive prefix
+or plan retirement cannot clear an unresolved charge or permit alternate Studio
+spending. Named terminal cost evidence preserves the original outcome; it cannot
+invent a result. Resume can reconstruct a retained layout without another model
+call, rechecking task ownership, revisions and active references before import.
+Historical unledgered plans remain incomplete accounting history. See
+runbooks/CANVA_PLANNER_RECOVERY.md for operator actions and failure drills.

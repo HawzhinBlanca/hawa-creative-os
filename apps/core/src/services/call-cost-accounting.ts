@@ -9,7 +9,7 @@ type Scope = RlsContext & { userId: string; sessionHash?: string };
 type Receipt = { id: string; revision: number; request_hash: string; actor_user_id: string; recorded_at: Date };
 type PageKey = { startedAt: string; kind: CallCostKind; id: string };
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
-const kindOf = (v: unknown): v is CallCostKind => ['studio','evaluation','voice','health_probe'].includes(String(v));
+const kindOf = (v: unknown): v is CallCostKind => ['studio','evaluation','voice','health_probe','canva_planner'].includes(String(v));
 const fail = (status: number, code: string, message: string): never => { throw new CanvaFlowError(status, code, message); };
 const receiptView = (r: Receipt) => ({ id:r.id, revision:r.revision, actorUserId:r.actor_user_id, recordedAt:new Date(r.recorded_at).toISOString() });
 
