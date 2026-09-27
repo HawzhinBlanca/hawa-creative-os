@@ -36,7 +36,7 @@ import { isValidUuid, TaskStoreUnavailableError } from '../core-helpers.js';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { loadPinnedDeliverables, type DeliverableStore } from './pinned-deliverables.js';
-import { pendingChangeOf } from './pending-change.js';
+import { pendingChangeOf, pendingChangeWords } from './pending-change.js';
 import type { ClientDnaResolver } from './client-dna-resolver.js';
 import type { TaskReader } from './task-reader.js';
 import { recordWorkflowDeliveryIn } from './workflow-delivery-record.js';
@@ -155,7 +155,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         (opts.allowInvalidated || !a.invalidated)
     );
     if (match) {
-      if ((isProduction || task?.requireQc || (opts as any).requireQc) && !match.qcReportHash && !opts.allowInvalidated) {
+      // A stored approval still needs its QC evidence: the policy excuses a later edit, not missing QA.
+      if ((isProduction || task?.requireQc || (opts as any).requireQc) && !match.qcReportHash) {
         // Task R05: null/unknown QC cannot publish in production or when requireQc is set
         return null;
       }
@@ -191,8 +192,9 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       if (!opts.allowInvalidated && row.decision_payload?.invalidated === true) {
         return null;
       }
-      if (!opts.allowInvalidated && !row.decision_payload?.qcReportHash && !row.qc_run_id) {
-        // Task R05: null/unknown QC cannot publish
+      if (!row.decision_payload?.qcReportHash && !row.qc_run_id) {
+        // Task R05: null/unknown QC cannot publish, under any policy. deliver_approved_stored used to
+        // skip this too, so an approval with no QA behind it could be delivered (audit #2).
         return null;
       }
       return {
@@ -343,6 +345,19 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       }
       if (owner === 'restate') {
         return { ok: false, status: 409, title: 'Lifecycle Owned', code: 'LIFECYCLE_OWNED', message: `Task ${taskId} belongs to a request the request lifecycle runs; press Deliver in the Desk` };
+      }
+    }
+    // A change the client asked for blocks delivery whichever path asks. Only the Desk's publish route
+    // checked it; publish-omnichannel and the WhatsApp approve link reached here without it and could
+    // deliver a version the client had asked to change (audit 2026-09-27 #3). The workflow's own run
+    // is checked by RequestLifecycle before it starts.
+    if (!workflowMode) {
+      const change = await changeBlockingDelivery(task, taskId);
+      if (change === null) {
+        return { ok: false, status: 503, title: 'Database Unavailable', code: 'DATABASE_UNAVAILABLE', message: 'Whether the client asked for a change could not be checked; try again' };
+      }
+      if (change) {
+        return { ok: false, status: 409, title: "Changed At The Client's Request", code: 'CHANGE_PENDING', message: `${pendingChangeWords(change)} The approved version was not delivered.` };
       }
     }
     if (workflowMode) {
@@ -753,24 +768,12 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     // The chaos suite kills Core here: the files are in Drive, and nothing of it is recorded yet.
     await chaosPoint('core.delivery.after-drive', { taskId, mode: workflowMode ? 'workflow' : 'core' });
 
-    // COMPLETE only when Drive and Sheets are both confirmed. Files delivered with the Sheets row
-    // unconfirmed leave the task in PUBLISH_RECONCILIATION (the database keeps 'publishing'); it used
-    // to be marked COMPLETE regardless, and forced to COMPLETE even when the transition was refused.
-    const sheetsConfirmed = publishResult.value.state === 'complete';
-    const finalStatus = sheetsConfirmed ? 'COMPLETE' : 'PUBLISH_RECONCILIATION';
-    if (!workflowMode && task.status !== finalStatus) {
-      const finishTrans = sm.transition(
-        finalStatus,
-        actor as any,
-        sheetsConfirmed ? reason : `Files delivered; Sheets row not confirmed: ${publishResult.value.detail?.sheetProblem || 'unknown reason'}`
-      );
-      if (!finishTrans.ok) {
-        return { ok: false, status: 409, message: finishTrans.error.message };
-      }
-      task.status = finalStatus;
-      events.get(taskId)?.push(finishTrans.value);
-    }
-
+    // Whether the requester's delivery message is safely in the outbox. A task used to become COMPLETE
+    // even when this write failed, so the requester never heard (audit 2026-09-27 #12). The files stay
+    // delivered (FR-051: a notification never rolls back a publication), but the task is completed only
+    // once the message is queued; until then it waits in PUBLISH_RECONCILIATION and Deliver retries,
+    // adopting the Drive files and queueing the message under the same idempotency key.
+    let notificationQueued = true;
     // The requester is told once the approved files are verified in Drive, and receives the files
     // themselves: the payload names the pinned exports, which the worker reads and sends to the chat,
     // with each file's Drive link. It used to wait for the Sheets row too, so a client with no ledger,
@@ -809,6 +812,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     } else if (outboxPayload && !outboxPayload.chatId) {
       log.info(`[core:omnichannel:notify] Task ${taskId} has no requesting chat; no delivery message is sent.`);
     } else if (outboxPayload && outboxRepo && db && isValidUuid(taskId)) {
+      notificationQueued = false;
       try {
         await withRlsContext(db, { tenantId: pubTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
           if (await outboxRepo.findByIdempotencyKey(pubTenantId, notifyKey, trx)) return;
@@ -821,12 +825,37 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
             payload: outboxPayload as unknown as Record<string, unknown>,
           }, trx);
         });
+        notificationQueued = true;
       } catch (err) {
-        log.error('[core:omnichannel:notify] Could not write the delivery notification to the outbox:', err);
+        log.error('[core:omnichannel:notify] Could not write the delivery notification to the outbox; the task is not completed, and Deliver retries it:', err);
       }
     }
 
-    if (!workflowMode && sheetsConfirmed && taskRepo && db && isValidUuid(taskId)) {
+    // COMPLETE only when Drive and Sheets are both confirmed. Files delivered with the Sheets row
+    // unconfirmed leave the task in PUBLISH_RECONCILIATION (the database keeps 'publishing'); it used
+    // to be marked COMPLETE regardless, and forced to COMPLETE even when the transition was refused.
+    const sheetsConfirmed = publishResult.value.state === 'complete';
+    const completable = sheetsConfirmed && notificationQueued;
+    const finalStatus = completable ? 'COMPLETE' : 'PUBLISH_RECONCILIATION';
+    if (!workflowMode && task.status !== finalStatus) {
+      const finishTrans = sm.transition(
+        finalStatus,
+        actor as any,
+        completable
+          ? reason
+          : !sheetsConfirmed
+            ? `Files delivered; Sheets row not confirmed: ${publishResult.value.detail?.sheetProblem || 'unknown reason'}`
+            : 'Files delivered; the delivery message could not be queued'
+      );
+      if (!finishTrans.ok) {
+        return { ok: false, status: 409, message: finishTrans.error.message };
+      }
+      task.status = finalStatus;
+      events.get(taskId)?.push(finishTrans.value);
+    }
+
+
+    if (!workflowMode && completable && taskRepo && db && isValidUuid(taskId)) {
       try {
         const tenantId = isValidUuid(task.tenantId) ? task.tenantId : '00000000-0000-4000-a000-000000000001';
         await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
@@ -880,7 +909,7 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
           }
 
           // The workflow's publication is completed with its task, by delivery-finished.
-          if (sheetsConfirmed && !workflowMode) {
+          if (completable && !workflowMode) {
             await publicationRepo.markComplete({
               tenantId: pubTenantId,
               publicationId: dbPub.id,
@@ -907,14 +936,16 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
     const receipt = dbPub ? { ...publishResult.value, publicationId: String(dbPub.id) } : publishResult.value;
     const verifiedFiles = receipt.driveFiles.filter((f: any) => f.verified);
 
-    if (!sheetsConfirmed) {
-      broadcast('task:publish_reconciliation', { taskId, status: task.status, sheetProblem: receipt.detail?.sheetProblem ?? null });
+    if (!completable) {
+      const notificationProblem = sheetsConfirmed ? 'The delivery message to the requester could not be queued; press Deliver again' : null;
+      broadcast('task:publish_reconciliation', { taskId, status: task.status, sheetProblem: receipt.detail?.sheetProblem ?? null, notificationProblem });
       return {
         ok: true,
         taskId,
         status: task.status,
         complete: false,
         sheetProblem: receipt.detail?.sheetProblem ?? null,
+        notificationProblem,
         publicationReceipt: receipt,
         driveFolderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
         sheetRowUrl: null,

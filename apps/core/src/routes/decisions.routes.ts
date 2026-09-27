@@ -28,6 +28,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
     readCurrentTask,
     resolveTaskWithFallback,
     broadcastEvent: broadcast,
+    isProduction,
   } = ctx;
 
   // createApp's verifyRequestAuth fills in every field, with '' for a caller who is not signed in
@@ -232,13 +233,17 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
             }
           }
         } catch (err) {
+          // Fail closed: an approval whose QA could not be read used to go through (audit #14).
           log.error('[core:approvals:qc_lookup] DB QC run lookup error:', err);
+          return problem(c, 503, 'Database Unavailable', 'The QA run of this revision could not be read; try again');
         }
       }
 
       // The QC evidence is the run Postgres holds (above). A QA report kept on this process's copy of
       // the task, or sent by the caller with a revision, was trusted here and lost at a restart.
-      if (!passingQcVerified && (body.requireQcPass === true || c.req.header('x-require-qc') === 'true')) {
+      // In production a passing run is always required; the gate used to be opt-in there too
+      // (requireQcPass / x-require-qc), so an approval with no QA run at all went through (audit #14).
+      if (!passingQcVerified && (isProduction || body.requireQcPass === true || c.req.header('x-require-qc') === 'true')) {
         return problem(
           c,
           412,

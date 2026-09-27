@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { describe, expect, it, afterAll } from 'vitest';
-import { createDb } from '@hawa/db';
+import { describe, expect, it, afterAll, vi } from 'vitest';
+import { createDb, OutboxRepository } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import {
   buildDeliveredNotificationPayload,
@@ -116,6 +116,27 @@ describe('the delivery notification', () => {
     const { deliver, notifications, saveDna } = await setup();
     expect((await (await deliver()).json()).status).toBe('PUBLISH_RECONCILIATION');
     await saveDna('sheet-for-no-sheet-notify-client');
+    expect((await (await deliver()).json()).status).toBe('COMPLETE');
+    expect(await notifications()).toHaveLength(1);
+  });
+
+  it('must be queued before the task is COMPLETE: a failed write leaves it for Deliver to retry (audit 2026-09-27 #12)', async () => {
+    const { deliver, notifications, saveDna } = await setup();
+    await saveDna('sheet-for-no-sheet-notify-client');
+    const enqueue = OutboxRepository.prototype.enqueue;
+    const spy = vi.spyOn(OutboxRepository.prototype, 'enqueue').mockImplementation(function (this: OutboxRepository, command: any, trx?: any) {
+      if (command?.commandType === 'notify.published') return Promise.reject(new Error('connection reset (fixture)'));
+      return enqueue.call(this, command, trx);
+    } as any);
+    try {
+      const first = await (await deliver()).json();
+      // The files are in Drive and the row confirmed, but the requester would never hear: not COMPLETE.
+      expect(first.status).toBe('PUBLISH_RECONCILIATION');
+      expect(first.notificationProblem).toMatch(/could not be queued/);
+      expect(await notifications()).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
+    }
     expect((await (await deliver()).json()).status).toBe('COMPLETE');
     expect(await notifications()).toHaveLength(1);
   });

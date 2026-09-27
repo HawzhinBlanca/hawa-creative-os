@@ -4,6 +4,7 @@ import { apiClient } from './api/client.js';
 import { clearAuthToken, getAuthToken } from './services/auth.js';
 import { createDeskQueryClient, queryKeys } from './services/queryClient.js';
 import { createDeskSession, type DeskSession, type SessionState } from './services/session.js';
+import { clearPwaCaches } from './services/serviceWorker.js';
 import { bridgeTaskEvents, pollIntervalFor, useStreamStatus, type LiveEventSource, type VisibilitySource } from './services/liveUpdates.js';
 
 /**
@@ -23,10 +24,13 @@ export function createDeskRuntime(input: { stream: LiveEventSource; doc?: Visibi
   const session = createDeskSession({
     hasToken: () => Boolean(getAuthToken()),
     clearToken: clearAuthToken,
-    // A signed-out tab keeps no answer read with the old session and listens to nothing.
+    // A signed-out tab keeps no answer read with the old session and listens to nothing. That includes
+    // the service worker's copies of /v1/ reads, which stayed readable in Cache Storage after sign-out
+    // on a shared machine (audit 2026-09-27 #21).
     onSignedOut: () => {
       stream.disconnect();
       queryClient?.clear();
+      void clearPwaCaches().catch((err: unknown) => console.warn('[PWA] Could not clear the offline copies at sign-out:', err));
     },
     onSignedIn: () => stream.connect(),
   });

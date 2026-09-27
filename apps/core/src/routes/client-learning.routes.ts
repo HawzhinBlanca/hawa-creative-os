@@ -211,9 +211,9 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
           path.join(process.cwd(), 'config', 'clients', 'kaae.dna.json'),
           path.join(process.cwd(), '..', '..', 'config', 'clients', 'kaae.dna.json'),
           '/app/config/clients/kaae.dna.json',
-          '/Users/hawzhin/Hawdesign/config/clients/kaae.dna.json',
         ];
         const dnaPath = dnaCandidates.find((p) => fs.existsSync(p));
+        if (!dnaPath) log.warn(`[Core] The promoted rule was not written to kaae.dna.json: no copy of it here (${dnaCandidates.join(', ')}).`);
         if (dnaPath && result.rule) {
           const dnaContent = JSON.parse(fs.readFileSync(dnaPath, 'utf-8'));
           if (!dnaContent.guidelines) dnaContent.guidelines = {};
