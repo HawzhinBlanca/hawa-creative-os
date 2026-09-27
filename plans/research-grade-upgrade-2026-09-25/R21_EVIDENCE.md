@@ -252,3 +252,22 @@ manifest verification pass. Failed runs remain in the proof's hashed artifact se
 This qualifies staffed closure of fixture diagnostics. It does not settle general
 Studio calls, automatically verify invoices, establish a real Google sign-in or human
 approval, or complete independent recovery/model-quality/live-pilot gates.
+
+
+## 2026-09-27 — Studio task uncertainty survives replacement (ADR-086)
+
+Four failing regression cases reproduced new paid work after a stale/failed/abandoned
+run and dispatch from an old executor after abandonment. Studio now checks every
+run's unresolved calls under the task lock before replacement. The alternate planner
+uses the same hold. Call admission rechecks the run after acquiring that lock;
+abandonment uses the same transaction. Late first outcomes remain recordable.
+
+Eight connected files / 116 tests pass, including two actual process kills,
+observed PostgreSQL lock contention, planner switching and a separate-task control.
+Source build and test types pass. Original red logs are retained.
+Proof: `R21_STUDIO_TASK_HOLD_PROOF.json`; artifacts:
+`output/acceptance/2026-09-27-studio-task-hold/`.
+
+This is a qualified local safety slice. General Studio settlement, live pilot,
+human design review and independent-host recovery remain open. No production
+change and no new isolated image deployment are claimed.

@@ -120,6 +120,45 @@ describe.skipIf(!url)('studio run guards', () => {
     await svc.abandon(scope, taskId, run.id, 'test cleanup');
   });
 
+  it.each(['stale', 'abandoned', 'failed'] as const)('keeps an unresolved model call held when its run is %s', async mode => {
+    const taskId = await task(), svc = service(), repo = new DesignStudioRepository(db);
+    const key = `held-${randomUUID()}`, input = { width: 1080, height: 1350 };
+    const { run } = await svc.createOrGetRun(scope, taskId, key, input);
+    await repo.recordCallStart({ id: randomUUID(), runId: run.id, ...scope,
+      stage: 'briefing', provider: 'openai', model: 'synthetic-model', requestedModel: 'synthetic-model',
+      callOrdinal: 1, logicalCallSha256: 'a'.repeat(64) });
+    if (mode === 'abandoned') await svc.abandon(scope, taskId, run.id, 'Stop this run');
+    if (mode === 'failed') await repo.updateRunStatus(run.id, scope.tenantId, 'failed');
+    await expect(svc.createOrGetRun(scope, taskId, `fresh-${randomUUID()}`, input))
+      .rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN', status: 409 });
+    // Re-reading the saved action remains safe; it cannot erase its admission.
+    await expect(svc.createOrGetRun(scope, taskId, key, input))
+      .resolves.toMatchObject({ created: false, run: { id: run.id } });
+    expect((await sql`SELECT id FROM hawa.design_studio_runs WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(1);
+  });
+
+  it('refuses an old executor after abandonment while preserving its earlier paid outcome', async () => {
+    const taskId = await task(), fetcher = vi.fn(), repo = new DesignStudioRepository(db);
+    const svc = new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher, staleRunMinutes: 0 });
+    const { run } = await svc.createOrGetRun(scope, taskId, `old-${randomUUID()}`, { width: 1080, height: 1350 });
+    const id = randomUUID();
+    await repo.recordCallStart({ id, runId: run.id, ...scope,
+      stage: 'briefing', provider: 'openai', model: 'synthetic-model', requestedModel: 'synthetic-model',
+      callOrdinal: 1, logicalCallSha256: 'b'.repeat(64) });
+    const budget = { maxUsd: 2, maxCalls: 24, spentUsd: 0, calls: 1 };
+    const ctx = await (svc as any).createStageContext(scope, run, 'briefing', budget, async () => {});
+    await svc.abandon(scope, taskId, run.id, 'Stop this run');
+    await repo.finalizeCall({ id, tenantId: scope.tenantId, inputTokens: 10, outputTokens: 2,
+      usdEstimate: 0.01, status: 'ok', responseId: 'synthetic-receipt' });
+    await expect(ctx.client.completeJson({ prompt: 'synthetic request', schema: { type: 'object' } }))
+      .rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED' });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(budget.calls).toBe(1);
+    expect(await repo.getCallsForRun(run.id, scope.tenantId)).toMatchObject([{ id, status: 'ok', response_id: 'synthetic-receipt' }]);
+    await expect(svc.createOrGetRun(scope, taskId, `after-${randomUUID()}`, { width: 1080, height: 1350 }))
+      .resolves.toMatchObject({ created: true });
+  });
+
   it('does not let a second actor or task inherit an in-flight resume authorization', async () => {
     const taskId = await task(), svc = service();
     const { run } = await svc.createOrGetRun(scope, taskId, `scope-${randomUUID()}`, { width: 1080, height: 1350 });

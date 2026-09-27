@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T05:28:49Z",
+  "generatedAt": "2026-09-27T05:40:19Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 390,
+  "fileCount": 392,
   "files": [
     {
       "path": ".dockerignore",
@@ -498,6 +498,11 @@
       "bytes": 2163
     },
     {
+      "path": "adrs/086_studio_task_uncertainty_fence.md",
+      "sha256": "df8b85864454affa1d9daecce6ab193ae177f14cfde64882032f5e9189655dc6",
+      "bytes": 1479
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -764,8 +769,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "5be95af180a90ae18fc91246e52b8487ba2d6b0e85c8cf5ea5f79ff4608cf645",
-      "bytes": 14462
+      "sha256": "0e18443ab413be8c88be898a35c575b794b396a15748b2e04bdd2507f1e1d39c",
+      "bytes": 15069
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1179,13 +1184,18 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "bf63c869d89eee26a09114176959f639cb17ccd44ffb70f11f80b6c18677283e",
-      "bytes": 30520
+      "sha256": "e47d2d22253e5a87ab1321af86ef4cca827653bf3c2b175a80d8d987cb65cede",
+      "bytes": 31549
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json",
       "sha256": "d507467ae79801a525441c801d780062f1cb107be44ed561e119c50da9a62fd2",
       "bytes": 6282
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R21_STUDIO_TASK_HOLD_PROOF.json",
+      "sha256": "7ea9c3a2f2d91ab52dfb111015a2f054422ef1113adf286b0dd5671b22c454ea",
+      "bytes": 3304
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R26_BLANK_POLICY.png",
@@ -1259,8 +1269,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "3076ac96811215584cf76925b532abbec8ea044430175045e0936c73b718cd72",
-      "bytes": 316901
+      "sha256": "744ef6b9781943c2df12160b93c0cb50bd4398462d25e18a573f2ad290ff789b",
+      "bytes": 318368
     },
     {
       "path": "plans/user-stories.csv",

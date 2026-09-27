@@ -196,7 +196,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
     expect(await repo.getCallsForRun(runId, tenantA)).toHaveLength(1);
   });
 
-  it('serializes call admission behind cancellation and still finalizes an earlier admitted call', async () => {
+  it.each(['cancellation', 'abandonment'])('serializes call admission behind %s and still finalizes an earlier admitted call', async closure => {
     const taskId = await createTask(tenantA, clientA);
     const runId = randomUUID();
     await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA,
@@ -210,7 +210,9 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
     try {
       let pending!: Promise<unknown>;
       await withRlsContext(db, { tenantId: tenantA }, async trx => {
-        await sql`UPDATE hawa.tasks SET state='cancelled' WHERE id=${taskId}::uuid`.execute(trx);
+        await sql`SELECT id FROM hawa.tasks WHERE id=${taskId}::uuid FOR UPDATE`.execute(trx);
+        if (closure === 'cancellation') await sql`UPDATE hawa.tasks SET state='cancelled' WHERE id=${taskId}::uuid`.execute(trx);
+        else await repo.updateRunStatus(runId, tenantA, 'abandoned', {}, trx);
         pending = new DesignStudioRepository(peer).recordCallStart(call(randomUUID(), 2)).catch(error => error);
         // Confirm the peer actually reached the task lock before releasing cancellation.
         let blocked = false;
@@ -230,6 +232,24 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
         inputTokens: 100, outputTokens: 10, usdEstimate: 0.01, responseId: 'synthetic-paid-reply' });
       expect(await repo.getCallsForRun(runId, tenantA)).toMatchObject([{ id: admittedId, status: 'ok', response_id: 'synthetic-paid-reply' }]);
     } finally { await peer.destroy(); }
+  });
+
+  it('holds new ordinals after a finished uncertain call without affecting a different task', async () => {
+    const taskId = await createTask(tenantA, clientA), runId = randomUUID();
+    await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA, actorId: 'test_user',
+      requestKey: `uncertain-${runId}`, requestHash: 'c'.repeat(64), request: {}, tier: 'premium' });
+    const id = randomUUID();
+    const call = { id, runId, tenantId: tenantA, stage: 'briefing', provider: 'openai', model: 'test',
+      requestedModel: 'test', callOrdinal: 1, logicalCallSha256: 'c'.repeat(64) };
+    await repo.recordCallStart(call);
+    await repo.finalizeCall({ id, tenantId: tenantA, status: 'uncertain', inputTokens: 0, outputTokens: 0, usdEstimate: 0 });
+    await expect(repo.recordCallStart({ ...call, id: randomUUID(), callOrdinal: 2, logicalCallSha256: 'd'.repeat(64) }))
+      .rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
+    const otherTask = await createTask(tenantA, clientA), otherRun = randomUUID();
+    await repo.createRun({ id: otherRun, tenantId: tenantA, taskId: otherTask, clientId: clientA, actorId: 'test_user',
+      requestKey: `other-${otherRun}`, requestHash: 'd'.repeat(64), request: {}, tier: 'premium' });
+    await expect(repo.recordCallStart({ ...call, id: randomUUID(), runId: otherRun }))
+      .resolves.toMatchObject({ status: 'uncertain' });
   });
 
   it('rejects deletion or mutation of completed run via immutability trigger', async () => {

@@ -94,6 +94,31 @@ export class TaskGenerationBlockedError extends Error {
   }
 }
 
+export class StudioCallUncertainError extends Error {
+  readonly code = 'MODEL_CALL_UNCERTAIN';
+  readonly status = 409;
+  readonly isUncertain = true;
+  constructor() {
+    super('This task has an unresolved Studio model call. Reconcile its outcome before starting more paid work.');
+    this.name = 'StudioCallUncertainError';
+  }
+}
+
+/** Caller holds the task row lock, shared by run replacement, abandonment and call admission. */
+export async function assertStudioCallsResolved(
+  db: Kysely<Database>, tenantId: string, taskId: string, executingRunId?: string
+): Promise<void> {
+  let query = db.selectFrom('design_studio_calls as c')
+    .innerJoin('design_studio_runs as r', join => join.onRef('r.id', '=', 'c.run_id')
+      .onRef('r.tenant_id', '=', 'c.tenant_id'))
+    .select('c.id').where('r.tenant_id', '=', tenantId).where('r.task_id', '=', taskId)
+    .where('c.status', '=', 'uncertain');
+  if (executingRunId) query = query.where(eb => eb.or([
+    eb('r.id', '!=', executingRunId), eb('c.finished_at', 'is not', null),
+  ]));
+  if (await query.executeTakeFirst()) throw new StudioCallUncertainError();
+}
+
 export class ModelCallFinalizationConflictError extends Error {
   readonly code = 'MODEL_CALL_FINALIZATION_CONFLICT';
   constructor() {
@@ -552,10 +577,18 @@ export class DesignStudioRepository {
       const task = await client.selectFrom('tasks as t')
         .innerJoin('design_studio_runs as r', join => join.onRef('r.task_id', '=', 't.id')
           .onRef('r.tenant_id', '=', 't.tenant_id').onRef('r.client_id', '=', 't.client_id'))
-        .select('t.state').where('r.id', '=', params.runId).where('t.tenant_id', '=', params.tenantId)
+        .select(['t.id', 't.state']).where('r.id', '=', params.runId).where('t.tenant_id', '=', params.tenantId)
         .forUpdate('t').executeTakeFirst();
       const blocker = taskGenerationBlocker(task?.state);
       if (blocker) throw new TaskGenerationBlockedError(blocker);
+      // Read after acquiring the task lock: abandonment may have committed while we waited.
+      const run = await client.selectFrom('design_studio_runs').select('status')
+        .where('id', '=', params.runId).where('tenant_id', '=', params.tenantId).executeTakeFirst();
+      if (!run || ['abandoned', 'failed', 'degraded'].includes(run.status) ||
+          (run.status === 'transferred' && params.stage !== 'parity')) {
+        throw new TaskGenerationBlockedError('This Studio run is closed to new model requests.');
+      }
+      await assertStudioCallsResolved(client, params.tenantId, task!.id, params.runId);
       const [row] = await client
         .insertInto('design_studio_calls')
         .values({

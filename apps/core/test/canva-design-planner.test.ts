@@ -2,7 +2,7 @@ import { describe,it,expect,vi,beforeAll,afterAll } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { blobStoreFromEnv,createDb,sql,withRlsContext } from '@hawa/db';
+import { blobStoreFromEnv,createDb,sql,withRlsContext,DesignStudioRepository } from '@hawa/db';
 import { CanvaDesignPlanner,assertPlannerLogoRules,buildPlannerSystemPrompt,correctPlannerPalette,savedDesignCopy } from '../src/services/canva-design-planner.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
@@ -105,6 +105,20 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   beforeAll(async()=>{await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${scope.actorId}::uuid,'isolated-operator@example.test','Test') ON CONFLICT DO NOTHING`.execute(db);
     await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${clientId}::uuid,${scope.tenantId}::uuid,'kaae','KAAE') ON CONFLICT DO NOTHING`.execute(db);});
   afterAll(()=>db.destroy());
+  it('cannot bypass a held Studio request through the alternate planner',async()=>{
+    const taskId=await intake(),fetcher=vi.fn(),repo=new DesignStudioRepository(db),runId=randomUUID();
+    await repo.createRun({id:runId,tenantId:scope.tenantId,taskId,clientId,actorId:scope.actorId,
+      requestKey:`studio-${runId}`,requestHash:'a'.repeat(64),request:{},tier:'premium'});
+    await repo.recordCallStart({id:randomUUID(),runId,...scope,stage:'briefing',provider:'openai',model:'test',
+      requestedModel:'test',callOrdinal:1,logicalCallSha256:'a'.repeat(64)});
+    await repo.updateRunStatus(runId,scope.tenantId,'abandoned');
+    const {planner,api}=make(fetcher);
+    await expect(planner.generate(scope,taskId,`planner-${randomUUID()}`,1200,1697))
+      .rejects.toMatchObject({code:'MODEL_CALL_UNCERTAIN',status:409});
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(api.importEditableDesign).not.toHaveBeenCalled();
+    expect((await sql`SELECT id FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
+  });
   it.each(['complete','cancelled','rejected','paused','approved','publishing'])('refuses paid planning for a %s task',async state=>{
     const taskId=await intake(),fetcher=vi.fn();
     await sql`UPDATE hawa.tasks SET state=${state}::hawa.task_state WHERE id=${taskId}::uuid`.execute(db);

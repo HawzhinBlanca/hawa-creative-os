@@ -1,4 +1,4 @@
-import { assertTaskGenerationAllowed } from './task-generation-guard.js';
+import { assertTaskGenerationAllowed, assertStudioCallsResolved } from './task-generation-guard.js';
 import { orderedAlbumImages } from './lifecycle-album.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -242,6 +242,7 @@ export class CanvaDesignPlanner {
       if(prior){
         if (prior.status === 'failed' || prior.status === 'abandoned' || (key.startsWith('redrive_') && (prior.status === 'uncertain' || prior.status === 'planned'))) {
           assertTaskGenerationAllowed(locked.state);
+          await assertStudioCallsResolved(db,s.tenantId,taskId);
           if (prior.status !== 'abandoned') {
             await sql`UPDATE hawa.canva_design_plans SET status='abandoned', diagnostic=${'Auto-abandoned for re-drive retry'}, updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${prior.id}::uuid`.execute(db);
           }
@@ -251,6 +252,7 @@ export class CanvaDesignPlanner {
         }
       }
       assertTaskGenerationAllowed(locked.state);
+      await assertStudioCallsResolved(db,s.tenantId,taskId);
       if((await sql`SELECT id FROM hawa.canva_bindings WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND status='bound'`.execute(db)).rows.length)
         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the existing Canva design; generation never overwrites it.');
       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND status='planning'`.execute(db)).rows[0];

@@ -1,5 +1,5 @@
 import { TaskGenerationBlockedError } from '@hawa/db';
-import { assertTaskGenerationAllowed } from '../task-generation-guard.js';
+import { assertTaskGenerationAllowed, assertStudioCallsResolved } from '../task-generation-guard.js';
 import { orderedAlbumImages } from '../lifecycle-album.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -578,6 +578,7 @@ export class DesignStudioService {
         }
 
         assertTaskGenerationAllowed(lockedTask.state);
+        await assertStudioCallsResolved(db, s.tenantId, taskId);
 
         // Different key, but an active run is in flight
         if (!prior.stale) {
@@ -597,6 +598,7 @@ export class DesignStudioService {
       }
 
       assertTaskGenerationAllowed(lockedTask.state);
+      await assertStudioCallsResolved(db, s.tenantId, taskId);
 
       // 4. Verify task is not already bound to Canva
       const bound = (
@@ -2636,7 +2638,7 @@ export class DesignStudioService {
   }
 
   /**
-   * Abandons an active studio run so another generation can be requested.
+   * Stops future admission; unresolved provider calls remain held at task scope.
    */
   public async abandon(s: Scope, taskId: string, runId: string, reason: string): Promise<StudioResumeResult> {
     const why = String(reason || '').trim();
@@ -2644,8 +2646,9 @@ export class DesignStudioService {
       throw new CanvaFlowError(422, 'REASON_REQUIRED', 'Give a short reason (3-500 chars) for abandoning this studio run.');
     }
 
-    return this.tx(s, async () => {
-      const run = await this.repo.getRunById(runId, s.tenantId);
+    return this.tx(s, async (db) => {
+      await sql`SELECT id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db);
+      const run = await this.repo.getRunById(runId, s.tenantId, db);
       if (!run) throw new CanvaFlowError(404, 'RUN_NOT_FOUND', 'Studio run not found.');
       if (run.task_id && taskId && run.task_id !== taskId) {
         throw new CanvaFlowError(403, 'TASK_SCOPE_MISMATCH', 'The studio run belongs to a different task.');
@@ -2653,18 +2656,18 @@ export class DesignStudioService {
       if (run.actor_id && s.actorId && run.actor_id !== s.actorId && s.role !== 'administrator' && s.role !== 'art_director') {
         throw new CanvaFlowError(403, 'ACTOR_SCOPE_MISMATCH', 'Studio run can only be abandoned by the initiating actor or an administrator/art director.');
       }
-      if (['transferred', 'abandoned'].includes(run.status)) {
+      if (['transferred', 'abandoned', 'failed', 'degraded'].includes(run.status)) {
         throw new CanvaFlowError(409, 'CANNOT_ABANDON', `Cannot abandon run in status '${run.status}'.`);
       }
 
       await this.repo.updateRunStatus(runId, s.tenantId, 'abandoned', {
         diagnostic: `Abandoned by ${s.actorId}: ${why}`,
-      });
+      }, db);
 
       return {
         runId,
         status: 'abandoned',
-        message: 'Studio run abandoned. A new generation may now be started.',
+        message: 'Studio run abandoned. Unresolved model calls still require reconciliation before new paid work.',
       };
     });
   }

@@ -109,8 +109,13 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
       const freshDb = createDb(databaseUrl!);
       try {
         const replayFetch = vi.fn();
-        const fresh = new DesignStudioService(freshDb, undefined, { apiKey: 'x', fetcher: replayFetch as typeof fetch });
+        const fresh = new DesignStudioService(freshDb, undefined, { apiKey: 'x', fetcher: replayFetch as typeof fetch, staleRunMinutes: 0 });
         await expect(fresh.resume(scope, taskId, run.id)).rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
+        await expect(fresh.createOrGetRun(scope, taskId, `replace-killed-${randomUUID()}`,
+          { width: 1080, height: 1350, tier: 'standard' })).rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
+        await fresh.abandon(scope, taskId, run.id, 'Interrupted provider request');
+        await expect(fresh.createOrGetRun(scope, taskId, `replace-abandoned-${randomUUID()}`,
+          { width: 1080, height: 1350, tier: 'standard' })).rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
         expect(replayFetch).not.toHaveBeenCalled();
         expect(acceptedCount).toBe(1);
       } finally {

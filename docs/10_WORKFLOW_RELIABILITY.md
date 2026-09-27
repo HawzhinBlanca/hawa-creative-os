@@ -61,6 +61,15 @@ For new Studio calls, PostgreSQL admits a per-run ordinal and request digest bef
 
 The ledger seals a call's run/stage/model/ordinal/digest at admission. Its first outcome, including `uncertain`, is the last mutation allowed; a second finalization is a conflict and holds the Studio pipeline. Reconciliation must append separately attributed evidence rather than rewrite the original call (ADR-051).
 
+Run replacement cannot clear uncertainty (ADR-086). Under the task row lock, a
+new Studio run or alternate planner reservation checks unresolved Studio calls
+across every run for that task, including stale, failed and abandoned runs.
+Abandonment shares this lock with paid-call admission. Closed runs refuse new
+calls, while earlier admitted calls may still record their first late outcome.
+Transferred runs retain only the existing content-keyed parity operation. This
+prevents replacement from resetting an unresolved cost; it does not yet provide
+general Studio settlement or replay of a lost response.
+
 ## 5. Retry classes
 
 An uncertain request-owned Telegram send is never an automatic retry. Under ADR-046, an office administrator may record that every approved file and notice is visible in the immutable requester chat, using one message ID per item and an expected request revision. Core verifies the local marks and archived Drive/Sheet receipts and commits one audited settlement; inconclusive cases remain open. This is staff observation, not a requester read receipt or proof of exactly-once Telegram transport.
