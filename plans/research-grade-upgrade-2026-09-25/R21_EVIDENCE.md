@@ -1,5 +1,20 @@
 # R21 — Unknown model acceptance is not a free retry
 
+### Final ADR-093 request-spending qualification, 2026-09-27
+
+Source `13a4acd`, tested seal `8a47f63`: **3920 passed, zero failed, 59 skipped**
+across483 files (476 passed/7 skipped),113.74seconds. Strict source/scripts and
+484/484 test roots, lint986/1053 with9existing egress exceptions, Desk build,
+security scanner/11-pattern self-test, blueprint969/0/0 and manifest pass.
+All18 source hashes matched before evidence finalization. This is local request
+spending qualification; no new runtime image, live bill or production rollout.
+
+A separate read-only probe confirmed the old shared schema checker incorrectly
+accepts fractional integers, non-finite numbers and prohibited extra properties.
+Those three controls are saved in the proof's follow-up evidence and remain
+unfixed. Correct this gateway prerequisite next, then complete shared evaluation/
+voice office limits, recovery/admin controls and fresh/live qualification.
+
 ## 2026-09-27 — Gateway request spending bounds (ADR-093, candidate)
 
 The shared gateway now quotes each exact serialized provider body at reviewed

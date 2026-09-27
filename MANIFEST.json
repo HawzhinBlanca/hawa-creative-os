@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T09:07:43Z",
+  "generatedAt": "2026-09-27T09:12:43Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -989,8 +989,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "3d51d08bf67bb27911ed38cdbcbbf70e33423525b3cf6d489345469ee9bed71b",
-      "bytes": 74928
+      "sha256": "5200b840e10446c6879158ba4049f7e76d80c2f857a1fdb0ec2f670177e8b8f1",
+      "bytes": 75859
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1234,8 +1234,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "b5e3afc458e92f869b40ce25d91e53d6098435920d335adb03ad6f245f4289b4",
-      "bytes": 45885
+      "sha256": "d2e0e2f55bff31d61d5d1d281e20dc94c922df73fe6f570fffdb1a60480131ae",
+      "bytes": 46816
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json",
@@ -1244,8 +1244,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_SPENDING_PROOF.json",
-      "sha256": "9c2953f7cd73242161d45b7540a34fd2b28f1d7183772f165040752f5fd1c6a3",
-      "bytes": 3858
+      "sha256": "f14bd8b72bf7c8c894a0b1fa16b8f6f69851bb5786228468c446049b6263ae65",
+      "bytes": 7478
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_SPENDING_RESERVATIONS_PROOF.json",
@@ -1339,8 +1339,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "53b930963125b23039d2017c33d57c4f9f3a4781c58afb4522ec7049b016bf3c",
-      "bytes": 337505
+      "sha256": "04c890e99b7d3a66bf39c25fff613badd895e466727db31ae4c0862f86dc26fb",
+      "bytes": 338975
     },
     {
       "path": "plans/user-stories.csv",

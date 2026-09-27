@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "GATEWAY_REQUEST_BOUNDS_CANDIDATE",
+  "status": "LOCALLY_QUALIFIED_GATEWAY_REQUEST_SPENDING_BOUNDS",
   "requirements": [
     "FR-059",
     "FR-060",
@@ -45,15 +45,31 @@
       "ceiling": 1053,
       "existingEgressExceptions": 9
     },
-    "deskBuild": "passed"
+    "deskBuild": "passed",
+    "sourceManifest": "verified",
+    "securityScanFindings": 0,
+    "securitySelfTestPatterns": 11,
+    "blueprint": {
+      "passed": 969,
+      "warned": 0,
+      "failed": 0
+    }
   },
   "fullRegression": {
-    "status": "pending"
+    "passed": 3920,
+    "failed": 0,
+    "skipped": 59,
+    "filesPassed": 476,
+    "filesSkipped": 7,
+    "filesTotal": 483,
+    "durationSeconds": 113.74,
+    "log": "output/acceptance/2026-09-27-gateway-spending/full-sealed.log"
   },
   "runtimeChanged": false,
   "productionChanged": false,
   "realProviderCalls": false,
   "notQualified": [
+    "Shared schema validation: read-only probes still accept fractional integers, non-finite numbers and prohibited extra fields",
     "Shared durable evaluation/voice/other gateway office limits",
     "Live provider invoice ceilings",
     "Named Desk budget allocation and accounting repair",
@@ -68,5 +84,34 @@
     "First connected run: 86 passed/two failed, because old pricing fixtures omitted Google total usage and expected obsolete provider-wide rates; corrected explicit fixtures.",
     "Initial source compilation exposed local narrowing, required safeAction, and an unused React import; corrected without suppressions.",
     "An exploratory image-sizing change was removed after primary documentation confirmed a sixteen-tile cap is conservative; no image parser/Studio policy change retained."
-  ]
+  ],
+  "sourceCommit": "13a4acd2fc9396b625a5ca8506b9be80452cf2a0",
+  "testedCommit": "8a47f638763d4d90e96796bad54a6ee8fa117577",
+  "followUpEvidence": {
+    "schemaGap": "output/acceptance/2026-09-27-gateway-spending/schema-gap.jsonl",
+    "expectedInvalid": 3,
+    "incorrectlyAccepted": 3
+  },
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-gateway-spending/blueprint.log": "f609167ce53940d3f7463ac7ac0d52d6ddbac4e3ba6747a04c3b9ddcf45eb289",
+    "output/acceptance/2026-09-27-gateway-spending/candidate-seal.log": "f98527fa4483d5c8faec56ad06feaa9cd32ac707a657490dd4ae51b91330f0c6",
+    "output/acceptance/2026-09-27-gateway-spending/desk-build.log": "7c058211e393abe5b5dad93fb8ba2684701fa2276f39bb28fe2f774c136b4f91",
+    "output/acceptance/2026-09-27-gateway-spending/focused-final.log": "a5fca471689cf82842b431bf6ca13873a5a99fc9556f14076740ec244942ffdb",
+    "output/acceptance/2026-09-27-gateway-spending/focused-first.log": "c0397f5858498fd323d1cd675923e77ba7f2ede068749043f39ec5f1bbf26685",
+    "output/acceptance/2026-09-27-gateway-spending/focused-second.log": "859c93a63c3200a050dad243fcbe4fd682f29a4ebfe0060f1688b9ec008836e3",
+    "output/acceptance/2026-09-27-gateway-spending/full-sealed.log": "8b0c1db0fd57e2dddbc4922dbe04971d7d78174ffaf38224e6e014a4d5b41f63",
+    "output/acceptance/2026-09-27-gateway-spending/generate-release.log": "864b33dfb5ae5dee555c4d374b9a17ea959a1bcfe4cb4233f254fc7d48003014",
+    "output/acceptance/2026-09-27-gateway-spending/lint.log": "46969defc7ad9dcc3a939e70450ea055100613d92bed1a522f8e5f4b7a4a5986",
+    "output/acceptance/2026-09-27-gateway-spending/red-first.log": "52ac953260d0110f012531ad9fb3e0b9d398c298ddec07574ed483fec831b2e0",
+    "output/acceptance/2026-09-27-gateway-spending/refresh-pack.log": "bedc03d57e83b1fdfc08e5d883827da4917345041cc88e3292244b754efc3d6e",
+    "output/acceptance/2026-09-27-gateway-spending/refresh-seal.log": "bedc03d57e83b1fdfc08e5d883827da4917345041cc88e3292244b754efc3d6e",
+    "output/acceptance/2026-09-27-gateway-spending/release-verify.log": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6",
+    "output/acceptance/2026-09-27-gateway-spending/schema-gap.jsonl": "44ac7869962f12371f303f69d4f65d77dce26c681792a16f88ba2c651e5c27de",
+    "output/acceptance/2026-09-27-gateway-spending/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
+    "output/acceptance/2026-09-27-gateway-spending/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+    "output/acceptance/2026-09-27-gateway-spending/source-commit.log": "21aed948cc073dd82d3bb460c3e0e44f5f7c4ae31d4eca961fa8dd0f1327f540",
+    "output/acceptance/2026-09-27-gateway-spending/source-types-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-gateway-spending/source-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-gateway-spending/test-types.log": "8e6bc9c08bd5568cc80f74a9242767b0a0d08e8470cb44fa1d7eb668b402b996"
+  }
 }
