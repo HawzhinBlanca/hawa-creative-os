@@ -363,7 +363,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
 
     const revCheck = await app.request(`/v1/tasks/${taskId}`);
-    const { latestRevisionId } = await revCheck.json();
+    let { latestRevisionId } = await revCheck.json();
 
     // Revision 1
     const rev1 = await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
@@ -377,6 +377,15 @@ describe('Core API: Ingress & Task Lifecycle', () => {
 
     // Transition back to AWAITING_APPROVAL
     await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
+    const nextRevision = await (await app.request(`/v1/tasks/${taskId}`)).json();
+    expect(nextRevision.status).toBe('AWAITING_APPROVAL');
+    expect(nextRevision.latestRevisionId).not.toBe(latestRevisionId);
+    const stale = await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outcome: 'revision_requested', revisionRequest: { comment: 'Stale request must not count' } }),
+    });
+    expect(stale.status).toBe(409);
+    latestRevisionId = nextRevision.latestRevisionId;
 
     // Revision 2
     const rev2 = await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
@@ -390,6 +399,10 @@ describe('Core API: Ingress & Task Lifecycle', () => {
 
     // Transition back to AWAITING_APPROVAL
     await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
+    const finalRevision = await (await app.request(`/v1/tasks/${taskId}`)).json();
+    expect(finalRevision.status).toBe('AWAITING_APPROVAL');
+    expect(finalRevision.latestRevisionId).not.toBe(latestRevisionId);
+    latestRevisionId = finalRevision.latestRevisionId;
 
     // Revision 3 (exceeds budget -> OPERATOR_REQUIRED)
     const rev3 = await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
