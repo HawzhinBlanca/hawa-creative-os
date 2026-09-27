@@ -12,7 +12,47 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current implementation (2026-09-27 — blank Canva checking, ADR-077)
+## Current result (2026-09-27 — blank-design policy)
+
+Implementation `196daf2`, corrected candidate `4686e90`, tested seal `6ff3659`:
+manual Desk request → blank Canva creation → explicit synthetic manual edit →
+checked PNG/PPTX → review → simulated approval/publication passed **29/29 fresh
+deployed checks**. Runtime image labels match the candidate; eight services were
+newly created, provider callers/parser have internal networks, and no runtime
+source changed between candidate and tested seal. Prior PDF/voice/restart/import
+checks remain in the same rehearsal. See R26_BLANK_POLICY_PROOF.json.
+
+Full sealed regression: **450 files / 3,574 passed; 7 files / 59 skipped**, 103.00s.
+Affected run: 8 files/139 passed, then the expanded blank-policy file/19 passed
+(including restricted runtime RLS); counts overlap. Types, lint, production Desk
+build, security, blueprint **873/0/0** and release manifest passed. Initial fixture,
+type and scanner failures are recorded in the proof. First source-196daf2 rehearsal
+passed 28 transport checks, but browser inspection found missing defaultLocale in
+the synthetic DNA. Corrected fixture and directory assertion qualify this run;
+no runtime validator was weakened.
+
+The existing export operation now freezes matching source policy or exact manual
+copy plus active, hashed, human-authored Client DNA families. Migration 046 prevents
+policy mutation. Historical-key replay is stable after DNA changes; new review,
+approval and publication reject superseded policy. Manual font checks inspect the
+script declarations of each run without default or family-prefix admission.
+No import row is invented; another design's source or another actor's inaccessible
+source cannot provide a fallback. The retained policy accompanies source review.
+
+Browser created task `a0516d5c-118a-4adc-9d9c-4fa4251e38cc`, used blank creation and Capture for
+Review, and reached Needs Approval with two exports and zero imported sources.
+The bright warning and gray disabled Confirm Approval were visually inspected;
+PNG/PPTX stayed selected, the dialog was cancelled and the task remains unapproved.
+Screenshot: R26_BLANK_POLICY.png. Provider editing is an explicit fake fixture;
+real native edit/reopen and human quality remain unqualified. Production unchanged.
+
+Next: qualify remaining Desk status/control behavior (hard-coded Studio models,
+stale intake/binding messages, closed-task action admission). Flags govern automatic
+intake in the inspected code; establish the explicit Studio action contract before
+changing availability. Then live native/human/provider acceptance, retrieval
+measurements and clean-host WAL/PITR/Restate restore. App-wide completion is unproven.
+
+## Prior implementation (2026-09-27 — blank Canva checking, ADR-077)
 
 Blank manual designs now admit exact saved copy with active hash-verified,
 human-authored Client DNA font families. New export operations freeze checking

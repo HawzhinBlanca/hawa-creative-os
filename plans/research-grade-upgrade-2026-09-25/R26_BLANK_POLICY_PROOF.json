@@ -1,0 +1,484 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "isolated_deployed_rehearsal_and_browser",
+  "verifiedAt": "2026-09-27T00:41:09.554906+00:00",
+  "implementationCommit": "196daf268e25176f49317fafa303a918be80782d",
+  "candidateCommit": "4686e90a208c3442751cfed347a4e1fafdbc82ea",
+  "testedSeal": "6ff3659c1a29f4ddfca5c1fd6d3e5504ad7a6eb0",
+  "requirements": [
+    "FR-015",
+    "FR-017",
+    "FR-041",
+    "FR-043",
+    "FR-054",
+    "FR-064",
+    "FR-069",
+    "NFR-017",
+    "NFR-020"
+  ],
+  "fullRegression": {
+    "command": "pnpm exec vitest run --reporter=default --reporter=json",
+    "passedFiles": 450,
+    "skippedFiles": 7,
+    "passedTests": 3574,
+    "failedTests": 0,
+    "skippedTests": 59,
+    "seconds": 103.0
+  },
+  "focused": {
+    "affectedRun": {
+      "files": 8,
+      "passedTests": 139
+    },
+    "expandedBlankPolicyRun": {
+      "files": 1,
+      "passedTests": 19,
+      "includesRestrictedRuntimeRole": true
+    },
+    "note": "The expanded run includes the earlier blank-policy cases; these counts are not additive."
+  },
+  "gates": {
+    "types": "passed",
+    "lint": "passed",
+    "productionDeskBuild": "passed",
+    "securityScan": "passed",
+    "sourceManifest": "passed",
+    "testedSealBlueprint": {
+      "pass": 873,
+      "warn": 0,
+      "fail": 0
+    }
+  },
+  "priorFailures": [
+    "Initial sandbox runs could not access local database/tsx IPC; authorized isolated reruns executed normally.",
+    "New fixture used an invalid actor UUID (12 failures); corrected fixture, then 13 passed.",
+    "Expanded request-refusal fixtures reused one unique design binding (3 failures/136 passed); distinct fixture designs, then 139 passed.",
+    "Captured-policy provenance needed an explicit type narrowing; final source/test typechecks passed.",
+    "Security scanner rejected a literal synthetic token; fixtures now generate fresh tokens.",
+    "First deployment passed 28 checks but browser rejected its client directory: synthetic DNA omitted defaultLocale. Corrected fixture plus directory gate passed the fresh 29-check run. No runtime validator was weakened."
+  ],
+  "priorCandidate": {
+    "commit": "196daf268e25176f49317fafa303a918be80782d",
+    "passedChecks": 28,
+    "qualification": "Incomplete browser fixture; superseded by corrected rehearsal."
+  },
+  "candidate": {
+    "finishedAt": "2026-09-27T00:36:01.633Z",
+    "telegramPoller": "worker",
+    "deployment": {
+      "commit": "4686e90a208c3442751cfed347a4e1fafdbc82ea",
+      "sourceChanges": {},
+      "containers": {
+        "postgres": {
+          "imageId": "sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T00:35:07.43009371Z"
+        },
+        "restate": {
+          "imageId": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+          "buildCommit": "d5425f5bfae4024f4d26bab447bc8e6c6db08bfa",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T00:35:07.428192252Z"
+        },
+        "core": {
+          "imageId": "sha256:11ee3f220e20b61f5c5486bffbee946a5bb1954e398b94d2fd91e9c8695cb005",
+          "buildCommit": "4686e90a208c3442751cfed347a4e1fafdbc82ea",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_parser"
+          ],
+          "createdAt": "2026-09-27T00:35:10.698593462Z"
+        },
+        "worker-blue": {
+          "imageId": "sha256:10b87f32d6c360f0157da8fd50880bd5cfefc9bdf083eb245df6dc81367ec2e8",
+          "buildCommit": "4686e90a208c3442751cfed347a4e1fafdbc82ea",
+          "networks": [
+            "hawa-chaos_chaos"
+          ],
+          "createdAt": "2026-09-27T00:35:10.620648129Z"
+        },
+        "fakes": {
+          "imageId": "sha256:9480892c2295f338556f43ba0eba42b1ffe44b3db04534274465cd8ba5c09adb",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T00:35:07.426879502Z"
+        },
+        "docling": {
+          "imageId": "sha256:0b59399512523b1708683578417bae0eed81cc31f03c6a58c9410f9ba3d65d1c",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_parser"
+          ],
+          "createdAt": "2026-09-27T00:35:17.07661234Z"
+        },
+        "desk": {
+          "imageId": "sha256:32aeb0b97af8bf00f665cb0108b49414f1bd472ebc9ab8f58f8b93f370724d5f",
+          "buildCommit": "4686e90a208c3442751cfed347a4e1fafdbc82ea",
+          "networks": [
+            "hawa-chaos_chaos"
+          ],
+          "createdAt": "2026-09-27T00:35:17.077307298Z"
+        },
+        "nginx": {
+          "imageId": "sha256:b947b2630c97622793113555e13332eec85bdc7a0ac6ab697159af78942bb856",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T00:35:17.122820257Z"
+        }
+      },
+      "networks": [
+        "hawa-chaos_chaos|true",
+        "hawa-chaos_parser|true"
+      ],
+      "externalAdapters": "synthetic fakes",
+      "parser": "real pinned offline Docling",
+      "productionChanged": false
+    },
+    "totalMs": 81675,
+    "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
+    "peakMemoryMiB": {
+      "hawa-chaos-nginx-1": 8,
+      "hawa-chaos-desk-1": 7,
+      "hawa-chaos-docling-1": 14,
+      "hawa-chaos-core-1": 100,
+      "hawa-chaos-worker-blue-1": 61,
+      "hawa-chaos-postgres-1": 104,
+      "hawa-chaos-restate-1": 604,
+      "hawa-chaos-fakes-1": 82
+    },
+    "peakTotalMiB": 980,
+    "uncoveredModelCalls": [],
+    "scenarios": [
+      {
+        "name": "R1.S3.SOURCES",
+        "what": "full-app PDF source to voice revision and simulated approved delivery",
+        "ms": 26440,
+        "invariants": [
+          {
+            "name": "every candidate container was created after this rehearsal started",
+            "ok": true,
+            "detail": "rehearsal started 2026-09-27T00:34:40.180Z"
+          },
+          {
+            "name": "Core, worker and Desk image labels match the candidate checkout",
+            "ok": true,
+            "detail": "build 4686e90a208c3442751cfed347a4e1fafdbc82ea; changed source files=0"
+          },
+          {
+            "name": "provider callers and the real parser have only internal networks",
+            "ok": true,
+            "detail": "hawa-chaos_chaos|true, hawa-chaos_parser|true"
+          },
+          {
+            "name": "production Desk HTML is served through production nginx",
+            "ok": true,
+            "detail": "HTTP 200"
+          },
+          {
+            "name": "the built Desk entry asset is present",
+            "ok": true,
+            "detail": "HTTP 200"
+          },
+          {
+            "name": "Desk session is persisted by the running Core",
+            "ok": true,
+            "detail": "HTTP 201; durable=true"
+          },
+          {
+            "name": "PDF source review creates no premature task",
+            "ok": true,
+            "detail": "source 90469307892"
+          },
+          {
+            "name": "application/pdf original crosses nginx byte-identically",
+            "ok": true,
+            "detail": "HTTP 200; SHA-256 adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617"
+          },
+          {
+            "name": "real local parser preserves both PDF pages and numeric copy",
+            "ok": true,
+            "detail": "HTTP 200; source adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617"
+          },
+          {
+            "name": "duplicate source confirmation produces one task through Restate",
+            "ok": true,
+            "detail": "replay HTTP 202"
+          },
+          {
+            "name": "review wait survives Restate and worker process restart",
+            "ok": true,
+            "detail": "request b368d121-5ea0-44b3-a4b8-b77c8f2601d2; rev 2"
+          },
+          {
+            "name": "audio/ogg original crosses nginx byte-identically",
+            "ok": true,
+            "detail": "HTTP 200; SHA-256 e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2"
+          },
+          {
+            "name": "unapproved voice model remains manual with honest timing and billing",
+            "ok": true,
+            "detail": "{\"clientId\":\"c1000000-0000-4000-8000-000000000002\",\"updateId\":90469307894,\"sourceSha256\":\"e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2\",\"audio\":{\"version\":\"ogg-opus-v1\",\"channels\":1,\"mediaType\":\"audio/ogg\",\"sampleRate\":48000,\"encodedSamples\":48960,\"durationSeconds\":1},\"state\":\"manual\",\"message\":\"Client privacy does not authorize cloud transcription. The original is retained for manual copy review; no audio was sent to a model.\",\"transcript\":null,\"estimatedUsd\":null,\"actualUsd\":null}"
+          },
+          {
+            "name": "voice source does not create a child before exact-copy review",
+            "ok": true,
+            "detail": "voice source 90469307894"
+          },
+          {
+            "name": "revised simulated Canva export passes configured QA",
+            "ok": true,
+            "detail": "QC passed"
+          },
+          {
+            "name": "PDF new request and voice revision reach one logical simulated delivery",
+            "ok": true,
+            "detail": "{\"tasks\":[{\"id\":\"945d1553-837e-4333-9c51-e24fd1a036e6\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"af88a41d-c146-4ece-b1cd-a7e3378f4973\",\"state\":\"complete\",\"version\":\"8\"}],\"delivered\":{\"request_id\":\"b368d121-5ea0-44b3-a4b8-b77c8f2601d2\",\"current_task_id\":\"af88a41d-c146-4ece-b1cd-a7e3378f4973\",\"rev\":\"8\",\"stage\":\"delivered\"}}"
+          },
+          {
+            "name": "retained confirmations preserve exact source copy",
+            "ok": true,
+            "detail": "two immutable confirmations"
+          },
+          {
+            "name": "the two source originals were downloaded once each",
+            "ok": true,
+            "detail": "[\"candidate-pdf-9300001\",\"candidate-voice-9300001\"]"
+          },
+          {
+            "name": "manual-only voice caused no paid transcription attempt",
+            "ok": true,
+            "detail": "attempts=0"
+          },
+          {
+            "name": "bilingual Desk intake replay returns one task",
+            "ok": true,
+            "detail": "task f647206a-89d5-4a53-ab4e-37fc3ef98b89"
+          },
+          {
+            "name": "saved bilingual Desk copy imports through the explicit generation action",
+            "ok": true,
+            "detail": "status=retrieved; replay=retrieved"
+          },
+          {
+            "name": "the saved plan preserves both exact copy blocks and separate instructions",
+            "ok": true,
+            "detail": "plans=1; source=4c25ad35e12cdf8a80940db19527136938d5380b783b45e37910715f895215e2"
+          },
+          {
+            "name": "Desk capture records a review from retained PNG and checked live text",
+            "ok": true,
+            "detail": "Preview and checked source recorded for human review. Copy and font checks passed; inspect the design before approving."
+          },
+          {
+            "name": "capture replay preserves one revision without inventing native editability",
+            "ok": true,
+            "detail": "revisions=1"
+          },
+          {
+            "name": "manual review reaches one simulated approval and completed archive publication",
+            "ok": true,
+            "detail": "{\"approvals\":\"1\",\"publications\":\"1\"}"
+          },
+          {
+            "name": "synthetic blank client remains usable in the Desk directory",
+            "ok": true,
+            "detail": "client 4daae314-7515-4826-9315-d6562e4dafd0"
+          },
+          {
+            "name": "blank design is created through the deployed Canva adapter",
+            "ok": true,
+            "detail": "task c083bb07-c66c-4473-a26f-dc77b665e5f2; design DAchaosmuj373sl000016"
+          },
+          {
+            "name": "blank design reaches checked review using DNA and no invented imported source",
+            "ok": true,
+            "detail": "Preview and checked source recorded for human review. Copy and font checks passed; inspect the design before approving."
+          },
+          {
+            "name": "blank capture completes simulated publication with one explicit manual edit and no import",
+            "ok": true,
+            "detail": "task c083bb07-c66c-4473-a26f-dc77b665e5f2"
+          }
+        ],
+        "events": [
+          "PDF 90469307892 \u2192 request b368d121-5ea0-44b3-a4b8-b77c8f2601d2 \u2192 task 945d1553-837e-4333-9c51-e24fd1a036e6",
+          "Restate and worker SIGKILL/restart at the PDF review waitpoint",
+          "voice 90469307894 \u2192 reviewed revision task af88a41d-c146-4ece-b1cd-a7e3378f4973",
+          "Desk bilingual request f647206a-89d5-4a53-ab4e-37fc3ef98b89 \u2192 saved plan 35e19d9b-814a-43a3-b111-5ee8d5f73521 \u2192 simulated Canva import \u2192 captured review \u2192 simulated approval/publication",
+          "Blank design c083bb07-c66c-4473-a26f-dc77b665e5f2 \u2192 explicit simulated manual edit \u2192 DNA-checked review \u2192 simulated approval/publication; real native editing remains unverified"
+        ]
+      }
+    ]
+  },
+  "runtimeChangedSinceCandidate": [],
+  "browser": {
+    "origin": "http://127.0.0.1:56081",
+    "actions": [
+      "Sign in with isolated operator credential",
+      "Create manual Desk request with exact copy",
+      "Create blank Canva design through UI",
+      "Supply explicit synthetic manual edit through fake test control",
+      "Capture for Review through UI",
+      "Inspect selected PNG/PPTX and visible role warning",
+      "Confirm Approval is disabled",
+      "Cancel dialog; leave task unapproved"
+    ],
+    "screenshot": "R26_BLANK_POLICY.png",
+    "nativeEditing": "unverified; provider edit is synthetic",
+    "receipt": {
+      "task": {
+        "id": "a0516d5c-118a-4adc-9d9c-4fa4251e38cc",
+        "state": "human_review",
+        "current_design_revision_id": "1772bd4c-29f8-4c48-bed6-88b1a4826844",
+        "imported_sources": "0",
+        "approvals": "0"
+      },
+      "artifacts": [
+        {
+          "id": "cff979e1-46a1-4bba-833e-c51b4b23732e",
+          "format": "png",
+          "sha256": "2163fc8808e06df5ed92d427957fbc30fd459a07d7ef17004fbe62bfbe7df0ba",
+          "byte_size": 2570,
+          "content_check": null,
+          "design_id": "DAchaosmuj373sl000022",
+          "binding_version": 1,
+          "metadata": {
+            "format": "png",
+            "designUpdatedAt": 1790469428
+          }
+        },
+        {
+          "id": "fa1856f1-b5f8-44b2-a6a8-29f07a283cf7",
+          "format": "pptx",
+          "sha256": "a716d2dd35cd41b1eb714adf65fc15e96f8fa13d0bf3b04de4eed9187fd02ce9",
+          "byte_size": 45143,
+          "content_check": {
+            "source": "local_transfer_pptx",
+            "rtlNote": null,
+            "rtlPass": true,
+            "copyPass": true,
+            "fontPass": true,
+            "scriptFonts": null,
+            "checkVersion": 5,
+            "documentKind": "unspecified",
+            "expectedCopy": [
+              "Exact copy 123.45"
+            ],
+            "fontsByIndex": null,
+            "requiredFont": "Verdana",
+            "admittedFonts": [
+              "Cinzel",
+              "Playfair Display",
+              "Montserrat",
+              "Lora",
+              "Bodoni Moda",
+              "Cairo",
+              "Plus Jakarta Sans",
+              "Vazirmatn",
+              "Inter",
+              "Verdana",
+              "Noto Sans Arabic"
+            ],
+            "canvaDesignId": null,
+            "observedFonts": [
+              "Verdana"
+            ],
+            "checkingPolicy": {
+              "copy": [
+                "Exact copy 123.45"
+              ],
+              "kind": "manual_client_dna",
+              "options": {
+                "allowedFontsByScript": {
+                  "latin": [
+                    "Verdana"
+                  ],
+                  "arabic": []
+                }
+              },
+              "version": 1,
+              "clientId": "4daae314-7515-4826-9315-d6562e4dafd0",
+              "dnaVersion": 1,
+              "dnaContentHash": "sha256_511f57ca1c5f11f4f7b74a7fdd97fe19d98bafcff0dc2746a420b9e06b04b585",
+              "creationEventId": "cb6775bb-3df6-4892-869a-223c19add4a5"
+            },
+            "printQualified": false,
+            "fullReleasePass": false,
+            "textObjectCount": 1,
+            "comparisonPolicy": "exact words and punctuation; layout whitespace folded",
+            "logoVerification": "not_qualified",
+            "offendingObjects": [],
+            "sourceTextObjects": [
+              {
+                "id": "ppt/slides/slide1.xml#2",
+                "text": "Exact copy 123.45",
+                "type": "text",
+                "source": {
+                  "part": "ppt/slides/slide1.xml",
+                  "format": "pptx",
+                  "shapeId": "2"
+                }
+              }
+            ],
+            "layoutVerification": "visual_review_required",
+            "rtlTextObjectCount": 0,
+            "allowedFontsByScript": {
+              "latin": [
+                "Verdana"
+              ],
+              "arabic": []
+            },
+            "arabicTextObjectCount": 0,
+            "expectedTextObjectCount": 1
+          },
+          "design_id": "DAchaosmuj373sl000022",
+          "binding_version": 1,
+          "metadata": {
+            "format": "pptx",
+            "checkingPolicy": {
+              "copy": [
+                "Exact copy 123.45"
+              ],
+              "kind": "manual_client_dna",
+              "options": {
+                "allowedFontsByScript": {
+                  "latin": [
+                    "Verdana"
+                  ],
+                  "arabic": []
+                }
+              },
+              "version": 1,
+              "clientId": "4daae314-7515-4826-9315-d6562e4dafd0",
+              "dnaVersion": 1,
+              "dnaContentHash": "sha256_511f57ca1c5f11f4f7b74a7fdd97fe19d98bafcff0dc2746a420b9e06b04b585",
+              "creationEventId": "cb6775bb-3df6-4892-869a-223c19add4a5"
+            },
+            "designUpdatedAt": 1790469428
+          }
+        }
+      ],
+      "screenshotSha256": "1a2cf46238dd303a5e729351bb58be1aa65b97d52ef9c0850da35677f327ff3e"
+    }
+  },
+  "limits": [
+    "Production untouched; all external model/Canva/Telegram/Google adapters and approval identities are synthetic.",
+    "The real pinned offline Docling parser and actual container/process restart are covered; silent audio does not establish speech quality.",
+    "Font family membership is not font-file glyph coverage, role/layout verification, visual quality or native Canva editability/reopening.",
+    "Named OIDC/human pilot, live provider/delivery/billing, multilingual creative acceptance, retrieval relevance/latency and clean-host WAL/PITR/Restate recovery remain open.",
+    "Desk still shows hard-coded Studio model names and stale intake/binding messages; inspect action availability and closed-task generation boundaries next. Feature flags appear to govern automatic intake, so verify their contract before treating explicit Studio actions as disabled."
+  ]
+}
