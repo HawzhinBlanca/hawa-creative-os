@@ -6,7 +6,7 @@ import { cp, mkdtemp, readFile, rm, writeFile, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
-import { expect, it } from 'vitest';
+import { assert, expect, it } from 'vitest';
 import { createDb, sql, blobStoreFromEnv } from '@hawa/db';
 import { kaaeClientDNA } from '@hawa/domain';
 import { dropClone, withDatabase } from '../../../packages/db/src/test-template.js';
@@ -214,7 +214,7 @@ it.skipIf(process.env.HAWA_DOCUMENT_RECOVERY !== '1')('recovers real PDF evidenc
     check('restored request preserves exact bilingual copy and original source', detailAfter.copyEn === copyEn && detailAfter.copyCkb === copyCkb && JSON.stringify(detailAfter.sourceDocument) === JSON.stringify(detailBefore.sourceDocument));
     check('restored outbox remains a single durable command', await count('outbox_commands', 'aggregate_id', task.id) === 1);
     const recoveredStore = blobStoreFromEnv(runtime, { ...process.env, HAWA_BLOB_DIR: restoredBlobs });
-    const stat = await recoveredStore.stat(hash(pdf));
+    const stat = await recoveredStore.stat(hash(pdf)); assert(stat, "Expected retained source bytes");
     await chmod(stat.path, 0o644); await writeFile(stat.path, Buffer.alloc(pdf.length, 120));
     check('same-size corruption after restore fails original download', (await request(`${documents}/${receipt.id}/content`)).status === 503);
     check('corrupt restored source cannot create another task', (await request('/tasks', 'POST', taskBody, randomUUID())).status === 503);

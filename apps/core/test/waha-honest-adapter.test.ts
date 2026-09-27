@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import type { MessageEnvelope, OutboundNotification } from '@hawa/contracts';
+import { assert, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createApp } from '../src/app.js';
 import {
   createDb,
@@ -10,8 +11,6 @@ import {
   WahaAdapter,
   WahaIngressHandler,
   computeWahaPayloadHash,
-  type MessageEnvelope,
-  type OutboundNotification,
 } from '@hawa/integrations';
 import crypto from 'node:crypto';
 
@@ -84,7 +83,7 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
 
     expect(webhookRes.status).toBe(201);
     const webhookData = await webhookRes.json();
-    expect(webhookData.ok).toBe(true);
+    expect(webhookData.ok).toBe(true); assert(webhookData.ok);
     expect(webhookData.task).toBeDefined();
     expect(webhookData.task.sourcePlatform).toBe('whatsapp');
     expect(webhookData.rawPayloadHash).toBe(expectedHash);
@@ -147,7 +146,6 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
             editUrl: `https://www.canva.com/design/${canvaDesignId}/edit`,
             viewUrl: `https://www.canva.com/design/${canvaDesignId}/view`,
             directionName: 'primary',
-            actorId: userId,
           },
           trx
         );
@@ -236,12 +234,14 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
 
     expect(directRes.status).toBe(201);
     const directData = await directRes.json();
-    expect(directData.ok).toBe(true);
+    expect(directData.ok).toBe(true); assert(directData.ok);
   });
 
   it('4. WAHA session health probe: WORKING, SCAN_QR_CODE, STOPPED, OFFLINE', async () => {
     const ctx = {
-      requestId: 'req_waha_test_health',
+      correlationId: 'req_waha_test_health',
+      deadline: new Date(Date.now() + 60_000).toISOString(),
+      idempotencyKey: crypto.randomUUID(),
       tenantId,
       actor: { type: 'system' as const, id: 'sys' },
     };
@@ -267,7 +267,7 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
     });
 
     const workingHealth = await workingAdapter.health(ctx);
-    expect(workingHealth.ok).toBe(true);
+    expect(workingHealth.ok).toBe(true); assert(workingHealth.ok);
     expect(workingHealth.value.state).toBe('healthy');
     expect(workingHealth.value.detail.sessionState).toBe('WORKING');
     expect(workingHealth.value.detail.dedicatedAccount).toBe(dedicatedOfficeAccount);
@@ -292,7 +292,7 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
     });
 
     const qrHealth = await qrAdapter.health(ctx);
-    expect(qrHealth.ok).toBe(true);
+    expect(qrHealth.ok).toBe(true); assert(qrHealth.ok);
     expect(qrHealth.value.state).toBe('reauth_required');
     expect(qrHealth.value.detail.qrRequired).toBe(true);
     expect(qrHealth.value.detail.fallbackChannel).toBe('desk');
@@ -316,7 +316,7 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
     });
 
     const stoppedHealth = await stoppedAdapter.health(ctx);
-    expect(stoppedHealth.ok).toBe(true);
+    expect(stoppedHealth.ok).toBe(true); assert(stoppedHealth.ok);
     expect(stoppedHealth.value.state).toBe('unavailable');
     expect(stoppedHealth.value.detail.sessionState).toBe('STOPPED');
 
@@ -333,7 +333,7 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
     });
 
     const offlineHealth = await offlineAdapter.health(ctx);
-    expect(offlineHealth.ok).toBe(true);
+    expect(offlineHealth.ok).toBe(true); assert(offlineHealth.ok);
     expect(offlineHealth.value.state).toBe('unavailable');
     expect(offlineHealth.value.detail.sessionState).toBe('OFFLINE');
     expect(offlineHealth.value.detail.fallbackInstructions).toContain('Intake diverted to Hawa Desk');
@@ -341,7 +341,9 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
 
   it('5. QR disconnect drill: preserves tasks, alerts with fallback instructions, does not fabricate delivery', async () => {
     const ctx = {
-      requestId: 'req_qr_drill',
+      correlationId: 'req_qr_drill',
+      deadline: new Date(Date.now() + 60_000).toISOString(),
+      idempotencyKey: crypto.randomUUID(),
       tenantId,
       actor: { type: 'system' as const, id: 'sys' },
     };
@@ -386,7 +388,9 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
 
   it('6. Office kill switch drill: halts outbound immediately, preserves tasks in outbox, returns 503 on inbound', async () => {
     const ctx = {
-      requestId: 'req_kill_drill',
+      correlationId: 'req_kill_drill',
+      deadline: new Date(Date.now() + 60_000).toISOString(),
+      idempotencyKey: crypto.randomUUID(),
       tenantId,
       actor: { type: 'system' as const, id: 'sys' },
     };
@@ -449,7 +453,9 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
 
   it('7. Honest outbound reconciliation: detects session gaps, reports outage without invented receipts', async () => {
     const ctx = {
-      requestId: 'req_reconcile_test',
+      correlationId: 'req_reconcile_test',
+      deadline: new Date(Date.now() + 60_000).toISOString(),
+      idempotencyKey: crypto.randomUUID(),
       tenantId,
       actor: { type: 'system' as const, id: 'sys' },
     };
@@ -471,7 +477,7 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
       since: '2026-09-11T20:00:00.000Z',
     });
 
-    expect(reconcileRes.ok).toBe(true);
+    expect(reconcileRes.ok).toBe(true); assert(reconcileRes.ok);
     expect(reconcileRes.value.complete).toBe(false);
     expect(reconcileRes.value.detectedGaps.length).toBeGreaterThan(0);
     expect(reconcileRes.value.detectedGaps[0].reason).toContain('OFFLINE');
@@ -498,7 +504,7 @@ describe('CV-08: WhatsApp (WAHA) with Honest Boundaries & Office Isolation', () 
       since: '2026-09-11T20:00:00.000Z',
     });
 
-    expect(healthyReconcile.ok).toBe(true);
+    expect(healthyReconcile.ok).toBe(true); assert(healthyReconcile.ok);
     expect(healthyReconcile.value.complete).toBe(true);
     expect(healthyReconcile.value.detectedGaps.length).toBe(0);
   });

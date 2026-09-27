@@ -1,0 +1,582 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "status": "LOCALLY_QUALIFIED_TEST_TYPE_GATE",
+  "requirements": [
+    "NFR-012",
+    "NFR-024"
+  ],
+  "adr": "adrs/089_complete_test_type_verification.md",
+  "branch": "codex/research-grade-design-system",
+  "baseCommit": "9cf5d00c32e97c23e75583bc94d1d5e29b4f06c1",
+  "workingTree": "Source hashes identify the final repairs; the following release seal identifies the source commit. No image or production deployment.",
+  "findings": [
+    "Previous wrapper ignored compiler exit errors and filtered non-test-path diagnostics.",
+    "Previous test config excluded all Core/Worker tests and numerous active suites.",
+    "Retrieval conflict runtime objects omitted required canonical type/sourceIds/message; corrected additively while retaining metadata.",
+    "Existing inline base64 model image support is now declared on ModelInputPart, removing five production any casts without changing provider transport behavior."
+  ],
+  "typecheck": {
+    "coveredTestRoots": 479,
+    "expectedTestRoots": 479,
+    "restoredStrictBaselineErrors": 406,
+    "pass3Errors": 201,
+    "pass4Errors": 119,
+    "result": "PASSED",
+    "remaining": "None for current active test roots; new directories and excluded files are independently detected.",
+    "finalErrors": 0,
+    "history": [
+      {
+        "log": "pass-1.log",
+        "diagnostics": 9
+      },
+      {
+        "log": "pass-2.log",
+        "diagnostics": 253
+      },
+      {
+        "log": "pass-3.log",
+        "diagnostics": 201
+      },
+      {
+        "log": "pass-4.log",
+        "diagnostics": 119
+      },
+      {
+        "log": "pass-5.log",
+        "diagnostics": 1
+      },
+      {
+        "log": "pass-6.log",
+        "diagnostics": 20
+      },
+      {
+        "log": "pass-7.log",
+        "diagnostics": 2
+      },
+      {
+        "log": "pass-8.log",
+        "diagnostics": 0
+      }
+    ]
+  },
+  "verification": {
+    "sourceBuild": "PASS: pnpm exec tsc -b; exit 0",
+    "gateAndFocused": {
+      "files": 5,
+      "passed": 59,
+      "failed": 0
+    },
+    "affected": {
+      "filesSelected": 42,
+      "filesPassed": 41,
+      "filesSkipped": 1,
+      "passed": 455,
+      "failed": 0,
+      "skipped": 1,
+      "skippedFile": "apps/core/test/document-recovery.test.ts (opt-in process drill not executed in this run)"
+    },
+    "fullRegression": {
+      "passed": 3813,
+      "failed": 0,
+      "skipped": 59,
+      "filesPassed": 471,
+      "filesSkipped": 7,
+      "filesTotal": 478,
+      "durationSeconds": 113.9,
+      "scope": "Final runtime and fixture sources; predates the final new-directory inventory negative control."
+    },
+    "browserExecution": "NOT RUN; existing E2E runner declared and pinned, compiler coverage only",
+    "deployment": "NONE; isolated app remains earlier b641928 candidate; production unchanged",
+    "finalFocused": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "files": 2,
+      "scope": "Six real compiler/inventory controls including a new .tsx directory, plus the edited document fixture through four actual Core SIGKILL boundaries and a same-host database/blob restore."
+    },
+    "finalTypecheck": "PASS: pnpm typecheck (source build, script types, strict Node/Desk tests); 479/479 roots",
+    "lint": "PASS: pnpm lint; production any1002 <=1053; provider egress nine existing exceptions",
+    "deskBuild": "PASS: pnpm --filter @hawa/desk build",
+    "security": "PASS: scanner and self-test; zero findings,51 existing justified allowances",
+    "sourceReleaseManifest": "Separate post-commit verification against the source seal; not evidence of a deployed image.",
+    "blueprint": {
+      "passed": 951,
+      "warnings": 0,
+      "failed": 0
+    }
+  },
+  "next": [
+    "Hard USD reservations and typed completed-stage recovery.",
+    "Named live intake-to-delivery pilot and native Canva edit/save/reopen.",
+    "Human multilingual/design review; held-out model/retrieval/cost qualification.",
+    "Independent-host/offsite restore and controlled production rollout."
+  ],
+  "artifacts": [
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/affected-1.log",
+      "sha256": "ce20aa736674cb5c317722e2c12d473441c0d7c9552788f330d9ac89db1d9024"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/affected-inventory.json",
+      "sha256": "ec4a3c38a565e055a0935bd0c456789168eef42cdfc176bec195a6377e4a1ef8"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/all-strict-baseline.log",
+      "sha256": "771c382f9921421fda58046cf450081db46946789fd2f40a66d8c5f5a6245f2f"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/any-ratchet.log",
+      "sha256": "7b4e9becbb1c9bb042775bc8faca2971e7c381a604d7718cf79e1b4170a1edfd"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/browser-dependency.log",
+      "sha256": "889429d022e034fef57e7ab39c98e77e7ddd11d0e95688a6e01d716416f2e98e"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/desk-build.log",
+      "sha256": "9256fa322d8b9ef71d83468ed88df7beadd17e0aaf8b065b09879af94a7efd7a"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/egress.log",
+      "sha256": "b6e716bda86ecb080e1fd6c96efaf64b06b2bbb78001c634eaf7a1137a63edf8"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/final-lint.log",
+      "sha256": "3e2dd31acf1ea5bed9e0b326dd4130f53727e3111ac8ead8a7566d6b31b17913"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/final-typecheck.log",
+      "sha256": "58120d918271ca5dd0f5265446be79d9089095a7ed93c7fcdd878986a054f28f"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/focused-1.log",
+      "sha256": "26ac5633a8f61315300445bd86cf5d2f0840e4af08d78a68fa4fb97061c2dea5"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/full-1.log",
+      "sha256": "d932c0fea33b18f9712b234e8139abf9c5396d9733d90d7e792d072d91b1e615"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/pass-1.log",
+      "sha256": "228068a546dc9b8703630e740d249f206f516d6506117e2aca29d53a05138ba0"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/pass-2.log",
+      "sha256": "fe4cc3daecc09f1af5772a2448c5594bffd0345061b81815422483424312e073"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/pass-3.log",
+      "sha256": "49a4b8e010ab4083a65f66ffb10d472fd00106f47acc6909c5bb09d89394df9e"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/pass-4.log",
+      "sha256": "a9a9185f7052109ec49cc02ee656fcb965446d573bc9d096e69c097552e66bac"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/pass-5.log",
+      "sha256": "5d5f596197198d157f9c0447258f59983e282341b9d25a5dc11b6443c963a5ac"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/pass-6.log",
+      "sha256": "e1f5735bca84cbe19a58ace44b227d57373c4ce53c922ec9e1a2764638c4c95e"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/pass-7.log",
+      "sha256": "1c576e23f96899e2e777674d7e64eabaa0730fc03740eb6038fcea108878aee3"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/pass-8.log",
+      "sha256": "747428ef2c008834fccc6d3740e9afbbda6261e5f80250e198c87e0cd8aa8699"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/recovery-and-final-gate.log",
+      "sha256": "2dc2831d1decc4b1a640165b9e1d9a7b38b65978fb120d0b90946a3f9e4e7931"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/restored-coverage.log",
+      "sha256": "ff818c484c7c0d1fdbcbd78daa9ef20d3ac84c346d07573cb75b0a8826c3f131"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/script-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/security-scan.log",
+      "sha256": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/security-self-test.log",
+      "sha256": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/source-build-2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/source-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/tsconfig.all-strict.json",
+      "sha256": "a9bfbeea07965a4843360b462fa884800040fe687eea9bb87d34ede3488416b3"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/wrapper-baseline.log",
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed"
+    },
+    {
+      "path": "output/acceptance/2026-09-27-test-type-gate/blueprint.log",
+      "sha256": "c512fa76accac19b3748fa7b4a43393cab99f44f999889216ddd770113eba042"
+    }
+  ],
+  "checkpointSourceHashes": [
+    {
+      "path": "apps/core/test/blob-serving.test.ts",
+      "sha256": "ae41aa8830c9549cfb76560e239a799ee98b6f0acce704fd5f9d6ec6a366b8ba"
+    },
+    {
+      "path": "apps/core/test/canva-blank-export-policy.test.ts",
+      "sha256": "0eb1621c408aa8ad915498f1cde7bfb064d5852344393fbe53c50dbfd1d2395d"
+    },
+    {
+      "path": "apps/core/test/canva-connect-live-boundary.test.ts",
+      "sha256": "d94cda9497df97552b406894908700ee0f315b6c42168ce38c2305d47b138e12"
+    },
+    {
+      "path": "apps/core/test/canva-design-planner.test.ts",
+      "sha256": "d917d47ac21d43e18e396b3b9eca5ec4d170f573bee614a676bcfdbb6b37506d"
+    },
+    {
+      "path": "apps/core/test/canva-desk-check-capture.test.ts",
+      "sha256": "bf9194152b0730d5f0d6d56efbb0b96d12a8a2fc4f3098f90a49ca92e457e27d"
+    },
+    {
+      "path": "apps/core/test/canva-immutable-capture.test.ts",
+      "sha256": "253412591f593d62903dc0799c619bbe664ffdf3a3c89b2997751368c00e9ef5"
+    },
+    {
+      "path": "apps/core/test/canva-status-message.test.ts",
+      "sha256": "812eeaf3dac1358805c425dc2754602fbbb639bb75ee407e7b82102c2fe3aa99"
+    },
+    {
+      "path": "apps/core/test/canva-work-quality-inspection.test.ts",
+      "sha256": "b1fa60deea614e659aa81f81e4e7607b490a2d8b289eca47f85bc29495251277"
+    },
+    {
+      "path": "apps/core/test/client-direction.test.ts",
+      "sha256": "2572cf409a77aeb8bfa1cfa0b1b9cece7d54a2f4763c4315bcba23ff2cf4197c"
+    },
+    {
+      "path": "apps/core/test/client-dna-hydration.test.ts",
+      "sha256": "58709231008ed90729056bf9db99353a80911daac38469b86ed098e377377598"
+    },
+    {
+      "path": "apps/core/test/client-knowledge-assets.test.ts",
+      "sha256": "bc2c3903003c1fecd6456756d1257a6e15f7dffdd6c86c5a3e711c80634e90d0"
+    },
+    {
+      "path": "apps/core/test/client-rules.test.ts",
+      "sha256": "54fa5d9e64068da7a94f1e368b2e8f4971392ad11832917d618b041bea364a65"
+    },
+    {
+      "path": "apps/core/test/creative-planner-asset-route.test.ts",
+      "sha256": "d30b21e021ca191a97ab9df3556b68d07ee5585e9af53e131f6348e44daf80c3"
+    },
+    {
+      "path": "apps/core/test/document-inspection.test.ts",
+      "sha256": "0b91cf6e8675ec04a44340988f4f6e22be9a92654220aa83d678e61bd43af479"
+    },
+    {
+      "path": "apps/core/test/document-intake.test.ts",
+      "sha256": "33c840ca87ffed8ace82168fc455cc81616fc0196877961cf86e7419826988d2"
+    },
+    {
+      "path": "apps/core/test/document-knowledge.test.ts",
+      "sha256": "78114f4fb3b0d887039d34f400d618f96696d8a6e16c8b1dbb1de94e1521b364"
+    },
+    {
+      "path": "apps/core/test/document-recovery.test.ts",
+      "sha256": "dba7f7bbd63f3f4c8385b7b9c1b178bb03cfa3cca2fc1945dc36d5b92f54f18c"
+    },
+    {
+      "path": "apps/core/test/fixtures/document-recovery-process.ts",
+      "sha256": "eab4d2f15fd31e865fbc919909bfe7836456eff8b311523277c16937c3dae698"
+    },
+    {
+      "path": "apps/core/test/governed-feedback-adaptive-learning.test.ts",
+      "sha256": "aaf1f9660d70557376daf8d1d31e78f4d22636fa73f3cbae4a5d39352da372e0"
+    },
+    {
+      "path": "apps/core/test/intake-client-routing.test.ts",
+      "sha256": "989075605235ed78761ffabe55ffcdac100de6d75385e3faa55d218b41236cc2"
+    },
+    {
+      "path": "apps/core/test/judge-input-has-text.test.ts",
+      "sha256": "4f5f361c6bb16f5810ba3b73c097b260b869ed2c202a15211c6cff7921eca057"
+    },
+    {
+      "path": "apps/core/test/lifecycle-design-proof.test.ts",
+      "sha256": "92cce2d7b672d7e3caba3c759de606c46f0fd672e5d80196c40b184ff8afb6a2"
+    },
+    {
+      "path": "apps/core/test/lifecycle-office-desk-bridge.test.ts",
+      "sha256": "261fa76d2585bec0733b7b006169f50bd383fa7eb1f7a92ed0ae8012dbb947ce"
+    },
+    {
+      "path": "apps/core/test/lifecycle-open-projection.test.ts",
+      "sha256": "910550b3ed06f0e2d643401dfdff6d64b073330753ba88052c36c62063ec5a13"
+    },
+    {
+      "path": "apps/core/test/lifecycle-source.test.ts",
+      "sha256": "ffee63488c823f12b792b918c8501a2261bf5fa558c898072613098e6c7221fe"
+    },
+    {
+      "path": "apps/core/test/milestone1-vertical-slice.test.ts",
+      "sha256": "05df0098ec253cc262e63c0a96f893b53c7c372574e568df21c2d1cf8219a9b8"
+    },
+    {
+      "path": "apps/core/test/polled-update-dispatch.test.ts",
+      "sha256": "585f002d21758e9728da4c55cedf226ada0c7d462ffccab4624f007a433cdbf9"
+    },
+    {
+      "path": "apps/core/test/production-auth-safety.test.ts",
+      "sha256": "ce1c6ca3574ee89b70858f3c6d4bf15b2de7f76ebc3b5a69f11c8eb728fa00fa"
+    },
+    {
+      "path": "apps/core/test/production-entrypoint-hydration.test.ts",
+      "sha256": "69b6bba8e2757d5280ccd4043e9bbf983c68ea758055279794d070736e038a6c"
+    },
+    {
+      "path": "apps/core/test/qa-regressions.test.ts",
+      "sha256": "cec032c145f446c6711f0e99f7dadf674e0da583980c9ecde64ef2a86c30fda9"
+    },
+    {
+      "path": "apps/core/test/r06-publication-safety.test.ts",
+      "sha256": "7127a3a3e062b185952dfda9d742bc65e547036b796b968b6eeb3d35e9cd3420"
+    },
+    {
+      "path": "apps/core/test/r07-outbox-terminal-state.test.ts",
+      "sha256": "cc83b9a690f68e40a5f39cdcc0c8c4cf1f365430009db595ca7216832593bed1"
+    },
+    {
+      "path": "apps/core/test/registered-client-intake.test.ts",
+      "sha256": "ff89897e74fd54795d21a7d371fffc1da02d52c638c29a09f11d1d1182824df5"
+    },
+    {
+      "path": "apps/core/test/task-control-durability.test.ts",
+      "sha256": "d8a3791c9d99a0056bba6b11796b64392d887ec44d8a4b1e9d2fe84d5b947422"
+    },
+    {
+      "path": "apps/core/test/telegram-first-class-adapter.test.ts",
+      "sha256": "23ef073351a06208163177213f65b981d41a2d320e2f5751946010259f56c4d2"
+    },
+    {
+      "path": "apps/core/test/transfer-locale.test.ts",
+      "sha256": "97b8069dcc33930c2a8857a4a1c1f89629b70a45c37be190eb353b7b9d15ba32"
+    },
+    {
+      "path": "apps/core/test/waha-honest-adapter.test.ts",
+      "sha256": "6cd545d73cf60ec876956526753bf68193a322e45a0d93baf737cd8562634051"
+    },
+    {
+      "path": "apps/desk/package.json",
+      "sha256": "19dece518dd56bb9cfb28c380099e7eb686deca4e6ba0bbeef74740c25581f6c"
+    },
+    {
+      "path": "apps/desk/test/canva-capture.test.ts",
+      "sha256": "3b03c28e7ebe0a9854bf89e03f09880dcec99af5577e54bd7a542f8035882e68"
+    },
+    {
+      "path": "apps/desk/test/reviewer-assignments.test.ts",
+      "sha256": "4288efa752986bf0a63ee1a98a5862458c4cdd0167707c4d8a9fe036b12ae9b2"
+    },
+    {
+      "path": "apps/desk/tsconfig.test.json",
+      "sha256": "d3012b92c7d985bd8d69712eec8030230d9daf8c5f401a4dafb95aa75fe0f63f"
+    },
+    {
+      "path": "apps/worker/test/canva-draft-transient.test.ts",
+      "sha256": "604394330041a74ffc757fca65688b0b1e966516c66bb9ddea9d61fa84d50fc2"
+    },
+    {
+      "path": "apps/worker/test/canva-draft-workflow.test.ts",
+      "sha256": "95b867ba55cb45f2cc0454a3170a40f184b3314c5a13d2d74e2d7b692fc87050"
+    },
+    {
+      "path": "apps/worker/test/chat-inbox.test.ts",
+      "sha256": "a1d389b94e2ee9427d7a3291cbc5b3984d87b1048914d301cb7e91d2b30c1774"
+    },
+    {
+      "path": "apps/worker/test/core-internal-fixture.ts",
+      "sha256": "1a7854ddd9ff70ad34d94361c0c9adc96109fa5b37a284881228491f056b63e8"
+    },
+    {
+      "path": "apps/worker/test/outbox-delivery-notice.test.ts",
+      "sha256": "b59ae274137cce2755b8f7696ba69c9e2310afbaf9a6d31ba457d3e6781270bb"
+    },
+    {
+      "path": "apps/worker/test/request-lifecycle-design.test.ts",
+      "sha256": "db255ed74c065ffe8c815134907a813ec38dc85a3bd6d546e2792e65532e6ad4"
+    },
+    {
+      "path": "apps/worker/test/request-lifecycle-open.test.ts",
+      "sha256": "5067d11237ac8a6110c82ee8617b73cb778ae6647d86c52b5727f36a9c459a5d"
+    },
+    {
+      "path": "packages/contracts/src/model-gateway.ts",
+      "sha256": "c6f6970808f819290fd969e5823ed5b2390d62b0189ea4738a78b7c3c35155ca"
+    },
+    {
+      "path": "packages/contracts/src/retrieval.ts",
+      "sha256": "7c40f744783958200c4eec375cfc35b672fe8b6d5244acd9083999b6a4bd21cf"
+    },
+    {
+      "path": "packages/creative/test/brand-templates-client-copy.test.ts",
+      "sha256": "e63bbe6810afaefb158c852bd3fbe65883fa73cdd75c5c2e82d4ab1dbafa34bc"
+    },
+    {
+      "path": "packages/creative/test/font-pinning.test.ts",
+      "sha256": "0d87b8fe3c631d5f41c53f5263a3ddbae1ab219a729ca724dc3e358d1fa450f2"
+    },
+    {
+      "path": "packages/creative/test/gate-modes.test.ts",
+      "sha256": "75ec7a0d63c24525d4c84e9a526e5460584ae556e13a2eabea65251ea2c58da6"
+    },
+    {
+      "path": "packages/creative/test/kaae-creative-generation.test.ts",
+      "sha256": "f8ba06ebf69886f32168f99492390bd0e104ef5a8d7d48b022160ca28370a27e"
+    },
+    {
+      "path": "packages/creative/test/kaae-institutional-templates.test.ts",
+      "sha256": "542353fee70dea5f5b80476aded4a43cb73cffa9e5f18d1a68bc49c03149caf7"
+    },
+    {
+      "path": "packages/creative/test/kaae-operations-client-copy.test.ts",
+      "sha256": "f62d366b91654f1e40c78f22330b04608356b940ef21a29a2b96b2498bf9fd5a"
+    },
+    {
+      "path": "packages/creative/test/layout-spacing-fixes.test.ts",
+      "sha256": "c351736d256edf1c72ea580986ffd50d778bc12152f01a091f487bed06465999"
+    },
+    {
+      "path": "packages/creative/test/multi-format-engine.test.ts",
+      "sha256": "a903f947a1fc18b242fb5fcc6d671828b11f8efced5669ba59bc66d214ecebc5"
+    },
+    {
+      "path": "packages/creative/test/pipeline-v3.test.ts",
+      "sha256": "abf77627c879199d774d1ba1cb5e40f8b659ef4c234eea1065efe0d12c37244e"
+    },
+    {
+      "path": "packages/creative/test/r08-transfer-fidelity.test.ts",
+      "sha256": "2660a80d246ca0b0f5528b2bfe0eda17c07bb4ba4ad0184d1aa76c0a879a5357"
+    },
+    {
+      "path": "packages/creative/test/style-spec.test.ts",
+      "sha256": "504e35b5bfff5496e5b148558811580592471db600bac9aa0107f9e76fffe602"
+    },
+    {
+      "path": "packages/creative/test/transfer-art-scrim.test.ts",
+      "sha256": "1453aaa52697e3ba2bbfa1c771301801c2598ced19fccf34238d90fb14ad5b27"
+    },
+    {
+      "path": "packages/creative/test/transfer-eyebrow-fit.test.ts",
+      "sha256": "6f0d2f33ee1973b8d7b463940833ba94fda446a6cac22cd6d7b44b4b1b40f36c"
+    },
+    {
+      "path": "packages/creative/test/transfer-tracking.test.ts",
+      "sha256": "3cbd1d1b160fb7158b188ef4fee1c13122326d47fc3922bbe35469d81922fca3"
+    },
+    {
+      "path": "packages/creative/test/transfer-v2.test.ts",
+      "sha256": "5e8d3f26c6fa63ce694a79a17a29d75e7dcbd30923fb627b8dfa64d6df98b678"
+    },
+    {
+      "path": "packages/creative/test/vdp-personalizer.test.ts",
+      "sha256": "f8c558d2bb18bd914e342ba3e9e9f810b409fd2e021760e23eb4ed44a5bbcd2a"
+    },
+    {
+      "path": "packages/db/test/blob-nginx.test.ts",
+      "sha256": "c17371ed1536df20fbe76a9c3f2708995570305004571c74a81dcb286b217720"
+    },
+    {
+      "path": "packages/db/test/task-list-page.test.ts",
+      "sha256": "1fa3354bb8ddfec7959defeb147ad8fbd90ad502a46f3869db19b2e8d54b863e"
+    },
+    {
+      "path": "packages/evals/test/adversarial-chaos.test.ts",
+      "sha256": "643f78b3a7f98c7843fb7b33bed418ac6ee3b22c1584f55242571d99a85365a5"
+    },
+    {
+      "path": "packages/evals/test/proof-regression.test.ts",
+      "sha256": "696c1884951aed424340ce14112cad8b22396db6513ac89dd41f0b51f01e8a8b"
+    },
+    {
+      "path": "packages/integrations/src/model-gateway.ts",
+      "sha256": "da1470d42f36e8da34be4674158d8d3a058177e3dd5fbd12aaf1ebb198dad6de"
+    },
+    {
+      "path": "packages/integrations/test/model-gateway.test.ts",
+      "sha256": "48aef13c6c4be91827a9e37dd615d3d6a8165223b90be8c5a93908fd5e41ecaf"
+    },
+    {
+      "path": "packages/integrations/test/no-publisher-emulator.test.ts",
+      "sha256": "bb4e828c2f51fef15b40a9e29a1d4ec7cc13bbd602522d0f9ea556373f213f19"
+    },
+    {
+      "path": "packages/integrations/test/real-google-operations.test.ts",
+      "sha256": "e670fb086f79344fde404b82e65679b3d928982e2c9bef2ba6bc50b66c6ea80f"
+    },
+    {
+      "path": "packages/integrations/test/reconciliation.test.ts",
+      "sha256": "b914ce084b11f5069c943de4c0c767fd0c21a76b6041cbfdd7ea7d37426edde8"
+    },
+    {
+      "path": "packages/integrations/test/telegram-pick-flow.test.ts",
+      "sha256": "a991ab456056dea692edcadf5b5e87a57eb1577580fe7d03f7e621a6371a00d3"
+    },
+    {
+      "path": "packages/qa/test/contrast-layout.test.ts",
+      "sha256": "762db5a86492a2fa54d91984bcb5c69027506ae9977dd4e210b351974845f52a"
+    },
+    {
+      "path": "packages/retrieval/src/retrieval-service.ts",
+      "sha256": "5026d24f002317162f63797ab79c73492ad981d5ee19e20dc714a4bfc8a60d6e"
+    },
+    {
+      "path": "packages/testkit/test/e2e-office-lifecycle.test.ts",
+      "sha256": "972288930678fdfa51206be54adfb00b780ca9edb7030492ebcbb6fabe27c7cb"
+    },
+    {
+      "path": "packages/testkit/test/pilot-exit-drill.test.ts",
+      "sha256": "30b7972b6855e6c272adcf3cea4c355100f08d6a3a63f231e670f5d3a8cdd06b"
+    },
+    {
+      "path": "packages/testkit/test/three-client-production-pilot.test.ts",
+      "sha256": "ba86a35d685a58e1b2bbd0dd181178f24b1e88fda32ffbeb7ae54e8786a53a6d"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "76d787f2345c1c20d45bd948998c4452cf3d0f162fc501d68dbf6375251a0a5b"
+    },
+    {
+      "path": "scripts/test/typecheck-tests.test.ts",
+      "sha256": "5ad5c32f75442dd9030b1399dd04a560d42e2f287273bd8b4e101487e2d0d24c"
+    },
+    {
+      "path": "scripts/typecheck_tests.ts",
+      "sha256": "228234a901415e5e872b28df6a17c491485048bffae1b1eae39805268d3bfe84"
+    },
+    {
+      "path": "tsconfig.test.json",
+      "sha256": "61fd2562491bb2fadb37c0d2f6ac64169261e212e2f11e77ee0ccbdad2dd475f"
+    }
+  ],
+  "dependency": {
+    "name": "@playwright/test",
+    "version": "1.63.0",
+    "reason": "Existing Desk e2e script/config/imports lacked this required runner. Exact pin; no browser download or execution.",
+    "source": "https://registry.npmjs.org/@playwright/test/latest",
+    "checked": "2026-09-27"
+  }
+}

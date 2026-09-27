@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { DesignBrief, StudioOperation } from '@hawa/contracts';
+import type { DesignBrief } from '@hawa/domain';
+import type { StudioOperation } from '@hawa/contracts';
 import { CreativeDirectorRunner } from '../src/index.js';
 
 // generateKaaeOperations used to fill missing copy with its own lines, and a certificate with a
@@ -56,7 +57,7 @@ describe('generateKaaeOperations certificate', () => {
 
   it('draws the names it is given and no dates it was not given', () => {
     const ops = director.generateKaaeOperations(brief('ckb', []), 'certificate', { recipientName: 'زانکۆی کۆیە', programName: 'کۆلێژی ئەندازیاری' });
-    const ids = ops.map((op) => op.nodeId);
+    const ids = ops.flatMap(op => 'nodeId' in op ? [op.nodeId] : []);
     expect(ids).not.toContain('cert_dates');
     expect(ids).not.toContain('cert_issue_date');
     expect(texts(ops)).toContain('زانکۆی کۆیە');

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { assert, describe, it, expect, beforeEach } from 'vitest';
 import { createApp } from '../src/app.js';
 import {
   createDb,
@@ -106,7 +106,6 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
             editUrl: `https://www.canva.com/design/${canvaDesignId}/edit`,
             viewUrl: `https://www.canva.com/design/${canvaDesignId}/view`,
             directionName: 'primary',
-            actorId: userId,
           },
           trx
         );
@@ -160,7 +159,7 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
       currentRevisionId: 'rev_1',
       secretKey: hmacSecret,
     });
-    expect(verifyResult.ok).toBe(true);
+    expect(verifyResult.ok).toBe(true); assert(verifyResult.ok);
     expect(verifyResult.payload?.taskId).toBe(taskId);
     expect(verifyResult.payload?.action).toBe('approve');
 
@@ -206,7 +205,7 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
       currentRevisionId: 'rev_1',
       secretKey: hmacSecret,
     });
-    expect(res1.ok).toBe(true);
+    expect(res1.ok).toBe(true); assert(res1.ok);
 
     // 2nd Execution (Replay with same token / nonce): REJECTED with REPLAY_DETECTED
     const res2 = actionTokenService.verifyAndConsumeToken(callbackData, {
@@ -214,7 +213,7 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
       currentRevisionId: 'rev_1',
       secretKey: hmacSecret,
     });
-    expect(res2.ok).toBe(false);
+    expect(res2.ok).toBe(false); assert(!res2.ok);
     expect(res2.code).toBe('REPLAY_DETECTED');
 
     // Chat webhook boundary defense: rejects callback queries with 422 Desk review required
@@ -258,7 +257,7 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
       currentRevisionId: 'rev_1',
       secretKey: hmacSecret,
     });
-    expect(tokenRes.ok).toBe(false);
+    expect(tokenRes.ok).toBe(false); assert(!tokenRes.ok);
     expect(tokenRes.code).toBe('EXPIRED');
 
     const res = await app.request('/api/webhooks/telegram', {
@@ -302,7 +301,7 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
       currentRevisionId: 'rev_1',
       secretKey: hmacSecret,
     });
-    expect(tokenRes.ok).toBe(false);
+    expect(tokenRes.ok).toBe(false); assert(!tokenRes.ok);
     expect(tokenRes.code).toBe('UNAUTHORIZED_ACTOR');
 
     // Foreign user clicks button in webhook -> rejected with 422 Desk review required
@@ -345,7 +344,7 @@ describe('CV-07: Telegram First-Class Adapter & Security Verification', () => {
       secretKey: hmacSecret,
     });
 
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(false); assert(!result.ok);
     if (!result.ok) {
       expect(result.code).toBe('STALE_REVISION');
       expect(result.error).toContain('current task revision is rev_2_edited');

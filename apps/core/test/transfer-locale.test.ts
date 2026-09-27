@@ -40,13 +40,19 @@ describe('saved Studio transfer languages', () => {
       localeCopySha256: createHash('sha256').update(text).digest('hex') })),
     latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic',
   } as StageContext;
-  const winner = { currentLayout: {
-    version: 2, width: 1080, height: 1080, background: { color: '#FFFFFF' }, shapes: [],
+  const winner: CandidateState = {
+    id: 'locale-fixture', ordinal: 0, layouts: [], critiques: [], status: 'winner',
+    concept: { id: 'locale-concept', name: 'Saved copy', archetype: 'typographic-poster', artStrategy: 'none',
+      typographicScale: { ratio: 1.25, titleSize: 40, bodySize: 32 },
+      colourRoles: { background: '#FFFFFF', title: '#000000', body: '#000000', accent: '#000000', rule: '#000000' },
+      layoutIdea: 'Two live text blocks', whyDifferent: 'Locale transfer fixture' },
+    currentLayout: {
+    version: 2, logo: { x: 40, y: 40, width: 60, height: 40 }, width: 1080, height: 1080, background: { color: '#FFFFFF' }, shapes: [],
     grid: { columns: 12, margin: 80, gutter: 16, baseline: 8 },
     text: copy.map((_, copyIndex) => ({ copyIndex, role: 'body', x: 80, y: 100 + copyIndex * 240,
       width: 920, height: 180, fontSize: 32, lineHeight: 1.7, color: '#000000', align: 'center',
       fontFamily: copyIndex ? 'Noto Sans Arabic' : 'Verdana', rtl: Boolean(copyIndex) })),
-  } } as CandidateState;
+  } };
   it('carries persisted copy languages through the actual Studio transfer stage', async () => {
     const out = await runTransferStage(ctx, winner);
     expect(out.manifest).toMatchObject({ copy, copyLocales: ['en', 'ckb'] });

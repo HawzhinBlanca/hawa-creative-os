@@ -41,6 +41,7 @@ const previewTrackingPx = (svg: string, copyIndex: number): number | null => {
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 const baseLayout = (text: StudioLayoutV2['text']): StudioLayoutV2 => ({
+  version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
   width: 1080,
   height: 1350,
   background: { color: '#0A1628' },

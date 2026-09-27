@@ -14,9 +14,9 @@ let parse: ReturnType<typeof vi.spyOn>;
 beforeEach(() => { vi.stubEnv('HAWA_DOCLING_URL', 'http://127.0.0.1:19091'); parse = vi.spyOn(DoclingParser.prototype, 'parse').mockResolvedValue(parsed); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 afterAll(() => Promise.all([db.destroy(), owner.destroy()]));
-async function client(status = 'active') {
+async function client(status: 'active' | 'inactive' = 'active') {
   const id = randomUUID();
-  await withRlsContext(db, scope, trx => trx.insertInto('clients').values({ id, tenant_id: tenantId, code: id, name: 'PDF client', status }).execute());
+  await withRlsContext(db, scope, trx => trx.insertInto('clients').values({ id, tenant_id: tenantId, code: id, name: 'PDF client', aliases: [], default_language: 'en', retention_policy: {}, model_egress_policy: {}, status }).execute());
   return id;
 }
 function inspect(id: string, body = '%PDF-1.7 fixture', headers = {}) {

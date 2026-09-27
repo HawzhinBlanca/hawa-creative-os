@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { readFile, chmod, writeFile } from 'node:fs/promises';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { DoclingParser, PDF_EXTRACTOR_VERSION, DocumentExtractionError } from '@hawa/retrieval';
 import { TelegramBridgeDaemon } from '@hawa/integrations';
@@ -248,7 +248,7 @@ describe('requester-reviewed PDF source', () => {
 
   it('blocks missing and same-size corrupt bytes at confirmation and at projection', async () => {
     const f = await fixture(); await intake(f.update); const c = f.confirm(); const open = await intake(c);
-    const stat = await blobStoreFor(db)!.stat(hash(pdf)); await chmod(stat.path, 0o644); await writeFile(stat.path, Buffer.alloc(pdf.length, 120));
+    const stat = await blobStoreFor(db)!.stat(hash(pdf)); assert(stat, "Expected retained source bytes"); await chmod(stat.path, 0o644); await writeFile(stat.path, Buffer.alloc(pdf.length, 120));
     try {
       expect((await project(open)).status).toBe(503);
       const reader = createApp({ db, testAuth: { principal: scope } }); apps.push(reader);

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDb, sql, withRlsContext, blobStoreFromEnv } from '@hawa/db';
 import { DoclingParser, PDF_EXTRACTOR_VERSION } from '@hawa/retrieval';
 import { createApp } from '../src/app.js';
@@ -97,7 +97,7 @@ describe('approved document knowledge', () => {
     const f = await fixture(), key = randomUUID();
     expect((await f.write({ reviewed: false })).status).toBe(422);
     expect((await f.write({ sourceSha256: '0'.repeat(64) })).status).toBe(409);
-    const store = blobStoreFromEnv(db), stat = await store.stat(hash(f.raw));
+    const store = blobStoreFromEnv(db), stat = await store.stat(hash(f.raw)); assert(stat, "Expected retained source bytes");
     await fs.chmod(stat.path, 0o644); await fs.writeFile(stat.path, 'x'.repeat(Buffer.byteLength(f.raw)));
     expect((await f.write()).status).toBe(503);
     await fs.unlink(stat.path); await store.put(Buffer.from(f.raw), 'application/pdf');

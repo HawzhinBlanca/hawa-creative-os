@@ -57,13 +57,13 @@ function committedDesigns(): Design[] {
 function gradeDesign(design: Design, options: Record<string, unknown>) {
   const copy = {
     text: Object.fromEntries(design.blocks.map((t, i) => [i, t])),
-    scripts: Object.fromEntries(design.blocks.map((t, i) => [i, ARABIC.test(t) ? 'arabic' : 'latin'])),
+    scripts: Object.fromEntries(design.blocks.map((t, i) => [i, ARABIC.test(t) ? 'arabic' as const : 'latin' as const])),
   };
   const raw = JSON.parse(JSON.stringify(design.layout)) as StudioLayoutV2;
   const qaContext = {
     width: raw.width,
     height: raw.height,
-    copyScripts: design.blocks.map((t) => (ARABIC.test(t) ? 'arabic' : 'latin')) as ('arabic' | 'latin')[],
+    copyScripts: design.blocks.map((t) => (ARABIC.test(t) ? 'arabic' as const : 'latin' as const)) as ('arabic' | 'latin')[],
     latinFont: reference.latinFont,
     arabicFont: reference.arabicFont,
     palette: reference.palette,

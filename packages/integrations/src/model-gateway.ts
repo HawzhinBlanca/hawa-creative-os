@@ -328,7 +328,7 @@ export class ResilientModelGateway implements ModelGateway {
         };
       }
       for (const img of imageInputs) {
-        let hasData = Boolean((img as any).data || (img as any).base64);
+        let hasData = Boolean(img.data || (img as any).base64);
         if (!hasData && img.storageKey) {
           if (fs.existsSync(img.storageKey)) {
             hasData = true;
@@ -516,7 +516,7 @@ export class ResilientModelGateway implements ModelGateway {
           const parts: any[] = [{ text: promptText }];
           const imageParts = (request.inputs || []).filter((i) => i.kind === 'image');
           for (const img of imageParts) {
-            let base64Data: string | undefined = (img as any).data || (img as any).base64;
+            let base64Data: string | undefined = img.data || (img as any).base64;
             if (!base64Data && img.storageKey && fs.existsSync(img.storageKey)) {
               base64Data = fs.readFileSync(img.storageKey).toString('base64');
             }
@@ -587,7 +587,7 @@ export class ResilientModelGateway implements ModelGateway {
           if (request.role === 'visual_judge') {
             for (const img of imageParts) {
               let base64Data: string | undefined;
-              if ((img as any).data) base64Data = (img as any).data;
+              if (img.data) base64Data = img.data;
               else if ((img as any).base64) base64Data = (img as any).base64;
               else if (img.storageKey && fs.existsSync(img.storageKey)) {
                 base64Data = fs.readFileSync(img.storageKey).toString('base64');
@@ -673,7 +673,7 @@ export class ResilientModelGateway implements ModelGateway {
           if (request.role === 'visual_judge' && imageParts.length > 0) {
             const contentBlocks: any[] = [{ type: 'text', text: openaiContent }];
             for (const img of imageParts) {
-              let base64Data: string | undefined = (img as any).data || (img as any).base64;
+              let base64Data: string | undefined = img.data || (img as any).base64;
               if (!base64Data && img.storageKey && fs.existsSync(img.storageKey)) {
                 base64Data = fs.readFileSync(img.storageKey).toString('base64');
               }

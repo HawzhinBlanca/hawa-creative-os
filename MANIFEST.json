@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T06:29:56Z",
+  "generatedAt": "2026-09-27T07:20:16Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 397,
+  "fileCount": 400,
   "files": [
     {
       "path": ".dockerignore",
@@ -513,6 +513,11 @@
       "bytes": 2643
     },
     {
+      "path": "adrs/089_complete_test_type_verification.md",
+      "sha256": "06c6b3a3027773320fc79c740f15f1c4e3fdbbb3032c36493c307341939eaf24",
+      "bytes": 2919
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -964,8 +969,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "0a496bf7e9942e8904427619e27cf051a86e5e8c26f90d08343d06af46221c5d",
-      "bytes": 65740
+      "sha256": "0b1b8e6c72fc9253ce4f4145f48d60a10cdcc1dae462c2ca8946930fdf8b8a63",
+      "bytes": 67394
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -981,6 +986,11 @@
       "path": "plans/research-grade-upgrade-2026-09-25/R01_EVIDENCE.md",
       "sha256": "e3ee338ac2eee2cafa79cba16057bd0ab01bc26d176889e865f5157baab8f09f",
       "bytes": 4977
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R01_TEST_TYPE_GATE_PROOF.json",
+      "sha256": "dfa32fa0d8d59baff70696f8e77f34b6eb75e5c9370aac7da4b0874996484fd6",
+      "bytes": 22911
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R02_EVIDENCE.md",
@@ -1289,8 +1299,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "9a990af0c2d9201670c654180edc5f8bc3b775d35d1994cbf8cfad836b0d8ee3",
-      "bytes": 324331
+      "sha256": "85047e46a92885083551de07662e15b57511e6624a8c96ade717fd99dc5741fb",
+      "bytes": 326283
     },
     {
       "path": "plans/user-stories.csv",
@@ -1908,6 +1918,11 @@
       "bytes": 6344
     },
     {
+      "path": "scripts/test/typecheck-tests.test.ts",
+      "sha256": "5ad5c32f75442dd9030b1399dd04a560d42e2f287273bd8b4e101487e2d0d24c",
+      "bytes": 3007
+    },
+    {
       "path": "scripts/test_gateway_models.ts",
       "sha256": "a274670bdeff4f5030b295971f4f6c2a461f60df9bb61326114f88e85bf97104",
       "bytes": 3029
@@ -1929,8 +1944,8 @@
     },
     {
       "path": "scripts/typecheck_tests.ts",
-      "sha256": "98c3ab99a24a0833693f74c2a6b5cdb4b85d63f09956d38475d4e20a9dfa7c57",
-      "bytes": 1735
+      "sha256": "228234a901415e5e872b28df6a17c491485048bffae1b1eae39805268d3bfe84",
+      "bytes": 3794
     },
     {
       "path": "scripts/update_proofs_manifest.ts",
@@ -1979,8 +1994,8 @@
     },
     {
       "path": "tsconfig.test.json",
-      "sha256": "7a7ed2d056797d2bb38349357ab58f43faaf51e83dd4caf949c09b03dcae4cd6",
-      "bytes": 4810
+      "sha256": "61fd2562491bb2fadb37c0d2f6ac64169261e212e2f11e77ee0ccbdad2dd475f",
+      "bytes": 1813
     },
     {
       "path": "ui/design-system.md",

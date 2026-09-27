@@ -4,7 +4,7 @@ import { createPolledUpdateHandler, PARKED_UPDATE_NOTICE, POLLED_UPDATE_MAX_ATTE
 const quiet = { error: () => {}, warn: () => {} };
 const update = { update_id: 4242, message: { chat: { id: 77 }, text: 'a brief' } };
 
-function harness(deliver: () => Promise<number>, park: () => Promise<void> = async () => {}) {
+function harness(deliver: () => Promise<number>, park: (incoming: typeof update, reason: string) => Promise<void> = async () => {}) {
   const deps = { deliver: vi.fn(deliver), park: vi.fn(park), notifySender: vi.fn(async () => {}), log: quiet };
   return { deps, handle: createPolledUpdateHandler(deps) };
 }

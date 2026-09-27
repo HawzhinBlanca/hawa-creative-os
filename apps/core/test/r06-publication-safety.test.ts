@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { assert, describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createDb, PublicationRepository, TaskRepository, sql, withRlsContext } from '@hawa/db';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -369,7 +369,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     });
     expect(omniRes.status).toBe(200);
     const omniData = await omniRes.json();
-    expect(omniData.ok).toBe(true);
+    expect(omniData.ok).toBe(true); assert(omniData.ok);
     expect(omniData.status).toBe('COMPLETE');
   });
 
@@ -382,7 +382,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     const ctx: RequestContext = {
       tenantId: 'tenant-default',
       taskId: 'task-a',
-      actor: { type: 'workflow', id: 'test' },
+      actor: { type: 'workflow', id: 'test' }, idempotencyKey: crypto.randomUUID(),
       correlationId: crypto.randomUUID(),
       deadline: new Date(Date.now() + 60000).toISOString(),
     };
@@ -396,21 +396,21 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       publicationKey: 'pub_a',
       packageHash: 'hash-a',
       files: [{
-        artifactId: 'art-a',
+        artifactId: 'art-a', relativePath: 'a.png', storageKey: testFilePng,
         filename: 'a.png',
         mimeType: 'image/png',
         byteSize: testFileBytes.length,
         sha256: testFileSha256,
         content: testFileBytes,
       }],
-      destination: {
+      sheetRow: {}, destination: { relativeFolderParts: [], sheetId: 0,
         sharedDriveId: 'drive-1',
         productionRootFolderId: 'folder-1',
         spreadsheetId,
       },
     };
     const resA = await publisher.publish(ctx, reqA);
-    expect(resA.ok).toBe(true);
+    expect(resA.ok).toBe(true); assert(resA.ok);
     if (!resA.ok) return;
     expect(resA.value.sheet.rowNumber).toBe(2);
 
@@ -422,7 +422,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       packageHash: 'hash-b',
     };
     const resB = await publisher.publish(ctx, reqB);
-    expect(resB.ok).toBe(true);
+    expect(resB.ok).toBe(true); assert(resB.ok);
     if (!resB.ok) return;
     expect(resB.value.sheet.rowNumber).toBe(3);
 
@@ -448,7 +448,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       publicationKey: 'pub_a_updated',
     };
     const resA2 = await publisher.publish(ctx, reqA2);
-    expect(resA2.ok).toBe(true);
+    expect(resA2.ok).toBe(true); assert(resA2.ok);
     if (!resA2.ok) return;
 
     // Verify: Task A was updated at its actual row (row 3) by immutable task identity!
@@ -465,7 +465,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     fakeServer.setSheetRows(spreadsheetId, [sheetRows[0], sheetRows[1], ['', '', '', '', '', '', ''],
       sheetRows[2], sheetRows[3]]);
     const resA3 = await publisher.publish(ctx, { ...reqA, packageHash: 'hash-a-third', publicationKey: 'pub_a_third' });
-    expect(resA3.ok).toBe(true);
+    expect(resA3.ok).toBe(true); assert(resA3.ok);
     if (!resA3.ok) return;
     expect(resA3.value.sheet.rowNumber).toBe(4);
     sheetRows = fakeServer.getSheetRows(spreadsheetId);
@@ -480,7 +480,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     const ctx: RequestContext = {
       tenantId: 'tenant-default',
       taskId: 'task-tampered',
-      actor: { type: 'workflow', id: 'test' },
+      actor: { type: 'workflow', id: 'test' }, idempotencyKey: crypto.randomUUID(),
       correlationId: crypto.randomUUID(),
       deadline: new Date(Date.now() + 60000).toISOString(),
     };
@@ -493,14 +493,14 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       publicationKey: 'pub_tampered',
       packageHash: 'package-hash',
       files: [{
-        artifactId: 'art-1',
+        artifactId: 'art-1', relativePath: 'banner.png', storageKey: testFilePng,
         filename: 'banner.png',
         mimeType: 'image/png',
         byteSize: testFileBytes.length,
         sha256: '0000000000000000000000000000000000000000000000000000000000000000', // Forged hash
         content: testFileBytes,
       }],
-      destination: {
+      sheetRow: {}, destination: { sheetId: 0, relativeFolderParts: [],
         sharedDriveId: 'drive-1',
         productionRootFolderId: 'folder-1',
         spreadsheetId: 'sheet-1',

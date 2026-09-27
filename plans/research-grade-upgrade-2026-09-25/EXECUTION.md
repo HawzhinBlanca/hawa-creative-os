@@ -3,6 +3,32 @@
 Updated 2026-09-27; retain the faster, more economical completion method.
 Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PLAN.md` and `WORK_ITEMS.csv`.
 
+## Latest checkpoint — 2026-09-27, complete test type gate qualified locally
+
+ADR-089 replaces the wrapper that ignored compiler failures and filtered source
+errors. Independent discovery covers all479 active test roots, including Core,
+Worker and browser tests, and detects tests in new directories. Strict Node/Desk
+compilation now passes with0 errors (restored baseline406; intermediate119). The
+failed diagnostics are retained in `R01_TEST_TYPE_GATE_PROOF.json`.
+
+Full regression:3813 passed/0 failed/59 skipped across478 files. This predates one
+final new-directory gate control. Final targeted verification:7 passed/0 skipped,
+including six real compiler negative/positive controls and the edited document
+fixture through four actual Core SIGKILL boundaries and same-host DB/blob restore.
+Final `pnpm typecheck`, `pnpm lint`, Desk build and security checks pass. The release
+seal names the final source; no new image or browser execution is claimed.
+
+Runtime changes repair the canonical retrieval conflict fields and declare existing
+inline image input support. Fixture changes use current contracts and actual HTTP
+adapters with deterministic transports. Production is unchanged; the isolated app
+remains the earlierb641928 candidate/schema049.
+
+Next: hard USD reservations and typed completed-stage recovery. Named live intake
+through delivery, native Canva edit/save/reopen, human multilingual/design review,
+independent-host/offsite restore and held-out model/retrieval/cost qualification
+remain open. Existing Workspace/native-edit questions remain unanswered. Whole-app
+admission and the broader R01 release programme remain in progress.
+
 ## Latest checkpoint — 2026-09-27, named evaluation settlement
 
 Source69039f9 / sealed candidate571b522 implements ADR-085/migration048. Named staff

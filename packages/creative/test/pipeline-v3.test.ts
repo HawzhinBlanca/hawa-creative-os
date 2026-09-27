@@ -1103,7 +1103,7 @@ describe('text reads against the surface behind it', { timeout: 30000 }, () => {
   it('recolours unreadable text in the brand colour the design already uses for text', async () => {
     const { conformToHouseRules, declaredTextContrast, requiredContrast } = await import('../src/index.js');
     const layout = conformToHouseRules(navyOnNavy(), COPY, KAAE_PALETTE);
-    for (const t of layout.text) expect(declaredTextContrast(layout, t)).toBeGreaterThanOrEqual(requiredContrast(t.fontSize, t.bold));
+    for (const t of layout.text) expect(declaredTextContrast(layout, t)).toBeGreaterThanOrEqual(requiredContrast(t.fontSize, t.bold === true));
     expect(layout.text[3].color).toBe('#FDF8F3');
   });
 });

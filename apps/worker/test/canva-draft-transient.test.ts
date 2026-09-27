@@ -21,7 +21,7 @@ describe('HUNT: a Canva token refresh collision during the draft\'s exports', ()
       // The preview export lands while the other studio run's poll is refreshing the token.
       Response.json({ title: 'CANVA_RECONNECT_REQUIRED' }, { status: 409 }),
     ];
-    const remote = vi.fn(async () => responses.shift() ?? Response.json({ ok: true }));
+    const remote = vi.fn<typeof fetch>(async () => responses.shift() ?? Response.json({ ok: true }));
     const outcome = await runCanvaDraft(input, new DurableStepJournal(), remote).then(
       (r) => r.status,
       (e) => `retried: ${String(e?.message || e)}`

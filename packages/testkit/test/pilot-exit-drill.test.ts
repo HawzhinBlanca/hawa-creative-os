@@ -1,6 +1,6 @@
 import { FakeDesignStudioAdapter } from '../src/fake-studio.js';
 import crypto from 'node:crypto';
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import type { PackageFile, RequestContext } from '@hawa/contracts';
 
 function deliverable(relativePath: string, storageKey: string, filename: string, mimeType: string, text: string): PackageFile {
@@ -293,9 +293,9 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
             // 3. Pre-Retrieval Scoped Isolation (Invariant #4 & Invariant #6)
             const clientCtx = { ...ctx, clientId: scenario.clientId };
             const retrievalRes = await retrievalService.retrieve(clientCtx, [
-              { query: prompt, kinds: ['rule', 'official_asset', 'client_dna'], topK: 5 },
+              { query: prompt, kinds: ['rule', 'official_asset'], topK: 5 },
             ]);
-            expect(retrievalRes.ok).toBe(true);
+            expect(retrievalRes.ok).toBe(true); assert(retrievalRes.ok);
 
             // Assert zero cross-tenant contamination
             let crossTenantContamination = false;
@@ -316,7 +316,7 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
               objective: `${scenario.clientName} Campaign #${index}`,
               rawRequestText: prompt,
             });
-            expect(briefRes.ok).toBe(true);
+            expect(briefRes.ok).toBe(true); assert(briefRes.ok);
             if (!briefRes.ok) throw new Error('Brief build failed');
             const brief = briefRes.value;
 
@@ -336,7 +336,8 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
             // 6. Creative Direction Plan & simulated structured operations (Invariant #1, #2, #3)
             const designPlan = creativeDirector.createDesignPlan(brief, scenario.palette);
             expect(designPlan.zones.length).toBeGreaterThan(0);
-            expect(designPlan.artDirectionReference.shippedInArtifact).toBe(false);
+            assert(designPlan.artDirectionReference);
+    expect(designPlan.artDirectionReference.shippedInArtifact).toBe(false);
 
             sm.transition('COMPOSING', ctx.actor, 'Composing structured layers');
 
@@ -353,7 +354,7 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
               })),
               clientDnaVersion: 1,
             });
-            expect(createDocRes.ok).toBe(true);
+            expect(createDocRes.ok).toBe(true); assert(createDocRes.ok);
             if (!createDocRes.ok) throw new Error('Studio document create failed');
             const initialDoc = createDocRes.value;
 
@@ -368,13 +369,13 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
               operations: ops,
               destructiveOperationsAllowed: false,
             });
-            expect(applyRes.ok).toBe(true);
+            expect(applyRes.ok).toBe(true); assert(applyRes.ok);
             if (!applyRes.ok) throw new Error('Studio apply failed');
             const composedDoc = applyRes.value;
 
             // Verify Invariant #1: ZERO flattened raster layers containing text
             const manifestRes = await studio.getManifest(ctx, composedDoc);
-            expect(manifestRes.ok).toBe(true);
+            expect(manifestRes.ok).toBe(true); assert(manifestRes.ok);
             if (!manifestRes.ok) throw new Error('Manifest get failed');
             const manifest = manifestRes.value;
 
@@ -404,7 +405,7 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
               profile: { name: 'strict', version: '1.0', rules: {} },
               repairCycle: 0,
             });
-            expect(qaRes.ok).toBe(true);
+            expect(qaRes.ok).toBe(true); assert(qaRes.ok);
             if (!qaRes.ok) throw new Error('QA run failed');
             const qaReport = qaRes.value;
             expect(qaReport.status).toBe('passed');
@@ -429,7 +430,7 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
             };
 
             const approveTrans = sm.transition('APPROVED', { type: 'user', id: approvalDecision.actor.userId }, 'Approved in drill');
-            expect(approveTrans.ok).toBe(true);
+            expect(approveTrans.ok).toBe(true); assert(approveTrans.ok);
 
             // 9. Durable Omnichannel Publication (Gate G, Invariant #12)
             sm.transition('PUBLISHING', ctx.actor, 'Publishing to production storage');
@@ -461,7 +462,7 @@ describe('Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation D
               },
             });
 
-            expect(publishRes.ok).toBe(true);
+            expect(publishRes.ok).toBe(true); assert(publishRes.ok);
             if (!publishRes.ok) throw new Error('Publisher failed');
             const receipt = publishRes.value;
             expect(receipt.state).toBe('complete');

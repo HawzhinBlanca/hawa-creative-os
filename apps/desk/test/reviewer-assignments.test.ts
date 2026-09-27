@@ -49,7 +49,7 @@ it('keeps one action identity when an assignment commits but its first answer is
   expect(calls).toHaveLength(2);
   expect(calls[0][0]).toBe(calls[1][0]);
   expect((calls[0][1] as RequestInit).headers).toMatchObject({
-    'Idempotency-Key': (calls[1][1] as RequestInit).headers?.['Idempotency-Key'],
+    'Idempotency-Key': new Headers((calls[1][1] as RequestInit).headers).get('Idempotency-Key'),
   });
   expect(view.text()).toContain('now has client-wide review access');
   await view.unmount();

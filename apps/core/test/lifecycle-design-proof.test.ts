@@ -69,7 +69,7 @@ describe('one write owner for lifecycle-owned designs', () => {
       );
     }
     const [generation, studio, binding] = await withRlsContext(db, scope, async (trx) => Promise.all([
-      trx.selectFrom('canva_design_plans').select('id').where('task_id', '=', taskId).execute(),
+      sql<{ id: string }>`SELECT id FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(trx).then(result => result.rows),
       trx.selectFrom('design_studio_runs').select('id').where('task_id', '=', taskId).execute(),
       trx.selectFrom('canva_bindings').select('id').where('task_id', '=', taskId).execute(),
     ]));
@@ -112,7 +112,7 @@ describe('one write owner for lifecycle-owned designs', () => {
       expect(await post(path)).toMatchObject({ status: 409, body: { title: 'LIFECYCLE_OWNED' } });
     }
     const [briefs, revisionsBefore] = await withRlsContext(db, scope, (trx) => Promise.all([
-      trx.selectFrom('design_briefs').select('id').where('task_id', '=', taskId).execute(),
+      sql<{ id: string }>`SELECT id FROM hawa.design_briefs WHERE task_id=${taskId}::uuid`.execute(trx).then(result => result.rows),
       trx.selectFrom('design_revisions').select('id').where('task_id', '=', taskId).execute(),
     ]));
     expect([briefs, revisionsBefore]).toEqual([[], []]);

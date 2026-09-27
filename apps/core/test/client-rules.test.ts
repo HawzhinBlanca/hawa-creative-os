@@ -1,4 +1,5 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
+import { OpenAiStudioClient } from '@hawa/creative';
 import { createHash, randomUUID } from 'node:crypto';
 import { createDb, withRlsContext, ClientRulesRepository, formatClientRulesForPrompt } from '@hawa/db';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
@@ -93,15 +94,16 @@ describe.skipIf(!url)('standing client rules', () => {
     const replies = () => dispatch.mock.calls.map((c) => String(c[1]?.text ?? ''));
     return { deps, replies };
   };
-  const guidelines = (brandName: string, rules: string[]) => ({
-    completeJson: vi.fn(async () => ({
-      data: {
+  const guidelines = (brandName: string, rules: string[]) => new OpenAiStudioClient({
+    apiKey: 'fixture-only',
+    fetcher: async () => Response.json({ id: 'guidelines-fixture',
+      choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({
         isBrandGuidelines: true,
         brandName,
         summary: 'Brand guidelines.',
         rules: rules.map((rule) => ({ category: 'general', rule, fontFamily: '', script: 'any', colourHex: '' })),
-      },
-    })),
+      }) } }], usage: { prompt_tokens: 20, completion_tokens: 50 },
+    }),
   });
   const forgetAll = (client: string, ids: string[]) => repo(async (r) => { for (const id of ids) await r.deactivate(tenantId, client, id); });
 

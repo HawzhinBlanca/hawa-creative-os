@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { assert, afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { encodeEditableTransfer } from '@hawa/creative';
@@ -81,7 +81,8 @@ describe.skipIf(!url)('blank Canva checked export with frozen client policy',()=
     if(result.status!=='recorded')throw new Error('Missing recorded review');
     const response=await approve(result.revisionId,[png.artifact.id,checked.artifact.id]);
     expect(response.status,await response.text()).toBe(201);
-    expect((await service.startExport(scope,taskId,'blank-check-0001','pptx',1)).artifact.id).toBe(checked.artifact.id);
+    const replay = await service.startExport(scope,taskId,'blank-check-0001','pptx',1);
+    assert('artifact' in replay && replay.artifact); expect(replay.artifact.id).toBe(checked.artifact.id);
     expect(exportCalls).toBe(2);
     await expect(sql`UPDATE hawa.canva_remote_operations SET metadata=metadata-'checkingPolicy' WHERE id=${operation.operationId}::uuid`.execute(db)).rejects.toThrow('immutable');
   });
@@ -90,6 +91,7 @@ describe.skipIf(!url)('blank Canva checked export with frozen client policy',()=
     expect(new Set(outcomes.map(o=>o.operationId)).size).toBe(1);expect(exportCalls).toBe(1);
     await supersede();jobStatus='success';
     const checked=await new CanvaConnectService(db,options).startExport(scope,taskId,'blank-check-0001','pptx',1);
+    assert('artifact' in checked && checked.artifact);
     expect(checked.artifact.content_check).toMatchObject({fontPass:true,checkingPolicy:{dnaVersion:1}});expect(exportCalls).toBe(1);
     const next=await service.startExport(scope,taskId,'blank-check-0002','pptx',1);
     expect((await service.exportStatus(scope,taskId,next.operationId)).artifact.content_check).toMatchObject({fontPass:false,checkingPolicy:{dnaVersion:2}});
@@ -146,7 +148,7 @@ describe.skipIf(!url)('blank Canva checked export with frozen client policy',()=
   it('retains historical evidence but refuses review after policy supersession',async()=>{
     await saveDna();const {checked}=await capture();await supersede();
     expect(await record(checked.artifact.id)).toMatchObject({status:'blocked',reason:expect.stringContaining('policy changed')});
-    expect((await start()).artifact.id).toBe(checked.artifact.id);
+    const replay = await start(); assert('artifact' in replay && replay.artifact); expect(replay.artifact.id).toBe(checked.artifact.id);
   });
   it('refuses approval after policy supersession even with a passing current review',async()=>{
     await saveDna();const {checked,png}=await capture(),review=await record(checked.artifact.id);

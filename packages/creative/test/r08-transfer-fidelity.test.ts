@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { unzipSync, strFromU8 } from 'fflate';
 import { encodeStudioTransferV2, studioLayoutV2ToTransferPlan } from '../src/studio/transfer-v2.js';
-import { encodeEditableTransfer } from '../src/editable-transfer.js';
+import { encodeEditableTransfer, type EditableTransferPlan } from '../src/editable-transfer.js';
 import type { StudioLayoutV2 } from '../src/studio/layout-v2.js';
 
 describe('R08 Transfer Fidelity & Feature Preservation', () => {
   it('preserves exact audit fixture visual properties: ellipse, rotation, alpha, stroke, and text properties in DrawingML XML', async () => {
     const layout: StudioLayoutV2 = {
+      version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
       width: 1080,
       height: 1080,
       background: { color: '#FFFFFF' },
@@ -85,6 +86,7 @@ describe('R08 Transfer Fidelity & Feature Preservation', () => {
 
   it('supports roundRect and line shapes with stroke and rotation', async () => {
     const layout: StudioLayoutV2 = {
+      version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
       width: 1080,
       height: 1080,
       background: { color: '#0A1628' },
@@ -101,7 +103,7 @@ describe('R08 Transfer Fidelity & Feature Preservation', () => {
           rotation: 15,
           strokeWidth: 2,
           strokeColor: '#FFFFFF',
-          role: 'badge',
+          role: 'accent',
         },
         {
           kind: 'line',
@@ -111,7 +113,7 @@ describe('R08 Transfer Fidelity & Feature Preservation', () => {
           height: 4,
           color: '#F59E0B',
           opacity: 1,
-          role: 'divider',
+          role: 'rule',
         },
       ],
       text: [
@@ -123,6 +125,7 @@ describe('R08 Transfer Fidelity & Feature Preservation', () => {
           width: 980,
           height: 100,
           fontSize: 36,
+          lineHeight: 1.3,
           fontFamily: 'Cairo',
           color: '#FFFFFF',
           align: 'center',
@@ -146,6 +149,7 @@ describe('R08 Transfer Fidelity & Feature Preservation', () => {
 
   it('preserves Kurdish Sorani RTL text blocks with Cairo font and right alignment', async () => {
     const layout: StudioLayoutV2 = {
+      version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
       width: 1080,
       height: 1080,
       background: { color: '#0F172A' },
@@ -217,6 +221,7 @@ describe('R08 Transfer Fidelity & Feature Preservation', () => {
           width: 600,
           height: 80,
           fontSize: 32,
+          lineHeight: 1.3,
           fontFamily: 'Inter',
           color: '#111827',
           align: 'left',
@@ -253,6 +258,7 @@ describe('R08 Transfer Fidelity & Feature Preservation', () => {
 
   it('rejects unsupported fonts with clear validation errors instead of silent corruption', async () => {
     const invalidLayout: StudioLayoutV2 = {
+      version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
       width: 1080,
       height: 1080,
       background: { color: '#000000' },
@@ -267,6 +273,7 @@ describe('R08 Transfer Fidelity & Feature Preservation', () => {
           width: 800,
           height: 100,
           fontSize: 40,
+          lineHeight: 1.3,
           fontFamily: 'ComicSansMS_NotAllowed',
           color: '#FFFFFF',
           align: 'left',

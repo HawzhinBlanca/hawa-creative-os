@@ -44,7 +44,7 @@ const brief = (roles: CreativeBrief['roles']): CreativeBrief => ({
 
 describe("the client's direction reaches the design and is enforced", () => {
   it("quotes the client's instructions, the brief's musts and the requested background to the layout generator", () => {
-    const text = layoutBriefV3(brief([]), { instructions: INSTRUCTIONS, requestedBackground: '#0A1628' });
+    const text = layoutBriefV3(brief([]), { width: 1080, height: 1350, instructions: INSTRUCTIONS, requestedBackground: '#0A1628' });
     expect(text).toContain('dark blue navy as a background');
     expect(text).toContain('Must: Use dark blue navy background from brand palette');
     expect(text).toContain('Background: #0A1628, as the client asked');

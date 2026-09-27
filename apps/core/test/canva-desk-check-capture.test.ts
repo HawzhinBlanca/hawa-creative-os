@@ -24,7 +24,7 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
   const artDirector = { tenantId, actorId: '00000000-0000-4000-b000-000000000002' };
   const kaae = 'c1000000-0000-4000-8000-000000000002';
   let designId = '';
-  let pptx = Buffer.alloc(0);
+  let pptx: Buffer = Buffer.alloc(0);
   let providerUpdatedAt = 200;
   let providerReadUnavailable = false;
   const remote = vi.fn(async (input: any, init: any = {}) => {

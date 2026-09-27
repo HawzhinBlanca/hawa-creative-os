@@ -44,5 +44,5 @@ await app.clientDnaHydrated;
 const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 }, info => process.send?.({ port: info.port }));
 process.on('SIGTERM', () => {
   server.close(() => { void db.destroy().finally(() => process.exit(0)); });
-  server.closeAllConnections?.();
+  if ('closeAllConnections' in server) server.closeAllConnections();
 });

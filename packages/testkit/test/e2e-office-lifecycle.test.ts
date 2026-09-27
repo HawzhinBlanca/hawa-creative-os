@@ -1,5 +1,5 @@
 import { FakeDesignStudioAdapter } from '../src/fake-studio.js';
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import type { PackageFile, RequestContext } from '@hawa/contracts';
 import { createHash } from 'node:crypto';
 
@@ -209,7 +209,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
       receivedAt: new Date().toISOString(),
     });
 
-    expect(ingressRes.ok).toBe(true);
+    expect(ingressRes.ok).toBe(true); assert(ingressRes.ok);
     if (!ingressRes.ok) return;
     const normalizedMessage = ingressRes.value[0];
     expect(normalizedMessage.verification.verified).toBe(true);
@@ -257,16 +257,16 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
     // =========================================================================
     const clientCtx = { ...ctx, clientId };
     const retrievalRes = await retrievalService.retrieve(clientCtx, [
-      { query: rawKurdishMessage, kinds: ['rule', 'official_asset', 'client_dna'], topK: 5 },
+      { query: rawKurdishMessage, kinds: ['rule', 'official_asset'], topK: 5 },
     ]);
-    expect(retrievalRes.ok).toBe(true);
+    expect(retrievalRes.ok).toBe(true); assert(retrievalRes.ok);
 
     // Verify client isolation: query for another client does not leak Aster's assets
     const otherClientCtx = { ...ctx, clientId: 'client-competing-hotel' };
     const otherRetrievalRes = await retrievalService.retrieve(otherClientCtx, [
       { query: 'hotel', kinds: ['rule', 'official_asset'], topK: 5 },
     ]);
-    expect(otherRetrievalRes.ok).toBe(true);
+    expect(otherRetrievalRes.ok).toBe(true); assert(otherRetrievalRes.ok);
     if (otherRetrievalRes.ok) {
       const asterAssetLeaks = otherRetrievalRes.value.evidence.filter((c) => c.clientId === clientId);
       expect(asterAssetLeaks.length).toBe(0);
@@ -284,7 +284,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
       rawRequestText: rawKurdishMessage,
     });
 
-    expect(briefRes.ok).toBe(true);
+    expect(briefRes.ok).toBe(true); assert(briefRes.ok);
     if (!briefRes.ok) return;
     const brief = briefRes.value;
 
@@ -305,6 +305,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
     // =========================================================================
     const designPlan = creativeDirector.createDesignPlan(brief, ['#0B0F19', '#38BDF8', '#FFFFFF']);
     expect(designPlan.zones.length).toBeGreaterThan(0);
+    assert(designPlan.artDirectionReference);
     expect(designPlan.artDirectionReference.shippedInArtifact).toBe(false);
 
     sm.transition('COMPOSING', ctx.actor, 'Composing studio canvas');
@@ -323,7 +324,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
       })),
       clientDnaVersion: 1,
     });
-    expect(createDocRes.ok).toBe(true);
+    expect(createDocRes.ok).toBe(true); assert(createDocRes.ok);
     if (!createDocRes.ok) return;
     const initialDocRef = createDocRes.value;
 
@@ -340,7 +341,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
       operations: ops,
       destructiveOperationsAllowed: false,
     });
-    expect(applyRes.ok).toBe(true);
+    expect(applyRes.ok).toBe(true); assert(applyRes.ok);
     if (!applyRes.ok) return;
     const updatedDocRef = applyRes.value;
     expect(updatedDocRef.sourceRevision).toBe(initialDocRef.sourceRevision + 1);
@@ -361,7 +362,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
     sm.transition('QA', ctx.actor, 'Running hard QA checks');
 
     const manifestRes = await studio.getManifest(ctx, updatedDocRef);
-    expect(manifestRes.ok).toBe(true);
+    expect(manifestRes.ok).toBe(true); assert(manifestRes.ok);
     if (!manifestRes.ok) return;
     const manifest = manifestRes.value;
 
@@ -378,7 +379,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
       repairCycle: 0,
     });
 
-    expect(qaRes.ok).toBe(true);
+    expect(qaRes.ok).toBe(true); assert(qaRes.ok);
     if (!qaRes.ok) return;
     const qaReport = qaRes.value;
     expect(qaReport.criticalPass).toBe(true);
@@ -407,7 +408,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
     };
 
     const approveTransition = sm.transition('APPROVED', { type: 'user', id: approvalDecision.actor.userId }, 'Art Director approved');
-    expect(approveTransition.ok).toBe(true);
+    expect(approveTransition.ok).toBe(true); assert(approveTransition.ok);
 
     // =========================================================================
     // STEP 8: Durable Publishing to Google Drive & Google Sheets (Invariant 12)
@@ -441,7 +442,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
       },
     });
 
-    expect(publishRes.ok).toBe(true);
+    expect(publishRes.ok).toBe(true); assert(publishRes.ok);
     if (!publishRes.ok) return;
     const pubReceipt = publishRes.value;
     expect(pubReceipt.state).toBe('complete');
@@ -466,7 +467,7 @@ describe('End-to-End Office Lifecycle: Ingress to Google Drive/Sheet Publication
       },
       sheetRow: {},
     });
-    expect(republishRes.ok).toBe(true);
+    expect(republishRes.ok).toBe(true); assert(republishRes.ok);
     if (republishRes.ok) {
       expect(republishRes.value.publicationId).toBe(pubReceipt.publicationId);
     }

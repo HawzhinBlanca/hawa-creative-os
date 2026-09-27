@@ -80,7 +80,7 @@ describe('the task list page query (PostgreSQL, 5,000 tasks, runtime role)', () 
   it('costs the same at page 50 as at page 1 (keyset, not offset)', async () => {
     let cursor: string | null = null;
     for (let page = 1; page < 50; page++) {
-      const after = cursor ? decodeTaskCursor(cursor) : null;
+      const after: ReturnType<typeof decodeTaskCursor> = cursor ? decodeTaskCursor(cursor) : null;
       cursor = (await withRlsContext(db, BENCH_RLS, (trx) => listTaskPage(trx, { tenantId: BENCH_TENANT_ID, limit: 50, cursor: after }))).nextCursor;
       expect(cursor).not.toBeNull();
     }
@@ -101,8 +101,8 @@ describe('the task list page query (PostgreSQL, 5,000 tasks, runtime role)', () 
     let cursor: string | null = null;
     let total = -1;
     do {
-      const after = cursor ? decodeTaskCursor(cursor) : null;
-      const page = await withRlsContext(db, BENCH_RLS, (trx) => listTaskPage(trx, { tenantId: BENCH_TENANT_ID, limit: 200, cursor: after }));
+      const after: ReturnType<typeof decodeTaskCursor> = cursor ? decodeTaskCursor(cursor) : null;
+      const page: Awaited<ReturnType<typeof listTaskPage>> = await withRlsContext(db, BENCH_RLS, (trx) => listTaskPage(trx, { tenantId: BENCH_TENANT_ID, limit: 200, cursor: after }));
       total = page.total;
       seen.push(...page.rows.map((r) => ({ id: r.id, created: r.cursor_created_at })));
       cursor = page.nextCursor;

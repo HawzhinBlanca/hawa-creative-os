@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { assert, afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -30,7 +30,7 @@ describe('nginx.conf and the compose mounts agree on the file store', () => {
     const block = /location \/_blobs\/ \{([\s\S]*?)\n        \}/.exec(conf)?.[1] ?? '';
     expect(block).toMatch(/^\s*internal;$/m);
     const alias = /alias (\S+);/.exec(block)?.[1];
-    expect(alias).toBe('/srv/hawa-blobs/');
+    expect(alias).toBe('/srv/hawa-blobs/'); assert(alias);
     expect(compose).toContain(`- \${HAWA_BLOBS_DIR:-\${HOME}/.hawa/blobs}:${alias.replace(/\/$/, '')}:ro`);
     // Core and both worker colours mount the same host directory read-write at HAWA_BLOB_DIR.
     expect(compose.match(/- \$\{HAWA_BLOBS_DIR:-\$\{HOME\}\/\.hawa\/blobs\}:\/var\/lib\/hawa\/blobs$/gm)?.length).toBe(2); // core + the x-worker anchor

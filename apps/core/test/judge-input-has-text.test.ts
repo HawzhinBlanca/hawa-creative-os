@@ -214,7 +214,7 @@ describe('P07 judges the render that carries the copy', () => {
 
   it('refuses to judge if a no-text composite is ever handed over directly', () => {
     const candidate = createCandidate(0, { compositePng: noTextBytes(0) });
-    expect(() => assertJudgeSeesText([{ renderedPng: candidate.compositePng, candidate }])).toThrow(/no-text composite/i);
+    expect(() => assertJudgeSeesText([{ renderedPng: candidate.compositePng ?? undefined, candidate }])).toThrow(/no-text composite/i);
   });
 
   it('still judges a candidate that carries no render at all, from its layout', async () => {

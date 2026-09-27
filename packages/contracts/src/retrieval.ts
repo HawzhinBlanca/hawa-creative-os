@@ -39,7 +39,11 @@ export interface ContextPack {
   };
   evidence: RetrievalCandidate[];
   negativeEvidence: RetrievalCandidate[];
-  unresolvedConflicts: Array<{ type: string; sourceIds: string[]; message: string }>;
+  unresolvedConflicts: Array<{
+    type: string; sourceIds: string[]; message: string;
+    id?: string; conflictType?: string; severity?: 'BLOCKING' | 'WARNING';
+    description?: string; safeAction?: string;
+  }>;
   retrievalTrace: JsonObject;
 }
 

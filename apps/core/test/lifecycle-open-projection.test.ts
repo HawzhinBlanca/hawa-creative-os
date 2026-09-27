@@ -25,7 +25,7 @@ function projection(requestId = randomUUID(), chat = String(70_000_000 + Math.fl
     body: {
       v: 1, expectedRev: 0, rev: 1, key: `${requestId}:1:open`,
       ops: [{ kind: 'createRequest', draft: {
-        platform: 'telegram', sourceEventId: `lc-${requestId}-r0`, sourceChannelId: chat,
+        platform: 'telegram' as const, sourceEventId: `lc-${requestId}-r0`, sourceChannelId: chat,
         rawText: 'An autumn workshop poster with date and venue', title: 'Autumn workshop poster',
         designInstructions: 'Use the supplied text', exactCopy: ['Autumn workshop'],
         clientId: null, autoGenerate: false,

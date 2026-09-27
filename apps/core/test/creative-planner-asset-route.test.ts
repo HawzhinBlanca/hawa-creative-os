@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { assert, describe, it, expect, beforeEach, vi } from 'vitest';
 import crypto from 'node:crypto';
 import {
   BoundedCreativePlanner,
@@ -62,7 +62,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
         targetHeight: 1350,
       });
 
-      expect(briefRes.ok).toBe(true);
+      expect(briefRes.ok).toBe(true); assert(briefRes.ok);
       if (briefRes.ok) {
         const brief = briefRes.value;
         expect(brief.primaryLanguage).toBe('ckb');
@@ -95,7 +95,8 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
       expect(briefRes.ok).toBe(false);
       if (!briefRes.ok) {
         expect(briefRes.error.code).toBe('BRIEF_HAS_MISSING_FACTS');
-        expect(briefRes.error.detail?.missingFacts[0].field).toBe('event_date');
+        const missingFacts = briefRes.error.detail?.missingFacts; assert(Array.isArray(missingFacts));
+        expect(missingFacts[0]).toMatchObject({ field: 'event_date' });
         expect(briefRes.error.safeAction).toContain('Transition task to PAUSED');
       }
     });
@@ -110,7 +111,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
         objective: 'University Eligibility Status Decree for CUE',
         rawRequestText: 'بڕیاری شیاوبوونی زانکۆی کاتۆلیکی لە هەولێر (CUE) بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢',
       });
-      expect(briefRes.ok).toBe(true);
+      expect(briefRes.ok).toBe(true); assert(briefRes.ok);
       if (!briefRes.ok) return;
 
       const resolution = planner.resolveTaskRoute(briefRes.value);
@@ -124,7 +125,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
         clientDna: kaaeClientDNA,
       });
 
-      expect(packageRes.ok).toBe(true);
+      expect(packageRes.ok).toBe(true); assert(packageRes.ok);
       if (packageRes.ok) {
         expect(packageRes.value.routeResolution.route).toBe('template_fill');
         // Routine template tasks avoid deep models and image generation (NFR-018)
@@ -147,7 +148,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
           { role: 'disclaimer', text: 'تەواوکەری خۆراکییە و جێگەی دەرمان ناگرێتەوە', language: 'ckb', direction: 'rtl' },
         ],
       });
-      expect(briefRes.ok).toBe(true);
+      expect(briefRes.ok).toBe(true); assert(briefRes.ok);
       if (!briefRes.ok) return;
 
       const resolution = planner.resolveTaskRoute(briefRes.value);
@@ -159,14 +160,14 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
   describe('3. Model Admission & Authentic Provider Receipts (FR-056, FR-057, FR-079)', () => {
     it('admits actual model snapshots by role without hidden remapping', async () => {
       const directorDeployment = await modelGateway.resolve(ctx, 'creative_director');
-      expect(directorDeployment.ok).toBe(true);
+      expect(directorDeployment.ok).toBe(true); assert(directorDeployment.ok);
       if (directorDeployment.ok) {
         expect(directorDeployment.value.provider).toBe('openai');
         expect(directorDeployment.value.exactModelId).toBe('gpt-5.6-sol'); // Exact admitted snapshot
       }
 
       const judgeDeployment = await modelGateway.resolve(ctx, 'visual_judge');
-      expect(judgeDeployment.ok).toBe(true);
+      expect(judgeDeployment.ok).toBe(true); assert(judgeDeployment.ok);
       if (judgeDeployment.ok) {
         expect(judgeDeployment.value.provider).toBe('anthropic');
         expect(judgeDeployment.value.exactModelId).toBe('claude-opus-5'); // Exact admitted snapshot
@@ -178,7 +179,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
       modelGateway.setDeploymentAdmission('gemini-3.8-flash', 'retired');
 
       const resolved = await modelGateway.resolve(ctx, 'intake_router');
-      expect(resolved.ok).toBe(true);
+      expect(resolved.ok).toBe(true); assert(resolved.ok);
       if (resolved.ok) {
         // Skips retired gemini-3.8-flash and picks next admitted fallback (claude-sonnet-5)
         expect(resolved.value.provider).toBe('anthropic');
@@ -199,7 +200,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
         objective: 'Expensive novel visual campaign exceeding budget',
         rawRequestText: 'کەمپینی نوێی داهێنەرانە بۆ فرۆشتن',
       });
-      expect(briefRes.ok).toBe(true);
+      expect(briefRes.ok).toBe(true); assert(briefRes.ok);
       if (!briefRes.ok) return;
 
       const planned = planner.planCandidatePackage({
@@ -243,7 +244,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
 
       try {
         const res = await modelGateway.generateStructured(ctx, req);
-        expect(res.ok).toBe(true);
+        expect(res.ok).toBe(true); assert(res.ok);
         if (res.ok) {
           expect(res.value.deployment.provider).toBe('anthropic');
           expect(res.value.deployment.exactModelId).toBe('claude-sonnet-5');
@@ -315,7 +316,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
       ];
 
       const audit = holdoutAuditor.auditCandidateCopy(briefWithTokens, { operations: candidateOps });
-      expect(audit.ok).toBe(true);
+      expect(audit.ok).toBe(true); assert(audit.ok);
       if (audit.ok) {
         expect(audit.value.auditedTokensCount).toBe(2);
         expect(audit.value.exactMatch).toBe(true);
@@ -363,14 +364,14 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
         objective: 'KAAE Quality Milestone Decree',
         rawRequestText: 'ڕاگەیاندنی دەستکەوتی نێودەوڵەتی متمانەبەخشین بەپێی یاسای ژمارە (٦)ی ساڵی ٢٠٢٢ لە بەرواری 2026-09-11',
       });
-      expect(briefRes.ok).toBe(true);
+      expect(briefRes.ok).toBe(true); assert(briefRes.ok);
       if (!briefRes.ok) return;
 
       const packageRes = planner.planCandidatePackage({
         brief: briefRes.value,
         clientDna: kaaeClientDNA,
       });
-      expect(packageRes.ok).toBe(true);
+      expect(packageRes.ok).toBe(true); assert(packageRes.ok);
       if (!packageRes.ok) return;
 
       let candidate = packageRes.value;
@@ -378,7 +379,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
 
       // Cycle 1 Repair: Layout text overflow detected
       const repair1 = planner.attemptAutonomousRepair(candidate, 'Text line height collision in Kurdish diacritics');
-      expect(repair1.ok).toBe(true);
+      expect(repair1.ok).toBe(true); assert(repair1.ok);
       if (!repair1.ok) return;
       candidate = repair1.value;
       expect(candidate.repairCycle).toBe(1);
@@ -387,7 +388,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
 
       // Cycle 2 Repair: Contrast adjustment in header zone
       const repair2 = planner.attemptAutonomousRepair(candidate, 'Header zone contrast below WCAG AA');
-      expect(repair2.ok).toBe(true);
+      expect(repair2.ok).toBe(true); assert(repair2.ok);
       if (!repair2.ok) return;
       candidate = repair2.value;
       expect(candidate.repairCycle).toBe(2);
@@ -423,7 +424,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
         objective: 'KAAE Announcement without vector logo',
         rawRequestText: 'ڕاگەیاندنی فەرمی بەبێ لۆگۆ',
       });
-      expect(briefRes.ok).toBe(true);
+      expect(briefRes.ok).toBe(true); assert(briefRes.ok);
       if (!briefRes.ok) return;
 
       const planned = planner.createBoundedPlan(briefRes.value, clientWithoutLogo);
@@ -442,11 +443,11 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
         objective: 'Novel Luxury Suite Brand Launch Campaign',
         rawRequestText: 'کەمپینی نوێی داهێنەرانە بۆ هۆتێلی ئەستێرە لە هەولێر بەرواری 2026-10-01',
       });
-      expect(briefRes.ok).toBe(true);
+      expect(briefRes.ok).toBe(true); assert(briefRes.ok);
       if (!briefRes.ok) return;
 
       const planRes = planner.createBoundedPlan(briefRes.value, asterClientDNA);
-      expect(planRes.ok).toBe(true);
+      expect(planRes.ok).toBe(true); assert(planRes.ok);
       if (!planRes.ok) return;
 
       const plan = planRes.value;
@@ -456,7 +457,7 @@ describe('CV-10: Bounded Creative Planner and Asset Route', () => {
 
       // Safe export check passes
       const safeCheck = planner.validateExportPackageSafety(plan);
-      expect(safeCheck.ok).toBe(true);
+      expect(safeCheck.ok).toBe(true); assert(safeCheck.ok);
 
       // Mutated export attempting to ship reference pixels fails
       const tamperedPlan = {

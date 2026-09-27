@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDb, withRlsContext, sql, blobStoreFromEnv, TaskRepository } from '@hawa/db';
 import { kaaeClientDNA } from '@hawa/domain';
 import { DoclingParser, PDF_EXTRACTOR_VERSION } from '@hawa/retrieval';
@@ -11,7 +11,7 @@ const tenantId = '00000000-0000-4000-a000-000000000001';
 const scope = { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' as const };
 const app = () => createApp({ db, testAuth: { principal: scope } });
 const hash = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
-let parse: ReturnType<typeof vi.spyOn>;
+let parse: import('vitest').MockInstance<DoclingParser['parse']>;
 beforeEach(() => {
   vi.stubEnv('HAWA_DOCLING_URL', 'http://127.0.0.1:19091');
   parse = vi.spyOn(DoclingParser.prototype, 'parse').mockImplementation(async (id, bytes) => ({
@@ -26,7 +26,7 @@ afterAll(() => Promise.all([db.destroy(), owner.destroy()]));
 async function client() {
   const id = randomUUID();
   await withRlsContext(db, scope, async trx => {
-    await trx.insertInto('clients').values({ id, tenant_id: tenantId, code: id, name: 'PDF intake client', status: 'active' }).execute();
+    await trx.insertInto('clients').values({ id, tenant_id: tenantId, code: id, name: 'PDF intake client', status: 'active', aliases: [], default_language: 'en', retention_policy: {}, model_egress_policy: {} }).execute();
     await trx.insertInto('client_dna_versions').values({ id: randomUUID(), tenant_id: tenantId, client_id: id,
       version: 1, status: 'active', content_hash: randomUUID(), dna: kaaeClientDNA }).execute();
   });
@@ -105,7 +105,7 @@ describe('retained PDF request handoff', () => {
   });
   it('refuses damaged original bytes at download and task creation', async () => {
     const id = await client(), source = await upload(id);
-    const store = blobStoreFromEnv(db), stat = await store.stat(source.data.receipt.sourceSha256);
+    const store = blobStoreFromEnv(db), stat = await store.stat(source.data.receipt.sourceSha256); assert(stat, "Expected retained source bytes");
     await fs.chmod(stat.path, 0o644); await fs.writeFile(stat.path, 'x'.repeat(Buffer.byteLength(source.raw)));
     expect((await app().request(source.data.receipt.contentUrl)).status).toBe(503);
     expect((await submit(body(id, source.data.receipt))).status).toBe(503);
@@ -118,7 +118,8 @@ describe('retained PDF request handoff', () => {
     const id = await client();
     vi.stubEnv('HAWA_BLOB_DIR', '');
     expect((await upload(id)).status).toBe(503); expect(parse).not.toHaveBeenCalled();
-    const response = await createApp({ db: null, testAuth: { principal: scope } }).request('/v1/tasks', {
+    vi.stubEnv('DATABASE_URL', '');
+    const response = await createApp({ testAuth: { principal: scope } }).request('/v1/tasks', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body(id, {})),
     });
     expect(response.status).toBe(503);
@@ -145,7 +146,7 @@ describe('retained PDF request handoff', () => {
   it('rolls back task, event and outbox if the transaction fails after aggregate creation', async () => {
     const id = await client(), source = await upload(id), key = randomUUID();
     const original = TaskRepository.prototype.createTaskAggregate;
-    const fault = vi.spyOn(TaskRepository.prototype, 'createTaskAggregate').mockImplementationOnce(async function (...args) {
+    const fault = vi.spyOn(TaskRepository.prototype, 'createTaskAggregate').mockImplementationOnce(async function (this: TaskRepository, ...args) {
       await original.apply(this, args);
       throw new Error('Simulated commit boundary failure');
     });

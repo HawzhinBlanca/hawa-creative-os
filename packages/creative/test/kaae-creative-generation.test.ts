@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import type { StudioOperation } from '@hawa/contracts';
+import { assert, describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -24,7 +25,7 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
   describe('Part 1: Canonical Brand Kit & Domain Model Verification', () => {
     it('validates kaaeClientDNA passes domain model validation', () => {
       const validation = validateClientDna(kaaeClientDNA);
-      expect(validation.ok).toBe(true);
+      expect(validation.ok).toBe(true); assert(validation.ok);
       if (validation.ok) {
         expect(validation.value.code).toBe('KAAE');
         expect(validation.value.defaultLocale).toBe('en');
@@ -102,41 +103,41 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
       expect(ops.length).toBeGreaterThanOrEqual(10);
 
       // Verify canvas boundaries match 300DPI A4 Landscape (3508 x 2480)
-      const bgOp = ops.find((o) => o.op === 'addVector' && o.nodeId === 'cert_bg');
+      const bgOp = ops.find((o): o is Extract<StudioOperation, {op: 'addVector'}> => o.op === 'addVector' && o.nodeId === 'cert_bg');
       expect(bgOp).toBeDefined();
       expect(bgOp?.width).toBe(3508);
       expect(bgOp?.height).toBe(2480);
       expect(bgOp?.locked).toBe(true);
 
       // Verify Double Security Frame (Outer Blue + Inner Gold)
-      const bordersOp = ops.find((o) => o.op === 'addVector' && o.nodeId === 'cert_borders');
+      const bordersOp = ops.find((o): o is Extract<StudioOperation, {op: 'addVector'}> => o.op === 'addVector' && o.nodeId === 'cert_borders');
       expect(bordersOp).toBeDefined();
       expect(bordersOp?.source).toContain('#4770A3');
       expect(bordersOp?.source).toContain('#D4A94C');
 
       // Verify Official Cryptographic Emblem (Invariant 4)
-      const logoOp = ops.find((o) => o.op === 'addImage' && o.nodeId === 'cert_official_logo');
+      const logoOp = ops.find((o): o is Extract<StudioOperation, {op: 'addImage'}> => o.op === 'addImage' && o.nodeId === 'cert_official_logo');
       expect(logoOp).toBeDefined();
       expect(logoOp?.asset.sha256).toBe(KAAE_PRIMARY_LOGO_SHA256);
       expect(logoOp?.asset.storageKey).toBe(`assets/logos/${KAAE_PRIMARY_LOGO_SHA256}.png`);
 
       // Verify Live Editable Recipient and Program Text (Invariant 1 & 3)
-      const recipientOp = ops.find((o) => o.op === 'addText' && o.nodeId === 'cert_recipient');
+      const recipientOp = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'cert_recipient');
       expect(recipientOp).toBeDefined();
       expect(recipientOp?.text).toBe('زانکۆی سەلاحەدین - هەولێر');
       expect(recipientOp?.locked).toBe(false);
 
-      const programOp = ops.find((o) => o.op === 'addText' && o.nodeId === 'cert_program_name');
+      const programOp = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'cert_program_name');
       expect(programOp).toBeDefined();
       expect(programOp?.text).toBe('کۆلێژی پزیشکی - متمانەبەخشی نیشتمانی تەواو');
       expect(programOp?.locked).toBe(false);
 
       // Verify Statutory Authority & Signature Block
-      const authorityOp = ops.find((o) => o.op === 'addText' && o.nodeId === 'cert_statutory_badge');
+      const authorityOp = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'cert_statutory_badge');
       expect(authorityOp).toBeDefined();
       expect(authorityOp?.text).toContain('یاسای ژمارە (٦)ی ساڵی ٢٠٢٢');
 
-      const sigOp = ops.find((o) => o.op === 'addText' && o.nodeId === 'cert_sign_name');
+      const sigOp = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'cert_sign_name');
       expect(sigOp).toBeDefined();
       expect(sigOp?.text).toContain('Dr. Honar Issa');
     });
@@ -154,19 +155,19 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
       expect(ops.length).toBeGreaterThanOrEqual(10);
 
       // Verify canvas boundaries match 1080 x 1350
-      const bgOp = ops.find((o) => o.op === 'addVector' && o.nodeId === 'ann_bg');
+      const bgOp = ops.find((o): o is Extract<StudioOperation, {op: 'addVector'}> => o.op === 'addVector' && o.nodeId === 'ann_bg');
       expect(bgOp).toBeDefined();
       expect(bgOp?.width).toBe(1080);
       expect(bgOp?.height).toBe(1350);
       expect(bgOp?.source).toContain('#0A1628'); // Midnight Navy
 
       // Verify Verified Logo Node
-      const logoOp = ops.find((o) => o.op === 'addImage' && o.nodeId === 'ann_logo');
+      const logoOp = ops.find((o): o is Extract<StudioOperation, {op: 'addImage'}> => o.op === 'addImage' && o.nodeId === 'ann_logo');
       expect(logoOp).toBeDefined();
       expect(logoOp?.asset.sha256).toBe(KAAE_PRIMARY_LOGO_SHA256);
 
       // Verify Kurdish Headline in Cairo (Display Typography)
-      const headlineOp = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_headline_ckb');
+      const headlineOp = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'ann_headline_ckb');
       expect(headlineOp).toBeDefined();
       expect(headlineOp?.text).toBe('متمانەبەخشین بە کۆلێژی پزیشکی زانکۆی سلێمانی');
       expect(headlineOp?.style?.fontFamily).toBe('Cairo');
@@ -174,18 +175,18 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
       expect(headlineOp?.locked).toBe(false);
 
       // Verify Statutory Badge
-      const badgeOp = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_category_badge');
+      const badgeOp = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'ann_category_badge');
       expect(badgeOp).toBeDefined();
       expect(badgeOp?.text).toBe('بڕیاری فەرمی · OFFICIAL ACCREDITATION');
 
       // Verify Law No. 6 of 2022 Statutory Citation Block
-      const statutoryOp = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_statutory_rule');
+      const statutoryOp = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'ann_statutory_rule');
       expect(statutoryOp).toBeDefined();
       expect(statutoryOp?.text).toContain('یاسای ژمارە (٦)ی ساڵی ٢٠٢٢');
       expect(statutoryOp?.text).toContain('Law No. 6 of 2022');
 
       // Verify Official Web Address
-      const webOp = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_footer_tokens');
+      const webOp = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'ann_footer_tokens');
       expect(webOp).toBeDefined();
       expect(webOp?.text).toContain('www.kaae.org');
     });
@@ -203,7 +204,7 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
         rawRequestText: 'متمانەبەخشین بە زانکۆی نوێ لە هەرێمی کوردستان',
       });
 
-      expect(briefRes.ok).toBe(true);
+      expect(briefRes.ok).toBe(true); assert(briefRes.ok);
       if (briefRes.ok) {
         const plan = director.createDesignPlan(briefRes.value, ['#4770a3', '#0A1628', '#F7B500']);
         const ops = director.generateStudioOperations(briefRes.value, plan, KAAE_PRIMARY_LOGO_SHA256);
@@ -211,17 +212,17 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
         expect(ops.length).toBeGreaterThan(0);
 
         // Verify background is KAAE Midnight Navy (#0A1628)
-        const bgOp = ops.find((o) => o.nodeId === 'node_bg');
+        const bgOp = ops.find((o): o is Extract<StudioOperation, {op: 'addVector'}> => o.op === 'addVector' && o.nodeId === 'node_bg');
         expect(bgOp).toBeDefined();
         expect(bgOp?.source).toContain('#0A1628');
 
         // Verify logo references KAAE verified SHA
-        const logoOp = ops.find((o) => o.nodeId === 'node_logo');
+        const logoOp = ops.find((o): o is Extract<StudioOperation, {op: 'addImage'}> => o.op === 'addImage' && o.nodeId === 'node_logo');
         expect(logoOp).toBeDefined();
         expect(logoOp?.asset?.sha256).toBe(KAAE_PRIMARY_LOGO_SHA256);
 
         // Verify Kurdish headline uses Cairo font
-        const headlineTextOp = ops.find((o) => o.op === 'addText' && o.role === 'headline');
+        const headlineTextOp = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.role === 'headline');
         expect(headlineTextOp).toBeDefined();
         expect(headlineTextOp?.style?.fontFamily).toBe('Cairo');
       }
@@ -244,7 +245,7 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
         });
 
         expect(ops.length).toBeGreaterThan(0);
-        const recipient = ops.find((o) => o.op === 'addText' && o.nodeId === 'cert_recipient');
+        const recipient = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'cert_recipient');
         expect(recipient?.text).toBe('زانکۆی کۆیە');
       }
     });
@@ -264,7 +265,7 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
         });
 
         expect(ops.length).toBeGreaterThan(0);
-        const headline = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_headline_ckb');
+        const headline = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'ann_headline_ckb');
         expect(headline?.text).toBe('ڕاگەیاندنی فەرمی نوێ');
       }
     });
@@ -276,7 +277,6 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
         clientDnaVersion: 1,
         objective: 'English Official Announcement',
         rawRequestText: 'National Standards for Quality Assurance in Education',
-        languageHint: 'en',
       });
 
       if (briefRes.ok) {
@@ -287,13 +287,13 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
         });
 
         expect(ops.length).toBeGreaterThan(0);
-        const kurdishHeadline = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_headline_ckb');
+        const kurdishHeadline = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'ann_headline_ckb');
         expect(kurdishHeadline).toBeUndefined();
 
-        const kurdishCopy = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_body_ckb');
+        const kurdishCopy = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'ann_body_ckb');
         expect(kurdishCopy).toBeUndefined();
 
-        const badge = ops.find((o) => o.op === 'addText' && o.nodeId === 'ann_category_badge');
+        const badge = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'ann_category_badge');
         expect(badge?.text).toBe('KAAE OFFICIAL · ACCREDITATION COMMISSION');
 
         // Check that none of the text elements contain Kurdish characters
@@ -319,9 +319,9 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
         });
 
         expect(ops.length).toBeGreaterThanOrEqual(12);
-        const bg = ops.find((o) => o.op === 'addVector' && o.nodeId === 'mandate_bg');
+        const bg = ops.find((o): o is Extract<StudioOperation, {op: 'addVector'}> => o.op === 'addVector' && o.nodeId === 'mandate_bg');
         expect(bg?.source).toContain('#FDF8F3'); // Authentic Cream
-        const headline = ops.find((o) => o.op === 'addText' && o.nodeId === 'mandate_headline_en');
+        const headline = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'mandate_headline_en');
         expect(headline?.text).toBe('Custom Institutional Accreditation Mandate');
       }
     });
@@ -338,7 +338,7 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
       if (briefRes.ok) {
         const ops = director.generateKaaeOperations(briefRes.value, 'standards');
         expect(ops.length).toBeGreaterThanOrEqual(15);
-        const bg = ops.find((o) => o.op === 'addVector' && o.nodeId === 'std_bg');
+        const bg = ops.find((o): o is Extract<StudioOperation, {op: 'addVector'}> => o.op === 'addVector' && o.nodeId === 'std_bg');
         expect(bg?.height).toBe(1350); // 4:5
         expect(bg?.source).toContain('#0A1628');
         expect(bg?.source).toContain('#1E3A5F');
@@ -357,7 +357,7 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
       if (briefRes.ok) {
         const ops = director.generateKaaeOperations(briefRes.value, 'roadmap');
         expect(ops.length).toBeGreaterThanOrEqual(16);
-        const headline = ops.find((o) => o.op === 'addText' && o.nodeId === 'roadmap_headline_en');
+        const headline = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'roadmap_headline_en');
         expect(headline?.text).toContain('Three-Year Strategic Roadmap');
       }
     });
@@ -388,7 +388,7 @@ This invitation is personal and non-transferable. Kindly do not share this invit
         rawRequestText: invitationText,
       });
 
-      expect(briefRes.ok).toBe(true);
+      expect(briefRes.ok).toBe(true); assert(briefRes.ok);
       if (briefRes.ok) {
         const ops = director.generateKaaeOperations(briefRes.value, 'invitation', {
           rawText: invitationText,
@@ -398,13 +398,13 @@ This invitation is personal and non-transferable. Kindly do not share this invit
 
         expect(ops.some(o => o.op === 'addImage' && o.asset.sha256 === KAAE_PRIMARY_LOGO_SHA256)).toBe(true);
         expect(ops.filter(o => o.op === 'addText').some(o => o.text.includes('PROTOCOL OFFICE'))).toBe(false);
-        const titleNode = ops.find((o) => o.op === 'addText' && o.nodeId === 'inv_title');
+        const titleNode = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'inv_title');
         expect(titleNode?.text).toContain('THE NATIONAL STANDARDS FOR QUALITY ASSURANCE IN EDUCATION');
 
-        const keynoteNode = ops.find((o) => o.op === 'addText' && o.nodeId === 'inv_keynote');
+        const keynoteNode = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'inv_keynote');
         expect(keynoteNode?.text).toContain('Prime Minister Masrour Barzani');
 
-        const badgeNode = ops.find((o) => o.op === 'addText' && o.nodeId === 'inv_access_badge');
+        const badgeNode = ops.find((o): o is Extract<StudioOperation, {op: 'addText'}> => o.op === 'addText' && o.nodeId === 'inv_access_badge');
         expect(badgeNode?.text).toContain('By Invitation Only');
       }
     });

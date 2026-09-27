@@ -79,7 +79,7 @@ describe('Capture for Review takes a real Canva export through Core', () => {
     const api=fakeApi();api.resume.mockResolvedValueOnce(retrieved).mockRejectedValueOnce(new Error('response lost'));
     await expect(captureForReview(api,TASK,{key:'same-capture',sleep:noSleep})).rejects.toThrow('response lost');
     expect((await captureForReview(api,TASK,{key:'same-capture',sleep:noSleep})).completed).toBe(true);
-    expect(api.export.mock.calls.map(call=>call[3])).toEqual(['same-capture-png','same-capture-pptx','same-capture-png','same-capture-pptx']);
+    expect(api.export.mock.calls.map((call: unknown[])=>call[3])).toEqual(['same-capture-png','same-capture-pptx','same-capture-png','same-capture-pptx']);
   });
   it('refuses a binding changed after the action was reserved without starting an export',async()=>{
     const api=fakeApi();

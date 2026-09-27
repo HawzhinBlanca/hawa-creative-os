@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import {
   ReconciliationService,
   RECONCILIATION_BASIS,
@@ -123,7 +123,7 @@ describe('ReconciliationService (FR-049, FR-050)', () => {
     }
 
     const verifyRes = await publisher.verify(ctx, nonExistentId);
-    expect(verifyRes.ok).toBe(true);
+    expect(verifyRes.ok).toBe(true); assert(verifyRes.ok);
     expect(verifyRes.value.consistent).toBe(false);
   });
 });

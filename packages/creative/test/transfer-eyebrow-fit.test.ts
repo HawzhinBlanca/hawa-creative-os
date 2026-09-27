@@ -17,6 +17,7 @@ const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 describe('HUNT: an eyebrow shrunk to one line in the preview', () => {
   it('reaches Canva at the size and tracking the preview drew', async () => {
     const layout: StudioLayoutV2 = {
+      version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
       width: 1080,
       height: 1350,
       background: { color: '#0A1628' },

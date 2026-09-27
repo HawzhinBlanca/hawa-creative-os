@@ -96,7 +96,7 @@ describe('Governed Feedback & Adaptive Learning Engine (ADR-0044)', () => {
     const creativeDirector = new CreativeDirectorRunner();
 
     const mockBrief = {
-      briefId: 'brief_subsequent_01',
+      briefId: 'brief_subsequent_01', taskId: 'task_subsequent_01',
       clientId: testClientId,
       clientDnaVersion: 2,
       campaignId: 'cmp_standards',
@@ -104,7 +104,7 @@ describe('Governed Feedback & Adaptive Learning Engine (ADR-0044)', () => {
       taskRoute: 'creative_director' as const,
       primaryLanguage: 'en' as const,
       direction: 'ltr' as const,
-      variants: [{ id: 'v1', name: 'VIP Card', width: 1080, height: 1350, aspectRatio: '4:5' as const, role: 'vip_invitation' as const }],
+      variants: [{ id: 'v1', name: 'VIP Card', width: 1080, height: 1350, aspectRatio: '4:5' as const, role: 'custom' as const }],
       exactCopy: [{ id: 'c1', role: 'headline' as const, text: 'National Standards Launch', language: 'en' as const, direction: 'ltr' as const, approved: true, protectedTokens: [] }],
       missingFacts: [],
       requiredAssetRoles: ['logo_primary'],

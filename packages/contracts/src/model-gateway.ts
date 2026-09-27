@@ -17,6 +17,8 @@ export interface ModelInputPart {
   kind: 'text' | 'image' | 'document' | 'json';
   text?: string;
   storageKey?: string;
+  /** Inline base64 image bytes, with mimeType; used when no retained asset path is supplied. */
+  data?: string;
   mimeType?: string;
   json?: unknown;
   sha256?: SHA256;

@@ -13,6 +13,7 @@ import {
   layoutDefectCount,
   checkCandidateSetDegeneracy,
   logoClearZone,
+  NEUTRAL_STYLE_SPEC,
   type StyleSpec,
   type StudioLayoutV2,
 } from '../src/index.js';
@@ -137,7 +138,7 @@ describe('a style spec read from the reference is enforced on every candidate', 
   });
 
   it('leaves a layout alone when the spec decides nothing', () => {
-    const neutral = Object.fromEntries(Object.keys(fixture.spec).map((k) => [k, k === 'accentLastTitleLine' ? false : 'as_generated'])) as StyleSpec;
+    const neutral: StyleSpec = { ...NEUTRAL_STYLE_SPEC };
     const blocks = fixture.copy.ckb;
     const copy = { text: Object.fromEntries(blocks.map((b, i) => [i, b])) };
     const canvas = { width: 1080, height: 1350, logoAspect: 1, palette: reference.palette, ornament: resolveOrnamentSettings({}) };

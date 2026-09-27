@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { coreInternalFixture } from './core-internal-fixture.js';
 import type { OutboundMessage } from '@hawa/contracts';
 import { createRequestLifecycle, openManualRequest, type ManualLifecycleState, type OpenContext, type OpenManualEvent } from '../src/lifecycle/request-lifecycle.js';
 
@@ -35,7 +36,8 @@ function event(): OpenManualEvent {
   };
 }
 
-const core = (taskId = randomUUID()) => ({ post: vi.fn(async () => ({ v: 1, taskId, stage: 'manual', rev: 1, autoGenerate: false })) });
+afterEach(() => vi.unstubAllEnvs());
+const core = (taskId = randomUUID()) => coreInternalFixture({ v: 1, taskId, stage: 'manual', rev: 1, autoGenerate: false });
 
 describe('RequestLifecycle first manual open', () => {
   it('projects once and emits a stable critical acknowledgement after saving state', async () => {
@@ -45,7 +47,7 @@ describe('RequestLifecycle first manual open', () => {
     const result = await openManualRequest(ctx, c, e);
     expect(result).toMatchObject({ accepted: true, stage: 'manual', rev: 1 });
     expect(c.post).toHaveBeenCalledTimes(1);
-    expect(c.post.mock.calls[0][0]).toBe(`/internal/lifecycle/${e.requestId}/project`);
+    expect(c.postSpy.mock.calls[0][0]).toBe(`/internal/lifecycle/${e.requestId}/project`);
     expect(ctx.state).toMatchObject({ requestId: e.requestId, owner: 'restate', stage: 'manual', taskId: result.taskId });
     expect(ctx.sent).toEqual([expect.objectContaining({ key: `${e.requestId}:1:ack`, class: 'critical', taskId: result.taskId })]);
   });
@@ -78,7 +80,7 @@ describe('RequestLifecycle first manual open', () => {
   });
 
   it('registers the stable RequestLifecycle service name', () => {
-    const service = createRequestLifecycle(core() as any);
+    const service = createRequestLifecycle(core());
     expect(service.name).toBe('RequestLifecycle');
   });
 });

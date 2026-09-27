@@ -82,7 +82,7 @@ describe.skipIf(!url)('serving stored files (ADR-035)', () => {
     }
   };
 
-  const get = (path: string, headers: Record<string, string> = {}) => app.request(path, { headers });
+  const get = async (path: string, headers: Record<string, string> = {}) => app.request(path, { headers });
 
   beforeAll(async () => {
     store = blobStoreFromEnv(db);

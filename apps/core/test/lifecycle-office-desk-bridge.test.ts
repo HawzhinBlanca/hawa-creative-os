@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { deliveryBaseId } from '@hawa/contracts';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { assert, afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CanvaBindingRepository, PublicationRepository, createDb, sql, withRlsContext } from '@hawa/db';
 import { parseOfficeApprovalProof } from '@hawa/domain';
 import { createApp } from '../src/app.js';
@@ -160,6 +160,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     const transport = vi.fn(async (_url: string, init?: RequestInit) => {
       const envelope = JSON.parse(String(init?.body)) as SignedOfficeDecision;
       expect(checkSignedOfficeDecision(envelope, secret)).toBe('ok');
+      assert(envelope.event.kind !== 'deliver');
       const result = await recordOfficeRevision(object, core, envelope.event);
       if (loseAnswer) { loseAnswer = false; throw new Error('Desk answer lost'); }
       return Response.json(result);
@@ -595,6 +596,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
       expect(url).toBe('http://restate.fixture:8080/OfficeDecisionGateway/decide');
       const envelope = JSON.parse(String(init?.body)) as SignedOfficeDecision;
       expect(checkSignedOfficeDecision(envelope, secret)).toBe('ok');
+      assert(envelope.event.kind !== 'deliver');
       try {
         const result = await recordOfficeRevision(object, core, envelope.event);
         if (loseFirstAnswer) { loseFirstAnswer = false; throw new Error('Desk response lost after commit'); }
@@ -736,6 +738,7 @@ describe('authenticated Desk to private lifecycle office decision', () => {
       expect(url).toBe('http://restate.fixture:8080/OfficeDecisionGateway/decide');
       const envelope = JSON.parse(String(init?.body)) as SignedOfficeDecision;
       expect(checkSignedOfficeDecision(envelope, secret)).toBe('ok');
+      assert(envelope.event.kind !== 'deliver');
       try {
         const result = await recordOfficeRevision(object, core, envelope.event);
         if (loseFirstAnswer) { loseFirstAnswer = false; throw new Error('Desk response lost after commit'); }
@@ -984,6 +987,7 @@ describe('ADR-064 named reviewer transaction authority', () => {
       vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
         const envelope = JSON.parse(String(init?.body)) as SignedOfficeDecision;
         expect(checkSignedOfficeDecision(envelope, secret)).toBe('ok');
+      assert(envelope.event.kind !== 'deliver');
         expect(envelope.event.actor).toMatchObject({ userId: reviewerId, role: 'approver',
           authMethod: 'google_oidc', sessionHash });
         if (revokeBeforeProjection) {

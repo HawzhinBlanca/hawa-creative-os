@@ -22,8 +22,8 @@ function createMockContext(): StageContext {
     tier: 'premium',
     instructions: 'Design an elegant gala invitation',
     copyBlocks: [
-      { index: 0, role: 'title', text: 'Annual Gala 2026', script: 'latin' },
-      { index: 1, role: 'body', text: 'Join us for an evening of distinguished celebration.', script: 'latin' },
+      { text: 'Annual Gala 2026', script: 'latin' },
+      { text: 'Join us for an evening of distinguished celebration.', script: 'latin' },
     ],
     referencePack: {
       id: 'kaae_ref',
@@ -39,7 +39,7 @@ function createMockContext(): StageContext {
     artProvider,
     latinFont: 'Verdana',
     arabicFont: 'Noto Sans Arabic',
-    logoAspect: 1.0,
+    logoAspect: 1.0, promotedRules: '',
   };
 }
 

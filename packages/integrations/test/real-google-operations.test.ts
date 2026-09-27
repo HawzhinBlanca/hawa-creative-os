@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { assert, describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -176,7 +176,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
           byteSize: 12,
           sha256: testFileSha256,
         }],
-        destination: {
+        sheetRow: {}, destination: { sheetId: 0, sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
           productionRootFolderId: 'folder_root_123',
           spreadsheetId: 'sheet_prod_tracker',
         },
@@ -217,7 +217,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         byteSize: 12,
         sha256: 'sha256_absent',
       }],
-      destination: {
+      sheetRow: {}, destination: { sheetId: 0, sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
         productionRootFolderId: 'folder_root_123',
         spreadsheetId: 'sheet_prod_tracker',
       },
@@ -255,7 +255,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         byteSize: 12,
         sha256: testFileSha256,
       }],
-      destination: {
+      sheetRow: {}, destination: { sheetId: 0, sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
         productionRootFolderId: 'audit-invented-nonexistent-folder',
         spreadsheetId: 'sheet_prod_tracker',
       },
@@ -293,7 +293,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         byteSize: 12,
         sha256: testFileSha256,
       }],
-      destination: {
+      sheetRow: {}, destination: { sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
         productionRootFolderId: 'folder_prod_root_2026',
         spreadsheetId: 'sheet_prod_tracker',
         sheetId: 0,
@@ -301,7 +301,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
     };
 
     const res = await publisher.publish(dummyCtx, req);
-    expect(res.ok).toBe(true);
+    expect(res.ok).toBe(true); assert(res.ok);
     if (res.ok) {
       const receipt = res.value;
       expect(receipt.state).toBe('complete');
@@ -360,23 +360,23 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         byteSize: 12,
         sha256: testFileSha256,
       }],
-      destination: {
+      sheetRow: {}, destination: { sheetId: 0, sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
         productionRootFolderId: 'folder_prod_root_2026',
         spreadsheetId: 'sheet_prod_tracker',
       },
     };
 
     const pubRes = await publisher.publish(dummyCtx, req);
-    expect(pubRes.ok).toBe(true);
+    expect(pubRes.ok).toBe(true); assert(pubRes.ok);
     if (!pubRes.ok) return;
 
     const receipt = pubRes.value;
     const recRes = await publisher.reconcile(dummyCtx, receipt.publicationId);
-    expect(recRes.ok).toBe(true);
+    expect(recRes.ok).toBe(true); assert(recRes.ok);
 
     // Verify reads Drive and Sheets back: everything matches the receipt.
     const verifyRes = await publisher.verify(dummyCtx, receipt.publicationId);
-    expect(verifyRes.ok).toBe(true);
+    expect(verifyRes.ok).toBe(true); assert(verifyRes.ok);
     if (verifyRes.ok) {
       expect(verifyRes.value).toEqual({ consistent: true, differences: [] });
     }
@@ -384,7 +384,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
     const row = sheetRows.get(receipt.sheet.rowNumber!)!;
     row[6] = 'changed-package-hash';
     const diverged = await publisher.reconcile(dummyCtx, receipt.publicationId);
-    expect(diverged.ok).toBe(true);
+    expect(diverged.ok).toBe(true); assert(diverged.ok);
     if (diverged.ok) {
       expect(diverged.value.state).toBe('drive_complete');
       expect(diverged.value.sheet).toMatchObject({ synced: false, observedHash: 'changed-package-hash' });
@@ -396,7 +396,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
     const tokenUnavailable = vi.spyOn(publisher as any, 'getAccessToken').mockResolvedValue(null);
     try {
       const unknown = await publisher.reconcile(dummyCtx, receipt.publicationId);
-      expect(unknown.ok).toBe(true);
+      expect(unknown.ok).toBe(true); assert(unknown.ok);
       if (unknown.ok) {
         expect(unknown.value.state).toBe('drive_complete');
         expect(unknown.value.sheet).toMatchObject({ synced: false });
@@ -411,7 +411,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
     row[4] = 'IN_PROGRESS';
     purgedFiles.add(fileId);
     const afterPurge = await publisher.verify(dummyCtx, receipt.publicationId);
-    expect(afterPurge.ok).toBe(true);
+    expect(afterPurge.ok).toBe(true); assert(afterPurge.ok);
     if (afterPurge.ok) {
       expect(afterPurge.value.consistent).toBe(false);
       expect(afterPurge.value.differences).toEqual([

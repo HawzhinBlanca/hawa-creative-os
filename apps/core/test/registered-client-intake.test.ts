@@ -7,12 +7,12 @@ const db = createDb(process.env.TEST_DATABASE_URL!);
 const owner = createDb(process.env.TEST_DATABASE_OWNER_URL!);
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const scope = { tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' as const };
-const app = () => createApp({ db, testAuth: { principal: { role: 'operator', tenantId, userId: scope.userId } } });
+const app = () => createApp({ db, testAuth: { principal: { role: 'operator', userId: scope.userId } } });
 afterAll(() => Promise.all([db.destroy(), owner.destroy()]));
 async function client(active = true) {
   const id = randomUUID(), name = `Registered ${id}`;
   await withRlsContext(db, scope, async trx => {
-    await trx.insertInto('clients').values({ id, tenant_id: tenantId, code: id, name, status: active ? 'active' : 'inactive' }).execute();
+    await trx.insertInto('clients').values({ id, tenant_id: tenantId, code: id, name, aliases: [], default_language: 'en', retention_policy: {}, model_egress_policy: {}, status: active ? 'active' : 'inactive' }).execute();
     await trx.insertInto('client_dna_versions').values({ id: randomUUID(), tenant_id: tenantId, client_id: id,
       version: 1, status: 'active', content_hash: randomUUID(), dna: { ...kaaeClientDNA, clientId: 'client-old-alias', name } }).execute();
   });
@@ -48,7 +48,7 @@ describe('registered client scope at the Desk boundary (ADR-066)', () => {
     const clientId = await client(), otherClient = await client(), projectId = randomUUID(), userId = randomUUID();
     await withRlsContext(db, scope, async trx => {
       await trx.insertInto('projects').values({ id: projectId, tenant_id: tenantId, client_id: otherClient,
-        code: projectId, name: 'Other client project', status: 'active' }).execute();
+        code: projectId, name: 'Other client project', aliases: [], due_policy: {}, status: 'active' }).execute();
     });
     await owner.transaction().execute(async trx => {
       await sql`INSERT INTO hawa.users(id,email,external_subject,display_name)
@@ -57,7 +57,7 @@ describe('registered client scope at the Desk boundary (ADR-066)', () => {
         VALUES (${tenantId}::uuid,${userId}::uuid,'auditor',true)`.execute(trx);
     });
     expect((await post({ title: 'Wrong project', clientId, projectId, workflow: 'canva_manual' })).status).toBe(403);
-    const reader = createApp({ db, testAuth: { principal: { role: 'auditor', tenantId, userId } } });
+    const reader = createApp({ db, testAuth: { principal: { role: 'auditor', userId } } });
     const result = await reader.request('/v1/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Read-only attempt', clientId, workflow: 'canva_manual' }) });
     expect(result.status).toBe(403);

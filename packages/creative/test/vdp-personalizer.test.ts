@@ -34,7 +34,7 @@ describe('VdpInvitationBatchRunner & Personalization Engine', () => {
 
   it('personalizes template operations and applies protocol gold tier', () => {
     const baseOps = buildKaaeInvitationOperations({
-      clientName: 'Kurdistan Accrediting Association for Education',
+      title: 'Kurdistan Accrediting Association for Education',
     });
 
     const guest: VdpGuestRecord = {
@@ -60,7 +60,7 @@ describe('VdpInvitationBatchRunner & Personalization Engine', () => {
 
   it('processes a multi-guest batch with distinct cryptographic manifests', () => {
     const baseOps = buildKaaeInvitationOperations({
-      clientName: 'Kurdistan Accrediting Association for Education',
+      title: 'Kurdistan Accrediting Association for Education',
     });
 
     const roster: VdpGuestRecord[] = [

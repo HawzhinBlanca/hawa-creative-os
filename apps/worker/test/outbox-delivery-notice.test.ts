@@ -31,7 +31,7 @@ afterAll(async () => {
 
 const asTenant = <T>(fn: (trx: Kysely<Database>) => Promise<T>) => withRlsContext(db, { tenantId, userId, role: 'administrator' }, fn);
 
-async function enqueue(commandType: string, payload: Record<string, unknown>, aggregateId = randomUUID()) {
+async function enqueue(commandType: string, payload: Record<string, unknown>, aggregateId: string = randomUUID()) {
   const idempotencyKey = `delivery-notice-test-${randomUUID()}`;
   await asTenant((trx) => outbox.enqueue({ tenantId, aggregateType: 'task', aggregateId, commandType, idempotencyKey, payload }, trx));
   return { idempotencyKey, aggregateId };
@@ -62,7 +62,7 @@ describe('notify.published', () => {
     const pdf = new Uint8Array(Array.from({ length: 64 }, (_, i) => 255 - i));
     const pngId = randomUUID();
     const pdfId = randomUUID();
-    const stored = new Map([[pngId, png], [pdfId, pdf]]);
+    const stored = new Map<string, Uint8Array>([[pngId, png], [pdfId, pdf]]);
     const { idempotencyKey } = await enqueue('notify.published', {
       taskId: randomUUID(),
       title: 'Eid <poster> & *sale*',
@@ -116,7 +116,7 @@ describe('notify.published', () => {
     const b = new Uint8Array(Array.from({ length: 31 }, (_, i) => 200 - i));
     const aId = randomUUID();
     const bId = randomUUID();
-    const stored = new Map([[aId, a], [bId, b]]);
+    const stored = new Map<string, Uint8Array>([[aId, a], [bId, b]]);
     const chat = String(5000 + Math.floor(Math.random() * 1000));
     const { idempotencyKey } = await enqueue('notify.published', {
       taskId: randomUUID(), title: 'Retry', chatId: chat,

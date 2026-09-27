@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { assert, describe, it, expect, beforeEach } from 'vitest';
 import crypto from 'node:crypto';
 import {
   CanvaCapturePipeline,
@@ -46,7 +46,7 @@ describe('CV-13: Capture Real Immutable Output Packages', () => {
       const pngBuffer = createSyntheticValidPng(1080, 1350);
       const res = pipeline.validateArtifactBytes(pngBuffer, 'png');
 
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.format).toBe('png');
@@ -67,7 +67,7 @@ describe('CV-13: Capture Real Immutable Output Packages', () => {
       });
       const res = pipeline.validateArtifactBytes(pdfBuffer, 'pdf_print');
 
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.format).toBe('pdf_print');
@@ -147,7 +147,7 @@ describe('CV-13: Capture Real Immutable Output Packages', () => {
         rawBufferOverride: pngBuffer,
       });
 
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.format).toBe('png');
@@ -164,14 +164,14 @@ describe('CV-13: Capture Real Immutable Output Packages', () => {
         version: 1,
         format: 'pdf_print',
       });
-      expect(initRes.ok).toBe(true);
+      expect(initRes.ok).toBe(true); assert(initRes.ok);
       if (!initRes.ok) return;
 
       const jobId = initRes.value.jobId;
 
       // Reconcile
       const reconRes = await pipeline.reconcileExportJob(jobId);
-      expect(reconRes.ok).toBe(true);
+      expect(reconRes.ok).toBe(true); assert(reconRes.ok);
       if (!reconRes.ok) return;
 
       expect(reconRes.value.jobId).toBe(jobId);
@@ -208,7 +208,7 @@ describe('CV-13: Capture Real Immutable Output Packages', () => {
         version: 1,
       });
 
-      expect(ingestRes.ok).toBe(true);
+      expect(ingestRes.ok).toBe(true); assert(ingestRes.ok);
       if (!ingestRes.ok) return;
 
       expect(ingestRes.value.format).toBe('pdf_print');
@@ -242,6 +242,7 @@ describe('CV-13: Capture Real Immutable Output Packages', () => {
         rawBufferOverride: createSyntheticValidPdf({ cmyk: true }),
       });
 
+      assert(png1.ok); assert(png2.ok); assert(printPdf.ok);
       const publishRes = await pipeline.publishCapturePackage({
         tenantId,
         bindingId,
@@ -283,6 +284,7 @@ describe('CV-13: Capture Real Immutable Output Packages', () => {
         rawBufferOverride: createSyntheticValidPdf({ cmyk: true }),
       });
 
+      assert(png1.ok); assert(printPdf.ok);
       const publishRes = await pipeline.publishCapturePackage({
         tenantId,
         bindingId,
@@ -345,6 +347,7 @@ describe('CV-13: Capture Real Immutable Output Packages', () => {
         rawBufferOverride: createSyntheticValidPdf({ cmyk: false }),
       });
 
+      assert(png4x5.ok); assert(png1x1.ok); assert(png9x16.ok); assert(pdfPrint.ok); assert(pdfStandard.ok);
       const artifacts: CanvaCapturedArtifact[] = [
         png4x5.value!,
         png1x1.value!,
@@ -381,7 +384,7 @@ describe('CV-13: Capture Real Immutable Output Packages', () => {
         },
       });
 
-      expect(publishRes.ok).toBe(true);
+      expect(publishRes.ok).toBe(true); assert(publishRes.ok);
       if (!publishRes.ok) return;
 
       const captureSet = publishRes.value;

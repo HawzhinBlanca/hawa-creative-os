@@ -106,7 +106,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${clientId}::uuid,${scope.tenantId}::uuid,'kaae','KAAE') ON CONFLICT DO NOTHING`.execute(db);});
   afterAll(()=>db.destroy());
   it('cannot bypass a held Studio request through the alternate planner',async()=>{
-    const taskId=await intake(),fetcher=vi.fn(),repo=new DesignStudioRepository(db),runId=randomUUID();
+    const taskId=await intake(),fetcher=vi.fn<typeof fetch>(),repo=new DesignStudioRepository(db),runId=randomUUID();
     await repo.createRun({id:runId,tenantId:scope.tenantId,taskId,clientId,actorId:scope.actorId,
       requestKey:`studio-${runId}`,requestHash:'a'.repeat(64),request:{},tier:'premium'});
     await repo.recordCallStart({id:randomUUID(),runId,...scope,stage:'briefing',provider:'openai',model:'test',
@@ -120,7 +120,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect((await sql`SELECT id FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
   });
   it.each(['complete','cancelled','rejected','paused','approved','publishing'])('refuses paid planning for a %s task',async state=>{
-    const taskId=await intake(),fetcher=vi.fn();
+    const taskId=await intake(),fetcher=vi.fn<typeof fetch>();
     await sql`UPDATE hawa.tasks SET state=${state}::hawa.task_state WHERE id=${taskId}::uuid`.execute(db);
     const {planner,api}=make(fetcher);
     await expect(planner.generate(scope,taskId,`closed-${randomUUID()}`,1200,1697))
@@ -130,7 +130,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect((await sql`SELECT id FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
   });
   it('makes one paid call across simultaneous clicks and resumes immutable bytes after replacement',async()=>{
-    const id=await intake(),remote=vi.fn(async()=>{await new Promise(r=>setTimeout(r,30));return response();}),{api,planner}=make(remote);
+    const id=await intake(),remote=vi.fn<typeof fetch>(async()=>{await new Promise(r=>setTimeout(r,30));return response();}),{api,planner}=make(remote);
     await Promise.all([planner.generate(scope,id,'plan-key-001',1200,1697),planner.generate(scope,id,'plan-key-002',1200,1697)]);
     expect(remote).toHaveBeenCalledTimes(1);
     const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
@@ -151,11 +151,11 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] Sorani plan',
       rawText:'Use navy.\n---\nEXACT TITLE\n\nوۆرکشۆپی دڵنیایی جۆری بۆ بەرپرسانی زانکۆکان، ٢٨ی ئەیلوول ٢٠٢٦',designInstructions:'Use navy.',exactCopy:[]})).task.id;
     const modelPlan=structuredClone(plan) as any;modelPlan.text[1].fontFamily='Noto Sans Arabic'; // the model may name the script typeface on the Sorani block; the server decides direction either way
-    const remote=vi.fn(async()=>response('gpt-6-astra',modelPlan));
+    const remote=vi.fn<typeof fetch>(async()=>response('gpt-6-astra',modelPlan));
     const {api,planner}=make(remote);
     const result=await planner.generate(scope,id,'sorani-key-01',1200,1697);
     expect(result.status).toBe('submitted');expect(remote).toHaveBeenCalledTimes(1);
-    const sent=JSON.parse(remote.mock.calls[0][1].body);expect(sent.messages[0].content).toContain('Sorani Kurdish');
+    const sent=JSON.parse(String(remote.mock.calls[0][1]?.body));expect(sent.messages[0].content).toContain('Sorani Kurdish');
     expect(sent.messages[0].content).not.toContain('Kurdistan Sun Gold');
     expect(sent.messages[0].content).not.toContain('Midnight Navy');
     expect(sent.messages[0].content).toContain('Client reference palette');
@@ -187,7 +187,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   it('refuses copy in a script the transfer cannot set, before any paid call',async()=>{
     const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] CJK plan',
       rawText:'Use navy.\n---\nEXACT TITLE\n\n质量保证研讨会',designInstructions:'Use navy.',exactCopy:[]})).task.id;
-    const remote=vi.fn(async()=>response());const {api,planner}=make(remote);
+    const remote=vi.fn<typeof fetch>(async()=>response());const {api,planner}=make(remote);
     await expect(planner.generate(scope,id,'cjk-key-01',1200,1697)).rejects.toMatchObject({code:'COPY_UNSUPPORTED'});
     expect(remote).not.toHaveBeenCalled();expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
@@ -197,7 +197,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',
       clientId:otherClientId,title:'[TEST] Other client plan',rawText:'Use our colors.\n---\nOTHER TITLE\n\nOther body.',
       designInstructions:'Use our colors.',exactCopy:[]})).task.id;
-    const remote=vi.fn(async()=>response());const {api,planner}=make(remote);
+    const remote=vi.fn<typeof fetch>(async()=>response());const {api,planner}=make(remote);
     await expect(planner.generate(scope,id,'other-client-01',1200,1697)).rejects.toMatchObject({code:'CLIENT_REFERENCE_REQUIRED'});
     expect(remote).not.toHaveBeenCalled();expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
@@ -225,10 +225,10 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
       designInstructions:'Use open spacing.',exactCopy:[]})).task.id;
     const otherPlan={...structuredClone(plan),background:'#214365',logo:{x:500,y:50,width:200,height:200},
       text:[{...plan.text[0],fontFamily:'Inter',color:'#FAFAFA'},{...plan.text[1],fontFamily:'Inter',color:'#FAFAFA'}]};
-    const remote=vi.fn(async()=>response('gpt-6-astra',otherPlan));const {api,planner}=make(remote);
+    const remote=vi.fn<typeof fetch>(async()=>response('gpt-6-astra',otherPlan));const {api,planner}=make(remote);
     const result=await planner.generate(scope,id,'other-dna-001',1200,1697);
     expect(result.status).toBe('submitted');expect(api.importEditableDesign).toHaveBeenCalledTimes(1);
-    const sent=JSON.parse(remote.mock.calls[0][1].body);
+    const sent=JSON.parse(String(remote.mock.calls[0][1]?.body));
     expect(sent.messages[0].content).toContain('#214365');
     expect(sent.messages[0].content).not.toContain('#F7B500');
     expect(JSON.stringify(sent)).not.toContain('KAAE');
@@ -265,7 +265,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   it('refuses a divider with nothing after it as missing copy, before any paid call',async()=>{
     const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] No-copy plan',
       rawText:'Make a poster in navy.\n---\n',designInstructions:'Make a poster in navy.',exactCopy:[]})).task.id;
-    const remote=vi.fn(async()=>response());const {api,planner}=make(remote);
+    const remote=vi.fn<typeof fetch>(async()=>response());const {api,planner}=make(remote);
     await expect(planner.generate(scope,id,'nocopy-key-01',1200,1697)).rejects.toMatchObject({status:422,code:'COPY_REQUIRED'});
     expect(remote).not.toHaveBeenCalled();expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
@@ -278,7 +278,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const result=await planner.generate(scope,id,'reject-key-01',1200,1697);expect(result.status).toBe('failed');expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
   it('does not repeat an uncertain model charge after a lost response',async()=>{
-    const id=await intake(),remote=vi.fn(async()=>{throw new Error('lost');}),{api,planner}=make(remote);
+    const id=await intake(),remote=vi.fn<typeof fetch>(async()=>{throw new Error('lost');}),{api,planner}=make(remote);
     expect((await planner.generate(scope,id,'lost-key-001',1200,1697)).status).toBe('uncertain');
     expect((await planner.generate(scope,id,'lost-key-002',1200,1697)).status).toBe('uncertain');
     expect(remote).toHaveBeenCalledTimes(1);expect(api.importEditableDesign).not.toHaveBeenCalled();
@@ -299,7 +299,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   it('correctly parses model output wrapped in markdown codeblocks and conversational intro/outro',async()=>{
     const id=await intake();
     const conversationalText = `Here is the academic invitation design layout you requested:\n\n\`\`\`json\n${JSON.stringify(plan, null, 2)}\n\`\`\`\n\nI have followed all brand rules carefully.`;
-    const remote = vi.fn(async() => Response.json({
+    const remote = vi.fn<typeof fetch>(async() => Response.json({
       id:'chatcmpl-conversational-test',
       model:'gpt-6-astra',
       usage:{prompt_tokens:120,completion_tokens:450},
@@ -313,12 +313,12 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   it('threads prior layout and revision directive into a 4-turn conversational session for revisions',async()=>{
     // 1. First draft creates an initial plan
     const initialTaskId=await intake();
-    const remoteInitial=vi.fn(async()=>response('gpt-6-astra',plan));
+    const remoteInitial=vi.fn<typeof fetch>(async()=>response('gpt-6-astra',plan));
     const {planner:planner1}=make(remoteInitial);
     const initialResult=await planner1.generate(scope,initialTaskId,'plan-init-001',1200,1697);
     expect(initialResult.status).toBe('submitted');
     expect(remoteInitial).toHaveBeenCalledTimes(1);
-    const initialSent=JSON.parse(remoteInitial.mock.calls[0][1].body);
+    const initialSent=JSON.parse(String(remoteInitial.mock.calls[0][1]?.body));
     expect(initialSent.messages).toHaveLength(2);
     expect(initialSent.messages[0].role).toBe('system');
     expect(initialSent.messages[1].role).toBe('user');
@@ -346,16 +346,15 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     })).task.id;
 
     // Model returns updated plan
-    const updatedPlan=structuredClone(plan);
-    updatedPlan.shapes.push({x:400,y:350,width:300,height:4,color:'#F7B500'});
-    const remoteRevision=vi.fn(async()=>response('gpt-6-astra',updatedPlan));
+    const updatedPlan={...structuredClone(plan),shapes:[{x:400,y:350,width:300,height:4,color:'#F7B500'}]};
+    const remoteRevision=vi.fn<typeof fetch>(async()=>response('gpt-6-astra',updatedPlan));
     const {planner:planner2}=make(remoteRevision);
 
     const revisionResult=await planner2.generate(scope,revisionTaskId,'plan-rev-001',1200,1697);
     expect(revisionResult.status).toBe('submitted');
     expect(remoteRevision).toHaveBeenCalledTimes(1);
 
-    const revisionSent=JSON.parse(remoteRevision.mock.calls[0][1].body);
+    const revisionSent=JSON.parse(String(remoteRevision.mock.calls[0][1]?.body));
     expect(revisionSent.messages).toHaveLength(2);
 
     // Turn 0: System with revision mode guidelines
@@ -399,9 +398,9 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
       for(const ref of refs)await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
         VALUES(${scope.tenantId}::uuid,${taskId}::uuid,${ref.sha256},'reference_image')`.execute(trx);
     });
-    const remote=vi.fn(async()=>response());
+    const remote=vi.fn<typeof fetch>(async()=>response());
     expect((await make(remote).planner.generate(scope,taskId,'owned-album-0001',1200,1697)).status).toBe('submitted');
-    const sent=JSON.parse(remote.mock.calls[0][1].body);
+    const sent=JSON.parse(String(remote.mock.calls[0][1]?.body));
     const attached=sent.messages[1].content.filter((part:any)=>part.type==='image_url')
       .map((part:any)=>createHash('sha256').update(Buffer.from(part.image_url.url.split(',')[1],'base64')).digest('hex'));
     expect(attached.slice(0,2)).toEqual([refs[1].sha256,refs[0].sha256]);
@@ -438,10 +437,10 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
       await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
         VALUES(${scope.tenantId}::uuid,${childTaskId}::uuid,${stored.sha256},'reference_image')`.execute(trx);
     });
-    const remote=vi.fn(async()=>response());
+    const remote=vi.fn<typeof fetch>(async()=>response());
     const result=await make(remote).planner.generate(scope,childTaskId,'owned-photo-child-01',1200,1697);
     expect(result.status).toBe('submitted');
-    const sent=JSON.parse(remote.mock.calls[0][1].body);
+    const sent=JSON.parse(String(remote.mock.calls[0][1]?.body));
     const parts=sent.messages[1].content;
     expect(parts.filter((part:any)=>part.type==='image_url')).toEqual([
       {type:'image_url',image_url:{url:`data:image/png;base64,${photo.toString('base64')}`}},
@@ -470,7 +469,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   it('breaks free from previous layout coordinates and supports multimodal reference photo when user requests redesign', async () => {
     // 1. Initial plan
     const initialTaskId = await intake();
-    const remoteInitial = vi.fn(async () => response('gpt-6-astra', plan));
+    const remoteInitial = vi.fn<typeof fetch>(async () => response('gpt-6-astra', plan));
     const { planner: planner1 } = make(remoteInitial);
     await planner1.generate(scope, initialTaskId, 'plan-init-rd-001', 1200, 1697);
 
@@ -495,14 +494,14 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
 
     const freshPlan = structuredClone(plan);
     freshPlan.background = '#0A1628';
-    const remoteRedesign = vi.fn(async () => response('gpt-6-astra', freshPlan));
+    const remoteRedesign = vi.fn<typeof fetch>(async () => response('gpt-6-astra', freshPlan));
     const { planner: planner2 } = make(remoteRedesign);
 
     const result = await planner2.generate(scope, redesignTaskId, 'plan-redesign-001', 1200, 1697);
     expect(result.status).toBe('submitted');
     expect(remoteRedesign).toHaveBeenCalledTimes(1);
 
-    const sent = JSON.parse(remoteRedesign.mock.calls[0][1].body);
+    const sent = JSON.parse(String(remoteRedesign.mock.calls[0][1]?.body));
     expect(sent.messages).toHaveLength(2);
     // Turn 0: System prompt has redesign directive and vision note
     expect(sent.messages[0].role).toBe('system');

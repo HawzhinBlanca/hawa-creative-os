@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleUpdate, INTAKE_ATTEMPTS, chatInbox, type InboxContext } from '../src/lifecycle/chat-inbox.js';
+import { handleUpdate, INTAKE_ATTEMPTS, chatInbox, type ChatInboxCore, type InboxContext } from '../src/lifecycle/chat-inbox.js';
 import { createCoreClient } from '../src/lifecycle/core-client.js';
 
 /**
@@ -80,8 +80,8 @@ async function untilSettled(ctx: FakeContext, run: () => Promise<unknown>, attem
 }
 
 function core(answers: Array<() => Promise<any>>) {
-  const intake = vi.fn(async () => (answers.shift() ?? (async () => ({ kind: 'done', intakeStatus: 201 })))());
-  const park = vi.fn(async () => {});
+  const intake = vi.fn<ChatInboxCore['intake']>(async () => (answers.shift() ?? (async () => ({ kind: 'done', intakeStatus: 201 })))());
+  const park = vi.fn<ChatInboxCore['park']>(async () => {});
   return { intake, park };
 }
 

@@ -46,7 +46,7 @@ function tempDir(prefix: string): string {
 
 function layoutWith(text: Partial<TextElement>[]): StudioLayoutV2 {
   return {
-    version: 2,
+    version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
     width: 1000,
     height: 600,
     grid: { margin: 40, columns: 6, gutter: 20, baseline: 8 },

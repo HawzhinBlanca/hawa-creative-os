@@ -13,7 +13,7 @@ const make=async()=>{
   })});
   expect(r.status).toBe(201);return (await r.json()).id as string;
 };
-const act=(id:string,control:string,version:number,key=randomUUID(),reason='Synthetic operator decision',role?:string)=>app().request(`/v1/tasks/${id}/${control}`,{
+const act=(id:string,control:string,version:number,key:string=randomUUID(),reason='Synthetic operator decision',role?:string)=>app().request(`/v1/tasks/${id}/${control}`,{
   method:'POST',headers:{...headers,'Idempotency-Key':key,...(role?{'x-user-role':role}:{})},body:JSON.stringify({expectedVersion:version,reason}),
 });
 beforeAll(async()=>{

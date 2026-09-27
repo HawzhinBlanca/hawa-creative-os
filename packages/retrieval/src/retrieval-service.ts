@@ -179,13 +179,7 @@ export class RetrievalService implements RetrievalProvider {
 
     const evidence: RetrievalCandidate[] = [];
     const negativeEvidence: RetrievalCandidate[] = [];
-    const unresolvedConflicts: Array<{
-      id: string;
-      conflictType: string;
-      severity: string;
-      description: string;
-      safeAction?: string;
-    }> = [];
+    const unresolvedConflicts: ContextPack['unresolvedConflicts'] = [];
 
     // Check for prohibited phrases in intent queries
     const prohibitedRules = clientPool.filter(
@@ -199,6 +193,9 @@ export class RetrievalService implements RetrievalProvider {
           unresolvedConflicts.push({
             id: crypto.randomUUID(),
             conflictType: 'PROHIBITED_LEXICON_VIOLATION',
+            type: 'PROHIBITED_LEXICON_VIOLATION',
+            sourceIds: [p.sourceId],
+            message: `Query violates client prohibited guidelines: contains "${p.text}"`,
             severity: 'BLOCKING',
             description: `Query violates client prohibited guidelines: contains "${p.text}"`,
             safeAction: 'Remove prohibited phrase or seek client exception',
@@ -213,6 +210,9 @@ export class RetrievalService implements RetrievalProvider {
           unresolvedConflicts.push({
             id: crypto.randomUUID(),
             conflictType: 'MISSING_BRAND_ASSET',
+            type: 'MISSING_BRAND_ASSET',
+            sourceIds: [],
+            message: `No approved official assets exist for client ${ctx.clientId}. Cannot invent placeholder branding.`,
             severity: 'BLOCKING',
             description: `No approved official assets exist for client ${ctx.clientId}. Cannot invent placeholder branding.`,
             safeAction: 'Upload official vector logo/assets before generation',
@@ -298,7 +298,7 @@ export class RetrievalService implements RetrievalProvider {
       },
       evidence: [...new Map(evidence.map((item) => [item.id, item])).values()].slice(0, 10),
       negativeEvidence: [...new Map(negativeEvidence.map((item) => [item.id, item])).values()].slice(0, 5),
-      unresolvedConflicts: unresolvedConflicts as any,
+      unresolvedConflicts,
       retrievalTrace: {
         poolCount: clientPool.length,
         intentsCount: intents.length,

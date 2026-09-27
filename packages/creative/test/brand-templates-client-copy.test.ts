@@ -27,9 +27,9 @@ describe.each(TEMPLATES)('$brand template', ({ brand, build, width, height }) =>
   it('draws only the English copy for an English-only request, with the English headline as the headline', () => {
     const ops = build(ENGLISH);
     expect(texts(ops)).toEqual([ENGLISH.headlineEn, ENGLISH.copyEn]);
-    const headline = ops.find((op) => op.op === 'addText' && op.nodeId === `${brand}_headline_en`);
+    const headline = ops.find((op): op is Extract<StudioOperation, {op: 'addText'}> => op.op === 'addText' && op.nodeId === `${brand}_headline_en`);
     expect(headline).toMatchObject({ role: 'headline', style: { direction: 'ltr' } });
-    const body = ops.find((op) => op.op === 'addText' && op.nodeId === `${brand}_copy_en`);
+    const body = ops.find((op): op is Extract<StudioOperation, {op: 'addText'}> => op.op === 'addText' && op.nodeId === `${brand}_copy_en`);
     expect(body).toMatchObject({ role: 'body', style: { direction: 'ltr' } });
     expect(() => renderOperationsToSvg(ops, width, height)).not.toThrow();
   });
@@ -42,7 +42,7 @@ describe.each(TEMPLATES)('$brand template', ({ brand, build, width, height }) =>
 
   it('leaves out the badge, offer, contact line and their frames when none were sent', () => {
     const ops = build({ ...KURDISH, headlineEn: '  ', copyEn: '' });
-    const ids = ops.map((op) => op.nodeId);
+    const ids = ops.flatMap(op => 'nodeId' in op ? [op.nodeId] : []);
     for (const slot of ['authority_badge', 'discount_display', 'contact_info', 'footer_bg', 'headline_en', 'copy_en']) {
       expect(ids).not.toContain(`${brand}_${slot}`);
     }
@@ -58,7 +58,7 @@ describe.each(TEMPLATES)('$brand template', ({ brand, build, width, height }) =>
   it('draws no card when there is no body or offer to put in it', () => {
     const ops = build({ headlineCkb: KURDISH.headlineCkb });
     expect(texts(ops)).toEqual([KURDISH.headlineCkb]);
-    expect(ops.map((op) => op.nodeId).some((id) => /card/.test(id))).toBe(false);
+    expect(ops.flatMap(op => 'nodeId' in op ? [op.nodeId] : []).some((id) => /card/.test(id))).toBe(false);
   });
 
   it('carries no service claims in its vector shapes, and its SVG is valid XML', () => {

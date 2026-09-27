@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { assert, describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +29,7 @@ describe('Task 2: Elimination of emulateNetworkForTesting and Verification of fa
         tenantId: '00000000-0000-4000-a000-000000000001',
         taskId: 'task-fake-drive-test-1',
         actor: { type: 'workflow', id: 'test' },
-        correlationId: 'corr-fake-1',
+        correlationId: 'corr-fake-1', idempotencyKey: 'fake-drive-fixture',
         deadline: new Date(Date.now() + 60000).toISOString(),
       };
     });
@@ -57,7 +57,7 @@ describe('Task 2: Elimination of emulateNetworkForTesting and Verification of fa
         approvalId: 'app-1',
         publicationKey: 'pub-key-1',
         packageHash: 'pkg-hash-1',
-        destination: {
+        sheetRow: {}, destination: { sheetId: 0, sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
           productionRootFolderId: 'fake-folder-root',
           spreadsheetId: 'fake-spreadsheet-1',
         },
@@ -68,13 +68,13 @@ describe('Task 2: Elimination of emulateNetworkForTesting and Verification of fa
             byteSize: fileBuffer.length,
             sha256,
             mimeType: 'image/png',
-            content: fileContent,
+            relativePath: 'test-delivery.png', storageKey: 'fixture-inline-content', content: fileBuffer,
           },
         ],
       };
 
       const res = await publisher.publish(ctx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.state).toBe('complete');

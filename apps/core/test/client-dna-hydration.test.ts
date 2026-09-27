@@ -112,8 +112,8 @@ describe('loadActiveClientDna: PostgreSQL answers first, by uuid, code or client
   it('100 task creates at once no longer exhaust the pool through the DNA lookup', async () => {
     const app = createAppWithClientFixtures({ db });
     const headers = { 'content-type': 'application/json', Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };
-    const results = await Promise.all(Array.from({ length: 100 }, (_, i) =>
-      app.request('/v1/tasks', { method: 'POST', headers, body: JSON.stringify({ title: `Pool check ${i}`, clientId: kaaeId }) }).then((r) => r.status)));
+    const results = await Promise.all(Array.from({ length: 100 }, async (_, i) =>
+      (await app.request('/v1/tasks', { method: 'POST', headers, body: JSON.stringify({ title: `Pool check ${i}`, clientId: kaaeId }) })).status));
     const ok = results.filter((s) => s === 201).length;
     expect(ok).toBe(100);
   }, 120_000);

@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import type { StudioOperation } from '@hawa/contracts';
+import { assert, describe, it, expect } from 'vitest';
 import {
   BriefBuilder,
   DesignRouter,
@@ -53,7 +54,7 @@ describe('Milestone 4: Multi-Format Composition & Layout Engine', () => {
       rawRequestText: 'بانگەوازی نیشتمانی بۆ خوێندنی باڵا: سەرجەم قەبارەکان (ستۆری، پۆست، پانۆراما و چاپی A4)',
     });
 
-    expect(briefRes.ok).toBe(true);
+    expect(briefRes.ok).toBe(true); assert(briefRes.ok);
     if (!briefRes.ok) return;
 
     const resolution = router.resolveRoute(briefRes.value, []);
@@ -74,7 +75,7 @@ describe('Milestone 4: Multi-Format Composition & Layout Engine', () => {
       rawRequestText: 'دەستەی متمانەبەخشی: بانگەواز بۆ هەڵسەنگێنەرانی نیشتمانی لە هەولێر و سلێمانی',
     });
 
-    expect(briefRes.ok).toBe(true);
+    expect(briefRes.ok).toBe(true); assert(briefRes.ok);
     if (!briefRes.ok) return;
 
     const brief = briefRes.value;
@@ -114,7 +115,7 @@ describe('Milestone 4: Multi-Format Composition & Layout Engine', () => {
       rawRequestText: 'بڕیاری فەرمی دەستەی متمانەبەخشین: ستانداردە نوێیەکانی پەروەردە و فێرکردن ڕاگەیەندرا',
     });
 
-    expect(briefRes.ok).toBe(true);
+    expect(briefRes.ok).toBe(true); assert(briefRes.ok);
     if (!briefRes.ok) return;
 
     const brief = briefRes.value;
@@ -125,7 +126,7 @@ describe('Milestone 4: Multi-Format Composition & Layout Engine', () => {
       const ops = director.generateStudioOperations(brief, plan, KAAE_PRIMARY_LOGO_SHA256, fmt);
 
       // Background must match exact dimensions
-      const bgOp = ops.find((o) => o.op === 'addVector' && o.nodeId === 'node_bg');
+      const bgOp = ops.find((o): o is Extract<StudioOperation, {op: 'addVector'}> => o.op === 'addVector' && o.nodeId === 'node_bg');
       expect(bgOp).toBeDefined();
       expect(bgOp?.width).toBe(CANONICAL_FORMATS[fmt].width);
       expect(bgOp?.height).toBe(CANONICAL_FORMATS[fmt].height);
@@ -161,7 +162,7 @@ describe('Milestone 4: Multi-Format Composition & Layout Engine', () => {
       rawRequestText: 'دەستەی متمانەبەخشی: بانگەوازی هەڵسەنگێنەران بۆ زانکۆکانی هەرێمی کوردستان',
     });
 
-    expect(briefRes.ok).toBe(true);
+    expect(briefRes.ok).toBe(true); assert(briefRes.ok);
     if (!briefRes.ok) return;
 
     const batch = director.generateMultiFormatStudioOperations(briefRes.value, KAAE_PRIMARY_LOGO_SHA256);
