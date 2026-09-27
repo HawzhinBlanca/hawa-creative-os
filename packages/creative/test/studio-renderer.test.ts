@@ -18,23 +18,26 @@ import {
   MORNING_REQUEST_COPY,
 } from '../../../scripts/render_studio_v2_proofs.js';
 
+// The goldens are KAAE designs: their logo is handed in, as the studio hands a client's. The
+// renderer has no default logo any more (ADR-038).
+const KAAE_LOGO = { logoDataUri: getKaaeOfficialLogoDataUri() };
+
 describe('Design Studio v2: Local Renderer (renderLayoutV2) & Goldens', () => {
   it('renders Latin golden layout with Verdana, exact line wrapping, and ≤ 1.0% diff', () => {
-    const res1 = renderLayoutV2(LATIN_LAYOUT, { copyText: LATIN_COPY });
+    const res1 = renderLayoutV2(LATIN_LAYOUT, { copyText: LATIN_COPY, ...KAAE_LOGO });
     expect(res1.png.length).toBeGreaterThan(20000);
     expect(res1.noTextPng.length).toBeGreaterThan(10000);
     expect(res1.wrappedLines).toEqual({ 0: 1, 1: 2, 2: 1, 3: 2, 4: 1 });
     expect(res1.fontFidelity['Verdana']).toBe('exact');
 
-    const res2 = renderLayoutV2(LATIN_LAYOUT, { copyText: LATIN_COPY });
+    const res2 = renderLayoutV2(LATIN_LAYOUT, { copyText: LATIN_COPY, ...KAAE_LOGO });
     const diff = comparePngBuffers(res1.png, res2.png);
     expect(diff.diffPercentage).toBeLessThanOrEqual(1.0);
     expect(diff.diffPercentage).toBe(0.0);
   });
 
   it('renders Sorani Kurdish golden layout with Noto Sans Arabic, RTL bidi, and ≤ 1.0% diff', () => {
-    // The golden design carries KAAE's logo, handed in as the studio hands a client's (ADR-038).
-    const res1 = renderLayoutV2(SORANI_LAYOUT, { copyText: SORANI_COPY, logoDataUri: getKaaeOfficialLogoDataUri() });
+    const res1 = renderLayoutV2(SORANI_LAYOUT, { copyText: SORANI_COPY, ...KAAE_LOGO });
     expect(res1.png.length).toBeGreaterThan(20000);
     expect(res1.noTextPng.length).toBeGreaterThan(10000);
     expect(res1.wrappedLines).toEqual({ 0: 1, 1: 2, 2: 1, 3: 2, 4: 1 });
@@ -50,25 +53,25 @@ describe('Design Studio v2: Local Renderer (renderLayoutV2) & Goldens', () => {
     expect(res1.svg).toContain('\u202B');
     expect(res1.svg).toContain('Noto Sans Arabic');
 
-    const res2 = renderLayoutV2(SORANI_LAYOUT, { copyText: SORANI_COPY, logoDataUri: getKaaeOfficialLogoDataUri() });
+    const res2 = renderLayoutV2(SORANI_LAYOUT, { copyText: SORANI_COPY, ...KAAE_LOGO });
     const diff = comparePngBuffers(res1.png, res2.png);
     expect(diff.diffPercentage).toBeLessThanOrEqual(1.0);
     expect(diff.diffPercentage).toBe(0.0);
   });
 
   it('renders Mixed Latin + Sorani golden layout and verifies ≤ 1.0% diff', () => {
-    const res1 = renderLayoutV2(MIXED_LAYOUT, { copyText: MIXED_COPY });
+    const res1 = renderLayoutV2(MIXED_LAYOUT, { copyText: MIXED_COPY, ...KAAE_LOGO });
     expect(res1.png.length).toBeGreaterThan(20000);
     expect(res1.wrappedLines).toEqual({ 0: 1, 1: 1, 2: 1, 3: 2, 4: 1 });
 
-    const res2 = renderLayoutV2(MIXED_LAYOUT, { copyText: MIXED_COPY });
+    const res2 = renderLayoutV2(MIXED_LAYOUT, { copyText: MIXED_COPY, ...KAAE_LOGO });
     const diff = comparePngBuffers(res1.png, res2.png);
     expect(diff.diffPercentage).toBeLessThanOrEqual(1.0);
     expect(diff.diffPercentage).toBe(0.0);
   });
 
   it('renders 2026-09-14 morning request copy at 1080x1350 with exact wrapped line metrics', () => {
-    const res1 = renderLayoutV2(MORNING_REQUEST_LAYOUT, { copyText: MORNING_REQUEST_COPY });
+    const res1 = renderLayoutV2(MORNING_REQUEST_LAYOUT, { copyText: MORNING_REQUEST_COPY, ...KAAE_LOGO });
     expect(res1.png.length).toBeGreaterThan(50000);
     expect(res1.wrappedLines).toEqual({
       0: 1,
@@ -81,7 +84,7 @@ describe('Design Studio v2: Local Renderer (renderLayoutV2) & Goldens', () => {
       7: 1,
     });
 
-    const res2 = renderLayoutV2(MORNING_REQUEST_LAYOUT, { copyText: MORNING_REQUEST_COPY });
+    const res2 = renderLayoutV2(MORNING_REQUEST_LAYOUT, { copyText: MORNING_REQUEST_COPY, ...KAAE_LOGO });
     const diff = comparePngBuffers(res1.png, res2.png);
     expect(diff.diffPercentage).toBeLessThanOrEqual(1.0);
     expect(diff.diffPercentage).toBe(0.0);
