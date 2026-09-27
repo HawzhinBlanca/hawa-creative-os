@@ -243,6 +243,7 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
         const res = await gateway.generateStructured(ctx, {
           role: 'visual_judge',
           prompt: 'Evaluate layout quality',
+          egressPolicy: { mode: 'approved_providers', allowedProviders: ['google'] },
           inputs: [
             { kind: 'image', mimeType: 'image/png', data: dummyBase64 },
           ],

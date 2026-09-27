@@ -814,3 +814,36 @@ This is engineering evidence for the isolated candidate. Production, actual huma
 review, native edit/save/reopen, mixed-token isolation and live delivery remain
 unqualified; Workspace reviewer configuration, off-host/independent recovery and
 held-out creative quality/cost gates remain open. See R19_EXPLICIT_DIRECTION_PROOF.json.
+
+## 2026-09-27 — Shared gateway and evaluation uncertainty hold (ADR-083)
+
+The shared gateway now stops after network/timeout uncertainty, HTTP 408/5xx,
+unreadable or unusable successful output, schema failure or observed model
+mismatch. A later provider cannot conceal the earlier acceptance or bill. Errors
+retain bounded provider receipt facts and unknown cost without private response
+content. Explicit rate rejection still permits an authorized bounded fallback;
+valid JSON null/false/zero is a completed answer, never a reason to call again.
+
+The evaluation runner stops further routing and visual model calls on that hold,
+reports attempted and unexecuted cases separately, and leaves aggregate pass rate
+null. Desk labels the run stopped and suppresses even an obsolete stored 100%.
+This is an in-process safeguard; evaluation reports still lack a durable call
+ledger and restart reconciliation. Studio's separate persistent ledger does not
+cover these evaluation calls.
+
+Original regression: 28 failed/1 passed. First gateway follow-up: 45 passed/1 failed;
+the old multimodal-header fixture sent a Google response to Anthropic before
+falling through and now explicitly selects Google. Final connected checks:
+17 files/131 passed/zero failed/zero skipped, including a real localhost response
+lost mid-body with one observed request. Project/script/test types, lint and Desk
+build passed. Earlier failed receipts are retained. No full-suite rerun or rebuilt
+app candidate belongs to this slice; the earlier 3,687-test result and isolated
+8dd04cc candidate remain historical. No paid model call, production change,
+human approval or message occurred. R20/R21 remain in progress.
+
+Proof: `plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json`.
+Next: durable evaluation admission/recovery and candidate verification, followed
+by the real named-review/edit/revision/delivery pilot, independent recovery and
+held-out quality/cost qualification.
+
+Initial pre-commit scanner rejected a synthetic response marker named secret. Renamed it privateBody without changing runtime behavior or the marker value; the gateway follow-up passed 41 tests, zero failures. Final acceptance of the commit hook is checked separately.

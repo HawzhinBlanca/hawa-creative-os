@@ -37,7 +37,7 @@ export function statsFromReport(report: any): RunStats {
   return {
     copyGuard: percent(report?.copyGuard?.passRate),
     recall: percent(report?.retrieval?.passRate),
-    overall: percent(report?.overallPassRate),
+    overall: report?.executionStatus === 'stopped' ? '—' : percent(report?.overallPassRate),
     testsPassed: totalTests > 0 ? testsPassed : null,
     totalTests: totalTests > 0 ? totalTests : null,
   };
@@ -93,6 +93,7 @@ export const EvalScreen: React.FC = () => {
               setLastRunTime(dt.replace('T', ' ').substring(0, 19) + ' UTC');
             }
             if (latest.report) setRunStats(statsFromReport(latest.report));
+            if (latest.report?.executionStatus === 'stopped') addEvalNotice(`Evaluation stopped. ${latest.report.modelCallHold?.safeAction || 'Review the provider outcome before starting another run.'}`);
           }
         }
       })
@@ -144,6 +145,7 @@ export const EvalScreen: React.FC = () => {
       setLastRunId(data.runId);
       setPastRuns((prev) => [...prev, data]);
       setRunStats(statsFromReport(data.report));
+      if (data.report?.executionStatus === 'stopped') addEvalNotice(`Evaluation stopped. ${data.report.modelCallHold?.safeAction || 'Review the provider outcome before starting another run.'}`);
     } catch (err) {
       addEvalNotice(`The tournament did not run: ${reasonOf(err)}.`);
     } finally {
@@ -222,8 +224,8 @@ export const EvalScreen: React.FC = () => {
                     }}
                   >
                     <span style={{ fontFamily: 'monospace', fontSize: 10 }}>{run.runId.substring(0, 8)}</span>
-                    <span className="pill ok" style={{ fontSize: 10 }}>
-                      {percent(run.report?.overallPassRate)} pass
+                    <span className={`pill ${run.report?.executionStatus === 'stopped' ? '' : 'ok'}`} style={{ fontSize: 10 }}>
+                      {run.report?.executionStatus === 'stopped' ? 'Stopped · review required' : `${percent(run.report?.overallPassRate)} pass`}
                     </span>
                   </div>
                 ))}
@@ -688,5 +690,4 @@ export const EvalScreen: React.FC = () => {
     </section>
   );
 };
-
 

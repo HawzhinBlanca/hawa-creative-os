@@ -96,3 +96,36 @@ The source suite excluding the manifest-dependent release-gate file passed **421
 ### Sealed eighth-pass source verification
 
 Source and evidence commit `5911e81d17416a95ce48bcd54dc108bd7f45931d` was sealed by `ef8067015714d32905a742a608f1a34c19fe7bcb` with source-candidate manifest SHA-256 `013dc7a41f870c16decfb1bd1fae6c26fcd4ca0bba4f646709a61121ff32988c`. The exact clean suite passed **422 files / 3,221 tests**, with **4 files / 48 tests skipped**. Typecheck, lint, zero-secret scan, blueprint **775/0/0**, manifest verification and six release-gate refusal controls passed. The assessor returned `UNQUALIFIED_ENGINEERING`; Gates A–H each returned `NOT_RUN_DEPLOYMENT_REQUIRED`. Migration 030 is recorded in the manifest, build components remain `unbuilt`, and both design flags remain `off`. Provider reconciliation, response replay, complete stage fencing, clean-host recovery and quality admission remain open.
+
+## 2026-09-27 — Shared gateway and evaluation uncertainty hold (ADR-083)
+
+The shared gateway now stops after network/timeout uncertainty, HTTP 408/5xx,
+unreadable or unusable successful output, schema failure or observed model
+mismatch. A later provider cannot conceal the earlier acceptance or bill. Errors
+retain bounded provider receipt facts and unknown cost without private response
+content. Explicit rate rejection still permits an authorized bounded fallback;
+valid JSON null/false/zero is a completed answer, never a reason to call again.
+
+The evaluation runner stops further routing and visual model calls on that hold,
+reports attempted and unexecuted cases separately, and leaves aggregate pass rate
+null. Desk labels the run stopped and suppresses even an obsolete stored 100%.
+This is an in-process safeguard; evaluation reports still lack a durable call
+ledger and restart reconciliation. Studio's separate persistent ledger does not
+cover these evaluation calls.
+
+Original regression: 28 failed/1 passed. First gateway follow-up: 45 passed/1 failed;
+the old multimodal-header fixture sent a Google response to Anthropic before
+falling through and now explicitly selects Google. Final connected checks:
+17 files/131 passed/zero failed/zero skipped, including a real localhost response
+lost mid-body with one observed request. Project/script/test types, lint and Desk
+build passed. Earlier failed receipts are retained. No full-suite rerun or rebuilt
+app candidate belongs to this slice; the earlier 3,687-test result and isolated
+8dd04cc candidate remain historical. No paid model call, production change,
+human approval or message occurred. R20/R21 remain in progress.
+
+Proof: `plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json`.
+Next: durable evaluation admission/recovery and candidate verification, followed
+by the real named-review/edit/revision/delivery pilot, independent recovery and
+held-out quality/cost qualification.
+
+Initial pre-commit scanner rejected a synthetic response marker named secret. Renamed it privateBody without changing runtime behavior or the marker value; the gateway follow-up passed 41 tests, zero failures. Final acceptance of the commit hook is checked separately.

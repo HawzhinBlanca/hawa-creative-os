@@ -148,6 +148,7 @@ describe('screens show nothing invented before Core has answered', () => {
     expect(html).not.toMatch(/passed all admission gates|Gemini 3\.8 Flash|GPT-5\.6 Sol/);
 
     expect(statsFromReport(undefined)).toEqual({ copyGuard: '—', recall: '—', overall: '—', testsPassed: null, totalTests: null });
+    expect(statsFromReport({executionStatus:'stopped',overallPassRate:100}).overall).toBe('—');
     expect(statsFromReport({
       routing: { totalCases: 60, passedCases: 58 },
       retrieval: { totalCases: 20, passedCases: 20, passRate: 100 },

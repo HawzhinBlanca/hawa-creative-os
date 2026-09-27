@@ -4,7 +4,7 @@ import { FakeModelGateway } from '@hawa/testkit';
 import { extractProtectedTokens } from '@hawa/domain';
 import { RetrievalService } from '@hawa/retrieval';
 import { checkKurdishTypographyClearance, validateKurdishOrthography } from '@hawa/qa';
-import type { RequestContext, ModelGateway } from '@hawa/contracts';
+import type { RequestContext, ModelGateway, AppError } from '@hawa/contracts';
 
 function resolveEvalPath(relPath: string): string {
   const p1 = resolve(process.cwd(), relPath);
@@ -23,6 +23,12 @@ export interface EvalSummary {
   failedCases: number;
   passRate: number;
   criticalViolations: number;
+  execution?: {
+    status: 'complete' | 'stopped';
+    attemptedCases: number;
+    unexecutedCases: number;
+    stopReason?: AppError;
+  };
 }
 
 export class EvaluationRunner {
@@ -42,6 +48,8 @@ export class EvaluationRunner {
     let passed = 0;
     let failed = 0;
     let criticalViolations = 0;
+    let attemptedCases = 0;
+    let stopReason: AppError | undefined;
 
     const ctx: RequestContext = {
       tenantId: 'tenant-eval',
@@ -52,6 +60,7 @@ export class EvaluationRunner {
     };
 
     for (const c of cases) {
+      attemptedCases++;
       // Test routing
       const routeRes = await this.gateway.generateStructured<{ decision: string; confidence: number }>(ctx, {
         role: 'intake_router',
@@ -66,6 +75,10 @@ export class EvaluationRunner {
       if (!routeRes.ok) {
         failed += 1;
         if (c.critical) criticalViolations += 1;
+        if (routeRes.error.detail?.requiresReconciliation === true) {
+          stopReason = routeRes.error;
+          break;
+        }
         continue;
       }
 
@@ -165,6 +178,8 @@ export class EvaluationRunner {
       failedCases: failed,
       passRate: (passed / cases.length) * 100,
       criticalViolations,
+      execution: { status: stopReason ? 'stopped' : 'complete', attemptedCases,
+        unexecutedCases: cases.length - attemptedCases, ...(stopReason ? { stopReason } : {}) },
     };
   }
 
@@ -324,7 +339,7 @@ export class EvaluationRunner {
     };
   }
 
-  async runVisualJudgeEvaluation(): Promise<EvalSummary> {
+  async runVisualJudgeEvaluation(held?: AppError): Promise<EvalSummary> {
     const rubricDimensions = [
       'brief_fulfillment',
       'brand_fit',
@@ -337,6 +352,10 @@ export class EvaluationRunner {
       'multi_format_resilience',
       'repairability',
     ];
+
+    if (held) return { dataset: 'visual_judge_rubric.json', totalCases: rubricDimensions.length,
+      passedCases: 0, failedCases: 0, passRate: 0, criticalViolations: 0,
+      execution: { status: 'stopped', attemptedCases: 0, unexecutedCases: rubricDimensions.length, stopReason: held } };
 
     // Real production design payload evaluated against rubric
     const samplePayload = {
@@ -382,6 +401,9 @@ export class EvaluationRunner {
         failedCases: rubricDimensions.length,
         passRate: 0,
         criticalViolations: 1,
+        ...(judgeRes.error.detail?.requiresReconciliation === true ? { execution: {
+          status: 'stopped' as const, attemptedCases: rubricDimensions.length, unexecutedCases: 0, stopReason: judgeRes.error,
+        } } : {}),
       };
     }
 
@@ -518,13 +540,15 @@ export class EvaluationRunner {
     copyGuard: EvalSummary;
     visualJudge: EvalSummary;
     adversarialSafety: EvalSummary;
-    overallPassRate: number;
+    overallPassRate: number | null;
+    executionStatus: 'complete' | 'stopped';
+    modelCallHold?: AppError;
     admissionEligible: false;
   }> {
     const routing = await this.runRoutingAndBriefTournament();
     const retrieval = await this.runRetrievalEvaluation();
     const copyGuard = await this.runCopyGuardEvaluation();
-    const visualJudge = await this.runVisualJudgeEvaluation();
+    const visualJudge = await this.runVisualJudgeEvaluation(routing.execution?.stopReason);
     const adversarialSafety = await this.runPromptInjectionAndSafetyEvaluation();
     const total =
       routing.totalCases +
@@ -538,13 +562,16 @@ export class EvaluationRunner {
       copyGuard.passedCases +
       visualJudge.passedCases +
       adversarialSafety.passedCases;
+    const modelCallHold = routing.execution?.stopReason || visualJudge.execution?.stopReason;
     return {
       routing,
       retrieval,
       copyGuard,
       visualJudge,
       adversarialSafety,
-      overallPassRate: total > 0 ? (passed / total) * 100 : 100,
+      overallPassRate: modelCallHold ? null : total > 0 ? (passed / total) * 100 : 100,
+      executionStatus: modelCallHold ? 'stopped' : 'complete',
+      ...(modelCallHold ? { modelCallHold } : {}),
       admissionEligible: false,
     };
   }

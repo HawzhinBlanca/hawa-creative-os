@@ -129,7 +129,7 @@ export function parseModelJsonResponse<T = unknown>(rawText: string): T {
     } catch {}
   }
 
-  throw new Error(`Failed to parse model JSON output: ${trimmed.substring(0, 100)}...`);
+  throw new Error(`Failed to parse model JSON output (${trimmed.length} characters)`);
 }
 
 export class ResilientModelGateway implements ModelGateway {
@@ -482,6 +482,32 @@ export class ResilientModelGateway implements ModelGateway {
 
       const promptText = (request.inputs || []).map((i) => i.text || '').join('\n') || (request as any).prompt || '';
 
+      let dispatched = false;
+      let httpStatus: number | null = null;
+      let providerRequestId: string | null = null;
+      const providerFetch = async (url: string, init: RequestInit): Promise<Response> => {
+        dispatched = true;
+        const response = await fetch(url, init);
+        httpStatus = response.status;
+        const id = response.headers?.get('x-request-id') || response.headers?.get('request-id');
+        providerRequestId = id && /^[A-Za-z0-9_.:-]{1,200}$/.test(id) ? id : null;
+        return response;
+      };
+      // A later provider's success cannot settle the first provider's acceptance or bill.
+      // Keep provider content and raw transport exceptions out of errors and traces.
+      const stopProviderCall = (code: string, message: string): Result<StructuredModelResponse<T>, AppError> => {
+        const acceptance = !dispatched ? 'not_dispatched'
+          : httpStatus !== null && httpStatus >= 200 && httpStatus < 300 ? 'response_received' : 'unknown';
+        span.end({ 'error.failed': true, 'error.code': code, 'model.provider': candidate.provider,
+          'model.attempts': attempts, 'model.acceptance': acceptance });
+        return { ok: false, error: { code, message, retryable: false,
+          safeAction: dispatched ? 'Inspect the provider receipt and call outcome before starting new model work'
+            : 'Correct the input before starting model work',
+          detail: { provider: candidate.provider, model: candidate.model, attempts, httpStatus, providerRequestId,
+            acceptance, requiresReconciliation: dispatched, estimatedCostUsd: null },
+        } };
+      };
+
       if (candidate.provider === 'google' && (process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY)) {
         const googleKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
         try {
@@ -504,7 +530,7 @@ export class ResilientModelGateway implements ModelGateway {
             }
           }
 
-          const apiRes = await fetch(url, {
+          const apiRes = await providerFetch(url, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -519,13 +545,14 @@ export class ResilientModelGateway implements ModelGateway {
           if (apiRes.ok) {
             const body: any = await apiRes.json();
             const textPart = body.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!textPart || body.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+              return stopProviderCall('MODEL_OUTPUT_UNUSABLE', 'Provider returned absent or truncated output; no fallback was called');
+            }
             if (textPart) {
               const parsed = parseModelJsonResponse(textPart);
               const schemaVal = validateJsonSchema(parsed, request.responseSchema);
               if (!schemaVal.valid) {
-                lastError = { code: 'SCHEMA_VALIDATION_FAILED', message: `Model output failed schema validation: ${schemaVal.error}` };
-                if (attempts >= maxAttempts) break;
-                continue;
+                return stopProviderCall('SCHEMA_VALIDATION_FAILED', 'Provider output failed the requested schema; no fallback was called');
               }
               output = parsed;
               liveSuccess = true;
@@ -536,20 +563,21 @@ export class ResilientModelGateway implements ModelGateway {
               }
             }
           } else {
-            const errBody = await apiRes.text().catch(() => '');
             span.addEvent('provider_http_error', { provider: 'google', model: candidate.model, status: apiRes.status });
-            if (apiRes.status >= 500) {
+            if (apiRes.status >= 500 || apiRes.status === 408) {
               breaker?.recordFailure(`HTTP_${apiRes.status}`);
+              return stopProviderCall('MODEL_ACCEPTANCE_UNKNOWN', 'Provider acceptance and billing are unknown after the HTTP response; no fallback was called');
             }
-            lastError = { code: `GOOGLE_HTTP_${apiRes.status}`, message: `Google returned HTTP ${apiRes.status}: ${errBody.substring(0, 150)}` };
+            await apiRes.text().catch(() => '');
+            lastError = { code: `GOOGLE_HTTP_${apiRes.status}`, message: `Google returned HTTP ${apiRes.status}` };
             if (attempts >= maxAttempts) break;
             continue;
           }
-        } catch (err: any) {
-          breaker?.recordFailure(err?.message || 'Network error');
-          lastError = { code: 'GOOGLE_NETWORK_ERROR', message: err?.message || 'Network error' };
-          if (attempts >= maxAttempts) break;
-          continue;
+        } catch {
+          breaker?.recordFailure('Provider outcome could not be verified');
+          const code = !dispatched ? 'MODEL_INPUT_PREPARATION_FAILED'
+            : httpStatus !== null && httpStatus >= 200 && httpStatus < 300 ? 'MODEL_RESPONSE_UNREADABLE' : 'MODEL_ACCEPTANCE_UNKNOWN';
+          return stopProviderCall(code, 'Model request did not produce a verified result; no fallback was called');
         }
       } else if (candidate.provider === 'anthropic' && process.env.ANTHROPIC_API_KEY) {
         try {
@@ -582,7 +610,7 @@ export class ResilientModelGateway implements ModelGateway {
             text: `${promptText}\n\nRespond ONLY with valid JSON conforming to this schema:\n${JSON.stringify(request.responseSchema || {})}`,
           });
 
-          const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+          const apiRes = await providerFetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -600,19 +628,18 @@ export class ResilientModelGateway implements ModelGateway {
           if (apiRes.ok) {
             const body: any = await apiRes.json();
             if (body.model && body.model !== candidate.model && !body.model.startsWith(candidate.model)) {
-              span.addEvent('response_model_mismatch', { requested: candidate.model, observed: body.model });
-              lastError = { code: 'MODEL_MISMATCH', message: `Observed model ${body.model} does not match requested ${candidate.model}` };
-              if (attempts >= maxAttempts) break;
-              continue;
+              span.addEvent('response_model_mismatch', { requested: candidate.model });
+              return stopProviderCall('MODEL_MISMATCH', 'Provider response model did not match the requested model; no fallback was called');
             }
             const textBlock = body.content?.find((c: any) => c.type === 'text');
+            if (!textBlock?.text || body.stop_reason === 'max_tokens') {
+              return stopProviderCall('MODEL_OUTPUT_UNUSABLE', 'Provider returned absent or truncated output; no fallback was called');
+            }
             if (textBlock?.text) {
               const parsed = parseModelJsonResponse(textBlock.text);
               const schemaVal = validateJsonSchema(parsed, request.responseSchema);
               if (!schemaVal.valid) {
-                lastError = { code: 'SCHEMA_VALIDATION_FAILED', message: `Model output failed schema validation: ${schemaVal.error}` };
-                if (attempts >= maxAttempts) break;
-                continue;
+                return stopProviderCall('SCHEMA_VALIDATION_FAILED', 'Provider output failed the requested schema; no fallback was called');
               }
               output = parsed;
               liveSuccess = true;
@@ -623,20 +650,21 @@ export class ResilientModelGateway implements ModelGateway {
               }
             }
           } else {
-            const errBody = await apiRes.text().catch(() => '');
             span.addEvent('provider_http_error', { provider: 'anthropic', model: candidate.model, status: apiRes.status });
-            if (apiRes.status >= 500) {
+            if (apiRes.status >= 500 || apiRes.status === 408) {
               breaker?.recordFailure(`HTTP_${apiRes.status}`);
+              return stopProviderCall('MODEL_ACCEPTANCE_UNKNOWN', 'Provider acceptance and billing are unknown after the HTTP response; no fallback was called');
             }
-            lastError = { code: `ANTHROPIC_HTTP_${apiRes.status}`, message: `Anthropic returned HTTP ${apiRes.status}: ${errBody.substring(0, 150)}` };
+            await apiRes.text().catch(() => '');
+            lastError = { code: `ANTHROPIC_HTTP_${apiRes.status}`, message: `Anthropic returned HTTP ${apiRes.status}` };
             if (attempts >= maxAttempts) break;
             continue;
           }
-        } catch (err: any) {
-          breaker?.recordFailure(err?.message || 'Network error');
-          lastError = { code: 'ANTHROPIC_NETWORK_ERROR', message: err?.message || 'Network error' };
-          if (attempts >= maxAttempts) break;
-          continue;
+        } catch {
+          breaker?.recordFailure('Provider outcome could not be verified');
+          const code = !dispatched ? 'MODEL_INPUT_PREPARATION_FAILED'
+            : httpStatus !== null && httpStatus >= 200 && httpStatus < 300 ? 'MODEL_RESPONSE_UNREADABLE' : 'MODEL_ACCEPTANCE_UNKNOWN';
+          return stopProviderCall(code, 'Model request did not produce a verified result; no fallback was called');
         }
       } else if (candidate.provider === 'openai' && process.env.OPENAI_API_KEY) {
         try {
@@ -661,7 +689,7 @@ export class ResilientModelGateway implements ModelGateway {
             openaiContent = contentBlocks;
           }
 
-          const apiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+          const apiRes = await providerFetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -678,19 +706,18 @@ export class ResilientModelGateway implements ModelGateway {
           if (apiRes.ok) {
             const body: any = await apiRes.json();
             if (body.model && body.model !== candidate.model && !body.model.startsWith(candidate.model)) {
-              span.addEvent('response_model_mismatch', { requested: candidate.model, observed: body.model });
-              lastError = { code: 'MODEL_MISMATCH', message: `Observed model ${body.model} does not match requested ${candidate.model}` };
-              if (attempts >= maxAttempts) break;
-              continue;
+              span.addEvent('response_model_mismatch', { requested: candidate.model });
+              return stopProviderCall('MODEL_MISMATCH', 'Provider response model did not match the requested model; no fallback was called');
             }
             const content = body.choices?.[0]?.message?.content;
+            if (!content || body.choices?.[0]?.finish_reason === 'length' || body.choices?.[0]?.message?.refusal) {
+              return stopProviderCall('MODEL_OUTPUT_UNUSABLE', 'Provider returned absent, refused or truncated output; no fallback was called');
+            }
             if (content) {
               const parsed = parseModelJsonResponse(content);
               const schemaVal = validateJsonSchema(parsed, request.responseSchema);
               if (!schemaVal.valid) {
-                lastError = { code: 'SCHEMA_VALIDATION_FAILED', message: `Model output failed schema validation: ${schemaVal.error}` };
-                if (attempts >= maxAttempts) break;
-                continue;
+                return stopProviderCall('SCHEMA_VALIDATION_FAILED', 'Provider output failed the requested schema; no fallback was called');
               }
               output = parsed;
               liveSuccess = true;
@@ -701,20 +728,21 @@ export class ResilientModelGateway implements ModelGateway {
               }
             }
           } else {
-            const errBody = await apiRes.text().catch(() => '');
             span.addEvent('provider_http_error', { provider: 'openai', model: candidate.model, status: apiRes.status });
-            if (apiRes.status >= 500) {
+            if (apiRes.status >= 500 || apiRes.status === 408) {
               breaker?.recordFailure(`HTTP_${apiRes.status}`);
+              return stopProviderCall('MODEL_ACCEPTANCE_UNKNOWN', 'Provider acceptance and billing are unknown after the HTTP response; no fallback was called');
             }
-            lastError = { code: `OPENAI_HTTP_${apiRes.status}`, message: `OpenAI returned HTTP ${apiRes.status}: ${errBody.substring(0, 150)}` };
+            await apiRes.text().catch(() => '');
+            lastError = { code: `OPENAI_HTTP_${apiRes.status}`, message: `OpenAI returned HTTP ${apiRes.status}` };
             if (attempts >= maxAttempts) break;
             continue;
           }
-        } catch (err: any) {
-          breaker?.recordFailure(err?.message || 'Network error');
-          lastError = { code: 'OPENAI_NETWORK_ERROR', message: err?.message || 'Network error' };
-          if (attempts >= maxAttempts) break;
-          continue;
+        } catch {
+          breaker?.recordFailure('Provider outcome could not be verified');
+          const code = !dispatched ? 'MODEL_INPUT_PREPARATION_FAILED'
+            : httpStatus !== null && httpStatus >= 200 && httpStatus < 300 ? 'MODEL_RESPONSE_UNREADABLE' : 'MODEL_ACCEPTANCE_UNKNOWN';
+          return stopProviderCall(code, 'Model request did not produce a verified result; no fallback was called');
         }
       }
 
@@ -836,8 +864,8 @@ export class ResilientModelGateway implements ModelGateway {
         }
       }
 
-      if (output) {
-        if (typeof output === 'object') {
+      if (output !== undefined) {
+        if (output !== null && typeof output === 'object') {
           (output as any).provenance = liveSuccess ? 'live_provider' : 'deterministic_fallback';
         }
 

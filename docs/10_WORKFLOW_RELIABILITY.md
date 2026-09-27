@@ -193,3 +193,18 @@ The first office deployment can use one core server, but it must include:
 ## 12. Logical exactly-once definition
 
 The system is at-least-once internally. It achieves **logical exactly-once effects** through uniqueness constraints, request hashes, idempotency tokens, optimistic concurrency, read-after-write verification, and reconciliation. Documentation must not claim physical exactly-once delivery across the internet.
+
+### Shared gateway uncertainty and evaluation holds (ADR-083, 2026-09-27)
+
+A dispatched model request with unknown acceptance (including HTTP 408/5xx), or
+an unusable successful response, must stop the current logical call. Another
+provider's success cannot settle that request's cost. Return a non-retryable hold
+with observed provider/model, attempts, HTTP status and bounded request-header ID;
+unknown cost stays null. Exclude raw provider bodies and exception text. A definite
+rate rejection may follow the authorized bounded fallback policy.
+
+Evaluation batches must stop further model calls on this hold and distinguish
+attempted failures from unexecuted cases. A stopped tournament has no aggregate
+pass percentage and is not admission evidence. The current implementation enforces
+this during one process; a durable evaluation-call ledger, restart recovery and
+provider reconciliation remain required before qualifying resumable evaluations.

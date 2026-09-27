@@ -196,3 +196,17 @@ Design Studio v2 introduces specialized model assignments and benchmark protocol
 - **Statistical Confidence**: `ratings-intake.ts` computes 10,000-resample bootstrap 95% confidence intervals and Spearman rank correlation ($\rho$) for judge vs. human preference alignment.
 - **Position Bias Protection**: Tournament matches execute bidirectional presentation swaps (`Candidate A vs B` and `Candidate B vs A`). Asymmetric verdicts are logged as position-bias conflicts.
 
+### Shared gateway uncertainty and evaluation holds (ADR-083, 2026-09-27)
+
+A dispatched model request with unknown acceptance (including HTTP 408/5xx), or
+an unusable successful response, must stop the current logical call. Another
+provider's success cannot settle that request's cost. Return a non-retryable hold
+with observed provider/model, attempts, HTTP status and bounded request-header ID;
+unknown cost stays null. Exclude raw provider bodies and exception text. A definite
+rate rejection may follow the authorized bounded fallback policy.
+
+Evaluation batches must stop further model calls on this hold and distinguish
+attempted failures from unexecuted cases. A stopped tournament has no aggregate
+pass percentage and is not admission evidence. The current implementation enforces
+this during one process; a durable evaluation-call ledger, restart recovery and
+provider reconciliation remain required before qualifying resumable evaluations.

@@ -1,0 +1,3 @@
+SECURITY SCAN FAILED: 2 committable file(s) contain credential material:
+  - packages/integrations/test/model-gateway-uncertain.test.ts:12 quoted_secret_assignment
+  - packages/integrations/test/model-gateway-uncertain.test.ts:12 long_credential_assignment
