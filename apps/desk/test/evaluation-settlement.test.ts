@@ -35,6 +35,19 @@ it('does not offer settlement to shared or non-administrator sessions',async()=>
   const view=await mount(React.createElement(EvaluationSettlementPanel,{detail:{...detail,canSettle:false},onSettled:async()=>{}}));
   expect(view.container.querySelector('form')).toBeNull();expect(view.text()).toContain('named office administrator');await view.unmount();
 });
+it.each([
+  [409,'EVALUATION_BUSY'],
+  [403,'NAMED_ADMINISTRATOR_REQUIRED'],
+])('keeps the saved identity when HTTP %s cannot establish the earlier action outcome',async(status,title)=>{
+  const key=`hawa.evaluation-settlement.${runId}`;
+  const action={actionId:runId,body:{expectedSnapshot:detail.snapshotHash,reason:'Confirmed',calls:[]}};
+  sessionStorage.setItem(key,JSON.stringify(action));
+  stubCore(()=>json({status,title},status));
+  const view=await mount(React.createElement(EvaluationSettlementPanel,{detail,onSettled:async()=>{}}));
+  await act(async()=>{view.container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});await flush();
+  expect(JSON.parse(sessionStorage.getItem(key)!)).toEqual(action);
+  expect(view.text()).toContain('Retry saved settlement');await view.unmount();
+});
 it('storage failure prevents dispatch and preserves evidence for correction',async()=>{
   const transport=vi.fn();vi.stubGlobal('fetch',transport);
   const key=`hawa.evaluation-settlement.${runId}`;

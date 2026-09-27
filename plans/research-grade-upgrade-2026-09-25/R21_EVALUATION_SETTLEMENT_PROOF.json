@@ -15,28 +15,55 @@
     "packages/domain/src/evaluation-settlement.ts": "64f460f07b0ad06bdf9a7db39b7d72fd81c678ba2ca0a5f79a38b25034cf8aef",
     "apps/core/src/services/durable-evaluations.ts": "40a39d0e253ec016acb63ac7e3349b5ca42072f554babb9cfe3ef9e027aceeb1",
     "apps/core/src/routes/evals.routes.ts": "89c58c56fe5b186aacc25574f2e097ca6b7103240d6fa8ac42dff5aa24a18be4",
-    "apps/desk/src/components/EvaluationSettlementPanel.tsx": "985f01c30dcc7b08dc3f14f22b2f9f091d047d9fbd5c533266c90d8ac967d195",
+    "apps/desk/src/components/EvaluationSettlementPanel.tsx": "22aeb07bf1fedcc02fdc895452220458cc030fee8ad9335994648cb7de129b38",
     "apps/desk/src/screens/EvalScreen.tsx": "b328b0ebb1e96e2280857ece02ad02fe23966a198126c4268292fdcc8f45a79e",
     "apps/desk/src/api/client.ts": "fe88cb4e0c747cfe68a99a5d518dc5d5e3364070a85b05a11e3d1664663834ae",
     "apps/core/test/evaluation-settlement.test.ts": "e34f2d940d84478e921fa8655431511326e42dc5e14ecb5a2253e04fabf6fa01",
     "apps/core/test/evaluation-kill-recovery.test.ts": "89cbd6b9e174861d6f63124ddedb85c0303880f41462de9c3a7d71355151774e",
-    "apps/desk/test/evaluation-settlement.test.ts": "fa3593f4de8286ce1b76a74de14ccb228584c55344bc9cdca666936d163ac65e",
+    "apps/desk/test/evaluation-settlement.test.ts": "c001782123864a5d2cab0e8d667e2e7241e5380d452a548ee1ad6381be6f2e32",
     "packages/testkit/chaos/driver/evaluation-settlement.ts": "e3b981bd2cd9ef6947baa2e51f5936251c35f01f5226f587ea06a062ee9abc6e",
     "packages/testkit/chaos/driver/candidate-sources.ts": "83474c72973d8a1eb354e05111394d81b0c02c14682f1a35daf1d70d29956954",
     "api/openapi.yaml": "22fa63198cbc301cf604aec6f12df93b1d69709a5af7dd334016be81a766103c",
     "db/schema.sql": "41dfb1fb72299b38e58338424626d834cdbad0b4b147299802f371c46e8a371d",
     "db/rls.sql": "f48ce13c2f2937a91ce1900d458f1f6422319d548e7a4db299cffc16663d7e0f",
-    "runbooks/EVALUATION_RECOVERY.md": "026c75dda0f86d33dcdcae18dc288062afa03c4b2b64b0e71cc56c66bc80c254"
+    "runbooks/EVALUATION_RECOVERY.md": "026c75dda0f86d33dcdcae18dc288062afa03c4b2b64b0e71cc56c66bc80c254",
+    "apps/core/test/fixtures/route-inventory.txt": "85f98fc45bec92c64ad13ccc22b73316d00bfd0f99bf424dad87440f8701a864"
   },
   "evidence": {
     "redBefore": "4 tests failed because no settlement method existed",
     "focused": "7 files / 33 tests passed, including schema and browser action retention",
     "recovery": "5 files / 20 tests passed including actual SIGKILL and named HTTP/CSRF/revocation/isolation",
-    "initialHttpFailure": "Synthetic session tenant was outside the configured single-office tenant; fixture corrected, failure retained"
+    "initialHttpFailure": "Synthetic session tenant was outside the configured single-office tenant; fixture corrected, failure retained",
+    "firstFullSuite": {
+      "passed": 3753,
+      "failed": 1,
+      "skipped": 59,
+      "failure": "Route inventory omitted four prefixed aliases for the new POST endpoint; fixture corrected, runtime unchanged."
+    },
+    "firstPassingFullSuite": {
+      "passed": 3754,
+      "failed": 0,
+      "skipped": 59,
+      "files": 472,
+      "sourceCommit": "4acbc1f",
+      "scope": "Runtime candidate plus corrected route inventory; precedes final Desk busy/auth retry guard."
+    },
+    "busyRetryCorrection": "Two red-before Desk tests reproduced lost action identity on busy/auth responses; preserve it until a definite unadmitted input/snapshot/coverage refusal."
   },
   "qualification": {
-    "fullSuite": "pending",
-    "candidate": "pending"
+    "fullSuite": "final guard qualification pending",
+    "priorCandidate": {
+      "checks": 50,
+      "allPassed": true,
+      "workflowChecks": 36,
+      "settlementChecks": 14,
+      "coreRestartAfterSettlement": true,
+      "modelCallsDuringSettlementAndReplay": 0,
+      "totalEvaluationProviderRequests": 2,
+      "scope": "One original held evaluation and one explicitly requested new evaluation; internal fake provider and synthetic named administrator; production unchanged",
+      "receipt": "output/acceptance/2026-09-27-evaluation-settlement/candidate-rehearsal.json"
+    },
+    "candidate": "final guard qualification pending"
   },
   "limits": [
     "Administrator attestation is not automatic provider lookup or invoice verification.",
@@ -44,5 +71,7 @@
     "Original uncertain cost and first outcome remain unchanged; closure never claims a pass.",
     "No live provider, human approval or production deployment.",
     "Named pilot, independent recovery and human/model quality gates remain open."
-  ]
+  ],
+  "sourceCommit": "33bb339",
+  "candidateCommit": "4acbc1f2e3dbc90bd88930636c4a0bb9e8b15bef"
 }

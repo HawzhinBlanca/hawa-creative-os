@@ -50,7 +50,11 @@ export function EvaluationSettlementPanel({detail,onSettled}:{detail:Detail;onSe
       sessionStorage.removeItem(storageKey(detail.runId));setPending(null);
       setNotice('Settlement recorded. No model request was sent.');await onSettled();
     }catch(error){
-      if(error instanceof ApiError && [400,403,404,409].includes(error.status)){
+      // Busy/auth failures say nothing about an earlier request that may have committed.
+      // Only an invalid request or a checked, unadmitted snapshot/coverage refusal permits editing.
+      const refused=error instanceof ApiError && (error.status===400 ||
+        ['EVALUATION_SNAPSHOT_CHANGED','EVALUATION_EVIDENCE_INCOMPLETE'].includes(error.problem?.title||''));
+      if(refused){
         sessionStorage.removeItem(storageKey(detail.runId));setPending(null);
         setNotice(`Settlement refused: ${reasonOf(error)}. Reload the saved calls before correcting the evidence.`);
       }else setNotice(`Settlement was not confirmed: ${reasonOf(error)}. Retry the saved action.`);

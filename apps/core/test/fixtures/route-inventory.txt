@@ -414,6 +414,7 @@ POST /api/comparisons/:id/judges/:judgeId/link
 POST /api/comparisons/:id/lock
 POST /api/comparisons/:id/pairs
 POST /api/evaluations/runs
+POST /api/evaluations/runs/:runId/settlement
 POST /api/feedback/mine
 POST /api/fonts/inspect
 POST /api/fonts/package
@@ -509,6 +510,7 @@ POST /api/v1/comparisons/:id/judges/:judgeId/link
 POST /api/v1/comparisons/:id/lock
 POST /api/v1/comparisons/:id/pairs
 POST /api/v1/evaluations/runs
+POST /api/v1/evaluations/runs/:runId/settlement
 POST /api/v1/feedback/mine
 POST /api/v1/fonts/inspect
 POST /api/v1/fonts/package
@@ -607,6 +609,7 @@ POST /comparisons/:id/judges/:judgeId/link
 POST /comparisons/:id/lock
 POST /comparisons/:id/pairs
 POST /evaluations/runs
+POST /evaluations/runs/:runId/settlement
 POST /feedback/mine
 POST /fonts/inspect
 POST /fonts/package
@@ -702,6 +705,7 @@ POST /v1/comparisons/:id/judges/:judgeId/link
 POST /v1/comparisons/:id/lock
 POST /v1/comparisons/:id/pairs
 POST /v1/evaluations/runs
+POST /v1/evaluations/runs/:runId/settlement
 POST /v1/feedback/mine
 POST /v1/fonts/inspect
 POST /v1/fonts/package
