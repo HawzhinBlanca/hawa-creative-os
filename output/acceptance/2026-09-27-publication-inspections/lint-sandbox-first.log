@@ -1,0 +1,22 @@
+$ tsc --noEmit && tsc -p tsconfig.scripts.json && tsx scripts/ratchet_any.ts && tsx scripts/lint_provider_egress.ts
+node:net:1915
+      const error = new UVExceptionWithHostPort(rval, 'listen', address, port);
+                    ^
+
+Error: listen EPERM: operation not permitted /var/folders/7d/jcmsj249459d99kpf572jywr0000gn/T/tsx-501/48505.pipe
+    at Server.setupListenHandle [as _listen2] (node:net:1915:21)
+    at listenInCluster (node:net:1994:12)
+    at Server.listen (node:net:2116:5)
+    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/cli.mjs:53:31472
+    at new Promise (<anonymous>)
+    at createIpcServer (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/cli.mjs:53:31450)
+    at async file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/cli.mjs:55:542 {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '/var/folders/7d/jcmsj249459d99kpf572jywr0000gn/T/tsx-501/48505.pipe',
+  port: -1
+}
+
+Node.js v22.13.1
+[ELIFECYCLE] Command failed with exit code 1.

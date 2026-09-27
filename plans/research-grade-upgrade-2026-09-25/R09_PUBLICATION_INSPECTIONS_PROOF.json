@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recordedAt": "2026-09-27",
-  "status": "locally_verified_release_qualification_pending",
+  "status": "locally_qualified_live_pilot_pending",
   "baseCommit": "0514a387c4d9ccfd6db0d69eba494504394cf954",
   "requirements": [
     "FR-047",
@@ -46,11 +46,13 @@
     "packages/testkit/test/pilot-exit-drill.test.ts": "b016d65b27256a7736a28e16ea324b471e9e8df8728b11720926ee747a0ed080",
     "infra/docker/nginx.conf": "b1bab311ff10ff434af23ba7882ad4993cef2fb6cd57cf032a2b57e2ff557f00",
     "runbooks/GOOGLE_SHEET_ROW_IDENTITY.md": "2b94b705d69e0ff4f0f074f42fadb16e73b252fc6539f60de1967737594c2947",
-    "runbooks/LIVE_PILOT.md": "74e1a1a8a9c74771e6d97cb0de5d7056606d09e34e644a32cf9b866eb088289a",
+    "runbooks/LIVE_PILOT.md": "fb06346d1f242ccc27926264077d93f7ac307a0727e42af7fd8710087153c512",
     "packages/db/test/blob-nginx.test.ts": "d64a702a0d70c7ed10335c732a27c53f3d0e58f2e2bc83809d3dd0c3c4c4bf9b"
   },
   "evidenceHashes": {
-    "output/acceptance/2026-09-27-publication-inspections/STATUS.md": "8bd89669d23990d585fa6d41700201b1f63c31f34ef4aded4f0b980d7ad84ff3",
+    "output/acceptance/2026-09-27-publication-inspections/STATUS.md": "72590eb4c443ff350455f94664d98f4444c7d7658afe3f5fdbd8ebdd19e44719",
+    "output/acceptance/2026-09-27-publication-inspections/browser-final.json": "3125d914a7cd6f75513d8ae70bae652abac6930fde4048c5689524e7bf745c22",
+    "output/acceptance/2026-09-27-publication-inspections/browser-final.png": "720fbe34638afcfe4b42c78dea34a773400b86ec76ca7a852306cea27e53c866",
     "output/acceptance/2026-09-27-publication-inspections/build.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
     "output/acceptance/2026-09-27-publication-inspections/build1.log": "2f730f93d5dbf683b4652020273940ebe7990808d0794bdd602dfbc6b7b50e98",
     "output/acceptance/2026-09-27-publication-inspections/build2.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
@@ -59,6 +61,8 @@
     "output/acceptance/2026-09-27-publication-inspections/build5.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
     "output/acceptance/2026-09-27-publication-inspections/candidate-before-final-corrections.json": "12679f636053f811bd981bf0264af35749b09346efd86f083eb60721318cd367",
     "output/acceptance/2026-09-27-publication-inspections/candidate-before-final-corrections.log": "b1253203db12c528b4ea8bfe923c1ba3fd3e83f05636193a407cd30dfe3dd121",
+    "output/acceptance/2026-09-27-publication-inspections/candidate-final.json": "c4663bbc0b9a2c8bb7ba1459d894dedfcf8f613db7c9cb5fffd9a10e94dfb785",
+    "output/acceptance/2026-09-27-publication-inspections/candidate-final.log": "e4113b17efa53f6f6b511ee7f11e93c37f25a56d13e48adcb3d39d0d623239ec",
     "output/acceptance/2026-09-27-publication-inspections/candidate-first.log": "531550857648bde8679e983308e13cd43b6ad457d8d36a752b8b991aafdab1bf",
     "output/acceptance/2026-09-27-publication-inspections/concurrency-corrected.log": "93eee0330f0f56a9a29798929e05a0ad0eb3b0bbafca519163c8e3786fdae222",
     "output/acceptance/2026-09-27-publication-inspections/concurrency-first.log": "d6454571119b1bbaca089ffed988517ca2f1a110421c16c04f22efee14011d51",
@@ -68,8 +72,13 @@
     "output/acceptance/2026-09-27-publication-inspections/db-corrected.log": "ec9a0dad4294ed5d100646080f0f3ab477e0a2dfd707dd7d3b71f92a4dadfba7",
     "output/acceptance/2026-09-27-publication-inspections/db-first.log": "02db6a27878b0aa39ed0913db1e42a5cc0677563df9bb5b18805ec3000a03e2d",
     "output/acceptance/2026-09-27-publication-inspections/focused-final.log": "aab8548482d94e7cec4ba701ecd7e34c54cb714f07abcd663743c9431e9d639b",
+    "output/acceptance/2026-09-27-publication-inspections/full-final.log": "ca929872d2c5370578d748d52c21d774a2df8262e6ff21ca1cc9bf2f1ab7f194",
     "output/acceptance/2026-09-27-publication-inspections/full-first.log": "fc5c2bd08b1078bde92193cadf352843514c4c7b8e0d5766878a05428968d067",
+    "output/acceptance/2026-09-27-publication-inspections/lint-final.log": "d899edf631e5ced5db5f4227294e1b9510019a980e20f6b06b8c3846d4ddeb4b",
+    "output/acceptance/2026-09-27-publication-inspections/lint-sandbox-first.log": "2a057b186f80d3a22a409ca9530a9d723b690545ce36a5b8cb9de51bcb7c93f6",
     "output/acceptance/2026-09-27-publication-inspections/lint.log": "d899edf631e5ced5db5f4227294e1b9510019a980e20f6b06b8c3846d4ddeb4b",
+    "output/acceptance/2026-09-27-publication-inspections/migration-rehearsal.json": "1bf2ea534bc031117a1649ef519368a69c519f28eaa664f5fe9efbda15be4406",
+    "output/acceptance/2026-09-27-publication-inspections/migration-rehearsal.log": "c8a7ae7cfbd65c5b4fd026ee12744f666912bf9dea89aab43f269b1aef929fd5",
     "output/acceptance/2026-09-27-publication-inspections/production-preflight-after.json": "8a479d0d42b8cec16c131d3f7014a20b98246eab590c9e9143987c5fc213a1eb",
     "output/acceptance/2026-09-27-publication-inspections/production-preflight-before.json": "1e298b33de1438531ce6776ee3bb2d48bb014549f020638f23ad0436a9ce7db2",
     "output/acceptance/2026-09-27-publication-inspections/production-proxy-fix.json": "801e77d0e2c756ce74d978c24b596afa5035e0c91693610436a9c342545e11bf",
@@ -117,13 +126,41 @@
     "proxyFileDelivery": {
       "passed": 6,
       "failed": 0
+    },
+    "finalFullRegression": {
+      "passed": 4237,
+      "failed": 0,
+      "skipped": 60,
+      "passedFiles": 505,
+      "skippedFiles": 7
+    },
+    "finalCandidate": {
+      "passedScenarios": 1,
+      "unselectedScenarios": 43,
+      "passedInvariants": 63,
+      "providers": "synthetic fakes",
+      "parser": "real pinned offline Docling"
+    },
+    "liveDataMigrationRehearsal": {
+      "applied": 38,
+      "verifiedOnReplay": 60,
+      "historicalTablesUnchanged": 76,
+      "privateCloneRemoved": true,
+      "productionMigrated": false
+    },
+    "browser": {
+      "checked": true,
+      "evidence": "output/acceptance/2026-09-27-publication-inspections/browser-final.json",
+      "liveGoogleVerified": false
     }
   },
   "limits": [
-    "Full regression and deployed browser qualification pending",
-    "Approved permission baselines unavailable",
-    "Historical migration and full reporting columns open",
-    "Whole-app and human-quality admission open",
-    "No live Google inspection or production app/schema upgrade; nginx config-only outage repair applied"
-  ]
+    "Approved permission baselines unavailable; historical adoption and full reporting columns remain open",
+    "Missing original inputs and incomplete provider evidence remain explicitly unverified",
+    "Real Workspace sign-in, named reviewer approval and real end-to-end delivery are pending",
+    "Whole-app, multilingual human quality, held-out quality/cost and independent-host recovery admission remain open",
+    "No production app/schema upgrade; only tested nginx config repair applied; simulated providers in isolated candidate"
+  ],
+  "testedCommit": "b38f60dd670cf1c665a9edbab4485fa11e56832b",
+  "runtimeCommit": "b38f60dd670cf1c665a9edbab4485fa11e56832b"
 }

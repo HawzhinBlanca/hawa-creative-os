@@ -1,5 +1,36 @@
 # Scheduled Google publication inspections — local qualification
 
+## Final local qualification — 2026-09-27
+
+Tested and running isolated candidate **b38f60dd**: **4,237 passed, zero failed,
+60 skipped** (505 passing/7 skipped files). Final lint passes; source build and 513
+strict test roots passed before qualification. The selected deployed rehearsal passes
+63 invariants, with 43 scenarios unselected and external providers simulated. Two fake
+Gemini calls are outside the fixture coverage. This is not real-provider acceptance.
+
+The Operations browser check shows saved scheduled checks with timestamps and evidence
+hashes, and correctly labels incomplete Google/permission evidence as unverified.
+The 314px panel is readable; the final screenshot and browser record are retained.
+No manual run, repair, approval or delivery was performed through this panel.
+
+A consistent read-only production snapshot was streamed directly into a private test
+clone: all 38 pending migrations (023–060) applied, all 76 historical tables retained
+their original data, and replay verified 60 migrations without applying any again.
+The clone was removed. This is not an off-host restore or a retained rollback backup.
+Production app images/schema remain unchanged; the tested nginx configuration-only
+repair restored healthy HTTP 200 and Canva remains authorized.
+
+**Next is one supervised real-office job.** Google reviewer login is unconfigured;
+the office domain and reviewer email have been requested. Real login credentials and
+Google/Canva approval are not fabricated. Prepare a verified production recovery set
+before controlled cutover, then run a real brief, human review and authorized delivery.
+Historical adoption/reporting, approved permission policy and broader quality/recovery
+gates remain open. No whole-app 10/10 claim or new completion ETA is made.
+
+Earlier failures below remain retained; this section supersedes the earlier pending
+local-qualification status and the earlier claim that production was wholly unchanged.
+
+
 2026-09-27; ADR-107; migration 060; FR-047/048/049/050/064, NFR-006.
 
 ## Implemented and checked

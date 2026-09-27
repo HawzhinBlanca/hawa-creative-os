@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T19:40:59Z",
+  "generatedAt": "2026-09-27T19:45:05Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1059,8 +1059,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "d9ebb763676b18fc1cf6ea55aa60e96de3cb93042aa699f6365d3a16a3c9c804",
-      "bytes": 113576
+      "sha256": "378e99ab3d74da6e489a613ae7314ab96ccfda8c4a4d0f07bfb04f3259fee0a5",
+      "bytes": 115542
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1169,8 +1169,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_EVIDENCE.md",
-      "sha256": "2350cde4c7db2261ce95159f9e24ff6f6e31cd7c8e7267e2aebc06d5176cdced",
-      "bytes": 47214
+      "sha256": "ee278ebff463239ddabeb5c3249fdae4e7c8ea308295e5184eb851013d42ff5d",
+      "bytes": 49180
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_PUBLICATION_EXPECTATIONS_PROOF.json",
@@ -1179,8 +1179,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_PUBLICATION_INSPECTIONS_PROOF.json",
-      "sha256": "a7dc47bc7bfe7f0d9f153c12a73067b43bd5edea73bd5554fc8b445ce295c5eb",
-      "bytes": 10207
+      "sha256": "00622faf09b9a772dda35f3958d6423d8af7aa36aade38caf3d371d6e74ebdac",
+      "bytes": 12594
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R09_RESTATE_DELIVERY_KILL_DRILL.md",
@@ -1474,8 +1474,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "3731081b40db7bdfc023a0191b5603e6bc1230a8c541dfe07b07a0ffca4ccf86",
-      "bytes": 381669
+      "sha256": "e4ab35d2dea91bfc74282245db86200f250cf8a03447c342b977cc49bf375425",
+      "bytes": 384753
     },
     {
       "path": "plans/user-stories.csv",
@@ -1609,8 +1609,8 @@
     },
     {
       "path": "runbooks/LIVE_PILOT.md",
-      "sha256": "74e1a1a8a9c74771e6d97cb0de5d7056606d09e34e644a32cf9b866eb088289a",
-      "bytes": 4827
+      "sha256": "fb06346d1f242ccc27926264077d93f7ac307a0727e42af7fd8710087153c512",
+      "bytes": 6793
     },
     {
       "path": "runbooks/OPERATIONS_EVIDENCE.md",
