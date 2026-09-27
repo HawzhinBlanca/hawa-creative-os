@@ -103,7 +103,7 @@ function scenario(name: string, what: string, script: (chat: string, events: str
         ...(expectation.after ? await expectation.after() : []),
       ];
     } catch (err) {
-      report.error = err instanceof Error ? err.message : String(err);
+      report.error = err instanceof Error ? `${err.message}${err.cause instanceof Error ? `; cause: ${err.cause.message}` : ''}` : String(err);
     } finally {
       await fakes.clearFaults().catch(() => undefined);
       report.ms = Date.now() - started;

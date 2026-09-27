@@ -1,10 +1,13 @@
 /** Restores the real candidate at two external-effect boundaries; external services remain fakes. */
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { CHAOS_DIR, FAKES_URL, REPO_ROOT, closeDb, compose, fakes, query, restateQuery, secrets, sql } from './stack.js';
 import { sentTo, waitUntil, type InvariantResult } from './scenario.js';
+
+const execFileAsync = promisify(execFile);
 
 export async function restorePendingDelivery(taskId: string, chat: string, started: number,
   events: string[]): Promise<InvariantResult[]> {
@@ -16,10 +19,15 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
   const restore = async (phase: string) => {
     await closeDb();
     const output = join(CHAOS_DIR, '.run', `recovery-${phase}.json`);
-    const process = spawnSync('python3', [join(REPO_ROOT, 'infra/backup/candidate_recovery.py'),
-      '--task-id', taskId, '--started-after', new Date(started).toISOString(), '--output', output],
-    {cwd: REPO_ROOT, encoding: 'utf8', timeout: 300_000, maxBuffer: 1024 * 1024});
-    if (process.status !== 0) throw new Error(`Coordinated ${phase} restore failed: ${process.stdout.slice(-1000)} ${process.stderr.slice(-1500)}`);
+    try {
+      // Keep the event loop processing HTTP socket closures during the lengthy restore.
+      await execFileAsync('python3', [join(REPO_ROOT, 'infra/backup/candidate_recovery.py'),
+        '--task-id', taskId, '--started-after', new Date(started).toISOString(), '--output', output],
+      {cwd: REPO_ROOT, encoding: 'utf8', timeout: 300_000, maxBuffer: 1024 * 1024});
+    } catch (error) {
+      const failure = error as Error & {stdout?:string;stderr?:string};
+      throw new Error(`Coordinated ${phase} restore failed: ${failure.stdout?.slice(-1000)} ${failure.stderr?.slice(-1500)}`);
+    }
     const receipt = JSON.parse(readFileSync(output, 'utf8'));
     check(`${phase}: fresh stores match before any writer resumes`, receipt.allRowsAndPoliciesMatch &&
       receipt.allStoreFilesMatch && receipt.externalServiceSurvived && receipt.writersStoppedBeforeCaptureAndDuringValidation,
