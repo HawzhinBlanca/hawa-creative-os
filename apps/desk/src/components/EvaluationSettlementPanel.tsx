@@ -12,6 +12,8 @@ interface Detail {
 }
 type Draft={conclusion:'provider_not_accepted'|'provider_finished';cost:string;reference:string;hash:string};
 type Pending={actionId:string;body:SettlementBody};
+const fieldStyle={display:'flex',flexDirection:'column',gap:6,minWidth:0} as const;
+const inputStyle={width:'100%',minWidth:0,boxSizing:'border-box'} as const;
 const storageKey=(id:string,kind:string)=>`hawa.${kind}-settlement.${id}`;
 function saved(id:string,kind:string):Pending|null {
   try { const p=JSON.parse(sessionStorage.getItem(storageKey(id,kind))||'null');
@@ -76,21 +78,22 @@ export function EvaluationSettlementPanel({detail,onSettled,kind='evaluation',re
     <fieldset disabled={busy||!!pending} style={{border:0,padding:0}}>
       {unresolved.map(c=>{const d=drafts[c.id];return <fieldset key={c.id} style={{marginBottom:12}}><legend>Call {c.ordinal}</legend>
         <p style={{overflowWrap:'anywhere'}}>Saved call: {c.id} · {c.provider||'provider not reported'} / {c.model||'model not reported'}</p>
-        <label>Provider conclusion <select aria-label={`Call ${c.ordinal} conclusion`} value={d.conclusion} onChange={e=>update(c.id,{conclusion:e.target.value as Draft['conclusion']})}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,260px),1fr))',gap:12}}>
+        <label style={fieldStyle}>Provider conclusion <select style={inputStyle} aria-label={`Call ${c.ordinal} conclusion`} value={d.conclusion} onChange={e=>update(c.id,{conclusion:e.target.value as Draft['conclusion']})}>
           <option value="provider_finished">Provider confirms processing finished</option><option value="provider_not_accepted">Provider confirms request was not accepted</option>
         </select></label>
-        <label>Reported final cost (USD) <input aria-label={`Call ${c.ordinal} final cost`} type="number" min="0" max="1000000" step="any" required value={d.cost} onChange={e=>update(c.id,{cost:e.target.value})}/></label>
-        <label>Provider or support reference <input aria-label={`Call ${c.ordinal} evidence reference`} required maxLength={200} value={d.reference} onChange={e=>update(c.id,{reference:e.target.value})}/></label>
-        <label>Evidence SHA-256 <input aria-label={`Call ${c.ordinal} evidence hash`} required pattern="[a-f0-9]{64}" value={d.hash} onChange={e=>update(c.id,{hash:e.target.value})}/></label>
-        <label>Or select the evidence file to calculate its hash <input type="file" aria-label={`Call ${c.ordinal} evidence file`} onChange={e=>{
+        <label style={fieldStyle}>Reported final cost (USD) <input style={inputStyle} aria-label={`Call ${c.ordinal} final cost`} type="number" min="0" max="1000000" step="any" required value={d.cost} onChange={e=>update(c.id,{cost:e.target.value})}/></label>
+        <label style={fieldStyle}>Provider or support reference <input style={inputStyle} aria-label={`Call ${c.ordinal} evidence reference`} required maxLength={200} value={d.reference} onChange={e=>update(c.id,{reference:e.target.value})}/></label>
+        <label style={fieldStyle}>Evidence SHA-256 <input style={inputStyle} aria-label={`Call ${c.ordinal} evidence hash`} required pattern="[a-f0-9]{64}" value={d.hash} onChange={e=>update(c.id,{hash:e.target.value})}/></label>
+        <label style={fieldStyle}>Or select the evidence file to calculate its hash <input style={inputStyle} type="file" aria-label={`Call ${c.ordinal} evidence file`} onChange={e=>{
           const file=e.target.files?.[0];if(!file)return;
           if(file.size>20*1024*1024){setNotice('Select evidence of at most 20 MB.');return;}
           update(c.id,{hash:''});setBusy(true);
           void file.arrayBuffer().then(bytes=>crypto.subtle.digest('SHA-256',bytes)).then(hash=>update(c.id,{hash:Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('')}))
             .catch(()=>setNotice('Could not hash this file. Keep the evidence locally and enter its SHA-256.')).finally(()=>setBusy(false));
-        }}/></label><small>The file stays on this device. Keep it in the office’s evidence archive.</small>
+        }}/></label></div><p><small>The file stays on this device. Keep it in the office’s evidence archive.</small></p>
       </fieldset>;})}
-      <label>Reason <textarea aria-label="Settlement reason" required maxLength={500} value={reason} onChange={e=>setReason(e.target.value)}/></label>
+      <label style={{...fieldStyle,marginBottom:12}}>Reason <textarea style={{...inputStyle,minHeight:80}} aria-label="Settlement reason" required maxLength={500} value={reason} onChange={e=>setReason(e.target.value)}/></label>
     </fieldset>
     <button className="btn primary" type="submit" disabled={busy||(!pending&&!valid)}>{busy?'Recording…':pending?'Retry saved settlement':kind==='accounting'?'Record cost evidence':kind==='evaluation'?'Record evidence and close evaluation':'Record Studio settlement'}</button>
     {notice&&<p role="status">{notice}</p>}

@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T10:51:01Z",
+  "generatedAt": "2026-09-27T10:56:34Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -554,8 +554,8 @@
     },
     {
       "path": "adrs/097_exact_call_cost_accounting.md",
-      "sha256": "eaba21fe98f9f8bf2d5144d781fd581fb4bb35425c4ec2db8f11cdbc2a5bc7e9",
-      "bytes": 2856
+      "sha256": "6de99ac441654f4567fcbb55612d6384bf7024945c7dd736ed82f74488829205",
+      "bytes": 3258
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1239,8 +1239,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_CALL_COST_ACCOUNTING_PROOF.json",
-      "sha256": "921090c425c39a0e0ce2e7e4eefed593b12a279332bc0ea2c6a7a4831c56d62b",
-      "bytes": 7755
+      "sha256": "87bac3406ec59e4a1d8dbffc953e203bd8f4ea3e9870eec45ac4d097f659c5cf",
+      "bytes": 8779
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_DAILY_STUDIO_BUDGET_PROOF.json",
@@ -1469,8 +1469,8 @@
     },
     {
       "path": "runbooks/CALL_COST_ACCOUNTING.md",
-      "sha256": "eba0c40d1346279343de7526d5766ae083f6b5f8b437cfc92f223817f3e4ba13",
-      "bytes": 2767
+      "sha256": "80c006ee97075e20377a8ef4421e5c93b348853ef06eb460ea97dca1c652b57f",
+      "bytes": 3227
     },
     {
       "path": "runbooks/CHAT_REVIEW_ACCEPTANCE.md",

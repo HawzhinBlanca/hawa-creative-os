@@ -45,3 +45,12 @@ Run the accounting Core and Desk tests, shared-office spending tests, existing
 Studio/evaluation settlement tests and Studio budget domain tests. Evidence is
 retained under `output/acceptance/2026-09-27-call-cost-accounting/`; qualification
 status is recorded in `R21_CALL_COST_ACCOUNTING_PROOF.json` when checks finish.
+
+## Browser origin
+
+The reverse proxy must preserve the full Host authority, including its port. A
+non-default local port must not become a portless upstream URL: Core correctly
+refuses that mismatch for cookie-authenticated writes. Production OAuth settings
+still define the approved public origin. Diagnose a CSRF refusal by checking proxy
+authority and configured origin; never disable CSRF or convert the browser action
+to a privileged shared-key request.

@@ -125,10 +125,11 @@ it('serves named HTTP replay and refuses shared authority and missing CSRF',asyn
   vi.stubEnv('HAWA_GOOGLE_OIDC_REDIRECT_URI','https://desk.office.example/v1/auth/google/callback');vi.stubEnv('HAWA_GOOGLE_OIDC_HOSTED_DOMAINS','example.test');
   try{
     const options={db,skipPaidModelProbe:true,skipTelegramProbe:true,enableTelegramPolling:false};
-    const path=`/v1/spending/calls/evaluation/${id}/evidence`,headers={'Content-Type':'application/json','Idempotency-Key':action,Cookie:`hawa_session=${f.token}; hawa_csrf=${csrf}`,'x-hawa-csrf':csrf};
+    const path=`/v1/spending/calls/evaluation/${id}/evidence`,headers={'Content-Type':'application/json','Idempotency-Key':action,Cookie:`hawa_session=${f.token}; hawa_csrf=${csrf}`,'x-hawa-csrf':csrf,Origin:'https://desk.office.example'};
     const request={method:'POST',headers,body:JSON.stringify(body)};
     const first=await createApp(options).request(path,request);expect(first.status,await first.clone().text()).toBe(200);
     const replay=await createApp(options).request(path,request);expect(replay.status).toBe(200);expect(await replay.json()).toMatchObject({replayed:true});
+    expect((await createApp(options).request(path,{...request,headers:{...headers,Origin:'https://foreign.example'}})).status).toBe(403);
     expect((await createApp(options).request(path,{...request,headers:{'Content-Type':'application/json',Cookie:headers.Cookie}})).status).toBe(403);
     expect((await createApp({...options,testAuth:{principal:{role:'administrator',userId:f.userId}}}).request(path,{...request,headers:{'Content-Type':'application/json','Idempotency-Key':action}})).status).toBe(403);
   }finally{vi.unstubAllEnvs();}

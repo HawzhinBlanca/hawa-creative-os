@@ -42,3 +42,9 @@ stale snapshots, concurrent revisions, RLS/named authority/revocation/CSRF, SQL
 immutability and direct-insert guards, run-budget consistency and Desk retry flows.
 Live invoice validation, budget policy administration and typed result recovery
 remain separate requirements; keep their completion status explicit.
+
+The deployed browser control exposed that nginx forwarded `$host`, dropping the
+non-default browser port. Preserve the complete Host authority with `$http_host`
+and the existing `$host` fallback when absent. Core still requires the CSRF proof
+and exact browser origin (the configured public OAuth origin takes precedence).
+Do not weaken origin checks or inject an Authorization header to bypass them.
