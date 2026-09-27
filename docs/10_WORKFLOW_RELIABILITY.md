@@ -278,6 +278,21 @@ all run call receipts, including distinct parity inputs after transfer; stale or
 immutable run budget snapshots cannot reset limits. Exact-call settlement cost
 counts once, conservatively retaining the greater of receipt and reported cost.
 Malformed limits and incomplete historical accounting refuse dispatch. The USD
-limit is a recorded-cost stop threshold. Strict pre-dispatch USD reservations for
-unknown final costs and office/day/role limits remain separately qualified work.
+limit initially operated as a recorded-cost stop threshold. ADR-091 below extends
+it with per-request reservations. Office/day/role limits remain additional work.
 See runbooks/STUDIO_RECOVERY.md and R21_STUDIO_BUDGET_PROOF.json.
+
+
+### Studio spending reservations (ADR-091, 2026-09-27)
+
+Each newly admitted Studio request includes a versioned conservative quote bound
+to the exact serialized transport body. Under the task lock, the repository adds
+recorded/attested costs and outstanding reservations before admitting the next
+quote. USD comparisons use micro-units. The immutable quote survives restart,
+cancellation and lost replies. Missing usage or a per-image estimate retains the
+unused reserve; complete valid usage, definite rejection or exact-call settlement
+can release it. A higher observed charge remains in the ledger and blocks new
+requests even below the run cap. Quotes are operating estimates, not invoice
+ceilings. Historical calls retain absent reservation facts. No prompt or image
+bytes are stored in the quote. Role/office/day budgets, live invoice qualification
+and typed completed-stage replay remain separate requirements.

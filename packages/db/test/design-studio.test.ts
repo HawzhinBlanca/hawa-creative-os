@@ -90,7 +90,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
         stage: 'critique',
         provider: 'anthropic',
         model: 'claude-fable-5-1',
-        requestedModel: 'claude-fable-5-1',
+        reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'claude-fable-5-1',
         callOrdinal: 1,
         logicalCallSha256: createHash('sha256').update(callIdA).digest('hex'),
       });
@@ -160,7 +160,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
     const peerDb = createDb(url!);
     const peer = new DesignStudioRepository(peerDb);
     const call = (id: string, digest: string) => ({ id, runId, tenantId: tenantA,
-      stage: 'briefing', provider: 'openai', model: 'model-test', requestedModel: 'model-test',
+      stage: 'briefing', provider: 'openai', model: 'model-test', reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'model-test',
       callOrdinal: 1, logicalCallSha256: digest });
     try {
       const results = await Promise.allSettled([
@@ -184,7 +184,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
     const admit = () => withRlsContext(db, { tenantId: tenantA, clientId: clientA, role: 'operator' }, async trx => {
       await sql`SET LOCAL ROLE hawa_app`.execute(trx);
       return repo.recordCallStart({ id: randomUUID(), runId, tenantId: tenantA, actorId, stage: 'parity',
-        provider: 'openai', model: 'test', requestedModel: 'test', callOrdinal: null,
+        provider: 'openai', model: 'test', reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'test', callOrdinal: null,
         logicalCallSha256: createHash('sha256').update(randomUUID()).digest('hex') }, trx);
     });
     await expect(admit()).resolves.toMatchObject({ status: 'uncertain' });
@@ -203,7 +203,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       actorId: 'test_user', requestKey: `cancel-${runId}`, requestHash: 'a'.repeat(64), request: {}, tier: 'premium' });
     const admittedId = randomUUID();
     const call = (id: string, ordinal: number) => ({ id, runId, tenantId: tenantA, stage: 'briefing',
-      provider: 'openai', model: 'test', requestedModel: 'test', callOrdinal: ordinal,
+      provider: 'openai', model: 'test', reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'test', callOrdinal: ordinal,
       logicalCallSha256: createHash('sha256').update(id).digest('hex') });
     await repo.recordCallStart(call(admittedId, 1));
     const peer = createDb(url!);
@@ -240,7 +240,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       requestKey: `uncertain-${runId}`, requestHash: 'c'.repeat(64), request: {}, tier: 'premium' });
     const id = randomUUID();
     const call = { id, runId, tenantId: tenantA, stage: 'briefing', provider: 'openai', model: 'test',
-      requestedModel: 'test', callOrdinal: 1, logicalCallSha256: 'c'.repeat(64) };
+      reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'test', callOrdinal: 1, logicalCallSha256: 'c'.repeat(64) };
     await repo.recordCallStart(call);
     await repo.finalizeCall({ id, tenantId: tenantA, status: 'uncertain', inputTokens: 0, outputTokens: 0, usdEstimate: 0 });
     await expect(repo.recordCallStart({ ...call, id: randomUUID(), callOrdinal: 2, logicalCallSha256: 'd'.repeat(64) }))
@@ -329,7 +329,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
         stage: 'render',
         provider: 'anthropic',
         model: 'claude-fable-5-1',
-        requestedModel: 'claude-fable-5-1',
+        reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'claude-fable-5-1',
         callOrdinal: 1,
         logicalCallSha256: createHash('sha256').update(callId).digest('hex'),
       });
@@ -392,7 +392,7 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       request: { prompt: 'seal the call identity' }, tier: 'premium' });
     await repo.recordCallStart({ id: callId, runId, tenantId: tenantA,
       stage: 'briefing', provider: 'openai', model: 'requested-model',
-      requestedModel: 'requested-model', callOrdinal: 1,
+      reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'requested-model', callOrdinal: 1,
       logicalCallSha256: createHash('sha256').update(callId).digest('hex') });
 
     for (const change of [

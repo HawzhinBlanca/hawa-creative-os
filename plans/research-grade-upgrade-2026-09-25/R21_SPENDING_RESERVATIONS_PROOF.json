@@ -1,0 +1,118 @@
+{
+  "date": "2026-09-27",
+  "status": "CANDIDATE_PENDING_SEALED_FULL_REGRESSION",
+  "decision": "ADR-091",
+  "baselineCommit": "1296f37a4cd302646e02bb0cd3ec030230daea12",
+  "requirements": [
+    "FR-059",
+    "FR-060",
+    "FR-062",
+    "FR-065",
+    "FR-079",
+    "NFR-001"
+  ],
+  "changes": [
+    "Immutable request-body-bound quotes admitted with recorded spend and outstanding reservations under the task lock.",
+    "Separate known, reserved, committed and available USD; only valid complete usage, definite rejection or exact settlement releases unused reserve.",
+    "Provider overrun is retained and holds further work; unpriced/unbounded payloads refuse before transport.",
+    "Explicit standard text service tier, bounded output, conservative multilingual/vision/image prices; no automatic fidelity reduction.",
+    "Missing text usage remains estimated; no fabricated response/served-model identifiers; long-context Astra pricing corrected.",
+    "Desk exposes outstanding reservations and available funds."
+  ],
+  "checks": {
+    "redBefore": {
+      "failed": 3,
+      "passed": 6,
+      "log": "red-db.log"
+    },
+    "firstFocused": {
+      "passed": 71,
+      "failed": 1,
+      "reason": "Synthetic 20K input usage with a tiny prompt exceeded its truthful quote; corrected prompt size, preserving billed-error assertions."
+    },
+    "secondFocused": {
+      "passed": 142,
+      "failed": 3,
+      "reason": "Negative-zero rounding corrected; threshold fixture reservation aligned; exact settlement overrun now explicitly expects the stricter hold."
+    },
+    "thirdFocused": {
+      "passed": 150,
+      "failed": 0
+    },
+    "firstFull": {
+      "passed": 3851,
+      "failed": 10,
+      "skipped": 59,
+      "log": "full-first.log",
+      "reason": "Fake orchestrator always claimed Astra for cheaper requested models, correctly triggering overrun and cascading active-run limits; fixture now echoes requested model. Old release manifest schema049 refuses schema050 as expected."
+    },
+    "finalFocusedBeforeNumericRangeControl": {
+      "files": 14,
+      "passed": 177,
+      "failed": 0,
+      "skipped": 0,
+      "log": "focused-final.log"
+    },
+    "strictTypes": {
+      "roots": 481,
+      "errors": 0,
+      "log": "typecheck-final.log"
+    },
+    "lint": "991 production any, ceiling1053;9 existing egress exceptions",
+    "deskBuild": "passed",
+    "fullSealed": "pending"
+  },
+  "limits": [
+    "Conservative published-rate operating reservations are not a provider invoice ceiling. Image calculator headroom remains an estimate.",
+    "Office/day/role caps and typed completed-stage result recovery remain open.",
+    "Historical calls have no fabricated quote; Google per-image costs retain full reserve when complete modality usage is unavailable.",
+    "No paid provider request, native browser qualification, new runtime image or production deployment.",
+    "Named live pilot, native Canva save/reopen, human multilingual/design review, held-out quality/cost and independent-host restore remain open."
+  ],
+  "sourceHashes": {
+    "apps/core/src/services/design-studio/design-studio-service.ts": "fa328c38ee69d8693d7a4cff48fe3ac1d7e8f444420155dc329c8ad0bab5b0e4",
+    "apps/core/src/services/design-studio/types.ts": "f250c2fa998ef9fae51421be0d71d002b8a9d38fdfd0c8d86d7432b0b13a349b",
+    "apps/core/test/canva-design-planner.test.ts": "ae7e358a95c6d02ce3aff34dfc2009140ee8cd314df9536f0cc0cf00660f819b",
+    "apps/core/test/design-studio-orchestrator.test.ts": "416f10236b11941ea3e67e64cf74a1fdfd36d397644ed79b8a4c543e9c1a979f",
+    "apps/core/test/startup-schema-check.test.ts": "34c70f7e54dda9687b6e56814574afdee4dedaee5eaca54efb7b7c50913672b2",
+    "apps/core/test/studio-art-ledger.test.ts": "2a2544c2836b9401ea278f97988a6f3366fd8a2db8355eefd4846b886a3d9d73",
+    "apps/core/test/studio-call-settlement.test.ts": "b4871650a3a9a2aa03b8a9ab0abb8679889030fd7cdc10bafc0d2f39e7d7e9e5",
+    "apps/core/test/studio-ledger.test.ts": "991b0c880b690ee4eb1aca9a97c71215d8f203930ffb175a3cf5c6721260a821",
+    "apps/core/test/studio-model-kill-recovery.test.ts": "7487764ac2e7c56996b58d7f0750c194bc2a33a7ff83d4cf566ae69bf1d884b9",
+    "apps/core/test/studio-run-guards.test.ts": "a52d4d3fb9a31d8be4e0203f2b98f558f4c5e03ca0d77c2291c5d6a6a6023473",
+    "apps/desk/src/components/StudioBudgetSummary.tsx": "bfd47a6cc41ac5e80ee99ba0ea56285652e482e39d2aa6fffd25bea54c8a9c47",
+    "apps/desk/test/studio-budget.test.ts": "e985e493cab6d2ac26487fe2511f3ad3ba5da2821c521832198814f3a28bd38f",
+    "docs/10_WORKFLOW_RELIABILITY.md": "dbda8a554a467fd09d7eb96cae155d9c74e2687e50baecba34baeb50e5509156",
+    "docs/17_UI_UX.md": "a8fbbdbffd9727411cb559e03631469705a8dd433bc61fd61de7a892a15025a7",
+    "packages/creative/src/index.ts": "44981c824cc7fc5853d706a9aefff1ef5ff23b10643859de7d2a23fd81f06e16",
+    "packages/creative/src/studio/gemini-image-provider.ts": "d5f32455c9bef82eec2bf29ccdeb8f520c408635530a168d4049bb9305dec30f",
+    "packages/creative/src/studio/openai-studio-client.ts": "2ccc9f27d48cde6c8f252f2e9e2417df32343acb3590cbb13a83c198e32f63b7",
+    "packages/db/src/repositories/design-studio.repository.ts": "5883266bea180135113a96a954b032624ee411125fab659241fa2f1f555ba0a3",
+    "packages/db/src/types.ts": "624b156e105736a79376aff7c7bd6eaf556d940f3a85b272ae092375a4b88b16",
+    "packages/db/test/design-studio.test.ts": "a16a2f77a71184161b52abb0009dbc32a4378d826f456436636cf115f7aacc46",
+    "packages/db/test/schema-upgrade.test.ts": "52168f6d2912b600e71912d7a9ba8bbdbca60e495454100aac7376968a59890a",
+    "packages/db/test/studio-budget.test.ts": "5cc27ab2371990094b7bf13351a600378335fd84739b8e7ccde5cc7ef670101f",
+    "packages/domain/src/studio-budget.ts": "88401e31b589748566a0f8e5fd1086b352de5ee0539a23e291d08129ad7502f4",
+    "packages/domain/test/studio-budget.test.ts": "d5f3193c185aa6495db532cc50558a2fdd48c590a034eb8a4feda1d4a4c3230f",
+    "runbooks/STUDIO_RECOVERY.md": "6f47443d394f988c0d46bc33a5fd46cb538372a98e813219ce6c91e80bd9562a",
+    "adrs/091_studio_spending_reservations.md": "515048a58d0b53af7394a4ec0797bd849f1e72f986cf42deeb354ac0b6fc204f",
+    "packages/creative/src/studio/spending-reservation.ts": "7a38de155ccefef1433906b9237eecfe1e0f77777f3cf452c017510a5ce060b5",
+    "packages/creative/test/studio-spending-reservation.test.ts": "c5235e28dfdae063680634a3a2dd9b78aad9c46fdbfb66cb4836ada1f015a617",
+    "packages/db/migrations/050_studio_spending_reservations.sql": "46f32562aa37648224be5d79d39290fe5b21316bfeffcd2b9520ff1a5037f13c"
+  },
+  "artifactHashes": {
+    "output/acceptance/2026-09-27-spending-reservations/build-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-spending-reservations/build-first.log": "331258b34e2386b590b2c02ad0c76622b82c62734b6039796c176210e1a9e435",
+    "output/acceptance/2026-09-27-spending-reservations/build-second.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-spending-reservations/desk-build.log": "43a89f625440cb64e8b927b02a2babdcc711b2c924181aa16e18e181092a8891",
+    "output/acceptance/2026-09-27-spending-reservations/focused-final.log": "4c3704bcca454610e1ab4e8e9044b9f3950e898ded2dffceac754ae311605368",
+    "output/acceptance/2026-09-27-spending-reservations/focused-first.log": "68de36f11512c8463297ce6315dee1e3a6e29d913d84aa5f835525130c3d9f57",
+    "output/acceptance/2026-09-27-spending-reservations/focused-second.log": "59317c24a847de64824181395d09c5cf3e0a3ef18789779fda5049f3eabe0b36",
+    "output/acceptance/2026-09-27-spending-reservations/focused-third.log": "1e670244c61f8eb6b6779a7980dd27b32b4a85cb8661abb9476be56d159b1bee",
+    "output/acceptance/2026-09-27-spending-reservations/full-first.log": "645fc9cf3ca17330ef1f53b50fe140b7f3ee5bc2b7b2bd05bc77edeb0a22ffb0",
+    "output/acceptance/2026-09-27-spending-reservations/red-db.log": "366710db39237587b99b0d4a84acb8249c0b750e201fd8bc250343c2f747332c",
+    "output/acceptance/2026-09-27-spending-reservations/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+    "output/acceptance/2026-09-27-spending-reservations/test-types-first.log": "c4f0fc88b8bbb49cbd6bd2a150d12fcb7e427a9d1e67fb508d79cec893d4af7d",
+    "output/acceptance/2026-09-27-spending-reservations/test-types-second.log": "825ddc79976a9e95432bd4ea269752fe5eef7b1de8c52c1f2d08ff6847c272dd"
+  }
+}

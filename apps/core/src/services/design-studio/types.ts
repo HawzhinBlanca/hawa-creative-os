@@ -13,7 +13,8 @@ export function isModelCallHoldError(err: unknown): boolean {
       'code' in err && (err.code === 'MODEL_CALL_ADMISSION_CONFLICT' ||
         err.code === 'MODEL_CALL_FINALIZATION_CONFLICT' || err.code === 'MODEL_CALL_ACCOUNTING_FAILED' ||
         err.code === 'TASK_GENERATION_BLOCKED' ||
-        err.code === 'STUDIO_BUDGET_INVALID' || err.code === 'STUDIO_BUDGET_HISTORY_INCOMPLETE'));
+        err.code === 'STUDIO_BUDGET_INVALID' || err.code === 'STUDIO_BUDGET_UNQUOTABLE' ||
+        err.code === 'STUDIO_BUDGET_RESERVATION_EXCEEDED' || err.code === 'STUDIO_BUDGET_HISTORY_INCOMPLETE'));
 }
 
 export interface CreativeBriefRole {

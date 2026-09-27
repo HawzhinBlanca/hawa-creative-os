@@ -110,7 +110,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     await repo.createRun({id:runId,tenantId:scope.tenantId,taskId,clientId,actorId:scope.actorId,
       requestKey:`studio-${runId}`,requestHash:'a'.repeat(64),request:{},tier:'premium'});
     await repo.recordCallStart({id:randomUUID(),runId,...scope,stage:'briefing',provider:'openai',model:'test',
-      requestedModel:'test',callOrdinal:1,logicalCallSha256:'a'.repeat(64)});
+      reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel:'test',callOrdinal:1,logicalCallSha256:'a'.repeat(64)});
     await repo.updateRunStatus(runId,scope.tenantId,'abandoned');
     const {planner,api}=make(fetcher);
     await expect(planner.generate(scope,taskId,`planner-${randomUUID()}`,1200,1697))

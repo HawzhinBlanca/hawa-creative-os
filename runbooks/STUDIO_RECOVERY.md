@@ -83,5 +83,26 @@ cannot reduce a higher settled amount used for admission.
 
 The USD limit stops new requests after recorded spending reaches it. It is not a
 guaranteed invoice ceiling: final costs for admitted calls may exceed the remaining
-amount. Strict cost reservations and office/day/role budget qualification remain open.
+amount. ADR-091 adds reservations below; office/day/role budget qualification remains open.
 No settlement automatically supplies a missing stage result or retries its model.
+
+
+## Spending reservations (ADR-091)
+
+Desk shows recorded estimates, additional administrator-reported cost, reserved
+funds and available funds separately. A completed reply without usable token
+counts can still reserve money. Restarting or cancelling does not free it.
+Unknown acceptance still requires exact-call terminal settlement as above.
+
+A new call that cannot fit its quote stops before provider transport. Preserve
+its requested model, quality and output limit; a smaller budget does not authorize
+an automatic quality reduction. `STUDIO_BUDGET_UNQUOTABLE` means the payload needs
+a qualified bound. `STUDIO_BUDGET_RESERVATION_EXCEEDED` means a recorded provider
+charge exceeded the quote: retain the charge and review the pricing policy.
+The old run remains held; do not rewrite its quote or lower its cost to resume it.
+
+These quotes use published rates and conservative token bounds, not invoices.
+Google image estimates without complete modality usage retain the whole model
+output reservation. OpenAI auto image quality reserves the highest quality.
+Historical rows have no fabricated quote. Broader office/day/role limits and
+provider invoice reconciliation remain pending.

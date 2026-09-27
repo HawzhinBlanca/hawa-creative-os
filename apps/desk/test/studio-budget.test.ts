@@ -5,11 +5,13 @@ import { StudioBudgetSummary, type StudioBudgetUsage } from '../src/components/S
 import { mount } from './support/desk-harness.js';
 afterEach(() => { document.body.innerHTML = ''; });
 const usage: StudioBudgetUsage = { maxUsd: 2, maxCalls: 3, admittedCalls: 3, knownUsdEstimate: 0.25,
-  attestedAdditionalUsd: 0.5, accountedUsd: 0.75, unresolvedCalls: 0, blocker: 'BUDGET_EXHAUSTED' };
+  attestedAdditionalUsd: 0.5, accountedUsd: 0.75, reservedAdditionalUsd: 0.5, committedUsd: 1.25, remainingUsd: 0.75, unresolvedCalls: 0, blocker: 'BUDGET_EXHAUSTED' };
 it('shows cumulative calls and separately reported spend with the admission refusal', async () => {
   const view = await mount(React.createElement(StudioBudgetSummary, { usage }));
   expect(view.text()).toContain('Calls: 3 / 3');
   expect(view.text()).toContain('Spending counted: $0.750 / $2.000');
+  expect(view.text()).toContain('Available for new requests: $0.750');
+  expect(view.text()).toContain('Reserved for unfinished or estimated calls: $0.500');
   expect(view.text()).toContain('Recorded estimates: $0.250');
   expect(view.text()).toContain('administrator-reported cost: $0.500');
   expect(view.text()).toContain('Further model calls are blocked');

@@ -448,12 +448,14 @@ export async function requestStudioArtImage(
   settings: ImageSettings,
   prompt: string,
   key: string,
-  fetcher: typeof fetch
+  fetcher: typeof fetch,
+  beforeDispatch?: (body: string) => Promise<void>
 ): Promise<ProviderImage | null> {
   // One deadline for the whole request, body and download included; a timeout throws like every
   // other network failure, and the caller decides what to do with it.
   const signal = AbortSignal.timeout(IMAGE_REQUEST_TIMEOUT_MS);
   const providerFetch = async (url: string, init: RequestInit): Promise<Response> => {
+    await beforeDispatch?.(String(init.body));
     try { return await fetcher(url, init); }
     catch (error) { throw new ImageAcceptanceUnknownError(settings.provider, error); }
   };
@@ -543,8 +545,11 @@ export async function requestStudioArtImage(
 /** From the response's token counts when it reports them, else the operator's per-image estimate. */
 function openAiImageCost(settings: ImageSettings, usage: any): { costUsd: number; costSource: 'usage' | 'estimate' } {
   const rates = imagePricing(settings.model) || {};
-  if (usage && typeof usage.output_tokens === 'number') {
-    const details = usage.input_tokens_details || {};
+  const tokenCount = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+  const details = usage?.input_tokens_details || {};
+  if (usage && tokenCount(usage.output_tokens) && tokenCount(usage.input_tokens) &&
+      tokenCount(details.text_tokens ?? usage.input_tokens) && tokenCount(details.image_tokens ?? 0) &&
+      (details.text_tokens ?? usage.input_tokens) + (details.image_tokens ?? 0) === usage.input_tokens) {
     const textIn = typeof details.text_tokens === 'number' ? details.text_tokens : Number(usage.input_tokens || 0);
     const imageIn = Number(details.image_tokens || 0);
     const usd =

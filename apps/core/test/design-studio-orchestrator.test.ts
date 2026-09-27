@@ -199,7 +199,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
         status: 200,
         json: async () => ({
           id: `msg_${randomUUID().slice(0, 8)}`,
-          model: 'gpt-6-astra',
+          model: body.model,
           stop_reason: 'end_turn',
           choices: [
             {

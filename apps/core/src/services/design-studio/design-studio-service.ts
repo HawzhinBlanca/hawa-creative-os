@@ -1,3 +1,5 @@
+import { reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } from '@hawa/creative';
+import { studioUsdMicros, type StudioCallReservation } from '@hawa/domain';
 import { TaskGenerationBlockedError } from '@hawa/db';
 import { assertTaskGenerationAllowed, assertStudioCallsResolved } from '../task-generation-guard.js';
 import { orderedAlbumImages } from '../lifecycle-album.js';
@@ -919,7 +921,7 @@ export class DesignStudioService {
     // processes that read the same run budget; parity is content-keyed because a transferred run's
     // budget is immutable and a changed Canva export must remain independently checkable.
     const admitCall = async (call: {
-      id: string; stage: string; provider: string; model: string; input: unknown;
+      id: string; stage: string; provider: string; model: string; input: unknown; reservation: StudioCallReservation;
     }) => {
       const callOrdinal = currentStageName === 'parity' ? null : currentBudget.calls + 1;
       const logicalCallSha256 = hash(canonicalCallJson({
@@ -938,6 +940,7 @@ export class DesignStudioService {
           requestedModel: call.model,
           callOrdinal,
           logicalCallSha256,
+          reservation: call.reservation,
         });
       } catch (error) {
         if (error instanceof TaskGenerationBlockedError || error instanceof StudioBudgetEvidenceError) {
@@ -949,119 +952,60 @@ export class DesignStudioService {
       currentBudget.calls++;
     };
 
-    // Instrument client with ledger hooks and budget checks
-    const ledgerClient: any = {
-      calculateCost: baseClient.calculateCost.bind(baseClient),
-      circuitBreaker: baseClient.circuitBreaker,
-      primaryModel: baseClient.primaryModel,
-      fallbackModel: baseClient.fallbackModel,
-      completeJson: async <T>(params: any): Promise<any> => {
-        // Check budget before dispatch
-        if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
-          throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
-        }
-
-        const callId = randomUUID();
-        const model = params.model || baseClient.primaryModel || resolveModel('text');
-
-        // Ledger insert-before-dispatch
-        await admitCall({ id: callId, stage: currentStageName, provider: 'openai', model, input: params });
-
-        let result: Awaited<ReturnType<typeof baseClient.completeJson<T>>>;
-        try {
-          result = await baseClient.completeJson<T>(params);
-        } catch (err: any) {
-          // A reply cut off at the token cap or not JSON was answered and billed: the error carries
-          // what it cost. Recorded at $0 and left out of the budget until 2026-09-24.
-          const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
-          const uncertain = err?.isUncertain === true;
-          await finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            responseId: err?.responseId,
-            inputTokens: 0,
-            outputTokens: 0,
-            usdEstimate: billedUsd,
-            status: uncertain ? 'uncertain' : 'error',
-            errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.message || 'CALL_FAILED'),
-          });
-          if (billedUsd > 0) await recordSpend(billedUsd);
-          throw err;
-        }
-        const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
-          input_tokens: result.receipt.inputTokens,
-          output_tokens: result.receipt.outputTokens,
+    const checkReservation = (cost: number, reservation: StudioCallReservation) => {
+      if (studioUsdMicros(cost) > studioUsdMicros(reservation.usd)) {
+        throw new StudioBudgetEvidenceError('STUDIO_BUDGET_RESERVATION_EXCEEDED',
+          'The provider cost exceeded its reservation. The receipt is saved; review pricing before continuing.');
+      }
+    };
+    const complete = async <T>(invoke: (beforeDispatch: (body: string) => Promise<void>) => Promise<OpenAiStructuredResponse<T>>) => {
+      if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
+        throw new StudioBudgetExhaustedError();
+      }
+      const callId = randomUUID();
+      let reservation: StudioCallReservation | undefined;
+      let result: OpenAiStructuredResponse<T>;
+      try {
+        result = await invoke(async body => {
+          const quoted = reserveStudioText(body);
+          const model = JSON.parse(body).model as string;
+          await admitCall({ id: callId, stage: currentStageName, provider: 'openai', model,
+            input: { requestSha256: quoted.requestSha256 }, reservation: quoted });
+          reservation = quoted;
         });
-        await finalizeCall({
-          id: callId,
-          tenantId: s.tenantId,
-          responseId: result.receipt.id,
-          servedModel: result.receipt.model,
-          providerRequestId: result.receipt.xRequestId,
-          responseSha256: result.receipt.sha256,
-          latencyMs: result.receipt.latencyMs,
-          attempts: result.receipt.attempts,
-          inputTokens: result.receipt.inputTokens,
-          cachedInputTokens: result.receipt.cacheReadTokens || 0,
-          outputTokens: result.receipt.outputTokens,
-          usdEstimate: cost,
-          status: 'ok',
-        });
-        await recordSpend(cost);
-        return result;
-      },
-      createStructuredCompletion: async <T>(params: any): Promise<any> => {
-        if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
-          throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
-        }
-
-        const callId = randomUUID();
-        const model = params.model || baseClient.primaryModel || resolveModel('text');
-
-        await admitCall({ id: callId, stage: currentStageName, provider: 'openai', model, input: params });
-
-        let result: Awaited<ReturnType<typeof baseClient.createStructuredCompletion<T>>>;
-        try {
-          result = await baseClient.createStructuredCompletion<T>(params);
-        } catch (err: any) {
-          // Billed failures carry their cost, as in completeJson above.
-          const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
-          const uncertain = err?.isUncertain === true;
-          await finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            responseId: err?.responseId,
-            inputTokens: 0,
-            outputTokens: 0,
-            usdEstimate: billedUsd,
-            status: uncertain ? 'uncertain' : 'error',
-            errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.message || 'CALL_FAILED'),
-          });
-          if (billedUsd > 0) await recordSpend(billedUsd);
-          throw err;
-        }
-        const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
-          input_tokens: result.receipt.inputTokens,
-          output_tokens: result.receipt.outputTokens,
-        });
-        await finalizeCall({
-          id: callId,
-          tenantId: s.tenantId,
-          responseId: result.receipt.id || result.receipt.responseId,
-          servedModel: result.receipt.model,
-          providerRequestId: result.receipt.xRequestId,
-          responseSha256: result.receipt.sha256,
-          latencyMs: result.receipt.latencyMs,
-          attempts: result.receipt.attempts,
-          inputTokens: result.receipt.inputTokens,
-          cachedInputTokens: result.receipt.cacheReadTokens || 0,
-          outputTokens: result.receipt.outputTokens,
-          usdEstimate: cost,
-          status: 'ok',
-        });
-        await recordSpend(cost);
-        return result;
-      },
+      } catch (err: any) {
+        // A refused quote/admission has no ledger row and must never be finalized as a paid call.
+        if (!reservation) throw err;
+        const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
+        const uncertain = err?.isUncertain === true;
+        const notAccepted = typeof err?.status === 'number' && err.status >= 400 && err.status < 500;
+        await finalizeCall({ id: callId, tenantId: s.tenantId, responseId: err?.responseId,
+          inputTokens: 0, outputTokens: 0, usdEstimate: billedUsd,
+          costBasis: notAccepted ? 'not_accepted' : uncertain ? 'unavailable' : err?.costBasis ?? 'estimate',
+          status: uncertain ? 'uncertain' : 'error',
+          errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.code || 'CALL_FAILED') });
+        if (billedUsd > 0) await recordSpend(billedUsd);
+        checkReservation(billedUsd, reservation);
+        throw err;
+      }
+      const cost = result.receipt.costUsd;
+      await finalizeCall({ id: callId, tenantId: s.tenantId, responseId: result.receipt.responseId,
+        servedModel: result.receipt.servedModel, providerRequestId: result.receipt.xRequestId,
+        responseSha256: result.receipt.sha256, latencyMs: result.receipt.latencyMs,
+        attempts: result.receipt.attempts, inputTokens: result.receipt.inputTokens,
+        cachedInputTokens: result.receipt.cacheReadTokens || 0, outputTokens: result.receipt.outputTokens,
+        usdEstimate: cost, costBasis: result.receipt.costBasis ?? 'estimate', status: 'ok' });
+      await recordSpend(cost);
+      checkReservation(cost, reservation!);
+      return result;
+    };
+    const ledgerClient = {
+      calculateCost: baseClient.calculateCost.bind(baseClient), circuitBreaker: baseClient.circuitBreaker,
+      primaryModel: baseClient.primaryModel, fallbackModel: baseClient.fallbackModel,
+      completeJson: <T>(params: Parameters<OpenAiStudioClient['completeJson']>[0]) =>
+        complete<T>(beforeDispatch => baseClient.completeJson<T>({ ...params, beforeDispatch })),
+      createStructuredCompletion: <T>(params: Parameters<OpenAiStudioClient['createStructuredCompletion']>[0]) =>
+        complete<T>(beforeDispatch => baseClient.createStructuredCompletion<T>({ ...params, beforeDispatch })),
     };
 
     const ledgerArtProvider: Pick<OpenAiImageProvider, 'generateArt'> = {
@@ -1075,15 +1019,20 @@ export class DesignStudioService {
               throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
             }
             const callId = randomUUID();
-            await admitCall({ id: callId, stage: 'art', provider: selected.provider, model: selected.model,
-              input: { prompt, settings: selected } });
+            let reservation: StudioCallReservation | undefined;
             const started = Date.now();
             let result: Awaited<ReturnType<typeof requestStudioArtImage>>;
             try {
               result = await requestStudioArtImage(selected, prompt,
                 selected.provider === 'google' ? params.geminiApiKey || process.env.GEMINI_API_KEY || '' : apiKey,
-                fetchFn);
+                fetchFn, async body => {
+                  const quoted = reserveStudioImage(selected.provider, body);
+                  await admitCall({ id: callId, stage: 'art', provider: selected.provider, model: selected.model,
+                    input: { requestSha256: quoted.requestSha256 }, reservation: quoted });
+                  reservation = quoted;
+                });
             } catch (error) {
+              if (!reservation) throw error;
               const uncertain = !!error && typeof error === 'object' && 'isUncertain' in error && error.isUncertain === true;
               await finalizeCall({ id: callId, tenantId: s.tenantId, inputTokens: 0, outputTokens: 0,
                 usdEstimate: 0, status: uncertain ? 'uncertain' : 'error',
@@ -1097,8 +1046,10 @@ export class DesignStudioService {
               responseSha256: result ? hash(result.imageBuffer) : null,
               inputTokens: result?.inputTokens ?? 0, outputTokens: result?.outputTokens ?? 0,
               images: result ? 1 : 0, usdEstimate: cost, status: result ? 'ok' : 'error',
+              costBasis: !result ? 'not_accepted' : result.costSource === 'usage' ? 'usage' : 'estimate',
               errorCode: result ? null : 'IMAGE_REQUEST_REJECTED', latencyMs: Date.now() - started, attempts: 1 });
             await recordSpend(cost);
+            checkReservation(cost, reservation!);
             return result;
           },
         });
@@ -2205,7 +2156,8 @@ export class DesignStudioService {
           return { runId, status: run.status };
       }
     } catch (err: any) {
-      if (['TASK_GENERATION_BLOCKED', 'STUDIO_BUDGET_INVALID', 'STUDIO_BUDGET_HISTORY_INCOMPLETE'].includes(err?.code)) {
+      if (['TASK_GENERATION_BLOCKED', 'STUDIO_BUDGET_INVALID', 'STUDIO_BUDGET_HISTORY_INCOMPLETE',
+        'STUDIO_BUDGET_UNQUOTABLE', 'STUDIO_BUDGET_RESERVATION_EXCEEDED'].includes(err?.code)) {
         throw new CanvaFlowError(409, err.code, err.message);
       }
       if (isModelCallHoldError(err)) {

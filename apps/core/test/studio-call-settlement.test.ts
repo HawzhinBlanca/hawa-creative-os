@@ -19,7 +19,7 @@ async function fixture(office=false,status:string|null='abandoned'){
   const scope={tenantId,userId,role:'administrator',sessionHash},repo=new DesignStudioRepository(owner);
   await repo.createRun({id:runId,tenantId,taskId,clientId,actorId:userId,requestKey:`run-${runId}`,requestHash:'a'.repeat(64),request:{},tier:'standard'});
   const callId=randomUUID();
-  await repo.recordCallStart({id:callId,tenantId,runId,actorId:userId,stage:'briefing',provider:'openai',model:'synthetic',requestedModel:'synthetic',callOrdinal:1,logicalCallSha256:'b'.repeat(64)});
+  await repo.recordCallStart({id:callId,tenantId,runId,actorId:userId,stage:'briefing',provider:'openai',model:'synthetic',reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel:'synthetic',callOrdinal:1,logicalCallSha256:'b'.repeat(64)});
   if(status) await repo.updateRunStatus(runId,tenantId,status as 'abandoned'|'transferred');
   const service=new StudioCallSettlementService(db),detail=await service.get(scope,taskId,runId);
   const body={expectedSnapshot:detail.snapshotHash,reason:'Provider confirmed final execution and charge',calls:[{callId,conclusion:'provider_finished',reportedCostUsd:0.125,evidenceReference:'support-case-123',evidenceSha256:'c'.repeat(64)}]};
@@ -38,7 +38,7 @@ it('settles exact calls, preserves original outcomes and stopped run, survives a
   expect(after).toMatchObject({unresolvedCalls:0,canSettle:false,status:'abandoned'});
   expect(after.calls[0]).toMatchObject({status:'uncertain',estimatedCostUsd:null,settlement:{reportedCostUsd:0.125}});
   await expect(withRlsContext(db,f.scope,tx=>assertStudioCallsResolved(tx,f.scope.tenantId,f.taskId))).resolves.toBeUndefined();
-  const request={id:randomUUID(),runId:f.runId,tenantId:f.scope.tenantId,actorId:f.scope.userId,stage:'briefing',provider:'openai',model:'test',requestedModel:'test',callOrdinal:2,logicalCallSha256:'d'.repeat(64)};
+  const request={id:randomUUID(),runId:f.runId,tenantId:f.scope.tenantId,actorId:f.scope.userId,stage:'briefing',provider:'openai',model:'test',reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel:'test',callOrdinal:2,logicalCallSha256:'d'.repeat(64)};
   await expect(f.repo.recordCallStart(request)).rejects.toMatchObject({code:'TASK_GENERATION_BLOCKED'});
   const next=randomUUID();
   await f.repo.createRun({id:next,tenantId:f.scope.tenantId,taskId:f.taskId,clientId:f.clientId,actorId:f.scope.userId,requestKey:`new-${next}`,requestHash:'e'.repeat(64),request:{},tier:'standard'});
@@ -108,14 +108,14 @@ it('scopes a transferred run settlement to exact calls, never its future parity 
   const f=await fixture(false,'transferred');
   await f.service.settle(f.scope,f.taskId,f.runId,randomUUID(),f.body);
   const id=randomUUID();
-  await f.repo.recordCallStart({id,runId:f.runId,tenantId:f.scope.tenantId,actorId:f.scope.userId,stage:'parity',provider:'openai',model:'synthetic',requestedModel:'synthetic',callOrdinal:null,logicalCallSha256:'e'.repeat(64)});
+  await f.repo.recordCallStart({id,runId:f.runId,tenantId:f.scope.tenantId,actorId:f.scope.userId,stage:'parity',provider:'openai',model:'synthetic',reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel:'synthetic',callOrdinal:null,logicalCallSha256:'e'.repeat(64)});
   const detail=await f.service.get(f.scope,f.taskId,f.runId);
   expect(detail.unresolvedCalls).toBe(1);
   expect(detail.calls.find(c=>c.id===id)?.settlement).toBeNull();
   await f.service.settle(f.scope,f.taskId,f.runId,randomUUID(),{...f.body,expectedSnapshot:detail.snapshotHash,calls:[{...f.body.calls[0],callId:id}]});
   const after=await f.service.get(f.scope,f.taskId,f.runId);
   expect(after.settlements).toHaveLength(2);expect(after.unresolvedCalls).toBe(0);
-  await expect(f.repo.recordCallStart({id:randomUUID(),runId:f.runId,tenantId:f.scope.tenantId,actorId:f.scope.userId,stage:'parity',provider:'openai',model:'synthetic',requestedModel:'synthetic',callOrdinal:null,logicalCallSha256:'e'.repeat(64)}))
+  await expect(f.repo.recordCallStart({id:randomUUID(),runId:f.runId,tenantId:f.scope.tenantId,actorId:f.scope.userId,stage:'parity',provider:'openai',model:'synthetic',reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel:'synthetic',callOrdinal:null,logicalCallSha256:'e'.repeat(64)}))
     .rejects.toMatchObject({code:'MODEL_CALL_ADMISSION_CONFLICT'});
 });
 it('SQL rejects unknown costs even for a named administrator bypassing application parsing',async()=>{
@@ -133,12 +133,12 @@ it('counts exact-call settlement cost towards parity admission and never discoun
   const f=await fixture(false,'transferred');
   await f.service.settle(f.scope,f.taskId,f.runId,randomUUID(),{...f.body,calls:[{...f.body.calls[0],reportedCostUsd:6}]});
   const admit=()=>f.repo.recordCallStart({id:randomUUID(),runId:f.runId,tenantId:f.scope.tenantId,actorId:f.scope.userId,
-    stage:'parity',provider:'openai',model:'synthetic',requestedModel:'synthetic',callOrdinal:null,logicalCallSha256:'f'.repeat(64)});
-  await expect(admit()).rejects.toMatchObject({code:'BUDGET_EXHAUSTED'});
+    stage:'parity',provider:'openai',model:'synthetic',reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel:'synthetic',callOrdinal:null,logicalCallSha256:'f'.repeat(64)});
+  await expect(admit()).rejects.toMatchObject({code:'STUDIO_BUDGET_RESERVATION_EXCEEDED'});
   expect(await f.repo.getBudgetUsage(f.runId,f.scope.tenantId,f.scope.userId))
     .toMatchObject({knownUsdEstimate:0,attestedAdditionalUsd:6,accountedUsd:6,unresolvedCalls:0});
   await f.repo.finalizeCall({id:f.callId,tenantId:f.scope.tenantId,inputTokens:1,outputTokens:1,usdEstimate:0.25,status:'ok'});
-  await expect(admit()).rejects.toMatchObject({code:'BUDGET_EXHAUSTED'});
+  await expect(admit()).rejects.toMatchObject({code:'STUDIO_BUDGET_RESERVATION_EXCEEDED'});
   expect(await f.repo.getBudgetUsage(f.runId,f.scope.tenantId,f.scope.userId))
     .toMatchObject({knownUsdEstimate:0.25,attestedAdditionalUsd:5.75,accountedUsd:6});
 });

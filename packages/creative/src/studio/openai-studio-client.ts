@@ -25,7 +25,7 @@ export interface OpenAiStudioClientOptions {
 
 export interface OpenAiMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'low' | 'high' | 'auto' } }>;
+  content: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'low' | 'high' | 'auto' | 'original' } }>;
 }
 
 export interface OpenAiStructuredResponse<T = any> {
@@ -42,6 +42,8 @@ export interface OpenAiStructuredResponse<T = any> {
     cacheCreationTokens: number;
     cacheReadTokens: number;
     costUsd: number;
+    costBasis?: 'usage' | 'estimate';
+    servedModel?: string | null;
     sha256: string;
     latencyMs: number;
     attempts: number;
@@ -79,7 +81,7 @@ export function resolveRatesForModel(
   if (models[model]) return models[model];
   let best: string | undefined;
   for (const known of Object.keys(models)) {
-    if (model.startsWith(known) && (!best || known.length > best.length)) best = known;
+    if (model.startsWith(known + '-') && /^\d{4}-\d{2}-\d{2}$/.test(model.slice(known.length + 1)) && (!best || known.length > best.length)) best = known;
   }
   return best ? models[best] : undefined;
 }
@@ -133,7 +135,8 @@ export class OpenAiModelParseError extends StudioModelError {
   readonly contentLength: number;
   readonly responseId?: string;
   readonly costUsd: number;
-  constructor(model: string, contentLength: number, billed: { responseId?: string; costUsd?: number } = {}) {
+  readonly costBasis: 'usage' | 'estimate';
+  constructor(model: string, contentLength: number, billed: { responseId?: string; costUsd?: number; costBasis?: 'usage' | 'estimate' } = {}) {
     super(
       `OpenAI ${model} replied with ${contentLength} characters that are not valid JSON; not retried, the call was billed`,
       'MODEL_OUTPUT_UNPARSEABLE'
@@ -143,6 +146,7 @@ export class OpenAiModelParseError extends StudioModelError {
     this.contentLength = contentLength;
     this.responseId = billed.responseId;
     this.costUsd = billed.costUsd ?? 0;
+    this.costBasis = billed.costBasis ?? 'estimate';
   }
 }
 
@@ -156,7 +160,8 @@ export class OpenAiModelTruncatedError extends StudioModelError {
   readonly maxTokens: number;
   readonly responseId?: string;
   readonly costUsd: number;
-  constructor(model: string, maxTokens: number, billed: { responseId?: string; costUsd?: number } = {}) {
+  readonly costBasis: 'usage' | 'estimate';
+  constructor(model: string, maxTokens: number, billed: { responseId?: string; costUsd?: number; costBasis?: 'usage' | 'estimate' } = {}) {
     super(
       `OpenAI ${model} stopped at its ${maxTokens}-token cap, so the reply is cut off; not retried, raise maxTokens`,
       'MODEL_OUTPUT_TRUNCATED'
@@ -166,6 +171,7 @@ export class OpenAiModelTruncatedError extends StudioModelError {
     this.maxTokens = maxTokens;
     this.responseId = billed.responseId;
     this.costUsd = billed.costUsd ?? 0;
+    this.costBasis = billed.costBasis ?? 'estimate';
   }
 }
 
@@ -179,7 +185,8 @@ export class OpenAiModelRefusalError extends StudioModelError {
   readonly model: string;
   readonly responseId?: string;
   readonly costUsd: number;
-  constructor(model: string, refused: boolean, billed: { responseId?: string; costUsd?: number } = {}) {
+  readonly costBasis: 'usage' | 'estimate';
+  constructor(model: string, refused: boolean, billed: { responseId?: string; costUsd?: number; costBasis?: 'usage' | 'estimate' } = {}) {
     super(
       refused
         ? `OpenAI ${model} refused to answer; not retried, the call was billed`
@@ -190,6 +197,7 @@ export class OpenAiModelRefusalError extends StudioModelError {
     this.model = model;
     this.responseId = billed.responseId;
     this.costUsd = billed.costUsd ?? 0;
+    this.costBasis = billed.costBasis ?? 'estimate';
   }
 }
 
@@ -312,6 +320,14 @@ export function describeFetchCause(err: any): string {
   return [code, message && message !== code ? message : ''].filter(Boolean).join(': ').slice(0, 200);
 }
 
+function validTextUsage(usage: any): boolean {
+  const count = (n: unknown) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
+  return count(usage.prompt_tokens ?? usage.input_tokens) && count(usage.completion_tokens ?? usage.output_tokens) &&
+    count(usage.cache_read_input_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0) &&
+    count(usage.cache_creation_input_tokens ?? 0) &&
+    (usage.cache_read_input_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0) <= (usage.prompt_tokens ?? usage.input_tokens);
+}
+
 export class OpenAiStudioClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -396,10 +412,13 @@ export class OpenAiStudioClient {
     const cacheWriteTokens = usage.cache_creation_input_tokens ?? 0;
     const regularInputTokens = Math.max(0, inTok - cacheReadTokens);
 
-    const inCost = (regularInputTokens / 1_000_000) * rates.inputPerMillion;
-    const outCost = (outTok / 1_000_000) * rates.outputPerMillion;
-    const cacheReadCost = rates.cacheReadPerMillion ? (cacheReadTokens / 1_000_000) * rates.cacheReadPerMillion : 0;
-    const cacheWriteCost = rates.cacheWritePerMillion ? (cacheWriteTokens / 1_000_000) * rates.cacheWritePerMillion : 0;
+    // Astra prices the entire request at long-context rates above 272K input tokens.
+    const longContext = /^gpt-6-astra(?:-\d{4}-\d{2}-\d{2})?$/.test(model) && inTok > 272000;
+    const inputMultiplier = longContext ? 2 : 1, outputMultiplier = longContext ? 1.5 : 1;
+    const inCost = (regularInputTokens / 1_000_000) * rates.inputPerMillion * inputMultiplier;
+    const outCost = (outTok / 1_000_000) * rates.outputPerMillion * outputMultiplier;
+    const cacheReadCost = rates.cacheReadPerMillion ? (cacheReadTokens / 1_000_000) * rates.cacheReadPerMillion * inputMultiplier : 0;
+    const cacheWriteCost = rates.cacheWritePerMillion ? (cacheWriteTokens / 1_000_000) * rates.cacheWritePerMillion * inputMultiplier : 0;
 
     return Number((inCost + outCost + cacheReadCost + cacheWriteCost).toFixed(6));
   }
@@ -411,6 +430,7 @@ export class OpenAiStudioClient {
     timeoutMs?: number;
     temperature?: number;
     maxTokens?: number;
+    beforeDispatch?: (body: string) => Promise<void>;
     reasoningEffort?: 'low' | 'medium' | 'high';
   }): Promise<OpenAiStructuredResponse<T>> {
     const model = options.model || resolveModel('text');
@@ -436,7 +456,8 @@ export class OpenAiStudioClient {
           strict: options.jsonSchema.strict ?? true,
         },
       },
-      max_completion_tokens: options.maxTokens || 4000,
+      max_completion_tokens: options.maxTokens ?? 4000,
+      service_tier: 'default',
     };
 
     // Only reasoning models accept reasoning_effort; the others reject the whole request with a
@@ -452,6 +473,11 @@ export class OpenAiStudioClient {
       payload.temperature = options.temperature;
     }
 
+    if (!Number.isSafeInteger(payload.max_completion_tokens) || payload.max_completion_tokens < 1) {
+      throw new TypeError('maxTokens must be a positive safe integer.');
+    }
+    const body = JSON.stringify(payload);
+    await options.beforeDispatch?.(body);
     const startTime = Date.now();
     const timeout = options.timeoutMs || this.timeoutMs;
 
@@ -472,7 +498,7 @@ export class OpenAiStudioClient {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${this.apiKey}`,
           },
-          body: JSON.stringify(payload),
+          body,
           signal: controller.signal,
         });
       } catch (err: unknown) {
@@ -506,12 +532,13 @@ export class OpenAiStudioClient {
 
         const latencyMs = Date.now() - startTime;
         const usage = data.usage || {};
-        const costUsd = this.calculateCost(model, usage);
-        const responseId = data.id || xRequestId || `openai_${Date.now()}`;
+        const costUsd = validTextUsage(usage) ? this.calculateCost(data.model || model, usage) : 0;
+        const responseId = typeof data.id === 'string' ? data.id : '';
+        const costBasis = validTextUsage(usage) && !!resolveRatesForModel(this.pricing.models, data.model || model) ? 'usage' as const : 'estimate' as const;
 
         const finishReason = data.choices?.[0]?.finish_reason ?? data.stop_reason;
         if (finishReason === 'length' || finishReason === 'max_tokens') {
-          throw new OpenAiModelTruncatedError(model, payload.max_completion_tokens, { responseId, costUsd });
+          throw new OpenAiModelTruncatedError(model, payload.max_completion_tokens, { responseId, costUsd, costBasis });
         }
 
         const toolUsePart = Array.isArray(data.content)
@@ -522,7 +549,7 @@ export class OpenAiStudioClient {
         // A refusal, or a message with neither content nor a tool call, is no answer (see OpenAiModelRefusalError).
         const message = data.choices?.[0]?.message;
         if (message && (message.refusal || (message.content == null && !toolCallArg))) {
-          throw new OpenAiModelRefusalError(model, Boolean(message.refusal), { responseId, costUsd });
+          throw new OpenAiModelRefusalError(model, Boolean(message.refusal), { responseId, costUsd, costBasis });
         }
 
         const rawContent = message?.content ??
@@ -544,7 +571,7 @@ export class OpenAiStudioClient {
           // did not parse). Neither is an answer: it is reported, once.
           parsed = parseJsonReply(answerText);
           if (parsed === undefined) {
-            throw new OpenAiModelParseError(model, answerText.length, { responseId, costUsd });
+            throw new OpenAiModelParseError(model, answerText.length, { responseId, costUsd, costBasis });
           }
         }
 
@@ -564,6 +591,8 @@ export class OpenAiStudioClient {
             cacheCreationTokens: usage.cache_creation_input_tokens || 0,
             cacheReadTokens: usage.cache_read_input_tokens || usage.prompt_tokens_details?.cached_tokens || 0,
             costUsd,
+            costBasis,
+            servedModel: typeof data.model === 'string' ? data.model : null,
             sha256,
             latencyMs,
             attempts: attempt,
@@ -600,6 +629,7 @@ export class OpenAiStudioClient {
     timeoutMs?: number;
     temperature?: number;
     maxTokens?: number;
+    beforeDispatch?: (body: string) => Promise<void>;
   }): Promise<{ data: T; rawText: string; receipt: any }> {
     const model = params.model || this.primaryModel;
     assertModelAllowed(model);
@@ -641,6 +671,7 @@ export class OpenAiStudioClient {
       timeoutMs: params.timeoutMs,
       temperature: params.temperature,
       maxTokens: params.maxTokens,
+      beforeDispatch: params.beforeDispatch,
     });
   }
 

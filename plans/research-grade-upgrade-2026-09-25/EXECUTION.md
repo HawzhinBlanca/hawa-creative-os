@@ -1,5 +1,29 @@
 # Completion checkpoint
 
+## 2026-09-27 — Studio pre-dispatch spending reservations (ADR-091, candidate)
+
+Migration050 stores immutable request-body quotes. Under the task lock, admission
+requires recorded/attested cost plus outstanding reservations plus the next quote
+to fit the run cap. Missing usage keeps its reserve; complete usage, definite
+rejection or exact settlement releases unused funds. A provider overrun is saved
+and stops further work. No automatic quality/model/output reduction. Desk shows
+reserved and available funds. Text receipts preserve absent provider identifiers,
+standard service tier is explicit, and Astra long-context rates are counted.
+
+Three DB red controls failed before implementation. Connected14-file suite passed
+177 tests, including actual text/image-vision Core SIGKILL with durable quotes,
+after correcting negative-zero and deliberately inconsistent price fixtures.
+The initial full run had3851 pass/10 fail/59 skip: fake provider model identity
+caused overrun/cascading active-run holds; the old source manifest also correctly
+rejected schema050. Fixture corrected. Types481/481, lint and Desk build pass.
+Sealed full regression is pending. See R21_SPENDING_RESERVATIONS_PROOF.json.
+
+Quotes are conservative operating estimates, not invoice guarantees. Broader
+role/office/day caps, typed result recovery, fresh candidate, named live pilot,
+native Canva edit/save/reopen, human quality/cost evaluation and independent-host
+restore remain open. Production and isolated app deployments are unchanged.
+
+
 Updated 2026-09-27; retain the faster, more economical completion method.
 Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PLAN.md` and `WORK_ITEMS.csv`.
 

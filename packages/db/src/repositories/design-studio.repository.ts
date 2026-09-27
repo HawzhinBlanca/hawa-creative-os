@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { createHash } from 'node:crypto';
 import { withRlsContext } from '../client.js';
-import { assertStudioBudgetAdmission, studioBudgetUsage, type StudioBudgetUsage } from '@hawa/domain';
+import { assertStudioBudgetAdmission, studioBudgetUsage, type StudioBudgetUsage, validateStudioReservation, type StudioCallReservation, type StudioCostBasis } from '@hawa/domain';
 import { parseBlobRef, sniffBlobMediaType, taskGenerationBlocker, type BlobRef } from '@hawa/contracts';
 import { BlobCorruptError, BlobMissingError, type BlobStore } from '../blobs/store.js';
 import type {
@@ -77,6 +77,7 @@ export interface RecordCallStartParams {
   /** Per-run sequence number for generation; parity checks use a content-only identity. */
   callOrdinal: number | null;
   logicalCallSha256: string;
+  reservation: StudioCallReservation;
 }
 
 export class ModelCallAdmissionConflictError extends Error {
@@ -145,6 +146,7 @@ export interface FinalizeCallParams {
   outputTokens: number;
   images?: number;
   usdEstimate: number | string;
+  costBasis?: StudioCostBasis;
   status: DesignStudioCallStatus;
   errorCode?: string | null;
   finishedAt?: Date;
@@ -569,6 +571,7 @@ export class DesignStudioRepository {
    * This guarantees that any initiated spend is journaled prior to network dispatch.
    */
   async recordCallStart(params: RecordCallStartParams, trx?: Kysely<Database>) {
+    validateStudioReservation(params.reservation);
     if (params.callOrdinal !== null && (!Number.isSafeInteger(params.callOrdinal) || params.callOrdinal < 1)) {
       throw new TypeError('Studio call ordinal must be a positive safe integer.');
     }
@@ -595,7 +598,7 @@ export class DesignStudioRepository {
       await assertStudioCallsResolved(client, params.tenantId, task!.id, params.runId);
       // Different logical calls must compete for the same remaining slots under the task lock.
       // The run JSON may be stale after a crash or permanently frozen after Canva transfer.
-      assertStudioBudgetAdmission(await this.readBudgetUsage(client, params.runId, params.tenantId, run.budget));
+      assertStudioBudgetAdmission(await this.readBudgetUsage(client, params.runId, params.tenantId, run.budget), params.reservation.usd);
       const [row] = await client
         .insertInto('design_studio_calls')
         .values({
@@ -608,6 +611,7 @@ export class DesignStudioRepository {
           requested_model: params.requestedModel,
           call_ordinal: params.callOrdinal,
           logical_call_sha256: params.logicalCallSha256,
+          reservation: params.reservation,
           status: 'uncertain',
         })
         .onConflict((oc) => oc.doNothing())
@@ -650,6 +654,7 @@ export class DesignStudioRepository {
           output_tokens: params.outputTokens,
           images: params.images || 0,
           usd_estimate: usdEstimate.toString(),
+          cost_basis: params.costBasis ?? (params.status === 'uncertain' ? 'unavailable' : 'estimate'),
           status: params.status,
           error_code: params.errorCode || null,
           finished_at: params.finishedAt || new Date(),
@@ -679,14 +684,15 @@ export class DesignStudioRepository {
   }
 
   private async readBudgetUsage(client: Kysely<Database>, runId: string, tenantId: string, snapshot: unknown): Promise<StudioBudgetUsage> {
-    const calls = await sql<{ status: 'ok' | 'error' | 'uncertain'; estimated_usd: string; settled_usd: string | null }>`
-      SELECT c.status, c.usd_estimate AS estimated_usd,
+    const calls = await sql<{ status: 'ok' | 'error' | 'uncertain'; estimated_usd: string; settled_usd: string | null; reservation: StudioCallReservation | null; cost_basis: StudioCostBasis | null }>`
+      SELECT c.status, c.reservation, c.cost_basis, c.usd_estimate AS estimated_usd,
         (SELECT max((e.value->>'reportedCostUsd')::numeric)
          FROM hawa.studio_run_settlements s CROSS JOIN LATERAL jsonb_array_elements(s.calls) e
          WHERE s.tenant_id=c.tenant_id AND s.run_id=c.run_id AND e.value->>'callId'=c.id::text) AS settled_usd
       FROM hawa.design_studio_calls c WHERE c.tenant_id=${tenantId}::uuid AND c.run_id=${runId}::uuid
       ORDER BY c.started_at,c.id`.execute(client);
     return studioBudgetUsage(snapshot, calls.rows.map(c => ({ status: c.status,
+      reservedUsd: c.reservation?.usd ?? null, costBasis: c.cost_basis,
       estimatedUsd: Number(c.estimated_usd), settledUsd: c.settled_usd === null ? null : Number(c.settled_usd) })));
   }
 

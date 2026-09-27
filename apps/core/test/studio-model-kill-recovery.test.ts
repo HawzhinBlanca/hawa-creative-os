@@ -111,12 +111,17 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
       expect((await exited).signal).toBe('SIGKILL');
 
       const calls = await withRlsContext(db, scope, (tx) =>
-        sql<{ status: string; usd_estimate: string; call_ordinal: number; logical_call_sha256: string }>`
-          SELECT status,usd_estimate,call_ordinal,logical_call_sha256
+        sql<{ status: string; usd_estimate: string; call_ordinal: number; logical_call_sha256: string; reservation: { usd: number; requestSha256: string } }>`
+          SELECT status,usd_estimate,call_ordinal,logical_call_sha256,reservation
           FROM hawa.design_studio_calls WHERE run_id=${run.id}::uuid ORDER BY call_ordinal`.execute(tx));
       expect(calls.rows).toHaveLength(expectedCalls);
       expect(calls.rows.at(-1)).toMatchObject({ status: 'uncertain', call_ordinal: expectedCalls });
       expect(calls.rows.at(-1)?.logical_call_sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(calls.rows.at(-1)?.reservation.usd).toBeGreaterThan(0);
+      expect(calls.rows.at(-1)?.reservation.requestSha256).toMatch(/^[0-9a-f]{64}$/);
+      const durableUsage = await new DesignStudioRepository(db).getBudgetUsage(run.id, scope.tenantId);
+      expect(durableUsage?.reservedAdditionalUsd).toBeCloseTo(calls.rows.at(-1)!.reservation.usd, 6);
+
       if (kind === 'art-vision') {
         expect(calls.rows[0].status).toBe('ok');
         expect(Number(calls.rows[0].usd_estimate)).toBeCloseTo(0.032, 6);

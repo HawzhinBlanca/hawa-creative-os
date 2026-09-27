@@ -113,7 +113,7 @@ describe.skipIf(!url)('studio run guards', () => {
     const { run } = await svc.createOrGetRun(scope, taskId, `budget-${randomUUID()}`, { width: 1080, height: 1350 });
     const id = randomUUID();
     await repo.recordCallStart({ id, runId: run.id, ...scope, stage: 'parity', provider: 'openai',
-      model: 'synthetic', requestedModel: 'synthetic', callOrdinal: null, logicalCallSha256: 'e'.repeat(64) });
+      model: 'synthetic', reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 2, inputTokens: 100, outputTokens: 100 }, requestedModel: 'synthetic', callOrdinal: null, logicalCallSha256: 'e'.repeat(64) });
     await repo.finalizeCall({ id, tenantId: scope.tenantId, inputTokens: 1, outputTokens: 1, usdEstimate: 2, status: 'ok' });
     await repo.updateRunStatus(run.id, scope.tenantId, 'transferred');
     const budget = { maxUsd: 2, maxCalls: 24, spentUsd: 0, calls: 0 };
@@ -123,6 +123,19 @@ describe.skipIf(!url)('studio run guards', () => {
     expect(fetcher).not.toHaveBeenCalled();
     expect(await repo.getCallsForRun(run.id, scope.tenantId)).toHaveLength(1);
     expect(budget.calls).toBe(0);
+  });
+
+  it('refuses an unaffordable request before any model transport or ledger admission', async () => {
+    const taskId = await task(), fetcher = vi.fn();
+    const svc = new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher, staleRunMinutes: 0, maxUsd: 0.01 });
+    const { run } = await svc.createOrGetRun(scope, taskId, `quote-${randomUUID()}`, { width: 1080, height: 1350 });
+    const budget = { maxUsd: 0.01, maxCalls: 24, spentUsd: 0, calls: 0 };
+    const ctx = await (svc as any).createStageContext(scope, run, 'briefing', budget, async () => {});
+    await expect(ctx.client.completeJson({ model: 'gpt-6-astra', prompt: 'A new brief' }))
+      .rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(await new DesignStudioRepository(db).getCallsForRun(run.id, scope.tenantId)).toHaveLength(0);
+    await svc.abandon(scope, taskId, run.id, 'Completed reservation refusal test');
   });
 
   it('rejects malformed configured limits before creating a run', async () => {
@@ -153,7 +166,7 @@ describe.skipIf(!url)('studio run guards', () => {
     const key = `held-${randomUUID()}`, input = { width: 1080, height: 1350 };
     const { run } = await svc.createOrGetRun(scope, taskId, key, input);
     await repo.recordCallStart({ id: randomUUID(), runId: run.id, ...scope,
-      stage: 'briefing', provider: 'openai', model: 'synthetic-model', requestedModel: 'synthetic-model',
+      stage: 'briefing', provider: 'openai', model: 'synthetic-model', reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'synthetic-model',
       callOrdinal: 1, logicalCallSha256: 'a'.repeat(64) });
     if (mode === 'abandoned') await svc.abandon(scope, taskId, run.id, 'Stop this run');
     if (mode === 'failed') await repo.updateRunStatus(run.id, scope.tenantId, 'failed');
@@ -171,7 +184,7 @@ describe.skipIf(!url)('studio run guards', () => {
     const { run } = await svc.createOrGetRun(scope, taskId, `old-${randomUUID()}`, { width: 1080, height: 1350 });
     const id = randomUUID();
     await repo.recordCallStart({ id, runId: run.id, ...scope,
-      stage: 'briefing', provider: 'openai', model: 'synthetic-model', requestedModel: 'synthetic-model',
+      stage: 'briefing', provider: 'openai', model: 'synthetic-model', reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'synthetic-model',
       callOrdinal: 1, logicalCallSha256: 'b'.repeat(64) });
     const budget = { maxUsd: 2, maxCalls: 24, spentUsd: 0, calls: 1 };
     const ctx = await (svc as any).createStageContext(scope, run, 'briefing', budget, async () => {});

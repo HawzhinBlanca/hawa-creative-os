@@ -56,7 +56,7 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
       async (cost: number) => { spent.push(cost); budget.spentUsd += cost; }
     );
 
-    const err: any = await ctx.client.completeJson({ prompt: 'lay it out', schema: { type: 'object' }, model: 'gpt-6-astra' }).catch((e: any) => e);
+    const err: any = await ctx.client.completeJson({ prompt: 'lay it out '.repeat(2000), schema: { type: 'object' }, model: 'gpt-6-astra' }).catch((e: any) => e);
     expect(err?.name).toBe('OpenAiModelTruncatedError');
     // The client knows what the call cost.
     expect(err.costUsd).toBeGreaterThan(0);

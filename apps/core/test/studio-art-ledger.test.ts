@@ -62,8 +62,10 @@ describe('each Studio art request has its own durable admission', () => {
     vi.stubEnv('HAWA_MODEL_TIER', 'production');
     let h: Awaited<ReturnType<typeof harness>>;
     let transports = 0;
-    const fetcher = vi.fn<typeof fetch>(async url => {
+    const fetcher = vi.fn<typeof fetch>(async (url, init) => {
       expect(h.admissions).toHaveLength(++transports);
+      expect(h.admissions.at(-1)?.reservation.requestSha256)
+        .toBe(createHash('sha256').update(String(init?.body)).digest('hex'));
       return String(url).includes('/images/') ? imageResponse() : visionResponse();
     });
     h = await harness(fetcher);
@@ -76,6 +78,20 @@ describe('each Studio art request has its own durable admission', () => {
       responseSha256: createHash('sha256').update(imageBytes).digest('hex'), images: 1, status: 'ok' });
     expect(h.budget.spentUsd).toBeCloseTo(0.032 + 0.02, 6);
     expect(art.receipt.costUsd).toBeCloseTo(h.budget.spentUsd, 6);
+  });
+
+  it('records an image overrun and stops before another verifier or image request', async () => {
+    vi.stubEnv('HAWA_MODEL_TIER', 'production');
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      data: [{ b64_json: imageBytes.toString('base64') }],
+      usage: { input_tokens: 400, output_tokens: 100000, input_tokens_details: { text_tokens: 400 } },
+    }), { status: 200 }));
+    const h = await harness(fetcher, { maxUsd: 10 });
+    await expect(h.ctx.artProvider!.generateArt(request))
+      .rejects.toMatchObject({ code: 'STUDIO_BUDGET_RESERVATION_EXCEEDED' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(h.outcomes).toMatchObject([{ usdEstimate: 3.002, status: 'ok', costBasis: 'usage' }]);
+    expect(h.budget.spentUsd).toBe(3.002);
   });
 
   it('holds a lost vision reply after saving the image receipt, without fallback or another image', async () => {

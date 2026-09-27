@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { newStudioBudget, studioBudgetUsage, assertStudioBudgetAdmission } from '../src/studio-budget.js';
 
 describe('Studio budget policy', () => {
-  it.each([NaN, Infinity, -1, 0, null, '', '2usd'])('refuses invalid USD limits: %s', value => {
+  it.each([NaN, Infinity, Number.MAX_SAFE_INTEGER, -1, 0, null, '', '2usd'])('refuses invalid USD limits: %s', value => {
     expect(() => newStudioBudget(value)).toThrow();
   });
   it.each([NaN, Infinity, -1, 0, 1.5, null, '', '24calls', Number.MAX_SAFE_INTEGER + 1])('refuses invalid call limits: %s', value => {
@@ -51,5 +51,35 @@ describe('Studio budget policy', () => {
     expect(studioBudgetUsage({ ...newStudioBudget(), spentUsd: 0.1 + 0.2, calls: 2 }, calls).blocker).toBeNull();
     expect(studioBudgetUsage({ ...newStudioBudget(), spentUsd: 0.300001, calls: 2 }, calls).blocker)
       .toBe('STUDIO_BUDGET_HISTORY_INCOMPLETE');
+  });
+  it('releases unused funds only with usage, definite rejection or exact settlement', () => {
+    const call = { status: 'ok' as const, estimatedUsd: 0.1, settledUsd: null, reservedUsd: 0.5 };
+    for (const costBasis of ['estimate', 'unavailable', null] as const) {
+      expect(studioBudgetUsage(newStudioBudget(1), [{ ...call, costBasis }]))
+        .toMatchObject({ reservedAdditionalUsd: 0.4, committedUsd: 0.5, remainingUsd: 0.5 });
+    }
+    expect(studioBudgetUsage(newStudioBudget(1), [{ ...call, costBasis: 'usage' }]))
+      .toMatchObject({ reservedAdditionalUsd: 0, committedUsd: 0.1, remainingUsd: 0.9 });
+    expect(studioBudgetUsage(newStudioBudget(1), [{ ...call, status: 'error', estimatedUsd: 0, costBasis: 'not_accepted' }]))
+      .toMatchObject({ committedUsd: 0, remainingUsd: 1 });
+    expect(studioBudgetUsage(newStudioBudget(1), [{ ...call, status: 'uncertain', settledUsd: 0.2 }]))
+      .toMatchObject({ accountedUsd: 0.2, committedUsd: 0.2, reservedAdditionalUsd: 0 });
+  });
+  it('does not let a partial usage observation release an uncertain request', () => {
+    expect(studioBudgetUsage(newStudioBudget(1), [{ status: 'uncertain', estimatedUsd: 0.1,
+      costBasis: 'usage', reservedUsd: 0.5, settledUsd: null }]))
+      .toMatchObject({ reservedAdditionalUsd: 0.4, committedUsd: 0.5 });
+  });
+  it('retains an overrun and refuses further requests even if the run has spare money', () => {
+    const usage = studioBudgetUsage(newStudioBudget(10), [{ status: 'ok', estimatedUsd: 0.6,
+      reservedUsd: 0.5, costBasis: 'usage', settledUsd: null }]);
+    expect(usage).toMatchObject({ accountedUsd: 0.6, blocker: 'STUDIO_BUDGET_RESERVATION_EXCEEDED' });
+    expect(() => assertStudioBudgetAdmission(usage, 0.1)).toThrow(/exceeded/);
+  });
+  it('does not grant a micro-dollar beyond remaining funds', () => {
+    const usage = studioBudgetUsage(newStudioBudget(0.3), [{ status: 'ok', estimatedUsd: 0.1,
+      reservedUsd: 0.2, costBasis: 'usage', settledUsd: null }]);
+    expect(() => assertStudioBudgetAdmission(usage, 0.2)).not.toThrow();
+    expect(() => assertStudioBudgetAdmission(usage, 0.200001)).toThrow();
   });
 });

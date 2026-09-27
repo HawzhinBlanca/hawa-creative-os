@@ -24,11 +24,13 @@ describe.skipIf(!url)('durable Studio budget admission', () => {
     if (transferred) await repo.updateRunStatus(id, tenantId, 'transferred');
     return id;
   }
-  const call = (runId: string) => {
+  const call = (runId: string, usd = 0.5) => {
     const id = randomUUID();
     return { id, runId, tenantId, stage: 'parity', provider: 'openai', model: 'synthetic',
       requestedModel: 'synthetic', callOrdinal: null,
-      logicalCallSha256: createHash('sha256').update(id).digest('hex') };
+      logicalCallSha256: createHash('sha256').update(id).digest('hex'),
+      reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd,
+        inputTokens: 100, outputTokens: 100 } };
   };
   async function finish(id: string, usdEstimate: number) {
     await repo.finalizeCall({ id, tenantId, inputTokens: 1, outputTokens: 1, usdEstimate, status: 'ok' });
@@ -67,6 +69,61 @@ describe.skipIf(!url)('durable Studio budget admission', () => {
       ]);
       expect(await repo.getCallsForRun(runId, tenantId)).toHaveLength(1);
     } finally { await peerDb.destroy(); }
+  });
+
+  it('reserves the last dollars atomically across two database connections', async () => {
+    const runId = await run({ maxUsd: 0.5, maxCalls: 10, spentUsd: 0, calls: 0 });
+    const peer = createDb(url!);
+    try {
+      const results = await Promise.allSettled([repo.recordCallStart(call(runId, 0.3)),
+        new DesignStudioRepository(peer).recordCallStart(call(runId, 0.3))]);
+      expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter(r => r.status === 'rejected')).toMatchObject([{ reason: { code: 'BUDGET_EXHAUSTED' } }]);
+      expect(await new DesignStudioRepository(peer).getBudgetUsage(runId, tenantId))
+        .toMatchObject({ reservedAdditionalUsd: 0.3, remainingUsd: 0.2 });
+    } finally { await peer.destroy(); }
+  });
+
+  it('retains a successful estimate reservation across restart', async () => {
+    const runId = await run({ maxUsd: 0.5, maxCalls: 10, spentUsd: 0, calls: 0 });
+    const c = call(runId, 0.4); await repo.recordCallStart(c); await finish(c.id, 0.01);
+    const peer = createDb(url!);
+    try {
+      await expect(new DesignStudioRepository(peer).recordCallStart(call(runId, 0.2)))
+        .rejects.toMatchObject({ code: 'BUDGET_EXHAUSTED' });
+      expect(await repo.getBudgetUsage(runId, tenantId))
+        .toMatchObject({ accountedUsd: 0.01, reservedAdditionalUsd: 0.39, committedUsd: 0.4 });
+    } finally { await peer.destroy(); }
+  });
+
+  it('refuses a missing or invalid reservation before admitting work', async () => {
+    const runId = await run({ maxUsd: 2, maxCalls: 10, spentUsd: 0, calls: 0 });
+    for (const usd of [NaN, Infinity, 0, -1]) {
+      await expect(repo.recordCallStart(call(runId, usd))).rejects.toMatchObject({ code: 'STUDIO_BUDGET_INVALID' });
+    }
+    expect(await repo.getCallsForRun(runId, tenantId)).toHaveLength(0);
+  });
+
+  it('releases unused funds with complete usage and keeps its quote immutable', async () => {
+    const runId = await run({ maxUsd: 0.5, maxCalls: 10, spentUsd: 0, calls: 0 });
+    const c = call(runId, 0.4); await repo.recordCallStart(c);
+    await expect(withRlsContext(db, { tenantId }, trx => sql`UPDATE hawa.design_studio_calls
+      SET reservation=jsonb_set(reservation,'{usd}','0.01'), finished_at=now()
+      WHERE id=${c.id}::uuid`.execute(trx))).rejects.toThrow(/identity is immutable/);
+    await repo.finalizeCall({ id: c.id, tenantId, inputTokens: 1, outputTokens: 1,
+      usdEstimate: 0.1, status: 'ok', costBasis: 'usage' });
+    expect(await repo.getBudgetUsage(runId, tenantId)).toMatchObject({ reservedAdditionalUsd: 0, remainingUsd: 0.4 });
+    await expect(repo.recordCallStart(call(runId, 0.4))).resolves.toMatchObject({ status: 'uncertain' });
+  });
+
+  it('preserves an overrun as evidence and blocks another call before the overall cap', async () => {
+    const runId = await run({ maxUsd: 2, maxCalls: 10, spentUsd: 0, calls: 0 });
+    const c = call(runId, 0.2); await repo.recordCallStart(c);
+    await repo.finalizeCall({ id: c.id, tenantId, inputTokens: 1, outputTokens: 1,
+      usdEstimate: 0.3, status: 'ok', costBasis: 'usage' });
+    await expect(repo.recordCallStart(call(runId, 0.1)))
+      .rejects.toMatchObject({ code: 'STUDIO_BUDGET_RESERVATION_EXCEEDED' });
+    expect(await repo.getBudgetUsage(runId, tenantId)).toMatchObject({ accountedUsd: 0.3 });
   });
 
   it('refuses an incomplete historical ledger instead of treating unaccounted spend as free', async () => {

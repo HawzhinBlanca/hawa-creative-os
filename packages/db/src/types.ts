@@ -610,6 +610,8 @@ export interface DesignStudioCallsTable {
   call_ordinal: number | null;
   /** SHA-256 of the logical call identity; null only on historical rows. */
   logical_call_sha256: string | null;
+  reservation: import('@hawa/domain').StudioCallReservation | null;
+  cost_basis: import('@hawa/domain').StudioCostBasis | null;
   response_id: string | null;
   /** Provider-reported model and request metadata; historical rows remain null. */
   served_model: string | null;
