@@ -41,6 +41,18 @@ describe('real Canva paragraph direction evidence', () => {
     const r = checkCanvaPptx(styled, copy(1), { ...options, directionsByIndex: ['rtl', 'rtl', 'ltr', 'ltr'] });
     expect(r).toMatchObject({ rtlPass: false, rtlMetadataPass: false });
   });
+  it('keeps the corrected native LTR roundtrip eligible for visual review without inventing metadata proof', () => {
+    const capture = new URL('../../../output/acceptance/2026-09-27-explicit-direction/', import.meta.url);
+    const sheet = JSON.parse(readFileSync(new URL('fixtures.json', capture), 'utf8')).groups[0];
+    const bytes = readFileSync(new URL('direction-v2-canva.pptx', capture));
+    const r = checkCanvaPptx(bytes, sheet.cases.map((c: { text: string }) => c.text), {
+      ...options, directionsByIndex: ['rtl', 'rtl', 'ltr', 'ltr', 'ltr', 'ltr'],
+    });
+    expect(r).toMatchObject({ copyPass: true, fontPass: true, rtlPass: true, rtlMetadataPass: null,
+      rtlVisualReviewRequired: true, directionViolations: [], fullReleasePass: false });
+    expect(r.paragraphDirections.filter(p => p.expected === 'ltr')).toHaveLength(8);
+    expect(r.paragraphDirections.filter(p => p.expected === 'ltr').every(p => p.observed === 'absent')).toBe(true);
+  });
   it('reports unknown for genuinely missing Canva metadata and refuses invalid policy cardinality', () => {
     const bytes = change(wide, xml => xml.replaceAll(' rtl="true"', ''));
     expect(checkCanvaPptx(bytes, copy(0), options)).toMatchObject({ rtlPass: true, rtlMetadataPass: null, rtlVisualReviewRequired: true });

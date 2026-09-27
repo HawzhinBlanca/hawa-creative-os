@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T04:03:28Z",
+  "generatedAt": "2026-09-27T04:09:37Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 382,
+  "fileCount": 383,
   "files": [
     {
       "path": ".dockerignore",
@@ -479,8 +479,8 @@
     },
     {
       "path": "adrs/082_paragraph_direction_evidence.md",
-      "sha256": "160df6441b755b9d736d54efab665fdb71ffca19d1d70e430c7fa27ebe08c735",
-      "bytes": 2871
+      "sha256": "1108060aaff3afecb0b392b2d35b77213dc4c93f05248bff4c2ce8935113cba4",
+      "bytes": 3661
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -754,8 +754,8 @@
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
-      "sha256": "b32bacaef2df5ced86a44d36ae7758cdc40922e5b623e876770b84393e7ab387",
-      "bytes": 6379
+      "sha256": "0d87ca8dd5f10908c013ba1b637f01f03b846337a01a5e61e1463c283b2af92d",
+      "bytes": 6710
     },
     {
       "path": "docs/12_HUMAN_REVIEW.md",
@@ -934,8 +934,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "3ad97cc38ee8887eafd9e6dbdd7eb31df3b05e89ff184a419d04e20ee088b3c2",
-      "bytes": 54423
+      "sha256": "0d9f8a6b9732fd6c33136b4c859526abb12318836e7c4cfab79e72f5393bb9e1",
+      "bytes": 55772
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1114,8 +1114,13 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R19_EVIDENCE.md",
-      "sha256": "3c6be9213332c0fc391fb77b7cec885d93a179a64d80bc3fffd4aa8ebb77358f",
-      "bytes": 6476
+      "sha256": "6fe709d00d750f0b567587ab2d4298386d96469348a95c0f8eb69d8e529cd320",
+      "bytes": 7825
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R19_EXPLICIT_DIRECTION_PROOF.json",
+      "sha256": "991ef0de4c9996fb52bb202d74720ebdfc5c4884ebef0d53b70a68778e38740a",
+      "bytes": 7122
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R19_LOCALE_CANVA_PROOF.json",
@@ -1224,8 +1229,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "793cc0e10b2a340f03509a5ce77c65dd1b101ba9b3ce2fdedb53d30b207fa768",
-      "bytes": 298612
+      "sha256": "0b92d4f681acf369db8e3b43a8796bb125512ca07fd7365d271cc81d8db7ec90",
+      "bytes": 300188
     },
     {
       "path": "plans/user-stories.csv",

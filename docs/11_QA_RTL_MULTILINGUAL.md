@@ -68,6 +68,11 @@ For every text run:
 
 ### Bidirectional behavior
 
+Studio must respect explicit `rtl:false` even with an Arabic-script font. Legacy
+font-based direction fallback applies only when direction is unspecified. Cursive
+tracking and line spacing are typography rules, independent of paragraph direction.
+Canva may omit LTR attributes; absent metadata is not positive rendering evidence.
+
 Golden tests include:
 
 - pure Sorani and Arabic;

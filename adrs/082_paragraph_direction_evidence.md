@@ -48,3 +48,15 @@ task events carry canonical `{text, ...}` blocks, while import manifests carry
 strings. The byte checker now reads either shape without normalization or dropping
 invalid entries. Current task copy still outranks a passing capture receipt; wrong
 or malformed task blocks fail. No historical QC report is rewritten.
+
+## Explicit direction transfer follow-up — 2026-09-27
+
+The retained STYLE-MIXED failure originates before Canva: Studio used the Arabic
+font fallback even for explicit `rtl:false`. Both plan conversion and transfer now
+use the explicit boolean, falling back to the font only for historical layouts
+without direction. Cursive spacing, line pitch and accent styling remain separate.
+One new six-block native sheet preserves exact text and colors, and removes the
+wrong RTL attributes. Canva exports LTR paragraphs without direction attributes;
+that remains unknown metadata and still requires visual review. Three unchanged
+control boxes have zero changed pixels; the corrected mixed-direction box changes.
+This repairs the explicit override, not mixed-token isolation or human admission.

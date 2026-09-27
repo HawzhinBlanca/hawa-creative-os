@@ -99,3 +99,24 @@ Next repair: respect explicit direction in the transfer and verify the real roun
 Human typography review, committed native edit/save/reopen, broad office corpus and
 full live workflow remain open. No production deployment/migration, model call or
 message occurred. See `R19_LOCALE_CANVA_PROOF.json`; full admission remains false.
+
+
+## 2026-09-27 — explicit Studio direction repaired and native control captured
+
+Studio now honors `rtl:false` independently of Arabic font family in both the
+transfer plan and all text paragraphs. Font fallback applies only when direction
+is unspecified; cursive tracking, line spacing and color-run behavior are preserved.
+Regression: three font cases fail before the repair; final eight files/67 tests
+pass after it. Project/script/test types and lint pass. The initial sandbox test
+ran zero tests; two test-fixture type omissions were corrected and not concealed.
+
+One real Canva import/three exports preserve six exact multiline strings and all
+color runs. Three unchanged control boxes have zero changed pixels out of 565,800;
+the repaired mixed box changes 9,247 pixels. Four RTL paragraphs retain true flags;
+eight explicitly LTR paragraphs have absent flags and stay unknown for metadata.
+The checker accepts them only with required visual review; no full release pass.
+The read-only native tool matches flattened text only. Time-token isolation and
+native-reader review remain unqualified. No production change, paid model call,
+real approval, editing transaction or message. Retained older failing control is
+unchanged. See `R19_EXPLICIT_DIRECTION_PROOF.json`. Refreshed deployment and full
+regression are the next qualification step.

@@ -1,0 +1,14 @@
+JSON report written to /Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-explicit-direction/focused.json
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: connect EPERM 127.0.0.1:55432 - Local (0.0.0.0:0)
+ ❯ internalConnect node:net:1115:16
+ ❯ defaultTriggerAsyncIdScope node:internal/async_hooks:464:18
+ ❯ node:net:1353:9
+ ❯ processTicksAndRejections node:internal/process/task_queues:85:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -1, code: 'EPERM', syscall: 'connect', address: '127.0.0.1', port: 55432 }
+
+
+
