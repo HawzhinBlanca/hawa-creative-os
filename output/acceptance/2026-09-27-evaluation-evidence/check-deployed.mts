@@ -14,8 +14,10 @@ check('saved case evidence matches the served corpus',latest.report.routing.sour
 check('saved case evidence covers every routing definition',latest.report.routing.caseResults.length===dataset.cases.length);
 check('stopped routing case evidence separates attempted failure from unexecuted',latest.report.routing.caseResults[0].status==='failed'&&latest.report.routing.caseResults.slice(1).every((r:{status:string})=>r.status==='not_executed'));
 const browser=await chromium.launch({headless:true,channel:'chrome'});
+let completed=false;
 try {
  const context=await browser.newContext({viewport:{width:1500,height:1300},extraHTTPHeaders:{Authorization:`Bearer ${secrets().CHAOS_BEARER_TOKEN}`}});
+ await context.addInitScript(token=>sessionStorage.setItem('hawa_operator_token',token),secrets().CHAOS_BEARER_TOKEN);
  const page=await context.newPage(),errors:string[]=[];let mutations=0;
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method())&&r.url().includes('/evaluations/'))mutations++;});
  await page.goto(origin+'/#/eval');
@@ -38,14 +40,15 @@ try {
  await panel.getByRole('button',{name:/^Cases/}).click();
  await panel.locator('.listitem').filter({hasText:'RTL Golden Suite'}).click();
  await panel.locator('tbody tr').filter({hasText:'RTL-001'}).waitFor();
- check('RTL definitions are explicitly unexecuted',(await panel.locator('tbody tr').first().locator('td').nth(4).innerText()).includes('Not executed by this tournament'));
+ check('RTL definitions are explicitly unexecuted',(await panel.locator('tbody tr').filter({hasText:'RTL-001'}).locator('td').nth(4).innerText()).includes('Not executed by this tournament'));
  await page.reload();await panel.locator('tbody tr').first().waitFor();
  check('reload retains saved case outcomes',(await panel.locator('tbody tr').first().locator('td').nth(4).innerText()).trim()==='Failed');
  check('no browser execution errors',errors.length===0);check('browsing starts no evaluation mutation',mutations===0);
  check('browsing causes zero additional provider calls',await ledger()===before);
+ completed=true;
  writeFileSync(new URL('runtime-health.json',out),JSON.stringify(await api('/health'),null,2)+'\n');
 } finally {
  await browser.close();
- writeFileSync(new URL('deployed-evaluation-evidence.json',out),JSON.stringify({checkedAt:new Date().toISOString(),buildCommit:expected,checks,realProviderCalls:false,productionChanged:false,scope:'Disposable candidate with synthetic provider outcomes'},null,2)+'\n');
+ writeFileSync(new URL('deployed-evaluation-evidence.json',out),JSON.stringify({checkedAt:new Date().toISOString(),buildCommit:expected,completed,checks,realProviderCalls:false,productionChanged:false,scope:'Disposable candidate with synthetic provider outcomes'},null,2)+'\n');
 }
 console.log(JSON.stringify({passed:checks.filter(c=>c.passed).length,failed:checks.filter(c=>!c.passed).length}));

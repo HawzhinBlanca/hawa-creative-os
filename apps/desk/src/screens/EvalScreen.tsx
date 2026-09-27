@@ -178,7 +178,7 @@ export const EvalScreen: React.FC = () => {
                   <span style={{ fontWeight: selectedDataset === ds.id ? 700 : 500, fontSize: 13 }}>{ds.name}</span>
                   <small style={{ color: 'var(--muted)', fontSize: 10 }}>{ds.status === 'unavailable' ? 'Corpus unavailable' : 'Case definitions'}</small>
                 </div>
-                <span className="pill" style={{ fontSize: 10 }}>
+                <span className="pill" style={{ fontSize: 10, color: 'var(--ink)' }}>
                   {ds.cases}
                 </span>
               </div>
@@ -207,7 +207,7 @@ export const EvalScreen: React.FC = () => {
             <div style={{ marginTop: 16, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--muted)', display: 'flex', justifyContent: 'space-between' }}>
                 <span>Run History</span>
-                <span className="pill" style={{ fontSize: 9 }}>{pastRuns.length} runs</span>
+                <span className="pill" style={{ fontSize: 9, color: 'var(--ink)' }}>{pastRuns.length} runs</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 150, overflowY: 'auto' }}>
                 {pastRuns.slice(-4).reverse().map((run) => (
@@ -225,7 +225,7 @@ export const EvalScreen: React.FC = () => {
                     }}
                   >
                     <button className="btn btn-sm" aria-pressed={lastRunId === run.runId} onClick={() => selectRun(run)}>{run.runId.substring(0, 8)}</button>
-                    <span className={`pill ${run.settlement || run.status === 'running' || run.report?.executionStatus === 'stopped' || statsFromReport(run.report).overall === '—' ? '' : 'ok'}`} style={{ fontSize: 10 }}>
+                    <span className={`pill ${run.settlement || run.status === 'running' || run.report?.executionStatus === 'stopped' || statsFromReport(run.report).overall === '—' ? '' : 'ok'}`} style={{ fontSize: 10, color: 'var(--ink)' }}>
                       {run.settlement ? 'Closed · evidence retained' : run.status === 'running' ? 'Incomplete' : run.report?.executionStatus === 'stopped' ? 'Stopped · review required' : statsFromReport(run.report).overall === '—' ? 'Not reported' : `${statsFromReport(run.report).overall} pass`}
                     </span>
                     <button className="btn btn-sm" onClick={() => void loadReceipts(run.runId)}>Calls</button>
@@ -267,7 +267,7 @@ export const EvalScreen: React.FC = () => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <h2 style={{ margin: 0, fontSize: 18 }}>{currentDataset?.name}</h2>
-                <span className="pill" style={{ fontSize: 10 }}>Fixture diagnostics</span>
+                <span className="pill" style={{ fontSize: 10, color: 'var(--ink)' }}>Fixture diagnostics</span>
               </div>
               <p style={{ color: 'var(--muted)', fontSize: 12, margin: '4px 0 0' }}>{currentDataset?.description}</p>
             </div>
@@ -382,7 +382,7 @@ export const EvalScreen: React.FC = () => {
                         <th style={{ padding: '8px 10px', width: 60 }}>Lang</th>
                         <th style={{ padding: '8px 10px' }}>Input Text / Query</th>
                         <th style={{ padding: '8px 10px', width: 140 }}>Target / Invariants</th>
-                        <th style={{ padding: '8px 10px', width: 80 }}>Status</th>
+                        <th style={{ padding: '8px 10px', width: 120 }}>Status</th>
                         <th style={{ padding: '8px 10px', width: 70 }}>Action</th>
                       </tr>
                     </thead>
@@ -398,7 +398,7 @@ export const EvalScreen: React.FC = () => {
                               {c.id || `CASE-${idx + 1}`}
                             </td>
                             <td style={{ padding: '8px 10px' }}>
-                              <span className="pill" style={{ fontSize: 9, textTransform: 'uppercase' }}>
+                              <span className="pill" style={{ fontSize: 10, color: 'var(--ink)', textTransform: 'uppercase' }}>
                                 {lang}
                               </span>
                             </td>
@@ -420,7 +420,7 @@ export const EvalScreen: React.FC = () => {
                               {target}
                             </td>
                             <td style={{ padding: '8px 10px' }}>
-                              <span className={`pill ${outcome === 'Passed' ? 'ok' : outcome === 'Failed' ? 'bad' : ''}`} style={{ fontSize: 9, padding: '2px 6px' }}>
+                              <span className={`pill ${outcome === 'Passed' ? 'ok' : outcome === 'Failed' ? 'bad' : ''}`} style={{ fontSize: 10, padding: '2px 6px', color: outcome === 'Passed' || outcome === 'Failed' ? undefined : 'var(--ink)' }}>
                                 {outcome}
                               </span>
                             </td>

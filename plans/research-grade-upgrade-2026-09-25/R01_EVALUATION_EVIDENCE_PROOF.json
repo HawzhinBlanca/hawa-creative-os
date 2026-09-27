@@ -28,7 +28,10 @@
   },
   "failedFirstEvidence": [
     "First focused run:54 passed,1 failed. An old test required a numeric overall score when the judge was unavailable; it now asserts null and ten explicitly unreported rubric results.",
-    "First script compilation exposed seven nullable-score consumers; CLI formatting now reports unreported and admission comparisons require a numeric result."
+    "First script compilation exposed seven nullable-score consumers; CLI formatting now reports unreported and admission comparisons require a numeric result.",
+    "First browser harness supplied only request headers, which did not initialize Desk session state; corrected with ephemeral synthetic session setup.",
+    "Second browser harness selected the receipt table when checking RTL case outcomes; corrected to select the named RTL row. Both partial runs are preserved and not counted as complete.",
+    "Screenshot review exposed faint neutral status labels; Desk now uses foreground text for unknown/unexecuted labels and gives the status column more space."
   ],
   "notQualified": [
     "Real model quality and admission",
@@ -45,7 +48,7 @@
     "apps/core/src/routes/evals.routes.ts": "cd40ee8d0e07b74577db0bc7d98c664235198b608e6c2d12d591e71e1dfd62fa",
     "apps/core/test/durable-evaluations.test.ts": "b96e76bb2c27e3db3f32a9375d93eda59d76f737094def19e102281254884cb7",
     "apps/desk/src/components/EvaluationSettlementPanel.tsx": "02ac4de2b67a51492e3d300a485218a36fa1462a1d6645d1760e595d39875663",
-    "apps/desk/src/screens/EvalScreen.tsx": "dd8a2fa9b12e12939087f2df3ac82aaef7e7c0b682004887a03930e3c831ea0f",
+    "apps/desk/src/screens/EvalScreen.tsx": "ce85875b0ffeb3fc28ad1ece7b9d6f81b6e150a8cbf27842ed71616797ac01c2",
     "apps/desk/src/services/evaluation-evidence.ts": "8127ae861f46ebf87236c6e20ad603ba38a9e2857c422266195cff7d5296cb80",
     "apps/desk/test/evaluation-evidence.test.ts": "2420e4149326be19cd0355408a510aa1e3c2f98aafed8e8ecde2ab4fc5589756",
     "docs/07_MODEL_REGISTRY_AND_EVALUATION.md": "09130ca8958e0746a634a7512065b1c37e7362d90852d4811a3cc1b12fc59013",
@@ -63,17 +66,48 @@
     "scripts/run_model_tournament.ts": "6c28fbc9e6727a54b46aced5389d95f592fd4b65fe9f0993d43b33ebfc22090b"
   },
   "evidenceHashes": {
-    "output/acceptance/2026-09-27-evaluation-evidence/check-deployed.mts": "4a0b3e5fe3340b95c610076b33c83dff32679116a108db86cc3ca78c561e303d",
+    "output/acceptance/2026-09-27-evaluation-evidence/blueprint-source.log": "91b46432bda235119e06a3192038055dd18523286d91a0554015ac6dbbe59b77",
+    "output/acceptance/2026-09-27-evaluation-evidence/browser-final.log": "0651cec19bac5ba9739b01bbde0a7d3322f4be2d7a5764a623b66f3cb148be96",
+    "output/acceptance/2026-09-27-evaluation-evidence/browser-first.log": "cfa8b7a79827802c27d673167825b5cd481dbe1e51e275e27d70396db53d6bbc",
+    "output/acceptance/2026-09-27-evaluation-evidence/browser-second.log": "621b6d77f72b9667d6c35aa0b242937670477d6c88fdae9b5fdbe60e7281117e",
+    "output/acceptance/2026-09-27-evaluation-evidence/candidate-first.json": "4218b65621e309493604d4df838192c7d895578e440d26ccc473faf9955e3cb0",
+    "output/acceptance/2026-09-27-evaluation-evidence/candidate-first.log": "fa23eb8975b6e5e9f13e83386f45f467d0b2e51ba67018767a7c771998b56e09",
+    "output/acceptance/2026-09-27-evaluation-evidence/candidate-rehearsal.json": "4218b65621e309493604d4df838192c7d895578e440d26ccc473faf9955e3cb0",
+    "output/acceptance/2026-09-27-evaluation-evidence/candidate-rehearsal.log": "fa23eb8975b6e5e9f13e83386f45f467d0b2e51ba67018767a7c771998b56e09",
+    "output/acceptance/2026-09-27-evaluation-evidence/case-results-before-contrast.png": "7dea064b08a918204abbe64716bf8a26e1ca3511fb70897b4a6bc8e42915ce7a",
+    "output/acceptance/2026-09-27-evaluation-evidence/case-results.png": "7dea064b08a918204abbe64716bf8a26e1ca3511fb70897b4a6bc8e42915ce7a",
+    "output/acceptance/2026-09-27-evaluation-evidence/check-deployed.mts": "fd06bb3b38b2dcf2aa53e1a9a7ad2ece31c188a2d6816a87e6ff7f9e5236979a",
+    "output/acceptance/2026-09-27-evaluation-evidence/deployed-before-contrast.json": "3108e2ae4c6516975260f0b231a3b30761360fb66b3ad43c6d90f62b4b2f0b01",
+    "output/acceptance/2026-09-27-evaluation-evidence/deployed-evaluation-evidence.json": "3108e2ae4c6516975260f0b231a3b30761360fb66b3ad43c6d90f62b4b2f0b01",
+    "output/acceptance/2026-09-27-evaluation-evidence/deployed-first.json": "f11053dc66bbc6abd452b1174178406f97a606107c795ae52417b89dd67634d7",
+    "output/acceptance/2026-09-27-evaluation-evidence/deployed-second.json": "c61e85fdbaf3d50d92dab6c464aa97cf3dd42f3a1261639a3a29c87823f2d97a",
     "output/acceptance/2026-09-27-evaluation-evidence/desk-build-final.log": "684227c0b6fa0e5e8f522a9766719d22db828b5dc783fdd4c3e5b701ab26014a",
     "output/acceptance/2026-09-27-evaluation-evidence/desk-build.log": "27f29937bde7ce7f0047b27d11ae7fef76bb74d3fa61c6030bc6d23729525d8c",
+    "output/acceptance/2026-09-27-evaluation-evidence/desk-contrast-build.log": "b997ec4af95045cef48d6c6650d41db5ef516bf600591bff7d4fa054b0c5a68d",
+    "output/acceptance/2026-09-27-evaluation-evidence/desk-contrast.log": "e038bf25bc08a18b85f113e506bebd204a3650bcb4a8a8507620ab8785688a58",
     "output/acceptance/2026-09-27-evaluation-evidence/focused-complete.log": "1fbd9df79b4b0690aa24900ac95228e891822ec5f83d59b1e31714ca4888ff62",
     "output/acceptance/2026-09-27-evaluation-evidence/focused-final.log": "bf25677c12eced0e7a54afc13a8587bf94606d9b2a5d0b07e521dace772e8305",
     "output/acceptance/2026-09-27-evaluation-evidence/focused-first.log": "ebe945161912aede4ae3cdb564308eb768391b4e82794ae033bdd1b5d7d6ea3a",
+    "output/acceptance/2026-09-27-evaluation-evidence/full-candidate.log": "c8445b86db09df6a6979b4c9d4ae20ac6ef265f69e70b5d2e6d1a4496f98032a",
+    "output/acceptance/2026-09-27-evaluation-evidence/full-first-sealed.log": "c8445b86db09df6a6979b4c9d4ae20ac6ef265f69e70b5d2e6d1a4496f98032a",
     "output/acceptance/2026-09-27-evaluation-evidence/lint.log": "8e2f8fe07f46f1f1f9a7dcb39a888aee60db4bdc3c63b73540c4ab596cf4f82a",
+    "output/acceptance/2026-09-27-evaluation-evidence/model-evidence.png": "3aaa20398d2c9a34520e08166e6f86a56ec98e8feb472637c97e878fe493b4bd",
+    "output/acceptance/2026-09-27-evaluation-evidence/runtime-health.json": "f44efc773c8154ae90160d19d53760adc3775a0540638d5e14abcb1765a2495a",
     "output/acceptance/2026-09-27-evaluation-evidence/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
     "output/acceptance/2026-09-27-evaluation-evidence/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+    "output/acceptance/2026-09-27-evaluation-evidence/suite-results.png": "3de9ead8d3d4d31ab5b75a44c679d4a8315c647722191f78cc391f00e174da8b",
     "output/acceptance/2026-09-27-evaluation-evidence/types-final.log": "7b0b77ba30d4504087dadd412b9f3cc418df846edf2537c97f252287bc2430c3",
     "output/acceptance/2026-09-27-evaluation-evidence/types-first.log": "4c94efcefecaeba9310d45ee707b2da2a07e273bde63528d61ba4dfa7252d883",
     "output/acceptance/2026-09-27-evaluation-evidence/types.log": "7b0b77ba30d4504087dadd412b9f3cc418df846edf2537c97f252287bc2430c3"
+  },
+  "firstSealedCandidate": {
+    "commit": "f21c4e024c36534d41c37d13c16809e5dc1eb281",
+    "passed": 4036,
+    "failed": 0,
+    "skipped": 59,
+    "durationSeconds": 120.86,
+    "workflowChecksPassed": 63,
+    "browserChecksPassed": 17,
+    "scope": "Synthetic providers; followed by a Desk-only contrast correction"
   }
 }

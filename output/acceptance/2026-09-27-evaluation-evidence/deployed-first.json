@@ -1,0 +1,29 @@
+{
+  "checkedAt": "2026-09-27T11:52:20.996Z",
+  "buildCommit": "f21c4e024c36534d41c37d13c16809e5dc1eb281",
+  "checks": [
+    {
+      "name": "exact candidate is running",
+      "passed": true
+    },
+    {
+      "name": "candidate includes saved stopped evaluation",
+      "passed": true
+    },
+    {
+      "name": "saved case evidence matches the served corpus",
+      "passed": true
+    },
+    {
+      "name": "saved case evidence covers every routing definition",
+      "passed": true
+    },
+    {
+      "name": "stopped routing case evidence separates attempted failure from unexecuted",
+      "passed": true
+    }
+  ],
+  "realProviderCalls": false,
+  "productionChanged": false,
+  "scope": "Disposable candidate with synthetic provider outcomes"
+}
