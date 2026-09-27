@@ -1,6 +1,7 @@
 import type { StageContext, CandidateState } from '../types.js';
 import type { EditableTransferPlan } from '@hawa/creative';
 import { encodeStudioTransferV2 } from '@hawa/creative';
+import { createHash } from 'node:crypto';
 
 export interface TransferStageResult {
   pptxBytes: Buffer;
@@ -24,6 +25,8 @@ export async function runTransferStage(
       photos: ctx.photos?.map((p) => ({ bytes: p.bytes, mimeType: p.mimeType })),
       photoCutouts: ctx.photoCutouts,
       extraFonts: [ctx.latinFont, ctx.arabicFont, 'Verdana', 'Noto Sans Arabic', 'Cinzel', 'Playfair Display'],
+      copyLocales: ctx.copyBlocks.map(block => block.localeCopySha256 === createHash('sha256').update(block.text).digest('hex')
+        ? block.locale ?? 'und' : 'und'),
     }
   );
 

@@ -40,3 +40,27 @@ one family and literal style markers do not establish auto direction, actual
 styled runs, multiple fonts, native edit/save/reopen, human language approval or
 the required real office corpus. See `R19_MULTILINGUAL_PROOF.json` and
 `output/acceptance/2026-09-27-canva-multilingual/README.md`.
+
+
+## 2026-09-27 — truthful copy language in both import encoders
+
+FR-034/035/036; source correction only, no native Canva qualification. Both encoders
+had hard-coded `ku` for RTL while PptxGenJS silently defaulted other copy to `en-US`.
+They now validate language tags, bind them by exact-copy index and record `copyLocales`
+in the import manifest; unspecified copy is `und`. Plain and accented paragraph runs
+carry the same tag. Core uses only explicitly labelled Desk/reviewed-PDF fields with
+identical copy/order; old script-derived language labels are not authority. Studio
+binds the label to the original text hash and makes revised/legacy copy undetermined.
+
+Red: 12/12 failed as expected. Focused: 8 files/81 passed, then a planner follow-up
+with the new explicit Desk persistence case passed 36/36 (82 distinct tests across
+the two passing runs). An intermediate suite import failure was fixed without a new
+dependency. Creative build, project/script/test TypeScript and lint passed. Full
+regression, deployed candidate and real Canva import/export were not rerun.
+
+FR-036's 2026-09-19 blanket qualification is not supported by this active import path.
+Language provenance is now explicit, but universal node locale/copy reference and
+normalization policy remain unqualified. Existing word-joiner/paragraph formatting
+and font-based direction heuristics remain separate work. Source tags do not prove
+native Canva metadata retention, rendered language quality or human acceptance.
+See `R19_LOCALE_PROOF.json`; production is unchanged, and R19 remains in progress.

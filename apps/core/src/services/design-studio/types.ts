@@ -137,7 +137,13 @@ export interface ParityResult {
   copyVisibleIdentical: boolean;
 }
 
-export type CopyBlock = { text: string; script: 'latin' | 'arabic' | 'mixed' };
+export type CopyBlock = {
+  text: string;
+  script: 'latin' | 'arabic' | 'mixed';
+  /** Language from an explicitly labelled saved copy field, bound to its original text. */
+  locale?: string;
+  localeCopySha256?: string;
+};
 
 export interface ReferencePack {
   palette: string[];

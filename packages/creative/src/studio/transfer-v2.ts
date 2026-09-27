@@ -18,6 +18,7 @@ import {
   type PhotoFragment,
 } from './photo-treatments.js';
 import type { EditableTransferPlan, TransferLogo, TransferOptions } from '../editable-transfer.js';
+import { resolveTransferLocales } from '../editable-transfer.js';
 
 /**
  * Joins a hyphenated or slashed compound — "K-12", "2025/2026" — with invisible word joiners
@@ -278,6 +279,7 @@ export async function encodeStudioTransferV2(
   if (!copy.length || copy.length > 40 || copy.some((t) => !t || t.length > 10000)) {
     throw new Error('Missing or excessive factual copy');
   }
+  const copyLocales = resolveTransferLocales(copy, options.copyLocales);
   if (
     layout.text.length !== copy.length ||
     new Set(layout.text.map((t) => t.copyIndex)).size !== copy.length ||
@@ -578,6 +580,7 @@ export async function encodeStudioTransferV2(
           options: {
             breakLine: r.breakLine,
             align: t.align,
+            lang: copyLocales[t.copyIndex],
             ...(r.accent ? { color: hex(t.accentColor!) } : {}),
           },
         }))
@@ -589,7 +592,8 @@ export async function encodeStudioTransferV2(
             options: {
               breakLine: i < paragraphs.length - 1,
               align: t.align,
-              ...(isArabic ? { rtlMode: true, lang: 'ku' } : {}),
+              lang: copyLocales[t.copyIndex],
+              ...(isArabic ? { rtlMode: true } : {}),
               ...(i === (t.accentParagraph === 'first' ? 0 : paragraphs.length - 1) ? { color: hex(t.accentColor!) } : {}),
             },
           }))
@@ -616,7 +620,8 @@ export async function encodeStudioTransferV2(
       vertAnchor: 'middle',
       paraSpaceAfterPt: 0,
       fit: 'resize',
-      ...(isArabic ? { rtlMode: true, lang: 'ku' } : {}),
+      lang: copyLocales[t.copyIndex],
+      ...(isArabic ? { rtlMode: true } : {}),
     });
   }
 
@@ -644,6 +649,7 @@ export async function encodeStudioTransferV2(
       width: layout.width,
       height: layout.height,
       copy,
+      copyLocales,
       copySha256: createHash('sha256').update(JSON.stringify(copy)).digest('hex'),
       logoSha256: logo?.sha256 || null,
       artSha256: options.artBuffer ? createHash('sha256').update(options.artBuffer).digest('hex') : null,

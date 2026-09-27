@@ -14,7 +14,7 @@ export interface EditableTransferPlan {
     letterSpacing?: number;
     /** Line height multiple from the layout. Falls back to 1.4 when a caller does not supply it. */
     lineHeight?: number;
-    /** Right-to-left block (Sorani Kurdish): written with rtl="1", right alignment and lang="ku". Set by the server, never by the model. */
+    /** Right-to-left block. Direction does not identify the copy's language. */
     rtl?: boolean }>;
   /**
    * Shape geometry mirrors the raster renderer. Without `kind`, `opacity` and the stroke fields
@@ -30,8 +30,27 @@ export interface EditableTransferPlan {
 export interface TransferLogo { bytes: Buffer; sha256: string; mimeType: 'image/png'|'image/jpeg' }
 
 /** Encodes a validated layout while taking factual copy exclusively from the saved request. */
-export interface TransferOptions { /** Script typefaces admitted by the client reference pack (for example the provisional Sorani font). */ extraFonts?: string[] }
+export interface TransferOptions {
+  /** Script typefaces admitted by the client reference pack. */
+  extraFonts?: string[];
+  /** Saved language metadata, indexed by exact copy. Omitted metadata means undetermined. */
+  copyLocales?: readonly string[];
+}
+
+/** Validate before passing tags into DrawingML attributes; never derive language from script/font. */
+export function resolveTransferLocales(copy: readonly string[], locales?: readonly string[]): string[] {
+  if (locales === undefined) return copy.map(() => 'und');
+  if (!Array.isArray(locales) || locales.length !== copy.length) throw new Error('Copy locales must match every exact-copy block');
+  return Array.from(locales, locale => {
+    if (typeof locale !== 'string' || locale.length > 63 || !/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/.test(locale)) {
+      throw new Error('Invalid copy locale');
+    }
+    try { return Intl.getCanonicalLocales(locale)[0]; }
+    catch { throw new Error('Invalid copy locale'); }
+  });
+}
 export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: string[], logo?: TransferLogo, options: TransferOptions = {}) {
+  const copyLocales = resolveTransferLocales(copy, options.copyLocales);
   const hex = (color: string) => {
     let c = color.trim();
     if (/^#?[a-fA-F0-9]{3}$/.test(c)) {
@@ -94,12 +113,12 @@ export async function encodeEditableTransfer(plan: EditableTransferPlan, copy: s
       fontFace:t.fontFamily,fontSize:t.fontSize*.75,color:hex(t.color),transparency:textTransparency,
       ...(trackingEm ? { charSpacing: trackingEm * t.fontSize * 0.75 } : {}),
       align:t.rtl?'right':t.align,bold:t.bold||false,italic:t.italic||false,
-      margin:0,lineSpacing:Math.round(t.fontSize*(t.lineHeight||1.4)*0.75*100)/100,breakLine:false,vertAnchor:'middle',paraSpaceAfterPt:0,fit:'resize',...(t.rtl?{rtlMode:true,lang:'ku'}:{})});
+      margin:0,lineSpacing:Math.round(t.fontSize*(t.lineHeight||1.4)*0.75*100)/100,breakLine:false,vertAnchor:'middle',paraSpaceAfterPt:0,fit:'resize',lang:copyLocales[t.copyIndex],...(t.rtl?{rtlMode:true}:{})});
   }
   if(plan.logo&&logo)slide.addImage({data:`${logo.mimeType};base64,${logo.bytes.toString('base64')}`,x:plan.logo.x/96,y:plan.logo.y/96,w:plan.logo.width/96,h:plan.logo.height/96});
   const bytes=await pptx.write({outputType:'nodebuffer'}) as Buffer;
   return {bytes,sha256:createHash('sha256').update(bytes).digest('hex'),manifest:{width:plan.width,height:plan.height,
-    copy,copySha256:createHash('sha256').update(JSON.stringify(copy)).digest('hex'),logoSha256:logo?.sha256||null,plan,
+    copy,copyLocales,copySha256:createHash('sha256').update(JSON.stringify(copy)).digest('hex'),logoSha256:logo?.sha256||null,plan,
     rtlBlocks:plan.text.filter(t=>t.rtl).map(t=>t.copyIndex),
     nativeVerification:'required',qaStatus:'not_run'}};
 }

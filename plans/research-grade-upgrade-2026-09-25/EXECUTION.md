@@ -707,3 +707,27 @@ Red 12 failed/52 passed; final 9 files/122 passed after sequential DB rebuild; t
 Source be2b70c: production preflight found schema 22/46, no reviewer OIDC configuration, healthy HTTP/Canva and unrecorded image revision. Consistent live-data clone in separate test PostgreSQL applied all 24 pending migrations; SHA-256 comparisons preserve 76 historical tables, including 1612 tasks, 110 approvals and 47 publications. Replay applied zero and verified 46; application-role task read succeeded; both private clones removed. Accepted proof uses SHA-256 after an earlier MD5 comparison. Production schema/images remain unchanged.
 
 Fresh isolated full app: 36/36 invariants, 1 selected scenario passed/43 unselected; four deployed font-QA reads agree across list/detail and preserve unknown glyph coverage. Images match be2b70c, runtime source changes empty. External providers and identities remain synthetic. No real approval, message, deployment or full regression run. Workspace-domain input is pending. Runbook: runbooks/LIVE_PILOT.md; proof R26_LIVE_PREFLIGHT_PROOF.json. Next: named office identity, production backup/cutover gate, real native/human pilot, independent-host recovery and quality/cost evidence.
+
+
+## 2026-09-27 — truthful copy language in both import encoders
+
+FR-034/035/036; source correction only, no native Canva qualification. Both encoders
+had hard-coded `ku` for RTL while PptxGenJS silently defaulted other copy to `en-US`.
+They now validate language tags, bind them by exact-copy index and record `copyLocales`
+in the import manifest; unspecified copy is `und`. Plain and accented paragraph runs
+carry the same tag. Core uses only explicitly labelled Desk/reviewed-PDF fields with
+identical copy/order; old script-derived language labels are not authority. Studio
+binds the label to the original text hash and makes revised/legacy copy undetermined.
+
+Red: 12/12 failed as expected. Focused: 8 files/81 passed, then a planner follow-up
+with the new explicit Desk persistence case passed 36/36 (82 distinct tests across
+the two passing runs). An intermediate suite import failure was fixed without a new
+dependency. Creative build, project/script/test TypeScript and lint passed. Full
+regression, deployed candidate and real Canva import/export were not rerun.
+
+FR-036's 2026-09-19 blanket qualification is not supported by this active import path.
+Language provenance is now explicit, but universal node locale/copy reference and
+normalization policy remain unqualified. Existing word-joiner/paragraph formatting
+and font-based direction heuristics remain separate work. Source tags do not prove
+native Canva metadata retention, rendered language quality or human acceptance.
+See `R19_LOCALE_PROOF.json`; production is unchanged, and R19 remains in progress.

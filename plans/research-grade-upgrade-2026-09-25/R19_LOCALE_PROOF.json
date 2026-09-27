@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "baseCommit": "38d0db0",
+  "requirements": [
+    "FR-034",
+    "FR-035",
+    "FR-036"
+  ],
+  "status": "SOURCE_CORRECTION_ONLY",
+  "sourceHashes": {
+    "packages/creative/src/editable-transfer.ts": "f3ee3f99e6a48a89c4aebc683f3923b532cf5d712ca224f2236d3ebe17c4efc6",
+    "packages/creative/src/studio/transfer-v2.ts": "394bc5fb3035514673fe52339e9707310b9be944e96d00279d9f22172a4518fa",
+    "apps/core/src/services/saved-design-copy.ts": "b7faf57f940d258a84b2e5ac14c70a81da05b9d5e46b1b37f6e74d21997eaef0",
+    "apps/core/src/services/canva-design-planner.ts": "7fba4d789632dc2c155036e65c3dd4ff291fd32e71109ac0e565de58408a5c30",
+    "apps/core/src/services/design-studio/types.ts": "b14d23c02c8885a75fee71ed0ae46082e9e0944cc7b83c8516abadbace53dcb0",
+    "apps/core/src/services/design-studio/design-studio-service.ts": "5d42d068cfa5e94bba61de9d561ac429a321178224df4fb97f6f902980deaa62",
+    "apps/core/src/services/design-studio/stages/transfer.stage.ts": "c9108d2fced5730f7bf4c7819815c8a2017f3763caec30d653bcb32368cd9fab"
+  },
+  "testRuns": [
+    {
+      "artifact": "output/acceptance/2026-09-27-transfer-locale/red.json",
+      "passed": 0,
+      "failed": 12,
+      "skipped": 0,
+      "files": 1
+    },
+    {
+      "artifact": "output/acceptance/2026-09-27-transfer-locale/focused.json",
+      "passed": 76,
+      "failed": 0,
+      "skipped": 0,
+      "files": 8
+    },
+    {
+      "artifact": "output/acceptance/2026-09-27-transfer-locale/final-focused.json",
+      "passed": 81,
+      "failed": 0,
+      "skipped": 0,
+      "files": 8
+    },
+    {
+      "artifact": "output/acceptance/2026-09-27-transfer-locale/persisted-languages.json",
+      "passed": 36,
+      "failed": 0,
+      "skipped": 0,
+      "files": 1
+    }
+  ],
+  "intermediateFailure": "First focused run: 76 passed, no failed assertions, one suite could not load fflate from Core. Removed the undeclared test import and used existing QA API; no dependency added.",
+  "verification": {
+    "creativeBuild": "passed",
+    "projectTypeScriptBuild": "passed",
+    "scriptTypeScript": "passed",
+    "testTypeScript": "passed",
+    "lint": "passed",
+    "fullRegression": "not_run",
+    "nativeCanvaImportExport": "not_run",
+    "deployedImage": "not_run"
+  },
+  "findings": [
+    "Both source exporters hard-coded ku for RTL; the pinned PptxGenJS library defaults unlabelled text to en-US.",
+    "Both exporters now validate and record per-copy language tags and emit them on plain and styled paragraph runs. Missing metadata is und.",
+    "Core derives en/ckb only from explicitly labelled Desk or reviewed-PDF fields with identical copy order and bytes. Historical script-derived labels are ignored.",
+    "Studio binds the locale to the saved text hash; old or revised text without matching provenance exports und.",
+    "PostgreSQL planner and Studio workflow tests retain locale evidence in immutable request/source manifests; exact copy checks pass."
+  ],
+  "limitations": [
+    "The 81-test focused run plus 36-test planner follow-up cover 82 distinct tests; they are not 117 distinct tests.",
+    "No real Canva preservation of und/ar-IQ/ckb/en-GB was tested on this source.",
+    "No native human typography review, full multilingual admission, auto direction, multiple fonts or narrow layout qualification.",
+    "FR-036 is partial: universal node locale, canonical-copy reference and normalization policy remain unqualified.",
+    "Existing Studio word-joiner/paragraph formatting and font-based direction heuristics are unchanged and require their own review.",
+    "No app deployment, production database mutation, approval, model call or message."
+  ],
+  "artifacts": {
+    "output/acceptance/2026-09-27-transfer-locale/final-focused.json": {
+      "sha256": "2dd97e3fe309c744c1ed3b214e9438b979450c6225c3afc4935a0146ce8925d9",
+      "bytes": 32491
+    },
+    "output/acceptance/2026-09-27-transfer-locale/final-focused.log": {
+      "sha256": "5383237af002ef573da8f34f97d72c81e00c8a684524a397a1b44491a3b81ef9",
+      "bytes": 1166
+    },
+    "output/acceptance/2026-09-27-transfer-locale/focused.json": {
+      "sha256": "9823cda0c2dbf8c6844874b6740df6611594991926af3babbb1bbc13993169d3",
+      "bytes": 30765
+    },
+    "output/acceptance/2026-09-27-transfer-locale/focused.log": {
+      "sha256": "d8db7423626f550bb7309662da6d49401cfec96c57b4f9e61aa4834c85d9d674",
+      "bytes": 1160
+    },
+    "output/acceptance/2026-09-27-transfer-locale/persisted-languages.json": {
+      "sha256": "e272695c1b46a06aedbc4265d52adffd5ee59f83bb56ceca9a3784ea10749d85",
+      "bytes": 14567
+    },
+    "output/acceptance/2026-09-27-transfer-locale/persisted-languages.log": {
+      "sha256": "a0f75ae5f1f7fe11dd7f5791f9d0aa07d132fe2686d6d48ac7790c2e48d74b14",
+      "bytes": 230
+    },
+    "output/acceptance/2026-09-27-transfer-locale/red.json": {
+      "sha256": "783e28435856259a55a9e54398adf52755504cf5eea64f00a97209cc716eac20",
+      "bytes": 15646
+    },
+    "output/acceptance/2026-09-27-transfer-locale/red.log": {
+      "sha256": "dcd06e1e2737b977ecd052d4283447786126d8d8662c8339f9b78bd2e85b234e",
+      "bytes": 214
+    }
+  }
+}

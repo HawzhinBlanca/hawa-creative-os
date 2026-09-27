@@ -812,6 +812,9 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     expect(planRow).toBeDefined();
     expect(planRow.source_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(planRow.source_content).toBeDefined();
+    expect(run.request.copyBlocks.every((block: { locale?: string; localeCopySha256?: string; text: string }) =>
+      block.locale === 'und' && block.localeCopySha256 === createHash('sha256').update(block.text).digest('hex'))).toBe(true);
+    expect(planRow.result.manifest.copyLocales).toEqual(run.request.copyBlocks.map(() => 'und'));
     expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
   }, 30000);
 

@@ -1,6 +1,28 @@
 import { CanvaFlowError } from './canva-flow-error.js';
 import { isDesignerRemark, peelTrailingRemarks } from './request-remarks.js';
 
+/**
+ * Only labelled, separately saved Desk fields establish a language. Historical exactCopy.language
+ * was often guessed from script (including Arabic labelled ckb), so it is not authority here.
+ * Require identical copy and order: legacy cleanup or a revision must not inherit a stale label.
+ */
+export function savedDesignCopyLocales(payload: unknown, copy: readonly string[]): string[] {
+  const object = (value: unknown): Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const outer = object(payload);
+  const p = object(outer.payload || outer);
+  const body = object(p.body || p);
+  const unknown = () => copy.map(() => 'und');
+  if (object(p.reviewedSource).confirmation === 'request_copy_reviewed') return unknown();
+  const fields = object(p.sourceDocument).confirmation === 'request_copy_reviewed'
+    ? ['copyEn', 'copyCkb']
+    : body.workflow === 'canva_manual' ? ['headlineEn', 'copyEn', 'headlineCkb', 'copyCkb'] : [];
+  const labelled = fields.filter(key => typeof body[key] === 'string' && (body[key] as string).trim())
+    .map(key => ({ text: body[key], locale: key.endsWith('Ckb') ? 'ckb' : 'en' }));
+  if (labelled.length !== copy.length || labelled.some((block, i) => block.text !== copy[i])) return unknown();
+  return labelled.map(block => block.locale);
+}
+
 const ENVELOPE_CLOSE:Record<string,string>={'(':')','[':']','{':'}','"':'"','\u201C':'\u201D','\u00AB':'\u00BB'};
 /**
  * Copy the requester wrapped in brackets or quotes, with a remark after the closing mark:
@@ -106,4 +128,3 @@ export function classifyCopyScript(text:string):'latin'|'arabic'|'unsupported'{
   if(/[^\u0009\u000A\u000D\u0020-\u024F\u02B0-\u02FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u2000-\u206F\u20A0-\u20CF\u2100-\u214F\u2190-\u21FF\u2200-\u22FF\u25A0-\u25FF\u2600-\u27BF\uFE0F]/.test(text))return 'unsupported';
   return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text)?'arabic':'latin';
 }
-

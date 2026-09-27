@@ -121,6 +121,8 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(remote).toHaveBeenCalledTimes(1);
     const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
     expect(saved.status).toBe('planned');expect(saved.result.manifest.copy).toEqual(['EXACT TITLE','Exact body. Never rewrite it.']);
+    expect(saved.request.copyLocales).toEqual(['und','und']);
+    expect(saved.result.manifest.copyLocales).toEqual(['und','und']);
     expect(saved.result.receipt.returnedModel).toBe('gpt-6-astra');
     // The source is in the file store too (ADR-035), under the hash the plan names, and the import reads it.
     const stored=await blobStoreFromEnv(db).read(saved.source_sha256,{verify:true});
@@ -147,10 +149,26 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const saved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
     expect(saved.status).toBe('planned');
     expect(saved.result.manifest).toMatchObject({copyScripts:['latin','arabic'],rtlFont:'Noto Sans Arabic',rtlFontProvisional:true,rtlBlocks:1});
+    expect(saved.result.manifest.copyLocales).toEqual(['und','und']);
     expect(saved.result.manifest.plan.text[1]).toMatchObject({rtl:true,align:'right',fontFamily:'Noto Sans Arabic'});
     expect(saved.result.manifest.plan.text[0]).toMatchObject({fontFamily:'Verdana'});
     const check=checkCanvaPptx(new Uint8Array(saved.source_content),saved.result.manifest.copy,'Verdana',{scriptFonts:{arabic:'Noto Sans Arabic'}});
     expect(check).toMatchObject({copyPass:true,fontPass:true,rtlPass:true,arabicTextObjectCount:1,rtlTextObjectCount:1});
+  });
+  it('persists explicitly labelled Desk languages with the generated exact-copy source',async()=>{
+    const id=randomUUID(),copyEn='Exact English title',copyCkb='وۆرکشۆپی دڵنیایی جۆری';
+    await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title,state)
+      VALUES(${id}::uuid,${scope.tenantId}::uuid,${clientId}::uuid,'Language provenance fixture','received')`.execute(db);
+    await sql`INSERT INTO hawa.task_events(id,tenant_id,task_id,aggregate_version,event_type,actor_type,actor_id,correlation_id,data)
+      VALUES(${randomUUID()}::uuid,${scope.tenantId}::uuid,${id}::uuid,1,'task.created','user',${scope.actorId},${randomUUID()}::uuid,
+      ${JSON.stringify({payload:{body:{workflow:'canva_manual',copyEn,copyCkb}}})}::jsonb)`.execute(db);
+    const {planner}=make(vi.fn(async()=>response()));
+    await planner.generate(scope,id,'explicit-desk-languages',1200,1697);
+    const saved=(await sql<any>`SELECT request,result,source_content FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows[0];
+    expect(saved.request.copyLocales).toEqual(['en','ckb']);
+    expect(saved.result.manifest).toMatchObject({copy:[copyEn,copyCkb],copyLocales:['en','ckb']});
+    expect(checkCanvaPptx(new Uint8Array(saved.source_content),[copyEn,copyCkb],'Verdana',
+      {scriptFonts:{arabic:'Noto Sans Arabic'}})).toMatchObject({copyPass:true,rtlPass:true});
   });
   it('refuses copy in a script the transfer cannot set, before any paid call',async()=>{
     const id=(await persistChatIntake(db,{platform:'telegram',sourceEventId:randomUUID(),sourceChannelId:'isolated-planner',clientId,title:'[TEST] CJK plan',

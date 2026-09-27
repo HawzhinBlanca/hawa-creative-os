@@ -26,6 +26,13 @@ A design passes only when every required hard gate passes.
 - correct locale and numeral policy;
 - Unicode normalization recorded, not silently substituted in source text.
 
+Transfer language metadata comes from explicitly labelled saved copy fields, independently of
+font and direction. Unknown language is `und`; Arabic script does not establish Arabic versus
+Sorani, and historical script-derived `exactCopy.language` labels are not authoritative.
+The import manifest records one validated language tag per exact-copy index. Studio binds
+known labels to the copy's SHA-256 and discards the label after a wording change. These source
+tags do not establish native Canva preservation, shaping, normalization or visual quality.
+
 ### Source/editability
 
 - real Canva design ID, captured source metadata and export bound to the pinned revision;

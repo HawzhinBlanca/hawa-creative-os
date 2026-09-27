@@ -77,6 +77,7 @@ const runStages = (run: { stages?: unknown }): Record<string, any> => {
 };
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
+import { savedDesignCopyLocales } from '../saved-design-copy.js';
 import { runsPipelineV3, PICTURE_ONLY_DIRECTIVE } from '../chat-intake.js';
 import { StudioBudgetExhaustedError, isModelCallHoldError, type StageContext, type CandidateState, type CreativeBrief, type Concept, type ReferencePack, type CopyBlock, type ParityResult, type ContentPhoto } from './types.js';
 import {
@@ -452,9 +453,12 @@ export class DesignStudioService {
       );
     }
 
+    const copyLocales = savedDesignCopyLocales(task.source, content.copy);
     const copyBlocks: CopyBlock[] = content.copy.map((text, idx) => ({
       text,
       script: copyScripts[idx] === 'arabic' ? 'arabic' : 'latin',
+      locale: copyLocales[idx],
+      localeCopySha256: createHash('sha256').update(text).digest('hex'),
     }));
     qualifiedStudioFonts(reference, copyBlocks);
 

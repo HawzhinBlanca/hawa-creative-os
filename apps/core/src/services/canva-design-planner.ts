@@ -8,7 +8,7 @@ import { encodeEditableTransfer, creativeAssetPath, type EditableTransferPlan } 
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import { z } from 'zod';
 import { CanvaConnectService, CanvaFlowError } from './canva-connect-service.js';
-import { savedDesignCopy, classifyCopyScript } from './saved-design-copy.js';
+import { savedDesignCopy, savedDesignCopyLocales, classifyCopyScript } from './saved-design-copy.js';
 export { savedDesignCopy, classifyCopyScript, unwrapCopyEnvelope, withoutEmoji } from './saved-design-copy.js';
 import { log } from '../logging.js';
 import { blobStoreFor, putToStore, readPreferringStore } from './blob-store-context.js';
@@ -202,6 +202,7 @@ export class CanvaDesignPlanner {
     return {
       request: {
         ...content,
+        copyLocales: savedDesignCopyLocales(task.source, content.copy),
         copyScripts,
         rtlFont,
         documentKind,
@@ -564,7 +565,7 @@ export class CanvaDesignPlanner {
       // recorded in the manifest so the model's original output is not misrepresented as clean.
       const paletteCorrections = correctPlannerPalette(plan, request.reference);
       const sourceExtraFonts = [...new Set([...(request.admittedFonts || []), request.rtlFont].filter((f): f is string => Boolean(f)))];
-      const source=await encodeEditableTransfer(plan,request.copy,{bytes:logo,sha256:request.reference.logoSha256,mimeType:'image/png'},{extraFonts:sourceExtraFonts});
+      const source=await encodeEditableTransfer(plan,request.copy,{bytes:logo,sha256:request.reference.logoSha256,mimeType:'image/png'},{extraFonts:sourceExtraFonts,copyLocales:request.copyLocales});
       await assertCurrentClientDesignReference(this.db,s,request.reference);
       const isRevision = Boolean(directiveMatch || request.parentTaskId);
       const evidence={manifest:{
