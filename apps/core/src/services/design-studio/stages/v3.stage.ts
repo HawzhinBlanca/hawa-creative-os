@@ -110,10 +110,11 @@ export function conceptFromV3Candidate(
 
 /** The hard-QA context of this run: the gate its winner must pass. */
 export function hardQaContextFor(
-  ctx: Pick<StageContext, 'width' | 'height' | 'copyBlocks' | 'latinFont' | 'arabicFont' | 'referencePack' | 'logoAspect' | 'photos'>
+  ctx: Pick<StageContext, 'width' | 'height' | 'copyBlocks' | 'latinFont' | 'arabicFont' | 'referencePack' | 'logoAspect' | 'photos' | 'playbook'>
 ): HardQaContext {
   return {
     photoCount: ctx.photos?.length ?? 0,
+    ...(ctx.playbook ? { playbook: ctx.playbook } : {}),
     width: ctx.width,
     height: ctx.height,
     copyScripts: ctx.copyBlocks.map((b) => (b.script === 'arabic' ? 'arabic' : 'latin')),
@@ -285,6 +286,18 @@ export async function runCritiqueStageV3(
 }
 
 /**
+ * The client's logo and photos for every render the critique and the judge see, so they judge the
+ * design that ships, with this client's logo and no other (ADR-038).
+ */
+export function clientRenderAssetsFor(ctx: Pick<StageContext, 'logo' | 'photos' | 'photoCutouts'>) {
+  return {
+    ...(ctx.logo ? { logoDataUri: `data:${ctx.logo.mimeType};base64,${ctx.logo.bytes.toString('base64')}` } : {}),
+    ...(ctx.photos?.length ? { photoFiles: ctx.photos.map((p) => ({ bytes: p.bytes, mediaType: p.mimeType })) } : {}),
+    ...(ctx.photoCutouts ? { photoCutouts: ctx.photoCutouts } : {}),
+  };
+}
+
+/**
  * P06: gated refinement of the top-ranked candidate. A repair is prepared like any generated layout
  * before it is measured, so a repair cannot move the logo off its real aspect.
  */
@@ -305,6 +318,7 @@ export async function runReviseStageV3(
       style: ctx.style,
     },
     qa: hardQaContextFor(ctx),
+    render: clientRenderAssetsFor(ctx),
   });
   return { candidate: ranked[0].candidate, outcome, layout: outcome.layout };
 }
@@ -321,7 +335,7 @@ export async function runJudgeStageV3(
 }> {
   const ranked = rankStudioCandidatesV3(ctx, candidates);
   assertJudgeSeesText(ranked);
-  const selection = await selectWinnerV3(ranked, copyForStageV3(ctx), { client: ctx.client, reference: ctx.reference });
+  const selection = await selectWinnerV3(ranked, copyForStageV3(ctx), { client: ctx.client, reference: ctx.reference, render: clientRenderAssetsFor(ctx) });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;
   return { selection, winner: find(selection.winner)!, runnerUp: find(selection.runnerUp), ranked };

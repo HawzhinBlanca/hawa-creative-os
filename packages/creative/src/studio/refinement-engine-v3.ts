@@ -1,3 +1,4 @@
+import type { RenderLayoutOptions } from './render-layout-v2.js';
 import { measureWrappedLines } from './render-layout-v2.js';
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
@@ -82,6 +83,8 @@ export interface RefineOptions {
    * metrics fall back to box area instead of the measured lines the ranking uses.
    */
   copyText?: Record<number, string>;
+  /** The client's logo and photos for the critique's renders (see PipelineV3CallOptions.render). */
+  render?: Pick<RenderLayoutOptions, 'logoDataUri' | 'logoPath' | 'photoFiles' | 'photoCutouts'>;
   /**
    * Refine even when the metric gate would skip: the caller knows of a failure the metrics do not
    * see — a hard-QA defect, for instance.
@@ -408,7 +411,7 @@ export async function refineCandidate(
       deterministicMetrics: currentMetrics,
       model,
       detail: 'low',
-      renderOptions: copyText ? { copyText } : undefined,
+      renderOptions: copyText || options.render ? { ...options.render, ...(copyText ? { copyText } : {}) } : undefined,
     });
 
     const issues = options.issuesFor ? options.issuesFor(currentLayout) : [];

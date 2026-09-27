@@ -59,12 +59,25 @@ Behaviour:
   - a verified reference pack of 15–30 approved past designs;
   - its Telegram chats and main language;
   - a passing proof set across its formats, including Sorani and Arabic copy where the client uses them.
-- **Blocks the second live client:** the renderer draws KAAE's logo whenever a caller passes none (`resolveLogoHref`, `packages/creative/src/studio/render-layout-v2.ts`), and the judge's preview renders pass none (`pipeline-v3.ts`). While KAAE is the only live client this cannot leak, because the studio refuses every other client. It must be removed, with a test that a render for one client never carries another's logo, before a second pack is set `live`.
-- **Deferred (phase 2):**
-  - a thumbnail playbook for the design stages (a face cut-out, a 3–5 word hook, a timestamp-safe corner);
-  - a check that the design is still legible at about 170 px wide;
-  - removing KAAE's persona, palette and templates from shared creative code;
-  - per-client reference retrieval.
+- **The renderer's KAAE logo default (resolved 2026-09-27):** the renderer drew KAAE's logo whenever a caller passed none, and the v3 judge, canary and critique renders passed none. Now:
+  - A render draws only the logo it is handed (`resolveLogoHref`, `render-layout-v2.ts`). With no logo it draws a neutral placeholder; this was KAAE gold before.
+  - The v3 pipeline takes the client's logo and photos (`PipelineV3CallOptions.render`, filled by `clientRenderAssetsFor` in `v3.stage.ts`), so the judge scores the design that ships.
+  - Tests check that a render never carries another client's logo (`packages/creative/test/renderer-neutral-svg.test.ts`).
+- **The video-thumbnail playbook (built 2026-09-27, `packages/creative/src/studio/thumbnail-rules.ts`):**
+  - A thumbnail client's stages are all told the playbook through the rules every stage reads:
+    - the size it is seen at (168 px wide for 16:9, 180 px for 9:16);
+    - the person as the focal point;
+    - the hook as the largest text;
+    - the copy is never cut;
+    - the logo small and in a top corner.
+  - Its hard QA adds two checks, both of which the layout can fix:
+    - `THUMBNAIL_COVERED_ZONE`: text or the logo under the video-length badge (16:9) or the Shorts/Reels buttons (9:16);
+    - `THUMBNAIL_HOOK_TOO_SMALL`: a hook under 9 px tall at listing size, which is 69 px on a 1280×720 canvas.
+  - The length of the requester's copy is guidance, never a defect, because the copy is exact.
+- **Deferred:**
+  - removing KAAE's persona, palette and templates from shared creative code (`layout-generator-v3.ts`, `motifs.ts`, `templates/kaae-*`). This must be done before the second client's first proof set;
+  - per-client reference retrieval, with each client's exemplars scoped to it;
+  - a thumbnail proof set per client, run on its real assets once the office supplies them.
 
 ## 4. Alternatives considered
 

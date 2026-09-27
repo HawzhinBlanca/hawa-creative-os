@@ -1,7 +1,7 @@
 import { resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { evaluateDesignMetrics, type DesignMetricsReport } from './design-metrics.js';
-import { renderLayoutV2, measureWrappedLines, balancedBoxWidths, admittedFontFace, findAdmittedFontFace } from './render-layout-v2.js';
+import { renderLayoutV2, measureWrappedLines, balancedBoxWidths, admittedFontFace, findAdmittedFontFace, type RenderLayoutOptions } from './render-layout-v2.js';
 import { correctFontsThatCannotDrawTheCopy, centerSeparatorsInGaps, findAsymmetricSeparators } from './layout-generator-v3.js';
 import { generateBoxGroundedCritique, type BoxCritiqueResult } from './box-critique-v3.js';
 import { refineCandidate, type RefinementCandidateResult } from './refinement-engine-v3.js';
@@ -62,6 +62,12 @@ export interface PipelineV3CallOptions {
   model?: string;
   /** The client's style reference, shown to the critique and the judge. */
   reference?: ClientReference;
+  /**
+   * The client's logo and photos, drawn into every render the critique and the judge see. Without
+   * them the renderer drew KAAE's logo and no photos, so the judge scored a design that never ships
+   * and, for any other client, one with the wrong logo on it (audit N-CRE-1, ADR-038).
+   */
+  render?: Pick<RenderLayoutOptions, 'logoDataUri' | 'logoPath' | 'photoFiles' | 'photoCutouts'>;
 }
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
@@ -1262,7 +1268,7 @@ export async function critiqueCandidateV3(
     client: options.client,
     model: options.model || resolveModel('critique'),
     deterministicMetrics: candidate.metrics,
-    renderOptions: { copyText: copy.text },
+    renderOptions: { ...options.render, copyText: copy.text },
   });
 }
 
@@ -1325,6 +1331,7 @@ export async function refineCandidateV3(
     maxRounds: 2,
     minDelta: 0.01,
     copyText: copy.text,
+    render: options.render,
     force: failsQa,
     // What production's QA would say once the layout is prepared the way it will be stored.
     ...(options.qa
@@ -1415,13 +1422,13 @@ export async function selectWinnerV3(
     reference: options.reference,
     client: options.client,
     model: options.model || resolveModel('judge'),
-    renderOptions: { copyText: copy.text },
+    renderOptions: { ...options.render, copyText: copy.text },
   };
   const asJudgeInput = (c: RankedCandidateV3, id: string): CandidateJudgeInput => ({
     id,
     layout: c.layout,
     deterministicMetrics: c.metrics,
-    renderedPng: c.renderedPng || renderLayoutV2(c.layout, { copyText: copy.text }).png,
+    renderedPng: c.renderedPng || renderLayoutV2(c.layout, judgeOptions.renderOptions).png,
   });
 
   const [first, second] = ranked;
@@ -1441,13 +1448,13 @@ export async function selectWinnerV3(
       id: 'chosen',
       layout: tentative.layout,
       deterministicMetrics: tentative.metrics,
-      renderedPng: renderLayoutV2(tentative.layout, { copyText: copy.text }).png,
+      renderedPng: renderLayoutV2(tentative.layout, judgeOptions.renderOptions).png,
     },
     {
       id: 'degraded_canary',
       layout: canaryLayout,
       deterministicMetrics: measureDesignV3(canaryLayout, copy),
-      renderedPng: renderLayoutV2(canaryLayout, { copyText: copy.text }).png,
+      renderedPng: renderLayoutV2(canaryLayout, judgeOptions.renderOptions).png,
     },
     judgeOptions
   );

@@ -21,8 +21,8 @@ const doc = (pack: object, file?: string) => ({ source: `clients/${file ?? (pack
 describe('the client packs that ship', () => {
   it('are KAAE and the four clients being set up', () => {
     expect(packs.map((p) => p.code)).toEqual(['erbil-edition', 'halwest-news', 'kaae', 'kawa-ba-hawlery', 'zar-podcast']);
-    // A second live client first needs the renderer's KAAE logo default removed (ADR-038, section 3).
-    expect(packs.filter((p) => p.status === 'live').map((p) => p.code), 'see ADR-038 before setting a second client live').toEqual(['kaae']);
+    // A client goes live through its onboarding list and a proof set on its real assets (ADR-038, section 3).
+    expect(packs.filter((p) => p.status === 'live').map((p) => p.code), 'see ADR-038 section 3 before setting a client live').toEqual(['kaae']);
   });
 
   it('keep KAAE on its existing row, reference pack and logo', () => {

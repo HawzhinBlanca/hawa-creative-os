@@ -1,4 +1,5 @@
-import { clientReferenceOf } from '../client-packs.js';
+import { clientPackOf, clientReferenceOf } from '../client-packs.js';
+import { thumbnailPlaybookPrompt } from '@hawa/creative';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
@@ -1111,6 +1112,13 @@ export class DesignStudioService {
     }
     const logo = { bytes: logoBytes, sha256: logoSha256, mimeType: 'image/png' as const };
 
+    // The client's playbook (ADR-038). A thumbnail client's stages are all told the thumbnail rules
+    // through the rules every stage reads, and its hard QA checks them.
+    const playbook = clientPackOf(run.client_id)?.playbook;
+    if (playbook === 'video-thumbnail') {
+      promotedRules = `${promotedRules}\n\n${thumbnailPlaybookPrompt({ width: request.width, height: request.height })}`;
+    }
+
     return {
       runId: run.id,
       tenantId: s.tenantId,
@@ -1124,6 +1132,7 @@ export class DesignStudioService {
       copyBlocks: request.copyBlocks,
       referencePack,
       promotedRules,
+      ...(playbook ? { playbook } : {}),
       latinFont,
       arabicFont,
       logoAspect: request.logoAspect || 1.0,
