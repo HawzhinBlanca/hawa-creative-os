@@ -484,4 +484,5 @@ Missing/interrupted time stays unknown. Calendar reports use Asia/Baghdad, expos
 coverage and uncertainty bounds, and only evaluate monthly compliance on a completed,
 fully observed month. Successful probe latency is not end-to-end user latency.
 An independent physical host and real observation period remain admission gates.
-See `runbooks/AVAILABILITY_MONITORING.md`; implementation is undergoing qualification.
+See `runbooks/AVAILABILITY_MONITORING.md`; local mechanics are qualified in the
+2026-09-27 `R02_AVAILABILITY_PROOF.json`. Real monthly admission remains open.

@@ -1,0 +1,146 @@
+[
+  {
+    "payload": {
+      "buildCommit": "1f07c9b3ff0fa2f50e4a207cff7d575115a07099",
+      "completedAt": "2026-09-27T16:08:17.843Z",
+      "durationMs": 18,
+      "monitorId": "00000000-0000-4000-a000-000000000104",
+      "observationId": "fef1ef8f-e0b8-414b-b69a-c25833a8e78c",
+      "observedAt": "2026-09-27T16:08:17.824Z",
+      "probes": {
+        "desk": {
+          "durationMs": 7,
+          "error": "none",
+          "httpStatus": 200,
+          "outcome": "available"
+        },
+        "office": {
+          "durationMs": 10,
+          "error": "none",
+          "httpStatus": 200,
+          "outcome": "available"
+        }
+      },
+      "schemaVersion": 1,
+      "slotStart": "2026-09-27T16:08:00.000Z",
+      "targetOrigin": "http://127.0.0.1:56081"
+    },
+    "receipt": {
+      "monitorId": "00000000-0000-4000-a000-000000000104",
+      "observationId": "fef1ef8f-e0b8-414b-b69a-c25833a8e78c",
+      "observationSha256": "4a7bc0f4b150ead1422d75568bc89f7ee5afd9914387f35c1c31010aab8e5587",
+      "payloadSha256": "f961671523b446ee2814cf111f45101ae4aaa1565123aa268a2effcd0b4aa874",
+      "recordedAt": "2026-09-27T16:08:17.845Z",
+      "replayed": true,
+      "slotStart": "2026-09-27T16:08:00.000Z"
+    }
+  },
+  {
+    "payload": {
+      "buildCommit": null,
+      "completedAt": "2026-09-27T16:09:05.218Z",
+      "durationMs": 4006,
+      "monitorId": "00000000-0000-4000-a000-000000000104",
+      "observationId": "556045bd-a369-4120-bbb9-392958510ac3",
+      "observedAt": "2026-09-27T16:09:01.210Z",
+      "probes": {
+        "desk": {
+          "durationMs": 5,
+          "error": "none",
+          "httpStatus": 200,
+          "outcome": "available"
+        },
+        "office": {
+          "durationMs": 4001,
+          "error": "network_error",
+          "httpStatus": null,
+          "outcome": "unavailable"
+        }
+      },
+      "schemaVersion": 1,
+      "slotStart": "2026-09-27T16:09:00.000Z",
+      "targetOrigin": "http://127.0.0.1:56081"
+    },
+    "receipt": {
+      "monitorId": "00000000-0000-4000-a000-000000000104",
+      "observationId": "556045bd-a369-4120-bbb9-392958510ac3",
+      "observationSha256": "df7fc57f430ba46ec8a61f72c8e8bdc2b3d7beafec71731249a1b81bb7145a04",
+      "payloadSha256": "cc489bf71e9025872b82ce60165804bff1092f6112be712f87ab84a205337910",
+      "recordedAt": "2026-09-27T16:09:10.474Z",
+      "replayed": false,
+      "slotStart": "2026-09-27T16:09:00.000Z"
+    }
+  },
+  {
+    "payload": {
+      "buildCommit": null,
+      "completedAt": "2026-09-27T16:10:01.244Z",
+      "durationMs": 13,
+      "monitorId": "00000000-0000-4000-a000-000000000104",
+      "observationId": "3364930c-b6c2-49cd-b9dd-958153c07093",
+      "observedAt": "2026-09-27T16:10:01.228Z",
+      "probes": {
+        "desk": {
+          "durationMs": 7,
+          "error": "none",
+          "httpStatus": 200,
+          "outcome": "available"
+        },
+        "office": {
+          "durationMs": 6,
+          "error": "http_error",
+          "httpStatus": 503,
+          "outcome": "unavailable"
+        }
+      },
+      "schemaVersion": 1,
+      "slotStart": "2026-09-27T16:10:00.000Z",
+      "targetOrigin": "http://127.0.0.1:56081"
+    },
+    "receipt": {
+      "monitorId": "00000000-0000-4000-a000-000000000104",
+      "observationId": "3364930c-b6c2-49cd-b9dd-958153c07093",
+      "observationSha256": "1e258a26985e36b89763b31e13f8f18811e8e6bee1edb21c7aad12c317b5ab00",
+      "payloadSha256": "b57e46a87834f04c27e8d831f598e9c8a2d2b8b35cc010be0d7f21561e5a7e11",
+      "recordedAt": "2026-09-27T16:10:02.463Z",
+      "replayed": false,
+      "slotStart": "2026-09-27T16:10:00.000Z"
+    }
+  },
+  {
+    "payload": {
+      "buildCommit": "1f07c9b3ff0fa2f50e4a207cff7d575115a07099",
+      "completedAt": "2026-09-27T16:11:01.082Z",
+      "durationMs": 17,
+      "monitorId": "00000000-0000-4000-a000-000000000104",
+      "observationId": "1c4248e0-d0c8-4fdb-be1c-7d7da0331fbe",
+      "observedAt": "2026-09-27T16:11:01.063Z",
+      "probes": {
+        "desk": {
+          "durationMs": 5,
+          "error": "none",
+          "httpStatus": 200,
+          "outcome": "available"
+        },
+        "office": {
+          "durationMs": 12,
+          "error": "none",
+          "httpStatus": 200,
+          "outcome": "available"
+        }
+      },
+      "schemaVersion": 1,
+      "slotStart": "2026-09-27T16:11:00.000Z",
+      "targetOrigin": "http://127.0.0.1:56081"
+    },
+    "receipt": {
+      "monitorId": "00000000-0000-4000-a000-000000000104",
+      "observationId": "1c4248e0-d0c8-4fdb-be1c-7d7da0331fbe",
+      "observationSha256": "07456a49f5e4cbfd08894cac8c096f6c1b3cd139f887e50add3968ea48eaf116",
+      "payloadSha256": "dcf3d1a8317e2655e58690c6bd80fbe4662e969603f41c0a6e1f1ae3abe49bbd",
+      "recordedAt": "2026-09-27T16:11:01.083Z",
+      "replayed": false,
+      "slotStart": "2026-09-27T16:11:00.000Z"
+    }
+  }
+]

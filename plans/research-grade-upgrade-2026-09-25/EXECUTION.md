@@ -1574,3 +1574,21 @@ The old UI hard-coded passing cases, model scores, latency and canary states. Th
 Final ADR-099 on33a4dc7:4036 passed/0 failed/59 skipped;494 strict roots;61 focused plus18 final Desk checks. Fresh matching isolated app passes63 workflow/recovery and17 Chrome checks; saved case hashes/statuses, RTL unexecuted labels and zero model work while browsing verified. Synthetic fixtures cannot admit models or native Canva; live/human/independent-host gates and whole-app completion remain open.
 
 Isolated health at 2026-09-27 11:59:41 UTC /14:59 Baghdad remains degraded: PostgreSQL and Restate connected, zero paused/backoff/inbox workflows; Canva/model/Telegram API unverified, design flags off. Production unchanged. Initial browser session/selector failures and faint neutral labels are recorded with their corrections. Next: remaining paid paths and typed completed-result recovery, then real office/provider/Canva/human/held-out studies, independent-host restore and controlled rollout.
+
+## 2026-09-27 — Independent availability observations locally qualified (ADR-104)
+
+Source c35d6415; runtime 1f07c9b3; route-inventory-only correction/full suite 684540dd.
+4169 passed/0 failed/59 skipped, 507 strict roots, 14 Python controls, 63 selected
+synthetic workflow invariants and 26 actual deployed runtime/Chrome checks. A durable
+independent collector retains unknown interruptions and real Core/PostgreSQL outage
+observations, verifies original upload receipts and never backfills missing time.
+Desk reports coverage, uncertainty bounds and limited readiness latency.
+
+First full 4168/1/59 failure was the omitted route inventory; correction 36/2 and
+full rerun pass. All failures, deployment identities and limits are retained in
+`R02_AVAILABILITY_PROOF.json` and `output/acceptance/2026-09-27-availability-observations`.
+No live provider or production change. Independent-host installation and a real
+complete month still gate NFR-002. Next: external Drive/Sheets scheduled reconciliation
+and staffed repair (full FR-050), remaining retained-result recovery, live office/native
+Canva and pending after-preview approval, human multilingual/design/held-out quality
+evaluation, independent-host restore and controlled rollout. Whole-app goal active.

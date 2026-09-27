@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T16:05:24Z",
+  "generatedAt": "2026-09-27T16:15:33Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -589,8 +589,8 @@
     },
     {
       "path": "adrs/104_independent_availability_observations.md",
-      "sha256": "86211e39da66e8d85f6025be51eaec6aaa2f6f5b4b9e949bc82444e2d3199fa0",
-      "bytes": 6130
+      "sha256": "6aba7a84abfd0e33f26c844333c70c5d10505922f3972fb4a60e44d46a0487fb",
+      "bytes": 6787
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -859,8 +859,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "b6878d2b27b0fcf3f054c6eea07298c5884c09cd36d895e2895211e88035ad42",
-      "bytes": 29862
+      "sha256": "24ae70b7e46e45acf41f33ebf9aa6942060ac41d1a301585f9fc34a4b1364bb3",
+      "bytes": 29934
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1044,8 +1044,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "27fe5977a1fe1ce63e66dbb9576db0176c1acac7a9e13e7e6f34272f3485250c",
-      "bytes": 108712
+      "sha256": "aab40359e933212e870cb60801d16754b1fad0be78fc8313786eb4210a92f0c5",
+      "bytes": 109975
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1074,13 +1074,13 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R02_AVAILABILITY_PROOF.json",
-      "sha256": "9371c6e292c32537f679e8f5938b235e22df90e8e64363a634309ac87a1ea582",
-      "bytes": 2127
+      "sha256": "0afcc549a734705d8201cfe36d643f2f13a48b981aab92f8b0f3e650174ff348",
+      "bytes": 16965
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R02_EVIDENCE.md",
-      "sha256": "c2ef220cfae6c1f3422696563cbda03c72f4a2c9a987b8c6cecf07fe44e2fc47",
-      "bytes": 5381
+      "sha256": "5e25e04f7ecd9b29bafce7c7f736f761ed655dde8ece3a2cedf2dce1a90d4fd1",
+      "bytes": 6644
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R02_OPERATIONS_EVIDENCE_PROOF.json",
@@ -1444,8 +1444,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "7d48e3159f128927f9fa6ed42ff0f0779cb271a5efab3c6e3c0081b97a9a9d8f",
-      "bytes": 374543
+      "sha256": "15eb9c9080f28514dc02c8c1ee1ba733fcb34ef5fd89b809eefeac1e7430905d",
+      "bytes": 376043
     },
     {
       "path": "plans/user-stories.csv",

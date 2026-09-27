@@ -1,0 +1,30 @@
+{"name":"exact candidate is deployed","passed":true}
+{"name":"deployed named read accepts v2 evidence with unknown monthly compliance","passed":true}
+{"name":"actual collector dies after Core commits upload but before local acknowledgement","passed":true}
+{"name":"first real collector sample observed Desk assets and office readiness","passed":true}
+{"name":"restart replays the same original observation and receives its prior receipt","passed":true}
+{"name":"one committed row retains the exact original observed evidence","passed":true}
+{"name":"dead worker makes office readiness unavailable despite registered services","passed":true}
+Waiting for the next real observation minute
+{"name":"real Core outage is retained in the durable upload backlog","passed":true}
+{"name":"Core restart drains the original pending record once","passed":true}
+Waiting for the next real observation minute
+{"name":"real PostgreSQL outage is retained locally without a fabricated success","passed":true}
+{"name":"PostgreSQL recovery accepts the saved outage record exactly once","passed":true}
+Waiting for the next real observation minute
+{"name":"later healthy observation continues the original monitor","passed":true}
+{"name":"all four original samples have verified immutable server receipts","passed":true}
+{"name":"SQL hashes remain valid after both service outages","passed":true}
+{"name":"readiness witness leaves no retained rows","passed":true}
+{"name":"monthly report retains failures and unknown time after recovery","passed":true}
+{"name":"monitor credential cannot read office data","passed":true}
+{"name":"Chrome renders actual coverage, failures and explicit readiness limits","passed":true}
+{"name":"historical month stays unknown with no invented past measurements","passed":true}
+{"name":"failed browser refresh clears earlier successful evidence","passed":true}
+{"name":"mobile availability fields and evidence fit the viewport","passed":true}
+{"name":"office browser cookies cannot upload measurements","passed":true}
+{"name":"no browser execution errors","passed":true}
+{"name":"monitoring and recovery made no model requests","passed":true}
+{"name":"monitoring and recovery did not create office tasks, requests, approvals or outbox work","passed":true}
+{"name":"membership revocation immediately denies monthly evidence","passed":true}
+{"passed":26,"failed":0,"evidenceDirectory":"/private/tmp/hawa-availability-deployed-first"}

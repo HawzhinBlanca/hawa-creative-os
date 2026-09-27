@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "date": "2026-09-27",
-  "status": "implemented; full regression and fresh deployed qualification pending",
+  "status": "locally qualified; independent-host and monthly production admission remain open",
   "requirements": [
     "NFR-002",
     "FR-064",
@@ -18,7 +18,8 @@
   "finalUi": {
     "passed": 9,
     "failed": 0,
-    "files": 2
+    "files": 2,
+    "note": "Overlaps the affected 53-test run; counts are not additive."
   },
   "collectorPython": {
     "passed": 14,
@@ -35,25 +36,256 @@
   "scriptTypes": "passed",
   "lintAny": 975,
   "egressExceptions": 9,
-  "deskBuild": "passed before final refresh adjustment; final build pending",
-  "security": "passed after replacing constant synthetic fixture credential with random test-only values",
+  "deskBuild": "passed on final executable source",
+  "security": "zero-secret scan and 11-pattern self-test passed; no new allowlist",
   "firstFailures": [
     "Unused React import in AvailabilityPanel; removed and source build passed.",
     "Loopback HTTP test was denied by sandbox; authorized isolated retry passed all 14 Python tests.",
     "Security scanner rejected a literal synthetic fixture credential; changed to randomly generated test values.",
-    "Blueprint validation before manifest refresh found expected stale hashes; final manifest validation pending."
+    "Initial blueprint validation before manifest refresh found stale hashes; refreshed source validation passed 1025/0/0.",
+    "First full regression: 4168 passed/1 failed/59 skipped. Reviewed and added the eight expected aliases to the route inventory; focused correction 36/2 and full regression 4169/0/59 passed. Runtime code did not change."
   ],
-  "qualificationPending": [
-    "final full source regression",
-    "fresh candidate deployment and actual Core/PostgreSQL outage replay",
-    "Chrome desktop/mobile evidence",
-    "final source manifest"
-  ],
+  "qualificationPending": [],
   "notQualified": [
     "independent-host installation and monthly production availability",
     "full external Drive/Sheets reconciliation",
     "live provider/native Canva and pending after-preview approval",
     "human Sorani/Arabic/design and held-out quality/cost evaluation",
     "independent-host restore and controlled rollout"
-  ]
+  ],
+  "implementationCommit": "c35d64159d705ea8193836c45b00234415cd29ee",
+  "testedCommit": "684540dd82c3a515c2d387b5a0fa05860d832016",
+  "runtimeCommit": "1f07c9b3ff0fa2f50e4a207cff7d575115a07099",
+  "inventoryCorrection": "Eight new endpoint aliases were added to the route inventory fixture only; executable source is identical between runtime and final full-suite commits.",
+  "fullRegression": {
+    "passed": 4169,
+    "failed": 0,
+    "skipped": 59,
+    "filesPassed": 499,
+    "filesSkipped": 7,
+    "durationSeconds": 121.07,
+    "log": "output/acceptance/2026-09-27-availability-observations/full-final.log"
+  },
+  "firstFullRegression": {
+    "passed": 4168,
+    "failed": 1,
+    "skipped": 59,
+    "filesPassed": 498,
+    "filesFailed": 1,
+    "filesSkipped": 7,
+    "durationSeconds": 127.24,
+    "failure": "Route inventory fixture did not yet include eight aliases of the two dedicated monitoring endpoints."
+  },
+  "inventoryCorrectionTests": {
+    "passed": 36,
+    "failed": 0,
+    "files": 2
+  },
+  "blueprint": {
+    "passed": 1025,
+    "warnings": 0,
+    "failed": 0
+  },
+  "runtime": {
+    "buildCommit": "1f07c9b3ff0fa2f50e4a207cff7d575115a07099",
+    "sourceChanges": {},
+    "workflowInvariantsPassed": 63,
+    "workflowInvariantsFailed": 0,
+    "selectedScenarios": 1,
+    "unselectedScenarios": 43,
+    "uncoveredModelCalls": [
+      "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent ",
+      "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent "
+    ],
+    "deployedChecksPassed": 26,
+    "deployedChecksFailed": 0,
+    "checkedAt": "2026-09-27T16:11:04.351Z",
+    "actualFailures": [
+      "collector SIGKILL after upload before local acknowledgement",
+      "worker SIGKILL",
+      "Core SIGKILL",
+      "PostgreSQL SIGKILL"
+    ],
+    "observations": 4,
+    "syntheticSessionRevoked": true,
+    "screenshotsVisuallyInspected": true,
+    "productionChanged": false,
+    "realProviderCalls": false
+  },
+  "runtimeHealth": {
+    "status": "degraded",
+    "timestamp": "2026-09-27T16:11:04.347Z",
+    "buildCommit": "1f07c9b3ff0fa2f50e4a207cff7d575115a07099",
+    "flags": {
+      "DESIGN_PIPELINE_V3": "off",
+      "DESIGN_STUDIO_V2": "off"
+    },
+    "lastVerifiedProgressAt": "2026-09-27T16:09:09.646Z",
+    "lastPaidProbe": {
+      "at": null,
+      "status": "unverified",
+      "observedStatus": null,
+      "schemaVersion": null,
+      "detail": null,
+      "callId": null,
+      "lastAlertMessageId": null,
+      "everyMinutes": 30
+    },
+    "funnel": {
+      "windowHours": 48,
+      "briefsCount": 6,
+      "draftsCount": 4,
+      "approvalsCount": 6,
+      "deliveriesCount": 6,
+      "status": "healthy",
+      "alert": null,
+      "oldestUnapprovedHours": 0.1,
+      "stalledTaskCount": 0,
+      "oldestStalledTaskId": null,
+      "oldestStalledTaskHours": null,
+      "stageDurations": {
+        "briefToDraft": {
+          "samples": 4,
+          "p50Hours": 0,
+          "p95Hours": 0
+        },
+        "draftToApproval": {
+          "samples": 3,
+          "p50Hours": 0,
+          "p95Hours": 0
+        },
+        "approvalToDelivery": {
+          "samples": 3,
+          "p50Hours": 0,
+          "p95Hours": 0
+        }
+      },
+      "nextAction": null,
+      "measuredAt": "2026-09-27T16:11:04.337Z"
+    },
+    "restateInvocations": {
+      "status": "ok",
+      "paused": 0,
+      "backingOff": 0,
+      "inbox": 0,
+      "checkedAt": "2026-09-27T16:11:02.919Z"
+    },
+    "models": {
+      "tier": "production",
+      "text": "gpt-6-astra",
+      "layout": "gpt-6-astra",
+      "critique": "gpt-6-astra",
+      "judge": "gpt-4.1-mini",
+      "ornament": {
+        "dividers": true,
+        "texture": "sun-rays",
+        "textureOpacity": 0.25,
+        "balance": true
+      },
+      "image": {
+        "provider": "openai",
+        "model": "gpt-image-2.5-sunburst",
+        "size": "1024x1024",
+        "quality": "auto",
+        "aspectRatio": "1:1",
+        "key": "present"
+      }
+    },
+    "dependencies": {
+      "postgres": "connected",
+      "parkedClientMessages": 0,
+      "canva": "unverified",
+      "canvaCircuitBreaker": "CLOSED",
+      "telegram": "active",
+      "waha": "unconfigured",
+      "disk": "writable",
+      "restate": "connected",
+      "restatePausedInvocations": 0,
+      "modelProvider": "unverified",
+      "telegramApi": "unverified",
+      "funnel": "healthy",
+      "cutout": "unconfigured"
+    }
+  },
+  "sourceHashes": {
+    "adrs/104_independent_availability_observations.md": "6aba7a84abfd0e33f26c844333c70c5d10505922f3972fb4a60e44d46a0487fb",
+    "api/openapi.yaml": "bd6943d70a6ecfcc6ab617cae119d90c13c82d8c0b38b17360a7c2ecfe058c5d",
+    "apps/core/src/app.ts": "acf4a9bbf161cd4c04bb886fa455bbc1b4b35053ea01f81cf6d46bd0edf3f501",
+    "apps/core/src/routes/availability.routes.ts": "ed74b868313d5598617e828a4c049075e6cc49073369d6584dd836c7b1b5f452",
+    "apps/core/src/routes/system.routes.ts": "d1868db46d068130877473ad9b4ccf20489ee386aea338d2c38973a05a6a0044",
+    "apps/core/src/services/availability-observations.ts": "59c876f3d91a2b916c549fba7cab2a83006624858ae21b113f958fe537982f8c",
+    "apps/core/test/availability-observations.test.ts": "777c5e660b53c8a7ee2ba08e9cb1eea1ac2b4ab212635b5d4c3477460e1a11c3",
+    "apps/core/test/canva-planner-accounting.test.ts": "7f743f0e6f14b57167d4b999ab4fe2767889e2c03832ecb2e4020e10be5cd222",
+    "apps/core/test/fixtures/route-inventory.txt": "d08016b667d96a9bc96f67875714a04913cdc6b6dc8b220e72d5d0f1e47916a8",
+    "apps/core/test/startup-schema-check.test.ts": "d20f53c1d5ebf625167914424b7cb3d52502c0fa6f99549777244c21a89b2478",
+    "apps/desk/src/api/client.ts": "b735545a5dc66135606340650fc8212cf6a32d6fe6beefe894e9a10096a808e3",
+    "apps/desk/src/components/AvailabilityPanel.tsx": "894e475414d022a7724b685c338afc8ed8675506e4ec48b3a77e06418d3d8eaa",
+    "apps/desk/src/screens/OpsScreen.tsx": "881777575873440f4290a1797456959230aa28c9aa826a9070b114459dcc244a",
+    "apps/desk/src/services/operationsEvidence.ts": "1679eda7e19599cc075e9dd652aabc7ec9a07503e62595322b35efc747cd69a9",
+    "apps/desk/test/availability-panel.test.ts": "b0be534fe0121f16c2b25b95a1165b42894dfddd74ff4d0530f5d66b1fa85d4e",
+    "docs/10_WORKFLOW_RELIABILITY.md": "24ae70b7e46e45acf41f33ebf9aa6942060ac41d1a301585f9fc34a4b1364bb3",
+    "docs/17_UI_UX.md": "2731aa66ba0253792cb03d7376025bf70b7ca69dbb97cfac8d17985a3a2f03e0",
+    "infra/docker/.env.production.example": "9b5069d6ea5b35dd360b9cfcbd389cffefc107948082f2c8847031ade7b36b0a",
+    "infra/docker/docker-compose.prod.yml": "aad82b3101ab2ae30795c13d8b63d30b6dc92cbb144d0634e7e33085f9f05041",
+    "infra/monitoring/availability_collector.py": "9f6eb590ffb8c041e2724ba74e0c03711ca50055834e940a4f33cbe68edabe45",
+    "infra/monitoring/test_availability_collector.py": "ce3c9edae9f36b8d3f6391fa49ad24327cd8a564a4deb0bdbb339be8ab4e19ec",
+    "infra/ops/README.md": "2d60ef4f7236338856b7938e560ee53168720ad959e669683ed23f808d5f77d8",
+    "packages/contracts/src/index.ts": "e0a89fad9b8f83e6e2ec87ae5986f4c451129f0e879b762d73985c044779d209",
+    "packages/contracts/src/operations-reliability.ts": "fe84fa84babdcf02e7f99965d260d8d8cc8f86868ad8e48a9c490b675be0fddb",
+    "packages/db/migrations/058_availability_observations.sql": "cd4274808d430d2273b7919f4cfeb2461e61a001b4278edda2016e780683afc2",
+    "packages/db/test/schema-upgrade.test.ts": "14f10deb9d90d4bc19b6111ea32f9604e6c5ad8dfc50aab5dc38c7f785e8c116",
+    "packages/domain/src/availability.ts": "f53ecf728c49d1eb83d474a883c291c4b85e4944fd0a0d67a48ff0f81e909627",
+    "packages/domain/src/index.ts": "9b17a38ac646d9e469810b1f8735788f5e8d31b97522b12d53b968f432c91e8a",
+    "packages/domain/test/availability.test.ts": "6b4aecebb0a85190afe96ca1fc12ab278d5f334ebbc6d17f3d4ea85939a141bb",
+    "packages/testkit/chaos/docker-compose.chaos.yml": "673b314d0c6f85af6c1e2f109e1d3eacc858173dd8f688bd8618b6e8e693cfcd",
+    "packages/testkit/chaos/driver/stack.ts": "c89943ed583bfe24e048aed9acec9c8305264e10e9aff4cea0880ee30e2e13d6",
+    "packages/testkit/test/availability-collector.test.ts": "80329d9ba8f983243bc4af1dc3b8f9ade274aa2856bfbbab1eb66ea8f1f26aca",
+    "runbooks/AVAILABILITY_MONITORING.md": "68991ee9fa87462b892fc145dd27599be8230bb206c1e91c0e686d688ff2bc04"
+  },
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-availability-observations/STATUS.md": "fbec0f1e4e421773f621b993358ba7bc60c2452712cae43bbf3c3949a08ea65c",
+    "output/acceptance/2026-09-27-availability-observations/availability-desktop.png": "b4d4ce03670794c079bb7f9154b17979161d10c7e2e3a7879121a5dbaa9766f4",
+    "output/acceptance/2026-09-27-availability-observations/availability-mobile.png": "3cce42fbfaf11ee3f2716faaa6b8ba8166c8f10ecdac9bc27adad0e25160e892",
+    "output/acceptance/2026-09-27-availability-observations/blueprint-final.log": "f87513794c32ac85839e6b2a070497548e87fd654f97ea1580a9e19f13cb1ba5",
+    "output/acceptance/2026-09-27-availability-observations/blueprint-first.log": "d781e3cc0ac1e7193f2fdc0f7f5e1d68d2fa8c8be3b9678e35c0b018df567c6f",
+    "output/acceptance/2026-09-27-availability-observations/blueprint-qualified.log": "f87513794c32ac85839e6b2a070497548e87fd654f97ea1580a9e19f13cb1ba5",
+    "output/acceptance/2026-09-27-availability-observations/build-first.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-availability-observations/build-second.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-availability-observations/build-ui.log": "6eb32d39274ada1014034452e10815a90685c16dfa21ee1d904f5c73211e7367",
+    "output/acceptance/2026-09-27-availability-observations/candidate.json": "40fe7d64adaed996d5835fb013eb123dac9b6fa8c6a95e0343b3dd88bf32c195",
+    "output/acceptance/2026-09-27-availability-observations/check-deployed.mts": "7b4d910faffa2e584cee7ba117564dc26523f7fefe6debf1fbef6bc51f1a9804",
+    "output/acceptance/2026-09-27-availability-observations/commit-inventory.log": "e6643808f5a3c50b6b162782ac465e07d2f4943a0ebca9b82e9813efab4bfd5e",
+    "output/acceptance/2026-09-27-availability-observations/commit-source.log": "01627a3137c17984ff914c18e15e28a76c1700e23c7b900e927422793b2c070e",
+    "output/acceptance/2026-09-27-availability-observations/deployed-availability.json": "f6c6547e8a63e6b1075846af97756ca2636f8b1fb84a4478c594478a7e5326ee",
+    "output/acceptance/2026-09-27-availability-observations/deployed-first.log": "24f977f14555ce09539270d9b90034956aa1e1602cb466e0002120667719fd76",
+    "output/acceptance/2026-09-27-availability-observations/desk-build-final.log": "989412c7ec0e29b4da975ca527e20d179d8a4f6f0387f5ee0cc5115587973dea",
+    "output/acceptance/2026-09-27-availability-observations/desk-build.log": "223d57427776d6f2470ea38db6c39d9b2bb9dedcac0c30051be8e459e46fda26",
+    "output/acceptance/2026-09-27-availability-observations/focused-final.log": "ed3962743e22a88ca9b4dc062c7ab6846e66e1356b92cc8ccea6a1f23932586d",
+    "output/acceptance/2026-09-27-availability-observations/focused-first.log": "788c8510b478a708bf861a7ff4a7ee4cb2a5505c402faad8e1b2523d6b65a69a",
+    "output/acceptance/2026-09-27-availability-observations/focused-second.log": "8d9955d4876fc17ece098e9ab90d2b22b5a92885bb6d800dbec1c6b9d541a53e",
+    "output/acceptance/2026-09-27-availability-observations/focused-third.log": "9a6df69e5c3b5665ceeecff9b3c04cdd14834d90953fa3507acda9437695b03c",
+    "output/acceptance/2026-09-27-availability-observations/full-final.log": "5d789dcec94c8284dd788827f749bb26102be53c63f56a85531061e3d381fea1",
+    "output/acceptance/2026-09-27-availability-observations/full-first.log": "3b422bba0ff7c4e442143654b172284045afb69dbf019ed7ad70efc5a7c3ad86",
+    "output/acceptance/2026-09-27-availability-observations/inventory-correction.log": "bf32023b3cec2feefd88396b5edcf989d215a5374790fc03fd17fc8497cb2556",
+    "output/acceptance/2026-09-27-availability-observations/lint.log": "c0a617b454bb6a1ed9077a3d8d2a03008607bae14507ba643328b54454edc2b0",
+    "output/acceptance/2026-09-27-availability-observations/manifest-qualified.log": "a9f1a4551b5fea0fa8626b233ca5adb7b290ba7ecfca65f1df746fb198b57608",
+    "output/acceptance/2026-09-27-availability-observations/manifest-source.log": "a9f1a4551b5fea0fa8626b233ca5adb7b290ba7ecfca65f1df746fb198b57608",
+    "output/acceptance/2026-09-27-availability-observations/mobile-bounds.json": "5a8812d7b2db3a33fefd04fc3b9a9fdc5bca662e7dca01e1a8e7fce8a7455235",
+    "output/acceptance/2026-09-27-availability-observations/observations.json": "6adbb5edfdb6112d9ac7a9d1c7517b9001368c2ea91ceef4ad1da6ff0baa7581",
+    "output/acceptance/2026-09-27-availability-observations/python-first.log": "3a52b466851327ea14f360331d9417f4070301a503fafebf819d3ab452572d1a",
+    "output/acceptance/2026-09-27-availability-observations/python-second.log": "0e645f0df5733383dcd03b80cf5d1dbe2ac4563a224bc2a28fa1aecaaacfb9dd",
+    "output/acceptance/2026-09-27-availability-observations/report.json": "d7a3a13b519f5537b3036374c0098d53a30d247f1ec28dac159ab6586fad2601",
+    "output/acceptance/2026-09-27-availability-observations/runtime-first.log": "0923549b8de3d50adf1ef080609371c1219308f76f91d940d9092c3cb4dd74f5",
+    "output/acceptance/2026-09-27-availability-observations/runtime-health.json": "376517fdc65b00b826772d9df2dc86b4c5e213e4d36e40ef328df43dfee92e5a",
+    "output/acceptance/2026-09-27-availability-observations/seal.log": "4c37f25ddafb01c2250aa07f43a9012ab848a4f1539ab681ef5f2501e1bb5701",
+    "output/acceptance/2026-09-27-availability-observations/security-final.log": "95dc7aca6c7a8d9913908a33eb562ac198bf49b875c525e29ea10c7822595c26",
+    "output/acceptance/2026-09-27-availability-observations/security-qualified.log": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d",
+    "output/acceptance/2026-09-27-availability-observations/security.log": "f6512352c67787500f385287ca16dbc0bbc4b8373371012e2de952dd295b5e6f",
+    "output/acceptance/2026-09-27-availability-observations/types-final.log": "e3362911531f715f1856bca1c60c569c8e839b771ec376489cee08972d106bb2",
+    "output/acceptance/2026-09-27-availability-observations/types-sealed.log": "e3362911531f715f1856bca1c60c569c8e839b771ec376489cee08972d106bb2",
+    "output/acceptance/2026-09-27-availability-observations/types.log": "e3362911531f715f1856bca1c60c569c8e839b771ec376489cee08972d106bb2",
+    "output/acceptance/2026-09-27-availability-observations/ui-final.log": "c850efae5c5a0aea93f9fe5a1c11febf44d68af9af926ec9aa0a5a09addf9bac",
+    "output/acceptance/2026-09-27-availability-observations/verify-corrected.log": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6",
+    "output/acceptance/2026-09-27-availability-observations/verify-source.log": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6"
+  }
 }

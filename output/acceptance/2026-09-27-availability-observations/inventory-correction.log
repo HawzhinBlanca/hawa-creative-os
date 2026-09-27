@@ -1,0 +1,13 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_c3bf33c83bd68d08 and hawa_tpl_repair_c3bf33c83bd68d08 (25 ms)
+7:09:23 PM [vite] (ssr) warning: invalid import "../src/routes/${file.replace(/\.ts$/, ".js")}". A file extension must be included in the static part of the import. For example: import(`./foo/${bar}.js`).
+  Plugin: vite:dynamic-import-vars
+  File: /Users/hawzhin/Hawdesign/apps/core/test/route-inventory.test.ts
+
+ Test Files  2 passed (2)
+      Tests  36 passed (36)
+   Start at  19:09:23
+   Duration  1.85s (transform 2.11s, setup 120ms, import 2.85s, tests 310ms, environment 0ms)
+

@@ -24,3 +24,21 @@
 - Record durable reachability receipts for Canva, Telegram and other adapters. Their integration items still reflect local configuration and switches; they are not verified by the OpenAI probe.
 - Test operational health with representative production observations. Validate stage-duration interpretation against a real cohort and add a deduplicated alert sender if paging is required.
 - Run the complete suite and release checks on the final candidate. The branch still has no remote tracking branch, so the seven-stage gate cannot be called green.
+
+## 2026-09-27 — Independent availability observations locally qualified (ADR-104)
+
+Source c35d6415; runtime 1f07c9b3; route-inventory-only correction/full suite 684540dd.
+4169 passed/0 failed/59 skipped, 507 strict roots, 14 Python controls, 63 selected
+synthetic workflow invariants and 26 actual deployed runtime/Chrome checks. A durable
+independent collector retains unknown interruptions and real Core/PostgreSQL outage
+observations, verifies original upload receipts and never backfills missing time.
+Desk reports coverage, uncertainty bounds and limited readiness latency.
+
+First full 4168/1/59 failure was the omitted route inventory; correction 36/2 and
+full rerun pass. All failures, deployment identities and limits are retained in
+`R02_AVAILABILITY_PROOF.json` and `output/acceptance/2026-09-27-availability-observations`.
+No live provider or production change. Independent-host installation and a real
+complete month still gate NFR-002. Next: external Drive/Sheets scheduled reconciliation
+and staffed repair (full FR-050), remaining retained-result recovery, live office/native
+Canva and pending after-preview approval, human multilingual/design/held-out quality
+evaluation, independent-host restore and controlled rollout. Whole-app goal active.

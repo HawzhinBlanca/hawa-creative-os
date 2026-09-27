@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 2,
+  "evidenceKind": "independent_probe",
+  "checkedAt": "2026-09-27T16:11:01.135Z",
+  "basis": "sampled_office_readiness",
+  "period": {
+    "month": "2026-09",
+    "startAt": "2026-08-31T21:00:00.000Z",
+    "endAt": "2026-09-30T21:00:00.000Z",
+    "throughAt": "2026-09-27T16:11:00.000Z",
+    "complete": false
+  },
+  "monitor": {
+    "id": "00000000-0000-4000-a000-000000000104",
+    "targetOrigin": "http://127.0.0.1:56081",
+    "scopeSha256": "1eb714be1d1c6661ddcf1df68ede5789ce9d8cd5a49f92fe81c6f4ed81e7c6e6",
+    "intervalSeconds": 60,
+    "status": "fresh",
+    "lastObservedAt": "2026-09-27T16:11:01.063Z",
+    "lastReceivedAt": "2026-09-27T16:11:01.083Z"
+  },
+  "availability": {
+    "targetPercent": 99.5,
+    "window": "calendar_month",
+    "timeZone": "Asia/Baghdad",
+    "elapsedSlots": 38591,
+    "observationCount": 3,
+    "availableSlots": 1,
+    "unavailableSlots": 2,
+    "unknownSlots": 38588,
+    "missingSlots": 38588,
+    "coveragePercent": 0.007773833277188982,
+    "observedPercent": 33.33333333333333,
+    "minimumPercent": 0.002591277759062994,
+    "maximumPercent": 99.99481744448188,
+    "sloCompliant": null
+  },
+  "latency": {
+    "scope": "successful_readiness_probe_round_trip",
+    "p50Ms": 18,
+    "p95Ms": 18,
+    "p99Ms": 18,
+    "observationCount": 1
+  },
+  "recentFailures": [
+    {
+      "slotStart": "2026-09-27T16:10:00.000Z",
+      "probes": {
+        "desk": {
+          "error": "none",
+          "outcome": "available",
+          "durationMs": 7,
+          "httpStatus": 200
+        },
+        "office": {
+          "error": "http_error",
+          "outcome": "unavailable",
+          "durationMs": 6,
+          "httpStatus": 503
+        }
+      }
+    },
+    {
+      "slotStart": "2026-09-27T16:09:00.000Z",
+      "probes": {
+        "desk": {
+          "error": "none",
+          "outcome": "available",
+          "durationMs": 5,
+          "httpStatus": 200
+        },
+        "office": {
+          "error": "network_error",
+          "outcome": "unavailable",
+          "durationMs": 4001,
+          "httpStatus": null
+        }
+      }
+    }
+  ],
+  "nextAction": "Inspect the observed failures and their timestamps. Restored readiness does not erase past outages."
+}

@@ -1,7 +1,7 @@
 # ADR-104: Independent durable office availability observations
 
 Date: 2026-09-27
-Status: implementation and qualification in progress
+Status: accepted; locally qualified; independent-host and monthly production admission pending
 Requirements: NFR-002, FR-064, NFR-006
 Sources: MASTER_SPEC.md; docs/02_PRD.md; docs/10_WORKFLOW_RELIABILITY.md;
 docs/17_UI_UX.md; infra/ops/watchdog.sh; ADR-102
@@ -103,3 +103,13 @@ responses, missing Desk assets, unavailable workflow registration, and no provid
 or office mutations. Qualify a fresh deployment and actual narrow/wide Desk
 screens, with failed reads clearing old evidence. Preserve failures and state
 which host, month coverage and live gates remain unqualified.
+
+## Local qualification — 2026-09-27
+
+Source c35d6415, runtime 1f07c9b3 and inventory-only correction/full-suite 684540dd.
+4169 tests passed, 59 skipped; 507 strict roots; 14 Python controls; 63 synthetic
+workflow invariants and 26 deployed runtime/Chrome checks passed. Collector death
+after server acceptance and real worker/Core/PostgreSQL failures preserve immutable
+observations and exact replay. First failures remain in the evidence. No production
+change or real provider call. See `R02_AVAILABILITY_PROOF.json` and the dated
+acceptance STATUS; independent-host/month/live/human/restore gates remain open.
