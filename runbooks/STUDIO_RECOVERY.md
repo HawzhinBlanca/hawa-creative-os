@@ -83,7 +83,8 @@ cannot reduce a higher settled amount used for admission.
 
 Before ADR-091, the USD limit stopped new requests only after recorded spending
 reached it. The reservations below now account for admitted work before transport;
-they remain estimates rather than invoice guarantees. Office/day/role limits remain open.
+they remain estimates rather than invoice guarantees. Shared office/client/role
+limits are described in [Shared daily spending](STUDIO_DAILY_BUDGETS.md).
 No settlement automatically supplies a missing stage result or retries its model.
 
 
@@ -104,5 +105,7 @@ The old run remains held; do not rewrite its quote or lower its cost to resume i
 These quotes use published rates and conservative token bounds, not invoices.
 Google image estimates without complete modality usage retain the whole model
 output reservation. OpenAI auto image quality reserves the highest quality.
-Historical rows have no fabricated quote. Broader office/day/role limits and
-provider invoice reconciliation remain pending.
+Historical rows have no fabricated quote. ADRs 092/096 add shared daily limits for
+Studio, evaluations and retained voice. Other paid-path integration, named cost
+repair for completed estimated/unknown calls and live invoice reconciliation
+remain pending.

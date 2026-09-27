@@ -90,7 +90,7 @@ export function EvaluationSettlementPanel({detail,onSettled,kind='evaluation',re
       </fieldset>;})}
       <label>Reason <textarea aria-label="Settlement reason" required maxLength={500} value={reason} onChange={e=>setReason(e.target.value)}/></label>
     </fieldset>
-    <button type="submit" disabled={busy||(!pending&&!valid)}>{busy?'Recording…':pending?'Retry saved settlement':kind==='evaluation'?'Record evidence and close evaluation':'Record Studio settlement'}</button>
+    <button className="btn primary" type="submit" disabled={busy||(!pending&&!valid)}>{busy?'Recording…':pending?'Retry saved settlement':kind==='evaluation'?'Record evidence and close evaluation':'Record Studio settlement'}</button>
     {notice&&<p role="status">{notice}</p>}
   </form>;
 }

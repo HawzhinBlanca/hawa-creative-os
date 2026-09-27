@@ -244,8 +244,8 @@ export const EvalScreen: React.FC = () => {
                     <span className={`pill ${run.settlement || run.status === 'running' || run.report?.executionStatus === 'stopped' ? '' : 'ok'}`} style={{ fontSize: 10 }}>
                       {run.settlement ? 'Closed · evidence retained' : run.status === 'running' ? 'Incomplete' : run.report?.executionStatus === 'stopped' ? 'Stopped · review required' : `${percent(run.report?.overallPassRate)} pass`}
                     </span>
-                    <button onClick={() => void loadReceipts(run.runId)}>Calls</button>
-                    {run.resumable && <button disabled={runningTournament} onClick={() => void handleRunTournament({actionId:run.actionId,name:run.name})}>Resume</button>}
+                    <button className="btn btn-sm" onClick={() => void loadReceipts(run.runId)}>Calls</button>
+                    {run.resumable && <button className="btn btn-sm" disabled={runningTournament} onClick={() => void handleRunTournament({actionId:run.actionId,name:run.name})}>Resume</button>}
                   </div>
                 ))}
               </div>
@@ -270,8 +270,10 @@ export const EvalScreen: React.FC = () => {
             if(receiptSelection.current===callEvidence.runId)setCallEvidence(detail);setPastRuns(runs);
             if(detail.settlement){clearEvaluation(detail.actionId);setPendingAction(pendingEvaluation());}
           }}/>
-          <button onClick={() => void loadReceipts(callEvidence.runId)}>Reload receipts</button>
-          <button onClick={() => {receiptSelection.current=null;receiptRequest.current++;setCallEvidence(null);}}>Close receipts</button>
+          <div style={{display:'flex',gap:8,marginTop:12}}>
+            <button className="btn btn-sm" onClick={() => void loadReceipts(callEvidence.runId)}>Reload receipts</button>
+            <button className="btn btn-sm" onClick={() => {receiptSelection.current=null;receiptRequest.current++;setCallEvidence(null);}}>Close receipts</button>
+          </div>
         </section>}
 
         {/* Keep the evaluation beside its sidebar when the full-width receipt row is open. */}
