@@ -1,7 +1,7 @@
 # ADR-099: Source-bound fixture evaluation evidence
 
 Date: 2026-09-27
-Status: Accepted; qualification pending
+Status: Accepted; locally qualified. Live and human admission remain pending.
 Requirements: FR-056, FR-057, FR-060, FR-065, FR-079
 
 ## Context
