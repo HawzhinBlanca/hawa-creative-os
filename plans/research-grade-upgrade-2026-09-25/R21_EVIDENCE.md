@@ -1,6 +1,17 @@
 # R21 — Unknown model acceptance is not a free retry
 
-## 2026-09-27 — Studio daily scope budgets (ADR-092, qualification in progress)
+### Final ADR-092 source qualification, 2026-09-27
+
+Source `2ad54b1`, tested seal `32e31b4`: **3879 passed, zero failed,
+59 skipped**, 474 passing files/7 skipped, 115.23 seconds.
+All 482 strict test roots, source/scripts, ordered lint (991 any; nine existing
+provider-egress exceptions), Desk build, zero-secret scan, blueprint 965/0/0 and
+source manifest passed. Final tests include malformed policy/identity controls,
+Core pre-transport refusal, the updated Desk wording and actual Core-kill recovery.
+No runtime image, deployment, native browser check or paid provider call occurred.
+This qualifies Studio daily accounting only; whole-app admission remains open.
+
+## 2026-09-27 — Studio daily scope budgets (ADR-092, locally qualified)
 
 Migration 051 derives office/client/model-role daily obligations from the existing
 call and settlement ledgers. Database admission serializes across tasks and Core

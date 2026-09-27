@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "IMPLEMENTED_FINAL_QUALIFICATION_PENDING",
+  "status": "LOCALLY_QUALIFIED_STUDIO_DAILY_SCOPE_BUDGETS",
   "requirements": [
     "FR-059",
     "FR-060",
@@ -37,7 +37,8 @@
     "files": 10,
     "passed": 91,
     "failed": 0,
-    "finalAdditionalTestPending": true
+    "finalAdditionalTestPending": false,
+    "finalAdditionalTestVerifiedIn": "fullRegression"
   },
   "diagnosticFull": {
     "passed": 3869,
@@ -59,5 +60,64 @@
     "Live office pilot and human quality admission",
     "Independent-host restore",
     "Production rollout"
-  ]
+  ],
+  "sourceCommit": "2ad54b1b260573b9dca92f87c4f4971e9d537492",
+  "testedCommit": "32e31b4641f9bfdef61bc3230db1be4ce44f616e",
+  "fullRegression": {
+    "passed": 3879,
+    "failed": 0,
+    "skipped": 59,
+    "filesPassed": 474,
+    "filesSkipped": 7,
+    "filesTotal": 481,
+    "durationSeconds": 115.23,
+    "log": "output/acceptance/2026-09-27-studio-daily-budget/full-sealed.log"
+  },
+  "checks": {
+    "sourceAndScriptsTypes": "passed",
+    "strictTestRoots": 482,
+    "lint": {
+      "any": 991,
+      "ceiling": 1053,
+      "existingEgressExceptions": 9
+    },
+    "deskBuild": "passed",
+    "securityScanFindings": 0,
+    "blueprint": {
+      "passed": 965,
+      "warned": 0,
+      "failed": 0
+    },
+    "sourceManifest": "verified"
+  },
+  "failedFirstEvidence": [
+    "Sandbox connection refusal before the first DB run; no tests executed.",
+    "First diagnostic full run: 3869 passed, six failures, 59 skipped. Corrected fixture scope/quotes, policy RLS hoisting, retained-history cleanup, schema expectation and generated manifest.",
+    "Follow-up focused run: 86 passed/two failed because deliberately incomplete historical route fixtures attempted fresh admission. Fixtures now import historical receipts under isolated owner setup; the actual admission hold remains tested.",
+    "pnpm typecheck wrapper hit sandbox tsx IPC; direct node commands passed source, scripts and all 482 test roots. Concurrent lint read stale declarations; ordered source build then lint passed.",
+    "A release manifest was generated before the source commit finished; the package-hash commit hook rejected it. Restored that generated file, committed source, then regenerated/sealed in order."
+  ],
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-studio-daily-budget/full-first.log": "339b65316835883b14950b33e148b0402650c23faca68b9ceb51ac1fed9207bd",
+    "output/acceptance/2026-09-27-studio-daily-budget/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+    "output/acceptance/2026-09-27-studio-daily-budget/full-sealed.log": "03a6483913f27572da837ee6fdec6359870ab0010aeac1ae573c1d1693af31fa",
+    "output/acceptance/2026-09-27-studio-daily-budget/typecheck-final.log": "f123445d730513a91da5a887d4376f122df5f08eab3bc304ffdd24b3ec9852db",
+    "output/acceptance/2026-09-27-studio-daily-budget/blueprint-final.log": "c6b60cd0783b738a048250dd5b3bb26124951dc77beb1fe8a3b84cef09819de6",
+    "output/acceptance/2026-09-27-studio-daily-budget/lint.log": "9814c44a8ceb20a88e0692a9916deda2bda1204460a5b9d9aa6fd13053703c6d",
+    "output/acceptance/2026-09-27-studio-daily-budget/focused-final.log": "7712291d47c9ea0129701d6a41e4c04b93726b376702cb3e97bfd0b5d4a63292",
+    "output/acceptance/2026-09-27-studio-daily-budget/desk-build-final.log": "1b1567405cb3d6e6a78372b3e0e0148ccf8052ecbce62e52938ca56fb52953ae",
+    "output/acceptance/2026-09-27-studio-daily-budget/refresh-pack-final.log": "1f56126a5f40668e35242dd52e717acc6143f5876dc676566e5b06e3aa1d3b6d",
+    "output/acceptance/2026-09-27-studio-daily-budget/focused-corrected.log": "b210fd5db28a6b72a2ab29061e1e3084809e49dfb6e11375ea8c506468054f6b",
+    "output/acceptance/2026-09-27-studio-daily-budget/blueprint-precommit.log": "6125f5b9d0ac8b35758d22b82237d91bab92c700af39cb019718bf4969997543",
+    "output/acceptance/2026-09-27-studio-daily-budget/source-commit.log": "b6f02a92553a6fc72b04afda702dbff7de1dd79d01332fd2753a5e3f5f698694",
+    "output/acceptance/2026-09-27-studio-daily-budget/test-types.log": "fa6ad0b9a114014db888b2892f3a045c97e2b7ca23582948af5842acf032dc7c",
+    "output/acceptance/2026-09-27-studio-daily-budget/focused-first.log": "5f1fb32235317b8ddea542297a69686b89beeb7662bf6dbc94af88f233724cde",
+    "output/acceptance/2026-09-27-studio-daily-budget/desk-build.log": "4bc97cfd16364d8431aabbede429a3534719f5445415f0b388fbc9442317759e",
+    "output/acceptance/2026-09-27-studio-daily-budget/refresh-pack.log": "1f56126a5f40668e35242dd52e717acc6143f5876dc676566e5b06e3aa1d3b6d",
+    "output/acceptance/2026-09-27-studio-daily-budget/focused-second.log": "d70cde67bea187973f8da9f1d2e699a7eab9afab98867eaa9955f2f3d07a09e8",
+    "output/acceptance/2026-09-27-studio-daily-budget/source-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-studio-daily-budget/candidate-seal.log": "a11838755ce7f8c5efd6bf9e37d0409cc1c8fc24361fe078b483b7a19cfe65f2",
+    "output/acceptance/2026-09-27-studio-daily-budget/source-commit-retry.log": "b943080c326112c88248613740197dec408a894a2e6778a400d8f76ebeb19ad3",
+    "output/acceptance/2026-09-27-studio-daily-budget/blueprint.log": "6e8ad37f9f55b0b103672356aa79186371ea95a0f138f463bf288a7e552c2d2b"
+  }
 }
