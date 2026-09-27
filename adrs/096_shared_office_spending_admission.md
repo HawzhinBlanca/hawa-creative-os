@@ -1,7 +1,7 @@
 # ADR-096 — Share daily spending admission across Studio, evaluation and voice
 
 Date: 2026-09-27
-Status: Implemented; focused qualification passed; full release gate pending
+Status: Implemented and locally qualified; live office/provider qualification pending
 Requirements: FR-059, FR-060, FR-062, FR-065, FR-079, NFR-001
 
 Studio migration 051 serializes only Studio charges. Evaluation requests have a

@@ -1,5 +1,34 @@
 # Completion checkpoint
 
+### Final ADR-096 source and runtime qualification, 2026-09-27
+
+Shared office/client/role admission is locally qualified for Studio, fixture
+evaluation and retained voice. Implementation404b2eb, fixture-corrected sourcee870775,
+full tested seal3f1cff9: **3987 passed, zero failed,59 skipped** (485files;
+478passed/7skipped),120.52seconds. Initial full3984/3/59 exposed a historical
+migration020 fixture using the wrong input schema; corrected without altering the
+old migration. All486 test roots, source/scripts, lint981/1053 (nine existing
+provider-egress exceptions), Desk build, security/11-pattern self-test and
+blueprint979/0/0 pass. Focused86 and migration follow-up19 include actual Core kills.
+
+A real Chrome inspection exposed unreadable receipt buttons. UI-only follow-up
+7f85334 applies existing Desk styles, with10 affected tests and a successful build.
+Fresh isolated runtimeb3d10f7 has matching Core/worker/Desk image labels, no changed
+source and63 deployed workflow/recovery checks. Eighteen additional checks verify
+migration052, saved allocations, no invented evaluation client, zero-allowance
+refusal with zero model transport, unchanged replay, and Chrome display/reload/close.
+Synthetic policy is restored and the test administrator revoked. The two unmatched
+Gemini fake responses are intentional uncertain-outcome controls. No live provider,
+real delivery, human approval or production deployment occurred.
+
+Current isolated health remains degraded because Canva/model/Telegram API are
+unverified; PostgreSQL/Restate connect with zero paused/backoff/inbox counts and
+both new design flags off. This is a fresh synthetic test app, not live admission.
+Next: named policy/accounting repair (including completed estimated/unknown calls),
+other paid paths, typed result recovery, truthful fixture-result presentation,
+real office/native Canva/human/held-out quality and independent recovery/rollout.
+Proof: R21_SHARED_SPENDING_PROOF.json; screenshots and failed-first logs are retained.
+
 ## 2026-09-27 — Shared office admission (ADR-096, candidate)
 
 Migration 052 shares the original Studio daily policy and PostgreSQL lock with

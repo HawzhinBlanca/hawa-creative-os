@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T10:15:38Z",
+  "generatedAt": "2026-09-27T10:20:49Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -549,8 +549,8 @@
     },
     {
       "path": "adrs/096_shared_office_spending_admission.md",
-      "sha256": "3026c0448d75939c2af8238862a66b95c6e0458ac4c1f51cc3af098a8cea1021",
-      "bytes": 3182
+      "sha256": "5adfe0d6442f2e90aa1de56c623e6af44d692aab998d59d5604c1a9e32dc702f",
+      "bytes": 3191
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1004,8 +1004,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "7aceb74ae4c9dbe81c4849da18e2eab73ce9cf7464938ee4173d131b43ae5e4d",
-      "bytes": 79993
+      "sha256": "1d9544385a228816c5855183c5c92d21eb5e2d9698b1d23b269c909c815579ae",
+      "bytes": 82000
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1249,8 +1249,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "f378c9f170394f27c009531c6b3ef972ce78485e0e70a00e710b4a187fcb200a",
-      "bytes": 50950
+      "sha256": "2b48172ac24c78e5a1a93bf7d95bff5ed6f5c2c4e2d00545250d7443db050b3a",
+      "bytes": 52957
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json",
@@ -1269,8 +1269,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_SHARED_SPENDING_PROOF.json",
-      "sha256": "57e35c4e0bcad6778bc449679642cdf2d6b0c0701025beb60fed33fbfdee09e0",
-      "bytes": 7639
+      "sha256": "a915565c391369e5fc3b9e1d6f01b56b11b77c0530e5fbb96322b7a5b7abaffa",
+      "bytes": 18413
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_SPENDING_RESERVATIONS_PROOF.json",
@@ -1364,8 +1364,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "ba5e706e9f025279ccd1abbc8d66bc62f73b54c7623cec5e4351eb8695aa344d",
-      "bytes": 344804
+      "sha256": "d4303ccd74c8302db73e6109484fe59b1d2217c82fa20992851c1367d355631e",
+      "bytes": 346844
     },
     {
       "path": "plans/user-stories.csv",
