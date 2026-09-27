@@ -456,3 +456,8 @@ failed reads clear prior successful results, and late older refreshes cannot
 replace newer evidence. Stored publication receipt audits show their scope,
 timestamp and anomalies; no-task audits are empty, not proof of external storage
 consistency. No audit claims to repair a drift or read live Drive/Sheets state.
+
+Private API responses are excluded from service-worker caching. Activation purges
+legacy Hawa API caches; Desk JSON requests use HTTP no-store. Offline shell/font
+caching does not authorize replay of task, policy or health data from another
+session or an older successful read (ADR-102 browser correction).

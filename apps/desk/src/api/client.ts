@@ -235,6 +235,7 @@ class HawaApiClient {
         ...options,
         headers,
         credentials: 'same-origin',
+        cache: 'no-store',
       });
     } catch (networkErr: any) {
       throw new ApiError(0, `Network error: ${networkErr.message || 'Unable to connect to server'}`);

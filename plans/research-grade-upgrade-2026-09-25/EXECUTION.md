@@ -1,5 +1,16 @@
 # Completion checkpoint
 
+## 2026-09-27 — Operations browser cache correction, final qualification pending
+
+The first sealed candidate 4b6a900 passed 4113 tests/0 failed/59 skipped and the
+63-invariant synthetic workflow. Chrome then exposed private API caching in the
+service worker, which could conceal offline status and replay earlier authenticated
+data. ADR-102 now removes private JSON/binary API caching, purges legacy Hawa API
+caches at activation and uses HTTP no-store for Desk JSON. Public shell/font caching
+remains. Two original-worker regressions fail; corrected six files/63 tests and
+500 strict roots pass. This correction requires a new final full/runtime/browser
+qualification. The earlier full run is not claimed for the new source.
+
 ## 2026-09-27 — Operations evidence authority (ADR-102, qualification in progress)
 
 Core no longer owns a synthetic studio benchmark. Reliability GET reports the

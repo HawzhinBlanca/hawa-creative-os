@@ -1,0 +1,11 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (21 ms)
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 43 skipped (44)
+   Start at  16:44:30
+   Duration  96.51s (transform 538ms, setup 44ms, import 760ms, tests 95.57s, environment 0ms)
+
+Results: packages/testkit/chaos/.run/last-run.json

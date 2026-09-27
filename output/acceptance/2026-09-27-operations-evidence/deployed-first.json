@@ -1,0 +1,54 @@
+{
+  "completed": false,
+  "checkedAt": "2026-09-27T13:46:50.605Z",
+  "buildCommit": "4b6a900a67bd7f6300372ee358eaa352f79073ad",
+  "checks": [
+    {
+      "name": "exact candidate is deployed",
+      "passed": true
+    },
+    {
+      "name": "unmeasured availability and latency are explicit",
+      "passed": true
+    },
+    {
+      "name": "retired endpoint refuses /operations/slo/run",
+      "passed": true
+    },
+    {
+      "name": "retired endpoint refuses /clients/budgets",
+      "passed": true
+    },
+    {
+      "name": "retired endpoint refuses /clients/client-drustee/budget",
+      "passed": true
+    },
+    {
+      "name": "retired endpoint refuses /clients/client-drustee/budget/allocate",
+      "passed": true
+    },
+    {
+      "name": "named daily policy still reads authoritative data",
+      "passed": true
+    },
+    {
+      "name": "Chrome shows the monthly target without a compliance claim",
+      "passed": true
+    },
+    {
+      "name": "no fixture budget or benchmark controls remain",
+      "passed": true
+    },
+    {
+      "name": "Chrome policy controls use current PostgreSQL limits",
+      "passed": true
+    },
+    {
+      "name": "reading Operations and policy makes no mutation",
+      "passed": false
+    }
+  ],
+  "revokedSyntheticAdministrator": true,
+  "productionChanged": false,
+  "realProviderCalls": false
+}

@@ -1,0 +1,63 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (25 ms)
+ ❯ apps/desk/test/authorized-image.test.ts (7 tests | 2 failed) 52ms
+     × bypasses Cache Storage for private pictures, task JSON, budgets and operational evidence 4ms
+   × purges every legacy private API cache when the new worker activates 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desk/test/authorized-image.test.ts > the service worker keeps private API responses out of Cache Storage > bypasses Cache Storage for private pictures, task JSON, budgets and operational evidence
+AssertionError: /v1/tasks/t: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Promise {},
+    ]
+
+
+Number of calls: 1
+
+ ❯ apps/desk/test/authorized-image.test.ts:128:34
+    126|       const respondWith = vi.fn();
+    127|       onFetch({ request: new Request(`https://desk.test${p}`), respond…
+    128|       expect(respondWith, p).not.toHaveBeenCalled();
+       |                                  ^
+    129|     }
+    130|     expect(puts).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/desk/test/authorized-image.test.ts > purges every legacy private API cache when the new worker activates
+AssertionError: expected [ 'hawa-api-cache-v4', …(2) ] to deeply equal [ 'hawa-api-cache-v3', …(1) ]
+
+- Expected
++ Received
+
+  [
+-   "hawa-api-cache-v3",
+    "hawa-api-cache-v4",
++   "hawa-shell-v4",
++   "hawa-fonts-v4",
+  ]
+
+ ❯ apps/desk/test/authorized-image.test.ts:142:18
+    140|  vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../public/…
+    141|  let work:Promise<unknown>|undefined;handlers.activate({waitUntil:p=>{…
+    142|  expect(deleted).toEqual(['hawa-api-cache-v3','hawa-api-cache-v4']);ex…
+       |                  ^
+    143| });
+    144|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 passed (7)
+   Start at  16:51:20
+   Duration  707ms (transform 46ms, setup 41ms, import 64ms, tests 52ms, environment 395ms)
+

@@ -1,22 +1,11 @@
-// Hawa Desk PWA — Offline-First Service Worker
+// Hawa Desk PWA — public shell and font caching only
 // Provides zero-flicker Kurdish font precaching (Vazirmatn & Noto Sans Arabic)
 // and resilient offline app shell caching.
 
-// v3 (ADR-035): the API cache held pictures and task JSON with inline previews; a new version drops it.
-const CACHE_VERSION = 'v3';
+// v4 (ADR-102): private API evidence must never be cached or replayed across sessions.
+const CACHE_VERSION = 'v4';
 const FONTS_CACHE = `hawa-fonts-${CACHE_VERSION}`;
 const SHELL_CACHE = `hawa-shell-${CACHE_VERSION}`;
-const API_CACHE = `hawa-api-cache-${CACHE_VERSION}`;
-
-/**
- * A Core address that answers with a file, not JSON: never put in Cache Storage (see the fetch
- * handler). /v1/tasks/:id/exports/:exportId/content, /v1/tasks/:id/files/:sha256, and any .png under
- * /v1/ (studio candidates, comparison pairs).
- */
-function isBinaryApiPath(pathname) {
-  if (!pathname.startsWith('/v1/') && !pathname.startsWith('/api/v1/')) return false;
-  return /\/content$/.test(pathname) || /\/tasks\/[^/]+\/files\/[^/]+$/.test(pathname) || /\.png$/i.test(pathname);
-}
 
 const PRECACHE_URLS = [
   '/',
@@ -37,7 +26,7 @@ self.addEventListener('install', (event) => {
 
 // Clean up stale caches on activate
 self.addEventListener('activate', (event) => {
-  const allowedCaches = new Set([FONTS_CACHE, SHELL_CACHE, API_CACHE]);
+  const allowedCaches = new Set([FONTS_CACHE, SHELL_CACHE]);
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -60,6 +49,10 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.includes('/events/stream') || request.method !== 'GET') {
     return;
   }
+
+  // Authenticated data stays on the network. Cache Storage has no office/session scope,
+  // and a stored success must never conceal offline status or a revoked permission.
+  if (url.origin === self.location.origin && /^\/(?:v1|api)(?:\/|$)/.test(url.pathname)) return;
 
   // 2. Kurdish & Latin Webfonts: Cache-First (eliminates FOIT/FOUT)
   if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
@@ -123,37 +116,4 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Pictures and files Core serves (ADR-035): an export's content, a task's reference photo, a studio
-  // candidate's or a comparison's PNG. They are private to the session that asked, can be megabytes,
-  // and the browser's own HTTP cache already keeps them (Cache-Control: private, immutable). Cache
-  // Storage would keep every one for good, readable after sign-out, so they are left to the network.
-  if (url.origin === self.location.origin && isBinaryApiPath(url.pathname)) {
-    return;
-  }
-
-  // 4. Read API Calls (/v1/tasks, /v1/clients/*, /v1/integrations/*): Network-First with Cache Fallback
-  if (url.origin === self.location.origin && url.pathname.startsWith('/v1/')) {
-    event.respondWith(
-      fetch(request)
-        .then(async (networkResponse) => {
-          if (networkResponse.ok) {
-            const cache = await caches.open(API_CACHE);
-            cache.put(request, networkResponse.clone());
-          }
-          return networkResponse;
-        })
-        .catch(async () => {
-          const cache = await caches.open(API_CACHE);
-          const cachedResponse = await cache.match(request);
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          return new Response(JSON.stringify({ error: 'SERVICE_UNAVAILABLE', message: 'Offline: Network unreachable and no cached response available' }), {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        })
-    );
-    return;
-  }
 });

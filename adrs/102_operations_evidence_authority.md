@@ -2,7 +2,7 @@
 
 Date: 2026-09-27
 Status: implementation and qualification in progress
-Requirements: FR-064, FR-079, NFR-002
+Requirements: FR-064, FR-079, NFR-002, NFR-006
 Sources: docs/10_WORKFLOW_RELIABILITY.md; docs/17_UI_UX.md; MASTER_SPEC.md
 
 ## Findings
@@ -51,3 +51,19 @@ at a coherent qualification point; inspect the fresh deployed Operations UI.
 
 A live availability observation series, external storage checks, production provider
 admission and human creative-quality gates remain separate and unqualified.
+
+## Deployed browser finding — private API caching
+
+The first Chrome fault-injection check exposed a second response path: the service
+worker fetches and stores authenticated JSON independently of page interception,
+then replays cached responses after a network exception. Cache Storage is not
+partitioned by signed-in office identity. This can hide unreadable telemetry and
+expose earlier task/budget evidence after a session change.
+
+Remove all same-origin API response caching, including binary and JSON responses,
+and purge all legacy Hawa API caches on activation. Keep public shell/assets and
+fonts eligible for offline caching. Desk JSON requests explicitly use no-store to
+avoid a separate HTTP-cache fallback. Verify actual service-worker activation,
+legacy-cache removal and offline refusal in Chrome; do not disable the worker to
+make the browser test pass. The prior candidate's full suite remains recorded but
+does not qualify this correction.

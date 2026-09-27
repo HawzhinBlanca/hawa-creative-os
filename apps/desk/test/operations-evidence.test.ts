@@ -13,7 +13,8 @@ it('shows unmeasured office reliability and an empty receipt audit; never calls 
  expect(v.text()).toContain('Availability unmeasured');expect(v.text()).toContain('99.5%');expect(v.text()).toContain('No tasks audited');
  expect(v.text()).not.toMatch(/SLO: COMPLIANT|100% In Sync|Drifts Repaired|Langfuse|Helicone|Monthly Spend/);
  expect(calls.some(c=>c.path.includes('/clients/budgets'))).toBe(false);
- expect(calls.filter(c=>c.method!=='GET')).toEqual([]);await v.unmount();
+ expect(calls.filter(c=>c.method!=='GET')).toEqual([]);
+ expect((fetch as ReturnType<typeof vi.fn>).mock.calls.every(([,options])=>options.cache==='no-store')).toBe(true);await v.unmount();
 });
 it('clears stale successful evidence on failed or malformed refresh',async()=>{
  let fail=false;

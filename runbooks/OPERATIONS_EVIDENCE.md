@@ -39,3 +39,12 @@ storage verification, native Canva editing, live office integrations, human desi
 and multilingual review, held-out evaluation, independent-host recovery and
 controlled rollout remain separate requirements. This correction does not qualify
 the full app for production or satisfy the monthly availability target.
+
+## Browser cache upgrade
+
+The v4 service worker caches only the public app shell/assets and fonts. It
+bypasses all private API paths and deletes old Hawa API caches on activation.
+JSON API requests also use HTTP no-store. Verify the updated worker has activated
+when admitting a deployed Desk. Offline office data must become unavailable;
+previously cached task, budget or health responses must not substitute for a
+current authorized read. Offline shell availability is separate from private data.

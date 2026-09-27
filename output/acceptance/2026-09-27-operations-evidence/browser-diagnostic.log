@@ -1,0 +1,11 @@
+Browser POST paths [ '/v1/auth/stream-ticket' ]
+/Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-operations-evidence/check-deployed.mts:11
+const check=(name:string,passed:boolean)=>{checks.push({name,passed});if(!passed)throw new Error(name);};
+                                                                                       ^
+
+
+Error: reading Operations and policy makes no mutation
+    at check (/Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-operations-evidence/check-deployed.mts:11:88)
+    at <anonymous> (/Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-operations-evidence/check-deployed.mts:44:3)
+
+Node.js v22.13.1
