@@ -161,3 +161,22 @@ Canva/revision/delivery pilot, and human quality/cost qualification remain open.
 No production change, real model call, human approval or message. R20/R21 remain
 in progress. Proof: `R21_DURABLE_EVALUATION_PROOF.json`;
 operation: `runbooks/EVALUATION_RECOVERY.md`.
+
+### Candidate packaging and full-regression correction
+
+Initial sealed candidate 448c79c passes 36 synthetic workflow invariants, but its
+evaluation POST returns503 before any provider call: the image omitted the three
+root fixture files and RELEASE_MANIFEST.json. The retained file-existence/HTTP
+negative control proves all four omissions and zero fake-provider calls. The
+Dockerfile now copies only those required resources and evaluates the replay
+identity during image build. The probe's first fake-ledger URL was wrong; it was
+corrected before that measurement.
+
+First full regression: **3,739 passed, six failed, 59 skipped**. The failures are
+explicit old migration/table/policy counts and an old expectation that evaluation
+history exists without PostgreSQL. Corrected checks require migration047,55 base
+tables/27 policies, and503 without storage; they also assert the new ledger/table
+policy by name. Base RLS now covers the ledger before versioned migrations too.
+The schema text check is explicitly labeled as inventory, not a recovery drill.
+Affected follow-up: **8 files/33 passed**, including runtime RLS and both actual
+process-kill cases. Final full regression and corrected image checks follow.

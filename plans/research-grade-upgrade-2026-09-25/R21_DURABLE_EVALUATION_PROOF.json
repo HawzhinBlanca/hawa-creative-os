@@ -33,7 +33,14 @@
     "apps/core/test/fixtures/evaluation-kill-child.ts": "f4ca80c7f3c971f98e01c7957b404ffb15055b424a1c3e83fc626d06e66b741c",
     "packages/evals/test/fixture-replay.test.ts": "684fbb201f25b60fbc5b6510a67ffa40a6fbc47e4ff595e50ce9170446fe6ecc",
     "apps/desk/test/evaluation-action.test.ts": "417c8766b3b2deff8efae32233e7525ffce072c1ea82f3b50feedae1ca04ea06",
-    "apps/desk/test/desk-auth.test.ts": "07e8ccf808de4d75aec4a4e6d88ee5ae4a5d7255e328346d0c33df358808e030"
+    "apps/desk/test/desk-auth.test.ts": "07e8ccf808de4d75aec4a4e6d88ee5ae4a5d7255e328346d0c33df358808e030",
+    "infra/docker/Dockerfile.core": "32d55b63d9092303d523dbe5181e3791b052a21c4b0b8e5ea77da580a268b897",
+    "db/rls.sql": "5ef9cad37bf1876e44823f03823e8a2ccc9aa1f736c3260d1250ed90ae1c1eda",
+    "apps/core/test/startup-schema-check.test.ts": "f650d0575f05ceca1293c5d1dc841e330698cf7a928bca1151d71aa4feb7d812",
+    "packages/db/test/schema-upgrade.test.ts": "51ae492eee803ef03c3eff923fbabf09fe1b6ffe0e1ca6cbe0b043366babf1df",
+    "packages/db/test/db.test.ts": "26981607df4b6210e04a8ffbb7b29f3769762f6238f4f63a1ab2b29c8652b617",
+    "packages/db/test/backup-restore.test.ts": "bb14c348771729fdbcb88126fcd166e5e0c5614cc64088ddb47ad50ab0b206c7",
+    "packages/testkit/test/app-decomposition.test.ts": "e797f6ad57dfa52dc0e2c8165025de6e60833a3b4208506052c92313b4b05154"
   },
   "verification": {
     "testRuns": {
@@ -64,6 +71,20 @@
         "failed": 0,
         "skipped": 0,
         "receipt": "output/acceptance/2026-09-27-durable-evaluations/current-tests.json"
+      },
+      "full-tests": {
+        "files": 470,
+        "passed": 3739,
+        "failed": 6,
+        "skipped": 59,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/full-tests.json"
+      },
+      "qualification-followup": {
+        "files": 8,
+        "passed": 33,
+        "failed": 0,
+        "skipped": 0,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/qualification-followup.json"
       }
     },
     "typesLintDeskBuild": "output/acceptance/2026-09-27-durable-evaluations/types-lint-desk-build.log",
@@ -79,13 +100,14 @@
       "runtimeRls": true,
       "provider": "localhost synthetic HTTP endpoint"
     },
-    "fullRegression": "Not yet run on the sealed candidate.",
-    "candidateDeployment": "Not refreshed for this change yet.",
+    "fullRegression": "First sealed run: 3739 passed, 6 failed, 59 skipped. All six are retained outdated schema/migration or database-unavailable expectations; corrected follow-up passed 33 tests. Final full regression follows the packaging correction.",
+    "candidateDeployment": "Initial 448c79c workflow passed 36 invariants, but evaluation failed closed with HTTP503 and zero provider calls because the image omitted its three fixture files and release manifest. Dockerfile now includes them and verifies replay identity during build; refreshed deployment follows.",
     "developmentCorrections": [
       "Initial typecheck found two missing required safeAction fields; corrected before final typecheck.",
       "Recovery now reads existing call evidence before mutable provider resolution, including when that provider is subsequently unavailable.",
       "Provider/model display uses observed receipt facts; a pending call stays unknown.",
-      "Replay identity also binds the fixed visual image hash."
+      "Replay identity also binds the fixed visual image hash.",
+      "The initial negative image probe used the wrong fake-ledger URL; corrected to /__fakes/models/ledger before measuring zero provider calls. No runtime change was needed for that probe."
     ]
   },
   "limits": [
@@ -99,6 +121,22 @@
     "output/acceptance/2026-09-27-durable-evaluations/build.log": {
       "bytes": 6,
       "sha256": "5ac71a99decf5b92dbfe798066cbe8ea317395f8f764f5a8879fd3511ca99454"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-first-check.log": {
+      "bytes": 664,
+      "sha256": "e2502f08c32d53c05c12db8aaf62759c2f54bf62ab0a9e3e8a75b30da36a5042"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-first-rehearsal.json": {
+      "bytes": 11968,
+      "sha256": "f97446e755ac8a402610ecebe8ce2f1ab2c1aa75467183addd94fe3e118a3757"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/check-candidate.mts": {
+      "bytes": 5038,
+      "sha256": "09295ff4cf277e79fda3f720f89465bbff670eb8cc28cc4b7a360a84434b6257"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/check-image-negative.mts": {
+      "bytes": 1974,
+      "sha256": "fd632b6534bb26063186d25d52333451ce4e5c5cd2edd1fee1eb81b1ac4aec27"
     },
     "output/acceptance/2026-09-27-durable-evaluations/current-tests.json": {
       "bytes": 5958,
@@ -124,6 +162,18 @@
       "bytes": 1193,
       "sha256": "83de7c31a993a37ee06c606dcf3a840fab58974546447f5471a9c9046feb01df"
     },
+    "output/acceptance/2026-09-27-durable-evaluations/full-tests.json": {
+      "bytes": 1566754,
+      "sha256": "6502fa52b4bf491ac250a31e66f1d0478d15b75b38fc8c85666c5e52a6bfd5e1"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/full-tests.log": {
+      "bytes": 131980,
+      "sha256": "7a4938236a198c61c9db522305f3bca87bf575b6b33f5bacee743f52f04717fe"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/image-negative.json": {
+      "bytes": 599,
+      "sha256": "33b6c597fb0a8dd41863728ffccc32a48af1d6c1ba6e3ce414b50cbf98e53a28"
+    },
     "output/acceptance/2026-09-27-durable-evaluations/kill-tests.json": {
       "bytes": 1713,
       "sha256": "39772c73b3a79db79e408b3956b98d323ed71da96d7a85d2adabe8c586b04e54"
@@ -131,6 +181,14 @@
     "output/acceptance/2026-09-27-durable-evaluations/kill-tests.log": {
       "bytes": 225,
       "sha256": "dc725ca63dfe32704827b785195191253ed42007e80cdfb8152ad53c5edabbbe"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/qualification-followup.json": {
+      "bytes": 14112,
+      "sha256": "32ffcaf336c1d48485960ab0ee37b3ab13d98d93391f584abb9161027bc712c7"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/qualification-followup.log": {
+      "bytes": 1204,
+      "sha256": "d3a96a4468c280642fac1b261ba28a48f52749be481792b9512c233cf52e81ec"
     },
     "output/acceptance/2026-09-27-durable-evaluations/types-lint-desk-build.log": {
       "bytes": 1177,

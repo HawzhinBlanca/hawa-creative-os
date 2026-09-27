@@ -1,0 +1,17 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {randomUUID} from 'node:crypto';
+const root=new URL('../../../',import.meta.url);
+const env=Object.fromEntries(readFileSync(new URL('packages/testkit/chaos/.run/chaos.env',root),'utf8').trim().split('\n').map(line=>{const i=line.indexOf('=');return [line.slice(0,i),line.slice(i+1)];}));
+const paths=['/app/evals/routing_brief.jsonl','/app/evals/retrieval_eval.jsonl','/app/evals/rtl_golden_cases.jsonl','/app/RELEASE_MANIFEST.json'];
+const probe=spawnSync('docker',['exec','hawa-chaos-core-1','node','-e',`process.stdout.write(JSON.stringify(${JSON.stringify(paths)}.map(path=>({path,present:require('fs').existsSync(path)}))))`],{encoding:'utf8'});
+if(probe.status!==0)throw new Error('Candidate file probe failed');
+const files=JSON.parse(probe.stdout);const count=async()=>((await(await fetch('http://127.0.0.1:56090/__fakes/models/ledger')).json()) as {ledger:unknown[]}).ledger.length;
+const before=await count();
+const response=await fetch('http://127.0.0.1:56081/v1/evaluations/runs',{method:'POST',headers:{Authorization:`Bearer ${env.CHAOS_BEARER_TOKEN}`,'Idempotency-Key':randomUUID(),'Content-Type':'application/json'},body:JSON.stringify({name:'[TEST] missing fixture image refusal'})});
+const report=await response.json();const delta=await count()-before;
+if(files.some((f:{present:boolean})=>f.present)||response.status!==503||delta!==0)throw new Error('Expected missing-file refusal was not observed');
+const rehearsal=JSON.parse(readFileSync(new URL('packages/testkit/chaos/.run/last-run.json',root),'utf8'));
+const receipt={sourceCommit:rehearsal.deployment.commit,files,httpStatus:response.status,title:report.title,providerCalls:delta,expectedNegativeControl:true,workflowInvariants:36,productionChanged:false};
+writeFileSync(new URL('image-negative.json',import.meta.url),JSON.stringify(receipt,null,2)+'\n');
+console.log(JSON.stringify(receipt));

@@ -53,6 +53,10 @@ COPY --from=builder --chown=hawa:hawa /app/node_modules ./node_modules
 COPY --from=builder --chown=hawa:hawa /app/packages ./packages
 COPY --from=builder --chown=hawa:hawa /app/apps/core ./apps/core
 COPY --from=builder --chown=hawa:hawa /app/package.json ./package.json
+# Fixed evaluation inputs and source identity are runtime dependencies of durable replay.
+COPY --chown=hawa:hawa evals/routing_brief.jsonl evals/retrieval_eval.jsonl evals/rtl_golden_cases.jsonl ./evals/
+COPY --chown=hawa:hawa RELEASE_MANIFEST.json ./RELEASE_MANIFEST.json
+RUN node --input-type=module -e "import { fixtureEvaluationIdentity } from './packages/evals/dist/fixture-replay.js'; if (!/^[0-9a-f]{64}$/.test(fixtureEvaluationIdentity().hash)) process.exit(1)"
 
 # No second copy of the fonts under /usr/local/share/fonts: the renderer generates its own fontconfig
 # file at run time (packages/creative/src/studio/font-environment.ts) listing only the repo's font

@@ -1,0 +1,11 @@
+/Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-durable-evaluations/check-candidate.mts:16
+function check(name:string,ok:boolean){checks.push({name,ok});if(!ok)throw new Error(name);}
+                                                                           ^
+
+
+Error: Candidate evaluation returns a saved stopped report
+    at check (/Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-durable-evaluations/check-candidate.mts:16:76)
+    at <anonymous> (/Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-durable-evaluations/check-candidate.mts:22:1)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+Node.js v22.13.1

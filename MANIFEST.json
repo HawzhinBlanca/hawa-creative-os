@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T04:44:05Z",
+  "generatedAt": "2026-09-27T04:49:46Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -589,8 +589,8 @@
     },
     {
       "path": "db/rls.sql",
-      "sha256": "6e6dc5e707dde802a4836caaf8a280907427cc8155e489e5eea28fbd4c81b803",
-      "bytes": 13804
+      "sha256": "5ef9cad37bf1876e44823f03823e8a2ccc9aa1f736c3260d1250ed90ae1c1eda",
+      "bytes": 14352
     },
     {
       "path": "db/schema.sql",
@@ -944,8 +944,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "91118994ff09d288af371f8f5e206b101dcf71f645abb04117b5d59a6901a619",
-      "bytes": 61806
+      "sha256": "f06b52ee685df8c9d05987276d03df55dd748980c1cdb81eaddc069301478be8",
+      "bytes": 63021
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1154,8 +1154,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_EVIDENCE.md",
-      "sha256": "7bb7fc2cbfa0f980ae2c4233b6c8a737e8719fd5bee2c44bf3246f8985f3640b",
-      "bytes": 18528
+      "sha256": "37ab074f92a26769136edefef887045ea0015d8bb8bcf3bec0685e9d4226f787",
+      "bytes": 19743
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R20_VOICE_EVIDENCE_PROOF.json",
@@ -1164,13 +1164,13 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_DURABLE_EVALUATION_PROOF.json",
-      "sha256": "b194d4662b9dabe23e4b2563319e476f44f73962427788b2d386a6d7c0bc46a8",
-      "bytes": 6848
+      "sha256": "474854cd1d252c6b0c3403da6f66c17646db5783b638e00efa7d2e5a0dbf7900",
+      "bytes": 10419
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "e412e00ee1c196f8a795cc801ba3b4febc1c34057bc8186099855c15c084b267",
-      "bytes": 24678
+      "sha256": "70b1192f02da8067ddc87bea0799276d47a47d6a85eeabab46dee49906827e35",
+      "bytes": 25893
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json",

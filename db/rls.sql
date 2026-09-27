@@ -243,4 +243,13 @@ CREATE POLICY users_same_tenant_select ON users FOR SELECT USING (
 ALTER TABLE model_roles ENABLE ROW LEVEL SECURITY; ALTER TABLE model_roles FORCE ROW LEVEL SECURITY;
 CREATE POLICY model_roles_read ON model_roles FOR SELECT USING (current_tenant_id() IS NOT NULL);
 
+-- ADR-084: fixture evaluation receipts are scoped from initial bootstrap too.
+ALTER TABLE eval_model_calls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE eval_model_calls FORCE ROW LEVEL SECURITY;
+CREATE POLICY eval_model_calls_scope ON eval_model_calls FOR ALL
+USING (tenant_id=current_tenant_id() AND
+  (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[])))
+WITH CHECK (tenant_id=current_tenant_id() AND
+  (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[])));
+
 COMMIT;
