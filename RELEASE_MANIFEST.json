@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-27T15:36:08+03:00",
+  "generatedAt": "2026-09-27T16:02:45+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "b553e43169b5ad35d9d7517cf7ebb3aa41eab5cd",
+    "commit": "63a0c85a2e6011aeb7550b2c487baeed542239bc",
     "treeClean": true,
-    "commitTimestamp": "2026-09-27T15:36:08+03:00",
+    "commitTimestamp": "2026-09-27T16:02:45+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
-    "targetVersion": "055_durable_paid_health_probes",
-    "latestMigrationFile": "055_durable_paid_health_probes.sql",
-    "totalMigrations": 55
+    "targetVersion": "056_durable_canva_planner_calls",
+    "latestMigrationFile": "056_durable_canva_planner_calls.sql",
+    "totalMigrations": 56
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -73,7 +73,7 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "ed92d4afec7a6b3d1ded71f6726d26342a53e6090cfd578b68bfbe61836fa8be",
+      "apps/core/src/services/canva-design-planner.ts": "2a2b34f2b03b8882d73e1788d49c93e53ccf538caabda7498e9dab0ca376a417",
       "packages/creative/src/studio/layout-generator-v3.ts": "c0a14f8490fbebf171fd3c820acecf53f45255926e4ae9f0e55376bb3f469164",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "950d7d5f1701c9a80871f74843e59115b3440c73bade98b6d80a755f12d36889",
       "packages/creative/src/studio/box-critique-v3.ts": "34c2d9b4f8d194ee0e0d8cec0229c3d1a12fbf07a8a5be94c94461f2456672c4"
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "b6922e310121959b5297abc08881b45aada58b245eba3abcc648489d8e40270b"
+  "sha256": "554963f0eed7a4ff2c1f6a2b47ac85377332b4b5ff714edd685aeb22e40ed9ac"
 }

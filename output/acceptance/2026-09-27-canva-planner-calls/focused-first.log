@@ -1,0 +1,298 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] hawa_tpl_build_test_09af69ec: applied db/schema.sql
+[test databases] hawa_tpl_build_test_09af69ec: applied db/rls.sql
+[test databases] hawa_tpl_build_test_09af69ec: applied db/seed.sql
+[test databases] hawa_tpl_build_test_09af69ec: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_test_09af69ec: versioned upgrades applied=56 verified=0
+[test databases] hawa_tpl_build_test_09af69ec: applied db/test-fixtures.sql
+[test databases] built template hawa_tpl_test_777aa0178e33b9cd
+[test databases] hawa_tpl_build_repair_e69d1b6f: applied db/schema.sql
+[test databases] hawa_tpl_build_repair_e69d1b6f: applied db/rls.sql
+[test databases] hawa_tpl_build_repair_e69d1b6f: applied db/seed.sql
+[test databases] hawa_tpl_build_repair_e69d1b6f: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_repair_e69d1b6f: versioned upgrades applied=56 verified=0
+[test databases] built template hawa_tpl_repair_777aa0178e33b9cd
+[test databases] per-file clones of hawa_tpl_test_777aa0178e33b9cd and hawa_tpl_repair_777aa0178e33b9cd (620 ms)
+ ❯ apps/core/test/canva-design-planner.test.ts (37 tests | 11 failed) 1263ms
+     × plans a second client from its active DNA and hashed logo without KAAE style or assets 165ms
+     × rejects overlap without a Canva side effect 35ms
+     × rejects missing-block without a Canva side effect 21ms
+     × does not repeat an uncertain model charge after a lost response 18ms
+     × preserves an uncertain paid hold after abandonment; fresh keys cannot bypass it 17ms
+     × rejects prose wrapped around a strict structured response without creating a document 18ms
+     × threads prior layout and revision directive into a 4-turn conversational session for revisions 18ms
+     × sends every confirmed album image in manifest order and refuses a lost image before the model 58ms
+     × sends only the child task-owned photo with a lifecycle revision, pinned by hash 17ms
+     × breaks free from previous layout coordinates and supports multimodal reference photo when user requests redesign 17ms
+     × re-drives a failed design plan without conflict and successfully plans a new design 15ms
+ ❯ apps/core/test/startup-schema-check.test.ts (8 tests | 3 failed) 2338ms
+     × the entrypoint logs one line naming the missing upgrade and exits 1 without serving 775ms
+     × the entrypoint says so when no upgrade has run at all 593ms
+     × logs one line naming every upgrade, exits 1, and never dies of an unhandled rejection 524ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > plans a second client from its active DNA and hashed logo without KAAE style or assets
+TypeError: Right-hand side of 'instanceof' is not an object
+ ❯ CanvaDesignPlanner.materialize apps/core/src/services/canva-design-planner.ts:618:23
+    616|       // Durable model evidence remains recoverable on transient stora…
+    617|       const reason=error instanceof z.ZodError?'LAYOUT_SCHEMA_INVALID'…
+    618|       const permanent=error instanceof EditableTransferValidationError…
+       |                       ^
+    619|         (error.status===422||['PLAN_INPUT_CHANGED','CLIENT_REFERENCE_C…
+    620|         /^(PLAN_BRAND_OR_DIMENSIONS_CHANGED|LOGO_|LAYOUT_SCHEMA_INVALI…
+ ❯ CanvaDesignPlanner.resume apps/core/src/services/canva-design-planner.ts:656:22
+ ❯ apps/core/test/canva-design-planner.test.ts:258:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > rejects overlap without a Canva side effect
+TypeError: Right-hand side of 'instanceof' is not an object
+ ❯ CanvaDesignPlanner.materialize apps/core/src/services/canva-design-planner.ts:618:23
+    616|       // Durable model evidence remains recoverable on transient stora…
+    617|       const reason=error instanceof z.ZodError?'LAYOUT_SCHEMA_INVALID'…
+    618|       const permanent=error instanceof EditableTransferValidationError…
+       |                       ^
+    619|         (error.status===422||['PLAN_INPUT_CHANGED','CLIENT_REFERENCE_C…
+    620|         /^(PLAN_BRAND_OR_DIMENSIONS_CHANGED|LOGO_|LAYOUT_SCHEMA_INVALI…
+ ❯ CanvaDesignPlanner.resume apps/core/src/services/canva-design-planner.ts:656:22
+ ❯ apps/core/test/canva-design-planner.test.ts:278:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > rejects missing-block without a Canva side effect
+Error: Two designs are already being planned. Resume existing work before starting another.
+ ❯ apps/core/src/services/canva-design-planner.ts:256:40
+    254|         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the e…
+    255|       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.…
+    256|       if(Number(concurrent.n)>=2)throw new CanvaFlowError(429,'PLANNIN…
+       |                                        ^
+    257|       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY;
+    258|       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','…
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ withRlsContext packages/db/src/client.ts:73:10
+ ❯ CanvaDesignPlanner.generate apps/core/src/services/canva-design-planner.ts:239:17
+ ❯ apps/core/test/canva-design-planner.test.ts:278:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > does not repeat an uncertain model charge after a lost response
+Error: Two designs are already being planned. Resume existing work before starting another.
+ ❯ apps/core/src/services/canva-design-planner.ts:256:40
+    254|         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the e…
+    255|       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.…
+    256|       if(Number(concurrent.n)>=2)throw new CanvaFlowError(429,'PLANNIN…
+       |                                        ^
+    257|       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY;
+    258|       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','…
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ withRlsContext packages/db/src/client.ts:73:10
+ ❯ CanvaDesignPlanner.generate apps/core/src/services/canva-design-planner.ts:239:17
+ ❯ apps/core/test/canva-design-planner.test.ts:282:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > preserves an uncertain paid hold after abandonment; fresh keys cannot bypass it
+Error: Two designs are already being planned. Resume existing work before starting another.
+ ❯ apps/core/src/services/canva-design-planner.ts:256:40
+    254|         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the e…
+    255|       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.…
+    256|       if(Number(concurrent.n)>=2)throw new CanvaFlowError(429,'PLANNIN…
+       |                                        ^
+    257|       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY;
+    258|       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','…
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ withRlsContext packages/db/src/client.ts:73:10
+ ❯ CanvaDesignPlanner.generate apps/core/src/services/canva-design-planner.ts:239:17
+ ❯ apps/core/test/canva-design-planner.test.ts:288:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/14]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > rejects prose wrapped around a strict structured response without creating a document
+Error: Two designs are already being planned. Resume existing work before starting another.
+ ❯ apps/core/src/services/canva-design-planner.ts:256:40
+    254|         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the e…
+    255|       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.…
+    256|       if(Number(concurrent.n)>=2)throw new CanvaFlowError(429,'PLANNIN…
+       |                                        ^
+    257|       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY;
+    258|       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','…
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ withRlsContext packages/db/src/client.ts:73:10
+ ❯ CanvaDesignPlanner.generate apps/core/src/services/canva-design-planner.ts:239:17
+ ❯ apps/core/test/canva-design-planner.test.ts:309:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/14]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > threads prior layout and revision directive into a 4-turn conversational session for revisions
+Error: Two designs are already being planned. Resume existing work before starting another.
+ ❯ apps/core/src/services/canva-design-planner.ts:256:40
+    254|         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the e…
+    255|       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.…
+    256|       if(Number(concurrent.n)>=2)throw new CanvaFlowError(429,'PLANNIN…
+       |                                        ^
+    257|       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY;
+    258|       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','…
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ withRlsContext packages/db/src/client.ts:73:10
+ ❯ CanvaDesignPlanner.generate apps/core/src/services/canva-design-planner.ts:239:17
+ ❯ apps/core/test/canva-design-planner.test.ts:318:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/14]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > sends every confirmed album image in manifest order and refuses a lost image before the model
+Error: Two designs are already being planned. Resume existing work before starting another.
+ ❯ apps/core/src/services/canva-design-planner.ts:256:40
+    254|         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the e…
+    255|       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.…
+    256|       if(Number(concurrent.n)>=2)throw new CanvaFlowError(429,'PLANNIN…
+       |                                        ^
+    257|       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY;
+    258|       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','…
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ withRlsContext packages/db/src/client.ts:73:10
+ ❯ CanvaDesignPlanner.generate apps/core/src/services/canva-design-planner.ts:239:17
+ ❯ apps/core/test/canva-design-planner.test.ts:402:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/14]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > sends only the child task-owned photo with a lifecycle revision, pinned by hash
+Error: Two designs are already being planned. Resume existing work before starting another.
+ ❯ apps/core/src/services/canva-design-planner.ts:256:40
+    254|         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the e…
+    255|       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.…
+    256|       if(Number(concurrent.n)>=2)throw new CanvaFlowError(429,'PLANNIN…
+       |                                        ^
+    257|       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY;
+    258|       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','…
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ withRlsContext packages/db/src/client.ts:73:10
+ ❯ CanvaDesignPlanner.generate apps/core/src/services/canva-design-planner.ts:239:17
+ ❯ apps/core/test/canva-design-planner.test.ts:420:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/14]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > breaks free from previous layout coordinates and supports multimodal reference photo when user requests redesign
+Error: Two designs are already being planned. Resume existing work before starting another.
+ ❯ apps/core/src/services/canva-design-planner.ts:256:40
+    254|         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the e…
+    255|       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.…
+    256|       if(Number(concurrent.n)>=2)throw new CanvaFlowError(429,'PLANNIN…
+       |                                        ^
+    257|       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY;
+    258|       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','…
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ withRlsContext packages/db/src/client.ts:73:10
+ ❯ CanvaDesignPlanner.generate apps/core/src/services/canva-design-planner.ts:239:17
+ ❯ apps/core/test/canva-design-planner.test.ts:474:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/14]⎯
+
+ FAIL  apps/core/test/canva-design-planner.test.ts > durable design planner, real PostgreSQL and mocked model/Canva > re-drives a failed design plan without conflict and successfully plans a new design
+Error: Two designs are already being planned. Resume existing work before starting another.
+ ❯ apps/core/src/services/canva-design-planner.ts:256:40
+    254|         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the e…
+    255|       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.…
+    256|       if(Number(concurrent.n)>=2)throw new CanvaFlowError(429,'PLANNIN…
+       |                                        ^
+    257|       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY;
+    258|       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','…
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ withRlsContext packages/db/src/client.ts:73:10
+ ❯ CanvaDesignPlanner.generate apps/core/src/services/canva-design-planner.ts:239:17
+ ❯ apps/core/test/canva-design-planner.test.ts:548:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/14]⎯
+
+ FAIL  apps/core/test/startup-schema-check.test.ts > Core checks the versioned upgrades before it starts > the entrypoint logs one line naming the missing upgrade and exits 1 without serving
+AssertionError: expected { code: 1, fatal: +0 } to deeply equal { code: 1, fatal: 1 }
+
+- Expected
++ Received
+
+  {
+    "code": 1,
+-   "fatal": 1,
++   "fatal": 0,
+  }
+
+ ❯ apps/core/test/startup-schema-check.test.ts:119:45
+    117|       const { code, out } = await startCore(appUrl!);
+    118|       const fatal = out.split('\n').filter((l) => /"level":"fatal"|FAT…
+    119|       expect({ code, fatal: fatal.length }).toEqual({ code: 1, fatal: …
+       |                                             ^
+    120|       expect(fatal[0]).toContain(`missing versioned upgrade ${LAST}`);
+    121|       expect(out).not.toMatch(/unhandledRejection|uncaughtException|St…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/14]⎯
+
+ FAIL  apps/core/test/startup-schema-check.test.ts > Core checks the versioned upgrades before it starts > the entrypoint says so when no upgrade has run at all
+AssertionError: expected { code: 1, fatal: +0 } to deeply equal { code: 1, fatal: 1 }
+
+- Expected
++ Received
+
+  {
+    "code": 1,
+-   "fatal": 1,
++   "fatal": 0,
+  }
+
+ ❯ apps/core/test/startup-schema-check.test.ts:132:45
+    130|       const { code, out } = await startCore(appUrl!);
+    131|       const fatal = out.split('\n').filter((l) => /"level":"fatal"|FAT…
+    132|       expect({ code, fatal: fatal.length }).toEqual({ code: 1, fatal: …
+       |                                             ^
+    133|       expect(fatal[0]).toContain('001_canva_bindings.sql');
+    134|       expect(fatal[0]).toContain('no versioned upgrade has run');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/14]⎯
+
+ FAIL  apps/core/test/startup-schema-check.test.ts > Core on a fresh production database before deploy.sh migrates > logs one line naming every upgrade, exits 1, and never dies of an unhandled rejection
+AssertionError: expected { code: 1, fatal: +0 } to deeply equal { code: 1, fatal: 1 }
+
+- Expected
++ Received
+
+  {
+    "code": 1,
+-   "fatal": 1,
++   "fatal": 0,
+  }
+
+ ❯ apps/core/test/startup-schema-check.test.ts:186:43
+    184|     const { code, out } = await startCore(onDatabase(appUrl!, freshNam…
+    185|     const fatal = out.split('\n').filter((l) => /"level":"fatal"|FATAL…
+    186|     expect({ code, fatal: fatal.length }).toEqual({ code: 1, fatal: 1 …
+       |                                           ^
+    187|     expect(fatal[0]).toContain('no versioned upgrade has run');
+    188|     for (const name of expectedUpgrades()) expect(fatal[0]).toContain(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/14]⎯
+
+
+ Test Files  2 failed | 1 passed (3)
+      Tests  14 failed | 34 passed (48)
+   Start at  15:50:42
+   Duration  3.47s (transform 747ms, setup 407ms, import 1.11s, tests 3.77s, environment 0ms)
+
