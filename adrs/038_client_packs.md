@@ -74,9 +74,21 @@ Behaviour:
     - `THUMBNAIL_COVERED_ZONE`: text or the logo under the video-length badge (16:9) or the Shorts/Reels buttons (9:16);
     - `THUMBNAIL_HOOK_TOO_SMALL`: a hook under 9 px tall at listing size, which is 69 px on a 1280×720 canvas.
   - The length of the requester's copy is guidance, never a defect, because the copy is exact.
+- **KAAE's persona and palette removed from shared code (2026-09-27).** Each pack now carries a `profile`: who the client is, what it orders and its voice, and only what the office has said. KAAE's profile is the identity the prompts used to hard-code.
+  - The layout system prompt names no client. The client comes in the request (`CLIENT:` in the layout generator's user prompt), follows the client's colour rules in every stage's rules, and goes to the judge. The judge's brand fit is scored against that profile; it was "institutional prestige, elegance, academic gravitas".
+  - The critic, the image-art prompt and the Canva planner no longer describe themselves as KAAE's or as institutional.
+  - Colours come from the client:
+    - The layout normaliser repairs contrast from the client's palette (`paletteRepairColours`). It used fixed KAAE cream, navy and a `#C5A059` gold that is not in KAAE's palette.
+    - Motif, image-prompt, style and ornament fallbacks are neutral greys.
+    - A reference pack without a palette is refused rather than filled with KAAE's.
+  - A video-thumbnail client gets no brand ornament (texture or dividers).
+  - Guard test: `packages/creative/test/no-client-in-shared-code.test.ts`.
+  - Still there on purpose:
+    - KAAE hex values used only as points in colour space, to find the nearest colour in a client's own palette. They are never drawn.
+    - The KAAE persona in `cost-architecture-v3.ts` `STABLE_SYSTEM_PROMPT_PREFIX`, which no production call sends; only a test and a proof script read it.
 - **Deferred:**
-  - removing KAAE's persona, palette and templates from shared creative code (`layout-generator-v3.ts`, `motifs.ts`, `templates/kaae-*`). This must be done before the second client's first proof set;
-  - per-client reference retrieval, with each client's exemplars scoped to it;
+  - per-client reference retrieval: the studio and the planner still read `kaae-exemplars.json`, which is harmless while KAAE is the only live client;
+  - retiring the v1 KAAE templates (`packages/creative/src/templates/kaae-*`), which serve only the legacy preview;
   - a thumbnail proof set per client, run on its real assets once the office supplies them.
 
 ## 4. Alternatives considered

@@ -34,9 +34,9 @@ describe('T5 Full Pipeline Qualification Path', () => {
       const isJudge = body.messages.some((m: any) =>
         typeof m.content === 'string' && m.content.includes('blind pairwise design comparison')
       );
-      const isCritique = body.messages.some((m: any) =>
-        typeof m.content === 'string' && m.content.includes('institutional poster layout critic')
-      );
+      // The critique is recognised by the report it asks for, not its prompt's wording, which names
+      // no client and changed when KAAE's persona left shared code (ADR-038).
+      const isCritique = body.response_format?.json_schema?.name === 'DesignCritiqueReport';
 
       if (isCritique) {
         const mockResult = {

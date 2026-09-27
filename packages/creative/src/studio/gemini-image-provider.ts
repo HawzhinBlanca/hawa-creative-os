@@ -115,7 +115,7 @@ export function composeArtPrompt(
 ): string {
   const paletteHexList = options.palette && options.palette.length > 0
     ? options.palette.join(', ')
-    : '#0A1628, #1E3A5F, #4770A3, #D4E2F0, #F7B500';
+    : 'the client has not given a palette: use a restrained, neutral range of tones';
 
   const calmRegion = options.calmRegion || 'center and bottom region';
   const aspect = options.aspect || '4:5';

@@ -1013,16 +1013,10 @@ export class DesignStudioService {
       },
     };
 
+    // Filled from the client's own reference pack below; a run whose pack cannot be read stops, so
+    // these are never designed with. They were KAAE's palette (ADR-038).
     let referencePack: ReferencePack = {
-      palette: [
-        '#0A1628',
-        '#1E3A5F',
-        '#4770A3',
-        '#F7B500',
-        '#FDF8F3',
-        '#FFFFFF',
-        '#1A1A1A',
-      ],
+      palette: [],
       referenceFonts: {
         latin: 'Verdana',
         arabic: 'Noto Sans Arabic',
@@ -1112,9 +1106,14 @@ export class DesignStudioService {
     }
     const logo = { bytes: logoBytes, sha256: logoSha256, mimeType: 'image/png' as const };
 
-    // The client's playbook (ADR-038). A thumbnail client's stages are all told the thumbnail rules
-    // through the rules every stage reads, and its hard QA checks them.
-    const playbook = clientPackOf(run.client_id)?.playbook;
+    // The client, as every stage is told it (ADR-038): shared prompts name no client, so its profile
+    // follows its own colour rules in the rules every stage reads, and goes to the layout generator
+    // and the judge by name. A thumbnail client's stages are also told the thumbnail rules, and its
+    // hard QA checks them.
+    const pack = clientPackOf(run.client_id);
+    const playbook = pack?.playbook;
+    const clientProfile = pack?.profile;
+    if (clientProfile) promotedRules = `${promotedRules}\n\nCLIENT: ${clientProfile}`;
     if (playbook === 'video-thumbnail') {
       promotedRules = `${promotedRules}\n\n${thumbnailPlaybookPrompt({ width: request.width, height: request.height })}`;
     }
@@ -1132,6 +1131,7 @@ export class DesignStudioService {
       copyBlocks: request.copyBlocks,
       referencePack,
       promotedRules,
+      ...(clientProfile ? { clientProfile } : {}),
       ...(playbook ? { playbook } : {}),
       latinFont,
       arabicFont,
@@ -1142,7 +1142,9 @@ export class DesignStudioService {
       artProvider: ledgerArtProvider as any,
       pipelineV3: isPipelineV3Run(run),
       requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
-      ornament: ornamentSettings(),
+      // The brand ornament (texture and dividers) is the announcement house style; a video thumbnail
+      // has none (ADR-038).
+      ornament: playbook === 'video-thumbnail' ? { ...ornamentSettings(), texture: 'none', dividers: false } : ornamentSettings(),
       style: (runStages(run).brief as CreativeBrief | undefined)?.styleSpec,
     };
   }

@@ -201,11 +201,11 @@ export function deriveConditionedArtPrompt(layout: StudioLayoutV2): string {
 
   const calmDesc = `Keep the central typography zone (normalized x: ${Number((calm.x / layout.width).toFixed(2))}, y: ${Number((calm.y / layout.height).toFixed(2))}, w: ${Number((calm.width / layout.width).toFixed(2))}, h: ${Number((calm.height / layout.height).toFixed(2))}) exceptionally calm, dark, and low-contrast with minimal texture, so overlaid text has flawless legibility.`;
 
-  const concept = layout.art.prompt || 'Abstract institutional architectural lines and subtle luxury gradient textures';
+  const concept = layout.art.prompt || 'Abstract architectural lines and subtle gradient textures';
 
   const p7Suffix = `Strict Negative Constraints: No text of any kind, no typography, no letters, no words, no numbers, no logos, no emblems, no seals, no flags, no coats of arms, no people, no faces, no hands, no watermarks, no borders.`;
 
-  return `${concept}. Clean modern academic aesthetic in ${aspectDesc} format. Palette restricted to ${paletteStr} with deep dark navy tones and subtle accents. ${calmDesc} Confine any visual texture and subtle architectural geometry to the outer perimeter and corners. ${p7Suffix}`;
+  return `${concept}. Clean modern aesthetic in ${aspectDesc} format. Palette restricted to ${paletteStr}, its darkest tones dominant with subtle accents. ${calmDesc} Confine any visual texture and subtle architectural geometry to the outer perimeter and corners. ${p7Suffix}`;
 }
 
 /**
@@ -293,7 +293,9 @@ export async function generateConditionedArtLayer(
       // not the whole canvas.
       width: Math.round(box.width),
       height: Math.round(box.height),
-      palette: ['#0A1628', '#C5A059', '#1E3A5F'],
+      // The layout's own colours (background and shapes), as the image prompt uses: it was a fixed
+      // KAAE navy and gold for every client (ADR-038).
+      palette: [layout.background.color, ...layout.shapes.map((s) => s.color).filter(Boolean)] as Hex[],
       // Drawn at full strength, the same rule the production art stage follows: the layer's
       // opacity is applied once, by the render and by the deck. Baking it in here as well made the
       // degraded motif twice as faint as the layout asked for, in the preview and in Canva alike.

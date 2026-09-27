@@ -49,6 +49,12 @@ export const clientPackSchema = z
     kind: z.enum(['institution', 'podcast', 'news', 'brand']),
     /** What the requester is shown, and the row's name. */
     displayName: z.string().min(2),
+    /**
+     * Who the client is, as every design stage is told it: what it is, what it orders, its voice.
+     * Shared prompts name no client (ADR-038); this is the only place a client's identity lives.
+     * Only what the office has said: a client being set up says its tone is not set yet.
+     */
+    profile: z.string().min(40),
     names: z.object({ en: z.string().min(2), ckb: z.string().min(1).optional(), ar: z.string().min(1).optional() }),
     /** Languages the client's copy is written in, main one first. Empty until the office says. */
     languages: z.array(z.enum(['ckb', 'ar', 'en'])),

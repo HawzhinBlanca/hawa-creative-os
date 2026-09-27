@@ -216,7 +216,7 @@ export async function generateBoxGroundedCritique(
     });
 
   // 4. Construct Prompts
-  const systemPrompt = `You are a world-class institutional poster layout critic specializing in spatial composition, typographic hierarchy, and visual balance.
+  const systemPrompt = `You are a world-class layout critic for posters, social posts and video thumbnails, specializing in spatial composition, typographic hierarchy, and visual balance.
 Your task is to analyze an annotated layout render where every structural element is tagged with a bounding box and an identifier (e.g. [B0], [B1], [B2], etc.) in Set-of-Mark style.
 
 CRITICAL SCOPE RESTRICTION:
