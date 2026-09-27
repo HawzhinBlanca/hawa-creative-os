@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext, CanvaBindingRepository, type Kysely, type Database } from '@hawa/db';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 
-describe('CanvaConnectService: Stranded Operations Sweeper & Conflict Bypass (Item 3, Score 40)', () => {
+describe('CanvaConnectService: bounded reconciliation and definite failure evidence', () => {
   let db: Kysely<Database>;
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const actorId = '00000000-0000-4000-b000-000000000001';
@@ -109,7 +109,7 @@ describe('CanvaConnectService: Stranded Operations Sweeper & Conflict Bypass (It
     });
   });
 
-  it('marks stranded operation as failed when Canva job fails or cannot be retrieved', async () => {
+  it('records a definite provider job failure', async () => {
     const taskId = randomUUID();
     const opId = randomUUID();
     jobStatus = 'failed';
@@ -146,7 +146,7 @@ describe('CanvaConnectService: Stranded Operations Sweeper & Conflict Bypass (It
     });
   });
 
-  it('bypasses CANVA_CREATE_CONFLICT when prior operation has failed status', async () => {
+  it('permits a fresh key after a matching definite provider failure', async () => {
     const taskId = randomUUID();
     const priorOpId = randomUUID();
 
@@ -163,7 +163,7 @@ describe('CanvaConnectService: Stranded Operations Sweeper & Conflict Bypass (It
         ) VALUES (
           ${priorOpId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${clientId}::uuid, ${actorId},
           'old-different-key', 'hash123', 'create', 'failed', ${`job_${taskId}`},
-          '{"method":"pptx_import"}'::jsonb,
+          ${JSON.stringify({method:'pptx_import',failureEvidence:{kind:'provider_failed',remoteJobId:`job_${taskId}`}})}::jsonb,
           now() - interval '1 hour',
           now() - interval '1 hour'
         )
@@ -189,7 +189,7 @@ describe('CanvaConnectService: Stranded Operations Sweeper & Conflict Bypass (It
     expect(res.operationId).not.toBe(priorOpId);
     expect(res.status).toBe('retrieved');
   });
-  it('fails creating and uncertain operations with no Canva job to follow, and leaves recent ones alone (2026-09-24)', async () => {
+  it('holds old unknown creations, retains export recovery and leaves recent or named creations alone', async () => {
     const taskId = randomUUID();
     const oldImport = randomUUID();
     const oldExport = randomUUID();
@@ -216,12 +216,12 @@ describe('CanvaConnectService: Stranded Operations Sweeper & Conflict Bypass (It
     const sweepRes = await service.sweepStrandedOperations(scope, { maxAgeMinutes: 10 });
     const statusOf = (id: string) => sweepRes.settled.find((s) => s.id === id)?.status;
     expect({ oldImport: statusOf(oldImport), oldExport: statusOf(oldExport), recentImport: statusOf(recentImport), namedDesign: statusOf(namedDesign) })
-      .toEqual({ oldImport: 'failed', oldExport: 'failed', recentImport: undefined, namedDesign: undefined });
+      .toEqual({ oldImport: 'uncertain', oldExport: 'failed', recentImport: undefined, namedDesign: undefined });
 
     const rows = await withRlsContext(db, { tenantId, userId: actorId, role: 'administrator' }, async (trx) =>
       (await sql<any>`SELECT id, status FROM hawa.canva_remote_operations WHERE task_id = ${taskId}::uuid`.execute(trx)).rows);
     const stored = Object.fromEntries(rows.map((r: any) => [r.id, r.status]));
-    expect(stored).toEqual({ [oldImport]: 'failed', [oldExport]: 'failed', [recentImport]: 'uncertain', [namedDesign]: 'uncertain' });
+    expect(stored).toEqual({ [oldImport]: 'uncertain', [oldExport]: 'failed', [recentImport]: 'uncertain', [namedDesign]: 'uncertain' });
     // Nothing tenant-wide is left for other suites: the two untouched rows are this test's own.
     await withRlsContext(db, { tenantId, userId: actorId, role: 'administrator' }, (trx) =>
       sql`UPDATE hawa.canva_remote_operations SET status = 'failed' WHERE task_id = ${taskId}::uuid AND status <> 'failed'`.execute(trx));

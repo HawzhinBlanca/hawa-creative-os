@@ -90,6 +90,7 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
     <details style={{marginTop:12}}><summary>Evidence and operation history</summary>
     {(state?.operations||[]).map((o:any)=>{const r=results[o.id];return <div key={o.id} style={{borderTop:'1px solid var(--border)',padding:'8px 0'}}>
       <span>{o.kind==='create'?'Native design':'Export'} · {r?.status||o.status}</span>
+      {o.reconciliation_required&&<p role="status">The original design creation needs reconciliation. Check the original import or link its existing Canva design. Starting another creation is blocked.</p>}
       {o.kind==='create'&&o.method==='pptx_import'&&o.status!=='retrieved'&&<button className="btn" disabled={busy||!connected} onClick={()=>run(async()=>{const r=await apiClient.canva.resumeImport(taskId,o.id);setMessage(r.message||`Import status: ${r.status}`);})}>Check import</button>}
       {o.kind==='export'&&<button className="btn" disabled={busy||!connected} onClick={()=>resume(o.id)} style={{marginLeft:8}}>Check / resume</button>}
       {o.kind==='create'&&o.design_id&&<p>Returned design ID: {o.design_id}. Link it to recover an interrupted handoff.</p>}

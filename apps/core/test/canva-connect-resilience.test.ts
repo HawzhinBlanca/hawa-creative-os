@@ -32,6 +32,8 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
   let exportCreateFaults: number[];
   /** What Canva answers POST /imports with; 200 creates the import job. */
   let importCreateHttp: number;
+  let importReadResponse: (() => Promise<Response>) | undefined;
+  let importCreateResponse: (() => Promise<Response>) | undefined;
   let service: CanvaConnectService;
   const remote = vi.fn(async (input: any, init: any = {}) => {
     const u = String(input);
@@ -46,10 +48,12 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     }
     if (u.endsWith('/imports') && init.method === 'POST') {
       importCreates++;
+      if (importCreateResponse) return importCreateResponse();
       if (importCreateHttp !== 200) return new Response('{"code":"internal_error"}', { status: importCreateHttp });
       return Response.json({ job: { id: 'import_' + taskId + '_' + importCreates, status: 'in_progress' } });
     }
     if (u.includes('/imports/')) {
+      if (importReadResponse) return importReadResponse();
       if (importStatusHttp !== 200) return new Response('{}', { status: importStatusHttp });
       return Response.json({ job: { id: u.split('/imports/')[1], status: importStatus, ...(importStatus === 'success' ? { result: { designs: [{ id: designId, urls: { edit_url: 'https://www.canva.com/d/x', view_url: 'https://www.canva.com/d/y' } }] } } : {}) } });
     }
@@ -91,6 +95,8 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     exportCreateHttp = 200;
     exportCreateFaults = [];
     importCreateHttp = 200;
+    importReadResponse = undefined;
+    importCreateResponse = undefined;
     await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title) VALUES (${taskId}::uuid,${tenant}::uuid,${clientId}::uuid,'Hunt Canva task')`.execute(db);
     service = new CanvaConnectService(db, options);
     const auth = await service.startAuthorization(scope);
@@ -198,4 +204,152 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     expect(results.map((r) => r.status === 'fulfilled' ? 'ok' : String((r as PromiseRejectedResult).reason?.code))).toEqual(['ok', 'ok']);
     expect(refreshCalls).toBe(1);
   });
+
+  const ageImport = (id: string) => sql`UPDATE hawa.canva_remote_operations
+    SET created_at=now()-interval '2 days',updated_at=now()-interval '2 days'
+    WHERE id=${id}::uuid`.execute(db);
+
+  it('a lost import reply stays uncertain after sweeping and a fresh key cannot create twice', async () => {
+    importCreateHttp = 502;
+    const first = await service.importEditableDesign(scope, taskId, 'lost-reply-first', source());
+    await ageImport(first.operationId);
+    importCreateHttp = 200;
+    const sweep = await service.sweepStrandedOperations(scope);
+    expect(sweep.settled.find(op => op.id === first.operationId)?.status).toBe('uncertain');
+    await expect(service.importEditableDesign(scope, taskId, 'lost-reply-new-key', source()))
+      .rejects.toMatchObject({ code: 'CANVA_CREATE_CONFLICT' });
+    expect(importCreates).toBe(1);
+    const state = await service.taskState(scope, taskId);
+    expect(state.operations.find(op => op.id === first.operationId)).toMatchObject({
+      status: 'uncertain', reconciliation_required: true,
+    });
+    const next = await service.sweepStrandedOperations(scope);
+    expect(next.settled.some(op => op.id === first.operationId)).toBe(false);
+  });
+
+  it.each([200, 503, 404])('old pending import with status HTTP %s requires reconciliation, then recovers its original job', async (http) => {
+    const first = await service.importEditableDesign(scope, taskId, 'old-pending-first', source());
+    await ageImport(first.operationId);
+    importStatusHttp = http;
+    const sweep = await service.sweepStrandedOperations(scope);
+    expect(sweep.settled.find(op => op.id === first.operationId)?.status).toBe('uncertain');
+    await expect(service.importEditableDesign(scope, taskId, 'old-pending-new-key', source()))
+      .rejects.toMatchObject({ code: 'CANVA_CREATE_CONFLICT' });
+    expect(importCreates).toBe(1);
+    importStatusHttp = 200;
+    importStatus = 'success';
+    const resumed = await service.resumeImport(scope, taskId, first.operationId);
+    expect(resumed).toMatchObject({ status: 'retrieved', designId });
+    expect(importCreates).toBe(1);
+    expect((await service.taskState(scope, taskId)).operations.find(op => op.id === first.operationId))
+      .toMatchObject({ status: 'retrieved', reconciliation_required: false });
+  });
+
+  it('a historical failed import without evidence cannot authorize another document', async () => {
+    const first = await service.importEditableDesign(scope, taskId, 'legacy-failed-first', source());
+    await sql`UPDATE hawa.canva_remote_operations SET status='failed' WHERE id=${first.operationId}::uuid`.execute(db);
+    await expect(service.importEditableDesign(scope, taskId, 'legacy-failed-new-key', source()))
+      .rejects.toMatchObject({ code: 'CANVA_CREATE_CONFLICT' });
+    expect(importCreates).toBe(1);
+    expect((await service.taskState(scope, taskId)).operations.find(op => op.id === first.operationId))
+      .toMatchObject({ status: 'uncertain', reconciliation_required: true });
+    importStatus = 'success';
+    expect(await service.resumeImport(scope, taskId, first.operationId)).toMatchObject({ status: 'retrieved', designId });
+  });
+
+  it('a missing job read cannot authorize a fresh import even before the sweep deadline', async () => {
+    const first = await service.importEditableDesign(scope, taskId, 'missing-job-first', source());
+    importStatusHttp = 404;
+    expect(await service.resumeImport(scope, taskId, first.operationId)).toMatchObject({ status: 'uncertain' });
+    await expect(service.importEditableDesign(scope, taskId, 'missing-job-new-key', source()))
+      .rejects.toMatchObject({ code: 'CANVA_CREATE_CONFLICT' });
+    expect(importCreates).toBe(1);
+  });
+
+
+  it('a late missing-job read cannot demote concurrent successful reconciliation', async () => {
+    const first = await service.importEditableDesign(scope, taskId, 'concurrent-import-first', source());
+    await ageImport(first.operationId);
+    let unblock!: (response: Response) => void;
+    let entered!: () => void;
+    const waiting = new Promise<void>(resolve => { entered = resolve; });
+    importReadResponse = () => {
+      importReadResponse = undefined;
+      entered();
+      return new Promise<Response>(resolve => { unblock = resolve; });
+    };
+    const sweep = service.sweepStrandedOperations(scope);
+    await waiting;
+    importStatus = 'success';
+    expect(await service.resumeImport(scope, taskId, first.operationId)).toMatchObject({status:'retrieved',designId});
+    unblock(new Response('{}', {status:404}));
+    expect((await sweep).settled.find(op => op.id === first.operationId)?.status).toBe('retrieved');
+    expect((await service.taskState(scope, taskId)).operations.find(op => op.id === first.operationId))
+      .toMatchObject({status:'retrieved',reconciliation_required:false});
+    expect(importCreates).toBe(1);
+  });
+
+  it('a mismatched successful job cannot bind the task or authorize another create', async () => {
+    const first = await service.importEditableDesign(scope, taskId, 'mismatched-import-first', source());
+    importReadResponse = async () => Response.json({job:{id:'wrong-job',status:'success',result:{designs:[{
+      id:designId,urls:{edit_url:'https://www.canva.com/edit',view_url:'https://www.canva.com/view'},
+    }]}}});
+    expect(await service.resumeImport(scope, taskId, first.operationId)).toMatchObject({status:'uncertain'});
+    await expect(service.binding(scope,taskId)).rejects.toMatchObject({code:'CANVA_BINDING_REQUIRED'});
+    await expect(service.importEditableDesign(scope, taskId, 'mismatched-import-new', source()))
+      .rejects.toMatchObject({code:'CANVA_CREATE_CONFLICT'});
+    expect(importCreates).toBe(1);
+  });
+
+  it.each(['success','failed'])('returned designs with job status %s cannot trigger another import', async (status) => {
+    const first = await service.importEditableDesign(scope, taskId, 'multiple-import-first', source());
+    const stored=(await sql<{remote_job_id:string}>`SELECT remote_job_id FROM hawa.canva_remote_operations WHERE id=${first.operationId}::uuid`.execute(db)).rows[0];
+    importReadResponse = async () => Response.json({job:{id:stored.remote_job_id,status,result:{designs:[
+      {id:designId,urls:{edit_url:'https://www.canva.com/edit',view_url:'https://www.canva.com/view'}},
+      {id:'DA_second',urls:{edit_url:'https://www.canva.com/edit',view_url:'https://www.canva.com/view'}},
+    ]}}});
+    expect(await service.resumeImport(scope, taskId, first.operationId)).toMatchObject({status:'uncertain'});
+    await expect(service.importEditableDesign(scope, taskId, 'multiple-import-new', source()))
+      .rejects.toMatchObject({code:'CANVA_CREATE_CONFLICT'});
+    expect(importCreates).toBe(1);
+  });
+
+
+  it('a late creation receipt clears only its own sweep hold and resumes normal polling', async () => {
+    let unblock!: (response: Response) => void;
+    let entered!: () => void;
+    const waiting = new Promise<void>(resolve => { entered = resolve; });
+    importCreateResponse = () => {
+      entered();
+      return new Promise<Response>(resolve => { unblock = resolve; });
+    };
+    const creating = service.importEditableDesign(scope, taskId, 'late-create-receipt', source());
+    await waiting;
+    const op=(await service.taskState(scope,taskId)).operations[0];
+    await ageImport(op.id);
+    expect((await service.sweepStrandedOperations(scope)).settled.find(row=>row.id===op.id)?.status).toBe('uncertain');
+    unblock(Response.json({job:{id:'late-original-job',status:'in_progress'}}));
+    expect(await creating).toMatchObject({operationId:op.id,status:'submitted'});
+    expect((await service.taskState(scope,taskId)).operations[0]).toMatchObject({
+      status:'submitted',remote_job_id:'late-original-job',reconciliation_required:false,
+    });
+    importStatus='success';
+    expect(await service.resumeImport(scope,taskId,op.id)).toMatchObject({status:'retrieved',designId});
+    expect(importCreates).toBe(1);
+  });
+
+  it('unavailable owner authorization after the deadline does not prove import failure', async () => {
+    const first=await service.importEditableDesign(scope,taskId,'owner-unavailable-import',source());
+    await ageImport(first.operationId);
+    await sql`UPDATE hawa.canva_connections SET status='reconnect_required' WHERE tenant_id=${tenant}::uuid AND actor_id=${actor}`.execute(db);
+    expect((await service.sweepStrandedOperations(scope)).settled.find(op=>op.id===first.operationId)?.status).toBe('uncertain');
+    const auth=await service.startAuthorization(scope);
+    await service.finishAuthorization(auth.state,auth.state,'test-code');
+    await expect(service.importEditableDesign(scope,taskId,'owner-unavailable-new',source()))
+      .rejects.toMatchObject({code:'CANVA_CREATE_CONFLICT'});
+    importStatus='success';
+    expect(await service.resumeImport(scope,taskId,first.operationId)).toMatchObject({status:'retrieved',designId});
+    expect(importCreates).toBe(1);
+  });
+
 });

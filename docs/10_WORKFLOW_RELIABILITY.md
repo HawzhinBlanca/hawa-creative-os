@@ -96,6 +96,19 @@ The legacy outbox also requires a positive Bot API message ID and a committed `s
 
 ## 6. Timeouts and budgets
 
+### Canva creation uncertainty (ADR-108)
+
+An old or inaccessible Canva creation remains uncertain. Sweeping stops automatic
+polling after the deadline and exposes a reconciliation hold; it never changes age
+into proof of nonacceptance. A fresh import key can bypass a prior failed creation
+only when that operation retains definite dispatch refusal/not-sent evidence or a
+matching provider job's failed result, with no returned design. Historical failed
+labels alone remain blocking and are displayed as unknown outcomes. Explicit resume
+can reconcile the original job. Stale sweep/read results cannot demote a concurrently
+completed operation. See `runbooks/CANVA_CREATION_RECONCILIATION.md`.
+
+### General limits
+
 Every step declares:
 
 - attempt timeout;

@@ -1030,7 +1030,7 @@ export function createApp(options?: CreateAppOptions) {
 
   // Canva operations nobody follows any more (an import still settling when the studio stopped
   // polling, an export the worker ran out of polls for, a call cut off by a restart) are settled
-  // every five minutes, so none blocks its task for good. Nothing ran the sweeper before 2026-09-24.
+  // every five minutes. Unknown creations retain their reconciliation hold (ADR-108).
   // A check export it retrieves is recorded as the draft's QC run, as a Desk capture is.
   if (db && canvaConnectService && options?.enableCanvaSweeper) {
     const sweepDb = db;

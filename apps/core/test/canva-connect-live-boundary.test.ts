@@ -111,7 +111,7 @@ describe.skipIf(!url)('Canva Connect service: real isolated PostgreSQL, mocked p
     const source={bytes:sourceBytes,sha256:createHash('sha256').update(sourceBytes).digest('hex'),manifest:{copy:['test']}};
     transportMode='import_lost';expect((await service.importEditableDesign(scope,taskId,'import-key-01',source)).status).toBe('uncertain');
     expect((await new CanvaConnectService(db,options).importEditableDesign(scope,taskId,'import-key-01',source)).status).toBe('uncertain');
-    await expect(service.importEditableDesign(scope,taskId,'import-key-02',source)).rejects.toThrow('different creation');expect(createCalls).toBe(1);
+    await expect(service.importEditableDesign(scope,taskId,'import-key-02',source)).rejects.toMatchObject({code:'CANVA_CREATE_CONFLICT'});expect(createCalls).toBe(1);
   });
   it('stores native copy/font mismatch evidence without creating an approval',async()=>{
     const {encodeEditableTransfer}=await import('@hawa/creative');

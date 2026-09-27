@@ -1,4 +1,5 @@
 import { assertTaskGenerationAllowed } from './task-generation-guard.js';
+import { canRetryCanvaCreation } from '@hawa/domain';
 import { CanvaFlowError } from './canva-flow-error.js';
 import { resolveManualExportPolicy, type ExportCheckPolicy } from './canva-export-policy.js';
 import { checkCanvaPptx } from '@hawa/qa';
@@ -28,7 +29,7 @@ const overrides = (s: Scope) => OVERRIDE_ROLES.includes(s.role || '');
  * A 5xx is different: it may come from a gateway after Canva made the job, the same reasoning the
  * client uses when it declines to repeat one. On an export that does not matter (a duplicate job only
  * reads the design), so `serverErrorCreatedNothing` says so there; on an import it would be a second
- * design in the owner's account, so a 5xx leaves the import 'uncertain' for the sweeper to settle.
+ * design in the owner's account, so a 5xx leaves the import uncertain for reconciliation.
  * Imports told the operator "nothing was created, and it may be sent again" on a 5xx until 2026-09-24.
  */
 const createdNothing = (err: unknown, serverErrorCreatedNothing: boolean) =>
@@ -289,7 +290,9 @@ export class CanvaConnectService {
     try {
       const { design } = await client.createDesign({ title:task.title.slice(0,255),designType:{type:'custom',width,height} });
       // Save the real returned ID before binding, so an interrupted binding is recoverable.
-      await this.tx(s,db => sql`UPDATE hawa.canva_remote_operations SET design_id=${design.id},status='submitted',updated_at=now() WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
+      await this.tx(s,db => sql`UPDATE hawa.canva_remote_operations SET design_id=${design.id},status='submitted',
+        metadata=(metadata-'reconciliationReason')||'{"reconciliationRequired":false}'::jsonb,updated_at=now()
+        WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
       await this.tx(s,async db => {
         await new CanvaBindingRepository(db).createBinding({ tenantId:s.tenantId,taskId,clientId:task.client_id,
           canvaDesignId:design.id,editUrl:'https://www.canva.com/design/'+design.id+'/edit',canvaUserId:design.owner?.user_id,canvaTeamId:design.owner?.team_id });
@@ -310,8 +313,13 @@ export class CanvaConnectService {
       // actor, and the studio exports as the worker's identity while approval needs a reviewer's,
       // so the approver saw no export at all and Approve stayed disabled on every studio design.
       // Exports are limited to the design currently bound, as exportsById limits them.
-      const operations=(await sql<any>`SELECT id,kind,status,design_id,remote_job_id,metadata->>'method' AS method,created_at FROM hawa.canva_remote_operations
-        WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid ORDER BY created_at DESC LIMIT 20`.execute(db)).rows;
+      const operations=(await sql<any>`SELECT id,kind,status,design_id,remote_job_id,metadata,metadata->>'method' AS method,created_at FROM hawa.canva_remote_operations
+        WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid ORDER BY created_at DESC LIMIT 20`.execute(db)).rows.map(({metadata,...op}) => {
+          const legacyUnknown=op.kind==='create'&&op.status==='failed'&&!canRetryCanvaCreation({...op,metadata});
+          return {...op,status:legacyUnknown?'uncertain':op.status,
+            reconciliation_required:legacyUnknown||metadata?.reconciliationRequired===true,
+            reconciliation_reason:legacyUnknown?'legacy_failed_without_evidence':metadata?.reconciliationReason??null};
+        });
       const artifacts=binding ? (await sql<any>`SELECT b.id,b.operation_id,b.format,b.sha256,b.content_check,octet_length(b.content) AS byte_size,
           o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
         JOIN hawa.canva_remote_operations o ON o.id=b.operation_id AND o.tenant_id=b.tenant_id
@@ -340,14 +348,15 @@ export class CanvaConnectService {
         if(own.kind!=='create'||own.request_hash!==requestHash||own.actor_id!==s.actorId||own.metadata?.method!=='pptx_import')fail(409,'CANVA_IDEMPOTENCY_CONFLICT','Request key already belongs to another request');
         return {id:own.id,created:false};
       }
-      const prior=(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND kind='create' AND status != 'failed' LIMIT 1`.execute(db)).rows[0];
+      const prior=(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND kind='create' ORDER BY created_at`.execute(db)).rows.find(op=>!canRetryCanvaCreation(op));
       if(prior){
         // The same document from the same actor under another key (a studio transfer retried after a
         // restart, or re-driven) is the same import: while Canva has a job for it, it is followed, never
         // sent a second time. Refused with 409 CANVA_CREATE_CONFLICT until 2026-09-24, which stranded
         // the task while the first import was still settling. One with no job to follow (creating,
-        // uncertain) is still refused, until the sweeper settles it.
-        if(!prior.remote_job_id||prior.request_hash!==requestHash||prior.actor_id!==s.actorId||prior.metadata?.method!=='pptx_import')fail(409,'CANVA_CREATE_CONFLICT','A different creation exists. Inspect it instead of making another document');
+        // uncertain), held for reconciliation, or historically failed without evidence cannot
+        // authorize another creation. Explicit resume may still reconcile the original job.
+        if(!prior.remote_job_id||prior.status==='failed'||prior.metadata?.reconciliationRequired===true||prior.request_hash!==requestHash||prior.actor_id!==s.actorId||prior.metadata?.method!=='pptx_import')fail(409,'CANVA_CREATE_CONFLICT','A creation requires reconciliation. Inspect the original operation instead of making another document');
         return {id:prior.id,created:false};
       }
       assertTaskGenerationAllowed(locked.state);
@@ -362,10 +371,14 @@ export class CanvaConnectService {
     if(!claimed.created)return this.resumeImport(s,taskId,claimed.id);
     try {
       const result=await client.createImportJob(source.bytes,task.title);
-      await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET remote_job_id=${result.job.id},status='submitted',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
+      await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET remote_job_id=${result.job.id},status='submitted',
+        metadata=(metadata-'reconciliationReason')||'{"reconciliationRequired":false}'::jsonb,updated_at=now()
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
     } catch (err) {
       if(createdNothing(err,false)){
-        await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
+        await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',
+          metadata=metadata||'{"failureEvidence":{"kind":"not_accepted"}}'::jsonb,updated_at=now()
+          WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
         return {operationId:claimed.id,status:'failed',message:`Canva did not accept the import (${(err as Error)?.message || 'not sent'}); nothing was created, and it may be sent again.`};
       }
       await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='uncertain',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
@@ -376,26 +389,36 @@ export class CanvaConnectService {
   async resumeImport(s:Scope,taskId:string,id:string) {
     const op=await this.tx(s,async db=>(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND id=${id}::uuid`.execute(db)).rows[0]);
     if(!op||(op.actor_id!==s.actorId&&!overrides(s))||op.kind!=='create'||op.metadata?.method!=='pptx_import')fail(404,'CANVA_IMPORT_NOT_FOUND','Import operation not found');
-    if(op.status==='retrieved'||!op.remote_job_id)return {operationId:id,status:op.status,designId:op.design_id};
+    if(op.status==='retrieved'||canRetryCanvaCreation(op))return {operationId:id,status:op.status,designId:op.design_id};
+    if(!op.remote_job_id){
+      if(op.status==='failed')return this.holdCanvaOperation(s,op,'legacy_failed_without_evidence');
+      return {operationId:id,status:op.status,designId:op.design_id};
+    }
     let result: any;
     try {
       // Read with the connection that made the import: a Canva job is visible to that account only.
       result=await (await this.authorizedClient({...s,actorId:op.actor_id})).getImportJob(op.remote_job_id);
     } catch (err: any) {
-      // Only Canva saying it has no such job settles the import. A failed read (a 503, a rate limit,
-      // a connection to refresh) says nothing about the import itself: it was marked failed until
-      // 2026-09-24, and the retry then sent the deck to Canva a second time.
+      // A missing job can be expired or inaccessible after creation. No read error proves that
+      // the original effect did not happen (ADR-108).
       if(err instanceof CanvaHttpError&&err.status===404){
-        await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db));
-        return {operationId:id,status:'failed',message:'Canva has no record of this import job. Original source is retained.'};
+        return this.holdCanvaOperation(s,op,'import_job_unavailable');
       }
-      return {operationId:id,status:'submitted',message:`Canva import status could not be read just now (${err?.message || String(err)}); the import is kept and checked again.`};
+      return {operationId:id,status:op.status==='submitted'?'submitted':'uncertain',message:`Canva import status could not be read just now (${err?.message || String(err)}); the original operation is retained.`};
     }
-    if(result.job.status==='in_progress')return {operationId:id,status:'submitted'};
-    if(result.job.status==='failed'||result.job.result?.designs.length!==1){
-      await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db));
-      return {operationId:id,status:'failed',message:'Canva did not return one complete imported document. Original source is retained.'};
+    if(result.job.id!==op.remote_job_id)return this.holdCanvaOperation(s,op,'import_job_identity_mismatch');
+    if(result.job.status==='in_progress')return {operationId:id,status:op.status==='submitted'?'submitted':'uncertain'};
+    if(result.job.status==='failed'){
+      if(result.job.result?.designs?.length)return this.holdCanvaOperation(s,op,'import_result_requires_inspection');
+      const evidence=JSON.stringify({failureEvidence:{kind:'provider_failed',remoteJobId:op.remote_job_id},reconciliationRequired:false});
+      const updated=await this.tx(s,db=>sql<{status:string}>`UPDATE hawa.canva_remote_operations
+        SET status='failed',metadata=(metadata-'reconciliationReason')||${evidence}::jsonb,updated_at=now()
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid AND status=${op.status}
+          AND design_id IS NULL AND remote_job_id=${op.remote_job_id} RETURNING status`.execute(db));
+      if(!updated.rows.length)return this.operationOutcome(s,id);
+      return {operationId:id,status:'failed',message:'Canva reported that this import job failed. Original source is retained.'};
     }
+    if(result.job.result?.designs.length!==1)return this.holdCanvaOperation(s,op,'import_result_requires_inspection');
     const design=result.job.result!.designs[0];
     await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET design_id=${design.id},updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db));
     await this.tx(s,async db=>{
@@ -404,20 +427,37 @@ export class CanvaConnectService {
       const existing=await new CanvaBindingRepository(db).findByTaskId(s.tenantId,taskId);
       if(existing&&existing.canva_design_id!==design.id)fail(409,'CANVA_BINDING_CONFLICT','Task now refers to another document');
       if(!existing)await new CanvaBindingRepository(db).createBinding({tenantId:s.tenantId,taskId,clientId:op.client_id,canvaDesignId:design.id,editUrl:`https://www.canva.com/design/${design.id}/edit`});
-      await sql`UPDATE hawa.canva_remote_operations SET status='retrieved',updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db);
+      await sql`UPDATE hawa.canva_remote_operations SET status='retrieved',metadata=(metadata-'reconciliationReason'-'failureEvidence')||'{"reconciliationRequired":false}'::jsonb,updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db);
     });
     return {operationId:id,status:'retrieved',designId:design.id,contentStatus:'imported_editable_draft',qaStatus:'not_run'};
+  }
+  private async operationOutcome(s:Scope,id:string) {
+    const row=await this.tx(s,async db=>(await sql<{status:string;design_id:string|null}>`SELECT status,design_id
+      FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid`.execute(db)).rows[0]);
+    if(!row)fail(404,'CANVA_OPERATION_NOT_FOUND','Operation not found');
+    return {operationId:id,status:row.status,designId:row.design_id};
+  }
+  private async holdCanvaOperation(s:Scope,op:{id:string;status:string;remote_job_id:string|null},reason:string) {
+    // A late sweep cannot demote an operation that acquired its job or completed meanwhile.
+    const metadata=JSON.stringify({reconciliationRequired:true,reconciliationReason:reason});
+    await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations
+      SET status='uncertain',metadata=metadata||${metadata}::jsonb,updated_at=now()
+      WHERE tenant_id=${s.tenantId}::uuid AND id=${op.id}::uuid AND status=${op.status}
+        AND remote_job_id IS NOT DISTINCT FROM ${op.remote_job_id}`.execute(db));
+    const outcome=await this.operationOutcome(s,op.id);
+    return outcome.status==='uncertain'
+      ? {...outcome,message:'The original Canva outcome needs reconciliation. Check the original job or link its returned design; do not create another copy.'}
+      : outcome;
   }
   /**
    * Settles Canva operations nobody is following any more, so none blocks the task for good (Core
    * runs this on an interval since 2026-09-24; nothing called it before, and a slow import left the
    * task refusing every later design with 409 CANVA_CREATE_CONFLICT).
    *  - a submitted import or export is asked about again, with the connection that made it;
-   *  - one Canva still has not settled after `giveUpMinutes` is failed, so the task can move on;
+   *  - an import still unresolved after `giveUpMinutes` needs explicit reconciliation;
    *  - an operation left 'creating' (Core stopped mid-call) or 'uncertain' (the answer was lost) has
-   *    no Canva job to ask about. It is failed, unless it is a creation that names its design, which a
-   *    person must bind. A failed export leaves nothing at Canva; a failed import may leave an unbound
-   *    copy there.
+   *    no Canva job to ask about. Unknown creations remain held; exports have separate read-only
+   *    retry semantics. Age never proves creation failure (ADR-108).
    */
   async sweepStrandedOperations(s: Scope, options: { maxAgeMinutes?: number; giveUpMinutes?: number; limit?: number } = {}) {
     const maxAgeMinutes = options.maxAgeMinutes ?? 10;
@@ -428,6 +468,7 @@ export class CanvaConnectService {
           created_at < now() - (interval '1 minute' * ${giveUpMinutes}) AS expired
         FROM hawa.canva_remote_operations
         WHERE tenant_id = ${s.tenantId}::uuid
+          AND metadata->>'reconciliationRequired' IS DISTINCT FROM 'true'
           AND ((status = 'submitted' AND created_at < now() - (interval '1 minute' * ${maxAgeMinutes})
                 AND ((kind = 'create' AND metadata->>'method' = 'pptx_import') OR kind = 'export'))
             OR (status IN ('creating', 'uncertain') AND (kind = 'export' OR design_id IS NULL) AND updated_at < now() - (interval '1 minute' * ${maxAgeMinutes})))
@@ -441,6 +482,11 @@ export class CanvaConnectService {
     for (const op of stranded) {
       const base = { id: op.id, taskId: op.task_id, kind: op.kind, ...(op.format ? { format: op.format } : {}) };
       if (op.status !== 'submitted') {
+        if(op.kind==='create'){
+          const held=await this.holdCanvaOperation(s,op,'creation_reply_unavailable');
+          settled.push({...base,status:held.status});
+          continue;
+        }
         await markFailed(op.id, op.status);
         settled.push({ ...base, status: 'failed', error: `Left ${op.status} with no Canva job to ask about` });
         continue;
@@ -451,12 +497,24 @@ export class CanvaConnectService {
           ? await this.exportStatus(owner, op.task_id, op.id)
           : await this.resumeImport(owner, op.task_id, op.id);
         if (res.status === 'submitted' && op.expired) {
+          if(op.kind==='create'){
+            const held=await this.holdCanvaOperation(s,op,'import_polling_deadline');
+            settled.push({...base,status:held.status});
+            continue;
+          }
           await markFailed(op.id, 'submitted');
           settled.push({ ...base, status: 'failed', error: `Canva had not settled it after ${giveUpMinutes} minutes` });
         } else {
           settled.push({ ...base, status: res.status, designId: res.designId });
         }
       } catch (err: any) {
+        if(op.kind==='create'){
+          if(op.expired){
+            const held=await this.holdCanvaOperation(s,op,'import_reconciliation_unavailable');
+            settled.push({...base,status:held.status});
+          }else settled.push({...base,status:'submitted',error:err?.message||String(err)});
+          continue;
+        }
         // A refusal that cannot change (the binding moved on, the import is not this task's, Canva
         // has no such job) settles the operation; a failed read is asked again on the next pass.
         const final = (err instanceof CanvaFlowError && err.status >= 400 && err.status < 500 && err.status !== 429)
