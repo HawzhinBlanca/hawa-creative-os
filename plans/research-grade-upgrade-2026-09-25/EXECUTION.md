@@ -12,15 +12,34 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## In progress (2026-09-27 — coordinated application recovery)
+## Current result (2026-09-27 — coordinated application recovery)
 
-ADR-080 adds a recovery mode to the existing full-app candidate. It freezes every
-application writer, captures authenticated encrypted PostgreSQL/Restate/blob stores,
-restores fresh volumes at exact image IDs, validates data/files/journal identity
-before restarting writers, and keeps external fakes alive to detect duplicates.
-Two boundaries are planned: Drive effect without its receipt, then an unconfirmed
-Telegram file send. The **50-test backup suite** and harness TypeScript pass;
-the actual candidate recovery rehearsal is pending. Production remains unchanged.
+Source `a3de8c3`: **57/57 deployed checks pass** in the selected full-app recovery
+scenario; 43 other chaos scenarios are intentionally unselected. At two external
+effect boundaries, authenticated encrypted PostgreSQL/Restate/blob copies restore
+to fresh volumes. Both restores match **86 tables / 133 RLS policies / 4 registered
+blobs** before writers resume. The original pending Delivery survives both restores,
+adopts the existing Drive file, never repeats the uncertain Telegram file send,
+and completes one publication/Sheet row after explicit synthetic staff observation.
+Staff settlement and its replay send nothing further. External fakes stay alive.
+
+A real build-context gap copied ignored private test files into prior candidate
+images. Docker now excludes `.run` and backup snapshots; the actual rebuilt Core
+and worker images prove the private directory is absent. Earlier failed harness
+runs and the presence-only counterexample are retained in
+`R10_COORDINATED_RESTORE_PROOF.json`. No credential contents were read.
+
+**50 backup Python tests**, **11 fake-wire tests**, harness types, lint and blueprint
+**895/0/0** pass. No runtime app logic changed; the prior 3,634-pass / 59-skip full
+app regression remains historical. Temporary helpers/private archives are removed;
+original and both restored store sets remain for the retained disposable candidate.
+Production is unchanged. This is coherent same-host synthetic recovery; R10 remains
+in progress. Real providers, real staff review, unequal capture-window repair,
+independent-host/off-host durability and production RPO/RTO are unqualified.
+
+Next: independent-host/off-host recovery and production capture qualification;
+real Canva manual edit/reopen with multilingual/human review; a supervised live
+intake-to-delivery pilot; held-out retrieval and role-model quality/cost measurements.
 
 ## Prior result (2026-09-27 — isolated encrypted database recovery)
 

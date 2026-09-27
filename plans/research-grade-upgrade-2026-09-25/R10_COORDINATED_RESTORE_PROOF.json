@@ -1,0 +1,719 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "requirements": [
+    "FR-060",
+    "FR-061",
+    "FR-070",
+    "NFR-003",
+    "NFR-006",
+    "NFR-013",
+    "NFR-020"
+  ],
+  "decision": "ADR-080",
+  "sourceCommit": "a3de8c31c14fbcc4a931723fa9d7948f586d1d44",
+  "scope": "Same-host coherent cold recovery of the actual app using synthetic external providers and staff; R10 remains in progress",
+  "qualification": {
+    "status": "synthetic_coordinated_application_recovery_verified",
+    "checksPassed": 57,
+    "checksFailed": 0,
+    "applicationReplayProved": true,
+    "productionChanged": false,
+    "separateHostProved": false,
+    "offHostDurabilityProved": false,
+    "realProviderAcceptanceProved": false,
+    "realStaffAcceptanceProved": false
+  },
+  "candidate": {
+    "finishedAt": "2026-09-27T02:13:09.339Z",
+    "telegramPoller": "worker",
+    "deployment": {
+      "commit": "a3de8c31c14fbcc4a931723fa9d7948f586d1d44",
+      "sourceChanges": {},
+      "containers": {
+        "postgres": {
+          "imageId": "sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T02:12:45.479325131Z"
+        },
+        "restate": {
+          "imageId": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+          "buildCommit": "d5425f5bfae4024f4d26bab447bc8e6c6db08bfa",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T02:12:45.375616256Z"
+        },
+        "core": {
+          "imageId": "sha256:b5696695a9429e47e77b4ca57954651e72d9f6390acfe7ddc7bd4f1af5d85b0b",
+          "buildCommit": "a3de8c31c14fbcc4a931723fa9d7948f586d1d44",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_parser"
+          ],
+          "createdAt": "2026-09-27T02:12:52.681906301Z"
+        },
+        "worker-blue": {
+          "imageId": "sha256:e1c4e24914d83d5522951a4d0dd0ccfeba1a80d1a6a4af17d16127a80f649077",
+          "buildCommit": "a3de8c31c14fbcc4a931723fa9d7948f586d1d44",
+          "networks": [
+            "hawa-chaos_chaos"
+          ],
+          "createdAt": "2026-09-27T02:12:58.465659929Z"
+        },
+        "fakes": {
+          "imageId": "sha256:a441e876ba71f103b8dbc98d6e919ce350f5a0f8d751e8d0177880f7d9725be2",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T02:10:54.757468427Z"
+        },
+        "docling": {
+          "imageId": "sha256:66a8b3e02320765f50266025047bf035953cfcb86166c81c6a3e6fd91fff96be",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_parser"
+          ],
+          "createdAt": "2026-09-27T02:11:04.3331395Z"
+        },
+        "desk": {
+          "imageId": "sha256:8ff9ee95bdd402301d8be3702c090dc4a7fca88d2ebd134925aba18651c294d5",
+          "buildCommit": "a3de8c31c14fbcc4a931723fa9d7948f586d1d44",
+          "networks": [
+            "hawa-chaos_chaos"
+          ],
+          "createdAt": "2026-09-27T02:11:04.333571Z"
+        },
+        "nginx": {
+          "imageId": "sha256:b947b2630c97622793113555e13332eec85bdc7a0ac6ab697159af78942bb856",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T02:11:04.393069334Z"
+        }
+      },
+      "networks": [
+        "hawa-chaos_chaos|true",
+        "hawa-chaos_parser|true"
+      ],
+      "externalAdapters": "synthetic fakes",
+      "parser": "real pinned offline Docling",
+      "productionChanged": false
+    },
+    "totalMs": 163044,
+    "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
+    "peakMemoryMiB": {
+      "hawa-chaos-nginx-1": 8,
+      "hawa-chaos-desk-1": 7,
+      "hawa-chaos-docling-1": 13,
+      "hawa-chaos-core-1": 93,
+      "hawa-chaos-worker-blue-1": 49,
+      "hawa-chaos-postgres-1": 95,
+      "hawa-chaos-restate-1": 202,
+      "hawa-chaos-fakes-1": 60
+    },
+    "peakTotalMiB": 508,
+    "uncoveredModelCalls": [],
+    "scenarios": [
+      {
+        "name": "R1.S3.SOURCES",
+        "what": "full-app PDF source to voice revision and simulated approved delivery",
+        "ms": 105879,
+        "invariants": [
+          {
+            "name": "every candidate container was created after this rehearsal started",
+            "ok": true,
+            "detail": "rehearsal started 2026-09-27T02:10:26.514Z"
+          },
+          {
+            "name": "Core, worker and Desk image labels match the candidate checkout",
+            "ok": true,
+            "detail": "build a3de8c31c14fbcc4a931723fa9d7948f586d1d44; changed source files=0"
+          },
+          {
+            "name": "core image excludes private test-run files",
+            "ok": true,
+            "detail": "privateRunDirectory=false"
+          },
+          {
+            "name": "worker-blue image excludes private test-run files",
+            "ok": true,
+            "detail": "privateRunDirectory=false"
+          },
+          {
+            "name": "provider callers and the real parser have only internal networks",
+            "ok": true,
+            "detail": "hawa-chaos_chaos|true, hawa-chaos_parser|true"
+          },
+          {
+            "name": "production Desk HTML is served through production nginx",
+            "ok": true,
+            "detail": "HTTP 200"
+          },
+          {
+            "name": "the built Desk entry asset is present",
+            "ok": true,
+            "detail": "HTTP 200"
+          },
+          {
+            "name": "Desk session is persisted by the running Core",
+            "ok": true,
+            "detail": "HTTP 201; durable=true"
+          },
+          {
+            "name": "PDF source review creates no premature task",
+            "ok": true,
+            "detail": "source 90475055049"
+          },
+          {
+            "name": "application/pdf original crosses nginx byte-identically",
+            "ok": true,
+            "detail": "HTTP 200; SHA-256 adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617"
+          },
+          {
+            "name": "real local parser preserves both PDF pages and numeric copy",
+            "ok": true,
+            "detail": "HTTP 200; source adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617"
+          },
+          {
+            "name": "duplicate source confirmation produces one task through Restate",
+            "ok": true,
+            "detail": "replay HTTP 202"
+          },
+          {
+            "name": "review wait survives Restate and worker process restart",
+            "ok": true,
+            "detail": "request 62d3cc5c-23ed-44bc-af9a-087a5fa10387; rev 2"
+          },
+          {
+            "name": "audio/ogg original crosses nginx byte-identically",
+            "ok": true,
+            "detail": "HTTP 200; SHA-256 e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2"
+          },
+          {
+            "name": "unapproved voice model remains manual with honest timing and billing",
+            "ok": true,
+            "detail": "{\"clientId\":\"c1000000-0000-4000-8000-000000000002\",\"updateId\":90475055051,\"sourceSha256\":\"e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2\",\"audio\":{\"version\":\"ogg-opus-v1\",\"channels\":1,\"mediaType\":\"audio/ogg\",\"sampleRate\":48000,\"encodedSamples\":48960,\"durationSeconds\":1},\"state\":\"manual\",\"message\":\"Client privacy does not authorize cloud transcription. The original is retained for manual copy review; no audio was sent to a model.\",\"transcript\":null,\"estimatedUsd\":null,\"actualUsd\":null}"
+          },
+          {
+            "name": "voice source does not create a child before exact-copy review",
+            "ok": true,
+            "detail": "voice source 90475055051"
+          },
+          {
+            "name": "revised simulated Canva export passes configured QA",
+            "ok": true,
+            "detail": "QC passed"
+          },
+          {
+            "name": "delivery held after external Drive effect",
+            "ok": true,
+            "detail": "{\"seq\":42,\"point\":\"core.delivery.after-drive\",\"detail\":{\"taskId\":\"a1d7204c-787b-42cf-ab84-bbd71c736e1c\",\"mode\":\"workflow\"},\"service\":\"core\",\"pid\":1,\"at\":\"2026-09-27T02:11:42.813Z\",\"held\":true}"
+          },
+          {
+            "name": "Drive already has the selected export before capture",
+            "ok": true,
+            "detail": "1 files"
+          },
+          {
+            "name": "drive: fresh stores match before any writer resumes",
+            "ok": true,
+            "detail": "86 tables / 133 policies; 7.39s startup verification"
+          },
+          {
+            "name": "drive: restored blob rows have exact bytes before writer admission",
+            "ok": true,
+            "detail": "4 registered blobs verified"
+          },
+          {
+            "name": "restored pending delivery reaches Telegram without another Deliver press",
+            "ok": true,
+            "detail": "{\"seq\":44,\"point\":\"worker.sender.after-telegram\",\"detail\":{\"key\":\"dl-a1d7204c-787b-42cf-ab84-bbd71c736e1c-124f2109-53b2-4c4b-ab43-a5014dc3882c:file:c3baf191-2648-4fc8-a5b9-b138e47621d5\",\"kind\":\"document\",\"chat\":\"9300001\",\"commandType\":\"lifecycle\"},\"service\":\"worker-blue\",\"pid\":1,\"at\":\"2026-09-27T02:12:22.947Z\",\"held\":true}"
+          },
+          {
+            "name": "one approved file has reached Telegram before its receipt",
+            "ok": true,
+            "detail": "1 documents"
+          },
+          {
+            "name": "uncertain Telegram attempt is committed before the second capture",
+            "ok": true,
+            "detail": "attempt marks=1"
+          },
+          {
+            "name": "telegram: fresh stores match before any writer resumes",
+            "ok": true,
+            "detail": "86 tables / 133 policies; 7.347s startup verification"
+          },
+          {
+            "name": "telegram: restored blob rows have exact bytes before writer admission",
+            "ok": true,
+            "detail": "4 registered blobs verified"
+          },
+          {
+            "name": "pending Delivery retains its original invocation and deployment across both restores",
+            "ok": true,
+            "detail": "[{\"id\":\"inv_1lNXMpvgLr6203XvOncWi5tvswd4O2OIl8\",\"target_service_key\":\"dl-a1d7204c-787b-42cf-ab84-bbd71c736e1c-124f2109-53b2-4c4b-ab43-a5014dc3882c\",\"pinned_deployment_id\":\"dp_10EiYzZQocblIODpaWqrC7L\"}]"
+          },
+          {
+            "name": "Drive recovery adopted the existing external file",
+            "ok": true,
+            "detail": "before=drive_file_1_1790475102787; after=drive_file_1_1790475102787"
+          },
+          {
+            "name": "restored unconfirmed Telegram send was never repeated",
+            "ok": true,
+            "detail": "1 documents"
+          },
+          {
+            "name": "restored uncertain send is surfaced once to the office",
+            "ok": true,
+            "detail": "1 alerts"
+          },
+          {
+            "name": "uncertain delivery stays unresolved after restored journal completion",
+            "ok": true,
+            "detail": "state=requester_send_reconciliation"
+          },
+          {
+            "name": "restored send evidence records one uncertain file attempt",
+            "ok": true,
+            "detail": "HTTP 200"
+          },
+          {
+            "name": "every confirmation item exists in the surviving fake chat",
+            "ok": true,
+            "detail": "file and notice identities observed; synthetic staff only"
+          },
+          {
+            "name": "ordinary operator cannot settle the restored uncertain delivery",
+            "ok": true,
+            "detail": "HTTP 403"
+          },
+          {
+            "name": "explicit synthetic staff observation settles once with stable replay",
+            "ok": true,
+            "detail": "HTTP 200/200; rev 9"
+          },
+          {
+            "name": "staff settlement and its replay create no additional requester sends",
+            "ok": true,
+            "detail": "before=8; after=8"
+          },
+          {
+            "name": "restored delivery records exactly one completed publication",
+            "ok": true,
+            "detail": "[{\"id\":\"55364c44-55ab-4591-b9c0-80e2d2d43c51\",\"state\":\"complete\"}]"
+          },
+          {
+            "name": "surviving external sheet contains one task row after both restores",
+            "ok": true,
+            "detail": "1 rows"
+          },
+          {
+            "name": "PDF new request and voice revision reach one logical simulated delivery",
+            "ok": true,
+            "detail": "{\"tasks\":[{\"id\":\"e8475f71-f6e2-43aa-b05c-11d970c4fdb8\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"a1d7204c-787b-42cf-ab84-bbd71c736e1c\",\"state\":\"complete\",\"version\":\"8\"}],\"delivered\":{\"request_id\":\"62d3cc5c-23ed-44bc-af9a-087a5fa10387\",\"current_task_id\":\"a1d7204c-787b-42cf-ab84-bbd71c736e1c\",\"rev\":\"9\",\"stage\":\"delivered\"}}"
+          },
+          {
+            "name": "retained confirmations preserve exact source copy",
+            "ok": true,
+            "detail": "two immutable confirmations"
+          },
+          {
+            "name": "the two source originals were downloaded once each",
+            "ok": true,
+            "detail": "[\"candidate-pdf-9300001\",\"candidate-voice-9300001\"]"
+          },
+          {
+            "name": "manual-only voice caused no paid transcription attempt",
+            "ok": true,
+            "detail": "attempts=0"
+          },
+          {
+            "name": "bilingual Desk intake replay returns one task",
+            "ok": true,
+            "detail": "task b304e6cc-2ade-422b-8a65-f296c17b3237"
+          },
+          {
+            "name": "saved bilingual Desk copy imports through the explicit generation action",
+            "ok": true,
+            "detail": "status=retrieved; replay=retrieved"
+          },
+          {
+            "name": "the saved plan preserves both exact copy blocks and separate instructions",
+            "ok": true,
+            "detail": "plans=1; source=fd91712f2472387eea3025ebc66866085d8e88d89f40315eea2fd8ab9954d668"
+          },
+          {
+            "name": "Desk capture records a review from retained PNG and checked live text",
+            "ok": true,
+            "detail": "Preview and checked source recorded for human review. Copy and font checks passed; inspect the design before approving."
+          },
+          {
+            "name": "capture replay preserves one revision without inventing native editability",
+            "ok": true,
+            "detail": "revisions=1"
+          },
+          {
+            "name": "manual review reaches one simulated approval and completed archive publication",
+            "ok": true,
+            "detail": "{\"approvals\":\"1\",\"publications\":\"1\"}"
+          },
+          {
+            "name": "cancel commits terminal state and replays the same durable receipt",
+            "ok": true,
+            "detail": "task 0988ddd8-3879-43a2-98e1-3d3475862378"
+          },
+          {
+            "name": "cancelled task refuses deployed studio admission",
+            "ok": true,
+            "detail": "HTTP 409"
+          },
+          {
+            "name": "cancelled task refuses deployed generate admission",
+            "ok": true,
+            "detail": "HTTP 409"
+          },
+          {
+            "name": "cancelled task refuses deployed design admission",
+            "ok": true,
+            "detail": "HTTP 409"
+          },
+          {
+            "name": "closed-task refusals admit no run, plan or remote operation",
+            "ok": true,
+            "detail": "{\"runs\":\"0\",\"plans\":\"0\",\"operations\":\"0\"}"
+          },
+          {
+            "name": "synthetic blank client remains usable in the Desk directory",
+            "ok": true,
+            "detail": "client f07de2b6-a5a9-4af7-9c83-bbf30099be7a"
+          },
+          {
+            "name": "blank design is created through the deployed Canva adapter",
+            "ok": true,
+            "detail": "task 8f9d0c7c-6feb-419b-8c8a-6b93051f3dac; design DAchaosmuj6mabt000016"
+          },
+          {
+            "name": "blank design reaches checked review using DNA and no invented imported source",
+            "ok": true,
+            "detail": "Preview and checked source recorded for human review. Copy and font checks passed; inspect the design before approving."
+          },
+          {
+            "name": "blank capture completes simulated publication with one explicit manual edit and no import",
+            "ok": true,
+            "detail": "task 8f9d0c7c-6feb-419b-8c8a-6b93051f3dac"
+          }
+        ],
+        "events": [
+          "PDF 90475055049 → request 62d3cc5c-23ed-44bc-af9a-087a5fa10387 → task e8475f71-f6e2-43aa-b05c-11d970c4fdb8",
+          "Restate and worker SIGKILL/restart at the PDF review waitpoint",
+          "voice 90475055051 → reviewed revision task a1d7204c-787b-42cf-ab84-bbd71c736e1c",
+          "drive: restored PostgreSQL, Restate and blobs from authenticated encrypted archives to new volumes; resumed exact images",
+          "telegram: restored PostgreSQL, Restate and blobs from authenticated encrypted archives to new volumes; resumed exact images",
+          "Synthetic administrator explicitly reconciled the restored uncertain send using IDs from the surviving fake chat; no real human/provider acceptance implied",
+          "Desk bilingual request b304e6cc-2ade-422b-8a65-f296c17b3237 → saved plan 292208b6-02f8-44c7-8c86-b05c08a1228d → simulated Canva import → captured review → simulated approval/publication",
+          "Synthetic cancelled task 0988ddd8-3879-43a2-98e1-3d3475862378: all three deployed generation entry points refused",
+          "Blank design 8f9d0c7c-6feb-419b-8c8a-6b93051f3dac → explicit simulated manual edit → DNA-checked review → simulated approval/publication; real native editing remains unverified"
+        ]
+      }
+    ]
+  },
+  "storeRestores": {
+    "drive": {
+      "status": "coordinated_stores_restored_before_worker_admission",
+      "taskId": "a1d7204c-787b-42cf-ab84-bbd71c736e1c",
+      "capturedAt": "2026-09-27T02:11:57.989072+00:00",
+      "images": {
+        "postgres": "sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+        "restate": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+        "core": "sha256:b5696695a9429e47e77b4ca57954651e72d9f6390acfe7ddc7bd4f1af5d85b0b",
+        "worker-blue": "sha256:e1c4e24914d83d5522951a4d0dd0ccfeba1a80d1a6a4af17d16127a80f649077",
+        "fakes": "sha256:a441e876ba71f103b8dbc98d6e919ce350f5a0f8d751e8d0177880f7d9725be2"
+      },
+      "archives": {
+        "postgres": {
+          "filename": "postgres.tar.enc",
+          "ciphertextSha256": "e64a0ed0da27e4553840c71a151a871d2219d497d883b3907f54c044d6c56576",
+          "plaintextSha256": "8d40eeda98b31672607f33638b43707698f9e9f80dd7844a45848bba80aa3ca8",
+          "sourceVolume": "hawa-chaos_chaos_postgres",
+          "bytes": 82995200
+        },
+        "restate": {
+          "filename": "restate.tar.enc",
+          "ciphertextSha256": "d1c12864ac2ee9c3057ede2f6e23a459770d5cf90bf6bd306732f7c33ab56e53",
+          "plaintextSha256": "c2e2969c558c8412a9e58754c1b4668241b8470583fc8e24adefb663e00d6554",
+          "sourceVolume": "hawa-chaos_chaos_restate",
+          "bytes": 901120
+        },
+        "blobs": {
+          "filename": "blobs.tar.enc",
+          "ciphertextSha256": "341ade156e5acfd7a60d836f006715693512fc5ed3b34e47981349106c60710b",
+          "plaintextSha256": "250a76a5d910b4a8b8dac43ecc5b05c2d632658242fec73d6fe9387e47c89d6c",
+          "sourceVolume": "hawa-chaos_chaos_blobs",
+          "bytes": 3133440
+        }
+      },
+      "pendingDelivery": [
+        {
+          "id": "inv_1lNXMpvgLr6203XvOncWi5tvswd4O2OIl8",
+          "target_service_key": "dl-a1d7204c-787b-42cf-ab84-bbd71c736e1c-124f2109-53b2-4c4b-ab43-a5014dc3882c",
+          "pinned_deployment_id": "dp_10EiYzZQocblIODpaWqrC7L"
+        }
+      ],
+      "tableCount": 86,
+      "policyCount": 133,
+      "restoredVolumes": {
+        "chaos_postgres": {
+          "name": "hawa-recovery-0bb7fbd651e041b6-postgres"
+        },
+        "chaos_restate": {
+          "name": "hawa-recovery-0bb7fbd651e041b6-restate"
+        },
+        "chaos_blobs": {
+          "name": "hawa-recovery-0bb7fbd651e041b6-blobs"
+        }
+      },
+      "allRowsAndPoliciesMatch": true,
+      "allStoreFilesMatch": true,
+      "verifiedBlobCount": 4,
+      "missingBlobReferences": 0,
+      "externalServiceSurvived": true,
+      "writersStoppedBeforeCaptureAndDuringValidation": true,
+      "fsync": true,
+      "fullPageWrites": true,
+      "restoreValidationSeconds": 7.39,
+      "applicationReplayProved": false,
+      "separateHostProved": false,
+      "productionChanged": false,
+      "scriptSha256": "029f27e51f6f043e21bcd60467b78c86a9e91dee67a860e627285e294940e069"
+    },
+    "telegram": {
+      "status": "coordinated_stores_restored_before_worker_admission",
+      "taskId": "a1d7204c-787b-42cf-ab84-bbd71c736e1c",
+      "capturedAt": "2026-09-27T02:12:39.679347+00:00",
+      "images": {
+        "postgres": "sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+        "restate": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+        "core": "sha256:b5696695a9429e47e77b4ca57954651e72d9f6390acfe7ddc7bd4f1af5d85b0b",
+        "worker-blue": "sha256:e1c4e24914d83d5522951a4d0dd0ccfeba1a80d1a6a4af17d16127a80f649077",
+        "fakes": "sha256:a441e876ba71f103b8dbc98d6e919ce350f5a0f8d751e8d0177880f7d9725be2"
+      },
+      "archives": {
+        "postgres": {
+          "filename": "postgres.tar.enc",
+          "ciphertextSha256": "bf902b2e1c14d27c4b0ac445af4f56d91ab0820ee723ce4cb63401bad3a81914",
+          "plaintextSha256": "dabea0c7f6bae11051cdbeeb4b78a4054515da896bd216d0ab7e076f26f52fe5",
+          "sourceVolume": "hawa-recovery-0bb7fbd651e041b6-postgres",
+          "bytes": 82882560
+        },
+        "restate": {
+          "filename": "restate.tar.enc",
+          "ciphertextSha256": "8bca25e5c102fc23145844c098ba12af08e892409ac939fc08bd2c809c1ab51e",
+          "plaintextSha256": "e5ebe8bf9596bfa43ccecb2c9cf4e2827cfb008d46c3c4880fe1cf949cef77c1",
+          "sourceVolume": "hawa-recovery-0bb7fbd651e041b6-restate",
+          "bytes": 942080
+        },
+        "blobs": {
+          "filename": "blobs.tar.enc",
+          "ciphertextSha256": "d9d4a90030d8faaf58c8d8947e7a91910be4c47e7ae6fe6100eaf6b3b2274cde",
+          "plaintextSha256": "250a76a5d910b4a8b8dac43ecc5b05c2d632658242fec73d6fe9387e47c89d6c",
+          "sourceVolume": "hawa-recovery-0bb7fbd651e041b6-blobs",
+          "bytes": 3133440
+        }
+      },
+      "pendingDelivery": [
+        {
+          "id": "inv_1lNXMpvgLr6203XvOncWi5tvswd4O2OIl8",
+          "target_service_key": "dl-a1d7204c-787b-42cf-ab84-bbd71c736e1c-124f2109-53b2-4c4b-ab43-a5014dc3882c",
+          "pinned_deployment_id": "dp_10EiYzZQocblIODpaWqrC7L"
+        }
+      ],
+      "tableCount": 86,
+      "policyCount": 133,
+      "restoredVolumes": {
+        "chaos_postgres": {
+          "name": "hawa-recovery-44d094b3e1f14d3d-postgres"
+        },
+        "chaos_restate": {
+          "name": "hawa-recovery-44d094b3e1f14d3d-restate"
+        },
+        "chaos_blobs": {
+          "name": "hawa-recovery-44d094b3e1f14d3d-blobs"
+        }
+      },
+      "allRowsAndPoliciesMatch": true,
+      "allStoreFilesMatch": true,
+      "verifiedBlobCount": 4,
+      "missingBlobReferences": 0,
+      "externalServiceSurvived": true,
+      "writersStoppedBeforeCaptureAndDuringValidation": true,
+      "fsync": true,
+      "fullPageWrites": true,
+      "restoreValidationSeconds": 7.347,
+      "applicationReplayProved": false,
+      "separateHostProved": false,
+      "productionChanged": false,
+      "scriptSha256": "029f27e51f6f043e21bcd60467b78c86a9e91dee67a860e627285e294940e069"
+    }
+  },
+  "timingScope": "restoreValidationSeconds covers restored PostgreSQL/Restate startup and validation after archive extraction. It is not total restore time or a production RTO measurement.",
+  "focusedTests": {
+    "backupPython": {
+      "passed": 50,
+      "failed": 0,
+      "command": "python3 -m unittest discover -s infra/backup -p 'test_*.py' -v"
+    },
+    "fakeWireContract": {
+      "filesPassed": 1,
+      "passed": 11,
+      "failed": 0
+    },
+    "candidateHarnessTypecheck": "passed",
+    "lint": "passed; sandbox IPC refusal followed by permitted rerun"
+  },
+  "candidateSelection": {
+    "scenario": "R1.S3.SOURCES",
+    "selectedTestsPassed": 1,
+    "unselectedTestsSkipped": 43,
+    "allChaosScenariosClaimed": false
+  },
+  "imagePrivacy": {
+    "before": {
+      "sourceCommit": "a4aeeee973ffc4bb0d54746c48af7e6528a0443a",
+      "corePresenceProbe": {
+        "privateRunDirectory": true,
+        "privateEnvironmentFile": true
+      },
+      "credentialContentsRead": false
+    },
+    "after": {
+      "corePrivateRunDirectory": false,
+      "workerPrivateRunDirectory": false,
+      "verifiedBy": "two actual candidate filesystem assertions"
+    },
+    "historicalProductionImagesAssessed": false,
+    "historicalCachedImagesRemoved": false
+  },
+  "cleanup": {
+    "temporaryHelperContainers": 0,
+    "restoredVolumesRetainedForCandidate": [
+      "hawa-recovery-0bb7fbd651e041b6-blobs",
+      "hawa-recovery-0bb7fbd651e041b6-postgres",
+      "hawa-recovery-0bb7fbd651e041b6-restate",
+      "hawa-recovery-44d094b3e1f14d3d-blobs",
+      "hawa-recovery-44d094b3e1f14d3d-postgres",
+      "hawa-recovery-44d094b3e1f14d3d-restate"
+    ],
+    "exactlyTwoRestoredStoreSets": true,
+    "privateArchiveDirectoriesRemaining": 0,
+    "originalStoreVolumesRetained": [
+      "hawa-chaos_chaos_blobs",
+      "hawa-chaos_chaos_postgres",
+      "hawa-chaos_chaos_restate"
+    ],
+    "productionChanged": false
+  },
+  "earlierFailedAttempts": [
+    {
+      "sourceCommit": "31f33a178002cd9f1716270599b73ca3268c2a96",
+      "finishedAt": "2026-09-27T01:58:09.132Z",
+      "error": "fetch failed",
+      "completedEvents": [
+        "PDF 90474194457 → request ae4e6b90-348f-415c-a681-ae15f3f332a0 → task ad208ca4-dc77-408f-af0e-afffcd605d70",
+        "Restate and worker SIGKILL/restart at the PDF review waitpoint",
+        "voice 90474194459 → reviewed revision task 0e56d681-0656-410c-8209-1abe62302cf9",
+        "drive: restored PostgreSQL, Restate and blobs from authenticated encrypted archives to new volumes; resumed exact images"
+      ],
+      "correction": "The driver used synchronous subprocess execution during a long restore; changed to asynchronous execution. The original fetch error had no nested cause, so its precise transport cause remains unconfirmed."
+    },
+    {
+      "sourceCommit": "a4aeeee973ffc4bb0d54746c48af7e6528a0443a",
+      "finishedAt": "2026-09-27T02:02:51.028Z",
+      "error": "restored uncertain send is surfaced once to the office: 2 alerts",
+      "completedEvents": [
+        "PDF 90474434753 → request 23b6611a-6f59-4387-abbb-2f8d27ab0b6a → task f03612e3-b9c8-4e8b-b2c8-2c164bb7b76e",
+        "Restate and worker SIGKILL/restart at the PDF review waitpoint",
+        "voice 90474434755 → reviewed revision task 248f0546-ce6d-4a0b-9963-9b452079138a",
+        "drive: restored PostgreSQL, Restate and blobs from authenticated encrypted archives to new volumes; resumed exact images",
+        "telegram: restored PostgreSQL, Restate and blobs from authenticated encrypted archives to new volumes; resumed exact images"
+      ],
+      "correction": "The assertion counted an earlier office-review notice as an uncertainty alert; filter the actual alert kind. Staff settlement advances the request to revision 9, rather than ordinary delivery revision 8."
+    }
+  ],
+  "secondRunContinuationProbe": {
+    "synthetic": true,
+    "taskId": "248f0546-ce6d-4a0b-9963-9b452079138a",
+    "operatorStatus": 403,
+    "adminStatus": 200,
+    "replayStatus": 200,
+    "result": {
+      "requestId": "23b6611a-6f59-4387-abbb-2f8d27ab0b6a",
+      "taskId": "248f0546-ce6d-4a0b-9963-9b452079138a",
+      "publicationId": "85df2cb6-ace0-4787-b432-fe3742427efc",
+      "stage": "delivered",
+      "requestRev": 9,
+      "confirmationSource": "staff_visible",
+      "actionId": "86e60a93-fcc9-45ef-9e96-342c543b1e15"
+    },
+    "replay": {
+      "stage": "delivered",
+      "taskId": "248f0546-ce6d-4a0b-9963-9b452079138a",
+      "actionId": "86e60a93-fcc9-45ef-9e96-342c543b1e15",
+      "requestId": "23b6611a-6f59-4387-abbb-2f8d27ab0b6a",
+      "requestRev": 9,
+      "publicationId": "85df2cb6-ace0-4787-b432-fe3742427efc",
+      "confirmationSource": "staff_visible"
+    },
+    "sheetRows": 1
+  },
+  "historicalApplicationRegression": {
+    "filesPassed": 452,
+    "testsPassed": 3634,
+    "filesSkipped": 7,
+    "testsSkipped": 59,
+    "testedSeal": "dd62672",
+    "rerunForThisInfrastructureAndHarnessSlice": false
+  },
+  "sourceSha256": {
+    ".dockerignore": "ecd6bee3df70249fcb5b934d8865357149346a0ba5d6efddd321bebee1a3a46c",
+    "infra/backup/candidate_recovery.py": "029f27e51f6f043e21bcd60467b78c86a9e91dee67a860e627285e294940e069",
+    "infra/backup/test_candidate_recovery.py": "aa47ef9ce74e2c39ceca07ae55b4ed9655e7e3b68c47c06fc6a7ec68c5b482f3",
+    "packages/testkit/chaos/chaos.test.ts": "735ddac7fd37121c9820074e5ad053a6f6e946e6ae9bcdc47077db2a8a58a520",
+    "packages/testkit/chaos/docker-compose.chaos.yml": "8e9eb706b77437d528d0065e6a582f17c869810997113753c18e198bc041032b",
+    "packages/testkit/chaos/driver/candidate-recovery.ts": "6975bda19f0f206062f63ae54c565d54fd3900b8e7102ce75853bf88089895e9",
+    "packages/testkit/chaos/driver/candidate-sources.ts": "f732df19d79f5e3d873b0850551a01ae059e7ee9390b20bc61e3a729ac9c732f",
+    "packages/testkit/chaos/driver/stack.ts": "f73553a873aef311c20be51fcdbe7cf71117ab3265f52598b98ee5dc47bf1628",
+    "packages/testkit/chaos/fakes/telegram.ts": "7a18e1c07a044449161f7667260156f52dea7df0432c276694f5848b5fbba246",
+    "packages/testkit/chaos/run.ts": "dab3089fd20f45619745bdec8e0dcc14faf79fb81311e31cc0501eab70d73bb2",
+    "packages/testkit/chaos/test/fakes.test.ts": "0471b9b38bfa9dfc707f5cdb24207169a82e8e2281e20f9ce18b25ef81a8e999"
+  },
+  "remaining": [
+    "Independent-host and off-host recovery; production RPO/RTO",
+    "Coordinated production capture and explicit repair for unequal PostgreSQL/Restate capture windows",
+    "Real native Canva edit/reopen and multilingual/human design acceptance",
+    "Supervised live intake-to-approved-delivery pilot",
+    "Held-out retrieval relevance/latency and role-model quality/cost measurements"
+  ],
+  "qualificationGates": {
+    "harnessTypecheck": "passed",
+    "lint": "passed",
+    "blueprint": {
+      "passed": 895,
+      "warnings": 0,
+      "failures": 0
+    },
+    "sourceHashes": "matched",
+    "releaseManifest": "pending seal"
+  }
+}

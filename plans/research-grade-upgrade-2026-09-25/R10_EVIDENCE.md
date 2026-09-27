@@ -165,3 +165,46 @@ rehearsal records no automatic completion: it checks operator refusal, then uses
 an explicit synthetic administrator observation of the original fake-chat message
 IDs to settle the request. The observation and its replay must cause no new send.
 This exercises the existing ADR-046 contract and does not qualify real staff review.
+
+## Qualified coordinated candidate (ADR-080, 2026-09-27)
+
+Source `a3de8c3` passes **57/57 deployed checks** with PostgreSQL durability flags on.
+The two matched cold captures restore all three stores into fresh volumes at exact
+image IDs; each matches **86 tables, 133 RLS policies and 4 registered blob hashes**
+before Core/worker resume. The surviving external fake ledgers prove the same Drive
+file is adopted, the uncertain Telegram file is not resent, one office uncertainty
+alert is emitted, and one publication/Sheet row completes. The same pending Delivery
+invocation/deployment survives both restores. Ordinary operator settlement is
+refused; explicit synthetic administrator observation and replay cause no new sends.
+The detailed result is `R10_COORDINATED_RESTORE_PROOF.json`.
+
+Earlier runs failed after successful store validation: the first reported a fetch
+failure after a synchronous restore driver (precise transport cause unconfirmed);
+the second counted an earlier review notice as an uncertainty alert. The driver is
+now asynchronous and the assertion targets uncertainty alerts. A continuation probe
+proved settlement before the final fresh run; expected final revision is 9 because
+staff settlement is an extra transition. Both failed attempts remain in the proof.
+
+A presence-only runtime probe found `.run/chaos.env` and the private run directory
+inside the previous synthetic Core image. Git ignore did not constrain Docker's
+package copy. `.dockerignore` now excludes all `.run` directories and backup
+snapshots; actual Core and worker filesystem checks pass. No credential contents
+were read, and neither historical production images nor historical image-cache
+removal is claimed. This is an NFR-006 build-boundary correction.
+
+Focused validation passes **50 Python backup tests**, **11 fake-wire tests**,
+harness TypeScript, lint, security and blueprint **895/0/0**. Lint first hit a
+sandbox IPC refusal and passed with local socket permission. The first privacy-fix
+commit was refused by the blueprint hook until required manifests were refreshed;
+the hook was preserved. The selected chaos test passes; 43 unselected scenarios
+are explicitly skipped. The prior full 3,634-test application regression was not
+rerun for these infrastructure/harness changes.
+
+No helper containers or private archive directories remain. Original and both
+restored three-volume store sets are intentionally retained by `--keep`. Startup
+and validation took 7.390s and 7.347s after archive extraction; these are not full
+restore timings or production RTO. Store receipts deliberately state
+`applicationReplayProved: false`: the subsequent scenario provides replay proof.
+Production and automatic Restate backup admission are unchanged. Independent-host,
+off-host, capture-gap, real-provider and human acceptance remain open; R10 remains
+in progress.
