@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { PNG } from 'pngjs';
@@ -326,20 +327,17 @@ export async function generateConditionedArtLayer(
   };
 
   // 3. Composite behind text with scrim
-  // Temporary write art buffer for renderer
-  const tempArtPath = path.resolve(process.cwd(), `output/proofs/2026-09-17-research-grade-pipeline/P04_ART/temp_art_${Date.now()}.png`);
-  fs.mkdirSync(path.dirname(tempArtPath), { recursive: true });
-  fs.writeFileSync(tempArtPath, artBuffer!);
-
-  // Render composite
-  const renderResult: RenderLayoutV2Result = renderLayoutV2(layout, {
-    artImagePath: tempArtPath,
-  });
-
-  // Clean up temp file
+  // The renderer reads the art from a file. It goes in a private temp directory, never the working
+  // directory (it used to land in output/proofs, and stayed there whenever the render threw).
+  const tempArtDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-art-'));
+  const tempArtPath = path.join(tempArtDir, 'art.png');
+  let renderResult: RenderLayoutV2Result;
   try {
-    fs.unlinkSync(tempArtPath);
-  } catch {}
+    fs.writeFileSync(tempArtPath, artBuffer!);
+    renderResult = renderLayoutV2(layout, { artImagePath: tempArtPath });
+  } finally {
+    fs.rmSync(tempArtDir, { recursive: true, force: true });
+  }
 
   // 4. Re-run composite contrast check on rendered composite
   const compositeContrast = evaluateCompositeContrast(renderResult.noTextPng, layout);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,7 +16,9 @@ describe('review of 2026-09-24: an sRGB PNG with a cHRM chunk', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hunt-png-'));
   const file = path.join(dir, 'poster.png');
   // A 1080x1350 RGB poster, as ImageMagick writes it by default.
-  execFileSync('magick', ['-size', '1080x1350', 'gradient:#0A2A6B-#F7B500', '-depth', '8', file]);
+  // ImageMagick 7 installs `magick`; Ubuntu's ImageMagick 6 only `convert`. Both write cHRM.
+  const imagemagick = spawnSync('magick', ['-version']).error ? 'convert' : 'magick';
+  execFileSync(imagemagick, ['-size', '1080x1350', 'gradient:#0A2A6B-#F7B500', '-depth', '8', file]);
   const bytes = fs.readFileSync(file);
 
   it('carries the sRGB primaries in its cHRM chunk', () => {

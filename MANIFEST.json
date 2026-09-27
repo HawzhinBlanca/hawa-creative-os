@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T02:49:39Z",
+  "generatedAt": "2026-09-27T11:22:35Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 277,
+  "fileCount": 278,
   "files": [
     {
       "path": ".dockerignore",
@@ -29,8 +29,8 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "00210ab9b9c2dc0acfbd411ed2a23349480ddbe7b17fced3d036d087d9738be8",
-      "bytes": 3637
+      "sha256": "715a9a0f1d65677e0188e98f2304cf49cf23d8055a867d9f8b8e46b6d6b230a0",
+      "bytes": 5205
     },
     {
       "path": "AGENTS.md",
@@ -868,6 +868,11 @@
       "bytes": 4150
     },
     {
+      "path": "scripts/ci/install_render_deps.sh",
+      "sha256": "fd9620958af766be3d68fd2308319771c5ed3a608767dba170ef91f1b7902113",
+      "bytes": 1685
+    },
+    {
       "path": "scripts/compare_cutout_outlines.ts",
       "sha256": "e96740e2227489884fea3c977f458f70ef3d0242bbc316732a689d2b6753003b",
       "bytes": 22488
@@ -899,8 +904,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "fb004047867d043d6d281d070dcdc18ce49573520cfeffa822a48d9c8fe50a71",
-      "bytes": 17830
+      "sha256": "cf9df0286b8288c594efa9815fff91082477862893e057999b89ae2ee9f3152d",
+      "bytes": 18228
     },
     {
       "path": "scripts/execute_independent_live_vertical_slice.ts",

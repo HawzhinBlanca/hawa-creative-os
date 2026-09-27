@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# System packages the test suite renders and measures with, on Debian/Ubuntu (CI runners, Linux
+# dev boxes). The same set Dockerfile.core installs, so tests measure what production draws:
+#   - librsvg2-bin (rsvg-convert) + webp-pixbuf-loader: every SVG -> PNG render, WebP photos included;
+#   - ttf-mscorefonts-installer: Verdana, the client's Latin body face (render-fonts.json systemPaths).
+#     It is licensed, so it is never committed; without it ~115 tests fail with FONT_UNRESOLVED;
+#   - imagemagick: one test writes a PNG the way ImageMagick does by default.
+# On macOS none of this is needed: Verdana ships with the system and rsvg comes from Homebrew.
+set -euo pipefail
+
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then SUDO="sudo"; fi
+
+echo 'ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true' | $SUDO debconf-set-selections
+$SUDO apt-get update -qq
+
+# The fonts installer downloads from SourceForge mirrors, which fail now and then: retry it.
+for attempt in 1 2 3; do
+  if DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq --no-install-recommends \
+      librsvg2-bin webp-pixbuf-loader imagemagick fontconfig cabextract ttf-mscorefonts-installer \
+    && [ -f /usr/share/fonts/truetype/msttcorefonts/Verdana.ttf ]; then
+    break
+  fi
+  if [ "$attempt" -eq 3 ]; then
+    echo "Verdana is still missing after 3 attempts (SourceForge unreachable?)" >&2
+    exit 1
+  fi
+  echo "fonts install attempt $attempt failed; retrying" >&2
+  $SUDO dpkg-reconfigure -f noninteractive ttf-mscorefonts-installer || true
+  sleep $((attempt * 10))
+done
+
+rsvg-convert --version
+ls /usr/share/fonts/truetype/msttcorefonts/ | grep -i verdana

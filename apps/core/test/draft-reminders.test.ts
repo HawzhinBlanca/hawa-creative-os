@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext, OutboxRepository } from '@hawa/db';
-import { composeDraftReminder, draftsToRemind, inOfficeHours, questionsToRemind, remindUnansweredDrafts } from '../src/services/draft-reminders.js';
+import { composeDraftReminder, draftsToRemind, inOfficeHours, questionsToRemind, remindUnansweredDrafts, REMINDERS_FROM } from '../src/services/draft-reminders.js';
 
 /** A draft nobody answered is asked about once a day later, once more at five days, and no more. */
 describe('draft reminders', () => {
@@ -124,6 +124,10 @@ describe.skipIf(!url)('draft reminders (PostgreSQL)', () => {
 
   it('never at night, and never for drafts sent before reminders existed', async () => {
     const { taskId } = await draft(30);
+    // Pinned an hour before REMINDERS_FROM: "30 hours ago" only fell before it until 2026-09-25.
+    await withRlsContext(db, operator, async (trx) => {
+      await sql`UPDATE hawa.outbox_commands SET created_at = ${REMINDERS_FROM}::timestamptz - interval '1 hour' WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.telegram'`.execute(trx);
+    });
     expect(await remindUnansweredDrafts({ db, outbox, tenantId, userId, now: new Date('2026-09-24T21:00:00Z'), from: '2026-01-01T00:00:00Z' })).toBe(0);
     await remindUnansweredDrafts({ db, outbox, tenantId, userId, now: officeHours });
     expect(await reminders(taskId)).toEqual([]);
