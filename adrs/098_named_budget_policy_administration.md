@@ -1,7 +1,7 @@
 # ADR-098 — Named administration of the shared spending policy
 
 Date: 2026-09-27
-Status: Accepted for implementation; qualification pending
+Status: Locally qualified; live office admission pending
 Requirements: FR-060, FR-062, FR-065, FR-079, NFR-001.
 Sources: docs/10_WORKFLOW_RELIABILITY.md, docs/14_SECURITY_THREAT_MODEL.md,
 docs/17_UI_UX.md and MASTER_SPEC.md.

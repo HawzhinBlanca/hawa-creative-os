@@ -1,6 +1,6 @@
 # R21 — Unknown model acceptance is not a free retry
 
-## 2026-09-27 — Named budget policy administration (ADR-098, candidate)
+## 2026-09-27 — Named budget policy administration (ADR-098, locally qualified)
 
 Desk Operations now reads current shared limits, consistent daily usage and
 paginated policy history, and lets a current named administrator review and append
@@ -11,14 +11,31 @@ Lower caps retain prior charges/reservations; zero stops new admissions, and
 removing an override restores its default. Browser actions are saved by office/user
 before dispatch and retained across uncertain answers, remounts and newer policies.
 
+Source e0c8744; tested candidate and fresh app images **7743355**. Full regression:
+**4019 passed, zero failed,59 skipped**,483 passing/7 skipped files,130.84seconds.
 Focused SQL/Core/domain/Desk and migration checks:88 passed across9files; final
 browser-safe import follow-up:5 Desk tests/build pass. All491 active test roots and
-source/scripts compile. Lint981/1053 (nine existing egress exceptions), scanner and
-11-pattern self-test pass. Full sealed regression and fresh deployed qualification
-are pending. No production change or real provider request. Other paid paths,
-typed result recovery, truthful fixture cases and live/human/recovery admission
-remain open. See R21_NAMED_SPENDING_POLICY_PROOF.json and runbooks/SPENDING_POLICY.md.
+source/scripts compile. Lint981/1053 (nine existing egress exceptions), scanner,
+11-pattern self-test and blueprint991/0/0 pass. The new workspace dependency reuses
+existing domain code; no third-party package was added. First failures are retained.
 
+Fresh Core/worker/Desk images all identify7743355 with sourceChanges empty. The
+selected full-app synthetic scenario passes63 workflow/recovery invariants;43
+scenarios were not selected. Twenty-one real Chrome/budget checks pass: explicit
+change review, named cookie/CSRF, refusal of shared authority and foreign origins,
+deliberately lost successful response followed by reload and exact replay, stale
+proposal refusal, actual Core restart and zero additional model requests. Original
+synthetic limits are restored and the temporary administrator revoked. Review and
+form screenshots were visually inspected. Isolated health at11:27:37 UTC remains
+degraded, with PostgreSQL/Restate connected and zero paused/backoff/inbox jobs;
+live Canva/model/Telegram API remain unverified and both new design flags off.
+
+No production change or real provider request. Next: replace hard-coded fixture
+PASS100% displays with actual evaluation evidence; remaining paid paths; typed
+completed-result recovery; real office/native Canva/human multilingual/design and
+held-out quality admission; independent-host restore and controlled rollout. The
+whole-app goal remains active. See R21_NAMED_SPENDING_POLICY_PROOF.json and
+runbooks/SPENDING_POLICY.md.
 
 ## 2026-09-27 — Exact-call accounting (ADR-097, locally qualified)
 

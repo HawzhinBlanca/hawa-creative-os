@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "IMPLEMENTED_FULL_REGRESSION_AND_RUNTIME_PENDING",
+  "status": "LOCALLY_QUALIFIED_LIVE_ADMISSION_PENDING",
   "requirements": [
     "FR-060",
     "FR-062",
@@ -25,10 +25,23 @@
     "deskBuild": "passed",
     "deskImportFollowupTestsPassed": 5,
     "securityScan": "passed",
-    "securitySelfTestPatterns": 11
+    "securitySelfTestPatterns": 11,
+    "blueprint": {
+      "passed": 991,
+      "warned": 0,
+      "failed": 0
+    }
   },
-  "fullRegression": "pending",
-  "runtimeChanged": false,
+  "fullRegression": {
+    "passed": 4019,
+    "failed": 0,
+    "skipped": 59,
+    "filesPassed": 483,
+    "filesSkipped": 7,
+    "durationSeconds": 130.84,
+    "log": "output/acceptance/2026-09-27-budget-policy/full-candidate.log"
+  },
+  "runtimeChanged": true,
   "productionChanged": false,
   "realProviderCalls": false,
   "failedFirstEvidence": [
@@ -44,7 +57,7 @@
     "Independent-host restore and controlled rollout"
   ],
   "sourceHashes": {
-    "adrs/098_named_budget_policy_administration.md": "46e327773e9c91605bf17ec27d7e6834d18e76a8691d5534a419412d7a6a305f",
+    "adrs/098_named_budget_policy_administration.md": "905b80afff167acf92ca11bbd5a6e44eb61da945b64168cf113dc63a8d1f7c3f",
     "api/openapi.yaml": "d59fa770f44be916766cae4ec8224763d4cc180eb36099284d6b771c331b7207",
     "apps/core/src/app.ts": "ac498cd2bd1d50c2e35343ed2f153f8417045614bc65b44953ccf14c36660ea1",
     "apps/core/src/routes/spending-policy.routes.ts": "24f585360e68b10ad73e8993e1196dfc9d290400886a09a90c0aeaa86cee3e59",
@@ -90,6 +103,70 @@
     "output/acceptance/2026-09-27-budget-policy/types.log": "b21c199bedea3f7d144aea69b709f4e07f21182236367cb53d0f13544cac4115",
     "output/acceptance/2026-09-27-budget-policy/workspace-install-final.log": "4780fa088c9750073956a7b5d350f928b18fc31a1a069d6101acb9c7a7705125",
     "output/acceptance/2026-09-27-budget-policy/workspace-link.log": "606863a2f2b1f0d2da2af949bd33932a370c9659f08ec38568abd7ecf4652b5c",
-    "output/acceptance/2026-09-27-budget-policy/workspace-lock.log": "a3cec7db5773652719b3f30abcea2174ad113203280750048cb434f2a1667a4d"
+    "output/acceptance/2026-09-27-budget-policy/workspace-lock.log": "a3cec7db5773652719b3f30abcea2174ad113203280750048cb434f2a1667a4d",
+    "output/acceptance/2026-09-27-budget-policy/blueprint-candidate.log": "653913077d375d79b520cce71843b43cce91615e8dd592b5661b9204251d4513",
+    "output/acceptance/2026-09-27-budget-policy/browser-first.log": "80d17d77e4b40f8705206780be2aeb025b61aa496ad4c82db8fc89b500137378",
+    "output/acceptance/2026-09-27-budget-policy/budget-policy-browser.png": "cb59a0334417dee581e585c288dea0854dfb345b8fa607cc4a388cdfe0ef44b9",
+    "output/acceptance/2026-09-27-budget-policy/budget-policy-browser.txt": "6a7599a920bd4f8b36fea66d07f970652e1602e717a2684ae6ebf528cb8ac948",
+    "output/acceptance/2026-09-27-budget-policy/budget-review.png": "2b7b0845832f0aa2dd9d3e014d84b3175a46f58c2c45075f7e9d68ecdd008d7d",
+    "output/acceptance/2026-09-27-budget-policy/candidate-rehearsal.json": "567aec803eecd9e76dd646bd166d5283f027430f2dc6a9bea550d172da95d1f7",
+    "output/acceptance/2026-09-27-budget-policy/candidate-rehearsal.log": "b86f3900338a6c34cb51987cc787ece56a646572731d53e92e4611a725337af0",
+    "output/acceptance/2026-09-27-budget-policy/check-deployed.mts": "00e9a665ca559a8f89f27d3c3e8f70ddd04ef437ee380227b379e674a21cc665",
+    "output/acceptance/2026-09-27-budget-policy/deployed-budget-policy.json": "c86ee18aefcd34e2d266923805f6234306736200c0b644b4fe7752b6a8c8b538",
+    "output/acceptance/2026-09-27-budget-policy/full-candidate.log": "ba2a51ae35c7755668797b7e5e8282545967f6a1e65918717ffe3a461c6bc1e6",
+    "output/acceptance/2026-09-27-budget-policy/runtime-health.json": "d5981c462b1a4154731341cad6e0b7d906074cd4ac24f4c53408a6cc2cbb19e0"
+  },
+  "implementationCommit": "e0c8744",
+  "testedCommit": "774335577be381d188cbdb5283196dd5ebba1580",
+  "runtime": {
+    "buildCommit": "774335577be381d188cbdb5283196dd5ebba1580",
+    "sourceChanges": {},
+    "workflowChecksPassed": 63,
+    "workflowChecksFailed": 0,
+    "scenariosExecuted": 1,
+    "scenariosNotSelected": 43,
+    "browserChecksPassed": 21,
+    "browserChecksFailed": 0,
+    "lostResponseAfterCommit": true,
+    "pageReloadExactReplay": true,
+    "actualCoreRestart": true,
+    "additionalModelRequests": 0,
+    "restoredOriginalLimits": true,
+    "revokedSyntheticAdministrator": true,
+    "screenshotsVisuallyInspected": true,
+    "scope": "Disposable hawa-chaos synthetic providers and staff only",
+    "sourceFile": "output/acceptance/2026-09-27-budget-policy/candidate-rehearsal.json",
+    "browserProof": "output/acceptance/2026-09-27-budget-policy/deployed-budget-policy.json"
+  },
+  "runtimeHealth": {
+    "status": "degraded",
+    "timestamp": "2026-09-27T11:27:37.447Z",
+    "buildCommit": "774335577be381d188cbdb5283196dd5ebba1580",
+    "flags": {
+      "DESIGN_PIPELINE_V3": "off",
+      "DESIGN_STUDIO_V2": "off"
+    },
+    "restateInvocations": {
+      "status": "ok",
+      "paused": 0,
+      "backingOff": 0,
+      "inbox": 0,
+      "checkedAt": "2026-09-27T11:27:37.426Z"
+    },
+    "dependencies": {
+      "postgres": "connected",
+      "parkedClientMessages": 0,
+      "canva": "unverified",
+      "canvaCircuitBreaker": "CLOSED",
+      "telegram": "active",
+      "waha": "unconfigured",
+      "disk": "writable",
+      "restate": "connected",
+      "restatePausedInvocations": 0,
+      "modelProvider": "unverified",
+      "telegramApi": "unverified",
+      "funnel": "healthy",
+      "cutout": "unconfigured"
+    }
   }
 }
