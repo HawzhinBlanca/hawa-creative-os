@@ -84,7 +84,8 @@ try{
     check('browser has no execution errors',errors.length===0);
     check('credentials stay out of localStorage',await page.evaluate(()=>localStorage.getItem('hawa_operator_token')===null));
     await page.setViewportSize({width:1440,height:1600});
-    await selected.screenshot({path:new URL('accounting-browser.png',out).pathname});
+    await page.evaluate(()=>window.scrollTo(0,0));
+    await page.screenshot({path:new URL('accounting-browser.png',out).pathname,fullPage:true});
     writeFileSync(new URL('browser-accounting.txt',out),await selected.innerText());
     await selected.getByRole('button',{name:'Reload selected call',exact:true}).click();
     await selected.getByText('Accounting history (1)',{exact:true}).waitFor();check('browser reload preserves history',true);

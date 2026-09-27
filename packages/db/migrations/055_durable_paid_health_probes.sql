@@ -30,10 +30,10 @@ CREATE INDEX paid_probe_scope ON hawa.paid_model_probe_calls(tenant_id,started_a
 ALTER TABLE hawa.paid_model_probe_calls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hawa.paid_model_probe_calls FORCE ROW LEVEL SECURITY;
 CREATE POLICY paid_probe_read ON hawa.paid_model_probe_calls FOR SELECT USING
-  (tenant_id=hawa.current_tenant_id() AND hawa.has_tenant_role(tenant_id,ARRAY['administrator','operator','auditor']::hawa.membership_role[]));
+  (tenant_id=hawa.current_tenant_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator','operator','auditor']::hawa.membership_role[])));
 CREATE POLICY paid_probe_write ON hawa.paid_model_probe_calls FOR ALL USING
-  (tenant_id=hawa.current_tenant_id() AND hawa.has_tenant_role(tenant_id,ARRAY['administrator','operator']::hawa.membership_role[])) WITH CHECK
-  (tenant_id=hawa.current_tenant_id() AND hawa.has_tenant_role(tenant_id,ARRAY['administrator','operator']::hawa.membership_role[]));
+  (tenant_id=hawa.current_tenant_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator','operator']::hawa.membership_role[]))) WITH CHECK
+  (tenant_id=hawa.current_tenant_id() AND (SELECT hawa.has_tenant_role(hawa.current_tenant_id(),ARRAY['administrator','operator']::hawa.membership_role[])));
 GRANT SELECT,INSERT,UPDATE ON hawa.paid_model_probe_calls TO hawa_app;
 REVOKE DELETE ON hawa.paid_model_probe_calls FROM PUBLIC,hawa_app;
 ALTER TABLE hawa.call_cost_attestations DROP CONSTRAINT call_cost_attestations_call_kind_check;

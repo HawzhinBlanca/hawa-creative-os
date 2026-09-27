@@ -1,0 +1,53 @@
+health_probe call · gpt-4.1-mini
+
+Call ID: e318f2ed-a5b9-4137-a008-e864d7009bda
+Original outcome: unreachable
+Provider reference: Not reported
+
+Original recorded cost
+Unknown
+Original allocation
+$0.000478
+Prior run settlement
+None recorded
+Highest administrator-attested cost
+$0.004000
+Known minimum charge
+$0.004000
+Accounting history (1)
+Revision 1 · $0.004000
+
+Provider finished · synthetic-loopback-unbilled
+
+Synthetic provider accounting evidence; no real billing
+
+Attested by 2faa85b4-a508-47e9-98aa-149f84a43d13 at 9/27/2026, 3:28:51 PM
+
+Evidence SHA-256: 112f52b78cdbda5cb4c0f606485145d647e15ef3893a5de0652f67ac256c2052
+
+Terminal evidence permits a new scheduled health probe after its interval if spending limits allow it. It does not retry this call or establish provider health.
+
+Record final call cost
+
+Use a final provider receipt or support confirmation for every unresolved call. A timeout or request ID alone is insufficient. Unknown costs must remain held.
+
+Record the provider’s final charge for this exact call. This releases unused reserved funds while retaining the highest known or attested cost. The original result and any workflow hold remain. Corrections append to the history.
+
+Call 1
+
+Saved call: e318f2ed-a5b9-4137-a008-e864d7009bda · openai / gpt-4.1-mini
+
+Provider conclusion
+Provider confirms processing finished
+Provider confirms request was not accepted
+Reported final cost (USD)
+Provider or support reference
+Evidence SHA-256
+Or select the evidence file to calculate its hash
+
+The file stays on this device. Keep it in the office’s evidence archive.
+
+Reason
+Record cost evidence
+Reload selected call
+Close call

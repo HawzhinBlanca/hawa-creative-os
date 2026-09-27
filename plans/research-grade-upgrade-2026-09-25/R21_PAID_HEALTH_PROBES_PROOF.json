@@ -31,7 +31,8 @@
   ],
   "firstFailures": [
     "Initial test connection refused by sandbox; isolated database escalation passed.",
-    "Initial pnpm typecheck reached the tsx IPC sandbox restriction; authorized full check passed."
+    "Initial pnpm typecheck reached the tsx IPC sandbox restriction; authorized full check passed.",
+    "First full suite found two migration inventories still ending at054 and two new RLS policies checking membership per row. Updated inventories and hoisted membership checks to a scalar subquery with fixed current tenant. Four affected files/43 tests pass."
   ],
   "sourceHashes": {
     "api/openapi.yaml": "785e83e4b51fa46bc0df3a1684e96e44538cc5325e34e28979b6f697dd295518",
@@ -55,8 +56,10 @@
     "apps/core/src/services/paid-model-probe.ts": "cad531a77edc5a407f83d72636f45d4c48e5d65dff105db5dee505d7a898ec06",
     "apps/core/test/fixtures/paid-probe-kill-child.ts": "511e0680a0d9ea02f8b025ee0c317d436b4f031045be33159b344240c88de18b",
     "apps/core/test/paid-model-probe.test.ts": "01bdc59d709eed8037a4a49d8ca816a75a3bb8229bef9cacf6b6d2a4476a81b2",
-    "packages/db/migrations/055_durable_paid_health_probes.sql": "83e3e4f3706d7f7e9f4d8753f59f6bc185221b799f273b0c0141a68470ea1133",
-    "runbooks/PAID_HEALTH_PROBES.md": "188b2e303e21a43dd3d70881fd20ac60ff857e36d93172727390e1a71b2c7af8"
+    "packages/db/migrations/055_durable_paid_health_probes.sql": "8c53a7dbde3f3deab3e06d1a10b8f930533ee1a8c0b74abe9c3cf9d7dfae4126",
+    "runbooks/PAID_HEALTH_PROBES.md": "188b2e303e21a43dd3d70881fd20ac60ff857e36d93172727390e1a71b2c7af8",
+    "apps/core/test/startup-schema-check.test.ts": "2b607c719dec6862618c8ef7ee5a16407214816c110ad010645b337d218b0d7f",
+    "packages/db/test/schema-upgrade.test.ts": "70e3bb5cba5a5a7e9ec83678ce2b944df589db3b750c0152976287e84272d12a"
   },
   "evidenceHashes": {
     "output/acceptance/2026-09-27-paid-health-probes/check-deployed.mts": "33fe57248a2db796ddae2de7be3da0f7f1d349494ecf6f391c6196213cca17d8",
@@ -71,6 +74,25 @@
     "output/acceptance/2026-09-27-paid-health-probes/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
     "output/acceptance/2026-09-27-paid-health-probes/types-final.log": "98205bdfd9cf43cc7182e7b5f3d2cb26e5fb8167dd044d6b6d0a18a52e77b65d",
     "output/acceptance/2026-09-27-paid-health-probes/types-sandbox-refusal.log": "a7bf66aac691243eb43a350ad58679333357c9d3c4d15c5134a1171dd7e294ac",
-    "output/acceptance/2026-09-27-paid-health-probes/types.log": "98205bdfd9cf43cc7182e7b5f3d2cb26e5fb8167dd044d6b6d0a18a52e77b65d"
+    "output/acceptance/2026-09-27-paid-health-probes/types.log": "98205bdfd9cf43cc7182e7b5f3d2cb26e5fb8167dd044d6b6d0a18a52e77b65d",
+    "output/acceptance/2026-09-27-paid-health-probes/candidate-first.json": "8766d75ec8bc4460da581b88303906d4a7d9e2a17cb595677996842f72d20135",
+    "output/acceptance/2026-09-27-paid-health-probes/candidate-first.log": "dcf04302fddfc15c4b693bbcb5a1648d7291b85cd42ddcc89527e42b2730a741",
+    "output/acceptance/2026-09-27-paid-health-probes/full-first.log": "6573182417df605787da4c73c4832ac6d24874c6938d682b5eaee903e233059e",
+    "output/acceptance/2026-09-27-paid-health-probes/migration-correction.log": "8811440080f2a2ab003d111810accbb846727a0a27df26d478201b1033d620db"
+  },
+  "implementationCommit": "01aed175903e7edd84032677195de5b8b1c7a413",
+  "firstCandidateCommit": "4cfb5b04818c9088993fc2144502ad2997356b1c",
+  "firstFullRegression": {
+    "passed": 4062,
+    "failed": 3,
+    "skipped": 59,
+    "durationSeconds": 121.44,
+    "log": "output/acceptance/2026-09-27-paid-health-probes/full-first.log"
+  },
+  "migrationCorrection": {
+    "passed": 43,
+    "failed": 0,
+    "files": 4,
+    "log": "output/acceptance/2026-09-27-paid-health-probes/migration-correction.log"
   }
 }
