@@ -3,7 +3,7 @@ import { studioUsdMicros, type StudioCallReservation } from '@hawa/domain';
 import { dataUriPixelSize } from './photo-crop.js';
 
 /** Versioned conservative policy, researched 2026-09-27; see ADR-091 for assumptions. */
-const POLICY = 'studio-2026-09-27-v1';
+const POLICY = 'studio-2026-09-27-v2';
 export class StudioReservationError extends Error {
   readonly code = 'STUDIO_BUDGET_UNQUOTABLE';
   constructor(message: string) { super(message); this.name = 'StudioReservationError'; }
@@ -25,8 +25,8 @@ function quote(body: string, inputTokens: number, outputTokens: number, inputRat
     usd, inputTokens, outputTokens };
 }
 
-// Worst standard-tier input (including cache writing) and output rates. Astra uses
-// long-context rates, even for short prompts; cached-read discounts never enlarge admission.
+// Worst standard-tier input (including cache writing) and output rates.
+// The conservative input bound chooses the context tier; cache discounts never enlarge admission.
 const TEXT_RATES: Record<string, [number, number]> = {
   'gpt-6-astra': [45, 75], 'gpt-4.1-mini': [0.4, 1.6], 'gpt-4o-mini': [0.15, 0.6], 'o4-mini': [1.1, 4.4],
 };
@@ -75,7 +75,8 @@ export function reserveStudioText(body: string): StudioCallReservation {
     }
     else refuse('Invalid message content.');
   }
-  const [inputRate, outputRate] = TEXT_RATES[model]!;
+  const [inputRate, outputRate] = model === 'gpt-6-astra' && inputTokens <= 272000
+    ? [22.5, 50] : TEXT_RATES[model]!;
   return quote(body, inputTokens, outputTokens, inputRate, outputRate);
 }
 

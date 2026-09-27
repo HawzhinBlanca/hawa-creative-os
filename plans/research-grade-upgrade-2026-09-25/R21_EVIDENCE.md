@@ -16,7 +16,12 @@ after correcting negative-zero and deliberately inconsistent price fixtures.
 The initial full run had3851 pass/10 fail/59 skip: fake provider model identity
 caused overrun/cascading active-run holds; the old source manifest also correctly
 rejected schema050. Fixture corrected. Types481/481, lint and Desk build pass.
-Sealed full regression is pending. See R21_SPENDING_RESERVATIONS_PROOF.json.
+First sealed regression7909793:3862 passed/0 failed/59 skipped. An additional
+production-price workflow exposed an over-conservative long-context quote.
+Policyv2 now chooses the context tier from the conservative input bound; both
+production and dev v3 workflows pass in a60-test correction run. No model/quality,
+output-limit or budget increase. Final v2 sealed full regression pending.
+See R21_SPENDING_RESERVATIONS_PROOF.json.
 
 Quotes are conservative operating estimates, not invoice guarantees. Broader
 role/office/day caps, typed result recovery, fresh candidate, named live pilot,

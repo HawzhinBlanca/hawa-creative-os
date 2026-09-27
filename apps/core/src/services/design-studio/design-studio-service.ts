@@ -2171,7 +2171,7 @@ export class DesignStudioService {
       if (err instanceof CanvaFlowError && err.code === 'PARENT_STILL_RUNNING') throw err;
       if (err instanceof StudioBudgetExhaustedError) {
         // Budget exhausted: gracefully handle by selecting best candidate so far
-        return this.handleBudgetExhaustion(s, run, ctx, budget);
+        return this.handleBudgetExhaustion(s, run, ctx, budget, err.message);
       }
 
       if (ctx.pipelineV3) {
@@ -2268,7 +2268,8 @@ export class DesignStudioService {
     s: Scope,
     run: any,
     ctx: StageContext,
-    budget?: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number }
+    budget?: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
+    reason?: string
   ): Promise<StudioResumeResult> {
     // The cap and what reached it, in the run's own record: with the caps lowered to a few designs'
     // worth, the operator needs to see which one a run hit.
@@ -2303,7 +2304,7 @@ export class DesignStudioService {
     if (bestCandidate) {
       await this.repo.updateRunStatus(run.id, s.tenantId, 'transferring', {
         winnerCandidateId: bestCandidate.id,
-        diagnostic: `BUDGET_EXHAUSTED${cap}: proceeded with best candidate passing hard QA.`,
+        diagnostic: `BUDGET_EXHAUSTED${cap}${reason ? `: ${reason}` : ''}: proceeded with best candidate passing hard QA.`,
       });
       return {
         runId: run.id,
@@ -2314,7 +2315,7 @@ export class DesignStudioService {
     }
 
     await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', {
-      diagnostic: `BUDGET_EXHAUSTED${cap}: no candidates passed hard QA before budget cap was reached.`,
+      diagnostic: `BUDGET_EXHAUSTED${cap}${reason ? `: ${reason}` : ''}: no candidates passed hard QA before budget cap was reached.`,
     });
     return {
       runId: run.id,

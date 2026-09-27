@@ -150,6 +150,6 @@ export function assertStudioBudgetAdmission(usage: StudioBudgetUsage, reservedUs
       'A provider cost exceeded its reservation. Review the pricing policy before requesting more work.');
   }
   if (usage.remainingUsd === null || studioUsdMicros(reservedUsd) > studioUsdMicros(usage.remainingUsd)) {
-    throw new StudioBudgetExhaustedError('The next request cannot fit within the remaining Studio budget.');
+    throw new StudioBudgetExhaustedError(`The next request needs a $${reservedUsd.toFixed(6)} reservation; $${(usage.remainingUsd ?? 0).toFixed(6)} remains.`);
   }
 }

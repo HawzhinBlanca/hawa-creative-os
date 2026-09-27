@@ -855,7 +855,9 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     }
   }, 30000);
 
-  it('6b. a pilot chat\'s run goes through the shared v3 stages, records every judgement, and transfers', async () => {
+  it.each(['dev', 'production'] as const)('6b. %s: a pilot chat\'s run goes through the shared v3 stages, records every judgement, and transfers', async modelTier => {
+    const originalTier = process.env.HAWA_MODEL_TIER;
+    process.env.HAWA_MODEL_TIER = modelTier;
     const originalFlag = process.env.DESIGN_PIPELINE_V3;
     const originalChats = process.env.DESIGN_PIPELINE_V3_CHATS;
     const pilotChat = `isolated-pilot-${randomUUID().slice(0, 8)}`;
@@ -989,6 +991,8 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       expect(final.winner_candidate_id).toBeTruthy();
       expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
     } finally {
+      if (originalTier === undefined) delete process.env.HAWA_MODEL_TIER;
+      else process.env.HAWA_MODEL_TIER = originalTier;
       if (originalFlag === undefined) delete process.env.DESIGN_PIPELINE_V3;
       else process.env.DESIGN_PIPELINE_V3 = originalFlag;
       if (originalChats === undefined) delete process.env.DESIGN_PIPELINE_V3_CHATS;

@@ -15,9 +15,13 @@ describe('Studio request reservation policy', () => {
     const a = reserveStudioText(textBody()), prompt = 'سڵاو بالعربية'.repeat(100);
     const b = reserveStudioText(textBody({ messages: [{ role: 'user', content: prompt }] }));
     expect(b.inputTokens - a.inputTokens).toBe(2 * (Buffer.byteLength(prompt) - 5));
-    expect(reserveStudioText(textBody({ max_completion_tokens: 8000 })).usd - a.usd).toBeCloseTo(0.3, 6);
+    expect(reserveStudioText(textBody({ max_completion_tokens: 8000 })).usd - a.usd).toBeCloseTo(0.2, 6);
     const schema = reserveStudioText(textBody({ response_format: { description: 'x'.repeat(30000) } }));
     expect(schema.inputTokens).toBeGreaterThan(60000);
+    const long = reserveStudioText(textBody({ messages: [{ role: 'user', content: 'x'.repeat(140000) }] }));
+    expect(long.inputTokens).toBeGreaterThan(272000);
+    expect(long.usd).toBeCloseTo((long.inputTokens * 45 + long.outputTokens * 75) / 1e6, 5);
+    expect(a.usd).toBeCloseTo((a.inputTokens * 22.5 + a.outputTokens * 50) / 1e6, 5);
   });
   it.each([{ model: 'unpriced' }, { model: 'gpt-6-astra-ultra' }, { max_completion_tokens: 0 },
     { max_completion_tokens: 1.2 }, { service_tier: 'priority' }, { tools: [{}] },

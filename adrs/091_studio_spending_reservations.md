@@ -51,3 +51,15 @@ mutex fails across Core instances. Releasing on timeout permits double spending.
 Verify competing PostgreSQL admissions, restart persistence, missing usage,
 settlement, immutable quotes, overrun retention, exact transport-body binding,
 unpriced/malformed input rejection, and visible remaining/reserved funds in Desk.
+
+
+## Production-tier correction during qualification
+
+The first policy always reserved Astra long-context prices. A production-tier
+v3 workflow then refused a layout under the default USD2 cap although the entire
+conservative input bound was below the272K long-context threshold. Policyv2
+selects short versus long prices using that upper input bound, preserving byte,
+schema, framing, vision and maximum-output headroom. It changes no model, quality,
+output limit or run cap. Both production and development v3 fixtures now run the
+same full workflow in the normal suite. Refusal diagnostics show the required
+reservation and remaining funds. Earlier v1 quotes are immutable evidence.
