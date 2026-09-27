@@ -39,7 +39,7 @@ paths:
       tags: [Designs]
       operationId: readStudioRunEvidence
       summary: Read saved Studio evidence and cumulative budget accounting
-      description: Budget admission counts all run calls, including parity after transfer. The original budget snapshot is preserved. Reported settlement costs remain distinct from provider estimates. The USD limit stops further admission after recorded spending reaches it; it is not a guaranteed invoice ceiling.
+      description: Budget admission counts all run calls, including parity after transfer, and reserves conservative request estimates before transport. Shared daily limits aggregate Studio, evaluation and retained-voice calls. Original snapshots and settlement evidence remain distinct. These are operating estimates, not guaranteed invoice ceilings.
       parameters:
         - {$ref: '#/components/parameters/TaskId'}
         - name: runId
@@ -72,8 +72,15 @@ paths:
                           knownUsdEstimate: {type: number, minimum: 0}
                           attestedAdditionalUsd: {type: number, minimum: 0}
                           accountedUsd: {type: [number, 'null'], description: Amount used for admission; incomplete while unresolved calls remain}
+                          reservedAdditionalUsd: {type: number, minimum: 0}
+                          committedUsd: {type: [number, 'null']}
+                          remainingUsd: {type: [number, 'null']}
+                          daily:
+                            oneOf:
+                              - {$ref: '#/components/schemas/SharedDailySpending'}
+                              - {type: 'null'}
                           unresolvedCalls: {type: integer, minimum: 0}
-                          blocker: {type: [string, 'null'], enum: [STUDIO_BUDGET_INVALID, STUDIO_BUDGET_HISTORY_INCOMPLETE, BUDGET_EXHAUSTED, null]}
+                          blocker: {type: [string, 'null'], enum: [STUDIO_BUDGET_INVALID, STUDIO_BUDGET_HISTORY_INCOMPLETE, STUDIO_BUDGET_RESERVATION_EXCEEDED, BUDGET_EXHAUSTED, null]}
                   candidates: {type: array, items: {type: object}}
                   judgments: {type: array, items: {type: object}}
                   calls: {type: array, items: {type: object}}
@@ -742,6 +749,14 @@ paths:
                   resumable: {type: boolean}
                   snapshotHash: {type: string, pattern: '^[a-f0-9]{64}$'}
                   canSettle: {type: boolean}
+                  daily: {$ref: '#/components/schemas/SharedDailySpending'}
+                  calls:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        allocatedUsd: {type: [number, 'null'], description: Original daily allocation; distinct from the gateway request bound and actual usage}
+                        spendingPolicyVersion: {type: [integer, 'null']}
                   settlement: {type: [object, 'null'], description: Administrator-attested terminal provider evidence; never an automated invoice verification}
         default: {$ref: '#/components/responses/Problem'}
   /v1/evaluations/runs/{runId}/settlement:
@@ -890,6 +905,26 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    SharedDailySpending:
+      type: object
+      required: [day, timezone, policyVersion, scopes]
+      properties:
+        day: {type: string, format: date}
+        timezone: {const: Asia/Baghdad}
+        policyVersion: {type: integer, minimum: 1}
+        scopes:
+          type: array
+          items:
+            type: object
+            required: [scope, subject, maxUsd, spentUsd, heldUsd, remainingUsd, historyIncomplete]
+            properties:
+              scope: {enum: [office, client, role]}
+              subject: {type: string, description: Scope label or role; never another client identifier}
+              maxUsd: {type: number, minimum: 0}
+              spentUsd: {type: number, minimum: 0}
+              heldUsd: {type: number, minimum: 0}
+              remainingUsd: {type: number, minimum: 0}
+              historyIncomplete: {type: boolean}
     DocumentConfirmation:
       type: object
       required: [id, sourceSha256, extractionSha256, confirmed]

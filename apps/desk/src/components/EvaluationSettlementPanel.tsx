@@ -1,9 +1,11 @@
+import type { DailySpendingUsage } from './DailySpendingSummary.js';
 import React, {useState} from 'react';
 import {ApiError,apiClient,type SettlementBody} from '../api/client.js';
 import {reasonOf} from '../services/statusReport.js';
 import type { EvaluationCallCostProps } from './EvaluationCallCost.js';
 
 interface Detail {
+  daily?:DailySpendingUsage|null;
   runId:string; status:string; snapshotHash:string; canSettle:boolean;
   calls:Array<EvaluationCallCostProps & {id:string;ordinal:number;status:string;provider?:string|null;model?:string|null;error?:{code:string;detail?:{providerRequestId?:string|null}}|null}>;
   settlement:null|{actorUserId:string;recordedAt:string;reason:string;calls:SettlementBody['calls']};

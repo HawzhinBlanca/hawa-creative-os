@@ -73,5 +73,22 @@ raise dollar limits merely to turn a diagnostic green. The current price policy
 expires before 2026-11-22 UTC and needs a reviewed source update before further
 paid calls. `MODEL_SPENDING_BOUND_EXCEEDED` preserves an observed overrun and
 requires terminal provider evidence before more work. Existing settlement rules
-still apply. The gateway bound is not yet a shared office allocation for evaluation
-and voice; those paths remain an open release requirement.
+still apply. ADR-096 adds durable shared allocation for evaluations and retained
+voice; other paid paths and live billing qualification remain open.
+
+## Shared daily admission (ADR-096)
+
+The Calls panel shows **Shared daily limits** and each call's original **Daily
+allocation**, separately from its request bound and reported usage. Evaluations
+consume the office and model-role allowances without a fictitious client bucket.
+Studio and retained voice consume the same office funds. Admission is serialized
+in PostgreSQL before transport; a new run or Core restart cannot reset it.
+
+`MODEL_BUDGET_DAILY_EXHAUSTED`, `MODEL_BUDGET_DAILY_HISTORY_INCOMPLETE` and
+`MODEL_BUDGET_DAILY_INVALID` stop the batch before a new provider request. Inspect
+the shared balances and original receipts. The office day uses Asia/Baghdad.
+Unknown or incomplete usage holds its allocation across midnight; an exact
+settlement counts the greater of original known cost and administrator-reported
+cost. Existing held-run settlement cannot repair every completed reply with
+unknown usage or historical missing allocation. Those require the pending named
+accounting-repair workflow; do not delete or rewrite original evidence to unblock.

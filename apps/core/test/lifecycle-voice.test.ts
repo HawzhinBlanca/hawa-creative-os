@@ -21,7 +21,11 @@ beforeEach(async () => {
   vi.stubEnv('AUTO_GENERATE_DAILY_CAP_GLOBAL', '1000000');
   vi.spyOn(TelegramBridgeDaemon.prototype, 'downloadFile').mockResolvedValue(audio);
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ text: '  Unreviewed دە دۆلار\nsource_01  ' })));
-  await sql`DELETE FROM hawa.inbox_events WHERE source_account_id LIKE 'lifecycle_voice_%'`.execute(owner);
+  await owner.transaction().execute(async tx=>{
+    await sql`ALTER TABLE hawa.inbox_events DISABLE TRIGGER enforce_voice_spending`.execute(tx);
+    await sql`DELETE FROM hawa.inbox_events WHERE source_account_id LIKE 'lifecycle_voice_%'`.execute(tx);
+    await sql`ALTER TABLE hawa.inbox_events ENABLE TRIGGER enforce_voice_spending`.execute(tx);
+  });
   await sql`DELETE FROM hawa.model_deployments WHERE tenant_id=${tenantId}::uuid AND role='voice_transcriber'`.execute(owner);
   await sql`INSERT INTO hawa.model_deployments(tenant_id,role,provider,exact_model_id,deployment_version,admission,policy_profile)
     VALUES (${tenantId}::uuid,'voice_transcriber','openai','whisper-1','synthetic-fixture-v1','canary',
@@ -57,6 +61,17 @@ const count = async (kind: string) => Number((await sql<{ n: string }>`SELECT co
   WHERE tenant_id=${tenantId}::uuid AND source_account_id=${kind}`.execute(owner)).rows[0].n);
 
 describe('retained voice admission and reviewed request', () => {
+  it('refuses shared client-budget admission and still permits exact manual copy review',async()=>{
+    const f=await fixture();
+    await withRlsContext(owner,scope,tx=>sql`INSERT INTO hawa.studio_spending_policies(tenant_id,version,reason,limits)
+      SELECT ${tenantId}::uuid,coalesce(max(version),0)+1,'Synthetic client stop',
+      ${JSON.stringify({officeUsd:30,clientUsd:30,roleUsd:30,clients:{[f.clientId]:0},roles:{}})}::jsonb
+      FROM hawa.studio_spending_policies WHERE tenant_id=${tenantId}::uuid`.execute(tx));
+    const held=await intake(f.update);
+    expect(held.sourceMessage).toContain('shared');expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(await count('lifecycle_voice_attempt')).toBe(0);
+    expect((await project(await intake(f.confirm()))).status).toBe(200);
+  });
   it('retains real audio, reserves its actual packet timing, preserves raw transcript and creates one reviewed request', async () => {
     const f = await fixture(); const received = await intake(f.update);
     expect(received).toMatchObject({ lifecycleAction: 'source-message', intakeStatus: 200 });
@@ -115,7 +130,11 @@ describe('retained voice admission and reviewed request', () => {
 
   it('an admitted attempt with no outcome remains held after app restart and can be manually reviewed', async () => {
     const f = await fixture(); await intake(f.update);
-    await sql`DELETE FROM hawa.inbox_events WHERE source_account_id='lifecycle_voice_outcome'`.execute(owner);
+    await owner.transaction().execute(async tx=>{
+      await sql`ALTER TABLE hawa.inbox_events DISABLE TRIGGER enforce_voice_spending`.execute(tx);
+      await sql`DELETE FROM hawa.inbox_events WHERE source_account_id='lifecycle_voice_outcome'`.execute(tx);
+      await sql`ALTER TABLE hawa.inbox_events ENABLE TRIGGER enforce_voice_spending`.execute(tx);
+    });
     const held = await intake(f.update, app()); expect(held.sourceMessage).toContain('outcome is not recorded');
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect((await project(await intake(f.confirm()))).status).toBe(200);

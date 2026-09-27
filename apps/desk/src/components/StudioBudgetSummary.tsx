@@ -1,7 +1,6 @@
+import { DailySpendingSummary, type DailySpendingUsage } from './DailySpendingSummary.js';
 export interface StudioBudgetUsage {
-  daily?: { day: string; timezone: string; policyVersion: number;
-    scopes: Array<{ scope: 'office' | 'client' | 'role'; subject: string; maxUsd: number;
-      spentUsd: number; heldUsd: number; remainingUsd: number; historyIncomplete: boolean }> } | null;
+  daily?: DailySpendingUsage | null;
   maxUsd: number | null;
   maxCalls: number | null;
   admittedCalls: number;
@@ -34,17 +33,6 @@ export function StudioBudgetSummary({ usage }: { usage?: StudioBudgetUsage | nul
           ? 'A provider cost exceeded its reservation. Review pricing before continuing.'
           : 'Budget settings or cost evidence are invalid. Further model calls are blocked.'}</div>}
     <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Every new call must fit within the available budget. Reservations use conservative price estimates; provider billing can differ.</div>
-    {usage.daily?.scopes.some(scope => scope.scope !== 'role' && (scope.historyIncomplete || scope.remainingUsd === 0)) &&
-      <div role="status">Studio daily spending is blocked. Review daily limits and saved calls before requesting more work.</div>}
-    {usage.daily === null && <div role="status">Daily spending information is unavailable for this account.</div>}
-    {usage.daily && <details>
-      <summary>Studio daily limits · {usage.daily.day} ({usage.daily.timezone})</summary>
-      <p>These limits combine Studio runs. Unfinished or estimated charges from earlier days remain held.</p>
-      <ul>{usage.daily.scopes.map(scope => <li key={`${scope.scope}:${scope.subject}`}>
-        {scope.subject.replaceAll('_', ' ')}: {money(scope.remainingUsd)} available / {money(scope.maxUsd)};
-        {' '}{money(scope.spentUsd)} recorded today, {money(scope.heldUsd)} held.
-        {scope.historyIncomplete && ' Historical cost is unresolved; new spending is blocked.'}
-      </li>)}</ul>
-    </details>}
+    <DailySpendingSummary daily={usage.daily} />
   </div>;
 }

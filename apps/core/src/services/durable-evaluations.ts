@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { sql, withRlsContext, withSessionAdvisoryLock, type Database, type Kysely, type RlsContext } from '@hawa/db';
 import { EvaluationRunner, fixtureEvaluationIdentity, projectFixtureScore } from '@hawa/evals';
 import { parseEvaluationSettlement, coversUnsettledEvaluationCalls, type EvaluationCallSettlement } from '@hawa/domain';
+import { officeSpendingRefusal } from './office-spending.js';
+import { studioUsdMicros, type StudioDailyBudget } from '@hawa/domain';
 import { lockNamedOfficeAdministrator } from './named-review-authority.js';
 import type { AppError, GatewaySpendingReservation, ModelGateway, RequestContext, Result, StructuredModelRequest, StructuredModelResponse } from '@hawa/contracts';
 
@@ -10,7 +12,7 @@ type Settlement = { id:string; action_id:string; actor_user_id:string; request_h
 type RunRow = { id: string; action_id: string; name: string; request_hash: string; candidate: { suiteHash: string }; status: string; summary: Report; started_at: Date; completed_at: Date | null; settlement?:Settlement|null };
 type Outcome = Result<StructuredModelResponse<unknown>, AppError>;
 type CallRow = { id: string; request_hash: string; status: string; outcome: Outcome | null };
-type ReceiptRow = CallRow & { ordinal:number; role:string; deployment:Record<string,unknown>; started_at:Date; finished_at:Date|null };
+type ReceiptRow = CallRow & { budget_reservation:{usd:number}|null; spending_policy_version:number|null; ordinal:number; role:string; deployment:Record<string,unknown>; started_at:Date; finished_at:Date|null };
 export type EvaluationScope = RlsContext & { userId: string; sessionHash?:string };
 export class EvaluationError extends Error {
   constructor(public code: string, public status: number, message: string) { super(message); }
@@ -67,9 +69,11 @@ export class DurableEvaluationService {
       SELECT * FROM hawa.eval_model_calls
       WHERE tenant_id=${scope.tenantId}::uuid AND run_id=${id}::uuid ORDER BY ordinal`.execute(tx));
     const canSettle = !rows.rows[0].settlement && scope.sessionHash ? await this.scoped(scope,tx=>lockNamedOfficeAdministrator(tx,{...scope,sessionHash:scope.sessionHash!})) : false;
-    return {...view(rows.rows[0]),snapshotHash:snapshot(rows.rows[0],calls.rows),canSettle,
+    const daily=(await this.scoped(scope,tx=>sql<{daily:StudioDailyBudget}>`SELECT hawa.office_scope_budget() AS daily`.execute(tx))).rows[0].daily;
+    return {...view(rows.rows[0]),daily,snapshotHash:snapshot(rows.rows[0],calls.rows),canSettle,
       calls:calls.rows.map(call=>({id:call.id,ordinal:call.ordinal,role:call.role,status:call.status,
       requestedDeployment:call.deployment,
+      allocatedUsd:call.budget_reservation?.usd ?? null,spendingPolicyVersion:call.spending_policy_version,
       provider:call.outcome?.ok ? call.outcome.value.deployment.provider : call.outcome?.error.detail?.provider ?? null,
       model:call.outcome?.ok ? call.outcome.value.deployment.exactModelId : call.outcome?.error.detail?.model ?? null,
       estimatedCostUsd:call.outcome?.ok ? call.outcome.value.usage.estimatedCostUsd ?? null : safeCost(call.outcome?.error.detail?.estimatedCostUsd),
@@ -162,7 +166,9 @@ export class DurableEvaluationService {
 
   private async call(scope: EvaluationScope, runId: string, ordinal: number, context: RequestContext, request: StructuredModelRequest,
     identity: ReturnType<typeof fixtureEvaluationIdentity>): Promise<Outcome> {
+    request=structuredClone(request);
     const requestHash = digest(request);
+    const reservation={policy:'gateway-request-budget-v1',requestSha256:requestHash,usd:studioUsdMicros(request.budget.maxCostUsd)/1000000};
     // Recovery reads the original admission before consulting mutable provider availability.
     const prior = (await this.scoped(scope,tx=>sql<CallRow>`SELECT id,request_hash,status,outcome FROM hawa.eval_model_calls
       WHERE tenant_id=${scope.tenantId}::uuid AND run_id=${runId}::uuid AND ordinal=${ordinal}`.execute(tx))).rows[0];
@@ -172,15 +178,20 @@ export class DurableEvaluationService {
     }
     const deployment = await this.gateway.resolve(context,request.role);
     if (!deployment.ok) return {ok:false,error:safeError(deployment.error)};
-    const reserved = await this.scoped(scope, async tx => {
+    let reserved: {fresh:boolean;row:CallRow};
+    try { reserved = await this.scoped(scope, async tx => {
       const parent = (await sql<{status:string}>`SELECT status FROM hawa.eval_runs WHERE tenant_id=${scope.tenantId}::uuid AND id=${runId}::uuid AND completed_at IS NULL FOR UPDATE`.execute(tx)).rows[0];
       if (!parent) throw new EvaluationError('EVALUATION_ALREADY_STOPPED',409,'The evaluation is no longer running.');
       const existing = (await sql<CallRow>`SELECT id,request_hash,status,outcome FROM hawa.eval_model_calls WHERE tenant_id=${scope.tenantId}::uuid AND run_id=${runId}::uuid AND ordinal=${ordinal}`.execute(tx)).rows[0];
       if (existing) return {fresh:false,row:existing};
-      const row = (await sql<CallRow>`INSERT INTO hawa.eval_model_calls(tenant_id,run_id,ordinal,request_hash,role,deployment)
-        VALUES(${scope.tenantId}::uuid,${runId}::uuid,${ordinal},${requestHash},${request.role},${JSON.stringify(deployment.value)}::jsonb) RETURNING *`.execute(tx)).rows[0];
+      const row = (await sql<CallRow>`INSERT INTO hawa.eval_model_calls(tenant_id,run_id,ordinal,request_hash,role,deployment,budget_reservation)
+        VALUES(${scope.tenantId}::uuid,${runId}::uuid,${ordinal},${requestHash},${request.role},${JSON.stringify(deployment.value)}::jsonb,${JSON.stringify(reservation)}::jsonb) RETURNING *`.execute(tx)).rows[0];
       return {fresh:true,row};
-    });
+    }); } catch(error) {
+      const refusal=officeSpendingRefusal(error);
+      if(refusal) return {ok:false,error:refusal};
+      throw error;
+    }
     if (reserved.row.request_hash !== requestHash) return hold('EVALUATION_CALL_IDENTITY_CHANGED');
     if (!reserved.fresh) return reserved.row.status === 'completed' && reserved.row.outcome ? reserved.row.outcome : hold('EVALUATION_CALL_UNCERTAIN');
     let outcome: Outcome;

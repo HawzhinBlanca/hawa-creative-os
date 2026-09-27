@@ -1,5 +1,30 @@
 # R21 — Unknown model acceptance is not a free retry
 
+## 2026-09-27 — Shared office admission (ADR-096, candidate)
+
+Migration 052 shares the original Studio daily policy and PostgreSQL lock with
+fixture evaluation and retained-voice admissions. It binds the request allowance,
+policy version, client/role and database admission time before transport. Unknown
+and estimated obligations remain held across midnight; original known costs and
+larger overruns survive settlement. Evaluations do not invent a client. Voice
+budget refusal preserves the original audio and manual copy review. Desk exposes
+the shared balances and separate daily allocation/request bound/usage values.
+
+Two initial Core controls proved zero allowances still dispatched. Later runtime
+SQL testing exposed a foreign-client admission through the office-role helper;
+explicit ownership and a composite foreign key fix it. Final connected evidence:
+**86 tests /13 files pass**, including cross-path races, role/client/office caps,
+stale snapshot and malformed/changed identities, previous-day obligations,
+settlement maxima, native Core SIGKILL/replay, retained audio and UI cost clarity.
+All486 strict test roots, source/scripts, lint981/1053 (nine existing provider-egress
+exceptions), Desk build and security/11-pattern self-test pass. Earlier failures
+remain in the evidence; full sealed regression follows.
+
+No runtime image, live provider call or production change. Named policy/cost
+repair, other paid-path integration, typed completed-stage recovery, fresh runtime,
+real Canva workflow/human/held-out quality and independent recovery remain open.
+Proof: R21_SHARED_SPENDING_PROOF.json. Operation: runbooks/STUDIO_DAILY_BUDGETS.md.
+
 ### Final ADR-094/095 source qualification, 2026-09-27
 
 Source `78c9094`, tested seal `2fbedf9`: **3,973 passed, zero failed, 59 skipped**

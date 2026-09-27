@@ -2,6 +2,7 @@
 import { sql, type Kysely, type Database } from '@hawa/db';
 import type { VoiceAudioInspection } from '@hawa/domain';
 import type { KurdishVoiceTranscriber, VoiceTranscriptionResult } from '@hawa/integrations';
+import { officeSpendingRefusal } from './office-spending.js';
 import { chaosPoint } from '@hawa/observability';
 import { appendSourceRecord as append, readSourceRecord as read, sourceHash, SourceConflict,
   type SourceUpload } from './lifecycle-source-store.js';
@@ -116,7 +117,20 @@ async function admit(trx: Kysely<Database>, tenantId: string, source: SourceUplo
 export async function transcribeRetainedVoice(tx: Tx, tenantId: string, source: SourceUpload,
   audio: VoiceAudioInspection, bytes: Uint8Array, transcriber: KurdishVoiceTranscriber): Promise<SourceVoiceReview> {
   const key = process.env.OPENAI_API_KEY;
-  const attempt = await tx(trx => admit(trx, tenantId, source, audio, Boolean(key && !key.startsWith('mock-'))));
+  let attempt: Attempt | null;
+  try { attempt = await tx(trx => admit(trx, tenantId, source, audio, Boolean(key && !key.startsWith('mock-')))); }
+  catch(error) {
+    if(!officeSpendingRefusal(error)) throw error;
+    // The rejected admission transaction rolled back. Retained audio already exists independently.
+    await tx(async trx => {
+      await lock(trx,tenantId,keyFor(source));
+      if (!await read<Decision>(trx,tenantId,'lifecycle_voice_decision',source.updateId)) {
+        await append<Decision>(trx,tenantId,'lifecycle_voice_decision',source.updateId,{mode:'manual',
+          reason:'The shared daily spending allowance or cost history blocks transcription. No new paid call started; listen to the retained original and review exact copy.'});
+      }
+    });
+    attempt=null;
+  }
   if (attempt) {
     await chaosPoint('core.voice.after-attempt', { updateId: source.updateId, attemptKey: attempt.key });
     const result = await transcriber.transcribe({ audioBuffer: bytes, audioMimeType: 'audio/ogg',

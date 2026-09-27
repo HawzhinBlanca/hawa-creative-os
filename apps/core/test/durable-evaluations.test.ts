@@ -23,6 +23,14 @@ const newGateway=()=>{
   return {gateway,call};
 };
 describe('durable fixture evaluations under runtime RLS',()=>{
+  it('refuses evaluation model transport when the shared office allowance is zero',async()=>{
+    const s=await scope(),i=input(),{gateway,call}=newGateway();
+    await withRlsContext(owner,s,tx=>sql`INSERT INTO hawa.studio_spending_policies(tenant_id,version,reason,limits)
+      VALUES(${s.tenantId}::uuid,2,'Synthetic office stop','{"officeUsd":0,"clientUsd":30,"roleUsd":30,"clients":{},"roles":{}}'::jsonb)`.execute(tx));
+    const service=new DurableEvaluationService(runtime,gateway),run=await service.run(s,i);
+    expect(run.report).toMatchObject({executionStatus:'stopped',overallPassRate:null,modelCallHold:{code:'MODEL_BUDGET_DAILY_EXHAUSTED'}});
+    expect(call).not.toHaveBeenCalled();expect((await service.get(s,run.runId))?.calls).toEqual([]);
+  });
   it('persists schema-invalid paid output as a hold and replays its receipt without another call',async()=>{
     const s=await scope(),i=input();vi.stubEnv('GEMINI_API_KEY','synthetic-gateway-key');
     const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({modelVersion:'gemini-3.8-flash',

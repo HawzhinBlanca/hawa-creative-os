@@ -92,7 +92,7 @@ export interface StudioBudgetUsage {
   blocker: 'STUDIO_BUDGET_INVALID' | 'STUDIO_BUDGET_HISTORY_INCOMPLETE' | 'STUDIO_BUDGET_RESERVATION_EXCEEDED' | 'BUDGET_EXHAUSTED' | null;
 }
 
-/** Studio-only aggregates; other paid paths are not included in these limits yet. */
+/** Shared Studio/evaluation/retained-voice daily aggregates; historical name retained. */
 export interface StudioDailyBudget {
   day: string;
   timezone: 'Asia/Baghdad';

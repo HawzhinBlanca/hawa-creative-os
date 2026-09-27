@@ -69,7 +69,11 @@ The Studio spending panel also shows office, client and model-role daily limits,
 recorded charges, held obligations and remaining allocations in the Asia/Baghdad
 office day (ADR-092). It distinguishes the run balance from the daily balances,
 flags historical accounting gaps and exposes no other client identifiers. These
-are Studio-only limits until the remaining provider paths are integrated.
+now aggregate Studio, fixture evaluation and retained-voice calls (ADR-096).
+The evaluation Calls panel also shows shared daily balances and each original
+daily allocation, separately from actual usage and the gateway request bound.
+Other provider paths still require integration. A blocked voice admission keeps
+the original audio and manual copy-review flow available.
 
 ## 5. Client DNA screen
 

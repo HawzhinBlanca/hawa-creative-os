@@ -1,0 +1,103 @@
+{
+  "date": "2026-09-27",
+  "status": "FOCUSED_QUALIFIED_SHARED_SPENDING_FULL_RELEASE_PENDING",
+  "requirements": [
+    "FR-059",
+    "FR-060",
+    "FR-062",
+    "FR-065",
+    "FR-079",
+    "NFR-001"
+  ],
+  "adrs": [
+    "096_shared_office_spending_admission"
+  ],
+  "sourceHashes": {
+    "adrs/096_shared_office_spending_admission.md": "3026c0448d75939c2af8238862a66b95c6e0458ac4c1f51cc3af098a8cea1021",
+    "api/openapi.yaml": "dc42838e605464bd666c3e2f9366fc6f5fec96110ac2c5b97013241f0ae58e91",
+    "apps/core/src/services/durable-evaluations.ts": "d7ec459f4132e18c183ad0078ae5a69c0ad19c1a41d2b0863c302599a96bb3a2",
+    "apps/core/src/services/lifecycle-voice.ts": "bca099f02db13e2ba448f7b576da66a038e478cbc5a86d588b732eb1001fcf04",
+    "apps/core/src/services/office-spending.ts": "0c70c1cadbdd83c505d144c115cc2d704e80590773980d96524983c372ad1647",
+    "apps/core/test/durable-evaluations.test.ts": "4c6dfc42f60b6bb6c966dd47c9adc846e0571c581ee491049631db25dae8b2ec",
+    "apps/core/test/evaluation-settlement.test.ts": "5101d1450403ee698b26339a089932521727469b738d32b70a2edc08ae694863",
+    "apps/core/test/lifecycle-voice.test.ts": "1f6774547931594ead301144af57dfc1dd8c00bdfee122ad98bbbf575e9b9e89",
+    "apps/core/test/startup-schema-check.test.ts": "f1ca9c2cec29acabf9c8f6e5eda2224c5ede690a52c673918da20568ff521b68",
+    "apps/desk/src/components/DailySpendingSummary.tsx": "64dd1d6cdf5ef6610523ea8938ed6d9ca2812f30ad1d517e3fc9873b23a43f3c",
+    "apps/desk/src/components/EvaluationCallCost.tsx": "c3dd120568ed563b080aa06f470ffac2ab6b57e8836743f34bf02b415c161ca1",
+    "apps/desk/src/components/EvaluationSettlementPanel.tsx": "c49ac0a490e3ac671060422f69c2f19a02cdb425778298f15c94aa1369140f64",
+    "apps/desk/src/components/StudioBudgetSummary.tsx": "86b97478c18f57052d2d9d151c6d685386aad39d66a8aad8965d4d15f2ee43eb",
+    "apps/desk/src/screens/EvalScreen.tsx": "3686658da7efdf15f95205221931c84a586000455b97a3fcc43fe5bff2d41afe",
+    "apps/desk/test/evaluation-call-cost.test.ts": "d50acfbd58d65251560a52b6775f67feac147070f09872fc3fbb5f3eb45b3c5d",
+    "apps/desk/test/studio-budget.test.ts": "0f117cc1f8567bb0af00a0815c9b022045d3c2e6a3122f669caa7ad375557e47",
+    "docs/07_MODEL_REGISTRY_AND_EVALUATION.md": "31790de5a7f6909533e25312f9f56ee7f76b409adb8a4d2ed25855336fef6799",
+    "docs/10_WORKFLOW_RELIABILITY.md": "055aa3cf1ac6f469b52a0e94a9b6bbdb8fd73ad526fb354537cbcf819236ed04",
+    "docs/17_UI_UX.md": "44180b595a9668744e042a515e3065f0cca23897d5370a01f41c545daab32515",
+    "packages/db/migrations/052_shared_office_spending.sql": "5ceb9074217b564d679f473c7fa6486ee74bfa3be601e6a8660fc3ed4910bed0",
+    "packages/db/test/schema-upgrade.test.ts": "aa634044154c758ebdfe32b2245c7bad61c52727cd6ef61b99452e90d4a92ed7",
+    "packages/db/test/shared-office-spending.test.ts": "b5a2a93faca61e089bd05866a2e3ef60ecc573bc53826818e22afad3ef7753a5",
+    "packages/domain/src/studio-budget.ts": "6608630cd8870b83d95bb2799ec67d228c240a46daf4759193486f0e8a4cf408",
+    "runbooks/EVALUATION_RECOVERY.md": "e7edc55f1e342c15bc593aa94d2078fa7f1ca0828b0a64c0b559c74c4c3a5f04",
+    "runbooks/STUDIO_DAILY_BUDGETS.md": "db7e887882f3d068a4ac30b4fcab139a23e85932bf015adc61b9b07c49187156"
+  },
+  "evidenceDirectory": "output/acceptance/2026-09-27-shared-spending",
+  "focused": {
+    "passed": 86,
+    "failed": 0,
+    "skipped": 0,
+    "files": 13,
+    "log": "output/acceptance/2026-09-27-shared-spending/focused-final.log"
+  },
+  "checks": {
+    "sourceAndScriptTypes": "passed",
+    "strictTestRoots": 486,
+    "lint": {
+      "any": 981,
+      "ceiling": 1053,
+      "existingEgressExceptions": 9
+    },
+    "deskBuild": "passed",
+    "securitySelfTestPatterns": 11,
+    "securityScanFindings": 0
+  },
+  "fullRegression": null,
+  "runtimeChanged": false,
+  "productionChanged": false,
+  "realProviderCalls": false,
+  "failedFirstEvidence": [
+    "Two zero-allowance Core controls failed before implementation: evaluation dispatched despite zero office allowance and voice dispatched despite zero shared client allowance.",
+    "Initial Desk type imports referenced an undeclared package; reused the UI transport shape locally without a new dependency.",
+    "New database fixture had a syntax/import error and omitted its required dataset description; corrected, with failed logs retained.",
+    "Foreign-client negative control exposed that office-role permission alone did not establish client tenant ownership; migration now checks actual ownership and adds a composite foreign key. The follow-up passes."
+  ],
+  "notQualified": [
+    "Other provider-egress paths beyond Studio/fixture evaluation/retained voice",
+    "Named budget policy administration and repair of completed-unknown evaluation/voice accounting",
+    "Typed completed-stage recovery",
+    "Fresh runtime/browser integration",
+    "Live office/native Canva/human multilingual quality admission",
+    "Held-out model/retrieval/cost qualification",
+    "Independent-host restore",
+    "Backup/canary/rollback and production rollout"
+  ],
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-shared-spending/boundary-first.log": "a1ea166823d25e58063a1ba34d53eec09fc372a913219f87d0eb4b8e7915e0d3",
+    "output/acceptance/2026-09-27-shared-spending/boundary-second.log": "388de4640f56134073821addfa4b1fa4bb4ab74220b84f1faa2b4128b81e5162",
+    "output/acceptance/2026-09-27-shared-spending/core-first.log": "4590896642a98d21d3efbabe982bfcc5ce19fe962640e59a0d4d1f26c3d01d49",
+    "output/acceptance/2026-09-27-shared-spending/desk-first.log": "69be653f76d770d916aec7c2cd883eb382ac6ef50b3305812b42c46ad06ad836",
+    "output/acceptance/2026-09-27-shared-spending/focused-final.log": "c75cc3a89aa31b9b407796466b051c60bbcc54907d461e5fa9d2d9f4a00f7173",
+    "output/acceptance/2026-09-27-shared-spending/lint-final.log": "36deb7821a552124e408f9796ce7fab95c1b191500fd2f7c1a10d90428a78f8e",
+    "output/acceptance/2026-09-27-shared-spending/recovery-first.log": "3d06831c1c1b64d16d2b6f9dfb904280a551ee609d4e59b42792b7f6d2a106d7",
+    "output/acceptance/2026-09-27-shared-spending/red-core.log": "aa3ca3468ecee5d8a82a0827b9f8f36e1e11d0ef3bf7f3aa025dffa2f28fe93f",
+    "output/acceptance/2026-09-27-shared-spending/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
+    "output/acceptance/2026-09-27-shared-spending/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+    "output/acceptance/2026-09-27-shared-spending/shared-first.log": "393fb7f3684233e465b37226ef49600bd271922b161a45c946665a98536ea1db",
+    "output/acceptance/2026-09-27-shared-spending/shared-second.log": "636dab4bad1762bd93c9d3b222a5e5aa3395ca408b795fa7e38cab1bfc5b304f",
+    "output/acceptance/2026-09-27-shared-spending/shared-third.log": "747c204e2a35c23fd953577f22bf3aa5d533cccda87b2f7eb43451467b2cdcd7",
+    "output/acceptance/2026-09-27-shared-spending/test-types-first.log": "08473d3edf34ac90876df2dfb41bbfd49ec35d80ca83bb741706be4ac1dec6c1",
+    "output/acceptance/2026-09-27-shared-spending/types-final.log": "87575d81b93d6494386d93c62aa2724e8acf116b92a5b9f61e4baa7dfc49f435",
+    "output/acceptance/2026-09-27-shared-spending/types-first.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-shared-spending/types-second.log": "afdd9c916de1791dc550c5e7be59b10c1fb6923933d391b06d3b2e3a9730d218",
+    "output/acceptance/2026-09-27-shared-spending/types-third.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-shared-spending/voice-recovery-first.log": "893ea02f4e0854059cc492bd37e57e4355f787e62300384a020d0e43387cf562"
+  }
+}

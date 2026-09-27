@@ -1,16 +1,19 @@
-# Studio daily budgets
+# Shared daily spending
 
-ADR-092 / migration 051. These limits cover Studio text, image, vision and parity
-calls. Evaluation, voice and other ModelGateway paths are not yet included; do not
-describe this as an app-wide spending ceiling. Provider invoice totals can differ
-from the estimated reservations.
+ADRs 092/096 / migrations 051/052. These limits cover Studio text, image, vision
+and parity calls, fixture evaluations, and retained voice transcription. Other
+provider-egress paths still require integration. Provider invoice totals can
+differ from estimated reservations.
 
 ## Reading the balance
 
-Open a Studio run in Desk and expand **Studio daily limits**. The office day is
+Open a Studio run or saved evaluation in Desk and expand **Shared daily limits**. The office day is
 00:00–24:00 in Asia/Baghdad, regardless of the Core machine's timezone. Each call
 must fit the office balance, its client's balance, its model-role balance and its
-existing per-run limits. The call retains the policy version and model role.
+existing per-run limits. Fixture evaluations consume office and role funds, with
+no invented client bucket. Voice also consumes its client and voice-role limits;
+its previous UTC-day/per-call limits remain additional controls. Every admission
+retains the policy version; database time determines the shared office day.
 
 Recorded costs count on the original admission day. Unfinished or estimated calls
 carry their full remaining obligation into later days. They do not expire at
@@ -18,8 +21,11 @@ midnight, on cancellation or after a process restart. A complete usage receipt o
 an exact-call administrator settlement releases unused funds. Late overruns are
 saved even when they exceed the limit. Missing historical quotes on uncertain
 calls or run snapshots exceeding their ledger hold new spending for the office.
-Historical completed calls without quotes retain their original recorded estimates;
-no price bound is retroactively invented.
+Historical completed Studio calls without quotes retain their original recorded
+estimates; no price bound is retroactively invented. Evaluation usage without a
+verified basis or reservation is incomplete history. A received voice transcript
+does not prove its bill: its estimate stays held until attributed accounting
+repair. Definite non-acceptance can release the unused allowance.
 
 For uncertain calls, follow [Studio recovery](STUDIO_RECOVERY.md). Never delete a
 call, clear a budget file, reset a run counter or create a replacement run to make
@@ -53,7 +59,9 @@ VALUES (:'tenant_id'::uuid, :expected_version + 1, :'action_id'::uuid, :'reason'
 ```
 
 `clients` maps existing client UUIDs in that tenant to daily USD caps. `roles`
-supports `creative_director`, `visual_judge`, `asset_photoreal`. Amounts must be
+supports `creative_director`, `visual_judge`, `asset_photoreal`, `intake_router`,
+`brief_builder`, `feedback_classifier`, `rule_miner`, `embedding_multimodal`,
+`reranker_multimodal`, and `voice_transcriber`. Amounts must be
 between zero and one million USD and represent whole micro-dollars. A concurrent
 policy edit conflicts; reload and review instead of automatically overwriting it.
 On a lost response, look up the same action UUID before attempting a new revision.
@@ -64,5 +72,5 @@ Raising a cap preserves every prior obligation. No policy mutation changes the d
 The local qualification uses isolated databases, concurrent connections, synthetic
 provider requests and prior-day fixtures. The full app image, deployed runtime,
 real invoices and live office workflow require separate qualification. Check
-`plans/research-grade-upgrade-2026-09-25/R21_DAILY_STUDIO_BUDGET_PROOF.json` for the
+`plans/research-grade-upgrade-2026-09-25/R21_SHARED_SPENDING_PROOF.json` for the
 current evidence and unexecuted gates.

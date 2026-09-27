@@ -26,13 +26,14 @@ it('keeps incomplete cost and missing accounting visible', async () => {
   expect(view.text()).not.toContain('$0.000');
   await view.unmount();
 });
-it('shows daily Studio scope limits and retained obligations without implying app-wide coverage', async () => {
+it('shows shared scope limits and retained obligations for the three covered paid paths', async () => {
   const view = await mount(React.createElement(StudioBudgetSummary, { usage: { ...usage,
     daily: { day: '2026-09-27', timezone: 'Asia/Baghdad', policyVersion: 2, scopes: [
       { scope: 'office', subject: 'office', maxUsd: 30, spentUsd: 1, heldUsd: 2, remainingUsd: 27, historyIncomplete: false },
       { scope: 'role', subject: 'visual_judge', maxUsd: 1, spentUsd: 0, heldUsd: 0, remainingUsd: 1, historyIncomplete: true },
     ] } } }));
-  expect(view.text()).toContain('Studio daily limits');
+  expect(view.text()).toContain('Shared daily limits');
+  expect(view.text()).toContain('Studio, evaluation and retained-voice calls');
   expect(view.text()).toContain('2026-09-27 (Asia/Baghdad)');
   expect(view.text()).toContain('office: $27.000 available / $30.000');
   expect(view.text()).toContain('$1.000 recorded today, $2.000 held');

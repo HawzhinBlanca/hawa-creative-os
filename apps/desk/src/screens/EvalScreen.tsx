@@ -3,6 +3,7 @@ import { apiClient } from '../api/client.js';
 import { reasonOf } from '../services/statusReport.js';
 import { pendingEvaluation, retainEvaluation, clearEvaluation, type EvaluationAction } from '../services/evaluation-action.js';
 import { EvaluationSettlementPanel } from '../components/EvaluationSettlementPanel.js';
+import { DailySpendingSummary } from '../components/DailySpendingSummary.js';
 import { EvaluationCallCost } from '../components/EvaluationCallCost.js';
 
 interface DatasetInfo {
@@ -263,6 +264,7 @@ export const EvalScreen: React.FC = () => {
               <td><EvaluationCallCost {...call} /></td>
             </tr>)}</tbody>
           </table></div>
+          <DailySpendingSummary daily={callEvidence.daily} />
           <EvaluationSettlementPanel key={`${callEvidence.runId}:${callEvidence.snapshotHash}`} detail={callEvidence} onSettled={async()=>{
             const [detail,runs]=await Promise.all([apiClient.evaluations.get(callEvidence.runId),apiClient.evaluations.runs()]);
             if(receiptSelection.current===callEvidence.runId)setCallEvidence(detail);setPastRuns(runs);

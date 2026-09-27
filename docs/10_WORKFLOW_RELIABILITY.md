@@ -331,3 +331,28 @@ known usage, exact request quote and response schema hash as a durable evaluatio
 hold; a fresh Core replays the saved failure without another paid call. Successful
 scoring projections keep envelope provenance/schema hash separately from the
 original answer hash. Historical receipts are unchanged.
+
+### Shared office spending admission (ADR-096, 2026-09-27)
+
+Migration 052 extends the Studio policy/lock to original evaluation and retained
+voice ledgers. Evaluations reserve their full frozen request allowance against
+office and model-role limits; voice reserves inspected audio cost against office,
+client and voice-role limits. No duplicate balance counter is introduced. All
+admission uses database timestamps, Asia/Baghdad days and READ COMMITTED queries
+after the same office lock. Parent/task/source locks precede the spending lock.
+Voice client identity also has a tenant/client foreign key; office-role permission
+alone does not prove that an arbitrary client ID belongs to that tenant.
+
+Complete finite usage or definite non-acceptance releases unused funds. Missing
+usage, uncertain calls and received voice without billing evidence retain their
+allocation across midnight. Missing historical allocation holds further spending;
+an observed overrun remains recorded. Exact settlements preserve the greater of
+observed and administrator-attested cost. Refused evaluations stop before transport;
+refused voice preserves original audio and manual copy review. Original admission
+and outcome identities are immutable; exact duplicate voice replay remains valid
+after the allowance is exhausted.
+
+This covers Studio, fixture evaluations and retained voice. Other provider-egress
+paths, named policy administration/accounting repair, typed completed-stage replay,
+fresh runtime qualification and live billing/office admission remain open. See
+runbooks/STUDIO_DAILY_BUDGETS.md and R21_SHARED_SPENDING_PROOF.json.
