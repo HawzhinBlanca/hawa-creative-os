@@ -53,7 +53,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
   };
 
   /** A Canva draft as the bridge records it: revision (planner manifest: 1200x1697) and a passing QC run. */
-  const draft = async (taskId: string, headline = 'KAAE members evening') => {
+  const draft = async (taskId: string, headline = 'KAAE members evening', historicalReport?: Record<string, unknown>) => {
     const checked = await checkedCanvaExportFixture(headline);
     return withRlsContext(db, scope, async (trx) => {
       const revision = await new RevisionRepository(db).createRevision(
@@ -80,6 +80,7 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
         content: checked.bytes,
         content_check: checked.contentCheck,
       });
+      const report = historicalReport ?? qc.qaReport;
       await trx
         .insertInto('qc_runs')
         .values({
@@ -89,8 +90,8 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
           qc_profile_id: await resolveQcProfileId(trx, tenantId),
           status: qc.status,
           critical_pass: qc.criticalPass,
-          report: qc.qaReport as any,
-          report_sha256: createHash('sha256').update(JSON.stringify(qc.qaReport)).digest('hex'),
+          report: report as any,
+          report_sha256: createHash('sha256').update(JSON.stringify(report)).digest('hex'),
         })
         .execute();
       return { revisionId: revision.id as string, qc };
@@ -120,6 +121,28 @@ describe('Desk task reads and approvals (PostgreSQL)', () => {
       // margins away from artboard edges" and "Observed contrast ratio meets ... standards".
       expect({ detail: detail.qaReport.safeMargins, list: listed.qaReport.safeMargins }).toEqual({ detail: null, list: null });
       expect({ detail: detail.qaReport.contrastCompliant, list: listed.qaReport.contrastCompliant }).toEqual({ detail: null, list: null });
+      expect({ detail: detail.qaReport.fontFamilyPass, list: listed.qaReport.fontFamilyPass }).toEqual({ detail: true, list: true });
+      expect({ detail: detail.qaReport.fontCoverage, list: listed.qaReport.fontCoverage }).toEqual({ detail: null, list: null });
+    });
+
+    it.each([true, false, null])('projects historical font family evidence (%s) without rewriting the QC report', async (familyPass) => {
+      const taskId = await request('KAAE: historical font evidence');
+      const report = { fontCoverage: true, rtlVisualReviewRequired: true,
+        checks: familyPass === null ? [] : [{ name: 'fontPass', passed: familyPass }] };
+      const { revisionId } = await draft(taskId, undefined, report);
+      const app = createApp({ db, deliverableStore: exports.store } as any);
+      const detail = await (await app.request(`/v1/tasks/${taskId}`, { headers: operator })).json();
+      const list = await (await app.request('/v1/tasks?limit=200', { headers: operator })).json();
+      const listed = list.items.find((t: { id: string }) => t.id === taskId);
+      for (const item of [detail, listed]) {
+        expect(item.qaReport.fontCoverage).toBeNull();
+        expect(item.qaReport.fontFamilyPass).toBe(familyPass);
+        expect(item.qaReport.rtlVisualReviewRequired).toBe(true);
+      }
+      const stored = await withRlsContext(db, scope, async (trx) => trx.selectFrom('qc_runs')
+        .select(['report', 'report_sha256']).where('design_revision_id', '=', revisionId).executeTakeFirstOrThrow());
+      expect(stored.report).toEqual(report);
+      expect(stored.report_sha256).toBe(createHash('sha256').update(JSON.stringify(report)).digest('hex'));
     });
 
     it("reports the design's recorded size, not an invented 1080 x 1350", async () => {

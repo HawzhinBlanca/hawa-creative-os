@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "observedDate": "2026-09-27",
+  "captureSourceCommit": "2d4c4de1f8dafa8d3761ebd44b4d74e57c6fc78c",
+  "corpus": {
+    "path": "evals/rtl_golden_cases.jsonl",
+    "sha256": "903601e57d2570a58545ef93b0dda45c2b6d01d7be01880a7df803990eee1148",
+    "caseCount": 40
+  },
+  "imports": 4,
+  "exports": 15,
+  "groups": [
+    {
+      "id": "group-1",
+      "acceptedCapture": "group-1-round-2",
+      "designId": "DAHWW-oflAo",
+      "caseCount": 10,
+      "nativeExactCopyPass": true,
+      "independentNativeTextObjects": 10,
+      "pptxCopyPass": true,
+      "declaredFontFamilyPass": true,
+      "declaredFamilies": [
+        "Noto Sans Arabic"
+      ],
+      "pdfFonts": [
+        {
+          "resource": "/F5",
+          "baseFont": "/AAAAAA+NotoSansArabic-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "resource": "/F6",
+          "baseFont": "/BAAAAA+NotoSans-Regular",
+          "subtype": "/Type0"
+        }
+      ],
+      "pngDimensions": [
+        1200,
+        2000
+      ],
+      "metadataUnchangedDuringCapture": true,
+      "humanVisualReview": "not_run",
+      "renderedGlyphCoverage": null
+    },
+    {
+      "id": "group-2",
+      "acceptedCapture": "group-2",
+      "designId": "DAHWW7k0bDA",
+      "caseCount": 10,
+      "nativeExactCopyPass": true,
+      "independentNativeTextObjects": 10,
+      "pptxCopyPass": true,
+      "declaredFontFamilyPass": true,
+      "declaredFamilies": [
+        "Noto Sans Arabic"
+      ],
+      "pdfFonts": [
+        {
+          "resource": "/F5",
+          "baseFont": "/AAAAAA+NotoSansArabic-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "resource": "/F6",
+          "baseFont": "/BAAAAA+NotoSans-Regular",
+          "subtype": "/Type0"
+        }
+      ],
+      "pngDimensions": [
+        1200,
+        2000
+      ],
+      "metadataUnchangedDuringCapture": true,
+      "humanVisualReview": "not_run",
+      "renderedGlyphCoverage": null
+    },
+    {
+      "id": "group-3",
+      "acceptedCapture": "group-3",
+      "designId": "DAHWWwCxPqk",
+      "caseCount": 10,
+      "nativeExactCopyPass": true,
+      "independentNativeTextObjects": 10,
+      "pptxCopyPass": true,
+      "declaredFontFamilyPass": true,
+      "declaredFamilies": [
+        "Noto Sans Arabic"
+      ],
+      "pdfFonts": [
+        {
+          "resource": "/F5",
+          "baseFont": "/AAAAAA+NotoSans-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "resource": "/F6",
+          "baseFont": "/BAAAAA+NotoSansArabic-Regular",
+          "subtype": "/Type0"
+        }
+      ],
+      "pngDimensions": [
+        1200,
+        2000
+      ],
+      "metadataUnchangedDuringCapture": true,
+      "humanVisualReview": "not_run",
+      "renderedGlyphCoverage": null
+    },
+    {
+      "id": "group-4",
+      "acceptedCapture": "group-4",
+      "designId": "DAHWWxcep-I",
+      "caseCount": 10,
+      "nativeExactCopyPass": true,
+      "independentNativeTextObjects": 10,
+      "pptxCopyPass": true,
+      "declaredFontFamilyPass": true,
+      "declaredFamilies": [
+        "Noto Sans Arabic"
+      ],
+      "pdfFonts": [
+        {
+          "resource": "/F5",
+          "baseFont": "/AAAAAA+NotoSans-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "resource": "/F6",
+          "baseFont": "/BAAAAA+NotoSansArabic-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "resource": "/F7",
+          "baseFont": null,
+          "subtype": "/Type3"
+        }
+      ],
+      "pngDimensions": [
+        1200,
+        2000
+      ],
+      "metadataUnchangedDuringCapture": true,
+      "humanVisualReview": "not_run",
+      "renderedGlyphCoverage": null
+    }
+  ],
+  "totalExactNativeStrings": 40,
+  "firstCaptureRefusal": {
+    "status": "design_changed",
+    "reason": "Provider metadata changed during capture; artifacts retained but excluded from accepted set.",
+    "replacement": "group-1-round-2",
+    "pngDecodedChangedPixels": 0,
+    "pngBytesIdentical": false
+  },
+  "failures": [
+    {
+      "at": "2026-09-27T03:01:13.598Z",
+      "phase": "group-1:capture-consistency",
+      "errorClass": "Error",
+      "finding": "Provider updated_at advanced from 1790478053 to 1790478055; first export set refused."
+    },
+    {
+      "at": "2026-09-27T03:03:00.499Z",
+      "phase": "group-2:import",
+      "errorClass": "TypeError",
+      "code": null,
+      "httpStatus": null,
+      "clarification": "Probe ordering bug: stability check dereferenced record.design before saved import job was polled. Not a Canva transport failure; job ID retained. Fixed ordering and resume existing job."
+    }
+  ],
+  "fullMultilingualAdmission": false,
+  "limits": [
+    "Native read inspection establishes independent addressable text, not committed manual edit/save/reopen.",
+    "Direction is explicitly set from the golden oracle; automatic direction inference is not tested.",
+    "RTL-038 and RTL-039 keep literal ** markers; actual styled runs are not tested.",
+    "One declared family and one wide layout; approved multiple fonts and narrow layouts are not tested.",
+    "PDF font resources include NotoSans-Regular in addition to NotoSansArabic-Regular; group 4 also has unnamed Type3 resources.",
+    "PDF text extraction is not an authoritative logical-text oracle for these RTL exports.",
+    "Font names do not establish exact font-file coverage, fallback correctness or licensing.",
+    "Metadata samples are not an atomic Canva revision lock.",
+    "Native reader visual review, 20 real Sorani, 10 Arabic and 10 mixed office designs remain unexecuted.",
+    "No full Hawa task/review/approval/delivery or deployment was exercised."
+  ],
+  "artifactHashes": {
+    "fixtures.json": "9f332a9252bf2df4dba279383a1078471398d695363afc41eb8ab711710bb8ac",
+    "group-1-canva.pdf": "8f3df170c1d9578c0b09c49c774634793807b81a35bece32f103bbe83b9bcaba",
+    "group-1-canva.png": "30c83ee6c720c01e63856e967fcecfd648dea37025ff202ba479f631413689e8",
+    "group-1-canva.pptx": "5689cc5e9c6c1a1711cd23df2f60fe54eb4e62f545214781b76067b33c821541",
+    "group-1-input.pptx": "7f6aa0d3a57973664b3a4ef37d2b1e1ab06bcf9e63e0648a97b57859499cfa62",
+    "group-1-native.json": "5c7d3ce6dff781c757083a822744020cfebb68b2c8047da30ccaeb61093acb80",
+    "group-1-qa.json": "786fbad1f97b075200fc85b0152eaa108f0ef224fd9806a99bd2c3417ff9cf05",
+    "group-1-round-2-canva.pdf": "bf4a9d2a6260d041b0b881b025df3bbbbfb75615c603c9f719bda9756d430cc2",
+    "group-1-round-2-canva.png": "9867c1f667f2925280bd1a4ea447973c3b6ef2f568cee89c0b967cfdf3ae560b",
+    "group-1-round-2-canva.pptx": "5138c60337e629fd2fc6c04c3993ca9aa64b323d497420d936fb8bed6eae1512",
+    "group-1-round-2-qa.json": "786fbad1f97b075200fc85b0152eaa108f0ef224fd9806a99bd2c3417ff9cf05",
+    "group-2-canva.pdf": "60574bfc52ea63b0fdb26b10f6c9284af1ae4cd98d38cdb49c35f000c3290fc4",
+    "group-2-canva.png": "af70dec6f74ff2d02350abfcd8fb0175576f2878292d047c44a8edf5cd93a1c7",
+    "group-2-canva.pptx": "4f139e585e8eaf1142f818e6b690a76e4c0a281e5b04e5acb476aac3edd80757",
+    "group-2-input.pptx": "d775ec16c6ac05534b574e173ae8ea30478cf622bb88c4824a65811143485caa",
+    "group-2-native.json": "3ea4f769aa9ba481d79f67f5ae43fabd6310e53ff26342aab434ecaff275a3ae",
+    "group-2-qa.json": "6498072088a07672392c053d9a2c47cdfff17fa800f69df2118959205b0c7ae5",
+    "group-3-canva.pdf": "b8a89b2ecab562dc8b121c8b797d7a696e6a5c89d129fd9b3bc8e3ea452d0268",
+    "group-3-canva.png": "a9c0e7fcf4c50d5b1249e72a88ad9d8b8095ff6be9db57fc0561136eca26f0ca",
+    "group-3-canva.pptx": "5486d2cd427a5bd28b06fe090c6653b6fe408620cb70a5f874ecc8f628129ff2",
+    "group-3-input.pptx": "e0a6731d0c628f66ed50e96061044d4631c09e98cc7debad2c838f81dcad0cd5",
+    "group-3-native.json": "efad7d4158a20072e92c22a7c1f143fd11c80223281d1a54c8da69fd8eaa88a0",
+    "group-3-qa.json": "2efad433ec219db0945390fc1c0e64307fc95d916dd921187d0d63176f7be3c9",
+    "group-4-canva.pdf": "04e7bf986a173156a8cee6151c06c007c10bf08a5f062c516fffa5904f967f58",
+    "group-4-canva.png": "8f2a8dd8ecfe2406d763ca76fd76766424f7eb7e5509c917996c0a87937bafc5",
+    "group-4-canva.pptx": "ff92c95c150b6c1affa26808e8514abff7f1eaf3c43638f6cc9cdc60d9ef3c3c",
+    "group-4-input.pptx": "ac61eb164265de2b44b0b1824567e51f45fb0d428ef19c449ba5d37a407b6c1e",
+    "group-4-native.json": "af25a4d4813c9994b4f0e85b0070c145fb9a75a5439f0abd385a8f0ff94081b9",
+    "group-4-qa.json": "02d439c1283438d16e4c313c35db6bcdb39ce30e94c6a33d0f014f9c154700a2",
+    "live-capture.json": "e0894be21fefd62bea491a5013a964ce1f0d994ef7fd79d9ba851e2fd513a820"
+  }
+}

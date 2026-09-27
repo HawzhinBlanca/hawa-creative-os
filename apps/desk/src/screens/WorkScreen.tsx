@@ -81,7 +81,9 @@ export interface LiveTask {
     /** null = not measured by the check that produced this report; rendered as pending, never as a pass. */
     safeMargins: boolean | null;
     contrastCompliant: boolean | null;
-    fontCoverage: boolean;
+    fontFamilyPass?: boolean | null;
+    /** Legacy field: a family-name check cannot establish rendered glyph coverage. */
+    fontCoverage?: boolean | null;
     exportArtifactId?: string | null;
     exportSha256?: string | null;
     captureVersion?: string | null;
@@ -1283,7 +1285,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                           const bidiPass = qa ? qa.bidiIsolation : null;
                           const marginPass = qa ? qa.safeMargins : null;
                           const contrastPass = qa ? qa.contrastCompliant : null;
-                          const fontPass = qa ? qa.fontCoverage : null;
+                          const fontPass = qa?.fontFamilyPass ?? null;
 
                           return (
                             <>
@@ -1334,13 +1336,23 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                               <div className={`qa-item ${fontPass === true ? 'passed' : fontPass === false ? 'failed' : 'pending'}`}>
                                 <span className="qa-status-icon">{fontPass === true ? '✓' : fontPass === false ? '✗' : '○'}</span>
                                 <div style={{ flex: 1 }}>
-                                  <strong>Font License & Glyph Coverage</strong>
+                                  <strong>Declared font families</strong>
                                   <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
                                     {fontPass === true
-                                      ? 'All glyphs covered by OFL fonts (Vazirmatn/Cairo/Rabar). Zero placeholder tofu boxes.'
+                                      ? 'Text runs declare font families allowed by the saved policy.'
                                       : fontPass === false
-                                      ? 'Missing Kurdish Sorani glyph shapes or unsupported font weights detected.'
-                                      : 'Font coverage inspection pending.'}
+                                      ? 'Declared font families do not match the saved policy.'
+                                      : 'Font-family inspection has not been measured.'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="qa-item pending">
+                                <span className="qa-status-icon">○</span>
+                                <div style={{ flex: 1 }}>
+                                  <strong>Rendered glyph coverage</strong>
+                                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                                    Not verified by this check. Inspect the final export for missing glyphs and unexpected font changes; verify licenses against approved font records.
                                   </p>
                                 </div>
                               </div>

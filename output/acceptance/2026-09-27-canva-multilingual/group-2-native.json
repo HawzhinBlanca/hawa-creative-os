@@ -1,0 +1,231 @@
+{
+  "designId": "DAHWW7k0bDA",
+  "pages": [
+    {
+      "page_id": "PB1dqknLtnTcty7P",
+      "page_number": 1,
+      "notes": "1",
+      "dimension": {
+        "width": 1200,
+        "height": 2000
+      },
+      "is_responsive": false,
+      "is_empty": false,
+      "is_editable": true
+    }
+  ],
+  "richtexts": [
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "رقم الهاتف: +964 750 123 4567"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 60,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PB1dqknLtnTcty7P-LBrQl9LWzqSqSFLt"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "careers.rona.example/jobs — داواکاری بنێرە"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 250,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PB1dqknLtnTcty7P-LBfFMD3NTzgpysf7"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "داواکاری بنێرە: careers.rona.example/jobs"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 440,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PB1dqknLtnTcty7P-LBM3CF7pVTVjMLcs"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "@Rona #تەندروستی"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 630,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PB1dqknLtnTcty7P-LBdkS3nxqgQ202ss"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "#الصحة @Rona"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 820,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PB1dqknLtnTcty7P-LBnVHVrdLKPx8PxV"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "«ڕوونی، هێزی داهێنانە»"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1010,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PB1dqknLtnTcty7P-LBDnGn5h7SnfW04t"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "“الوضوح ميزة إبداعية”"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1200,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PB1dqknLtnTcty7P-LBzC4bVkpKJvyrhb"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "(NOVA ONE) بەرهەمی نوێ"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1390,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PB1dqknLtnTcty7P-LBzLRpkHqcDwdjTR"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "بەرهەمی نوێ (NOVA ONE)"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1580,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PB1dqknLtnTcty7P-LBmRXJLjK9rlPrlW"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "[١٠ی ئەیلوول] ڕووداو"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1770,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PB1dqknLtnTcty7P-LBCZLRcXwc21jWGc"
+    }
+  ],
+  "inspectionTransaction": "cancelled without edits",
+  "scope": "Observed native text and geometry; no human language approval."
+}

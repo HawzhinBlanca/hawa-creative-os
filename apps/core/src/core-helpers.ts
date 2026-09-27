@@ -169,7 +169,10 @@ export interface CanvaQcEvaluationResult {
     bidiIsolation: boolean | null;
     /** True when Canva's PPTX lacks readable RTL direction metadata; a person must inspect the final image. */
     rtlVisualReviewRequired: boolean;
-    fontCoverage: boolean;
+    /** Checks declared PPTX families against the captured policy, not actual rendered fonts. */
+    fontFamilyPass: boolean | null;
+    /** This evaluator does not measure rendered glyphs, fallback fonts or licenses. */
+    fontCoverage: null;
     copyFidelity: boolean;
     /** null = this evaluator did not measure it. It reads the exported PPTX, which carries no pixels or geometry verdict. */
     contrastCompliant: boolean | null;
@@ -206,7 +209,8 @@ export function evaluateCanvaExportQc(
         passed: false,
         bidiIsolation: false,
         rtlVisualReviewRequired: false,
-        fontCoverage: false,
+        fontFamilyPass: null,
+        fontCoverage: null,
         copyFidelity: false,
         contrastCompliant: false,
         safeMargins: false,
@@ -238,7 +242,7 @@ export function evaluateCanvaExportQc(
       status: 'failed', criticalPass: false,
       qaReport: {
         status: 'failed', criticalPass: false, passed: false,
-        bidiIsolation: false, rtlVisualReviewRequired: false, fontCoverage: false, copyFidelity: false,
+        bidiIsolation: false, rtlVisualReviewRequired: false, fontFamilyPass: null, fontCoverage: null, copyFidelity: false,
         contrastCompliant: null, safeMargins: null, errors,
         checks: [
           { name: 'exportRetrieved', passed: Boolean(bytes?.length) },
@@ -281,7 +285,8 @@ export function evaluateCanvaExportQc(
         passed: false,
         bidiIsolation: false,
         rtlVisualReviewRequired: false,
-        fontCoverage: false,
+        fontFamilyPass: null,
+        fontCoverage: null,
         copyFidelity: false,
         contrastCompliant: false,
         safeMargins: false,
@@ -343,7 +348,8 @@ export function evaluateCanvaExportQc(
       passed: criticalPass,
       bidiIsolation: rtlVisualReviewRequired ? null : rtlPass,
       rtlVisualReviewRequired,
-      fontCoverage: fontPass,
+      fontFamilyPass: fontPass,
+      fontCoverage: null,
       copyFidelity: copyPass,
       contrastCompliant: null,
       safeMargins: null,

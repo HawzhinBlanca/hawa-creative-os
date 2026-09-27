@@ -329,7 +329,10 @@ export function buildTaskPageQuery(params: TaskPageParams) {
       SELECT q.status, q.critical_pass,
         jsonb_build_object(
           'bidiIsolation', q.report -> 'bidiIsolation', 'safeMargins', q.report -> 'safeMargins',
+          'rtlVisualReviewRequired', q.report -> 'rtlVisualReviewRequired',
           'contrastCompliant', q.report -> 'contrastCompliant', 'fontCoverage', q.report -> 'fontCoverage',
+          'fontFamilyPass', COALESCE(q.report -> 'fontFamilyPass',
+            jsonb_path_query_first(q.report, '$.checks[*] ? (@.name == "fontPass").passed')),
           'copyFidelity', q.report -> 'copyFidelity', 'errors', q.report -> 'errors'
         ) AS report
       FROM hawa.qc_runs q

@@ -1,0 +1,231 @@
+{
+  "designId": "DAHWW-oflAo",
+  "pages": [
+    {
+      "page_id": "PBDK7BHkKYk3Ncw6",
+      "page_number": 1,
+      "notes": "1",
+      "dimension": {
+        "width": 1200,
+        "height": 2000
+      },
+      "is_responsive": false,
+      "is_empty": false,
+      "is_editable": true
+    }
+  ],
+  "richtexts": [
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "سڵاو جیهان"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 60,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBDK7BHkKYk3Ncw6-LBZrlP07Gd0fS1bh"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "مرحبا بالعالم"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 250,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBDK7BHkKYk3Ncw6-LBsBrpwCg4nrHQyk"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "Hello world"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 440,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBDK7BHkKYk3Ncw6-LBcMMXdWjKVPfNrc"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "نرخی تایبەت: ٢٥٬٠٠٠ دینار"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 630,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBDK7BHkKYk3Ncw6-LBZYh9Jt8Py458pX"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "السعر الخاص: ٢٥٬٠٠٠ دينار"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 820,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBDK7BHkKYk3Ncw6-LBRwXgKzZSYjPfr7"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "NOVA ONE — بۆ هەنگاوی داهاتوو"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1010,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBDK7BHkKYk3Ncw6-LBCY9ZTJlcsZRrC7"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "بۆ هەنگاوی داهاتوو — NOVA ONE"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1200,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBDK7BHkKYk3Ncw6-LBgnNGKyxMGTppKg"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "کاتژمێر 8:30 PM"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1390,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBDK7BHkKYk3Ncw6-LBNh5Gyyx3QnPJHZ"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "الساعة 8:30 PM"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1580,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBDK7BHkKYk3Ncw6-LBxpXpxbs4KKyncJ"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "ژمارە: ٠٧٥٠ ١٢٣ ٤٥٦٧"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1770,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBDK7BHkKYk3Ncw6-LBxCB61CCYlBhTz0"
+    }
+  ],
+  "inspectionTransaction": "cancelled without edits",
+  "scope": "Observed native text and geometry; no human language approval."
+}

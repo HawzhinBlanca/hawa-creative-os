@@ -23,3 +23,28 @@ The direct isolated-PostgreSQL test now creates a revision with no QA, requests 
 This establishes honest QA provenance for this decision path, not full review truth. Canva export/capture binding, live design state, independent visual evidence, migration rehearsal on a restored production-shaped database and deployed approval remain open. R18 and R08 remain **in progress**.
 
 **Migration rehearsal:** Source `9c59f85` (2026-09-25) adds an isolated PostgreSQL test that reinstates the old non-null QA columns and drops the new guard inside a rollback-only transaction, applies the checked-in migration 025 body, then verifies both columns are nullable and the approved-row guard exists. The focused file passed **1 test**; test TypeScript and blueprint **749/0/0** passed. This is an old-shape schema rehearsal with test fixtures, not a restored production-data migration or a runtime deploy. Full sealed-tree verification follows the updated evidence seal.
+
+## 2026-09-27 — font-family checks do not certify rendered glyphs
+
+FR-038/041, NFR-020; this enforces ADR-077's existing measurement boundary.
+Real multilingual Canva exports showed one declared PPTX family but additional
+PDF font resources. Core nevertheless mapped family membership to `fontCoverage`,
+and Desk claimed all glyphs were covered by named OFL fonts with zero tofu.
+Core now records `fontFamilyPass` separately and `fontCoverage: null`; Desk shows
+declared families and unverified rendered glyphs with separate statuses. Missing
+or unreadable bytes do not invent a measured font-family result. Existing copy,
+font-family refusal, RTL visual review and human approval controls remain intact.
+
+Historical QC reports and hashes are preserved. Task reads extract explicit
+family evidence from the named legacy check; the old coverage flag alone proves
+nothing. The compact list query now includes that evidence and the previously
+dropped `rtlVisualReviewRequired` flag. Regression tests cover historical true,
+false and absent measurements, immutable stored hashes, list/detail agreement,
+the real Canva PPTX and rendered Desk states.
+
+Red-before: **12 failed / 52 passed**. Final focused run after the DB package
+rebuild: **9 files / 122 passed**, no skips. TypeScript (including tests), lint and
+Desk build pass. Earlier post-fix failures identified the SQL projection and a
+run against stale compiled DB output; both are retained in the execution account.
+Full app regression and deployed-image checks were not rerun. See
+`R19_MULTILINGUAL_PROOF.json`; R18/R19 and release admission remain in progress.

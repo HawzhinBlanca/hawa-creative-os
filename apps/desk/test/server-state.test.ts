@@ -31,6 +31,7 @@ interface FakeTask {
   revision?: number;
   revisionId?: string;
   approved?: boolean;
+  fontFamilyPass?: boolean | null;
 }
 
 const approvable = (id: string, title: string): FakeTask => ({ id, title, status: 'AWAITING_APPROVAL', revision: 1 });
@@ -49,7 +50,8 @@ function asTask(t: FakeTask) {
       ? {
           latestRevisionId: t.revisionId || `r${t.revision}`,
           latestRevision: { id: t.revisionId || `r${t.revision}`, version: t.revision, sha256: 'ab'.repeat(32), format: 'png' },
-          qaReport: { passed: true, bidiIsolation: true, safeMargins: true, contrastCompliant: true, fontCoverage: true, errors: [] },
+          qaReport: { passed: true, bidiIsolation: true, safeMargins: true, contrastCompliant: true, fontCoverage: true,
+            ...(t.fontFamilyPass !== undefined ? { fontFamilyPass: t.fontFamilyPass } : {}), errors: [] },
         }
       : {}),
     ...(t.approved ? { latestApproval: { decisionId: 'd1', role: 'art_director', decidedAt: '2026-09-24T10:05:00.000Z' } } : {}),
@@ -196,6 +198,20 @@ afterAll(() => {
 });
 
 describe('the Work queue follows the event stream', () => {
+  it.each([undefined, true, false, null])('keeps rendered glyphs unverified with legacy coverage=true and family result %s', async (fontFamilyPass) => {
+    fakeCore([{ ...approvable('t1', 'Font evidence'), fontFamilyPass }]);
+    const { view } = await renderWork(new FakeStream('connected'));
+    await click(byText(view.container, 'button', /QA Preflight/));
+    const panel = view.container.querySelector('[aria-label="Automated QA Preflight"]')!;
+    expect(panel.textContent).not.toContain('All glyphs covered');
+    expect(panel.textContent).not.toContain('Zero placeholder tofu boxes');
+    const rows = [...panel.querySelectorAll('.qa-item')];
+    const family = rows.find(row => row.textContent?.includes('Declared font families'));
+    const glyphs = rows.find(row => row.textContent?.includes('Rendered glyph coverage'));
+    expect(family?.classList.contains(fontFamilyPass === true ? 'passed' : fontFamilyPass === false ? 'failed' : 'pending')).toBe(true);
+    expect(glyphs?.classList.contains('pending')).toBe(true);
+  });
+
   it('shows a new draft within 2 s of its event', async () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);

@@ -1,0 +1,168 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_ee09c001ddce1e56 and hawa_tpl_repair_ee09c001ddce1e56 (25 ms)
+ ❯ apps/desk/test/server-state.test.ts (33 tests | 4 failed) 806ms
+     × keeps rendered glyphs unverified with legacy coverage=true and family result undefined 80ms
+     × keeps rendered glyphs unverified with legacy coverage=true and family result true 30ms
+     × keeps rendered glyphs unverified with legacy coverage=true and family result false 36ms
+     × keeps rendered glyphs unverified with legacy coverage=true and family result null 31ms
+ ❯ apps/core/test/canva-export-qc.test.ts (17 tests | 4 failed) 23ms
+     × passes an export whose copy, fonts and direction survived Canva, and says what it did not measure 6ms
+     × refuses an export where Canva substituted the Sorani typeface 1ms
+     × refuses a Canva font substitution hidden behind an earlier passing check 0ms
+     × does not claim rendered glyph coverage from the real Canva multilingual export 11ms
+{"level":"error","time":"2026-09-27T03:12:58.580Z","service":"core","requestId":"4296a4e4-0a7f-4c95-8942-1db85450f70e","taskId":"3a500403-8c21-4067-b7cf-c5450ad9280e","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Cannot approve task 3a500403-8c21-4067-b7cf-c5450ad9280e: changes were requested on revision 4a0a8f97-fd04-48b5-ba2a-8f6df435b586, so it can no longer be approved; approve the revision made with the changes once it is recorded","stack":"Error: Cannot approve task 3a500403-8c21-4067-b7cf-c5450ad9280e: changes were requested on revision 4a0a8f97-fd04-48b5-ba2a-8f6df435b586, so it can no longer be approved; approve the revision made with the changes once it is recorded\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:356:28)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at RevisionRepository.recordApproval (/Users/hawzhin/Hawdesign/packages/db/src/repositories/revision.repository.ts:603:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/routes/decisions.routes.ts:581:26\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at /Users/hawzhin/Hawdesign/apps/core/src/routes/decisions.routes.ts:577:22\n    at dispatch (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/hono@4.13.5/node_modules/hono/dist/compose.js:22:17)"},"msg":"[core:approvals:create] DB approval error:"}
+{"level":"warn","time":"2026-09-27T03:12:58.672Z","service":"core","requestId":"1357f33f-acef-41ff-bb13-f3760a8336ad","taskId":"0962cfd7-1529-4da3-a6da-e4c000763e35","tenantId":"00000000-0000-4000-a000-000000000001","msg":"[canvaStatusHandler] Task 0962cfd7-1529-4da3-a6da-e4c000763e35 needs an operator: Automatic draft ended GENERATION_FAILED. An operator has to follow up."}
+ ❯ apps/core/test/desk-task-truth.test.ts (14 tests | 4 failed) 1418ms
+       × reports the checks the QC never measured (safe margins, contrast) as not measured, not as passed 111ms
+       × projects historical font family evidence (true) without rewriting the QC report 51ms
+       × projects historical font family evidence (false) without rewriting the QC report 49ms
+       × projects historical font family evidence (null) without rewriting the QC report 44ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 12 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desk/test/server-state.test.ts > the Work queue follows the event stream > keeps rendered glyphs unverified with legacy coverage=true and family result undefined
+ FAIL  apps/desk/test/server-state.test.ts > the Work queue follows the event stream > keeps rendered glyphs unverified with legacy coverage=true and family result true
+ FAIL  apps/desk/test/server-state.test.ts > the Work queue follows the event stream > keeps rendered glyphs unverified with legacy coverage=true and family result false
+ FAIL  apps/desk/test/server-state.test.ts > the Work queue follows the event stream > keeps rendered glyphs unverified with legacy coverage=true and family result null
+AssertionError: expected '✓Kurdish Sorani Bidi Isolation (UAX #…' not to contain 'All glyphs covered'
+
+Expected: "All glyphs covered"
+Received: "✓Kurdish Sorani Bidi Isolation (UAX #9)Readable text-direction metadata passed in the exported source.✓Safe Margins & Bleed ClearanceAll text nodes maintain minimum 32px safe margins away from artboard edges.✓High Contrast Compliance (WCAG AA 4.5:1+)Observed contrast ratio meets institutional accessibility standards.✓Font License & Glyph CoverageAll glyphs covered by OFL fonts (Vazirmatn/Cairo/Rabar). Zero placeholder tofu boxes."
+
+ ❯ apps/desk/test/server-state.test.ts:206:35
+    204|     await click(byText(view.container, 'button', /QA Preflight/));
+    205|     const panel = view.container.querySelector('[aria-label="Automated…
+    206|     expect(panel.textContent).not.toContain('All glyphs covered');
+       |                                   ^
+    207|     expect(panel.textContent).not.toContain('Zero placeholder tofu box…
+    208|     const rows = [...panel.querySelectorAll('.qa-item')];
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯
+
+ FAIL  apps/core/test/canva-export-qc.test.ts > evaluateCanvaExportQc: the QC record behind a Canva approval > passes an export whose copy, fonts and direction survived Canva, and says what it did not measure
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ apps/core/test/canva-export-qc.test.ts:89:39
+     87|     expect(r.criticalPass).toBe(true);
+     88|     expect(r.qaReport.copyFidelity).toBe(true);
+     89|     expect(r.qaReport.fontFamilyPass).toBe(true);
+       |                                       ^
+     90|     expect(r.qaReport.fontCoverage).toBeNull();
+     91|     expect(r.qaReport.bidiIsolation).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯
+
+ FAIL  apps/core/test/canva-export-qc.test.ts > evaluateCanvaExportQc: the QC record behind a Canva approval > refuses an export where Canva substituted the Sorani typeface
+AssertionError: expected undefined to be false // Object.is equality
+
+- Expected:
+false
+
++ Received:
+undefined
+
+ ❯ apps/core/test/canva-export-qc.test.ts:119:39
+    117|     expect(r.criticalPass).toBe(false);
+    118|     expect(r.qaReport.copyFidelity).toBe(true);
+    119|     expect(r.qaReport.fontFamilyPass).toBe(false);
+       |                                       ^
+    120|     expect(r.qaReport.fontCoverage).toBeNull();
+    121|     expect(r.qaReport.errors.join(' ')).toMatch(/font/i);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯
+
+ FAIL  apps/core/test/canva-export-qc.test.ts > evaluateCanvaExportQc: the QC record behind a Canva approval > refuses a Canva font substitution hidden behind an earlier passing check
+AssertionError: expected undefined to be false // Object.is equality
+
+- Expected:
+false
+
++ Received:
+undefined
+
+ ❯ apps/core/test/canva-export-qc.test.ts:201:44
+    199|     const result = evaluateCanvaExportQc({ ...checked, content: change…
+    200|     expect(result.criticalPass).toBe(false);
+    201|     expect(result.qaReport.fontFamilyPass).toBe(false);
+       |                                            ^
+    202|     expect(result.qaReport.fontCoverage).toBeNull();
+    203|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯
+
+ FAIL  apps/core/test/canva-export-qc.test.ts > evaluateCanvaExportQc: the QC record behind a Canva approval > does not claim rendered glyph coverage from the real Canva multilingual export
+AssertionError: expected true to be null
+
+- Expected:
+null
+
++ Received:
+true
+
+ ❯ apps/core/test/canva-export-qc.test.ts:233:42
+    231|     // The corresponding real PDF also uses NotoSans-Regular and an un…
+    232|     // family declarations cannot certify those rendered glyphs, fallb…
+    233|     expect(result.qaReport.fontCoverage).toBeNull();
+       |                                          ^
+    234|     expect(result.qaReport.fontFamilyPass).toBe(true);
+    235|     expect(result.qaReport.rtlVisualReviewRequired).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯
+
+ FAIL  apps/core/test/desk-task-truth.test.ts > Desk task reads and approvals (PostgreSQL) > GET /tasks/:id and GET /tasks (the Work screen reads these) > reports the checks the QC never measured (safe margins, contrast) as not measured, not as passed
+AssertionError: expected { detail: undefined, list: undefined } to deeply equal { detail: true, list: true }
+
+- Expected
++ Received
+
+  {
+-   "detail": true,
+-   "list": true,
++   "detail": undefined,
++   "list": undefined,
+  }
+
+ ❯ apps/core/test/desk-task-truth.test.ts:124:96
+    122|       expect({ detail: detail.qaReport.safeMargins, list: listed.qaRep…
+    123|       expect({ detail: detail.qaReport.contrastCompliant, list: listed…
+    124|       expect({ detail: detail.qaReport.fontFamilyPass, list: listed.qa…
+       |                                                                                                ^
+    125|       expect({ detail: detail.qaReport.fontCoverage, list: listed.qaRe…
+    126|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+ FAIL  apps/core/test/desk-task-truth.test.ts > Desk task reads and approvals (PostgreSQL) > GET /tasks/:id and GET /tasks (the Work screen reads these) > projects historical font family evidence (true) without rewriting the QC report
+ FAIL  apps/core/test/desk-task-truth.test.ts > Desk task reads and approvals (PostgreSQL) > GET /tasks/:id and GET /tasks (the Work screen reads these) > projects historical font family evidence (false) without rewriting the QC report
+ FAIL  apps/core/test/desk-task-truth.test.ts > Desk task reads and approvals (PostgreSQL) > GET /tasks/:id and GET /tasks (the Work screen reads these) > projects historical font family evidence (null) without rewriting the QC report
+AssertionError: expected true to be null
+
+- Expected:
+null
+
++ Received:
+true
+
+ ❯ apps/core/test/desk-task-truth.test.ts:137:44
+    135|       const listed = list.items.find((t: { id: string }) => t.id === t…
+    136|       for (const item of [detail, listed]) {
+    137|         expect(item.qaReport.fontCoverage).toBeNull();
+       |                                            ^
+    138|         expect(item.qaReport.fontFamilyPass).toBe(familyPass);
+    139|       }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  12 failed | 52 passed (64)
+   Start at  06:12:56
+   Duration  3.24s (transform 2.83s, setup 203ms, import 3.47s, tests 2.25s, environment 513ms)

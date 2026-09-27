@@ -693,3 +693,10 @@ the last full suite passed 421 files / 3,237 tests before the reminder changes.
 2. **Final exports and provider boundaries**: qualify R11–R19 exports and R20–R23 provider boundaries.
 3. **Canary & admission**: deploy only after a coherent release gate, then run live recovery and blind human
    creative-quality acceptance. No current source or local test result establishes production admission.
+
+
+## 2026-09-27 — multilingual capture and honest font QA
+
+Capture source `2d4c4de`: four real Canva imports, fifteen exports, forty exact independent native strings. Initial metadata mismatch refused; recapture accepted. Probe ordering failure resumed the saved import, with no duplicate. Actual PDF font resources disproved the glyph/license conclusion inferred from PPTX family names. Core, compact DB task projection and Desk now expose declared family evidence with unknown glyph coverage; legacy QC hashes stay unchanged and the list retains RTL review-required state.
+
+Red 12 failed/52 passed; final 9 files/122 passed after sequential DB rebuild; types/lint/Desk build pass. Full regression not rerun; no app deployment, model calls, approval or messages. Human language, actual style boundaries, multi-font/narrow layouts, real office designs, committed native save/reopen, full live workflow and independent-host recovery remain open. See R19_MULTILINGUAL_PROOF.json and R18/R19 evidence.

@@ -1,0 +1,231 @@
+{
+  "designId": "DAHWWxcep-I",
+  "pages": [
+    {
+      "page_id": "PBmxHTHbBHbtz3mq",
+      "page_number": 1,
+      "notes": "1",
+      "dimension": {
+        "width": 1200,
+        "height": 2000
+      },
+      "is_responsive": false,
+      "is_empty": false,
+      "is_editable": true
+    }
+  ],
+  "richtexts": [
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "البريد: team@example.com"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 60,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBmxHTHbBHbtz3mq-LBxBrp3k2mVd4ydn"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "هەڵبژاردەی A/B بۆ ٢٠٢٦"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 250,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBmxHTHbBHbtz3mq-LBhg33grfRd6RF2V"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "الخيار A/B لعام ٢٠٢٦"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 440,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBmxHTHbBHbtz3mq-LBm8Z24skGnRy4nK"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "٥٠٪ داشکاندن"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 630,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBmxHTHbBHbtz3mq-LBKWssN0RCQQZ9ZT"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "خصم 50%"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 820,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBmxHTHbBHbtz3mq-LBGpmjw2FKVdC6BM"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "ڕۆژی یەکشەممە\n٦ی ئەیلوولی ٢٠٢٦\nکاتژمێر ٦:٣٠"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1010,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBmxHTHbBHbtz3mq-LBh4h8j01Jwgy219"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "الأحد\n6 سبتمبر 2026\n6:30 مساءً"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1200,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBmxHTHbBHbtz3mq-LBDXhyLfzWdwhwtV"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "سڵاو **NOVA** جیهان"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1390,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBmxHTHbBHbtz3mq-LBwd7MGN804ZD05n"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "مرحبا **NOVA** بالعالم"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1580,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBmxHTHbBHbtz3mq-LBrXKp3GQvq3Wthb"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "کوردی 😀 English 2026"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1770,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBmxHTHbBHbtz3mq-LBMbNJVft7V80LhZ"
+    }
+  ],
+  "inspectionTransaction": "cancelled without edits",
+  "scope": "Observed native text and geometry; no human language approval."
+}

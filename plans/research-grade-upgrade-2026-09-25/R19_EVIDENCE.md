@@ -23,3 +23,20 @@ All observed effects are retained: two test designs, four export jobs, one impor
 normal rotation of the existing Hawa OAuth connection; no model calls, messages,
 app restarts or flag changes. Existing full-suite results remain historical; no
 runtime app source changed for this qualification.
+
+## 2026-09-27: forty real multilingual strings, partial admission
+
+Capture source `2d4c4de`; FR-034/035/038/041 and NFR-020. Four actual Canva
+imports and fifteen exports preserve all forty supplied strings in native text
+and final PPTX. Accepted PNGs are 1200×2000. An initial metadata mismatch was
+refused and recaptured; a local probe ordering bug resumed the existing import
+job. Both failures remain recorded. Native inspection transactions were cancelled.
+
+The PDFs contain NotoSans-Regular alongside NotoSansArabic-Regular, and group 4
+has an unnamed Type3 resource, despite passing PPTX family checks. The resulting
+false glyph/license QA claim is corrected in Core and Desk; see R18 evidence.
+Full multilingual admission remains false: explicit direction, one wide layout,
+one family and literal style markers do not establish auto direction, actual
+styled runs, multiple fonts, native edit/save/reopen, human language approval or
+the required real office corpus. See `R19_MULTILINGUAL_PROOF.json` and
+`output/acceptance/2026-09-27-canva-multilingual/README.md`.

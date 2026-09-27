@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { crc32 } from 'node:zlib';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { checkCanvaPptx } from '@hawa/qa';
 import { evaluateCanvaExportQc } from '../src/app.js';
 
@@ -85,7 +86,8 @@ describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
     expect(r.status).toBe('passed');
     expect(r.criticalPass).toBe(true);
     expect(r.qaReport.copyFidelity).toBe(true);
-    expect(r.qaReport.fontCoverage).toBe(true);
+    expect(r.qaReport.fontFamilyPass).toBe(true);
+    expect(r.qaReport.fontCoverage).toBeNull();
     expect(r.qaReport.bidiIsolation).toBe(true);
     expect(r.qaReport.errors).toEqual([]);
     expect(r.qaReport.exportSha256).toBe(sha256(storedRow(pptx()).content));
@@ -114,7 +116,8 @@ describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
     const r = evaluateCanvaExportQc(storedRow(pptx({ soraniFont: 'Arimo' })), COPY);
     expect(r.criticalPass).toBe(false);
     expect(r.qaReport.copyFidelity).toBe(true);
-    expect(r.qaReport.fontCoverage).toBe(false);
+    expect(r.qaReport.fontFamilyPass).toBe(false);
+    expect(r.qaReport.fontCoverage).toBeNull();
     expect(r.qaReport.errors.join(' ')).toMatch(/font/i);
   });
 
@@ -195,7 +198,8 @@ describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
     const changed = pptx({ soraniFont: 'Arimo' });
     const result = evaluateCanvaExportQc({ ...checked, content: changed, sha256: sha256(changed) }, COPY);
     expect(result.criticalPass).toBe(false);
-    expect(result.qaReport.fontCoverage).toBe(false);
+    expect(result.qaReport.fontFamilyPass).toBe(false);
+    expect(result.qaReport.fontCoverage).toBeNull();
   });
 
   it('refuses a wrong stored hash and a check with no export bytes', () => {
@@ -212,5 +216,23 @@ describe('evaluateCanvaExportQc: the QC record behind a Canva approval', () => {
       expect(r.qaReport.status).toBe(r.status);
       expect(r.status).toBe(r.criticalPass ? 'passed' : 'failed');
     }
+  });
+
+  it('does not claim rendered glyph coverage from the real Canva multilingual export', () => {
+    const root = new URL('../../../output/acceptance/2026-09-27-canva-multilingual/', import.meta.url);
+    const bytes = readFileSync(new URL('group-4-canva.pptx', root));
+    const fixtures = JSON.parse(readFileSync(new URL('fixtures.json', root), 'utf8'));
+    const copy = fixtures.groups[3].cases.map((item: { text: string }) => item.text);
+    const check = checkCanvaPptx(bytes, copy, 'Noto Sans Arabic');
+    expect(check.copyPass).toBe(true);
+    expect(check.fontPass).toBe(true);
+    expect(check.observedFonts).toEqual(['Noto Sans Arabic']);
+    const result = evaluateCanvaExportQc({ format: 'pptx', sha256: sha256(bytes), content: bytes, content_check: check }, copy);
+    // The corresponding real PDF also uses NotoSans-Regular and an unnamed Type3 font. PPTX
+    // family declarations cannot certify those rendered glyphs, fallback behavior or licenses.
+    expect(result.qaReport.fontCoverage).toBeNull();
+    expect(result.qaReport.fontFamilyPass).toBe(true);
+    expect(result.qaReport.rtlVisualReviewRequired).toBe(true);
+    expect(result.qaReport.bidiIsolation).toBeNull();
   });
 });

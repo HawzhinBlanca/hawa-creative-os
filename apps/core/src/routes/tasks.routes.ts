@@ -10,6 +10,7 @@ import { withRlsContext, IdempotencyConflictError, toDbTaskState, toApiTaskStatu
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
+import { canvaFontEvidence } from '../services/canva-font-evidence.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -115,7 +116,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             rtlVisualReviewRequired: report.rtlVisualReviewRequired === true,
             safeMargins: report.safeMargins ?? null,
             contrastCompliant: report.contrastCompliant ?? null,
-            fontCoverage: report.fontCoverage ?? null,
+            ...canvaFontEvidence(report),
             copyFidelity: report.copyFidelity ?? null,
             errors: report.errors || [],
           } : undefined;
@@ -553,7 +554,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
               rtlVisualReviewRequired: report?.rtlVisualReviewRequired === true,
               safeMargins: report?.safeMargins ?? null,
               contrastCompliant: report?.contrastCompliant ?? null,
-              fontCoverage: report?.fontCoverage ?? null,
+              ...canvaFontEvidence(report),
               copyFidelity: report?.copyFidelity ?? null,
               exportArtifactId: typeof report?.exportArtifactId === 'string' ? report.exportArtifactId : null,
               exportSha256: typeof report?.exportSha256 === 'string' ? report.exportSha256 : null,
