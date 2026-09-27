@@ -1,0 +1,366 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Durable task controls",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/tasks/{taskId}/pause": {
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "operationId": "pauseTask",
+        "summary": "Pause future task generation",
+        "description": "Requires office authority, current expectedVersion, reason and a stable key. The task lock and append-only event commit atomically. Already admitted operations may finish. RequestLifecycle-owned tasks use their office action instead.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason",
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durably recorded control, or replay of its original receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "commandId",
+                    "taskId",
+                    "acceptedAt",
+                    "status",
+                    "version",
+                    "replayed"
+                  ],
+                  "properties": {
+                    "commandId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "taskId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workflowId": {
+                      "type": "string"
+                    },
+                    "acceptedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "fromStatus": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No office authority"
+          },
+          "404": {
+            "description": "Task unavailable in current scope"
+          },
+          "409": {
+            "description": "Stale revision, different keyed action, missing pause checkpoint, closed task or lifecycle ownership"
+          },
+          "422": {
+            "description": "Missing or invalid control input"
+          },
+          "503": {
+            "description": "Control could not be durably confirmed; retry the same key"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{taskId}/resume": {
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "operationId": "resumeTask",
+        "summary": "Resume a retained operator pause checkpoint",
+        "description": "Requires office authority, current expectedVersion, reason and a stable key. The task lock and append-only event commit atomically. Already admitted operations may finish. RequestLifecycle-owned tasks use their office action instead.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason",
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durably recorded control, or replay of its original receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "commandId",
+                    "taskId",
+                    "acceptedAt",
+                    "status",
+                    "version",
+                    "replayed"
+                  ],
+                  "properties": {
+                    "commandId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "taskId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workflowId": {
+                      "type": "string"
+                    },
+                    "acceptedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "fromStatus": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No office authority"
+          },
+          "404": {
+            "description": "Task unavailable in current scope"
+          },
+          "409": {
+            "description": "Stale revision, different keyed action, missing pause checkpoint, closed task or lifecycle ownership"
+          },
+          "422": {
+            "description": "Missing or invalid control input"
+          },
+          "503": {
+            "description": "Control could not be durably confirmed; retry the same key"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{taskId}/cancel": {
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "operationId": "cancelTask",
+        "summary": "Cancel future task work",
+        "description": "Requires office authority, current expectedVersion, reason and a stable key. The task lock and append-only event commit atomically. Already admitted operations may finish. RequestLifecycle-owned tasks use their office action instead.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason",
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durably recorded control, or replay of its original receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "commandId",
+                    "taskId",
+                    "acceptedAt",
+                    "status",
+                    "version",
+                    "replayed"
+                  ],
+                  "properties": {
+                    "commandId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "taskId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workflowId": {
+                      "type": "string"
+                    },
+                    "acceptedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "fromStatus": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No office authority"
+          },
+          "404": {
+            "description": "Task unavailable in current scope"
+          },
+          "409": {
+            "description": "Stale revision, different keyed action, missing pause checkpoint, closed task or lifecycle ownership"
+          },
+          "422": {
+            "description": "Missing or invalid control input"
+          },
+          "503": {
+            "description": "Control could not be durably confirmed; retry the same key"
+          }
+        }
+      }
+    }
+  }
+}

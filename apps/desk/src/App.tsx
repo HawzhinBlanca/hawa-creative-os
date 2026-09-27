@@ -47,6 +47,11 @@ export const App: React.FC = () => {
   const [linkedReview, setLinkedReview] = useState(() => deskReviewTarget(window.location.hash));
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(getInitialScreen);
   const [appToast, setAppToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!appToast) return;
+    const timer = window.setTimeout(() => setAppToast(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [appToast]);
   const [showTour, setShowTour] = useState<boolean>(false);
   const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
 
@@ -252,7 +257,7 @@ export const App: React.FC = () => {
       setTaskReferenceAssets('');
       setSelectedClientId('');
       setPendingManualRetry(false);
-      setAppToast('Request saved. Create or link a Canva design to edit it. Automatic design composition is not connected.');
+      setAppToast('Request saved.');
       handleNavigate('review');
     } catch (error) {
       setPendingManualRetry(Boolean(getPendingManualDraft()));
@@ -495,7 +500,8 @@ export const App: React.FC = () => {
             gap: 10,
           }}
         >
-          <span>{appToast}</span>
+          <span role="status">{appToast}</span>
+          <button type="button" className="btn" aria-label="Dismiss notification" onClick={() => setAppToast(null)}>×</button>
         </div>
       )}
 

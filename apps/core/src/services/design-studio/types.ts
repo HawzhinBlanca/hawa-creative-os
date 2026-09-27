@@ -12,12 +12,12 @@ export class StudioBudgetExhaustedError extends Error {
   }
 }
 
-/** A provider may have accepted a paid call even though this process has no usable answer. */
+/** Stop every fallback when task authority ends or a paid call requires reconciliation. */
 export function isModelCallHoldError(err: unknown): boolean {
   return !!err && typeof err === 'object' &&
     ('isUncertain' in err && err.isUncertain === true ||
       'code' in err && (err.code === 'MODEL_CALL_ADMISSION_CONFLICT' ||
-        err.code === 'MODEL_CALL_FINALIZATION_CONFLICT'));
+        err.code === 'MODEL_CALL_FINALIZATION_CONFLICT' || err.code === 'TASK_GENERATION_BLOCKED'));
 }
 
 export interface CreativeBriefRole {

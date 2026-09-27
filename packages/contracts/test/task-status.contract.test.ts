@@ -17,6 +17,7 @@ import {
   parseTaskTransitioned,
   publicationAwareTaskStatus,
   taskTransitioned,
+  taskGenerationBlocker,
   toApiTaskStatus,
   toDbTaskState,
   type TaskApiStatus,
@@ -245,5 +246,18 @@ describe('task:transitioned', () => {
     ]) {
       expect(parseTaskTransitioned(old), JSON.stringify(old)).toBeNull();
     }
+  });
+});
+
+
+describe('task generation authority', () => {
+  const blocked = ['COMPLETE','CANCELLED','REJECTED','PAUSED','APPROVED','PUBLISHING',
+    'ARCHIVE_RECONCILIATION','PUBLISH_RECONCILIATION','REQUESTER_SEND_RECONCILIATION'];
+  it.each(TASK_API_STATUSES)('uses the same decision for API and database state %s', status => {
+    expect(Boolean(taskGenerationBlocker(status))).toBe(blocked.includes(status));
+    expect(taskGenerationBlocker(toDbTaskState(status))).toBe(taskGenerationBlocker(status));
+  });
+  it.each([undefined, null, '', 'unexpected'])('refuses unknown task state %s', state => {
+    expect(taskGenerationBlocker(state)).toContain('unavailable');
   });
 });

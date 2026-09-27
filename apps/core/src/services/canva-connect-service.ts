@@ -1,3 +1,4 @@
+import { assertTaskGenerationAllowed } from './task-generation-guard.js';
 import { CanvaFlowError } from './canva-flow-error.js';
 import { resolveManualExportPolicy, type ExportCheckPolicy } from './canva-export-policy.js';
 import { checkCanvaPptx } from '@hawa/qa';
@@ -264,11 +265,12 @@ export class CanvaConnectService {
     const client = await this.authorizedClient(s), id=randomUUID();
     const claim = await this.tx(s, async db => {
       // Lock the task to serialize different create keys, not only identical retries.
-      const locked=(await sql<any>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      const locked=(await sql<any>`SELECT client_id,state FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
       if(locked?.client_id!==task.client_id)fail(409,'CANVA_CLIENT_CHANGED','Client changed during the operation');
       const previous = (await sql<any>`SELECT id FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND kind='create' LIMIT 1`.execute(db)).rows[0];
       const bound = await new CanvaBindingRepository(db).findByTaskId(s.tenantId,taskId);
       if (previous || bound) return false;
+      assertTaskGenerationAllowed(locked.state);
       await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,metadata)
         VALUES (${id}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${task.client_id}::uuid,${s.actorId},${key},${requestHash},'create','creating',${JSON.stringify({width,height})}::jsonb)`.execute(db);
       return true;
@@ -319,7 +321,7 @@ export class CanvaConnectService {
     // the same hash, so this finds the file and writes nothing; its bytes stay in the row until the strip.
     await putToStore(blobStoreFor(this.db,this.options.blobStore),source.bytes,'application/vnd.openxmlformats-officedocument.presentationml.presentation','an editable source');
     const claimed=await this.tx(s,async db=>{
-      const locked=(await sql<any>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      const locked=(await sql<any>`SELECT client_id,state FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
       if(locked?.client_id!==task.client_id)fail(409,'CANVA_CLIENT_CHANGED','Client changed during the operation');
       // This key's own operation, whatever became of it: a failed one is reported, never sent again
       // under the same key (the key is unique, and a second INSERT failed with a database error).
@@ -338,6 +340,7 @@ export class CanvaConnectService {
         if(!prior.remote_job_id||prior.request_hash!==requestHash||prior.actor_id!==s.actorId||prior.metadata?.method!=='pptx_import')fail(409,'CANVA_CREATE_CONFLICT','A different creation exists. Inspect it instead of making another document');
         return {id:prior.id,created:false};
       }
+      assertTaskGenerationAllowed(locked.state);
       if(await new CanvaBindingRepository(db).findByTaskId(s.tenantId,taskId))fail(409,'CANVA_ALREADY_BOUND','Edit the existing Canva design');
       const id=randomUUID();
       await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,metadata)

@@ -1,3 +1,5 @@
+import { TaskGenerationBlockedError } from '@hawa/db';
+import { assertTaskGenerationAllowed } from '../task-generation-guard.js';
 import { orderedAlbumImages } from '../lifecycle-album.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -543,7 +545,7 @@ export class DesignStudioService {
 
       // 2. Lock task row FOR UPDATE to verify client scope immutability
       const lockedTask = (
-        await sql<any>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)
+        await sql<any>`SELECT client_id,state FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)
       ).rows[0];
 
       if (!lockedTask || lockedTask.client_id !== taskCtx.task.client_id) {
@@ -571,6 +573,8 @@ export class DesignStudioService {
           return { run: prior, created: false };
         }
 
+        assertTaskGenerationAllowed(lockedTask.state);
+
         // Different key, but an active run is in flight
         if (!prior.stale) {
           throw new CanvaFlowError(
@@ -587,6 +591,8 @@ export class DesignStudioService {
           diagnostic: `Abandoned by ${s.actorId}: no progress at '${prior.status}' for ${staleMinutes} minutes; a new run was requested`,
         }, db);
       }
+
+      assertTaskGenerationAllowed(lockedTask.state);
 
       // 4. Verify task is not already bound to Canva
       const bound = (
@@ -905,17 +911,25 @@ export class DesignStudioService {
         version: 1, runId: run.id, stage: call.stage, provider: call.provider,
         model: call.model, callOrdinal, input: call.input,
       }));
-      await this.repo.recordCallStart({
-        id: call.id,
-        runId: run.id,
-        tenantId: s.tenantId,
-        stage: call.stage,
-        provider: call.provider,
-        model: call.model,
-        requestedModel: call.model,
-        callOrdinal,
-        logicalCallSha256,
-      });
+      try {
+        await this.repo.recordCallStart({
+          id: call.id,
+          runId: run.id,
+          tenantId: s.tenantId,
+          actorId: s.actorId,
+          stage: call.stage,
+          provider: call.provider,
+          model: call.model,
+          requestedModel: call.model,
+          callOrdinal,
+          logicalCallSha256,
+        });
+      } catch (error) {
+        if (error instanceof TaskGenerationBlockedError) {
+          throw new CanvaFlowError(409, error.code, error.message);
+        }
+        throw error;
+      }
       currentBudget.calls++;
     };
 
@@ -1201,8 +1215,16 @@ export class DesignStudioService {
    * Interrupted runs resume from the current stage without duplicating prior stage calls.
    * Concurrent requests for the same run share the in-flight promise to prevent race conditions.
    */
+  private async assertTaskCanGenerate(s: Scope, taskId: string): Promise<void> {
+    await this.tx(s, async db => {
+      const task = (await sql<{state:string}>`SELECT state FROM hawa.tasks
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      assertTaskGenerationAllowed(task?.state);
+    });
+  }
+
   public async resume(s: Scope, taskId: string, runId: string): Promise<StudioResumeResult> {
-    const lockKey = `${s.tenantId}:${runId}`;
+    const lockKey = `${s.tenantId}:${taskId}:${runId}:${s.actorId}:${s.role || ""}`;
     const existing = this.inFlightResumes.get(lockKey);
     if (existing) {
       return await existing;
@@ -1240,6 +1262,7 @@ export class DesignStudioService {
     }
 
     if (run.status === 'awaiting_selection') {
+      await this.assertTaskCanGenerate(s, taskId);
       return {
         runId,
         status: 'awaiting_selection',
@@ -1266,6 +1289,8 @@ export class DesignStudioService {
       throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE',
         `The ${run.status} stage has a recorded paid model call but no saved stage result. Review that call before starting a new run.`);
     }
+
+    await this.assertTaskCanGenerate(s, taskId);
 
     const stages: Record<string, any> =
       typeof run.stages === 'string' ? JSON.parse(run.stages || '{}') : run.stages || {};
@@ -2176,6 +2201,9 @@ export class DesignStudioService {
           return { runId, status: run.status };
       }
     } catch (err: any) {
+      if (err?.code === 'TASK_GENERATION_BLOCKED') {
+        throw new CanvaFlowError(409, 'TASK_GENERATION_BLOCKED', err.message);
+      }
       if (isModelCallHoldError(err)) {
         const code = err?.code === 'MODEL_CALL_ADMISSION_CONFLICT' || err?.code === 'MODEL_CALL_FINALIZATION_CONFLICT'
           ? err.code : 'MODEL_CALL_UNCERTAIN';
@@ -2583,13 +2611,17 @@ export class DesignStudioService {
     const candidate = candidates.find((c) => c.id === candidateId);
     if (!candidate) throw new CanvaFlowError(404, 'CANDIDATE_NOT_FOUND', 'Candidate not found for this run.');
 
-    await this.repo.updateRunStatus(runId, s.tenantId, 'transferring', {
-      winnerCandidateId: candidateId,
+    await this.tx(s, async db => {
+      const task = (await sql<{state:string}>`SELECT state FROM hawa.tasks
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      assertTaskGenerationAllowed(task?.state);
+      await this.repo.updateRunStatus(runId, s.tenantId, 'transferring', { winnerCandidateId: candidateId }, db);
     });
 
     try {
       return await this.resume(s, taskId, runId);
-    } catch {
+    } catch (err) {
+      if (err instanceof CanvaFlowError && err.code === 'TASK_GENERATION_BLOCKED') throw err;
       return {
         runId,
         status: 'transferring',

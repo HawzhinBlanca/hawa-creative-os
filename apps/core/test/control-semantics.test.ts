@@ -52,27 +52,10 @@ describe('N3: task control semantics', () => {
     app.request(`/v1/tasks/${id}/${word}`, { method: 'POST', headers, body: '{}' });
   const statusOf = async (app: ReturnType<typeof createApp>, id: string) => (await (await app.request(`/v1/tasks/${id}`, { headers })).json()).status;
 
-  // Today's words, pinned as they are rather than as they should be: cancel hands the task to an
-  // operator, and pause, resume and retry all move it to PLANNING, through the state machine.
-  it('POST /tasks/<task>/cancel is accepted with 202 and hands the task to an operator', async () => {
-    const app = createApp();
-    const id = await newTask(app, 'Control cancel');
-    const res = await control(app, id, 'cancel');
-    expect(res.status).toBe(202);
-    expect(await res.json()).toMatchObject({ taskId: id, workflowId: `wf_${id}` });
-    expect(await statusOf(app, id)).toBe('OPERATOR_REQUIRED');
-  });
-
-  it.each(['pause', 'resume', 'retry'])('POST /tasks/<task>/%s is accepted with 202 where the state machine allows it', async (word) => {
-    const app = createApp();
-    const id = await newTask(app, `Control ${word}`);
-    // RECEIVED cannot move to PLANNING, so the control is refused rather than forced.
-    expect((await control(app, id, word)).status).toBe(409);
-    expect((await control(app, id, 'cancel')).status).toBe(202);
-    const res = await control(app, id, word);
-    expect(res.status).toBe(202);
-    expect(await res.json()).toMatchObject({ taskId: id, workflowId: `wf_${id}` });
-    expect(await statusOf(app, id)).toBe('PLANNING');
+  it.each(['pause','resume','cancel','retry'])('refuses %s without durable storage',async word=>{
+    const app=createApp(),id=await newTask(app,`Control ${word}`);
+    expect((await control(app,id,word)).status).toBe(503);
+    expect(await statusOf(app,id)).toBe('RECEIVED');
   });
 
   // Whoever answers these six after the catch-all is gone must still refuse to act on the copy of the

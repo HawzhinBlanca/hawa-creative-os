@@ -1,8 +1,11 @@
+import {taskGenerationBlocker} from '@hawa/contracts/task-status';
 import React,{useEffect,useRef,useState} from 'react';
 import {apiClient} from '../api/client.js';
 import {canvaPreviewEvidence} from '../services/canvaPreviewEvidence.js';
-export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
+export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId,taskStatus})=>{
+  const generationBlocker=taskGenerationBlocker(taskStatus);
   const [state,setState]=useState<any>(null),[connected,setConnected]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+  useEffect(()=>{setMessage('');},[taskStatus]);
   const [width,setWidth]=useState('1200'),[height,setHeight]=useState('1697'),[results,setResults]=useState<Record<string,any>>({});
   const [plans,setPlans]=useState<any[]>([]);
   const [preview,setPreview]=useState<{url:string;artifactId:string;taskId:string} | null>(null);
@@ -29,7 +32,7 @@ export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
       delete exportRequests.current[r.operationId];
     }
   };
-  const create=()=>run(async()=>{const r=await apiClient.canva.create(taskId,Number(width),Number(height),requestKey('create'));setMessage(r.status==='retrieved'?'Blank Canva design created and linked. Open Canva to add your design.':r.message||'Creation recorded; inspect its status before retrying.');});
+  const create=()=>run(async()=>{const r=await apiClient.canva.create(taskId,Number(width),Number(height),requestKey('create'));setMessage(r.status==='retrieved'?'Blank Canva design created and linked.':r.message||'Creation recorded; inspect its status before retrying.');});
   const generate=()=>run(async()=>{setMessage('Planning the saved copy with client references. The resulting plan records the model used. This may take up to 90 seconds.');const r=await apiClient.canva.generate(taskId,Number(width),Number(height),requestKey('generate'));setMessage(r.message);if(r.status==='failed')delete keys.current.generate;});
   const capture=(format:'png'|'pdf'|'pptx')=>run(async()=>{
     const current=await apiClient.canva.taskState(taskId);
@@ -48,16 +51,16 @@ export const CanvaTaskPanel:React.FC<{taskId:string}>=({taskId})=>{
       <p>Create an editable draft from the saved copy and verified client references. The saved plan records the model used. Native font, layout and copy still require review.</p>
       <label>Draft proportions <select value={`${width}x${height}`} onChange={e=>{const [w,h]=e.target.value.split('x');setWidth(w);setHeight(h);}}>
         <option value="1200x1697">Portrait invitation</option><option value="1080x1350">Portrait post</option><option value="1080x1080">Square post</option></select></label>
-      <button className="btn" disabled={busy||!connected||plans.some(p=>['planning','planned','uncertain'].includes(p.status))||state.operations?.some((o:any)=>o.kind==='create')} onClick={generate}>Design in Canva</button>
+      <button className="btn" disabled={busy||!connected||Boolean(generationBlocker)||plans.some(p=>['planning','planned','uncertain'].includes(p.status))||state.operations?.some((o:any)=>o.kind==='create')} onClick={generate}>Design in Canva</button>
     </div>}
     {plans.map(p=><div key={p.id}><p>Design plan · {p.status}{p.receipt?` · ${p.receipt.returnedModel}`:''}</p>{p.diagnostic&&<p>{p.diagnostic}</p>}
-      {p.status==='planned'&&!state?.binding&&<button className="btn" disabled={busy||!connected} onClick={()=>run(async()=>{const r=await apiClient.canva.resumePlan(taskId,p.id);setMessage(r.message);})}>Resume saved design</button>}</div>)}
+      {p.status==='planned'&&!state?.binding&&<button className="btn" disabled={busy||!connected||Boolean(generationBlocker)} onClick={()=>run(async()=>{const r=await apiClient.canva.resumePlan(taskId,p.id);setMessage(r.message);})}>Resume saved design</button>}</div>)}
     {state&&!state.binding&&<details><summary>Create a blank Canva design</summary>
       <p>This creates an editable canvas. Add your approved content in Canva. Canva removes unused blank designs after seven days.</p>
       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
         <label>Width (px) <input type="number" min="40" max="8000" value={width} onChange={e=>setWidth(e.target.value)} style={{width:100}} /></label>
         <label>Height (px) <input type="number" min="40" max="8000" value={height} onChange={e=>setHeight(e.target.value)} style={{width:100}} /></label>
-        <button className="btn" disabled={busy||!connected||!width||!height||state.operations?.some((o:any)=>o.kind==='create')} onClick={create}>Create in Canva</button>
+        <button className="btn" disabled={busy||!connected||Boolean(generationBlocker)||!width||!height||state.operations?.some((o:any)=>o.kind==='create')} onClick={create}>Create in Canva</button>
       </div>
     </details>}
     {state?.binding&&<div style={{display:'flex',gap:8,flexWrap:'wrap'}}>

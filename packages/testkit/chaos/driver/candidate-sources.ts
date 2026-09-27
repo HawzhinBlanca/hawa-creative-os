@@ -215,6 +215,28 @@ export async function candidateSources(chat: string, events: string[], suiteStar
     Number(manualReceipts.approvals) === 1 && Number(manualReceipts.publications) === 1, JSON.stringify(manualReceipts));
   events.push(`Desk bilingual request ${manual.id} → saved plan ${generated.planId} → simulated Canva import → captured review → simulated approval/publication`);
 
+  // The actual control endpoint closes a synthetic task before any generation admission.
+  const closed=await action('/tasks',{...intake,title:'Candidate cancelled generation controls'},randomUUID(),session.token);
+  const closeKey=randomUUID(),closeInput={reason:'Synthetic cancelled-task qualification',expectedVersion:closed.version};
+  const closedReceipt=await action(`/tasks/${closed.id}/cancel`,closeInput,closeKey,session.token);
+  const replayedClose=await action(`/tasks/${closed.id}/cancel`,closeInput,closeKey,session.token);
+  check('cancel commits terminal state and replays the same durable receipt',closedReceipt.status==='CANCELLED' &&
+    closedReceipt.commandId===replayedClose.commandId && replayedClose.replayed===true,`task ${closed.id}`);
+  for (const endpoint of ['studio','generate','design']) {
+    const response=await fetch(`${origin}/v1/tasks/${closed.id}/canva/${endpoint}`,{method:'POST',headers:{
+      Authorization:`Bearer ${session.token}`,'Content-Type':'application/json','Idempotency-Key':randomUUID(),
+    },body:JSON.stringify({width:1080,height:1350})});
+    const result=await response.json();
+    check(`cancelled task refuses deployed ${endpoint} admission`,response.status===409 &&
+      JSON.stringify(result).includes('TASK_GENERATION_BLOCKED'),`HTTP ${response.status}`);
+  }
+  const [closedEffects]=await query<{runs:string;plans:string;operations:string}>(sql`
+    SELECT (SELECT count(*) FROM hawa.design_studio_runs WHERE task_id=${closed.id}::uuid) AS runs,
+      (SELECT count(*) FROM hawa.canva_design_plans WHERE task_id=${closed.id}::uuid) AS plans,
+      (SELECT count(*) FROM hawa.canva_remote_operations WHERE task_id=${closed.id}::uuid) AS operations`);
+  check('closed-task refusals admit no run, plan or remote operation',Object.values(closedEffects).every(value=>Number(value)===0),JSON.stringify(closedEffects));
+  events.push(`Synthetic cancelled task ${closed.id}: all three deployed generation entry points refused`);
+
   const blankClient=randomUUID(),tenantId='00000000-0000-4000-a000-000000000001';
   const blankDna={tenantId,clientId:blankClient,name:'Synthetic blank-design client',code:blankClient,version:1,status:'active',
     defaultLocale:'en',defaultDirection:'ltr',updatedAt:new Date().toISOString(),colors:[],assets:[],

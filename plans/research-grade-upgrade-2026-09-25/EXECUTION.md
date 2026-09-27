@@ -12,6 +12,28 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
+## Current implementation (2026-09-27 — durable controls and generation admission)
+
+ADR-078 adds task-state admission at Studio creation, every paid call, candidate
+selection, planner reservation, redrive queueing and Canva blank/import creation.
+Task locks serialize cancellation and admission; authenticated caller scope is
+preserved under runtime RLS. Previously admitted responses and imports retain their
+outcomes. Concurrent resume promises are scoped to both task and actor.
+
+The old cancel route actually set failed_operator; pause/resume/retry all targeted
+planning and swallowed storage failures. Durable controls now require reason,
+expectedVersion and a stable key. Cancel records cancelled; pause records paused;
+resume restores the recorded operator checkpoint. Events and state commit together,
+with original receipt replay. Generic retry refuses without a saved execution
+checkpoint and directs the operator to the saved run. Desk exposes controls, reads
+saved Studio history after reload, disables unavailable generation, reports recorded
+models and expires/dismisses saved-request messages. RequestLifecycle keeps ownership.
+
+Affected qualification: **16 files / 279 tests passed**; source build and Desk build
+pass. Full release suite, fresh candidate/browser and final source seal are pending.
+Failed-first cases and fixture corrections are retained in R26 evidence. Production
+unchanged; real native/human/provider/retrieval/clean-host gates remain open.
+
 ## Current result (2026-09-27 — blank-design policy)
 
 Implementation `196daf2`, corrected candidate `4686e90`, tested seal `6ff3659`:

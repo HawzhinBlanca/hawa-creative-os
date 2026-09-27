@@ -1,5 +1,6 @@
 export * from './types.js';
 export * from './state-machine.js';
+export * from './task-control.js';
 export * from './client-dna.js';
 export * from './brief.js';
 export * from './design-plan.js';

@@ -489,6 +489,8 @@ class HawaApiClient {
   };
 
   public readonly studio = {
+    latest: (taskId: string) => this.request<{ runId: string | null; status: string | null }>(
+      `/tasks/${encodeURIComponent(taskId)}/canva/studio`),
     start: (
       taskId: string,
       input: {
@@ -566,6 +568,10 @@ class HawaApiClient {
   };
 
   public readonly tasks = {
+    control: (taskId: string, action: 'pause' | 'resume' | 'cancel', input: { reason: string; expectedVersion: number }, key: string) =>
+      this.request<{ commandId: string; status: string; version: number; replayed: boolean }>(`/tasks/${encodeURIComponent(taskId)}/${action}`, {
+        method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify(input),
+      }),
     getEditorUrl: (taskId: string) => this.request<{ url: string }>(`/tasks/${encodeURIComponent(taskId)}/canva/editor`),
     bindCanva: (taskId: string, editUrl: string) => this.request(`/tasks/${encodeURIComponent(taskId)}/canva-binding`, {
       method: 'POST', body: JSON.stringify({ editUrl }),

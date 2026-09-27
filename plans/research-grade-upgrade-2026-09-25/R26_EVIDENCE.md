@@ -224,3 +224,47 @@ stale intake/binding messages, closed-task action admission). Flags govern autom
 intake in the inspected code; establish the explicit Studio action contract before
 changing availability. Then live native/human/provider acceptance, retrieval
 measurements and clean-host WAL/PITR/Restate restore. App-wide completion is unproven.
+
+
+## 2026-09-27 — Task generation admission (ADR-078), implementation
+
+Requirements FR-060/061/064, NFR-017/020. Paid Studio admission previously ignored
+task closure; the initial regression run reproduced seven failures with ten older
+tests passing. The fix locks current task authority at every new design boundary,
+while retaining outcomes admitted before closure. Desk reflects those controls and
+uses recorded requested/served models. New source: task-generation-guard.ts and
+shared taskGenerationBlocker; no new provider or workflow dependency.
+
+The first affected run passed 185 tests and failed three: two isolated ledger mocks
+expected reconciliation refusal before any task DB read, and the race observer
+reused a PostgreSQL statistics snapshot. Reordering read-only reconciliation ahead
+of the task preflight and clearing the observer snapshot produced 188 passes.
+Expanded restricted-runtime coverage then passed 210 tests and failed one because
+the synthetic operator lacked membership and call admission lacked caller context.
+The test now has a real synthetic membership (also tests revocation), and the
+production reservation carries authenticated actor identity. Final results below
+will identify the actual tested candidate. No live acceptance claim is made.
+
+
+### Durable controls and affected qualification
+
+Inspection found legacy cancel→failed_operator and pause/resume/retry→planning,
+with database write errors swallowed. ADR-078 replaces this with attributed,
+versioned, keyed task control receipts in the same transaction as the state change.
+Cancel is terminal, pause blocks admissions, and resume restores only an actual
+operator checkpoint. Generic retry returns a safe refusal naming saved-run controls.
+The legacy memory-only mutation path now refuses without durable storage. Desk
+exposes these controls and recovers the saved Studio run after reload. An in-flight
+Studio resume cache now includes task/actor/role, preventing another scope inheriting
+an authorized promise. Automatic intake flags are unchanged.
+
+Final affected run: **16 files / 279 passed**, 7.36s. Added HTTP tests cover receipt
+replay after Core replacement, concurrent version conflicts, changed keyed payload,
+missing requester checkpoint, role/input refusal and event-write rollback. Desk tests
+cover required reason, stable retry key after response loss and closed/role controls.
+The first control test fixture lacked Client DNA/manual intake admission (six failures);
+the fixture now creates an ordinary seeded task, while the deployed rehearsal tests
+actual manual intake. Two bigint string expectations were normalized explicitly.
+Source/test types, full milestone regression and deployed proof are recorded below
+only after execution. Native editability, human quality and live providers are not
+qualified by these synthetic tests.

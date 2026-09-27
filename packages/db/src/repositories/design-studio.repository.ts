@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { createHash } from 'node:crypto';
 import { withRlsContext } from '../client.js';
-import { parseBlobRef, sniffBlobMediaType, type BlobRef } from '@hawa/contracts';
+import { parseBlobRef, sniffBlobMediaType, taskGenerationBlocker, type BlobRef } from '@hawa/contracts';
 import { BlobCorruptError, BlobMissingError, type BlobStore } from '../blobs/store.js';
 import type {
   Database,
@@ -67,6 +67,8 @@ export interface RecordCallStartParams {
   id: string;
   runId: string;
   tenantId: string;
+  /** Authenticated caller for the task's membership/RLS check; never provider input. */
+  actorId?: string;
   stage: string;
   provider: string;
   model: string;
@@ -81,6 +83,14 @@ export class ModelCallAdmissionConflictError extends Error {
   constructor() {
     super('This logical Studio model call was already admitted by another process.');
     this.name = 'ModelCallAdmissionConflictError';
+  }
+}
+
+export class TaskGenerationBlockedError extends Error {
+  readonly code = 'TASK_GENERATION_BLOCKED';
+  constructor(message: string) {
+    super(message);
+    this.name = 'TaskGenerationBlockedError';
   }
 }
 
@@ -536,7 +546,16 @@ export class DesignStudioRepository {
     if (!/^[0-9a-f]{64}$/.test(params.logicalCallSha256)) {
       throw new TypeError('Studio logical call identity must be a SHA-256 digest.');
     }
-    return this.withClient(trx, params.tenantId, async (client) => {
+    return withRlsContext(trx || this.db, { tenantId: params.tenantId, userId: params.actorId }, async (client) => {
+      // Cancellation and admission serialize on the same task row. Do not gate finalization:
+      // a request admitted before closure may still return a paid response afterwards.
+      const task = await client.selectFrom('tasks as t')
+        .innerJoin('design_studio_runs as r', join => join.onRef('r.task_id', '=', 't.id')
+          .onRef('r.tenant_id', '=', 't.tenant_id').onRef('r.client_id', '=', 't.client_id'))
+        .select('t.state').where('r.id', '=', params.runId).where('t.tenant_id', '=', params.tenantId)
+        .forUpdate('t').executeTakeFirst();
+      const blocker = taskGenerationBlocker(task?.state);
+      if (blocker) throw new TaskGenerationBlockedError(blocker);
       const [row] = await client
         .insertInto('design_studio_calls')
         .values({

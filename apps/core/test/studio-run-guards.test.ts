@@ -1,6 +1,6 @@
-import { describe, it, expect, afterAll, beforeAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { createDb, sql } from '@hawa/db';
+import { createDb, sql, DesignStudioRepository } from '@hawa/db';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 
@@ -72,6 +72,70 @@ describe.skipIf(!url)('studio run guards', () => {
       delete process.env.DESIGN_STUDIO_MAX_USD;
       delete process.env.DESIGN_STUDIO_MAX_CALLS;
     }
+  });
+
+  it.each(['complete', 'cancelled', 'rejected', 'paused', 'approved', 'publishing'])('refuses new Studio work on a %s task but preserves its existing run', async state => {
+    const taskId = await task();
+    const svc = service();
+    const key = `closed-${randomUUID()}`;
+    const input = { width: 1080, height: 1350 };
+    const { run } = await svc.createOrGetRun(scope, taskId, key, input);
+    await sql`UPDATE hawa.tasks SET state=${state}::hawa.task_state WHERE id=${taskId}::uuid`.execute(db);
+    await expect(svc.createOrGetRun(scope, taskId, key, input)).resolves.toMatchObject({ created: false, run: { id: run.id } });
+    await expect(svc.createOrGetRun(scope, taskId, `new-${randomUUID()}`, input))
+      .rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED', status: 409 });
+    await expect(svc.resume(scope, taskId, run.id))
+      .rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED', status: 409 });
+    const saved = (await sql<{status:string}>`SELECT status FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0];
+    expect(saved.status).toBe('briefing');
+    await svc.abandon(scope, taskId, run.id, 'test cleanup');
+    await expect(svc.resume(scope, taskId, run.id)).resolves.toMatchObject({ status: 'abandoned' });
+  });
+
+  it('refuses dispatch when cancellation commits after stage context was built', async () => {
+    const taskId = await task(), fetcher = vi.fn();
+    const svc = new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher, staleRunMinutes: 0 });
+    const { run } = await svc.createOrGetRun(scope, taskId, `race-${randomUUID()}`, { width: 1080, height: 1350 });
+    const budget = { maxUsd: 2, maxCalls: 24, spentUsd: 0, calls: 0 };
+    const ctx = await (svc as any).createStageContext(scope, run, 'briefing', budget, async () => {});
+    await sql`UPDATE hawa.tasks SET state='cancelled' WHERE id=${taskId}::uuid`.execute(db);
+    await expect(ctx.client.completeJson({ prompt: 'synthetic request', schema: { type: 'object' } }))
+      .rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED' });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(budget.calls).toBe(0);
+    expect((await sql`SELECT id FROM hawa.design_studio_calls WHERE run_id=${run.id}::uuid`.execute(db)).rows).toHaveLength(0);
+    await svc.abandon(scope, taskId, run.id, 'test cleanup');
+  });
+
+  it('preserves candidate selection evidence when the task has closed', async () => {
+    const taskId = await task(), svc = service(), repo = new DesignStudioRepository(db), candidateId = randomUUID();
+    const { run } = await svc.createOrGetRun(scope, taskId, `select-${randomUUID()}`, { width: 1080, height: 1350 });
+    await repo.insertCandidate({ id: candidateId, runId: run.id, tenantId: scope.tenantId, ordinal: 0, concept: { name: 'Synthetic' } });
+    await repo.updateRunStatus(run.id, scope.tenantId, 'awaiting_selection');
+    await sql`UPDATE hawa.tasks SET state='cancelled' WHERE id=${taskId}::uuid`.execute(db);
+    await expect(svc.selectCandidate(scope, taskId, run.id, candidateId))
+      .rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED', status: 409 });
+    expect(await repo.getRunById(run.id, scope.tenantId)).toMatchObject({ status: 'awaiting_selection', winner_candidate_id: null });
+    expect(await repo.getCandidatesForRun(run.id, scope.tenantId)).toHaveLength(1);
+    await svc.abandon(scope, taskId, run.id, 'test cleanup');
+  });
+
+  it('does not let a second actor or task inherit an in-flight resume authorization', async () => {
+    const taskId = await task(), svc = service();
+    const { run } = await svc.createOrGetRun(scope, taskId, `scope-${randomUUID()}`, { width: 1080, height: 1350 });
+    let reached!: () => void, stop!: () => void;
+    const entered = new Promise<void>(resolve => { reached = resolve; });
+    const held = new Promise<void>(resolve => { stop = resolve; });
+    vi.spyOn(svc as any, 'createStageContext').mockImplementation(async () => {
+      reached(); await held; throw new Error('Synthetic context stop');
+    });
+    const first = svc.resume(scope, taskId, run.id).catch(error => error);
+    await entered;
+    try {
+      await expect(svc.resume({ ...scope, actorId: randomUUID(), role: 'operator' }, taskId, run.id))
+        .rejects.toMatchObject({ code: 'ACTOR_SCOPE_MISMATCH' });
+      await expect(svc.resume(scope, randomUUID(), run.id)).rejects.toMatchObject({ code: 'TASK_SCOPE_MISMATCH' });
+    } finally { stop(); await first; }
   });
 
   it("counts a task's unfinished run as still being made, and not once it is abandoned", async () => {

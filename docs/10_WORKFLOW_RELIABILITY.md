@@ -116,6 +116,20 @@ Cancellation stops future work but does not erase evidence or blindly undo succe
 
 If cancellation commits while Drive upload is finishing, publication completion must check the task's current state and expected revision inside the receipt transaction. It must preserve the cancellation and withhold requester delivery. Because the file may already exist in Drive, the publication records an unconfirmed archive for audit and staffed retention review; a cancelled task must not be offered an automatic delivery retry.
 
+Operator pause, resume and cancel require a reason, current expectedVersion and
+stable Idempotency-Key. PostgreSQL commits the state and its attributable control
+receipt together. Resume restores a retained operator pause checkpoint, not a
+requester clarification state. A generic retry without a saved execution checkpoint
+is refused; the operator uses the saved Studio/Canva run controls (ADR-078).
+
+New design work is admitted under the task row lock (ADR-078). Studio checks each
+paid-call reservation, including parity, using the authenticated actor's RLS scope.
+Planner reservations, blank designs, new imports and candidate selections use the
+same task eligibility rule. Closed, paused, approved/delivering and unknown states
+refuse new work. Earlier admitted outcomes and import reconciliation remain
+recordable after closure; no provider request already admitted can be undone by
+this guard. An unresolved paid call remains a reconciliation requirement.
+
 ## 9. Recovery drills
 
 Inject at least:

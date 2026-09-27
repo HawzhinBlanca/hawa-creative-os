@@ -16,6 +16,30 @@ tags:
   - name: Evaluations
   - name: Integrations
 paths:
+  /v1/tasks/{taskId}/canva/studio:
+    get:
+      tags: [Designs]
+      operationId: latestStudioRun
+      summary: Find the latest saved Studio run without starting generation
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      responses:
+        '200':
+          description: Current task-scoped run identity, or null when none exists
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runId, status]
+                properties:
+                  runId: {type: [string, 'null'], format: uuid}
+                  status: {type: [string, 'null']}
+        '404': {description: Task unavailable in the caller's scope}
+  /v1/tasks/{taskId}/pause:
+    $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1pause'
+  /v1/tasks/{taskId}/resume:
+    $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1resume'
+  /v1/tasks/{taskId}/cancel:
+    $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1cancel'
   /v1/tasks/{taskId}/canva/generate:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1generate'
   /v1/tasks/{taskId}/canva/plans:

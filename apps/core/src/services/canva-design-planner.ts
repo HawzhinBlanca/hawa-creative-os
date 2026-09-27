@@ -1,3 +1,4 @@
+import { assertTaskGenerationAllowed } from './task-generation-guard.js';
 import { orderedAlbumImages } from './lifecycle-album.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -232,13 +233,14 @@ export class CanvaDesignPlanner {
     const {request,logo,ownedImageDataUrls}=await this.context(s,taskId,width,height),requestHash=hash(JSON.stringify(request));
     const claim=await this.tx(s,async db=>{
       await sql`SELECT pg_advisory_xact_lock(hashtextextended(${'canva-planning:'+s.tenantId},0))`.execute(db);
-      const locked=(await sql<any>`SELECT client_id,request_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      const locked=(await sql<any>`SELECT client_id,request_id,state FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
       if(locked?.client_id!==request.clientId)throw new CanvaFlowError(409,'CLIENT_CHANGED','Client changed while references were retrieved.');
       if((locked.request_id||null)!==request.requestId)throw new CanvaFlowError(409,'REQUEST_CHANGED','Request ownership changed while references were retrieved.');
       await assertCurrentClientDesignReference(db,s,request.reference);
       const prior=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND (request_key=${key} OR status IN ('planning','planned','uncertain')) ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0];
       if(prior){
         if (prior.status === 'failed' || prior.status === 'abandoned' || (key.startsWith('redrive_') && (prior.status === 'uncertain' || prior.status === 'planned'))) {
+          assertTaskGenerationAllowed(locked.state);
           if (prior.status !== 'abandoned') {
             await sql`UPDATE hawa.canva_design_plans SET status='abandoned', diagnostic=${'Auto-abandoned for re-drive retry'}, updated_at=now() WHERE tenant_id=${s.tenantId}::uuid AND id=${prior.id}::uuid`.execute(db);
           }
@@ -247,6 +249,7 @@ export class CanvaDesignPlanner {
           return {row:prior,created:false,priorPlanRow:null};
         }
       }
+      assertTaskGenerationAllowed(locked.state);
       if((await sql`SELECT id FROM hawa.canva_bindings WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND status='bound'`.execute(db)).rows.length)
         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the existing Canva design; generation never overwrites it.');
       const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND status='planning'`.execute(db)).rows[0];

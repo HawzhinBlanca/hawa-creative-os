@@ -146,7 +146,8 @@ export function publicationAwareTaskStatus(
 }
 
 /**
- * The legal moves between API statuses. Taken from the domain state machine as it stood on
+ * Normal pipeline moves between API statuses. Conditional operator pause/resume/cancel
+ * use the retained-checkpoint policy in domain/task-control.ts (ADR-078). Taken from the domain state machine as it stood on
  * 2026-09-24 and reconciled with what Core records:
  *  - NEEDS_INFORMATION is gone: it had no database state (it was stored as 'received'), and PAUSED is
  *    the same wait for the requester. Its moves are PAUSED's.
@@ -248,6 +249,18 @@ export function isApprovableTaskStatus(status: unknown): boolean {
 
 export function isTerminalTaskStatus(status: unknown): boolean {
   return isTaskApiStatus(status) && TERMINAL_TASK_STATUSES.includes(status);
+}
+
+/** New generation uses current task authority; historical results remain readable. */
+export function taskGenerationBlocker(status: unknown): string | null {
+  const apiStatus = isTaskDbState(status) ? API_STATUS_OF_DB_STATE[status] : status;
+  if (!isTaskApiStatus(apiStatus)) return 'Task state is unavailable. Refresh the task before starting design work.';
+  if (isTerminalTaskStatus(apiStatus)) return 'This task is closed. Create a new request for further design work; existing results remain available.';
+  if (apiStatus === 'PAUSED') return 'This task is paused. Resolve its pending question or resume it before starting design work.';
+  if (['APPROVED', 'PUBLISHING', 'ARCHIVE_RECONCILIATION', 'PUBLISH_RECONCILIATION', 'REQUESTER_SEND_RECONCILIATION'].includes(apiStatus)) {
+    return 'This design is approved or being delivered. Request a revision before starting further design work.';
+  }
+  return null;
 }
 
 export function isInProgressTaskStatus(status: unknown): boolean {

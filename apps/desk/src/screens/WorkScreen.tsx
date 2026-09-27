@@ -1,3 +1,4 @@
+import { TaskControls } from '../components/TaskControls.js';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
@@ -987,7 +988,9 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 )}
 
                 <details className="canva-binding-form">
-                  <summary>Link this task’s Canva design</summary>
+                  <summary>{selectedTask.canvaBinding ? 'Linked Canva design' : 'Link this task’s Canva design'}</summary>
+                  {selectedTask.canvaBinding && <p>Design {selectedTask.canvaBinding.designId}</p>}
+                  {!selectedTask.canvaBinding && <>
                   <p>Use a separate Canva copy for this task. Linking does not capture or approve its contents.</p>
                   <form onSubmit={async event => {
                     event.preventDefault();
@@ -1004,10 +1007,14 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                       onChange={event => setCanvaLinkInput(event.target.value)} placeholder="https://www.canva.com/design/…/edit" />
                     <button className="btn" type="submit" disabled={actionLoading || !canvaLinkInput.trim()}>Save Canva link</button>
                   </form>
+                  </>}
                 </details>
                 <AskLedgerPanel key={`asks-${selectedTask.id}`} taskId={selectedTask.id} />
-                <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} />
-                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} />
+                {!detail?.requestId && !selectedTask.requestId && <TaskControls key={`controls-${selectedTask.id}`}
+                  taskId={selectedTask.id} status={selectedTask.status} version={selectedTask.version} role={sessionUser?.role}
+                  refresh={() => readTaskAgain(selectedTask.id)} />}
+                <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} taskStatus={selectedTask.status} hasCanvaBinding={Boolean(selectedTask.canvaBinding)} />
+                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} taskStatus={selectedTask.status} />
                 <p className="capture-availability" role="status">Retrieved exports require QA and human approval before delivery.</p>
                 {/* =================================================================== */}
                 {/* PRIMARY ACTION BAR (FR-078)                                         */}

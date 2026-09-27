@@ -175,6 +175,63 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
     }
   });
 
+  it('enforces task admission under the restricted runtime database role', async () => {
+    const taskId = await createTask(tenantA, clientA), runId = randomUUID(), actorId = randomUUID();
+    await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${actorId}::uuid,${actorId + '@example.test'},'Synthetic runtime operator')`.execute(db);
+    await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES(${tenantA}::uuid,${actorId}::uuid,'operator')`.execute(db);
+    await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA,
+      actorId: 'test_user', requestKey: `runtime-${runId}`, requestHash: 'b'.repeat(64), request: {}, tier: 'premium' });
+    const admit = () => withRlsContext(db, { tenantId: tenantA, clientId: clientA, role: 'operator' }, async trx => {
+      await sql`SET LOCAL ROLE hawa_app`.execute(trx);
+      return repo.recordCallStart({ id: randomUUID(), runId, tenantId: tenantA, actorId, stage: 'parity',
+        provider: 'openai', model: 'test', requestedModel: 'test', callOrdinal: null,
+        logicalCallSha256: createHash('sha256').update(randomUUID()).digest('hex') }, trx);
+    });
+    await expect(admit()).resolves.toMatchObject({ status: 'uncertain' });
+    await sql`UPDATE hawa.tenant_memberships SET active=false WHERE tenant_id=${tenantA}::uuid AND user_id=${actorId}::uuid`.execute(db);
+    await expect(admit()).rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED' });
+    await sql`UPDATE hawa.tenant_memberships SET active=true WHERE tenant_id=${tenantA}::uuid AND user_id=${actorId}::uuid`.execute(db);
+    await sql`UPDATE hawa.tasks SET state='complete' WHERE id=${taskId}::uuid`.execute(db);
+    await expect(admit()).rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED' });
+    expect(await repo.getCallsForRun(runId, tenantA)).toHaveLength(1);
+  });
+
+  it('serializes call admission behind cancellation and still finalizes an earlier admitted call', async () => {
+    const taskId = await createTask(tenantA, clientA);
+    const runId = randomUUID();
+    await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA,
+      actorId: 'test_user', requestKey: `cancel-${runId}`, requestHash: 'a'.repeat(64), request: {}, tier: 'premium' });
+    const admittedId = randomUUID();
+    const call = (id: string, ordinal: number) => ({ id, runId, tenantId: tenantA, stage: 'briefing',
+      provider: 'openai', model: 'test', requestedModel: 'test', callOrdinal: ordinal,
+      logicalCallSha256: createHash('sha256').update(id).digest('hex') });
+    await repo.recordCallStart(call(admittedId, 1));
+    const peer = createDb(url!);
+    try {
+      let pending!: Promise<unknown>;
+      await withRlsContext(db, { tenantId: tenantA }, async trx => {
+        await sql`UPDATE hawa.tasks SET state='cancelled' WHERE id=${taskId}::uuid`.execute(trx);
+        pending = new DesignStudioRepository(peer).recordCallStart(call(randomUUID(), 2)).catch(error => error);
+        // Confirm the peer actually reached the task lock before releasing cancellation.
+        let blocked = false;
+        for (let attempt = 0; attempt < 100; attempt++) {
+          await sql`SELECT pg_stat_clear_snapshot()`.execute(trx);
+          const locks = await sql<{blocked:boolean}>`SELECT EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+              AND pid<>pg_backend_pid() AND pg_backend_pid()=ANY(pg_blocking_pids(pid))
+          ) AS blocked`.execute(trx);
+          if (locks.rows[0].blocked) { blocked = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        expect(blocked).toBe(true);
+      });
+      expect(await pending).toMatchObject({ code: 'TASK_GENERATION_BLOCKED' });
+      await repo.finalizeCall({ id: admittedId, tenantId: tenantA, status: 'ok',
+        inputTokens: 100, outputTokens: 10, usdEstimate: 0.01, responseId: 'synthetic-paid-reply' });
+      expect(await repo.getCallsForRun(runId, tenantA)).toMatchObject([{ id: admittedId, status: 'ok', response_id: 'synthetic-paid-reply' }]);
+    } finally { await peer.destroy(); }
+  });
+
   it('rejects deletion or mutation of completed run via immutability trigger', async () => {
     const taskA = await createTask(tenantA, clientA);
     const runId = randomUUID();

@@ -5,7 +5,7 @@ import {
   type DesignStudioServiceOptions,
 } from '../services/design-studio/index.js';
 import { CanvaConnectService, CanvaFlowError } from '../services/canva-connect-service.js';
-import { DesignStudioRepository, type CandidateImageKind } from '@hawa/db';
+import { DesignStudioRepository, withRlsContext, type CandidateImageKind } from '@hawa/db';
 import { isSha256Hex } from '@hawa/contracts';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { blobStoreFor, storedFileLost } from '../services/blob-store-context.js';
@@ -97,6 +97,16 @@ export function registerDesignStudioRoutes(
   };
 
   // 1. POST /tasks/:taskId/canva/studio — start studio run
+  ctx.registerRoute('get', '/tasks/:taskId/canva/studio', protect(async (c, s, _svc, repo) => {
+    const taskId = c.req.param('taskId');
+    return withRlsContext(ctx.db!, { tenantId: s.tenantId, userId: s.actorId, role: s.role }, async db => {
+      const task = await db.selectFrom('tasks').select('id').where('id', '=', taskId)
+        .where('tenant_id', '=', s.tenantId).executeTakeFirst();
+      if (!task) return ctx.problem(c, 404, 'Task Not Found');
+      const run = await repo.getLatestRunForTask(taskId, s.tenantId, db);
+      return c.json({ runId: run?.id ?? null, status: run?.status ?? null });
+    });
+  }));
   ctx.registerRoute(
     'post',
     '/tasks/:taskId/canva/studio',

@@ -1,3 +1,4 @@
+import { taskGenerationBlocker } from '@hawa/contracts/task-status';
 import React, { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client.js';
 import { AuthorizedImage } from './AuthorizedImage.js';
@@ -103,10 +104,16 @@ const PIPELINE_STAGES = [
   { id: 'transfer', label: 'Canva' },
 ];
 
-export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = ({
+export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanvaBinding?: boolean; initialRunId?: string }> = ({
   taskId,
+  taskStatus,
+  hasCanvaBinding = false,
   initialRunId,
 }) => {
+  const [historyLoaded, setHistoryLoaded] = useState(Boolean(initialRunId));
+  const generationBlocker = taskGenerationBlocker(taskStatus);
+  const startBlocker = generationBlocker || (hasCanvaBinding ? 'This task already has a Canva design. Open it to continue editing.' : null) || (!historyLoaded ? 'Read the saved Studio history before starting a new run.' : null);
+  const [calls, setCalls] = useState<Array<{ id: string; stage: string; model: string; servedModel: string | null; status: string }>>([]);
   const [runId, setRunId] = useState<string | null>(initialRunId || null);
   const [run, setRun] = useState<RunData | null>(null);
   const [candidates, setCandidates] = useState<CandidateData[]>([]);
@@ -143,11 +150,20 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
   };
 
   const refresh = async () => {
-    if (!runId) return;
     try {
-      const data = await apiClient.studio.getRun(taskId, runId);
+      let currentRunId = runId;
+      if (!currentRunId) {
+        const latest = await apiClient.studio.latest(taskId);
+        if (activeTask.current !== taskId) return;
+        currentRunId = latest.runId;
+        setHistoryLoaded(true);
+        if (!currentRunId) return;
+        setRunId(currentRunId);
+      }
+      const data = await apiClient.studio.getRun(taskId, currentRunId);
       if (activeTask.current !== taskId) return;
       setRun(data.run);
+      setCalls(data.calls || []);
       setCandidates(data.candidates || []);
       if (!selectedCandidateId && data.run.winnerCandidateId) {
         setSelectedCandidateId(data.run.winnerCandidateId);
@@ -163,13 +179,12 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
 
   useEffect(() => {
     setRun(null);
+    setCalls([]);
     setCandidates([]);
     setMessage('');
     setFeedbackSubmitted(false);
     idempotencyKey.current = crypto.randomUUID();
-    if (runId) {
-      void refresh();
-    }
+    void refresh();
   }, [taskId, runId]);
 
   // Polling while run is actively progressing
@@ -185,7 +200,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
 
   const handleStart = async () => {
     setBusy(true);
-    setMessage('Starting a studio run (gpt-6-astra; imagery gpt-image-2.5-sunburst)...');
+    setMessage('Starting a studio run…');
     try {
       const key = idempotencyKey.current;
       const res = await apiClient.studio.start(
@@ -203,6 +218,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
       setMessage(`Studio run started: ${res.runId} (${res.status}). Press Advance Stage to run each stage; a run left unadvanced for 30 minutes releases its studio slot.`);
       const data = await apiClient.studio.getRun(taskId, res.runId);
       setRun(data.run);
+      setCalls(data.calls || []);
       setCandidates(data.candidates || []);
     } catch (err: any) {
       setMessage(err.message || 'Failed to start studio run');
@@ -283,7 +299,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
 
   return (
     <section
-      aria-label="Design Studio v2"
+      aria-label="Design Studio"
       className="rule studio-panel-container"
       style={{
         marginTop: 16,
@@ -298,10 +314,10 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--warn-text, #FBBF24)' }}>
-            Design Studio v2
+            Design Studio
           </h3>
           <span style={{ fontSize: '0.8rem', color: 'var(--muted, #94A3B8)' }}>
-            See → Judge → Revise Multi-Concept Pipeline (gpt-6-astra &amp; gpt-image-2.5-sunburst)
+            Generate concepts, review candidates and transfer an editable design to Canva.
           </span>
         </div>
         {run && (
@@ -361,6 +377,14 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
           </div>
         )}
       </header>
+
+      {startBlocker && <p role="status">{startBlocker}</p>}
+      {!historyLoaded && <button className="btn" disabled={busy} onClick={() => void refresh()}>Refresh Studio history</button>}
+      {calls.length > 0 && <details><summary>Recorded model calls</summary>
+        <ul>{calls.map(call => <li key={call.id}>
+          {call.stage} · requested {call.model} · served {call.servedModel || 'not reported'} · {call.status}
+        </li>)}</ul>
+      </details>}
 
       {/* PIPELINE STAGE STEPPER */}
       {run && (
@@ -483,7 +507,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
               >
                 <option value="auto">Auto (Brief Directed)</option>
                 <option value="none">None (Typography Only)</option>
-                <option value="generated">Generated (gpt-image-2.5-sunburst)</option>
+                <option value="generated">Generated imagery</option>
               </select>
             </div>
 
@@ -501,7 +525,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
 
             <button
               className="btn btn-primary"
-              disabled={busy}
+              disabled={busy || Boolean(startBlocker)}
               onClick={handleStart}
               style={{
                 padding: '7px 18px',
@@ -548,7 +572,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
               {!['transferred', 'degraded', 'failed', 'abandoned'].includes(run.status) && (
                 <button
                   className="btn"
-                  disabled={busy}
+                  disabled={busy || Boolean(generationBlocker)}
                   onClick={handleResume}
                   style={{
                     padding: '4px 12px',
@@ -566,7 +590,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
               {['failed', 'abandoned'].includes(run.status) && (
                 <button
                   className="btn"
-                  disabled={busy}
+                  disabled={busy || Boolean(startBlocker)}
                   onClick={async () => {
                     setBusy(true);
                     try {
@@ -787,7 +811,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
                       {run.status === 'awaiting_selection' && (
                         <button
                           className="btn"
-                          disabled={busy}
+                          disabled={busy || Boolean(generationBlocker)}
                           onClick={(e) => {
                             e.stopPropagation();
                             void handleSelectCandidate(cand.id);
@@ -979,7 +1003,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
                       {activeCandidate.artSha256 || 'None'}
                     </code>
                     <p style={{ marginTop: 10, color: 'var(--muted, #94A3B8)', fontSize: '0.8rem' }}>
-                      Background generated by gpt-image-2.5-sunburst (text-free) or procedural gradient scrim.
+                      Retained artwork for this candidate. Review its provenance before release.
                     </p>
                   </div>
                 </div>
@@ -999,7 +1023,7 @@ export const StudioPanel: React.FC<{ taskId: string; initialRunId?: string }> = 
                         }}
                       >
                         <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                          gpt-6-astra Vision Rubric Evaluation
+                          Recorded visual critique
                         </span>
                         <span
                           style={{

@@ -105,6 +105,16 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
   beforeAll(async()=>{await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${scope.actorId}::uuid,'isolated-operator@example.test','Test') ON CONFLICT DO NOTHING`.execute(db);
     await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES(${clientId}::uuid,${scope.tenantId}::uuid,'kaae','KAAE') ON CONFLICT DO NOTHING`.execute(db);});
   afterAll(()=>db.destroy());
+  it.each(['complete','cancelled','rejected','paused','approved','publishing'])('refuses paid planning for a %s task',async state=>{
+    const taskId=await intake(),fetcher=vi.fn();
+    await sql`UPDATE hawa.tasks SET state=${state}::hawa.task_state WHERE id=${taskId}::uuid`.execute(db);
+    const {planner,api}=make(fetcher);
+    await expect(planner.generate(scope,taskId,`closed-${randomUUID()}`,1200,1697))
+      .rejects.toMatchObject({code:'TASK_GENERATION_BLOCKED',status:409});
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(api.importEditableDesign).not.toHaveBeenCalled();
+    expect((await sql`SELECT id FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
+  });
   it('makes one paid call across simultaneous clicks and resumes immutable bytes after replacement',async()=>{
     const id=await intake(),remote=vi.fn(async()=>{await new Promise(r=>setTimeout(r,30));return response();}),{api,planner}=make(remote);
     await Promise.all([planner.generate(scope,id,'plan-key-001',1200,1697),planner.generate(scope,id,'plan-key-002',1200,1697)]);

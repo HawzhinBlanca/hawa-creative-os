@@ -116,7 +116,19 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
 
   // 1. Authentication & Authorization Negative Controls
   describe('Authentication and Authorization', () => {
-    it("starts a run for an API-key caller under the operator's uuid, not its label", async () => {
+    it('finds the saved run for a task without admitting a new one', async () => {
+    const res = await createApp({ db }).request(`/v1/tasks/${taskId}/canva/studio`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ runId, status: 'briefing' });
+    const missing = await createApp({ db }).request(`/v1/tasks/${randomUUID()}/canva/studio`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` },
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  it("starts a run for an API-key caller under the operator's uuid, not its label", async () => {
       // 81f4390 passed auth.actorId ('operator_1') as the actor; every studio start then failed in
       // Postgres with "invalid input syntax for type uuid" (task 8fb76534, 2026-09-19).
       const res = await app.request(`/v1/tasks/${taskId}/canva/studio`, {

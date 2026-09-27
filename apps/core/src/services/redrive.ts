@@ -1,3 +1,5 @@
+import { taskGenerationBlocker } from '@hawa/contracts';
+import { assertTaskGenerationAllowed } from './task-generation-guard.js';
 /**
  * Re-driving a task whose automatic design failed, and the sweep that re-drives every such task.
  * Moved unchanged from app.ts (architecture programme 1.3, SPLIT_PLAN.md G6): the controls routes
@@ -66,6 +68,9 @@ export function createRedrive(deps: RedriveDeps) {
       return { ok: false, code: 'LIFECYCLE_OWNED',
         message: 'This request is managed by RequestLifecycle; use its office redrive action' };
     }
+
+    const generationBlocker = taskGenerationBlocker(taskData.state);
+    if (generationBlocker) return { ok: false, code: 'TASK_GENERATION_BLOCKED', message: generationBlocker };
 
     if (!taskData.client_id) {
       if (sourceChannelId && sourceChannelId !== 'tg_default') {
@@ -162,6 +167,8 @@ export function createRedrive(deps: RedriveDeps) {
     if (runsPipelineV3(String(taskData.payload?.sourceChannelId || channelId)) || taskData.payload?.designStudio === true) {
       if (!outboxRepo) throw new Error('Durable outbox required for a studio re-drive');
       const queued = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+        const currentTask = (await sql<{state:string}>`SELECT state FROM hawa.tasks WHERE tenant_id=${tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(trx)).rows[0];
+        assertTaskGenerationAllowed(currentTask?.state);
         // `stale`: not live by the Desk's own rule (LIVE_RUN), 30 minutes without progress.
         const unfinishedRun = (await sql<any>`SELECT id, status, updated_at <= now() - interval '30 minutes' AS stale FROM hawa.design_studio_runs
           WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
