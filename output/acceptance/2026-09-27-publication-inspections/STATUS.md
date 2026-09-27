@@ -65,3 +65,10 @@ Core and Desk at changed IPs without proxy restart (8 checks). The exact tested
 configuration was validated and gracefully reloaded in production. App images, data,
 flags and schema were not upgraded. nginx 1.27.5 supports the existing-image fix.
 Reference: https://nginx.org/en/docs/http/ngx_http_upstream_module.html#server
+
+The real nginx private-file delivery regression passes six checks after its fixture
+was updated to a disposable user-defined Docker network (required for Docker's
+embedded resolver). The initial default-bridge fixture failure is retained. Final
+production readback: HTTP 200 healthy; Canva configured, authorized and active.
+Google reviewer login remains unconfigured; the older production app does not expose
+the newer auth-providers endpoint.

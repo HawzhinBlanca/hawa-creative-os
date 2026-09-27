@@ -46,10 +46,11 @@
     "packages/testkit/test/pilot-exit-drill.test.ts": "b016d65b27256a7736a28e16ea324b471e9e8df8728b11720926ee747a0ed080",
     "infra/docker/nginx.conf": "b1bab311ff10ff434af23ba7882ad4993cef2fb6cd57cf032a2b57e2ff557f00",
     "runbooks/GOOGLE_SHEET_ROW_IDENTITY.md": "2b94b705d69e0ff4f0f074f42fadb16e73b252fc6539f60de1967737594c2947",
-    "runbooks/LIVE_PILOT.md": "74e1a1a8a9c74771e6d97cb0de5d7056606d09e34e644a32cf9b866eb088289a"
+    "runbooks/LIVE_PILOT.md": "74e1a1a8a9c74771e6d97cb0de5d7056606d09e34e644a32cf9b866eb088289a",
+    "packages/db/test/blob-nginx.test.ts": "d64a702a0d70c7ed10335c732a27c53f3d0e58f2e2bc83809d3dd0c3c4c4bf9b"
   },
   "evidenceHashes": {
-    "output/acceptance/2026-09-27-publication-inspections/STATUS.md": "1ae64bf2a71325ff4be3978fc01689c3463cf36c0839ec920c78be8a23d678a0",
+    "output/acceptance/2026-09-27-publication-inspections/STATUS.md": "8bd89669d23990d585fa6d41700201b1f63c31f34ef4aded4f0b980d7ad84ff3",
     "output/acceptance/2026-09-27-publication-inspections/build.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
     "output/acceptance/2026-09-27-publication-inspections/build1.log": "2f730f93d5dbf683b4652020273940ebe7990808d0794bdd602dfbc6b7b50e98",
     "output/acceptance/2026-09-27-publication-inspections/build2.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
@@ -69,11 +70,14 @@
     "output/acceptance/2026-09-27-publication-inspections/focused-final.log": "aab8548482d94e7cec4ba701ecd7e34c54cb714f07abcd663743c9431e9d639b",
     "output/acceptance/2026-09-27-publication-inspections/full-first.log": "fc5c2bd08b1078bde92193cadf352843514c4c7b8e0d5766878a05428968d067",
     "output/acceptance/2026-09-27-publication-inspections/lint.log": "d899edf631e5ced5db5f4227294e1b9510019a980e20f6b06b8c3846d4ddeb4b",
+    "output/acceptance/2026-09-27-publication-inspections/production-preflight-after.json": "8a479d0d42b8cec16c131d3f7014a20b98246eab590c9e9143987c5fc213a1eb",
     "output/acceptance/2026-09-27-publication-inspections/production-preflight-before.json": "1e298b33de1438531ce6776ee3bb2d48bb014549f020638f23ad0436a9ce7db2",
     "output/acceptance/2026-09-27-publication-inspections/production-proxy-fix.json": "801e77d0e2c756ce74d978c24b596afa5035e0c91693610436a9c342545e11bf",
     "output/acceptance/2026-09-27-publication-inspections/provider-ui-first.log": "ddfc2747946e0420e41976e2a41907b62196052728333fcf4d803668a92e2658",
     "output/acceptance/2026-09-27-publication-inspections/proxy-dns-drill.json": "f875304bb2c6e4961a8c07d9402c5ee9df6fddeb0f865e6adfd8e920547ed419",
     "output/acceptance/2026-09-27-publication-inspections/proxy-dns-drill.py": "af5056cd99b0ba0a2c8d77582a01e28198506631a951918021c0566380da4fdb",
+    "output/acceptance/2026-09-27-publication-inspections/proxy-file-delivery-final.log": "6a4016e072160ab185e00752ce245f7280c8cf9e954ced02fad3aaf43fc1ebd2",
+    "output/acceptance/2026-09-27-publication-inspections/proxy-file-delivery-first.log": "343fda07e29d058a56308fe02717e67ebf8b9cbb94cc57c089b54d3247e49792",
     "output/acceptance/2026-09-27-publication-inspections/security.log": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d",
     "output/acceptance/2026-09-27-publication-inspections/types.log": "30e66586091116f998700b4b33a43421e9a7dfdb7ec5b2f67bec595d7edfa9c9",
     "output/acceptance/2026-09-27-publication-inspections/ui-corrected.log": "94407191d64b62dd54177a2bf034d03b9e007a66a426e5fbb4adeb79f4299cdf"
@@ -109,6 +113,10 @@
       "passed": 8,
       "failed": 0,
       "productionConfigOnlyApplied": true
+    },
+    "proxyFileDelivery": {
+      "passed": 6,
+      "failed": 0
     }
   },
   "limits": [

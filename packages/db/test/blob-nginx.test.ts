@@ -63,6 +63,7 @@ describe.skipIf(!haveImage)(`the /_blobs/ location in ${IMAGE}`, () => {
   const sha = createHash('sha256').update(bytes).digest('hex');
   const rel = `sha256/${sha.slice(0, 2)}/${sha}.png`;
   let stub: http.Server;
+  const network = `hawa-blob-nginx-${randomBytes(6).toString('hex')}`;
   let container = '';
   let base = '';
 
@@ -93,10 +94,13 @@ describe.skipIf(!haveImage)(`the /_blobs/ location in ${IMAGE}`, () => {
     await new Promise<void>((resolve) => stub.listen(0, '127.0.0.1', resolve));
     const port = (stub.address() as AddressInfo).port;
     const conf = fs.readFileSync(nginxConf, 'utf8')
-      .replace('server core:3001;', `server host.docker.internal:${port};`)
-      .replace('server desk:80;', `server host.docker.internal:${port};`);
+      .replace('server core:3001 resolve;', `server host.docker.internal:${port} resolve;`)
+      .replace('server desk:80 resolve;', `server host.docker.internal:${port} resolve;`);
     fs.writeFileSync(path.join(work, 'nginx.conf'), conf, { mode: 0o644 });
-    const run = docker(['run', '-d', '--rm', '-p', '127.0.0.1::80', '-v', `${path.join(work, 'nginx.conf')}:/etc/nginx/nginx.conf:ro`, '-v', `${blobs}:/srv/hawa-blobs:ro`, IMAGE]);
+    // Docker's embedded resolver is available on user-defined networks, as in production.
+    const madeNetwork = docker(['network','create',network]);
+    if (madeNetwork.status !== 0) throw new Error(`test network did not start: ${madeNetwork.stderr}`);
+    const run = docker(['run', '-d', '--rm', '--network',network, '-p', '127.0.0.1::80', '-v', `${path.join(work, 'nginx.conf')}:/etc/nginx/nginx.conf:ro`, '-v', `${blobs}:/srv/hawa-blobs:ro`, IMAGE]);
     if (run.status !== 0) throw new Error(`nginx did not start: ${run.stderr}`);
     container = run.stdout.trim();
     const mapped = docker(['port', container, '80']).stdout.split('\n')[0].trim();
@@ -111,6 +115,7 @@ describe.skipIf(!haveImage)(`the /_blobs/ location in ${IMAGE}`, () => {
 
   afterAll(async () => {
     if (container) docker(['rm', '-f', container]);
+    docker(['network','rm',network]);
     await new Promise<void>((resolve) => (stub ? stub.close(() => resolve()) : resolve()));
     fs.rmSync(work, { recursive: true, force: true });
   });
