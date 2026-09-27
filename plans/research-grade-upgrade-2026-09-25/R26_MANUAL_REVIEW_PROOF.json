@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "isolated_manual_review_qualification",
+  "verifiedAt": "2026-09-27T00:15:49.114040+00:00",
+  "implementationCommit": "b78810a2e17aedeecfb47e183577c1474b1da011",
+  "testCorrectionCommit": "177c2c398d3c4e26752df175f7adbba48d420b51",
+  "testedSeal": "619827cd7addc4250bc3a37f8ab9bdf9c219c650",
+  "requirements": [
+    "FR-001",
+    "FR-041",
+    "FR-043",
+    "FR-064",
+    "FR-069",
+    "NFR-017",
+    "NFR-020"
+  ],
+  "fullRegression": {
+    "passedTests": 3554,
+    "failedTests": 0,
+    "skippedTests": 59,
+    "passedFiles": 449,
+    "skippedFiles": 7,
+    "command": "pnpm exec vitest run --reporter=default --reporter=json --outputFile=/private/tmp/hawa-manual-review-full-final.json",
+    "reportSha256": "6071d40c383c9a6bdca72529e128b9ff4bb48ebd469048a5a1cab9ccb662ba1d"
+  },
+  "focused": {
+    "affectedFiles": 14,
+    "affectedTests": 151,
+    "correctionFiles": 2,
+    "correctionTests": 42
+  },
+  "gates": {
+    "types": "passed",
+    "lint": "passed",
+    "productionDeskBuild": "passed",
+    "securityScan": "passed",
+    "sourceManifest": "passed",
+    "testedSealBlueprint": {
+      "pass": 867,
+      "warn": 0,
+      "fail": 0
+    }
+  },
+  "priorFullRun": {
+    "passed": 3552,
+    "failed": 2,
+    "skipped": 59,
+    "failures": [
+      {
+        "test": "Core API: Ingress & Task Lifecycle enforces repair budget of max 2 cycles on revision requests",
+        "file": "apps/core/test/core.test.ts"
+      },
+      {
+        "test": "Core checks the versioned upgrades before it starts knows every upgrade this build carries, in order",
+        "file": "apps/core/test/startup-schema-check.test.ts"
+      }
+    ],
+    "resolution": "Updated the migration-044 expectation and used the new current revision after regeneration; added explicit stale-decision HTTP 409 verification. Runtime source did not change."
+  },
+  "candidate": {
+    "finishedAt": "2026-09-27T00:09:05.942Z",
+    "telegramPoller": "worker",
+    "deployment": {
+      "commit": "b78810a2e17aedeecfb47e183577c1474b1da011",
+      "sourceChanges": {},
+      "containers": {
+        "postgres": {
+          "imageId": "sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T00:08:08.768606503Z"
+        },
+        "restate": {
+          "imageId": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+          "buildCommit": "d5425f5bfae4024f4d26bab447bc8e6c6db08bfa",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T00:08:08.766949586Z"
+        },
+        "core": {
+          "imageId": "sha256:781054570eb6b14de05cb218743ceb7db6a263e2f4b3f812b4894cf8a835e881",
+          "buildCommit": "b78810a2e17aedeecfb47e183577c1474b1da011",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_parser"
+          ],
+          "createdAt": "2026-09-27T00:08:12.037078879Z"
+        },
+        "worker-blue": {
+          "imageId": "sha256:0779a4f2a41d93bab40e9d2c4a668a493ef69709e96f5717b89069548f2cb9e4",
+          "buildCommit": "b78810a2e17aedeecfb47e183577c1474b1da011",
+          "networks": [
+            "hawa-chaos_chaos"
+          ],
+          "createdAt": "2026-09-27T00:08:11.941914379Z"
+        },
+        "fakes": {
+          "imageId": "sha256:f003e65fe9b2b9a636ee809b679e0e0a872e2ed077859717ade3840d3896826b",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T00:08:08.765730003Z"
+        },
+        "docling": {
+          "imageId": "sha256:6f3c82862025714e2db1237bfd4ab98b7f37808e867d1a8b86e4a84325dea6d3",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_parser"
+          ],
+          "createdAt": "2026-09-27T00:08:18.420852466Z"
+        },
+        "desk": {
+          "imageId": "sha256:b80fd2a2a42476fa4f5ef851ab376bd5789b36b2b69284d8f3fbe1caa835072d",
+          "buildCommit": "b78810a2e17aedeecfb47e183577c1474b1da011",
+          "networks": [
+            "hawa-chaos_chaos"
+          ],
+          "createdAt": "2026-09-27T00:08:18.421302174Z"
+        },
+        "nginx": {
+          "imageId": "sha256:b947b2630c97622793113555e13332eec85bdc7a0ac6ab697159af78942bb856",
+          "buildCommit": "",
+          "networks": [
+            "hawa-chaos_chaos",
+            "hawa-chaos_chaos-edge"
+          ],
+          "createdAt": "2026-09-27T00:08:18.475504757Z"
+        }
+      },
+      "networks": [
+        "hawa-chaos_chaos|true",
+        "hawa-chaos_parser|true"
+      ],
+      "externalAdapters": "synthetic fakes",
+      "parser": "real pinned offline Docling",
+      "productionChanged": false
+    },
+    "totalMs": 85147,
+    "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
+    "peakMemoryMiB": {
+      "hawa-chaos-nginx-1": 8,
+      "hawa-chaos-desk-1": 7,
+      "hawa-chaos-docling-1": 13,
+      "hawa-chaos-core-1": 101,
+      "hawa-chaos-worker-blue-1": 68,
+      "hawa-chaos-postgres-1": 103,
+      "hawa-chaos-restate-1": 607,
+      "hawa-chaos-fakes-1": 79
+    },
+    "peakTotalMiB": 986,
+    "uncoveredModelCalls": [],
+    "scenarios": [
+      {
+        "name": "R1.S3.SOURCES",
+        "what": "full-app PDF source to voice revision and simulated approved delivery",
+        "ms": 27977,
+        "invariants": [
+          {
+            "name": "every candidate container was created after this rehearsal started",
+            "ok": true,
+            "detail": "rehearsal started 2026-09-27T00:07:41.077Z"
+          },
+          {
+            "name": "Core, worker and Desk image labels match the candidate checkout",
+            "ok": true,
+            "detail": "build b78810a2e17aedeecfb47e183577c1474b1da011; changed source files=0"
+          },
+          {
+            "name": "provider callers and the real parser have only internal networks",
+            "ok": true,
+            "detail": "hawa-chaos_chaos|true, hawa-chaos_parser|true"
+          },
+          {
+            "name": "production Desk HTML is served through production nginx",
+            "ok": true,
+            "detail": "HTTP 200"
+          },
+          {
+            "name": "the built Desk entry asset is present",
+            "ok": true,
+            "detail": "HTTP 200"
+          },
+          {
+            "name": "Desk session is persisted by the running Core",
+            "ok": true,
+            "detail": "HTTP 201; durable=true"
+          },
+          {
+            "name": "PDF source review creates no premature task",
+            "ok": true,
+            "detail": "source 90467689275"
+          },
+          {
+            "name": "application/pdf original crosses nginx byte-identically",
+            "ok": true,
+            "detail": "HTTP 200; SHA-256 adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617"
+          },
+          {
+            "name": "real local parser preserves both PDF pages and numeric copy",
+            "ok": true,
+            "detail": "HTTP 200; source adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617"
+          },
+          {
+            "name": "duplicate source confirmation produces one task through Restate",
+            "ok": true,
+            "detail": "replay HTTP 202"
+          },
+          {
+            "name": "review wait survives Restate and worker process restart",
+            "ok": true,
+            "detail": "request 35183795-bb22-41d0-a321-3899c5b290b1; rev 2"
+          },
+          {
+            "name": "audio/ogg original crosses nginx byte-identically",
+            "ok": true,
+            "detail": "HTTP 200; SHA-256 e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2"
+          },
+          {
+            "name": "unapproved voice model remains manual with honest timing and billing",
+            "ok": true,
+            "detail": "{\"clientId\":\"c1000000-0000-4000-8000-000000000002\",\"updateId\":90467689277,\"sourceSha256\":\"e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2\",\"audio\":{\"version\":\"ogg-opus-v1\",\"channels\":1,\"mediaType\":\"audio/ogg\",\"sampleRate\":48000,\"encodedSamples\":48960,\"durationSeconds\":1},\"state\":\"manual\",\"message\":\"Client privacy does not authorize cloud transcription. The original is retained for manual copy review; no audio was sent to a model.\",\"transcript\":null,\"estimatedUsd\":null,\"actualUsd\":null}"
+          },
+          {
+            "name": "voice source does not create a child before exact-copy review",
+            "ok": true,
+            "detail": "voice source 90467689277"
+          },
+          {
+            "name": "revised simulated Canva export passes configured QA",
+            "ok": true,
+            "detail": "QC passed"
+          },
+          {
+            "name": "PDF new request and voice revision reach one logical simulated delivery",
+            "ok": true,
+            "detail": "{\"tasks\":[{\"id\":\"a02b33fe-d6b6-4c96-9d67-5b4c7f951c59\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"dd8200a2-722e-4720-95ae-aecf91468bd8\",\"state\":\"complete\",\"version\":\"8\"}],\"delivered\":{\"request_id\":\"35183795-bb22-41d0-a321-3899c5b290b1\",\"current_task_id\":\"dd8200a2-722e-4720-95ae-aecf91468bd8\",\"rev\":\"8\",\"stage\":\"delivered\"}}"
+          },
+          {
+            "name": "retained confirmations preserve exact source copy",
+            "ok": true,
+            "detail": "two immutable confirmations"
+          },
+          {
+            "name": "the two source originals were downloaded once each",
+            "ok": true,
+            "detail": "[\"candidate-pdf-9300001\",\"candidate-voice-9300001\"]"
+          },
+          {
+            "name": "manual-only voice caused no paid transcription attempt",
+            "ok": true,
+            "detail": "attempts=0"
+          },
+          {
+            "name": "bilingual Desk intake replay returns one task",
+            "ok": true,
+            "detail": "task dd6568d0-c94e-42ad-a6ca-368df1da08d7"
+          },
+          {
+            "name": "saved bilingual Desk copy imports through the explicit generation action",
+            "ok": true,
+            "detail": "status=retrieved; replay=retrieved"
+          },
+          {
+            "name": "the saved plan preserves both exact copy blocks and separate instructions",
+            "ok": true,
+            "detail": "plans=1; source=1f57d5ca1d3d3c67519b4ddf747fadbb31b502d7d89e8ccebe8342c8aa12457f"
+          },
+          {
+            "name": "Desk capture records a review from retained PNG and checked live text",
+            "ok": true,
+            "detail": "Preview and checked source recorded for human review. Copy and font checks passed; inspect the design before approving."
+          },
+          {
+            "name": "capture replay preserves one revision without inventing native editability",
+            "ok": true,
+            "detail": "revisions=1"
+          },
+          {
+            "name": "manual review reaches one simulated approval and completed archive publication",
+            "ok": true,
+            "detail": "{\"approvals\":\"1\",\"publications\":\"1\"}"
+          }
+        ],
+        "events": [
+          "PDF 90467689275 → request 35183795-bb22-41d0-a321-3899c5b290b1 → task a02b33fe-d6b6-4c96-9d67-5b4c7f951c59",
+          "Restate and worker SIGKILL/restart at the PDF review waitpoint",
+          "voice 90467689277 → reviewed revision task dd8200a2-722e-4720-95ae-aecf91468bd8",
+          "Desk bilingual request dd6568d0-c94e-42ad-a6ca-368df1da08d7 → saved plan 87fa4592-33e6-4ef7-8ec3-125ab07038b5 → simulated Canva import → captured review → simulated approval/publication"
+        ]
+      }
+    ]
+  },
+  "runtimeChangedSinceCandidate": false,
+  "browser": {
+    "origin": "http://127.0.0.1:56081",
+    "taskId": "6f6f4dfa-2645-4afc-ae8e-26d1b098e002",
+    "actions": [
+      "operator sign-in",
+      "manual Desk request",
+      "Design in Canva against explicit fake",
+      "Capture for Review",
+      "inspect approval dialog",
+      "cancel without approval"
+    ],
+    "observed": [
+      "Needs a designer has no automatic-failure claim",
+      "capture reaches Needs approval with revision v1",
+      "current preview shows matching captured text check",
+      "PNG and checked PPTX preselected",
+      "operator Confirm Approval disabled"
+    ],
+    "screenshot": "R26_MANUAL_REVIEW.png",
+    "screenshotSha256": "e570d7a4eba71eeee40d14394a4a25de1f95c499544af43f9a7440f65712f503",
+    "humanApprovalPerformed": false
+  },
+  "limits": [
+    "No production deployment or live external-provider action.",
+    "Native Canva editing/reopening, fonts/assets/RTL visual quality and independent creative acceptance remain unqualified.",
+    "The semantic map covers live PPTX text only; native Canva verification remains unverified.",
+    "Current checked-export admission still requires Hawa-imported source metadata; blank Canva source checking remains open.",
+    "The approval warning needs a contrast correction.",
+    "Named OIDC/human pilot, live delivery/billing, retrieval relevance/latency and clean-host WAL/PITR/Restate recovery remain open."
+  ]
+}

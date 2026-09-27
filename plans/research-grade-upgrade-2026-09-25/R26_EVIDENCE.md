@@ -151,3 +151,36 @@ its fresh deployment and the final full suite are pending at this checkpoint.
 
 This is source implementation evidence. It does not qualify a production build,
 real Canva layer editability, human approval, visual/RTL quality or real delivery.
+
+## Manual capture qualification — source b78810a, tested seal 619827c
+
+The fresh candidate passed **25/25 invariants** in 85.147s including setup.
+Core, worker and Desk retain source `b78810a` image labels; all eight services were
+newly created, external callers remain on internal networks, and runtime source
+changes were empty. The extension exercised the actual Desk capture coordinator,
+retained same-version PNG/PPTX, one review on replay, one simulated approval and
+one completed archive publication. Docling was real; external adapters and the
+approval identity were synthetic. No real provider or human acceptance is implied.
+
+Browser verification saved another task, generated/imported through the fake,
+clicked Capture for Review, reached **Needs approval**, and displayed PNG+PPTX
+selected in the approval dialog. Confirm Approval was disabled for the operator;
+the dialog was cancelled and the task remains unapproved. Screenshot:
+[R26_MANUAL_REVIEW.png](R26_MANUAL_REVIEW.png).
+
+The first full run passed 3552 tests with **2 failures / 59 skipped**. The new
+migration exposed a hard-coded 044 expectation; successful regeneration exposed
+a repair-budget test reusing its old revision ID. Test-only commit `177c2c3` updates
+both and explicitly verifies stale decisions return 409. Its 42 tests passed.
+No production guard or runtime source changed after the deployed rehearsal.
+Final exact sealed regression: **449 files / 3554 passed;
+7 files / 59 skipped**. Types, lint, Desk build, security,
+source manifest and tested-seal blueprint **867/0/0** passed. Exact images, hashes,
+commands, source lineage and limitations: [R26_MANUAL_REVIEW_PROOF.json](R26_MANUAL_REVIEW_PROOF.json).
+
+Remaining engineering: checked exports of blank/manual-only Canva designs still
+require source copy/font admission, and the dark approval warning needs improved
+contrast. Native edit/reopen, named human multilingual/creative review, live
+provider/delivery/billing, measured retrieval and clean-host recovery remain open.
+The source-backed imported-draft manual path is locally qualified; all-app 10/10
+and production admission remain unproven.

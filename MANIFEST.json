@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T00:13:29Z",
+  "generatedAt": "2026-09-27T00:15:51Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 358,
+  "fileCount": 360,
   "files": [
     {
       "path": ".dockerignore",
@@ -899,8 +899,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "8c3b0a23170b0826c0a5d7e852abf09df0f6d5c1850f1e234ebff3ad4b617ef2",
-      "bytes": 32505
+      "sha256": "5ddedc5c7330e72a8b366742149dc289a86e29041cbb81b360f42f0e40f2ca2f",
+      "bytes": 34026
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1089,8 +1089,18 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R26_EVIDENCE.md",
-      "sha256": "f06d20a625a28a1b7eae1eecd7e57b6f43ec7b9379c1701964ddf793e7dd59d8",
-      "bytes": 9341
+      "sha256": "700be4bb11ddd587a0765d8f4015362d869e24aa408e1fcca6ec6eb861ab2757",
+      "bytes": 11485
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R26_MANUAL_REVIEW.png",
+      "sha256": "e570d7a4eba71eeee40d14394a4a25de1f95c499544af43f9a7440f65712f503",
+      "bytes": 33430
+    },
+    {
+      "path": "plans/research-grade-upgrade-2026-09-25/R26_MANUAL_REVIEW_PROOF.json",
+      "sha256": "ee88617cb6308c7cfa032e8b14d9584734302b0a8935a870565e8a73d3c5a793",
+      "bytes": 13423
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/REALITY_CHECK_2026-09-25.md",
@@ -1109,8 +1119,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "fdc8a5b1c6005207fc61a611db85a11d171f851be6a8952d736a5537627597c2",
-      "bytes": 264297
+      "sha256": "8542c9d02bbed04d171908241c00abfb9cb3ce86c59e2393081939b123b85375",
+      "bytes": 267307
     },
     {
       "path": "plans/user-stories.csv",

@@ -12,7 +12,31 @@ Branch: `codex/research-grade-design-system`. Scope and acceptance remain in `PL
 - Keep engineering, live-operation and human-quality acceptance separate. Complete available engineering while real corpus preparation and human review remain pending; no synthetic result substitutes for them.
 - Reuse fixtures, the existing Restate workflow and the pinned dependency stack. Add a dependency or redesign only when a measured need justifies it.
 
-## Current implementation (2026-09-27 — manual captured review, ADR-076)
+## Current result (2026-09-27 — source-backed manual review)
+
+Implementation `b78810a`, test correction `177c2c3`, tested seal `619827c`:
+manual Desk generation/import → Capture for Review → current source/preview review
+→ simulated approval/publication passed **25/25 fresh deployed checks**. Stable
+keys, hash/version matching, actual PPTX text identities, concurrent replay,
+recapture and one-time approval invalidation are verified. Native Canva status
+stays unverified. Migration 045 permits later Canva review checkpoints with the
+same genuine PPTX hash. Browser operator confirmation stays disabled.
+
+Exact sealed regression: **449 files / 3554 passed;
+7 files / 59 skipped**. 151 affected + 42 test-correction
+checks; types/lint/Desk build/security, tested blueprint 867/0/0 and manifest passed.
+The initial two full-suite failures and their fixes remain in R26 evidence.
+Runtime images still match `b78810a`; the later changes touched tests only.
+See R26_MANUAL_REVIEW_PROOF.json and R26_MANUAL_REVIEW.png. Production unchanged.
+
+Next engineering: admit exact saved copy and approved font policy for checked
+exports of blank Canva designs (currently imported source is required), fix the
+low-contrast approval warning, and qualify remaining Desk control states. Then
+complete real Canva edit/reopen, named human multilingual/creative acceptance,
+live delivery/billing, retrieval evaluation and clean-host WAL/PITR/Restate
+recovery. Keep the goal active; app-wide completion is not established.
+
+## Prior implementation checkpoint (2026-09-27 — manual captured review, ADR-076)
 
 Manual Desk capture now retains PNG and checked PPTX under stable action keys and
 records an attributable review using exact submitted copy and live text identities
