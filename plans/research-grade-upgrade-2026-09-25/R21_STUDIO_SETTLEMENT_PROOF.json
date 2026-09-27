@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "local_recovery_qualified_deployment_pending",
+  "status": "qualified_local_candidate_live_gates_open",
   "requirements": [
     "FR-060",
     "FR-065",
@@ -22,7 +22,13 @@
     "deskBuild": "passed",
     "anyRatchet": "1008 <= 1053; passed",
     "providerEgress": "passed;9 existing exceptions",
-    "receiptLabels": "2 files/9 Desk tests passed; exact call IDs are visible when matching provider evidence, including parity calls without an ordinal."
+    "receiptLabels": "2 files/9 Desk tests passed; exact call IDs are visible when matching provider evidence, including parity calls without an ordinal.",
+    "firstFullSuite": {
+      "passed": 3774,
+      "failed": 1,
+      "skipped": 59,
+      "reason": "Startup-schema fixture still expected migration048; changed its literal expected version to049. Runtime unchanged; first failure retained."
+    }
   },
   "limits": [
     "Administrator attestation is not automated provider lookup or invoice verification.",
@@ -51,12 +57,21 @@
     "packages/testkit/chaos/driver/candidate-sources.ts": "3ae975c2ca11cca663c63639a2c0013027a1d5de878abe1b7dfdf72dd9c0397b",
     "api/openapi.yaml": "ebc9ea7426d1f7343512c5a999d28dee59154d561dcb461b58b9b5ad0902a0ff",
     "apps/core/test/fixtures/route-inventory.txt": "7c6b22049e805b9d811a4222af41c3525e219c478c9c7a5927d0754dcd72f7dc",
-    "runbooks/STUDIO_RECOVERY.md": "f460515c288ea739626595535f24ab113f216f66c1a9b49cab0988c2c78cfa7a"
+    "runbooks/STUDIO_RECOVERY.md": "f460515c288ea739626595535f24ab113f216f66c1a9b49cab0988c2c78cfa7a",
+    "apps/core/test/startup-schema-check.test.ts": "9c507a1927d6d62cd4f5486087d48e3dace680676f3a549e2b1af4b1670fde9d"
   },
   "artifacts": {
     "output/acceptance/2026-09-27-studio-settlement/build.log": {
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
+    },
+    "output/acceptance/2026-09-27-studio-settlement/candidate-rehearsal.json": {
+      "sha256": "838d108469754a3262be529ed4d03d9067fdc09e2d93fe87b2194ee688b16a64",
+      "bytes": 17468
+    },
+    "output/acceptance/2026-09-27-studio-settlement/candidate.log": {
+      "sha256": "8a2366365abaaabc82e42185bd3103023967a6f091dda46e04a6c584624bb1df",
+      "bytes": 389
     },
     "output/acceptance/2026-09-27-studio-settlement/desk-build.log": {
       "sha256": "0021762d5d04cfc5aac4e87506905a1bbf7e283c72e45f72b3fe6379693fb632",
@@ -69,6 +84,22 @@
     "output/acceptance/2026-09-27-studio-settlement/focused.log": {
       "sha256": "ef860a3b575bcfd393ca7d278f6fcf8b455b0158323408b685b8c01a18e495a9",
       "bytes": 1294
+    },
+    "output/acceptance/2026-09-27-studio-settlement/full-tests-first.json": {
+      "sha256": "8f359c68686217ef53c6972214bdc498d63319164984c123bfdb539714824010",
+      "bytes": 1573873
+    },
+    "output/acceptance/2026-09-27-studio-settlement/full-tests-first.log": {
+      "sha256": "3fa3dda8af5101c76ace24cb2d71b9db28d5f38945b513521b3d501c7341cee7",
+      "bytes": 498360
+    },
+    "output/acceptance/2026-09-27-studio-settlement/full-tests.json": {
+      "sha256": "d207c1722ec6121dc4c8017127ea25cdba641ab53837aa22de5bfce71aad0c6c",
+      "bytes": 1572482
+    },
+    "output/acceptance/2026-09-27-studio-settlement/full-tests.log": {
+      "sha256": "bdee3b27a67dbbc639df145f205f51891c828640f33f0e4e78e5e594c7ffed00",
+      "bytes": 484695
     },
     "output/acceptance/2026-09-27-studio-settlement/harness-types.log": {
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -90,5 +121,30 @@
       "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
       "bytes": 145
     }
+  },
+  "implementationCommit": "9a7c973b865637c1bb66f3af37994857cac3ceb1",
+  "sourceCommit": "f14c7ccd9bf467206a31acb4779bc0b817e9ca35",
+  "candidateCommit": "b641928af8e3b64f3b32e0b153e79ff6943ce9f7",
+  "qualification": {
+    "fullSuite": {
+      "passed": 3775,
+      "failed": 0,
+      "skipped": 59,
+      "files": 474,
+      "runtimeCommit": "b641928af8e3b64f3b32e0b153e79ff6943ce9f7",
+      "scope": "Sealed runtime plus corrected startup migration fixture"
+    },
+    "candidate": {
+      "checks": 63,
+      "allPassed": true,
+      "priorWorkflowAndEvaluationChecks": 50,
+      "studioSettlementChecks": 13,
+      "coreRestartAfterStudioSettlement": true,
+      "modelRequestsDuringStudioProof": 0,
+      "originalStudioCallWasSyntheticDatabaseAdmission": true,
+      "scope": "Deployed local candidate; synthetic Studio ledger and named administrator, external adapters fake; independent actual process kills are in source tests."
+    },
+    "releaseManifest": "verified",
+    "sourceChangesInCandidate": 0
   }
 }

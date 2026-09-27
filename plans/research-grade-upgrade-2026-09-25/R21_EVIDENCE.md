@@ -296,3 +296,9 @@ Proof:`R21_STUDIO_SETTLEMENT_PROOF.json`; artifacts:
 candidate rehearsal are pending at this source checkpoint. General reply replay,
 live pilot/billing, human/native quality, independent recovery and held-out model/
 retrieval/cost qualification remain open. No production change or human approval.
+
+Final candidate b641928 (source f14c7cc, migration049) passes63 deployed checks:50 existing workflow/evaluation +13 Studio settlement. Core restarts after settlement; the saved action returns the same receipt, original uncertainty/run state survive, explicit new Studio admission is allowed, and the Studio proof makes zero model requests. The held Studio call was seeded as a synthetic admission; actual provider-read/process-kill recovery is covered separately in source tests. Core/Desk/worker image labels match and sourceChanges is empty.
+
+First full regression:3774 passed/1 failed/59 skipped because startup-schema-check still expected migration048. Corrected the literal to049 without changing runtime. Final full regression:3775 passed/0 failed/59 skipped,474 files. Initial failure retained. Native browser navigation reached candidate sign-in only; no authenticated visual inspection is claimed. Desk behavior is covered by rendered DOM tests and its production build.
+
+Follow-up: prove cumulative parity-call budgets across distinct exports on a transferred run; its immutable run budget and later call ledger are currently separate. General typed-stage reply recovery, live named pilot, native/human quality, independent restore and held-out measurements remain open.
