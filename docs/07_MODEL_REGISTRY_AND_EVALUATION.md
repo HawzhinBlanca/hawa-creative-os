@@ -262,3 +262,25 @@ stop further calls. Evaluation runs retain the quote/hash and observed overrun,
 stop on budget refusal, and distinguish unexecuted cases. These provider estimates
 do not prove invoice amounts or office-wide durable allocation; that integration
 remains separate. Price policy expiry and sources are in ADR-093.
+
+
+### Shared response schema enforcement (ADR-094, 2026-09-27)
+
+The gateway compiles the frozen application schema before any provider transport.
+Pinned Ajv supports default draft-07 and explicit draft-2019-09 / draft-2020-12.
+Unknown keywords/formats/dialects, unresolved external references, malformed and
+async schemas fail with MODEL_SCHEMA_INVALID and zero cost/dispatch. Schemas are
+trusted application code, never model/upload content. They are bounded to 128 KiB,
+depth 64 and 10,000 values; the compiled cache retains at most 128 schemas.
+
+Every cloud/local answer must be finite plain JSON (at most 8 MiB, depth 128 and
+100,000 values) and pass the compiled schema. No coercion, property removal or
+default insertion occurs. Invalid paid output keeps its usage/quote evidence and
+blocks another provider call. The validated answer is returned and hashed unchanged;
+execution provenance and responseSchemaSha256 live on the response envelope.
+Historical absent metadata stays absent. Diagnostics omit answer/schema content.
+
+Routing/visual fixture calls now supply explicit schemas for their consumed fields.
+Fixture replay protocol v2 binds these schemas into its identity. An incompatible
+in-progress run retains the original version hold. Schema enforcement does not
+turn fixture results into independent model/design qualification.

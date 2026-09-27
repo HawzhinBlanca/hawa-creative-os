@@ -23,6 +23,27 @@ const newGateway=()=>{
   return {gateway,call};
 };
 describe('durable fixture evaluations under runtime RLS',()=>{
+  it('persists schema-invalid paid output as a hold and replays its receipt without another call',async()=>{
+    const s=await scope(),i=input();vi.stubEnv('GEMINI_API_KEY','synthetic-gateway-key');
+    const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({modelVersion:'gemini-3.8-flash',
+      candidates:[{content:{parts:[{text:'{"decision":"route_matched","confidence":0.9,"extra":"PRIVATE_OUTPUT"}'}]}}],
+      usageMetadata:{promptTokenCount:100,candidatesTokenCount:20,totalTokenCount:120},
+    }),{status:200,headers:{'x-request-id':'schema-receipt'}}));
+    try{
+      const service=new DurableEvaluationService(runtime,new ResilientModelGateway()),run=await service.run(s,i);
+      expect(run.report).toMatchObject({executionStatus:'stopped',overallPassRate:null,modelCallHold:{code:'SCHEMA_VALIDATION_FAILED'}});
+      const call=(await service.get(s,run.runId))!.calls[0];
+      expect(call).toMatchObject({status:'uncertain',costBasis:'usage',estimatedCostUsd:.00015});
+      expect(call.spending?.usd).toBeGreaterThan(0);
+      expect(call.responseSchemaSha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(JSON.stringify(call)).not.toContain('PRIVATE_OUTPUT');
+      const fresh=new DurableEvaluationService(runtime,new ResilientModelGateway());
+      expect(await fresh.run(s,i)).toEqual(run);
+      expect((await fresh.get(s,run.runId))!.calls[0]).toEqual(call);
+      await expect(fresh.run(s,input())).rejects.toMatchObject({code:'EVALUATION_PRIOR_RUN_UNSETTLED'});
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }finally{vi.restoreAllMocks();vi.unstubAllEnvs();}
+  });
   it('retains a native gateway overrun and its exact request bound through fresh Core replay',async()=>{
     const s=await scope(),i=input(),gateway=new ResilientModelGateway();
     vi.stubEnv('GEMINI_API_KEY','synthetic-gateway-key');
@@ -49,7 +70,8 @@ describe('durable fixture evaluations under runtime RLS',()=>{
     }),{status:200})).mockResolvedValue(new Response('',{status:503}));
     try{
       const service=new DurableEvaluationService(runtime,gateway),run=await service.run(s,i),detail=await service.get(s,run.runId);
-      expect(detail?.calls[0]).toMatchObject({status:'completed',estimatedCostUsd:null,costBasis:'unknown',spending:{outputTokens:2048}});
+      expect(detail?.calls[0]).toMatchObject({status:'completed',estimatedCostUsd:null,costBasis:'unknown',spending:{outputTokens:2048},provenance:'live_provider'});
+      expect(detail?.calls[0].responseSchemaSha256).toMatch(/^[a-f0-9]{64}$/);
       expect(detail?.calls[0].spending?.usd).toBeGreaterThan(0);
       expect(run.report?.executionStatus).toBe('stopped');expect(fetcher).toHaveBeenCalledTimes(2);
       await new DurableEvaluationService(runtime,gateway).run(s,i);expect(fetcher).toHaveBeenCalledTimes(2);

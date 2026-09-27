@@ -5,9 +5,10 @@ import { extractProtectedTokens } from '@hawa/domain';
 import { RetrievalService } from '@hawa/retrieval';
 import { checkKurdishTypographyClearance, validateKurdishOrthography } from '@hawa/qa';
 import type { RequestContext, ModelGateway, AppError } from '@hawa/contracts';
+import { ROUTING_RESPONSE_SCHEMA, VISUAL_RESPONSE_SCHEMA } from './response-schemas.js';
 
 const stopsModelBatch = (error: AppError) => error.detail?.requiresReconciliation === true ||
-  error.code.startsWith('MODEL_BUDGET_') || error.code === 'MODEL_DEADLINE_EXCEEDED';
+  error.code.startsWith('MODEL_BUDGET_') || error.code === 'MODEL_DEADLINE_EXCEEDED' || error.code === 'MODEL_SCHEMA_INVALID';
 
 function resolveEvalPath(relPath: string): string {
   const p1 = resolve(process.cwd(), relPath);
@@ -69,7 +70,7 @@ export class EvaluationRunner {
         role: 'intake_router',
         inputs: [{ kind: 'text', text: c.input_text || c.message || '' }],
         systemPromptVersion: '1.0',
-        responseSchema: {},
+        responseSchema: ROUTING_RESPONSE_SCHEMA,
         maxOutputTokens: 2048,
         budget: { maxCostUsd: 0.01, maxLatencyMs: 1000, maxAttempts: 1 },
         egressPolicy: { mode: 'approved_providers', allowedProviders: ['google'] },
@@ -391,7 +392,7 @@ export class EvaluationRunner {
         { kind: 'image', storageKey: 'packages/creative/assets/logos/kaae-official-logo.png', mimeType: 'image/png' },
       ],
       systemPromptVersion: '1.0',
-      responseSchema: {},
+      responseSchema: VISUAL_RESPONSE_SCHEMA,
       maxOutputTokens: 2048,
       budget: { maxCostUsd: 0.05, maxLatencyMs: 5000, maxAttempts: 1 },
       egressPolicy: { mode: 'approved_providers', allowedProviders: ['google'] },

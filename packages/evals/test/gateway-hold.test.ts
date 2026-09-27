@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ResilientModelGateway } from '@hawa/integrations';
 import { EvaluationRunner } from '../src/runner.js';
+import { FakeModelGateway } from '@hawa/testkit';
 
 afterEach(()=>{vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllEnvs();});
 describe('evaluation batches preserve uncertain provider holds',()=>{
+  it('stops the batch for an invalid application schema rather than repeating the same request',async()=>{
+    const gateway=new FakeModelGateway();gateway.setFailure('MODEL_SCHEMA_INVALID');
+    const call=vi.spyOn(gateway,'generateStructured');
+    const report=await new EvaluationRunner(gateway).runFullTournament();
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(report).toMatchObject({executionStatus:'stopped',overallPassRate:null,modelCallHold:{code:'MODEL_SCHEMA_INVALID'},
+      routing:{execution:{attemptedCases:1}},visualJudge:{execution:{attemptedCases:0}}});
+  });
   it('stops an unquotable budget before transport without treating unexecuted cases as failures',async()=>{
     vi.setSystemTime(new Date('2026-11-22T00:00:00Z'));vi.stubEnv('GEMINI_API_KEY','synthetic-eval-key');
     const fetcher=vi.spyOn(globalThis,'fetch').mockRejectedValue(new Error('Must not dispatch'));

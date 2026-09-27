@@ -20,6 +20,7 @@ const uuid = (value: unknown): value is string => typeof value === 'string' && /
 const hold = (code: string): Outcome => ({ ok: false, error: { code, message: 'Evaluation model work is held pending reconciliation.', retryable: false,
   safeAction: 'Inspect the saved evaluation call before starting further model work.', detail: { requiresReconciliation: true, estimatedCostUsd: null } } });
 const safeWord = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_.:/-]{1,200}$/.test(value) ? value : null;
+const safeSha = (value: unknown) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) ? value : null;
 const safeCost = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 9007199254 ? value : null;
 function safeSpending(value: unknown): GatewaySpendingReservation | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -37,6 +38,7 @@ function safeError(error: AppError): AppError {
     detail: { requiresReconciliation: detail.requiresReconciliation === true, estimatedCostUsd: safeCost(detail.estimatedCostUsd),
       costBasis:detail.costBasis === 'usage' ? 'usage' : 'unknown',...(spending ? {spending:{...spending}} : {}),
       provider: safeWord(detail.provider), model: safeWord(detail.model), providerRequestId: safeWord(detail.providerRequestId),
+      responseSchemaSha256: safeSha(detail.responseSchemaSha256),
       httpStatus: typeof detail.httpStatus === 'number' ? detail.httpStatus : null, attempts: typeof detail.attempts === 'number' ? detail.attempts : null,
       acceptance: ['unknown', 'response_received', 'not_dispatched', 'not_accepted'].includes(String(detail.acceptance)) ? detail.acceptance : null } };
 }
@@ -73,6 +75,8 @@ export class DurableEvaluationService {
       estimatedCostUsd:call.outcome?.ok ? call.outcome.value.usage.estimatedCostUsd ?? null : safeCost(call.outcome?.error.detail?.estimatedCostUsd),
       costBasis:call.outcome?.ok ? call.outcome.value.usage.costBasis ?? null : call.outcome?.error.detail?.costBasis ?? null,
       spending:call.outcome?.ok ? call.outcome.value.spending ?? null : safeSpending(call.outcome?.error.detail?.spending),
+      provenance:call.outcome?.ok ? call.outcome.value.provenance ?? null : null,
+      responseSchemaSha256:call.outcome?.ok ? call.outcome.value.responseSchemaSha256 ?? null : safeSha(call.outcome?.error.detail?.responseSchemaSha256),
       latencyMs:call.outcome?.ok ? call.outcome.value.latencyMs : null,
       responseHash:call.outcome?.ok ? call.outcome.value.responseHash : null,
       error:call.outcome && !call.outcome.ok ? call.outcome.error : null,
@@ -186,6 +190,8 @@ export class DurableEvaluationService {
         const r=response.value;
         outcome={ok:true,value:{deployment:r.deployment,value:projectFixtureScore(r.value,request.role,identity),responseHash:r.responseHash,
           invocationId:r.invocationId,usage:r.usage,latencyMs:r.latencyMs,attempts:r.attempts,completedAt:r.completedAt,
+          ...(r.provenance === 'live_provider' || r.provenance === 'deterministic_fallback' ? {provenance:r.provenance} : {}),
+          ...(r.responseSchemaSha256 && /^[a-f0-9]{64}$/.test(r.responseSchemaSha256) ? {responseSchemaSha256:r.responseSchemaSha256} : {}),
           ...(r.spending ? {spending:r.spending} : {}),...(r.traceId ? {traceId:r.traceId} : {})}};
       } else outcome={ok:false,error:safeError(response.error)};
     } catch { outcome=hold('EVALUATION_CALL_OUTCOME_UNKNOWN'); }

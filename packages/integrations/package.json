@@ -18,6 +18,8 @@
   "dependencies": {
     "@hawa/contracts": "workspace:*",
     "@hawa/domain": "workspace:*",
-    "@hawa/observability": "workspace:*"
+    "@hawa/observability": "workspace:*",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
   }
 }

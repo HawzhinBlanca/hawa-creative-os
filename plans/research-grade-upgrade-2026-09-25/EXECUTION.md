@@ -1,5 +1,31 @@
 # Completion checkpoint
 
+## 2026-09-27 — Shared response schemas and parser patch (ADRs 094–095, candidate)
+
+Replaced the partial gateway checker with pinned Ajv and format validation.
+Schemas compile before transport; malformed/unknown/async/external-reference
+contracts fail without spending. Finite JSON and all declared schema constraints
+apply to cloud/local answers. No answer mutation; execution provenance and exact
+schema hash are envelope metadata. Evaluation calls now declare their consumed
+fields and use replay protocol v2. A rejected paid answer retains cost/quote/hash
+and stops replay/new work until reconciliation.
+
+Forty initial controls failed before the repair. Final connected verification:
+230 tests/22 files, including actual Core SIGKILL/replay. Strict types cover 485
+active test roots; source/scripts, lint (981 any /1053, nine existing egress
+exceptions) and Desk build pass. Initial type import issues and sandbox IPC/DB
+failures are retained in logs; no suppression was added.
+
+Dependency review found a published fix for the two old ignored image-size
+advisories. ADR-095 pins 2.0.4 under pptxgenjs 4.0.1, removes both exclusions, and
+passes 77 transfer/Canva-package tests plus zero-vulnerability production audit.
+CycloneDX lists 314 components. Full sealed regression is pending. No new runtime
+image, native browser run, live provider call or production deployment. Shared
+evaluation/voice daily admission, budget administration/accounting repair, stage
+recovery and fresh/live/independent-host qualification remain open.
+See R21_GATEWAY_SCHEMA_PROOF.json.
+
+
 ### Final ADR-093 request-spending qualification, 2026-09-27
 
 Source `13a4acd`, tested seal `8a47f63`: **3920 passed, zero failed, 59 skipped**

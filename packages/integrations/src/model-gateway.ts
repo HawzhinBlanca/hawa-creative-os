@@ -18,6 +18,8 @@ import type {
   SHA256,
   GatewaySpendingReservation,
 } from '@hawa/contracts';
+import { compileGatewaySchema } from './gateway-schema.js';
+export { validateJsonSchema } from './gateway-schema.js';
 import { CircuitBreaker, type CircuitBreakerSnapshot } from './circuit-breaker.js';
 import { OfficeTracer, PhoenixClient } from '@hawa/observability';
 import { GATEWAY_DEFAULT_OUTPUT_TOKENS, GatewaySpendingError, gatewayServedModelMatches, gatewayUsage, quoteGatewayRequest } from './gateway-spending.js';
@@ -30,84 +32,6 @@ export interface ProviderCandidate {
 export interface ModelPricing {
   inputPer1M: number;
   outputPer1M: number;
-}
-
-export function validateJsonSchema(
-  value: unknown,
-  schema: any
-): { valid: true } | { valid: false; error: string } {
-  if (!schema || typeof schema !== 'object') return { valid: true };
-
-  if (schema.type === 'object') {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      return { valid: false, error: `Expected object, got ${Array.isArray(value) ? 'array' : typeof value}` };
-    }
-    if (Array.isArray(schema.required)) {
-      for (const req of schema.required) {
-        if (!(req in (value as object)) || (value as any)[req] === undefined) {
-          return { valid: false, error: `Missing required property: '${req}'` };
-        }
-      }
-    }
-    if (schema.properties && typeof schema.properties === 'object') {
-      for (const [k, propSchema] of Object.entries(schema.properties)) {
-        if (k in (value as object) && (value as any)[k] !== undefined) {
-          const res = validateJsonSchema((value as any)[k], propSchema);
-          if (!res.valid) {
-            return { valid: false, error: `Property '${k}': ${res.error}` };
-          }
-        }
-      }
-    }
-    return { valid: true };
-  }
-
-  if (schema.type === 'array') {
-    if (!Array.isArray(value)) {
-      return { valid: false, error: `Expected array, got ${typeof value}` };
-    }
-    if (schema.items) {
-      for (let i = 0; i < value.length; i++) {
-        const res = validateJsonSchema(value[i], schema.items);
-        if (!res.valid) {
-          return { valid: false, error: `Array item [${i}]: ${res.error}` };
-        }
-      }
-    }
-    return { valid: true };
-  }
-
-  if (schema.type === 'string') {
-    if (typeof value !== 'string') {
-      return { valid: false, error: `Expected string, got ${typeof value}` };
-    }
-    if (schema.enum && !schema.enum.includes(value)) {
-      return { valid: false, error: `Value '${value}' not in allowed enum: ${JSON.stringify(schema.enum)}` };
-    }
-    return { valid: true };
-  }
-
-  if (schema.type === 'boolean') {
-    if (typeof value !== 'boolean') {
-      return { valid: false, error: `Expected boolean, got ${typeof value}` };
-    }
-    return { valid: true };
-  }
-
-  if (schema.type === 'number' || schema.type === 'integer') {
-    if (typeof value !== 'number' || isNaN(value)) {
-      return { valid: false, error: `Expected number, got ${typeof value}` };
-    }
-    if (schema.minimum !== undefined && value < schema.minimum) {
-      return { valid: false, error: `Value ${value} is less than minimum ${schema.minimum}` };
-    }
-    if (schema.maximum !== undefined && value > schema.maximum) {
-      return { valid: false, error: `Value ${value} is greater than maximum ${schema.maximum}` };
-    }
-    return { valid: true };
-  }
-
-  return { valid: true };
 }
 
 export function parseModelJsonResponse<T = unknown>(rawText: string): T {
@@ -294,6 +218,14 @@ export class ResilientModelGateway implements ModelGateway {
       'model.candidates_count': cascade.length,
       'tenant.id': _ctx.tenantId,
     });
+
+    const responseValidator = compileGatewaySchema(request.responseSchema);
+    if (!responseValidator.valid) {
+      span.end({ 'error.failed': true, 'error.code': 'MODEL_SCHEMA_INVALID' });
+      return { ok: false, error: { code: 'MODEL_SCHEMA_INVALID', message: responseValidator.error,
+        retryable: false, safeAction: 'Correct the application response schema before starting model work.',
+        detail: { acceptance: 'not_dispatched', requiresReconciliation: false, estimatedCostUsd: 0 } } };
+    }
 
     // A governed request must name the exact providers permitted by the caller's client policy.
     // An empty list cannot mean "all providers": that silently expands a denied scope.
@@ -531,7 +463,7 @@ export class ResilientModelGateway implements ModelGateway {
           detail: { provider: candidate.provider, model: candidate.model, attempts, httpStatus, providerRequestId,
             acceptance, requiresReconciliation: dispatched, estimatedCostUsd: dispatched ? reportedUsage?.estimatedCostUsd ?? null : 0,
             costBasis: reportedUsage ? 'usage' : 'unknown',
-            ...(reservation ? { spending: { ...reservation } } : {}), servedModelId },
+            ...(reservation ? { spending: { ...reservation } } : {}), servedModelId, responseSchemaSha256: responseValidator.sha256 },
         } };
       };
 
@@ -587,7 +519,7 @@ export class ResilientModelGateway implements ModelGateway {
             }
             if (textPart) {
               const parsed = parseModelJsonResponse(textPart);
-              const schemaVal = validateJsonSchema(parsed, request.responseSchema);
+              const schemaVal = responseValidator.validate(parsed);
               if (!schemaVal.valid) {
                 return stopProviderCall('SCHEMA_VALIDATION_FAILED', 'Provider output failed the requested schema; no fallback was called');
               }
@@ -678,7 +610,7 @@ export class ResilientModelGateway implements ModelGateway {
             }
             if (textBlock?.text) {
               const parsed = parseModelJsonResponse(textBlock.text);
-              const schemaVal = validateJsonSchema(parsed, request.responseSchema);
+              const schemaVal = responseValidator.validate(parsed);
               if (!schemaVal.valid) {
                 return stopProviderCall('SCHEMA_VALIDATION_FAILED', 'Provider output failed the requested schema; no fallback was called');
               }
@@ -761,7 +693,7 @@ export class ResilientModelGateway implements ModelGateway {
             }
             if (content) {
               const parsed = parseModelJsonResponse(content);
-              const schemaVal = validateJsonSchema(parsed, request.responseSchema);
+              const schemaVal = responseValidator.validate(parsed);
               if (!schemaVal.valid) {
                 return stopProviderCall('SCHEMA_VALIDATION_FAILED', 'Provider output failed the requested schema; no fallback was called');
               }
@@ -899,7 +831,7 @@ export class ResilientModelGateway implements ModelGateway {
         }
 
         // Validate local/deterministic output against requested schema (do not invent missing values)
-        const schemaVal = validateJsonSchema(output, request.responseSchema);
+        const schemaVal = responseValidator.validate(output);
         if (!schemaVal.valid) {
           lastError = { code: 'SCHEMA_VALIDATION_FAILED', message: `Model output failed schema validation: ${schemaVal.error}` };
           output = undefined;
@@ -909,10 +841,6 @@ export class ResilientModelGateway implements ModelGateway {
       }
 
       if (output !== undefined) {
-        if (output !== null && typeof output === 'object') {
-          (output as any).provenance = liveSuccess ? 'live_provider' : 'deterministic_fallback';
-        }
-
         const isLocalExecution = isLocal;
         const actualProvider = isLocalExecution ? 'local' : candidate.provider;
         const actualModel = candidate.model;
@@ -933,6 +861,8 @@ export class ResilientModelGateway implements ModelGateway {
             deploymentVersion: '2026-09-04',
           },
           value: output as T,
+          provenance: liveSuccess ? 'live_provider' : 'deterministic_fallback',
+          responseSchemaSha256: responseValidator.sha256,
           responseHash,
           invocationId: crypto.randomUUID(),
           usage,

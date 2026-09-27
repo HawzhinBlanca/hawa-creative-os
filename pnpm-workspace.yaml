@@ -3,11 +3,6 @@ packages:
   - 'packages/*'
 allowBuilds:
   esbuild: true
-# Audit exceptions, each with a reason. Remove an entry as soon as a patched version is published.
-auditConfig:
-  ignoreGhsas:
-    # image-size <=2.0.2 (via pptxgenjs): infinite loops in the ICNS/JXL/HEIF parsers. No patched
-    # version exists yet (latest 2.0.2, patched >=2.0.3). Unreachable here: pptxgenjs sizes only the
-    # PNG logo from packages/creative/assets, never user-supplied images. Re-check on every pnpm audit.
-    - GHSA-w3rx-r6r6-pgpr
-    - GHSA-5p2g-fcmc-qvqq
+# ADR-095: both image-size parser advisories are patched; qualify through transfer tests.
+overrides:
+  'pptxgenjs@4.0.1>image-size': '2.0.4'

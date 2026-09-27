@@ -322,3 +322,12 @@ or a fabricated token count. Evaluation call outcomes persist this evidence and
 replay it after restart. Application-wide durable admission for evaluation/voice
 still requires integration with the Studio office ledger; a returned request quote
 alone is not a database reservation.
+
+
+### Schema-invalid paid evaluation replies (ADR-094)
+
+Invalid response schemas stop before transport. Invalid provider answers preserve
+known usage, exact request quote and response schema hash as a durable evaluation
+hold; a fresh Core replays the saved failure without another paid call. Successful
+scoring projections keep envelope provenance/schema hash separately from the
+original answer hash. Historical receipts are unchanged.

@@ -190,3 +190,13 @@ Per client/project define:
 ### Release identity (ADR-038, 2026-09-25)
 
 A committed source manifest describes a candidate, not a deployed image. The deployment must reject a build stamp different from the clean checkout and inspect the built Core, Desk and Worker image IDs and OCI revision labels before traffic switches. An observed deployment receipt records those immutable IDs, the applied database migration name/hash, and effective non-secret runtime flags/models. A mutable image tag, local source checksum, or source-default model list cannot stand in for this receipt. The receipt proves those observations only; exact task/export provenance and the full release gate are still required for admission.
+
+
+### Reviewed dependency repair, 2026-09-27 (ADR-095)
+
+The source candidate pins pptxgenjs 4.0.1's image-size dependency to 2.0.4.
+GHSA-w3rx-r6r6-pgpr and GHSA-5p2g-fcmc-qvqq are no longer audit exclusions; their
+patch is available. Source transfer/Canva-package compatibility and an unfiltered
+production dependency audit are recorded in R21_GATEWAY_SCHEMA_PROOF.json. This
+is a candidate dependency change; backup/canary/rollback deployment gates remain
+required before runtime rollout.

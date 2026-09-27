@@ -37,6 +37,7 @@ export interface StructuredModelRequest<TSchema extends JsonObject = JsonObject>
   deploymentId?: UUID;
   inputs: ModelInputPart[];
   systemPromptVersion: string;
+  /** Trusted application JSON Schema; compiled before transport. Never supplied by models/uploads. */
   responseSchema: TSchema;
   tools?: ToolDefinition[];
   allowedToolNames?: string[];
@@ -52,6 +53,10 @@ export interface StructuredModelRequest<TSchema extends JsonObject = JsonObject>
 export interface StructuredModelResponse<T> {
   deployment: ModelDeploymentRef;
   value: T;
+  /** Execution metadata is outside the validated answer; absent on historical receipts. */
+  provenance?: 'live_provider' | 'deterministic_fallback';
+  /** Digest of the exact frozen response schema; absent on historical receipts. */
+  responseSchemaSha256?: string;
   responseHash: SHA256;
   invocationId: UUID;
   usage: { inputTokens?: number; outputTokens?: number; assetUnits?: number; estimatedCostUsd?: number;

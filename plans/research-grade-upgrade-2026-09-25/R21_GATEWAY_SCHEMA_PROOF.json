@@ -1,0 +1,85 @@
+{
+  "date": "2026-09-27",
+  "status": "CANDIDATE_FULL_REGRESSION_PENDING",
+  "requirements": [
+    "FR-059",
+    "FR-062",
+    "FR-065",
+    "NFR-001",
+    "NFR-013"
+  ],
+  "adrs": [
+    "094_gateway_schema_validation",
+    "095_patched_image_parser_dependency"
+  ],
+  "sourceHashes": {
+    "adrs/094_gateway_schema_validation.md": "c05810e8484f66f9fb1695869d899ce4e06ebaab36c9381e8ff42b5e7b9d9f25",
+    "adrs/095_patched_image_parser_dependency.md": "e70d24fe88f7f2aad26e4937a69d908601d3e93844a5dea9329596e54fc3e094",
+    "packages/integrations/package.json": "b6c56537a9c9e645d742e6f62b65b79144fe422503384ee580a1d57ff7636b14",
+    "pnpm-lock.yaml": "c3bf14e2973c4425edfe7b8df6710a0e613fe6c918d378edd712d2fb73da96a8",
+    "pnpm-workspace.yaml": "8de010d9a185cdba809a88eedc41fbb368818497ea6686d25ba9eda1adb7d2fb",
+    "packages/contracts/src/model-gateway.ts": "9055e0f09afed61ec792f15a13062b0d7b5de3c5692937d75ca3bcc41338e19d",
+    "packages/integrations/src/model-gateway.ts": "24fdcc3eff81cc8ab9212e22b632a7632b45fed5454be47b8aa107efc4166320",
+    "packages/integrations/src/gateway-schema.ts": "66529fdca46fb8d5aa08de42d54f756749e08ad163488770e8b3f700d19c329b",
+    "packages/integrations/test/gateway-schema.test.ts": "944690f3b95539327ff72c00c069ddcfdf2cc023e130f22c2a38efff53747a56",
+    "packages/evals/src/response-schemas.ts": "381c078ed59c360a14412ce5dff46287e206e8c9c35c21edd153d8a9f4e274f3",
+    "packages/evals/src/runner.ts": "4eda85e70c5665e9daa81523a272ed1cdc1a1555714b589f927787a7045d8747",
+    "packages/evals/src/fixture-replay.ts": "2b26b320746d9e8919c12458d377f75d86434a3ed3a7d81b7976c3b84406b8ff",
+    "packages/evals/test/gateway-hold.test.ts": "492c8374701c319a8ed7fb4591d503672ba664d12fe8f5cc9f4f1be3e436ad97",
+    "apps/core/src/services/durable-evaluations.ts": "022e7194d6c7b565b55326b59cd4095a0f23e7652d88505ccd7b0d5525761036",
+    "apps/core/test/durable-evaluations.test.ts": "e704608572b596ea3ce6ee82f3e255dfc606f914b830876e758edf0c4e973251",
+    "docs/07_MODEL_REGISTRY_AND_EVALUATION.md": "bdcc78987dbe0774db5b70b305d222f05d035ad9c2ea1132f10ed5582574d03a",
+    "docs/10_WORKFLOW_RELIABILITY.md": "18235a6218f17c63e38451217a45d882b2fb7c848b03557e7ee656adc791ff1f",
+    "docs/14_SECURITY_THREAT_MODEL.md": "acec7e50e7526514c4c51da3bbd8679140d18c7e24d40cd66997213dfacdfe90"
+  },
+  "evidenceDirectory": "output/acceptance/2026-09-27-gateway-schema",
+  "focused": {
+    "passed": 230,
+    "failed": 0,
+    "skipped": 0,
+    "files": 22
+  },
+  "transferCompatibility": {
+    "passed": 77,
+    "failed": 0,
+    "skipped": 0,
+    "files": 10
+  },
+  "checks": {
+    "sourceAndScriptTypes": "passed",
+    "strictTestRoots": 485,
+    "lint": {
+      "any": 981,
+      "ceiling": 1053,
+      "existingEgressExceptions": 9
+    },
+    "deskBuild": "passed",
+    "securitySelfTestPatterns": 11,
+    "productionDependencyAudit": {
+      "knownVulnerabilities": 0,
+      "exclusions": 0
+    },
+    "sbomComponents": 314
+  },
+  "fullRegression": null,
+  "runtimeChanged": false,
+  "productionChanged": false,
+  "realProviderCalls": false,
+  "failedFirstEvidence": [
+    "40 schema controls failed before implementation.",
+    "Initial test invocation could not connect to isolated PostgreSQL under sandbox; rerun with loopback permission.",
+    "Initial source types exposed the CommonJS formats import and async validator type narrowing; corrected without suppressions.",
+    "Initial lint invocation was blocked by tsx temporary-pipe sandbox permission; rerun passed.",
+    "Initial audit reported two high vulnerabilities suppressed by dated workspace exceptions; pinned published image-size patch and removed both ignores."
+  ],
+  "notQualified": [
+    "Shared durable evaluation/voice/other gateway daily limits",
+    "Named budget administration and accounting repair",
+    "Typed completed-stage recovery",
+    "Fresh runtime/browser integration",
+    "Live office/native Canva/human multilingual quality admission",
+    "Held-out model/retrieval/cost qualification",
+    "Independent-host restore",
+    "Backup/canary/rollback and production rollout"
+  ]
+}
