@@ -2,7 +2,8 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CHAOS_DIR, FAKES_URL, REPO_ROOT, closeDb, compose, fakes, query, restateQuery, sql } from './stack.js';
+import { randomUUID } from 'node:crypto';
+import { CHAOS_DIR, FAKES_URL, REPO_ROOT, closeDb, compose, fakes, query, restateQuery, secrets, sql } from './stack.js';
 import { sentTo, waitUntil, type InvariantResult } from './scenario.js';
 
 export async function restorePendingDelivery(taskId: string, chat: string, started: number,
@@ -68,6 +69,35 @@ export async function restorePendingDelivery(taskId: string, chat: string, start
     return messages.length ? messages : null;
   });
   check('restored uncertain send is surfaced once to the office', alerts.length === 1, `${alerts.length} alerts`);
+  const state = await fakes.core(`/tasks/${taskId}/publication-state`, secrets().CHAOS_BEARER_TOKEN);
+  check('uncertain delivery stays unresolved after restored journal completion', state.status === 200 &&
+    state.json.state === 'requester_send_reconciliation', `state=${state.json.state}`);
+  const evidence = await fakes.core(`/tasks/${taskId}/requester-send-evidence`, secrets().CHAOS_BEARER_TOKEN);
+  check('restored send evidence records one uncertain file attempt', evidence.status === 200 &&
+    evidence.json.files.length === 1 && evidence.json.files[0].attemptCount === 1 &&
+    ['attempted','uncertain'].includes(evidence.json.files[0].outcome), `HTTP ${evidence.status}`);
+  const visible = await sentTo(chat);
+  const observed = evidence.json.files.map((file: {sendKey:string;sha256:string}) => {
+    const actual = visible.find(item=>item.method === 'sendDocument' && item.documentSha256 === file.sha256);
+    if (!actual?.messageId) throw new Error('No external fake-chat observation for the approved file');
+    return {sendKey:file.sendKey,messageId:String(actual.messageId)};
+  });
+  const notice = visible.find(item=>String(item.messageId) === evidence.json.notice.messageId);
+  check('every confirmation item exists in the surviving fake chat', !!notice && notice.method === 'sendMessage',
+    `file and notice identities observed; synthetic staff only`);
+  observed.push({sendKey:evidence.json.notice.sendKey,messageId:String(notice.messageId)});
+  const confirmation = {actionId:randomUUID(),expectedRev:evidence.json.requestRev,
+    publicationId:evidence.json.publicationId,approvalId:evidence.json.approvalId,
+    requesterChatId:chat,observed,attested:true};
+  const path = `/tasks/${taskId}/requester-send-confirmation`;
+  const denied = await fakes.core(path,secrets().CHAOS_BEARER_TOKEN,{body:confirmation});
+  check('ordinary operator cannot settle the restored uncertain delivery',denied.status === 403,`HTTP ${denied.status}`);
+  const settled = await fakes.core(path,secrets().CHAOS_ADMIN_KEY,{body:confirmation});
+  const repeated = await fakes.core(path,secrets().CHAOS_ADMIN_KEY,{body:confirmation});
+  check('explicit synthetic staff observation settles once with stable replay',settled.status === 200 && repeated.status === 200 &&
+    settled.json.confirmationSource === 'staff_visible' && settled.json.requestRev === repeated.json.requestRev,
+    `HTTP ${settled.status}/${repeated.status}; rev ${settled.json.requestRev}`);
+  events.push('Synthetic administrator explicitly reconciled the restored uncertain send using IDs from the surviving fake chat; no real human/provider acceptance implied');
   const publications = await query<{id:string;state:string}>(sql`SELECT id,state FROM hawa.publications WHERE task_id=${taskId}::uuid`);
   check('restored delivery records exactly one completed publication', publications.length === 1 && publications[0].state === 'complete',
     JSON.stringify(publications));

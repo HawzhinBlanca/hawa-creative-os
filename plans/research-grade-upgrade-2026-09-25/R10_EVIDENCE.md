@@ -159,3 +159,9 @@ file, and one uncertain-send office alert. These are intended checks, not result
 the actual deployed rehearsal is pending. The Python backup suite passes **50 tests**
 (seven new recovery refusal controls); the candidate harness typecheck passes.
 Production and unattended Restate backup remain unchanged; R10 remains in progress.
+
+The restored uncertain send must remain in requester-send reconciliation. The
+rehearsal records no automatic completion: it checks operator refusal, then uses
+an explicit synthetic administrator observation of the original fake-chat message
+IDs to settle the request. The observation and its replay must cause no new send.
+This exercises the existing ADR-046 contract and does not qualify real staff review.

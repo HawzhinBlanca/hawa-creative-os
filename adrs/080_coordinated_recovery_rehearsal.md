@@ -46,3 +46,9 @@ reconciliation and must not be presented as an atomic recovery set.
 [Restate backup guidance](https://docs.restate.dev/server/snapshots), checked
 2026-09-27, requires the complete single-node data directory and node configuration.
 The rehearsal retains the existing pinned Restate 1.7.10 image and node identity.
+
+The restored uncertain send must remain in requester-send reconciliation. The
+rehearsal records no automatic completion: it checks operator refusal, then uses
+an explicit synthetic administrator observation of the original fake-chat message
+IDs to settle the request. The observation and its replay must cause no new send.
+This exercises the existing ADR-046 contract and does not qualify real staff review.

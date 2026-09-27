@@ -356,3 +356,9 @@ three messages and one task.
 
 `run.ts --poller core --only R1.0,R4` (the default, unchanged): R1.0 holds; R4 fails as before, chat B
 answered after 31.0 s.
+
+The restored uncertain send must remain in requester-send reconciliation. The
+rehearsal records no automatic completion: it checks operator refusal, then uses
+an explicit synthetic administrator observation of the original fake-chat message
+IDs to settle the request. The observation and its replay must cause no new send.
+This exercises the existing ADR-046 contract and does not qualify real staff review.

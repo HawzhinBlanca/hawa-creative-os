@@ -81,6 +81,9 @@ describe('fake Telegram', () => {
       ['92', 'drop-after-processing', true],
     ]);
     expect(sent[0].textHash).toBe(crypto.createHash('sha256').update('draft ready').digest('hex'));
+    expect(sent[0].messageId).toBeNull();
+    expect(sent[1].messageId).toBe(ok.json.result.message_id);
+    expect(sent[2].messageId).toBeGreaterThan(sent[1].messageId);
   });
 
   it('records uploaded documents by content hash', async () => {

@@ -37,6 +37,8 @@ export interface SentRecord {
   fault: TelegramFaultKind | null;
   /** Whether Telegram would have shown it to the chat. */
   delivered: boolean;
+  /** Identity visible in the fake chat, including when its API response is lost. */
+  messageId: number | null;
 }
 
 export interface FakeFile {
@@ -181,6 +183,7 @@ export class FakeTelegram {
       at: new Date().toISOString(),
       fault,
       delivered,
+      messageId: null,
     };
     this.sent.push(record);
     return record;
@@ -228,13 +231,14 @@ export class FakeTelegram {
     }
 
     if (!SEND_METHODS.has(method)) return sendJson(res, 400, { ok: false, error_code: 400, description: `Bad Request: method ${method} is not faked` });
-    this.record(method, fields, upload, fault?.kind === 'drop-after-processing' ? 'drop-after-processing' : null, true);
+    const record = this.record(method, fields, upload, fault?.kind === 'drop-after-processing' ? 'drop-after-processing' : null, true);
+    record.messageId = ++this.messageSeq;
     // The message reached the chat, and the answer is lost: the sender cannot know it arrived.
     if (fault?.kind === 'drop-after-processing') return dropConnection(res);
     const chatId = /^-?\d+$/.test(chat || '') ? Number(chat) : chat;
     sendJson(res, 200, {
       ok: true,
-      result: { message_id: ++this.messageSeq, date: Math.floor(Date.now() / 1000), chat: { id: chatId, type: 'private' }, text: fields.text },
+      result: { message_id: record.messageId, date: Math.floor(Date.now() / 1000), chat: { id: chatId, type: 'private' }, text: fields.text },
     });
   }
 
