@@ -2,6 +2,7 @@ import { taskGenerationBlocker } from '@hawa/contracts/task-status';
 import React, { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client.js';
 import { AuthorizedImage } from './AuthorizedImage.js';
+import { StudioRecoveryPanel } from './StudioRecoveryPanel.js';
 
 interface CritiqueDetail {
   overall?: number;
@@ -379,6 +380,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
       </header>
 
       {startBlocker && <p role="status">{startBlocker}</p>}
+      {run&&<StudioRecoveryPanel key={`${taskId}:${run.id}`} taskId={taskId} runId={run.id} status={run.status}/>}
       {!historyLoaded && <button className="btn" disabled={busy} onClick={() => void refresh()}>Refresh Studio history</button>}
       {calls.length > 0 && <details><summary>Recorded model calls</summary>
         <ul>{calls.map(call => <li key={call.id}>

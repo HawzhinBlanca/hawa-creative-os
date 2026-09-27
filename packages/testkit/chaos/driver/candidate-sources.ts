@@ -9,6 +9,7 @@ import { checkedCanvaExportFixture } from '../../src/canva-export-fixture.js';
 import { computeDnaHash } from '../../../../apps/core/src/core-helpers.js';
 import { restorePendingDelivery } from './candidate-recovery.js';
 import { candidateEvaluationSettlement } from './evaluation-settlement.js';
+import { candidateStudioSettlement } from './studio-settlement.js';
 import { chatInboxInvocations, imageDocumentUpdate, sendToChatInbox, tasksOfChat, textUpdate, waitUntil,
   type InvariantResult } from './scenario.js';
 
@@ -290,5 +291,6 @@ export async function candidateSources(chat: string, events: string[], suiteStar
     ledger.filter(entry=>entry.kind==='manual_edit').length===1 && !ledger.some(entry=>entry.kind==='import'),`task ${blank.id}`);
   events.push(`Blank design ${blank.id} → explicit simulated manual edit → DNA-checked review → simulated approval/publication; real native editing remains unverified`);
   checks.push(...await candidateEvaluationSettlement(events));
+  checks.push(...await candidateStudioSettlement(events));
   return checks;
 }

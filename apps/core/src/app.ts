@@ -56,6 +56,7 @@ import { DurableEvaluationService } from './services/durable-evaluations.js';
 import { SyntheticTrafficDaemon } from '@hawa/testkit';
 import { registerCanvaRoutes } from './routes/canva.routes.js';
 import { registerDesignStudioRoutes } from './routes/design-studio.routes.js';
+import { registerStudioRecoveryRoutes } from './routes/studio-recovery.routes.js';
 import { CanvaConnectService } from './services/canva-connect-service.js';
 import { canvaDeliverableStore, EMPTY_DELIVERABLE_STORE, type DeliverableStore } from './services/pinned-deliverables.js';
 import { registerSystemRoutes } from './routes/system.routes.js';
@@ -1014,6 +1015,7 @@ export function createApp(options?: CreateAppOptions) {
   registerSystemRoutes(routeContext);
   registerCanvaRoutes(routeContext, options?.canvaOptions);
   registerDesignStudioRoutes(routeContext, options?.designStudioOptions, options?.designStudioService);
+  registerStudioRecoveryRoutes(routeContext);
   registerAuthRoutes(routeContext);
   registerClientsRoutes(routeContext);
   registerEvalsRoutes(routeContext);

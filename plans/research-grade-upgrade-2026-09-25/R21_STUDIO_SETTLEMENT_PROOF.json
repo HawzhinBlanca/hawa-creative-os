@@ -1,0 +1,89 @@
+{
+  "date": "2026-09-27",
+  "status": "local_recovery_qualified_deployment_pending",
+  "requirements": [
+    "FR-060",
+    "FR-065",
+    "FR-067",
+    "FR-079",
+    "NFR-001"
+  ],
+  "decision": "ADR-087",
+  "checks": {
+    "initialBuild": "Unused React import failed source typecheck; removed before final build.",
+    "initialFocused": "2 files/10 tests passed",
+    "connected": "8 files/53 tests passed",
+    "recovery": "6 files/57 tests passed including actual process-kill settlement and route inventory",
+    "finalFocused": "4 files/19 tests passed including lost-response history cleanup",
+    "sourceBuild": "passed",
+    "testTypes": "passed",
+    "scriptTypes": "passed",
+    "harnessTypes": "passed",
+    "deskBuild": "passed",
+    "anyRatchet": "1008 <= 1053; passed",
+    "providerEgress": "passed;9 existing exceptions"
+  },
+  "limits": [
+    "Administrator attestation is not automated provider lookup or invoice verification.",
+    "Only stopped runs can settle; the operation changes no task, run, workflow ownership or approval.",
+    "Original calls and budgets stay unchanged; no missing model response is replayed.",
+    "No production deployment, live provider receipt or real human approval.",
+    "Native pilot, human quality, independent restore and held-out cost/model/retrieval qualification remain open."
+  ],
+  "sourceHashes": {
+    "adrs/087_studio_call_settlement.md": "7d9cf87c54f449a45997bf77902fcd73955df0757e3f8967d4f53c8ed6b48860",
+    "packages/db/migrations/049_studio_call_settlement.sql": "a51b854a87ec25bf5fe22c9accc0606d159bdf35ffe1ea6586428d115ba44fe1",
+    "db/schema.sql": "fced7ef468b62a48b8b9586de225b9b32f903b5c298e7284515a7a75528465de",
+    "db/rls.sql": "6955e8eb7ddebbbce690fc1186a9edaa2fc5c1ed68ee164c4e3484f02c8577d5",
+    "apps/core/src/services/studio-call-settlement.ts": "ed326037149f48e805f2cea1351eb4c0279fb728b15520976defc3ad64aff8b8",
+    "apps/core/src/routes/studio-recovery.routes.ts": "807f6ba2e25feca5478d7ade5e0d00e86b84e2c07a0ab175e150a57badc187d4",
+    "apps/core/src/app.ts": "07db4e831462ea63c38e7a3bbc0a0aede98dbff48f4bc1d254703ac5f50d4a09",
+    "packages/db/src/repositories/design-studio.repository.ts": "895dc273b53b27cea9747524cc76b575d2293ab30a7e1283c1949890abc8cb3d",
+    "apps/desk/src/api/client.ts": "c15165d7b6c31bfd9de1f132e646bf1c4eeba16661e59fe0ccc3d3cd35b6c479",
+    "apps/desk/src/components/EvaluationSettlementPanel.tsx": "16e0b3d91e258c02642a89db5f79828da5356e64143f77d6d109052682922af6",
+    "apps/desk/src/components/StudioRecoveryPanel.tsx": "85b0a69241e661716c545230d77e0785a0b0055da95695c756b487254a912766",
+    "apps/desk/src/components/StudioPanel.tsx": "6ef86e1af83f74c6d0ac0f0c94184f7f674e038b52292a7169570a4e28497560",
+    "apps/core/test/studio-call-settlement.test.ts": "b5db27a8035d12fd4741ed206856e26f21ee1184ab0e6264cc7049b538830847",
+    "apps/core/test/studio-model-kill-recovery.test.ts": "7790fd1b7e10c00ff51919ef3c39ec58771cd8d4ca3e577c98d6b28dbbe04fb3",
+    "apps/desk/test/studio-recovery.test.ts": "17d2de244b16b8d3c13178a43b80607314cefa5ed7168f154db7b58c65da650c",
+    "packages/testkit/chaos/driver/studio-settlement.ts": "839c0c7e1a8a0c314d0b78138f810f3dcfe36557b11378a04c44697c0976ea44",
+    "packages/testkit/chaos/driver/candidate-sources.ts": "3ae975c2ca11cca663c63639a2c0013027a1d5de878abe1b7dfdf72dd9c0397b",
+    "api/openapi.yaml": "ebc9ea7426d1f7343512c5a999d28dee59154d561dcb461b58b9b5ad0902a0ff",
+    "apps/core/test/fixtures/route-inventory.txt": "7c6b22049e805b9d811a4222af41c3525e219c478c9c7a5927d0754dcd72f7dc",
+    "runbooks/STUDIO_RECOVERY.md": "f460515c288ea739626595535f24ab113f216f66c1a9b49cab0988c2c78cfa7a"
+  },
+  "artifacts": {
+    "output/acceptance/2026-09-27-studio-settlement/build.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-studio-settlement/desk-build.log": {
+      "sha256": "ad025a68c17cf923241aca998f8bbee85eb023b91dd0ee8e641f348b4cffba1e",
+      "bytes": 745
+    },
+    "output/acceptance/2026-09-27-studio-settlement/final-focused.log": {
+      "sha256": "1167cb5448e61c875fe3562e7776a6137942957e1d46a7a1615aec88c70b6404",
+      "bytes": 327
+    },
+    "output/acceptance/2026-09-27-studio-settlement/focused.log": {
+      "sha256": "ef860a3b575bcfd393ca7d278f6fcf8b455b0158323408b685b8c01a18e495a9",
+      "bytes": 1294
+    },
+    "output/acceptance/2026-09-27-studio-settlement/harness-types.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-studio-settlement/qualified.log": {
+      "sha256": "e21debc0b85bb44c4198c2af865b74c0c3b21ce56b7a392bebb603755b2918da",
+      "bytes": 327
+    },
+    "output/acceptance/2026-09-27-studio-settlement/recovery.log": {
+      "sha256": "ef87697864f8c5bec5a43f64aadd9c90c083bb6b905af01bf0c2c5b3ac87a7a6",
+      "bytes": 639
+    },
+    "output/acceptance/2026-09-27-studio-settlement/types.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    }
+  }
+}

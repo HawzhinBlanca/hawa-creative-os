@@ -10,6 +10,13 @@ export interface SettlementBody {
   expectedSnapshot:string; reason:string;
   calls:Array<{callId:string;conclusion:'provider_not_accepted'|'provider_finished';reportedCostUsd:number;evidenceReference:string;evidenceSha256:string}>;
 }
+export interface StudioRecoveryDetail {
+  runId:string; taskId:string; status:string; snapshotHash:string; canSettle:boolean; requiresStop:boolean; unresolvedCalls:number;
+  calls:Array<{id:string;ordinal:number|null;stage:string;provider:string;model:string;status:string;
+    providerRequestId:string|null;responseId:string|null;estimatedCostUsd:number|null;
+    settlement:(SettlementBody['calls'][number]&{actorUserId:string;recordedAt:string})|null}>;
+  settlements:Array<{id:string;actionId:string;actorUserId:string;reason:string;recordedAt:string;calls:SettlementBody['calls']}>;
+}
 
 
 export interface ApiSessionUser {
@@ -496,6 +503,9 @@ class HawaApiClient {
   };
 
   public readonly studio = {
+    recovery: (taskId:string,runId:string) => this.request<StudioRecoveryDetail>(`/tasks/${encodeURIComponent(taskId)}/studio-recovery/${encodeURIComponent(runId)}`),
+    settle: (taskId:string,runId:string,actionId:string,body:SettlementBody) => this.request<unknown>(`/tasks/${encodeURIComponent(taskId)}/studio-recovery/${encodeURIComponent(runId)}/settlement`,
+      {method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
     latest: (taskId: string) => this.request<{ runId: string | null; status: string | null }>(
       `/tasks/${encodeURIComponent(taskId)}/canva/studio`),
     start: (

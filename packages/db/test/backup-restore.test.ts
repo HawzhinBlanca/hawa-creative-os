@@ -36,13 +36,13 @@ describe('Static Schema Invariant & Snapshot Verification (Dry-Run Invariant Sui
     expect(snapshotBundle).toContain('INSERT INTO');
   });
 
-  it('verifies exact schema invariant counts: 56 tables, 11 enums, 29 RLS policies', async () => {
+  it('verifies exact schema invariant counts: 57 tables, 11 enums, 31 RLS policies', async () => {
     const result = await checkDatabaseSchema();
 
     expect(result.valid).toBe(true);
-    expect(result.tableCount).toBe(56);
+    expect(result.tableCount).toBe(57);
     expect(result.enumsCount).toBe(11);
-    expect(result.policiesCount).toBe(29);
+    expect(result.policiesCount).toBe(31);
   });
 
   it('preserves the parsed base schema and policy inventory (not a recovery drill)', () => {
@@ -67,9 +67,9 @@ describe('Static Schema Invariant & Snapshot Verification (Dry-Run Invariant Sui
     simulatedCleanHost.policies = [...parsedSchema.policies, ...parsedRls.policies];
 
     // 3. Verify post-restore integrity
-    expect(simulatedCleanHost.tables).toHaveLength(56);
+    expect(simulatedCleanHost.tables).toHaveLength(57);
     expect(simulatedCleanHost.enums).toHaveLength(11);
-    expect(simulatedCleanHost.policies).toHaveLength(29);
+    expect(simulatedCleanHost.policies).toHaveLength(31);
 
     // Multi-tenant core tables must be present
     expect(simulatedCleanHost.tables).toContain('eval_model_calls');

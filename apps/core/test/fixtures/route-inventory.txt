@@ -99,6 +99,7 @@ GET /api/tasks/:taskId/review-desk
 GET /api/tasks/:taskId/revisions/:revisionId
 GET /api/tasks/:taskId/revisions/diff
 GET /api/tasks/:taskId/rubric-reports
+GET /api/tasks/:taskId/studio-recovery/:runId
 GET /api/tasks/:taskId/timeline
 GET /api/tasks/:taskId/workflow/state
 GET /api/v1/adapters/figma/cloud-status
@@ -187,6 +188,7 @@ GET /api/v1/tasks/:taskId/review-desk
 GET /api/v1/tasks/:taskId/revisions/:revisionId
 GET /api/v1/tasks/:taskId/revisions/diff
 GET /api/v1/tasks/:taskId/rubric-reports
+GET /api/v1/tasks/:taskId/studio-recovery/:runId
 GET /api/v1/tasks/:taskId/timeline
 GET /api/v1/tasks/:taskId/workflow/state
 GET /api/v1/v1/figma/status
@@ -279,6 +281,7 @@ GET /tasks/:taskId/review-desk
 GET /tasks/:taskId/revisions/:revisionId
 GET /tasks/:taskId/revisions/diff
 GET /tasks/:taskId/rubric-reports
+GET /tasks/:taskId/studio-recovery/:runId
 GET /tasks/:taskId/timeline
 GET /tasks/:taskId/workflow/state
 GET /v1/adapters/figma/cloud-status
@@ -372,6 +375,7 @@ GET /v1/tasks/:taskId/review-desk
 GET /v1/tasks/:taskId/revisions/:revisionId
 GET /v1/tasks/:taskId/revisions/diff
 GET /v1/tasks/:taskId/rubric-reports
+GET /v1/tasks/:taskId/studio-recovery/:runId
 GET /v1/tasks/:taskId/timeline
 GET /v1/tasks/:taskId/workflow/state
 GET /v1/v1/figma/status
@@ -478,6 +482,7 @@ POST /api/tasks/:taskId/revisions/:revisionId/decisions
 POST /api/tasks/:taskId/revisions/:revisionId/evaluate-rubric
 POST /api/tasks/:taskId/revisions/:revisionId/qa
 POST /api/tasks/:taskId/route
+POST /api/tasks/:taskId/studio-recovery/:runId/settlement
 POST /api/tasks/:taskId/workflow/:action
 POST /api/tasks/sweep-failed
 POST /api/v1/adapters/telegram/poll-now
@@ -574,6 +579,7 @@ POST /api/v1/tasks/:taskId/revisions/:revisionId/decisions
 POST /api/v1/tasks/:taskId/revisions/:revisionId/evaluate-rubric
 POST /api/v1/tasks/:taskId/revisions/:revisionId/qa
 POST /api/v1/tasks/:taskId/route
+POST /api/v1/tasks/:taskId/studio-recovery/:runId/settlement
 POST /api/v1/tasks/:taskId/workflow/:action
 POST /api/v1/tasks/sweep-failed
 POST /api/v1/waha/kill-switch
@@ -673,6 +679,7 @@ POST /tasks/:taskId/revisions/:revisionId/decisions
 POST /tasks/:taskId/revisions/:revisionId/evaluate-rubric
 POST /tasks/:taskId/revisions/:revisionId/qa
 POST /tasks/:taskId/route
+POST /tasks/:taskId/studio-recovery/:runId/settlement
 POST /tasks/:taskId/workflow/:action
 POST /tasks/sweep-failed
 POST /v1/adapters/telegram/poll-now
@@ -782,6 +789,7 @@ POST /v1/tasks/:taskId/revisions/:revisionId/decisions
 POST /v1/tasks/:taskId/revisions/:revisionId/evaluate-rubric
 POST /v1/tasks/:taskId/revisions/:revisionId/qa
 POST /v1/tasks/:taskId/route
+POST /v1/tasks/:taskId/studio-recovery/:runId/settlement
 POST /v1/tasks/:taskId/workflow/:action
 POST /v1/tasks/sweep-failed
 POST /v1/waha/kill-switch

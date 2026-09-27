@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createDb, sql, withRlsContext } from '@hawa/db';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
+import { StudioCallSettlementService } from '../src/services/studio-call-settlement.js';
 
 const databaseUrl = process.env.HAWA_ISOLATED_TEST_DB;
 if (databaseUrl && !/^\/hawa_(repair|tr_)/.test(new URL(databaseUrl).pathname)) {
@@ -116,6 +117,23 @@ describe.skipIf(!databaseUrl)('Studio paid-call process-kill recovery', () => {
         await fresh.abandon(scope, taskId, run.id, 'Interrupted provider request');
         await expect(fresh.createOrGetRun(scope, taskId, `replace-abandoned-${randomUUID()}`,
           { width: 1080, height: 1350, tier: 'standard' })).rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
+        const userId=randomUUID(),sessionHash=createHash('sha256').update(randomUUID()).digest('hex');
+        await sql`INSERT INTO hawa.users(id,email,display_name,external_subject)
+          VALUES(${userId}::uuid,${userId+'@example.test'},'Synthetic recovery administrator',${userId})`.execute(freshDb);
+        await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role)
+          VALUES(${scope.tenantId}::uuid,${userId}::uuid,'administrator')`.execute(freshDb);
+        await sql`INSERT INTO hawa.desk_sessions(token_hash,tenant_id,user_id,actor_id,role,display_name,expires_at,auth_method)
+          VALUES(${sessionHash},${scope.tenantId}::uuid,${userId}::uuid,'oidc:drill','administrator','Synthetic recovery administrator',now()+interval '1 hour','google_oidc')`.execute(freshDb);
+        const recoveryScope={tenantId:scope.tenantId,userId,role:'administrator',sessionHash};
+        const recovery=new StudioCallSettlementService(freshDb),detail=await recovery.get(recoveryScope,taskId,run.id);
+        const evidence={expectedSnapshot:detail.snapshotHash,reason:'Synthetic provider terminal evidence after process kill',calls:detail.calls.map(c=>({
+          callId:c.id,conclusion:'provider_finished',reportedCostUsd:0.125,evidenceReference:'synthetic-provider-terminal',evidenceSha256:'c'.repeat(64)}))};
+        const action=randomUUID(),settled=await recovery.settle(recoveryScope,taskId,run.id,action,evidence);
+        expect(await new StudioCallSettlementService(freshDb).settle(recoveryScope,taskId,run.id,action,evidence))
+          .toMatchObject({replayed:true,settlement:settled.settlement});
+        expect((await recovery.get(recoveryScope,taskId,run.id)).calls[0]).toMatchObject({status:'uncertain',estimatedCostUsd:null});
+        await expect(fresh.createOrGetRun(scope,taskId,`explicit-after-settlement-${randomUUID()}`,
+          {width:1080,height:1350,tier:'standard'})).resolves.toMatchObject({created:true});
         expect(replayFetch).not.toHaveBeenCalled();
         expect(acceptedCount).toBe(1);
       } finally {

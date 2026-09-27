@@ -249,3 +249,15 @@ remain unchanged, closed runs admit no new calls, and the settlement sends no mo
 request. Any subsequent evaluation is explicitly requested new billable work. See
 runbooks/EVALUATION_RECOVERY.md. Automatic provider lookup and general Studio reply
 recovery remain separate work.
+
+### Stopped Studio call settlement (ADR-087, 2026-09-27)
+
+A named office administrator may append terminal provider evidence and known final
+reported cost for all unresolved calls in a stopped Studio run. Task/run/call locks,
+current authority, an exact snapshot and a stable action protect the operation.
+Original call outcomes, run budget/status and RequestLifecycle ownership remain
+unchanged. Settlement sends no model request and cannot supply a lost design result.
+New generation remains a separate action; evidence covers exact calls, never future
+parity requests. Earlier admitted calls may still record a late first outcome.
+See runbooks/STUDIO_RECOVERY.md. Administrator attestation remains distinct from
+machine-verified provider billing and from human design approval.

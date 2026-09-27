@@ -850,6 +850,24 @@ CREATE TABLE eval_model_calls (
          (status<>'pending' AND outcome IS NOT NULL AND finished_at IS NOT NULL))
 );
 
+-- ADR-087: Studio run/client FKs and admission trigger are added by migration 049.
+CREATE TABLE studio_run_settlements (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  task_id uuid NOT NULL,
+  client_id uuid NOT NULL,
+  run_id uuid NOT NULL,
+  action_id uuid NOT NULL,
+  actor_user_id uuid NOT NULL REFERENCES users(id),
+  request_hash text NOT NULL CHECK(request_hash ~ '^[a-f0-9]{64}$'),
+  snapshot_hash text NOT NULL CHECK(snapshot_hash ~ '^[a-f0-9]{64}$'),
+  reason text NOT NULL CHECK(length(trim(reason)) BETWEEN 1 AND 500),
+  calls jsonb NOT NULL CHECK(jsonb_typeof(calls)='array' AND jsonb_array_length(calls) BETWEEN 1 AND 1000),
+  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  FOREIGN KEY(tenant_id,task_id) REFERENCES tasks(tenant_id,id),
+  UNIQUE(tenant_id,action_id)
+);
+
 CREATE TABLE eval_run_settlements (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,

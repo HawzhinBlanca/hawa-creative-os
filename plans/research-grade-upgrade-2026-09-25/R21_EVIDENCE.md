@@ -273,3 +273,26 @@ human design review and independent-host recovery remain open. No production
 change and no new isolated image deployment are claimed.
 
 Full regression on sealed runtime ab78c1d initially returned 3758 passed /5 failed /59 skipped. The five scope tests used an empty transaction stub; a query-only Kysely fixture retains their original authorization assertions. Its first import from Core was unavailable and was moved to DB test support; both failure logs are retained. Corrected scope file:13 passed. Final full regression:3763 passed /0 failed /59 skipped,472 files. Runtime source is unchanged. Release verification, any ratchet and provider egress lint passed.
+
+
+## 2026-09-27 — Attributed recovery of stopped Studio calls (ADR-087)
+
+Named administrators can append terminal provider evidence and known reported cost
+for every unresolved call in a stopped Studio run. Action/snapshot/actor/scope,
+FORCE RLS, SQL authority and immutable evidence protect settlement. Original calls,
+run state/budget, task and workflow ownership remain unchanged. Future parity calls
+are not covered. New generation remains explicit billable work; settlement sends
+no model request and cannot recover a missing response.
+
+Connected:8 files/53 tests. Recovery:6 files/57 tests, including two actual process
+kills and settlement of the missing-answer call after restart. Final affected UI
+and recovery:4 files/19 tests. Named HTTP replay/CSRF/revocation, SQL bypass refusal,
+exact coverage, future parity, stopped-state and tenant/task isolation pass. An
+unused React import initially failed the build and was removed. Final source/test/
+script/harness types, Desk build, any ratchet and provider egress lint pass.
+
+Proof:`R21_STUDIO_SETTLEMENT_PROOF.json`; artifacts:
+`output/acceptance/2026-09-27-studio-settlement/`. Full regression and the packaged
+candidate rehearsal are pending at this source checkpoint. General reply replay,
+live pilot/billing, human/native quality, independent recovery and held-out model/
+retrieval/cost qualification remain open. No production change or human approval.

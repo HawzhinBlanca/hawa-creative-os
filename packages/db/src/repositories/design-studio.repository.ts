@@ -112,7 +112,10 @@ export async function assertStudioCallsResolved(
     .innerJoin('design_studio_runs as r', join => join.onRef('r.id', '=', 'c.run_id')
       .onRef('r.tenant_id', '=', 'c.tenant_id'))
     .select('c.id').where('r.tenant_id', '=', tenantId).where('r.task_id', '=', taskId)
-    .where('c.status', '=', 'uncertain');
+    .where('c.status', '=', 'uncertain')
+    .where(sql<boolean>`NOT EXISTS (SELECT 1 FROM hawa.studio_run_settlements s
+      WHERE s.tenant_id=c.tenant_id AND s.run_id=c.run_id
+        AND s.calls @> jsonb_build_array(jsonb_build_object('callId',c.id::text)))`);
   if (executingRunId) query = query.where(eb => eb.or([
     eb('r.id', '!=', executingRunId), eb('c.finished_at', 'is not', null),
   ]));

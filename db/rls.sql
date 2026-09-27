@@ -261,4 +261,14 @@ CREATE POLICY eval_run_settlements_read ON eval_run_settlements FOR SELECT USING
 CREATE POLICY eval_run_settlements_insert ON eval_run_settlements FOR INSERT WITH CHECK
   (tenant_id=current_tenant_id() AND actor_user_id=current_user_id() AND
    (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator']::membership_role[])));
+
+-- ADR-087: named Studio settlement evidence.
+ALTER TABLE studio_run_settlements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE studio_run_settlements FORCE ROW LEVEL SECURITY;
+CREATE POLICY studio_settlements_read ON studio_run_settlements FOR SELECT USING
+  (tenant_id=current_tenant_id() AND
+   (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator','designer']::membership_role[])));
+CREATE POLICY studio_settlements_insert ON studio_run_settlements FOR INSERT WITH CHECK
+  (tenant_id=current_tenant_id() AND actor_user_id=current_user_id() AND
+   (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator']::membership_role[])));
 COMMIT;
