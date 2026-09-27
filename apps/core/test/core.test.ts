@@ -14,6 +14,8 @@ describe('Core API: Ingress & Task Lifecycle', () => {
   const dbApp = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'art_director' }, roleHeader: true },  deliverableStore: exports.store });
   /** KAAE's seeded client row; Postgres takes only a uuid client id. */
   const KAAE = 'c1000000-0000-4000-8000-000000000002';
+  /** A seeded client the legacy generator still drafts (KAAE's designs are made in the studio). */
+  const HAWA_STUDIO = 'c1000000-0000-4000-8000-000000000001';
   const DRUSTEE = 'c1000000-0000-4000-8000-000000000003';
 
   it('responds to health checks', async () => {
@@ -183,7 +185,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const routeRes = await app.request(`/v1/tasks/${taskId}/route`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId: 'client-office-1', reason: 'Client assigned' }),
+      body: JSON.stringify({ clientId: 'client-nova', reason: 'Client assigned' }),
     });
     expect(routeRes.status).toBe(202);
     const routeReceipt = await routeRes.json();
@@ -257,7 +259,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
 
   it('enforces repair budget of max 2 cycles on revision requests', async () => {
     const app = dbApp;
-    // KAAE's template draws only the headline the client sent; the title no longer stands in for one.
+    // A client the legacy generator still drafts: KAAE's designs are made only in the studio (ADR-038).
     const createRes = await app.request('/v1/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -269,7 +271,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     await app.request(`/v1/tasks/${taskId}/route`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId: KAAE }),
+      body: JSON.stringify({ clientId: HAWA_STUDIO }),
     });
     await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
 

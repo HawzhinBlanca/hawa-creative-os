@@ -98,8 +98,15 @@ Behaviour:
   - The Canva planner's prompt still named KAAE's six colours as "the client reference palette", and its colour correction snapped stray colours to KAAE's navy, cream and gold. The prompt now states the client's own palette (`plannerPaletteRule`), refusing a reference with none. The correction snaps to the nearest colour of the client's palette.
   - Retrieval also rebuilds KAAE's embedding cache when an exemplar is missing from it. Before this, one confirmed after the cache was written was never retrieved.
   - Tests: `packages/creative/test/client-exemplars.test.ts`, `apps/core/test/client-exemplars.test.ts`.
+- **The v1 KAAE templates are retired (2026-09-27).** KAAE's designs are made only in the design studio.
+  - Deleted: `packages/creative/src/templates/kaae-{announcement,certificate,institutional,invitation}.template.ts` and `CreativeDirectorRunner.generateKaaeOperations`.
+  - The chat-intake inline preview (off in production, `AUTO_GENERATE_CHAT_DESIGNS=false`) draws nothing for KAAE. A KAAE request without copy is still refused `COPY_REQUIRED`.
+  - `POST /tasks/:id/generate`, which no screen calls, refuses KAAE with 410 `LEGACY_TEMPLATES_RETIRED`. Its generic draft is not a substitute: it can pass QA and would reach review as a KAAE design no one designed.
+  - The generic v1 generator lost its KAAE styling (navy background, larger logo, Cinzel and Cairo, gold subheads).
+  - `generateCommercialBrandOperations` no longer falls back to KAAE's templates for a brand it does not know; it throws.
+  - The feedback miner's promoted rules reached a design only through these templates. The studio reads the client's standing rules instead.
+  - Seven proof scripts that could only run against the templates were deleted (none was in CI; one was already broken). `KAAE_PRIMARY_LOGO_SHA256` moved to `brand-kits.ts`.
 - **Deferred:**
-  - retiring the v1 KAAE templates (`packages/creative/src/templates/kaae-*`), which serve only the legacy preview;
   - a thumbnail proof set per client, run on its real assets once the office supplies them.
 
 ## 4. Alternatives considered

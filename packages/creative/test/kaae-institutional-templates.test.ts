@@ -1,93 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import {
-  createKaaeEligibilityDecreeTemplate,
-  createKaaeGlobalMilestoneTemplate,
-  createKaaeEvaluatorCallTemplate,
-  createKaaeMetricsReportTemplate,
-} from '../src/templates/kaae-institutional.template.js';
 import { DesignRouter } from '../src/design-router.js';
 import { KaaeGraphicsLearningEngine } from '../src/kaae-graphics-learning.js';
 import type { DesignBrief } from '@hawa/domain';
 
-describe('KAAE Institutional Procedural Templates & Intelligent Routing', () => {
+describe('KAAE institutional routing and graphics knowledge', () => {
   const engine = new KaaeGraphicsLearningEngine();
   const router = new DesignRouter();
-
-  it('1. generates valid StudioOperation vector AST for AUK Eligibility Decree', () => {
-    const ops = createKaaeEligibilityDecreeTemplate({
-      pageId: 'auk_decree_test',
-      institutionNameEn: 'American University of Kurdistan (AUK)',
-      institutionNameCkb: 'زانکۆی ئەمریکی لە کوردستان (AUK)',
-      collegialAdvicesCount: 13,
-      recommendationsCount: 0,
-      requirementsCount: 0,
-    });
-
-    expect(ops.length).toBeGreaterThan(10);
-    const bgOp = ops.find((o) => o.op === 'addVector') as any;
-    expect(bgOp).toBeDefined();
-    expect(bgOp?.source).toContain('#002050');
-
-    // Verify statutory citation and advice numbers
-    const lawNode = ops.find((o) => o.op === 'addText' && (o as any).text.includes('LAW NO. 6 OF 2022'));
-    expect(lawNode).toBeDefined();
-
-    const adviceNode = ops.find((o) => o.op === 'addText' && (o as any).text.includes('Collegial Advices: 13'));
-    expect(adviceNode).toBeDefined();
-  });
-
-  it('2. generates valid StudioOperation vector AST for Global Milestone (INQAAHE)', () => {
-    const ops = createKaaeGlobalMilestoneTemplate({
-      pageId: 'inqaahe_milestone_test',
-      milestoneTitleEn: 'Approved for Associate Membership',
-      milestoneTitleCkb: 'پەسەندکرا بۆ ئەندامێتی هاوبەش',
-      networkNameEn: 'INQAAHE',
-      networkNameCkb: 'تۆڕی نێودەوڵەتی بۆ دەزگاکانی دڵنیایی جۆری لە خوێندنی باڵا',
-    });
-
-    expect(ops.length).toBeGreaterThan(8);
-    const bgOp = ops.find((o) => o.op === 'addVector') as any;
-    expect(bgOp).toBeDefined();
-    expect(bgOp?.source).toContain('#160874');
-
-    const networkNode = ops.find((o) => o.op === 'addText' && (o as any).text === 'INQAAHE') as any;
-    expect(networkNode).toBeDefined();
-    expect(networkNode.style?.color).toBe('#E8B85C');
-  });
-
-  it('3. generates valid StudioOperation vector AST for Call for Peer Evaluators', () => {
-    const ops = createKaaeEvaluatorCallTemplate({
-      pageId: 'evaluator_call_test',
-      cheEvaluatorTarget: 30,
-      k12EvaluatorTarget: 30,
-    });
-
-    expect(ops.length).toBeGreaterThan(12);
-    const cheVal = ops.find((o) => o.op === 'addText' && (o as any).text === '30');
-    expect(cheVal).toBeDefined();
-
-    const headline = ops.find((o) => o.op === 'addText' && (o as any).text === 'CALL FOR PEER EVALUATORS');
-    expect(headline).toBeDefined();
-  });
-
-  it('4. generates valid StudioOperation vector AST for OTA Metrics & Reach Card', () => {
-    const ops = createKaaeMetricsReportTemplate({
-      pageId: 'metrics_report_test',
-      socialViews: '4.24M',
-      socialReach: '1.09M',
-      volunteerCount: 138,
-      pilotSchoolsCount: 12,
-      pilotUniversitiesCount: 11,
-    });
-
-    expect(ops.length).toBeGreaterThan(15);
-    const viewsNode = ops.find((o) => o.op === 'addText' && (o as any).text === '4.24M') as any;
-    expect(viewsNode).toBeDefined();
-    expect(viewsNode.style?.color).toBe('#E8B85C');
-
-    const volNode = ops.find((o) => o.op === 'addText' && (o as any).text === '138');
-    expect(volNode).toBeDefined();
-  });
 
   it('5. auto-routes KAAE institutional prompts to the appropriate templates with high confidence', () => {
     const eligibilityBrief: DesignBrief = {
