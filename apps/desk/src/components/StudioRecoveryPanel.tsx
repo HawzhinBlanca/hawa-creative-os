@@ -27,7 +27,7 @@ export function StudioRecoveryPanel({taskId,runId,status}:{taskId:string;runId:s
     {!detail&&!notice&&<p>Loading saved evidence…</p>}
     {detail&&<>
       {detail.requiresStop&&detail.unresolvedCalls>0&&<p>Stop this run through its owning workflow before settlement. Abandonment preserves unresolved provider calls.</p>}
-      <ul>{detail.calls.map(call=><li key={call.id}>{call.stage} · {call.provider} / {call.model} · original outcome: {call.status}
+      <ul>{detail.calls.map(call=><li key={call.id} style={{overflowWrap:'anywhere'}}>Saved call: {call.id} · {call.stage} · {call.provider} / {call.model} · original outcome: {call.status}
         {call.providerRequestId&&<> · request: {call.providerRequestId}</>}
         {call.responseId&&<> · response: {call.responseId}</>}
         {' · '}{call.estimatedCostUsd===null?'original cost unknown':`recorded estimate $${call.estimatedCostUsd}`}

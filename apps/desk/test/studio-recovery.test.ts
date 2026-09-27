@@ -16,6 +16,7 @@ it('retains the Studio action and frozen evidence across lost response and remou
   const calls=stubCore(c=>c.path.endsWith('/settlement')?(++attempts===1?Promise.reject(new Error('lost after commit')):json({replayed:true})):json(detail));
   let view=await mount(React.createElement(StudioRecoveryPanel,{taskId,runId,status:'abandoned'}));await flush();
   expect(view.text()).toContain('original cost unknown');expect(view.text()).toContain('Retry saved settlement');
+  expect(view.text()).toContain(`Saved call: ${callId}`);
   await act(async()=>{view.container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});await flush();
   expect(JSON.parse(sessionStorage.getItem(key)!)).toEqual(action);
   await view.unmount();view=await mount(React.createElement(StudioRecoveryPanel,{taskId,runId,status:'abandoned'}));await flush();

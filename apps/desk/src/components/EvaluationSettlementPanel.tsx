@@ -70,6 +70,7 @@ export function EvaluationSettlementPanel({detail,onSettled,kind='evaluation',re
     <p>{kind==='evaluation'?'Closing retains the stopped result and sends no model request. Starting another evaluation is a separate billable action.':'Settlement retains the original call outcomes and sends no model request. It cannot recover a missing design result. New generation remains a separate billable action through the task’s owner.'}</p>
     <fieldset disabled={busy||!!pending} style={{border:0,padding:0}}>
       {unresolved.map(c=>{const d=drafts[c.id];return <fieldset key={c.id} style={{marginBottom:12}}><legend>Call {c.ordinal}</legend>
+        <p style={{overflowWrap:'anywhere'}}>Saved call: {c.id} · {c.provider||'provider not reported'} / {c.model||'model not reported'}</p>
         <label>Provider conclusion <select aria-label={`Call ${c.ordinal} conclusion`} value={d.conclusion} onChange={e=>update(c.id,{conclusion:e.target.value as Draft['conclusion']})}>
           <option value="provider_finished">Provider confirms processing finished</option><option value="provider_not_accepted">Provider confirms request was not accepted</option>
         </select></label>
