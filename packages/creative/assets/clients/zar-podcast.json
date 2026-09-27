@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "c1000000-0000-4000-8000-000000000011",
+  "code": "zar-podcast",
+  "status": "onboarding",
+  "kind": "podcast",
+  "displayName": "ZAR Podcast",
+  "names": {
+    "en": "ZAR Podcast"
+  },
+  "languages": [],
+  "routing": {
+    "telegramChatIds": [],
+    "latinAliases": [
+      "zar podcast",
+      "zarpodcast"
+    ],
+    "scriptAliases": [],
+    "phrases": []
+  },
+  "formats": [
+    "youtube-thumbnail",
+    "story-reel"
+  ],
+  "defaultFormat": "youtube-thumbnail",
+  "playbook": "video-thumbnail",
+  "reference": null,
+  "onboarding": {
+    "missing": [
+      "logo",
+      "palette",
+      "fonts",
+      "reference-pack",
+      "telegram-chats",
+      "language",
+      "kurdish-aliases",
+      "proof-set"
+    ]
+  }
+}

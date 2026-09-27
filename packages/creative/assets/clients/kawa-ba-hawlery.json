@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "c1000000-0000-4000-8000-000000000013",
+  "code": "kawa-ba-hawlery",
+  "status": "onboarding",
+  "kind": "news",
+  "displayName": "Kawa ba Hawlery",
+  "names": {
+    "en": "Kawa ba Hawlery"
+  },
+  "languages": [],
+  "routing": {
+    "telegramChatIds": [],
+    "latinAliases": [
+      "kawa ba hawlery"
+    ],
+    "scriptAliases": [],
+    "phrases": []
+  },
+  "formats": [
+    "youtube-thumbnail",
+    "story-reel"
+  ],
+  "defaultFormat": "youtube-thumbnail",
+  "playbook": "video-thumbnail",
+  "reference": null,
+  "onboarding": {
+    "missing": [
+      "logo",
+      "palette",
+      "fonts",
+      "reference-pack",
+      "telegram-chats",
+      "language",
+      "kurdish-aliases",
+      "proof-set"
+    ]
+  }
+}

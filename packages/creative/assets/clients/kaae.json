@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "c1000000-0000-4000-8000-000000000002",
+  "code": "kaae",
+  "status": "live",
+  "kind": "institution",
+  "displayName": "KAAE (Accreditation)",
+  "names": {
+    "en": "Kurdistan Accrediting Association for Education"
+  },
+  "languages": [
+    "ckb",
+    "en"
+  ],
+  "routing": {
+    "telegramChatIds": [],
+    "latinAliases": [
+      "kaae",
+      "accreditation",
+      "university"
+    ],
+    "scriptAliases": [],
+    "phrases": [
+      "باوەڕپێدان",
+      "کەی ئەی",
+      "زانکۆ"
+    ]
+  },
+  "formats": [
+    "social-portrait",
+    "social-square",
+    "story-reel",
+    "landscape-hd"
+  ],
+  "defaultFormat": "social-portrait",
+  "playbook": "institutional-announcement",
+  "reference": {
+    "pack": "kaae-reference.json",
+    "logo": "logos/kaae-official-logo.png"
+  },
+  "onboarding": {
+    "missing": []
+  }
+}

@@ -1,3 +1,4 @@
+import { clientReferenceOf } from './client-packs.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -146,8 +147,10 @@ export class CanvaDesignPlanner {
       (SELECT e.data FROM hawa.task_events e WHERE e.task_id=t.id AND e.tenant_id=t.tenant_id AND e.event_type='task.created' ORDER BY e.aggregate_version LIMIT 1) AS source
       FROM hawa.tasks t WHERE t.tenant_id=${s.tenantId}::uuid AND t.id=${taskId}::uuid`.execute(db)).rows[0]);
     if(!task?.client_id)throw new CanvaFlowError(422,'CLIENT_REQUIRED','Select the client before retrieving brand references.');
-    const reference=JSON.parse(await readFile(creativeAssetPath('kaae-reference.json'),'utf8'));
-    if(task.client_id!==reference.clientId)throw new CanvaFlowError(422,'CLIENT_REFERENCE_REQUIRED','This client needs its own verified reference pack. KAAE references cannot be used for another client.');
+    const clientReference=clientReferenceOf(task.client_id);
+    if('refusal' in clientReference)throw new CanvaFlowError(422,'CLIENT_REFERENCE_REQUIRED',clientReference.refusal);
+    const reference=JSON.parse(await readFile(clientReference.referencePath,'utf8'));
+    if(task.client_id!==reference.clientId)throw new CanvaFlowError(422,'CLIENT_REFERENCE_REQUIRED','This client needs its own verified reference pack. Another client\'s references cannot be used for it.');
     const content=savedDesignCopy(task.source,task.description||'');
     if(!content.copy.length||content.copy.join('').length>16000)
       throw new CanvaFlowError(422,'COPY_UNSUPPORTED','This admitted transfer supports bounded copy only. Review the source before generating.');
@@ -157,7 +160,7 @@ export class CanvaDesignPlanner {
     const rtlFont:string|null=copyScripts.includes('arabic')?(typeof reference.rules?.scriptFonts?.arabic==='string'?reference.rules.scriptFonts.arabic:null):null;
     if(copyScripts.includes('arabic')&&!rtlFont)
       throw new CanvaFlowError(422,'COPY_UNSUPPORTED','The client reference pack names no Sorani typeface, so Kurdish copy cannot be drafted automatically yet.');
-    const logo=await readFile(creativeAssetPath('logos/kaae-official-logo.png'));
+    const logo=await readFile(clientReference.logoPath);
     if(hash(logo)!==reference.logoSha256)throw new CanvaFlowError(409,'LOGO_CHANGED','The official logo checksum changed; review the reference pack.');
     // PNG IHDR dimensions preserve the supplied logo's aspect ratio.
     if(logo.subarray(1,4).toString()!=='PNG')throw new Error('Expected PNG logo');

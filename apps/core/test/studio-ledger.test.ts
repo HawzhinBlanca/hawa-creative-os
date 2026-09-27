@@ -36,7 +36,8 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
     const run = {
       id: randomUUID(),
       task_id: randomUUID(),
-      client_id: randomUUID(),
+      // Runs exist only for a client with a verified reference pack (ADR-038): KAAE's.
+      client_id: 'c1000000-0000-4000-8000-000000000002',
       tier: 'premium',
       request: JSON.stringify({ width: 1080, height: 1350, copyBlocks: [{ text: 'A', script: 'latin' }], instructions: 'x' }),
       stages: {},
