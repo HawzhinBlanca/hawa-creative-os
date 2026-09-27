@@ -30,7 +30,7 @@
     "db:upgrade": "tsx packages/db/src/upgrade.ts",
     "db:check": "tsx packages/db/src/check.ts",
     "security:scan": "python3 infra/security/security_scan.py",
-    "sbom": "pnpm sbom --sbom-format cyclonedx > evidence/sbom.json",
+    "sbom": "pnpm dlx pnpm@11 sbom --sbom-format cyclonedx --lockfile-only > evidence/sbom.json",
     "validate": "python3 scripts/validate_pack.py && pnpm typecheck && pnpm test",
     "compose:up": "docker compose -f deployment/docker-compose.yml up -d",
     "compose:down": "docker compose -f deployment/docker-compose.yml down",

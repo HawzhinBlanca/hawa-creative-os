@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-25T02:49:39Z",
+  "generatedAt": "2026-09-27T16:05:07Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 277,
+  "fileCount": 278,
   "files": [
     {
       "path": ".dockerignore",
@@ -29,8 +29,8 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "00210ab9b9c2dc0acfbd411ed2a23349480ddbe7b17fced3d036d087d9738be8",
-      "bytes": 3637
+      "sha256": "18e7da8a8c137398f98cbacd6aaea8d904eebbd52212f4a4916da7af09e43885",
+      "bytes": 5702
     },
     {
       "path": "AGENTS.md",
@@ -69,8 +69,8 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "1ce8a5c5a0df34b1611d47d77e067f5a871ec46d6fe4b57ba8868411b9ed0db4",
-      "bytes": 2901
+      "sha256": "aa8798f247cd2fe5108cc82dfc88048e396043f792cc83f2fc5a6745a03d0c23",
+      "bytes": 2907
     },
     {
       "path": "adrs/001_office_inbox.md",
@@ -868,6 +868,11 @@
       "bytes": 4150
     },
     {
+      "path": "scripts/ci/install_render_deps.sh",
+      "sha256": "fd9620958af766be3d68fd2308319771c5ed3a608767dba170ef91f1b7902113",
+      "bytes": 1685
+    },
+    {
       "path": "scripts/compare_cutout_outlines.ts",
       "sha256": "e96740e2227489884fea3c977f458f70ef3d0242bbc316732a689d2b6753003b",
       "bytes": 22488
@@ -899,8 +904,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "fb004047867d043d6d281d070dcdc18ce49573520cfeffa822a48d9c8fe50a71",
-      "bytes": 17830
+      "sha256": "cf9df0286b8288c594efa9815fff91082477862893e057999b89ae2ee9f3152d",
+      "bytes": 18228
     },
     {
       "path": "scripts/execute_independent_live_vertical_slice.ts",
@@ -1364,8 +1369,8 @@
     },
     {
       "path": "scripts/verify_release_manifest.ts",
-      "sha256": "c1905fcbdb00ac1051d5f2b62318e79348cc415b0fff0385e82daf1c3cb77bc8",
-      "bytes": 8718
+      "sha256": "7e46bda8014f73fd9e67e2b2f748eb7bed5f720d3ec4a8431bd9e783806bd4df",
+      "bytes": 9155
     },
     {
       "path": "scripts/verify_t8_ratings.ts",
