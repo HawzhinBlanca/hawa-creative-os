@@ -693,9 +693,52 @@ paths:
                   runId: {type: string, format: uuid}
                   actionId: {type: string, format: uuid}
                   name: {type: string}
-                  status: {enum: [running, completed, failed]}
+                  status: {enum: [running, completed, failed, closed]}
                   report: {type: [object, 'null']}
                   resumable: {type: boolean}
+                  snapshotHash: {type: string, pattern: '^[a-f0-9]{64}$'}
+                  canSettle: {type: boolean}
+                  settlement: {type: [object, 'null'], description: Administrator-attested terminal provider evidence; never an automated invoice verification}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/evaluations/runs/{runId}/settlement:
+    post:
+      tags: [Evaluations]
+      operationId: settleHeldEvaluation
+      description: A current named Google office administrator closes a held fixture evaluation using terminal provider evidence and known reported costs. Preserves the original report and call outcomes. Sends no model request. Repeating the same action returns its saved settlement.
+      parameters:
+        - {name: runId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedSnapshot, reason, calls]
+              properties:
+                expectedSnapshot: {type: string, pattern: '^[a-f0-9]{64}$'}
+                reason: {type: string, minLength: 1, maxLength: 500}
+                calls:
+                  type: array
+                  maxItems: 1000
+                  description: Every pending or uncertain call exactly once. Empty only for an interrupted run with no unresolved calls.
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [callId, conclusion, reportedCostUsd, evidenceReference, evidenceSha256]
+                    properties:
+                      callId: {type: string, format: uuid}
+                      conclusion: {enum: [provider_not_accepted, provider_finished]}
+                      reportedCostUsd: {type: number, minimum: 0, maximum: 1000000, description: Administrator-reported final USD cost; zero required for provider_not_accepted; unknown refused}
+                      evidenceReference: {type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,199}$'}
+                      evidenceSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+      responses:
+        '200': {description: Immutable settlement and replay indicator}
+        '400': {description: Invalid or unknown evidence/cost}
+        '403': {description: Current named administrator session required}
+        '409': {description: Active execution, changed snapshot/action, prior settlement or incomplete evidence}
+        '503': {description: Outcome unavailable; retry the same settlement action}
         default: {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:

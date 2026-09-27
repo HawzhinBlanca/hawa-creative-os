@@ -850,6 +850,22 @@ CREATE TABLE eval_model_calls (
          (status<>'pending' AND outcome IS NOT NULL AND finished_at IS NOT NULL))
 );
 
+CREATE TABLE eval_run_settlements (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  run_id uuid NOT NULL,
+  action_id uuid NOT NULL,
+  actor_user_id uuid NOT NULL REFERENCES users(id),
+  request_hash text NOT NULL CHECK(request_hash ~ '^[a-f0-9]{64}$'),
+  snapshot_hash text NOT NULL CHECK(snapshot_hash ~ '^[a-f0-9]{64}$'),
+  reason text NOT NULL CHECK(length(trim(reason)) BETWEEN 1 AND 500),
+  calls jsonb NOT NULL CHECK(jsonb_typeof(calls)='array'),
+  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  FOREIGN KEY(tenant_id,run_id) REFERENCES eval_runs(tenant_id,id),
+  UNIQUE(tenant_id,run_id),
+  UNIQUE(tenant_id,action_id)
+);
+
 CREATE TABLE eval_results (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   eval_run_id uuid NOT NULL REFERENCES eval_runs(id) ON DELETE CASCADE,

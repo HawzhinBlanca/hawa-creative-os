@@ -252,4 +252,13 @@ USING (tenant_id=current_tenant_id() AND
 WITH CHECK (tenant_id=current_tenant_id() AND
   (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[])));
 
+-- ADR-085: named evidence that closes a held fixture run.
+ALTER TABLE eval_run_settlements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE eval_run_settlements FORCE ROW LEVEL SECURITY;
+CREATE POLICY eval_run_settlements_read ON eval_run_settlements FOR SELECT USING
+  (tenant_id=current_tenant_id() AND
+   (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[])));
+CREATE POLICY eval_run_settlements_insert ON eval_run_settlements FOR INSERT WITH CHECK
+  (tenant_id=current_tenant_id() AND actor_user_id=current_user_id() AND
+   (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator']::membership_role[])));
 COMMIT;

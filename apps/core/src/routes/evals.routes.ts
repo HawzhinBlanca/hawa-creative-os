@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import type { RouteContext } from './types.js';
 import { EvaluationError } from '../services/durable-evaluations.js';
 
@@ -7,7 +8,9 @@ export function registerEvalsRoutes(ctx: RouteContext) {
   const { registerRoute, evaluationService, verifyRequestAuth, problem } = ctx;
   const scope = (c: any) => {
     const auth = verifyRequestAuth(c);
-    return { tenantId: auth.tenantId!, userId: auth.userId!, role: auth.role };
+    const token=ctx.bearerTokenOf?.(c);
+    return { tenantId: auth.tenantId!, userId: auth.userId!, role: auth.role,
+      sessionHash:auth.authMethod==='google_oidc' && token ? createHash('sha256').update(token).digest('hex') : undefined };
   };
   registerRoute('post', '/evaluations/runs', async (c: any) => {
     if (!evaluationService) return problem(c, 503, 'Evaluation Database Required', 'No model work started; durable evaluation storage is unavailable.');
@@ -30,6 +33,15 @@ export function registerEvalsRoutes(ctx: RouteContext) {
     if (!evaluationService) return problem(c,503,'Evaluation Database Required');
     const run = await evaluationService.get(scope(c),c.req.param('runId'));
     return run ? c.json(run) : problem(c,404,'Evaluation Run Not Found');
+  });
+  registerRoute('post', '/evaluations/runs/:runId/settlement', async (c: any) => {
+    if (!evaluationService) return problem(c,503,'Evaluation Database Required');
+    try {
+      return c.json(await evaluationService.settle(scope(c),c.req.param('runId'),c.req.header('Idempotency-Key'),await c.req.json().catch(()=>null)));
+    } catch(error) {
+      if(error instanceof EvaluationError) return problem(c,error.status,error.code,error.message);
+      return problem(c,503,'Settlement Outcome Unavailable','Retry the same settlement action or reload its recorded evidence.');
+    }
   });
 
   registerRoute('get', '/evaluations/datasets', (c: any) => {

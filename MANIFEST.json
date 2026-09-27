@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T04:59:52Z",
+  "generatedAt": "2026-09-27T05:15:44Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 388,
+  "fileCount": 390,
   "files": [
     {
       "path": ".dockerignore",
@@ -493,6 +493,11 @@
       "bytes": 2086
     },
     {
+      "path": "adrs/085_evaluation_settlement.md",
+      "sha256": "5bbe82e583cf8256b803dd0a81c4120c982834a720ec61b3f9fda9db3e83bdef",
+      "bytes": 2163
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "1cec9fa7e485ff78896a8a9933aacdde0117097a09ae245ba3361cb13d667ea7",
       "bytes": 25778
@@ -504,8 +509,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "dd464f7b68faf3c159c554cfc4f19b1ce894819635a5c08ea7a5e2612223c5ab",
-      "bytes": 47589
+      "sha256": "22fa63198cbc301cf604aec6f12df93b1d69709a5af7dd334016be81a766103c",
+      "bytes": 50359
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -589,13 +594,13 @@
     },
     {
       "path": "db/rls.sql",
-      "sha256": "5ef9cad37bf1876e44823f03823e8a2ccc9aa1f736c3260d1250ed90ae1c1eda",
-      "bytes": 14352
+      "sha256": "f48ce13c2f2937a91ce1900d458f1f6422319d548e7a4db299cffc16663d7e0f",
+      "bytes": 15006
     },
     {
       "path": "db/schema.sql",
-      "sha256": "d230c2c3a471622505a1edf489f340d382ea187a30c3ff600f6c66498a4e46fe",
-      "bytes": 45505
+      "sha256": "41dfb1fb72299b38e58338424626d834cdbad0b4b147299802f371c46e8a371d",
+      "bytes": 46181
     },
     {
       "path": "db/seed.sql",
@@ -744,8 +749,8 @@
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
-      "sha256": "a66df24878a984e59fa3ce327b37759b86aacb875cf8a0b196d22fcb66a51267",
-      "bytes": 9608
+      "sha256": "3908853568d53499edb97fffb715926d9e5bfada2f456afefe194156fe06f98c",
+      "bytes": 10604
     },
     {
       "path": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
@@ -759,8 +764,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "8e83f53ad9dee2181a1b2338f3c2ec20ba4d35ec2f82115b55a0d8d0cf53fa21",
-      "bytes": 13466
+      "sha256": "5be95af180a90ae18fc91246e52b8487ba2d6b0e85c8cf5ea5f79ff4608cf645",
+      "bytes": 14462
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1168,9 +1173,14 @@
       "bytes": 13178
     },
     {
+      "path": "plans/research-grade-upgrade-2026-09-25/R21_EVALUATION_SETTLEMENT_PROOF.json",
+      "sha256": "08ae3ce69de835e28ee7d7159110f6dd7b3ed8ff67031327792227d5cf63cd15",
+      "bytes": 3116
+    },
+    {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "d2842f4b3d1c459bb803852ec10347d5b5284dfda840e8452d863f9d8ce374b5",
-      "bytes": 27615
+      "sha256": "e18d3de472554988618d97d77675cdbe2e1a8d2d607d28d55836d9acada2fa80",
+      "bytes": 29050
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json",
@@ -1249,8 +1259,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "ef68426055947280c62cf96b937c5992e6dbfac2555f2f316de1c12dbd62bc18",
-      "bytes": 313186
+      "sha256": "aaab930938b6b757f95ea3d59a6c1cc6a1ddfa79e77a65d487e5716bc56d876a",
+      "bytes": 315456
     },
     {
       "path": "plans/user-stories.csv",
@@ -1354,8 +1364,8 @@
     },
     {
       "path": "runbooks/EVALUATION_RECOVERY.md",
-      "sha256": "c7b9533cd597ec4c2ca47a6f9128b563d7954e24473fa7a35538167417f57d9b",
-      "bytes": 2005
+      "sha256": "026c75dda0f86d33dcdcae18dc288062afa03c4b2b64b0e71cc56c66bc80c254",
+      "bytes": 4051
     },
     {
       "path": "runbooks/LIVE_PILOT.md",

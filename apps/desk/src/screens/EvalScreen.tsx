@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { apiClient } from '../api/client.js';
 import { reasonOf } from '../services/statusReport.js';
 import { pendingEvaluation, retainEvaluation, clearEvaluation, type EvaluationAction } from '../services/evaluation-action.js';
+import { EvaluationSettlementPanel } from '../components/EvaluationSettlementPanel.js';
 
 interface DatasetInfo {
   id: string;
@@ -59,7 +60,8 @@ export const EvalScreen: React.FC = () => {
   const [lastRunTime, setLastRunTime] = useState<string | null>(null);
   const [lastRunId, setLastRunId] = useState<string | null>(null);
   const [pastRuns, setPastRuns] = useState<any[]>([]);
-  const [callEvidence, setCallEvidence] = useState<{runId:string;calls:any[]} | null>(null);
+  const [callEvidence, setCallEvidence] = useState<React.ComponentProps<typeof EvaluationSettlementPanel>['detail'] | null>(null);
+  const receiptSelection=useRef<string|null>(null),receiptRequest=useRef(0);
   // No run loaded means no numbers: the cards show — until Core returns a report.
   const [runStats, setRunStats] = useState<RunStats | null>(null);
   const [evalNotice, setEvalNotice] = useState<string | null>(null);
@@ -96,7 +98,7 @@ export const EvalScreen: React.FC = () => {
               setLastRunTime(dt.replace('T', ' ').substring(0, 19) + ' UTC');
             }
             if (latest.report) setRunStats(statsFromReport(latest.report));
-            if (latest.report?.executionStatus === 'stopped') addEvalNotice(`Evaluation stopped. ${latest.report.modelCallHold?.safeAction || 'Review the provider outcome before starting another run.'}`);
+            if (!latest.settlement && latest.report?.executionStatus === 'stopped') addEvalNotice(`Evaluation stopped. ${latest.report.modelCallHold?.safeAction || 'Review the provider outcome before starting another run.'}`);
           }
         }
       })
@@ -146,18 +148,24 @@ export const EvalScreen: React.FC = () => {
       retainEvaluation(action);
       setPendingAction(action);
       const data = await apiClient.evaluations.run(action.name, action.actionId);
-      if (data.completedAt) { clearEvaluation(action.actionId); setPendingAction(null); }
+      if (data.completedAt || data.settlement) { clearEvaluation(action.actionId); setPendingAction(null); }
       const now = new Date();
       setLastRunTime(now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
       setLastRunId(data.runId);
       setPastRuns((prev) => [...prev.filter(run => run.runId !== data.runId), data]);
       setRunStats(statsFromReport(data.report));
-      if (data.report?.executionStatus === 'stopped') addEvalNotice(`Evaluation stopped. ${data.report.modelCallHold?.safeAction || 'Review the provider outcome before starting another run.'}`);
+      if (!data.settlement && data.report?.executionStatus === 'stopped') addEvalNotice(`Evaluation stopped. ${data.report.modelCallHold?.safeAction || 'Review the provider outcome before starting another run.'}`);
     } catch (err) {
       addEvalNotice(`Evaluation outcome unavailable: ${reasonOf(err)}. Retry this same action to read or resume its saved run.`);
     } finally {
       setRunningTournament(false);
     }
+  };
+
+  const loadReceipts=async(runId:string)=>{
+    const request=++receiptRequest.current;receiptSelection.current=runId;setCallEvidence(null);
+    try{const detail=await apiClient.evaluations.get(runId);if(request===receiptRequest.current)setCallEvidence(detail);}
+    catch(error){if(request===receiptRequest.current)addEvalNotice(`Could not load call receipts: ${reasonOf(error)}`);}
   };
 
   return (
@@ -231,10 +239,10 @@ export const EvalScreen: React.FC = () => {
                     }}
                   >
                     <span style={{ fontFamily: 'monospace', fontSize: 10 }}>{run.runId.substring(0, 8)}</span>
-                    <span className={`pill ${run.status === 'running' || run.report?.executionStatus === 'stopped' ? '' : 'ok'}`} style={{ fontSize: 10 }}>
-                      {run.status === 'running' ? 'Incomplete' : run.report?.executionStatus === 'stopped' ? 'Stopped · review required' : `${percent(run.report?.overallPassRate)} pass`}
+                    <span className={`pill ${run.settlement || run.status === 'running' || run.report?.executionStatus === 'stopped' ? '' : 'ok'}`} style={{ fontSize: 10 }}>
+                      {run.settlement ? 'Closed · evidence retained' : run.status === 'running' ? 'Incomplete' : run.report?.executionStatus === 'stopped' ? 'Stopped · review required' : `${percent(run.report?.overallPassRate)} pass`}
                     </span>
-                    <button onClick={() => { setCallEvidence(null); void apiClient.evaluations.get(run.runId).then(setCallEvidence).catch(error => addEvalNotice(`Could not load call receipts: ${reasonOf(error)}`)); }}>Calls</button>
+                    <button onClick={() => void loadReceipts(run.runId)}>Calls</button>
                     {run.resumable && <button disabled={runningTournament} onClick={() => void handleRunTournament({actionId:run.actionId,name:run.name})}>Resume</button>}
                   </div>
                 ))}
@@ -254,7 +262,13 @@ export const EvalScreen: React.FC = () => {
               <td>{typeof call.estimatedCostUsd === 'number' ? `$${call.estimatedCostUsd.toFixed(4)}` : 'Unknown'}</td>
             </tr>)}</tbody>
           </table></div>
-          <button onClick={() => setCallEvidence(null)}>Close receipts</button>
+          <EvaluationSettlementPanel key={`${callEvidence.runId}:${callEvidence.snapshotHash}`} detail={callEvidence} onSettled={async()=>{
+            const [detail,runs]=await Promise.all([apiClient.evaluations.get(callEvidence.runId),apiClient.evaluations.runs()]);
+            if(receiptSelection.current===callEvidence.runId)setCallEvidence(detail);setPastRuns(runs);
+            if(detail.settlement){clearEvaluation(detail.actionId);setPendingAction(pendingEvaluation());}
+          }}/>
+          <button onClick={() => void loadReceipts(callEvidence.runId)}>Reload receipts</button>
+          <button onClick={() => {receiptSelection.current=null;receiptRequest.current++;setCallEvidence(null);}}>Close receipts</button>
         </section>}
 
         {/* Keep the evaluation beside its sidebar when the full-width receipt row is open. */}
@@ -713,4 +727,3 @@ export const EvalScreen: React.FC = () => {
     </section>
   );
 };
-

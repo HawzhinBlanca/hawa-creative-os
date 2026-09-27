@@ -226,3 +226,19 @@ changes cannot bypass the saved admission. A version conflict requires the origi
 candidate. Database unavailability must not invoke an in-memory model path. Desk
 retains the action through HTTP failure/refresh and exposes incomplete status and
 sanitized call receipts. Provider settlement and live billing remain unqualified.
+
+### Attributed closure of held fixture runs (ADR-085, 2026-09-27)
+
+A named office administrator may close a held fixture evaluation by recording the
+exact observed ledger snapshot and terminal provider evidence for every unresolved
+call. The provider/support reference, retained-evidence digest and known reported
+final cost are separate administrator attestations; they do not replace the original
+unknown outcome or establish automated invoice verification. Unknown cost or
+acceptance remains held. A confirmed non-acceptance requires zero cost.
+
+Settlement is append-only, tenant-scoped, keyed and transactionally authorized. It
+refuses an active execution or changed snapshot. The old report and call outcomes
+remain unchanged, closed runs admit no new calls, and the settlement sends no model
+request. Any subsequent evaluation is explicitly requested new billable work. See
+runbooks/EVALUATION_RECOVERY.md. Automatic provider lookup and general Studio reply
+recovery remain separate work.

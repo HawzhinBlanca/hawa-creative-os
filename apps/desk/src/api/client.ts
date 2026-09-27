@@ -6,6 +6,11 @@
  */
 
 import { getAuthToken, setAuthToken, clearAuthToken, getCsrfToken, getAuthHeaders } from '../services/auth.js';
+export interface SettlementBody {
+  expectedSnapshot:string; reason:string;
+  calls:Array<{callId:string;conclusion:'provider_not_accepted'|'provider_finished';reportedCostUsd:number;evidenceReference:string;evidenceSha256:string}>;
+}
+
 
 export interface ApiSessionUser {
   id: string;
@@ -418,6 +423,7 @@ class HawaApiClient {
     datasets: () => this.request<any[]>('/evaluations/datasets'),
     runs: () => this.request<any[]>('/evaluations/runs'),
     get: (runId: string) => this.request<any>(`/evaluations/runs/${encodeURIComponent(runId)}`),
+    settle: (runId: string, actionId:string, body:SettlementBody) => this.request<unknown>(`/evaluations/runs/${encodeURIComponent(runId)}/settlement`, {method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
     cases: (datasetId: string) => this.request<any>(`/evaluations/datasets/${encodeURIComponent(datasetId)}/cases`),
     run: (name: string, actionId: string) => this.request<any>('/evaluations/runs', { method: 'POST', headers: { 'Idempotency-Key': actionId }, body: JSON.stringify({ name }) }),
   };

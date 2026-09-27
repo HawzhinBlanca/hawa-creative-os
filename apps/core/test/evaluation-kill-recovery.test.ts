@@ -1,5 +1,5 @@
 import {afterAll,expect,it,vi} from 'vitest';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createServer,type ServerResponse} from 'node:http';
 import {fileURLToPath} from 'node:url';
@@ -51,6 +51,21 @@ it.each(['after-send','after-receipt'])('preserves %s through actual SIGKILL and
       if(boundary==='after-send'){
         expect(result.report?.modelCallHold?.code).toBe('EVALUATION_CALL_UNCERTAIN');expect(calls).not.toHaveBeenCalled();expect(rows.rows).toEqual([{status:'pending',outcome:null}]);
         await expect(fresh.run(scope,{actionId:randomUUID(),name:'Fresh bypass'})).rejects.toMatchObject({code:'EVALUATION_PRIOR_RUN_UNSETTLED'});
+        // The independent local endpoint has now terminated its one received request.
+        // Synthetic named staff evidence closes the hold, preserving the pending receipt.
+        response!.end();
+        const sessionHash=createHash('sha256').update(randomUUID()).digest('hex');
+        await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES(${scope.tenantId}::uuid,${scope.userId}::uuid,'administrator')`.execute(owner);
+        await sql`INSERT INTO hawa.desk_sessions(token_hash,tenant_id,user_id,actor_id,role,display_name,expires_at,auth_method)
+          VALUES(${sessionHash},${scope.tenantId}::uuid,${scope.userId}::uuid,'oidc:kill-fixture','administrator','Kill fixture',now()+interval '1 hour','google_oidc')`.execute(owner);
+        const admin={...scope,role:'administrator',sessionHash},detail=(await fresh.get(admin,run.runId))!;
+        const body={expectedSnapshot:detail.snapshotHash,reason:'Synthetic endpoint confirms terminal receipt',calls:[{
+          callId:detail.calls[0].id,conclusion:'provider_finished',reportedCostUsd:0.02,evidenceReference:'local-kill-drill',evidenceSha256:createHash('sha256').update(`received:${accepted}`).digest('hex')}]};
+        const settlementAction=randomUUID();await fresh.settle(admin,run.runId,settlementAction,body);
+        expect((await new DurableEvaluationService(runtime,gateway).settle(admin,run.runId,settlementAction,body)).replayed).toBe(true);
+        expect((await fresh.run(scope,{actionId,name:'Kill boundary'})).status).toBe('closed');
+        expect((await fresh.get(scope,run.runId))?.calls[0]).toMatchObject({status:'pending',estimatedCostUsd:null});
+        expect(accepted).toBe(1);expect(calls).not.toHaveBeenCalled();
       }else{
         expect(result.status).toBe('completed');expect(calls).toHaveBeenCalledTimes(rows.rows.length-1);
         expect(rows.rows[0]).toMatchObject({status:'completed',outcome:{ok:true,value:{usage:{estimatedCostUsd:0.02}}}});

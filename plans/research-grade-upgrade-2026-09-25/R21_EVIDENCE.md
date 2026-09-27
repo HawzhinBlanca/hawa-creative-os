@@ -208,3 +208,25 @@ unchanged afterward and the CSS follow-up has a separate successful Desk build.
 No production upgrade, live provider bill, human approval or message occurred.
 Provider settlement, real office workflow, independent recovery and human creative
 qualification remain open. Final proof: R21_DURABLE_EVALUATION_PROOF.json.
+
+## 2026-09-27 — Named settlement of held fixture evaluations (ADR-085)
+
+Migration048 adds an immutable run settlement, exact ledger snapshot and named
+administrator evidence for every unresolved call. The separate final-cost claim
+requires terminal provider evidence; unknown costs cannot be settled. Closure
+preserves the original report, scores and call outcomes, never sends a model request,
+and prevents new ordinals in the closed run. Subsequent explicitly requested runs
+remain distinct billable work. SQL and Core recheck authority, scope and complete call
+coverage. Desk retains the exact settlement through response loss and reload; local
+evidence files contribute only a digest.
+
+Four red-before tests failed on the absent operation. Focused schema/browser/Core
+checks passed 7 files/33 tests. Final recovery checks passed 5 files/20 tests, including
+two actual process kills, named HTTP replay, shared-key/CSRF refusal, revocation,
+concurrency and immutable receipts. The initial HTTP test used a tenant outside the
+configured office; that fixture was corrected and the failure retained.
+
+Release/candidate qualification is pending at this source checkpoint. See
+`R21_EVALUATION_SETTLEMENT_PROOF.json` and `runbooks/EVALUATION_RECOVERY.md`. This is
+synthetic staff evidence, not live provider reconciliation, automatic invoice
+verification, general Studio response replay or real human approval. R21 remains in progress.
