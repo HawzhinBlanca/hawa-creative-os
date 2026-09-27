@@ -81,9 +81,9 @@ cannot reduce a higher settled amount used for admission.
   USD must be finite and positive; the call cap must be a positive safe integer.
   Missing historical settings do not authorize default spending.
 
-The USD limit stops new requests after recorded spending reaches it. It is not a
-guaranteed invoice ceiling: final costs for admitted calls may exceed the remaining
-amount. ADR-091 adds reservations below; office/day/role budget qualification remains open.
+Before ADR-091, the USD limit stopped new requests only after recorded spending
+reached it. The reservations below now account for admitted work before transport;
+they remain estimates rather than invoice guarantees. Office/day/role limits remain open.
 No settlement automatically supplies a missing stage result or retries its model.
 
 

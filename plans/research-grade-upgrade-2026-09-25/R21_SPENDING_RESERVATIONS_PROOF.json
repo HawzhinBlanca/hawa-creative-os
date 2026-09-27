@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "status": "CANDIDATE_PENDING_SEALED_FULL_REGRESSION",
+  "status": "LOCALLY_QUALIFIED_STUDIO_SPENDING_RESERVATIONS",
   "decision": "ADR-091",
   "baselineCommit": "1296f37a4cd302646e02bb0cd3ec030230daea12",
   "requirements": [
@@ -56,11 +56,27 @@
     "strictTypes": {
       "roots": 481,
       "errors": 0,
-      "log": "typecheck-final.log"
+      "result": "passed",
+      "log": "typecheck-v2.log"
     },
-    "lint": "991 production any, ceiling1053;9 existing egress exceptions",
+    "lint": {
+      "result": "passed",
+      "productionAny": 991,
+      "ceiling": 1053,
+      "existingEgressExceptions": 9,
+      "log": "lint-v2.log"
+    },
     "deskBuild": "passed",
-    "fullSealed": "pending policyv2 sealed regression",
+    "fullSealed": {
+      "passed": 3863,
+      "failed": 0,
+      "skipped": 59,
+      "passedFiles": 473,
+      "skippedFiles": 7,
+      "files": 480,
+      "seconds": 113.0,
+      "log": "full-final.log"
+    },
     "firstSealedFull": {
       "passed": 3862,
       "failed": 0,
@@ -85,7 +101,11 @@
       "files": 3,
       "log": "context-tier-correction.log",
       "scope": "Both production and dev v3 full workflow; client quoting and domain controls. Precedes final explicit short/long calculation assertions."
-    }
+    },
+    "productionTierWorkflow": "Both production and dev v3 workflows pass in the final suite with the same USD2 run cap, models, quality and output limits; fake providers only.",
+    "security": "Scanner zero findings;11-pattern self-test passed.",
+    "blueprint": "959 passed,0 warnings,0 failures before final evidence-only update; revalidated by commit hook.",
+    "processKill": "Actual Core SIGKILL text and image/vision drills retain immutable quote amounts and request hashes in isolated PostgreSQL; new connections observe outstanding reserves, no old transport is replayed."
   },
   "limits": [
     "Conservative published-rate operating reservations are not a provider invoice ceiling. Image calculator headroom remains an estimate.",
@@ -119,33 +139,31 @@
     "packages/db/test/studio-budget.test.ts": "5cc27ab2371990094b7bf13351a600378335fd84739b8e7ccde5cc7ef670101f",
     "packages/domain/src/studio-budget.ts": "b5c983bbe2d5d0cbfad88bcca37de676bbbb6531e655d6d2ab85da056bb585f7",
     "packages/domain/test/studio-budget.test.ts": "d5f3193c185aa6495db532cc50558a2fdd48c590a034eb8a4feda1d4a4c3230f",
-    "runbooks/STUDIO_RECOVERY.md": "6f47443d394f988c0d46bc33a5fd46cb538372a98e813219ce6c91e80bd9562a",
+    "runbooks/STUDIO_RECOVERY.md": "916826b738e81d26a5fb5d3ba1aa0f48979c8b21449961878adb23310239ca33",
     "adrs/091_studio_spending_reservations.md": "656e455c25d50fe96458bca37b47228d4a1741a315262ea3faa3267d2110d191",
     "packages/creative/src/studio/spending-reservation.ts": "4f5b4b7b0f8f6f927e735275bbd0706195ffcf2f68f0028a119827f7db13ad07",
     "packages/creative/test/studio-spending-reservation.test.ts": "711222abad47c2774fefc780fbda8675cc84d4f75d53da807f813ff249faee01",
     "packages/db/migrations/050_studio_spending_reservations.sql": "46f32562aa37648224be5d79d39290fe5b21316bfeffcd2b9520ff1a5037f13c"
   },
   "artifactHashes": {
-    "output/acceptance/2026-09-27-spending-reservations/build-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "output/acceptance/2026-09-27-spending-reservations/build-first.log": "331258b34e2386b590b2c02ad0c76622b82c62734b6039796c176210e1a9e435",
-    "output/acceptance/2026-09-27-spending-reservations/build-second.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "output/acceptance/2026-09-27-spending-reservations/desk-build.log": "43a89f625440cb64e8b927b02a2babdcc711b2c924181aa16e18e181092a8891",
-    "output/acceptance/2026-09-27-spending-reservations/focused-final.log": "4c3704bcca454610e1ab4e8e9044b9f3950e898ded2dffceac754ae311605368",
+    "output/acceptance/2026-09-27-spending-reservations/red-db.log": "366710db39237587b99b0d4a84acb8249c0b750e201fd8bc250343c2f747332c",
     "output/acceptance/2026-09-27-spending-reservations/focused-first.log": "68de36f11512c8463297ce6315dee1e3a6e29d913d84aa5f835525130c3d9f57",
     "output/acceptance/2026-09-27-spending-reservations/focused-second.log": "59317c24a847de64824181395d09c5cf3e0a3ef18789779fda5049f3eabe0b36",
     "output/acceptance/2026-09-27-spending-reservations/focused-third.log": "1e670244c61f8eb6b6779a7980dd27b32b4a85cb8661abb9476be56d159b1bee",
+    "output/acceptance/2026-09-27-spending-reservations/focused-final.log": "4c3704bcca454610e1ab4e8e9044b9f3950e898ded2dffceac754ae311605368",
     "output/acceptance/2026-09-27-spending-reservations/full-first.log": "645fc9cf3ca17330ef1f53b50fe140b7f3ee5bc2b7b2bd05bc77edeb0a22ffb0",
-    "output/acceptance/2026-09-27-spending-reservations/red-db.log": "366710db39237587b99b0d4a84acb8249c0b750e201fd8bc250343c2f747332c",
-    "output/acceptance/2026-09-27-spending-reservations/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
-    "output/acceptance/2026-09-27-spending-reservations/test-types-first.log": "c4f0fc88b8bbb49cbd6bd2a150d12fcb7e427a9d1e67fb508d79cec893d4af7d",
-    "output/acceptance/2026-09-27-spending-reservations/test-types-second.log": "825ddc79976a9e95432bd4ea269752fe5eef7b1de8c52c1f2d08ff6847c272dd",
     "output/acceptance/2026-09-27-spending-reservations/full-sealed.log": "09f2bddb51fc9746188624d47e83084b9239b511bcf7d38c63b3252b23f14154",
-    "output/acceptance/2026-09-27-spending-reservations/production-tier-workflow.log": "d922c6dc3365c1dff1eea4a0c6dd2594a2d58d6ef0fbd2012023f638023c0c65",
+    "output/acceptance/2026-09-27-spending-reservations/full-final.log": "fda8cd392bc81c97dba0e2c8d9bb3e36f8654fb27bb7afca769344fc4cad3f0b",
+    "output/acceptance/2026-09-27-spending-reservations/typecheck-v2.log": "89c217b5c2fc574fa7807acf6647318c8720c850e1923d479b2b24ea59634a0d",
+    "output/acceptance/2026-09-27-spending-reservations/lint-v2.log": "c8c567424dbb2afbd2c13931b7b70f8dc172334ab942fa79131e99997ef35273",
+    "output/acceptance/2026-09-27-spending-reservations/desk-build.log": "43a89f625440cb64e8b927b02a2babdcc711b2c924181aa16e18e181092a8891",
+    "output/acceptance/2026-09-27-spending-reservations/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+    "output/acceptance/2026-09-27-spending-reservations/security-self-test.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
     "output/acceptance/2026-09-27-spending-reservations/context-tier-correction.log": "111f6ba5f9169142315e39b8b0e75b18d1f92097dee43da1141e9914435ca9ce",
+    "output/acceptance/2026-09-27-spending-reservations/production-tier-workflow.log": "d922c6dc3365c1dff1eea4a0c6dd2594a2d58d6ef0fbd2012023f638023c0c65",
     "output/acceptance/2026-09-27-spending-reservations/candidate-verify.log": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6",
-    "output/acceptance/2026-09-27-spending-reservations/source-commit.log": "0ea42213a1a16162b3a66203615feed1d905f7394961a67f15eb77d04398b580",
-    "output/acceptance/2026-09-27-spending-reservations/candidate-seal.log": "b4d384ae0862aff9f091f0d3d32225cc5f4371650e1d4b7fa2414b1b1001c38f",
-    "output/acceptance/2026-09-27-spending-reservations/typecheck-final.log": "89c217b5c2fc574fa7807acf6647318c8720c850e1923d479b2b24ea59634a0d",
-    "output/acceptance/2026-09-27-spending-reservations/lint-final.log": "c8c567424dbb2afbd2c13931b7b70f8dc172334ab942fa79131e99997ef35273"
-  }
+    "output/acceptance/2026-09-27-spending-reservations/verify-v2.log": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6"
+  },
+  "qualifiedSourceCommit": "97250932bb6e14276d116c6946e09f1ff2495ead",
+  "testedCandidateCommit": "c626584f2366d057d40bc9c73d324728bb6bfd13"
 }

@@ -1,6 +1,6 @@
 # R21 — Unknown model acceptance is not a free retry
 
-## 2026-09-27 — Studio pre-dispatch spending reservations (ADR-091, candidate)
+## 2026-09-27 — Studio pre-dispatch spending reservations (ADR-091, locally qualified)
 
 Migration050 stores immutable request-body quotes. Under the task lock, admission
 requires recorded/attested cost plus outstanding reservations plus the next quote
@@ -20,8 +20,17 @@ First sealed regression7909793:3862 passed/0 failed/59 skipped. An additional
 production-price workflow exposed an over-conservative long-context quote.
 Policyv2 now chooses the context tier from the conservative input bound; both
 production and dev v3 workflows pass in a60-test correction run. No model/quality,
-output-limit or budget increase. Final v2 sealed full regression pending.
+output-limit or budget increase. Final v2 sealed full regression passed; qualification below.
 See R21_SPENDING_RESERVATIONS_PROOF.json.
+
+Final policyv2 qualification: source9725093, tested sealc626584,
+full regression3863 passed/0 failed/59 skipped across480 files.
+The normal suite now contains both production and dev v3 full-flow controls at
+unchanged USD2 limits. All481 test roots compile; source/scripts, lint(991 any),
+Desk build, security scanner/11-pattern self-test and source manifest pass.
+Actual Core text and art/vision kills retain durable quote evidence. Earlier
+failed controls remain in the proof. No runtime image or production deployment.
+
 
 Quotes are conservative operating estimates, not invoice guarantees. Broader
 role/office/day caps, typed result recovery, fresh candidate, named live pilot,

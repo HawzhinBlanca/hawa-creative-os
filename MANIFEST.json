@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T08:08:23Z",
+  "generatedAt": "2026-09-27T08:11:40Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -979,8 +979,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/EXECUTION.md",
-      "sha256": "185390122c4f0f5e5d7b992ac56da63c66dd8528d7dfd1faca41edf9a85c6372",
-      "bytes": 70591
+      "sha256": "9426e3a87f93b509f997041185fadb14dc01b049ec79323803fd269c601333c4",
+      "bytes": 71143
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/PLAN.md",
@@ -1219,8 +1219,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_EVIDENCE.md",
-      "sha256": "ef2a9a29a9fc6f0fa572e85a1fa30f64218015a115a6ddb81def2f212ebba77d",
-      "bytes": 41548
+      "sha256": "b5fa708465ccd7f176341a0dcc28edbd826bce07711ca50f678e9a9985a7f9f5",
+      "bytes": 42100
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_GATEWAY_HOLD_PROOF.json",
@@ -1229,8 +1229,8 @@
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_SPENDING_RESERVATIONS_PROOF.json",
-      "sha256": "d38e73f742bf5f907dce32d219d208cbe9aed642d290e03e7294ad90f427709f",
-      "bytes": 10530
+      "sha256": "fdb129ff4d245a5dc0fa92f2970bbb1c4fe8ba82053e925028f9c7191d07ae42",
+      "bytes": 10943
     },
     {
       "path": "plans/research-grade-upgrade-2026-09-25/R21_STUDIO_BUDGET_PROOF.json",
@@ -1319,8 +1319,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "de7729bd8419250c4140e4f7a2219ac0f0269d1e5fc5a4fded2b53fe9dc3a1f6",
-      "bytes": 329519
+      "sha256": "67107101d97eeffdad575e24f856591f169ddda30fd8107970a8e5224c3e86fa",
+      "bytes": 330881
     },
     {
       "path": "plans/user-stories.csv",
@@ -1439,8 +1439,8 @@
     },
     {
       "path": "runbooks/STUDIO_RECOVERY.md",
-      "sha256": "6f47443d394f988c0d46bc33a5fd46cb538372a98e813219ce6c91e80bd9562a",
-      "bytes": 6765
+      "sha256": "916826b738e81d26a5fb5d3ba1aa0f48979c8b21449961878adb23310239ca33",
+      "bytes": 6761
     },
     {
       "path": "schemas/ApprovalDecision.schema.json",
