@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T16:15:33Z",
+  "generatedAt": "2026-09-27T16:16:48Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -69,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "b020f19e8e491bb54c7a3c0f5ba2d37b0da27ff2782f4a87dcbefa634980f8e8",
+      "sha256": "f9f47fba66746349a454ea06edbeaf29a2210559b248a5152f007707a600f4b0",
       "bytes": 3983
     },
     {
