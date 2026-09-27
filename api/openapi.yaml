@@ -852,6 +852,59 @@ paths:
         '409': {description: Run not stopped, changed snapshot/action or incomplete evidence}
         '503': {description: Outcome unavailable; retry the same settlement action}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/spending/policy:
+    get:
+      tags: [Operations]
+      operationId: readSpendingPolicy
+      description: Office administrator, operator or auditor reads the current immutable policy, daily ledger usage, office clients and up to 20 history revisions. Named authority determines canEdit. Asia/Baghdad day is fixed. No provider call occurs.
+      parameters:
+        - {name: beforeVersion, in: query, schema: {type: integer, minimum: 1, maximum: 2147483647}}
+      responses:
+        '200': {description: Current policy with limits/hash/version/provenance, consistent daily usage, history, nextBeforeVersion, client choices and canEdit}
+        '403': {description: Authorized office role required}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      tags: [Operations]
+      operationId: recordSpendingPolicy
+      description: Current named administrator appends an immutable office/client/role policy revision. SQL verifies authority and expected version/hash under the existing spending admission lock. Zero stops new spending; existing charges, reservations, history and execution holds remain. Exact action replay precedes the current-version check and rechecks authority. Shared administrator keys cannot write.
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedVersion, expectedLimitsSha256, reason, limits]
+              properties:
+                expectedVersion: {type: integer, minimum: 1, maximum: 2147483646}
+                expectedLimitsSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+                reason: {type: string, minLength: 1, maxLength: 500}
+                limits:
+                  type: object
+                  additionalProperties: false
+                  required: [officeUsd, clientUsd, roleUsd, clients, roles]
+                  properties:
+                    officeUsd: {type: number, minimum: 0, maximum: 1000000, multipleOf: 0.000001}
+                    clientUsd: {type: number, minimum: 0, maximum: 1000000, multipleOf: 0.000001}
+                    roleUsd: {type: number, minimum: 0, maximum: 1000000, multipleOf: 0.000001}
+                    clients:
+                      type: object
+                      maxProperties: 1000
+                      propertyNames: {pattern: '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'}
+                      additionalProperties: {type: number, minimum: 0, maximum: 1000000, multipleOf: 0.000001}
+                    roles:
+                      type: object
+                      propertyNames: {enum: [creative_director, visual_judge, asset_photoreal, intake_router, brief_builder, feedback_classifier, rule_miner, embedding_multimodal, reranker_multimodal, voice_transcriber]}
+                      additionalProperties: {type: number, minimum: 0, maximum: 1000000, multipleOf: 0.000001}
+      responses:
+        '200': {description: Saved attributed policy receipt and replayed flag}
+        '400': {description: Invalid limits, unknown role or client outside this office}
+        '403': {description: Current named administrator required}
+        '409': {description: Policy changed or action reused for a different proposal}
+        '503': {description: Outcome unavailable; retry the same saved action}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/spending/calls:
     get:
       tags: [Operations]

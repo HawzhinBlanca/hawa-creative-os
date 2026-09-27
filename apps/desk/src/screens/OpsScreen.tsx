@@ -1,3 +1,4 @@
+import { SpendingPolicyPanel } from '../components/SpendingPolicyPanel.js';
 import React, { useState, useEffect } from 'react';
 import { eventStream } from '../services/eventStream';
 import { apiClient } from '../api/client.js';
@@ -249,6 +250,7 @@ export const OpsScreen: React.FC = () => {
 
   return (
     <section id="ops" className="screen active">
+      <SpendingPolicyPanel />
       <CallCostAccountingPanel />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ fontSize: 13, color: 'var(--muted)' }}>

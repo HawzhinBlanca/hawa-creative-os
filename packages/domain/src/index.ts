@@ -19,3 +19,5 @@ export * from './telegram-source-review.js';
 export * from './voice-audio.js';
 export * from './evaluation-settlement.js';
 export * from './studio-budget.js';
+
+export * from './spending-policy.js';

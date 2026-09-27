@@ -14,7 +14,8 @@
     "@tanstack/react-query": "5.103.2",
     "dompurify": "^3.4.15",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@hawa/domain": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

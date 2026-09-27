@@ -1,5 +1,25 @@
 # R21 — Unknown model acceptance is not a free retry
 
+## 2026-09-27 — Named budget policy administration (ADR-098, candidate)
+
+Desk Operations now reads current shared limits, consistent daily usage and
+paginated policy history, and lets a current named administrator review and append
+office/client/role limits with a reason. SQL checks version/hash/authority under the
+existing spending admission lock; direct runtime table mutation remains denied.
+Exact replay precedes stale-revision checks and preserves the original receipt.
+Lower caps retain prior charges/reservations; zero stops new admissions, and
+removing an override restores its default. Browser actions are saved by office/user
+before dispatch and retained across uncertain answers, remounts and newer policies.
+
+Focused SQL/Core/domain/Desk and migration checks:88 passed across9files; final
+browser-safe import follow-up:5 Desk tests/build pass. All491 active test roots and
+source/scripts compile. Lint981/1053 (nine existing egress exceptions), scanner and
+11-pattern self-test pass. Full sealed regression and fresh deployed qualification
+are pending. No production change or real provider request. Other paid paths,
+typed result recovery, truthful fixture cases and live/human/recovery admission
+remain open. See R21_NAMED_SPENDING_POLICY_PROOF.json and runbooks/SPENDING_POLICY.md.
+
+
 ## 2026-09-27 — Exact-call accounting (ADR-097, locally qualified)
 
 Migration 053 adds named, immutable revisions of exact Studio/evaluation/voice

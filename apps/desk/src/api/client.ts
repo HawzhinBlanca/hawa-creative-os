@@ -1,3 +1,4 @@
+import type { SpendingPolicyDetail, SpendingPolicyChange, SpendingPolicyResult } from '@hawa/contracts';
 /**
  * Hawa Desk Typed API Client
  *
@@ -434,6 +435,12 @@ class HawaApiClient {
     settle: (runId: string, actionId:string, body:SettlementBody) => this.request<unknown>(`/evaluations/runs/${encodeURIComponent(runId)}/settlement`, {method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
     cases: (datasetId: string) => this.request<any>(`/evaluations/datasets/${encodeURIComponent(datasetId)}/cases`),
     run: (name: string, actionId: string) => this.request<any>('/evaluations/runs', { method: 'POST', headers: { 'Idempotency-Key': actionId }, body: JSON.stringify({ name }) }),
+  };
+
+  public readonly spendingPolicy = {
+    get: (beforeVersion?:number|null) => this.request<SpendingPolicyDetail>(`/spending/policy${beforeVersion?`?beforeVersion=${beforeVersion}`:''}`),
+    record: (actionId:string,body:SpendingPolicyChange) => this.request<SpendingPolicyResult>('/spending/policy',
+      {method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
   };
 
   public readonly callCosts = {

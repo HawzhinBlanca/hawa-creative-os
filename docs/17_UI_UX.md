@@ -177,3 +177,23 @@ Desk Operations shows paginated original costs, reserved amounts, attributed
 history and conflicts. Unknown cost remains unknown; evidence files stay local.
 See runbooks/CALL_COST_ACCOUNTING.md. Live billing, policy administration and typed
 result recovery retain separate acceptance gates.
+
+
+### Named daily budget administration (ADR-098, 2026-09-27)
+
+Desk Operations exposes the existing shared office/client/role spending policy,
+consistent current-day ledger usage and paginated revision history. Only a current
+named administrator can append a policy after reviewing old and proposed limits
+and supplying a reason. SQL checks session, tenant, actor, version and limits hash
+under the same short lock as paid admissions. Runtime direct table writes remain
+denied. The database records human identity separately from its connection identity;
+historical owner revisions do not acquire fabricated human attribution.
+
+Limits use nonnegative whole micro-dollars, including an explicit zero stop.
+Removing a client or role override restores the displayed default. Lowering a cap
+retains existing obligations; raising one never clears uncertain execution or
+missing history. The fixed Asia/Baghdad day and current ledger accounting remain.
+Desk retains an exact action scoped to the office and user before POST and retries
+it after an uncertain answer or remount. Replay rechecks authority and returns the
+original receipt before checking whether newer policy revisions exist. See
+runbooks/SPENDING_POLICY.md. Other paid paths and live admission remain open.

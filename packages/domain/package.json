@@ -8,6 +8,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./spending-policy": {
+      "import": "./dist/spending-policy.js",
+      "types": "./dist/spending-policy.d.ts"
     }
   },
   "scripts": {

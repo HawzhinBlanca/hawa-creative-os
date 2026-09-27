@@ -67,6 +67,7 @@ GET /api/outbox/failed
 GET /api/search
 GET /api/spending/calls
 GET /api/spending/calls/:kind/:callId
+GET /api/spending/policy
 GET /api/system/cutover/status
 GET /api/system/funnel/health
 GET /api/system/revision-metrics
@@ -158,6 +159,7 @@ GET /api/v1/outbox/failed
 GET /api/v1/search
 GET /api/v1/spending/calls
 GET /api/v1/spending/calls/:kind/:callId
+GET /api/v1/spending/policy
 GET /api/v1/system/cutover/status
 GET /api/v1/system/funnel/health
 GET /api/v1/system/revision-metrics
@@ -253,6 +255,7 @@ GET /ready
 GET /search
 GET /spending/calls
 GET /spending/calls/:kind/:callId
+GET /spending/policy
 GET /system/cutover/status
 GET /system/funnel/health
 GET /system/revision-metrics
@@ -347,6 +350,7 @@ GET /v1/ready
 GET /v1/search
 GET /v1/spending/calls
 GET /v1/spending/calls/:kind/:callId
+GET /v1/spending/policy
 GET /v1/system/cutover/status
 GET /v1/system/funnel/health
 GET /v1/system/providers
@@ -448,6 +452,7 @@ POST /api/operations/kill-switch
 POST /api/operations/reconciliation/run
 POST /api/operations/slo/run
 POST /api/spending/calls/:kind/:callId/evidence
+POST /api/spending/policy
 POST /api/system/cutover/rollback-rehearsal
 POST /api/system/outbox/requeue
 POST /api/tasks
@@ -546,6 +551,7 @@ POST /api/v1/operations/kill-switch
 POST /api/v1/operations/reconciliation/run
 POST /api/v1/operations/slo/run
 POST /api/v1/spending/calls/:kind/:callId/evidence
+POST /api/v1/spending/policy
 POST /api/v1/system/cutover/rollback-rehearsal
 POST /api/v1/system/outbox/requeue
 POST /api/v1/tasks
@@ -647,6 +653,7 @@ POST /operations/kill-switch
 POST /operations/reconciliation/run
 POST /operations/slo/run
 POST /spending/calls/:kind/:callId/evidence
+POST /spending/policy
 POST /system/cutover/rollback-rehearsal
 POST /system/outbox/requeue
 POST /tasks
@@ -757,6 +764,7 @@ POST /v1/operations/kill-switch
 POST /v1/operations/reconciliation/run
 POST /v1/operations/slo/run
 POST /v1/spending/calls/:kind/:callId/evidence
+POST /v1/spending/policy
 POST /v1/system/cutover/rollback-rehearsal
 POST /v1/system/outbox/requeue
 POST /v1/system/providers
