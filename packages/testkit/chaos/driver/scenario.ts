@@ -6,6 +6,7 @@
  * Each request runs in its own chat, so one scenario's messages, tasks and paid calls never mix with
  * another's, and nothing is reset between scenarios.
  */
+import { randomUUID } from 'node:crypto';
 import { RESTATE_INGRESS_URL, fakes, kill, query, restateQuery, secrets, sql, start, waitHealthy, type Service } from './stack.js';
 
 export const OFFICE_CHAT = '9000001';
@@ -119,9 +120,28 @@ export async function briefToDraft(chat: string, tag: string, timeoutMs = 240_00
     if (outcome && outcome !== 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW') {
       throw new RequestEndedError(`task ${task.id}: the design run ended as ${outcome}, so there is no draft to approve`);
     }
-    return (await sentTo(chat)).some(isDraft) && (await taskState(task.id)) === 'human_review';
+    return (await draftShown(chat, task.id)) && (await taskState(task.id)) === 'human_review';
   }, timeoutMs, 2000);
   return task.id;
+}
+
+/**
+ * The draft has reached review: a legacy draft reaches the chat with the requester's buttons; a
+ * request RequestLifecycle owns (ADR-059) sends a notice without them and hands review to the Desk
+ * (ADR-065), and is then `in_review` on this task.
+ */
+async function draftShown(chat: string, taskId: string): Promise<boolean> {
+  if ((await sentTo(chat)).some(isDraft)) return true;
+  const [request] = await query<{ stage: string }>(sql`SELECT stage FROM hawa.requests
+    WHERE chat_id = ${chat} AND current_task_id = ${taskId}::uuid`);
+  return request?.stage === 'in_review';
+}
+
+/** The request RequestLifecycle owns for this task, if any (ADR-059). */
+async function requestOf(taskId: string): Promise<{ request_id: string; stage: string; rev: string } | null> {
+  const [row] = await query<{ request_id: string; stage: string; rev: string }>(sql`SELECT request_id, stage, rev
+    FROM hawa.requests WHERE current_task_id = ${taskId}::uuid`);
+  return row ?? null;
 }
 
 /**
@@ -148,15 +168,24 @@ export async function approve(taskId: string, options: { pinDeck?: boolean } = {
   if (options.pinDeck && !deck) throw new Error(`task ${taskId} has no stored PPTX export to pin`);
   const [task] = await query<{ rev: string | null }>(sql`SELECT current_design_revision_id AS rev FROM hawa.tasks WHERE id = ${taskId}::uuid`);
   if (!task?.rev) throw new Error(`task ${taskId} has no design revision to approve`);
+  // The Desk sends each decision with its own action key; a request-owned task requires one.
   const res = await fakes.core(`/tasks/${taskId}/revisions/${task.rev}/decisions`, token, {
+    headers: { 'Idempotency-Key': randomUUID() },
     body: { action: 'approve', reason: 'Brand, hierarchy, and exact-copy verified', pinnedExportIds: [...new Set([png?.id, checked?.id, deck?.id].filter(Boolean))] },
   });
   return { status: res.status, body: res.json };
 }
 
-/** The Desk's Deliver button. */
+/**
+ * The Desk's Deliver button, with its action key (request-owned delivery requires a UUID one). For a
+ * request RequestLifecycle owns, the Desk offers Deliver once the request has taken the approval.
+ */
 export async function deliver(taskId: string): Promise<{ status: number; body: any }> {
-  const res = await fakes.core(`/tasks/${taskId}/publish`, secrets().CHAOS_REVIEWER_KEY, { body: {} });
+  const request = await requestOf(taskId);
+  if (request) await waitUntil(`request ${request.request_id} to take the approval`, async () =>
+    (await requestOf(taskId))?.stage === 'approved', 60_000, 500);
+  const res = await fakes.core(`/tasks/${taskId}/publish`, secrets().CHAOS_REVIEWER_KEY,
+    { headers: { 'Idempotency-Key': randomUUID() }, body: {} });
   return { status: res.status, body: res.json };
 }
 
@@ -274,7 +303,10 @@ export async function checkRequest(chat: string, options: {
   // A send nobody can confirm (the fake dropped its answer, or the worker died between the send and
   // its record) is not repeated, and the office hears about it once. Without one, no alert at all.
   const uncertain = options.uncertainSends ?? shown.filter((s) => s.fault === 'drop-after-processing').length;
-  const alerts = (await sentTo(OFFICE_CHAT)).filter((s) => s.text && s.text.includes(task.id));
+  // RequestLifecycle tells the office a draft is ready for its Desk review (ADR-065, 8682bd97): a
+  // notice of the review, not an alert about a send.
+  const alerts = (await sentTo(OFFICE_CHAT)).filter((s) => s.text && s.text.includes(task.id) &&
+    !s.text.startsWith('A design is ready for office review in Hawa Desk.'));
   add(uncertain ? 'an uncertain send has exactly one office alert' : 'no office alert without an uncertain send', alerts.length === uncertain, `uncertain sends expected=${uncertain} office alerts naming the task=${alerts.length}`);
 
   // Paid calls: every fingerprint once (the classifier may run again when intake died before saving).
@@ -314,11 +346,13 @@ export async function checkRequest(chat: string, options: {
   const [ops] = await query<{ imports: string; exports: string }>(sql`SELECT count(*) FILTER (WHERE kind = 'create') AS imports, count(*) FILTER (WHERE kind = 'export') AS exports FROM hawa.canva_remote_operations WHERE task_id = ${task.id}::uuid`);
   add('one Canva import per task', Number(ops.imports) === 1, `imports=${ops.imports} exports=${ops.exports}`);
 
-  // Restate: one workflow for the task, finished; nothing paused; no journal mismatch.
-  const inv = await restateQuery<{ id: string; status: string; last_failure_error_code: string | null }>(
-    `SELECT id, status, last_failure_error_code FROM sys_invocation WHERE target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${task.id}'`
+  // Restate: one design run for the task, finished; nothing paused; no journal mismatch. A legacy task
+  // is designed by TaskWorkflow; a task RequestLifecycle owns by its DesignRun (ADR-034, ADR-059).
+  const inv = await restateQuery<{ id: string; status: string; target_service_name: string }>(
+    `SELECT id, status, target_service_name FROM sys_invocation WHERE (target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${task.id}')
+       OR (target_service_name = 'DesignRun' AND target_service_key = 'dr-${task.id}')`
   );
-  add('one TaskWorkflow invocation, completed', inv.length === 1 && inv[0].status === 'completed', JSON.stringify(inv.map((i) => i.status)));
+  add('one design run (TaskWorkflow or DesignRun), completed', inv.length === 1 && inv[0].status === 'completed', JSON.stringify(inv.map((i) => `${i.target_service_name}:${i.status}`)));
   const [paused] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE status = 'paused'`);
   add('no paused invocation', Number(paused?.n ?? 0) === 0, `paused=${paused?.n ?? 0}`);
   const [rt16] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE last_failure_error_code = 'RT0016'`);
@@ -400,7 +434,7 @@ export async function draftOf(chat: string, timeoutMs = 240_000): Promise<string
     if (outcome && outcome !== 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW') {
       throw new RequestEndedError(`task ${task.id}: the design run ended as ${outcome}, so there is no draft to approve`);
     }
-    return (await sentTo(chat)).some(isDraft) && (await taskState(task.id)) === 'human_review';
+    return (await draftShown(chat, task.id)) && (await taskState(task.id)) === 'human_review';
   }, timeoutMs, 2000);
   return task.id;
 }

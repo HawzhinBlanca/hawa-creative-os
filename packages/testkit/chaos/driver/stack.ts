@@ -177,6 +177,20 @@ export function logs(service: Service, tail = 200): string {
   return run('docker', ['logs', '--tail', String(tail), containerOf(service)], { allowFail: true }).stdout + run('docker', ['logs', '--tail', String(tail), containerOf(service)], { allowFail: true }).stderr;
 }
 
+/**
+ * Each chaos container's state (running, exit code, OOM kill, when it finished): recorded when a
+ * scenario loses the stack, so a run that stops answering says which container went and how.
+ */
+export function stackState(): string {
+  const res = run('docker', ['ps', '-a', '--filter', `label=com.docker.compose.project=${PROJECT}`, '--format', '{{.Names}}'], { allowFail: true });
+  const names = res.stdout.split('\n').map((n) => n.trim()).filter((n) => n.startsWith(`${PROJECT}-`));
+  if (!names.length) return 'no hawa-chaos containers exist';
+  return names.map((name) => {
+    const state = run('docker', ['inspect', '-f', '{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}', name], { allowFail: true });
+    return `${name}: ${state.stdout.trim() || state.stderr.trim()}`;
+  }).join('; ');
+}
+
 /** Memory in use per chaos container, in MiB, from one `docker stats` sample. */
 export function memory(): Record<string, number> {
   const res = run('docker', ['stats', '--no-stream', '--format', '{{.Name}}\t{{.MemUsage}}'], { allowFail: true });
@@ -237,6 +251,8 @@ export const fakes = {
   file: (file: Record<string, unknown>) => call('/__fakes/telegram/files', { body: file }),
   sent: () => call('/__fakes/telegram/sent').then((r) => r.json.sent as any[]),
   polls: () => call('/__fakes/telegram/polls').then((r) => r.json),
+  /** Bot API calls as they arrived (before any delay or fault answered them); getUpdates left out. */
+  telegramCalls: () => call('/__fakes/telegram/calls').then((r) => r.json.calls as Array<{ method: string; at: string; chat?: string | null }>),
   canvaFault: (fault: Record<string, unknown>) => call('/__fakes/canva/faults', { body: fault }),
   driveFiles: () => call('/__fakes/drive/files').then((r) => r.json.files as any[]),
   googleDelay: (delay: { path: string; delayMs: number; n?: number }) => call('/__fakes/google/faults', { body: delay }),

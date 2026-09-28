@@ -242,12 +242,14 @@ due, the fake Telegram quiet for 5 s) and then checks the invariants that apply 
 - each message, photo and file reaches the requester once (a 429 or 5xx answer was not shown); an
   uncertain send has exactly one office alert;
 - no paid model call twice (classifier allowance configurable); one Canva import per task;
-- one `TaskWorkflow` invocation, completed; nothing paused; no `RT0016`.
+- one design run, completed (`TaskWorkflow` for a legacy task, `DesignRun` for a task RequestLifecycle
+  owns); nothing paused; no `RT0016`. The office's "ready for office review in Hawa Desk" notice of a
+  lifecycle draft (ADR-065) is not counted as an alert.
 
 | Name | What |
 |---|---|
 | R1.0 | happy path, no faults |
-| R1.K0 | Core killed while the intake classifier (a paid call, slowed to 4 s) is answering; classifier allowance 2 |
+| R1.K0 | Core killed while intake acknowledges the brief (the `sendMessage` slowed to 4 s), after the task was committed and before the offset was stored; the update is polled again. Until 2026-09-28 this killed Core during the intake classifier's paid call, which intake no longer makes for an unscoped text (82b28988: local classification without a client egress decision) |
 | R1.K1 | worker killed at `worker.outbox.after-claim` (task.created) |
 | R1.K2 | worker killed at `worker.dispatch.after-submit` |
 | R1.K3 | worker killed after `canva-create-draft` (planner and import done) |
@@ -262,7 +264,7 @@ due, the fake Telegram quiet for 5 s) and then checks the invariants that apply 
 | R1.K12 | worker killed at `worker.sender.after-telegram` for the approved file (one uncertain send expected) |
 | R1.K13 | Telegram takes the approved file and the answer is lost (one uncertain send expected) |
 | R1.K14 | Core killed in the middle of a Deliver request (the fake Drive upload slowed to 8 s); Deliver pressed again once |
-| R1.K15 | Postgres killed while the worker is held at `worker.sender.after-telegram` for the approved file |
+| R1.K15 | Postgres killed while the worker is held at `worker.sender.after-telegram` for the approved file; since 6407deb6 (ADR-045) the sender retries its `sent` mark for about 15 s, so the send ends `sent`, with no uncertain send and no office alert |
 | R1.D1 | deploy mid-request: the design is held on blue, green is started and registered (`restate-bluegreen.ts register green`), the design finishes, `finish-drains` must delete blue; the invocation must stay pinned to blue |
 | R4 | two chats: a 19.9 MB picture whose download takes 30 s in chat A; chat B's text must be answered in under 5 s |
 
@@ -279,14 +281,19 @@ invocation of the chat completed; the stored offset past the update; nothing dea
 | R1.S1.K3 | Postgres killed while the poller is held at `worker.poller.after-enqueue` (the offset cannot be stored, so the update is sent again with the same key) |
 | R1.S2.K4 | Core killed at `core.intake.after-decision` |
 | R1.S2.K5 | worker killed while Core is held at `core.intake.after-decision` |
-| R1.S2.K5b | worker killed while the intake classifier (slowed to 4 s) answers; classifier allowance 2 |
+| R1.S2.K5b | worker killed while Core's intake acknowledges the update (the `sendMessage` slowed to 4 s); until 2026-09-28 during the classifier's paid call, which no longer happens (see R1.K0) |
 | R1.DUP | the same update handed to `ChatInbox` again, with the poller's key and then with another: one task, nothing new in the chat |
 
 Not yet: R1 kill points that need later Phase 2 code (`RequestLifecycle`: R1 S3 onwards); the design's
 **Slice 2.2 (the Delivery workflow and TelegramSender).** These use chats 9300001 to 9300012, which
 `docker-compose.chaos.yml` lists in `HAWA_LIFECYCLE_CHATS`, so Deliver hands the task to the Restate
 `Delivery` workflow instead of Core's own delivery. Each request pins the PNG and the PPTX (two files),
-and Deliver is pressed once. On top of the checks above: both files archived once each and shown to the
+and Deliver is pressed once. They run only with `--poller worker`: since ADR-059 (99eb6b04) a task
+claims the Restate executor only when RequestLifecycle opens it, which only ChatInbox reaches; with Core
+polling (production mode) a flagged chat's brief is a Core-pinned legacy task (ADR-052) that Core
+delivers itself. The driver therefore waits for the request to be `in_review` (the lifecycle draft
+notice has no requester buttons) and `approved` before Deliver, and sends each Desk action with its
+UUID `Idempotency-Key`, as request-owned delivery requires. On top of the checks above: both files archived once each and shown to the
 requester once each, the publication `executor = 'restate'` with every started run reported back, no
 `notify.published` command, every `Delivery` invocation completed.
 

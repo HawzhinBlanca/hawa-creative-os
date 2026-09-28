@@ -81,7 +81,8 @@ export class FakeTelegram {
   private files = new Map<string, FakeFile>();
   readonly sent: SentRecord[] = [];
   readonly polls: PollRecord[] = [];
-  readonly calls: Array<{ method: string; at: string }> = [];
+  /** Every Bot API call as it arrives, before a fault or delay answers it (`chat` once its fields are read). */
+  readonly calls: Array<{ method: string; at: string; chat?: string | null }> = [];
 
   reset(): void {
     this.updates = [];
@@ -195,9 +196,11 @@ export class FakeTelegram {
     const m = /^\/bot[^/]+\/([A-Za-z]+)$/.exec(path);
     if (!m) return sendJson(res, 404, { ok: false, error_code: 404, description: 'Not Found' });
     const method = m[1];
-    this.calls.push({ method, at: new Date().toISOString() });
+    const call: { method: string; at: string; chat?: string | null } = { method, at: new Date().toISOString() };
+    this.calls.push(call);
     const { fields, file: upload } = await this.params(req, query);
     const chat = fields.chat_id !== undefined ? String(fields.chat_id) : null;
+    call.chat = chat;
     const fault = this.takeFault(method, chat);
 
     if (fault?.kind === 'delay') await sleep(fault.delayMs ?? 1000);
