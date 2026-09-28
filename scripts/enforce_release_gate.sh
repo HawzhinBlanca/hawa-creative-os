@@ -47,16 +47,22 @@ echo "==========================================================================
 
 if [ "$TEST_REFUSAL" -eq 1 ]; then
   echo "[REFUSAL DRILL] Testing Gate Refusal under corrupted release manifest..."
-  TMP_MANIFEST="${ROOT_DIR}/RELEASE_MANIFEST.corrupted.json"
-  cp "${ROOT_DIR}/RELEASE_MANIFEST.json" "${TMP_MANIFEST}"
-  
-  # Corrupt the manifest by flipping a mandatory flag to an unapproved state
-  sed -i '' 's/"DESIGN_PIPELINE_V3": "off"/"DESIGN_PIPELINE_V3": "on"/' "${TMP_MANIFEST}"
-  
+  # Outside the tree, removed on any exit: a copy in the repository root was left behind whenever
+  # this drill failed part-way, which it always did on Linux (BSD-only `sed -i ''`).
+  TMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "${TMP_DIR}"' EXIT
+  TMP_MANIFEST="${TMP_DIR}/RELEASE_MANIFEST.corrupted.json"
+
+  # Corrupt the manifest by flipping a mandatory flag to an unapproved state (portable: no sed -i)
+  sed 's/"DESIGN_PIPELINE_V3": "off"/"DESIGN_PIPELINE_V3": "on"/' "${ROOT_DIR}/RELEASE_MANIFEST.json" > "${TMP_MANIFEST}"
+  if cmp -s "${ROOT_DIR}/RELEASE_MANIFEST.json" "${TMP_MANIFEST}"; then
+    echo "[REFUSAL DRILL FAILED] Could not corrupt the manifest: DESIGN_PIPELINE_V3 \"off\" not found."
+    exit 1
+  fi
+
   REFUSAL_OUTPUT=""
   REFUSAL_EXIT=0
   REFUSAL_OUTPUT=$(pnpm tsx "${ROOT_DIR}/scripts/verify_release_manifest.ts" "${TMP_MANIFEST}" 2>&1) || REFUSAL_EXIT=$?
-  rm -f "${TMP_MANIFEST}"
   
   if [ "$REFUSAL_EXIT" -ne 0 ] && echo "$REFUSAL_OUTPUT" | grep -q "DESIGN_PIPELINE_V3 flag must be 'off'"; then
     echo "[REFUSAL DRILL PASSED] Gate strictly refused corrupted candidate (exit code: ${REFUSAL_EXIT}):"

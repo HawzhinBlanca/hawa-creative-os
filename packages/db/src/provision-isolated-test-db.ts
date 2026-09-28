@@ -11,6 +11,10 @@
  *   pnpm test:db               start the server if needed, create missing databases
  *   pnpm test:db --recreate    drop and rebuild both databases
  *   pnpm test:db --print-env   print the four .env.test lines (they contain the test passwords)
+ *   pnpm test:db --external-server   provision a server already listening on 127.0.0.1:55432 that
+ *                              this script did not start (CI's service container); no Docker. With
+ *                              HAWA_TEST_POSTGRES_PASSWORD and HAWA_TEST_APP_PASSWORD in the
+ *                              environment, no credentials file is read or written.
  *
  * The credentials are generated on first use into ~/.hawa/test-postgres.env (mode 0600), shared by
  * every checkout and worktree on this machine, and are used by nothing but this server; no
@@ -55,8 +59,13 @@ interface Credentials {
   appPassword: string;
 }
 
-/** Read the machine's test-server credentials, generating them on first use. */
+/**
+ * Read the machine's test-server credentials, generating them on first use. CI, which starts the
+ * server as a service container before any step runs, passes the two passwords in the environment.
+ */
 function loadOrCreateCredentials(): Credentials {
+  const fromEnv = { ownerPassword: process.env.HAWA_TEST_POSTGRES_PASSWORD, appPassword: process.env.HAWA_TEST_APP_PASSWORD };
+  if (fromEnv.ownerPassword && fromEnv.appPassword) return fromEnv as Credentials;
   if (!existsSync(CREDENTIALS_FILE)) {
     mkdirSync(path.dirname(CREDENTIALS_FILE), { recursive: true, mode: 0o700 });
     const secret = () => randomBytes(24).toString('base64url');
@@ -127,6 +136,19 @@ ALTER ROLE ${APP_ROLE} WITH LOGIN PASSWORD '${credentials.appPassword}';
   );
 }
 
+/** syncRoles for a server this script did not start (CI's service container): over TCP as the owner. */
+async function syncRolesOverTcp(credentials: Credentials): Promise<void> {
+  const client = new pg.Client({ connectionString: testUrl(OWNER_ROLE, credentials.ownerPassword, 'postgres'), connectionTimeoutMillis: 10000 });
+  await client.connect();
+  try {
+    const { rowCount } = await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [APP_ROLE]);
+    const password = client.escapeLiteral(credentials.appPassword);
+    await client.query(`${rowCount ? 'ALTER' : 'CREATE'} ROLE ${APP_ROLE} WITH LOGIN PASSWORD ${password}`);
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
 async function provisionDatabase(root: string, credentials: Credentials, name: (typeof DATABASES)[number], recreate: boolean) {
   const maint = new pg.Client({ connectionString: testUrl(OWNER_ROLE, credentials.ownerPassword, 'postgres'), connectionTimeoutMillis: 10000 });
   await maint.connect();
@@ -187,8 +209,14 @@ async function main() {
     return;
   }
   const recreate = process.argv.includes('--recreate');
-  startServer(root);
-  syncRoles(credentials);
+  // --external-server: the server on 127.0.0.1:55432 is already running and was not started from
+  // COMPOSE_FILE (CI's service container). Docker is neither needed nor used.
+  if (process.argv.includes('--external-server')) {
+    await syncRolesOverTcp(credentials);
+  } else {
+    startServer(root);
+    syncRoles(credentials);
+  }
   for (const name of DATABASES) await provisionDatabase(root, credentials, name, recreate);
   await applyFixtures(root, credentials);
   console.log(`ready: ${DATABASES.join(', ')} on ${TEST_POSTGRES_CONTAINER} (127.0.0.1:${TEST_POSTGRES_PORT})`);

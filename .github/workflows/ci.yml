@@ -1,10 +1,15 @@
 name: Hawa Creative OS — Continuous Assurance CI/CD
 
+# Every job here must be able to go red. Until 2026-09-27 no step of this workflow had ever run
+# (60 of 60 runs died before a runner was assigned), and the test job had no database, no Verdana
+# and no rsvg, so it could not have passed on a clean runner either: 146 of 430 test files failed
+# on a fresh Linux checkout. See output/audits/2026-09-27-hawdesign-audit/REPORT.md.
+
 on:
   push:
-    branches: [master, main, studio-v2]
+    branches: [master, main, studio-v2, codex/research-grade-design-system]
   pull_request:
-    branches: [master, main, studio-v2]
+    branches: [master, main, studio-v2, codex/research-grade-design-system]
   workflow_dispatch:
 
 concurrency:
@@ -13,18 +18,16 @@ concurrency:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   blueprint-and-security:
     name: Blueprint & Security Hygiene (Gates A, B)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
@@ -34,105 +37,118 @@ jobs:
       - name: Gate A — Master Blueprint Validation
         run: python3 scripts/validate_pack.py
 
-      - name: Gate B — Zero Secret Leakage Scan
+      - name: Gate B — Secret scan of the tracked tree (not history)
         run: |
           python3 infra/security/security_scan.py --self-test
           python3 infra/security/security_scan.py
 
   typecheck-and-tests:
-    name: Typecheck & Test Suite (Gates C, D, E, F, G, H, I, K, L, M, N, O, P)
+    name: Typecheck, Lint & Test Suite on PostgreSQL (Gates C–P)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Throwaway credentials for the service container below, which exists only for this job on
+      # this runner. The same two values are in services.postgres (a service cannot read env).
+      HAWA_TEST_POSTGRES_PASSWORD: ci-throwaway-owner
+      HAWA_TEST_APP_PASSWORD: ci-throwaway-app
+    services:
+      postgres:
+        # The production image (infra/docker/docker-compose.prod.yml), on the test port the suite's
+        # guard accepts (127.0.0.1:55432; production's 54332 is refused).
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: hawa_owner
+          POSTGRES_PASSWORD: ci-throwaway-owner
+          POSTGRES_DB: postgres
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U hawa_owner -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 10
 
-      - name: Get pnpm store directory
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm dependencies
-        uses: actions/cache@v4
+      - uses: actions/setup-node@v4
         with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+          node-version: 22
+          cache: pnpm
 
       - name: Install monorepo dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Gate C — Strict TypeScript Build (14 packages)
+      # Also the Pango/Cairo headers `pnpm test` needs to compile the shared text-measurement helper
+      # (packages/creative/native, ADR-118); the runner's own Pango runtime draws the text.
+      - name: Install render dependencies (rsvg, Verdana, ImageMagick, Pango headers)
+        run: bash scripts/ci/install_render_deps.sh
+
+      - name: Gate C — Strict TypeScript build (builds every package's dist/)
         run: pnpm typecheck
 
-      - name: Native text measurement and renderer dependencies
-        run: sudo apt-get update && sudo apt-get install -y libpango1.0-dev pkg-config build-essential librsvg2-bin
+      - name: Lint (scripts typecheck, any-ratchet, provider egress)
+        run: pnpm lint
 
-      - name: Gates D-P — Full Vitest Suite
-        run: pnpm test
+      - name: Provision the test databases (hawa_test, hawa_repair)
+        run: |
+          pnpm test:db --external-server
+          pnpm -s test:db --print-env >> "$GITHUB_ENV"
 
-      - name: Gate H — Canonical Desk PWA Production Build
+      - name: Gate J — Live schema parity against the provisioned database
+        run: DATABASE_URL="$TEST_DATABASE_OWNER_URL" pnpm db:check
+
+      - name: Gate H — Desk PWA production build (a test checks its bundle size)
         run: pnpm --filter @hawa/desk build
 
-  database-and-evals:
-    name: Schema Integrity & Model Tournament (Gates J, Evals)
+      - name: Gates D–P — Full Vitest suite
+        run: |
+          test -n "$TEST_DATABASE_URL" -a -n "$HAWA_ISOLATED_TEST_DB" || { echo "database env missing: the DB suites would skip"; exit 1; }
+          pnpm test
+
+      - name: The suite left the tree clean
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Tests wrote into the repository:"; git status --porcelain; exit 1
+          fi
+
+  evals-and-supply-chain:
+    name: Eval Harness, SBOM & Container Topology (Gates Q, S)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Gate J — Database Schema, RLS & Migration DDL
-        run: pnpm db:check
-
-      - name: Autonomous Model Tournament Run
+      # This runs against the fake gateway and its own expected answers, so it cannot fail on
+      # model quality (audit LLM-01/02). It is kept as a smoke test that the harness still runs.
+      - name: Eval harness smoke (fake gateway; not a quality gate)
         run: pnpm eval
 
-  supply-chain-and-containers:
-    name: Supply Chain SBOM & Container Topology (Gates Q, S)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Gate Q — CycloneDX SBOM from the lockfile
+        run: pnpm dlx pnpm@11 sbom --sbom-format cyclonedx --lockfile-only > "$RUNNER_TEMP/sbom.json"
 
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/upload-artifact@v4
         with:
-          node-version: 22
+          name: sbom
+          path: ${{ runner.temp }}/sbom.json
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Gate Q — CycloneDX 1.7 SBOM Generation
-        run: pnpm run sbom
-
-      - name: Gate S — Validate Docker Compose Topology
+      - name: Gate S — Validate Docker Compose topology
         run: |
+          cp infra/docker/.env.production.example infra/docker/.env.production
           docker compose -f infra/docker/docker-compose.prod.yml --env-file infra/docker/.env.example config --quiet
           echo "Docker Compose declarative topology valid."
