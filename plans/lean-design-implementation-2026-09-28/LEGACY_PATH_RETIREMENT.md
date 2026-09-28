@@ -172,3 +172,60 @@ reach it (ADR-135). Stage 2 moves or deletes them with the stage.
 `channel-kill-switch-persistence` (all under `apps/core/test/`), plus
 `apps/desk/test/status-honesty.test.ts`, `packages/integrations/test/telegram-live-ingress.test.ts`
 and `packages/testkit/test/nginx-internal-boundary.test.ts`.
+
+## 6. Stage 2: what is deleted, and when
+
+Stage 2 merges only when `GET /v1/operations/legacy-path` answers `stage2Ready: true` on production
+(no open legacy Telegram task, no Core requester send pending, no legacy Delivery run in flight).
+Until then every piece below still finishes real requests. The office has to finish, reject or cancel
+the 111 open legacy tasks first; almost all are stale `received` rows.
+
+Separate commits on the same branch, after stage 1:
+
+- **2a, the Core poller (d).** Core's poll loop and its update handler (`app.ts`), the
+  `enableTelegramPolling` option, `createPolledUpdateHandler` (the dead-letter helpers
+  `parkTelegramUpdate`/`PARKED_UPDATE_NOTICE`, which the worker's `/park` uses, stay), the "Poll now"
+  and webhook-registration routes and their Desk controls, the bridge's getUpdates machinery in
+  `@hawa/integrations`, `PostgresTelegramPollState.recordFailure`, and `deploy.sh`'s hold, release and
+  exit-note functions for Core's poller value (the ADR-135 refusal stays). Tests of those pieces go
+  with them; the worker poller's own tests cover polling, offsets, kill switch and dead letters.
+  Strictly this commit does not depend on the gate (Core has not polled since stage 1); it is kept
+  in stage 2 so a stage 1 deploy can still be compared against a Core that has the code.
+- **2b, the Delivery workflow for non-lifecycle tasks (b).** `startWorkflowDelivery`,
+  `recordFinishedRun`, `finishWorkflowDelivery`, `DELIVERY_OWNED_BY_CORE`, the publish route's
+  restate block, `POST /v1/internal/tasks/:id/delivery-finished`, the prepare route's
+  `requestId === taskId` branch and the worker's `reportTo: 'core'` branch. A non-lifecycle task can
+  then only be delivered by Core; one pinned `restate` (none exists in production, and the gate
+  counts any open one) would be refused. Tests: `apps/core/test/delivery-workflow.test.ts` keeps
+  the Core-pinned cases and the refusal; `apps/worker/test/lifecycle-delivery.test.ts` runs its cases
+  with `reportTo: 'lifecycle'`.
+
+Not cleanly separable, therefore a written plan only:
+
+- **2c, the legacy intake's finishing readers (b).** `telegram-intake/{changes,requester-actions,questions,media}.ts`,
+  most of `replies.ts`, the route's new-request stage, `legacy-telegram-routing.ts`, the finish-only
+  scope and the `persistChatIntake` backstop. They share one route with what the lifecycle path still
+  delegates to it: the answers to greetings and questions, standing rules said in chat
+  (`telegram-rules-intake.ts`, `standing-rules-chat.ts`), the "Designs are approved in Hawa Desk" answer
+  to `/approve` and to office buttons, edited-message and group-chat handling. Order: (1) move those
+  answers into a small lifecycle-side module called from `lifecycle-internal.routes.ts` where it now
+  calls `legacyFinish`, answering through ChatInbox notices instead of the Core bridge; (2) route
+  callbacks and replies naming a legacy task to `STALE_REQUEST_REPLY`/`new-brief-required`;
+  (3) delete the readers, the route's Telegram task creation (WhatsApp keeps `ingestChatCampaignTask`),
+  and the ~30 Core test files that build legacy tasks through `/webhooks/telegram` (section 5), moving
+  what they prove about copy extraction and client routing onto `prepareChatCampaignDraft`, which the
+  lifecycle open uses. The bilingual split (one graphic per language) must be ported to the lifecycle
+  open before step 3, or it is lost.
+- **2d, Core's requester sends for legacy tasks (b).** The `notify.published` enqueue in
+  `deliverOmnichannel` (both sites), `coreQueuedFiles`, the worker's `notify.published` handler and
+  `deliveredByWorkflow`, and the Telegram in-chat approve (`rq:ok`, `/approve`) publishing. Once no
+  legacy Telegram task is open, `resolveRequesterChat` finds no chat for any task Core delivers (Desk,
+  WhatsApp and webhook tasks have none), so the enqueue is dead; but it sits inside Core's shared
+  publish transaction and the chat-only fallback of `failBeforeDrive`, and six worker outbox test files
+  exercise it, so it goes after 2c with its own review. A `notify.published` command that ended
+  `failed` cannot be redriven afterwards (the endpoint reports `failedRequesterSends`).
+
+What stays after all of stage 2: TaskWorkflow and the outbox's `task.created` dispatch (WhatsApp,
+webhook and redriven tasks), `runCanvaDraft` (DesignRun uses it), Core's own Drive/Sheets delivery for
+Desk and WhatsApp tasks, the pin column (history), `parkTelegramUpdate`, the classifier,
+`prepareChatCampaignDraft` and `persistChatIntake`.
