@@ -149,6 +149,22 @@ async function syncRolesOverTcp(credentials: Credentials): Promise<void> {
   }
 }
 
+/**
+ * The test server, running and with its roles matching the credentials file (or CI's environment),
+ * and an owner URL builder for any database on it. Used by the pre-deploy dump check
+ * (predeploy-dump-check.ts), which restores production's dump into a scratch database here.
+ */
+export async function readyTestServer(root: string): Promise<{ ownerUrl: (database: string) => string }> {
+  const credentials = loadOrCreateCredentials();
+  if (process.env.HAWA_TEST_POSTGRES_PASSWORD && process.env.HAWA_TEST_APP_PASSWORD) {
+    await syncRolesOverTcp(credentials);
+  } else {
+    startServer(root);
+    syncRoles(credentials);
+  }
+  return { ownerUrl: (database: string) => testUrl(OWNER_ROLE, credentials.ownerPassword, database) };
+}
+
 async function provisionDatabase(root: string, credentials: Credentials, name: (typeof DATABASES)[number], recreate: boolean) {
   const maint = new pg.Client({ connectionString: testUrl(OWNER_ROLE, credentials.ownerPassword, 'postgres'), connectionTimeoutMillis: 10000 });
   await maint.connect();

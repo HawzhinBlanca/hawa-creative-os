@@ -86,7 +86,7 @@ fi
 # Stage 1: Exact TypeScript Typecheck
 # ------------------------------------------------------------------------------
 echo ""
-echo "--> [Stage 1/7] Running static typecheck across all workspace packages..."
+echo "--> [Stage 1/8] Running static typecheck across all workspace packages..."
 T_START=$(date +%s)
 pnpm typecheck
 T_END=$(date +%s)
@@ -97,7 +97,7 @@ echo "    [PASS] Typecheck completed cleanly."
 # Stage 2: Database Schema & Migration Consistency
 # ------------------------------------------------------------------------------
 echo ""
-echo "--> [Stage 2/7] Checking database schema & migration integrity..."
+echo "--> [Stage 2/8] Checking database schema & migration integrity..."
 T_START=$(date +%s)
 pnpm run db:check
 T_END=$(date +%s)
@@ -105,10 +105,44 @@ STAGE_STATUS+=("db_check:PASS ($((T_END - T_START))s)")
 echo "    [PASS] Database migrations in strict chronological order."
 
 # ------------------------------------------------------------------------------
-# Stage 3: Security & Secret Leakage Scanner
+# Stage 3: Pending migrations on production's newest dump (ADR-137)
+# ------------------------------------------------------------------------------
+# On 2026-09-28 a release passed every other stage and still refused every paid call in production:
+# its migrations treated 79 historical records as "history incomplete" (ADR-133). No test database
+# holds production-shaped history. This restores the newest production dump (deploy.sh's
+# predeploy_*.dump or the nightly hawa_*.dump, both in infra/backup/snapshots of the checkout the
+# gate runs from) into a scratch database on the TEST server, applies this candidate's migrations
+# with deploy's upgrader, runs read-only invariants (spending history and admission for every tenant
+# and client, the runtime role under RLS, NOT VALID constraints, schema parity with a fresh build) and
+# drops the scratch databases. About 10 s. Skipped, with a message, only when no dump exists.
+echo ""
+echo "--> [Stage 3/8] Checking pending migrations against production's newest dump..."
+T_START=$(date +%s)
+PREDEPLOY_LOG="${OUTPUT_DIR}/PREDEPLOY_DUMP_CHECK.log"
+PREDEPLOY_EXIT=0
+HAWA_PREDEPLOY_SNAPSHOTS="${HAWA_PREDEPLOY_SNAPSHOTS:-${ROOT_DIR}/infra/backup/snapshots}" \
+  pnpm exec tsx "${ROOT_DIR}/packages/db/src/predeploy-dump-check.ts" --json "${OUTPUT_DIR}/PREDEPLOY_DUMP_CHECK.json" \
+  > "${PREDEPLOY_LOG}" 2>&1 || PREDEPLOY_EXIT=$?
+T_END=$(date +%s)
+if [ "$PREDEPLOY_EXIT" -eq 3 ]; then
+  echo "    [SKIP] No production dump in ${HAWA_PREDEPLOY_SNAPSHOTS:-${ROOT_DIR}/infra/backup/snapshots}: the pending migrations were NOT checked against production's data."
+  STAGE_STATUS+=("predeploy_dump_check:SKIPPED (no production dump)")
+  PREDEPLOY_STAGE="skipped, no production dump"
+elif [ "$PREDEPLOY_EXIT" -ne 0 ]; then
+  echo "FATAL: the pending migrations break an invariant on production's newest dump. See ${PREDEPLOY_LOG}"
+  grep -vE '^ Container ' "${PREDEPLOY_LOG}" | tail -n 30
+  exit 1
+else
+  STAGE_STATUS+=("predeploy_dump_check:PASS ($((T_END - T_START))s)")
+  PREDEPLOY_STAGE="passed"
+  echo "    [PASS] Pending migrations hold every invariant on production's newest dump."
+fi
+
+# ------------------------------------------------------------------------------
+# Stage 4: Security & Secret Leakage Scanner
 # ------------------------------------------------------------------------------
 echo ""
-echo "--> [Stage 3/7] Running zero-leak secret scanner & self-test..."
+echo "--> [Stage 4/8] Running zero-leak secret scanner & self-test..."
 T_START=$(date +%s)
 python3 "${ROOT_DIR}/infra/security/security_scan.py" --self-test
 python3 "${ROOT_DIR}/infra/security/security_scan.py"
@@ -117,15 +151,15 @@ STAGE_STATUS+=("security_scan:PASS ($((T_END - T_START))s)")
 echo "    [PASS] Security scanner and self-test passed with 0 findings."
 
 # ------------------------------------------------------------------------------
-# Stage 4: Knowledge Pack & Blueprint Validation
+# Stage 5: Knowledge Pack & Blueprint Validation
 # ------------------------------------------------------------------------------
 echo ""
-echo "--> [Stage 4/7] Validating knowledge pack and blueprint checksums..."
+echo "--> [Stage 5/8] Validating knowledge pack and blueprint checksums..."
 T_START=$(date +%s)
 # Verify the committed manifest is current; do not quietly make it current.
 #
 # This stage used to run refresh_manifest.py, which rewrites MANIFEST.json and SHA256SUMS.txt in
-# place. Stage 5 then refuses to certify a tree with uncommitted modifications — so the gate dirtied
+# place. Stage 6 then refuses to certify a tree with uncommitted modifications — so the gate dirtied
 # the tree it was about to demand be clean, and passed only when the manifest happened to be in sync
 # already. Its verdict therefore depended on whether someone had committed a manifest moments
 # before, not on the state of the release. Both "all seven stages passed" runs on 2026-09-21 were
@@ -137,7 +171,7 @@ T_START=$(date +%s)
 #
 # The comparison skips generated manifests' own entries to avoid circular
 # checksums. The source-candidate release manifest is independently verified
-# against source hashes and the recorded commit in Stage 5.
+# against source hashes and the recorded commit in Stage 6.
 GATE_SUMS_BEFORE="$(grep -vE '  (MANIFEST|RELEASE_MANIFEST)\.json$|  SHA256SUMS\.txt$' "${ROOT_DIR}/SHA256SUMS.txt" | sort)"
 python3 "${ROOT_DIR}/scripts/refresh_manifest.py"
 GATE_SUMS_AFTER="$(grep -vE '  (MANIFEST|RELEASE_MANIFEST)\.json$|  SHA256SUMS\.txt$' "${ROOT_DIR}/SHA256SUMS.txt" | sort)"
@@ -155,10 +189,10 @@ STAGE_STATUS+=("pack_validation:PASS ($((T_END - T_START))s)")
 echo "    [PASS] Pack validation completed."
 
 # ------------------------------------------------------------------------------
-# Stage 5: Cryptographic Release Manifest Verification
+# Stage 6: Cryptographic Release Manifest Verification
 # ------------------------------------------------------------------------------
 echo ""
-echo "--> [Stage 5/7] Verifying source-candidate manifest invariants..."
+echo "--> [Stage 6/8] Verifying source-candidate manifest invariants..."
 T_START=$(date +%s)
 pnpm tsx "${ROOT_DIR}/scripts/verify_release_manifest.ts"
 T_END=$(date +%s)
@@ -166,10 +200,10 @@ STAGE_STATUS+=("release_manifest:PASS ($((T_END - T_START))s)")
 echo "    [PASS] Source-candidate checksum and topology verified."
 
 # ------------------------------------------------------------------------------
-# Stage 6: Database Isolation Verification
+# Stage 7: Database Isolation Verification
 # ------------------------------------------------------------------------------
 echo ""
-echo "--> [Stage 6/7] Verifying production database isolation guard..."
+echo "--> [Stage 7/8] Verifying production database isolation guard..."
 T_START=$(date +%s)
 PROD_PORT="54332"
 TEST_PORT="55432"
@@ -209,17 +243,17 @@ T_END=$(date +%s)
 STAGE_STATUS+=("db_isolation:PASS ($((T_END - T_START))s)")
 
 # ------------------------------------------------------------------------------
-# Stage 7: Full Monorepo Test Suite Execution
+# Stage 8: Full Monorepo Test Suite Execution
 # ------------------------------------------------------------------------------
 TOTAL_TESTS=0
 TOTAL_FILES=0
 if [ "$SKIP_TESTS" -eq 1 ]; then
   echo ""
-  echo "--> [Stage 7/7] SKIPPING test execution per --skip-tests flag."
+  echo "--> [Stage 8/8] SKIPPING test execution per --skip-tests flag."
   STAGE_STATUS+=("test_suite:SKIPPED")
 else
   echo ""
-  echo "--> [Stage 7/7] Executing full monorepo vitest suite (with isolated test DB)..."
+  echo "--> [Stage 8/8] Executing full monorepo vitest suite (with isolated test DB)..."
   T_START=$(date +%s)
   TEST_RUN_LOG="${OUTPUT_DIR}/FULL_TEST_SUITE_RUN.log"
   TEST_EXIT=0
@@ -306,11 +340,12 @@ cat <<EOF > "${EVIDENCE_FILE}"
   "verificationStages": [
     "Stage 1: TypeScript typecheck (pnpm typecheck)",
     "Stage 2: Database schema & migrations check (pnpm run db:check)",
-    "Stage 3: Security & secret scanner with self-test (security_scan.py)",
-    "Stage 4: Knowledge pack validation (validate_pack.py)",
-    "Stage 5: Source-candidate manifest check (verify_release_manifest.ts)",
-    "Stage 6: Production DB & credential isolation guard",
-    "Stage 7: Full monorepo acceptance tests (${TOTAL_TESTS} passed, 0 failed)"
+    "Stage 3: Pending migrations on production's newest dump (predeploy-dump-check.ts): ${PREDEPLOY_STAGE}",
+    "Stage 4: Security & secret scanner with self-test (security_scan.py)",
+    "Stage 5: Knowledge pack validation (validate_pack.py)",
+    "Stage 6: Source-candidate manifest check (verify_release_manifest.ts)",
+    "Stage 7: Production DB & credential isolation guard",
+    "Stage 8: Full monorepo acceptance tests (${TOTAL_TESTS} passed, 0 failed)"
   ],
   "normativeGatesEvaluated": ${GATES_JSON},
   "admissionEvidence": "Current-candidate deployment, gate, and blinded human-quality evidence are not evaluated by pre-deployment checks; R27 admission remains open.",

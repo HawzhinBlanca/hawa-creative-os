@@ -1,0 +1,738 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "38b0503f",
+  "branch": "worktree-agent-aff34eaf5c073402e (from codex/research-grade-design-system at 38b0503f)",
+  "status": "CHAOS_AND_MIGRATIONS_CHECKED_ON_PRODUCTION_DATA_LOCALLY; GATE_STAGE_NOT_YET_RUN_BY_THE_RELEASE_GATE_FROM_THE_MAIN_CHECKOUT",
+  "adr": "137",
+  "migration": null,
+  "requirements": [
+    "NFR-013",
+    "FR-074",
+    "NFR-024"
+  ],
+  "why": "The 2026-09-28 release passed the full gate (chaos 17/19 core, 42/43 worker) and refused every paid call in production (ADR-133); no test or chaos database held production-shaped history.",
+  "data_handling": {
+    "dump": "predeploy_20260928T181301Z.dump",
+    "dump_bytes": 48680609,
+    "checksum": "verified",
+    "where_restored": [
+      "hawa-test-postgres scratch databases hawa_drill_predeploy_* (dropped on every exit; none left after the runs)",
+      "hawa-chaos chaos_postgres volume (removed by down -v at the start and end of every run)"
+    ],
+    "production_touched": false,
+    "row_values_recorded": false,
+    "restored_counts": {
+      "tenants": 1,
+      "clients": 8,
+      "client_dna_versions": 1,
+      "tasks": 1613,
+      "outbox_commands": 1628,
+      "design_studio_calls": 429,
+      "canva_design_plans": 109,
+      "users": 4
+    }
+  },
+  "predeploy_gate_stage": {
+    "command": "scripts/enforce_release_gate.sh stage 3 -> pnpm exec tsx packages/db/src/predeploy-dump-check.ts --json output/release-gate/PREDEPLOY_DUMP_CHECK.json",
+    "newest_dump_run": {
+      "dump": "predeploy_20260928T181301Z.dump",
+      "status": "passed",
+      "migrations_applied": [],
+      "ms": {
+        "checksum": 1156,
+        "restore": 15628,
+        "upgrade": 185,
+        "freshBuild": 1483,
+        "invariants": 1390,
+        "drop": 167
+      },
+      "wall_seconds_via_pnpm_exec": 21,
+      "invariants": [
+        {
+          "name": "budget-history",
+          "ok": true,
+          "detail": "no historyIncomplete scope in 9 tenant/client budget(s)"
+        },
+        {
+          "name": "admission",
+          "ok": true,
+          "detail": "99 zero-dollar admission(s) accepted"
+        },
+        {
+          "name": "app-role",
+          "ok": true,
+          "detail": "hawa_app reads tasks, clients and outbox under RLS for 1 tenant(s)"
+        },
+        {
+          "name": "constraints",
+          "ok": true,
+          "detail": "0 NOT VALID constraint(s), all hold on the data"
+        },
+        {
+          "name": "schema-parity",
+          "ok": true,
+          "detail": "0 missing, 0 different, 545 extra of 6261 object(s) a fresh build has"
+        }
+      ],
+      "counts": {
+        "tenants": 1,
+        "clients": 8,
+        "tasks": 1613,
+        "design_studio_calls": 429,
+        "canva_design_plans": 109,
+        "canva_planner_calls": 0,
+        "eval_model_calls": 0,
+        "paid_model_probe_calls": 0,
+        "outbox_commands": 1628,
+        "client_dna_versions": 1,
+        "admissions": 99,
+        "notValidConstraints": 0,
+        "schemaObjects": 6806,
+        "extra column-privilege": 244,
+        "extra privilege": 301
+      }
+    },
+    "replay_of_the_adr133_incident": {
+      "dump": "predeploy_20260928T135006Z.dump (taken before migrations 023..067 were deployed)",
+      "through_066": {
+        "status": "failed",
+        "budget_history": "11 daily spending scope(s) historyIncomplete",
+        "admission": "55 zero-dollar admission(s) refused (OFFICE_BUDGET_HISTORY_INCOMPLETE)"
+      },
+      "through_067": {
+        "status": "passed",
+        "budget_history": "no historyIncomplete scope in 5 budgets",
+        "admission": "55 accepted"
+      }
+    },
+    "skip_path": "no dump in HAWA_PREDEPLOY_SNAPSHOTS -> exit 3, the gate prints [SKIP] ... the pending migrations were NOT checked",
+    "schema_parity_note": "production holds 301 table privileges and 244 column privileges for hawa_app beyond a fresh build (reported, not failed); nothing missing or different",
+    "not_executed": "the full scripts/enforce_release_gate.sh was not run: it refuses a dirty tree and runs the whole suite; the stage was run alone as the gate calls it"
+  },
+  "egress_fence": {
+    "how": [
+      "Core and workers only on internal Docker networks (chaos, parser); provider hosts are aliases of the fakes; nothing else resolves or routes",
+      "verifyEgressFence() runs Node dns.lookup/net.connect inside core and worker-blue before any scenario; a seeded run refuses to start if one check fails",
+      "restored canva_connections (1), desk_sessions (11), OAuth/OIDC flows and integrations.config_encrypted are deleted/cleared before any app starts; the run refuses while any credential-shaped text/bytea/json column holds a value",
+      "provider keys and bot token are placeholders or throwaway values from .run/chaos.env; no production env file is read"
+    ],
+    "result": [
+      {
+        "container": "core",
+        "checks": 17,
+        "passed": 17,
+        "names": [
+          "provider api.telegram.org",
+          "provider api.openai.com",
+          "provider generativelanguage.googleapis.com",
+          "provider api.anthropic.com",
+          "provider api.canva.com",
+          "provider export-download.canva.com",
+          "provider document-export.canva.com",
+          "provider oauth2.googleapis.com",
+          "provider www.googleapis.com",
+          "provider sheets.googleapis.com",
+          "unfaked example.com",
+          "unfaked github.com",
+          "unfaked www.canva.com",
+          "unfaked drive.google.com",
+          "unfaked upload.googleapis.com",
+          "public 1.1.1.1:443",
+          "public 8.8.8.8:53"
+        ]
+      },
+      {
+        "container": "worker-blue",
+        "checks": 17,
+        "passed": 17,
+        "names": [
+          "provider api.telegram.org",
+          "provider api.openai.com",
+          "provider generativelanguage.googleapis.com",
+          "provider api.anthropic.com",
+          "provider api.canva.com",
+          "provider export-download.canva.com",
+          "provider document-export.canva.com",
+          "provider oauth2.googleapis.com",
+          "provider www.googleapis.com",
+          "provider sheets.googleapis.com",
+          "unfaked example.com",
+          "unfaked github.com",
+          "unfaked www.canva.com",
+          "unfaked drive.google.com",
+          "unfaked upload.googleapis.com",
+          "public 1.1.1.1:443",
+          "public 8.8.8.8:53"
+        ]
+      }
+    ],
+    "neutralised": {
+      "removed": {
+        "canva_connections": 1,
+        "canva_oauth_states": 0,
+        "desk_sessions": 11,
+        "office_oidc_flows": 0,
+        "integrations.config_encrypted": 0
+      },
+      "credentialColumns": 6,
+      "outboxDue": 0
+    }
+  },
+  "chaos_runs": [
+    {
+      "run": "worker poller, HAWA_LIFECYCLE_CHATS=* (production setting), seeded, first attempt",
+      "result": "10 passed, 33 failed",
+      "triage": "harness: 6 legacy-path scenarios (R1.K1, K2, K5, K12, K13 and K15) cannot run with every chat on the lifecycle. They waited 300 s for chaos points nothing reaches, or expected legacy completion. Also harness: R1.K14 deliver() waited for stage approved after the Delivery workflow had already delivered. External: at 19:09:28Z the shared project was taken down under the lock by scripts/load/run.ts from another checkout, which gave up after waiting 30 min and still ran its teardown. Every later scenario then failed with ECONNREFUSED 56090. That runner is fixed on this branch."
+    },
+    {
+      "run": "worker poller, HAWA_LIFECYCLE_CHATS=*, seeded, after harness fixes",
+      "total_seconds": 1234,
+      "peak_memory_mib": {
+        "hawa-chaos-core-1": 144,
+        "hawa-chaos-worker-blue-1": 116,
+        "hawa-chaos-postgres-1": 156,
+        "hawa-chaos-restate-1": 734,
+        "hawa-chaos-fakes-1": 150,
+        "hawa-chaos-worker-green-1": 108
+      },
+      "peak_total_mib": 1267,
+      "uncovered_model_calls": [],
+      "summary": "35 passed, 2 failed, 6 not applicable",
+      "scenarios": [
+        {
+          "scenario": "R1.0",
+          "result": "pass",
+          "seconds": 19,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K0",
+          "result": "pass",
+          "seconds": 29,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K3",
+          "result": "pass",
+          "seconds": 19,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K4",
+          "result": "pass",
+          "seconds": 15,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K6",
+          "result": "pass",
+          "seconds": 20,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K7",
+          "result": "pass",
+          "seconds": 29,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K8",
+          "result": "pass",
+          "seconds": 21,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K9",
+          "result": "pass",
+          "seconds": 20,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K10",
+          "result": "pass",
+          "seconds": 15,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K11",
+          "result": "pass",
+          "seconds": 23,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K14",
+          "result": "fail",
+          "seconds": 29,
+          "invariants": 15,
+          "failed": [
+            "a delivery cut off by a Core restart does not stay stuck in publishing: task publishing at the kill, publishing after the restart"
+          ]
+        },
+        {
+          "scenario": "R1.D1",
+          "result": "fail",
+          "seconds": 21,
+          "invariants": 17,
+          "failed": [
+            "the in-flight design finished on the blue deployment it started on: []"
+          ]
+        },
+        {
+          "scenario": "R1.W0",
+          "result": "pass",
+          "seconds": 38,
+          "invariants": 18
+        },
+        {
+          "scenario": "R1.S1.K1",
+          "result": "pass",
+          "seconds": 18,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.S1.K2",
+          "result": "pass",
+          "seconds": 17,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.S1.K3",
+          "result": "pass",
+          "seconds": 17,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.S2.K4",
+          "result": "pass",
+          "seconds": 18,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.S2.K5",
+          "result": "pass",
+          "seconds": 13,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.S2.K5b",
+          "result": "pass",
+          "seconds": 12,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.DUP",
+          "result": "pass",
+          "seconds": 11,
+          "invariants": 15
+        },
+        {
+          "scenario": "R1.S3.K1",
+          "result": "pass",
+          "seconds": 13,
+          "invariants": 7
+        },
+        {
+          "scenario": "R1.S3.PHOTO",
+          "result": "pass",
+          "seconds": 13,
+          "invariants": 7
+        },
+        {
+          "scenario": "R1.S3.REVISION_PHOTO",
+          "result": "pass",
+          "seconds": 18,
+          "invariants": 10
+        },
+        {
+          "scenario": "R1.S3.CAPTIONLESS_PHOTO",
+          "result": "pass",
+          "seconds": 19,
+          "invariants": 10
+        },
+        {
+          "scenario": "R1.S3.ALBUM",
+          "result": "pass",
+          "seconds": 21,
+          "invariants": 10
+        },
+        {
+          "scenario": "R1.S3.IMAGE_DOCUMENT",
+          "result": "pass",
+          "seconds": 18,
+          "invariants": 10
+        },
+        {
+          "scenario": "R1.S3.DOCUMENT_ALBUM",
+          "result": "pass",
+          "seconds": 21,
+          "invariants": 10
+        },
+        {
+          "scenario": "R1.S3.MEDIA",
+          "result": "pass",
+          "seconds": 6,
+          "invariants": 5
+        },
+        {
+          "scenario": "L2.0",
+          "result": "pass",
+          "seconds": 15,
+          "invariants": 18
+        },
+        {
+          "scenario": "L2.K14",
+          "result": "pass",
+          "seconds": 30,
+          "invariants": 18
+        },
+        {
+          "scenario": "L2.K15",
+          "result": "pass",
+          "seconds": 23,
+          "invariants": 17
+        },
+        {
+          "scenario": "L2.K16",
+          "result": "pass",
+          "seconds": 18,
+          "invariants": 17
+        },
+        {
+          "scenario": "L2.K17",
+          "result": "pass",
+          "seconds": 23,
+          "invariants": 17
+        },
+        {
+          "scenario": "L2.K18",
+          "result": "pass",
+          "seconds": 21,
+          "invariants": 17
+        },
+        {
+          "scenario": "L2.K12",
+          "result": "pass",
+          "seconds": 17,
+          "invariants": 20
+        },
+        {
+          "scenario": "L2.429",
+          "result": "pass",
+          "seconds": 18,
+          "invariants": 18
+        },
+        {
+          "scenario": "R4",
+          "result": "pass",
+          "seconds": 36,
+          "invariants": 2
+        }
+      ],
+      "not_applicable": [
+        {
+          "name": "R1.K1",
+          "reason": "legacy path only; with every chat on the lifecycle it cannot be reached. Covered by R1.S2.K4/R1.S2.K5 (intake) and R1.K3 (DesignRun steps)"
+        },
+        {
+          "name": "R1.K2",
+          "reason": "legacy path only; with every chat on the lifecycle it cannot be reached. Covered by R1.S1.K1 (Restate accepted, offset not stored) and R1.DUP"
+        },
+        {
+          "name": "R1.K5",
+          "reason": "legacy path only; with every chat on the lifecycle it cannot be reached. Covered by R1.K3/R1.K4 (DesignRun steps) and R1.S3.K1"
+        },
+        {
+          "name": "R1.K12",
+          "reason": "legacy path only; with every chat on the lifecycle it cannot be reached. Covered by L2.K12 (worker killed after the first file, before its mark)"
+        },
+        {
+          "name": "R1.K13",
+          "reason": "legacy path only; with every chat on the lifecycle it cannot be reached. Covered by L2.K12 (an unconfirmed send is held for staff, ADR-046)"
+        },
+        {
+          "name": "R1.K15",
+          "reason": "legacy path only; with every chat on the lifecycle it cannot be reached. Covered by L2.K17 (Postgres killed after Telegram took the first file)"
+        }
+      ]
+    },
+    {
+      "run": "worker poller, *, seeded: R1.K14 and R1.D1 after their harness fixes",
+      "summary": "2 passed",
+      "scenarios": [
+        {
+          "scenario": "R1.K14",
+          "result": "pass",
+          "seconds": 24,
+          "invariants": 15
+        },
+        {
+          "scenario": "R1.D1",
+          "result": "pass",
+          "seconds": 19,
+          "invariants": 17
+        }
+      ],
+      "peak_total_mib": 1129
+    },
+    {
+      "run": "core poller (default), default lifecycle chat list, seeded",
+      "total_seconds": 1097,
+      "peak_memory_mib": {
+        "hawa-chaos-core-1": 258,
+        "hawa-chaos-worker-blue-1": 102,
+        "hawa-chaos-postgres-1": 155,
+        "hawa-chaos-fakes-1": 128,
+        "hawa-chaos-restate-1": 610,
+        "hawa-chaos-worker-green-1": 64
+      },
+      "peak_total_mib": 1306,
+      "uncovered_model_calls": [],
+      "summary": "17 passed, 2 failed (R1.K14, R4)",
+      "scenarios": [
+        {
+          "scenario": "R1.0",
+          "result": "pass",
+          "seconds": 16,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K0",
+          "result": "pass",
+          "seconds": 20,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K1",
+          "result": "pass",
+          "seconds": 74,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K2",
+          "result": "pass",
+          "seconds": 63,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K3",
+          "result": "pass",
+          "seconds": 17,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K4",
+          "result": "pass",
+          "seconds": 15,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K5",
+          "result": "pass",
+          "seconds": 15,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K6",
+          "result": "pass",
+          "seconds": 20,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K7",
+          "result": "pass",
+          "seconds": 32,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K8",
+          "result": "pass",
+          "seconds": 20,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K9",
+          "result": "pass",
+          "seconds": 19,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K10",
+          "result": "pass",
+          "seconds": 24,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K11",
+          "result": "pass",
+          "seconds": 24,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K12",
+          "result": "pass",
+          "seconds": 75,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K13",
+          "result": "pass",
+          "seconds": 13,
+          "invariants": 14
+        },
+        {
+          "scenario": "R1.K14",
+          "result": "fail",
+          "seconds": 29,
+          "invariants": 15,
+          "failed": [
+            "a delivery cut off by a Core restart does not stay stuck in publishing: task publishing at the kill, publishing after the restart"
+          ]
+        },
+        {
+          "scenario": "R1.K15",
+          "result": "pass",
+          "seconds": 20,
+          "invariants": 15
+        },
+        {
+          "scenario": "R1.D1",
+          "result": "pass",
+          "seconds": 89,
+          "invariants": 17
+        },
+        {
+          "scenario": "R4",
+          "result": "fail",
+          "seconds": 38,
+          "invariants": 2,
+          "failed": [
+            "chat B is acknowledged in under 5 s while chat A downloads: chat B first answer after 32665 ms (chat A after 32525 ms)"
+          ]
+        }
+      ]
+    }
+  ],
+  "failure_triage": [
+    {
+      "scenario": "R1.K1, R1.K2, R1.K5, R1.K12, R1.K13, R1.K15 (worker, *)",
+      "class": "harness",
+      "fix": "marked legacyOnly. With every chat on the lifecycle they are recorded as not applicable and name the lifecycle scenario that covers the same fault. All six pass in core mode on the same data."
+    },
+    {
+      "scenario": "R1.K14 (worker, *)",
+      "class": "harness",
+      "fix": "deliver() accepts a request that is already delivering or delivered. Under the lifecycle, the invariant is that the Delivery workflow completes without a second Deliver, as L2.K14 requires, not that the task left 'publishing' 3 s after the restart. Verified: complete before the second Deliver, which then got 409."
+    },
+    {
+      "scenario": "R1.D1 (worker, *)",
+      "class": "harness",
+      "fix": "the pinned-deployment check also looks up DesignRun dr-<task>, the design invocation when RequestLifecycle owns the request. Verified: completed on blue, blue drained and deleted."
+    },
+    {
+      "scenario": "R1.K14 (core)",
+      "class": "known product baseline, not caused by the data",
+      "detail": "legacy path: task still 'publishing' 3 s after Core restarts mid-Deliver. It fails the same way on the mainline baseline without production data (claude-mainline last-run 2026-09-28T13:15Z, 70be33b2 verdict). Not fixed here."
+    },
+    {
+      "scenario": "R4 (core)",
+      "class": "known legacy baseline, not caused by the data",
+      "detail": "Core's poller answers chat B only after chat A's 30 s download. This is the documented core-mode baseline at 70be33b2. It passes with the worker poller (production's)."
+    },
+    {
+      "scenario": "mid-run teardown of hawa-chaos",
+      "class": "harness defect (fixed)",
+      "detail": "scripts/load/run.ts ran down -v in finally/SIGINT even when it never owned the project. It now takes hawa-chaos-lock and tears down only what it holds (scripts/load/test/project-lock.test.ts)."
+    },
+    {
+      "scenario": "queued run killed by hook timeout",
+      "class": "harness defect (fixed)",
+      "detail": "chaos.test.ts's 30 min beforeAll included the 30 min lock wait. The lock wait now has its own 3 h budget."
+    }
+  ],
+  "product_defects_found_on_production_data": [],
+  "product_defects_note": "None. With production data restored and upgraded, no scenario failed because of the data: core mode matched the synthetic baseline exactly (17/19, same two failures), and in worker mode with every chat enrolled 35 of 37 applicable scenarios passed in one run and the other 2 passed on rerun after harness-only fixes. The restored history (1613 tasks, 429 Studio calls, 109 Canva plans, 1628 outbox rows, 8 clients) caused no budget refusal, no stuck outbox and no paid-call mismatch. The ADR-133 class of defect is now caught by gate stage 3, which fails on the pre-067 replay.",
+  "tests": {
+    "packages/db/test/predeploy-invariants.test.ts": "7 passed (3 need HAWA_ISOLATED_TEST_DB, run on the test server)",
+    "packages/testkit/chaos/test/seed.test.ts": "3 passed",
+    "scripts/load/test/project-lock.test.ts": "2 passed"
+  },
+  "source_files": [
+    {
+      "path": "adrs/137_production_data_before_deploy.md",
+      "sha256": "16439a8f601e02aefc5a768f17ee1259a0a49de89ad787dc6c5573f7bca53c7e"
+    },
+    {
+      "path": "packages/db/src/predeploy-dump-check.ts",
+      "sha256": "0116d2b3f30d090b26834c896c8f53f4189bdb623d3456a4d49aa8e86f90dc27"
+    },
+    {
+      "path": "packages/db/src/predeploy-invariants.ts",
+      "sha256": "19f059851e26ca07ec62c9ba52e85dcaefec2afd87aa8d1b90423ef10d39cf32"
+    },
+    {
+      "path": "packages/db/src/upgrade.ts",
+      "sha256": "f3d137329ccde00e0d6275bbd751f86503dd123061c3f723142d6b1d68b4e09c"
+    },
+    {
+      "path": "packages/db/src/provision-isolated-test-db.ts",
+      "sha256": "c911214a19dbe903d364c7fed7f14c4c0e690e29e4efccd4368c8c7b86948d46"
+    },
+    {
+      "path": "packages/db/test/predeploy-invariants.test.ts",
+      "sha256": "f937cf4dfc10e12acac333abe7ec15d36da704355bf58942c29d3db36b5a3f2b"
+    },
+    {
+      "path": "scripts/enforce_release_gate.sh",
+      "sha256": "03c2f8ab381cff144df92a1c9b98983feb15f8763cfb86afa4e8b2a565a71cc0"
+    },
+    {
+      "path": "packages/testkit/chaos/driver/seed.ts",
+      "sha256": "2b40767c9ca531d6b4406be0ad10c0123b545caeeeec7b66e561041df8a0a7e6"
+    },
+    {
+      "path": "packages/testkit/chaos/driver/stack.ts",
+      "sha256": "570639d68741d50fcadd72229dc668cc9d65bd34d583e95e91a697b1bfc1288a"
+    },
+    {
+      "path": "packages/testkit/chaos/driver/scenario.ts",
+      "sha256": "03fa4c436858e7cccc7d7ede709534d770b47d2050adb38228cc410a75c9b1b1"
+    },
+    {
+      "path": "packages/testkit/chaos/chaos.test.ts",
+      "sha256": "d7d06e6eb56cef7e68e296db7e5c58d658cf839ad77159aeb0a1cfb7ec98aad5"
+    },
+    {
+      "path": "packages/testkit/chaos/run.ts",
+      "sha256": "b3f00c8f384e9916528dbfcf4d6f395348d4d3ae510ee8ea6f91992be11ea23c"
+    },
+    {
+      "path": "packages/testkit/chaos/docker-compose.chaos.yml",
+      "sha256": "4285d7375737df8239ffd477458b45429b6342d507ed77adf6d5353928bf7fcd"
+    },
+    {
+      "path": "packages/testkit/chaos/test/seed.test.ts",
+      "sha256": "de3952b6c9f85fd0413397faca4b820faa3d77a49b9e6a5eb74086a1fe616084"
+    },
+    {
+      "path": "scripts/load/run.ts",
+      "sha256": "e75d26a7f86f3db1448fdaa1da399db7a593b80c9e5617d958d70ce25013b6fe"
+    },
+    {
+      "path": "scripts/load/test/project-lock.test.ts",
+      "sha256": "336f0b34640237c8ff50831bdc4721f8cdc7ef12e5ae2cffe72bdd0c4b51396b"
+    },
+    {
+      "path": "packages/testkit/chaos/README.md",
+      "sha256": "3dd46e2dd23bae22d7fe0c305c00092adc021ae80a12f3f63f544997524d0d40"
+    },
+    {
+      "path": "docs/23_TEST_STRATEGY.md",
+      "sha256": "19bbf5d72f509677c308135fa65ec8f85594885dd5dd9e411bc02b07d67d6778"
+    }
+  ],
+  "not_executed": [
+    "the release gate end to end from the main checkout",
+    "a seeded chaos run on a dump with pending migrations (the newest dump already records all 67; the pending-migration path was exercised by the gate-stage replays on the 13:50Z dump)",
+    "production itself: nothing was run against it"
+  ]
+}

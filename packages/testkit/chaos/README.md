@@ -26,6 +26,46 @@ The receipt is `.run/r10-restore.json`; the runbook section "Clean-host restore 
 records what it proved. `driver/stack.ts` defaults are unchanged: `configureStack()` is the only way to
 point it elsewhere, and a project name must start with `hawa-chaos`.
 
+## On a copy of production's data (2026-09-28, ADR-137)
+
+```sh
+npx tsx packages/testkit/chaos/run.ts --seed-dump infra/backup/snapshots/predeploy_<stamp>.dump --poller worker --lifecycle-chats all
+```
+
+The chaos stack normally starts from `db/*.sql` and holds no history. The release of 2026-09-28
+passed this suite and still refused every paid call in production (ADR-133): nothing here had a
+record from before daily admission. With `--seed-dump`, `driver/seed.ts` runs these steps:
+
+1. It waits until the chaos Postgres has run its init scripts (the roles the restore needs), then
+   drops `hawa_chaos` and restores the dump into it with `pg_restore` inside the container. The
+   dump's `.sha256` is checked when present.
+2. It applies the pending migrations with deploy's upgrader (`provision.ts` `upgradeSchema`).
+3. It neutralises restored credentials: it deletes `canva_connections`, `canva_oauth_states`,
+   `desk_sessions` and OIDC flows, and clears `integrations.config_encrypted`. It then refuses to
+   go on while any text, bytea or JSON column named like a credential (`token`, `secret`,
+   `password`, `verifier`, `api_key`, …) still holds a value. The chaos operator's Canva connection
+   is then sealed afresh with the chaos key.
+4. It starts Core and the worker and proves the egress fence from inside both
+   (`verifyEgressFence`). Every provider host must resolve to the fakes. `example.com`,
+   `github.com`, `www.canva.com`, `drive.google.com` and `upload.googleapis.com` must not resolve.
+   1.1.1.1:443 and 8.8.8.8:53 must be unreachable. The run refuses to start if any check fails.
+
+Real clients, client DNA, tasks, outbox history and spending records stay. Real chat ids, Canva
+design ids and Drive folder ids stay too; any call they cause lands in the fakes, which accept any id.
+`--lifecycle-chats all` sets `HAWA_LIFECYCLE_CHATS=*` (production's setting) instead of the default
+list of 24 flagged chats. `.run/last-run.json` gains `seededFrom`: dump name, restore time, row counts,
+the migrations applied, what was neutralised and every egress check. It holds counts, never row values.
+
+The restored data is client data. It lives only in the `chaos_postgres` volume, which `down -v`
+removes at the start and, unless `--keep`, at the end of every run. Do not keep a seeded project
+longer than you need it. The pre-deploy gate stage (`packages/db/src/predeploy-dump-check.ts`) runs
+the same kind of restore on the test server without the stack.
+
+**One run at a time.** The suite, `run.ts --down` and the load runner share `hawa-chaos`. The
+driver takes the lock container `hawa-chaos-lock` (`driver/stack.ts` `acquireProject`) before its
+first `down` and waits, saying who holds it, while another run does. `run.ts --down` refuses instead
+of waiting. The lock runs `cat` on the holder's stdin, so it goes away however the holder ends.
+
 ## Isolated full-app candidate rehearsal (2026-09-27)
 
 ### Coordinated recovery mode (ADR-080)

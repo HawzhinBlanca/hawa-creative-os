@@ -6,7 +6,7 @@
  * container name is checked to start with `hawa-chaos-` before it is killed: nothing here can touch
  * the office's hawa-production or hawa-test projects.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -146,7 +146,7 @@ export function secrets(): ChaosSecrets {
   return made;
 }
 
-function run(cmd: string, args: string[], options: { allowFail?: boolean; timeoutMs?: number; quiet?: boolean } = {}): { status: number; stdout: string; stderr: string } {
+export function run(cmd: string, args: string[], options: { allowFail?: boolean; timeoutMs?: number; quiet?: boolean } = {}): { status: number; stdout: string; stderr: string } {
   const res = spawnSync(cmd, args, { cwd: CHAOS_DIR, encoding: 'utf8', timeout: options.timeoutMs ?? 20 * 60 * 1000, maxBuffer: 64 * 1024 * 1024, env: composeEnvironment() });
   const status = res.status ?? -1;
   if (status !== 0 && !options.allowFail) {
@@ -179,9 +179,22 @@ export function build(services: Service[]): void {
   compose(['build', ...services], { timeoutMs: 45 * 60 * 1000 });
 }
 
+/** Set by down({ volumes: true }): the next Postgres this driver starts must initialise its own database. */
+let expectFreshDatabase = false;
+
 /** Starts these services, building their images from this checkout unless `build` is false. */
 export function up(options: { build?: boolean; services?: Service[] } = {}): void {
-  compose(['up', '-d', '--wait', '--wait-timeout', '240', ...(options.build === false ? ['--no-build'] : ['--build']), ...(options.services || ['postgres', 'restate', 'fakes', 'core', 'worker-blue'])], { timeoutMs: 45 * 60 * 1000 });
+  const services = options.services || ['postgres', 'restate', 'fakes', 'core', 'worker-blue'];
+  compose(['up', '-d', '--wait', '--wait-timeout', '240', ...(options.build === false ? ['--no-build'] : ['--build']), ...services], { timeoutMs: 45 * 60 * 1000 });
+  if (expectFreshDatabase && services.includes('postgres')) {
+    expectFreshDatabase = false;
+    // After this run's own down -v, a data directory that is already there was made by another run,
+    // with the passwords of its own .run/chaos.env: every login of this run would then fail with
+    // "password authentication failed for user hawa_owner" (2026-09-28, twice).
+    if (logs('postgres', 1000).includes('Skipping initialization')) {
+      throw new Error('the hawa-chaos Postgres was initialised by another run, not this one: another checkout started the project between this run\'s down and up (it has its own .run/chaos.env). Let one run finish, then start again.');
+    }
+  }
 }
 
 /**
@@ -205,7 +218,116 @@ export function down(options: { volumes?: boolean } = {}): void {
       run('docker', ['volume', 'rm', volume]);
     }
   }
-  if (options.volumes) rmSync(ENV_FILE, { force: true });
+  if (options.volumes) {
+    rmSync(ENV_FILE, { force: true });
+    expectFreshDatabase = true;
+  }
+}
+
+/**
+ * The project's lock: one run at a time on this machine, from its first down to its last.
+ *
+ * The project name, ports and volumes are fixed, but every checkout keeps its own .run/chaos.env.
+ * Two runs that overlapped (a load run started while another checkout's chaos suite was between its
+ * down and its up, when no container runs) shared one Postgres volume initialised with the other's
+ * passwords, and the later one failed at its first login (2026-09-28, 2 of 9 load runs).
+ *
+ * The lock is a running container, hawa-chaos-lock: Docker refuses a second container of that name,
+ * so taking it is atomic across checkouts and agents (they share only the Docker daemon, not a temp
+ * directory). It runs `cat` on the holder's stdin pipe with --rm, so it goes away when the holder
+ * does, however it ends (even SIGKILL: the pipe closes, cat reads EOF). Older load runners, which
+ * wait while any hawa-chaos-* container runs, wait for it too. Same container and labels as the lock
+ * written on claude/objective-hellman-2d66cb, so the two implementations exclude each other.
+ */
+export const LOCK_CONTAINER = `${PROJECT}-lock`;
+/** An image the stack pulls anyway; the container only runs cat, with no network. */
+const LOCK_IMAGE = 'pgvector/pgvector:pg17';
+let held: ChildProcess | null = null;
+
+interface LockHolder { id: string; running: boolean; token: string; dir: string; command: string; since: string }
+
+function lockHolder(): LockHolder | null {
+  const format = ['{{.Id}}', '{{.State.Running}}', ...['token', 'dir', 'command', 'since'].map((k) => `{{index .Config.Labels "hawa.chaos.lock.${k}"}}`)].join('\t');
+  const res = run('docker', ['inspect', '-f', format, LOCK_CONTAINER], { allowFail: true });
+  if (res.status !== 0) return null;
+  const [id, running, token, dir, command, since] = res.stdout.trim().split('\t');
+  return { id, running: running === 'true', token, dir, command, since };
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Starts the lock container; null when this process now holds it, otherwise who does. */
+async function tryLock(): Promise<LockHolder | null> {
+  const token = randomBytes(12).toString('hex');
+  const child = spawn('docker', [
+    'run', '-i', '--rm', '--name', LOCK_CONTAINER, '--network', 'none', '--memory', '16m', '--entrypoint', 'cat',
+    '--label', `hawa.chaos.lock.token=${token}`, '--label', `hawa.chaos.lock.dir=${CHAOS_DIR}`,
+    '--label', `hawa.chaos.lock.command=${process.argv.slice(1).join(' ').slice(0, 300)}`,
+    '--label', `hawa.chaos.lock.since=${new Date().toISOString()}`, LOCK_IMAGE,
+  ], { stdio: ['pipe', 'ignore', 'pipe'] });
+  let stderr = '';
+  child.stderr!.on('data', (d) => (stderr += String(d)));
+  let exited = false;
+  child.on('exit', () => (exited = true));
+  // Minutes only when the image has to be pulled first.
+  const deadline = Date.now() + 10 * 60_000;
+  while (Date.now() < deadline) {
+    const now = lockHolder();
+    if (now?.running && now.token === token) {
+      held = child;
+      // The lock must not keep this process alive; it ends with the process.
+      child.unref();
+      (child.stdin as unknown as { unref(): void }).unref();
+      (child.stderr as unknown as { unref(): void }).unref();
+      return null;
+    }
+    if (exited) {
+      if (!/already in use|Conflict/i.test(stderr)) throw new Error(`taking the hawa-chaos lock failed: ${stderr.trim().slice(-500)}`);
+      const other = lockHolder();
+      if (!other) return tryLock();
+      // A lock container left stopped (the daemon restarted under it): remove that one, by id.
+      if (!other.running) {
+        run('docker', ['rm', '-f', '-v', other.id], { allowFail: true });
+        return tryLock();
+      }
+      return other;
+    }
+    await sleep(200);
+  }
+  child.kill();
+  throw new Error('taking the hawa-chaos lock: docker run neither started nor refused within 10 minutes');
+}
+
+/**
+ * Takes the project's lock, waiting up to `waitMs` (30 minutes by default) while another run holds it.
+ * Call it before the first down of a run; releaseProject() after the last.
+ */
+export async function acquireProject(options: { waitMs?: number; log?: (line: string) => void } = {}): Promise<void> {
+  if (held) return;
+  const deadline = Date.now() + (options.waitMs ?? 30 * 60_000);
+  let told = 0;
+  for (;;) {
+    const other = await tryLock();
+    if (!other) return;
+    const who = `a run in ${other.dir} since ${other.since} (${other.command})`;
+    if (Date.now() >= deadline) throw new Error(`hawa-chaos is held by ${who}; not starting`);
+    if (Date.now() - told >= 30_000) {
+      (options.log ?? console.log)(`hawa-chaos is held by ${who}; waiting`);
+      told = Date.now();
+    }
+    // Short, so a waiting run usually takes the lock before its holder's next run has started.
+    await sleep(2000);
+  }
+}
+
+/** Gives the lock back (a no-op when this process does not hold it) and waits until it is gone. */
+export async function releaseProject(): Promise<void> {
+  const child = held;
+  held = null;
+  if (!child) return;
+  const gone = new Promise<void>((r) => (child.exitCode !== null ? r() : child.once('exit', () => r())));
+  child.stdin?.end();
+  await Promise.race([gone, sleep(15_000)]);
 }
 
 /** SIGKILL, as the kernel's OOM killer or a power cut of the process would. */
@@ -258,7 +380,9 @@ export function memory(): Record<string, number> {
   const out: Record<string, number> = {};
   for (const line of res.stdout.split('\n')) {
     const [name, usage] = line.split('\t');
-    if (!name?.startsWith(`${PROJECT}-`) || !usage) continue;
+    // This project's services only: not hawa-chaos-lock, nor another project whose name starts
+    // with hawa-chaos- (another agent's hawa-chaos-r10s ran beside this suite on 2026-09-28).
+    if (!name || !usage || !SERVICES.some((service) => name === `${PROJECT}-${service}-1`)) continue;
     const m = /([\d.]+)\s*([KMG]i?B)/.exec(usage);
     if (!m) continue;
     const n = Number(m[1]);

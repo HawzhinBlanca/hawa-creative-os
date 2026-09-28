@@ -117,6 +117,31 @@ For every database, HyCanvas, schema, browser, font, ComfyUI, model, or workflow
 - verify old editable sources;
 - verify audit and publication identities.
 
+### Production's own data (ADR-137)
+
+The test and chaos databases are built from `db/*.sql`, fixtures and synthetic scenarios; they hold
+no production-shaped history. On 2026-09-28 that let a release pass its whole gate and then refuse
+every paid call in production (ADR-133). Two checks close the gap; both read a production dump
+file (`infra/backup/snapshots/predeploy_*.dump` from deploy.sh, or the nightly `hawa_*.dump`) and
+never connect to production:
+
+- **Release gate stage 3** (`scripts/enforce_release_gate.sh`, `packages/db/src/predeploy-dump-check.ts`):
+  restores the newest dump into a scratch `hawa_drill_predeploy_*` database on the test server
+  (`hawa-test-postgres`, 127.0.0.1:55432), applies the candidate's pending migrations with deploy's
+  upgrader, and runs read-only invariants (`packages/db/src/predeploy-invariants.ts`): no daily
+  spending scope `historyIncomplete` for any tenant or client; a zero-dollar admission accepted for
+  every tenant, client and spending role; the runtime role reads under RLS; every `NOT VALID`
+  constraint holds on the data; and schema parity with a database built from the checkout (nothing
+  missing or different; extra production privileges are reported). The scratch databases are dropped
+  on every exit path. About 10 s. The stage is skipped, with a message saying the migrations were
+  not checked, only when no dump exists (a worktree has none; the gate runs from the main checkout).
+  `--through <NNN>` replays a past release: on the 13:50Z dump of 2026-09-28, migrations through
+  066 fail `budget-history` and `admission`, and through 067 pass.
+- **Chaos suite on a copy of production** (`run.ts --seed-dump <file>`,
+  `packages/testkit/chaos/driver/seed.ts`): the chaos Postgres is replaced by the dump, upgraded as a
+  deploy does, stripped of stored credentials, and the scenarios run on it with every provider
+  faked. The run refuses to start unless the egress fence holds from inside Core and the worker.
+
 ## 10. Acceptance evidence
 
 Test runs store versioned artifacts, logs/traces, source hashes, screenshots, human sign-off, and defects. A green CI icon alone is insufficient for editor/model admission.

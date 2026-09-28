@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T19:07:55Z",
+  "generatedAt": "2026-09-28T20:58:27Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 511,
+  "fileCount": 514,
   "files": [
     {
       "path": ".dockerignore",
@@ -763,6 +763,11 @@
       "bytes": 7552
     },
     {
+      "path": "adrs/137_production_data_before_deploy.md",
+      "sha256": "c59d719f96d7326f2c42278695f3e4a8aff958fecf6e275c9750773fb1a52a2d",
+      "bytes": 6927
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1094,8 +1099,8 @@
     },
     {
       "path": "docs/23_TEST_STRATEGY.md",
-      "sha256": "ef3eae12a940187697a69e111ede5e1474f61dc86f486c9785fda85adcaa46e3",
-      "bytes": 3229
+      "sha256": "19bbf5d72f509677c308135fa65ec8f85594885dd5dd9e411bc02b07d67d6778",
+      "bytes": 5210
     },
     {
       "path": "docs/24_COST_HARDWARE.md",
@@ -1206,6 +1211,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/CANVA_UNCERTAINTY_PROOF.json",
       "sha256": "2383a49ea693396c534b42993728348e4c56b70ce105175820cca0d7624749e9",
       "bytes": 5034
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/CHAOS_ON_PRODUCTION_DATA_PROOF.json",
+      "sha256": "2f023279bee133cd2a2db425989e23186f1b30b1d08e328eaad9be22c54fae08",
+      "bytes": 24666
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/COMPUTE_ELIGIBILITY_PROOF.json",
@@ -1764,8 +1774,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "a519f75ef5f5e3503bcebbc34b0469c71950628d3e35afd29296a1a1dacec66b",
-      "bytes": 472448
+      "sha256": "f74fa75b4aafffe0839f7a4031f992863d74808959b905c53eb25cd7c131855f",
+      "bytes": 473469
     },
     {
       "path": "plans/user-stories.csv",
@@ -2074,8 +2084,8 @@
     },
     {
       "path": "scripts/enforce_release_gate.sh",
-      "sha256": "c4043626380e068204f4f2781f9b6853c2bf9c69843fc5d19b2e4eedc01f40ee",
-      "bytes": 16711
+      "sha256": "03c2f8ab381cff144df92a1c9b98983feb15f8763cfb86afa4e8b2a565a71cc0",
+      "bytes": 19038
     },
     {
       "path": "scripts/experiments/judge-model-agreement.ts",
@@ -2224,8 +2234,8 @@
     },
     {
       "path": "scripts/load/run.ts",
-      "sha256": "7a1a9872f160da3144cb05fa3a73787816cadb82afd212b4b400883b887763fa",
-      "bytes": 23524
+      "sha256": "e75d26a7f86f3db1448fdaa1da399db7a593b80c9e5617d958d70ce25013b6fe",
+      "bytes": 23326
     },
     {
       "path": "scripts/load/seed-desk-tasks.ts",
@@ -2241,6 +2251,11 @@
       "path": "scripts/load/test/load-stats.test.ts",
       "sha256": "b8964d56684c91cef9321f91eaf492b8179caa37990d882047f91cd5b7b8303a",
       "bytes": 6434
+    },
+    {
+      "path": "scripts/load/test/project-lock.test.ts",
+      "sha256": "336f0b34640237c8ff50831bdc4721f8cdc7ef12e5ae2cffe72bdd0c4b51396b",
+      "bytes": 2106
     },
     {
       "path": "scripts/load/test/runbook.test.ts",
