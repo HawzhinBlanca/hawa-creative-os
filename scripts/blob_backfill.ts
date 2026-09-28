@@ -15,7 +15,8 @@
  *           reference photo. It never changes the bytes, the JSON or an existing hash, so it needs no
  *           trigger disabled and can run while Core runs.
  *   verify  reports rows whose bytes are not in the store yet, stored hashes whose file is missing or
- *           differs, and JSON still carrying a data:image URI. Changes nothing.
+ *           differs, hashes with no file row and no bytes to copy (release B's foreign keys reject
+ *           those: blocksForeignKey), and JSON still carrying a data:image URI. Changes nothing.
  *   strip   (this release: test databases and restored copies only) sets the bytea columns of rows
  *           whose file the store has, verified by hash, to NULL. Each batch runs in one transaction
  *           that disables the table's append-only trigger, updates and enables it again; DDL is
@@ -27,6 +28,9 @@
  * bytes are present and whose file is, in keyset order on the row id, and put() is
  * idempotent. So a second run does nothing, and a run stopped anywhere (SIGINT finishes the batch in
  * hand) resumes where it stopped. Undecodable data URIs and hash mismatches are reported and left.
+ *
+ * Exit status: 0 done and clean; 1 done with problems to read; 3 stopped (a signal or --limit) with
+ * rows left, so run it again; 2 refused or failed.
  *
  * Preconditions, asserted before anything is read: migration 019 is applied; the role bypasses row-level
  * security (every table forces it); the store's marker is present. Production (port 54332 or the
@@ -59,6 +63,12 @@ export interface BackfillProblem {
    * lists these apart and production copy asks for them to be accepted by count.
    */
   leftAsIs?: boolean;
+  /**
+   * The row's hash column names a file the store has no row for. Release B's foreign keys
+   * (output/plans/2026-09-24-architecture-programme/staged/blob_fks.sql) fail to validate while any
+   * such row exists, so a rehearsal counts them apart: copy cannot mend them, a person must decide.
+   */
+  blocksForeignKey?: boolean;
 }
 
 export interface PhaseReport {
@@ -272,9 +282,10 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
   for (const phase of o.phases) {
     const report: PhaseReport = { phase, mode: o.mode, scanned: 0, stored: 0, linked: 0, stripped: 0, notCopied: 0, strippable: 0, inlineJson: 0, problems: [], stoppedEarly: false };
     reports.push(report);
-    const problem = (table: string, id: string, what: string, leftAsIs = false) => {
-      report.problems.push({ table, id, problem: what, ...(leftAsIs ? { leftAsIs } : {}) });
-      log({ phase, mode: o.mode, table, id, problem: what, ...(leftAsIs ? { leftAsIs } : {}) });
+    const problem = (table: string, id: string, what: string, leftAsIs = false, blocksForeignKey = false) => {
+      const flags = { ...(leftAsIs ? { leftAsIs } : {}), ...(blocksForeignKey ? { blocksForeignKey } : {}) };
+      report.problems.push({ table, id, problem: what, ...flags });
+      log({ phase, mode: o.mode, table, id, problem: what, ...flags });
     };
 
     if (phase === 'reference_photos') {
@@ -292,10 +303,6 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
         }
         let after = '00000000-0000-0000-0000-000000000000';
         for (;;) {
-          if (o.mode === 'copy' && stop()) {
-            report.stoppedEarly = true;
-            break;
-          }
           const rows = (
             await sql<{ id: string; tenant_id: string; task_id: string; image: string }>`
               SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.${sql.raw(src.task)}::text AS task_id, ${sql.raw(src.image)} AS image
@@ -305,6 +312,11 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
               ORDER BY r.id LIMIT ${batch}`.execute(o.db)
           ).rows;
           if (!rows.length) break;
+          // Stopped only when there is more to do: a run whose last write finished the phase is done.
+          if (o.mode === 'copy' && stop()) {
+            report.stoppedEarly = true;
+            break;
+          }
           for (const row of rows) {
             after = row.id;
             report.scanned++;
@@ -355,35 +367,47 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
             problem(src.table, n.id, `${src.sha} ${n.sha.slice(0, 12)}…: ${(err as Error).message}`);
           }
         }
+        // A hash with no file row and no bytes to copy it from: nothing can mend it by copying, and
+        // release B's foreign key rejects it. (A column 019 added has its foreign key already.)
+        const dangling = (await sql<{ id: string; sha: string }>`SELECT r.id::text AS id, r.${shaCol} AS sha FROM ${table} r
+          WHERE r.${bytesCol} IS NULL AND r.${shaCol} IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol}) ORDER BY r.id`.execute(o.db)).rows;
+        for (const d of dangling) {
+          report.scanned++;
+          problem(src.table, d.id, `${src.sha} ${d.sha.slice(0, 12)}… names a file the store does not have, and the row holds no bytes to copy it from; left as it is`, true, true);
+        }
         // The rows not copied yet are then read as copy reads them (below), so those copy would leave
         // as they are are told apart from those it would copy.
       }
 
       let after = '00000000-0000-0000-0000-000000000000';
+      // Stopped only when there is more to do: a run whose last write finished the phase is done.
+      const stopBefore = (rows: unknown[]) => {
+        if (!rows.length || o.mode === 'verify' || !stop()) return false;
+        report.stoppedEarly = true;
+        return true;
+      };
       for (;;) {
-        if (o.mode !== 'verify' && stop()) {
-          report.stoppedEarly = true;
-          break;
-        }
         if (o.mode === 'copy' || o.mode === 'verify') {
           const rows = (await sql<{ id: string; bytes: Buffer; sha: string | null }>`
             SELECT r.id::text AS id, r.${bytesCol} AS bytes, r.${shaCol} AS sha FROM ${table} r
             WHERE r.${bytesCol} IS NOT NULL AND r.id > ${after}::uuid
               AND (r.${shaCol} IS NULL OR NOT EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol}))
             ORDER BY r.id LIMIT ${batch}`.execute(o.db)).rows;
-          if (!rows.length) break;
+          if (!rows.length || stopBefore(rows)) break;
           for (const row of rows) {
             after = row.id;
             report.scanned++;
             const bytes = Buffer.from(row.bytes);
             const actual = sha256(bytes);
             if (row.sha && row.sha !== actual) {
-              problem(src.table, row.id, `${src.sha} says ${row.sha.slice(0, 12)}…, the bytes hash to ${actual.slice(0, 12)}…; left as it is`, true);
+              problem(src.table, row.id, `${src.sha} says ${row.sha.slice(0, 12)}…, the bytes hash to ${actual.slice(0, 12)}…; left as it is`, true, true);
               continue;
             }
             const mediaType = sniffBlobMediaType(bytes);
             if (!mediaType || (src.expected === 'image' ? !mediaType.startsWith('image/') : mediaType !== src.expected)) {
-              problem(src.table, row.id, `${src.bytes} is ${mediaType ?? 'of no type the store knows'}; left as it is`, true);
+              // Its hash, when it has one, names no file row (copy selects only those): a foreign key blocker.
+              problem(src.table, row.id, `${src.bytes} is ${mediaType ?? 'of no type the store knows'}; left as it is`, true, Boolean(row.sha));
               continue;
             }
             if (o.mode === 'verify') {
@@ -413,7 +437,7 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
           WHERE r.${bytesCol} IS NOT NULL AND r.id > ${after}::uuid
             AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})
           ORDER BY r.id LIMIT ${batch}`.execute(o.db)).rows;
-        if (!rows.length) break;
+        if (!rows.length || stopBefore(rows)) break;
         after = rows[rows.length - 1].id;
         const verified: string[] = [];
         for (const row of rows) {
@@ -452,8 +476,12 @@ export function rehearsalReceipt(database: string, migrations: Record<string, st
   if (!/^hawa_restore_[A-Za-z0-9_]+$/.test(database)) throw new Error(`A rehearsal receipt comes from a hawa_restore_* database, not ${database}`);
   if (reports.some((r) => r.mode !== 'verify')) throw new Error('A rehearsal receipt is written by a verify run');
   const verifyFailures = reports.reduce((n, r) => n + r.problems.filter((p) => !p.leftAsIs).length + r.notCopied, 0);
-  const leftAsIs = reports.flatMap((r) => r.problems.filter((p) => p.leftAsIs).map(({ table, id, problem }) => ({ table, id, problem })));
-  return { database, migrations, verifyFailures, leftAsIs, phases: reports.map((r) => r.phase), at: new Date().toISOString() };
+  const leftAsIs = reports.flatMap((r) =>
+    r.problems.filter((p) => p.leftAsIs).map(({ table, id, problem, blocksForeignKey }) => ({ table, id, problem, ...(blocksForeignKey ? { blocksForeignKey } : {}) }))
+  );
+  // Release B's foreign keys fail to validate until each of these is decided (FILESTORE_DESIGN.md 5).
+  const foreignKeyBlockers = reports.reduce((n, r) => n + r.problems.filter((p) => p.blocksForeignKey).length, 0);
+  return { database, migrations, verifyFailures, leftAsIs, foreignKeyBlockers, phases: reports.map((r) => r.phase), at: new Date().toISOString() };
 }
 
 /** Database and table sizes, for the evidence (FILESTORE_DESIGN.md section 5, --measure). */
@@ -535,6 +563,8 @@ async function main(args: string[]): Promise<number> {
     }
     const summary = { database, mode, phases, reports, ...(before ? { measureBefore: before, measureAfter: after } : {}), ...(receipt ? { receipt } : {}), log: logFile };
     process.stdout.write(`${JSON.stringify(summary)}\n`);
+    // 3: stopped (a signal or --limit) with work left, so run it again; 1: problems to read.
+    if (reports.some((r) => r.stoppedEarly)) return 3;
     return reports.some((r) => r.problems.length) ? 1 : 0;
   } finally {
     await db.destroy();
