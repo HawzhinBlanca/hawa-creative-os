@@ -17,8 +17,11 @@ describe('Task 8: Tooling Remediation', () => {
       cwd: rootDir,
       encoding: 'utf8',
       stdio: 'pipe',
+      env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
     });
-    expect(output).toContain('Coverage report from v8');
+    // On GitHub runners the child still coloured its output, splitting the phrase with ANSI codes.
+    const plain = output.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).toContain('Coverage report from v8');
   });
 
   it('2. verifies strict ratchet on any in source files', () => {

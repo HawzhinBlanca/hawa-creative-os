@@ -68,7 +68,13 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     steps:
+      # Full history, and the PR's own head rather than GitHub's merge commit: the release-manifest
+      # test (packages/testkit/test/r11-release-gate.test.ts) checks that RELEASE_MANIFEST.json
+      # records HEAD or one of its two parents, and that the recorded commit exists.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -133,6 +139,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # `pnpm build` starts with build:native, which compiles the Pango text-measurement helper.
+      - name: Install the native build dependencies (Pango headers)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends build-essential pkg-config libpango1.0-dev
+
+      - name: Build the workspace packages (the eval runner imports their dist/)
+        run: pnpm build
 
       # This runs against the fake gateway and its own expected answers, so it cannot fail on
       # model quality (audit LLM-01/02). It is kept as a smoke test that the harness still runs.
