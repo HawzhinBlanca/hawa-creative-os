@@ -174,13 +174,76 @@ Only the missing capability is ported, in this branch's structures:
 - A record held under a live lock for over two hours is reported as a stuck
   backup; that pass then continues as before (it may start Restate).
 
+Limits: verified with a real SIGKILL of a child process in the middle of the
+archive step against a file-backed fake engine, and with the watchdog run against
+stubbed Docker, curl and sleep; no production Docker engine, Core, PostgreSQL or
+Restate was contacted, and the production backup schedule remains off (ADR-053).
+A kill between Core's pause answer and the record write leaves an unreleased pause
+the office must release: deliberate refusal rather than a guess. The watchdog's
+`notify` no longer ends the pass with exit 2 when the production environment file
+is absent (the guard `nightly_backup.sh` already had). studio-v2's backup script,
+restore script and chaos restore drill (088ce5e6) are not ported: ADR-053 to
+ADR-057 and ADR-081 already cover guarded capture, fenced release, the paired
+nightly archive, retention and an isolated boot rehearsal.
+
+## Decision: operations work is ported, adapted to this branch's structures
+
+- CI (1a160953, 9cd4afeb, c2bf4943): the workflow runs on a clean Ubuntu runner
+  with its own PostgreSQL service, render dependencies, lint, live schema parity,
+  the Desk build and a clean-tree check, and runs for this branch. This branch's
+  native text-measurement helper (ADR-118) needs Pango headers, so the render
+  dependency script installs them and the eval job installs them before `pnpm
+  build`. The release-manifest check accepts a build commit that is an ancestor of
+  HEAD with only manifest files changed since, and refuses real drift. This does
+  not change ADR-038's two-phase release identity.
+- Deploy (644fd8dd): Core's health is asked for up to a minute after the switch;
+  when only internet dependencies are unreachable the deploy ends with a warning.
+  The OpenAPI fix is adapted: this branch already documented pause, resume and
+  cancel with the body its routes read; the stale `{control}` catch-all is removed
+  and `retry` is documented as the 409 refusal Core returns.
+- Canva panel poll (ecc9af71): 5 s only while Canva or the planner is working,
+  otherwise 60 s, and a refresh on the task's live event. The amendment
+  observation stays an explicit action (ADR-119).
+- Load test and runbook (5e64ae31): ported; the runbook's Phase 2 flag sections
+  describe this branch's lifecycle (ADR-052, ADR-059), every command block says
+  whether it was run again on this branch, and studio-v2's Deliver-time enrolment
+  drill and its helper are not ported. The chaos compose duplicate-key fix
+  (e8169f44) is not needed: a duplicate-key YAML load finds none here.
+- File store (4e2e6e58, 75153027): the backfill fixes and the staged release B
+  keys are ported; the staged keys remain outside the migrations directory and
+  were checked against migrations 023-064. No migration is added (number 070 is
+  unused by this package).
+- Documents (1869518d, 9a4a38b3, 82240d9e and the evidence of 4eb16341) are kept
+  as history, each with a note that studio-v2's RequestLifecycle was superseded.
+
+## Not ported
+
+studio-v2's RequestLifecycle (8b0d140b, d5a884cf, 5fb37d29, 736b0e9b, 3904fe07,
+6269ef4e) and its migration 023 are superseded by this branch's own lifecycle
+(ADR-034, ADR-052, ADR-059 onward). The "chore(release): record manifest"
+commits are not ported; MANIFEST.json and SHA256SUMS.txt are refreshed here, and
+RELEASE_MANIFEST.json is left for the lead to regenerate.
+
 ## Consequences and limits
 
-- Verified with a real SIGKILL of a child process in the middle of the archive
-  step against a file-backed fake engine, and with the watchdog run against stubbed
-  Docker, curl and sleep. No production Docker engine, Core, PostgreSQL or Restate
-  was contacted. The production backup schedule remains off (ADR-053).
-- A kill between Core's pause answer and the record write leaves an unreleased
-  pause the office must release; this is deliberate refusal rather than a guess.
-- The watchdog's `notify` no longer ends the pass with exit 2 when the production
-  environment file is absent (the guard `nightly_backup.sh` already had).
+- Nothing here was deployed, and no production SQL, Canva, Telegram or paid model
+  call was made. Chaos-stack drills and the load test were not re-run on this
+  branch.
+- The four onboarding clients cannot be designed automatically until the office
+  supplies their Client DNA (logo, palette, fonts), Kurdish aliases, chats and a
+  proof set.
+- Changing the KAAE v3 layout and judge prompts makes a KAAE v3 run resumed across
+  this change hold on its changed retained call input (ADR-111).
+- Five test expectations that lagged behind this branch's own migrations 063-064
+  and the ADR-111/113/114/119 routes and blob columns were brought up to date in
+  the same integration; the two `studio-ledger` resume cases already failed at the
+  base commit (their stub has no `db.transaction`) and are left for their owner.
+
+## Owner steps
+
+- Supply each new client's Client DNA in the Desk, its Kurdish aliases and
+  Telegram chats, and approve a proof set before setting its pack `live`.
+- Decide whether to enable the unattended Restate backup schedule
+  (`HAWA_RESTATE_BACKUP_ENABLED`) after a live rehearsal (ADR-053).
+- Decide the production fixture row that blocks release B's staged keys
+  (PHASE3_EVIDENCE.md), before those keys move into a migration.

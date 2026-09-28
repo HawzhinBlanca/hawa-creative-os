@@ -212,9 +212,16 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
           'png', ${createHash('sha256').update(bytes).digest('hex')}, ${bytes}, clock_timestamp())`.execute(trx);
     });
 
-    for (const policy of ['current_task', 'deliver_approved_stored']) {
+    // The stored-approval policy is an administrator's, with a reason (audit 2026-09-27 #2, ADR-127):
+    // an operator is refused first, and an administrator still meets the same missing-QC refusal.
+    const adminHeaders = { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' };
+    const refusedOperator = await app.request(`/tasks/${taskId}/publish`, {
+      method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'deliver_approved_stored', reason: 'Client confirmed by phone' }),
+    });
+    expect(refusedOperator.status).toBe(403);
+    for (const [policy, headers] of [['current_task', operatorHeaders], ['deliver_approved_stored', adminHeaders]] as const) {
       const response = await app.request(`/tasks/${taskId}/publish`, {
-        method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy }),
+        method: 'POST', headers, body: JSON.stringify({ policy, reason: 'Client confirmed by phone' }),
       });
       expect(response.status).toBe(422);
       expect((await response.json()).title).toBe('Nothing Approved To Deliver');
