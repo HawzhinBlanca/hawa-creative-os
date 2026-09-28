@@ -1,0 +1,433 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "7b8de71ed015616c5a315cf67da07af31c77019a",
+  "branch": "worktree-wf_512e9b2d-671-1 (to join codex/research-grade-design-system)",
+  "status": "STUDIO_V2_INTEGRATED_LOCALLY_QUALIFIED_NOT_DEPLOYED",
+  "adr": "127",
+  "migration": null,
+  "requirements": [
+    "FR-007",
+    "FR-011",
+    "FR-017",
+    "FR-038",
+    "FR-041",
+    "FR-044",
+    "FR-051",
+    "FR-061",
+    "FR-068",
+    "FR-070",
+    "NFR-003",
+    "NFR-007",
+    "NFR-013"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/127_studio_v2_integration.md",
+      "sha256": "98ce9b7fe9d00ab78ccd4fd44c6de7b2828b7709cb70d5c72bbf44f0edc1eccf"
+    },
+    {
+      "path": "infra/docker/deploy.sh",
+      "sha256": "53db28a6fc8c98f95dc8d62fa408c8ca9b0528f79bbffbc6706e5e8bdff8995a"
+    },
+    {
+      "path": "api/openapi.yaml",
+      "sha256": "9d30cfcd1e1386f931f3c67e49e62041b3eeb0a49a029e960af89eab8dac0bc7"
+    },
+    {
+      "path": "api/task-controls.openapi.json",
+      "sha256": "2f2a966ef74ce3945ce66daef462dfdf4449d6c5968161f5bb56d163274a3e0c"
+    },
+    {
+      "path": "apps/desk/src/services/canvaPanelPoll.ts",
+      "sha256": "505eee93577a6d7bb3fc7a96164fd188242ad59f30642d9cd40ae0925a3ef181"
+    },
+    {
+      "path": "apps/desk/src/components/CanvaTaskPanel.tsx",
+      "sha256": "4d73ef0b8df7562d200c020685ea756a5cca24d49e3af7c7e9dea0ad01504dfe"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "dfef4edb419a6a2ab67151c98306ea1dd8cc7e8c5176cc6c5b0d556c9f97d7d1"
+    },
+    {
+      "path": "scripts/ci/install_render_deps.sh",
+      "sha256": "1631d6362d55b4167ed6158dd514538071be0ccd50d30c829cb602faac12eb01"
+    },
+    {
+      "path": "scripts/verify_release_manifest.ts",
+      "sha256": "ce34f198de8b012ff8db48e820557b4409efe8f03ab8ef3e27dda92466c061a6"
+    },
+    {
+      "path": "packages/creative/src/studio/art-generator-v3.ts",
+      "sha256": "29c001d10f9a2239a4b1c062b5deda5e85feaeee7fd19d16cebdec010ee7030c"
+    },
+    {
+      "path": "scripts/blob_backfill.ts",
+      "sha256": "602d5942be4abf0177ff594c3e2e3a8952af8f041bb54cc9c4d3f1fe7415d8c6"
+    },
+    {
+      "path": "output/plans/2026-09-24-architecture-programme/staged/blob_fks.sql",
+      "sha256": "64790dc4f7c9618cb40c73b7b07cbec1241939f5c7e033db436ac63a964b047b"
+    },
+    {
+      "path": "infra/backup/restate_nightly.py",
+      "sha256": "f92c93320097fa513d0b9ad80b1c214fc39388785c7fc4c635c579160aa85982"
+    },
+    {
+      "path": "infra/backup/test_restate_recovery.py",
+      "sha256": "df5ae66799e3a74954d051ff2ec6001c0777f23fe56bcc5bce0d1938e7415525"
+    },
+    {
+      "path": "infra/ops/watchdog.sh",
+      "sha256": "926c94b4ab301453aebc7ccb552957e5bcfe785eb27babc5022e5548dde2bca8"
+    },
+    {
+      "path": "runbooks/10_backup_restore.md",
+      "sha256": "c604f58bada725448932af392c26aff94248a8e1ba4b39343836c0a124696a19"
+    },
+    {
+      "path": "runbooks/20_architecture_operations.md",
+      "sha256": "f57175b524d739dcb9a6b8f8647a046eae0aeb8857785f2e1e64d69d25fddb71"
+    },
+    {
+      "path": "scripts/load/run.ts",
+      "sha256": "37afeff91b915eb8d174ef6a60f075d569c009fdc453dc8d45afdce5d1eb6f8a"
+    },
+    {
+      "path": "scripts/load/seed-desk-tasks.ts",
+      "sha256": "2401f116087c298ea0bc4ef9d6518d830cc4c8eb5be068d7822353c713487336"
+    },
+    {
+      "path": "packages/creative/src/clients/client-pack.ts",
+      "sha256": "35788786a40aa70f431771e7ec4d17fcbe42a6bc5ab3b30f0171fe839737c7c8"
+    },
+    {
+      "path": "packages/creative/assets/clients/kaae.json",
+      "sha256": "9ac570eb44a7fa35a69bd8b88fe7a25a4077603449301b236aa245aaf441c706"
+    },
+    {
+      "path": "packages/creative/assets/clients/zar-podcast.json",
+      "sha256": "f716bf4c4d189bcff80f89478985ef25d53d82cdbd38da9c15866b0199370eea"
+    },
+    {
+      "path": "packages/creative/assets/clients/halwest-news.json",
+      "sha256": "dc84e73dc2ead0c69771d27e40c8815252dd4fe9a19272e1d13879ea738a3986"
+    },
+    {
+      "path": "packages/creative/assets/clients/kawa-ba-hawlery.json",
+      "sha256": "c00211e073b2bd1ea6b6530b2afd86979a5f3441f81be5d60685b59d4a1ac95d"
+    },
+    {
+      "path": "packages/creative/assets/clients/erbil-edition.json",
+      "sha256": "6683676973943fb5c546e19c5f5e8430358863f42799ac37ae4fd85fae80b5ce"
+    },
+    {
+      "path": "packages/creative/src/studio/thumbnail-rules.ts",
+      "sha256": "0027b5a72cb452b26e0573cf2bcd281b2b44d42f31ac0f3751d06a707c7d75a6"
+    },
+    {
+      "path": "packages/creative/src/studio/hard-qa.ts",
+      "sha256": "6e5927b162e74d0d2ecb191be72b01b3f0f4adaad6c78fd615ae934be1dc36d6"
+    },
+    {
+      "path": "packages/creative/src/studio/layout-generator-v3.ts",
+      "sha256": "67f794506005091aefbce45d491109b7052668b4ba8517f7da7c53bb677eb12a"
+    },
+    {
+      "path": "packages/creative/src/studio/pairwise-judge-v3.ts",
+      "sha256": "5ecf25768a864e8e7c1b243bfb6d9aa1c06c2cb8f544cc255d5e78fa9de4fddd"
+    },
+    {
+      "path": "apps/core/src/services/client-packs.ts",
+      "sha256": "5b7b0a0cd68d5823346b2ac0fde691505eea5f879cacf45e1c5a91ed40899d9e"
+    },
+    {
+      "path": "apps/core/src/services/client-pack-rows.ts",
+      "sha256": "17d2b5c433cb1d0747f06674d4f8ce29f6a14c59d74f8aecf3cc67e66591ff58"
+    },
+    {
+      "path": "apps/core/src/services/chat-campaign-intake.ts",
+      "sha256": "bd1bbe19b7e0430b57f79b7a9d4fbf860d2980a62b3a17547df0510cd5b72591"
+    },
+    {
+      "path": "apps/core/src/services/client-design-reference.ts",
+      "sha256": "fb9f1ab8394f1fcfe9e9d5ebe277bcecb82426b4d227d9fb33e886e20720b0f2"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "5b709edf427c4ad95c5dfa761ede04afcad7a0be4f5a07dc5f4a12a222742c5d"
+    },
+    {
+      "path": "apps/core/src/routes/delivery.routes.ts",
+      "sha256": "17fdc164cfbd5c6978ec200ddea29eabbbd7d775ac3fae1f3ce08c8e28bb4c25"
+    },
+    {
+      "path": "apps/core/src/routes/system.routes.ts",
+      "sha256": "068c73bf833853f7d50119af2c2abd19fe4eecdabfb830acf4b8d28074668ae4"
+    },
+    {
+      "path": "apps/core/src/services/omnichannel-delivery.ts",
+      "sha256": "a82bfe13ca676a98137ae816e7ecaeecc370cd92ade93e774ae6f48cad8088ba"
+    },
+    {
+      "path": "db/seed.sql",
+      "sha256": "a7270afa44974ef143716fef126dc546aea0750d34b8d7c2d68a6156f371221b"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "c1e25d21a11eb451f8c65a05c068dad675331cfb505ffadff56c3aa829c81a8d"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/art-temp-red.log",
+      "sha256": "f2e0a07a066452c2e5ff600d0a6bfa344a860fe5982dce19a9532bcf84bcc2ad"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/audit-fixes-green.log",
+      "sha256": "c9570697b714482269303ddc796a21d222a6e1e04751be19f60ddf7898b10a27"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/audit-fixes-red.log",
+      "sha256": "aadcf618dcdfbdbc8fdf335a18de9a06b62aacf50b31d82ef25d7b6313e13837"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/build-final.log",
+      "sha256": "f8cbe810fe753ff146745031a1dadb23ffe9ef9bc58c2c8e558fd0fd597c6502"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/build.log",
+      "sha256": "f8cbe810fe753ff146745031a1dadb23ffe9ef9bc58c2c8e558fd0fd597c6502"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/canva-panel-poll-green.log",
+      "sha256": "24ee04faffe32f85600fb1c97df5dca67a1adb22de0c8f80ca0ee1f747410e5b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/canva-panel-poll-red.log",
+      "sha256": "775f1b60f205c28bd74310ef5749a4178e2a98fbc0ed09e37a7f1cd102b34e7c"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/checks.txt",
+      "sha256": "fa8ed611e916b7789c3bcfdf1dca24166e2b5dd470c95bb6e87fd2864fd08d06"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/ci-port-green.log",
+      "sha256": "f90a9971da7e2c554f610fa14a75eb1d51c4aabe039221fb9dcc407cd0240527"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/client-packs-red.log",
+      "sha256": "88606f36269a8a92cb77addd8bace522f5bf13f449a0b0200f0bde5826bf933c"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/compose-duplicate-keys.log",
+      "sha256": "a40ec084f67e7fa482d9aa3df44779e1d03f3a8be073deca8e63e2b1612925dc"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/deploy-health-red.log",
+      "sha256": "57b9e92d4f3584c2d8c6c6ab3670a37cb188033e4edebbf81ebcf6d5d8ab8031"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/deploy-openapi-green.log",
+      "sha256": "d31f22dd16f264f3253700229ff39d1fc8ed7965e382bcd2a957a5a220e4cf2b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/desk-build.log",
+      "sha256": "8c78ed2734b08054fb0aab3171e197199c947e2a44f62ff7d408d4a2e633bb60"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/filestore-green.log",
+      "sha256": "c937baec513dd054f3ba16eae063bfc015acaec17693d148e1e7659f5cf7c5c0"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/filestore-red.log",
+      "sha256": "162b53ddb9527e84acf8958079674796d4921197c6c03101b2e19092b97d36ca"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/full-suite.end",
+      "sha256": "c2eeb4b6a1efd645c64387c4e51f0e2d53680bc677d97707b92e1bb7cabc3055"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/full-suite.log",
+      "sha256": "f6f1e6eddd9b3a6def297a60146a808ee911cdc3bd9865f1cf94efe8c5ebc7b3"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/full-suite.start",
+      "sha256": "2baebcc055b6f0a58a8891880ade69a670d0cc4a19bde27c58f3296bc8e75963"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/lint-final.log",
+      "sha256": "bf6a506574a99e16abdfc6878ea45a2405886cf96032f2223612a31a69e58785"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/lint.log",
+      "sha256": "bf6a506574a99e16abdfc6878ea45a2405886cf96032f2223612a31a69e58785"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/openapi-controls-red.log",
+      "sha256": "361de1c3a73a30a12b049b4f702e2eaa17d4f816d3f83e4bb0d51d7e675358a9"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/release-manifest-commit-green.log",
+      "sha256": "585d61fe28219135b8e361bfc2aa23257438276c174f5d28c12aa9c5a6b0d410"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/release-manifest-commit-red.log",
+      "sha256": "8e03c5c749bfec06fb4c510dc5c6b71430137980ce7c3a5591b30b5b9cb990c2"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/rerun-after-desk-build.log",
+      "sha256": "3f083418e478a649be2f90b2169b81110c0471e22512bb1133c00b9a3f6b0027"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/restate-recovery-green.log",
+      "sha256": "b1f06383a111604a07912d769b00d044b8aaba8016c7e322fb967023cfe26384"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/restate-recovery-red.log",
+      "sha256": "2867e1519fe254459fb3101b066770761814e83a7c1e34133a3ac83dc65a584d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/retire-templates-green.log",
+      "sha256": "d902e1ab37d803bd18fe657df095259b372f850b1f863a0d553f438ff661a39a"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/retire-templates-red.log",
+      "sha256": "a85e7a2aa0e17b5c144182a98182daa23c6bc2b47d22492afecf1c64e32921ba"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/runbook-load-green.log",
+      "sha256": "9c078cfa013e08b7df40b2fc2023b735594ee9c348fa9cccedcd31a7141bae1e"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/runbook-red.log",
+      "sha256": "0f296c79f0304ccb71a152997eec69bfa2235abb738d626321f59f1170415a5a"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/security.log",
+      "sha256": "8d854907ff4e04b377eac079ee1781a91b0d6a89c86f124b995762b97d5117c1"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/shared-code-green.log",
+      "sha256": "066ae9ed593252fe7dd7d5d6367d4d56c217b2d2e1dbf23ce7e2972b2e47db41"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/shared-code-red.log",
+      "sha256": "bd6a6237ca421c4612f55faf4fced885c167826bc2dc9c73f1ccefc8b3544f59"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/stale-fixtures-green.log",
+      "sha256": "3dd729cd991fc715d8cedb8d50d3f6e578bb9cbb4459520f4a84db6068983bfc"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/studio-ledger-at-base.log",
+      "sha256": "b4f7ddd16c4121cdb8baa033bf428d5516e4b586c57ac3b456ec7b50b521918b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/thumbnail-green.log",
+      "sha256": "0c1cd99c1fb5df002ba17691e3e66e794345a3ee763f94e9b6b7239d87722aa6"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/thumbnail-red.log",
+      "sha256": "f658dbdc44454cdb83798cc97bc282d5c4f00ff69568f5cebae216b754e41610"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/tooling-remediation.log",
+      "sha256": "fd0bf695f4e145c900ee9048c89c5b9dcb414d03cb874158c9c40a6abe1c10a1"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/typecheck-final.log",
+      "sha256": "d731e4443e65da012eeba3331dcc921536d8c725265f3b04d27a84dbd21901b3"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/typecheck-first.log",
+      "sha256": "b11fe0c4f45099d10e7e36f838e11e0741fb2f5341f0d37da3ef122f9175f03b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/typecheck.log",
+      "sha256": "d731e4443e65da012eeba3331dcc921536d8c725265f3b04d27a84dbd21901b3"
+    }
+  ],
+  "acceptance": {
+    "full_suite": {
+      "workers": 3,
+      "window": "2026-09-28T08:42:08Z..08:45:23Z",
+      "files": {
+        "failed": 9,
+        "passed": 533,
+        "skipped": 7,
+        "total": 549
+      },
+      "tests": {
+        "failed": 10,
+        "passed": 4535,
+        "skipped": 60,
+        "total": 4605
+      },
+      "failures": [
+        "r11-release-gate: manifest (expected; RELEASE_MANIFEST.json left for the lead)",
+        "studio-ledger x2: db.transaction missing in stub; fails identically at base 7b8de71e (studio-ledger-at-base.log); not fixed",
+        "hawa-work-desk-cv17: Desk dist absent in the fresh worktree; passed after pnpm --filter desk build (rerun-after-desk-build.log)",
+        "canva-desk-check-capture: stale operator expectation after audit #2 port; test updated, 10/10 pass",
+        "route-inventory, startup-schema-check, canva-planner-accounting, schema-upgrade, blob-gc: expectations older than base migrations 063/064 and ADR-111/113/114/119; updated, 79/79 pass with the two above (stale-fixtures-green.log)"
+      ]
+    },
+    "environment": "Isolated test PostgreSQL 127.0.0.1:55432 with per-file clones; synthetic model, Canva and Telegram transports; stubbed docker/curl for backup and watchdog",
+    "prior_attempts": [
+      "deploy health (644fd8dd): red 7 failures before port",
+      "OpenAPI task controls: red 3 before port",
+      "Canva panel poll: red (module missing) before port",
+      "art temp directory: red 1 before port",
+      "release manifest commit check: red 4 before port",
+      "file store: red 10 failures plus missing staged file before port",
+      "Restate recovery: red import failure; SIGKILL demo left intake paused and Restate stopped",
+      "runbook: red 2 before adaptation",
+      "client packs: red 2; thumbnail: red; shared code: red 7 of 9; templates: red 3; audit fixes: red 7",
+      "first full-suite attempt exited 127 (no timeout binary on macOS); rerun without it",
+      "first full suite: 10 failures listed above"
+    ]
+  },
+  "checks": {
+    "build": "passed (build-final.log)",
+    "source_types": "passed",
+    "script_types": "passed",
+    "strict_test_roots": 550,
+    "any_count": 955,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "security": "0 secrets",
+    "restate_python_tests": 52
+  },
+  "proof_scope": [
+    "client packs route intake, gate automatic drafts and name exemplars while Client DNA stays the brand authority",
+    "video-thumbnail playbook in hard QA and prompts",
+    "KAAE persona and palette out of shared studio code",
+    "v1 KAAE templates retired (410)",
+    "audit fixes #2 #3 #11 #14 #15 #16 #17 #21 #22",
+    "deploy health retry and task-control OpenAPI",
+    "CI on a clean runner including Pango headers",
+    "Canva panel adaptive poll",
+    "file store backfill fixes and staged release B keys",
+    "Restate backup recovery after SIGKILL and watchdog handling",
+    "load-test scripts and runbook with re-run markers",
+    "historical documents with supersession notes"
+  ],
+  "not_executed": [
+    "chaos stack drills and the load test itself",
+    "pnpm test:db against the chaos database",
+    "any production database, container or deploy.sh",
+    "native Canva operations and autofill on the real account",
+    "paid model or image calls",
+    "Telegram sends",
+    "live Restate backup rehearsal",
+    "RELEASE_MANIFEST.json regeneration",
+    "a second full-suite run after the fixture updates (affected files re-run instead)"
+  ],
+  "next": [
+    "owner: Client DNA, Kurdish aliases, chats and proof set per onboarding client before setting it live",
+    "owner: decide HAWA_RESTATE_BACKUP_ENABLED after a live rehearsal",
+    "owner: decide the production fixture row that blocks release B keys",
+    "lead: regenerate RELEASE_MANIFEST.json",
+    "fix the studio-ledger resume stub (pre-existing)"
+  ]
+}
