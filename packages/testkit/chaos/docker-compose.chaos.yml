@@ -29,7 +29,8 @@ x-app-environment: &app-environment
   # The chats whose requests Restate's lifecycle runs (Phase 2 slices; 2.2: the Delivery workflow).
   # The driver's flagged scenarios use these chats; every other chat takes the legacy path. With the
   # worker's poller the R1.S3 and L2 scenarios together use 16 of them (17 with --candidate).
-  HAWA_LIFECYCLE_CHATS: "9300001,9300002,9300003,9300004,9300005,9300006,9300007,9300008,9300009,9300010,9300011,9300012,9300013,9300014,9300015,9300016,9300017,9300018,9300019,9300020,9300021,9300022,9300023,9300024"
+  # run.ts --lifecycle-chats overrides it (CHAOS_LIFECYCLE_CHATS); `*` enrols every chat (production's setting on 2026-09-28).
+  HAWA_LIFECYCLE_CHATS: "${CHAOS_LIFECYCLE_CHATS:-9300001,9300002,9300003,9300004,9300005,9300006,9300007,9300008,9300009,9300010,9300011,9300012,9300013,9300014,9300015,9300016,9300017,9300018,9300019,9300020,9300021,9300022,9300023,9300024}"
   HAWA_BEARER_TOKEN: ${CHAOS_BEARER_TOKEN:?}
   HAWA_ART_DIRECTOR_KEY: ${CHAOS_REVIEWER_KEY:?}
   HAWA_ADMIN_KEY: ${CHAOS_ADMIN_KEY:?}
@@ -130,7 +131,8 @@ services:
       - ../../../db/seed.sql:/docker-entrypoint-initdb.d/04-seed.sql:ro
     networks: [chaos, chaos-edge]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hawa_owner -d hawa_chaos"]
+      # Over TCP: the socket answers during the init scripts (for about 1 s), when --wait must not pass yet.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U hawa_owner -d hawa_chaos"]
       interval: 2s
       timeout: 3s
       retries: 60

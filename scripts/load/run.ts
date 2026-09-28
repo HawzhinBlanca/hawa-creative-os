@@ -43,12 +43,12 @@
  *  - errors: failed tab requests, console errors in the tabs, stream drops, error lines of Core and the
  *    worker, briefs without a draft, model calls no fixture answered, paused or failing invocations.
  */
-import { fork, spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { fork, spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  build, CHAOS_DIR, closeDb, down, fakes, logs, PORTS, query, REPO_ROOT, restateQuery, secrets, sql, up,
+  acquireProject, build, CHAOS_DIR, closeDb, down, fakes, logs, PORTS, query, REPO_ROOT, releaseProject, restateQuery, secrets, sql, up,
 } from '../../packages/testkit/chaos/driver/stack.js';
 import { connectCanva, kaaeClientDna, registerColour, upgradeSchema } from '../../packages/testkit/chaos/driver/provision.js';
 import { briefText, designOutcome, quiescent, tasksOfChat, textUpdate } from '../../packages/testkit/chaos/driver/scenario.js';
@@ -67,24 +67,6 @@ const log = (line: string) => console.log(`[load] ${new Date().toISOString().sli
 function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
-}
-
-/** Names of running containers of the chaos project (hawa-chaos-*), from `docker ps`. */
-function chaosContainers(): string[] {
-  const res = spawnSync('docker', ['ps', '--format', '{{.Names}}'], { encoding: 'utf8' });
-  if (res.status !== 0) throw new Error(`docker ps failed: ${res.stderr}`);
-  return res.stdout.split('\n').map((s) => s.trim()).filter((n) => n.startsWith('hawa-chaos'));
-}
-
-async function waitForFreeChaosProject(): Promise<void> {
-  const deadline = Date.now() + 30 * 60_000;
-  for (;;) {
-    const running = chaosContainers();
-    if (!running.length) return;
-    if (Date.now() > deadline) throw new Error(`hawa-chaos is still in use after 30 minutes (${running.join(', ')}); not starting`);
-    log(`hawa-chaos is in use (${running.join(', ')}); waiting 30 s`);
-    await sleep(30_000);
-  }
 }
 
 /** Memory per chaos container (MiB) from one `docker stats` sample, without blocking the event loop. */
@@ -194,14 +176,20 @@ async function main(): Promise<void> {
   const stopEverything = () => {
     for (const t of tabs) t.stop();
   };
+  // Set once this run holds the project's lock. Before that the project, if any, is another run's:
+  // on 2026-09-28 a load run that gave up after waiting 30 minutes still ran the teardown below and
+  // took down a chaos suite in the middle of its scenarios (every later scenario ECONNREFUSED 56090).
+  let owned = false;
   process.on('SIGINT', () => {
     stopEverything();
-    if (!keep) down({ volumes: true });
+    if (owned && !keep) down({ volumes: true });
     process.exit(130);
   });
 
   try {
-    await waitForFreeChaosProject();
+    // One run at a time on this machine (driver/stack.ts acquireProject): the hawa-chaos-lock container.
+    await acquireProject({ waitMs: 30 * 60_000, log });
+    owned = true;
     log(`starting hawa-chaos with the ${poller} poller`);
     down({ volumes: true });
     build(['core', 'worker-blue']);
@@ -389,10 +377,12 @@ async function main(): Promise<void> {
     sampling = false;
     stopEverything();
     await closeDb();
-    if (!keep) {
+    if (!owned) log('hawa-chaos was never ours (the lock was not taken): left as it is');
+    else if (!keep) {
       down({ volumes: true });
       log('hawa-chaos is down, with its volumes');
     } else log('--keep: hawa-chaos is still running; take it down with `npx tsx packages/testkit/chaos/run.ts --down`');
+    await releaseProject();
   }
 }
 

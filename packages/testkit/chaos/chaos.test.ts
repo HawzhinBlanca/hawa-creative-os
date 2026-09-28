@@ -8,6 +8,7 @@
  *   HAWA_CHAOS_KEEP=1   leave the project running afterwards (default: taken down with its volumes)
  *   HAWA_CHAOS_ONLY=R1.0,R4   run only these scenarios
  *   CHAOS_TELEGRAM_POLLER=worker   the worker polls Telegram through ChatInbox (Phase 2.1; run.ts --poller worker)
+ *   HAWA_CHAOS_SEED_DUMP=<file>    the scenarios run on a copy of production's data (run.ts --seed-dump; driver/seed.ts)
  *
  * It drives the legacy path; with the worker poller, intake goes through ChatInbox first. The results (per scenario: invariants, time, memory) are written to
  * .run/last-run.json and printed; a failed invariant fails its scenario.
@@ -17,8 +18,9 @@ import { candidateSources } from './driver/candidate-sources.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
+import { acquireProject, build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, releaseProject, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
+import { neutralise, restoreDump, verifyEgressFence, type EgressProbe, type NeutraliseReport, type SeedReport } from './driver/seed.js';
 import {
   approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
   OFFICE_CHAT, sendToChatInbox, sentTo, sleep, staffConfirmVisible, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
@@ -31,6 +33,11 @@ const candidate = process.env.HAWA_CHAOS_CANDIDATE === '1';
 // Who polls Telegram in the stack (run.ts --poller; docker-compose.chaos.yml): Core, as production
 // does today, or the worker's poller and ChatInbox (Phase 2.1). Scenarios of 2.1 need the worker.
 const poller = (process.env.CHAOS_TELEGRAM_POLLER || 'core').trim().toLowerCase() === 'worker' ? 'worker' : 'core';
+// run.ts --seed-dump: the scenarios run on a restored copy of production's data (driver/seed.ts).
+const seedDump = process.env.HAWA_CHAOS_SEED_DUMP || '';
+let seeded: { restore: SeedReport; upgrade: { applied: string[]; verified: number }; neutralised: NeutraliseReport; egress: EgressProbe[] } | null = null;
+// Set once this run holds the project's lock; a run that never got it must not touch the project.
+let owned = false;
 
 interface ScenarioReport {
   name: string;
@@ -83,8 +90,22 @@ interface Expectation {
   executor?: 'core' | 'restate';
 }
 
-function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, options: { flagged?: boolean; needs?: 'worker-poller' } = {}) {
-  const run = enabled && (only.length === 0 || only.includes(name)) && (options.needs !== 'worker-poller' || poller === 'worker');
+/**
+ * Every chat on the Restate lifecycle (run.ts --lifecycle-chats all; production's setting on
+ * 2026-09-28): with the worker's poller no request takes the legacy path (Core intake → outbox
+ * task.created → TaskWorkflow → notify.published), so a scenario whose kill point or expectation
+ * exists only there cannot apply. It is recorded as not applicable, with the lifecycle scenario
+ * that covers the same fault, instead of waiting 300 s for a point nothing reaches.
+ */
+const everyChatOnLifecycle = (process.env.CHAOS_LIFECYCLE_CHATS || '').split(',').map((c) => c.trim()).includes('*') && poller === 'worker';
+const notApplicable: Array<{ name: string; reason: string }> = [];
+
+function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, options: { flagged?: boolean; needs?: 'worker-poller'; legacyOnly?: string } = {}) {
+  const selected = enabled && (only.length === 0 || only.includes(name));
+  if (selected && options.legacyOnly && everyChatOnLifecycle) {
+    notApplicable.push({ name, reason: `legacy path only; with every chat on the lifecycle it cannot be reached. Covered by ${options.legacyOnly}` });
+  }
+  const run = selected && (options.needs !== 'worker-poller' || poller === 'worker') && !(options.legacyOnly && everyChatOnLifecycle);
   it.skipIf(!run)(`${name}: ${what}`, async () => {
     const chat = options.flagged ? flaggedChat() : newChat();
     const events: string[] = [];
@@ -135,15 +156,37 @@ async function fullRequest(chat: string, tag: string, events: string[], hooks: {
 
 describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   beforeAll(async () => {
+    // One run at a time on this machine, from this down to the last (driver/stack.ts acquireProject).
+    await acquireProject({ log: (line) => console.log(`[chaos] ${line}`) });
+    owned = true;
     // Always from nothing: a kept project from an earlier run would carry its tasks and journals.
     down({ volumes: true });
     // Core and the worker start below with --no-build, so their images are built from this checkout here.
     build(['core', 'worker-blue', ...(candidate ? ['desk', 'docling'] as const : [])]);
     up({ services: ['postgres', 'restate', 'fakes'] });
-    await upgradeSchema();
+    if (seedDump) {
+      // Production's data, then the pending migrations exactly as a deploy runs them, then nothing
+      // restored that could act outside the stack (driver/seed.ts). No application container runs yet.
+      const restore = await restoreDump(seedDump);
+      console.log(`[chaos] restored ${restore.dump} (${restore.migrationsInDump} migrations recorded, ${restore.restoreMs} ms): ${JSON.stringify(restore.counts)}`);
+      const upgrade = await upgradeSchema();
+      console.log(`[chaos] upgraded the restored data: ${upgrade.applied.length} pending migration(s) applied, ${upgrade.verified.length} verified`);
+      const neutralised = await neutralise();
+      console.log(`[chaos] neutralised: ${JSON.stringify(neutralised)}`);
+      seeded = { restore, upgrade: { applied: upgrade.applied, verified: upgrade.verified.length }, neutralised, egress: [] };
+    } else {
+      await upgradeSchema();
+    }
     await connectCanva();
     await kaaeClientDna();
     up({ build: false, services: ['core', 'worker-blue'] });
+    if (seeded) {
+      // Refuse to run a scenario on production's data unless the fence holds from inside the apps.
+      seeded.egress = verifyEgressFence();
+      const broken = seeded.egress.flatMap((p) => p.checks.filter((c) => !c.ok).map((c) => `${p.container}: ${c.name} ${c.detail}`));
+      if (broken.length) throw new Error(`egress fence does not hold, not running on production data: ${broken.join('; ')}`);
+      console.log(`[chaos] egress fence holds: ${seeded.egress.map((p) => `${p.container} ${p.checks.length} checks`).join(', ')}`);
+    }
     const reg = await registerColour('blue');
     if (reg.code !== 0) throw new Error(`register blue: ${reg.lines.join(' | ')}`);
     if (candidate) up({ build: false, services: ['docling', 'desk', 'nginx'] });
@@ -151,10 +194,15 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   }, 30 * 60_000);
 
   afterAll(async () => {
+    // Never started (the lock was not taken): the project, if any, is another run's.
+    if (!owned) return;
     sampleMemory();
     const result = {
       finishedAt: new Date().toISOString(),
       telegramPoller: poller,
+      lifecycleChats: process.env.CHAOS_LIFECYCLE_CHATS || 'default list (docker-compose.chaos.yml)',
+      ...(seeded ? { seededFrom: seeded } : {}),
+      notApplicable,
       ...(candidate ? { deployment: deploymentReceipt() } : {}),
       totalMs: Date.now() - suiteStarted,
       memoryMeasurement: 'start/end and scenario samples; not a continuous peak measurement',
@@ -169,10 +217,12 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       const bad = r.invariants.filter((i) => !i.ok);
       console.log(`[chaos] ${r.name} ${r.error ? 'ERROR' : bad.length ? 'FAIL' : 'ok'} ${Math.round(r.ms / 1000)} s — ${r.what}${r.error ? `\n    error: ${r.error}` : ''}${bad.map((b) => `\n    ✗ ${b.name}: ${b.detail}`).join('')}`);
     }
+    for (const n of notApplicable) console.log(`[chaos] ${n.name} n/a — ${n.reason}`);
     console.log(`[chaos] total ${Math.round(result.totalMs / 1000)} s, peak memory ${result.peakTotalMiB} MiB (${JSON.stringify(peakMemory)})`);
     await closeDb();
     if (!keep) down({ volumes: true });
-    else console.log('[chaos] HAWA_CHAOS_KEEP=1: the hawa-chaos project is still running; take it down with `npx tsx packages/testkit/chaos/run.ts --down`.');
+    await releaseProject();
+    if (keep) console.log(`[chaos] HAWA_CHAOS_KEEP=1: the hawa-chaos project is still running${seeded ? ' WITH A COPY OF PRODUCTION DATA' : ''}; take it down with \`npx tsx packages/testkit/chaos/run.ts --down\`.`);
   }, 10 * 60_000);
 
   if (candidate) scenario('R1.S3.SOURCES', 'full-app PDF source to voice revision and simulated approved delivery', async (chat, events) => ({
@@ -207,14 +257,14 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await fullRequest(chat, 'R1.K1', events);
     events.push(`killed ${(await k.done).killed} at worker.outbox.after-claim`);
     return { delivered: true };
-  });
+  }, 12 * 60_000, { legacyOnly: 'R1.S2.K4/R1.S2.K5 (intake) and R1.K3 (DesignRun steps)' });
 
   scenario('R1.K2', 'worker killed after Restate accepted the workflow, before the outbox recorded it', async (chat, events) => {
     const k = await killAtPoint('worker.dispatch.after-submit', {});
     await fullRequest(chat, 'R1.K2', events);
     events.push(`killed ${(await k.done).killed} at worker.dispatch.after-submit`);
     return { delivered: true };
-  });
+  }, 12 * 60_000, { legacyOnly: 'R1.S1.K1 (Restate accepted, offset not stored) and R1.DUP' });
 
   scenario('R1.K3', 'worker killed after Core planned and imported the draft, before the step was journalled', async (chat, events) => {
     const k = await killAtPoint('worker.step.after-action', { step: 'canva-create-draft' });
@@ -235,7 +285,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await fullRequest(chat, 'R1.K5', events);
     events.push(`killed ${(await k.done).killed} after canva-notify-canva_draft_ready_for_visual_review`);
     return { delivered: true };
-  });
+  }, 12 * 60_000, { legacyOnly: 'R1.K3/R1.K4 (DesignRun steps) and R1.S3.K1' });
 
   scenario('R1.K6', 'Core killed mid-design (worker held after reading the binding), back after 5 s', async (chat, events) => {
     const k = await killWhileHeld('worker.step.after-action', { step: 'canva-read-binding' }, 'core');
@@ -291,14 +341,14 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     events.push(`killed ${(await k.done).killed} after the document send`);
     await waitUntil('the delivery command to settle', async () => !(await outboxOpen(taskId)), 240_000, 2000);
     return { delivered: true, uncertainSends: 1 };
-  });
+  }, 12 * 60_000, { legacyOnly: 'L2.K12 (worker killed after the first file, before its mark)' });
 
   scenario('R1.K13', 'Telegram takes the approved file and the answer is lost (uncertain send)', async (chat, events) => {
     await fakes.telegramFault({ method: 'sendDocument', chat, kind: 'drop-after-processing', n: 1 });
     const taskId = await fullRequestUntilDelivery(chat, 'R1.K13', events);
     await waitUntil('the delivery command to settle', async () => !(await outboxOpen(taskId)), 240_000, 2000);
     return { delivered: true, uncertainSends: 1 };
-  });
+  }, 12 * 60_000, { legacyOnly: 'L2.K12 (an unconfirmed send is held for staff, ADR-046)' });
 
   scenario('R1.K14', 'Core killed in the middle of a Deliver request (Drive upload slowed to 8 s), back after 5 s; Deliver pressed again once', async (chat, events) => {
     const taskId = await briefToDraft(chat, 'R1.K14');
@@ -345,7 +395,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       extra: [{ name: "the held file's 'sent' mark is written once Postgres is back", ok: marks.length >= 1 && marks.every((m) => m.outcome === 'telegram_document_sent'),
         detail: JSON.stringify(marks.map((m) => m.outcome)) }],
     };
-  });
+  }, 12 * 60_000, { legacyOnly: 'L2.K17 (Postgres killed after Telegram took the first file)' });
 
   scenario('R1.D1', 'deploy to green while the design runs on blue: it finishes on blue, blue drains and is deleted', async (chat, events) => {
     const [blue] = await restateQuery<{ id: string }>(`SELECT id FROM sys_deployment WHERE endpoint LIKE '%worker-blue%'`);

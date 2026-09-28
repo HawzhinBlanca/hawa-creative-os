@@ -182,8 +182,10 @@ export async function approve(taskId: string, options: { pinDeck?: boolean } = {
  */
 export async function deliver(taskId: string): Promise<{ status: number; body: any }> {
   const request = await requestOf(taskId);
+  // Approved or past it: a Deliver pressed again after the Delivery workflow already ran (R1.K14 with
+  // every chat on the lifecycle, 2026-09-28) finds the request delivering or delivered.
   if (request) await waitUntil(`request ${request.request_id} to take the approval`, async () =>
-    (await requestOf(taskId))?.stage === 'approved', 60_000, 500);
+    ['approved', 'delivering', 'delivered'].includes((await requestOf(taskId))?.stage ?? ''), 60_000, 500);
   const res = await fakes.core(`/tasks/${taskId}/publish`, secrets().CHAOS_REVIEWER_KEY,
     { headers: { 'Idempotency-Key': randomUUID() }, body: {} });
   return { status: res.status, body: res.json };

@@ -20,11 +20,15 @@ export function discoverMigrations(migrationsDir?: string): string[] {
   return files;
 }
 
-export async function upgradeCanvaSchema(connectionString: string): Promise<{ applied: string[]; verified: string[] }> {
+/**
+ * `through` stops after that migration number: only the pre-deploy check's replay of a past release
+ * (predeploy-dump-check.ts --through) uses it; a deploy always applies every migration.
+ */
+export async function upgradeCanvaSchema(connectionString: string, options: { through?: number } = {}): Promise<{ applied: string[]; verified: string[] }> {
   if (!connectionString) throw new Error('DATABASE_URL is required; no implicit target or successful dry run');
   const client = new pg.Client({ connectionString, connectionTimeoutMillis: 10000 });
   const result: { applied: string[]; verified: string[] } = { applied: [], verified: [] };
-  const upgrades = discoverMigrations();
+  const upgrades = discoverMigrations().filter((name) => options.through === undefined || parseInt(name.slice(0, 3), 10) <= options.through!);
   try {
     await client.connect();
     await client.query('BEGIN');
