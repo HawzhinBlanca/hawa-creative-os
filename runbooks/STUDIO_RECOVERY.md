@@ -87,8 +87,31 @@ rewrite immutable history to make the check pass. Settlement establishes cost
 facts; it cannot reconstruct a missing result. Original unknown calls and billed
 errors without a validated response retain the prior settlement workflow.
 
-This is serial prefix recovery. Changed branching after a persisted rebrief,
-interleaved failed attempts and unpinned derivations may still require review.
+This is serial recovery. Since ADR-122 each new call records a semantic substep
+(`concepts/board`, `layout/concept-2`, `art/candidate-1`), its attempt and binding.
+Recovery matches retained results per substep, so a persisted rebrief branch and an
+interleaved definite image refusal resume without transport. `MODEL_STAGE_REPLAY_UNSAFE`
+now names the substep and attempt: "retained for different inputs" means its request,
+schema, authority or renderer basis changed; "cannot be reproduced" means a failed
+attempt preceded saved work anywhere in the interrupted stage (the detail names the
+first such substep). Calls admitted before migration 065 keep the ordered-prefix rule
+and are matched by request digest only. A resume that leaves saved results unread
+logs `the <stage> resume did not read N saved result(s)` with each call id, substep
+and attempt; compare each with the stored stage before settling or discarding it.
+Unpinned derivations may still require review.
+
+Since ADR-123, `STUDIO_VISUAL_INPUTS_UNSAFE` may name the renderer: "The font or renderer
+basis changed" means the fonts, rsvg-convert, its libraries or the system release differ from the
+run's pinned basis; restore that image or review the run, never edit the bundle. "predate renderer
+attestation" marks a version-2 bundle. A mismatched cut-out or focus derivation means the pinned
+pixels disagree with their recorded source; preserve the run and investigate. Before deploying
+ADR-123, list active runs past layout and runs with retained results bound to the old basis: they
+will hold. Rebuild the cut-out image so new derivations record its runtime.
+
+Deploying migration 065: it takes an ACCESS EXCLUSIVE lock on
+`hawa.design_studio_calls` until it commits (a validated CHECK and a non-concurrent
+unique index in one transaction). Stop Core and the worker, take the backup, apply
+it through the normal deployment migration gate, then start Core.
 Parity reruns, concurrent substeps, production process-kill/restore qualification
 and recovery of replies lost before retention are not covered by this slice.
 

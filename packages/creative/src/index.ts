@@ -24,6 +24,8 @@ export * from './studio/validate-layout-v2.js';
 export * from './studio/layout-metrics.js';
 export * from './studio/line-geometry.js';
 export * from './studio/render-layout-v2.js';
+export * from './studio/renderer-identity.js';
+export * from './studio/placement-map.js';
 export * from './studio/composite-contrast.js';
 export * from './studio/motifs.js';
 export * from './studio/color-science.js';

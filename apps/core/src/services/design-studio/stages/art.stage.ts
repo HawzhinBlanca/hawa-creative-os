@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
 import { isModelCallHoldError, type StageContext, type CandidateState } from '../types.js';
-import { FORBIDDEN_ART_WORDS, renderMotifPng, evaluateHardQa, type ProceduralMotifType } from '@hawa/creative';
+import { FORBIDDEN_ART_WORDS, renderMotifPng, evaluateHardQa, expectedArtFrame, planArtRegion, landArtRegion, imagePixelSize, type ProceduralMotifType } from '@hawa/creative';
 import { hardQaContextFor } from './v3.stage.js';
 import { log } from '../../../logging.js';
+import { resolveImageSettings, studioSubstepKey } from '@hawa/domain';
+import { inStudioSubstep } from '../substeps.js';
 
 function assertArtPromptSafe(prompt: string, ctx: StageContext): void {
   const normalized = (value: string) => value.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -67,22 +69,33 @@ export async function runArtStage(
         width: rawCalm.width ?? box.width,
         height: rawCalm.height ?? box.height,
       };
-      const calmRegionDesc = `centered around (${Math.round(calmBox.x)}, ${Math.round(calmBox.y)}) measuring ${Math.round(calmBox.width)}x${Math.round(calmBox.height)}`;
 
       try {
-        const artResult = await ctx.artProvider.generateArt({
+        // ADR-123: the calm region is described in the frame the provider is asked for, after the
+        // renderer's cover crop. Until 2026-09-28 it went out in layout pixels ("centered around
+        // (0, 945) measuring 1080x405") to a 1024x1024 image, with an aspect the request did not use.
+        const settings = resolveImageSettings();
+        const regionPlan = planArtRegion({ box, calmRegion: calmBox }, expectedArtFrame(settings, box));
+        // The image, its refusals and its verifier are attempts of one substep (ADR-122).
+        const artProvider = ctx.artProvider;
+        const artResult = await inStudioSubstep(studioSubstepKey('art', `candidate-${cand.ordinal + 1}`), () => artProvider.generateArt({
           artPrompt: basePrompt,
           palette: ctx.referencePack.palette,
-          aspect: width >= height ? '16:9' : '9:16',
-          calmRegionDescription: calmRegionDesc,
+          aspect: regionPlan.aspect,
+          ...(regionPlan.description ? { calmRegionDescription: regionPlan.description } : {}),
           width,
           height,
-        });
+          settings,
+        }));
 
         const actualSha256 = createHash('sha256').update(artResult.imageBuffer).digest('hex');
         if (actualSha256 !== artResult.receipt.sha256) {
           throw new Error('ART_RECEIPT_HASH_MISMATCH');
         }
+        // What came back is checked against the region it was asked for, in its actual frame.
+        // A procedural motif the provider fell back to was never given the prompt.
+        const prompted = artResult.receipt.provider !== 'procedural';
+        const generated = landArtRegion({ box, calmRegion: calmBox }, imagePixelSize(artResult.imageBuffer), prompted ? regionPlan : undefined, artResult.imageBuffer);
 
         cand.artPng = artResult.imageBuffer;
         cand.artSha256 = actualSha256;
@@ -93,6 +106,7 @@ export async function runArtStage(
           prompt: basePrompt,
           ...(artResult.receipt.artFallback ? { artFallback: artResult.receipt.artFallback } : {}),
           ...(artResult.receipt.fallbackReason ? { fallbackReason: artResult.receipt.fallbackReason } : {}),
+          region: { plan: regionPlan, generated },
         };
       } catch (err: any) {
         if (isModelCallHoldError(err)) throw err;

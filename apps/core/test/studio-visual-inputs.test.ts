@@ -135,7 +135,7 @@ describe.skipIf(!url)('Studio uses one pinned visual basis',()=>{
     const f=service();await expect(f.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
     expect(boundary.layout).toHaveBeenCalledTimes(1);
     const original=await inputs.get(scope,runId);
-    expect(original?.manifest).toMatchObject({version:2,fonts:{version:1}});
+    expect(original?.manifest).toMatchObject({version:3,fonts:{version:2,renderer:{version:1}}});
     const actual=captureRenderFontInputs();
     vi.mocked(captureRenderFontInputs).mockReturnValueOnce({...actual,sha256:'0'.repeat(64)});
     const second=service();
@@ -145,6 +145,47 @@ describe.skipIf(!url)('Studio uses one pinned visual basis',()=>{
     expect(await inputs.get(scope,runId)).toEqual(original);
     await expect(second.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
     expect(boundary.layout).toHaveBeenCalledTimes(2);
+  });
+
+  it('holds a pinned run when the renderer runtime changed and resumes after it is restored',async()=>{
+    const f=service();await expect(f.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
+    expect(boundary.layout).toHaveBeenCalledTimes(1);
+    const original=await inputs.get(scope,runId);
+    const actual=captureRenderFontInputs();
+    expect(actual.renderer).toMatchObject({version:1,rsvg:{version:expect.stringMatching(/rsvg-convert version/)},os:{platform:process.platform}});
+    // Same fonts, another rasteriser build: the basis the run pinned is no longer the one that would draw.
+    const renderer={...(actual.renderer as {rsvg:Record<string,string>}),rsvg:{...(actual.renderer as {rsvg:Record<string,string>}).rsvg,version:'rsvg-convert version 0.0.0-synthetic'}};
+    const real=vi.mocked(captureRenderFontInputs).getMockImplementation()!;
+    vi.mocked(captureRenderFontInputs).mockImplementation(()=>({...actual,renderer:renderer as typeof actual.renderer,sha256:'1'.repeat(64)}));
+    const second=service();
+    await expect(second.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE',message:expect.stringMatching(/renderer/)});
+    expect(boundary.layout).toHaveBeenCalledTimes(1);expect(second.fetcher).not.toHaveBeenCalled();expect(second.local).not.toHaveBeenCalled();
+    expect((await runs.getRunById(runId,scope.tenantId))?.status).toBe('laying_out');
+    expect(await inputs.get(scope,runId)).toEqual(original);
+    vi.mocked(captureRenderFontInputs).mockImplementation(real);
+    await expect(second.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
+    expect(boundary.layout).toHaveBeenCalledTimes(2);
+  });
+
+  it('pins the cut-out service runtime and face-detector identity with each derivation it used',async()=>{
+    await sql`DELETE FROM hawa.photo_cutouts WHERE tenant_id=${scope.tenantId}::uuid AND source_sha256=${hash(currentPhoto)}`.execute(db);
+    const runtime={implementation:'hawa-cutout/2',codeSha256:'c'.repeat(64),python:'3.12.7',packages:{numpy:'2.1.3',onnxruntime:'1.20.1'},faceModelSha256:'f'.repeat(64)};
+    const digest=(value:unknown)=>hash(JSON.stringify(value,(_k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v));
+    const f=service();
+    f.local.mockImplementation(async(input)=>String(input).endsWith('/v1/cutout')
+      ? new Response(JSON.stringify({ok:true,passed:true,png:oldCut.toString('base64'),width:16,height:16,bbox:[0,0,16,16],faces:[{x:2,y:2,width:6,height:6}],
+        gates:{},stats:{people:1},model:'synthetic.onnx',modelSha256:'a'.repeat(64),runtime}))
+      : new Response(JSON.stringify({ok:true,orientation:1,height:16,focus:{x:.4,y:.2},faces:[{height:6}],runtime})));
+    await expect(f.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
+    const manifest=(await inputs.get(scope,runId))!.manifest as {outcomes:Array<{derivation:Record<string,unknown>}>;preparation:{photoFocus:Array<Record<string,unknown>>}};
+    expect(manifest.outcomes[0].derivation).toEqual({sourceSha256:hash(currentPhoto),model:'synthetic.onnx',modelSha256:'a'.repeat(64),
+      reportSha256:expect.stringMatching(/^[a-f0-9]{64}$/),pngSha256:hash(oldCut),runtimeSha256:digest(runtime),faceModelSha256:'f'.repeat(64)});
+    expect(manifest.preparation.photoFocus[0]).toMatchObject({x:.4,y:.2,derivation:{sourceSha256:hash(currentPhoto),runtimeSha256:digest(runtime)}});
+    // After pinning the service is not asked again, whatever it now reports.
+    const second=service();second.local.mockRejectedValue(new Error('A pinned run must not reach the cut-out service'));
+    await expect(second.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
+    expect(boundary.layout).toHaveBeenCalledTimes(2);expect(second.local).not.toHaveBeenCalled();
+    expect((boundary.layout.mock.calls[1][0] as StageContext).photoCutouts?.[0]?.png).toEqual(oldCut);
   });
 
   it('refuses changed client policy before layout or a new model call',async()=>{
@@ -192,5 +233,20 @@ describe('visual bundle interpretation',()=>{
     expect(()=>restoreVisualInputs(ctx(), {}, {...bundle,assets:[]})).toThrow(/missing/);
     expect(()=>restoreVisualInputs(ctx(), {}, {...bundle,manifest:{...(bundle.manifest as Record<string,unknown>),version:1}})).toThrow(/currently authorized/);
     expect(()=>restoreVisualInputs(ctx(), {}, {...bundle,manifest:{...(bundle.manifest as Record<string,unknown>),fonts:undefined}})).toThrow(/currently authorized/);
+  });
+  it('holds bundles without renderer attestation and cut-out derivations that do not match their pinned bytes',async()=>{
+    const bundle=await captureVisualInputs(ctx(),{cutoutsWanted:true,photoFocus:[null]});
+    expect(bundle.manifest).toMatchObject({version:3,fonts:{version:2}});
+    expect(()=>restoreVisualInputs(ctx(), {}, {...bundle,manifest:{...(bundle.manifest as Record<string,unknown>),version:2}})).toThrow(/renderer/);
+    const cut=ctx();cut.photoCutouts=[{png:oldCut,width:16,height:16}];
+    cut.cutoutOutcomes=[{photoIndex:0,passed:true,derivation:{sourceSha256:hash(photo),model:'m',modelSha256:'a'.repeat(64),reportSha256:'b'.repeat(64),pngSha256:hash(oldCut)}}];
+    const pinned=await captureVisualInputs(cut,{cutoutsWanted:true,photoFocus:[{x:.4,y:.2,derivation:{sourceSha256:hash(photo)}}]});
+    const restored=ctx();restoreVisualInputs(restored,{},pinned);expect(restored.photoCutouts?.[0]?.png).toEqual(oldCut);
+    const m=pinned.manifest as {outcomes:Array<{derivation:Record<string,unknown>}>;preparation:{photoFocus:Array<Record<string,unknown>>}};
+    const altered=(change:(copy:typeof m)=>void)=>{const copy=structuredClone(m);change(copy);return {...pinned,manifest:copy};};
+    expect(()=>restoreVisualInputs(ctx(),{},altered(c=>{c.outcomes[0].derivation.pngSha256=hash(newCut);}))).toThrow(/derivation/);
+    expect(()=>restoreVisualInputs(ctx(),{},altered(c=>{c.outcomes[0].derivation.sourceSha256=hash(newCut);}))).toThrow(/derivation/);
+    expect(()=>restoreVisualInputs(ctx(),{},altered(c=>{c.preparation.photoFocus[0].derivation={sourceSha256:hash(newCut)};}))).toThrow(/derivation/);
+    await expect(captureVisualInputs({...cut,cutoutOutcomes:[{...cut.cutoutOutcomes![0],derivation:{...cut.cutoutOutcomes![0].derivation!,pngSha256:hash(newCut)}}]},{})).rejects.toThrow(/derivation/);
   });
 });

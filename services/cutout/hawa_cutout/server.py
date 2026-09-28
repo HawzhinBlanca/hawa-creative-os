@@ -5,7 +5,10 @@ POST /v1/cutout          body: the photo's bytes; query: people=<n> (optional)
                          200 {"ok": true, "passed": bool, "png": base64, "shadow": {...}, "gates": {...}, ...}
                          400 when the body is not a picture, or one too large to cut out; 503 while
                          the model is loading
-GET  /health             {"status": "healthy" | "loading" | "failed", "model": ..., "modelSha256": ...}
+GET  /health             {"status": "healthy" | "loading" | "failed", "model": ..., "modelSha256": ..., "runtime": {...}}
+
+Every answer from a loaded service carries "runtime" (identity.py): the service code, Python and
+package versions and the face detector's sha256, so a design can pin the derivation it used (ADR-123).
 
 One cut at a time: an inference takes about 8 GB at 1024 x 1024, so a second request waits for the
 first rather than run beside it. /health answers while a cut runs.
@@ -22,10 +25,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .core import Cutter, UnreadablePhoto
+from .identity import runtime_identity
 
 MAX_BODY = 25 * 1024 * 1024
 
-state: dict[str, object] = {'status': 'loading', 'cutter': None, 'error': None}
+state: dict[str, object] = {'status': 'loading', 'cutter': None, 'error': None, 'runtime': None}
 lock = threading.Lock()
 
 
@@ -42,7 +46,8 @@ def load() -> None:
             model_sha256=os.environ.get('CUTOUT_MODEL_SHA256') or None,
             threads=int(os.environ.get('CUTOUT_THREADS', '4')),
         )
-        state.update(cutter=cutter, status='healthy')
+        # Identified once, at load: the files cannot change under a running container's read-only mount.
+        state.update(cutter=cutter, runtime=runtime_identity(cutter.face_model_path), status='healthy')
         print(f'[cutout] model loaded: {cutter.model_path} sha256 {cutter.model_sha256[:16]}', flush=True)
     except Exception as err:  # the service stays up to say why
         state.update(status='failed', error=f'{type(err).__name__}: {err}')
@@ -72,6 +77,7 @@ class Handler(BaseHTTPRequestHandler):
             'error': state['error'],
             'model': os.path.basename(cutter.model_path) if isinstance(cutter, Cutter) else None,
             'modelSha256': cutter.model_sha256 if isinstance(cutter, Cutter) else None,
+            'runtime': state['runtime'],
             'busy': lock.locked(),
         })
 
@@ -89,7 +95,7 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/v1/faces':
             # Face detection only: milliseconds, and no need to wait behind a cut.
             try:
-                return self.reply(200, {'ok': True, **cutter.focus(data)})
+                return self.reply(200, {'ok': True, **cutter.focus(data), 'runtime': state['runtime']})
             except Exception as err:
                 return self.reply(400 if bad_picture(err) else 500, {'ok': False, 'error': f'{type(err).__name__}: {err}'})
         people = parse_qs(url.query).get('people', [None])[0]
@@ -116,6 +122,7 @@ class Handler(BaseHTTPRequestHandler):
             'timings': {**r.timings, 'queued': round(waited, 3)},
             'model': os.path.basename(cutter.model_path),
             'modelSha256': cutter.model_sha256,
+            'runtime': state['runtime'],
         })
 
 

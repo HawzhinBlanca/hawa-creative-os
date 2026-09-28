@@ -15,6 +15,8 @@ import { buildP0SystemPrompt, buildP3Prompt } from '../prompts.js';
 import { copyForStageV3, conceptFromV3Candidate } from './v3.stage.js';
 import { log } from '../../../logging.js';
 import { layoutVisualInputs } from './asset-inputs.js';
+import { studioSubstepKey } from '@hawa/domain';
+import { inStudioSubstep } from '../substeps.js';
 
 export const LAYOUT_SCHEMA = {
   type: 'object',
@@ -210,7 +212,8 @@ export async function runLayoutsStage(
 
     const briefSummary = layoutBriefV3(brief, ctx);
 
-    const v3Result = await generateLayoutCandidatesV3({
+    const visualInputs = await layoutVisualInputs(ctx);
+    const v3Result = await inStudioSubstep('layout/set', () => generateLayoutCandidatesV3({
       client: ctx.client as any,
       brief: briefSummary,
       copyBlocks: copyBlockSlots,
@@ -218,10 +221,10 @@ export async function runLayoutsStage(
       canvasWidth: ctx.width,
       canvasHeight: ctx.height,
       isRtl: ctx.copyBlocks.some((b) => b.script === 'arabic'),
-      visualInputs: await layoutVisualInputs(ctx),
+      visualInputs,
       logoAspect: ctx.logoAspect || 1.0,
       reference: ctx.reference,
-    });
+    }));
 
     const prepared = v3Result.layouts.map((rawLayout, i) => {
       const layout = prepareGeneratedLayoutV3(rawLayout, copy, {
@@ -297,12 +300,14 @@ export async function runLayoutsStage(
       copyBlocks: copyBlocksFormatted,
     });
 
-    let layoutResponse = await ctx.client.completeJson<{ layout: StudioLayoutV2; notes?: string }>({
+    // One semantic substep per concept; its repair is the substep's second attempt (ADR-122).
+    const substep = studioSubstepKey('layout', `concept-${ordinal + 1}`);
+    let layoutResponse = await inStudioSubstep(substep, () => ctx.client.completeJson<{ layout: StudioLayoutV2; notes?: string }>({
       system: systemPrompt,
       prompt: userPrompt,
       schema: LAYOUT_SCHEMA,
       schemaName: 'StudioLayoutV2Output',
-    });
+    }));
 
     let layout = normalizeCandidateLayout(layoutResponse.data.layout, ctx.width, ctx.height, logoAspect);
 
@@ -336,12 +341,12 @@ export async function runLayoutsStage(
       log.warn(`[LayoutsStage] Candidate ${ordinal} failed initial validation: [${validation.code}] ${validation.message}`);
       const repairPrompt = `${userPrompt}\n\nYour previous layout failed this check:\n- [${validation.code}]: ${validation.message}\nReturn a corrected StudioLayoutV2 adhering to all constraints.`;
 
-      layoutResponse = await ctx.client.completeJson<{ layout: StudioLayoutV2; notes?: string }>({
+      layoutResponse = await inStudioSubstep(substep, () => ctx.client.completeJson<{ layout: StudioLayoutV2; notes?: string }>({
         system: systemPrompt,
         prompt: repairPrompt,
         schema: LAYOUT_SCHEMA,
         schemaName: 'StudioLayoutV2Output',
-      });
+      }));
 
       layout = normalizeCandidateLayout(layoutResponse.data.layout, ctx.width, ctx.height, logoAspect);
       validation = validateLayoutV2(layout, validationContext);

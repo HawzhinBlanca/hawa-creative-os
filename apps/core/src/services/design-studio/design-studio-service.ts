@@ -1,7 +1,8 @@
 import { StudioVisualInputsRepository, StudioVisualInputsError } from '@hawa/db';
-import { captureVisualInputs, restoreVisualInputs } from './visual-inputs.js';
-import { reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } from '@hawa/creative';
-import { studioUsdMicros, type StudioCallReservation } from '@hawa/domain';
+import { authorityPolicySha256, captureVisualInputs, restoreVisualInputs } from './visual-inputs.js';
+import { captureRenderFontInputs, reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } from '@hawa/creative';
+import { StudioSubstepReplay, studioBindingText, studioSubstepKey, studioUsdMicros, type RecordedStudioAttempt, type StudioCallReservation } from '@hawa/domain';
+import { currentStudioSubstep, inStudioSubstep, substepBindsAuthority, substepBindsRenderer } from './substeps.js';
 import { TaskGenerationBlockedError } from '@hawa/db';
 import { assertTaskGenerationAllowed, assertStudioCallsResolved } from '../task-generation-guard.js';
 import { assertNativeRevisionAdmission } from '../native-revision-handoff.js';
@@ -22,6 +23,7 @@ import {
   type DesignStudioTier,
   type DesignStudioJudgeStatus,
   type DesignStudioCandidateStatus,
+  type RecordCallStartParams,
 } from '@hawa/db';
 import {
   OpenAiStudioClient,
@@ -131,11 +133,26 @@ const optionalImages = (error: unknown): string[] => {
 
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 
+/** The retained art and its provenance, which final QA checks the final layout against (ADR-123). */
+const candidateArt = (row: { art_png?: Buffer | Uint8Array | null; art_provenance?: unknown }): Pick<CandidateState, 'artPng' | 'artProvenance'> => ({
+  ...(row.art_png ? { artPng: Buffer.from(row.art_png) } : {}),
+  ...(row.art_provenance ? { artProvenance: (typeof row.art_provenance === 'string' ? JSON.parse(row.art_provenance) : row.art_provenance) as Record<string, unknown> } : {}),
+});
+
 type StudioReplayCall = Pick<Awaited<ReturnType<DesignStudioRepository['getCallsForRun']>>[number],
-  'id' | 'stage' | 'provider' | 'model' | 'status' | 'reservation' | 'call_ordinal' | 'has_retained_result'>;
+  'id' | 'stage' | 'provider' | 'model' | 'status' | 'reservation' | 'call_ordinal' | 'has_retained_result'> &
+  Partial<Pick<Awaited<ReturnType<DesignStudioRepository['getCallsForRun']>>[number],
+    'substep_key' | 'substep_attempt' | 'binding_sha256' | 'cost_basis' | 'usd_estimate' | 'error_code'>>;
 class RetainedStudioReply {
   constructor(readonly value: unknown) {}
 }
+
+const recordedStudioAttempt = (call: StudioReplayCall): RecordedStudioAttempt => ({
+  callId: call.id, substep: call.substep_key ?? null, attempt: call.substep_attempt ?? null, ordinal: call.call_ordinal,
+  stage: call.stage, provider: call.provider, model: call.model, status: call.status, retained: call.has_retained_result,
+  costBasis: call.cost_basis ?? null, usd: Number(call.usd_estimate ?? 0), errorCode: call.error_code ?? null,
+  requestSha256: call.reservation?.requestSha256 ?? null, bindingSha256: call.binding_sha256 ?? null,
+});
 
 /** Stable object-key order for the digest only; provider requests keep their original shape. */
 const canonicalCallJson = (value: unknown): string => {
@@ -918,6 +935,7 @@ export class DesignStudioService {
     onSpendUpdate: (cost: number) => Promise<void>,
     replayCalls: StudioReplayCall[] = [],
     skipExemplarRetrieval = false,
+    runHistory: StudioReplayCall[] = replayCalls,
   ): Promise<StageContext> {
     const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
     const fetchFn = this.options.fetcher || fetch;
@@ -942,19 +960,45 @@ export class DesignStudioService {
     const finalizeCall = (params: Parameters<DesignStudioRepository['finalizeCall']>[0]) =>
       account(() => this.repo.finalizeCall({ ...params, actorId: s.actorId }));
     const recordSpend = (cost: number) => account(() => onSpendUpdate(cost));
-    const prefix = [...replayCalls].sort((a, b) => (a.call_ordinal ?? 0) - (b.call_ordinal ?? 0));
-    let replayPosition = 0;
-    const replay = async (kind: 'structured' | 'image', stage: string, provider: string, model: string, requestSha256: string) => {
-      const previous = prefix[replayPosition];
-      if (!previous) return;
-      if (previous.stage !== stage || previous.provider !== provider || previous.model !== model ||
-          previous.status !== 'ok' || !previous.has_retained_result || previous.reservation?.requestSha256 !== requestSha256) {
-        throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', 'The interrupted stage no longer matches its recorded model-call inputs. Reconcile its saved results before continuing.');
+    // ADR-122: retained results are consumed by semantic substep and attempt. A persisted branch
+    // or an interleaved failure no longer shifts every later result; a changed binding still holds.
+    const replayLedger = new StudioSubstepReplay(replayCalls.map(recordedStudioAttempt), runHistory.map(recordedStudioAttempt));
+    let boundContext: StageContext | undefined;
+    let rendererIdentity: string | undefined;
+    const renderer = () => {
+      if (rendererIdentity) return rendererIdentity;
+      try { rendererIdentity = captureRenderFontInputs().sha256; }
+      catch { throw new StudioVisualInputsError('The current font and renderer basis cannot be verified. Restore it before continuing.'); }
+      return rendererIdentity;
+    };
+    const replay = async (kind: 'structured' | 'image', stage: string, provider: string, model: string,
+      reservation: StudioCallReservation, schema?: string): Promise<NonNullable<RecordCallStartParams['substep']>> => {
+      const requestSha256 = reservation.requestSha256;
+      // Parity is content-keyed (ADR-049): each distinct export check is its own substep.
+      const substep = currentStageName === 'parity' && stage === 'parity'
+        ? studioSubstepKey('parity', `request-${requestSha256.slice(0, 16)}`) : currentStudioSubstep(stage);
+      const identities: Record<string, string> = { stage, provider, model, kind, capability: reservation.policy };
+      if (schema) identities.schema = schema;
+      if (substepBindsAuthority(substep, stage)) {
+        if (!boundContext) throw new TypeError('A Studio model call ran before its stage context was built.');
+        identities.authority = authorityPolicySha256(boundContext);
       }
-      const retained = await account(() => this.repo.getRetainedCallResult(previous.id, s.tenantId, s.actorId));
-      if (!retained || retained.kind !== kind) throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', 'The interrupted stage has no matching retained result.');
-      replayPosition++;
-      throw new RetainedStudioReply(kind === 'image' ? { ...(retained.payload as object), imageBuffer: retained.image } : retained.payload);
+      if (substepBindsRenderer(substep, stage)) identities.renderer = renderer();
+      const bindingText = studioBindingText({ version: 1, substep, inputs: { request: requestSha256 }, identities, assets: [] });
+      const bindingSha256 = hash(bindingText);
+      const decision = replayLedger.next({ substep, stage, provider, model, kind, requestSha256, bindingSha256 });
+      // Every ledger hold keeps the pipeline's hold code; resume reports unknown calls before this.
+      if (decision.action === 'hold') {
+        throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', `${decision.detail} Reconcile its saved results before continuing.`);
+      }
+      // A definite image refusal is reproduced as the same outcome, without transport or charge.
+      if (decision.action === 'replay_refusal') throw new RetainedStudioReply(null);
+      if (decision.action === 'reuse') {
+        const retained = await account(() => this.repo.getRetainedCallResult(decision.callId, s.tenantId, s.actorId));
+        if (!retained || retained.kind !== kind) throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', 'The interrupted stage has no matching retained result.');
+        throw new RetainedStudioReply(kind === 'image' ? { ...(retained.payload as object), imageBuffer: retained.image } : retained.payload);
+      }
+      return { key: substep, attempt: decision.attempt, bindingText, bindingSha256 };
     };
 
     // PostgreSQL admits one logical call identity before transport. The ordinal fences two Core
@@ -962,6 +1006,7 @@ export class DesignStudioService {
     // budget is immutable and a changed Canva export must remain independently checkable.
     const admitCall = async (call: {
       id: string; stage: string; provider: string; model: string; input: unknown; reservation: StudioCallReservation;
+      substep: NonNullable<RecordCallStartParams['substep']>;
     }) => {
       const callOrdinal = currentStageName === 'parity' ? null : currentBudget.calls + 1;
       const logicalCallSha256 = hash(canonicalCallJson({
@@ -981,6 +1026,7 @@ export class DesignStudioService {
           callOrdinal,
           logicalCallSha256,
           reservation: call.reservation,
+          substep: call.substep,
         });
       } catch (error) {
         if (error instanceof TaskGenerationBlockedError || error instanceof StudioBudgetEvidenceError) {
@@ -1005,11 +1051,12 @@ export class DesignStudioService {
       try {
         result = await invoke(async body => {
           const quoted = reserveStudioText(body);
-          const model = JSON.parse(body).model as string;
-          await replay('structured', currentStageName, 'openai', model, quoted.requestSha256);
+          const parsed = JSON.parse(body) as { model: string; response_format?: { json_schema?: { name?: unknown } } };
+          const schema = typeof parsed.response_format?.json_schema?.name === 'string' ? parsed.response_format.json_schema.name : undefined;
+          const substep = await replay('structured', currentStageName, 'openai', parsed.model, quoted, schema);
           if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) throw new StudioBudgetExhaustedError();
-          await admitCall({ id: callId, stage: currentStageName, provider: 'openai', model,
-            input: { requestSha256: quoted.requestSha256 }, reservation: quoted });
+          await admitCall({ id: callId, stage: currentStageName, provider: 'openai', model: parsed.model,
+            input: { requestSha256: quoted.requestSha256 }, reservation: quoted, substep });
           reservation = quoted;
         });
       } catch (err: any) {
@@ -1053,7 +1100,8 @@ export class DesignStudioService {
       generateArt: async params => {
         // One image per admission. The verifier uses the same ledger-backed text client;
         // the bounded art controller cannot hide its second attempt inside the first receipt.
-        const settings = resolveImageSettings();
+        // The art stage describes its reserved region in the frame these settings request (ADR-123).
+        const settings = params.settings ?? resolveImageSettings();
         return baseArtProvider.generateArt({ ...params, settings, visionClient: ledgerClient,
           requestImage: async (selected, prompt) => {
             const callId = randomUUID();
@@ -1065,10 +1113,10 @@ export class DesignStudioService {
                 selected.provider === 'google' ? params.geminiApiKey || process.env.GEMINI_API_KEY || '' : apiKey,
                 fetchFn, async body => {
                   const quoted = reserveStudioImage(selected.provider, body);
-                  await replay('image', 'art', selected.provider, selected.model, quoted.requestSha256);
+                  const substep = await replay('image', 'art', selected.provider, selected.model, quoted);
                   if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
                   await admitCall({ id: callId, stage: 'art', provider: selected.provider, model: selected.model,
-                    input: { requestSha256: quoted.requestSha256 }, reservation: quoted });
+                    input: { requestSha256: quoted.requestSha256 }, reservation: quoted, substep });
                   reservation = quoted;
                 });
             } catch (error) {
@@ -1192,7 +1240,7 @@ export class DesignStudioService {
 
     const logo = { bytes: logoBytes, sha256: reference.logoSha256, mimeType: 'image/png' as const };
 
-    return {
+    const ctx: StageContext = {
       runId: run.id,
       tenantId: s.tenantId,
       taskId: run.task_id,
@@ -1219,7 +1267,10 @@ export class DesignStudioService {
       requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
       ornament: packagedKaae ? ornamentSettings() : undefined,
       style: (runStages(run).brief as CreativeBrief | undefined)?.styleSpec,
+      unconsumedRetainedCalls: () => replayLedger.unconsumed(),
     };
+    boundContext = ctx;
+    return ctx;
   }
 
   /**
@@ -1308,8 +1359,8 @@ export class DesignStudioService {
     const stages = runStages(run);
     const budget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number } =
       typeof run.budget === 'string' ? JSON.parse(run.budget) : run.budget;
-    const replayCalls = stageCalls.some((call) => call.has_retained_result) ? stageCalls : [];
-    if (replayCalls.length) {
+    // The whole stage is the replay pool; it replays only when it holds a retained result.
+    if (stageCalls.some((call) => call.has_retained_result)) {
       const usage = await this.repo.getBudgetUsage(runId, s.tenantId, s.actorId);
       if (!usage || usage.accountedUsd === null || (usage.blocker && usage.blocker !== 'BUDGET_EXHAUSTED')) throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', 'The saved result budget history is incomplete.');
       budget.spentUsd = usage.accountedUsd;
@@ -1333,7 +1384,7 @@ export class DesignStudioService {
     // worker to retry for ever, so it is marked failed here with the reason.
     let ctx: StageContext;
     try {
-      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate, replayCalls, Boolean(pinnedVisualInputs)));
+      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate, stageCalls, Boolean(pinnedVisualInputs), priorCalls));
     } catch (err: any) {
       if (pinnedVisualInputs) throw new CanvaFlowError(409, 'STUDIO_VISUAL_INPUTS_UNSAFE',
         'The pinned design policy cannot currently be verified. Restore its original authorized inputs before continuing.');
@@ -1372,10 +1423,11 @@ export class DesignStudioService {
           // every picture, so each is classified instead of guessed from the request's words.
           ctx.requestImages = images;
           ctx.attachedImage = undefined;
-          const reread = await runBriefStage(ctx);
+          const reread = await inStudioSubstep('brief/images-rebrief', () => runBriefStage(ctx));
           const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
           stages.brief = { ...reread, photosSent, imagesRebrief: true };
           await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
+          stages.brief = await this.briefAsStored(s, runId, stages.brief);
           briefSoFar = stages.brief as LateReferenceBrief;
           ctx.requestImages = undefined;
         }
@@ -1471,7 +1523,7 @@ export class DesignStudioService {
             (typeof run.request === 'string' ? JSON.parse(run.request) : run.request) as { directed?: { parentTaskId?: unknown } } | undefined
           )?.directed?.parentTaskId;
           if (ctx.pipelineV3 && typeof directedParent === 'string') await this.refuseWhileParentRuns(s, directedParent);
-          const brief = await runBriefStage(ctx);
+          const brief = await inStudioSubstep('brief/request', () => runBriefStage(ctx));
           // Recorded on the run so the requester's note can say what became of their photos.
           const photosSent = (brief.imageRoles || []).filter((r) => r.role === 'content_photo').length || (ctx.photos?.length ?? 0);
           stages.brief = { ...brief, photosSent };
@@ -1499,7 +1551,7 @@ export class DesignStudioService {
           // A v3 run's layout call invents its own three archetypes and never reads these
           // concepts, so it spends nothing here: it reserves a row per layout the generator
           // returns, and each row's concept is filled from what the generator produced.
-          const concepts = ctx.pipelineV3 ? [] : await runConceptsStage(ctx, brief);
+          const concepts = ctx.pipelineV3 ? [] : await inStudioSubstep('concepts/board', () => runConceptsStage(ctx, brief));
           stages.concepts = concepts;
           const slots = ctx.pipelineV3 ? V3_CANDIDATE_SLOTS : concepts.length;
 
@@ -2043,6 +2095,7 @@ export class DesignStudioService {
             metrics: typeof winnerRow.metrics === 'string' ? JSON.parse(winnerRow.metrics) : winnerRow.metrics,
             previewPng: winnerRow.preview_png ? Buffer.from(winnerRow.preview_png) : undefined,
             compositePng: winnerRow.composite_png ? Buffer.from(winnerRow.composite_png) : undefined,
+            ...candidateArt(winnerRow),
             critiques: [],
             status: 'winner',
           };
@@ -2063,6 +2116,7 @@ export class DesignStudioService {
                 concept: typeof otherRow.concept === 'string' ? JSON.parse(otherRow.concept) : otherRow.concept,
                 layouts: otherLayouts,
                 currentLayout: otherLayouts[otherLayouts.length - 1],
+                ...candidateArt(otherRow),
                 critiques: [],
                 status: 'runner_up',
               };
@@ -2285,6 +2339,15 @@ export class DesignStudioService {
 
       // If failure happened during generation stages, execute Rung 4 fallback
       return this.executeRung4Fallback(s, run, err.message || 'Studio stage failed');
+    } finally {
+      // ADR-122: saved paid work this resume bypassed stays visible to the operator. A result
+      // already applied in the stored stage (a persisted rebrief) is listed too; the operator
+      // compares it with the stage before settling or discarding it.
+      const unread = ctx.unconsumedRetainedCalls?.() ?? [];
+      if (unread.length) {
+        log.warn(`[studio] run ${runId}: the ${run.status} resume did not read ${unread.length} saved result(s): ` +
+          unread.map((call) => `${call.callId} (${call.substep ?? 'ordered prefix'} attempt ${call.attempt ?? '-'})`).join(', ') + '.');
+      }
     }
   }
 
@@ -2332,7 +2395,7 @@ export class DesignStudioService {
 
     let reread: CreativeBrief;
     try {
-      reread = await runBriefStage(ctx, { lateReference: true });
+      reread = await inStudioSubstep('brief/late-reference', () => runBriefStage(ctx, { lateReference: true }));
     } catch (err: any) {
       if (isModelCallHoldError(err)) throw err;
       // The stored brief still designs the request, so an extra call that failed must not fail the
@@ -2353,7 +2416,19 @@ export class DesignStudioService {
     log.warn(
       `[studio] run ${run.id}: brief re-read at '${run.status}' with the reference image that arrived after it (referenceRole ${brief.referenceRole}).`
     );
-    return brief;
+    stages.brief = await this.briefAsStored(s, run.id, brief);
+    return stages.brief as LateReferenceBrief;
+  }
+
+  /**
+   * ADR-122: a brief persisted inside a stage continues in its stored form, exactly as a resume
+   * reads it back. PostgreSQL jsonb reorders keys and later prompts embed the brief's JSON text,
+   * so the in-memory form would make the same work unreplayable. Only the form is adopted:
+   * stored content that differs from what was just written is never substituted.
+   */
+  private async briefAsStored<T>(s: Scope, runId: string, written: T): Promise<T> {
+    const stored = runStages((await this.repo.getRunById(runId, s.tenantId)) ?? {}).brief;
+    return stored !== undefined && canonicalCallJson(stored) === canonicalCallJson(written) ? stored as T : written;
   }
 
   /**

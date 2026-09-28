@@ -29,3 +29,4 @@ export * from './publication-inspection.js';
 export * from './canva-creation.js';
 export * from './native-revision.js';
 export * from './native-review-submission.js';
+export * from './studio-substeps.js';

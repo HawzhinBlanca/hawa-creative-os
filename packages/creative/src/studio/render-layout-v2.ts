@@ -24,6 +24,8 @@ import {
 import { escapeXml } from '../operations-to-svg.js';
 import { SvgFiles, checkInlineDataUris } from './svg-files.js';
 import { pinnedFontconfigFile, rasteriserEnv, fontFileInventory, pinnedSystemFontFiles, type FontFileIdentity } from './font-environment.js';
+import { resolveRsvgConvert, rendererRuntimeIdentity, type RendererRuntimeIdentity } from './renderer-identity.js';
+import { layoutPlacements, type LayoutPlacements } from './placement-map.js';
 
 export { PNG };
 
@@ -88,6 +90,22 @@ export interface RenderLayoutV2Result {
   files: Record<string, Buffer>;
   wrappedLines: Record<number, number>;
   fontFidelity: Record<string, 'exact' | 'stand-in'>;
+  /** Where the art's calm region and each photo's crop land in the bytes drawn (ADR-123). */
+  placements: LayoutPlacements;
+}
+
+/** The bytes the renderer draws for the art and each photo, read from the same options it reads. */
+function placementsFor(layout: StudioLayoutV2, options: RenderLayoutOptions): LayoutPlacements {
+  const art = options.artImagePath
+    ? options.artImagePath.startsWith('data:') ? dataUriBytes(options.artImagePath)
+      : fs.existsSync(options.artImagePath) ? fs.readFileSync(options.artImagePath) : undefined
+    : undefined;
+  const photos = (layout.photos ?? []).reduce<Array<Buffer | undefined>>((all, p) => {
+    const uri = options.photoDataUris?.[p.photoIndex];
+    all[p.photoIndex] = options.photoFiles?.[p.photoIndex]?.bytes ?? (uri ? dataUriBytes(uri) : undefined);
+    return all;
+  }, []);
+  return layoutPlacements(layout, { art, photos, cutouts: options.photoCutouts });
 }
 
 // In-memory cache for loaded fontkit Font objects
@@ -223,21 +241,6 @@ export function assertFontResolves(fontFamily: string, fontconfigFile: string): 
     }
     console.warn(`[render-layout-v2] Warning: fc-match check failed (${err.message}). Proceeding with fontkit loading.`);
   }
-}
-
-function resolveRsvgConvert(options?: RenderLayoutOptions): string {
-  if (options?.rsvgConvertPath && fs.existsSync(options.rsvgConvertPath)) {
-    return options.rsvgConvertPath;
-  }
-  const candidates = [
-    '/opt/homebrew/bin/rsvg-convert',
-    '/usr/bin/rsvg-convert',
-    '/usr/local/bin/rsvg-convert',
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return 'rsvg-convert';
 }
 
 export const ADMITTED_FONT_FAMILIES = [
@@ -2080,6 +2083,7 @@ export function renderLayoutV2(
     files,
     wrappedLines,
     fontFidelity,
+    placements: placementsFor(layout, options),
   };
 }
 
@@ -2140,7 +2144,7 @@ export async function renderLayoutV2Async(layout: StudioLayoutV2, options: Rende
     svgToPngAsync(svg, layout.width, layout.height, options, files),
     svgToPngAsync(noTextSvg, layout.width, layout.height, options, files),
   ]);
-  return { svg, png, noTextSvg, noTextPng, files, wrappedLines, fontFidelity };
+  return { svg, png, noTextSvg, noTextPng, files, wrappedLines, fontFidelity, placements: placementsFor(layout, options) };
 }
 
 export interface ElementBoxAnnotation {
@@ -2249,21 +2253,33 @@ export function renderAnnotatedLayoutV2(
 
 
 export interface RenderFontInputs {
-  version: 1;
+  /** 2 since ADR-123 added the renderer; version 1 named fonts and the measurement helper only. */
+  version: 2;
   sha256: string;
   registrySha256: string;
   measurement?: MeasurementRuntimeIdentity | { unavailable: true };
+  /** The rasteriser and operating system that draw (ADR-123); unavailable is recorded, not guessed. */
+  renderer: RendererRuntimeIdentity | { unavailable: true };
   files: FontFileIdentity[];
 }
 let lastFontBasis: string | undefined;
 
-/** Recovery evidence for fonts, not an attestation of native rasterizer/OS identity. */
-export function captureRenderFontInputs(options: { fontsDir?: string; registryPath?: string; systemFiles?: string[] } = {}): RenderFontInputs {
+/**
+ * Recovery evidence for the fonts, the measurement helper and the rasteriser/OS release that draw
+ * them (ADR-116/118/123). Version strings and executable hashes, not every shared-library byte, and
+ * not native Canva fidelity.
+ */
+export function captureRenderFontInputs(options: {
+  fontsDir?: string; registryPath?: string; systemFiles?: string[]; rsvgConvertPath?: string; osIdentityFiles?: string[];
+} = {}): RenderFontInputs {
   const registrySha256 = createHash('sha256').update(fs.readFileSync(resolveRenderFontsPath(options.registryPath))).digest('hex');
   const files = fontFileInventory(options.fontsDir ?? resolveFontsDir(), options.systemFiles ?? pinnedSystemFontFiles());
   let measurement: RenderFontInputs['measurement'];
   try { measurement = measurementRuntimeIdentity(); } catch { measurement = { unavailable: true }; }
-  const basis = { version: 1 as const, registrySha256, files, measurement };
+  let renderer: RenderFontInputs['renderer'];
+  try { renderer = rendererRuntimeIdentity({ rsvgConvertPath: options.rsvgConvertPath, osIdentityFiles: options.osIdentityFiles }); }
+  catch { renderer = { unavailable: true }; }
+  const basis = { version: 2 as const, registrySha256, files, measurement, renderer };
   const sha256 = createHash('sha256').update(JSON.stringify(basis)).digest('hex');
   if (lastFontBasis !== undefined && lastFontBasis !== sha256) {
     fontCache.clear(); inkCheckCache.clear(); sentinelHashCache.clear();

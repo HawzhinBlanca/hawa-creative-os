@@ -4,6 +4,7 @@ import type { LayoutMetrics, TextMeasurement } from '@hawa/creative';
 import type { OpenAiStudioClient } from '@hawa/creative';
 import type { OpenAiImageProvider } from '@hawa/creative';
 import type { DesignStudioRepository } from '@hawa/db';
+import type { UnconsumedStudioAttempt } from '@hawa/domain';
 
 export { StudioBudgetExhaustedError } from '@hawa/domain';
 
@@ -128,6 +129,8 @@ export interface HardQAResult {
   metrics: LayoutMetrics;
   textMeasurements: TextMeasurement[];
   messages: string[];
+  /** Where art regions and photo crops landed in the final layout (ADR-123); absent before it. */
+  placement?: import('@hawa/creative').LayoutPlacements;
 }
 
 export interface ParityResult {
@@ -180,6 +183,8 @@ export interface StageContext {
   client: OpenAiStudioClient;
   artProvider?: OpenAiImageProvider;
   ledger?: DesignStudioRepository;
+  /** ADR-122: retained results of the interrupted stage that this resume has not read. */
+  unconsumedRetainedCalls?: () => UnconsumedStudioAttempt[];
   /** This run executes the v3 pipeline. Fixed at run creation; see isPipelineV3Run. */
   pipelineV3?: boolean;
   /** Brief decision applied to optional artwork; required client photos remain content. */
