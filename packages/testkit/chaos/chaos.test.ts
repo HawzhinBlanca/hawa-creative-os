@@ -21,7 +21,7 @@ import { build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, kill, memory
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
   approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
-  OFFICE_CHAT, sendToChatInbox, sentTo, sleep, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
+  OFFICE_CHAT, sendToChatInbox, sentTo, sleep, staffConfirmVisible, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
 } from './driver/scenario.js';
 
 const enabled = process.env.HAWA_CHAOS === '1';
@@ -53,10 +53,10 @@ function sampleMemory(): void {
 
 let chatSeq = 9_200_000 + (Date.now() % 100_000) * 10;
 const newChat = () => String(++chatSeq);
-// Chats on HAWA_LIFECYCLE_CHATS (docker-compose.chaos.yml): 9300001 to 9300012, one per scenario.
+// Chats on HAWA_LIFECYCLE_CHATS (docker-compose.chaos.yml): 9300001 to 9300024, one per scenario.
 let flaggedSeq = 9_300_000;
 const flaggedChat = () => {
-  if (flaggedSeq >= 9_300_012) throw new Error('every flagged chat of docker-compose.chaos.yml is used; add more there');
+  if (flaggedSeq >= 9_300_024) throw new Error('every flagged chat of docker-compose.chaos.yml is used; add more there');
   return String(++flaggedSeq);
 };
 
@@ -692,39 +692,16 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       return result && (row?.stage === 'in_review' || state?.startsWith('failed')) ? result : null;
     });
     events.push(`child design outcome: ${outcome}`);
-    const [review] = await query<{ revision_id: string }>(sql`
-      SELECT current_design_revision_id AS revision_id FROM hawa.tasks WHERE id = ${child}::uuid`);
-    const [qc] = await query<{ status: string; critical_pass: boolean; report: any }>(sql`
-      SELECT status, critical_pass, report FROM hawa.qc_runs
-      WHERE task_id = ${child}::uuid AND design_revision_id = ${review?.revision_id}::uuid
-      ORDER BY started_at DESC LIMIT 1`);
-    const exportId = qc?.report?.exportArtifactId;
-    if (!review?.revision_id || qc?.status !== 'passed' || !qc.critical_pass || !exportId)
-      throw new Error(`revised draft has no approval-ready QA/export: ${JSON.stringify({ review, status: qc?.status, criticalPass: qc?.critical_pass, exportId })}`);
-    const approved = await fakes.core(`/tasks/${child}/revisions/${review.revision_id}/decisions`,
-      secrets().CHAOS_REVIEWER_KEY, { headers: { 'Idempotency-Key': randomUUID() }, body: {
-        action: 'approve', reason: 'Checked the revised design and selected its verified export',
-        pinnedExportIds: [exportId],
-      } });
-    events.push(`office approval of revised draft: HTTP ${approved.status}`);
-    if (approved.status !== 201) throw new Error(`office approval refused: ${JSON.stringify(approved.json).slice(0, 400)}`);
-    const approvalId = approved.json?.decisionId;
-    await waitUntil('the revised draft approval at rev 6', async () => {
-      const [row] = await query<{ rev: string; stage: string }>(sql`
-        SELECT rev, stage FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
-      return Number(row?.rev) === 6 && row?.stage === 'approved' ? row : null;
-    });
-    const delivery = await fakes.core(`/tasks/${child}/publish`, secrets().CHAOS_REVIEWER_KEY,
-      { headers: { 'Idempotency-Key': randomUUID() }, body: { approvalId } });
-    events.push(`approved revised draft delivery: HTTP ${delivery.status}`);
-    if (delivery.status !== 202 && delivery.status !== 200)
-      throw new Error(`revised draft delivery refused: ${JSON.stringify(delivery.json).slice(0, 400)}`);
-    await waitUntil('revised draft delivery result', async () => {
-      const [row] = await query<{ rev: string; stage: string }>(sql`
-        SELECT rev, stage FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
-      return Number(row?.rev) >= 8 ? row : null;
-    });
-    return { delivered: false, skipRequestChecks: true, skipQuiescence: true,
+    // Since ADR-113 (7765a9e3) a revision linked to an earlier design never regenerates from the local
+    // recipe: its run ends DESIGN_REJECTED (NATIVE_REVISION_HANDOFF_REQUIRED) with no plan, no import
+    // and no paid call, and RequestLifecycle holds the request at `manual` for the office's native
+    // revision recovery (ADR-114). Until 2026-09-28 this scenario expected a planner redraw here and
+    // approved and delivered it; the recovery route itself (link, confirm, capture, submit) is not driven.
+    const [held] = await query<{ code: string | null }>(sql`SELECT data->>'code' AS code FROM hawa.task_events
+      WHERE task_id = ${child}::uuid AND event_type = 'task.state_changed' AND data ? 'outcome'
+      ORDER BY occurred_at DESC LIMIT 1`);
+    events.push(`child held: ${outcome} (${held?.code ?? 'no code'})`);
+    return { delivered: false, skipRequestChecks: true,
       extra: [{ name: 'second revision photo update accepted for replay',
         ok: replay === 200 || replay === 202, detail: `HTTP ${replay}` }],
       after: async () => {
@@ -753,6 +730,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         const [outbox] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands
           WHERE state IN ('pending', 'leased') AND available_at <= now() + interval '5 seconds'`);
         const model = (await fakes.modelLedger()).ledger as Array<{route:string;status:number;imageSha256?:string[]}>;
+        const [effects] = await query<{ plans: string; operations: string }>(sql`SELECT
+            (SELECT count(*) FROM hawa.canva_design_plans WHERE task_id = ${child}::uuid) AS plans,
+            (SELECT count(*) FROM hawa.canva_remote_operations WHERE task_id = ${child}::uuid) AS operations`);
         return [
           { name: 'one owned child task after the office revision',
             ok: tasks.length === 2 && tasks[0].id === rootTaskId && tasks[1].id === child &&
@@ -779,15 +759,14 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
           { name: 'both ChatInbox invocations completed',
             ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
             detail: JSON.stringify(inbox) },
-          { name: 'revised draft passes simulated office review and reaches approved delivery',
-            ok: tasks[1]?.state === 'complete' && state?.stage === 'delivered' && Number(state.rev) === 8 &&
-              outcome === 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW',
-            detail: JSON.stringify({childState:tasks[1]?.state,request:state,outcome}) },
-          { name: 'the planner received every child photo by content hash',
-            ok: model.filter((entry) => entry.route === 'canva_design_plan' && entry.status === 200 &&
-              files.length > 0 && files.every((file) => entry.imageSha256?.includes(file.sha256))).length === 1 &&
+          { name: 'the linked revision is held for the native handoff (ADR-113, ADR-114)',
+            ok: tasks[1]?.state === 'failed_operator' && state?.stage === 'manual' && Number(state.rev) === 5 &&
+              outcome === 'DESIGN_REJECTED' && held?.code === 'NATIVE_REVISION_HANDOFF_REQUIRED',
+            detail: JSON.stringify({ childState: tasks[1]?.state, request: state, outcome, code: held?.code }) },
+          { name: 'the held revision made no plan, no Canva effect and no unmatched model call',
+            ok: Number(effects?.plans) === 0 && Number(effects?.operations) === 0 &&
               !model.some((entry) => entry.route.startsWith('unmatched')),
-            detail: JSON.stringify(model) },
+            detail: JSON.stringify({ effects, unmatched: model.filter((entry) => entry.route.startsWith('unmatched')).length }) },
           { name: 'only future lifecycle reminders remain scheduled',
             ok: active.length === 0 && Number(outbox?.n ?? -1) === 0,
             detail: JSON.stringify({ unfinished, readyOutbox: outbox?.n }) },
@@ -913,9 +892,15 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
 
   scenario('L2.K12', 'flagged chat: worker killed after Telegram took the first file, before its mark (one uncertain send expected)', async (chat, events) => {
     const k = await killAtPoint('worker.sender.after-telegram', { commandType: 'lifecycle', kind: 'document' });
-    await workflowRequest(chat, 'L2.K12', events);
-    events.push(`killed ${(await k.done).killed} after the first document send`);
-    return { delivered: true, files: 2, executor: 'restate', uncertainSends: 1 };
+    // A request-owned delivery with an unconfirmed send is held for staff (ADR-043, ADR-045) and
+    // completes only on an administrator's confirmation (ADR-046); until 2026-09-28 this expected the
+    // slice 2.2 workflow to complete on its own.
+    let settlement: InvariantResult[] = [];
+    await workflowRequest(chat, 'L2.K12', events, { beforeComplete: async (taskId) => {
+      events.push(`killed ${(await k.done).killed} after the first document send`);
+      settlement = await staffConfirmVisible(chat, taskId, events);
+    } });
+    return { delivered: true, files: 2, executor: 'restate', uncertainSends: 1, extra: settlement };
   }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('L2.429', 'flagged chat: Telegram answers 429 (retry_after 3) to the second file', async (chat, events) => {
@@ -965,7 +950,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
  * PPTX are pinned, so two files go to the requester and a fault can fall between them. The Deliver
  * press is answered at once (202, executor restate); nothing presses it again.
  */
-async function workflowRequest(chat: string, tag: string, events: string[], hooks: { beforeDeliver?: (taskId: string) => Promise<void>; afterDeliver?: (taskId: string) => Promise<void> } = {}) {
+async function workflowRequest(chat: string, tag: string, events: string[], hooks: { beforeDeliver?: (taskId: string) => Promise<void>; afterDeliver?: (taskId: string) => Promise<void>; beforeComplete?: (taskId: string) => Promise<void> } = {}) {
   const taskId = await briefToDraft(chat, tag);
   events.push(`task ${taskId}: draft in chat`);
   const approved = await approve(taskId, { pinDeck: true });
@@ -980,6 +965,7 @@ async function workflowRequest(chat: string, tag: string, events: string[], hook
     throw new Error(`the flagged chat's delivery was not handed to the workflow: HTTP ${delivered.status} ${JSON.stringify(delivered.body).slice(0, 300)}`);
   }
   if (hooks.afterDeliver) await hooks.afterDeliver(taskId);
+  if (hooks.beforeComplete) await hooks.beforeComplete(taskId);
   await waitDelivered(chat, taskId, 300_000, 2);
   events.push(`delivered, task ${await taskState(taskId)}`);
   return { taskId, deliveryId: String(delivered.body.deliveryId) };

@@ -81,6 +81,17 @@ ADR-073 replaces the old blanket PDF hold; the dated results below retain the ol
 contract and their original counts. The separate `lifecycle-source-recovery.test.ts`
 drill proves actual PDF extraction, copy confirmation and five Core crash boundaries.
 
+## Revision photos are held for the native handoff (2026-09-28)
+
+Since ADR-113 (7765a9e3) a revision linked to an earlier design does not regenerate from the local
+recipe, and ADR-114 routes it through the office's native revision recovery. The five
+`R1.S3.*PHOTO*`/`*ALBUM*`/`*DOCUMENT*` revision scenarios therefore still prove the photo intake
+across a Core SIGKILL (one child, photos bound once by hash, one download each, both ChatInbox keys
+completed), and then check that the child ends `DESIGN_REJECTED` (`NATIVE_REVISION_HANDOFF_REQUIRED`)
+with the request at `manual`, rev 5, no plan, no Canva effect and no unmatched model call. The dated
+sections below describe the earlier contract, when the child was redrawn by the planner, approved and
+delivered; the native recovery route itself is not driven by this suite.
+
 ## Confirmed album recovery (2026-09-26)
 
 For original image files, run:
@@ -285,7 +296,7 @@ invocation of the chat completed; the stored offset past the update; nothing dea
 | R1.DUP | the same update handed to `ChatInbox` again, with the poller's key and then with another: one task, nothing new in the chat |
 
 Not yet: R1 kill points that need later Phase 2 code (`RequestLifecycle`: R1 S3 onwards); the design's
-**Slice 2.2 (the Delivery workflow and TelegramSender).** These use chats 9300001 to 9300012, which
+**Slice 2.2 (the Delivery workflow and TelegramSender).** These use chats from 9300001 to 9300024, which
 `docker-compose.chaos.yml` lists in `HAWA_LIFECYCLE_CHATS`, so Deliver hands the task to the Restate
 `Delivery` workflow instead of Core's own delivery. Each request pins the PNG and the PPTX (two files),
 and Deliver is pressed once. They run only with `--poller worker`: since ADR-059 (99eb6b04) a task
@@ -305,7 +316,7 @@ requester once each, the publication `executor = 'restate'` with every started r
 | L2.K16 | worker killed at `worker.delivery.between-files` |
 | L2.K17 | Postgres killed while the sender is held at `worker.sender.after-telegram` (first file sent, its mark not written) |
 | L2.K18 | Restate killed while the delivery is held between the files |
-| L2.K12 | worker killed at `worker.sender.after-telegram` for the first file (one uncertain send, one office alert) |
+| L2.K12 | worker killed at `worker.sender.after-telegram` for the first file (one uncertain send, one office alert). A request-owned delivery then waits in `requester_send_reconciliation` (ADR-043, ADR-045); a synthetic administrator confirms the sends the fake chat shows (ADR-046, `staffConfirmVisible`), which completes it without a new send |
 | L2.429 | Telegram answers 429 with `retry_after` 3 to the second file; it must be sent again no sooner than 3 s later |
 
 First run (2026-09-24, `--only R1.0,L2.0,L2.K14,L2.K15,L2.K16,L2.K17,L2.K18,L2.K12,L2.429`, 235 s with a

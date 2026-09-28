@@ -438,3 +438,40 @@ export async function draftOf(chat: string, timeoutMs = 240_000): Promise<string
   }, timeoutMs, 2000);
   return task.id;
 }
+
+/**
+ * A request-owned delivery whose requester send Telegram never confirmed stays `delivering`, the task
+ * `publishing` with REQUESTER_SEND_UNCONFIRMED (ADR-043, ADR-045), until an office administrator
+ * records what they saw in the requester's chat (ADR-046). This waits for that hold, then settles it
+ * as a synthetic administrator with the message IDs the fake chat shows, and returns the checks.
+ * It is not a human's observation, nor a requester's receipt.
+ */
+export async function staffConfirmVisible(chat: string, taskId: string, events: string[]): Promise<InvariantResult[]> {
+  const out: InvariantResult[] = [];
+  const bearer = secrets().CHAOS_BEARER_TOKEN;
+  const held = await waitUntil('the delivery to wait for staff reconciliation', async () => {
+    const res = await fakes.core(`/tasks/${taskId}/publication-state`, bearer);
+    return res.status === 200 && res.json?.state === 'requester_send_reconciliation' ? res.json : null;
+  }, 240_000, 2000);
+  out.push({ name: 'an unconfirmed requester send holds the delivery for staff reconciliation', ok: held.state === 'requester_send_reconciliation', detail: `state=${held.state}` });
+  const evidence = await fakes.core(`/tasks/${taskId}/requester-send-evidence`, bearer);
+  if (evidence.status !== 200) throw new Error(`requester-send evidence: HTTP ${evidence.status} ${JSON.stringify(evidence.json).slice(0, 300)}`);
+  const visible = await sentTo(chat);
+  const observed = (evidence.json.files as Array<{ sendKey: string; sha256: string }>).map((file) => {
+    const shown = visible.find((s) => s.method === 'sendDocument' && s.documentSha256 === file.sha256);
+    if (!shown?.messageId) throw new Error(`the fake chat does not show approved file ${file.sha256.slice(0, 12)}`);
+    return { sendKey: file.sendKey, messageId: String(shown.messageId) };
+  });
+  const notice = visible.find((s) => String(s.messageId) === String(evidence.json.notice?.messageId));
+  if (!notice) throw new Error('the fake chat does not show the delivery notice');
+  observed.push({ sendKey: evidence.json.notice.sendKey, messageId: String(notice.messageId) });
+  const confirmation = { actionId: randomUUID(), expectedRev: evidence.json.requestRev, publicationId: evidence.json.publicationId,
+    approvalId: evidence.json.approvalId, requesterChatId: chat, observed, attested: true };
+  const settled = await fakes.core(`/tasks/${taskId}/requester-send-confirmation`, secrets().CHAOS_ADMIN_KEY, { body: confirmation });
+  events.push(`synthetic administrator confirmed ${observed.length} sends visible in the fake chat: HTTP ${settled.status}`);
+  out.push({ name: 'the administrator\'s confirmation settles the delivery', ok: settled.status === 200 && settled.json?.confirmationSource === 'staff_visible',
+    detail: `HTTP ${settled.status} ${JSON.stringify(settled.json).slice(0, 200)}` });
+  const after = await sentTo(chat);
+  out.push({ name: 'the settlement sends nothing to the requester', ok: after.length === visible.length, detail: `sends before=${visible.length} after=${after.length}` });
+  return out;
+}
