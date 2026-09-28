@@ -523,7 +523,9 @@ the plan; the call is then admitted under the plan's own id (at most one, howeve
 many processes carry the claim on), with the same allowance and ownership checks,
 and only if the plan's inputs are unchanged. An admitted call is still never sent
 again. Before this, such a claim stayed `planning` and the design run ended
-`DESIGN_PLANNING` (chaos `R1.K0`).
+`DESIGN_PLANNING` (chaos `R1.K0`). A Core killed while the call is in flight still
+ends that design for the office to settle (2 of 10 `R1.K0` kills on the chaos
+stack); nothing is sent twice.
 
 ### Operations evidence authority (ADR-102, 2026-09-27)
 

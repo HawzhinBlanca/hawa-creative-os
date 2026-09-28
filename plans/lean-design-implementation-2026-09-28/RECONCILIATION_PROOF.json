@@ -1,0 +1,75 @@
+{
+  "title": "ADR-135 stage 1 reconciled with ADR-136; ADR-138 planning-claim recovery; ADR-139 bilingual lifecycle open",
+  "date": "2026-09-29",
+  "base": { "commit": "2bea4671", "note": "codex/research-grade-design-system; production runs this source (build commit 5038a648) since 2026-09-29 00:31 +03" },
+  "branch": "worktree-agent-a5c2332c781ce70aa",
+  "commits": {
+    "reconciliation": ["dcaac2ca"],
+    "k0": ["cf48b437", "a3acdb8a"],
+    "bilingual": ["8f54b3f7", "9cbd68cc", "50d0a2eb"],
+    "r10_expectations": ["1fdb8b31"],
+    "stage2_branch": "legacy-retirement-stage2 (not merged; see ADR-135 section 8)"
+  },
+  "production": "Not touched: no deploy, no SQL, no container action on hawa-production-*. The dump below was read on the test server only.",
+  "reconciliation": {
+    "kept": {
+      "updates_about_an_old_request": "ADR-136 coreOwnedUpdate, renamed legacyOwnedUpdate and moved to apps/core/src/services/legacy-telegram-routing.ts; 'legacy' read as ADR-135 reads it (request_id IS NULL); runs before lifecycle routing and hands the update to ADR-135's finish-only legacy intake",
+      "unlinked_message_window": "ADR-135 newestRecentRequestIsOpenLegacy (replaces ADR-136's 'Core task in the last 48 h' check, which started a new Core task)",
+      "finish_only_scope_backstop_endpoint_poller_retirement": "ADR-135 stage 1 unchanged"
+    },
+    "removed": ["ADR-135 taskIdNamedByReply / isLegacyTaskOfChat (narrower: refused replies to delivered files and to prompts naming no task)", "ADR-136 polled-lifecycle-route.ts and Core poller forwarding to ChatInbox (unreachable: Core never polls)"],
+    "tests_adapted": [
+      "lifecycle-cutover-handoff.test.ts: Core requests written with persistChatIntake as legacy intake wrote them (no configuration creates one through intake any more)",
+      "lifecycle-cutover-handoff.test.ts: reply to a delivered Core file while a lifecycle request waits now expects LEGACY_REQUEST_REFUSED / LIFECYCLE_OWNED / new-brief-required (legacy intake reads it against the chat's newest design, the lifecycle one, and the finish-only backstop refuses to extend it) and no task or revision",
+      "lifecycle-cutover-handoff.test.ts: a brief next to an open recent Core design expects a continuation of it or a /new refusal, never a new Core task",
+      "lifecycle-cutover-handoff.test.ts: three Core-poller rollback cases removed with the poller",
+      "chaos R10.H1: old requests made on the previous release (5038a648 images) with Core polling, then this release deployed; D's photo reply to a finished design expects /new (ADR-135) instead of the control's new Core task; D's thanks compared by kind of answer (both releases read it as a new brief)",
+      "chaos R10.K1: rollback = the previous release (worker poller, HAWA_LIFECYCLE_CHATS=*) and forward; R10.K2: the emptied chat list changes nothing on this release"
+    ],
+    "unit_results": { "intake_files": "5 files 83 passed (handoff 6/6 after adaptation)", "affected_core_worker_files": "20 files 220 passed, 2 skipped (opt-in drills)", "inventory": "3 files 26 passed" }
+  },
+  "k0": {
+    "root_cause": "Since ADR-135 the acknowledgement and the design start together; a Core killed between the plan's claim (canva_design_plans 'planning') and the admission of its paid call left a claim resume() never dispatched, so the design run ended DESIGN_PLANNING after 30 polls.",
+    "fix": "resume() (and a same-key generate) carries a claim with no admission row on: inputs must hash to the claim; the call is admitted under the plan id in the usual locked transaction (at most one admission); changed inputs or a blocked task fail with nothing spent; an admitted call is never re-sent (ADR-101).",
+    "unit": { "file": "apps/core/test/canva-design-planner.test.ts", "new_tests": 4, "red_run": "3 failed, 1 passed (the admitted-call case) with only the chaos points added to the unchanged planner", "green": "planner + accounting + busy route + worker busy + studio: 5 files 89 passed" },
+    "chaos": {
+      "R1.K0": {
+        "runs_on_fix": 10,
+        "delivered": 8,
+        "ended_by_ADR101_in_flight_call": 2,
+        "kill_positions_seen": { "before_plan": 2, "claimed_no_call_recovered": 2, "call_completed_recovered": 4, "call_in_flight_uncertain": 2 },
+        "note": "The first run (cf48b437) had the old expectation: 2 delivered, 1 in flight ended DESIGN_PLANNING and failed. From a3acdb8a the scenario checks ADR-101's outcome when the call was in flight (one uncertain call, at most one model request, task failed_operator, office told once)."
+      },
+      "R1.K0P": { "runs": 7, "passed": 7, "what": "Core killed at core.planner.after-claim; carried on with one planner call" },
+      "R1.K0A": { "runs": 4, "passed": 4, "what": "Core killed at core.planner.after-admission; never sent again" }
+    },
+    "not_fixed": "A Core killed while the model call is in flight leaves an uncertain call that is never re-sent; the request ends for the office (DESIGN_PLANNING, failed_operator) after 60 s. Recovering it would need provider-side retrieval of the completed call or a second paid call, which the rule forbids."
+  },
+  "bilingual": {
+    "result": "One lifecycle request per language for the legacy split shape; each with its own task, draft, approval and Delivery run.",
+    "unit": { "core": "lifecycle-bilingual-open.test.ts 5 passed; red: 3 failed on the unchanged Core", "worker": "chat-inbox.test.ts 35 passed (+2)" },
+    "chaos": { "R1.BL": { "runs": 5, "passed_all_checks": 3, "harness_fixes": "first 3 runs: the chaos approve helper did not send the RTL visual review the Desk sends (approval refused); next run and the whole-suite run failed only a distinct-hash file count (the fake renders both designs as the same PNG)" } },
+    "limits": "Split only for a worker that sends languageSiblings; a two-language decision is never replayed to an older worker (503, retried then parked)."
+  },
+  "production_shaped_data": {
+    "dump": "predeploy_20260928T213048Z.dump (newest), restored into a scratch database on hawa-test-postgres and dropped",
+    "counts": {
+      "open_legacy_telegram_tasks": { "total": 111, "received": 97, "human_review": 12, "paused": 1, "failed_operator": 1, "chats": 15, "created_in_48h_before_dump": 1 },
+      "chats_under_unlinked_message_rule_at_dump_time": 1,
+      "lifecycle_requests": 0,
+      "planner_plans_in_planning": { "claimed_no_call": 0, "call_started": 0, "call_completed": 0 },
+      "new_brief_decisions": 0
+    },
+    "meaning": "ADR-138 will not start a paid call for any old plan on deploy (no claimed-without-call plans); the 48 h rule affected one chat at dump time and expires by 2026-09-30 16:33Z."
+  },
+  "verification": {
+    "typecheck": "pnpm run typecheck passed (587 test roots)",
+    "lint": "pnpm run lint passed (any ratchet 966/1053, egress lint)",
+    "full_suite": { "workers": 3, "files": "578 passed, 1 failed, 7 skipped (586)", "tests": "4913 passed, 1 failed, 64 skipped", "failure": "r11-release-gate test 1: RELEASE_MANIFEST.json not re-sealed (not edited by instruction)", "head": "9cbd68cc" },
+    "chaos_whole_suite_worker_mode": { "head": "9cbd68cc", "scenarios": 44, "passed": 43, "invariants": "644/645", "failed": "R1.BL distinct-hash count (fixed in 50d0a2eb, then R1.BL 3/3)", "seconds": 1172, "peak_mib": 1408, "uncovered_model_calls": 0 },
+    "chaos_r10": { "previous_release": "5038a648 (built from git archive, 110 s)", "first_run": "H1 78/80, K1 50/51, K2 17/17 (scenario expectations, fixed in 1fdb8b31)", "second_run": { "head": "1fdb8b31", "R10.H1": "80/80", "R10.K1": "54/54", "R10.K2": "17/17", "seconds": 454, "peak_mib": 870 } },
+    "chaos_final_repeat": { "head": "1fdb8b31", "R1.K0": "3/3 (2 delivered, 1 in-flight ADR-101 outcome)", "R1.BL": "3/3", "peak_mib": 1018 },
+    "lock": "every chaos run took hawa-chaos-lock (driver/stack.ts acquireProject) and tore down its own stack"
+  },
+  "not_executed": ["deploy", "a live Telegram chat", "real Canva or OpenAI", "the load test", "chaos on the stage 2 branch (its scenarios reach neither Core's poller nor the non-lifecycle Delivery path)", "the pre-deploy dump check stage (no migration was added)"]
+}
