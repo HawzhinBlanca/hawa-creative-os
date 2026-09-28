@@ -6,6 +6,10 @@ RUN corepack enable
 WORKDIR /app
 
 FROM base AS builder
+# @hawa/creative compiles its Pango measurement helper when it builds (ADR-118), and the worker
+# builds @hawa/creative as a dependency: the same build tools as Dockerfile.core's builder. The
+# runner stage does not get them; the worker never measures text.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config libpango1.0-dev && rm -rf /var/lib/apt/lists/*
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
 COPY apps/worker/package.json ./apps/worker/
 COPY apps/core/package.json ./apps/core/
