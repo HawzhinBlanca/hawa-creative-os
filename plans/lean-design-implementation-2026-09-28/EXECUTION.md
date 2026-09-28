@@ -436,3 +436,160 @@ preview approval, production routing, independent quality evaluation and all
 remaining six-package release/recovery requirements remain open. Next independent
 work is the brief-bound independent judge challenger; native qualification resumes
 only after the editing interface's explicit approval requirement is satisfied.
+
+## 2026-09-28 — Continuation by Claude after Codex's usage limit
+
+Codex reached its weekly limit at 06:30 (reset 2026-10-04). On the owner's instruction ("when gpt6 hit
+limit u finish all") Claude continued this ledger from `7b8de71e`, in isolated worktrees, one agent
+per item, each followed by an adversarial reviewer that re-ran the tests and a fix round where it
+found a blocking defect. The branches were merged into `claude/mainline`; the parallel items reserved
+migration numbers, which the merge renumbered to be contiguous (065 substep bindings, 066 initial
+native policy). The entries below are the implementers' checkpoints as written, corrected only for
+that renumbering. On the merged tree all 43 affected test files pass (450 tests).
+
+## 2026-09-28 — Semantic substep recovery (ADR-122)
+
+ADR-122/migration 065 records a semantic substep, its attempt and a canonical, hash-checked binding with every new Studio call. Substeps are brief/request, brief/images-rebrief, brief/late-reference, concepts/board, layout/concept-N, layout/set and art/candidate-N. Undeclared calls use sequence/<stage>, and parity uses a content-keyed substep. Recovery consumes retained results per substep in attempt order, not by the run's call order. A persisted rebrief branch and an interleaved definite image refusal now resume without transport or charge. Changed bindings, a failure before later retained work, unknown outcomes and paid calls without results still hold. Bindings add schema, capability policy, current authority (not for artwork) and the renderer/font basis where local rendering feeds the request. A withdrawn approval with unchanged request bytes now holds; previously the retained reply was silently reused. Pre-065 rows keep the ordered prefix. Only one admission is allowed per run/substep/attempt.
+
+Real resume exposed a second cause of the rebrief hold. The in-process rebrief differed in key order from the jsonb form a resume reads back, so the next request could never match. A persisted rebrief now continues from its stored form, and only when the stored content is identical. The domain's planStudioReuse defines explicit invalidation. A keyed date correction recomputes measurement, group geometry, render, native capture and approval, and reuses the artwork with its hashes. Undeclared drift, a font/renderer change and revoked or unknown asset authorization all hold. The same keyed change applies once. No route declares a change yet.
+
+Initial red run: 4 of 7 service cases failed on the previous source. Two resumes held, the date case was blocked by the same refusal, and a stale authority was reused. Final affected run: 56 files/632 passed/0 failed/0 skipped. All 535 strict test roots compile, and any/egress/security and pack validation pass. Two studio-ledger fixtures had failed at the base since ADR-113; they were repaired. The full suite was run once and had 6 failures. Two stale migration lists were then corrected, and the Desk bundle test passes once the Desk is built. Route-inventory, blob-gc coverage and the r11 release manifest failures come from earlier changes and remain open. See SUBSTEP_RECOVERY_PROOF.json.
+
+Package 3 remains open: no amend route declares changes, and native capture/approval are not wired to the planner. Per-asset model-call bindings, the remaining stage substeps, runtime/cutout pins, region mapping and bounded concurrency are also still open. No paid or native call, production migration, deployment, process-kill drill or human study took place. The full six-package objective remains active. Next: package 4 amend routing consumes planStudioReuse.
+
+## 2026-09-28 — Renderer/cut-out runtime pins and reserved-region mapping (ADR-123)
+
+ADR-123 adds the rasteriser to the retained basis: the rsvg-convert executable hash, its
+--version answer and the operating-system release files. The font basis becomes version 2 and
+visual bundles version 3. A changed renderer holds a pinned run before the next model or render
+stage, as a font change does; restoring it resumes. Version-2 bundles lack renderer attestation
+and are held for review. ADR-122 renderer bindings use the same basis. The cut-out service
+(hawa-cutout/2) reports its code, package versions and face detector. Each pinned cut-out and
+focus derivation records source, bytes and runtime; mismatches hold at capture and recovery. A
+pinned run never asks the service again, so a changed live service does not hold it.
+
+The art prompt described the calm region in layout pixels ("centered around (0, 945) measuring
+1080x405") to a 1024x1024 request and stated 9:16. It is now mapped through the renderer's cover
+crop into the requested frame, with that frame's aspect. The plan and a check of the returned
+image are retained; final QA records the final layout's landing (moved/frame_mismatch/
+unreadable) and each photo crop, including an unapplied focus on unreadable sizes. This is
+evidence, not a gate.
+
+Qualification: 34 files / 329 tests passed, zero failed/skipped, plus 4 Python identity tests.
+Real temporary executables and release files; real librsvg pixels confirm the crop mapping on
+macOS 2.62.3 and Debian 2.54.7; isolated PostgreSQL hold/restore through fresh services. Initial
+red: 5 failed/3 files unloadable, 6/6 art-stage cases (layout-pixel prompt), 1 Python error;
+fixture corrections retained. Source/scripts and 538 strict test roots, any 954/1053, egress and
+security pass. Full suite 537 files: 4505 passed, 3 failed, 60 skipped. The same three failures
+occur at base with this change stashed. See RUNTIME_REGION_PROOF.json.
+
+Not done: shared-library byte identity, a rebuilt cut-out image, paid art quality of the corrected
+prompt, deployment, and the inventory of active runs that will hold. Package 3 still needs safe
+bounded concurrency; all six packages remain active.
+
+Evidence and commands:
+- Initial red run: 27 tests, 22 passed, 5 failed, and 3 files could not load. The art stage failed 6 of 6, showing the layout-pixel prompt. The Python identity test had 1 error.
+- Before the final runs I corrected five test mistakes, all kept in the proof: an unavailable import (pngjs) in the Core test, a wrong assumption about a missing rsvg path, a missing test logo, a misnamed field, and one outdated expectation for focus points.
+- Final affected runs: 17 creative files (194 tests), 14 Core files (118 tests) and 3 Core recovery/schema/accounting files (17 tests), with no failures or skips. Python: 4 of 4 passed.
+- The full suite has 3 failures that are not from this change; I spawned a separate task to fix them.
+
+Files (all under /Users/hawzhin/Hawdesign/.claude/worktrees/wf_82dde19f-6dc-1):
+- adrs/123_renderer_runtime_and_region_mapping.md
+- plans/lean-design-implementation-2026-09-28/RUNTIME_REGION_PROOF.json
+- packages/creative/src/studio/renderer-identity.ts and placement-map.ts
+- apps/core/src/services/design-studio/visual-inputs.ts, stages/art.stage.ts and stages/qa.stage.ts
+- services/cutout/hawa_cutout/identity.py
+- Logs: output/acceptance/2026-09-28-runtime-region-*
+
+## 2026-09-28 — Brief-bound judge challenger (ADR-124)
+
+ADR-124 adds a challenger to the existing R06 metric-blind calibration interface. It receives the requester's instructions, the recorded brief fields and the exact copy unchanged. It never sees metrics, ranks or prestige wording. Correctness, communication and aesthetic preference are judged separately. Each dimension allows a tie or an abstention and can carry localized findings. The model returns no overall winner. The application applies a fixed rule over both orders: correctness first, then communication, then aesthetic preference. An abstention, a position flip or a pick contradicted by its own severe findings makes the pair uncertain. An uncertain pair keeps the higher composite and records humanChoiceRecommended.
+
+HAWA_STUDIO_JUDGE_PROTOCOL keeps the incumbent by default. Only brief_bound_v1 selects the challenger. Any other value is refused visibly, with no model call. The challenger reuses the same eligible top two, rendered bytes, degraded canary, ledger client and budget. Core stores the packet and image hashes, the verdict, the decision and the receipt. No migration was needed; 067 is unused.
+
+scripts/run_judge_experiment.ts compares both judges on one pinned corpus, with the same bytes and model, in both orders. It uses a frozen, hashed plan (3ab6847d…):
+- Primary endpoint: seeded-defect detection. Estimate: paired, lineage-clustered bootstrap. Worthwhile effect: +0.10, with the lower bound above 0.
+- Regression margins: human agreement and order consistency (-0.05), clean-control critical findings (at most 0.05), cost per case (at most 2x).
+- Minimum sample: 20 seeded and 10 clean lineages.
+- Ties, abstentions, flips, invalid replies and calls not run all count as failures.
+
+Every request is quoted with the ADR-091 policy before dispatch. It is admitted only against a run cap and the office daily ledger. The first provider error stops the run. A paid run must type back the plan hash.
+
+Initial red run: 71 passed, 26 failed, and one test module was missing. The Core test showed the flag had no effect. Two corpus defects were found and fixed:
+- A Sorani clean control had byte-identical images.
+- The offline layout overlapped its own copy. Blocks are now stacked by measured height, and hard QA must pass for every clean side.
+
+The final connected run passed 21 files and 228 tests, with 0 failed and 0 skipped. I ran the full suite once: 534 files, 4484 passed, 9 failed, 60 skipped. The same 9 failures in 8 files also fail with the worktree detached at base 7b8de71e (69 passed, 9 failed). The failing areas are migration and route fixtures, the release manifest, the Desk bundle size, blob-gc coverage, planner accounting and 2 studio-ledger stubs.
+
+A 72-case development corpus (24 golden briefs) ran end to end with the synthetic provider:
+- 288 calls, office ledger equal to run spend.
+- Decision: SYNTHETIC_PLUMBING_ONLY.
+- A quote-only run dispatched nothing. Worst-case reservations: USD 2.54 on gpt-4.1-mini, USD 99.47 on gpt-6-astra.
+
+Source, script and 535 test roots type-check. The any ratchet (956/1053), provider egress and security checks passed. Evidence is in JUDGE_CHALLENGER_PROOF.json.
+
+Still open: paid comparison, blind human labels (overall and per dimension), native Sorani review, calibration and holdout corpora from retained exports, shadow run, the remaining package 5 items, and the whole six-package objective. The golden-brief corpus is development material only. The flag must not be enabled in production on this evidence.
+
+## 2026-09-28 — One negative-space policy and an executable brief contract (ADR-125)
+
+The v3 generator was told "0.35 to 0.58" and "never leave 40% empty", but the checker it is ranked, repaired and judged by passes measured-line emptiness from 0.36 to 0.84. Version 2026-09-28.1 of `studio.negative-space` now holds the occupancy rules, both bands, the gap and bottom-void penalties and the pass score. QA scores through it. The generator statement is rendered from it, including that photographs and artwork are not counted. Every score records the policy id, version, digest and measure. The numbers are the existing calibration, so no accept or reject decision changes. A digest test is pinned to the version.
+
+Before the first layout call, a new or afresh-designed run records one executable brief contract on its stages, together with the policy identities it was built under:
+- exact copy and client assets, by hash
+- source-copy order and the relations checks already enforce (keepInside, noOverlap, aspect), marked protected
+- composition and cover-fit crop, marked permitted
+- every model brief field, as a proposal or an unknown
+
+The model readingOrder stays a proposal. Element IDs are the renderer's. Validation refuses any model proposal placed in the exact, protected or permitted layers.
+
+Disagreements are recorded with their resolution rather than resolved silently: an order proposal that is not adopted, no-imagery with client photos, and a background mapped to the palette.
+
+The copy-fit screen is free. It uses the validator's own admitted faces and QA's own measurement and width tolerance. When every admitted face shows an unbreakable run wider than the safe width at the 12px minimum, the run stops before layout. It gets a short explanation and only CLIENT_APPROVES_REVISED_COPY or CHOOSE_WIDER_APPROVED_FORMAT. Nothing is shrunk, omitted, split or reworded. If a face cannot be measured, the result is unknown, never a conflict. A changed recorded contract holds the run (BRIEF_CONTRACT_CHANGED) before any provider call.
+
+The initial red run failed all four new files. In the Core file, the unbreakable copy reached the layout boundary and no contract was recorded. An unseeded-client fixture and a key-filtering test helper were corrected.
+
+Final results:
+- New tests: 4 files, 21 passed.
+- Final connected run: 11 files, 95 passed, 0 failed, 0 skipped.
+- Affected packages: 32 files, 377 passed.
+- Affected Core/worker: 26 files, 241 passed and 2 failed. Both failures are in studio-ledger and reproduce on the base source.
+- Full suite, run once: 4,468 passed, 9 failed, 60 skipped. All 9 failures reproduce with the base sources restored.
+- Build, source/scripts types, 537 strict roots, the any ratchet (954/1053), egress and security checks pass.
+- Local screen timing: about 114ms warm median for eight bilingual blocks.
+
+There were no paid, native or deployment actions. See BRIEF_CONTRACT_PROOF.json.
+
+All six packages remain active. Still open:
+- aggregate area and hierarchy capacity screens
+- edit contracts for directed and native amendments
+- a clarification route for unknowns
+- whether photos and artwork belong in the negative-space measure
+- re-deriving the band from the exemplars
+- the generator margin statement (0.05 normalized), which is looser than the validator's 6% of the short edge
+- the separate Desk whitespaceRatio display figure
+- an equal-budget human comparison
+
+Next: the aggregate capacity screen and the native edit contract.
+
+## 2026-09-28 — Brief contract fix round
+
+Review found that a directed revision whose edit failed, and was designed afresh, held for good if it was interrupted after its contract was written. The contract labelled inherited copy as source copy. The mid-stage write persisted directedFailed, so the resumed stage skipped the edit and laid out the request copy. A real-PostgreSQL test with retained calls and a synthetic transport reproduced BRIEF_CONTRACT_CHANGED. Without inherited copy it reproduced the inferred MODEL_STAGE_REPLAY_UNSAFE. On the base source the same resume failed the run on the unique candidate ordinal.
+
+The contract now takes its copy authority from the copy the run lays out. Inherited copy is kept as the run's own, the mid-stage write leaves out directedFailed, and the afresh slots are reserved once. The resumed stage replays all four retained calls with no transport and reaches the layout boundary with the same copy and contract. An identity digest separates authorities from policy and measurement evidence: evidence changes re-admit the contract and are recorded, while identity changes hold. The write is conditional on laying_out. Every run records stages.policies. Policy 2026-09-28.2 states the span semantics with the same numbers, and the art gate measures lines when copy is supplied. Directed revisions stay held by ADR-113; the test bypasses only that admission.
+
+Five changed test files: 8/51 initially red, 51/51 after the fix. Affected Core/worker: 48 files, 530 passed, 2 failed (the known studio-ledger cases). Affected packages: 37 files, 434 passed. Full suite: 537 files, 4,477 passed, 9 failed (the same 9 as the first round, which reproduced on base in that round), 60 skipped. Types (538 roots), any ratchet 954/1053, egress and security pass. See BRIEF_CONTRACT_PROOF.json.
+
+Local qualification only. No paid, native, human, deployment or release evidence. Before deploy, confirm that no Studio run sits in laying_out with a retained layout call.
+
+## 2026-09-28 — Initial manual request recovery (ADR-126)
+
+ADR-126/migration 066 closes the Package 1 intake gap. A request opened for manual design has no run. Its owner state previously refused review, approval and delivery, and Core refused its design writes. The origin is now identified from the immutable rev-1 open receipt (manual, autoGenerate false, same root task) and from the absence of Studio run state. No run is fabricated. At revision 1 the office links the request's own separate design, confirms exact copy (initialNativeCopy event) and captures PNG/PPTX. This happens under the lifecycle lock, the active-user snapshot check and explicit request headers. The existing global binding uniqueness refuses a design already linked to another task. Capture before confirmation is refused, and capture does not advance the request.
+
+The same signed submission, at expectedRev 1, projects the revision, QA and the manual-to-in_review change once. Its hash-bound receipt survives lost Core and gateway replies and fresh hawa_app connections, and cannot rewind a later approval. The owner adopts it into a manual-origin state with no run. That state approves and delivers. A requester revision round is refused in both the owner and Core, because the requester's reply would start automatic generation. Rejection was not separately exercised. Migration 066 keeps an initial policy current only for the latest confirmation, binding and Client DNA. Other captures, and captures without a policy, cannot qualify such a task. Desk shows an initial variant and keeps a rev-1 submission across remounts. The non-lifecycle ADR-077 path already keeps Core as owner and the saved copy as the authority, so it was not changed.
+
+Initial red: 20 failed/11 passed across 4 files. Final connected run: 29 files/305 passed, zero failed or skipped. A mutation check that removed the two revise guards failed 3 cases. The earlier connected run surfaced a superseded ADR-114 expectation (expectedRev 1 treated as invalid) and a hard-coded upgrade list that was already stale at base; both were corrected. Source and script types pass, all 535 strict test roots compile, and the Desk build, any ratchet, egress check, security scan and validate_pack pass. The full suite gave 4474 passed/7 failed/60 skipped across 534 files. The six failing files have expectations that predate routes, migrations and release manifests already present at base. I inferred this from the base tree; I did not run the suite at base. See INITIAL_MANUAL_RECOVERY_PROOF.json.
+
+Open: Core delivery projection for this origin was exercised only through the owner with a mocked Core. Still open: an office-owned revision route, live native qualification, human judgment, full release and independent recovery. No paid or native calls, production SQL, migration or deployment occurred. All six packages remain active.
+
+Files are in the worktree above; evidence logs are gitignored under output/acceptance/2026-09-28-initial-native-*. I did not write to the wiki; the lead owns the merged record.
+
