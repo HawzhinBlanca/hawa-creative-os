@@ -2,6 +2,7 @@ import * as restate from '@restatedev/restate-sdk';
 import { verifyLifecycleOfficeEvent } from '@hawa/integrations';
 import { parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
+import { acceptedWorkerSecrets } from './worker-secrets.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
 import { RequestLifecycleApi, type OfficeDeliveryStartEvent, type OfficeDeliveryStartReply,
   type OfficeRevisionEvent, type OfficeRevisionReply } from './request-lifecycle.js';
@@ -15,7 +16,12 @@ export interface SignedOfficeDecision {
 }
 
 /** Only signed review decisions are exposed; the request object itself remains ingress-private. */
-export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: string): 'ok' | 'invalid' | 'unauthorized' {
+/** Any of the accepted values verifies (HAWA_WORKER_TOKEN, or its previous value during a rotation; ADR-129). */
+function signedWithAny(secrets: string | readonly string[], verify: (secret: string) => boolean): boolean {
+  return (typeof secrets === 'string' ? [secrets] : secrets).some((secret) => Boolean(secret) && verify(secret));
+}
+
+export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: string | readonly string[]): 'ok' | 'invalid' | 'unauthorized' {
   if (input?.v !== 1 || !input.event || typeof input.event !== 'object' || Array.isArray(input.event) ||
       input.event.v !== 1 || !['revise', 'approve', 'reject', 'deliver'].includes(input.event.kind) ||
       (input.event.kind === 'deliver'
@@ -44,10 +50,10 @@ export function checkSignedOfficeDecision(input: SignedOfficeDecision, secret: s
         input.event.revisionRequest !== undefined)) ||
       (input.event.kind === 'revise' && (input.event.approvalProof !== undefined ||
         input.event.deskRequestFingerprint !== undefined || input.event.rejectionCategory !== undefined))) return 'invalid';
-  return verifyLifecycleOfficeEvent(secret, input.event, input.signature) ? 'ok' : 'unauthorized';
+  return signedWithAny(secret, (value) => verifyLifecycleOfficeEvent(value, input.event, input.signature)) ? 'ok' : 'unauthorized';
 }
 
-export function createOfficeDecisionGateway(secret = process.env.HAWA_WORKER_TOKEN || '') {
+export function createOfficeDecisionGateway(secret: string | readonly string[] = acceptedWorkerSecrets()) {
   return restate.service({
     name: 'OfficeDecisionGateway',
     handlers: {
@@ -73,7 +79,7 @@ export function createOfficeDecisionGateway(secret = process.env.HAWA_WORKER_TOK
   });
 }
 
-export function checkSignedNativeReview(input: {v:1;event:NativeReviewSubmission;signature:string},secret:string):'ok'|'invalid'|'unauthorized' {
+export function checkSignedNativeReview(input: {v:1;event:NativeReviewSubmission;signature:string},secret:string|readonly string[]):'ok'|'invalid'|'unauthorized' {
   if (input?.v !== 1 || !parseNativeReviewSubmission(input.event)) return 'invalid';
-  return verifyLifecycleOfficeEvent(secret,input.event,input.signature)?'ok':'unauthorized';
+  return signedWithAny(secret,(value)=>verifyLifecycleOfficeEvent(value,input.event,input.signature))?'ok':'unauthorized';
 }

@@ -36,6 +36,10 @@ container into `~/.hawa/logs/containers/<YYYY-MM-DD>/<service>.ndjson` (UTC days
 the containers, so a deploy loses nothing. `disk_cleanup.sh` deletes days older than 30, nightly,
 and then the oldest days until the rest fit in `HAWA_LOG_MAX_MB` (2048; Docker's own driver capped
 each container at 250 MB, Vector caps nothing). Today's day is never deleted.
+`vector.yaml` is a single-file bind mount and Vector runs without `--watch-config`, so a plain
+`compose up` never applies a changed file. `deploy.sh` checks the file with `vector validate` in a
+one-off container before it starts anything, and restarts `vector` when the running container sees a
+different file (ADR-129), as it does for `nginx.conf`.
 
 ```bash
 npx tsx scripts/request_logs.ts <requestId>               # one request: nginx, Core, worker, in time order

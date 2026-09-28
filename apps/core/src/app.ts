@@ -86,7 +86,7 @@ import { registerSearchRoutes } from './routes/search.routes.js';
 import { registerWhatsappRoutes } from './routes/whatsapp.routes.js';
 import { createChannelKillSwitchStore } from './services/channel-kill-switches.js';
 import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.js';
-import { isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
+import { acceptedServiceTokensOf, isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
 import { telegramPollerOf } from './services/telegram-poller-owner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
 import { PaidModelProbeService } from './services/paid-model-probe.js';
@@ -425,10 +425,11 @@ export function createApp(options?: CreateAppOptions) {
     // `service` principal on /v1/internal/* and nothing anywhere else, and those routes take no other
     // credential: not the operator's or administrator's keys, a session, a stream ticket, the webhook
     // secret, a test principal or a role header. The worker used to call Core with the operator's key.
-    const workerToken = serviceTokenOf();
+    // During a rotation the previous value is accepted too: a colour still draining keeps it (ADR-129).
+    const workerTokens = acceptedServiceTokensOf();
     if (isInternalPath(String(c.req.path || ''))) {
       const presented = ticketCredential ? '' : String(c.req.header('Authorization') || '').replace(/^Bearer\s*/, '').trim();
-      if (workerToken && presented && secretsEqual(presented, workerToken)) {
+      if (presented && workerTokens.some((token) => secretsEqual(presented, token))) {
         return { authenticated: true, tenantId: defaultTenantId, userId: SYSTEM_AUTOMATION_USER_ID, actorId: 'hawa_worker', role: 'service', displayName: 'Hawa worker' };
       }
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
@@ -478,8 +479,8 @@ export function createApp(options?: CreateAppOptions) {
           return session;
         }
 
-        // The worker's token opens /v1/internal/* only (above).
-        if (workerToken && secretsEqual(token, workerToken)) {
+        // The worker's token (and its previous value during a rotation) opens /v1/internal/* only (above).
+        if (workerTokens.some((workerToken) => secretsEqual(token, workerToken))) {
           return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
         }
 
@@ -748,6 +749,9 @@ export function createApp(options?: CreateAppOptions) {
         DESIGN_PIPELINE_V3: process.env.DESIGN_PIPELINE_V3 || 'off',
         DESIGN_STUDIO_V2: process.env.DESIGN_STUDIO_V2 || 'off',
       },
+      // Who is meant to ask Telegram for updates: the watchdog then requires a polling worker colour
+      // when this says worker (ADR-129).
+      telegramPoller: telegramPollerOf(process.env),
       lastVerifiedProgressAt,
       lastPaidProbe: {
         at: modelHealth.at,

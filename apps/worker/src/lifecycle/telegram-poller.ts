@@ -91,6 +91,9 @@ export class TelegramPoller {
   private killSwitchValue: boolean | null = null;
   private lastPollAt?: string;
   private lastError?: string;
+  /** The end of the last cycle that worked: updates read and handed on, or intake switched off on purpose. */
+  private lastOkAt?: string;
+  private firstPollAt?: string;
   private handedOn = 0;
 
   constructor(private readonly options: TelegramPollerOptions) {}
@@ -117,8 +120,12 @@ export class TelegramPoller {
   /** One getUpdates and the hand-off of what it returned, in order. Never throws. */
   async pollOnce(signal?: AbortSignal): Promise<PollResult> {
     const result: PollResult = { polled: 0, enqueued: 0 };
+    this.firstPollAt ??= new Date(this.now).toISOString();
     try {
-      if (await this.intakeOff()) return { ...result, paused: 'kill_switch' };
+      if (await this.intakeOff()) {
+        this.lastOkAt = new Date(this.now).toISOString();
+        return { ...result, paused: 'kill_switch' };
+      }
     } catch (err) {
       this.lastError = `kill switch unreadable: ${errorText(err)}`;
       return { ...result, paused: 'kill_switch_unknown' };
@@ -176,6 +183,7 @@ export class TelegramPoller {
       this.handedOn++;
     }
     this.lastError = undefined;
+    this.lastOkAt = new Date(this.now).toISOString();
     return result;
   }
 
@@ -204,8 +212,37 @@ export class TelegramPoller {
   }
 
   status() {
-    return { offset: this.offset, handedOn: this.handedOn, lastPollAt: this.lastPollAt ?? null, lastError: this.lastError ?? null };
+    return {
+      offset: this.offset, handedOn: this.handedOn, lastPollAt: this.lastPollAt ?? null, lastError: this.lastError ?? null,
+      lastOkAt: this.lastOkAt ?? null, firstPollAt: this.firstPollAt ?? null,
+    };
   }
+}
+
+export type PollerStatus = ReturnType<TelegramPoller['status']>;
+
+/** A live poller with no working cycle for this long is reported; getUpdates itself waits 25 s at most. */
+export const POLLER_STALE_MS = 5 * 60_000;
+
+/**
+ * Why a poller that should be reading Telegram is not, for the worker's /health; null when nothing is
+ * wrong (ADR-129, Phase 4 operations finding 3). Only the colour that polls ('live', or 'always'
+ * without blue/green) is judged: a standby or taking-over colour is not meant to poll yet.
+ */
+export function pollerProblem(input: {
+  mode: PollerConfig['mode']; started: boolean; background: string; status: PollerStatus | null; now: number; staleMs?: number;
+}): string | null {
+  if (input.mode !== 'on') return null;
+  if (!input.started) return 'the Telegram poller did not start (no database, or the outbox is misconfigured)';
+  if (input.background !== 'live' && input.background !== 'always') return null;
+  const s = input.status;
+  if (!s) return null;
+  if (s.lastError && /^getUpdates answered HTTP (401|404)\b/.test(s.lastError)) return `Telegram refuses the bot token: ${s.lastError}`;
+  const since = s.lastOkAt ?? s.firstPollAt;
+  if (!since) return null;
+  const staleMs = input.staleMs ?? POLLER_STALE_MS;
+  if (input.now - Date.parse(since) <= staleMs) return null;
+  return `no successful poll for over ${Math.round(staleMs / 60_000)} minutes${s.lastError ? `: ${s.lastError}` : ''}`;
 }
 
 export interface PollerLoopHandle {

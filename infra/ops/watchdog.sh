@@ -29,6 +29,26 @@ notify() {
 }
 if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login, nightly backup 03:30."; echo "announced"; exit 0; fi
 
+# The worker Telegram poller (Phase 2.1). With HAWA_TELEGRAM_POLLER=worker Core does not poll, and a
+# colour whose poller was off, never started or failing left every check green while no client message
+# was read (ADR-129, Phase 4 operations finding 3). Core's health says who is meant to poll; each running
+# colour says what its poller does (mode, and background when it is on).
+worker_poller_state() {
+  python3 -c 'import json,sys
+h=json.load(sys.stdin); p=h.get("telegramPoller") or {}
+m=str(p.get("mode","off"))
+print(m+(":"+str(p.get("background")) if m=="on" else ""))' 2>/dev/null || echo unknown
+}
+core_poller_owner() {
+  python3 -c 'import json,sys; v=json.load(sys.stdin).get("telegramPoller"); print(v if v in ("core","worker") else "")' 2>/dev/null || true
+}
+telegram_poller_problem() {
+  if [[ "${1:-}" == worker && "${2:-0}" -eq 0 ]]; then
+    echo "HAWA_TELEGRAM_POLLER=worker but no worker colour is polling Telegram, and Core does not poll: client messages are not being read"
+  fi
+  return 0
+}
+
 problems=()
 # 1. Docker daemon (Docker Desktop is not set to auto-start; the agent runs at login and starts it)
 if ! docker info >/dev/null 2>&1; then
@@ -87,20 +107,28 @@ fi
 # Every running worker colour answers for itself. One of them must be running the outbox: "live" (or
 # "taking_over" for the minute after a deploy); a colour draining is "standby". A worker from before
 # blue/green reports no colour and always runs it.
-outbox_runners=0; workers_seen=0
+# The Telegram poller: when Core says the worker polls, one running colour must be polling (or taking
+# over); a degraded colour names its poller problem (telegramPoller.problem).
+outbox_runners=0; workers_seen=0; pollers=0
+core_owner="$(printf '%s' "${core:-}" | core_poller_owner)"
 for name in $(running_names | grep -E "$WORKER_NAME" || true); do
   workers_seen=$((workers_seen + 1))
   worker="$(docker exec "$name" node -e "fetch('http://localhost:9080/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
   label="${name#hawa-production-}"; label="${label%-1}"
   if [[ -z "$worker" ]]; then problems+=("${label} health does not answer"); continue; fi
-  wsum="$(printf '%s' "$worker" | python3 -c 'import json,sys; h=json.load(sys.stdin); print(h.get("status","?"), h.get("background","always"), json.dumps(h.get("outbox",{})))' 2>/dev/null || echo "unparseable")"
+  wsum="$(printf '%s' "$worker" | python3 -c 'import json,sys; h=json.load(sys.stdin); p=(h.get("telegramPoller") or {}).get("problem"); print(h.get("status","?"), h.get("background","always"), json.dumps(h.get("outbox",{}))+(" telegram poller: "+str(p) if p else ""))' 2>/dev/null || echo "unparseable")"
   [[ "$wsum" == healthy* ]] || problems+=("${label} ${wsum}")
   case "$wsum" in *" live "*|*" always "*|*" taking_over "*) outbox_runners=$((outbox_runners + 1)) ;; esac
+  case "$(printf '%s' "$worker" | worker_poller_state)" in on:live|on:always|on:taking_over) pollers=$((pollers + 1)) ;; esac
 done
 if [[ "$workers_seen" -eq 0 ]]; then
   # Already reported by the container check when it ran.
   [[ "${workers:-unchecked}" == 0 ]] || problems+=("worker health does not answer (no worker running)")
 elif [[ "$outbox_runners" -eq 0 ]]; then problems+=("no worker is running the outbox (Restate names no live worker, or cannot be reached)")
+fi
+if [[ "$workers_seen" -gt 0 ]]; then
+  poller_problem="$(telegram_poller_problem "$core_owner" "$pollers")"
+  [[ -z "$poller_problem" ]] || problems+=("$poller_problem")
 fi
 
 # 4. Disk and backup freshness (a full disk or a stale backup is an outage in waiting). From 88% Hawa

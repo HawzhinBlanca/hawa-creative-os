@@ -34,6 +34,7 @@ import { composeDeliveredMessage, composeDeliveryFailedAlert } from '../delivery
 import { log, requestIdHeaders, withInvocationLogContext } from '../logging.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 import { RequestLifecycleApi } from './request-lifecycle.js';
+import { acceptedWorkerSecrets } from './worker-secrets.js';
 
 /** A Core step's retry: from 2 s doubling to 30 s, for up to 10 minutes (as TaskWorkflow's steps). */
 export const PREPARE_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30000, maxRetryDuration: 10 * 60 * 1000 };
@@ -100,7 +101,8 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
   }
   if (input.reportTo === 'lifecycle') {
     const { claimSignature, ...claim } = input;
-    if (!verifyLifecycleDeliveryClaim(process.env.HAWA_WORKER_TOKEN || '', claim, claimSignature)) {
+    // HAWA_WORKER_TOKEN, or its previous value while a rotation is under way (ADR-129).
+    if (!acceptedWorkerSecrets().some((secret) => verifyLifecycleDeliveryClaim(secret, claim, claimSignature))) {
       throw new restate.TerminalError('INVALID_LIFECYCLE_DELIVERY_CLAIM', { errorCode: 401 });
     }
   }

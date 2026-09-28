@@ -176,19 +176,102 @@ The default verifies the files without creating Docker resources. Add `--apply` 
 
 `infra/backup/drill_restate_restore.py --image-id <immutable Restate image ID> --worker-image-id <immutable cached worker image ID> --compose-file infra/docker/docker-compose.prod.yml` reproduces a separate fully synthetic cold-copy, encrypted-pair and saved-state comparison without reading a production volume. On 2026-09-26 it restored 51 files and matched one saved state row. This is not a substitute for the clean-host journal/effect drill above.
 
-### Restoring for real
+### Restoring for real (rewritten 2026-09-28, ADR-129)
 
-1. Stop Core and both worker colours (nothing may write while the store and the database disagree).
-2. Pick the dump: the newest good `hawa_<stamp>.dump.enc` in the archive. Decrypt it with the passphrase
-   in the owner's password manager:
-   `openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -in hawa_<stamp>.dump.enc -pass file:<passphrase file> > hawa.dump`
-3. Restore the database from it (`pg_restore --clean --if-exists --exit-on-error`, as the owner, into the
-   production database), as `docs/25_OPERATIONS_RUNBOOK.md` describes.
+A dump is restored into a **new** database, checked, and then swapped in by renaming. It is never
+restored over the database the stack uses. The earlier step, `pg_restore --clean --if-exists
+--exit-on-error` into the production database, fails on any database a later migration has touched:
+the dump does not hold the foreign keys, policies and triggers those migrations added, so dropping its
+own tables fails partway (`cannot drop … because other objects depend on it`). By then pg_restore has
+already dropped the dump's own policies, triggers and most foreign keys. The tables keep `FORCE ROW
+LEVEL SECURITY` with no policies, so the application role sees no rows, and Core, the Desk and the
+worker are down. This was reproduced on 2026-09-28 with a pre-deploy dump and this branch's migrations
+022-064 (`plans/lean-design-implementation-2026-09-28/OPERATIONS_FIXES_PROOF.json`). Without
+`--exit-on-error` the same command leaves a mix of old and new rows instead.
+
+The same procedure is the **rollback of a deploy** with that deploy's `predeploy_<stamp>.dump`. A
+rollback also puts back the code that matches the dump: check out the commit that was live before the
+deploy and run `deploy.sh --apply` from it in step 6. First compare `WORKER_SERVICE_NAMES` in
+`apps/worker/src/services.ts` at that commit with the current one. If the older build lacks a service
+the current one hosts, do not deploy it: Restate would keep that service on the current colour and
+every later deploy would stop at its drain check. The current `deploy.sh` refuses such a registration
+(`infra/docker/README.md`), but an older commit's `deploy.sh` does not.
+
+1. Stop what would write or reconnect. The watchdog restarts a stopped Core within five minutes, and
+   the nightly backup and drills connect to the database, so their launch agents go first:
+   ```bash
+   for a in design.hawa.watchdog design.hawa.nightly-backup design.hawa.backup-restore-drill design.hawa.restore-drill; do launchctl bootout "gui/$(id -u)/$a" 2>/dev/null || true; done
+   docker stop hawa-production-core-1 hawa-production-worker-blue-1 hawa-production-worker-green-1 2>/dev/null || true
+   ```
+   (A colour that is not running is simply skipped.)
+2. Pick the dump. For a nightly one: the newest good `hawa_<stamp>.dump.enc` in the archive, decrypted
+   with the passphrase in the owner's password manager:
+   `openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -in hawa_<stamp>.dump.enc -pass file:<passphrase file> > hawa.dump`.
+   For a deploy rollback: `infra/backup/snapshots/predeploy_<stamp>.dump`, checked against the hash
+   beside it: `[[ "$(shasum -a 256 <dump> | cut -d' ' -f1)" == "$(cat <dump>.sha256)" ]] && echo checksum-ok`.
+3. Restore it into a new database, check it, and swap it in. Run this block as it stands, with `DUMP`
+   set to the file from step 2 (from the repository root, in bash). It restores in one transaction, so
+   an error leaves nothing half-restored and the live database untouched. It then copies what belongs
+   to the database itself and not to the dump: its owner, its grants (`GRANT ... ON DATABASE`, such as
+   a revoked `CONNECT`) and its settings (`ALTER DATABASE ... SET`, and `ALTER ROLE ... IN DATABASE ...
+   SET` for the application's login roles). A rename leaves them with the old database, so without the
+   copy the swapped-in database would accept connections the old one refused and drop those settings.
+   `infra/backup/restore_copy_props.sql` does the copy and refuses a setting whose value is a list;
+   `infra/backup/restore_props.sql` compares the two. The block swaps only when the new database holds
+   every policy, foreign key and trigger the dump lists and has the old one's owner, encoding, grants
+   and settings, and prints `restore-check=ok`; anything else prints `restore-check=MISMATCH`, changes
+   nothing, and leaves the new database for inspection (drop it with `dropdb`). `infra/backup/drill_restore_swap.sh` runs this same block,
+   read from this file, against the test server.
+
+   <!-- restore-swap:begin -->
+   ```bash
+   PG="${PG:-hawa-production-postgres-1}"; DB="${DB:-hawa}"; DUMP="${DUMP:?set DUMP to the dump file}"
+   STAMP="$(date -u +%Y%m%dt%H%M%Sz)"; NEW="${DB}_restore_${STAMP}"; OLD="${DB}_before_${STAMP}"
+   docker exec "$PG" createdb -U hawa_owner -T template0 "$NEW"
+   docker exec -i "$PG" pg_restore -U hawa_owner -d "$NEW" --exit-on-error --single-transaction < "$DUMP"
+   TOC="$(docker exec -i "$PG" pg_restore --list < "$DUMP")"
+   toc_count() { grep -cE "^[0-9]+; [0-9]+ [0-9]+ $1 " <<< "$TOC" || true; }   # grep -c exits 1 on 0
+   WANT="policies=$(toc_count POLICY) foreign_keys=$(toc_count 'FK CONSTRAINT') triggers=$(toc_count TRIGGER)"
+   HAVE="$(docker exec "$PG" psql -X -qAt -U hawa_owner -d "$NEW" -v ON_ERROR_STOP=1 -c "SELECT 'policies='||(SELECT count(*) FROM pg_policy)||' foreign_keys='||(SELECT count(*) FROM pg_constraint WHERE contype='f')||' triggers='||(SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal)")"
+   echo "dump: ${WANT}"; echo "new database ${NEW}: ${HAVE}"
+   # The owner, encoding, grants (GRANT ... ON DATABASE) and settings (ALTER DATABASE ... SET, ALTER ROLE
+   # ... IN DATABASE ... SET) belong to the database, not to what pg_dump -Fc writes, and a rename does
+   # not move them: they are copied from DB to NEW and compared (grants and settings only as a hash).
+   props() { docker exec -i "$PG" psql -X -qAt -U hawa_owner -d postgres -v ON_ERROR_STOP=1 -v name="$1" < infra/backup/restore_props.sql; }
+   copy_props() { docker exec -i "$PG" psql -X -q -U hawa_owner -d postgres -v ON_ERROR_STOP=1 -v src="$DB" -v dst="$NEW" < infra/backup/restore_copy_props.sql; }
+   if [[ "$HAVE" != "$WANT" ]]; then
+     echo "restore-check=MISMATCH: nothing was swapped; ${DB} is unchanged and ${NEW} is left for inspection"
+   elif ! copy_props; then
+     echo "restore-check=MISMATCH: the owner, grants or settings of ${DB} could not be copied (the reason is above); nothing was swapped, and ${NEW} is left for inspection"
+   elif P_DB="$(props "$DB")"; P_NEW="$(props "$NEW")"; [[ "$P_DB" != owner=* || "$P_NEW" != "$P_DB" ]]; then
+     echo "database ${DB}: ${P_DB}"; echo "database ${NEW}: ${P_NEW}"
+     echo "restore-check=MISMATCH: ${NEW} does not have the owner, encoding, grants and settings of ${DB}; nothing was swapped, and ${NEW} is left for inspection"
+   elif echo "database ${NEW}: ${P_NEW} (as ${DB})" && docker exec "$PG" psql -X -qAt -U hawa_owner -d postgres -v ON_ERROR_STOP=1 \
+       -c "SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE datname IN ('${DB}', '${NEW}') AND pid <> pg_backend_pid()" \
+       -c "ALTER DATABASE \"${DB}\" RENAME TO \"${OLD}\"; ALTER DATABASE \"${NEW}\" RENAME TO \"${DB}\"" >/dev/null; then
+     echo "restore-check=ok: ${DB} is the restored copy; the database it replaced is kept as ${OLD}"
+   else
+     echo "restore-check=SWAP_FAILED: the two renames run in one transaction, so ${DB} is unchanged; ${NEW} is left for inspection"
+   fi
+   ```
+   <!-- restore-swap:end -->
+
+   To undo the swap before anything was started: rename the two back
+   (`ALTER DATABASE "<DB>" RENAME TO "<NEW>"`, then `ALTER DATABASE "<OLD>" RENAME TO "<DB>"`, connected
+   to `postgres`). Roles and their passwords belong to the server, not the database, and the block
+   copied the database's own grants and settings, so Core and the workers connect to the restored copy
+   with the same `DATABASE_URL` and the same per-database settings.
 4. Restore the files: for each pack that `blobs/index.tsv` names for an entry of `hawa_<stamp>.blobs`,
    decrypt and unpack it into `~/.hawa/blobs` (`openssl enc -d … | tar -xkf - -C ~/.hawa/blobs`). Files
    already there are the same bytes, so `-k` keeps them. Then `chmod 0444` the files and `0755` the
-   directories, and make sure `~/.hawa/blobs/.hawa-blob-store` exists (`deploy.sh` writes it).
-5. Check before starting anything: `docker exec hawa-production-core-1 node /app/apps/core/dist/tools/blob-verify.js`
-   once Core is up, or from the host with `DATABASE_URL=<owner URL> node apps/core/dist/tools/blob-verify.js --dir ~/.hawa/blobs`.
-   `missing` must be 0.
-6. Start the stack with `bash infra/docker/deploy.sh --apply`.
+   directories, and make sure `~/.hawa/blobs/.hawa-blob-store` exists (`deploy.sh` writes it). A
+   pre-deploy dump has no manifest. Within 15 days of its deploy the store still holds every file it
+   references (the collector deletes only files unreferenced for longer, `HAWA_BLOB_GRACE_DAYS`); step 5
+   says whether that is so.
+5. Check before starting anything: from the host,
+   `DATABASE_URL=<owner URL> node apps/core/dist/tools/blob-verify.js --dir ~/.hawa/blobs`. `missing` must be 0.
+6. Start the stack with `bash infra/docker/deploy.sh --apply` (from the commit that matches the dump,
+   for a rollback), then load the launch agents again: `bash infra/ops/install_launch_agents.sh`.
+7. Once the restored stack is confirmed, drop the database it replaced:
+   `docker exec hawa-production-postgres-1 dropdb -U hawa_owner <OLD>`. Until then it takes its own
+   disk space; it is also the way back if the restore itself was the mistake.

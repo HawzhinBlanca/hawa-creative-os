@@ -1,0 +1,390 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "7b8de71ed015616c5a315cf67da07af31c77019a",
+  "branch": "worktree-wf_d0161674-b76-2 (from codex/research-grade-design-system)",
+  "status": "OPERATIONS_FIXES_LOCALLY_QUALIFIED_PRODUCTION_USE_NOT_EXECUTED",
+  "adr": "129",
+  "migration": null,
+  "requirements": [
+    "FR-060",
+    "NFR-001",
+    "NFR-002",
+    "NFR-003",
+    "NFR-006",
+    "NFR-013",
+    "NFR-017"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/129_deploy_poller_rotation_and_restore_safety.md",
+      "sha256": "e03efb21785cebd2ae5c8d87600ff4a0f8f336fdab47392679a1f6850db88ff5"
+    },
+    {
+      "path": "infra/docker/deploy.sh",
+      "sha256": "bdfc2e00db24d71f0bd8633d36a657607adf5ac9341897af13246b1459bef5d9"
+    },
+    {
+      "path": "infra/ops/watchdog.sh",
+      "sha256": "6c3bbf735fb2f085a2090238ef54c93d9847e250ff08ac70598ae49449eb442a"
+    },
+    {
+      "path": "infra/backup/drill_restore_swap.sh",
+      "sha256": "90b2cb9ebeaae1cabe5191742c1132a097365eec635b02a6f49d58c022891409"
+    },
+    {
+      "path": "scripts/restate-bluegreen.ts",
+      "sha256": "fd2acb592bf5ddec9c4a9f42982d0918b9eaea8ddb112163ce3d3e9b1d7e3593"
+    },
+    {
+      "path": "apps/core/src/services/worker-credential.ts",
+      "sha256": "e9c3b355404341e633a6576b29ad4506c6d517fa20cbcd613eea17ebc0ab2282"
+    },
+    {
+      "path": "apps/core/src/routes/lifecycle-internal.routes.ts",
+      "sha256": "30113e0beeb9d14bfa512cfb6d13050b761d21a35bbb1febd68b0686ff8836c2"
+    },
+    {
+      "path": "apps/core/src/routes/delivery-internal.routes.ts",
+      "sha256": "3035ffe65f3348ce9bc33afaeee72724b94a8f2d831c8838ae93512d2a629862"
+    },
+    {
+      "path": "apps/core/src/routes/lifecycle-design-proof.ts",
+      "sha256": "e886379af2c7a961a25d135d5b05e24e369da60a1cfec1a466465b0c769c738c"
+    },
+    {
+      "path": "apps/core/src/routes/decisions.routes.ts",
+      "sha256": "49b8d08fe55b269b89a846ab54d288e12ad06f5feda5adc5bce16b0c7e536794"
+    },
+    {
+      "path": "apps/core/src/routes/delivery.routes.ts",
+      "sha256": "18afa97bc2e4287a9cb703599e2d760a7d06deae57c9eba6fea15181d83d1908"
+    },
+    {
+      "path": "apps/core/src/routes/native-review.routes.ts",
+      "sha256": "f8af6dd46d5d533a07fbd246580897188633f8418a9957faeca0cce4557b820d"
+    },
+    {
+      "path": "apps/core/src/services/lifecycle-delivery-projection.ts",
+      "sha256": "7450079849fd3797b5dd6683035efb07cf5a7735a672a398bbf7dc2f31ea81ea"
+    },
+    {
+      "path": "apps/core/src/services/availability-observations.ts",
+      "sha256": "9dad15f38049bd61e903e93c585fafbde0721c00a77be9e88b67c63271498c1b"
+    },
+    {
+      "path": "apps/core/src/entrypoint-options.ts",
+      "sha256": "d35143333eefbc56c52569c562fc5380a6a6406462615f0c7f3973e40b659d95"
+    },
+    {
+      "path": "apps/core/src/app.ts",
+      "sha256": "79eb9027071b3bdcedddd4162572d2c20ce3a8cb2cbebc6547429ae7aa01b869"
+    },
+    {
+      "path": "apps/worker/src/index.ts",
+      "sha256": "eace626b6c33e7da47c3657e21ca4b9944908836e349728483b3c0cfbb1105bc"
+    },
+    {
+      "path": "apps/worker/src/lifecycle/telegram-poller.ts",
+      "sha256": "28ea3bf897ea7066ec73cc1f81b94b7fa0c95183d8494cdcbfb839a07cceea46"
+    },
+    {
+      "path": "apps/worker/src/lifecycle/worker-secrets.ts",
+      "sha256": "32fbecc511a211c0ac889165acabcf4f6025621ea3dc2e4ee734eaa62e58375e"
+    },
+    {
+      "path": "apps/worker/src/lifecycle/delivery.ts",
+      "sha256": "335f0d7c99469ce2f40e1d1e99e5705d53befa38613462e2ce08b2d710b50ef6"
+    },
+    {
+      "path": "apps/worker/src/lifecycle/office-decision-gateway.ts",
+      "sha256": "748fdb768c435e164f2625d474548dcd5faf76e9a88ee567b4321618c6fa8956"
+    },
+    {
+      "path": "packages/testkit/test/deploy-sh-operations-findings.test.ts",
+      "sha256": "89d69d925dd49d8033ac335f260b78aa13cc822ca095fbc07864959dfbb2c58a"
+    },
+    {
+      "path": "packages/testkit/test/restate-bluegreen-rollback-split.test.ts",
+      "sha256": "8a0b7595adfe7615b0ea5c92b5159b5233ebd014e29655d93673eb172e95027a"
+    },
+    {
+      "path": "packages/testkit/test/watchdog-telegram-poller.test.ts",
+      "sha256": "addfd3559c646cedf76e38fdc06ab0bc5c117402a55ac7708a292adb153335eb"
+    },
+    {
+      "path": "apps/core/test/telegram-poller-owner-health.test.ts",
+      "sha256": "654f3791b17a677518ffe74be3053ef326ac53231687bb8f6b1d423e3286812c"
+    },
+    {
+      "path": "apps/core/test/worker-token-rotation.test.ts",
+      "sha256": "1d6ae96ee6fda4c9a097ae9933235df247158c25e31e299128e572b9505fdfa6"
+    },
+    {
+      "path": "apps/worker/test/telegram-poller-health.test.ts",
+      "sha256": "f2788be36d50e0bf5f69fa73ba9922a0486a62aabf04debafcd2154023feffa0"
+    },
+    {
+      "path": "apps/worker/test/worker-token-rotation.test.ts",
+      "sha256": "dfc3812e06b4edf6a3a1145a079a3b3262802ce8cc13460dea35250b7bba4e60"
+    },
+    {
+      "path": "runbooks/10_backup_restore.md",
+      "sha256": "526bb9577b1f53ce27a553b0566bdad60cf1586a7ecfc7c23834c7f2d60c0d9f"
+    },
+    {
+      "path": "docs/25_OPERATIONS_RUNBOOK.md",
+      "sha256": "fa174a04288bcbb12c59d71d1fe548da6f791d2b39cd2671f1d259c94999fa7b"
+    },
+    {
+      "path": "infra/docker/README.md",
+      "sha256": "16fa32246bd17756daf7c933f3004b5cd956958c3ec1ec5f6082277465e99489"
+    },
+    {
+      "path": "infra/ops/README.md",
+      "sha256": "8699602534ac12150232e736fa84079ae3e75367e27ef4eee57bacf6d627f0e7"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "d0231100adf7f46336f701c194ef1af00fbcc9683a7e879f175866f9e6ebbb68"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-ops-findings-red.json",
+      "sha256": "3bc1bca3ffbb34c7deb52fd75b6c8c03da66657a6bc2f1f5ee2ac8324e1508b8"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-findings-red.log",
+      "sha256": "56d8cc5e8d0e61e466d9402917a36849de63bef68424c82487d115db0cb7cc82"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-findings-affected-1.json",
+      "sha256": "4448dce3f43e7e5e95469d955c61e2d730a5ba67774a54e622c941340e8c8b12"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-findings-affected-2.json",
+      "sha256": "7d7c11e99c8a261127ca4181a501db62e3e4aa5a396a1b7b6cdde7cfa82c50aa"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-findings-affected-final.json",
+      "sha256": "d60280341aecad08730e8af149731b6c1f40ead52f3ba6d068f3ee46decd2a85"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-findings-full-suite.json",
+      "sha256": "4854547ea7d020ecc7b5acdcd979019d1bfb50c9359478cc9b10a4604c4d1599"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-findings-base-7b8de71e-failures.json",
+      "sha256": "0debf54c2e48abf4b5eb8ca45192d765ba7e46de8355dd393b57b92114ec7d90"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-restore-swap-drill.json",
+      "sha256": "464b5032a6305f08e610b135c405953703a0cac4f62ec0255aa0d92a01df78fe"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-restore-swap-drill-final.json",
+      "sha256": "c6487820c3caafd282a884ceb7efb0481138ca5313bb51921c23415a5cb79f9b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-vector-validate-valid.log",
+      "sha256": "776df411c46875848f6a722467c5b4b85f3b043e16a8584dbb0d6cbc3e3c5b3f"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-vector-validate-invalid.log",
+      "sha256": "901ea8ef6102d3d5703f557a3097b4d18426300b6a255acf7f265628bbcf4098"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-findings-typecheck.log",
+      "sha256": "5045725a8c50f25da3400eb945b490b115b774a45596838c6a19ac14a4300b85"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-findings-lint.log",
+      "sha256": "58f0e5ef018f0075e06683b72868b12482eeb04c8c0983c1ee802519324eb488"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-findings-security.log",
+      "sha256": "95dc7aca6c7a8d9913908a33eb562ac198bf49b875c525e29ea10c7822595c26"
+    }
+  ],
+  "acceptance": {
+    "files": 49,
+    "passed": 444,
+    "failed": 1,
+    "skipped": 2,
+    "failed_detail": [
+      "apps/core/test/startup-schema-check.test.ts \"knows every upgrade this build carries\": pre-existing at 7b8de71e (LAST is 060_publication_inspections.sql, migrations end at 064); no migration in this change"
+    ],
+    "skipped_detail": [
+      "apps/core/test/lifecycle-source-recovery.test.ts and lifecycle-voice-recovery.test.ts: opt-in process-kill drills (HAWA_SOURCE_RECOVERY/HAWA_VOICE_RECOVERY unset); they match only because they call /v1/health"
+    ],
+    "environment": "Isolated per-file PostgreSQL clones on 127.0.0.1:55432 (HAWA_TEST_WORKERS=2); bash with Docker, Compose and Restate stubbed; fake Restate admin; stubbed fetch for Telegram",
+    "full_suite": {
+      "files": 539,
+      "tests": 4563,
+      "passed": 4495,
+      "failed": 8,
+      "skipped": 60,
+      "failures": [
+        "apps/core/test/canva-planner-accounting.test.ts: upgrades actual pre-ledger Studio artifacts without inventing or duplicating planner calls",
+        "apps/core/test/route-inventory.test.ts: serves exactly the routes in fixtures/route-inventory.txt",
+        "apps/core/test/startup-schema-check.test.ts: knows every upgrade this build carries, in order",
+        "apps/core/test/studio-ledger.test.ts: refuses to resume a run with an unresolved model call",
+        "apps/core/test/studio-ledger.test.ts: refuses to repay a completed call after a crash before the stage result was saved",
+        "packages/db/test/blob-gc.test.ts: the reference view reads every column that has a foreign key to hawa.blobs (coverage)",
+        "packages/db/test/schema-upgrade.test.ts: applies once and concurrent retries verify the same recorded migrations",
+        "packages/testkit/test/r11-release-gate.test.ts: 1. Release manifest passes cryptographic verification and canonical topology check"
+      ],
+      "base_check": "the same 8 tests fail with the tree restored to 7b8de71e (output/acceptance/2026-09-28-ops-findings-base-7b8de71e-failures.json: 7 files, 71 tests, 63 passed, 8 failed); none is caused by this change",
+      "failed_suites_including_describe_blocks": 13,
+      "files_with_failures": 7,
+      "skipped_note": "60 skipped tests are existing opt-in gates (drills, live or paid checks); none is in a file this change adds"
+    },
+    "prior_attempts": [
+      "Initial red: 44 tests in 7 files, 2 passed, 42 failed; apps/worker/test/worker-token-rotation.test.ts did not load (missing worker-secrets module). Behavioural reds: the fake Restate registered a TaskWorkflow/TaskService-only rollback build (ok:true); Core answered 401 to HAWA_WORKER_TOKEN_PREVIOUS on /v1/internal/*; production options left getMe unprobed with the worker polling; /v1/health had no telegramPoller",
+      "First affected run after the fixes (49 files): 443 passed, 2 failed, 2 skipped. The Desk bundle test failed because apps/desk/dist had not been built; after pnpm --filter @hawa/desk build it passes. The schema-list failure is pre-existing",
+      "First test type check failed: the new worker test imported OfficeRevisionEvent from @hawa/contracts; it is exported by apps/worker/src/lifecycle/request-lifecycle.ts. Corrected",
+      "First drill run passed but recorded first_dependency_error as null (capture regex too narrow); regex widened and the drill re-run for the final receipt"
+    ],
+    "restore_drill": {
+      "dump": "production infra/backup/snapshots/predeploy_20260924T204736Z.dump in the main checkout, read only, sha256 c6cf72a7e9fe14b4a1efa725f9abb67452e3c80f3c952db53803859495a05f7f (matches its .sha256); counts only",
+      "server": "hawa-test-postgres, 127.0.0.1:55432; scratch hawa_scratch_20260928t080540z*, all dropped (0 left)",
+      "dump_toc": {
+        "policies": 116,
+        "foreign_keys": 194,
+        "triggers": 28
+      },
+      "before_deploy": {
+        "policies": 116,
+        "foreign_keys": 194,
+        "triggers": 28,
+        "tables": 76,
+        "force_rls_tables": 66,
+        "last_upgrade": "021_review_comments.sql",
+        "upgrades": 21,
+        "app_rows_with_context": 1612
+      },
+      "deploy": {
+        "applied": 43,
+        "first": "022_publication_executor.sql",
+        "last": "064_native_copy_claims.sql",
+        "verified": 21
+      },
+      "after_deploy": {
+        "policies": 160,
+        "foreign_keys": 258,
+        "triggers": 70,
+        "tables": 102,
+        "force_rls_tables": 92,
+        "last_upgrade": "064_native_copy_claims.sql",
+        "upgrades": 64,
+        "app_rows_with_context": 1612
+      },
+      "red_runbook_step": {
+        "options": "--clean --if-exists --exit-on-error",
+        "exit": 1,
+        "errors": 1,
+        "first_dependency_error": "cannot drop constraint users_pkey on table hawa.users because other objects depend on it",
+        "after": {
+          "policies": 44,
+          "foreign_keys": 64,
+          "triggers": 42,
+          "tables": 102,
+          "force_rls_tables": 92,
+          "last_upgrade": "064_native_copy_claims.sql",
+          "upgrades": 64
+        },
+        "app_rows_with_context": "0"
+      },
+      "red_docs25_step": {
+        "options": "--clean --if-exists",
+        "exit": 1,
+        "errors": 84,
+        "first_dependency_error": "cannot drop constraint users_pkey on table hawa.users because other objects depend on it",
+        "after": {
+          "policies": 158,
+          "foreign_keys": 258,
+          "triggers": 66,
+          "tables": 102,
+          "force_rls_tables": 92,
+          "last_upgrade": "021_review_comments.sql",
+          "upgrades": 21
+        },
+        "app_rows_with_context": "1612"
+      },
+      "green_block_sha256": "c12ddf0ae3d1aa77def5e4efcc1bb3333d1364b5be6507e6b3e7e56cf714c923",
+      "after_swap": {
+        "policies": 116,
+        "foreign_keys": 194,
+        "triggers": 28,
+        "tables": 76,
+        "force_rls_tables": 66,
+        "last_upgrade": "021_review_comments.sql",
+        "upgrades": 21,
+        "app_rows_with_context": 1612,
+        "app_rows_without_context": 0
+      },
+      "replaced_database_kept": {
+        "policies": 160,
+        "foreign_keys": 258,
+        "triggers": 70,
+        "tables": 102,
+        "force_rls_tables": 92,
+        "last_upgrade": "064_native_copy_claims.sql",
+        "upgrades": 64
+      },
+      "verdict": {
+        "restored_to_pre_deploy_schema": true,
+        "matches_dump_toc": true,
+        "app_role_sees_rows_only_with_context": true,
+        "passed": true
+      }
+    },
+    "vector_validate": "timberio/vector:0.58.0-alpine (the pinned digest) validate --no-environment: exit 0 on infra/docker/vector.yaml, exit 78 (\"unknown field sinkz\") on a copy with sinks renamed",
+    "findings": {
+      "1": "Core keeps its HAWA_TELEGRAM_POLLER until the new worker colour is registered; idle worker image built before step 7; exit reports the poller",
+      "2": "register --hosts refuses, before POST, a build that does not host every service Restate routes to the worker; README advice corrected",
+      "3": "Core probes getMe whichever process polls and names the poller; worker /health degrades on poller faults; watchdog requires a polling colour",
+      "4": "HAWA_WORKER_TOKEN_PREVIOUS accepted by Core and worker verifiers, used by Core for signing during a rotation; deploy.sh refuses an unmatched token",
+      "6": "vector.yaml validated before step 7 and vector restarted when it sees another file",
+      "26": "restore into a new database, count check against the dump, two renames in one transaction; drill on the test server"
+    },
+    "new_tests": 47,
+    "new_tests_passed": 47
+  },
+  "checks": {
+    "source_types": "passed (tsc -b)",
+    "script_types": "passed (tsconfig.scripts.json)",
+    "strict_test_roots": 540,
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "security": "0 secrets; 53 justified allowlist hits",
+    "manifest": "refreshed with scripts/refresh_manifest.py; validate_pack passed"
+  },
+  "proof_scope": [
+    "deploy.sh functions run from the script text in bash with Docker/Compose/Restate stubbed",
+    "ordering of the script steps checked from its text",
+    "register refusal against a fake Restate admin API",
+    "Core internal auth, delivery route auth and health through createApp requests",
+    "worker claim and gateway verification with real HMAC signatures",
+    "worker poller health rules with a fake Telegram and clock",
+    "watchdog parsing functions from the script text",
+    "restore-swap block read from runbooks/10 and run against a copy of a production pre-deploy dump on the test server, with this branch's migrations applied first",
+    "vector validate CLI behaviour in the pinned image"
+  ],
+  "not_executed": [
+    "deploy.sh --apply (no production deploy)",
+    "a live HAWA_TELEGRAM_POLLER switch, a real Restate registration with --hosts, a Restate split recovery",
+    "a production HAWA_WORKER_TOKEN rotation",
+    "a production restore or rollback; the plain-SQL (.sql.zst) path; blob-verify and launch-agent steps of the runbook (the drill runs only the database block)",
+    "Compose run/exec/restart of the vector service; a changed vector.yaml on the running stack",
+    "the watchdog end to end (Telegram alert path) and the worker /health HTTP handler as a process (checked by source text and the pure rule)",
+    "repair of the 8 pre-existing full-suite failures (outside this change)"
+  ],
+  "next": [
+    "owner: approve and run a deploy with this change; confirm the poller hold message and vector apply lines in its output",
+    "owner: rotate HAWA_WORKER_TOKEN in two deploys when desired, following docs/25",
+    "repair the 8 pre-existing full-suite failures on this branch (schema list constants, route inventory, blob reference coverage, planner accounting, studio ledger fixtures, release manifest); none is in this change",
+    "decide whether the existing split-colour recovery (Restate admin API) needs its own tested procedure"
+  ]
+}

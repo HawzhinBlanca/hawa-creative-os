@@ -8,7 +8,7 @@ import { canonicalJson } from '../core-helpers.js';
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const OTHER_KEYS = ['HAWA_API_KEY', 'HAWA_BEARER_TOKEN', 'HAWA_DESK_SECRET', 'HAWA_ADMIN_KEY', 'HAWA_REVIEWER_KEY',
-  'HAWA_ART_DIRECTOR_KEY', 'HAWA_WORKER_TOKEN', 'HAWA_DEV_TOKEN', 'TELEGRAM_WEBHOOK_SECRET', 'HAWA_ACTION_HMAC_SECRET'];
+  'HAWA_ART_DIRECTOR_KEY', 'HAWA_WORKER_TOKEN', 'HAWA_WORKER_TOKEN_PREVIOUS', 'HAWA_DEV_TOKEN', 'TELEGRAM_WEBHOOK_SECRET', 'HAWA_ACTION_HMAC_SECRET'];
 const REQUIRED_SERVICES = ['TaskWorkflow', 'TaskService', 'ChatInbox', 'Delivery', 'TelegramSender', 'RequestLifecycle', 'DesignRun', 'OfficeDecisionGateway'];
 export interface AvailabilityConfig { monitorId: string; targetOrigin: string; scopeSha256: string; token: string; workerHealthUrls: string[] }
 export function availabilityConfig(env: NodeJS.ProcessEnv = process.env): AvailabilityConfig | null {

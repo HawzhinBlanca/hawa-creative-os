@@ -13,6 +13,7 @@ import { readRequesterSendEvidence } from '../services/requester-send-evidence.j
 import { confirmRequesterSendVisible } from '../services/requester-send-resolution.js';
 import { LifecycleProjectionConflict } from '../services/lifecycle-projection.js';
 import { DELIVERY_OWNED_BY_CORE } from '../services/omnichannel-delivery.js';
+import { workerSigningSecretOf } from '../services/worker-credential.js';
 
 /**
  * Delivery of an approved design and what it left behind (architecture programme 1.3, group G5,
@@ -107,7 +108,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       if (approvalId !== current.approval.id) return problem(c, 409, 'Approval Changed', 'The requested approval is not current');
       const expectedRev = current.receipts ? Number(current.receipts.rev) - 1 : Number(current.request.rev);
       const ingress = (process.env.RESTATE_INGRESS_URL || '').trim().replace(/\/+$/, '');
-      const secret = (process.env.HAWA_WORKER_TOKEN || '').trim();
+      const secret = workerSigningSecretOf() || '';
       if (!ingress || !secret) return problem(c, 503, 'Lifecycle Delivery Unavailable',
         'The signed delivery gateway is not configured; retry this action later');
       const event = { v: 1 as const, kind: 'deliver' as const, eventId: `desk:${actionId}`,

@@ -62,6 +62,16 @@ Use fallback/reconciliation and track root cause.
 
 - Rotate together: Telegram bot token (BotFather), `TELEGRAM_WEBHOOK_SECRET`, `HAWA_ADMIN_KEY`, `HAWA_ART_DIRECTOR_KEY`, `HAWA_BEARER_TOKEN`, `HAWA_ACTION_HMAC_SECRET`, `WAHA_WEBHOOK_SECRET`. Update `infra/docker/.env.production`, then redeploy.
 - Canva token key: run `apps/core/src/tools/rotate-canva-token-key.ts` with `--dry-run`, then for real, then update `CANVA_TOKEN_ENCRYPTION_KEY` and redeploy.
+- The worker credential `HAWA_WORKER_TOKEN` takes two deploys (ADR-129), because a worker colour that is
+  still draining keeps the value it was created with. First: set `HAWA_WORKER_TOKEN` to the new value and
+  `HAWA_WORKER_TOKEN_PREVIOUS` to the old one in `.env.production`, and deploy. Core then accepts both
+  from workers and keeps signing what workers verify with the old one; the new colour accepts both.
+  Second, once the old colour has drained (a later deploy reports it removed, and `deploy.sh` prints
+  that no running worker uses `HAWA_WORKER_TOKEN_PREVIOUS`): remove `HAWA_WORKER_TOKEN_PREVIOUS` and
+  deploy again. `deploy.sh` refuses, before it changes anything, a token that no running container can
+  match: a changed token without the previous value, or the previous value removed while a colour still
+  runs with it. A claim Core signed during the first step and replayed only after the second is refused
+  by a colour started in the second step; finish in-flight deliveries before it.
 - Database roles: the application's credential (`DATABASE_URL`, login roles `hawa_app_a`/`hawa_app_b` inheriting `hawa_app`) is rotated without downtime by `infra/ops/rotate_app_role.sh`; the sequence is in `infra/ops/README.md`. The owner role: `ALTER ROLE hawa_owner PASSWORD …`, then update `POSTGRES_PASSWORD` in `infra/docker/.env`.
 - Never keep a credential in a script, a test, a compose default or an audit document; `infra/security/security_scan.py` blocks commits that do.
 
@@ -147,9 +157,22 @@ not required. Run isolated backup tests before committing a script change.
 The deploy script writes `predeploy_<stamp>.dump` (same format, with its table of contents checked)
 before every migration. It is written as `.partial` and named, with its `.sha256`, only once checked;
 a failed one is removed and stops the deploy. Both live under the gitignored, owner-only `infra/backup/snapshots/`. Restore
-either: `pg_restore -U hawa_owner -d hawa --clean --if-exists <file>` inside the postgres container,
-after stopping core and the worker colours (`hawa-production-worker-blue-1`, `-green-1`). Pre-deploy dumps from before 2026-09-23 are plain SQL compressed as
-`.sql.zst`: `zstd -d --long=27 -c <file> | docker exec -i hawa-production-postgres-1 psql -U hawa_owner -d hawa`.
+either into a **new** database and swap it in by renaming, as `runbooks/10_backup_restore.md`
+("Restoring for real") gives it, step by step: stop the launch agents, Core and both worker colours, run
+its restore-swap block with `DUMP=<file>` (it also copies the database's owner, grants and settings,
+which neither the dump nor the rename carries), restore and verify the files, deploy. Never restore with
+`--clean` over the database the stack uses: once a migration newer than the dump has run, the dump
+cannot drop its own tables, and pg_restore stops after it has already dropped their policies and most
+foreign keys, so the application role sees no rows at all (reproduced 2026-09-28, ADR-129). Without
+`--exit-on-error` it finishes with old and new rows mixed. `infra/backup/drill_restore_swap.sh` restores
+a dump over a migrated database on the test server exactly that way. Pre-deploy dumps from before
+2026-09-23 are plain SQL compressed as `.sql.zst`: load one into a new database
+(`docker exec hawa-production-postgres-1 createdb -U hawa_owner -T template0 hawa_restore_<stamp>`, then
+`zstd -d --long=27 -c <file> | docker exec -i hawa-production-postgres-1 psql -v ON_ERROR_STOP=1 --single-transaction -U hawa_owner -d hawa_restore_<stamp>`)
+then copy its grants and settings (`infra/backup/restore_copy_props.sql` with `src=hawa` and
+`dst=hawa_restore_<stamp>`), compare them (`infra/backup/restore_props.sql`) and swap it in with the two
+renames the runbook's block runs; the block's count check does not apply to plain SQL, and this path
+was not drilled.
 
 `infra/ops/disk_cleanup.sh` bounds Hawa's own disk use: the newest ten checked pre-deploy dumps (with a
 `.sha256`); one dump a
@@ -166,7 +189,10 @@ Docker Desktop is not configured to start at login, so the watchdog starts it, b
 when fewer than the six non-worker containers or no worker colour run (`compose start` first, then
 `up -d --no-build --no-recreate`; worker colours that exist are started by name, and only a deploy
 creates one), then checks core `/v1/health` (including paused Restate invocations) and the health of
-every running worker colour, one of which must be running the outbox. Any problem is sent to the operator chat at most
+every running worker colour, one of which must be running the outbox. When Core's health says
+`telegramPoller: worker`, one running colour must also report its Telegram poller on and live (or
+taking over); a colour whose poller did not start, whose bot token Telegram refuses, or that has not
+completed a poll for five minutes reports itself degraded with `telegramPoller.problem` (ADR-129). Any problem is sent to the operator chat at most
 once per 30 minutes. Recovery is announced once, saying what it was, and only for a problem you were
 told about; when the other problems clear but the disk is still full, that is said at once. A disk
 over 90% full after Hawa's own cleanup is reported with how much of it is Hawa's, every 6 hours

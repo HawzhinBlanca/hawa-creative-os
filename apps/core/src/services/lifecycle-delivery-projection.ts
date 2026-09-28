@@ -5,6 +5,7 @@ import { signLifecycleDeliveryClaim } from '@hawa/integrations';
 import { PublicationRepository, TaskRepository, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { LifecycleProjectionConflict } from './lifecycle-projection.js';
 import { loadPinnedDeliverables, type DeliverableStore } from './pinned-deliverables.js';
+import { workerSigningSecretOf } from './worker-credential.js';
 
 const OFFICE_DELIVERY_ROLES = new Set(['art_director', 'creative_director', 'office_admin', 'administrator']);
 
@@ -132,7 +133,7 @@ export async function projectLifecycleDeliveryStart(
       chatId: request.chat_id, officeChatId: (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((c) => c.trim()).find(Boolean) || null,
       reportTo: 'lifecycle', requestRev: input.rev, run };
     const delivery: DeliveryInput = { ...unsignedDelivery,
-      claimSignature: signLifecycleDeliveryClaim(process.env.HAWA_WORKER_TOKEN || '', unsignedDelivery) };
+      claimSignature: signLifecycleDeliveryClaim(workerSigningSecretOf() || '', unsignedDelivery) };
     const result: LifecycleDeliveryStartResult = { requestId: input.requestId, taskId: input.taskId,
       approvalId: input.approvalId, actionId: input.actionId, stage: 'delivering', rev: input.rev, delivery };
     await trx.insertInto('lifecycle_projections').values({ tenant_id: input.tenantId,
