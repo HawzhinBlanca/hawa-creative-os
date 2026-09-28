@@ -13,7 +13,6 @@ import { log } from '../logging.js';
 import { mayChangeKillSwitch, setKillSwitch, type KillSwitchChannel } from '../services/channel-kill-switches.js';
 import { telegramPollerOf } from '../services/telegram-poller-owner.js';
 import { registerAvailabilityRoutes, availabilityConfig, AvailabilityError, readAvailabilityReport } from './availability.routes.js';
-import { setKillSwitch } from '../services/channel-kill-switches.js';
 
 /**
  * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors
