@@ -129,6 +129,8 @@ export interface HardQAResult {
   metrics: LayoutMetrics;
   textMeasurements: TextMeasurement[];
   messages: string[];
+  /** Where art regions and photo crops landed in the final layout (ADR-123); absent before it. */
+  placement?: import('@hawa/creative').LayoutPlacements;
 }
 
 export interface ParityResult {

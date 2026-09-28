@@ -824,6 +824,8 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     expect(final.stages.qa.passed).toBe(true);
     expect(final.stages.qa.textMeasurements.map((m) => m.status)).toEqual(run.request.copyBlocks.map(() => 'measured'));
     expect(final.stages.qa.textMeasurements.map((m) => m.copySha256)).toEqual(run.request.copyBlocks.map((b: {text: string}) => createHash('sha256').update(b.text).digest('hex')));
+    // ADR-123: final QA retains where art and photos landed; this typography-only design has neither.
+    expect(final.stages.qa.placement).toEqual({ version: 1, art: null, photos: [] });
   }, 30000);
 
   it.each([false, true])('6b. retains final QA for the replacement winner and honors selection hold (%s)', async (holdForSelection) => {

@@ -100,6 +100,14 @@ logs `the <stage> resume did not read N saved result(s)` with each call id, subs
 and attempt; compare each with the stored stage before settling or discarding it.
 Unpinned derivations may still require review.
 
+Since ADR-123, `STUDIO_VISUAL_INPUTS_UNSAFE` may name the renderer: "The font or renderer
+basis changed" means the fonts, rsvg-convert, its libraries or the system release differ from the
+run's pinned basis; restore that image or review the run, never edit the bundle. "predate renderer
+attestation" marks a version-2 bundle. A mismatched cut-out or focus derivation means the pinned
+pixels disagree with their recorded source; preserve the run and investigate. Before deploying
+ADR-123, list active runs past layout and runs with retained results bound to the old basis: they
+will hold. Rebuild the cut-out image so new derivations record its runtime.
+
 Deploying migration 065: it takes an ACCESS EXCLUSIVE lock on
 `hawa.design_studio_calls` until it commits (a validated CHECK and a non-concurrent
 unique index in one transaction). Stop Core and the worker, take the backup, apply

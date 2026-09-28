@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T08:30:57Z",
+  "generatedAt": "2026-09-28T09:02:16Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 478,
+  "fileCount": 480,
   "files": [
     {
       "path": ".dockerignore",
@@ -683,6 +683,11 @@
       "bytes": 7757
     },
     {
+      "path": "adrs/123_renderer_runtime_and_region_mapping.md",
+      "sha256": "0d0847d95c2eecca8b5af814b51a1c909611e356afaf04eaaf7cababed568e24",
+      "bytes": 6377
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "0a40a0ee632644cf1c1e0531fb516e5f4f7cb0dc857172785003ae6398e02845",
       "bytes": 45259
@@ -1049,8 +1054,8 @@
     },
     {
       "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
-      "sha256": "7ecc4ae7a68c939ffd3bf1bacd9f502e928b8216e90259a769e72025da27ddf6",
-      "bytes": 9526
+      "sha256": "45a03466a1f62bc9359e370ef70285854504565e509a6a04743488e1f716e195",
+      "bytes": 10367
     },
     {
       "path": "docs/30_FUTURE_EVOLUTION.md",
@@ -1176,6 +1181,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/RETAINED_RESULTS_PROOF.json",
       "sha256": "1e8c39d02f987c978628c567eb9275140f3e3ef3f65e5eb3af41612d9c41fe69",
       "bytes": 5688
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/RUNTIME_REGION_PROOF.json",
+      "sha256": "9af52b61c565dfbaf04e8dfa7204276bb861ae4f4a33ba428fa0d00614834646",
+      "bytes": 12169
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SUBSTEP_RECOVERY_PROOF.json",
@@ -1629,8 +1639,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "4e2693907cf160f98c902b1872ad11bd7cb436a896c9cf92c2c1f1722072e9f4",
-      "bytes": 426671
+      "sha256": "68d946aa670d5a99afad4a7bfc3e670d1cf2932c507ba32c9e480becd70a4528",
+      "bytes": 428445
     },
     {
       "path": "plans/user-stories.csv",
@@ -1809,8 +1819,8 @@
     },
     {
       "path": "runbooks/STUDIO_RECOVERY.md",
-      "sha256": "90998af4e3fa212f6cb863da2dcf2fa6b44109afa16bf2dd53b6049752a93e52",
-      "bytes": 11135
+      "sha256": "dfe9aec63226fcb3402d3184b04991bca717400741551f9bc2f894cdaa01b51b",
+      "bytes": 11789
     },
     {
       "path": "schemas/ApprovalDecision.schema.json",

@@ -88,6 +88,18 @@ Historical version-1 bundles lack this evidence and remain held for review. This
 font-input evidence, not native Canva fidelity or full renderer/OS reproducibility.
 See [ADR-116](../adrs/116_retained_font_basis.md).
 
+## Renderer runtime and reserved-region mapping (ADR-123)
+
+The retained basis now also names the rasteriser that draws (rsvg-convert bytes and its
+reported version) and the operating-system release. A change holds a pinned run before the next
+model/render stage, as a font change does; version-2 bundles without this evidence are held for
+review. Cut-out and focus derivations record the service runtime, face detector and cut-out
+bytes; a pinned run never asks the service again. The art prompt describes the calm region in the
+provider's requested frame after the renderer's cover crop. The art provenance keeps that plan
+and a check of the returned image; final QA records where the final layout's calm region and
+each photo crop landed. These are evidence, not a gate. See
+[ADR-123](../adrs/123_renderer_runtime_and_region_mapping.md).
+
 ## Native amendment observation (ADR-119)
 
 Desk can explicitly inspect the current link's named fields and account capability

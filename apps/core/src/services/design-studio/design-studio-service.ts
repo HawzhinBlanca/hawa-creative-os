@@ -129,6 +129,12 @@ const optionalImages = (error: unknown): string[] => {
 
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 
+/** The retained art and its provenance, which final QA checks the final layout against (ADR-123). */
+const candidateArt = (row: { art_png?: Buffer | Uint8Array | null; art_provenance?: unknown }): Pick<CandidateState, 'artPng' | 'artProvenance'> => ({
+  ...(row.art_png ? { artPng: Buffer.from(row.art_png) } : {}),
+  ...(row.art_provenance ? { artProvenance: (typeof row.art_provenance === 'string' ? JSON.parse(row.art_provenance) : row.art_provenance) as Record<string, unknown> } : {}),
+});
+
 type StudioReplayCall = Pick<Awaited<ReturnType<DesignStudioRepository['getCallsForRun']>>[number],
   'id' | 'stage' | 'provider' | 'model' | 'status' | 'reservation' | 'call_ordinal' | 'has_retained_result'> &
   Partial<Pick<Awaited<ReturnType<DesignStudioRepository['getCallsForRun']>>[number],
@@ -1090,7 +1096,8 @@ export class DesignStudioService {
       generateArt: async params => {
         // One image per admission. The verifier uses the same ledger-backed text client;
         // the bounded art controller cannot hide its second attempt inside the first receipt.
-        const settings = resolveImageSettings();
+        // The art stage describes its reserved region in the frame these settings request (ADR-123).
+        const settings = params.settings ?? resolveImageSettings();
         return baseArtProvider.generateArt({ ...params, settings, visionClient: ledgerClient,
           requestImage: async (selected, prompt) => {
             const callId = randomUUID();
@@ -2068,6 +2075,7 @@ export class DesignStudioService {
             metrics: typeof winnerRow.metrics === 'string' ? JSON.parse(winnerRow.metrics) : winnerRow.metrics,
             previewPng: winnerRow.preview_png ? Buffer.from(winnerRow.preview_png) : undefined,
             compositePng: winnerRow.composite_png ? Buffer.from(winnerRow.composite_png) : undefined,
+            ...candidateArt(winnerRow),
             critiques: [],
             status: 'winner',
           };
@@ -2088,6 +2096,7 @@ export class DesignStudioService {
                 concept: typeof otherRow.concept === 'string' ? JSON.parse(otherRow.concept) : otherRow.concept,
                 layouts: otherLayouts,
                 currentLayout: otherLayouts[otherLayouts.length - 1],
+                ...candidateArt(otherRow),
                 critiques: [],
                 status: 'runner_up',
               };

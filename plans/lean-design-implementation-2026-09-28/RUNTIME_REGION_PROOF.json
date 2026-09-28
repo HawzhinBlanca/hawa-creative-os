@@ -1,0 +1,262 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "991f9daa4c7bfb99aa87bb91cf4a69ffda967352",
+  "branch": "worktree-wf_82dde19f-6dc-1",
+  "status": "RENDERER_CUTOUT_RUNTIME_PINS_AND_REGION_MAPPING_LOCALLY_QUALIFIED_NOT_DEPLOYED",
+  "adr": "123",
+  "migration": null,
+  "requirements": [
+    "FR-074",
+    "NFR-014",
+    "FR-060",
+    "FR-026",
+    "FR-031",
+    "NFR-024"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/123_renderer_runtime_and_region_mapping.md",
+      "sha256": "0d0847d95c2eecca8b5af814b51a1c909611e356afaf04eaaf7cababed568e24"
+    },
+    {
+      "path": "packages/creative/src/studio/renderer-identity.ts",
+      "sha256": "a6d855f2cf4e5ab22308d253999acf68139f522e49b8fba62ece0a076ae85c06"
+    },
+    {
+      "path": "packages/creative/src/studio/placement-map.ts",
+      "sha256": "81cccb2ad3cefc8ad25093ec407e6abf4059c075822b56d62145b3f014babcec"
+    },
+    {
+      "path": "packages/creative/src/studio/render-layout-v2.ts",
+      "sha256": "24c0b3ae449a0698d4b5c1189640d5385f864854c569e7eac81678a6102ab54a"
+    },
+    {
+      "path": "packages/creative/src/index.ts",
+      "sha256": "7af2f088213e6cf96ab00bbef40046fc8bcd1c798e814d54284578d4eb3f21ff"
+    },
+    {
+      "path": "packages/creative/test/renderer-runtime-identity.test.ts",
+      "sha256": "958d3adac251488ce016129c5c959c43368a2c1fffbbf848b68d66c00335793c"
+    },
+    {
+      "path": "packages/creative/test/art-placement-map.test.ts",
+      "sha256": "7e1bd68b3ea7ca93d623b3a114a67895f593247bc61c1d05b7be301927e30806"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/visual-inputs.ts",
+      "sha256": "f027e77d828dad41d8fc3b2dd52bc2b20e6965cb0ef36111b1dafc5cb5cf336c"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/photo-cutouts.ts",
+      "sha256": "dbd96df6a983833dab79cd38672b6411d8c6813298cb27920d9a1c417da8655d"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/art.stage.ts",
+      "sha256": "38d521beb4cd52d1fe7e41879671952466f011e800c68104f3f1bf014d022c70"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/qa.stage.ts",
+      "sha256": "3aa70454f62d449b963594249b1fb5b517263452e78ddba5ff87078ff0dba265"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/types.ts",
+      "sha256": "8cc909544008a24c64b34b911b11d41d4fc998fb51f67a4a8933486eaeaa9551"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "abf457f1674a4169bd54c776e611f1ddaa6cff23e6a9786c88e412d3f93dab46"
+    },
+    {
+      "path": "apps/core/test/studio-art-region.test.ts",
+      "sha256": "d43ec14e35291e034e75ee363013882f770f4d8b29c4a34526fc6cb877e76013"
+    },
+    {
+      "path": "apps/core/test/studio-visual-inputs.test.ts",
+      "sha256": "25788c68c9cbf3dc195d49cb2aa3d5027580874c8bba64fa87dc1c1fa8f75c2f"
+    },
+    {
+      "path": "apps/core/test/photo-cutouts.test.ts",
+      "sha256": "604afbd1973c1f8fe87b3978fab8e6a6befd8c4d371460b58611d37c3975c1d5"
+    },
+    {
+      "path": "apps/core/test/design-studio-orchestrator.test.ts",
+      "sha256": "b032bfcf584693e58dac6bd261300b967471127e614443be19d565d65dbaf2ff"
+    },
+    {
+      "path": "services/cutout/hawa_cutout/identity.py",
+      "sha256": "5e25cd353fff878c5d41efbfcd90dee7c5f6c2516e08bad7c0f827d921274f67"
+    },
+    {
+      "path": "services/cutout/hawa_cutout/server.py",
+      "sha256": "8a84d4df902a73eb819fcf3a5c6d0f55b77d7f64c7c93c40fb6dc86dae7bde0b"
+    },
+    {
+      "path": "services/cutout/tests/test_identity.py",
+      "sha256": "d22d8e64eb4bfedae9c3e27e7a71f4286223eb69bfec0bc385f546afe3e46951"
+    },
+    {
+      "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
+      "sha256": "45a03466a1f62bc9359e370ef70285854504565e509a6a04743488e1f716e195"
+    },
+    {
+      "path": "runbooks/STUDIO_RECOVERY.md",
+      "sha256": "dfe9aec63226fcb3402d3184b04991bca717400741551f9bc2f894cdaa01b51b"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "68d946aa670d5a99afad4a7bfc3e670d1cf2932c507ba32c9e480becd70a4528"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-initial.json",
+      "sha256": "ac519b2aca913a66659fea7403a64682743f040f7eefe4191312840023f0f803"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-initial.log",
+      "sha256": "d590f278962f63161917b961eff034e3bab5b9d695cce6b82b3b503832db67c2"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-initial-art-stage.json",
+      "sha256": "9097623c6a214eab0b5122a3e5f0dbc53080dedee6d401d42f3c77ba323b3ba1"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-python-initial.log",
+      "sha256": "1bab7edcc50b8c42f096a59920cc74d769f6c09492aaaee20b826802b21495cb"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-creative-1.json",
+      "sha256": "bace6b15be88c439f94e655084be49d869a0cc4195f0d9d242ef75e938167b14"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-core-1.json",
+      "sha256": "1593eaa6f9ace5da49aa487f78f6236751ad08e33ed9b02c31492da3e06c901f"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-core-2.json",
+      "sha256": "2b082147f2ca0e240410f36c921f0834d06ae9b3e95fe5f474d896b805a080b0"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-core-3.json",
+      "sha256": "c29560c4f2a1262a8f088ba87dd596df5be37e0220bb49bbc6baa3f493c5cdad"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-python.log",
+      "sha256": "df112b921a7ec2219ff54f1af8d299ff35249b4227ae92ab92194b7cbf2dc253"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-debian.json",
+      "sha256": "83fac5a97d16141f5da92336c781af3dae8d54faafe79fc398920173924a7fcc"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-timing.json",
+      "sha256": "03d5b6cf31d70fe2cae6a01aa0e103ea56f1e185b7ace6d757fb0dc2a0ae56ac"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-typecheck.log",
+      "sha256": "92b12d4ca41156743870c4d82bd4d9996d1dfeba49553e2f40de319fb76d1def"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-lint.log",
+      "sha256": "58f0e5ef018f0075e06683b72868b12482eeb04c8c0983c1ee802519324eb488"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-security.log",
+      "sha256": "95dc7aca6c7a8d9913908a33eb562ac198bf49b875c525e29ea10c7822595c26"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-full.json",
+      "sha256": "73b61b7c901879192568d40add31a8d03b619abb5f449b400e99c856bfd1b78c"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-full.log",
+      "sha256": "a1c7b3c5ef0b06196ccf9e6b42b0710fb94c989efe02b9d5f22819cce5acd026"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-runtime-region-base-failures.json",
+      "sha256": "56652517c9342ae6d2e2e360566fb79edf1b2125d55f04f9c97cb54aa00845f4"
+    }
+  ],
+  "acceptance": {
+    "files": 34,
+    "passed": 329,
+    "failed": 0,
+    "skipped": 0,
+    "python_cutout_identity": {
+      "tests": 4,
+      "passed": 4
+    },
+    "batches": {
+      "creative": "17 files/194 passed",
+      "core": "14 files/118 passed",
+      "core_recovery_schema_accounting": "3 files/17 passed"
+    },
+    "full_suite": {
+      "files": 537,
+      "tests": 4568,
+      "passed": 4505,
+      "failed": 3,
+      "skipped": 60,
+      "files_with_skips_only": 7,
+      "failures": [
+        "apps/core/test/route-inventory.test.ts: 13 routes not in the fixture",
+        "packages/db/test/blob-gc.test.ts: 7 blob foreign-key columns against 5 expected",
+        "packages/testkit/test/r11-release-gate.test.ts: release manifest verification"
+      ],
+      "failures_at_base": "The same three tests fail with this change stashed at base 991f9daa (3 files, 44 passed, 3 failed); none touches renderer, cut-out, art or QA code. Not repaired in this package.",
+      "note": "Full run preceded a one-line import merge in art.stage.ts; the art-region and compute-gate files were re-run after it (16 passed)."
+    },
+    "environment": "macOS librsvg 2.62.3 (Pango 1.58.2); isolated PostgreSQL clones with hawa_app runtime connections; synthetic image, model and cut-out transports; Debian 12.15 librsvg 2.54.7 in the local hawa-fallback-measure-proof image for identity and crop pixels",
+    "initial_red": [
+      "First run: 27 tests, 22 passed, 5 failed; 3 files could not load. Missing renderer-identity/placement-map modules; manifest still version 2 with font basis version 1 and no renderer; no cut-out runtime or pngSha256 in derivations; version-2 bundle not distinguished; final QA had no placement",
+      "Art stage red: 6 of 6 failed. The provider received 'centered around (0, 945) measuring 1080x405' (layout pixels) and aspect 9:16 for a 1024x1024 request; no retained region plan or check",
+      "Python: identity module absent (1 error)"
+    ],
+    "prior_attempts": [
+      "Core art-region test first imported pngjs, which Core does not depend on; replaced with a local zlib PNG encoder before the red run was repeated",
+      "Renderer-identity test expected a missing explicit path to be unidentifiable; the renderer falls back to another installed rsvg-convert, so the test was corrected to expect that identity and to remove every rasteriser for the unavailable case",
+      "Two render fixtures failed with CLIENT_LOGO_REQUIRED; a synthetic logo was added",
+      "One fixture named the landing field 'source' instead of 'output'",
+      "First Core batch 117/118: photo-cutouts focus expectation predated the focus derivation; updated to the intended {x,y,derivation}"
+    ]
+  },
+  "checks": {
+    "source_types": "passed",
+    "script_types": "passed",
+    "strict_test_roots": 538,
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "security": "0 secrets; 53 justified allowlist hits",
+    "timing": "rendererRuntimeIdentity first 21.0 ms, warm p50 2.7/p95 3.2 ms; full basis capture p50 6.1/p95 6.7 ms over 30 local samples with 27 fonts; not an end-to-end latency claim"
+  },
+  "proof_scope": [
+    "same-path rasteriser replacement and restoration with real temporary executables",
+    "failing and absent rasteriser refused / recorded unavailable",
+    "OS release change alters identity; install path does not",
+    "actual rsvg-convert identity matches bytes and --version (macOS and Debian)",
+    "retained basis version 2 and visual bundle version 3; renderer change holds before the next stage with no transport and bundle unchanged; restore resumes (real PostgreSQL, fresh service)",
+    "version-2 bundles held; cut-out/focus derivations checked against pinned photo and pixels at capture and restore",
+    "cut-out and face runtime pinned per derivation through a synthetic HTTP boundary; pinned run never re-asks the service",
+    "art prompt describes calm region in the requested provider frame through the cover crop; configured frame used; plan and returned-image check retained",
+    "frame_mismatch, unreadable, not_prompted and moved statuses; final QA landing and luminance spread persisted in stages.qa",
+    "declared photo focus recorded with the renderer's crop; unreadable size recorded as focus not applied",
+    "real librsvg pixels (2.62.3 and 2.54.7) show the calm region where the mapping says"
+  ],
+  "not_executed": [
+    "paid image or model calls; art quality effect of the corrected prompt",
+    "live cut-out service or rebuilt hawa-cutout image",
+    "native Canva operations",
+    "shared-library byte pinning (same-version rebuilds, gdk-pixbuf loaders)",
+    "production deployment or inventory of active runs that will hold",
+    "OS process-kill drill",
+    "human quality study",
+    "release qualification"
+  ],
+  "next": [
+    "Inventory active runs past layout (version-2 bundles) and retained results bound to the old renderer basis before rollout",
+    "Rebuild the cut-out image so derivations record its runtime",
+    "Decide with paid, human-judged evidence whether region landing should become a gate",
+    "Remaining package 3 item: safe bounded concurrency"
+  ]
+}
