@@ -78,8 +78,14 @@ export function contentPhotoFromDataUrl(dataUrl: string): ContentPhoto {
 
 /** A run's stage record, whether the driver returned JSON or text. */
 const runStages = (run: { stages?: unknown }): Record<string, any> => {
-  if (typeof run.stages !== 'string') return (run.stages as Record<string, any>) || {};
-  try { return JSON.parse(run.stages); } catch { return {}; }
+  let stages = run.stages;
+  if (typeof stages === 'string') {
+    try { stages = JSON.parse(stages); } catch { return {}; }
+  }
+  // Migration 013 used [] for a new run. Named stage properties on that array vanish
+  // in JSON.stringify, including a recovered paid brief. Preserve empty legacy runs as objects.
+  if (Array.isArray(stages) && stages.length === 0) return {};
+  return (stages as Record<string, any>) || {};
 };
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
@@ -117,6 +123,12 @@ const optionalImages = (error: unknown): string[] => {
 };
 
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+
+type StudioReplayCall = Pick<Awaited<ReturnType<DesignStudioRepository['getCallsForRun']>>[number],
+  'id' | 'stage' | 'provider' | 'model' | 'status' | 'reservation' | 'call_ordinal' | 'has_retained_result'>;
+class RetainedStudioReply {
+  constructor(readonly value: unknown) {}
+}
 
 /** Stable object-key order for the digest only; provider requests keep their original shape. */
 const canonicalCallJson = (value: unknown): string => {
@@ -893,7 +905,8 @@ export class DesignStudioService {
     run: any,
     currentStageName: string,
     currentBudget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
-    onSpendUpdate: (cost: number) => Promise<void>
+    onSpendUpdate: (cost: number) => Promise<void>,
+    replayCalls: StudioReplayCall[] = [],
   ): Promise<StageContext> {
     const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
     const fetchFn = this.options.fetcher || fetch;
@@ -916,8 +929,22 @@ export class DesignStudioService {
       }
     };
     const finalizeCall = (params: Parameters<DesignStudioRepository['finalizeCall']>[0]) =>
-      account(() => this.repo.finalizeCall(params));
+      account(() => this.repo.finalizeCall({ ...params, actorId: s.actorId }));
     const recordSpend = (cost: number) => account(() => onSpendUpdate(cost));
+    const prefix = [...replayCalls].sort((a, b) => (a.call_ordinal ?? 0) - (b.call_ordinal ?? 0));
+    let replayPosition = 0;
+    const replay = async (kind: 'structured' | 'image', stage: string, provider: string, model: string, requestSha256: string) => {
+      const previous = prefix[replayPosition];
+      if (!previous) return;
+      if (previous.stage !== stage || previous.provider !== provider || previous.model !== model ||
+          previous.status !== 'ok' || !previous.has_retained_result || previous.reservation?.requestSha256 !== requestSha256) {
+        throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', 'The interrupted stage no longer matches its recorded model-call inputs. Reconcile its saved results before continuing.');
+      }
+      const retained = await account(() => this.repo.getRetainedCallResult(previous.id, s.tenantId, s.actorId));
+      if (!retained || retained.kind !== kind) throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', 'The interrupted stage has no matching retained result.');
+      replayPosition++;
+      throw new RetainedStudioReply(kind === 'image' ? { ...(retained.payload as object), imageBuffer: retained.image } : retained.payload);
+    };
 
     // PostgreSQL admits one logical call identity before transport. The ordinal fences two Core
     // processes that read the same run budget; parity is content-keyed because a transferred run's
@@ -961,9 +988,6 @@ export class DesignStudioService {
       }
     };
     const complete = async <T>(invoke: (beforeDispatch: (body: string) => Promise<void>) => Promise<OpenAiStructuredResponse<T>>) => {
-      if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
-        throw new StudioBudgetExhaustedError();
-      }
       const callId = randomUUID();
       let reservation: StudioCallReservation | undefined;
       let result: OpenAiStructuredResponse<T>;
@@ -971,11 +995,14 @@ export class DesignStudioService {
         result = await invoke(async body => {
           const quoted = reserveStudioText(body);
           const model = JSON.parse(body).model as string;
+          await replay('structured', currentStageName, 'openai', model, quoted.requestSha256);
+          if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) throw new StudioBudgetExhaustedError();
           await admitCall({ id: callId, stage: currentStageName, provider: 'openai', model,
             input: { requestSha256: quoted.requestSha256 }, reservation: quoted });
           reservation = quoted;
         });
       } catch (err: any) {
+        if (err instanceof RetainedStudioReply) return err.value as OpenAiStructuredResponse<T>;
         // A refused quote/admission has no ledger row and must never be finalized as a paid call.
         if (!reservation) throw err;
         const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
@@ -996,7 +1023,8 @@ export class DesignStudioService {
         responseSha256: result.receipt.sha256, latencyMs: result.receipt.latencyMs,
         attempts: result.receipt.attempts, inputTokens: result.receipt.inputTokens,
         cachedInputTokens: result.receipt.cacheReadTokens || 0, outputTokens: result.receipt.outputTokens,
-        usdEstimate: cost, costBasis: result.receipt.costBasis ?? 'estimate', status: 'ok' });
+        usdEstimate: cost, costBasis: result.receipt.costBasis ?? 'estimate', status: 'ok',
+        retainedResult: { kind: 'structured', payload: result } });
       await recordSpend(cost);
       checkReservation(cost, reservation!);
       return result;
@@ -1017,9 +1045,6 @@ export class DesignStudioService {
         const settings = resolveImageSettings();
         return baseArtProvider.generateArt({ ...params, settings, visionClient: ledgerClient,
           requestImage: async (selected, prompt) => {
-            if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
-              throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
-            }
             const callId = randomUUID();
             let reservation: StudioCallReservation | undefined;
             const started = Date.now();
@@ -1029,11 +1054,14 @@ export class DesignStudioService {
                 selected.provider === 'google' ? params.geminiApiKey || process.env.GEMINI_API_KEY || '' : apiKey,
                 fetchFn, async body => {
                   const quoted = reserveStudioImage(selected.provider, body);
+                  await replay('image', 'art', selected.provider, selected.model, quoted.requestSha256);
+                  if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
                   await admitCall({ id: callId, stage: 'art', provider: selected.provider, model: selected.model,
                     input: { requestSha256: quoted.requestSha256 }, reservation: quoted });
                   reservation = quoted;
                 });
             } catch (error) {
+              if (error instanceof RetainedStudioReply) return error.value as Awaited<ReturnType<typeof requestStudioArtImage>>;
               if (!reservation) throw error;
               const uncertain = !!error && typeof error === 'object' && 'isUncertain' in error && error.isUncertain === true;
               await finalizeCall({ id: callId, tenantId: s.tenantId, inputTokens: 0, outputTokens: 0,
@@ -1049,7 +1077,9 @@ export class DesignStudioService {
               inputTokens: result?.inputTokens ?? 0, outputTokens: result?.outputTokens ?? 0,
               images: result ? 1 : 0, usdEstimate: cost, status: result ? 'ok' : 'error',
               costBasis: !result ? 'not_accepted' : result.costSource === 'usage' ? 'usage' : 'estimate',
-              errorCode: result ? null : 'IMAGE_REQUEST_REJECTED', latencyMs: Date.now() - started, attempts: 1 });
+              errorCode: result ? null : 'IMAGE_REQUEST_REJECTED', latencyMs: Date.now() - started, attempts: 1,
+              ...(result ? { retainedResult: { kind: 'image' as const,
+                payload: { ...result, imageBuffer: undefined }, image: result.imageBuffer } } : {}) });
             await recordSpend(cost);
             checkReservation(cost, reservation!);
             return result;
@@ -1231,18 +1261,16 @@ export class DesignStudioService {
     // A previous worker may have died after the provider accepted a call but before it saved the
     // answer. Its pre-dispatch row survives the restart. Never pay for that logical stage again
     // until an operator reconciles the unknown provider outcome.
-    const priorCalls = await this.repo.getCallsForRun(runId, s.tenantId);
+    const priorCalls = await this.repo.getCallsForRun(runId, s.tenantId, undefined, s.actorId);
     const unresolvedCall = priorCalls.find((call) => call.status === 'uncertain');
     if (unresolvedCall) {
       throw new CanvaFlowError(409, 'MODEL_CALL_UNCERTAIN',
         `The ${unresolvedCall.stage} model call has an unknown outcome. Reconcile its provider result before resuming this run.`);
     }
-    // If a paid reply was recorded but this stage never advanced, the reply itself is no longer
-    // available for replay. The current-stage call is evidence of work already done, not permission
-    // to run that stage's model again. Art is recorded under its role name within laying_out.
-    const alreadyPaid = priorCalls.find((call) =>
-      (call.stage === run.status || (run.status === 'laying_out' && call.stage === 'art')) &&
-      (call.status === 'ok' || (call.status === 'error' && Number(call.usd_estimate) > 0)));
+    const stageCalls = priorCalls.filter((call) => call.stage === run.status || (run.status === 'laying_out' && call.stage === 'art'));
+    // Legacy successes and billed errors without validated reusable output still require review.
+    const alreadyPaid = stageCalls.find((call) =>
+      (call.status === 'ok' && !call.has_retained_result) || (call.status === 'error' && Number(call.usd_estimate) > 0));
     if (alreadyPaid) {
       throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE',
         `The ${run.status} stage has a recorded paid model call but no saved stage result. Review that call before starting a new run.`);
@@ -1250,10 +1278,16 @@ export class DesignStudioService {
 
     await this.assertTaskCanGenerate(s, taskId);
 
-    const stages: Record<string, any> =
-      typeof run.stages === 'string' ? JSON.parse(run.stages || '{}') : run.stages || {};
+    const stages = runStages(run);
     const budget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number } =
       typeof run.budget === 'string' ? JSON.parse(run.budget) : run.budget;
+    const replayCalls = stageCalls.some((call) => call.has_retained_result) ? stageCalls : [];
+    if (replayCalls.length) {
+      const usage = await this.repo.getBudgetUsage(runId, s.tenantId, s.actorId);
+      if (!usage || usage.accountedUsd === null || (usage.blocker && usage.blocker !== 'BUDGET_EXHAUSTED')) throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', 'The saved result budget history is incomplete.');
+      budget.spentUsd = usage.accountedUsd;
+      budget.calls = usage.admittedCalls;
+    }
 
     const onSpendUpdate = async (cost: number) => {
       budget.spentUsd += cost;
@@ -1265,7 +1299,7 @@ export class DesignStudioService {
     // worker to retry for ever, so it is marked failed here with the reason.
     let ctx: StageContext;
     try {
-      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate));
+      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate, replayCalls));
     } catch (err: any) {
       const diagnostic = `Stage context could not be built: ${err?.message || err}`;
       await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
@@ -2150,6 +2184,7 @@ export class DesignStudioService {
         throw new CanvaFlowError(409, err.code, err.message);
       }
       if (isModelCallHoldError(err)) {
+        if (err instanceof CanvaFlowError && err.code === 'MODEL_STAGE_REPLAY_UNSAFE') throw err;
         const code = ['MODEL_CALL_ADMISSION_CONFLICT', 'MODEL_CALL_FINALIZATION_CONFLICT', 'MODEL_CALL_ACCOUNTING_FAILED'].includes(err?.code)
           ? err.code : 'MODEL_CALL_UNCERTAIN';
         throw new CanvaFlowError(409, code,

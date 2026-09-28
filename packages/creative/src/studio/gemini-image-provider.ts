@@ -51,7 +51,7 @@ export function isStudioArtHoldError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   if ('isUncertain' in error && error.isUncertain === true) return true;
   return 'code' in error && typeof error.code === 'string' &&
-    /^(MODEL_CALL_|TASK_GENERATION_BLOCKED$|STUDIO_BUDGET_|BUDGET_EXHAUSTED$)/.test(error.code);
+    /^(MODEL_CALL_|MODEL_STAGE_REPLAY_UNSAFE$|TASK_GENERATION_BLOCKED$|STUDIO_BUDGET_|BUDGET_EXHAUSTED$)/.test(error.code);
 }
 
 export interface ArtVerificationReport {

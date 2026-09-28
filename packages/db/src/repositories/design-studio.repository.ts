@@ -141,6 +141,9 @@ export class ModelCallFinalizationConflictError extends Error {
 }
 
 export interface FinalizeCallParams {
+  /** Private content, committed atomically with the successful receipt; not exposed in call lists. */
+  retainedResult?: { kind: 'structured' | 'image'; payload: unknown; image?: Buffer };
+  actorId?: string;
   id: string;
   tenantId: string;
   responseId?: string | null;
@@ -270,14 +273,14 @@ export class DesignStudioRepository {
 
   private async withClient<T>(
     trx: Kysely<Database> | undefined,
-    scope: { tenantId?: string; clientId?: string } | string | undefined,
+    scope: { tenantId?: string; clientId?: string; actorId?: string } | string | undefined,
     fn: (client: Kysely<Database>) => Promise<T>
   ): Promise<T> {
     const base = trx || this.db;
     const tenantId = typeof scope === 'string' ? scope : scope?.tenantId;
     const clientId = typeof scope === 'object' ? scope?.clientId : undefined;
     if (tenantId) {
-      return withRlsContext(base, { tenantId, clientId }, fn);
+      return withRlsContext(base, { tenantId, clientId, userId: typeof scope === 'object' ? scope.actorId : undefined }, fn);
     }
     return fn(base);
   }
@@ -297,6 +300,7 @@ export class DesignStudioRepository {
           request: JSON.stringify(params.request),
           tier: params.tier,
           status: 'briefing',
+          stages: JSON.stringify({}),
           budget: params.budget ? JSON.stringify(params.budget) : JSON.stringify({ maxUsd: 6.0, maxCalls: 40, spentUsd: 0.0, calls: 0 }),
         })
         .returningAll()
@@ -641,6 +645,26 @@ export class DesignStudioRepository {
    * Finalizes the call in the ledger with exact tokens and USD spend.
    */
   async finalizeCall(params: FinalizeCallParams, trx?: Kysely<Database>) {
+    const retained = params.retainedResult;
+    let retainedValues: Omit<import('../types.js').DesignStudioCallResultsTable, 'created_at'> | undefined;
+    if (retained) {
+      if (params.status !== 'ok') throw new TypeError('Only a successful validated result may be retained.');
+      const payload = JSON.stringify(retained.payload);
+      if (!payload || !retained.payload || typeof retained.payload !== 'object' || Array.isArray(retained.payload) || Buffer.byteLength(payload) > 4194304) {
+        throw new TypeError('Retained Studio payload must be a bounded JSON object.');
+      }
+      const image = retained.image;
+      if (retained.kind === 'image' && (!image?.length || image.length > 33554432) || retained.kind === 'structured' && image) {
+        throw new TypeError('Retained Studio image is missing, oversized or incompatible with its result kind.');
+      }
+      const imageSha = image ? createHash('sha256').update(image).digest('hex') : null;
+      const imageType = image ? sniffBlobMediaType(image) : null;
+      if (image && (!imageType || !imageType.startsWith('image/'))) throw new TypeError('Retained image bytes have an unsupported format.');
+      const imageBlob = image && imageType && this.blobStore ? await this.blobStore.put(image, imageType) : null;
+      retainedValues = { tenant_id: params.tenantId, call_id: params.id, kind: retained.kind,
+        payload_text: payload, payload_sha256: createHash('sha256').update(payload).digest('hex'),
+        image_sha256: imageSha, image_blob_sha256: imageBlob?.sha256 ?? null, image_bytes: imageBlob ? null : image ?? null };
+    }
     const usdEstimate = typeof params.usdEstimate === 'string' && !params.usdEstimate.trim() ? NaN : Number(params.usdEstimate);
     if (!Number.isFinite(usdEstimate) || usdEstimate < 0) {
       throw new TypeError('Studio call cost must be a finite nonnegative estimate.');
@@ -654,7 +678,7 @@ export class DesignStudioRepository {
     if (params.attempts != null && (!Number.isSafeInteger(params.attempts) || params.attempts < 1)) {
       throw new TypeError('Studio call attempts must be a positive integer.');
     }
-    return this.withClient(trx, params.tenantId, async (client) => {
+    return this.withClient(trx, { tenantId: params.tenantId, actorId: params.actorId }, async (client) => {
       const [row] = await client
         .updateTable('design_studio_calls')
         .set({
@@ -680,15 +704,18 @@ export class DesignStudioRepository {
         .returningAll()
         .execute();
       if (!row) throw new ModelCallFinalizationConflictError();
+      if (retainedValues) await client.insertInto('design_studio_call_results').values(retainedValues).execute();
       return row;
     });
   }
 
-  async getCallsForRun(runId: string, tenantId?: string, trx?: Kysely<Database>) {
-    return this.withClient(trx, tenantId, async (client) => {
+  async getCallsForRun(runId: string, tenantId?: string, trx?: Kysely<Database>, actorId?: string) {
+    return this.withClient(trx, { tenantId, actorId }, async (client) => {
       let query = client
         .selectFrom('design_studio_calls')
         .selectAll()
+        .select(sql<boolean>`EXISTS(SELECT 1 FROM hawa.design_studio_call_results retained
+          WHERE retained.tenant_id=design_studio_calls.tenant_id AND retained.call_id=design_studio_calls.id)`.as('has_retained_result'))
         .where('run_id', '=', runId)
         .orderBy('started_at', 'asc');
       if (tenantId) {
@@ -696,6 +723,22 @@ export class DesignStudioRepository {
       }
       return await query.execute();
     });
+  }
+
+  async getRetainedCallResult(callId: string, tenantId: string, actorId?: string) {
+    const row = await this.withClient(undefined, { tenantId, actorId }, client => client.selectFrom('design_studio_call_results')
+      .selectAll().where('call_id', '=', callId).where('tenant_id', '=', tenantId).executeTakeFirst());
+    if (!row) return null;
+    if (createHash('sha256').update(row.payload_text).digest('hex') !== row.payload_sha256) throw new Error('STUDIO_RETAINED_RESULT_CORRUPT');
+    let image: Buffer | undefined;
+    if (row.kind === 'image') {
+      if (row.image_blob_sha256) {
+        if (!this.blobStore) throw new Error('STUDIO_RETAINED_BLOB_STORE_UNAVAILABLE');
+        image = await this.blobStore.read(row.image_blob_sha256, { verify: true });
+      } else image = row.image_bytes ? Buffer.from(row.image_bytes) : undefined;
+      if (!image || createHash('sha256').update(image).digest('hex') !== row.image_sha256) throw new Error('STUDIO_RETAINED_IMAGE_CORRUPT');
+    }
+    return { kind: row.kind, payload: JSON.parse(row.payload_text) as unknown, image };
   }
 
   private async readBudgetUsage(client: Kysely<Database>, runId: string, tenantId: string, snapshot: unknown): Promise<StudioBudgetUsage> {

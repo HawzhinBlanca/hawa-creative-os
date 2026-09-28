@@ -59,6 +59,16 @@ A Restate durable call wraps only operations with stable serialization and repla
 
 For new Studio calls, PostgreSQL admits a per-run ordinal and request digest before transport. A lost answer remains uncertain and cannot trigger a second paid request. On a completed call, the tenant-scoped ledger preserves the requested model separately from the provider-reported served model, provider request ID, response-content SHA-256, latency and attempt count when the adapter supplies them. Historical or absent receipt facts remain null. These fields support reconciliation but do not establish billing or permit response replay; raw prompt and response content are not kept in this ledger (ADRs 048–050).
 
+ADR-111 adds a separate immutable, client-authorized result store. Validated
+structured replies and image metadata/bytes commit atomically with the successful
+receipt. Exact request digest, stage, provider and model must match before ordered
+serial replay; saved content hashes must verify. Retained blobs are GC roots.
+Replay does not spend again or consume another call slot, and current task authority
+is rechecked. Unknown outcomes, missing/corrupt results, changed inputs and legacy
+paid calls without reusable content remain held. Derivation pinning, branch-aware
+substep replay and concurrent execution remain separate qualification. See
+`runbooks/STUDIO_RECOVERY.md` and ADR-111 for the bounded recovery contract.
+
 The ledger seals a call's run/stage/model/ordinal/digest at admission. Its first outcome, including `uncertain`, is the last mutation allowed; a second finalization is a conflict and holds the Studio pipeline. Reconciliation must append separately attributed evidence rather than rewrite the original call (ADR-051).
 
 Studio art admits each image attempt and each vision verification separately

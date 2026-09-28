@@ -14,7 +14,7 @@ No package is complete merely because a smaller test passes.
 | --- | --- | --- | --- |
 | 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty slice locally qualified; native revision preservation open | ADR-108; CANVA_UNCERTAINTY_PROOF.json |
 | 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs locally qualified; authorized visual-order contract, multilingual retrieval and human comparison open | ADR-109; CREATIVE_HANDOFF_PROOF.json |
-| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility locally qualified; retained results, pinned derivations, reserved-region mapping and concurrency open | ADR-110; COMPUTE_ELIGIBILITY_PROOF.json |
+| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility and retained serial results locally qualified; branch checkpoints, pinned derivations, reserved-region mapping and concurrency open | ADR-110/111; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json |
 | 4 | Amend/Adapt routing and actual Canva account capability qualification | Open | Official documentation is not account admission |
 | 5 | Relationship-led composition, calibrated selection, governed edit learning and equal-budget human comparisons | Open | Existing R04–R06/R13/R22–R25 study machinery must be reused |
 | 6 | Complete supervised native review/delivery, release qualification and independent recovery | Open | Prior qualification remains scoped to its own candidate |
@@ -116,3 +116,31 @@ human quality comparison. Earlier rejection can increase manual finishing or
 refusal; the human experiment must measure this alongside cost. Remaining package
 3 work is durable typed paid results, pinned derivations, actual provider-region
 mapping and safe concurrency. Native preservation and other packages remain open.
+
+
+## 2026-09-28 — Retained paid results checkpoint
+
+ADR-111/migration 061 stores validated structured replies and image metadata/bytes
+separately from operational receipts. The first successful receipt and result commit
+atomically; results are immutable and tenant/client scoped. File-store images are
+hash-verified GC roots, with bounded PostgreSQL byte storage when no store is configured.
+Normal serial resume consumes only matching original request/stage/provider/model
+prefixes. It recovers durable spend/call counts and never charges for reused replies,
+even at the cap. Task cancellation is rechecked. Unknown calls, legacy successes
+without content, changed input, missing storage or corrupt bytes still hold.
+
+Qualification: 6 affected files / 45 tests passed, zero failed/skipped, including
+fresh runtime-role public resume after injected post-receipt snapshot failure,
+image/verdict replay and image reuse before one newly admitted verifier. The tests
+also exposed and fixed repository initialization as [] instead of {}, which could
+silently discard named brief properties; empty historical arrays now normalize.
+This is fault injection and fresh-service recovery, not an OS process-kill drill.
+See RETAINED_RESULTS_PROOF.json for final type/security/manifest checks and retained
+initial failures (a genuine stage-persistence defect plus fixture mistakes).
+
+Full six-package objective remains active. Package 3 still needs branch-aware
+substeps, pinned derivations, actual provider-region/crop mapping and safe bounded
+concurrency. Persisted rebrief branches or interleaved failed attempts can cause a
+safe hold. No paid calls, deployment, native qualification, full release suite or
+human-quality comparison occurred. Next: pin the actual asset and conditioning
+inputs so resumed work is stable and does not repeat derivation unnecessarily.

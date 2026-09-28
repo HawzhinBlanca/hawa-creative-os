@@ -639,6 +639,18 @@ export interface DesignStudioCallsTable {
   finished_at: Date | null;
 }
 
+export interface DesignStudioCallResultsTable {
+  tenant_id: string;
+  call_id: string;
+  kind: 'structured' | 'image';
+  payload_text: string;
+  payload_sha256: string;
+  image_sha256: string | null;
+  image_blob_sha256: string | null;
+  image_bytes: Buffer | null;
+  created_at: Generated<Date>;
+}
+
 export type DesignFeedbackSource = 'desk' | 'telegram' | 'import';
 export type DesignFeedbackVerdict = 'approve' | 'reject' | 'revise' | 'rating';
 
@@ -744,5 +756,6 @@ export interface Database {
   design_studio_candidates: DesignStudioCandidatesTable;
   design_studio_judgments: DesignStudioJudgmentsTable;
   design_studio_calls: DesignStudioCallsTable;
+  design_studio_call_results: DesignStudioCallResultsTable;
   design_feedback: DesignFeedbackTable;
 }

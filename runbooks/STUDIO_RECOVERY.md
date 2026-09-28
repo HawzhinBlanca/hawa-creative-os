@@ -1,6 +1,6 @@
 # Recovering held Studio model calls
 
-Requirements FR-060/065/067/079 and NFR-001. ADRs 086, 087 and 088.
+Requirements FR-060/065/067/079 and NFR-001/014. ADRs 086–088 and 111.
 
 ## Inspect and stop
 
@@ -33,7 +33,7 @@ Requirements FR-060/065/067/079 and NFR-001. ADRs 086, 087 and 088.
    result, and cannot waive approval or export QA.
 6. New generation is an explicit, separately billable action under the task's owner.
    A transferred run's later parity calls have their own identities and holds;
-   earlier settlements do not cover them. The original call identity cannot replay.
+   earlier settlements do not cover them. The original uncertain call identity cannot replay.
 
 Previously admitted calls can still return their first late outcome. Compare that
 receipt with the separate attestation and investigate any disagreement. This tool
@@ -47,7 +47,7 @@ and `calls` entries containing `callId`, `conclusion`, `reportedCostUsd`,
 apply. Task/client/run scope, stopped state, snapshot and exact coverage are checked
 under locks. Evidence is append-only with FORCE RLS and SQL authority checks.
 
-General model-response replay and automated provider lookup are not implemented.
+Validated retained Studio responses can recover an interrupted serial stage as described below. Automated provider lookup is not implemented.
 Synthetic test identities and provider fixtures do not constitute live billing,
 human design review, or production readiness evidence.
 
@@ -59,11 +59,38 @@ request checks current limits before transport; a saved art aggregate is reporti
 only and does not add another charge. Older aggregate receipts may omit vision
 costs and are retained as historical evidence, not recalculated as complete bills.
 
-A lost vision reply holds the run even when the generated image is already saved
-in the receipt ledger. The receipt contains its hash, not recoverable image bytes.
-`MODEL_CALL_ACCOUNTING_FAILED` also holds the run: inspect the admitted calls and
-first outcomes before any new work. Never clear that condition by retrying art or
-selecting a procedural result. Completed-stage response recovery remains open.
+A lost vision reply still holds the run, even when the image was retained. The
+receipt ledger contains hashes; ADR-111 stores validated replies and generated
+image bytes separately. `MODEL_CALL_ACCOUNTING_FAILED` requires inspecting the
+admitted calls and first outcomes before resuming. Never clear it by erasing calls,
+re-keying the request or selecting a procedural result.
+
+## Recover a retained result
+
+Normal resume can consume the interrupted stage's successful retained calls in
+original order. It reconstructs each request and checks the stage, provider, model
+and exact request digest before loading the response. Content hashes are verified;
+current task/client authorization is rechecked. Reuse adds no charge or call slot,
+including at the run's cap. Any unfinished new call still needs normal admission.
+For example, an image retained before interruption can be reused and its unfinished
+vision check admitted once. A vision call with an unknown outcome still holds.
+
+Receipt and reusable content commit atomically. Images use the configured private
+blob store and are GC roots; installations without it retain bounded image bytes
+in PostgreSQL. A configured store's missing/corrupt bytes cause a hold, never a
+silent regeneration or fallback. Ordinary call lists expose availability only.
+
+`MODEL_STAGE_REPLAY_UNSAFE` means the saved call sequence or reconstructed inputs
+do not match, or a paid historical call lacks reusable output. Preserve the run
+and investigate changed rules, assets, model settings and stage branches. Do not
+rewrite immutable history to make the check pass. Settlement establishes cost
+facts; it cannot reconstruct a missing result. Original unknown calls and billed
+errors without a validated response retain the prior settlement workflow.
+
+This is serial prefix recovery. Changed branching after a persisted rebrief,
+interleaved failed attempts and unpinned derivations may still require review.
+Parity reruns, concurrent substeps, production process-kill/restore qualification
+and recovery of replies lost before retention are not covered by this slice.
 
 Desk shows the cumulative number of admitted calls and spending counted from the
 run's receipts, including later parity checks on a transferred design. The saved
