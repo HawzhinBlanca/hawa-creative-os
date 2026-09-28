@@ -50,6 +50,25 @@ refuses such keys). A client without active DNA is refused as before; the
 refusal now also names what an onboarding pack lists as missing. A pack's
 `live` status does not admit a design: Client DNA does.
 
+## Decision: the video-thumbnail playbook; the logo half is already stricter here
+
+studio-v2's 1d07664b removed the renderer's KAAE logo default (it drew a grey
+placeholder instead) and passed the client's logo and photos into the v3 judge,
+canary and critique renders. This branch's ADR-047 already refuses a
+logo-bearing render without an explicit client logo, and ADR-109 hands the
+candidate's real logo, art, photos and cutouts to refinement, fallback comparison
+and both sides of the canary. Both are stricter than a placeholder, so that half
+and d66804ce (golden KAAE tests handing in KAAE's logo) are superseded.
+
+The playbook is ported. A pack whose playbook is `video-thumbnail` has the
+thumbnail rules appended to the rules every stage reads (listing size 168 px for
+16:9 and 180 px for 9:16, the person as focal point, the hook as the largest
+text, copy never cut, a small top-corner logo), and hard QA adds
+`THUMBNAIL_COVERED_ZONE` and `THUMBNAIL_HOOK_TOO_SMALL`. Copy length stays
+guidance: the copy is exact. An announcement client's rules, and therefore its
+pinned visual policy (ADR-112), are unchanged. studio-v2's "no brand ornament for a
+thumbnail" is already true here: only KAAE's packaged reference gets an ornament.
+
 ## Decision: a Restate backup killed outright is put back by the watchdog
 
 studio-v2's Restate backup was a shell script; its watchdog skipped a pass while a

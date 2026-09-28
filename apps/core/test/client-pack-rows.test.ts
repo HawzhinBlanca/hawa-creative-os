@@ -1,8 +1,10 @@
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { createDb, sql } from '@hawa/db';
+import { blobStoreFromEnv, createDb, sql } from '@hawa/db';
 import { findClientPack, type ClientPack } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
+import { hardQaContextFor } from '../src/services/design-studio/stages/v3.stage.js';
+import { computeDnaHash } from '../src/core-helpers.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { ensureClientPackRows } from '../src/services/client-pack-rows.js';
 
@@ -76,5 +78,33 @@ describe.skipIf(!url)('client packs in PostgreSQL', () => {
     });
     const runs = (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.design_studio_runs WHERE task_id = ${saved.task.id}::uuid`.execute(db)).rows[0];
     expect(runs.n).toBe(0);
+  });
+
+  it("tells a thumbnail client's stages the thumbnail playbook once its Client DNA exists (ported from 1d07664b)", async () => {
+    await ensureClientPackRows(db, tenantId, [zar]);
+    const logoRef = await blobStoreFromEnv(db).put(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64'), 'image/png');
+    const dna = { tenantId, clientId: zar.id, name: 'ZAR Podcast', code: 'zar-podcast', version: 1, status: 'active',
+      defaultLocale: 'en', defaultDirection: 'ltr',
+      colors: [{ name: 'Night', hex: '#101820', role: 'background' }, { name: 'White', hex: '#FFFFFF', role: 'text' }, { name: 'Red', hex: '#E10600', role: 'accent' }],
+      fonts: [{ family: 'Inter', style: 'Regular', weight: 400, role: 'body', license: 'test', supportedLocales: ['en'] },
+        { family: 'Noto Sans Arabic', style: 'Regular', weight: 400, role: 'body', license: 'test', supportedLocales: ['ckb', 'ar'] },
+        { family: 'Inter', style: 'Bold', weight: 700, role: 'display', license: 'test', supportedLocales: ['en'] }],
+      assets: [{ assetId: randomUUID(), name: 'ZAR logo', role: 'logo_primary', storageKey: `sha256:${logoRef.sha256}`, sha256: logoRef.sha256, mimeType: 'image/png', minimumWidthPx: 100, clearSpacePx: 20 }],
+      guidelines: { voiceAndTone: 'Direct', prohibitedPhrases: [], requiredDisclaimers: [], layoutRules: [] },
+      destinations: { googleSharedDriveId: 'test', productionFolderId: 'test', archiveFolderId: 'test', spreadsheetId: 'test', sheetId: 1 },
+      approvalPolicy: { requiredRoles: ['art_director'], allowAutoApproval: false, autoApprovalEligibleTemplates: [] },
+      updatedAt: new Date().toISOString() };
+    await sql`INSERT INTO hawa.client_dna_versions(tenant_id,client_id,version,status,dna,content_hash,created_by)
+      VALUES(${tenantId}::uuid,${zar.id}::uuid,1,'active',${JSON.stringify(dna)}::jsonb,${computeDnaHash(dna)},${scope.actorId}::uuid)`.execute(db);
+    const saved = await persistChatIntake(db, {
+      platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: `zar-${randomUUID().slice(0, 8)}`, clientId: zar.id,
+      title: '[TEST] ZAR thumbnail', rawText: 'Thumbnail please.\n---\nWHY CITIES FLOOD\n\nEpisode 14', designInstructions: 'Thumbnail please.', exactCopy: [], variant: { width: 1280, height: 720 },
+    });
+    const studio = new DesignStudioService(db, undefined, { apiKey: 'test-key', fetcher: noCalls, staleRunMinutes: 0 });
+    const { run } = await studio.createOrGetRun(scope, saved.task.id, `key-${randomUUID().slice(0, 16)}`, { width: 1280, height: 720, tier: 'standard' });
+    const ctx = await (studio as any).createStageContext(scope, run, run.status, { maxUsd: 1, maxCalls: 4, spentUsd: 0, calls: 0 }, async () => {});
+    expect(ctx.playbook).toBe('video-thumbnail');
+    expect(ctx.promotedRules).toContain('VIDEO THUMBNAIL PLAYBOOK (this client\'s designs are video thumbnails, 1280x720)');
+    expect(hardQaContextFor(ctx).playbook).toBe('video-thumbnail');
   });
 });

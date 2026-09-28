@@ -167,6 +167,8 @@ export interface StageContext {
   copyBlocks: CopyBlock[];
   referencePack: ReferencePack;
   promotedRules: string;
+  /** The client's playbook (ADR-127): a video thumbnail also answers to the thumbnail rules. */
+  playbook?: 'institutional-announcement' | 'video-thumbnail';
   /** The office's standing rules for this client, numbered, as the models read them; '' when none. */
   clientRules?: string;
   latinFont: string;

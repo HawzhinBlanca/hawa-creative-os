@@ -40,13 +40,14 @@ import {
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError } from '@hawa/domain';
-import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, type OrnamentSettings } from '@hawa/creative';
+import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, thumbnailPlaybookPrompt, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
 import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type PhotoFaces } from './photo-cutouts.js';
 import { log } from '../../logging.js';
 import { blobStoreFor, putToStore, readPreferringStore } from '../blob-store-context.js';
 import { assertCurrentClientDesignReference, resolveClientDesignReference } from '../client-design-reference.js';
+import { clientPackOf } from '../client-packs.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -1188,6 +1189,14 @@ export class DesignStudioService {
 
     const logo = { bytes: logoBytes, sha256: reference.logoSha256, mimeType: 'image/png' as const };
 
+    // The client's playbook (ADR-127). A thumbnail client's stages are all told the thumbnail rules
+    // through the rules every stage reads, and its hard QA checks them. An announcement client's
+    // rules, and so its pinned visual policy, are unchanged.
+    const playbook = clientPackOf(run.client_id)?.playbook;
+    if (playbook === 'video-thumbnail') {
+      promotedRules = `${promotedRules}\n\n${thumbnailPlaybookPrompt({ width: request.width, height: request.height })}`;
+    }
+
     return {
       runId: run.id,
       tenantId: s.tenantId,
@@ -1201,6 +1210,7 @@ export class DesignStudioService {
       copyBlocks: request.copyBlocks,
       referencePack,
       promotedRules,
+      ...(playbook === 'video-thumbnail' ? { playbook } : {}),
       latinFont,
       arabicFont,
       logoAspect: request.logoAspect || 1.0,
