@@ -36,7 +36,8 @@ export class CoreBoundaryError extends Error {
   readonly terminal: boolean;
   /** A 409 that is retried before it is believed (RETRIED_REFUSALS). */
   readonly retriedRefusal: boolean;
-  constructor(readonly httpStatus: number, readonly code?: string) {
+  /** retryAfterMs: Core's Retry-After on a busy answer, when it named one (ADR-131). */
+  constructor(readonly httpStatus: number, readonly code?: string, readonly retryAfterMs?: number) {
     super(`Canva workflow Core boundary HTTP ${httpStatus}${code ? ` ${code}` : ''}`);
     this.name = 'CoreBoundaryError';
     this.retriedRefusal = httpStatus === 409 && Boolean(code && RETRIED_REFUSALS.has(code));
@@ -146,7 +147,14 @@ function coreClient(input: Pick<WorkflowInput, 'taskId'>, fetcher: typeof fetch,
     if (!res.ok) {
       let code: string | undefined;
       try { const problem: any = await res.json(); code = [problem?.title, problem?.error, problem?.code].find((v) => typeof v === 'string'); } catch { /* no body */ }
-      throw new CoreBoundaryError(res.status, code ? String(code).toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 64) : undefined);
+      // Core sends Retry-After in whole seconds; a bare test double may carry no headers at all.
+      const retryAfter = typeof res.headers?.get === 'function' ? res.headers.get('Retry-After') : null;
+      const retryAfterSeconds = retryAfter !== null && /^\s*\d+\s*$/.test(retryAfter) ? Number(retryAfter) : NaN;
+      throw new CoreBoundaryError(
+        res.status,
+        code ? String(code).toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 64) : undefined,
+        Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0 ? retryAfterSeconds * 1000 : undefined
+      );
     }
     return res.json() as Promise<any>;
   };
@@ -179,18 +187,30 @@ async function reportOutcome(ctx: WorkflowDurableContext, call: CoreCall, stepNa
 }
 
 /**
- * Core answers a studio start with 429 STUDIO_BUSY while two of the tenant's runs are unfinished. The
- * step retried that five times in under a second and the workflow then told the requester "We could
+ * Core answers a studio start with 429 STUDIO_BUSY while two of the tenant's runs are unfinished, and a
+ * generation with 429 PLANNING_BUSY while every planning slot is taken (ADR-131). The step retried that five times in under a second and the workflow then told the requester "We could
  * not make the automatic draft", although nothing was wrong with the request: it only had to wait its
  * turn (2026-09-23). A busy answer is now journalled as an answer rather than thrown, and the same
  * request is asked again after a durable 25 s wait, for up to 15 minutes. Only then does the run end
  * as it did before. The wait is counted from what was asked for, never from a clock, so a replay
  * reaches the same decision at the same try.
+ *
+ * When Core names the wait (Retry-After, which PLANNING_BUSY carries: until the oldest running plan
+ * should finish), that wait is kept, from 1 to 30 s, and journalled with the answer, so a replay
+ * sleeps the same without reading any header. The planning step used to throw the 429 into the
+ * step's own retry, which doubles (2, 4, 8, 16, 30 s): ten briefs sent at once got their drafts in
+ * pairs at about 5, 7, 11, 19 and 35 s while slots stood free between tries (2026-09-24 load test).
  */
 const CORE_BUSY_WAIT_MS = 25000;
 const CORE_BUSY_WINDOW_MS = 15 * 60 * 1000;
+const CORE_NAMED_WAIT_MIN_MS = 1000;
+const CORE_NAMED_WAIT_MAX_MS = 30000;
 
-type CoreBusy = { coreBusy: string };
+type CoreBusy = { coreBusy: string; retryAfterMs?: number };
+const busyWaitMs = (busy: CoreBusy): number =>
+  typeof busy.retryAfterMs === 'number' && Number.isFinite(busy.retryAfterMs)
+    ? Math.min(CORE_NAMED_WAIT_MAX_MS, Math.max(CORE_NAMED_WAIT_MIN_MS, busy.retryAfterMs))
+    : CORE_BUSY_WAIT_MS;
 const isCoreBusy = (value: unknown): value is CoreBusy =>
   typeof value === 'object' && value !== null && typeof (value as { coreBusy?: unknown }).coreBusy === 'string';
 
@@ -201,7 +221,11 @@ async function runUnlessBusy<T>(ctx: WorkflowDurableContext, stepName: string, r
       try {
         return await request();
       } catch (err) {
-        if (err instanceof CoreBoundaryError && err.httpStatus === 429) return { coreBusy: err.code || 'HTTP_429' };
+        if (err instanceof CoreBoundaryError && err.httpStatus === 429) {
+          return err.retryAfterMs === undefined
+            ? { coreBusy: err.code || 'HTTP_429' }
+            : { coreBusy: err.code || 'HTTP_429', retryAfterMs: err.retryAfterMs };
+        }
         // A change whose original design is still being made waits for it the same way: the studio
         // refuses it with 409 PARENT_STILL_RUNNING rather than designing the change from nothing.
         if (err instanceof CoreBoundaryError && err.httpStatus === 409 && err.code === 'PARENT_STILL_RUNNING') return { coreBusy: err.code };
@@ -209,8 +233,9 @@ async function runUnlessBusy<T>(ctx: WorkflowDurableContext, stepName: string, r
       }
     });
     if (!isCoreBusy(answer) || waitedMs >= CORE_BUSY_WINDOW_MS) return answer;
-    if (ctx.sleep) await ctx.sleep(CORE_BUSY_WAIT_MS);
-    waitedMs += CORE_BUSY_WAIT_MS;
+    const wait = busyWaitMs(answer);
+    if (ctx.sleep) await ctx.sleep(wait);
+    waitedMs += wait;
   }
 }
 
@@ -405,17 +430,17 @@ export async function runCanvaDraft(
   }
 
   const variant = resolveCanvaVariant(input);
+  // Still busy after the whole window: the run ends as a busy start always did, with Core's code.
+  const endBusy = (busy: CoreBusy, slot: 'studio' | 'planning') =>
+    finish('DESIGN_SERVER_ERROR', undefined, busy.coreBusy, undefined, {
+      detail: `Core was still busy (${busy.coreBusy}) after ${CORE_BUSY_WINDOW_MS / 60000} minutes of waiting for a free ${slot} slot.`,
+    });
   if (input.designStudio) {
     const studioBody = {
       width: variant.width,
       height: variant.height,
       ...input.studioOptions,
     };
-    // Still busy after the whole window: the run ends as a busy start always did, with Core's code.
-    const endBusy = (busy: CoreBusy) =>
-      finish('DESIGN_SERVER_ERROR', undefined, busy.coreBusy, undefined, {
-        detail: `Core was still busy (${busy.coreBusy}) after ${CORE_BUSY_WINDOW_MS / 60000} minutes of waiting for a free studio slot.`,
-      });
     try {
       result = await runUnlessBusy(ctx, 'canva-studio-start', () =>
         call('/canva/studio', studioBody, 'workflow-studio-' + runKey)
@@ -423,7 +448,7 @@ export async function runCanvaDraft(
     } catch (error) {
       return await handleBoundaryError(error, 'DESIGN_REJECTED');
     }
-    if (isCoreBusy(result)) return endBusy(result);
+    if (isCoreBusy(result)) return endBusy(result, 'studio');
     let idlePolls = 0;
     let waitedMs = 0;
     let stuckStage: string | undefined;
@@ -447,7 +472,7 @@ export async function runCanvaDraft(
         return await handleBoundaryError(error, 'DESIGN_REJECTED');
       }
       // The run's own answer is kept until then, so the report still names the run.
-      if (isCoreBusy(next)) return endBusy(next);
+      if (isCoreBusy(next)) return endBusy(next, 'studio');
       result = next;
       if (String(result.status) !== before) {
         idlePolls = 0;
@@ -475,10 +500,12 @@ export async function runCanvaDraft(
     }
   } else {
     try {
-      result = await ctx.run('canva-create-draft', () => call('/canva/generate', variant, 'workflow-' + runKey));
+      // The first try keeps its step name, so an invocation journalled before ADR-131 replays unchanged.
+      result = await runUnlessBusy(ctx, 'canva-create-draft', () => call('/canva/generate', variant, 'workflow-' + runKey));
     } catch (error) {
       return await handleBoundaryError(error, 'DESIGN_REJECTED');
     }
+    if (isCoreBusy(result)) return endBusy(result, 'planning');
     for (let n = 0; n < 30 && ['planning', 'submitted', 'creating'].includes(result.status); n++) {
       if (ctx.sleep) await ctx.sleep(2000);
       try {

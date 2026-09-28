@@ -212,6 +212,8 @@ services:
       <<: *app-environment
       PORT: 3001
       HAWA_CHAOS_SERVICE: core
+      # The load test's --planning-slots (scripts/load/run.ts); empty keeps Core's default (ADR-131).
+      HAWA_CANVA_PLANNING_SLOTS: ${HAWA_CANVA_PLANNING_SLOTS:-}
       # Standalone host collector: no scheduled monitor runs unless the qualification driver starts it.
       HAWA_AVAILABILITY_MONITOR_ID: "00000000-0000-4000-a000-000000000104"
       HAWA_AVAILABILITY_TARGET_ORIGIN: http://127.0.0.1:56081

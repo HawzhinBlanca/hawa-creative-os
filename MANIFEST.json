@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T13:54:56Z",
+  "generatedAt": "2026-09-28T14:26:24Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 502,
+  "fileCount": 503,
   "files": [
     {
       "path": ".dockerignore",
@@ -69,7 +69,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "8a17d7f78172e925fe367593e7ba879f3408281ea94cb311869e786aa18fbd98",
+      "sha256": "db22d3cac0a1554744ac32c6adea4d19f9b76ad8b17ef2461651a0bdc0af8140",
       "bytes": 3956
     },
     {
@@ -723,6 +723,11 @@
       "bytes": 5840
     },
     {
+      "path": "adrs/131_planning_slots_and_named_busy_wait.md",
+      "sha256": "54057d570d0878d85af3ce0d34c03533919033060423a97a8afebc6dc03aa1e4",
+      "bytes": 14044
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1214,8 +1219,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/MAINLINE_RELEASE.md",
-      "sha256": "1924c67d56b0bbeb48fa70fbb1d56066be13136b9ab41537539234b62f4823af",
-      "bytes": 4372
+      "sha256": "7260dbf31bb5f7618ba744b52ce61f367e5a6758e08902d51ce02503ff950af9",
+      "bytes": 2967
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/NATIVE_COPY_OWNER_PROOF.json",
@@ -1719,8 +1724,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "baca866383856b29a1bfa6155bd0ab0f4c725b17b2ed820ec00b52e8208f0715",
-      "bytes": 467019
+      "sha256": "5bb58b78e525407475e613d91d9fd8195705db69e01c23d4acc619abf74d65f2",
+      "bytes": 469371
     },
     {
       "path": "plans/user-stories.csv",
@@ -1814,8 +1819,8 @@
     },
     {
       "path": "runbooks/20_architecture_operations.md",
-      "sha256": "d8ecefe148c5c174ae21a2176f8533f287a6efb59fd062569bd9c6a02f8b633f",
-      "bytes": 37426
+      "sha256": "f005e49abe705f4f195358d5e5d094eebef895e2542838a82bc945bed2b7c893",
+      "bytes": 39968
     },
     {
       "path": "runbooks/AVAILABILITY_MONITORING.md",
@@ -2179,8 +2184,8 @@
     },
     {
       "path": "scripts/load/run.ts",
-      "sha256": "37afeff91b915eb8d174ef6a60f075d569c009fdc453dc8d45afdce5d1eb6f8a",
-      "bytes": 22428
+      "sha256": "7a1a9872f160da3144cb05fa3a73787816cadb82afd212b4b400883b887763fa",
+      "bytes": 23524
     },
     {
       "path": "scripts/load/seed-desk-tasks.ts",
