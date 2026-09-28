@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
-import { TelegramBridgeDaemon } from '@hawa/integrations';
 import { createApp } from '../src/app.js';
 import { createChannelKillSwitchStore, KILL_SWITCH_ROW_NAME } from '../src/services/channel-kill-switches.js';
 import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
@@ -106,7 +105,7 @@ describe('the kill switches survive a restart', () => {
     }
   });
 
-  it('Telegram, thrown with the ingress toggle: a new Core reports it, refuses the webhook and pauses the poller', async () => {
+  it('Telegram, thrown with the ingress toggle: a new Core reports it and refuses the webhook (the worker\'s poller reads the same row)', async () => {
     const before = createApp({ db } as any);
     const thrown = await toggle(before, 'telegram', false);
     expect(thrown.status).toBe(200);
@@ -116,8 +115,6 @@ describe('the kill switches survive a restart', () => {
     const restarted = createApp({ db } as any);
     expect(await channels(restarted)).toEqual({ telegram: false, waha: true });
     expect((await telegramWebhook(restarted)).status).toBe(503);
-    const bridge = (await (await restarted.request('/v1/adapters/telegram/status', { headers: operator })).json()).bridge;
-    expect(bridge.intakePaused).toBe(true);
     const health = await (await restarted.request('/v1/health', { headers: operator })).json();
     expect(health.dependencies.telegram).toBe('kill_switch_active');
   });
@@ -141,8 +138,6 @@ describe('the kill switches survive a restart', () => {
     expect((await switchRow('telegram'))?.state).not.toBe('disabled');
     const restarted = createApp({ db } as any);
     expect(await channels(restarted)).toEqual({ telegram: true, waha: true });
-    const bridge = (await (await restarted.request('/v1/adapters/telegram/status', { headers: operator })).json()).bridge;
-    expect(bridge.intakePaused).toBe(false);
   });
 
   it('WhatsApp, thrown with POST /waha/kill-switch: a new Core refuses WhatsApp intake although its environment says on', async () => {
@@ -159,33 +154,6 @@ describe('the kill switches survive a restart', () => {
 
     expect((await restarted.request('/v1/waha/kill-switch', { method: 'POST', headers: admin, body: JSON.stringify({ enabled: true }) })).status).toBe(200);
     expect(await channels(createApp({ db } as any))).toEqual({ telegram: true, waha: true });
-  });
-
-  // Core's poller is retired (ADR-135): "poll now" is refused, and this drives the bridge Core wires
-  // the kill switch into, as the loop did, until stage 2 deletes both.
-  it('a poll asked of a new Core at once waits for its read of Postgres and asks Telegram nothing', async () => {
-    await toggle(createApp({ db } as any), 'telegram', false);
-    const realFetch = globalThis.fetch;
-    let getUpdates = 0;
-    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: any) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (!url.startsWith('https://api.telegram.org/')) return realFetch(input, init);
-      if (url.includes('/getUpdates')) getUpdates += 1;
-      return Response.json({ ok: true, result: [] });
-    });
-    process.env.TELEGRAM_BOT_TOKEN = [String(700_000_000 + Math.floor(Math.random() * 99_999_999)), ['fixture', 'bot', 'secret'].join('_')].join(':');
-    try {
-      const bridge = new TelegramBridgeDaemon({ botToken: process.env.TELEGRAM_BOT_TOKEN,
-        secretToken: process.env.TELEGRAM_WEBHOOK_SECRET || '' });
-      const restarted = createApp({ db, telegramBridge: bridge } as any);
-      // Asked before anything else has read the switches in this app.
-      expect(await bridge.pollOnce()).toBe(0);
-      expect(getUpdates).toBe(0);
-      expect((await restarted.request('/v1/adapters/telegram/poll-now', { method: 'POST', headers: admin })).status).toBe(409);
-    } finally {
-      spy.mockRestore();
-      delete process.env.TELEGRAM_BOT_TOKEN;
-    }
   });
 
   it('a switch thrown by one running Core is reported by another', async () => {

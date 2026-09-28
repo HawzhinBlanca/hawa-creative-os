@@ -223,8 +223,8 @@ omnichannel publisher answers `409 LIFECYCLE_OWNED`.
 The worker polls only if `HAWA_TELEGRAM_POLLER=worker` **and** it has `HAWA_WORKER_TOKEN`. Core does
 not poll, whatever the variable says (ADR-135): its poller fed only the old intake, so a rollback to it
 would start requests on the old path, which the owner ruled out on 2026-09-28. `deploy.sh` refuses a
-value other than `worker` before it changes anything, and "Poll now" and webhook registration answer
-409.
+value other than `worker` before it changes anything. "Poll now" and webhook registration are gone
+(stage 2 of ADR-135); before that they answered 409.
 
 Rolling back a broken worker poller therefore means rolling back the worker: the previous colour stays
 registered until the new one is (blue/green above; `register` refuses a build that does not host every

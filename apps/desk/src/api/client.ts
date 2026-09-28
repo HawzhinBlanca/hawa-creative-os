@@ -360,12 +360,11 @@ class HawaApiClient {
 
   // Telegram adapter. Every call goes through the signed-in session; the webhook secret never
   // leaves the server, so the Desk inspects delivery through Core instead of posting to the webhook.
+  // The worker is the only poller (ADR-135): no "poll now", and no webhook registration; delete stays,
+  // to clear a webhook set outside Hawa that would stop the worker's getUpdates.
   public readonly telegram = {
     status: () => this.request<any>('/adapters/telegram/status'),
-    pollNow: () => this.request<any>('/adapters/telegram/poll-now', { method: 'POST' }),
     webhookInfo: () => this.request<any>('/adapters/telegram/webhook/info'),
-    registerWebhook: (url: string) =>
-      this.request<any>('/adapters/telegram/webhook/register', { method: 'POST', body: JSON.stringify({ url }) }),
     deleteWebhook: () =>
       this.request<any>('/adapters/telegram/webhook/delete', { method: 'POST', body: JSON.stringify({ dropPendingUpdates: true }) }),
   };

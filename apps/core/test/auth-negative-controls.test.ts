@@ -140,24 +140,13 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
 
   describe('4. Telegram Adapter Management Authentication', () => {
     it('rejects anonymous requests to Telegram webhook endpoints with 401', async () => {
-      const resRegister = await app.request('/v1/adapters/telegram/webhook/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: 'https://evil.com/webhook' }),
-      });
-      expect(resRegister.status).toBe(401);
-
+      // Webhook registration and "poll now" were removed by stage 2 of ADR-135 (the worker is the only poller).
       const resDelete = await app.request('/v1/adapters/telegram/webhook/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dropPendingUpdates: true }),
       });
       expect(resDelete.status).toBe(401);
-
-      const resPoll = await app.request('/v1/adapters/telegram/poll-now', {
-        method: 'POST',
-      });
-      expect(resPoll.status).toBe(401);
 
       const resInfo = await app.request('/v1/adapters/telegram/webhook/info', {
         method: 'GET',
@@ -166,16 +155,6 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
     });
 
     it('rejects non-admin operator requests to Telegram webhook modification with 403', async () => {
-      const resRegister = await app.request('/v1/adapters/telegram/webhook/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${testOperatorToken}`,
-        },
-        body: JSON.stringify({ url: 'https://evil.com/webhook' }),
-      });
-      expect(resRegister.status).toBe(403);
-
       const resDelete = await app.request('/v1/adapters/telegram/webhook/delete', {
         method: 'POST',
         headers: {
@@ -224,7 +203,7 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
     });
 
     it('rejects access_token query parameter on sensitive non-media routes', async () => {
-      const res = await app.request(`/v1/adapters/telegram/poll-now?access_token=${testOperatorToken}`, {
+      const res = await app.request(`/v1/adapters/telegram/webhook/delete?access_token=${testOperatorToken}`, {
         method: 'POST',
       });
       expect(res.status).toBe(401);

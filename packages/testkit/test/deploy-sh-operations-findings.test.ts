@@ -52,110 +52,22 @@ const line = (needle: string) => {
   return deploySh.slice(0, i).split('\n').length;
 };
 
-describe('finding 1: Core keeps its poller until the new worker colour is registered', () => {
-  it('telegram_poller_of reads the value as Core and the worker do', () => {
+// Finding 1 (ADR-129) held Core's poller value until the new worker colour was registered. Stage 2
+// of ADR-135 removed Core's poller, and with it the hold, the release and the exit note: only the
+// worker polls, and step 7 starts everything with HAWA_TELEGRAM_POLLER=worker.
+describe('finding 1 after ADR-135 stage 2: nothing is held for Core, which does not poll', () => {
+  it('telegram_poller_of reads the value as the worker does', () => {
     const r = run(['telegram_poller_of'], 'for v in worker " Worker " "" core other; do telegram_poller_of "$v"; done');
     expect(r.out.trim().split('\n')).toEqual(['worker', 'worker', 'core', 'core', 'core']);
   });
 
-  it('running_core_poller reads the running Core container, and says nothing when there is none', () => {
-    const inspect = (envLines: string) => `docker() { [[ "$1" == inspect ]] && { printf '${envLines}'; return 0; }; return 1; }`;
-    expect(run(['telegram_poller_of', 'running_core_poller'], 'running_core_poller', inspect('PATH=/bin\\nHAWA_TELEGRAM_POLLER=worker\\n')).out.trim()).toBe('worker');
-    expect(run(['telegram_poller_of', 'running_core_poller'], 'running_core_poller', inspect('PATH=/bin\\n')).out.trim()).toBe('core');
-    expect(run(['telegram_poller_of', 'running_core_poller'], 'echo "[$(running_core_poller)]"', 'docker() { return 1; }').out.trim()).toBe('[]');
-  });
-
-  it('core_poller_hold keeps the running value, and core when no Core runs', () => {
-    // A switch back to Core (worker -> core) is not held: Core polls from step 7, as before ADR-129.
-    // Holding it left nobody polling when the new colour, created with core, took ChatInbox (review).
-    const cases: Array<[string, string, string]> = [['worker', 'core', 'core'], ['core', 'worker', 'core'], ['worker', '', 'core'], ['worker', 'worker', 'worker'], ['core', '', 'core']];
-    for (const [wanted, running, hold] of cases) {
-      expect(run(['core_poller_hold'], `core_poller_hold ${wanted} "${running}"`).out.trim(), `${wanted}/${running}`).toBe(hold);
+  it('the hold, release and exit note of Core\'s poller are gone, and step 7 starts with worker', () => {
+    for (const gone of ['running_core_poller() {', 'core_poller_hold() {', 'release_core_poller() {', 'report_poller_on_exit() {', 'CORE_POLLER_HOLD', 'IDLE_KEPT']) {
+      expect(deploySh, gone).not.toContain(gone);
     }
-  });
-
-  it('release_core_poller recreates Core with the wanted value only when it was held', () => {
-    const moved = run(['poller_owner_text', 'release_core_poller'], 'CORE_POLLER_HOLD=core; CORE_POLLER_WANTED=worker; release_core_poller; echo "hold=$CORE_POLLER_HOLD"');
-    expect(moved.code).toBe(0);
-    expect(moved.calls).toEqual(['CALL compose --env-file /dev/null up -d --no-deps --no-build core [poller=worker]']);
-    expect(moved.out).toMatch(/hold=worker/);
-    expect(moved.out).toMatch(/the live worker colour polls Telegram/);
-    const same = run(['poller_owner_text', 'release_core_poller'], 'CORE_POLLER_HOLD=core; CORE_POLLER_WANTED=core; release_core_poller');
-    expect(same.calls).toEqual([]);
-  });
-
-  it('a deploy that stops after Core was recreated says which process polls, instead of implying nothing changed', () => {
-    const held = run(['poller_owner_text', 'report_poller_on_exit'], 'CORE_RECREATED=1; CORE_POLLER_HOLD=core; CORE_POLLER_WANTED=worker; trap report_poller_on_exit EXIT; exit 1');
-    expect(held.code).toBe(1);
-    expect(held.out).toMatch(/Core was recreated by this deploy\. Core polls Telegram \(HAWA_TELEGRAM_POLLER=core\)\. The switch to worker waits/);
-    expect(held.out).toMatch(/Core polls Telegram/);
-    const early = run(['poller_owner_text', 'report_poller_on_exit'], 'CORE_RECREATED=0; CORE_POLLER_HOLD=core; CORE_POLLER_WANTED=worker; trap report_poller_on_exit EXIT; exit 1');
-    expect(early.out).toBe('');
-    const fine = run(['poller_owner_text', 'report_poller_on_exit'], 'CORE_RECREATED=1; CORE_POLLER_HOLD=worker; CORE_POLLER_WANTED=worker; trap report_poller_on_exit EXIT; exit 0');
-    expect(fine.out).toBe('');
-  });
-
-  // Phase 4 review of 72cb6fae: bluegreen register exit 4 (Restate registered the new colour, the move
-  // of every service not confirmed) keeps the new colour. With a worker -> core switch held at step 7,
-  // the new colour (created with core) took ChatInbox and did not poll, Core (held at worker) did not
-  // poll, and the NOTE said the live worker colour polled.
-  const exit4 = (preamble: string) => run(
-    ['core_poller_hold', 'poller_owner_text', 'release_core_poller', 'report_poller_on_exit', 'abandon_idle'],
-    [
-      'LIVE=blue; IDLE=green',
-      preamble,
-      'trap report_poller_on_exit EXIT',
-      'CORE_RECREATED=1',
-      'HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d',
-      '"${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --force-recreate "worker-${IDLE}"',
-      'REGISTERED="$(bluegreen register "$IDLE" --hosts X)" || abandon_idle "Restate did not complete the switch to the new ${IDLE} worker."',
-      'release_core_poller',
-    ].join('\n'),
-    'bluegreen() { case "$1" in register) echo "ERROR: registered, ChatInbox move not confirmed" >&2; return 4 ;; removable) echo "registered=dp_green"; return 4 ;; esac; }',
-  );
-
-  it('review: a worker -> core switch whose register exits 4 leaves Core polling, and the note says so', () => {
-    const r = exit4('CORE_POLLER_WANTED=core; CORE_POLLER_RUNNING=worker; CORE_POLLER_HOLD="$(core_poller_hold "$CORE_POLLER_WANTED" "$CORE_POLLER_RUNNING")"');
-    expect(r.code).toBe(1);
-    expect(r.out).toMatch(/was NOT removed/);
-    // Core is recreated with core at step 7 (it polls from there on); it is never left at worker.
-    expect(r.calls).toContain('CALL compose --env-file /dev/null up -d [poller=core]');
-    expect(r.calls.filter((c) => /core \[poller=worker\]|up -d \[poller=worker\]/.test(c))).toEqual([]);
-    expect(r.out).not.toMatch(/the live worker colour polls Telegram/);
-    expect(r.out).toMatch(/NOTE: .*Core polls Telegram/);
-  });
-
-  it('review: even with Core held at worker, a kept colour that will not poll makes Core poll before exit 1', () => {
-    const r = exit4('CORE_POLLER_WANTED=core; CORE_POLLER_RUNNING=worker; CORE_POLLER_HOLD=worker');
-    expect(r.code).toBe(1);
-    const release = r.calls.indexOf('CALL compose --env-file /dev/null up -d --no-deps --no-build core [poller=core]');
-    expect(release).toBeGreaterThan(-1);
-    expect(r.out).not.toMatch(/the live worker colour polls Telegram/);
-    expect(r.out).toMatch(/NOTE: .*Core polls Telegram/);
-  });
-
-  it('review: a core -> worker switch whose register exits 4 keeps Core polling, and says the kept colour may poll too', () => {
-    const r = exit4('CORE_POLLER_WANTED=worker; CORE_POLLER_RUNNING=core; CORE_POLLER_HOLD=core');
-    expect(r.code).toBe(1);
-    expect(r.calls.filter((c) => /\[poller=worker\]/.test(c))).toEqual([]);
-    expect(r.out).toMatch(/NOTE: .*Core polls Telegram/);
-    expect(r.out).toMatch(/green colour .*kept.* also polls while Restate routes ChatInbox to it/);
-  });
-
-  it('review: a deploy that stops after the switch (step 8) says the worker colour Restate routes ChatInbox to polls, and that the new colour is registered', () => {
-    const r = run(['poller_owner_text', 'report_poller_on_exit'],
-      'LIVE=blue; IDLE=green; REGISTERED=deployment=dp_green; CORE_RECREATED=1; CORE_POLLER_WANTED=worker; CORE_POLLER_RUNNING=core; CORE_POLLER_HOLD=worker; trap report_poller_on_exit EXIT; exit 1');
-    expect(r.out).toMatch(/Core does not poll/);
-    expect(r.out).toMatch(/the worker colour Restate routes ChatInbox to polls/);
-    expect(r.out).toMatch(/green worker is registered/);
-  });
-
-  it('in the script, the step-7 up -d holds the poller, the worker image is built before it, and the release follows register', () => {
-    const up = line('HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n');
+    const up = line('HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n');
     expect(line('BUILD_SERVICES+=("worker-${PLAN_IDLE}")')).toBeLessThan(up);
-    expect(line('trap report_poller_on_exit EXIT')).toBeLessThan(up);
-    expect(line('REGISTERED="$(bluegreen register')).toBeLessThan(line('\nrelease_core_poller\n'));
-    expect(line('\nrelease_core_poller\n')).toBeLessThan(line('# 8. Verify health truthfully'));
+    expect(line('REGISTERED="$(bluegreen register')).toBeGreaterThan(up);
   });
 });
 
@@ -182,7 +94,7 @@ describe('ADR-135: the Telegram poller is the worker', () => {
     const refusal = line('refuse_retired_poller "$(compose_value HAWA_TELEGRAM_POLLER worker)"');
     expect(refusal).toBeLessThan(line('if [[ $APPLY == 0 ]]; then'));
     expect(refusal).toBeLessThan(line('# 5. Backup before anything changes'));
-    expect(refusal).toBeLessThan(line('HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n'));
+    expect(refusal).toBeLessThan(line('HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n'));
     expect(deploySh).not.toMatch(/compose_value HAWA_TELEGRAM_POLLER core/);
     const compose = fs.readFileSync(path.resolve(here, '../../../infra/docker/docker-compose.prod.yml'), 'utf8');
     expect(compose.match(/HAWA_TELEGRAM_POLLER: \$\{HAWA_TELEGRAM_POLLER:-worker\}/g)).toHaveLength(2);
@@ -234,7 +146,7 @@ describe('finding 2: register gets the new colour\'s own service list', () => {
   it('in the script, the idle build is checked after it is built and verified, and before step 7 replaces Core', () => {
     const at = line('[[ -z "$PLAN_IDLE" ]] || refuse_split_worker_build "worker-${PLAN_IDLE}"\n');
     expect(at).toBeGreaterThan(line('[[ -z "$PLAN_IDLE" ]] || verify_built_image "worker-${PLAN_IDLE}"'));
-    expect(at).toBeLessThan(line('HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n'));
+    expect(at).toBeLessThan(line('HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n'));
   });
 });
 
@@ -321,7 +233,7 @@ describe('finding 6: a changed vector.yaml reaches the running log shipper', () 
   });
 
   it('the file is validated before step 7 starts anything and applied after it', () => {
-    const up = line('HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n');
+    const up = line('HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n');
     expect(line('\nvalidate_vector_config\n')).toBeLessThan(up);
     expect(line('\napply_vector_config\n')).toBeGreaterThan(up);
   });

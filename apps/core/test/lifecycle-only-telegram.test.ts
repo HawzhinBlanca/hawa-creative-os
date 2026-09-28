@@ -252,16 +252,17 @@ describe('every Telegram chat is lifecycle-owned (ADR-135)', () => {
 describe('Core no longer polls Telegram (ADR-135)', () => {
   it('whatever HAWA_TELEGRAM_POLLER says, production Core does not poll, and the worker is named the poller', async () => {
     for (const value of [undefined, '', 'core', 'CORE', 'worker']) {
-      expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: value }).enableTelegramPolling, String(value)).toBe(false);
+      expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: value }), String(value)).not.toHaveProperty('enableTelegramPolling');
       expect(telegramPollerOf({ HAWA_TELEGRAM_POLLER: value })).toBe('worker');
     }
     vi.stubEnv('HAWA_TELEGRAM_POLLER', 'core');
     const app = createApp({ db } as any);
     const pollNow = await app.request('/v1/adapters/telegram/poll-now', { method: 'POST', headers: admin });
-    expect(pollNow.status).toBe(409);
+    // Stage 2 of ADR-135 removed both routes with Core's poller.
+    expect(pollNow.status).toBe(404);
     const webhook = await app.request('/v1/adapters/telegram/webhook/register', { method: 'POST', headers: admin,
       body: JSON.stringify({ url: 'https://example.invalid/hook', secretToken: 'x'.repeat(32) }) });
-    expect(webhook.status).toBe(409);
+    expect(webhook.status).toBe(404);
     const status = await (await app.request('/v1/adapters/telegram/status', { headers: admin })).json();
     expect(status.poller).toBe('worker');
   });

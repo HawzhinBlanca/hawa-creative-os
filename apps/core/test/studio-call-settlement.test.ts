@@ -88,7 +88,7 @@ it('supports named HTTP replay and refuses shared authority and missing CSRF',as
   vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_ID','test-client');vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_SECRET','test-client-secret');
   vi.stubEnv('HAWA_GOOGLE_OIDC_REDIRECT_URI','https://desk.office.example/v1/auth/google/callback');vi.stubEnv('HAWA_GOOGLE_OIDC_HOSTED_DOMAINS','example.test');
   try {
-    const options={db,skipPaidModelProbe:true,skipTelegramProbe:true,enableTelegramPolling:false};
+    const options={db,skipPaidModelProbe:true,skipTelegramProbe:true};
     const path=`/v1/tasks/${f.taskId}/studio-recovery/${f.runId}/settlement`;
     const headers={'Content-Type':'application/json','Idempotency-Key':action,Cookie:`hawa_session=${f.token}; hawa_csrf=${csrf}`,'x-hawa-csrf':csrf};
     const request={method:'POST',headers,body:JSON.stringify(f.body)};

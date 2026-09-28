@@ -57,7 +57,7 @@ it('supports named HTTP settlement after response loss and denies shared keys an
   vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_ID','test-client');vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_SECRET','test-client-secret');
   vi.stubEnv('HAWA_GOOGLE_OIDC_REDIRECT_URI','https://desk.office.example/v1/auth/google/callback');vi.stubEnv('HAWA_GOOGLE_OIDC_HOSTED_DOMAINS','example.test');
   try{
-    const options={db,evaluationGateway:f.gateway,skipPaidModelProbe:true,skipTelegramProbe:true,enableTelegramPolling:false};
+    const options={db,evaluationGateway:f.gateway,skipPaidModelProbe:true,skipTelegramProbe:true};
     const app=createApp(options),path=`/v1/evaluations/runs/${f.run.runId}/settlement`;
     const headers={'Content-Type':'application/json','Idempotency-Key':action,Cookie:`hawa_session=${f.token}; hawa_csrf=${csrf}`,'x-hawa-csrf':csrf};
     const request={method:'POST',headers,body:JSON.stringify(f.body)};

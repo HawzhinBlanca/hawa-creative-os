@@ -22,9 +22,9 @@ describe('the production entrypoint', () => {
   });
 
   it('never starts Core\'s Telegram poller, and keeps the other defaults', () => {
-    expect(productionAppOptions({})).toMatchObject({ enableTelegramPolling: false, enableBillingProbeSchedule: false, enableDraftReminders: true, enableCanvaSweeper: true, enablePublicationInspections: true });
-    expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: 'core' }).enableTelegramPolling).toBe(false);
-    expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: 'worker' }).enableTelegramPolling).toBe(false);
+    // Stage 2 of ADR-135 removed the option with Core's poller.
+    expect(productionAppOptions({})).toMatchObject({ enableBillingProbeSchedule: false, enableDraftReminders: true, enableCanvaSweeper: true, enablePublicationInspections: true });
+    for (const value of [undefined, 'core', 'worker']) expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: value })).not.toHaveProperty('enableTelegramPolling');
     expect(productionAppOptions({ HAWA_DRAFT_REMINDERS: 'off' }).enableDraftReminders).toBe(false);
     expect(productionAppOptions({ HAWA_BILLING_PROBE_ENABLED: 'on' }).enableBillingProbeSchedule).toBe(true);
     expect(productionAppOptions({ HAWA_PUBLICATION_INSPECTIONS: 'off' }).enablePublicationInspections).toBe(false);
