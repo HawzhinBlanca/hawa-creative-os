@@ -133,13 +133,23 @@ export async function approve(taskId: string, options: { pinDeck?: boolean } = {
   const token = secrets().CHAOS_REVIEWER_KEY;
   const state = await fakes.core(`/tasks/${taskId}/canva`, token);
   const artifacts: any[] = Array.isArray(state.json?.artifacts) ? state.json.artifacts : [];
-  const png = artifacts.find((a) => String(a.format).toLowerCase() === 'png');
-  const deck = options.pinDeck ? artifacts.find((a) => String(a.format).toLowerCase() === 'pptx') : null;
+  // As the Desk pins (approvalPins.defaultPins): a PNG of the Canva version QA checked, plus the
+  // export QA checked. Since 3e900a08 Core refuses an approval without the checked export.
+  const detail = await fakes.core(`/tasks/${taskId}`, token);
+  const qa = detail.json?.qaReport ?? detail.json?.task?.qaReport ?? null;
+  const checkedId: string | null = typeof qa?.exportArtifactId === 'string' ? qa.exportArtifactId : null;
+  const captureVersion: string | null = typeof qa?.captureVersion === 'string' ? qa.captureVersion : null;
+  const sameCapture = (a: any) => !captureVersion || a.capture_version == null || String(a.capture_version) === captureVersion;
+  const png = artifacts.find((a) => String(a.format).toLowerCase() === 'png' && sameCapture(a))
+    ?? artifacts.find((a) => String(a.format).toLowerCase() === 'png');
+  const checked = checkedId ? artifacts.find((a) => a.id === checkedId) : null;
+  const deck = options.pinDeck ? (checked && String(checked.format).toLowerCase() === 'pptx' ? checked
+    : artifacts.find((a) => String(a.format).toLowerCase() === 'pptx')) : null;
   if (options.pinDeck && !deck) throw new Error(`task ${taskId} has no stored PPTX export to pin`);
   const [task] = await query<{ rev: string | null }>(sql`SELECT current_design_revision_id AS rev FROM hawa.tasks WHERE id = ${taskId}::uuid`);
   if (!task?.rev) throw new Error(`task ${taskId} has no design revision to approve`);
   const res = await fakes.core(`/tasks/${taskId}/revisions/${task.rev}/decisions`, token, {
-    body: { action: 'approve', reason: 'Brand, hierarchy, and exact-copy verified', pinnedExportIds: [png?.id, deck?.id].filter(Boolean) },
+    body: { action: 'approve', reason: 'Brand, hierarchy, and exact-copy verified', pinnedExportIds: [...new Set([png?.id, checked?.id, deck?.id].filter(Boolean))] },
   });
   return { status: res.status, body: res.json };
 }
@@ -278,7 +288,10 @@ export async function checkRequest(chat: string, options: {
 
   if (options.delivered) {
     // Drive: the approved file archived once, however often delivery was pressed or restarted.
-    const expected = options.files ?? 1;
+    // The files the office pinned at approval (the Desk pins the QA-checked export beside the PNG).
+    const [pin] = await query<{ n: number | null }>(sql`SELECT jsonb_array_length(a.decision_payload->'pinnedExports') AS n
+      FROM hawa.approvals a WHERE a.task_id = ${task.id}::uuid AND a.decision = 'approved' ORDER BY a.created_at DESC LIMIT 1`);
+    const expected = options.files ?? (Number(pin?.n) || 1);
     const files = (await fakes.driveFiles()).filter((f: any) => f.properties?.taskId === task.id);
     add(expected === 1 ? 'the approved file is archived to Drive once' : `the ${expected} approved files are archived to Drive once each`, files.length === expected, `drive files for the task=${files.length}`);
     // Telegram: each approved file reached the requester (once each is checked above).
