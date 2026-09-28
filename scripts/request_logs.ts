@@ -11,9 +11,11 @@
  *
  * A line belongs to the id when the id appears in it as a whole token: Core's and the worker's lines
  * carry requestId (and taskId) fields, nginx's end in rid=<id>, and a line that names a task in its
- * text (a path, a message) names it too. Given a task id, the requests that touched the task are
- * followed as well: every line under a request id found on the task's lines is shown, which brings in
- * the nginx line and the steps of each request that never repeat the task id.
+ * text (a path, a message) names it too, and so does a Restate invocation keyed by it: the worker's
+ * Restate SDK lines name a task only inside the key, `[TaskWorkflow/task-wf-<taskId>/run][inv_…]`
+ * (see restateKeys). Given a task id, the requests and invocations that touched the task are followed
+ * as well: every line under a request id or invocation id found on the task's lines is shown, which
+ * brings in the nginx line and the steps of each request that never repeat the task id.
  *
  * Where the id comes from: an `x-request-id` response header (Core returns it on every response), a
  * task event's trace_id, an outbox command's payload.requestId, or tg-<update_id> for a Telegram
@@ -40,9 +42,28 @@ export interface StoredLine {
 export const DEFAULT_LOG_DIR = path.join(os.homedir(), '.hawa', 'logs', 'containers');
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+const escape = (id: string) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+
 function tokenPattern(id: string): RegExp {
-  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?<![A-Za-z0-9._:-])${escaped}(?![A-Za-z0-9._:-])`);
+  return new RegExp(`(?<![A-Za-z0-9._:-])${escape(id)}(?![A-Za-z0-9._:-])`);
+}
+
+/**
+ * The Restate keys that carry a task id (packages/contracts): TaskWorkflow's task-wf-<id> and
+ * task-wf-<id>-redrive-<n>, DesignRun's dr-<id> and dr-<id>-a<n>, and Delivery's
+ * dl-<id>-<approvalId> and dl-<id>-<approvalId>:archive:<n> (the id is the task's, or the request
+ * lifecycle's on its path). Each suffix is spelled out, so a longer id that merely starts with the
+ * given one is not taken for it.
+ */
+function restateKeys(id: string): string {
+  const e = escape(id);
+  return `task-wf-${e}(?:-redrive-\\d+)?|dr-${e}(?:-a\\d+)?|dl-${e}-${UUID}(?::archive:\\d+)?`;
+}
+
+/** The id as a whole token, or as the id inside a Restate key. */
+function idPattern(id: string): RegExp {
+  return new RegExp(`(?<![A-Za-z0-9._:-])(?:${escape(id)}|${restateKeys(id)})(?![A-Za-z0-9._:-])`);
 }
 
 /** The day files to read, oldest first; `since` (YYYY-MM-DD) skips older days. */
@@ -77,10 +98,25 @@ async function scan(files: string[], keep: (raw: string) => boolean, visit: (lin
   }
 }
 
-function requestIdOf(line: StoredLine): string | undefined {
-  if (typeof line.log?.requestId === 'string') return line.log.requestId;
-  const rid = line.message ? /\brid=([A-Za-z0-9._:-]+)/.exec(line.message)?.[1] : undefined;
-  return rid && rid !== '-' ? rid : undefined;
+/** A Restate SDK line: `[restate][<time>][<service>/<key>/<handler>][inv_…] LEVEL: …`. */
+const RESTATE_SDK_LINE = /^\[restate\]\[[^\]]*\]\[[^\]]*\]\[(inv_[A-Za-z0-9]+)\]/;
+
+/**
+ * The ids a line is logged under: its request id (a Core or worker field, nginx's rid=) and, for the
+ * worker, its Restate invocation. A handler with no request id of its own logs under
+ * `restate-<invocation id>` (apps/worker/src/logging.ts), so the two spellings are the same invocation.
+ */
+function correlationIdsOf(line: StoredLine): string[] {
+  let id: string | undefined;
+  if (typeof line.log?.requestId === 'string') id = line.log.requestId;
+  else if (line.message) {
+    const rid = /\brid=([A-Za-z0-9._:-]+)/.exec(line.message)?.[1];
+    id = rid && rid !== '-' ? rid : RESTATE_SDK_LINE.exec(line.message)?.[1];
+  }
+  if (!id) return [];
+  if (id.startsWith('inv_')) return [id, `restate-${id}`];
+  if (id.startsWith('restate-inv_')) return [id, id.slice('restate-'.length)];
+  return [id];
 }
 
 /**
@@ -89,12 +125,12 @@ function requestIdOf(line: StoredLine): string | undefined {
  */
 export async function findRequestLines(dir: string, id: string, options: { since?: string; follow?: boolean } = {}): Promise<StoredLine[]> {
   const files = logFiles(dir, options.since);
-  const direct = tokenPattern(id);
+  const direct = idPattern(id);
   const found: StoredLine[] = [];
   await scan(files, (raw) => raw.includes(id) && direct.test(raw), (line) => found.push(line));
 
   const requests = new Set<string>();
-  if (options.follow !== false) for (const line of found) { const r = requestIdOf(line); if (r && r !== id) requests.add(r); }
+  if (options.follow !== false) for (const line of found) for (const r of correlationIdsOf(line)) if (r !== id) requests.add(r);
   if (requests.size > 0) {
     const patterns = [...requests].map((r) => [r, tokenPattern(r)] as const);
     const seen = new Set(found.map((l) => `${l.file}\u0000${l.timestamp}\u0000${l.message ?? JSON.stringify(l.log)}`));
@@ -103,7 +139,7 @@ export async function findRequestLines(dir: string, id: string, options: { since
       (raw) => !direct.test(raw) && patterns.some(([r, p]) => raw.includes(r) && p.test(raw)),
       (line) => {
         const key = `${line.file}\u0000${line.timestamp}\u0000${line.message ?? JSON.stringify(line.log)}`;
-        if (requests.has(requestIdOf(line) ?? '') && !seen.has(key)) found.push(line);
+        if (correlationIdsOf(line).some((r) => requests.has(r)) && !seen.has(key)) found.push(line);
       }
     );
   }

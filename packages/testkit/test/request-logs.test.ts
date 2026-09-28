@@ -79,3 +79,84 @@ describe('request_logs', () => {
     expect(await runCli(['--dir', dir], { out: () => {}, err: () => {} })).toBe(64);
   });
 });
+
+/**
+ * The worker's Restate SDK lines name a task only inside the invocation's key: TaskWorkflow runs as
+ * task-wf-<taskId> (task-wf-<taskId>-redrive-<n> when re-driven), DesignRun as dr-<taskId>[-a<n>],
+ * Delivery as dl-<taskId>-<approvalId>[:archive:<n>]. The lines below are copied from
+ * hawa-chaos-worker-blue-1 on 2026-09-28 (`docker logs --timestamps`, written in Vector's layout as
+ * scripts/load/export-chaos-logs.ts writes it), with the fixture's ids put in.
+ */
+describe('request_logs on the worker\'s Restate lines', () => {
+  const wdir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-request-logs-restate-'));
+  afterAll(() => fs.rmSync(wdir, { recursive: true, force: true }));
+  const approvalId = '3b9e1f24-5c6d-4e7f-8a9b-0c1d2e3f4a5b';
+  const otherTaskId = 'e837a4e4-7808-41e3-a435-152d19a05697';
+  const restate = (timestamp: string, target: string, inv: string, rest: string) =>
+    JSON.stringify({ timestamp, service: 'worker-green', container_name: 'hawa-chaos-worker-green-1', message: `[restate][${timestamp.slice(0, 23)}Z][${target}][${inv}] ${rest}` });
+  const workerPino = (timestamp: string, log: Record<string, unknown>) =>
+    JSON.stringify({ timestamp, service: 'worker-green', container_name: 'hawa-chaos-worker-green-1', log: { level: 'info', time: `${timestamp.slice(0, 23)}Z`, service: 'worker', ...log } });
+  const wf = 'inv_1jQLgVMhRi8800zKle1fGXCpKb7JarQsHN';
+  const redrive = 'inv_1fx5ttOCXssO12LEWcLCOvYXCWSds6WYdK';
+  const design = 'inv_1eqmjOZqZHu25DQrJ1YgRVlkjNeRB6lU32';
+  const delivery = 'inv_17q3zCwJNhWz4fc7o8qtYbexBrtgqrIo4k';
+  const archive = 'inv_1aQ2wE3rT4yU5iO6pA7sD8fG9hJ0kL1zXc';
+
+  fs.mkdirSync(path.join(wdir, '2026-09-24'), { recursive: true });
+  fs.writeFileSync(path.join(wdir, '2026-09-24', 'core.ndjson'), [
+    JSON.stringify({ timestamp: '2026-09-24T21:20:00.558912345Z', service: 'core', container_name: 'hawa-chaos-core-1', log: { level: 'info', service: 'core', requestId: 'tg-90284190571', taskId, msg: 'task created' } }),
+  ].join('\n') + '\n');
+  fs.writeFileSync(path.join(wdir, '2026-09-24', 'worker-green.ndjson'), [
+    restate('2026-09-24T21:20:01.596138380Z', `TaskWorkflow/task-wf-${taskId}/run`, wf, 'INFO: Starting invocation.'),
+    restate('2026-09-24T21:20:01.778392054Z', `TaskWorkflow/task-wf-${taskId}/run`, wf, "WARN: Error when processing ctx.run 'canva-verify-task-scope'."),
+    restate('2026-09-24T21:20:02.030717382Z', `TaskWorkflow/task-wf-${taskId}/run`, wf, 'INFO: Invocation completed successfully.'),
+    restate('2026-09-24T21:20:03.100000000Z', `TaskWorkflow/task-wf-${taskId}-redrive-1/run`, redrive, 'INFO: Starting invocation.'),
+    restate('2026-09-24T21:20:04.200000000Z', `DesignRun/dr-${taskId}-a1/run`, design, 'INFO: Invocation completed successfully.'),
+    restate('2026-09-24T21:20:05.300000000Z', `Delivery/dl-${taskId}-${approvalId}/run`, delivery, 'INFO: Starting invocation.'),
+    // Logged in the Delivery invocation before its input named the task: the request id is the invocation's.
+    workerPino('2026-09-24T21:20:05.310000000Z', { requestId: `restate-${delivery}`, msg: '[Delivery] files prepared' }),
+    restate('2026-09-24T21:20:06.400000000Z', `Delivery/dl-${taskId}-${approvalId}:archive:2/run`, archive, 'INFO: Starting invocation.'),
+    // Longer ids that merely contain the task id, and another task: none of these is the task's.
+    restate('2026-09-24T21:20:07.000000000Z', `TaskWorkflow/task-wf-${taskId}0/run`, 'inv_1zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz', 'INFO: Starting invocation.'),
+    restate('2026-09-24T21:20:07.100000000Z', `Delivery/dl-${taskId}-${approvalId}0/run`, 'inv_1yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy', 'INFO: Starting invocation.'),
+    restate('2026-09-24T21:20:07.200000000Z', `Delivery/dl-x${taskId}-${approvalId}/run`, 'inv_1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'INFO: Starting invocation.'),
+    restate('2026-09-24T21:20:07.300000000Z', `TaskWorkflow/task-wf-${otherTaskId}/run`, 'inv_1wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww', 'INFO: Starting invocation.'),
+    workerPino('2026-09-24T21:20:07.400000000Z', { requestId: 'restate-inv_1zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz', msg: '[TaskWorkflow] not this task' }),
+  ].join('\n') + '\n');
+
+  it('given a task id, finds the Restate lines of every invocation keyed by it, and the lines logged under those invocations', async () => {
+    const lines = await findRequestLines(wdir, taskId);
+    expect(lines.map((l) => `${l.service} ${l.message ?? l.log?.msg}`)).toEqual([
+      'core task created',
+      `worker-green [restate][2026-09-24T21:20:01.596Z][TaskWorkflow/task-wf-${taskId}/run][${wf}] INFO: Starting invocation.`,
+      `worker-green [restate][2026-09-24T21:20:01.778Z][TaskWorkflow/task-wf-${taskId}/run][${wf}] WARN: Error when processing ctx.run 'canva-verify-task-scope'.`,
+      `worker-green [restate][2026-09-24T21:20:02.030Z][TaskWorkflow/task-wf-${taskId}/run][${wf}] INFO: Invocation completed successfully.`,
+      `worker-green [restate][2026-09-24T21:20:03.100Z][TaskWorkflow/task-wf-${taskId}-redrive-1/run][${redrive}] INFO: Starting invocation.`,
+      `worker-green [restate][2026-09-24T21:20:04.200Z][DesignRun/dr-${taskId}-a1/run][${design}] INFO: Invocation completed successfully.`,
+      `worker-green [restate][2026-09-24T21:20:05.300Z][Delivery/dl-${taskId}-${approvalId}/run][${delivery}] INFO: Starting invocation.`,
+      'worker-green [Delivery] files prepared',
+      `worker-green [restate][2026-09-24T21:20:06.400Z][Delivery/dl-${taskId}-${approvalId}:archive:2/run][${archive}] INFO: Starting invocation.`,
+    ]);
+    // Without following, the invocation's own pino line (it never names the task) is not there.
+    expect((await findRequestLines(wdir, taskId, { follow: false })).some((l) => l.log?.msg === '[Delivery] files prepared')).toBe(false);
+  });
+
+  it('does not take a prefix of the task id for the task', async () => {
+    expect(await findRequestLines(wdir, taskId.slice(0, 23))).toEqual([]);
+    expect(await findRequestLines(wdir, `task-wf-${taskId}`)).toHaveLength(3);
+  });
+
+  it('given an invocation id, finds its Restate lines and the lines logged under it', async () => {
+    const lines = await findRequestLines(wdir, delivery);
+    expect(lines.map((l) => l.message ?? l.log?.msg)).toEqual([
+      `[restate][2026-09-24T21:20:05.300Z][Delivery/dl-${taskId}-${approvalId}/run][${delivery}] INFO: Starting invocation.`,
+      '[Delivery] files prepared',
+    ]);
+  });
+
+  it('the CLI given a task id shows the worker\'s lines, not Core\'s only', async () => {
+    const err: string[] = [];
+    expect(await runCli([taskId, '--dir', wdir], { out: () => {}, err: (s) => err.push(s) })).toBe(0);
+    expect(err.at(-1)).toBe(`9 line(s) for ${taskId} in 2 file(s): core, worker-green`);
+  });
+});
