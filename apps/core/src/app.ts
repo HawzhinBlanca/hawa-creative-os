@@ -1,5 +1,4 @@
-import { createPolledUpdateHandler, parkTelegramUpdate, parkedUpdateChat } from './services/polled-update-dispatch.js';
-import { chatHasLifecycleRequest, handToChatInbox } from './services/polled-lifecycle-route.js';
+import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
 import { PostgresTelegramPollState, telegramBotKey } from './services/telegram-poll-state.js';
 import { hydrateClientDnaFromDb } from './services/client-dna-hydration.js';
 import { ensureClientPackRows } from './services/client-pack-rows.js';
@@ -90,7 +89,7 @@ import { registerWhatsappRoutes } from './routes/whatsapp.routes.js';
 import { createChannelKillSwitchStore } from './services/channel-kill-switches.js';
 import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.js';
 import { acceptedServiceTokensOf, isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
-import { telegramPollerOf } from './services/telegram-poller-owner.js';
+import { retiredTelegramSettings, telegramPollerOf } from './services/telegram-poller-owner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
 import { PaidModelProbeService } from './services/paid-model-probe.js';
 import { evaluatePaidModelHealth, paidModelConfigFingerprint, readLatestPaidModelObservation, type PaidModelHealth } from './services/paid-model-health.js';
@@ -1069,9 +1068,11 @@ export function createApp(options?: CreateAppOptions) {
   // The worker's calls into Core (Phase 2.1): ChatInbox hands each polled update to intake here, and
   // dead-letters one intake keeps failing. Only HAWA_WORKER_TOKEN opens them (verifyRequestAuth).
   registerLifecycleInternalRoutes(routeContext);
-  if (telegramPollerOf(process.env) === 'worker' && !serviceTokenOf()) {
-    log.error('[core:internal] HAWA_TELEGRAM_POLLER=worker but HAWA_WORKER_TOKEN is not usable here: the worker cannot hand updates to intake, and Core does not poll. Set HAWA_WORKER_TOKEN in .env.production (infra/docker/README.md).');
+  // Only the worker polls (ADR-135): without its credential nothing reaches intake.
+  if ((isProduction || (process.env.HAWA_TELEGRAM_POLLER || '').trim().toLowerCase() === 'worker') && !serviceTokenOf()) {
+    log.error('[core:internal] HAWA_WORKER_TOKEN is not usable here: the worker cannot hand updates to intake, and Core does not poll. Set HAWA_WORKER_TOKEN in .env.production (infra/docker/README.md).');
   }
+  for (const retired of retiredTelegramSettings(process.env, { production: isProduction })) log.error(`[core] ${retired}`);
 
   // Telegram intake by getUpdates. The handler is registered whenever a bot is configured, so the
   // administrator's "poll now" hands updates to intake exactly as the background loop does (through
@@ -1088,15 +1089,6 @@ export function createApp(options?: CreateAppOptions) {
       deliver: async (update) => {
         const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
         if (!secret) throw new Error('TELEGRAM_WEBHOOK_SECRET is not configured');
-        // A chat with a lifecycle-owned request stays with its ChatInbox after a rollback of the poller
-        // (ADR-136): legacy intake would revise that request's task outside its request.
-        const lifecycleChat = parkedUpdateChat(update);
-        if (db && lifecycleChat && await chatHasLifecycleRequest(db, DEFAULT_TENANT_ID, lifecycleChat)) {
-          const status = await handToChatInbox(update, lifecycleChat);
-          if (status >= 500) log.error(`[TelegramBridge] update ${update.update_id} of lifecycle chat ${lifecycleChat} could not be handed to its ChatInbox (HTTP ${status})`);
-          else log.info(`[TelegramBridge] update ${update.update_id} handed to the ChatInbox of lifecycle chat ${lifecycleChat}`);
-          return status;
-        }
         const res = await app.request('/api/webhooks/telegram?generate=true', {
           method: 'POST',
           // The update's own id (tg-<update_id>, set below) carries on into intake and what it writes.

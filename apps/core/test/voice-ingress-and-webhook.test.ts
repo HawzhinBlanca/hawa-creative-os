@@ -99,13 +99,12 @@ describe('Voice Ingress, Public Webhooks, Figma Cloud & Commercial Brands (Horiz
         secretToken: mockWebhookSecret,
       }),
     });
-    expect(regRes.status).toBe(200);
-    const regJson = await regRes.json();
-    expect(regJson.ok).toBe(true);
-    expect(regJson.status.webhookActive).toBe(true);
-    expect(regJson.status.webhookUrl).toBe('https://preview-office.kaae.org/api/webhooks/telegram');
+    // ADR-135: a webhook would send every update past RequestLifecycle and stop the worker's
+    // getUpdates, so registration is refused (the worker is the only poller) and nothing is set.
+    expect(regRes.status).toBe(409);
+    expect((await (await app.request('/v1/adapters/telegram/webhook/info', { headers: { Authorization: 'Bearer test_admin_key' } })).json()).status.webhookActive).not.toBe(true);
 
-    // 3. Delete webhook
+    // 3. Delete webhook (kept: it clears a webhook set outside Hawa, which would stop the worker's poller)
     const delRes = await app.request('/v1/adapters/telegram/webhook/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' },

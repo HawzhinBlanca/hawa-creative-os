@@ -18,6 +18,12 @@ export const REPO_ROOT = resolve(CHAOS_DIR, '..', '..', '..');
 const COMPOSE_FILE = join(CHAOS_DIR, 'docker-compose.chaos.yml');
 const RUN_DIR = join(CHAOS_DIR, '.run');
 export const RECOVERY_OVERRIDE = join(RUN_DIR, 'recovery.compose.json');
+/**
+ * The release Core and the workers are created from, when it is not this checkout's (the R10
+ * scenarios' previous release, driver/cutover.ts): image tags and that release's own settings.
+ * Removed with the volumes, so a later run starts on this checkout's images.
+ */
+export const RELEASE_OVERRIDE = join(RUN_DIR, 'release.compose.json');
 
 export interface StackPorts { postgres: number; restateAdmin: number; restateIngress: number; fakes: number }
 const DEFAULT_PROJECT = 'hawa-chaos';
@@ -159,6 +165,7 @@ export function compose(args: string[], options: { allowFail?: boolean; timeoutM
   secrets();
   return run('docker', ['compose', '-p', PROJECT, '-f', COMPOSE_FILE,
     ...(PROJECT === DEFAULT_PROJECT && existsSync(RECOVERY_OVERRIDE) ? ['-f', RECOVERY_OVERRIDE] : []),
+    ...(PROJECT === DEFAULT_PROJECT && existsSync(RELEASE_OVERRIDE) ? ['-f', RELEASE_OVERRIDE] : []),
     ...EXTRA_COMPOSE_FILES.flatMap((file) => ['-f', file]), '--env-file', ENV_FILE, ...args], options);
 }
 
@@ -220,6 +227,7 @@ export function down(options: { volumes?: boolean } = {}): void {
   }
   if (options.volumes) {
     rmSync(ENV_FILE, { force: true });
+    if (PROJECT === DEFAULT_PROJECT) rmSync(RELEASE_OVERRIDE, { force: true });
     expectFreshDatabase = true;
   }
 }

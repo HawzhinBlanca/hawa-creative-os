@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
+import { TelegramBridgeDaemon } from '@hawa/integrations';
 import { createApp } from '../src/app.js';
 import { createChannelKillSwitchStore, KILL_SWITCH_ROW_NAME } from '../src/services/channel-kill-switches.js';
 import { createChatCampaignIntake } from '../src/services/chat-campaign-intake.js';
@@ -160,7 +161,9 @@ describe('the kill switches survive a restart', () => {
     expect(await channels(createApp({ db } as any))).toEqual({ telegram: true, waha: true });
   });
 
-  it('"poll now" asked of a new Core at once waits for its read of Postgres and asks Telegram nothing', async () => {
+  // Core's poller is retired (ADR-135): "poll now" is refused, and this drives the bridge Core wires
+  // the kill switch into, as the loop did, until stage 2 deletes both.
+  it('a poll asked of a new Core at once waits for its read of Postgres and asks Telegram nothing', async () => {
     await toggle(createApp({ db } as any), 'telegram', false);
     const realFetch = globalThis.fetch;
     let getUpdates = 0;
@@ -172,12 +175,13 @@ describe('the kill switches survive a restart', () => {
     });
     process.env.TELEGRAM_BOT_TOKEN = [String(700_000_000 + Math.floor(Math.random() * 99_999_999)), ['fixture', 'bot', 'secret'].join('_')].join(':');
     try {
-      const restarted = createApp({ db } as any);
+      const bridge = new TelegramBridgeDaemon({ botToken: process.env.TELEGRAM_BOT_TOKEN,
+        secretToken: process.env.TELEGRAM_WEBHOOK_SECRET || '' });
+      const restarted = createApp({ db, telegramBridge: bridge } as any);
       // Asked before anything else has read the switches in this app.
-      const polled = await restarted.request('/v1/adapters/telegram/poll-now', { method: 'POST', headers: admin });
-      expect(polled.status).toBe(200);
-      expect((await polled.json()).updatesProcessed).toBe(0);
+      expect(await bridge.pollOnce()).toBe(0);
       expect(getUpdates).toBe(0);
+      expect((await restarted.request('/v1/adapters/telegram/poll-now', { method: 'POST', headers: admin })).status).toBe(409);
     } finally {
       spy.mockRestore();
       delete process.env.TELEGRAM_BOT_TOKEN;

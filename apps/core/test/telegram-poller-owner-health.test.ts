@@ -13,7 +13,8 @@ describe('Core health when the worker polls Telegram', () => {
 
   it('production Core probes the bot credential whichever process polls', () => {
     expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: 'worker' })).toMatchObject({ enableTelegramPolling: false, skipTelegramProbe: false });
-    expect(productionAppOptions({})).toMatchObject({ enableTelegramPolling: true, skipTelegramProbe: false });
+    // ADR-135: Core never polls, and still probes the credential.
+    expect(productionAppOptions({})).toMatchObject({ enableTelegramPolling: false, skipTelegramProbe: false });
   });
 
   it('a revoked bot token shows as telegramApi "unauthorized", and health names the worker as the poller', async () => {
@@ -36,9 +37,12 @@ describe('Core health when the worker polls Telegram', () => {
     expect(body.telegramPoller).toBe('worker');
   });
 
-  it('health names Core as the poller by default', async () => {
-    vi.stubEnv('HAWA_TELEGRAM_POLLER', '');
-    const app = createApp({ skipPaidModelProbe: true, skipTelegramProbe: true, enableTelegramPolling: false } as any);
-    expect((await (await app.request('/v1/health')).json()).telegramPoller).toBe('core');
+  // ADR-135: the worker is the only poller, so the watchdog always requires a polling worker colour.
+  it('health names the worker as the poller whatever HAWA_TELEGRAM_POLLER says', async () => {
+    for (const value of ['', 'core']) {
+      vi.stubEnv('HAWA_TELEGRAM_POLLER', value);
+      const app = createApp({ skipPaidModelProbe: true, skipTelegramProbe: true, enableTelegramPolling: false } as any);
+      expect((await (await app.request('/v1/health')).json()).telegramPoller, value).toBe('worker');
+    }
   });
 });

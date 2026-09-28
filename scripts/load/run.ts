@@ -5,8 +5,8 @@
  * production: it starts, seeds and tears down hawa-chaos only, and its database guard accepts
  * 127.0.0.1:56432/hawa_chaos alone.
  *
- *   npx tsx scripts/load/run.ts --poller core      # Core polls Telegram (production today)
- *   npx tsx scripts/load/run.ts --poller worker    # the worker polls, through ChatInbox (Phase 2.1)
+ *   npx tsx scripts/load/run.ts                    # the worker polls, through ChatInbox (the only poller since ADR-135)
+ *   npx tsx scripts/load/run.ts --poller worker    # the same; --poller core is refused (Core no longer polls)
  *   options: --tasks 5000 --chats 10 --idle-minutes 3 --after-minutes 2 --keep
  *            --plan-ms 30000        # every design plan's model call takes this long (the fakes answer
  *                                   # at once otherwise; real planner calls took 23-47 s, ADR-131)
@@ -152,8 +152,8 @@ interface MemoryReport {
 }
 
 async function main(): Promise<void> {
-  const poller = arg('poller', 'core');
-  if (poller !== 'core' && poller !== 'worker') throw new Error('--poller takes core or worker');
+  const poller = arg('poller', 'worker');
+  if (poller !== 'worker') throw new Error('--poller takes worker only: Core no longer polls Telegram (ADR-135)');
   const taskCount = Number(arg('tasks', '5000'));
   const chatCount = Number(arg('chats', '10'));
   const idleMinutes = Number(arg('idle-minutes', '3'));

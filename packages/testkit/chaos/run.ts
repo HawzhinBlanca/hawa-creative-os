@@ -6,12 +6,12 @@
  *   npx tsx packages/testkit/chaos/run.ts --keep          # leave hawa-chaos running afterwards
  *   npx tsx packages/testkit/chaos/run.ts --only R1.0,R4  # some scenarios
  *   npx tsx packages/testkit/chaos/run.ts --down          # take a kept project down (with its volumes)
- *   npx tsx packages/testkit/chaos/run.ts --poller worker # the worker polls Telegram (Phase 2.1)
+ *   npx tsx packages/testkit/chaos/run.ts --poller worker # the worker polls Telegram (the only poller since ADR-135)
  *   npx tsx packages/testkit/chaos/run.ts --seed-dump infra/backup/snapshots/predeploy_<stamp>.dump
  *                                        # on a copy of production's data (driver/seed.ts, ADR-137)
- *   npx tsx packages/testkit/chaos/run.ts --lifecycle-chats all   # every chat on the Restate lifecycle (HAWA_LIFECYCLE_CHATS=*)
- *   npx tsx packages/testkit/chaos/run.ts --poller core --lifecycle-chats none --only R10.H1,R10.K1,R10.K2
- *                                                   # the 2026-09-28 cutover and its rollback (ADR-136)
+ *   npx tsx packages/testkit/chaos/run.ts --only R10.H1,R10.K1,R10.K2 [--previous-release <commit>]
+ *                                        # old requests after this release's deploy, and rolling it back
+ *                                        # to the previous release (default: RELEASE_MANIFEST.json's build)
  *
  * The scenarios are chaos.test.ts (vitest); this sets HAWA_CHAOS and friends and runs it alone.
  */
@@ -47,15 +47,20 @@ if (seedAt >= 0 && args.includes('--candidate')) {
   console.error('--seed-dump is not combined with the --candidate rehearsal');
   process.exit(2);
 }
-const chatsAt = args.indexOf('--lifecycle-chats');
-if (chatsAt >= 0 && !/^(none|all|\*|\d+(,\d+)*)$/.test(args[chatsAt + 1] ?? '')) {
-  console.error("--lifecycle-chats takes chat ids, all (or '*') or none");
+if (args.includes('--lifecycle-chats')) {
+  console.error('--lifecycle-chats is gone: every chat is lifecycle-owned (ADR-135)');
+  process.exit(2);
+}
+const previousAt = args.indexOf('--previous-release');
+if (previousAt >= 0 && !/^[0-9a-f]{7,40}$/.test(args[previousAt + 1] ?? '')) {
+  console.error('--previous-release takes a commit (7 to 40 hex digits)');
   process.exit(2);
 }
 const onlyAt = args.indexOf('--only');
 const pollerAt = args.indexOf('--poller');
-if (pollerAt >= 0 && !['core', 'worker'].includes(args[pollerAt + 1] ?? '')) {
-  console.error('--poller takes core or worker');
+// ADR-135: Core no longer polls Telegram, so the only stack left to test is the worker's poller.
+if (pollerAt >= 0 && args[pollerAt + 1] !== 'worker') {
+  console.error('--poller takes worker only: Core no longer polls Telegram (ADR-135)');
   process.exit(2);
 }
 const env = {
@@ -66,14 +71,12 @@ const env = {
   ...(args.includes('--recovery') ? { HAWA_CHAOS_RECOVERY: '1', CHAOS_PG_FSYNC: 'on', CHAOS_PG_FULL_PAGE_WRITES: 'on' } : {}),
   ...(args.includes('--keep') ? { HAWA_CHAOS_KEEP: '1' } : {}),
   ...(onlyAt >= 0 && args[onlyAt + 1] ? { HAWA_CHAOS_ONLY: args[onlyAt + 1] } : {}),
-  // Who polls Telegram in the stack: core (as production today) or worker (Phase 2.1). Compose reads
-  // it from this environment (docker-compose.chaos.yml); the scenarios read it to know which apply.
-  ...(pollerAt >= 0 && args[pollerAt + 1] ? { CHAOS_TELEGRAM_POLLER: args[pollerAt + 1] } : {}),
+  // Who polls Telegram in the stack: the worker, always (ADR-135; docker-compose.chaos.yml).
+  CHAOS_TELEGRAM_POLLER: 'worker',
   // A copy of production's data under the scenarios (driver/seed.ts); compose never sees the path.
   ...(seedDump ? { HAWA_CHAOS_SEED_DUMP: seedDump } : {}),
-  // HAWA_LIFECYCLE_CHATS of Core and the workers at start: chat ids, `all` (`*`), or `none` (set but
-  // empty, as production before 2026-09-28). Without it the compose file's list of flagged chats applies.
-  ...(chatsAt >= 0 ? { CHAOS_LIFECYCLE_CHATS: args[chatsAt + 1] === 'all' ? '*' : args[chatsAt + 1] === 'none' ? '' : String(args[chatsAt + 1] ?? '') } : {}),
+  // The release R10 starts from and rolls back to (driver/cutover.ts buildPreviousRelease).
+  ...(previousAt >= 0 ? { HAWA_CHAOS_PREVIOUS_RELEASE: args[previousAt + 1] } : {}),
   // The Mac also runs the office: one test file, one worker.
   HAWA_TEST_WORKERS: '1',
 };

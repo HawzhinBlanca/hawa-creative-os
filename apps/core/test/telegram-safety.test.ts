@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext, RevisionRepository } from '@hawa/db';
-import { computeActionSignature } from '@hawa/integrations';
+import { computeActionSignature, TelegramBridgeDaemon } from '@hawa/integrations';
 import { createApp, evaluateCanvaExportQc } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { resolveQcProfileId } from '../src/services/canva-task-outcome.js';
@@ -13,7 +13,7 @@ import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-e
 /**
  * Telegram safety (architecture programme 0.4, 2026-09-24), against hawa-test-postgres as hawa_app
  * (row-level security as in production): the getUpdates offset lives in Postgres and never moves
- * past an update intake did not accept; "poll now" takes the poller's turn; the kill switch stops
+ * past an update intake did not accept; a poll takes the poller's turn; the kill switch stops
  * intake at the poller and at the webhook; the handlers that deliver, publish and decide read the
  * task's status from Postgres; delivery ignores an approval only Core's memory holds.
  */
@@ -100,10 +100,20 @@ const tasksInChat = async (chat: number) =>
     trx.selectFrom('outbox_commands').select(['aggregate_id', 'payload']).where('command_type', '=', 'task.created').execute()
   )).filter((r: any) => String(r.payload?.sourceChannelId) === String(chat));
 
-const pollNow = async (app: any) => {
-  const res = await app.request('/v1/adapters/telegram/poll-now', { method: 'POST', headers: admin });
-  return { status: res.status, body: await res.json().catch(() => ({})) };
+/**
+ * Core's own poller, until stage 2 of ADR-135 deletes it. Since ADR-135 no configuration starts it and
+ * "poll now" is refused (lifecycle-only-telegram.test.ts), so these tests drive the bridge Core wires
+ * the handler, offset store and kill switch into, one poll at a time, as the loop did.
+ */
+const bridges = new WeakMap<object, TelegramBridgeDaemon>();
+const pollingCore = () => {
+  const bridge = new TelegramBridgeDaemon({ botToken: process.env.TELEGRAM_BOT_TOKEN,
+    secretToken: process.env.TELEGRAM_WEBHOOK_SECRET || '', allowedUserIds: [String(OFFICE)] });
+  const app = createApp({ db, telegramBridge: bridge } as any);
+  bridges.set(app, bridge);
+  return app;
 };
+const pollNow = async (app: any) => ({ body: { updatesProcessed: await bridges.get(app)!.pollOnce() } });
 
 describe('the getUpdates offset (Postgres, per bot)', () => {
   it('a 5xx on one update never advances past it; after five attempts, across a restart, it is dead-lettered by id, the office alerted, and the queue moves on', async () => {
@@ -112,7 +122,7 @@ describe('the getUpdates offset (Postgres, per bot)', () => {
     const [chatA, chatB, chatC] = [chatId(), chatId(), chatId()];
     const telegram = fakeTelegram([brief(base, chatA), photo(base + 1, chatB), brief(base + 2, chatC)]);
 
-    const first = createApp({ db } as any);
+    const first = pollingCore();
     expect((await pollNow(first)).body.updatesProcessed).toBe(1);
     expect(await tasksInChat(chatA)).toHaveLength(1);
     expect(await state.getOffset()).toBe(base);
@@ -122,7 +132,7 @@ describe('the getUpdates offset (Postgres, per bot)', () => {
     expect(await state.failing()).toMatchObject({ updateId: base + 1, attempts: 2 });
 
     // Core restarts: the new process asks Telegram from the stored offset and keeps counting.
-    const restarted = createApp({ db } as any);
+    const restarted = pollingCore();
     for (let attempt = 3; attempt < POLLED_UPDATE_MAX_ATTEMPTS; attempt++) {
       expect((await pollNow(restarted)).body.updatesProcessed).toBe(0);
       expect(await state.getOffset()).toBe(base);
@@ -160,11 +170,11 @@ describe('the getUpdates offset (Postgres, per bot)', () => {
     const chat = chatId();
     const telegram = fakeTelegram([brief(base, chat)], { ignoreOffset: true });
 
-    const app = createApp({ db } as any);
+    const app = pollingCore();
     expect((await pollNow(app)).body.updatesProcessed).toBe(1);
     // Telegram hands the same update back (it ignores the offset here).
     expect((await pollNow(app)).body.updatesProcessed).toBe(1);
-    const restarted = createApp({ db } as any);
+    const restarted = pollingCore();
     expect((await pollNow(restarted)).body.updatesProcessed).toBe(1);
 
     expect(await tasksInChat(chat)).toHaveLength(1);
@@ -177,15 +187,15 @@ describe('the Telegram kill switch stops intake', () => {
   const killSwitch = (app: any, active: boolean) =>
     app.request('/v1/operations/kill-switch', { method: 'POST', headers: { ...operator, Authorization: 'Bearer test_admin_key' }, body: JSON.stringify({ channel: 'telegram', active }) });
 
-  it('at the poller: nothing is asked of Telegram, by the loop or by "poll now", until it is switched off', async () => {
+  it('at the poller: nothing is asked of Telegram until it is switched off', async () => {
     useFreshBot();
     const chat = chatId();
     const telegram = fakeTelegram([brief(updateBase(), chat)]);
-    const app = createApp({ db } as any);
+    const app = pollingCore();
     expect((await killSwitch(app, true)).status).toBe(200);
 
     const manual = await pollNow(app);
-    expect(manual.status).toBe(503);
+    expect(manual.body.updatesProcessed).toBe(0);
     expect(telegram.getUpdatesCalls()).toBe(0);
     expect(await tasksInChat(chat)).toHaveLength(0);
 

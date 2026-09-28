@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T21:14:16Z",
+  "generatedAt": "2026-09-28T21:52:06Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 516,
+  "fileCount": 515,
   "files": [
     {
       "path": ".dockerignore",
@@ -31,26 +31,6 @@
       "path": ".github/workflows/ci.yml",
       "sha256": "dfef4edb419a6a2ab67151c98306ea1dd8cc7e8c5176cc6c5b0d556c9f97d7d1",
       "bytes": 6283
-    },
-    {
-      "path": ".pytest_cache/.gitignore",
-      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
-      "bytes": 37
-    },
-    {
-      "path": ".pytest_cache/CACHEDIR.TAG",
-      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
-      "bytes": 191
-    },
-    {
-      "path": ".pytest_cache/README.md",
-      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
-      "bytes": 302
-    },
-    {
-      "path": ".pytest_cache/v/cache/nodeids",
-      "sha256": "96e2286dd4eccf949d6c287a6f5c0979259f2ba46e0b290f605470f02e2b0af1",
-      "bytes": 4044
     },
     {
       "path": "AGENTS.md",
@@ -763,9 +743,14 @@
       "bytes": 7552
     },
     {
+      "path": "adrs/135_lifecycle_only_telegram_requests.md",
+      "sha256": "7749a8235479f7f91bad90dd1321c55fc5ff479cb1bc3a136ec7796ef574e292",
+      "bytes": 11922
+    },
+    {
       "path": "adrs/136_cutover_handoff_and_poller_rollback.md",
-      "sha256": "af0dd2e1f8c848b599e815fe3fb9de18015ca2c2004f983b52fa201a2ecdbadd",
-      "bytes": 6957
+      "sha256": "db1283181359e30863c38be328d46818c8771f208adb05c2964e349b7a39dd9a",
+      "bytes": 8984
     },
     {
       "path": "adrs/137_production_data_before_deploy.md",
@@ -784,8 +769,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "9d30cfcd1e1386f931f3c67e49e62041b3eeb0a49a029e960af89eab8dac0bc7",
-      "bytes": 95370
+      "sha256": "4ec9a7f5c36bc42b55b949d22b1b5fc7099b48a0b1576315e556e886777c1827",
+      "bytes": 97587
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -1039,8 +1024,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "e694d279b4f7496009ea4a735e58d77df90975bf9a8213199cb29288e0adccd1",
-      "bytes": 36838
+      "sha256": "40a7dad89aa6a4dfbfb9d06ff1861238538988ee005dc028b9bf96b05acab4c3",
+      "bytes": 38242
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1256,6 +1241,16 @@
       "path": "plans/lean-design-implementation-2026-09-28/JUDGE_CHALLENGER_PROOF.json",
       "sha256": "69660d1e1579c3082a1f187908bddd406661c54a6f3e38e2ff84d10aa1f89700",
       "bytes": 21912
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md",
+      "sha256": "078efaca3e9191158778e06bbe2ad65745e2b97606562e981fb5d75644fc802f",
+      "bytes": 22521
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT_PROOF.json",
+      "sha256": "392de3f6453e25b0ed7768931e580d3d7359a88febf25df3a0b701421764c7b9",
+      "bytes": 5651
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LIFECYCLE_DESK_FIXES_PROOF.json",
@@ -1784,8 +1779,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "560f9fefd6870f8f357d2219d8018eb6aa08205b5cbe0fb360bb633660386e87",
-      "bytes": 475561
+      "sha256": "b99998f22f6bd3ee951f7e5c5ff6381152410f52d3833ece74cf0f1383eb3f17",
+      "bytes": 476478
     },
     {
       "path": "plans/user-stories.csv",
@@ -1879,8 +1874,8 @@
     },
     {
       "path": "runbooks/20_architecture_operations.md",
-      "sha256": "fd05006e55564a41e23de5f520cd59c45689c2273efe6ff2f2d44da4690d71d3",
-      "bytes": 40879
+      "sha256": "ac9f3ad1d8c99ab47ccd9ba74f55676d4a4b03bd510fa89f4df66f52637e6f86",
+      "bytes": 40099
     },
     {
       "path": "runbooks/AVAILABILITY_MONITORING.md",
@@ -2244,8 +2239,8 @@
     },
     {
       "path": "scripts/load/run.ts",
-      "sha256": "e75d26a7f86f3db1448fdaa1da399db7a593b80c9e5617d958d70ce25013b6fe",
-      "bytes": 23326
+      "sha256": "f5758d7abeed671388ff715cbd74c3a0387b66b6e90b3f016f6165ee2364aed7",
+      "bytes": 23384
     },
     {
       "path": "scripts/load/seed-desk-tasks.ts",

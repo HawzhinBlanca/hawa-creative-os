@@ -29,7 +29,7 @@ point it elsewhere, and a project name must start with `hawa-chaos`.
 ## On a copy of production's data (2026-09-28, ADR-137)
 
 ```sh
-npx tsx packages/testkit/chaos/run.ts --seed-dump infra/backup/snapshots/predeploy_<stamp>.dump --poller worker --lifecycle-chats all
+npx tsx packages/testkit/chaos/run.ts --seed-dump infra/backup/snapshots/predeploy_<stamp>.dump --poller worker
 ```
 
 The chaos stack normally starts from `db/*.sql` and holds no history. The release of 2026-09-28
@@ -52,8 +52,8 @@ record from before daily admission. With `--seed-dump`, `driver/seed.ts` runs th
 
 Real clients, client DNA, tasks, outbox history and spending records stay. Real chat ids, Canva
 design ids and Drive folder ids stay too; any call they cause lands in the fakes, which accept any id.
-`--lifecycle-chats all` sets `HAWA_LIFECYCLE_CHATS=*` (production's setting) instead of the default
-list of 24 flagged chats. `.run/last-run.json` gains `seededFrom`: dump name, restore time, row counts,
+Every chat is lifecycle-owned since ADR-135, so there is no chat list to choose (`--lifecycle-chats`
+is refused). `.run/last-run.json` gains `seededFrom`: dump name, restore time, row counts,
 the migrations applied, what was neutralised and every egress check. It holds counts, never row values.
 
 The restored data is client data. It lives only in the `chaos_postgres` volume, which `down -v`
@@ -66,39 +66,51 @@ driver takes the lock container `hawa-chaos-lock` (`driver/stack.ts` `acquirePro
 first `down` and waits, saying who holds it, while another run does. `run.ts --down` refuses instead
 of waiting. The lock runs `cat` on the holder's stdin, so it goes away however the holder ends.
 
-## Lifecycle cutover, handoff and rollback as deploys (R10, 2026-09-28, ADR-136)
+## Old requests after the deploy, and rolling back (R10; ADR-136, reconciled with ADR-135 on 2026-09-29)
 
 ```sh
-npx tsx packages/testkit/chaos/run.ts --poller core --lifecycle-chats none --only R10.H1,R10.K1,R10.K2
+npx tsx packages/testkit/chaos/run.ts --only R10.H1,R10.K1,R10.K2 [--previous-release <commit>]
 ```
 
-Start from production's configuration before 2026-09-28 (Core polls, `HAWA_LIFECYCLE_CHATS` set but
-empty; `--lifecycle-chats` sets it, `none` meaning empty). Each scenario changes the whole stack's
-configuration the way `infra/docker/deploy.sh` does (`driver/cutover.ts`): Core recreated with the new
-chat list and the poller it must hold, the idle colour created and registered with Restate, Core
-released to the new poller, the old colour drained and removed. So run them alone and in this order.
+This release has no Core poller and no chat list (ADR-135), and its old intake only finishes requests
+it started. Requests "from before the cutover" are therefore made the way production made them: on the
+previous release. The suite builds `hawa-chaos-core:prev` and `hawa-chaos-worker:prev` from a
+`git archive` of that release's commit (`driver/cutover.ts` `buildPreviousRelease`; default
+`RELEASE_MANIFEST.json`'s build commit, the release production runs) and starts the stack on it with
+Core polling and no chat on the lifecycle (production before 2026-09-28). Which release a container is
+created from, and the previous release's `HAWA_LIFECYCLE_CHATS`, come from `.run/release.compose.json`,
+which `down -v` removes. Each scenario then deploys a release the way `infra/docker/deploy.sh` does:
+Core recreated (with the poller it must hold), the idle colour created and registered with Restate, the
+old colour drained and removed. So run them alone and in this order; a whole-suite run skips them.
 
-- `R10.H1`: requests made while Core polled, in five states (waiting for a draft, held on the old
-  colour across the switch; draft in review with the "What should change?" prompt open; approved, not
-  delivered; delivered; a legacy clarification question open), plus a control chat that makes the same
-  follow-ups under the old configuration. Then the switch to `worker` and `*`, with an update sent
-  while both pollers run, and every request continued from Telegram (button presses, replies, a photo
-  reply) and the Desk (approval, Deliver). New requests: a new chat, `/new` in a chat with Core history,
-  and an ordinary brief next to recent and then 48-hour-old Core history.
+- `R10.H1`: requests made on the previous release while Core polled, in five states (waiting for a
+  draft, held on the old colour across the deploy; draft in review with the "What should change?"
+  prompt open; approved, not delivered; delivered; a legacy clarification question open), plus a
+  control chat that makes the same follow-ups on the previous release. Then this release is deployed,
+  with an update sent during the deploy, and every request is continued from Telegram (button presses,
+  replies, a photo reply) and the Desk (approval, Deliver). What ADR-135 changes is checked as such: a
+  photo reply asking to change the delivered design starts nothing and asks for `/new` (the control got
+  a revision); a brief beside an open recent Core design is continued or refused, never a new Core task;
+  beside a finished one it opens a lifecycle request. New chats, `/new`, and a brief once Core history
+  is older than 48 hours open lifecycle requests.
 - `R10.K1`: lifecycle requests awaiting approval, mid-delivery (held between two files) and waiting for
-  the requester's reply to the office revision notice; the poller and the chat list rolled back by a
-  deploy, with a new brief sent while both pollers run; updates and Desk actions after the rollback;
-  then forward again.
-- `R10.K2`: only the chat list emptied (the worker keeps polling) with a lifecycle request waiting for
-  its requester; then forward again.
+  the requester's reply to the office revision notice; this release rolled back to the previous one
+  (worker poller, `HAWA_LIFECYCLE_CHATS=*`, as production ran it) by a deploy, with a new brief sent
+  during it; updates and Desk actions after the rollback; then forward again, and the request that
+  crossed both deploys is approved and delivered.
+- `R10.K2`: ADR-136's smaller rollback, `HAWA_LIFECYCLE_CHATS` emptied, deployed on this release with a
+  lifecycle request waiting for its requester: the reply still reaches the request and a new chat still
+  opens one; then the setting is removed again.
 
-Every requester action is a real Telegram update shape (a reply quotes the bot's message and buttons,
-as Telegram does). The checks: each message reaches its chat once; no refusal of a legitimate follow-up
-(stale reply, ambiguous request, `/new` required, parked notice, late change); one ChatInbox invocation
-per `tg-<update_id>`, completed; no update dead-lettered; no update makes two tasks; each old request
-finishes on its pinned executor; the control chat's answers equal the handed-off chat's.
-The project lock (`hawa-chaos-lock`, `driver/stack.ts` `acquireProject`) is taken before the first down;
-a run waits up to three hours for another checkout's run to finish.
+ADR-136's `--poller core` rollback (Core's poller forwarding lifecycle chats to `ChatInbox`) is gone with
+Core's poller. Every requester action is a real Telegram update shape (a reply quotes the bot's message
+and buttons, as Telegram does). The checks: each message reaches its chat once; no refusal of a
+legitimate follow-up (stale reply, ambiguous request, `/new` required where not expected, parked notice,
+late change); one ChatInbox invocation per `tg-<update_id>`, completed; no update dead-lettered; no update
+makes two tasks; each old request finishes on its pinned executor; the control chat's answer to the
+thanks equals the handed-off chat's. The project lock (`hawa-chaos-lock`, `driver/stack.ts`
+`acquireProject`) is taken before the first down; a run waits up to three hours for another checkout's
+run to finish.
 
 ## Isolated full-app candidate rehearsal (2026-09-27)
 
@@ -220,8 +232,19 @@ npx tsx packages/testkit/chaos/run.ts                  # every scenario, then te
 npx tsx packages/testkit/chaos/run.ts --only R1.0,R4   # some scenarios
 npx tsx packages/testkit/chaos/run.ts --keep           # leave hawa-chaos running to inspect it
 npx tsx packages/testkit/chaos/run.ts --down           # take a kept project down, with its volumes
-npx tsx packages/testkit/chaos/run.ts --poller worker  # the worker polls Telegram (Phase 2.1); default core
+npx tsx packages/testkit/chaos/run.ts --poller worker  # the same stack: the worker is the only poller (ADR-135)
 ```
+
+**Since ADR-135 (2026-09-28) every scenario takes the lifecycle path.** Every chat is owned by
+RequestLifecycle and only the worker polls Telegram, so `--poller core` is refused and the flagged-chat
+list (`HAWA_LIFECYCLE_CHATS`, chats 9300001 to 9300024) is gone: each scenario gets a fresh chat, every
+request is opened by RequestLifecycle, designed by `DesignRun` and delivered by the `Delivery` workflow,
+and `checkRequest` expects `executor = 'restate'`. The scenarios that drove the legacy path were
+re-pointed at the lifecycle's own steps; the table below says how. `TaskWorkflow`, the outbox's
+`task.created` dispatch and Core's `notify.published` sender are no longer reached by a scripted request;
+their unit tests remain (`apps/worker/test/workflow.test.ts`, `outbox-*.test.ts`,
+`durable-workflow-recovery.test.ts`), and stage 2 of the retirement decides what of them stays
+(plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md).
 
 `run.ts` sets `HAWA_CHAOS=1` (and `HAWA_CHAOS_KEEP`, `HAWA_CHAOS_ONLY`) and runs `chaos.test.ts` with
 vitest; `HAWA_CHAOS=1 npx vitest run packages/testkit/chaos/chaos.test.ts` does the same. Without
@@ -353,27 +376,27 @@ due, the fake Telegram quiet for 5 s) and then checks the invariants that apply 
 | Name | What |
 |---|---|
 | R1.0 | happy path, no faults |
-| R1.K0 | Core killed while intake acknowledges the brief (the `sendMessage` slowed to 4 s), after the task was committed and before the offset was stored; the update is polled again. Until 2026-09-28 this killed Core during the intake classifier's paid call, which intake no longer makes for an unscoped text (82b28988: local classification without a client egress decision) |
-| R1.K1 | worker killed at `worker.outbox.after-claim` (task.created) |
-| R1.K2 | worker killed at `worker.dispatch.after-submit` |
+| R1.K0 | (flaky since ADR-135: the kill can land in the design's planning, which then ends `DESIGN_PLANNING`; see ADR-135 section 5) Core killed while the requester's acknowledgement is sent (the `sendMessage` slowed to 4 s). Before ADR-135 Core's legacy intake sent it; now RequestLifecycle's TelegramSender does. Until 2026-09-28 this killed Core during the intake classifier's paid call, which intake no longer makes for an unscoped text (82b28988) |
+| R1.K1 | worker killed after the design run's first step, `canva-verify-task-scope`. Before ADR-135: at `worker.outbox.after-claim` (task.created), which no request reaches now |
+| R1.K2 | Restate killed while the worker is held after `canva-verify-task-scope`. Before ADR-135: worker killed at `worker.dispatch.after-submit` (TaskWorkflow) |
 | R1.K3 | worker killed after `canva-create-draft` (planner and import done) |
 | R1.K4 | worker killed after `canva-export-copy-font-check` |
-| R1.K5 | worker killed after `canva-notify-canva_draft_ready_for_visual_review` (Core took the outcome) |
+| R1.K5 | worker killed after `canva-export-preview`, the last step before the design run reports. Before ADR-135: after `canva-notify-canva_draft_ready_for_visual_review`, a TaskWorkflow step a DesignRun does not have |
 | R1.K6 | Core killed while the worker is held after `canva-read-binding` |
 | R1.K7 | Postgres killed while the worker is held after `canva-export-preview` |
 | R1.K8 | Restate killed while the worker is held inside `canva-create-draft` |
 | R1.K9 | Canva 5xx ×3 then 429 on export creation |
-| R1.K10 | Telegram 429 (`retry_after` 3) on the draft message |
+| R1.K10 | Telegram 429 (`retry_after` 3) on the chat's second message (before ADR-135 the legacy draft with its buttons) |
 | R1.K11 | Core killed right after the Desk approval |
-| R1.K12 | worker killed at `worker.sender.after-telegram` for the approved file (one uncertain send expected) |
-| R1.K13 | Telegram takes the approved file and the answer is lost (one uncertain send expected) |
+| ~~R1.K12~~ | removed by ADR-135: it killed the worker after Core's `notify.published` sender sent the file; its lifecycle twin is L2.K12 |
+| R1.K13 | Telegram takes the first of two approved files and the answer is lost: one uncertain send, the delivery held for staff and settled by a synthetic administrator (ADR-043/045/046). Before ADR-135 this drove Core's `notify.published` sender |
 | R1.K14 | Core killed in the middle of a Deliver request (the fake Drive upload slowed to 8 s); Deliver pressed again once |
-| R1.K15 | Postgres killed while the worker is held at `worker.sender.after-telegram` for the approved file; since 6407deb6 (ADR-045) the sender retries its `sent` mark for about 15 s, so the send ends `sent`, with no uncertain send and no office alert |
-| R1.D1 | deploy mid-request: the design is held on blue, green is started and registered (`restate-bluegreen.ts register green`), the design finishes, `finish-drains` must delete blue; the invocation must stay pinned to blue |
+| ~~R1.K15~~ | removed by ADR-135: Postgres killed at Core's `notify.published` sender; its lifecycle twin is L2.K17 |
+| R1.D1 | deploy mid-request: the design is held on blue, green is started and registered (`restate-bluegreen.ts register green`), the design finishes, `finish-drains` must delete blue; the `DesignRun` invocation (before ADR-135 `TaskWorkflow`) must stay pinned to blue |
 | R4 | two chats: a 19.9 MB picture whose download takes 30 s in chat A; chat B's text must be answered in under 5 s |
 
-Phase 2.1 scenarios (`--poller worker`: the worker's poller hands each update to its chat's `ChatInbox`,
-which calls Core's `/v1/internal/telegram/intake`; skipped when Core polls). Each takes a brief to its
+Phase 2.1 scenarios (the worker's poller hands each update to its chat's `ChatInbox`, which calls
+Core's `/v1/internal/telegram/intake`; since ADR-135 the brief opens a lifecycle request). Each takes a brief to its
 draft and adds the checks of 2.1: one `ChatInbox` invocation per key `tg-<update_id>`, completed; every
 invocation of the chat completed; the stored offset past the update; nothing dead-lettered.
 
@@ -385,17 +408,15 @@ invocation of the chat completed; the stored offset past the update; nothing dea
 | R1.S1.K3 | Postgres killed while the poller is held at `worker.poller.after-enqueue` (the offset cannot be stored, so the update is sent again with the same key) |
 | R1.S2.K4 | Core killed at `core.intake.after-decision` |
 | R1.S2.K5 | worker killed while Core is held at `core.intake.after-decision` |
-| R1.S2.K5b | worker killed while Core's intake acknowledges the update (the `sendMessage` slowed to 4 s); until 2026-09-28 during the classifier's paid call, which no longer happens (see R1.K0) |
+| R1.S2.K5b | worker killed while its own acknowledgement send waits for Telegram (the `sendMessage` slowed to 4 s): one uncertain send, never repeated, one office alert. Before ADR-135 Core's legacy intake sent the acknowledgement; until 2026-09-28 the kill was during the classifier's paid call (see R1.K0) |
 | R1.DUP | the same update handed to `ChatInbox` again, with the poller's key and then with another: one task, nothing new in the chat |
 
 Not yet: R1 kill points that need later Phase 2 code (`RequestLifecycle`: R1 S3 onwards); the design's
-**Slice 2.2 (the Delivery workflow and TelegramSender).** These use chats from 9300001 to 9300024, which
-`docker-compose.chaos.yml` lists in `HAWA_LIFECYCLE_CHATS`, so Deliver hands the task to the Restate
+**Slice 2.2 (the Delivery workflow and TelegramSender).** Deliver hands the task to the Restate
 `Delivery` workflow instead of Core's own delivery. Each request pins the PNG and the PPTX (two files),
-and Deliver is pressed once. They run only with `--poller worker`: since ADR-059 (99eb6b04) a task
-claims the Restate executor only when RequestLifecycle opens it, which only ChatInbox reaches; with Core
-polling (production mode) a flagged chat's brief is a Core-pinned legacy task (ADR-052) that Core
-delivers itself. The driver therefore waits for the request to be `in_review` (the lifecycle draft
+and Deliver is pressed once. Until ADR-135 they used the chats `HAWA_LIFECYCLE_CHATS` listed, because a
+task claims the Restate executor only when RequestLifecycle opens it (ADR-059); since ADR-135 every
+request is opened that way. The driver therefore waits for the request to be `in_review` (the lifecycle draft
 notice has no requester buttons) and `approved` before Deliver, and sends each Desk action with its
 UUID `Idempotency-Key`, as request-owned delivery requires. On top of the checks above: both files archived once each and shown to the
 requester once each, the publication `executor = 'restate'` with every started run reported back, no

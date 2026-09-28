@@ -80,6 +80,9 @@ refuse_stuck_legacy() {
 # because the new colour, created with core, never polls, and once Restate routes ChatInbox to it the
 # old colour stops too. Two pollers at once cost nothing: Telegram refuses one of two concurrent
 # getUpdates (409), and an update both hand on is one ChatInbox invocation. Nobody polling loses time.
+# Since ADR-135 only the worker polls: Core's poller fed only the legacy intake and no longer runs,
+# whatever the value (refuse_retired_poller). The hold and release below stay for the one deploy that
+# takes a stack still on core to worker; stage 2 of the retirement removes them.
 # The value as Core and the worker read it (apps/core/src/services/telegram-poller-owner.ts).
 telegram_poller_of() {
   if [[ "$(tr -d '[:space:]' <<< "${1:-}" | tr '[:upper:]' '[:lower:]')" == worker ]]; then echo worker; else echo core; fi
@@ -126,6 +129,15 @@ report_poller_on_exit() {
   fi
   [[ -z "${REGISTERED:-}" ]] || note+=" The ${IDLE} worker is registered: Restate sends new work to it."
   echo "NOTE: Core was recreated by this deploy. ${note}"
+}
+# ADR-135: HAWA_TELEGRAM_POLLER must be worker. Core no longer polls, so with any other value the new
+# worker colours would not poll either and nobody would read client messages; a rollback to Core's
+# poller would also start requests on the old path, which the owner ruled out. $1 is the value as
+# compose interpolates it. Refused before any backup or change, in pre-flight too.
+refuse_retired_poller() {
+  [[ "$(telegram_poller_of "${1:-}")" == worker ]] && return 0
+  echo "ERROR: HAWA_TELEGRAM_POLLER is '${1:-}', not worker. Core no longer polls Telegram (ADR-135): with this value nobody would read client messages. Set HAWA_TELEGRAM_POLLER=worker in infra/docker/.env; to roll back a broken worker poller, deploy the previous release. Nothing was changed."
+  exit 1
 }
 # The image compose builds for a service, as verify_built_image resolves it.
 compose_image_ref() {
@@ -369,6 +381,9 @@ check_blob_store_private() {
 # 3. Compose topology with the real interpolation file
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" config --quiet
 echo "✓ compose topology valid"
+# 3b. Only the worker polls Telegram (ADR-135).
+refuse_retired_poller "$(compose_value HAWA_TELEGRAM_POLLER worker)"
+echo "✓ Telegram is polled by the worker"
 
 # 4. Repository gates
 (cd "$ROOT_DIR" && python3 infra/security/security_scan.py --self-test >/dev/null && python3 infra/security/security_scan.py >/dev/null)
@@ -465,7 +480,7 @@ nginx_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx sha256sum
 VECTOR_WANT="$(shasum -a 256 "${SCRIPT_DIR}/vector.yaml" | cut -d' ' -f1)"
 validate_vector_config
 # Core keeps the Telegram poller it runs with until 7b has registered the new worker colour.
-CORE_POLLER_WANTED="$(telegram_poller_of "$(compose_value HAWA_TELEGRAM_POLLER core)")"
+CORE_POLLER_WANTED="$(telegram_poller_of "$(compose_value HAWA_TELEGRAM_POLLER worker)")"
 CORE_POLLER_RUNNING="$(running_core_poller)"
 CORE_POLLER_HOLD="$(core_poller_hold "$CORE_POLLER_WANTED" "$CORE_POLLER_RUNNING")"
 [[ "$CORE_POLLER_HOLD" == "$CORE_POLLER_WANTED" ]] \

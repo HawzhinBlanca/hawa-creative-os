@@ -1,7 +1,7 @@
 /** File → retained candidate → explicit exact-copy confirmation, within the existing request owner. */
 import { createHash } from 'node:crypto';
 import { sql, withRlsContext, BlobCorruptError, BlobMissingError, type Kysely, type Database } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, type LifecycleSourceRef } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, type LifecycleSourceRef } from '@hawa/contracts';
 import { telegramSource, sourceCopyConfirmation, sourceMessageScope, inspectVoiceAudio, VoiceAudioError } from '@hawa/domain';
 import { DoclingParser, localPdfExtractor, PDF_EXTRACTOR_VERSION, DocumentExtractionError } from '@hawa/retrieval';
 import { chaosPoint } from '@hawa/observability';
@@ -38,7 +38,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
     'Everything after that line is copy, including whitespace. Use the original caption for design instructions. ' +
     'The saved original is also available in Hawa Desk under this client.');
 
-  return async (update: unknown, mode: string): Promise<Answer | null> => {
+  return async (update: unknown): Promise<Answer | null> => {
     const envelope = sourceMessageScope(update), pdf = telegramSource(update), confirmation = sourceCopyConfirmation(update);
     if (!envelope) return null;
     if (!db) return pdf || confirmation ? { status: 503, extra: { code: 'DATABASE_UNAVAILABLE' } } : null;
@@ -55,7 +55,7 @@ export function createLifecycleSourceIntake(ctx: CoreContext) {
       if ([priorUpload, priorAdmission, priorAnswer].some(prior => prior && prior.payloadHash !== payloadHash))
         throw new SourceConflict('Source event changed');
       if (!confirmation && !priorUpload && !priorAdmission && !priorAnswer &&
-          (!pdf || !(mode === 'lifecycle' || lifecycleOwnsChat(envelope.chatId)))) return null;
+          !pdf) return null;
       if (!allowed) return { status: 403, extra: { code: 'SENDER_NOT_ALLOWED' } };
       if (priorAnswer) return priorAnswer.answer;
       if (pdf && !priorUpload && !priorAdmission) {

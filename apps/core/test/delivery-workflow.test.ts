@@ -24,7 +24,10 @@ const url = process.env.HAWA_ISOLATED_TEST_DB;
  * workflow with the worker's own code (runDelivery, handleSend with real send marks and the stored
  * export bytes), calling Core's internal endpoints in process with the worker's token.
  */
-describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the Delivery workflow', () => {
+// A non-lifecycle task pinned 'restate' (ADR-052) is delivered by the Delivery workflow reporting to
+// Core (reportTo 'core'). None exists in production (LEGACY_PATH_RETIREMENT.md); stage 2 of ADR-135
+// deletes this path. HAWA_LIFECYCLE_CHATS, which these tests once set, no longer exists.
+describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the Delivery workflow', () => {
   const db = createDb(url || 'postgres://localhost/hawa_repair');
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const kaae = 'c1000000-0000-4000-8000-000000000002';
@@ -41,11 +44,10 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     process.env.RESTATE_INGRESS_URL = INGRESS;
     process.env.HAWA_CORE_INTERNAL_URL = CORE;
     process.env.TELEGRAM_ALLOWED_USERS = OFFICE;
-    delete process.env.HAWA_LIFECYCLE_CHATS;
   });
   afterEach(() => {
     vi.restoreAllMocks();
-    for (const k of ['HAWA_WORKER_TOKEN', 'RESTATE_INGRESS_URL', 'HAWA_CORE_INTERNAL_URL', 'TELEGRAM_ALLOWED_USERS', 'HAWA_LIFECYCLE_CHATS']) {
+    for (const k of ['HAWA_WORKER_TOKEN', 'RESTATE_INGRESS_URL', 'HAWA_CORE_INTERNAL_URL', 'TELEGRAM_ALLOWED_USERS']) {
       if (saved[k] === undefined) delete process.env[k];
       else process.env[k] = saved[k];
     }
@@ -215,7 +217,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     (await withRlsContext(db, operator, (trx) => sql<{ state: string; last_error: string | null }>`
       SELECT state::text AS state, last_error FROM hawa.outbox_commands WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.published'`.execute(trx))).rows;
 
-  it('with HAWA_LIFECYCLE_CHATS empty, Deliver runs Core\'s own delivery exactly as before', async () => {
+  it('a Core-pinned task: Deliver runs Core\'s own delivery exactly as before', async () => {
     const restateIngress = fakeRestate();
     const app = core();
     const { taskId } = await approvedTask(app);
@@ -229,11 +231,10 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect((await publishedCommands(taskId)).map((c) => c.state)).toEqual(['pending']);
   });
 
-  it('a task created before chat enrolment stays on Core before its first delivery', async () => {
+  it('a Core-pinned task stays on Core at its first delivery', async () => {
     const restateIngress = fakeRestate();
     const app = core();
     const { taskId, chat } = await approvedTask(app);
-    process.env.HAWA_LIFECYCLE_CHATS = chat;
     const res = await deliver(app, taskId);
     expect(res.status).toBe(202);
     expect((await res.json()).status).toBe('COMPLETE');
@@ -241,11 +242,10 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect((await publications(taskId)).map((p) => p.executor)).toEqual(['core']);
   });
 
-  it('a task pinned to the workflow keeps it after the chat flag is removed, before first delivery', async () => {
+  it('a task pinned to the workflow keeps it before its first delivery', async () => {
     const restateIngress = fakeRestate();
     const app = core();
     const { taskId } = await approvedTask(app, 'restate');
-    delete process.env.HAWA_LIFECYCLE_CHATS;
     const direct = await app.request(`/tasks/${taskId}/publish-omnichannel`, {
       method: 'POST', headers, body: JSON.stringify({}),
     });
@@ -258,13 +258,12 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect(restateIngress.starts).toHaveLength(1);
   });
 
-  it('flagged: the workflow sends each file and the notice once, and Core completes the task on its report', async () => {
+  it('workflow-pinned: the workflow sends each file and the notice once, and Core completes the task on its report', async () => {
     const restateIngress = fakeRestate();
     const telegram = fakeTelegram();
     const publisher = archivingPublisher();
     const app = core(publisher);
     const { taskId, chat, sha256 } = await approvedTask(app, 'restate');
-    process.env.HAWA_LIFECYCLE_CHATS = `123,${chat}`;
 
     const res = await deliver(app, taskId);
     const body = await res.json();
@@ -300,11 +299,10 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect(telegram.received).toHaveLength(3);
   });
 
-  it('flagged: Deliver pressed again while the workflow runs starts nothing new', async () => {
+  it('workflow-pinned: Deliver pressed again while the workflow runs starts nothing new', async () => {
     const restateIngress = fakeRestate();
     const app = core();
     const { taskId, chat } = await approvedTask(app, 'restate');
-    process.env.HAWA_LIFECYCLE_CHATS = chat;
     const first = await (await deliver(app, taskId)).json();
     const second = await deliver(app, taskId);
     expect(second.status).toBe(202);
@@ -319,9 +317,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     const restateIngress = fakeRestate();
     const before = core();
     const { taskId, chat } = await approvedTask(before, 'restate');
-    process.env.HAWA_LIFECYCLE_CHATS = chat;
     const first = await (await deliver(before, taskId)).json();
-    delete process.env.HAWA_LIFECYCLE_CHATS;
     const publisher = archivingPublisher();
     const after = core(publisher);
     const res = await deliver(after, taskId);
@@ -338,7 +334,6 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     const telegram = fakeTelegram();
     const app = core(noDrivePublisher());
     const { taskId, chat } = await approvedTask(app, 'restate');
-    process.env.HAWA_LIFECYCLE_CHATS = chat;
     await deliver(app, taskId);
     const outcome = await worker(app, telegram)(restateIngress.starts[0]);
     expect(outcome).toMatchObject({ outcome: 'chat_only', archived: false, filesSent: 2 });
@@ -367,7 +362,6 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     const telegram = fakeTelegram((chatId, kind, filename) => (kind === 'document' && filename?.endsWith('.pptx') ? { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' } : { success: true }));
     const app = core();
     const { taskId, chat } = await approvedTask(app, 'restate');
-    process.env.HAWA_LIFECYCLE_CHATS = chat;
     await deliver(app, taskId);
     const run = worker(app, telegram);
     const outcome = await run(restateIngress.starts[0]);
@@ -406,7 +400,6 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
       kind === 'document' && filename?.endsWith('.pptx') ? { success: false, error: 'TELEGRAM_DOCUMENT_REJECTED_403' } : { success: true });
     const app = core();
     const { taskId, chat } = await approvedTask(app, 'restate');
-    process.env.HAWA_LIFECYCLE_CHATS = chat;
     await deliver(app, taskId);
     const outcome = await worker(app, telegram)(restateIngress.starts[0]);
     expect(outcome).toMatchObject({ outcome: 'failed', archived: true, sheetsConfirmed: true, filesSent: 1 });
@@ -424,7 +417,6 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     const telegram = fakeTelegram();
     const app = core();
     const { taskId, chat } = await approvedTask(app, 'restate');
-    process.env.HAWA_LIFECYCLE_CHATS = chat;
     await deliver(app, taskId);
     // The report step gave up (Core away for the hour it waits): the worker's client ends it as terminal.
     const coreGoneForTheReport = coreInternalFromEnv(((input: any, init: any) => String(input).endsWith('/delivery-finished')
@@ -441,13 +433,12 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect((await publications(taskId)).map((p) => [p.state, p.executor_finished_run])).toEqual([['complete', 1]]);
   });
 
-  it('a delivery Core\'s own path started stays Core\'s once the chat is flagged', async () => {
+  it('a delivery Core\'s own path started stays Core\'s', async () => {
     const restateIngress = fakeRestate();
     const app = core(noDrivePublisher());
     const { taskId, chat } = await approvedTask(app);
     const first = await deliver(app, taskId);
     expect((await first.json()).status).toBe('DELIVERED_TO_CHAT_ONLY');
-    process.env.HAWA_LIFECYCLE_CHATS = chat;
     const again = await deliver(app, taskId);
     expect(again.status).toBe(503);
     expect((await again.json()).detail).toMatch(/archive may already exist/i);
@@ -460,7 +451,6 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     const telegram = fakeTelegram();
     const app = core();
     const { taskId, chat } = await approvedTask(app, 'restate');
-    process.env.HAWA_LIFECYCLE_CHATS = chat;
     await deliver(app, taskId);
     const input = restateIngress.starts[0];
     // An older Core (or a hand) wrote one anyway.
@@ -518,7 +508,6 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
       const restateIngress = fakeRestate();
       const app = core(noDrivePublisher());
       const { taskId, chat } = await approvedTask(app, 'restate');
-      process.env.HAWA_LIFECYCLE_CHATS = chat;
       expect((await deliver(app, taskId)).status).toBe(202);
       const input = restateIngress.starts[0];
       await withRlsContext(db, operator, async (trx) => {
@@ -555,7 +544,6 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
       const restateIngress = fakeRestate();
       const app = core();
       const { taskId, chat } = await approvedTask(app, 'restate');
-      process.env.HAWA_LIFECYCLE_CHATS = chat;
       await deliver(app, taskId);
       const input = restateIngress.starts[0];
       const report = (outcome: DeliveryOutcome) => app.request(`/v1/internal/tasks/${taskId}/delivery-finished`, {

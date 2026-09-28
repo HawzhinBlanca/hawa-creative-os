@@ -13,6 +13,8 @@ import { createTelegramCallbacksAndCommands } from '../services/telegram-intake/
 import { createTelegramMedia } from '../services/telegram-intake/media.js';
 import { createTelegramReplies, type PendingClarifications } from '../services/telegram-intake/replies.js';
 import { createTelegramChanges } from '../services/telegram-intake/changes.js';
+import { FINISH_ONLY_HEADER, LEGACY_REQUEST_REFUSED, LegacyTelegramRequestRefused, runLegacyTelegramIntake,
+  type LegacyRefusalReason } from '../services/legacy-telegram-scope.js';
 import type { RouteContext } from './types.js';
 
 /**
@@ -38,8 +40,26 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
   const { makeChange } = createTelegramChanges(ctx);
   const { ingestChatCampaignTask } = createChatCampaignIntake(ctx);
 
+  // The answer when this intake would start new work in its finish-only scope (ADR-135). Nothing
+  // has been sent to the requester; Core's internal intake passes it on and ChatInbox asks for /new.
+  const refuseNewWork = (c: Context, reason: LegacyRefusalReason) =>
+    c.json({ ok: false, code: LEGACY_REQUEST_REFUSED, reason,
+      detail: 'Legacy Telegram intake finishes the requests it started; new requests go through RequestLifecycle' }, 409);
+
   // Webhooks
   registerRoute('post', '/webhooks/telegram', async (c: Context) => {
+    // In production, and whenever Core's internal intake hands an update on, this intake may only
+    // finish open legacy requests (ADR-135, services/legacy-telegram-scope.ts).
+    const finishOnly = isProduction || c.req.header(FINISH_ONLY_HEADER) === 'finish-only';
+    try {
+      return await runLegacyTelegramIntake(finishOnly, () => legacyTelegramIntake(c, finishOnly));
+    } catch (error) {
+      if (error instanceof LegacyTelegramRequestRefused) return refuseNewWork(c, error.reason);
+      throw error;
+    }
+  });
+
+  async function legacyTelegramIntake(c: Context, finishOnly: boolean): Promise<Response> {
     const secret = c.req.header('x-telegram-bot-api-secret-token');
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (!secretsEqual(secret, expectedSecret)) {
@@ -182,7 +202,9 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
     const changeAnswer = await makeChange(c, reply);
     if (changeAnswer) return changeAnswer;
 
-    // A new request.
+    // A new request. Never in the finish-only scope: RequestLifecycle starts every new request
+    // (ADR-135). Refused here, before the instruction-only notice below is sent.
+    if (finishOnly) return refuseNewWork(c, 'NEW_REQUEST');
     const { rawText, voiceTranscript, referenceImageBase64, sourceChannelId, senderName, feedbackTargetTask } = reply;
     let { classification } = reply;
     if (!classification) {
@@ -271,8 +293,9 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
 
     return c.json({ ok: true, task: result.task, duplicate: result.duplicate === true, voiceTranscript, notification: result.notification }, result.duplicate ? 200 : 201);
     } catch (error) {
+      if (error instanceof LegacyTelegramRequestRefused) throw error;
       log.error('[chat-intake] Durable Telegram intake failed:', error);
       return problem(c, 503, 'Intake not committed', 'The request was not acknowledged. Retry with the same source event ID.');
     }
-  });
+  }
 }

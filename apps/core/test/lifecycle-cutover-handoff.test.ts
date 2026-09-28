@@ -12,6 +12,12 @@ import { persistChatIntake } from '../src/services/chat-intake.js';
  * design to legacy intake (ADR-052, ADR-059), and let an ordinary brief open a lifecycle request once
  * the chat's Core history is older than legacy intake's own 48-hour reading window.
  * Against the per-file test database as hawa_app (row-level security as in production).
+ *
+ * Reconciled with ADR-135 (2026-09-29): no path creates a Core request through intake any more, so the
+ * Core request each case starts from is written the way legacy intake wrote it (persistChatIntake, as
+ * lifecycle-only-telegram.test.ts does). Legacy intake is reached in its finish-only scope; a brief
+ * next to an open recent Core design is read against it or refused with a request for /new, never a
+ * new Core task. Core's poller, and ADR-136's forwarding of its updates to ChatInbox, are gone.
  */
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const clientId = 'c1000000-0000-4000-8000-000000000002';
@@ -77,13 +83,20 @@ const routingReceipt = async (id: number) => (await withRlsContext(db, scope, (t
   SELECT event_kind FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
     AND source_account_id = 'lifecycle_chat_routing' AND source_event_id = ${String(id)}`.execute(trx))).rows;
 
-/** A Core request of the chat, made while the chat was not on the lifecycle (legacy intake). */
+/**
+ * A Core request of the chat, as legacy intake made it before the cutover: pinned core, no request
+ * owner, waiting for review. (ADR-136 made it through intake with the chat off the lifecycle; since
+ * ADR-135 no configuration does that.)
+ */
 async function coreRequest(chat: number): Promise<string> {
-  vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
-  const made = await intake(createApp({ db } as any), message(updateId(), chat, BRIEF));
-  expect(made.body.taskIds).toHaveLength(1);
+  const created = await persistChatIntake(db, {
+    platform: 'telegram', sourceEventId: `legacy-${randomUUID()}`, sourceChannelId: String(chat),
+    rawText: BRIEF, title: 'KAAE members evening', clientId,
+    designInstructions: 'Event announcement', exactCopy: [{ text: 'December 4, 2026' }],
+    autoGenerate: false, variant: { width: 1080, height: 1350 },
+  });
   const [task] = await tasksInChat(chat);
-  expect(task.pin).toBe('core');
+  expect(task).toMatchObject({ id: String(created.task.id), pin: 'core' });
   return task.id;
 }
 
@@ -147,8 +160,12 @@ describe('a chat that joined the lifecycle with Core requests in flight (ADR-136
       date: 1790000000, document: { file_id: 'sent-file', file_name: 'design.png' } };
     const result = await intake(createApp({ db } as any), reply, 'lifecycle');
     expect(result.body.code).not.toBe('STALE_REQUEST_REPLY');
-    expect(result.body.lifecycleAction).toBeUndefined();
+    // Legacy intake reads a reply that names no task against the chat's newest design of the last 48
+    // hours, which here is the lifecycle request's: since ADR-135 its finish-only scope refuses to extend
+    // a request RequestLifecycle owns and asks for /new, instead of revising it outside its request.
+    expect(result.body).toMatchObject({ code: 'LEGACY_REQUEST_REFUSED', reason: 'LIFECYCLE_OWNED', lifecycleAction: 'new-brief-required' });
     expect(await requestRev(waiting.requestId)).toMatchObject({ rev: '3', stage: 'manual' });
+    expect((await tasksInChat(chat)).map((t) => t.id).sort()).toEqual([task, waiting.taskId].sort());
     expect(await routingReceipt(reply.update_id)).toEqual([]);
   });
 
@@ -203,87 +220,21 @@ describe('a chat that joined the lifecycle with Core requests in flight (ADR-136
     const chat = chatId();
     const task = await coreRequest(chat);
     vi.stubEnv('HAWA_LIFECYCLE_CHATS', '*');
+    // Next to the open, recent Core design the brief stays with legacy intake (ADR-136), which since
+    // ADR-135 may only continue that design or ask for /new: never a new Core task.
     const recent = await intake(createApp({ db } as any), message(updateId(), chat, 'KAAE follow-up event\n---\nDecember 9, 2026'));
-    expect(recent.body.lifecycleAction).toBeUndefined();
-    expect(recent.body.taskIds).toHaveLength(1);
+    expect(recent.body.lifecycleAction === 'open-request').toBe(false);
+    if (recent.body.code === 'LEGACY_REQUEST_REFUSED') expect(recent.body).toMatchObject({ reason: 'NEW_REQUEST', lifecycleAction: 'new-brief-required' });
+    const afterRecent = await tasksInChat(chat);
+    for (const t of afterRecent.filter((t) => t.id !== task)) expect(t).toMatchObject({ parent: task, pin: 'core' });
     await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.tasks SET created_at = now() - interval '49 hours'
       WHERE id IN (SELECT aggregate_id FROM hawa.outbox_commands WHERE command_type = 'task.created' AND payload->>'sourceChannelId' = ${String(chat)})`.execute(trx));
     const later = await intake(createApp({ db } as any), message(updateId(), chat, 'KAAE graduation ceremony\n---\nDecember 20, 2026\nErbil'));
     expect(later.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'open-request' });
-    expect((await tasksInChat(chat)).map((t) => t.id)).toContain(task);
-    expect(await tasksInChat(chat)).toHaveLength(2);
+    // The request object creates the lifecycle task; intake itself made none.
+    expect((await tasksInChat(chat)).map((t) => t.id)).toEqual(afterRecent.map((t) => t.id));
   });
 });
 
-describe('Core\'s own poller after a rollback of HAWA_TELEGRAM_POLLER (ADR-136)', () => {
-  const bridge = () => ({
-    dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }),
-    dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }),
-    answerCallbackQuery: vi.fn().mockResolvedValue(true),
-    handleCommand: vi.fn().mockReturnValue(null),
-    formatTaskPreviewCard: vi.fn().mockReturnValue({}),
-    attachOffsetStorage: vi.fn(),
-    startPolling: vi.fn(),
-    useUpdateHandler: vi.fn(),
-  });
-  const pollerHandler = () => {
-    const fake = bridge();
-    createApp({ db, telegramBridge: fake as any } as any);
-    expect(fake.useUpdateHandler).toHaveBeenCalledTimes(1);
-    return fake.useUpdateHandler.mock.calls[0][0] as (update: unknown) => Promise<void>;
-  };
-  /** Restate's ingress, recorded; anything else goes to the real fetch. */
-  function fakeIngress(status = 202) {
-    const realFetch = globalThis.fetch;
-    const calls: Array<{ url: string; key: string | null; body: any }> = [];
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: any) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (!url.startsWith('http://restate-ingress.test:8080/')) return realFetch(input, init);
-      calls.push({ url, key: new Headers(init?.headers).get('idempotency-key'), body: JSON.parse(String(init?.body)) });
-      return new Response(JSON.stringify({ invocationId: 'inv_test', status: 'Accepted' }), { status });
-    });
-    return calls;
-  }
-
-  it('hands an update of a chat with a lifecycle request to its ChatInbox under the worker poller\'s key, not to legacy intake', async () => {
-    vi.stubEnv('TELEGRAM_BOT_TOKEN', ['424243', 'handoff_poller_fixture'].join(':'));
-    vi.stubEnv('RESTATE_INGRESS_URL', 'http://restate-ingress.test:8080');
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
-    const calls = fakeIngress();
-    const chat = chatId();
-    const waiting = await waitingRequest(chat);
-    const handle = pollerHandler();
-    const reply = message(updateId(), chat, 'The venue is Rotana Hotel, Erbil');
-    (reply.message as Record<string, unknown>).reply_to_message = { message_id: 9090, from: BOT, chat: { id: chat, type: 'private' }, date: 1790000000, text: 'What should change?' };
-    await handle(reply);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ url: `http://restate-ingress.test:8080/ChatInbox/${chat}/handleUpdate/send`, key: `tg-${reply.update_id}`,
-      body: { v: 1, update: reply } });
-    // Legacy intake never saw it: no revision of the request's task outside its request.
-    expect((await tasksInChat(chat)).map((t) => t.id)).toEqual([waiting.taskId]);
-    expect(await requestRev(waiting.requestId)).toMatchObject({ rev: '3', stage: 'manual' });
-  });
-
-  it('keeps legacy intake for a chat without a lifecycle request', async () => {
-    vi.stubEnv('TELEGRAM_BOT_TOKEN', ['424243', 'handoff_poller_fixture'].join(':'));
-    vi.stubEnv('RESTATE_INGRESS_URL', 'http://restate-ingress.test:8080');
-    const calls = fakeIngress();
-    const chat = chatId();
-    const handle = pollerHandler();
-    await handle(message(updateId(), chat, BRIEF));
-    expect(calls).toHaveLength(0);
-    expect(await tasksInChat(chat)).toHaveLength(1);
-  });
-
-  it('asks again, and never gives the update to legacy intake, while Restate does not take it', async () => {
-    vi.stubEnv('TELEGRAM_BOT_TOKEN', ['424243', 'handoff_poller_fixture'].join(':'));
-    vi.stubEnv('RESTATE_INGRESS_URL', 'http://restate-ingress.test:8080');
-    const calls = fakeIngress(503);
-    const chat = chatId();
-    const waiting = await waitingRequest(chat);
-    const handle = pollerHandler();
-    await expect(handle(message(updateId(), chat, 'Use a darker blue'))).rejects.toThrow(/attempt 1\/5 failed \(intake answered HTTP 503\)/);
-    expect(calls).toHaveLength(1);
-    expect((await tasksInChat(chat)).map((t) => t.id)).toEqual([waiting.taskId]);
-  });
-});
+// ADR-136's "Core's own poller after a rollback" cases went with Core's poller (ADR-135): Core never
+// polls, whatever HAWA_TELEGRAM_POLLER says (lifecycle-only-telegram.test.ts, "Core no longer polls").

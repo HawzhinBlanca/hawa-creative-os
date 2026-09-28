@@ -7,11 +7,14 @@
  *   HAWA_CHAOS=1 npx vitest run packages/testkit/chaos/chaos.test.ts
  *   HAWA_CHAOS_KEEP=1   leave the project running afterwards (default: taken down with its volumes)
  *   HAWA_CHAOS_ONLY=R1.0,R4   run only these scenarios
- *   CHAOS_TELEGRAM_POLLER=worker   the worker polls Telegram through ChatInbox (Phase 2.1; run.ts --poller worker)
  *   HAWA_CHAOS_SEED_DUMP=<file>    the scenarios run on a copy of production's data (run.ts --seed-dump; driver/seed.ts)
+ *   HAWA_CHAOS_PREVIOUS_RELEASE=<commit>   the release R10 starts from and rolls back to (run.ts --previous-release)
  *
- * It drives the legacy path; with the worker poller, intake goes through ChatInbox first. The results (per scenario: invariants, time, memory) are written to
- * .run/last-run.json and printed; a failed invariant fails its scenario.
+ * Since ADR-135 (2026-09-28) every chat is lifecycle-owned and only the worker polls Telegram, so every
+ * scenario drives the lifecycle path: the worker's poller, ChatInbox, Core's internal intake,
+ * RequestLifecycle, DesignRun and the Delivery workflow. The scenarios that drove the legacy path were
+ * pointed at the lifecycle's own steps (README.md, "ADR-135"). The results (per scenario: invariants,
+ * time, memory) are written to .run/last-run.json and printed; a failed invariant fails its scenario.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { candidateSources } from './driver/candidate-sources.js';
@@ -21,7 +24,8 @@ import { randomUUID } from 'node:crypto';
 import { acquireProject, build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, releaseProject, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
 import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import { neutralise, restoreDump, verifyEgressFence, type EgressProbe, type NeutraliseReport, type SeedReport } from './driver/seed.js';
-import { chatsOnlyRollback, handoffOfOldRequests, rollbackAndForward } from './driver/cutover-scenarios.js';
+import { buildPreviousRelease, startOnRelease } from './driver/cutover.js';
+import { handoffOfOldRequests, retiredSettingsIgnored, rollbackToPreviousRelease } from './driver/cutover-scenarios.js';
 import {
   approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
   OFFICE_CHAT, sendToChatInbox, sentTo, sleep, staffConfirmVisible, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
@@ -31,15 +35,21 @@ const enabled = process.env.HAWA_CHAOS === '1';
 const only = (process.env.HAWA_CHAOS_ONLY || '').split(',').map((s) => s.trim()).filter(Boolean);
 const keep = process.env.HAWA_CHAOS_KEEP === '1';
 const candidate = process.env.HAWA_CHAOS_CANDIDATE === '1';
-// Who polls Telegram in the stack (run.ts --poller; docker-compose.chaos.yml): Core, as production
-// does today, or the worker's poller and ChatInbox (Phase 2.1). Scenarios of 2.1 need the worker.
-const poller = (process.env.CHAOS_TELEGRAM_POLLER || 'core').trim().toLowerCase() === 'worker' ? 'worker' : 'core';
+// Who polls Telegram in the stack: the worker's poller and ChatInbox, the only one since ADR-135.
+if ((process.env.CHAOS_TELEGRAM_POLLER || 'worker').trim().toLowerCase() !== 'worker') {
+  throw new Error('CHAOS_TELEGRAM_POLLER must be worker: Core no longer polls Telegram (ADR-135)');
+}
+const poller = 'worker';
 // run.ts --seed-dump: the scenarios run on a restored copy of production's data (driver/seed.ts).
 const seedDump = process.env.HAWA_CHAOS_SEED_DUMP || '';
 let seeded: { restore: SeedReport; upgrade: { applied: string[]; verified: number }; neutralised: NeutraliseReport; egress: EgressProbe[] } | null = null;
 // Set once this run holds the project's lock; a run that never got it must not touch the project.
 let owned = false;
 const LOCK_WAIT_MS = 3 * 60 * 60_000;
+// R10 (driver/cutover-scenarios.ts) starts on the previous release, which only a run that selects it
+// builds (run.ts --only R10.H1,R10.K1,R10.K2): the stack then starts on that release, as production.
+const r10 = ['R10.H1', 'R10.K1', 'R10.K2'].some((n) => only.includes(n));
+if (r10 && only.some((n) => !n.startsWith('R10.'))) throw new Error('R10 scenarios run alone (they deploy releases on the stack)');
 
 interface ScenarioReport {
   name: string;
@@ -60,14 +70,9 @@ function sampleMemory(): void {
   samples.push({ at: new Date().toISOString(), totalMiB: Object.values(m).reduce((a, b) => a + b, 0) });
 }
 
+// Every chat is lifecycle-owned (ADR-135): no chat list to draw from, one fresh chat per scenario.
 let chatSeq = 9_200_000 + (Date.now() % 100_000) * 10;
 const newChat = () => String(++chatSeq);
-// Chats on HAWA_LIFECYCLE_CHATS (docker-compose.chaos.yml): 9300001 to 9300024, one per scenario.
-let flaggedSeq = 9_300_000;
-const flaggedChat = () => {
-  if (flaggedSeq >= 9_300_024) throw new Error('every flagged chat of docker-compose.chaos.yml is used; add more there');
-  return String(++flaggedSeq);
-};
 
 /**
  * One scenario: a fresh chat, the script, quiescence, then the invariants. Every invariant is
@@ -88,28 +93,14 @@ interface Expectation {
   after?: () => Promise<InvariantResult[]>;
   /** The approved files the delivery sends (default 1). */
   files?: number;
-  /** Who delivers: 'restate' for a chat on HAWA_LIFECYCLE_CHATS (slice 2.2). */
+  /** Who delivers: the Delivery workflow ('restate') for every request since ADR-135 (the default). */
   executor?: 'core' | 'restate';
 }
 
-/**
- * Every chat on the Restate lifecycle (run.ts --lifecycle-chats all; production's setting on
- * 2026-09-28): with the worker's poller no request takes the legacy path (Core intake → outbox
- * task.created → TaskWorkflow → notify.published), so a scenario whose kill point or expectation
- * exists only there cannot apply. It is recorded as not applicable, with the lifecycle scenario
- * that covers the same fault, instead of waiting 300 s for a point nothing reaches.
- */
-const everyChatOnLifecycle = (process.env.CHAOS_LIFECYCLE_CHATS || '').split(',').map((c) => c.trim()).includes('*') && poller === 'worker';
-const notApplicable: Array<{ name: string; reason: string }> = [];
-
-function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, options: { flagged?: boolean; needs?: 'worker-poller'; legacyOnly?: string } = {}) {
-  const selected = enabled && (only.length === 0 || only.includes(name));
-  if (selected && options.legacyOnly && everyChatOnLifecycle) {
-    notApplicable.push({ name, reason: `legacy path only; with every chat on the lifecycle it cannot be reached. Covered by ${options.legacyOnly}` });
-  }
-  const run = selected && (options.needs !== 'worker-poller' || poller === 'worker') && !(options.legacyOnly && everyChatOnLifecycle);
+function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000) {
+  const run = enabled && (only.length === 0 ? !name.startsWith('R10.') : only.includes(name));
   it.skipIf(!run)(`${name}: ${what}`, async () => {
-    const chat = options.flagged ? flaggedChat() : newChat();
+    const chat = newChat();
     const events: string[] = [];
     const started = Date.now();
     const report: ScenarioReport = { name, what, ms: 0, invariants: [], events };
@@ -121,7 +112,7 @@ function scenario(name: string, what: string, script: (chat: string, events: str
       await fakes.release();
       if (!expectation.skipQuiescence) await quiescent();
       report.invariants = [
-        ...(expectation.skipRequestChecks ? [] : await checkRequest(chat, { ...expectation, ledgerSince })),
+        ...(expectation.skipRequestChecks ? [] : await checkRequest(chat, { ...expectation, executor: expectation.executor ?? 'restate', ledgerSince })),
         ...(expectation.extra || []),
         ...(expectation.after ? await expectation.after() : []),
       ];
@@ -140,7 +131,7 @@ function scenario(name: string, what: string, script: (chat: string, events: str
   }, timeoutMs);
 }
 
-/** The full request on the legacy path: brief, draft, Desk approval, delivery. */
+/** The full request: brief, draft, Desk approval, delivery (through RequestLifecycle since ADR-135). */
 async function fullRequest(chat: string, tag: string, events: string[], hooks: { afterApprove?: () => Promise<void> } = {}) {
   const taskId = await briefToDraft(chat, tag);
   events.push(`task ${taskId}: draft in chat`);
@@ -167,6 +158,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     down({ volumes: true });
     // Core and the worker start below with --no-build, so their images are built from this checkout here.
     build(['core', 'worker-blue', ...(candidate ? ['desk', 'docling'] as const : [])]);
+    // R10: the previous release's images too, from its commit, and the stack starts on it.
+    if (r10) console.log(`[chaos] previous release: ${JSON.stringify(buildPreviousRelease())}`);
     up({ services: ['postgres', 'restate', 'fakes'] });
     if (seedDump) {
       // Production's data, then the pending migrations exactly as a deploy runs them, then nothing
@@ -183,6 +176,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     }
     await connectCanva();
     await kaaeClientDna();
+    // R10.H1 makes its old requests the way production made them: the previous release, Core polling
+    // and no chat on the lifecycle (the configuration before 2026-09-28).
+    if (r10) startOnRelease({ release: 'previous', poller: 'core', chats: '' });
     up({ build: false, services: ['core', 'worker-blue'] });
     if (seeded) {
       // Refuse to run a scenario on production's data unless the fence holds from inside the apps.
@@ -195,7 +191,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     if (reg.code !== 0) throw new Error(`register blue: ${reg.lines.join(' | ')}`);
     if (candidate) up({ build: false, services: ['docling', 'desk', 'nginx'] });
     sampleMemory();
-  }, LOCK_WAIT_MS + 30 * 60_000);
+  }, LOCK_WAIT_MS + 45 * 60_000);
 
   afterAll(async () => {
     // Never started (the lock was not taken): the project, if any, is another run's.
@@ -204,9 +200,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     const result = {
       finishedAt: new Date().toISOString(),
       telegramPoller: poller,
-      lifecycleChats: process.env.CHAOS_LIFECYCLE_CHATS || 'default list (docker-compose.chaos.yml)',
       ...(seeded ? { seededFrom: seeded } : {}),
-      notApplicable,
       ...(candidate ? { deployment: deploymentReceipt() } : {}),
       totalMs: Date.now() - suiteStarted,
       memoryMeasurement: 'start/end and scenario samples; not a continuous peak measurement',
@@ -221,7 +215,6 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       const bad = r.invariants.filter((i) => !i.ok);
       console.log(`[chaos] ${r.name} ${r.error ? 'ERROR' : bad.length ? 'FAIL' : 'ok'} ${Math.round(r.ms / 1000)} s — ${r.what}${r.error ? `\n    error: ${r.error}` : ''}${bad.map((b) => `\n    ✗ ${b.name}: ${b.detail}`).join('')}`);
     }
-    for (const n of notApplicable) console.log(`[chaos] ${n.name} n/a — ${n.reason}`);
     console.log(`[chaos] total ${Math.round(result.totalMs / 1000)} s, peak memory ${result.peakTotalMiB} MiB (${JSON.stringify(peakMemory)})`);
     await closeDb();
     if (!keep) down({ volumes: true });
@@ -231,19 +224,18 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
 
   if (candidate) scenario('R1.S3.SOURCES', 'full-app PDF source to voice revision and simulated approved delivery', async (chat, events) => ({
     delivered: false, skipRequestChecks: true, skipQuiescence: true, extra: await candidateSources(chat, events, suiteStarted),
-  }), 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  }));
 
   scenario('R1.0', 'happy path: brief, draft, approve, deliver, no faults', async (chat, events) => {
     await fullRequest(chat, 'R1.0', events);
     return { delivered: true };
   });
 
-  // Since 82b28988 (2026-09-25) intake classifies an unscoped Telegram text locally: no production
-  // caller passes the client egress decision the paid classifier needs, so intake makes no model
-  // call to kill Core in. The slow moment of intake is now its acknowledgement: Core kills during
-  // that send, after the task was committed and before the poller stored the offset. The update is
-  // polled again after the restart and must be answered as the duplicate it is.
-  scenario('R1.K0', 'Core killed while intake acknowledges the brief (the send slowed to 4 s), back after 5 s', async (chat, events) => {
+  // Since 82b28988 (2026-09-25) intake classifies an unscoped Telegram text locally, so intake makes no
+  // model call to kill Core in. The slow moment is the acknowledgement, which RequestLifecycle's
+  // TelegramSender sends once the request is open (ADR-135: every request): Core is killed during that
+  // send, and the request must go on to delivery with one task and one acknowledgement.
+  scenario('R1.K0', 'Core killed while the acknowledgement is sent (the send slowed to 4 s), back after 5 s', async (chat, events) => {
     await fakes.telegramFault({ method: 'sendMessage', chat, kind: 'delay', delayMs: 4000, n: 1 });
     const request = fullRequest(chat, 'R1.K0', events);
     await waitUntil('the acknowledgement send', async () => (await fakes.telegramCalls()).some((c) => c.method === 'sendMessage' && c.chat === chat), 60_000, 200);
@@ -256,19 +248,22 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     return { delivered: true };
   });
 
-  scenario('R1.K1', 'worker killed after claiming task.created, before dispatching it', async (chat, events) => {
-    const k = await killAtPoint('worker.outbox.after-claim', { commandType: 'task.created' });
+  // Until ADR-135 these killed the worker around the outbox's dispatch of task.created to TaskWorkflow.
+  // A request's task now comes from RequestLifecycle, which starts its DesignRun itself; the start of
+  // the design run is the moment they cover.
+  scenario('R1.K1', 'worker killed after the design run checked its task, before the step was journalled', async (chat, events) => {
+    const k = await killAtPoint('worker.step.after-action', { step: 'canva-verify-task-scope' });
     await fullRequest(chat, 'R1.K1', events);
-    events.push(`killed ${(await k.done).killed} at worker.outbox.after-claim`);
+    events.push(`killed ${(await k.done).killed} after canva-verify-task-scope`);
     return { delivered: true };
-  }, 12 * 60_000, { legacyOnly: 'R1.S2.K4/R1.S2.K5 (intake) and R1.K3 (DesignRun steps)' });
+  });
 
-  scenario('R1.K2', 'worker killed after Restate accepted the workflow, before the outbox recorded it', async (chat, events) => {
-    const k = await killAtPoint('worker.dispatch.after-submit', {});
+  scenario('R1.K2', 'Restate killed right after the design run started (worker held after its first step), back after 5 s', async (chat, events) => {
+    const k = await killWhileHeld('worker.step.after-action', { step: 'canva-verify-task-scope' }, 'restate');
     await fullRequest(chat, 'R1.K2', events);
-    events.push(`killed ${(await k.done).killed} at worker.dispatch.after-submit`);
+    events.push(`killed ${(await k.done).killed} while the worker was held after canva-verify-task-scope`);
     return { delivered: true };
-  }, 12 * 60_000, { legacyOnly: 'R1.S1.K1 (Restate accepted, offset not stored) and R1.DUP' });
+  });
 
   scenario('R1.K3', 'worker killed after Core planned and imported the draft, before the step was journalled', async (chat, events) => {
     const k = await killAtPoint('worker.step.after-action', { step: 'canva-create-draft' });
@@ -284,12 +279,15 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     return { delivered: true };
   });
 
-  scenario('R1.K5', 'worker killed after Core took the outcome and sent the draft, before the step was journalled', async (chat, events) => {
-    const k = await killAtPoint('worker.step.after-action', { step: 'canva-notify-canva_draft_ready_for_visual_review' });
+  // Until ADR-135 this killed the worker after TaskWorkflow's `canva-notify-…` step (Core took the
+  // outcome). A DesignRun reports to its RequestLifecycle instead, with no step of that name; the last
+  // step before the report is the preview export.
+  scenario('R1.K5', 'worker killed after the preview export, before the step was journalled (just before the outcome is reported)', async (chat, events) => {
+    const k = await killAtPoint('worker.step.after-action', { step: 'canva-export-preview' });
     await fullRequest(chat, 'R1.K5', events);
-    events.push(`killed ${(await k.done).killed} after canva-notify-canva_draft_ready_for_visual_review`);
+    events.push(`killed ${(await k.done).killed} after canva-export-preview`);
     return { delivered: true };
-  }, 12 * 60_000, { legacyOnly: 'R1.K3/R1.K4 (DesignRun steps) and R1.S3.K1' });
+  });
 
   scenario('R1.K6', 'Core killed mid-design (worker held after reading the binding), back after 5 s', async (chat, events) => {
     const k = await killWhileHeld('worker.step.after-action', { step: 'canva-read-binding' }, 'core');
@@ -319,8 +317,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     return { delivered: true };
   });
 
-  scenario('R1.K10', 'Telegram answers 429 (retry_after 3) to the draft message', async (chat, events) => {
-    // The acknowledgement is the chat's first sendMessage; the draft (with the buttons) the second.
+  scenario('R1.K10', 'Telegram answers 429 (retry_after 3) to the chat\'s second message', async (chat, events) => {
+    // The acknowledgement is the chat's first sendMessage. Until ADR-135 the second was the legacy
+    // draft with its buttons; a lifecycle request's second message to the requester is its next notice.
     await fakes.telegramFault({ method: 'sendMessage', chat, kind: '429', n: 1, retryAfter: 3, skip: 1 });
     await fullRequest(chat, 'R1.K10', events);
     return { delivered: true };
@@ -339,20 +338,19 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     return { delivered: true };
   });
 
-  scenario('R1.K12', 'worker killed after sending the approved file, before marking it sent', async (chat, events) => {
-    const k = await killAtPoint('worker.sender.after-telegram', { commandType: 'notify.published', kind: 'document' });
-    const taskId = await fullRequestUntilDelivery(chat, 'R1.K12', events);
-    events.push(`killed ${(await k.done).killed} after the document send`);
-    await waitUntil('the delivery command to settle', async () => !(await outboxOpen(taskId)), 240_000, 2000);
-    return { delivered: true, uncertainSends: 1 };
-  }, 12 * 60_000, { legacyOnly: 'L2.K12 (worker killed after the first file, before its mark)' });
-
-  scenario('R1.K13', 'Telegram takes the approved file and the answer is lost (uncertain send)', async (chat, events) => {
+  // R1.K12 (worker killed after the approved file was sent, before its mark) and R1.K15 (Postgres killed
+  // there) drove Core's `notify.published` sender, which no new request reaches since ADR-135. Their
+  // lifecycle twins are L2.K12 and L2.K17 below (the same kills in the Delivery workflow's sender).
+  // R1.K13 had no twin, so it is the lifecycle's own now: an unconfirmed send is held for staff
+  // (ADR-043, ADR-045) and settled by an administrator (ADR-046), as in L2.K12.
+  scenario('R1.K13', 'Telegram takes the first approved file and the answer is lost (one uncertain send, settled by staff)', async (chat, events) => {
     await fakes.telegramFault({ method: 'sendDocument', chat, kind: 'drop-after-processing', n: 1 });
-    const taskId = await fullRequestUntilDelivery(chat, 'R1.K13', events);
-    await waitUntil('the delivery command to settle', async () => !(await outboxOpen(taskId)), 240_000, 2000);
-    return { delivered: true, uncertainSends: 1 };
-  }, 12 * 60_000, { legacyOnly: 'L2.K12 (an unconfirmed send is held for staff, ADR-046)' });
+    let settlement: InvariantResult[] = [];
+    await workflowRequest(chat, 'R1.K13', events, { beforeComplete: async (taskId) => {
+      settlement = await staffConfirmVisible(chat, taskId, events);
+    } });
+    return { delivered: true, files: 2, uncertainSends: 1, extra: settlement };
+  });
 
   scenario('R1.K14', 'Core killed in the middle of a Deliver request (Drive upload slowed to 8 s), back after 5 s; Deliver pressed again once', async (chat, events) => {
     const taskId = await briefToDraft(chat, 'R1.K14');
@@ -369,48 +367,27 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     start('core');
     await waitHealthy('core');
     await sleep(3000);
-    let stateAfterRestart = await taskState(taskId);
-    // With every chat on the lifecycle the Delivery workflow owns the delivery (slice 2.2) and resumes
-    // it after the restart on its own; 'publishing' three seconds later is that workflow still
-    // running, not a stuck task. Its invariant is that it completes without a second Deliver (as
-    // L2.K14). The legacy path keeps the original check.
-    if (everyChatOnLifecycle) {
-      await waitUntil('the Delivery workflow to finish without a second Deliver', async () => (await taskState(taskId)) === 'complete', 180_000, 2000).catch(() => undefined);
-      stateAfterRestart = await taskState(taskId);
-    }
+    const stateAfterRestart = await taskState(taskId);
     events.push(`after Core restarted, before a second Deliver: task ${stateAfterRestart}`);
-    const second = await deliver(taskId);
-    events.push(`second Deliver: HTTP ${second.status} ${JSON.stringify(second.body).slice(0, 160)}`);
+    // Since ADR-135 the delivery belongs to the request's Delivery workflow, which carries on through
+    // the Core restart: the request is past 'approved', so the second press goes straight to Core (the
+    // Desk's helper would wait for 'approved' first) and must start nothing new.
+    const second = await fakes.core(`/tasks/${taskId}/publish`, secrets().CHAOS_REVIEWER_KEY,
+      { headers: { 'Idempotency-Key': randomUUID() }, body: {} });
+    events.push(`second Deliver: HTTP ${second.status} ${JSON.stringify(second.json).slice(0, 160)}`);
     await waitDelivered(chat, taskId);
+    const runs = await query<{ executor_run: number }>(sql`SELECT executor_run FROM hawa.publications WHERE task_id = ${taskId}::uuid`);
     return {
       delivered: true,
-      extra: [everyChatOnLifecycle
-        ? { name: 'a delivery cut off by a Core restart completes without a second Deliver', ok: stateAfterRestart === 'complete', detail: `task ${stateAtKill} at the kill, ${stateAfterRestart} before the second Deliver (HTTP ${second.status})` }
-        : { name: 'a delivery cut off by a Core restart does not stay stuck in publishing', ok: stateAfterRestart !== 'publishing', detail: `task ${stateAtKill} at the kill, ${stateAfterRestart} after the restart` }],
+      extra: [
+        { name: 'the second press is answered without a server error', ok: second.status > 0 && second.status < 500, detail: `HTTP ${second.status}` },
+        { name: 'the delivery cut off by a Core restart finishes as one Delivery run', ok: runs.length === 1 && Number(runs[0].executor_run) === 1,
+          detail: `task ${stateAtKill} at the kill, ${stateAfterRestart} after the restart; runs ${JSON.stringify(runs)}` },
+      ],
     };
   });
 
-  scenario('R1.K15', 'Postgres killed after the approved file was sent, before its mark was written; back after 5 s', async (chat, events) => {
-    const k = await killWhileHeld('worker.sender.after-telegram', { commandType: 'notify.published', kind: 'document' }, 'postgres');
-    const taskId = await fullRequestUntilDelivery(chat, 'R1.K15', events);
-    events.push(`killed ${(await k.done).killed} after the document send`);
-    await waitUntil('the delivery command to settle', async () => !(await outboxOpen(taskId)), 300_000, 2000);
-    // Since 6407deb6 (ADR-045 addendum) the sender retries only its 'sent' mark for about 15 s when
-    // Postgres is gone after Telegram answered. A 5 s outage ends with the mark written: nothing is
-    // uncertain and the office hears nothing (as L2.K17 for the Delivery workflow's sender).
-    const marks = await query<{ step: string; outcome: string }>(sql`SELECT DISTINCT ON (e.source_event_id)
-        e.source_event_id AS step, e.event_kind AS outcome FROM hawa.inbox_events e
-      JOIN hawa.outbox_commands o ON e.source_event_id LIKE o.id::text || ':%'
-      WHERE o.aggregate_id = ${taskId}::uuid AND o.command_type = 'notify.published'
-        AND e.source_account_id = 'telegram_delivery' AND e.event_kind LIKE 'telegram_document_%'
-      ORDER BY e.source_event_id, e.received_at DESC, e.id DESC`);
-    return {
-      delivered: true, uncertainSends: 0,
-      extra: [{ name: "the held file's 'sent' mark is written once Postgres is back", ok: marks.length >= 1 && marks.every((m) => m.outcome === 'telegram_document_sent'),
-        detail: JSON.stringify(marks.map((m) => m.outcome)) }],
-    };
-  }, 12 * 60_000, { legacyOnly: 'L2.K17 (Postgres killed after Telegram took the first file)' });
-
+  // Since ADR-135 the design is a DesignRun (dr-<task>), not TaskWorkflow (task-wf-<task>).
   scenario('R1.D1', 'deploy to green while the design runs on blue: it finishes on blue, blue drains and is deleted', async (chat, events) => {
     const [blue] = await restateQuery<{ id: string }>(`SELECT id FROM sys_deployment WHERE endpoint LIKE '%worker-blue%'`);
     await fakes.hold('worker.step.after-action', { step: 'canva-read-binding' }, 1);
@@ -423,11 +400,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await fakes.release();
     await request;
     const [tasks] = [await tasksOfChat(chat)];
-    // The design is TaskWorkflow's on the legacy path and DesignRun's when RequestLifecycle owns the
-    // request (every chat, with --lifecycle-chats all; ADR-059), as checkRequest's design-run check.
     const inv = await restateQuery<{ pinned_deployment_id: string | null; status: string }>(
-      `SELECT pinned_deployment_id, status FROM sys_invocation WHERE (target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${tasks[0]?.id}')
-         OR (target_service_name = 'DesignRun' AND target_service_key = 'dr-${tasks[0]?.id}')`
+      `SELECT pinned_deployment_id, status FROM sys_invocation WHERE target_service_name = 'DesignRun' AND target_service_key = 'dr-${tasks[0]?.id}'`
     );
     const drains = await finishDrains(180);
     events.push(`finish-drains: exit ${drains.code} ${drains.lines.join(' | ')}`);
@@ -444,7 +418,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   // Phase 2.1 (PHASE2_DESIGN.md slice 2.1; R1 steps S1 and S2): the worker polls Telegram, each
   // update goes to its chat's ChatInbox with key tg-<update_id>, and ChatInbox hands it to Core's
   // intake. Each scenario takes its brief to the draft; S1 kills are around the hand-off to Restate,
-  // S2 kills around Core's intake. Run with `run.ts --poller worker`.
+  // S2 kills around Core's intake. Since ADR-135 the brief opens a RequestLifecycle request.
   const toDraft = async (chat: string, tag: string, events: string[]) => {
     const update = await sendBrief(chat, tag);
     events.push(`update ${update.update_id} in chat ${chat}`);
@@ -461,21 +435,21 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     events.push(`deliver: HTTP ${delivered.status}`);
     await waitDelivered(chat, taskId);
     return { delivered: true, after: () => checkIntake(chat, [update.update_id]) };
-  }, 12 * 60_000, { needs: 'worker-poller' });
+  });
 
   scenario('R1.S1.K1', 'worker killed after Restate accepted the update, before the offset was stored', async (chat, events) => {
     const k = await killAtPoint('worker.poller.after-enqueue', { chat });
     const { update } = await toDraft(chat, 'R1.S1.K1', events);
     events.push(`killed ${(await k.done).killed} at worker.poller.after-enqueue`);
     return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
-  }, 12 * 60_000, { needs: 'worker-poller' });
+  });
 
   scenario('R1.S1.K2', 'Restate killed right after getUpdates returned the update, back after 5 s', async (chat, events) => {
     const k = await killWhileHeld('worker.poller.after-getupdates', { chats: chat }, 'restate');
     const { update } = await toDraft(chat, 'R1.S1.K2', events);
     events.push(`killed ${(await k.done).killed} while the poller was held after getUpdates`);
     return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
-  }, 12 * 60_000, { needs: 'worker-poller' });
+  });
 
   scenario('R1.S1.K3', 'Postgres killed after Restate accepted the update, before the offset was stored; back after 5 s', async (chat, events) => {
     const k = await killWhileHeld('worker.poller.after-enqueue', { chat }, 'postgres');
@@ -483,25 +457,28 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     events.push(`killed ${(await k.done).killed} while the poller was held after the enqueue`);
     // The offset could not be stored, so the update was asked for and sent again with the same key.
     return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
-  }, 12 * 60_000, { needs: 'worker-poller' });
+  });
 
   scenario('R1.S2.K4', 'Core killed after intake saved the request, before it answered ChatInbox', async (chat, events) => {
     const k = await killAtPoint('core.intake.after-decision', { chat });
     const { update } = await toDraft(chat, 'R1.S2.K4', events);
     events.push(`killed ${(await k.done).killed} at core.intake.after-decision`);
     return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
-  }, 12 * 60_000, { needs: 'worker-poller' });
+  });
 
   scenario('R1.S2.K5', 'worker killed while Core\'s intake of its update was answering; back after 5 s', async (chat, events) => {
     const k = await killWhileHeld('core.intake.after-decision', { chat }, 'worker-blue');
     const { update } = await toDraft(chat, 'R1.S2.K5', events);
     events.push(`killed ${(await k.done).killed} while Core was held at core.intake.after-decision`);
     return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
-  }, 12 * 60_000, { needs: 'worker-poller' });
+  });
 
-  // As R1.K0: since 82b28988 intake makes no classifier call for an unscoped text, so the worker is
-  // killed while Core's intake is sending the acknowledgement (slowed to 4 s) instead.
-  scenario('R1.S2.K5b', 'worker killed while Core\'s intake acknowledges its update (the send slowed to 4 s)', async (chat, events) => {
+  // As R1.K0: since 82b28988 intake makes no classifier call for an unscoped text. Since ADR-135 the
+  // acknowledgement is the worker's own TelegramSender send: the worker is killed while Telegram holds
+  // it (slowed to 4 s). It must reach the requester once; the office hears of it only when its send
+  // mark could not record it as sent. (The first ADR-135 run expected an uncertain send and saw no
+  // office alert; the mark decides now, and the run records it.)
+  scenario('R1.S2.K5b', 'worker killed while its acknowledgement send waits for Telegram (slowed to 4 s)', async (chat, events) => {
     await fakes.telegramFault({ method: 'sendMessage', chat, kind: 'delay', delayMs: 4000, n: 1 });
     const update = await sendBrief(chat, 'R1.S2.K5b');
     events.push(`update ${update.update_id} in chat ${chat}`);
@@ -513,16 +490,36 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await waitHealthy('worker-blue');
     const taskId = await draftOf(chat);
     events.push(`task ${taskId}: draft in chat`);
-    return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
-  }, 12 * 60_000, { needs: 'worker-poller' });
+    // Whether the office must hear of it follows the acknowledgement's own send marks. Two runs on
+    // 2026-09-28 differed: one saw no office alert, the next saw one with marks [attempted, attempted,
+    // sent]; the kill lands before or after the attempt's result is written.
+    const [request] = await query<{ request_id: string }>(sql`SELECT request_id FROM hawa.requests WHERE chat_id = ${chat}`);
+    const marks = request ? await query<{ event_kind: string }>(sql`SELECT event_kind FROM hawa.inbox_events
+      WHERE source_account_id = 'telegram_delivery' AND source_event_id LIKE ${`%${request.request_id}:1:ack%`}
+      ORDER BY received_at`) : [];
+    events.push(`acknowledgement send marks: ${JSON.stringify(marks.map((m) => m.event_kind))}`);
+    // Every attempt writes 'attempted' before it sends and its result after; an attempt without a
+    // result is one whose answer was lost, which ADR-130 keeps uncertain and alerts once.
+    const attempts = marks.filter((m) => /_attempted$/.test(m.event_kind)).length;
+    const ackUncertain = attempts > marks.length - attempts;
+    const acks = (await sentTo(chat)).filter((m) => m.method === 'sendMessage' && m.text?.includes('Request received.'));
+    return {
+      delivered: false, uncertainSends: ackUncertain ? 1 : 0,
+      extra: [
+        { name: 'the acknowledgement has a send mark', ok: marks.length > 0, detail: JSON.stringify(marks.map((m) => m.event_kind)) },
+        { name: 'the acknowledgement reached the requester once', ok: acks.length === 1, detail: `acknowledgements=${acks.length}` },
+      ],
+      after: () => checkIntake(chat, [update.update_id]),
+    };
+  });
 
   scenario('R1.DUP', 'the same update handed on twice (Restate\'s key, then past it) makes one task and one acknowledgement', async (chat, events) => {
     const { update } = await toDraft(chat, 'R1.DUP', events);
     const acksBefore = (await sentTo(chat)).length;
     // The poller's key again: Restate answers with the invocation it has.
     const again = await sendToChatInbox(chat, update, `tg-${update.update_id}`);
-    // Past Restate's key (a rollback to Core's poller, or the key's 7 days gone): a new invocation,
-    // and Core's intake answers it as the duplicate it is.
+    // Past Restate's key (the key's 7 days gone): a new invocation, and Core's intake answers it as
+    // the duplicate it is.
     const other = await sendToChatInbox(chat, update, `chaos-dup-${update.update_id}`);
     events.push(`sent again: tg key HTTP ${again}, another key HTTP ${other}`);
     await waitUntil('the second hand-off to finish', async () => {
@@ -535,17 +532,17 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       extra: [{ name: 'nothing new reached the chat after the update was handed on again', ok: (await sentTo(chat)).length === acksBefore, detail: `sends before=${acksBefore} after=${(await sentTo(chat)).length}` }],
       after: () => checkIntake(chat, [update.update_id]),
     };
-  }, 12 * 60_000, { needs: 'worker-poller' });
+  });
 
-  // R07/FR-060/NFR-001: a flagged chat opens its first request through RequestLifecycle.
+  // R07/FR-060/NFR-001: a chat opens its first request through RequestLifecycle.
   // Crash Core after it commits the intake decision but before ChatInbox receives the answer;
   // then cross Restate's seven-day key with another invocation of the same Telegram update.
-  scenario('R1.S3.K1', 'flagged chat: a Core crash and update replay open one owned request and send one acknowledgement', async (chat, events) => {
+  scenario('R1.S3.K1', 'a Core crash and update replay open one owned request and send one acknowledgement', async (chat, events) => {
     const killed = await killAtPoint('core.intake.after-decision', { chat });
     const update = textUpdate(chat, 'Please use a navy background and a clean serif font for the design.');
     const [updateId] = await fakes.updates([update]);
     const polled = { ...update, update_id: updateId };
-    events.push(`update ${updateId} in flagged chat ${chat}`);
+    events.push(`update ${updateId} in chat ${chat}`);
     events.push(`killed ${(await killed.done).killed} after Core committed the intake decision`);
     await waitUntil('the request-owned task and acknowledgement', async () => {
       const tasks = await tasksOfChat(chat);
@@ -594,9 +591,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         ];
       },
     };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
-  scenario('R1.S3.PHOTO', 'flagged chat: a captioned photo survives a Core crash, binds to one request, and is downloaded once', async (chat, events) => {
+  scenario('R1.S3.PHOTO', 'a captioned photo survives a Core crash, binds to one request, and is downloaded once', async (chat, events) => {
     const fileId = `lifecycle-reference-${chat}`;
     const size = 1024;
     await fakes.file({ file_id: fileId, size, mime: 'image/jpeg' });
@@ -605,7 +602,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       'Please use the attached image as a reference and change the background to navy.');
     const [updateId] = await fakes.updates([update]);
     const polled = { ...update, update_id: updateId };
-    events.push(`captioned photo update ${updateId} in flagged chat ${chat}`);
+    events.push(`captioned photo update ${updateId} in chat ${chat}`);
     events.push(`killed ${(await killed.done).killed} after the stored photo decision`);
     await waitUntil('the photo-owned request and acknowledgement', async () => {
       const requests = await query<{ request_id: string }>(sql`SELECT request_id FROM hawa.requests WHERE chat_id = ${chat}`);
@@ -651,7 +648,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         ];
       },
     };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
   for (const mediaKind of ['captioned', 'captionless', 'album', 'document', 'document-album'] as const) {
   const document = mediaKind === 'document' || mediaKind === 'document-album';
@@ -659,7 +656,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   const captionless = mediaKind === 'captionless' || mediaKind === 'document';
   const scenarioId = document ? (album ? 'R1.S3.DOCUMENT_ALBUM' : 'R1.S3.IMAGE_DOCUMENT')
     : album ? 'R1.S3.ALBUM' : captionless ? 'R1.S3.CAPTIONLESS_PHOTO' : 'R1.S3.REVISION_PHOTO';
-  scenario(scenarioId, `flagged chat: ${mediaKind} photo input survives Core SIGKILL before task projection`, async (chat, events) => {
+  scenario(scenarioId, `${mediaKind} photo input survives Core SIGKILL before task projection`, async (chat, events) => {
     await sendBrief(chat, scenarioId);
     const request = await waitUntil('the first draft to enter lifecycle review', async () => {
       const [row] = await query<{ request_id: string; current_task_id: string; rev: string; stage: string }>(sql`
@@ -840,18 +837,18 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         ];
       },
     };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
   }
 
-  scenario('R1.S3.MEDIA', 'flagged chat: a PDF without client selection gets one durable review prompt and no task', async (chat, events) => {
+  scenario('R1.S3.MEDIA', 'a PDF without client selection gets one durable review prompt and no task', async (chat, events) => {
     const update = imageDocumentUpdate(chat, 'lifecycle-pdf', 128,
       'KAAE members evening\n---\nDecember 4, 2026\nErbil');
     update.message.document.mime_type = 'application/pdf';
     update.message.document.file_name = 'brief.pdf';
     const [updateId] = await fakes.updates([update]);
     const polled = { ...update, update_id: updateId };
-    events.push(`captioned PDF update ${updateId} in flagged chat ${chat}`);
+    events.push(`captioned PDF update ${updateId} in chat ${chat}`);
     await waitUntil('the PDF review prompt to be sent', async () => {
       const rows = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
         WHERE source_account_id = 'lifecycle_source_admission' AND source_event_id = ${String(updateId)}`);
@@ -886,15 +883,13 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         ];
       },
     };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
-  // Slice 2.2 (PHASE2_DESIGN.md section 3; design R1 S8): the Delivery workflow and TelegramSender, on
-  // chats listed in HAWA_LIFECYCLE_CHATS. Each request pins two files; no scenario presses Deliver twice.
-  // Only with the worker's poller: since ADR-059 (99eb6b04) a task claims the Restate executor only
-  // when RequestLifecycle opens it (chat-intake.ts: "a live chat flag is admission policy, not task
-  // ownership"), and only ChatInbox reaches RequestLifecycle. With Core polling, a flagged chat's brief
-  // is a Core-pinned legacy task (ADR-052) that Core delivers itself, as production mode does.
-  scenario('L2.0', 'flagged chat: the Delivery workflow sends both approved files and the notice once, no faults', async (chat, events) => {
+  // Slice 2.2 (PHASE2_DESIGN.md section 3; design R1 S8): the Delivery workflow and TelegramSender.
+  // Each request pins two files; no scenario presses Deliver twice. Since ADR-059 (99eb6b04) a task
+  // claims the Restate executor only when RequestLifecycle opens it, and since ADR-135 every request
+  // is opened that way.
+  scenario('L2.0', 'the Delivery workflow sends both approved files and the notice once, no faults', async (chat, events) => {
     const { deliveryId } = await workflowRequest(chat, 'L2.0', events);
     // Core reads a finished run's outcome here when its report never arrived (startWorkflowDelivery).
     const output = await fetch(`http://127.0.0.1:${PORTS.restateIngress}/restate/workflow/Delivery/${encodeURIComponent(deliveryId)}/output`);
@@ -904,9 +899,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       delivered: true, files: 2, executor: 'restate',
       extra: [{ name: "Restate keeps the finished run's outcome where Core reads it", ok: output.status === 200 && outcome?.outcome === 'delivered', detail: `HTTP ${output.status} ${JSON.stringify(outcome)}` }],
     };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
-  scenario('L2.K14', 'flagged chat: Core killed in the middle of the delivery (Drive upload slowed to 8 s), back after 5 s; Deliver pressed once', async (chat, events) => {
+  scenario('L2.K14', 'Core killed in the middle of the delivery (Drive upload slowed to 8 s), back after 5 s; Deliver pressed once', async (chat, events) => {
     let stateAfterRestart = '';
     await workflowRequest(chat, 'L2.K14', events, {
       beforeDeliver: async () => { await fakes.googleDelay({ path: '^/drive/v3/files', delayMs: 8000, n: 1 }); },
@@ -925,39 +920,39 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       delivered: true, files: 2, executor: 'restate',
       extra: [{ name: 'the delivery finishes after a Core restart without a second Deliver press', ok: true, detail: `task ${stateAfterRestart} right after the restart, complete without another press` }],
     };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
-  scenario('L2.K15', 'flagged chat: Core killed at core.delivery.after-drive (files in Drive, nothing recorded), restarted', async (chat, events) => {
+  scenario('L2.K15', 'Core killed at core.delivery.after-drive (files in Drive, nothing recorded), restarted', async (chat, events) => {
     const k = await killAtPoint('core.delivery.after-drive', { mode: 'workflow' });
     await workflowRequest(chat, 'L2.K15', events);
     events.push(`killed ${(await k.done).killed} at core.delivery.after-drive`);
     return { delivered: true, files: 2, executor: 'restate' };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
-  scenario('L2.K16', 'flagged chat: worker killed between the two files', async (chat, events) => {
+  scenario('L2.K16', 'worker killed between the two files', async (chat, events) => {
     const k = await killAtPoint('worker.delivery.between-files', {});
     await workflowRequest(chat, 'L2.K16', events);
     events.push(`killed ${(await k.done).killed} at worker.delivery.between-files`);
     return { delivered: true, files: 2, executor: 'restate' };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
-  scenario('L2.K17', 'flagged chat: Postgres killed after Telegram took the first file, before its mark was written; back after 5 s', async (chat, events) => {
+  scenario('L2.K17', 'Postgres killed after Telegram took the first file, before its mark was written; back after 5 s', async (chat, events) => {
     const k = await killWhileHeld('worker.sender.after-telegram', { commandType: 'lifecycle', kind: 'document' }, 'postgres');
     await workflowRequest(chat, 'L2.K17', events);
     events.push(`killed ${(await k.done).killed} while the sender was held after the first file`);
     // The send's answer is journaled and its 'sent' mark written once Postgres is back: nothing is
     // uncertain, so the office hears nothing.
     return { delivered: true, files: 2, executor: 'restate', uncertainSends: 0 };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
-  scenario('L2.K18', 'flagged chat: Restate killed between the two files, back after 5 s', async (chat, events) => {
+  scenario('L2.K18', 'Restate killed between the two files, back after 5 s', async (chat, events) => {
     const k = await killWhileHeld('worker.delivery.between-files', {}, 'restate');
     await workflowRequest(chat, 'L2.K18', events);
     events.push(`killed ${(await k.done).killed} while the delivery was held between the files`);
     return { delivered: true, files: 2, executor: 'restate' };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
-  scenario('L2.K12', 'flagged chat: worker killed after Telegram took the first file, before its mark (one uncertain send expected)', async (chat, events) => {
+  scenario('L2.K12', 'worker killed after Telegram took the first file, before its mark (one uncertain send expected)', async (chat, events) => {
     const k = await killAtPoint('worker.sender.after-telegram', { commandType: 'lifecycle', kind: 'document' });
     // A request-owned delivery with an unconfirmed send is held for staff (ADR-043, ADR-045) and
     // completes only on an administrator's confirmation (ADR-046); until 2026-09-28 this expected the
@@ -968,9 +963,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       settlement = await staffConfirmVisible(chat, taskId, events);
     } });
     return { delivered: true, files: 2, executor: 'restate', uncertainSends: 1, extra: settlement };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
-  scenario('L2.429', 'flagged chat: Telegram answers 429 (retry_after 3) to the second file', async (chat, events) => {
+  scenario('L2.429', 'Telegram answers 429 (retry_after 3) to the second file', async (chat, events) => {
     await fakes.telegramFault({ method: 'sendDocument', chat, kind: '429', n: 1, retryAfter: 3, skip: 1 });
     await workflowRequest(chat, 'L2.429', events);
     const calls = (await fakes.sent()).filter((s: any) => s.chat_id === chat && s.method === 'sendDocument');
@@ -982,25 +977,24 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       delivered: true, files: 2, executor: 'restate',
       extra: [{ name: "the second file is sent again no sooner than Telegram's retry_after (3 s)", ok: Boolean(limited && after) && waitedMs >= 3000, detail: `waited ${waitedMs} ms after the 429` }],
     };
-  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+  });
 
-  // R10 (driver/cutover-scenarios.ts): the cutover of 2026-09-28 and its rollback, as deploys. Run alone,
-  // in this order, from production's earlier configuration:
-  //   run.ts --poller core --lifecycle-chats none --only R10.H1,R10.K1,R10.K2
-  const r10 = enabled && poller === 'core' && process.env.CHAOS_LIFECYCLE_CHATS === '';
-  if (r10 || only.includes('R10.H1')) scenario('R10.H1', 'requests made while Core polled, continued after the switch to the worker poller and every chat on the lifecycle', async (_chat, events) => {
-    if (!r10) throw new Error('R10.H1 starts from --poller core --lifecycle-chats none');
+  // R10 (driver/cutover-scenarios.ts): the requests made before the lifecycle cutover, and what rolling
+  // back means since ADR-135 (the previous release, never Core's poller). Run alone, in this order:
+  //   run.ts --only R10.H1,R10.K1,R10.K2
+  // The stack starts on the previous release with Core polling and no chat on the lifecycle.
+  scenario('R10.H1', 'requests made on the previous release while Core polled, continued after the deploy of this release', async (_chat, events) => {
     const { extra } = await handoffOfOldRequests(newChat, events);
     return { delivered: false, skipRequestChecks: true, extra };
-  }, 60 * 60_000);
+  }, 75 * 60_000);
 
-  if (r10 || only.includes('R10.K1')) scenario('R10.K1', 'lifecycle requests in flight, the cutover rolled back by a deploy, updates kept coming, then rolled forward', async (_chat, events) => {
-    const { extra } = await rollbackAndForward(newChat, events);
+  scenario('R10.K1', 'lifecycle requests in flight, this release rolled back to the previous one by a deploy, then forward again', async (_chat, events) => {
+    const { extra } = await rollbackToPreviousRelease(newChat, events);
     return { delivered: false, skipRequestChecks: true, extra };
-  }, 60 * 60_000);
+  }, 75 * 60_000);
 
-  if (r10 || only.includes('R10.K2')) scenario('R10.K2', 'the chat list alone rolled back (the worker keeps polling) with a lifecycle request waiting for its requester, then forward', async (_chat, events) => {
-    const { extra } = await chatsOnlyRollback(newChat, events);
+  scenario('R10.K2', 'the retired chat list emptied on this release changes nothing: a waiting request keeps its reply, a new chat opens a request', async (_chat, events) => {
+    const { extra } = await retiredSettingsIgnored(newChat, events);
     return { delivered: false, skipRequestChecks: true, extra };
   }, 60 * 60_000);
 
@@ -1033,7 +1027,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
 });
 
 /**
- * Slice 2.2: a request in a flagged chat, delivered by the Restate Delivery workflow. The PNG and the
+ * Slice 2.2: a request delivered by the Restate Delivery workflow. The PNG and the
  * PPTX are pinned, so two files go to the requester and a fault can fall between them. The Deliver
  * press is answered at once (202, executor restate); nothing presses it again.
  */
@@ -1049,27 +1043,11 @@ async function workflowRequest(chat: string, tag: string, events: string[], hook
   events.push(`deliver: HTTP ${delivered.status} in ${Date.now() - started} ms, executor ${delivered.body?.executor}, ${delivered.body?.deliveryId}`);
   // 202 while the workflow runs; a request-owned delivery that finished before Core answered is 200.
   if ((delivered.status !== 202 && delivered.status !== 200) || delivered.body?.executor !== 'restate') {
-    throw new Error(`the flagged chat's delivery was not handed to the workflow: HTTP ${delivered.status} ${JSON.stringify(delivered.body).slice(0, 300)}`);
+    throw new Error(`the request's delivery was not handed to the workflow: HTTP ${delivered.status} ${JSON.stringify(delivered.body).slice(0, 300)}`);
   }
   if (hooks.afterDeliver) await hooks.afterDeliver(taskId);
   if (hooks.beforeComplete) await hooks.beforeComplete(taskId);
   await waitDelivered(chat, taskId, 300_000, 2);
   events.push(`delivered, task ${await taskState(taskId)}`);
   return { taskId, deliveryId: String(delivered.body.deliveryId) };
-}
-
-/** Brief to the Deliver press, without waiting for the task to complete (a kill may stop it). */
-async function fullRequestUntilDelivery(chat: string, tag: string, events: string[]): Promise<string> {
-  const taskId = await briefToDraft(chat, tag);
-  const approved = await approve(taskId);
-  events.push(`approve: HTTP ${approved.status}`);
-  const delivered = await deliver(taskId);
-  events.push(`deliver: HTTP ${delivered.status}`);
-  return taskId;
-}
-
-async function outboxOpen(taskId: string): Promise<boolean> {
-  const { query, sql } = await import('./driver/stack.js');
-  const [row] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands WHERE aggregate_id = ${taskId}::uuid AND state IN ('pending', 'leased')`);
-  return Number(row?.n ?? 0) > 0;
 }

@@ -1,6 +1,8 @@
 # ADR-136 — Requests from before the lifecycle cutover, and rolling the poller back
 
-Date: 2026-09-28. Status: implementation; locally qualified on the chaos stack, not deployed.
+Date: 2026-09-28. Status: deployed 2026-09-29 00:31 +03; **partly superseded by ADR-135** (2026-09-29,
+see "Reconciled with ADR-135" at the end): the Core-poller rollback and the 48-hour new-Core-task rule
+are gone; the handoff of Core-owned updates stays.
 Requirements: FR-004, FR-060, NFR-001, NFR-013. Normative sources: MASTER_SPEC.md,
 docs/10_WORKFLOW_RELIABILITY.md ("Legacy delivery cutover pin"), infra/docker/README.md,
 runbooks/20_architecture_operations.md. Builds on ADR-052, ADR-059, ADR-065, ADR-113/114, ADR-129
@@ -93,3 +95,27 @@ held design and the held delivery each finishing once on the colour they started
 Not executed: production (no deploy, no SQL), a lifecycle `awaiting_answer` question (no Studio
 fixtures), real Telegram's 409 between two pollers (the fake serves both), native recovery of the held
 revisions, and Restate backup and restore.
+
+## Reconciled with ADR-135 — 2026-09-29
+
+ADR-135 (every Telegram chat lifecycle-owned; the old intake only finishes its own requests; Core
+never polls) was written in parallel from an older base and adopted on top of this ADR. What of this
+ADR remains:
+
+- **Kept: the handoff of Core-owned updates** (decision 1). Its reading of which updates belong to an
+  old request is the one both ADRs now use (`legacyOwnedUpdate`, moved from
+  `lifecycle-chat-target.ts` to `apps/core/src/services/legacy-telegram-routing.ts`, with "legacy"
+  read as ADR-135 reads it: a Telegram task RequestLifecycle does not own). It was kept over ADR-135's
+  narrower reading because its tests and `R10.H1` cover replies ADR-135's missed: to a delivered file
+  and to a prompt that names no task. Legacy intake now takes these updates in its finish-only scope.
+- **Replaced: the 48-hour rule for new briefs** (decision 2). A brief next to recent Core history no
+  longer starts a Core task. It goes to the old intake only when the chat's newest request of the last
+  48 hours is an open legacy one, and that intake continues that design or asks for `/new` (ADR-135).
+- **Removed: Core's poller forwarding lifecycle chats to `ChatInbox`** (decision 3,
+  `polled-lifecycle-route.ts`). Core never polls, so it was unreachable. Rolling back is deploying the
+  previous release with `HAWA_TELEGRAM_POLLER=worker` and `HAWA_LIFECYCLE_CHATS=*` kept, not switching
+  to Core's poller (infra/docker/README.md, runbooks/20_architecture_operations.md).
+- The chaos scenarios were converted accordingly: `R10.H1` makes its old requests on the previous
+  release and deploys this one; `R10.K1` rolls this release back to the previous one and forward;
+  `R10.K2` checks that the emptied chat list changes nothing. Results:
+  `plans/lean-design-implementation-2026-09-28/RECONCILIATION_PROOF.json`.

@@ -16,9 +16,10 @@ import { telegramPollerOf } from '../src/services/telegram-poller-owner.js';
 /**
  * Core's side of Phase 2.1 (PHASE2_DESIGN.md slice 2.1), against the per-file test database as
  * hawa_app (row-level security as in production): the worker's ChatInbox hands each update to
- * POST /v1/internal/telegram/intake, which runs today's intake unchanged, and dead-letters one intake
- * keeps failing through POST /v1/internal/telegram/park. HAWA_TELEGRAM_POLLER decides which process
- * polls; unset, Core does, exactly as before.
+ * POST /v1/internal/telegram/intake, and dead-letters one intake keeps failing through
+ * POST /v1/internal/telegram/park. Since ADR-135 every chat is lifecycle-owned (no chat setting
+ * exists), the old intake only finishes requests it started (lifecycle-only-telegram.test.ts), and
+ * only the worker polls.
  */
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const clientId = 'c1000000-0000-4000-8000-000000000002';
@@ -238,12 +239,11 @@ describe('a requester change after the design reached the office (finding 13 of 
 });
 
 describe('POST /v1/internal/telegram/intake', () => {
-  it('prepares a flagged first brief without a Core task and replays its open after the flag changes', async () => {
+  it('prepares a first brief without a Core task and replays its open', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
     const update = brief(updateId(), chat);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const app = createApp({ db } as any);
     const first = await intake(app, update);
     expect(first.body).toMatchObject({ kind: 'handled', intakeStatus: 200,
@@ -252,7 +252,6 @@ describe('POST /v1/internal/telegram/intake', () => {
         sourceChannelId: String(chat), autoGenerate: true, clientId } });
     expect(first.body.draft.sourceEventId).toBe(`lc-${first.body.requestId}-r0`);
     expect(await tasksInChat(chat)).toHaveLength(0);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     const again = await intake(createApp({ db } as any), update);
     expect(again.body).toMatchObject({ duplicate: true, lifecycleAction: 'open-request',
       requestId: first.body.requestId, draft: first.body.draft });
@@ -282,7 +281,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     const chat = chatId();
     const app = createApp({ db } as any);
     const waiting = await seedWaitingRequest(app, chat);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const update = brief(updateId(), chat);
     update.message.text = '/new KAAE second event\n---\nDecember 9, 2026\nErbil';
     const result = await intake(app, update, 'lifecycle', waiting.requestId);
@@ -292,17 +290,15 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
 
-  it('refuses an unlinked reply in a flagged chat instead of saving it as a new task', async () => {
+  it('refuses a reply to an unknown message instead of saving it as a new task', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const update = brief(updateId(), chat);
     (update.message as any).reply_to_message = { message_id: 123456 };
     const result = await intake(createApp({ db } as any), update);
     expect(result.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY' });
     expect(await tasksInChat(chat)).toHaveLength(0);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     const replay = await intake(createApp({ db } as any), update);
     expect(replay.body).toMatchObject({ intakeStatus: 409, code: 'STALE_REQUEST_REPLY',
       lifecycleAction: 'request-choice-required' });
@@ -317,7 +313,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const app = createApp({ db } as any);
     const manual = brief(updateId(), chat);
     manual.message.text = 'Please change the background to navy';
@@ -335,7 +330,6 @@ describe('POST /v1/internal/telegram/intake', () => {
   it.each(['photo', 'document'] as const)('admits a captioned %s through its owned task without image bytes in Restate', async (carrier) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const update = brief(updateId(), chat);
     delete (update.message as any).text;
     (update.message as any).caption = 'KAAE members evening\n---\nDecember 4, 2026\nErbil';
@@ -363,7 +357,6 @@ describe('POST /v1/internal/telegram/intake', () => {
       .select('payload').where('source_account_id', '=', 'lifecycle_chat_open')
       .where('source_event_id', '=', String(update.update_id)).executeTakeFirstOrThrow());
     expect(storedSource.payload).toMatchObject({ sourceUpdate: update });
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect((await intake(createApp({ db } as any), update)).body).toMatchObject({
       intakeStatus: 200, duplicate: true, lifecycleAction: 'open-request',
       requestId: result.body.requestId, draft: result.body.draft });
@@ -416,7 +409,6 @@ describe('POST /v1/internal/telegram/intake', () => {
 
   it('requests an explicit client for voice and PDF sources and holds unlinked photos', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     const app = createApp({ db } as any);
     for (const media of [
       { voice: { file_id: 'voice-fixture', duration: 5 }, caption: 'The exact spoken brief' },
@@ -439,7 +431,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     'verifies original image-file bytes with MIME hint %s and ignores the filename', async (mime) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const update = brief(updateId(), chat);
     const message = update.message as Record<string, unknown>;
     message.caption = message.text;
@@ -459,7 +450,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     'holds an image-file submission with %s intact and never designs from its caption', async (fault) => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const update = brief(updateId(), chat);
     const message = update.message as Record<string, unknown>;
     message.caption = message.text;
@@ -479,7 +469,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect((await intake(createApp({ db, telegramBridge: bridge } as any), update)).body).toMatchObject(expected);
     expect(bridge.downloadFile).toHaveBeenCalledTimes(fault.endsWith('bytes') ? 1 : 0);
     expect(await tasksInChat(chat)).toHaveLength(0);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect((await intake(createApp({ db } as any), update)).body).toMatchObject(expected);
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
@@ -487,7 +476,6 @@ describe('POST /v1/internal/telegram/intake', () => {
   it('replays a pre-admission image-file hold after upgrading instead of starting a task', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const update = brief(updateId(), chat);
     const message = update.message as Record<string, unknown>;
     message.caption = message.text;
@@ -501,7 +489,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     const bridge = { downloadFile: vi.fn(), dispatchOutboundMessage: vi.fn() };
     const app = createApp({ db, telegramBridge: bridge } as any);
     expect((await intake(app, update)).body).toMatchObject({ intakeStatus: 422, lifecycleAction: 'park-update' });
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect((await intake(app, update)).body).toMatchObject({ intakeStatus: 422, lifecycleAction: 'park-update' });
     expect(bridge.downloadFile).not.toHaveBeenCalled();
     expect(await tasksInChat(chat)).toHaveLength(0);
@@ -511,7 +498,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     vi.stubEnv('HAWA_BLOB_DIR', '');
     const chat = chatId();
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const update = brief(updateId(), chat);
     delete (update.message as any).text;
     (update.message as any).caption = 'KAAE new design\n---\nDecember 4, 2026';
@@ -526,7 +512,6 @@ describe('POST /v1/internal/telegram/intake', () => {
   it('parks an unreadable photo rather than designing from its caption alone', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     const chat = chatId();
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const update = brief(updateId(), chat);
     delete (update.message as any).text;
     (update.message as any).caption = 'KAAE new design\n---\nDecember 4, 2026';
@@ -543,7 +528,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     for (const kind of ['channel_post', 'edited_message'] as const) {
       const chat = chatId();
-      vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
       const update = brief(updateId(), chat) as any;
       update[kind] = { ...update.message, photo: [{ file_id: `${kind}-fixture` }],
         caption: 'New design with this image' };
@@ -556,34 +540,41 @@ describe('POST /v1/internal/telegram/intake', () => {
     }
   });
 
-  it('keeps an existing Core chat on legacy intake until the sender explicitly starts a separate brief', async () => {
+  // Before ADR-135 an ordinary brief in a chat with earlier Core tasks became another Core task.
+  it('an update the old intake saved replays its receipt; beside that open legacy request a brief needs /new', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
     const app = createApp({ db } as any);
+    // A request the old intake made before the switch (its route still builds one for tests).
     const oldUpdate = brief(updateId(), chat);
-    const old = await intake(app, oldUpdate);
-    expect(old.body.taskIds).toHaveLength(1);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
+    const old = await app.request('/api/webhooks/telegram?generate=true', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': process.env.TELEGRAM_WEBHOOK_SECRET! },
+      body: JSON.stringify(oldUpdate) });
+    expect(old.status).toBe(201);
+    const oldTask = String((await old.json()).task.id);
     const replay = await intake(createApp({ db } as any), oldUpdate);
-    expect(replay.body).toMatchObject({ duplicate: true, taskIds: old.body.taskIds });
+    expect(replay.body).toMatchObject({ duplicate: true, taskIds: [oldTask] });
     expect(replay.body.lifecycleAction).toBeUndefined();
     expect(await tasksInChat(chat)).toHaveLength(1);
+    // Legacy intake reads an unlinked message there against that request: it starts no new one.
     const ordinary = brief(updateId(), chat);
     ordinary.message.text = 'KAAE follow-up event\n---\nDecember 9, 2026';
-    const legacy = await intake(app, ordinary);
-    expect(legacy.body.lifecycleAction).toBeUndefined();
-    expect(legacy.body.taskIds).toHaveLength(1);
-    const pins = await withRlsContext(db, scope, async (trx) =>
-      (await sql<{ delivery_executor_pin: string }>`SELECT t.delivery_executor_pin
-        FROM hawa.tasks t WHERE t.id = ${legacy.body.taskIds[0]}::uuid`.execute(trx)).rows);
-    expect(pins).toEqual([{ delivery_executor_pin: 'core' }]);
+    const refused = await intake(app, ordinary);
+    expect(refused.body).toMatchObject({ intakeStatus: 409, code: 'LEGACY_REQUEST_REFUSED',
+      lifecycleAction: 'new-brief-required', chatId: String(chat) });
+    expect(await tasksInChat(chat)).toHaveLength(1);
     const explicit = brief(updateId(), chat);
     explicit.message.text = '/new KAAE new request\n---\nDecember 10, 2026';
     expect((await intake(app, explicit)).body).toMatchObject({ lifecycleAction: 'open-request' });
+    const pins = await withRlsContext(db, scope, async (trx) =>
+      (await sql<{ delivery_executor_pin: string }>`SELECT t.delivery_executor_pin
+        FROM hawa.tasks t WHERE t.id = ${oldTask}::uuid`.execute(trx)).rows);
+    expect(pins).toEqual([{ delivery_executor_pin: 'core' }]);
   });
 
-  it('runs today\'s intake: a brief becomes one task, and the same update again is a duplicate, not a second task', async () => {
+  // Before ADR-135 this was "today's intake": the brief became a Core task at once.
+  it('a brief in a new chat opens one lifecycle request, and the same update again replays it, never a second', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
     const chat = chatId();
@@ -592,13 +583,14 @@ describe('POST /v1/internal/telegram/intake', () => {
 
     const first = await intake(app, update);
     expect(first.status).toBe(200);
-    expect(first.body).toMatchObject({ v: 1, kind: 'handled', intakeStatus: 201, duplicate: false });
-    expect(first.body.taskIds).toHaveLength(1);
+    expect(first.body).toMatchObject({ v: 1, kind: 'handled', intakeStatus: 200, duplicate: false, lifecycleAction: 'open-request' });
 
-    // Delivered again: by Restate after a worker restart, or by the other poller after a rollback.
+    // Delivered again: by Restate after a worker restart.
     const again = await intake(createApp({ db } as any), update);
-    expect(again.body).toMatchObject({ kind: 'handled', intakeStatus: 200, duplicate: true, taskIds: first.body.taskIds });
-    expect(await tasksInChat(chat)).toHaveLength(1);
+    expect(again.body).toMatchObject({ kind: 'handled', intakeStatus: 200, duplicate: true,
+      lifecycleAction: 'open-request', requestId: first.body.requestId });
+    // The request object creates the task; intake made none.
+    expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
   it('answers INTAKE_PAUSED while the office has switched Telegram off, and starts nothing', async () => {
@@ -612,18 +604,24 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(await tasksInChat(chat)).toHaveLength(0);
   });
 
-  it('accepts lifecycle mode and falls through to legacy intake when no manual request matches', async () => {
-    // lifecycle is now a supported mode (Phase 2.3 Q/A loop).
-    // When no lifecycle request is in manual stage for the chat, it falls through to legacy intake.
+  it('answers both modes alike: a brief opens a request, a greeting starts nothing', async () => {
+    // ChatInbox sends `legacy` for a chat's first update and `lifecycle` after that (ADR-135).
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
     fakeTelegram();
-    const chat = chatId();
-    const update = brief(updateId(), chat);
     const app = createApp({ db } as any);
-    const result = await intake(app, update, 'lifecycle');
-    expect(result.status).toBe(200);
-    expect(result.body).toMatchObject({ kind: 'handled', intakeStatus: 201 });
+    for (const mode of ['legacy', 'lifecycle']) {
+      const chat = chatId();
+      const result = await intake(app, brief(updateId(), chat), mode);
+      expect(result.status).toBe(200);
+      expect(result.body, mode).toMatchObject({ kind: 'handled', intakeStatus: 200, lifecycleAction: 'open-request' });
+      const greeting = brief(updateId(), chat);
+      greeting.message.text = 'hello';
+      expect((await intake(app, greeting, mode)).body.lifecycleAction, mode).toBeUndefined();
+      expect(await tasksInChat(chat)).toHaveLength(0);
+    }
     // A mode we have never heard of is still refused.
+    expect((await app.request('/v1/internal/telegram/intake', { method: 'POST', headers: worker,
+      body: JSON.stringify({ v: 1, update: brief(updateId(), chatId()), mode: 'decide' }) })).status).toBe(400);
     expect((await intake(app, { message: {} })).status).toBe(400);
   });
 
@@ -684,7 +682,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     const bridge = { downloadFile: vi.fn(async () => photo),
       dispatchOutboundMessage: vi.fn(async () => ({ success: true })) };
     const photoApp = createApp({ db, telegramBridge: bridge } as any);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const result = await intake(photoApp, update, 'lifecycle');
     expect(result.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'requester-revision',
       requestId: second.requestId, priorTaskId: second.taskId, duplicate: false });
@@ -712,7 +709,6 @@ describe('POST /v1/internal/telegram/intake', () => {
       fetcher: (async () => { throw new Error('no model calls'); }) as any });
     expect(await (studio as any).requestImages({ tenantId, actorId: operatorUserId }, result.body.newTaskId))
       .toContain(`data:image/png;base64,${photo.toString('base64')}`);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     const replay = await intake(createApp({ db } as any), update);
     expect(replay.body).toMatchObject({ intakeStatus: 200, duplicate: true,
       lifecycleAction: 'requester-revision', requestId: second.requestId,
@@ -732,7 +728,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     const chat = chatId();
     const app = createApp({ db } as any);
     const { requestId } = await seedWaitingRequest(app, chat);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
     const update = brief(updateId(), chat);
     delete (update.message as any).text;
     (update.message as any).photo = [{ file_id: 'unowned-captionless-photo' }];
@@ -754,7 +749,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     expect(result.body).toMatchObject(expected);
     expect(bridge.downloadFile).not.toHaveBeenCalled();
     expect(await tasksInChat(chat)).toHaveLength(1);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect((await intake(createApp({ db } as any), update)).body).toMatchObject(expected);
     expect(await tasksInChat(chat)).toHaveLength(1);
   });
@@ -874,7 +868,6 @@ describe('POST /v1/internal/telegram/intake', () => {
     await withRlsContext(db, scope, (trx) => recordRevisionPhotoDecision(trx,
       tenantId, update.update_id, { requestId, chatId: String(chat), payloadHash, image }));
     // The cutover flag and Telegram bridge can both disappear before the first Core answer.
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     const replayed = await intake(createApp({ db } as any), update);
     expect(replayed.body).toMatchObject({ intakeStatus: 200, lifecycleAction: 'requester-revision',
       requestId, duplicate: false });
@@ -1205,25 +1198,22 @@ describe('the kill switch the worker\'s poller reads', () => {
 });
 
 describe('HAWA_TELEGRAM_POLLER', () => {
-  it('leaves polling in Core unless it says worker', () => {
-    expect(telegramPollerOf({})).toBe('core');
-    expect(telegramPollerOf({ HAWA_TELEGRAM_POLLER: 'core' })).toBe('core');
-    expect(telegramPollerOf({ HAWA_TELEGRAM_POLLER: 'nonsense' })).toBe('core');
-    expect(telegramPollerOf({ HAWA_TELEGRAM_POLLER: ' Worker ' })).toBe('worker');
-    expect(productionAppOptions({}).enableTelegramPolling).toBe(true);
-    expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: 'worker' }).enableTelegramPolling).toBe(false);
+  // ADR-135: the worker is the only poller; the variable can no longer hand polling back to Core.
+  it('names the worker whatever it says, and Core never polls', () => {
+    for (const value of [undefined, 'core', 'nonsense', ' Worker ']) {
+      expect(telegramPollerOf({ HAWA_TELEGRAM_POLLER: value })).toBe('worker');
+      expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: value }).enableTelegramPolling).toBe(false);
+    }
   });
 
-  it('"poll now" is refused with 409 while the worker polls, and works as before otherwise', async () => {
+  it('"poll now" is refused with 409 however the variable is set', async () => {
     fakeTelegram();
-    vi.stubEnv('HAWA_TELEGRAM_POLLER', 'worker');
-    const app = createApp({ db } as any);
-    const refused = await app.request('/v1/adapters/telegram/poll-now', { method: 'POST', headers: admin });
-    expect(refused.status).toBe(409);
-    expect((await app.request('/v1/adapters/telegram/status')).status).toBe(200);
-    expect(await (await app.request('/v1/adapters/telegram/status')).json()).toMatchObject({ poller: 'worker' });
-    vi.stubEnv('HAWA_TELEGRAM_POLLER', 'core');
-    expect(await (await app.request('/v1/adapters/telegram/status')).json()).toMatchObject({ poller: 'core' });
-    expect((await app.request('/v1/adapters/telegram/poll-now', { method: 'POST', headers: admin })).status).not.toBe(409);
+    for (const value of ['worker', 'core', '']) {
+      vi.stubEnv('HAWA_TELEGRAM_POLLER', value);
+      const app = createApp({ db } as any);
+      expect((await app.request('/v1/adapters/telegram/poll-now', { method: 'POST', headers: admin })).status, value).toBe(409);
+      expect((await app.request('/v1/adapters/telegram/status')).status).toBe(200);
+      expect(await (await app.request('/v1/adapters/telegram/status')).json()).toMatchObject({ poller: 'worker' });
+    }
   });
 });

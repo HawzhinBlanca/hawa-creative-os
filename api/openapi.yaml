@@ -850,6 +850,47 @@ paths:
                   items: {type: array, items: {$ref: '#/components/schemas/FailureItem'}}
                   nextCursor: {type: [string, 'null']}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/operations/legacy-path:
+    get:
+      tags: [Operations]
+      operationId: getLegacyPathStatus
+      summary: What is still on the old Telegram path (ADR-135); administrators only, read-only
+      responses:
+        '200':
+          description: Open legacy Telegram tasks, queued Core requester sends and legacy Delivery runs; stage2Ready when all are zero
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [openTasks, pendingRequesterSends, failedRequesterSends, legacyWorkflowDeliveriesRunning, newestLegacyTaskCreatedAt, stage2Ready]
+                properties:
+                  openTasks:
+                    type: object
+                    required: [total, byState, byPin, chats, oldestUpdatedAt, items]
+                    properties:
+                      total: {type: integer, minimum: 0}
+                      byState: {type: object, additionalProperties: {type: integer}}
+                      byPin: {type: object, additionalProperties: {type: integer}}
+                      chats: {type: integer, minimum: 0}
+                      oldestUpdatedAt: {type: [string, 'null'], format: date-time}
+                      items:
+                        type: array
+                        maxItems: 50
+                        items:
+                          type: object
+                          required: [id, state, pin, createdAt, updatedAt]
+                          properties:
+                            id: {type: string, format: uuid}
+                            state: {type: string}
+                            pin: {type: string, enum: [core, restate]}
+                            createdAt: {type: string, format: date-time}
+                            updatedAt: {type: string, format: date-time}
+                  pendingRequesterSends: {type: integer, minimum: 0}
+                  failedRequesterSends: {type: integer, minimum: 0}
+                  legacyWorkflowDeliveriesRunning: {type: integer, minimum: 0}
+                  newestLegacyTaskCreatedAt: {type: [string, 'null'], format: date-time}
+                  stage2Ready: {type: boolean}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/integrations/health:
     get:
       tags: [Integrations]

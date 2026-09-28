@@ -10,6 +10,7 @@ import { cutText, isValidUuid } from '../../core-helpers.js';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../../core-context.js';
 import { log } from '../../logging.js';
 import { persistChatIntake, PICTURE_ONLY_DIRECTIVE } from '../chat-intake.js';
+import { LegacyTelegramRequestRefused } from '../legacy-telegram-scope.js';
 import { composeAnswerTaken } from '../requester-actions.js';
 import { createTelegramUpdateState } from './update-state.js';
 
@@ -170,6 +171,7 @@ export function createTelegramQuestions(deps: Pick<CoreContext, 'db' | 'telegram
       broadcast('task:created', persisted.task);
       return { ok: true, revisionTaskId: persisted.task.id };
     } catch (err) {
+      if (err instanceof LegacyTelegramRequestRefused) throw err;
       // Nothing is sent from here: a tapped answer is told in its pop-up, and a typed one is retried
       // with the update (a message here would repeat on every retry).
       log.error(`[Core] Task ${pending.taskId}: the answer to its question could not be saved:`, err);
