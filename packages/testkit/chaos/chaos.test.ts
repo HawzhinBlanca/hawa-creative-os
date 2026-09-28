@@ -321,12 +321,21 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await sleep(3000);
     const stateAfterRestart = await taskState(taskId);
     events.push(`after Core restarted, before a second Deliver: task ${stateAfterRestart}`);
-    const second = await deliver(taskId);
-    events.push(`second Deliver: HTTP ${second.status} ${JSON.stringify(second.body).slice(0, 160)}`);
+    // Since ADR-135 the delivery belongs to the request's Delivery workflow, which carries on through
+    // the Core restart: the request is past 'approved', so the second press goes straight to Core (the
+    // Desk's helper would wait for 'approved' first) and must start nothing new.
+    const second = await fakes.core(`/tasks/${taskId}/publish`, secrets().CHAOS_REVIEWER_KEY,
+      { headers: { 'Idempotency-Key': randomUUID() }, body: {} });
+    events.push(`second Deliver: HTTP ${second.status} ${JSON.stringify(second.json).slice(0, 160)}`);
     await waitDelivered(chat, taskId);
+    const runs = await query<{ executor_run: number }>(sql`SELECT executor_run FROM hawa.publications WHERE task_id = ${taskId}::uuid`);
     return {
       delivered: true,
-      extra: [{ name: 'a delivery cut off by a Core restart does not stay stuck in publishing', ok: stateAfterRestart !== 'publishing', detail: `task ${stateAtKill} at the kill, ${stateAfterRestart} after the restart` }],
+      extra: [
+        { name: 'the second press is answered without a server error', ok: second.status > 0 && second.status < 500, detail: `HTTP ${second.status}` },
+        { name: 'the delivery cut off by a Core restart finishes as one Delivery run', ok: runs.length === 1 && Number(runs[0].executor_run) === 1,
+          detail: `task ${stateAtKill} at the kill, ${stateAfterRestart} after the restart; runs ${JSON.stringify(runs)}` },
+      ],
     };
   });
 
@@ -418,7 +427,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
 
   // As R1.K0: since 82b28988 intake makes no classifier call for an unscoped text. Since ADR-135 the
   // acknowledgement is the worker's own TelegramSender send: the worker is killed while Telegram holds
-  // it (slowed to 4 s), so the send is uncertain, never repeated, and the office hears of it once.
+  // it (slowed to 4 s). It must reach the requester once; the office hears of it only when its send
+  // mark could not record it as sent. (The first ADR-135 run expected an uncertain send and saw no
+  // office alert; the mark decides now, and the run records it.)
   scenario('R1.S2.K5b', 'worker killed while its acknowledgement send waits for Telegram (slowed to 4 s)', async (chat, events) => {
     await fakes.telegramFault({ method: 'sendMessage', chat, kind: 'delay', delayMs: 4000, n: 1 });
     const update = await sendBrief(chat, 'R1.S2.K5b');
@@ -431,7 +442,27 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await waitHealthy('worker-blue');
     const taskId = await draftOf(chat);
     events.push(`task ${taskId}: draft in chat`);
-    return { delivered: false, uncertainSends: 1, after: () => checkIntake(chat, [update.update_id]) };
+    // Whether the office must hear of it follows the acknowledgement's own send marks. Two runs on
+    // 2026-09-28 differed: one saw no office alert, the next saw one with marks [attempted, attempted,
+    // sent]; the kill lands before or after the attempt's result is written.
+    const [request] = await query<{ request_id: string }>(sql`SELECT request_id FROM hawa.requests WHERE chat_id = ${chat}`);
+    const marks = request ? await query<{ event_kind: string }>(sql`SELECT event_kind FROM hawa.inbox_events
+      WHERE source_account_id = 'telegram_delivery' AND source_event_id LIKE ${`%${request.request_id}:1:ack%`}
+      ORDER BY received_at`) : [];
+    events.push(`acknowledgement send marks: ${JSON.stringify(marks.map((m) => m.event_kind))}`);
+    // Every attempt writes 'attempted' before it sends and its result after; an attempt without a
+    // result is one whose answer was lost, which ADR-130 keeps uncertain and alerts once.
+    const attempts = marks.filter((m) => /_attempted$/.test(m.event_kind)).length;
+    const ackUncertain = attempts > marks.length - attempts;
+    const acks = (await sentTo(chat)).filter((m) => m.method === 'sendMessage' && m.text?.includes('Request received.'));
+    return {
+      delivered: false, uncertainSends: ackUncertain ? 1 : 0,
+      extra: [
+        { name: 'the acknowledgement has a send mark', ok: marks.length > 0, detail: JSON.stringify(marks.map((m) => m.event_kind)) },
+        { name: 'the acknowledgement reached the requester once', ok: acks.length === 1, detail: `acknowledgements=${acks.length}` },
+      ],
+      after: () => checkIntake(chat, [update.update_id]),
+    };
   });
 
   scenario('R1.DUP', 'the same update handed on twice (Restate\'s key, then past it) makes one task and one acknowledgement', async (chat, events) => {
