@@ -12,6 +12,7 @@ import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus } from '@hawa/con
 import { log } from '../logging.js';
 import { mayChangeKillSwitch, setKillSwitch, type KillSwitchChannel } from '../services/channel-kill-switches.js';
 import { telegramPollerOf } from '../services/telegram-poller-owner.js';
+import { readLegacyPathStatus } from '../services/legacy-path-status.js';
 import { registerAvailabilityRoutes, availabilityConfig, AvailabilityError, readAvailabilityReport } from './availability.routes.js';
 
 /**
@@ -110,11 +111,11 @@ export function registerSystemRoutes(ctx: RouteContext) {
   // and stored offset. With the kill switch on it refuses as the webhook does.
   registerRoute('post', '/adapters/telegram/poll-now', async (c: any) => {
     const denied = requireAdministrator(c); if (denied) return denied;
-    // With HAWA_TELEGRAM_POLLER=worker the worker's poller is the bot's one getUpdates consumer
-    // (Phase 2.1). A second one here would take updates from the same offset outside ChatInbox's
-    // per-chat order; Telegram answers two consumers with 409 besides.
+    // The worker's poller is the bot's one getUpdates consumer (Phase 2.1; since ADR-135 always). A
+    // second one here would take updates from the same offset outside ChatInbox's per-chat order and
+    // hand them to the legacy intake; Telegram answers two consumers with 409 besides.
     if (telegramPollerOf(process.env) === 'worker') {
-      return problem(c, 409, 'The worker polls Telegram', 'HAWA_TELEGRAM_POLLER=worker: the worker asks Telegram for updates, and Core does not poll');
+      return problem(c, 409, 'The worker polls Telegram', 'The worker asks Telegram for updates, and Core does not poll (ADR-135)');
     }
     if (!telegramBridge) {
       return c.json({ ok: false, error: 'Telegram bridge not available' }, 503);
@@ -137,6 +138,11 @@ export function registerSystemRoutes(ctx: RouteContext) {
   // could redirect every office brief and approval to their own server.
   registerRoute('post', '/adapters/telegram/webhook/register', async (c: any) => {
     const denied = requireAdministrator(c); if (denied) return denied;
+    // A registered webhook sends every update to the legacy intake and stops the worker's getUpdates
+    // (Telegram refuses getUpdates while a webhook is set). Since ADR-135 no setting may do that.
+    if (telegramPollerOf(process.env) === 'worker') {
+      return problem(c, 409, 'The worker polls Telegram', 'A webhook would bypass RequestLifecycle and stop the worker poller (ADR-135); nothing was registered');
+    }
     if (!telegramBridge) {
       return c.json({ ok: false, error: 'Telegram bridge not available' }, 503);
     }
@@ -373,6 +379,23 @@ export function registerSystemRoutes(ctx: RouteContext) {
     } catch (err) {
       log.error('[core:failures] Could not read the failed tasks:', err);
       return problem(c, 503, 'Database Unavailable', 'The failed tasks could not be read; try again');
+    }
+  });
+
+  // What is still on the old Telegram path (ADR-135): open legacy Telegram tasks, Core requester
+  // sends still queued and legacy Delivery workflow runs in flight. Stage 2 of the retirement, which
+  // deletes the code that finishes them, waits for `stage2Ready`. Read-only; administrators only.
+  registerRoute('get', '/operations/legacy-path', async (c: Context) => {
+    const denied = requireAdministrator(c); if (denied) return denied;
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The legacy path is read from PostgreSQL');
+    const auth = verifyRequestAuth(c);
+    const tenantId = auth.tenantId || DEFAULT_TENANT_ID;
+    try {
+      return c.json(await withRlsContext(db, { tenantId, userId: auth.userId || SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+        (trx) => readLegacyPathStatus(trx, tenantId)));
+    } catch (err) {
+      log.error('[core:legacy-path] Could not read the legacy path:', err);
+      return problem(c, 503, 'Database Unavailable', 'The legacy path could not be read; try again');
     }
   });
 

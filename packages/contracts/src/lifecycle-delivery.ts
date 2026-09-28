@@ -8,21 +8,10 @@
  * wrote it (PHASE2_DESIGN.md section 4, rule 1).
  */
 
-/**
- * Whether a newly created Telegram task should pin delivery to the Delivery workflow, from HAWA_LIFECYCLE_CHATS: a
- * comma-separated list of Telegram chat ids, or `*` for every chat. Unset or empty enrols nobody, so
- * nothing changes until the owner sets it. Parsed like DESIGN_PIPELINE_V3_CHATS (isV3PilotChat in
- * apps/core/src/services/chat-intake.ts). A task with no chat (made in the Desk) is never enrolled.
- * Existing tasks use their stored pin, never this live setting, when an operator presses Deliver.
- */
-export function lifecycleOwnsChat(chatId: string | number | null | undefined, env: Record<string, string | undefined> = process.env): boolean {
-  const raw = env.HAWA_LIFECYCLE_CHATS;
-  if (!raw || chatId === null || chatId === undefined) return false;
-  const chat = String(chatId).trim();
-  if (!chat) return false;
-  const listed = raw.split(',').map((c) => c.trim()).filter(Boolean);
-  return listed.includes('*') || listed.includes(chat);
-}
+// Every Telegram chat is owned by RequestLifecycle (ADR-135). HAWA_LIFECYCLE_CHATS, which enrolled
+// chats one by one, and lifecycleOwnsChat, which read it, are gone: no setting can send a new request
+// down the old path. A task with no chat (made in the Desk) was never enrolled and still is not.
+// Existing tasks keep their stored pin (ADR-052) when an operator presses Deliver.
 
 /** A stored export the sender reads itself: bytes never travel through Restate's journal. */
 export interface ExportRef {

@@ -81,14 +81,14 @@ it.skipIf(process.env.HAWA_SOURCE_RECOVERY !== '1')('recovers a reviewed Telegra
       if (signal === 'SIGKILL') { check(`kill ${++kills} terminated Core with SIGKILL`, actual === 'SIGKILL'); }
     } finally { clearTimeout(fallback); held?.destroy(); held = undefined; child = undefined; }
   };
-  const start = async (flag: boolean, parser: boolean) => {
+  const start = async (parser: boolean) => {
     let stderr = '';
     child = spawn(process.execPath, ['--import', createRequire(import.meta.url).resolve('tsx'), join(root, 'apps/core/test/fixtures/document-recovery-process.ts')], {
       cwd: work, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: {
         PATH: process.env.PATH, NODE_ENV: 'production', HAWA_DOCUMENT_RECOVERY: '1', HAWA_SOURCE_RECOVERY: '1',
         TEST_DATABASE_URL: databaseUrl, HAWA_BLOB_DIR: blobDir, HAWA_ACTION_HMAC_SECRET: hash(randomUUID()),
         HAWA_CHAOS_CONTROL_URL: bridgeUrl, HAWA_CHAOS_HOLD_LIMIT_MS: '30000', HAWA_DOCLING_URL: parser ? bridgeUrl : '',
-        HAWA_WORKER_TOKEN: workerToken, HAWA_LIFECYCLE_CHATS: flag ? String(chatId) : '',
+        HAWA_WORKER_TOKEN: workerToken,
         TELEGRAM_BOT_TOKEN: botToken, TELEGRAM_WEBHOOK_SECRET: hash(randomUUID()), TELEGRAM_INTAKE_ALLOWED_USERS: String(senderId),
         AUTO_GENERATE_DAILY_CAP_GLOBAL: '1000000', DESIGN_PIPELINE_V3: 'off', DESIGN_STUDIO_V2: 'off',
         HAWA_GOOGLE_OIDC_CLIENT_ID: 'fixture-client', HAWA_GOOGLE_OIDC_CLIENT_SECRET: 'fixture-secret',
@@ -120,34 +120,34 @@ it.skipIf(process.env.HAWA_SOURCE_RECOVERY !== '1')('recovers a reviewed Telegra
     await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role,active) VALUES (${tenantId}::uuid,${userId}::uuid,'operator',true)`.execute(owner);
     await sql`INSERT INTO hawa.desk_sessions(token_hash,tenant_id,user_id,actor_id,role,display_name,expires_at,auth_method)
       VALUES (${hash(session)},${tenantId}::uuid,${userId}::uuid,'oidc:source-fixture','operator','Source fixture operator',now()+interval '1 hour','google_oidc')`.execute(owner);
-    await start(true, true);
+    await start(true);
     await interrupt('core.source.after-admission', () => intake(source));
     check('client admission commits before any external download', await count('lifecycle_source_admission') === 1 && downloads === 0);
     await sql`UPDATE hawa.clients SET code=${`${code}-old`},name=${`${code}-old`} WHERE id=${clientId}::uuid`.execute(owner);
     await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES (${otherId}::uuid,${tenantId}::uuid,${code},${code})`.execute(owner);
-    await start(false, true);
+    await start(true);
     await interrupt('core.source.after-upload', () => intake(source));
-    check('original bytes commit exactly once after flag rollback', await count('lifecycle_source_upload') === 1 && downloads === 1);
+    check('original bytes commit exactly once after a restart', await count('lifecycle_source_upload') === 1 && downloads === 1);
     await sql`SELECT * FROM hawa.blob_gc_mark()`.execute(runtime);
     check('pending source protects its original from GC before extraction', (await sql<{ unreferenced_since: unknown }>`SELECT unreferenced_since FROM hawa.blobs WHERE sha256=${hash(pdf)}`.execute(owner)).rows[0].unreferenced_since === null);
-    await start(false, true);
+    await start(true);
     await interrupt('core.source.after-extraction', () => intake(source));
     check('extraction commits once without downloading the original again', await count('lifecycle_source_extraction') === 1 && downloads === 1 && parses === 1);
-    await start(false, false);
+    await start(false);
     const review = await (await intake(source)).json();
-    check('replay opens the saved real extraction while parser and enrolment are off', review.intakeStatus === 200 && review.sourceMessage.includes('Hawa source page one 123.45'));
+    check('replay opens the saved real extraction while the parser is off', review.intakeStatus === 200 && review.sourceMessage.includes('Hawa source page one 123.45'));
     const filesPath = `/clients/${clientId}/source-files`, original = await desk(`${filesPath}/${sourceId}/content`);
     check('office can download identical source bytes before copy confirmation', original.status === 200 && hash(new Uint8Array(await original.arrayBuffer())) === hash(pdf));
     check('reassigned code cannot expose the source in another client', (await desk(`/clients/${otherId}/source-files/${sourceId}/content`)).status === 404);
     await interrupt('core.source.after-confirmation', () => intake(confirmation));
     check('confirmation commits once before its response', await count('lifecycle_source_confirmation') === 1 && await count('lifecycle_chat_open') === 1);
-    await start(false, false);
+    await start(false);
     const open = await (await intake(confirmation)).json();
     check('saved decision keeps original client and exact reviewed strings', open.intakeStatus === 200 && open.draft.clientId === clientId && open.draft.rawText === copy);
     const projection = () => internal(`/lifecycle/${open.requestId}/project`, { v: 1, expectedRev: 0, rev: 1,
       key: `${open.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: open.draft }] });
     await interrupt('core.source.after-projection', projection);
-    await start(false, false);
+    await start(false);
     const replay = await projection(); expect(replay.status).toBe(200);
     const result = await replay.json(), taskId = result.taskId;
     check('projection replay adopts one task after a lost commit acknowledgement', typeof taskId === 'string' &&

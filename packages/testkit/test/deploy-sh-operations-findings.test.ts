@@ -159,6 +159,37 @@ describe('finding 1: Core keeps its poller until the new worker colour is regist
   });
 });
 
+// ADR-135: only the worker polls. Core no longer polls whatever the value, so a deploy with any other
+// value would leave nobody reading client messages, and a rollback to Core's poller would start
+// requests on the old path. It is refused before anything changes, in pre-flight too.
+describe('ADR-135: the Telegram poller is the worker', () => {
+  it('refuse_retired_poller passes worker only, and says nothing was changed', () => {
+    for (const value of ['worker', ' Worker ']) {
+      const ok = run(['telegram_poller_of', 'refuse_retired_poller'], `refuse_retired_poller "${value}"; echo passed`);
+      expect(ok.code, value).toBe(0);
+      expect(ok.out).toMatch(/passed/);
+    }
+    for (const value of ['core', '', 'other']) {
+      const refused = run(['telegram_poller_of', 'refuse_retired_poller'], `refuse_retired_poller "${value}"; echo passed`);
+      expect(refused.code, value).toBe(1);
+      expect(refused.out).not.toMatch(/passed/);
+      expect(refused.out).toMatch(/Core no longer polls Telegram \(ADR-135\).*Nothing was changed/);
+      expect(refused.calls).toEqual([]);
+    }
+  });
+
+  it('in the script, the refusal comes before the pre-flight exit, the backup and step 7, and the default is worker', () => {
+    const refusal = line('refuse_retired_poller "$(compose_value HAWA_TELEGRAM_POLLER worker)"');
+    expect(refusal).toBeLessThan(line('if [[ $APPLY == 0 ]]; then'));
+    expect(refusal).toBeLessThan(line('# 5. Backup before anything changes'));
+    expect(refusal).toBeLessThan(line('HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n'));
+    expect(deploySh).not.toMatch(/compose_value HAWA_TELEGRAM_POLLER core/);
+    const compose = fs.readFileSync(path.resolve(here, '../../../infra/docker/docker-compose.prod.yml'), 'utf8');
+    expect(compose.match(/HAWA_TELEGRAM_POLLER: \$\{HAWA_TELEGRAM_POLLER:-worker\}/g)).toHaveLength(2);
+    expect(compose).not.toMatch(/HAWA_TELEGRAM_POLLER:-core/);
+  });
+});
+
 describe('finding 2: register gets the new colour\'s own service list', () => {
   it('idle_hosts reads the services the new colour\'s /ready lists, and "unknown" when it cannot', () => {
     const listed = run(['idle_hosts'], 'idle_hosts blue', 'docker() { echo "$*" >&9; echo "TaskWorkflow,TaskService,ChatInbox"; }');

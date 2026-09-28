@@ -73,7 +73,7 @@ it.skipIf(process.env.HAWA_VOICE_RECOVERY !== '1')('survives actual Core kills w
         PATH: process.env.PATH, NODE_ENV: 'production', HAWA_DOCUMENT_RECOVERY: '1', HAWA_SOURCE_RECOVERY: '1', HAWA_VOICE_RECOVERY: '1',
         TEST_DATABASE_URL: databaseUrl, HAWA_BLOB_DIR: blobDir, HAWA_ACTION_HMAC_SECRET: hash(randomUUID()),
         HAWA_CHAOS_CONTROL_URL: bridgeUrl, HAWA_CHAOS_HOLD_LIMIT_MS: '30000',
-        HAWA_WORKER_TOKEN: workerToken, HAWA_LIFECYCLE_CHATS: '*', OPENAI_API_KEY: randomUUID(),
+        HAWA_WORKER_TOKEN: workerToken, OPENAI_API_KEY: randomUUID(),
         TELEGRAM_BOT_TOKEN: botToken, TELEGRAM_WEBHOOK_SECRET: hash(randomUUID()), TELEGRAM_INTAKE_ALLOWED_USERS: String(senderId),
         AUTO_GENERATE_DAILY_CAP_GLOBAL: '1000000', DESIGN_PIPELINE_V3: 'off', DESIGN_STUDIO_V2: 'off',
         HAWA_GOOGLE_OIDC_CLIENT_ID: 'fixture-client', HAWA_GOOGLE_OIDC_CLIENT_SECRET: 'fixture-secret',

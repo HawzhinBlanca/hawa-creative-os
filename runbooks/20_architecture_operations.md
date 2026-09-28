@@ -174,29 +174,41 @@ the object's `get` handler before and after, and prefer fixing the cause and res
 ## Phase 2 flags per chat, and rolling back
 
 This section describes `codex/research-grade-design-system`'s own lifecycle (ADR-034, ADR-052,
-ADR-059 and the admissions after it), which replaced studio-v2's. studio-v2 read
-`HAWA_LIFECYCLE_CHATS` when Deliver was pressed; this branch does not.
+ADR-059 and the admissions after it), which replaced studio-v2's, as ADR-135 left it on 2026-09-28:
+**every Telegram chat is owned by `RequestLifecycle`**, and no setting can send a new request down the
+old path. studio-v2 read `HAWA_LIFECYCLE_CHATS` when Deliver was pressed; this branch does not read it
+at all any more.
 
 | Flag | Read by | Values | Where it is set in production |
 |---|---|---|---|
-| `HAWA_TELEGRAM_POLLER` | Core and the worker, at start | `core` (default) or `worker` | `infra/docker/.env` (compose interpolation), then deploy |
-| `HAWA_LIFECYCLE_CHATS` | Core's internal intake (`/v1/internal/telegram/intake`), for each update the worker's `ChatInbox` hands on | chat ids, comma-separated, or `*`; empty enrols nobody | `infra/docker/.env.production`, then deploy |
+| `HAWA_TELEGRAM_POLLER` | the worker, at start (Core only logs a value other than `worker`) | `worker`; `deploy.sh` refuses anything else | `infra/docker/.env` (compose interpolation, default `worker`), then deploy |
+| `HAWA_LIFECYCLE_CHATS` | nobody since ADR-135 (Core logs that it is set and ignored) | remove it | was `infra/docker/.env.production` |
 | `HAWA_WORKER_TOKEN` | Core (`/v1/internal/*`) and every worker colour | a long random value of its own (`openssl rand -hex 32`) | `infra/docker/.env.production`, then deploy |
 
 Each is read from the process environment, which a container gets when it starts: a change takes a
 restart of Core and the worker, which in production is a deploy.
 
-**What enrolment does here.** Only the worker's poller reaches `ChatInbox`, so `HAWA_LIFECYCLE_CHATS`
-has an effect only with `HAWA_TELEGRAM_POLLER=worker`; Core's own poller has no lifecycle routing. In an
-enrolled chat, a new brief (and no waiting request, or an explicit `/new`) makes Core prepare a
-versioned new-brief draft under the update's identity and answer `open-request`; `ChatInbox` then sends
-one keyed `RequestLifecycle.open`, and the request object alone creates and owns the task (ADR-059).
-Such a task is pinned to the Restate executor when it is created (`delivery_executor_pin = 'restate'`);
-every other Telegram task is pinned to `core`. The pin never changes afterwards (ADR-052; since then
-only a committed lifecycle open may claim Restate, `apps/core/src/services/chat-intake.ts`). A chat
-with earlier Core tasks needs an explicit `/new` for its first lifecycle request, because an ordinary
-message there could be a change to an older design. Media and PDF sources have their own admissions
-(ADR-061, ADR-068, ADR-069, ADR-071).
+**What happens to a Telegram update.** Only the worker's poller reaches `ChatInbox`. A new brief (no
+waiting request, or an explicit `/new`) makes Core prepare a versioned new-brief draft under the
+update's identity and answer `open-request`; `ChatInbox` then sends one keyed `RequestLifecycle.open`,
+and the request object alone creates and owns the task (ADR-059). Such a task is pinned to the Restate
+executor when it is created (`delivery_executor_pin = 'restate'`); the pin never changes afterwards
+(ADR-052; only a committed lifecycle open may claim Restate, `apps/core/src/services/chat-intake.ts`).
+Media and PDF sources have their own admissions (ADR-061, ADR-068, ADR-069, ADR-071).
+
+Requests the old intake started before the switch are **finished, never started**, by that intake in
+its finish-only scope (ADR-135, `apps/core/src/services/legacy-telegram-scope.ts`): a reply to one of
+its drafts, a press of one of its buttons, and an unlinked message in a chat whose newest request of
+the last 48 hours is an open legacy one. Questions, greetings and standing rules are still answered by
+it. Whenever it would start new work (a new request, or a change to a finished legacy design) it
+refuses, and `ChatInbox` asks the requester to send `/new` with the brief. Their tasks keep
+`delivery_executor_pin = 'core'` and are delivered by Core, as before.
+
+`GET /v1/operations/legacy-path` (administrators) says what is left on the old path: open legacy
+Telegram tasks by state and pin (with the 50 least recently updated), Core requester sends still
+queued, legacy Delivery workflow runs in flight, the newest legacy task, and `stage2Ready`. Close the
+stale ones in the Desk; the code that finishes legacy requests is removed only once `stage2Ready` is
+true (plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md).
 
 Once a chat's first lifecycle request opens, `ChatInbox` keeps that chat in lifecycle mode for good
 (`apps/worker/src/lifecycle/chat-inbox.ts`, `setMode`): replies to a request's notices keep reaching
@@ -204,35 +216,23 @@ that request. A request-owned task is delivered through its request: the Desk's 
 reviewer and a UUID `Idempotency-Key` (`apps/core/src/routes/delivery.routes.ts`), and the older
 omnichannel publisher answers `409 LIFECYCLE_OWNED`.
 
-### The poller: switching and rolling back
+### The poller: rolling back
 
-The worker polls only if `HAWA_TELEGRAM_POLLER=worker` **and** it has `HAWA_WORKER_TOKEN`; set the
-token first. Both pollers keep the offset in the same Postgres row, so either carries on where the
-other stopped.
+The worker polls only if `HAWA_TELEGRAM_POLLER=worker` **and** it has `HAWA_WORKER_TOKEN`. Core does
+not poll, whatever the variable says (ADR-135): its poller fed only the old intake, so a rollback to it
+would start requests on the old path, which the owner ruled out on 2026-09-28. `deploy.sh` refuses a
+value other than `worker` before it changes anything, and "Poll now" and webhook registration answer
+409.
 
-```sh
-# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:17Z; not re-run on this branch): roll back from worker to core.
-CHAOS_TELEGRAM_POLLER=core docker compose -p hawa-chaos -f packages/testkit/chaos/docker-compose.chaos.yml \
-  --env-file packages/testkit/chaos/.run/chaos.env up -d --no-build --no-deps --wait core worker-green
-curl -s http://127.0.0.1:56090/__core/v1/adapters/telegram/status | python3 -c "import json,sys; d=json.load(sys.stdin); print('core says poller =', d['poller'], '| bridge mode', d['bridge']['mode'])"
-# core says poller = core | bridge mode live_polling
-docker exec hawa-chaos-worker-green-1 node -e "fetch('http://localhost:9080/health').then(r=>r.json()).then(j=>console.log('worker telegramPoller', JSON.stringify(j.telegramPoller)))"
-# worker telegramPoller {"mode":"off"}
-```
+Rolling back a broken worker poller therefore means rolling back the worker: the previous colour stays
+registered until the new one is (blue/green above; `register` refuses a build that does not host every
+routed service, ADR-129), and a bad release is replaced by deploying the previous one. Both pollers
+keep the offset in the same Postgres row, so the colour that takes over carries on where the other
+stopped. The watchdog alerts when no worker colour polls (Core's `/v1/health` always names the worker).
 
-A brief sent after the rollback was answered once by Core, from the offset the worker had stored.
-Updates already handed to `ChatInbox` before a rollback still go to Core's intake, which deduplicates
-them. Switching forward is the same with `worker`; the worker starts polling once its colour has been
-live for 30 s (`HAWA_POLLER_TAKEOVER_MS`), and its health then shows `"mode":"on"` with `handedOn`
-counting updates. Core's "Poll now" answers 409 while the worker polls.
-
-**On this branch, rolling the poller back to `core` also stops every enrolled chat from opening new
-lifecycle requests**, because nothing reaches `ChatInbox` any more. Requests already open keep their
-Restate ownership, but their requesters' replies now arrive through Core's own poller, which does not
-route to `RequestLifecycle` (no lifecycle routing in `apps/core/src/services/polled-update-dispatch.ts`
-or the legacy Telegram intake). How legacy intake treats such a reply has not been exercised for this
-runbook. Before rolling back with lifecycle requests open, finish them or take them over in the Desk.
-No drill of this rollback has been run on either branch.
+The drill that switched the chaos stack back to Core's poller (studio-v2 at 1c1316d, 2026-09-24) is no
+longer an operation; it was never run on this branch, and a Core poller rollback with lifecycle
+requests open was never exercised.
 
 ### The worker token: rotating, and a half-done rotation
 
@@ -267,28 +267,17 @@ wait the same way. Rolling back a token is the same operation with the old value
 Core also gives it whatever worker token that compose invocation carries: restart Core and the workers
 together, from one environment.
 
-### The lifecycle chats: enrolling a chat and rolling back
+### The lifecycle chats: no enrolment any more
 
-Enrol a chat by adding its id to `HAWA_LIFECYCLE_CHATS` in `infra/docker/.env.production` and deploying
-(with `HAWA_TELEGRAM_POLLER=worker` and the token already in place). Roll back by removing it and
-deploying again. What rolling back changes (ADR-052, ADR-059):
+`HAWA_LIFECYCLE_CHATS` enrolled chats one by one until ADR-135 (2026-09-28); since then every chat is
+enrolled and the variable is ignored. There is nothing to roll back per chat: a chat cannot be sent
+back to the old intake. Requests already open keep their owner, their pin and their delivery
+executor (ADR-052); a delivery already started keeps its recorded executor.
 
-- New briefs in that chat no longer open lifecycle requests. `mayOpen` in
-  `apps/core/src/routes/lifecycle-internal.routes.ts` needs the chat on the list (or an admitted
-  album); an ordinary message then takes Core's legacy intake, and its task is pinned to `core`.
-- Requests already open are not moved. Their tasks keep `delivery_executor_pin = 'restate'` and their
-  request ownership; `ChatInbox` stays in lifecycle mode for the chat, so replies to their notices
-  still reach them, and an unlinked message in a chat with a waiting request is still treated as a
-  possible change to it, or refused as ambiguous.
-- A delivery already started keeps its recorded executor.
-
-studio-v2's drill of this section (a chat enrolled, delivered through its `Delivery` workflow with
-`scripts/load/deliver-one.ts`, then rolled back) exercised studio-v2's Deliver-time rule, which this
-branch does not have; that helper was not ported and the drill has **not** been run on this branch. The
-evidence here is the lifecycle intake, projection and delivery tests
-(`apps/core/test/lifecycle-internal-intake.test.ts`, `apps/core/test/delivery-workflow.test.ts`,
-`apps/core/test/chat-intake-flag-scoping.test.ts`) and the chaos suite's L2 scenarios. Run a chaos
-enrolment drill before enrolling a production chat.
+The evidence is the lifecycle intake, projection and delivery tests
+(`apps/core/test/lifecycle-internal-intake.test.ts`, `apps/core/test/lifecycle-only-telegram.test.ts`,
+`apps/core/test/delivery-workflow.test.ts`, `apps/core/test/chat-intake-flag-scoping.test.ts`) and the
+chaos suite, whose scenarios all run through the lifecycle path since ADR-135.
 
 ## Reading one request's logs
 

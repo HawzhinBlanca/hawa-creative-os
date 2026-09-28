@@ -1,7 +1,8 @@
 /**
- * Scripted requests on today's (legacy) path, and the checks the chaos suite makes after each:
- * brief in Telegram → Core intake → outbox → TaskWorkflow in the blue worker → Canva → outcome →
- * draft in Telegram → approve in the Desk API → deliver → files in Telegram.
+ * Scripted requests, and the checks the chaos suite makes after each. Since ADR-135 every request
+ * takes the lifecycle path: brief in Telegram → the worker's poller → ChatInbox → Core intake →
+ * RequestLifecycle → DesignRun in the blue worker → Canva → outcome → Desk review → approve in the
+ * Desk API → deliver through the Delivery workflow → files in Telegram.
  *
  * Each request runs in its own chat, so one scenario's messages, tasks and paid calls never mix with
  * another's, and nothing is reset between scenarios.
@@ -268,12 +269,15 @@ export interface InvariantResult {
   detail: string;
 }
 
-/** The checks of PHASE2_DESIGN.md section 6.3 that apply to the legacy path, for one request. */
+/**
+ * The checks of PHASE2_DESIGN.md section 6.3 for one request. Written for the legacy path; since
+ * ADR-135 every scripted request is RequestLifecycle's, and chaos.test.ts passes executor 'restate'.
+ */
 export async function checkRequest(chat: string, options: {
   delivered: boolean; classifierAllowance?: number; uncertainSends?: number; ledgerSince?: number;
   /** The approved files the delivery sends (and archives): 1 unless the scenario pinned more. */
   files?: number;
-  /** Who delivers: Core's own delivery and the outbox (legacy), or the Restate Delivery workflow (slice 2.2). */
+  /** Who delivers: Core's own delivery and the outbox (legacy, before ADR-135), or the Restate Delivery workflow. */
   executor?: 'core' | 'restate';
 }): Promise<InvariantResult[]> {
   const out: InvariantResult[] = [];

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { type Kysely, type Database, TaskRepository, withRlsContext, sql } from '@hawa/db';
 import { CHANNEL_INGRESS_USER_ID, type BlobRef, type LifecycleAlbumRef, type LifecycleSourceRef, type ReviewedSourceEvidence } from '@hawa/contracts';
+import { LegacyTelegramRequestRefused, legacyTelegramFinishOnly } from './legacy-telegram-scope.js';
 
 export interface ChatIntake {
   tenantId?: string;
@@ -277,13 +278,18 @@ export async function persistChatIntake(
     const predecessorIds = [...new Set([
       input.studioOptions?.parentTaskId, input.studioOptions?.answers, input.studioOptions?.referenceFor,
     ].filter((id): id is string => Boolean(id)))];
+    // ADR-135: in the legacy intake's finish-only scope a new Telegram task outside the lifecycle
+    // must continue an open legacy request of this chat. A replay of a saved event is not new work.
+    const legacyFinishOnly = !existing && input.platform === 'telegram' &&
+      options.outboxState !== 'recorded' && legacyTelegramFinishOnly();
+    if (legacyFinishOnly && predecessorIds.length === 0) throw new LegacyTelegramRequestRefused('NEW_REQUEST');
     let predecessorPin: 'core' | 'restate' | undefined;
     for (const predecessorId of predecessorIds) {
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(predecessorId)) {
         throw new Error('Invalid predecessor task ID');
       }
-      const predecessor = (await sql<{ delivery_executor_pin: 'core' | 'restate' }>`
-        SELECT t.delivery_executor_pin FROM hawa.tasks t
+      const predecessor = (await sql<{ delivery_executor_pin: 'core' | 'restate'; request_id: string | null; state: string }>`
+        SELECT t.delivery_executor_pin, t.request_id::text AS request_id, t.state::text AS state FROM hawa.tasks t
         JOIN hawa.outbox_commands o ON o.tenant_id = t.tenant_id AND o.aggregate_id = t.id
           AND o.command_type = 'task.created'
         WHERE t.tenant_id = ${tenantId}::uuid AND t.id = ${predecessorId}::uuid
@@ -292,6 +298,10 @@ export async function persistChatIntake(
           AND t.client_id IS NOT DISTINCT FROM ${input.clientId || null}::uuid
         LIMIT 1`.execute(trx)).rows[0];
       if (!predecessor) throw new Error('Predecessor task is outside this request scope');
+      if (legacyFinishOnly && predecessor.request_id) throw new LegacyTelegramRequestRefused('LIFECYCLE_OWNED');
+      if (legacyFinishOnly && ['complete', 'rejected', 'cancelled'].includes(predecessor.state)) {
+        throw new LegacyTelegramRequestRefused('REQUEST_CLOSED');
+      }
       if (predecessorPin && predecessorPin !== predecessor.delivery_executor_pin) {
         throw new Error('Predecessor tasks belong to different delivery executors');
       }

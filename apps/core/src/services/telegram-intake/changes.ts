@@ -12,6 +12,7 @@ import { cutText, isValidUuid } from '../../core-helpers.js';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../../core-context.js';
 import { log } from '../../logging.js';
 import { persistChatIntake } from '../chat-intake.js';
+import { LegacyTelegramRequestRefused } from '../legacy-telegram-scope.js';
 import { detectFontRequests, scriptLabel, unavailableFontNotice } from '../feedback-font-request.js';
 import { composeDesignerHandoff, type AskRecord } from '../requester-actions.js';
 import { saveChatRule, ruleClientById } from '../telegram-rules-intake.js';
@@ -364,6 +365,7 @@ export function createTelegramChanges(deps: Pick<CoreContext, 'db' | 'events' | 
             comment: rawText,
           }, 200);
         } catch (revErr) {
+          if (revErr instanceof LegacyTelegramRequestRefused) throw revErr;
           // Saying "feedback is recorded" here reported a revision that was never saved. The update
           // is retried instead (the revision's event id makes the retry idempotent).
           log.error('[TelegramBridge] Failed to enqueue revision draft:', revErr);

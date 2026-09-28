@@ -38,7 +38,6 @@ afterAll(async () => { await Promise.all(apps.map(a => a.clientDnaHydrated)); aw
 async function fixture() {
   const clientId = randomUUID(), code = `source-${next()}`, chat = next(), sender = next(), id = next();
   await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES (${clientId}::uuid,${tenantId}::uuid,${code},${code})`.execute(owner);
-  vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
   const update = { update_id: id, message: { message_id: id, from: { id: sender, is_bot: false, first_name: 'Requester' },
     chat: { id: chat, type: 'private' }, caption: `/new\nClient: ${code}\nUse editable typography.`,
     document: { file_id: 'original-pdf', file_name: '../original.pdf', mime_type: 'application/pdf', file_size: pdf.length } } };
@@ -100,7 +99,6 @@ describe('requester-reviewed PDF source', () => {
     const original = await reader.request(`${path}/${f.update.update_id}/content`);
     expect(original.status).toBe(200); expect(original.headers.get('cache-control')).toBe('private, no-store');
     expect(hash(new Uint8Array(await original.arrayBuffer()))).toBe(hash(pdf));
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', ''); expect(await intake(f.update)).toEqual(refused);
     expect(DoclingParser.prototype.parse).toHaveBeenCalledTimes(1); expect(await tasks(f.clientId)).toHaveLength(0);
   });
 
@@ -128,7 +126,6 @@ describe('requester-reviewed PDF source', () => {
 
   it('reopens retained extraction and confirmation after restart and flag rollback without reprocessing', async () => {
     const f = await fixture(); const first = await intake(f.update), c = f.confirm(); const opened = await intake(c);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', ''); vi.stubEnv('HAWA_DOCLING_URL', '');
     expect(await intake(f.update)).toEqual(first);
     expect(await intake(c)).toMatchObject({ duplicate: true, requestId: opened.requestId, draft: opened.draft });
     expect(TelegramBridgeDaemon.prototype.downloadFile).toHaveBeenCalledTimes(1);
@@ -172,7 +169,6 @@ describe('requester-reviewed PDF source', () => {
   it('keeps refused source events refused after restart, flag rollback and payload replacement', async () => {
     const f = await fixture(); f.update.message.caption = 'No client selected';
     const refused = await intake(f.update); expect(refused.intakeStatus).toBe(422);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect(await intake(f.update)).toEqual(refused);
     const changed = structuredClone(f.update); changed.message.caption = `/new\nClient: ${f.code}`;
     expect((await intake(changed)).intakeStatus).toBe(409);
@@ -186,7 +182,6 @@ describe('requester-reviewed PDF source', () => {
     const otherId = randomUUID();
     await sql`UPDATE hawa.clients SET code=${`${f.code}-renamed`},name=${`${f.code}-renamed`} WHERE id=${f.clientId}::uuid`.execute(owner);
     await sql`INSERT INTO hawa.clients(id,tenant_id,code,name) VALUES (${otherId}::uuid,${tenantId}::uuid,${f.code},${f.code})`.execute(owner);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect((await intake(f.update)).intakeStatus).toBe(200);
     const open = await intake(f.confirm());
     expect(open).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: f.clientId } });
@@ -224,7 +219,7 @@ describe('requester-reviewed PDF source', () => {
     const f = await fixture(), c = f.confirm(); vi.stubEnv('HAWA_DOCLING_URL', '');
     expect((await intake(f.update)).intakeStatus).toBe(503);
     expect((await intake(c)).intakeStatus).toBe(503);
-    vi.stubEnv('HAWA_DOCLING_URL', 'http://127.0.0.1:19091'); vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
+    vi.stubEnv('HAWA_DOCLING_URL', 'http://127.0.0.1:19091');
     expect((await intake(f.update)).intakeStatus).toBe(200);
     expect((await intake(c)).lifecycleAction).toBe('open-request');
     expect(TelegramBridgeDaemon.prototype.downloadFile).toHaveBeenCalledTimes(1);

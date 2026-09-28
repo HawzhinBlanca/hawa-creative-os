@@ -10,6 +10,7 @@ import { escapeTelegramHtml } from '@hawa/integrations';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../../core-context.js';
 import { log } from '../../logging.js';
 import { persistChatIntake, runsPipelineV3 } from '../chat-intake.js';
+import { LegacyTelegramRequestRefused } from '../legacy-telegram-scope.js';
 import { createAskHistory } from '../ask-history.js';
 import { createOfficeAlerts } from '../office-alerts.js';
 import {
@@ -219,6 +220,7 @@ export function createTelegramRequesterActions(
       broadcast('task:created', persisted.task);
       return { ok: true, sizeTaskId: persisted.task.id };
     } catch (err) {
+      if (err instanceof LegacyTelegramRequestRefused) throw err;
       log.error(`[Core] Task ${input.taskId}: the ${size.label} version could not be started:`, err);
       return { ok: false };
     }

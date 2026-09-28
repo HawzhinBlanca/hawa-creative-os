@@ -3,9 +3,9 @@
  * slice 2.2; PHASE2_DESIGN.md section 2.5, ADR-034). Key `dl-<task>-<approval>`, and
  * `dl-<task>-<approval>:archive:<n>` for a later run that retries the Drive archive or the Sheets row.
  *
- * It replaces, for a task whose chat is on HAWA_LIFECYCLE_CHATS when Deliver is pressed, Core's own
- * delivery run from the HTTP request (deliveriesInFlight, reopenInterruptedDelivery) and the outbox's
- * `notify.published` command:
+ * It replaces, for a request-owned task and for a non-lifecycle task pinned 'restate' (ADR-052; none
+ * in production, removed in stage 2 of ADR-135), Core's own delivery run from the HTTP request
+ * (deliveriesInFlight, reopenInterruptedDelivery) and the outbox's `notify.published` command:
  * 1. prepare: Core does the Drive and Sheets work (idempotent by the publication key) and answers
  *    with what the requester is sent. A Core that does not answer is asked again for 10 minutes; a
  *    refusal or a Core gone for longer ends the delivery `failed`. Core keeps a possible Drive upload

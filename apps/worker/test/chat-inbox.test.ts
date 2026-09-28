@@ -371,6 +371,23 @@ describe('ChatInbox.setMode', () => {
       chatId: '555', class: 'critical', text: expect.stringContaining('reply directly') }]);
   });
 
+  // ADR-135: the old intake finishes its own requests and starts none; Core's refusal asks for /new,
+  // and nothing reaches RequestLifecycle. A chat's first update (legacy mode) is answered alike.
+  it('asks for /new when the old intake would have started new work, and keeps the chat\'s mode', async () => {
+    for (const mode of [undefined, 'lifecycle'] as const) {
+      const ctx = new FakeContext();
+      if (mode) ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+        mode, requestId: 'req-x' } satisfies ChatInboxView);
+      const c = core([async () => ({ kind: 'done', intakeStatus: 409, code: 'LEGACY_REQUEST_REFUSED',
+        lifecycleAction: 'new-brief-required', chatId: '555' })]);
+      expect(await handleUpdate(ctx, input, c)).toMatchObject({ outcome: 'handled', intakeStatus: 409 });
+      expect(ctx.lifecycleDecisions).toHaveLength(0);
+      expect(ctx.notices).toMatchObject([{ key: `chatinbox:new-brief-required:${update.update_id}`,
+        chatId: '555', class: 'critical', text: expect.stringContaining('/new') }]);
+      expect((ctx.state.get('inbox') as ChatInboxView | undefined)?.mode).toBe(mode);
+    }
+  });
+
   it('tells the sender when a revision cannot start under the daily limit', async () => {
     const ctx = new FakeContext();
     ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,

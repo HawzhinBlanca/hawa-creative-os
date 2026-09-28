@@ -55,7 +55,9 @@ export type IntakeAnswer =
       requestId?: string; newTaskId?: string; round?: number; directive?: string;
       priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
       code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
-        'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' | 'LIFECYCLE_MEDIA_NOT_ADMITTED' | 'LATE_REQUESTER_CHANGE';
+        'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' | 'LIFECYCLE_MEDIA_NOT_ADMITTED' | 'LATE_REQUESTER_CHANGE' |
+        /** ADR-135: the old intake would have started new work; with new-brief-required, asks for /new. */
+        'LEGACY_REQUEST_REFUSED';
       reason?: string;
       /** late-change: the stage the request was in, and Core's alert for the office chat (if any). */
       requestStage?: LateChangeStage; officeAlert?: { chatId: string; text: string }; }
@@ -115,8 +117,8 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
   const update = input.update;
   // Read state directly through Restate's context. A ctx.get inside ctx.run records a nested
   // journal operation that is skipped when the completed run replays after a crash.
-  // The first flagged update arrives in legacy mode. Core can return open-request for that update;
-  // the resulting request then sets lifecycle mode for later chat updates.
+  // A chat's first update arrives in legacy mode. Core answers both modes alike since ADR-135 (every
+  // chat is lifecycle-owned); an open-request sets lifecycle mode for the chat's later updates.
   const view = await ctx.get<ChatInboxView>('inbox');
   const mode: IntakeMode = view?.mode === 'lifecycle' ? 'lifecycle' : 'legacy';
   const lifecycleRequestId = view?.mode === 'lifecycle' ? view.requestId : undefined;

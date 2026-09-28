@@ -39,7 +39,6 @@ async function fixture(localOnly = false) {
   const dna = { privacy: { modelEgressMode: localOnly ? 'local_only' : 'approved_providers', allowedProviders: ['openai'] } };
   await sql`INSERT INTO hawa.client_dna_versions(tenant_id,client_id,version,status,dna,content_hash,approved_by)
     VALUES (${tenantId}::uuid,${clientId}::uuid,1,'active',${JSON.stringify(dna)}::jsonb,${hash(JSON.stringify(dna))},${userId}::uuid)`.execute(owner);
-  vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
   const update = { update_id: id, message: { message_id: id, from: { id: next(), is_bot: false, first_name: 'Fixture' },
     chat: { id: chat, type: 'private' }, caption: `/new\nClient: ${code}\nUse editable typography.`,
     voice: { file_id: 'original-voice', mime_type: 'audio/ogg', file_size: audio.length, duration: 999_999 } } };
@@ -104,7 +103,6 @@ describe('retained voice admission and reviewed request', () => {
   it('a saved manual decision remains manual after policy, key and enrolment changes', async () => {
     const f = await fixture(true); const first = await intake(f.update);
     await sql`UPDATE hawa.client_dna_versions SET dna=jsonb_set(dna,'{privacy,modelEgressMode}','"approved_providers"') WHERE client_id=${f.clientId}::uuid`.execute(owner);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect(await intake(f.update)).toEqual(first); expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 

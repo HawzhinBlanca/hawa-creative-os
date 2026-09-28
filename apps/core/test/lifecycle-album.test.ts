@@ -21,7 +21,6 @@ afterAll(() => db.destroy());
 function setup() {
   const chat = ++id;
   vi.stubEnv('HAWA_WORKER_TOKEN', token);
-  vi.stubEnv('HAWA_LIFECYCLE_CHATS', String(chat));
   vi.stubEnv('AUTO_GENERATE_DAILY_CAP_GLOBAL', '100000');
   vi.stubEnv('AUTO_GENERATE_DAILY_CAP_PER_SENDER', '10000');
   const download = vi.fn(async (file: string) => photo(Number(file)));
@@ -125,7 +124,6 @@ describe('confirmed lifecycle photo albums', () => {
     const studio = new DesignStudioService(db);
     expect(await (studio as any).requestImages({ tenantId, actorId: userId }, result.taskId))
       .toEqual([1, 2].map((n) => `data:image/png;base64,${photo(n).toString('base64')}`));
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect(await f.intake(confirmation, createApp({ db } as any))).toMatchObject({
       duplicate: true, requestId: decision.requestId, draft: decision.draft });
     expect((await project(f.app, decision)).status).toBe(200);
@@ -152,7 +150,6 @@ describe('confirmed lifecycle photo albums', () => {
     const child = await withRlsContext(db, scope, (trx) => trx.selectFrom('outbox_commands').select('payload')
       .where('aggregate_id', '=', result.newTaskId).where('command_type', '=', 'task.created').executeTakeFirstOrThrow());
     expect(child.payload).toMatchObject({ exactCopy: [{ text: 'December 4, 2026' }] });
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     expect(await f.intake(confirmation, createApp({ db } as any))).toMatchObject({ duplicate: true, newTaskId: result.newTaskId });
     expect(f.download).toHaveBeenCalledTimes(2);
   });
@@ -173,7 +170,6 @@ describe('confirmed lifecycle photo albums', () => {
     expect(await f.intake({ ...confirm, update_id: first.update_id })).toMatchObject({ intakeStatus: 409 });
     expect(await f.intake({ ...confirm, message: { ...confirm.message, message_id: 501 } })).toMatchObject({ intakeStatus: 409 });
     expect(await f.intake(f.confirm(202))).toMatchObject({ intakeStatus: 422, lifecycleAction: 'album-message' });
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS', '');
     const late = await f.intake(f.part(203, 3));
     expect(late).toMatchObject({ intakeStatus: 422 });
     expect(late.albumMessage).toContain('late photo');
@@ -218,7 +214,6 @@ describe('confirmed lifecycle photo albums', () => {
     await f.intake(f.part(203,3));
     expect(await f.intake(f.confirm(201))).toMatchObject({intakeStatus:422});
     expect(await f.tasks()).toHaveLength(0);
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS','');
     expect(await f.intake(missing)).toMatchObject({intakeStatus:202});
     const admitted=await f.intake(f.confirm(201));
     expect(admitted).toMatchObject({lifecycleAction:'open-request'});
@@ -234,7 +229,6 @@ describe('confirmed lifecycle photo albums', () => {
       VALUES(${tenantId}::uuid,'lifecycle_chat_routing',${String(update.update_id)},'lifecycle_media_not_admitted',
         ${JSON.stringify({code:'LIFECYCLE_MEDIA_NOT_ADMITTED',chatId:String(f.chat)})}::jsonb,${digest},true)`.execute(trx));
     expect(await f.intake(update)).toMatchObject({intakeStatus:422,lifecycleAction:'park-update'});
-    vi.stubEnv('HAWA_LIFECYCLE_CHATS','');
     expect(await f.intake(update)).toMatchObject({intakeStatus:422,lifecycleAction:'park-update'});
     expect(f.download).not.toHaveBeenCalled();
     expect(await f.tasks()).toHaveLength(0);

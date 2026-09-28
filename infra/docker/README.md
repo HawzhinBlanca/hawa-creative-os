@@ -95,44 +95,43 @@ the two consumers are kept apart by the lease alone. To keep that window short, 
 while any paused or backing-off invocation is pinned to the old `worker` (they would never finish on
 their own), and every later deploy stops until the old `worker` is gone.
 
-### The Telegram poller (Phase 2.1)
+### The Telegram poller (Phase 2.1; ADR-135)
 
-Core asks Telegram for updates by default (`HAWA_TELEGRAM_POLLER=core`, or unset). Core handled one
-update at a time for every chat, so a 20 MB file in one chat held all the others for as long as its
-download took (the chaos suite's R4 measured 30.9 s). With `HAWA_TELEGRAM_POLLER=worker` the worker's
-live colour polls instead (`apps/worker/src/lifecycle/telegram-poller.ts`): it sends each update to its
-chat's `ChatInbox` in Restate (key `tg-<update_id>`, so the same update twice is one invocation) and
-moves the stored offset only after Restate accepted it. `ChatInbox` runs one update at a time per chat,
-chats side by side, and hands each to Core's intake unchanged through `POST /v1/internal/telegram/intake`.
-An update intake keeps failing is dead-lettered as before, through `POST /v1/internal/telegram/park`.
-Core's "Poll now" answers 409 while the worker polls.
+The worker's live colour asks Telegram for updates (`apps/worker/src/lifecycle/telegram-poller.ts`), and
+since ADR-135 (2026-09-28) it is the only poller: `HAWA_TELEGRAM_POLLER` must be `worker`, the compose
+default is `worker`, and `deploy.sh` refuses any other value before it changes anything. Core no longer
+polls whatever the value says, "Poll now" and webhook registration answer 409, and Core logs a value
+other than `worker` at start. Core's poller only ever fed the old intake, so it cannot be a rollback: it
+would start requests on the old path, which the owner ruled out ("put everything on the new path").
 
-**Before switching, the owner adds `HAWA_WORKER_TOKEN` to `infra/docker/.env.production`**: a long random
-value of its own (for example `openssl rand -hex 32`), not the same as any other key. Core and both
-worker colours read it from that file. It is the worker's credential for Core's `/v1/internal/*`, the
-only routes that accept it, and those routes accept nothing else. Without it the worker does not start
-its poller (worker `/health` reports `telegramPoller: misconfigured`), so with `worker` set and no token
-nobody polls: set the token first.
+The poller sends each update to its chat's `ChatInbox` in Restate (key `tg-<update_id>`, so the same
+update twice is one invocation) and moves the stored offset only after Restate accepted it. `ChatInbox`
+runs one update at a time per chat, chats side by side, and hands each to Core's intake through
+`POST /v1/internal/telegram/intake`. Every chat is owned by `RequestLifecycle`; the old intake only
+finishes requests it started before the switch (runbooks/20_architecture_operations.md, "Phase 2
+flags"). An update intake keeps failing is dead-lettered as before, through
+`POST /v1/internal/telegram/park`.
 
-- Switch: set `HAWA_TELEGRAM_POLLER=worker` in `infra/docker/.env` (the compose interpolation file; a
-  value in `.env.production` is overridden by compose's `environment:` block), then deploy. The deploy
-  starts Core with `core` still set, and recreates it with `worker` only after Restate has registered
-  the new worker colour (ADR-129); the new colour starts polling once it has held the role for 30 s
-  (`HAWA_POLLER_TAKEOVER_MS`). A deploy that fails before that leaves Core polling and says so ("NOTE:
-  Core was recreated by this deploy. Core polls Telegram (HAWA_TELEGRAM_POLLER=core). The switch to
-  worker waits for a registered worker colour"). If the new colour was kept (a switch Restate accepted
-  but could not confirm), the note adds that it may poll too. A Core container that does not exist yet
-  starts with `core` and changes the same way.
-- Roll back: set it to `core` (or remove it) and deploy again. This direction is not held: Core polls
-  from step 7, because the new colour is created with `core` and never polls, and the old colour stops
-  once Restate routes `ChatInbox` to the new one. Holding it, as the first version of ADR-129 did, left
-  nobody polling when `register` exited 4 with the new colour kept. Until then Core and the old colour
-  may both poll: Telegram refuses one of two concurrent `getUpdates` (409), both keep the offset in the
-  same Postgres row, and an update both hand on is one `ChatInbox` invocation; Core's intake
-  deduplicates what is already queued in Restate.
-- With `worker` set, Core still probes getMe (finding 3), so step 8 fails on `telegramApi: unreachable`
-  after the switch when Telegram does not answer Core. The switch stands: the new colour is registered
-  and polls, and the exit note says so ("The <colour> worker is registered").
+**`HAWA_WORKER_TOKEN` must be in `infra/docker/.env.production`**: a long random value of its own (for
+example `openssl rand -hex 32`), not the same as any other key. Core and both worker colours read it
+from that file. It is the worker's credential for Core's `/v1/internal/*`, the only routes that accept
+it, and those routes accept nothing else. Without it the worker does not start its poller (worker
+`/health` reports `telegramPoller: misconfigured`), so nobody polls.
+
+- Rolling back: a broken worker poller is rolled back with the worker. The previous colour keeps
+  polling until the new one is registered (ADR-129: `register` refuses a build that does not host every
+  routed service, and the new colour takes over 30 s after it holds the role, `HAWA_POLLER_TAKEOVER_MS`);
+  a bad release is replaced by deploying the previous one. Both colours keep the offset in the same
+  Postgres row, so the one that takes over carries on where the other stopped. There is no switch back
+  to Core.
+- A stack that still ran Core's poller (`core`) is moved in one deploy: set `HAWA_TELEGRAM_POLLER=worker`
+  in `infra/docker/.env` (the compose interpolation file; a value in `.env.production` is overridden by
+  compose's `environment:` block). The deploy keeps Core's value until Restate has registered the new
+  worker colour (ADR-129); since Core no longer polls on this build, updates wait in Telegram for the
+  new colour, which loses nothing. Production has run `worker` since 2026-09-28.
+- Core still probes getMe (finding 3), so step 8 fails on `telegramApi: unreachable` when Telegram does
+  not answer Core. The worker colour is registered and polls regardless, and the exit note says so
+  ("The <colour> worker is registered").
 - The kill switch stops the worker's poller too: it reads the channel's `office-kill-switch` row in
   Postgres before every poll (cached 5 s), and asks Telegram for nothing while the switch is thrown or
   cannot be read.
@@ -140,9 +139,10 @@ nobody polls: set the token first.
   offset, the count handed on, the last poll, the last error, the last poll that worked (`lastOkAt`)
   and, when something is wrong, `problem`. The colour that polls reports itself `degraded` when its
   poller did not start, when Telegram refuses the bot token (401/404), or when no poll has worked for
-  five minutes. Core probes the bot token with getMe whichever process polls, and its `/v1/health`
-  names the poller (`telegramPoller`); the watchdog alerts when that is `worker` and no running colour
-  is polling.
+  five minutes. Core's `/v1/health` names the poller (`telegramPoller`, always `worker`); the watchdog
+  alerts when no running colour is polling.
+- `GET /v1/operations/legacy-path` (administrators) says what is still on the old path and whether the
+  code that finishes it may be removed (`stage2Ready`).
 
 ### Operating it
 

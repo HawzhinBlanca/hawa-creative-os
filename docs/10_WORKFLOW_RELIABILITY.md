@@ -248,6 +248,10 @@ Chat enrolment for the legacy Delivery workflow is sampled when a Telegram task 
 
 This local rule has database-backed tests. Full ChatInbox handoff of old requests, deployed canary rollback, Restate backup and clean-host restore remain R10 acceptance work.
 
+### Lifecycle-only Telegram requests (2026-09-28, ADR-135)
+
+Every Telegram chat is owned by RequestLifecycle; `HAWA_LIFECYCLE_CHATS` no longer exists and no setting can send a new request down the old path. The old intake is reached only for a request it started (a reply naming its task, its buttons, an unlinked message where its newest request of the last 48 hours is open) and for answers to questions and greetings, and only in its finish-only scope: it refuses to create a task that does not continue an open legacy request of the same chat, and ChatInbox asks the requester for `/new`. Existing tasks keep their stored pin (above). Core no longer polls Telegram; the worker is the only poller, and a broken worker poller is rolled back with the worker (previous colour or previous release). `GET /v1/operations/legacy-path` reports what is still on the old path; the code that finishes it is removed only when that report's `stage2Ready` is true (plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md).
+
 ## 11. Availability design
 
 The first office deployment can use one core server, but it must include:

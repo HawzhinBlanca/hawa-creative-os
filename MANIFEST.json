@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T16:43:28Z",
+  "generatedAt": "2026-09-28T18:57:22Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 504,
+  "fileCount": 507,
   "files": [
     {
       "path": ".dockerignore",
@@ -733,6 +733,11 @@
       "bytes": 4651
     },
     {
+      "path": "adrs/135_lifecycle_only_telegram_requests.md",
+      "sha256": "6e81354c249150c3b09497b4f82059da87911c3331ec1b266de7150558644098",
+      "bytes": 8307
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -744,8 +749,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "9d30cfcd1e1386f931f3c67e49e62041b3eeb0a49a029e960af89eab8dac0bc7",
-      "bytes": 95370
+      "sha256": "4ec9a7f5c36bc42b55b949d22b1b5fc7099b48a0b1576315e556e886777c1827",
+      "bytes": 97587
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -999,8 +1004,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "c6850c3eba3cad1033ab686611380e715e1850daa10ef4f79f67be8ae1ce5bb4",
-      "bytes": 33913
+      "sha256": "34948fbb54a7d2127a69cd1aa6dce2473c5edfbbe31b114f99054a876dcaebea",
+      "bytes": 34940
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1211,6 +1216,16 @@
       "path": "plans/lean-design-implementation-2026-09-28/JUDGE_CHALLENGER_PROOF.json",
       "sha256": "69660d1e1579c3082a1f187908bddd406661c54a6f3e38e2ff84d10aa1f89700",
       "bytes": 21912
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md",
+      "sha256": "f995ab689d1229ccbc05b8c765dd1415ded5e6b6288896a7646cd821a5123a22",
+      "bytes": 17967
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT_PROOF.json",
+      "sha256": "8933dce37dca15f7d49c53aed5f09c9f24a1e7b4a0599643f297005f891ceb13",
+      "bytes": 3510
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LIFECYCLE_DESK_FIXES_PROOF.json",
@@ -1729,8 +1744,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "1f9fdfd4c3dc1f8d566590b9f4a8385f42430096d8368d6782dd54622cf7fe4f",
-      "bytes": 469854
+      "sha256": "994927cff063c16644ca7e5dcdcfa5c7186f00d50df8fbe66713c0168130e73d",
+      "bytes": 470771
     },
     {
       "path": "plans/user-stories.csv",
@@ -1824,8 +1839,8 @@
     },
     {
       "path": "runbooks/20_architecture_operations.md",
-      "sha256": "f005e49abe705f4f195358d5e5d094eebef895e2542838a82bc945bed2b7c893",
-      "bytes": 39968
+      "sha256": "3faaf3af00e16c32c4db40d98230284ccec6e386bc352c1e311b35a7c6815167",
+      "bytes": 39001
     },
     {
       "path": "runbooks/AVAILABILITY_MONITORING.md",
@@ -2189,8 +2204,8 @@
     },
     {
       "path": "scripts/load/run.ts",
-      "sha256": "7a1a9872f160da3144cb05fa3a73787816cadb82afd212b4b400883b887763fa",
-      "bytes": 23524
+      "sha256": "eceb40702bd70ec9a3d706a253a4cc38625db09f26af2803438dd0ba5dc5e95c",
+      "bytes": 23582
     },
     {
       "path": "scripts/load/seed-desk-tasks.ts",

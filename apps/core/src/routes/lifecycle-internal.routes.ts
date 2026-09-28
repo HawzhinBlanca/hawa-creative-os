@@ -5,8 +5,12 @@
  *   POST /v1/internal/telegram/intake  {v, update, mode: 'legacy'}  → {v, kind: 'handled', intakeStatus, …}
  *   POST /v1/internal/telegram/park    {v, update, reason, notifySender?} → {v, parked, alreadyParked}
  *
- * Legacy mode wraps today's Telegram intake. Lifecycle mode first checks request ownership and
- * a committed revision receipt before deciding whether the update belongs to a waiting request.
+ * Every Telegram chat is owned by RequestLifecycle (ADR-135): both modes, `legacy` (the first
+ * update of a chat, as ChatInbox sends it) and `lifecycle`, are handled alike. Intake checks request
+ * ownership and a committed revision receipt before deciding whether the update belongs to a
+ * waiting request or opens a new one. An update about a request the old intake started (a reply to
+ * its draft, its buttons, a change to the chat's open legacy request) and the answers to questions
+ * and greetings go to the old intake in its finish-only scope, which starts no new request.
  *
  * Only the worker calls these, with HAWA_WORKER_TOKEN: a `service` principal that app.ts's
  * verifyRequestAuth accepts on /v1/internal/* and nowhere else, and those routes accept nothing else.
@@ -19,7 +23,7 @@ import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, parseBlobRef, parseLifecycleAlbumRef, parseLifecycleSourceRef, type DeliveryOutcome } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, parseBlobRef, parseLifecycleAlbumRef, parseLifecycleSourceRef, type DeliveryOutcome } from '@hawa/contracts';
 import { createLifecycleSourceIntake } from '../services/lifecycle-source-intake.js';
 import { assertSourceIdentity, SourceConflict } from '../services/lifecycle-source-store.js';
 import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
@@ -27,7 +31,7 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
-import { AlbumConflict, albumMessage, isAlbumConfirmation, hasAlbum, readAlbumPart, partReply, assertAlbumSource,
+import { AlbumConflict, albumMessage, isAlbumConfirmation, readAlbumPart, partReply, assertAlbumSource,
   confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot } from '../services/lifecycle-album.js';
 import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
@@ -39,6 +43,8 @@ import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readN
   revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests,
   type LateRequesterChange } from '../services/lifecycle-chat-target.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
+import { FINISH_ONLY_HEADER, LEGACY_REQUEST_REFUSED } from '../services/legacy-telegram-scope.js';
+import { isLegacyTaskOfChat, newestRecentRequestIsOpenLegacy, taskIdNamedByReply } from '../services/legacy-telegram-routing.js';
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
 import type { ChatIntake } from '../services/chat-intake.js';
@@ -175,14 +181,44 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const incoming = body?.update;
     if (!isUpdate(incoming)) return problem(c, 400, 'Invalid update', 'The body must carry a Telegram update with a positive update_id');
     let preparedUpdate: UpdateLike = incoming;
-    // 2.3 adds the lifecycle's decide mode. Unknown modes are refused explicitly.
-    let mode = body?.mode ?? 'legacy';
+    // ChatInbox sends `legacy` for a chat's first update and `lifecycle` after that. Since ADR-135
+    // every chat is lifecycle-owned and both are handled alike; unknown modes are refused explicitly.
+    const mode = body?.mode ?? 'legacy';
     if (mode !== 'legacy' && mode !== 'lifecycle') {
       return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
     }
 
     const handled = (intakeStatus: number, extra: Record<string, unknown> = {}) =>
       c.json({ v: 1, kind: 'handled', intakeStatus, ...extra }, 200);
+
+    // The old intake, in this process, in its finish-only scope (ADR-135): it finishes requests it
+    // started and answers questions and greetings; it starts no request. Its refusal to start one
+    // asks the requester for /new, which the lifecycle path admits.
+    const legacyFinish = async (update: UpdateLike): Promise<Response> => {
+      const res = await app.request('/api/webhooks/telegram?generate=true', {
+        method: 'POST',
+        // Called only after the secret is known to be configured (NOT_CONFIGURED below).
+        headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret ?? '',
+          [FINISH_ONLY_HEADER]: 'finish-only', ...requestIdHeaders() },
+        body: JSON.stringify(update),
+      });
+      const answer = (await res.json().catch(() => ({}))) as { duplicate?: boolean; title?: string; code?: string; reason?: string; task?: { id?: string }; tasks?: Array<{ id?: string }> };
+      if (res.status === 503 && answer.title === 'Database Unavailable') return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+      // The switch thrown between the check above and intake's own.
+      if (res.status === 503 && answer.title === 'Service Unavailable') return handled(503, { code: 'INTAKE_PAUSED' });
+      if (res.status >= 400 && answer.code !== LEGACY_REQUEST_REFUSED) log.warn(`[core:internal] intake answered update ${update.update_id} with HTTP ${res.status}: ${answer.title ?? ''}`);
+
+      // Intake has decided and saved what it saves; the answer has not left yet (chaos suite point:
+      // a Core killed here must not make the worker's retry a second task).
+      await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatOf(update), status: res.status });
+      if (res.status === 409 && answer.code === LEGACY_REQUEST_REFUSED) {
+        const chat = chatOf(update);
+        return handled(409, { code: LEGACY_REQUEST_REFUSED, reason: answer.reason,
+          ...(chat ? { lifecycleAction: 'new-brief-required', chatId: chat } : {}) });
+      }
+      const taskIds = [...(answer.tasks ?? []), ...(answer.task ? [answer.task] : [])].map((t) => t?.id).filter((id): id is string => typeof id === 'string');
+      return handled(res.status, { duplicate: answer.duplicate === true, ...(taskIds.length ? { taskIds: [...new Set(taskIds)] } : {}) });
+    };
 
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (!secret) return handled(503, { code: 'NOT_CONFIGURED', detail: 'TELEGRAM_WEBHOOK_SECRET is not configured' });
@@ -228,9 +264,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           const priorPart = await tx((trx) => readAlbumPart(trx, DEFAULT_TENANT_ID, source));
           if (priorPart) return reply(partReply(priorPart));
           const priorRouting = await tx((trx) => readRoutingRefusal(trx, DEFAULT_TENANT_ID, source.update_id));
-          const owned = mode === 'lifecycle' || lifecycleOwnsChat(chatId) ||
-            await tx((trx) => hasAlbum(trx, DEFAULT_TENANT_ID, chatId, String(albumPart.media_group_id)));
-          if (owned && !priorRouting) {
+          // Every chat is lifecycle-owned (ADR-135): an album part is kept unless a refusal replays.
+          if (!priorRouting) {
             if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
             const old = await createTelegramUpdateState(ctx).telegramUpdateHandled(chatId, String(source.update_id));
             if (old) return handled(200, { duplicate: true, ...(old.taskId ? { taskIds: [old.taskId] } : {}) });
@@ -244,7 +279,6 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           admittedAlbum = confirmed.snapshot;
           if (!admittedAlbum) throw new Error('Album confirmation has no stored result');
           preparedUpdate = normalizedAlbumUpdate(admittedAlbum);
-          mode = 'lifecycle';
           await chaosPoint('core.intake.after-album-confirmation', { updateId: source.update_id, chat: chatId });
         }
       } catch (error) {
@@ -297,8 +331,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
     }
 
-    // A deliberate lifecycle refusal must not become a legacy task when the chat flag
-    // changes before Telegram repeats the same update ID.
+    // A deliberate lifecycle refusal replays as it was first answered when Telegram repeats the
+    // same update ID, whatever intake would decide today.
     if (priorRefusal) {
       const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
       if (priorRefusal.payloadHash !== hash || priorRefusal.chatId !== sourceChat) {
@@ -317,11 +351,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         chatId: sourceChat });
     }
 
-    const sourceAnswer = await sourceIntake(update, String(mode));
+    const sourceAnswer = await sourceIntake(update);
     if (sourceAnswer) return handled(sourceAnswer.status, sourceAnswer.extra);
 
-    // --- lifecycle mode: bind a requester answer to one request, then replay it by update ID ---
-    if (mode === 'lifecycle' || lifecycleOwnsChat(chatOf(update)) || priorRevisionPhoto) {
+    // --- bind a requester answer to one request, then replay it by update ID ---
+    {
       // The chat's stored request ID is only a hint. A chat can contain more than one request.
       if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
       {
@@ -431,12 +465,26 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 waiting: await waitingLifecycleRequests(trx, TENANT, chatId),
                 links: replyMessageId ? await linkedLifecycleReplies(trx, TENANT, chatId, replyMessageId) : [],
               }));
+            // ADR-135: an update about a request the old intake started is finished there, in its
+            // finish-only scope. A legacy draft's button (lifecycle notices carry none) never becomes
+            // a lifecycle directive; a reply naming a legacy task goes to that task; an unlinked
+            // message goes there only where legacy intake would read it against an open legacy design.
+            if (!priorRevisionPhoto && !admittedAlbum) {
+              if (cbq && typeof cbq === 'object') return await legacyFinish(update);
+              const namedTask = replyMessageId && links.length === 0 && !newCommand
+                ? taskIdNamedByReply((msg as Record<string, unknown>).reply_to_message) : null;
+              const aboutLegacy = await withRlsContext(db,
+                { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
+                  (namedTask ? await isLegacyTaskOfChat(trx, TENANT, chatId, namedTask) : false) ||
+                  (!replyMessageId && !newCommand && Boolean(msg) && waiting.length === 0 &&
+                    await newestRecentRequestIsOpenLegacy(trx, TENANT, chatId)));
+              if (aboutLegacy) return await legacyFinish(update);
+            }
             // A reply to a request whose design already went to the office (in review, approved,
             // delivering or delivered) cannot change that design, and it was a stale reply that kept
             // nothing. Its words are kept, the office is alerted, and Deliver waits for someone to
             // acknowledge them (finding 13 of the Phase 4 review).
             if (replyMessageId && !newCommand && !priorRevisionPhoto &&
-                (mode === 'lifecycle' || lifecycleOwnsChat(chatId)) &&
                 !links.some((link) => waiting.some((request) =>
                   request.request_id === link.requestId && Number(request.rev) === link.rev))) {
               const targets = await withRlsContext(db,
@@ -458,37 +506,27 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 return handled(409, lateChangeAnswer(chatId, stored.late));
               }
             }
-            if (replyMessageId && (mode === 'lifecycle' || lifecycleOwnsChat(chatId) || priorRevisionPhoto) &&
-                (links.length === 0 || newCommand)) return refuseWithReceipt('STALE_REQUEST_REPLY');
+            if (replyMessageId && (links.length === 0 || newCommand)) return refuseWithReceipt('STALE_REQUEST_REPLY');
             if (links.length > 1) return refuseWithReceipt('AMBIGUOUS_REQUEST');
             // An explicit new brief may coexist with a waiting request. A reply to a lifecycle
             // notice always remains bound to that notice, including a stale reply.
-            const mayOpen = (lifecycleOwnsChat(chatId) || Boolean(admittedAlbum)) && Boolean(msg) && !replyMessageId &&
-              (Boolean(newCommand) || waiting.length === 0);
+            const mayOpen = Boolean(msg) && !replyMessageId && (Boolean(newCommand) || waiting.length === 0);
             if (mayOpen) {
               const classification = classifyWithHeuristics(newBriefText, false, false);
               if (classification.kind !== 'new_brief') {
                 if (newCommand) return handled(422, { code: 'NEW_BRIEF_EMPTY',
                   lifecycleAction: 'new-brief-required', chatId });
                 // Questions, greetings and lasting preferences retain the legacy handler's
-                // established response; a chat flag does not turn them into design tasks.
+                // established response, in its finish-only scope: they never become design tasks.
               } else {
                 const sender = (msg as Record<string, { id?: unknown; first_name?: unknown }>).from;
                 if (!senderAllowed) {
                   return handled(403, { code: 'SENDER_NOT_ALLOWED' });
                 }
                 if (newBriefText.length > 100_000) return handled(413, { code: 'BRIEF_TOO_LONG' });
-                // A newly flagged chat with historical Core tasks needs an explicit command; an
-                // ordinary message could be a change to an older design.
-                const hasLegacyTask = await withRlsContext(db,
-                  { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
-                  async (trx) =>
-                    (await sql<{ one: number }>`SELECT 1 AS one FROM hawa.outbox_commands o
-                      JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
-                      WHERE o.tenant_id = ${TENANT}::uuid AND o.command_type = 'task.created'
-                        AND o.payload->>'sourceChannelId' = ${chatId}
-                        AND t.delivery_executor_pin = 'core' LIMIT 1`.execute(trx)).rows.length > 0);
-                if (newCommand || !hasLegacyTask) {
+                // A chat whose open legacy request could take this message as a change was sent to
+                // the old intake above (ADR-135); every other brief opens a lifecycle request.
+                {
                   const requestId = requestIdForUpdate(chatId, update.update_id);
                   const prepared = await createChatCampaignIntake(ctx).prepareChatCampaignDraft({
                     platform: 'telegram', sourceEventId: `lc-${requestId}-r0`, sourceChannelId: chatId,
@@ -589,7 +627,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
               }
             }
             if (photoInput || admittedAlbum) return holdMedia();
-            // Not in manual stage or no open request → fall through to legacy intake.
+            // No waiting request and not a new brief (a question, a greeting, a rule): the old
+            // intake answers it, in its finish-only scope.
           } catch (err) {
             if (err instanceof LifecycleProjectionConflict) {
               log.warn(`[core:internal] lifecycle intake conflict for update ${update.update_id}: ${err.code} ${err.message}`);
@@ -606,24 +645,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       }
     }
 
-    // --- legacy mode (or lifecycle fallback to legacy when not in manual stage) ---
-    // Today's intake, in this process, as the Core poller handed updates to it (app.ts).
-    const res = await app.request('/api/webhooks/telegram?generate=true', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret, ...requestIdHeaders() },
-      body: JSON.stringify(update),
-    });
-    const answer = (await res.json().catch(() => ({}))) as { duplicate?: boolean; title?: string; task?: { id?: string }; tasks?: Array<{ id?: string }> };
-    if (res.status === 503 && answer.title === 'Database Unavailable') return handled(503, { code: 'DATABASE_UNAVAILABLE' });
-    // The switch thrown between the check above and intake's own.
-    if (res.status === 503 && answer.title === 'Service Unavailable') return handled(503, { code: 'INTAKE_PAUSED' });
-    if (res.status >= 400) log.warn(`[core:internal] intake answered update ${update.update_id} with HTTP ${res.status}: ${answer.title ?? ''}`);
-
-    // Intake has decided and saved what it saves; the answer has not left yet (chaos suite point:
-    // a Core killed here must not make the worker's retry a second task).
-    await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatOf(update), status: res.status });
-    const taskIds = [...(answer.tasks ?? []), ...(answer.task ? [answer.task] : [])].map((t) => t?.id).filter((id): id is string => typeof id === 'string');
-    return handled(res.status, { duplicate: answer.duplicate === true, ...(taskIds.length ? { taskIds: [...new Set(taskIds)] } : {}) });
+    // --- anything the lifecycle path did not take: the old intake, finish-only (ADR-135) ---
+    return legacyFinish(update);
   });
 
   internal('/telegram/park', async (c) => {

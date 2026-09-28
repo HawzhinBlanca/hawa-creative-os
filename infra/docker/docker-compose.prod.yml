@@ -17,11 +17,12 @@ x-worker-environment: &worker-environment
   HAWA_BUILD_COMMIT: ${HAWA_BUILD_COMMIT:-unknown}
   # The content-addressed file store (ADR-035), the same host directory as Core's.
   HAWA_BLOB_DIR: /var/lib/hawa/blobs
-  # Who asks Telegram for updates (Phase 2.1, ADR-034): `core` (the default) or `worker`, set once in
-  # infra/docker/.env for Core and both colours alike. With `worker` the live colour polls and hands
-  # each update to its chat's ChatInbox, calling Core's /v1/internal/* with HAWA_WORKER_TOKEN, which
-  # comes from .env.production (env_file) like every credential; without it the poller does not start.
-  HAWA_TELEGRAM_POLLER: ${HAWA_TELEGRAM_POLLER:-core}
+  # Who asks Telegram for updates (Phase 2.1, ADR-034; ADR-135): the worker, set once in
+  # infra/docker/.env for Core and both colours alike; deploy.sh refuses any other value. The live
+  # colour polls and hands each update to its chat's ChatInbox, calling Core's /v1/internal/* with
+  # HAWA_WORKER_TOKEN, which comes from .env.production (env_file) like every credential; without it
+  # the poller does not start.
+  HAWA_TELEGRAM_POLLER: ${HAWA_TELEGRAM_POLLER:-worker}
 
 x-worker: &worker
   build:
@@ -121,9 +122,9 @@ services:
       # X-Accel-Redirect to nginx's internal location under this prefix.
       HAWA_BLOB_DIR: /var/lib/hawa/blobs
       HAWA_BLOB_ACCEL_PREFIX: /_blobs/
-      # `core` (default): Core polls Telegram, as before. `worker`: Core stops polling and serves the
-      # worker's intake calls on /v1/internal/*, which take HAWA_WORKER_TOKEN (.env.production) only.
-      HAWA_TELEGRAM_POLLER: ${HAWA_TELEGRAM_POLLER:-core}
+      # Only `worker` is accepted since ADR-135 (deploy.sh refuses anything else): Core never polls and
+      # serves the worker's intake calls on /v1/internal/*, which take HAWA_WORKER_TOKEN (.env.production) only.
+      HAWA_TELEGRAM_POLLER: ${HAWA_TELEGRAM_POLLER:-worker}
     volumes:
       - ${HAWA_BLOBS_DIR:-${HOME}/.hawa/blobs}:/var/lib/hawa/blobs
     extra_hosts:

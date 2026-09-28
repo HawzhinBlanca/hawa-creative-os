@@ -26,10 +26,8 @@ x-app-environment: &app-environment
   HAWA_CORE_INTERNAL_URL: http://core:3001
   # The worker's own credential for Core's /v1/internal/* endpoints (a service principal).
   HAWA_WORKER_TOKEN: ${CHAOS_WORKER_TOKEN:?}
-  # The chats whose requests Restate's lifecycle runs (Phase 2 slices; 2.2: the Delivery workflow).
-  # The driver's flagged scenarios use these chats; every other chat takes the legacy path. With the
-  # worker's poller the R1.S3 and L2 scenarios together use 16 of them (17 with --candidate).
-  HAWA_LIFECYCLE_CHATS: "9300001,9300002,9300003,9300004,9300005,9300006,9300007,9300008,9300009,9300010,9300011,9300012,9300013,9300014,9300015,9300016,9300017,9300018,9300019,9300020,9300021,9300022,9300023,9300024"
+  # Every chat's requests are RequestLifecycle's (ADR-135): HAWA_LIFECYCLE_CHATS, which listed the
+  # flagged chats until 2026-09-28, no longer exists.
   HAWA_BEARER_TOKEN: ${CHAOS_BEARER_TOKEN:?}
   HAWA_ART_DIRECTOR_KEY: ${CHAOS_REVIEWER_KEY:?}
   HAWA_ADMIN_KEY: ${CHAOS_ADMIN_KEY:?}
@@ -62,10 +60,10 @@ x-app-environment: &app-environment
   AUTO_GENERATE_DAILY_CAP_PER_SENDER: "1000"
   AUTO_GENERATE_DAILY_CAP_GLOBAL: "1000"
   HAWA_CHAOS_CONTROL_URL: http://fakes:9000/__chaos
-  # Phase 2.1: `core` (default) polls Telegram in Core, as production does today; `worker` (run.ts
-  # --poller worker) polls in the live worker colour and hands each update to its chat's ChatInbox,
-  # which calls Core's /v1/internal/* with the worker's own token.
-  HAWA_TELEGRAM_POLLER: ${CHAOS_TELEGRAM_POLLER:-core}
+  # The live worker colour polls Telegram and hands each update to its chat's ChatInbox, which calls
+  # Core's /v1/internal/* with the worker's own token. Since ADR-135 it is the only poller: Core never
+  # polls, and run.ts refuses --poller core.
+  HAWA_TELEGRAM_POLLER: ${CHAOS_TELEGRAM_POLLER:-worker}
   NODE_EXTRA_CA_CERTS: /chaos-ca/ca.pem
   HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
 
