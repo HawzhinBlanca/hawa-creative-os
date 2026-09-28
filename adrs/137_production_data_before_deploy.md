@@ -54,3 +54,11 @@ Production's data is already on disk as files. `deploy.sh` writes `infra/backup/
   - the check changes no rows.
 - `packages/testkit/chaos/test/seed.test.ts` (3 tests): the credential-column rule, and the compose file's internal networks and provider aliases.
 - The evidence and chaos results on production data are in `plans/lean-design-implementation-2026-09-28/CHAOS_ON_PRODUCTION_DATA_PROOF.json`.
+- Gate stage run as the gate calls it, on `predeploy_20260928T181301Z.dump`: passed in 21 s wall time (restore 15.6 s). No scratch database was left.
+- Seeded chaos runs on the same dump, with an egress fence of 17 checks from inside Core and the worker:
+  - worker poller with `HAWA_LIFECYCLE_CHATS=*`: 35 of 37 applicable scenarios passed in one run, and 6 legacy-only scenarios were not applicable. R1.K14 and R1.D1 passed on rerun after fixes to the harness only.
+  - core poller: 17 of 19 passed. The two failures, R1.K14 and R4, are the documented baselines without production data.
+  - No product defect came from production data.
+- Two harness defects were found and fixed:
+  - the load runner tore down a project it did not own after giving up its wait, which took down a seeded run mid-suite;
+  - a queued suite was killed by its own hook timeout while it waited for the lock.

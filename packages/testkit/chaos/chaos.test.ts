@@ -38,6 +38,7 @@ const seedDump = process.env.HAWA_CHAOS_SEED_DUMP || '';
 let seeded: { restore: SeedReport; upgrade: { applied: string[]; verified: number }; neutralised: NeutraliseReport; egress: EgressProbe[] } | null = null;
 // Set once this run holds the project's lock; a run that never got it must not touch the project.
 let owned = false;
+const LOCK_WAIT_MS = 3 * 60 * 60_000;
 
 interface ScenarioReport {
   name: string;
@@ -157,7 +158,9 @@ async function fullRequest(chat: string, tag: string, events: string[], hooks: {
 describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   beforeAll(async () => {
     // One run at a time on this machine, from this down to the last (driver/stack.ts acquireProject).
-    await acquireProject({ log: (line) => console.log(`[chaos] ${line}`) });
+    // The wait has its own budget (up to 3 h, reported every 30 s): with the lock's default 30 min
+    // inside a 30 min hook, a run queued behind another was killed by the hook timeout (2026-09-28).
+    await acquireProject({ waitMs: LOCK_WAIT_MS, log: (line) => console.log(`[chaos] ${line}`) });
     owned = true;
     // Always from nothing: a kept project from an earlier run would carry its tasks and journals.
     down({ volumes: true });
@@ -191,7 +194,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     if (reg.code !== 0) throw new Error(`register blue: ${reg.lines.join(' | ')}`);
     if (candidate) up({ build: false, services: ['docling', 'desk', 'nginx'] });
     sampleMemory();
-  }, 30 * 60_000);
+  }, LOCK_WAIT_MS + 30 * 60_000);
 
   afterAll(async () => {
     // Never started (the lock was not taken): the project, if any, is another run's.
@@ -365,14 +368,24 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     start('core');
     await waitHealthy('core');
     await sleep(3000);
-    const stateAfterRestart = await taskState(taskId);
+    let stateAfterRestart = await taskState(taskId);
+    // With every chat on the lifecycle the Delivery workflow owns the delivery (slice 2.2) and resumes
+    // it after the restart on its own; 'publishing' three seconds later is that workflow still
+    // running, not a stuck task. Its invariant is that it completes without a second Deliver (as
+    // L2.K14). The legacy path keeps the original check.
+    if (everyChatOnLifecycle) {
+      await waitUntil('the Delivery workflow to finish without a second Deliver', async () => (await taskState(taskId)) === 'complete', 180_000, 2000).catch(() => undefined);
+      stateAfterRestart = await taskState(taskId);
+    }
     events.push(`after Core restarted, before a second Deliver: task ${stateAfterRestart}`);
     const second = await deliver(taskId);
     events.push(`second Deliver: HTTP ${second.status} ${JSON.stringify(second.body).slice(0, 160)}`);
     await waitDelivered(chat, taskId);
     return {
       delivered: true,
-      extra: [{ name: 'a delivery cut off by a Core restart does not stay stuck in publishing', ok: stateAfterRestart !== 'publishing', detail: `task ${stateAtKill} at the kill, ${stateAfterRestart} after the restart` }],
+      extra: [everyChatOnLifecycle
+        ? { name: 'a delivery cut off by a Core restart completes without a second Deliver', ok: stateAfterRestart === 'complete', detail: `task ${stateAtKill} at the kill, ${stateAfterRestart} before the second Deliver (HTTP ${second.status})` }
+        : { name: 'a delivery cut off by a Core restart does not stay stuck in publishing', ok: stateAfterRestart !== 'publishing', detail: `task ${stateAtKill} at the kill, ${stateAfterRestart} after the restart` }],
     };
   });
 
@@ -409,8 +422,11 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await fakes.release();
     await request;
     const [tasks] = [await tasksOfChat(chat)];
+    // The design is TaskWorkflow's on the legacy path and DesignRun's when RequestLifecycle owns the
+    // request (every chat, with --lifecycle-chats all; ADR-059), as checkRequest's design-run check.
     const inv = await restateQuery<{ pinned_deployment_id: string | null; status: string }>(
-      `SELECT pinned_deployment_id, status FROM sys_invocation WHERE target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${tasks[0]?.id}'`
+      `SELECT pinned_deployment_id, status FROM sys_invocation WHERE (target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${tasks[0]?.id}')
+         OR (target_service_name = 'DesignRun' AND target_service_key = 'dr-${tasks[0]?.id}')`
     );
     const drains = await finishDrains(180);
     events.push(`finish-drains: exit ${drains.code} ${drains.lines.join(' | ')}`);
