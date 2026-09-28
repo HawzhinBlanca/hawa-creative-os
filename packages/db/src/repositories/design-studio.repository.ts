@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { createHash } from 'node:crypto';
 import { withRlsContext } from '../client.js';
-import { assertStudioBudgetAdmission, studioBudgetUsage, StudioBudgetExhaustedError, StudioBudgetEvidenceError, type StudioDailyBudget, type StudioBudgetUsage, validateStudioReservation, type StudioCallReservation, type StudioCostBasis } from '@hawa/domain';
+import { assertStudioBudgetAdmission, isStudioSubstepKey, studioBudgetUsage, StudioBudgetExhaustedError, StudioBudgetEvidenceError, type StudioDailyBudget, type StudioBudgetUsage, validateStudioReservation, type StudioCallReservation, type StudioCostBasis } from '@hawa/domain';
 import { parseBlobRef, sniffBlobMediaType, taskGenerationBlocker, type BlobRef } from '@hawa/contracts';
 import { BlobCorruptError, BlobMissingError, type BlobStore } from '../blobs/store.js';
 import type {
@@ -78,6 +78,8 @@ export interface RecordCallStartParams {
   callOrdinal: number | null;
   logicalCallSha256: string;
   reservation: StudioCallReservation;
+  /** ADR-122: the semantic substep, its attempt and the exact binding the result is valid for. */
+  substep?: { key: string; attempt: number; bindingText: string; bindingSha256: string };
 }
 
 export class ModelCallAdmissionConflictError extends Error {
@@ -590,6 +592,16 @@ export class DesignStudioRepository {
     if (!/^[0-9a-f]{64}$/.test(params.logicalCallSha256)) {
       throw new TypeError('Studio logical call identity must be a SHA-256 digest.');
     }
+    const substep = params.substep;
+    if (substep) {
+      let bound: unknown;
+      try { bound = JSON.parse(substep.bindingText); } catch { bound = undefined; }
+      if (!isStudioSubstepKey(substep.key) || !Number.isSafeInteger(substep.attempt) || substep.attempt < 1 ||
+          (bound as { substep?: unknown } | undefined)?.substep !== substep.key ||
+          createHash('sha256').update(substep.bindingText).digest('hex') !== substep.bindingSha256) {
+        throw new TypeError('Studio substep identity and binding must be valid and self-consistent.');
+      }
+    }
     return withRlsContext(trx || this.db, { tenantId: params.tenantId, userId: params.actorId }, async (client) => {
       // Cancellation and admission serialize on the same task row. Do not gate finalization:
       // a request admitted before closure may still return a paid response afterwards.
@@ -624,6 +636,10 @@ export class DesignStudioRepository {
           call_ordinal: params.callOrdinal,
           logical_call_sha256: params.logicalCallSha256,
           reservation: params.reservation,
+          substep_key: substep?.key ?? null,
+          substep_attempt: substep?.attempt ?? null,
+          binding_text: substep?.bindingText ?? null,
+          binding_sha256: substep?.bindingSha256 ?? null,
           status: 'uncertain',
         })
         .onConflict((oc) => oc.doNothing())

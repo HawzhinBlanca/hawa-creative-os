@@ -616,6 +616,12 @@ export interface DesignStudioCallsTable {
   call_ordinal: number | null;
   /** SHA-256 of the logical call identity; null only on historical rows. */
   logical_call_sha256: string | null;
+  /** ADR-122 semantic substep and attempt; null on rows admitted before migration 065. */
+  substep_key: string | null;
+  substep_attempt: number | null;
+  /** Canonical binding text (input/identity/asset digests only) and its SHA-256. */
+  binding_text: string | null;
+  binding_sha256: string | null;
   reservation: import('@hawa/domain').StudioCallReservation | null;
   spending_policy_version: Generated<number | null>;
   budget_role: Generated<'creative_director' | 'visual_judge' | 'asset_photoreal' | null>;

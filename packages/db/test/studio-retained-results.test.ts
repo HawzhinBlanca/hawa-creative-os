@@ -27,7 +27,7 @@ describe.skipIf(!url)('immutable retained Studio results', () => {
       await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title) VALUES(${taskId}::uuid,${tenantId}::uuid,${clientId}::uuid,'Retained fixture')`.execute(tx);
     });
     await repo.createRun({ id: runId, taskId, tenantId, clientId, actorId, requestKey: runId,
-      requestHash: 'a'.repeat(64), request: {}, tier: 'premium', budget: { maxUsd: 2, maxCalls: 2, spentUsd: 0, calls: 0 } });
+      requestHash: 'a'.repeat(64), request: {}, tier: 'premium', budget: { maxUsd: 2, maxCalls: 4, spentUsd: 0, calls: 0 } });
     await repo.recordCallStart({ id: callId, runId, tenantId, actorId, stage: 'briefing', provider: 'openai', model: 'synthetic',
       requestedModel: 'synthetic', callOrdinal: 1, logicalCallSha256: sha(callId),
       reservation: { version: 1, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: .5, inputTokens: 100, outputTokens: 100 } });
@@ -107,6 +107,52 @@ describe.skipIf(!url)('immutable retained Studio results', () => {
     await expect(storedRepo.getRetainedCallResult(callId, tenantId)).rejects.toThrow();
     await unlink(imagePath);
     await expect(storedRepo.getRetainedCallResult(callId, tenantId)).rejects.toThrow();
+  });
+
+  describe('ADR-122 substep identity and binding', () => {
+    const binding = (substep: string) => JSON.stringify({ version: 1, substep, inputs: { request: 'b'.repeat(64) }, identities: { model: 'synthetic' }, assets: [] });
+    const admit = (substep: { key: string; attempt: number; bindingText: string; bindingSha256: string }, ordinal: number) => {
+      const id = randomUUID();
+      return { id, call: repo.recordCallStart({ id, runId, tenantId, actorId, stage: 'briefing', provider: 'openai', model: 'synthetic',
+        requestedModel: 'synthetic', callOrdinal: ordinal, logicalCallSha256: sha(id), substep,
+        reservation: { version: 1, policy: 'synthetic-test', requestSha256: 'b'.repeat(64), usd: .5, inputTokens: 100, outputTokens: 100 } }) };
+    };
+    const valid = (key = 'brief/request', attempt = 1) => ({ key, attempt, bindingText: binding(key), bindingSha256: sha(binding(key)) });
+
+    it('records a self-consistent substep attempt and binding with the admission; legacy rows stay null', async () => {
+      const { id, call } = admit(valid(), 2);
+      await call;
+      const [row] = (await sql<{ substep_key: string; substep_attempt: number; binding_sha256: string }>`SELECT substep_key,substep_attempt,binding_sha256
+        FROM hawa.design_studio_calls WHERE id=${id}::uuid`.execute(db)).rows;
+      expect(row).toEqual({ substep_key: 'brief/request', substep_attempt: 1, binding_sha256: sha(binding('brief/request')) });
+      const legacy = (await sql<{ substep_key: string | null }>`SELECT substep_key FROM hawa.design_studio_calls WHERE id=${callId}::uuid`.execute(db)).rows[0];
+      expect(legacy.substep_key).toBeNull();
+      expect(await repo.getCallsForRun(runId, tenantId)).toMatchObject([{ substep_key: null }, { substep_key: 'brief/request', substep_attempt: 1 }]);
+    });
+
+    it('refuses an inconsistent binding in the repository and in the database', async () => {
+      await expect(admit({ ...valid(), bindingSha256: 'c'.repeat(64) }, 2).call).rejects.toThrow(/self-consistent/);
+      await expect(admit({ ...valid(), key: 'Brief/Request' }, 2).call).rejects.toThrow(/self-consistent/);
+      await expect(admit({ ...valid(), attempt: 0 }, 2).call).rejects.toThrow(/self-consistent/);
+      await expect(admit({ ...valid('brief/request'), bindingText: binding('concepts/board'), bindingSha256: sha(binding('concepts/board')) }, 2).call)
+        .rejects.toThrow(/self-consistent/);
+      const raw = (text: string, digest: string) => withRlsContext(db, { tenantId, userId: actorId }, tx => sql`INSERT INTO hawa.design_studio_calls(id,run_id,tenant_id,stage,provider,model,requested_model,
+        reservation,status,substep_key,substep_attempt,binding_text,binding_sha256) VALUES(${randomUUID()}::uuid,${runId}::uuid,${tenantId}::uuid,
+        'briefing','openai','synthetic','synthetic',${JSON.stringify({ version: 1, policy: 'synthetic-test', requestSha256: 'b'.repeat(64), usd: .5, inputTokens: 100, outputTokens: 100 })}::jsonb,
+        'uncertain','brief/request',1,${text},${digest})`.execute(tx));
+      await expect(raw(binding('brief/request'), 'c'.repeat(64))).rejects.toThrow(/studio_substep_binding_complete/);
+      await expect(raw(binding('concepts/board'), sha(binding('concepts/board')))).rejects.toThrow(/studio_substep_binding_complete/);
+    });
+
+    it('admits one call per substep attempt and keeps the identity immutable', async () => {
+      const { id, call } = admit(valid(), 2);
+      await call;
+      await expect(admit(valid(), 3).call).rejects.toMatchObject({ code: 'MODEL_CALL_ADMISSION_CONFLICT' });
+      await admit(valid('brief/request', 2), 3).call;
+      await expect(sql`UPDATE hawa.design_studio_calls SET substep_attempt=5 WHERE id=${id}::uuid`.execute(db)).rejects.toThrow(/immutable/);
+      await expect(sql`UPDATE hawa.design_studio_calls SET substep_key=NULL,substep_attempt=NULL,binding_text=NULL,binding_sha256=NULL
+        WHERE id=${id}::uuid`.execute(db)).rejects.toThrow(/immutable/);
+    });
   });
 
   it('refuses retaining unknown outcomes, malformed content, or hashless images', async () => {

@@ -36,6 +36,17 @@ export function visualPolicySha256(ctx: StageContext): string {
     style: ctx.style ?? null, imageryStrategy: ctx.imageryStrategy ?? null, requestedBackground: ctx.requestedBackground ?? null }));
 }
 
+/**
+ * ADR-122: the authority a retained model result relies on (client, reference pack, exemplar
+ * approvals, standing rules, admitted fonts). Brief-derived style fields are excluded: they are
+ * derived data that the request digest already carries, and they lag a persisted rebrief.
+ */
+export function authorityPolicySha256(ctx: StageContext): string {
+  return sha(JSON.stringify({ clientId: ctx.clientId, pipelineV3: ctx.pipelineV3 === true, referencePack: ctx.referencePack,
+    exemplarPolicySha256: ctx.exemplarPolicySha256 ?? null, promotedRules: ctx.promotedRules, clientRules: ctx.clientRules ?? '',
+    latinFont: ctx.latinFont, arabicFont: ctx.arabicFont, ornament: ctx.ornament ?? null }));
+}
+
 export async function captureVisualInputs(ctx: StageContext, stages: Record<string, unknown>): Promise<StudioVisualBundle> {
   const assets: StudioVisualAsset[] = [];
   const bytes = (key: string, value: Buffer) => { assets.push({ key, bytes: value }); return key; };

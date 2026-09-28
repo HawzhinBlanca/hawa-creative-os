@@ -87,8 +87,14 @@ rewrite immutable history to make the check pass. Settlement establishes cost
 facts; it cannot reconstruct a missing result. Original unknown calls and billed
 errors without a validated response retain the prior settlement workflow.
 
-This is serial prefix recovery. Changed branching after a persisted rebrief,
-interleaved failed attempts and unpinned derivations may still require review.
+This is serial recovery. Since ADR-122 each new call records a semantic substep
+(`concepts/board`, `layout/concept-2`, `art/candidate-1`), its attempt and binding.
+Recovery matches retained results per substep, so a persisted rebrief branch and an
+interleaved definite image refusal resume without transport. `MODEL_STAGE_REPLAY_UNSAFE`
+now names the substep and attempt: "retained for different inputs" means its request,
+schema, authority or renderer basis changed; "cannot be reproduced" means a failed
+attempt preceded retained work in that substep. Calls admitted before migration 065
+keep the ordered-prefix rule. Unpinned derivations may still require review.
 Parity reruns, concurrent substeps, production process-kill/restore qualification
 and recovery of replies lost before retention are not covered by this slice.
 

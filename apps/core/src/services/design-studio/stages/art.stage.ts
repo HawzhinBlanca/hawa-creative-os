@@ -3,6 +3,8 @@ import { isModelCallHoldError, type StageContext, type CandidateState } from '..
 import { FORBIDDEN_ART_WORDS, renderMotifPng, evaluateHardQa, type ProceduralMotifType } from '@hawa/creative';
 import { hardQaContextFor } from './v3.stage.js';
 import { log } from '../../../logging.js';
+import { studioSubstepKey } from '@hawa/domain';
+import { inStudioSubstep } from '../substeps.js';
 
 function assertArtPromptSafe(prompt: string, ctx: StageContext): void {
   const normalized = (value: string) => value.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -70,14 +72,16 @@ export async function runArtStage(
       const calmRegionDesc = `centered around (${Math.round(calmBox.x)}, ${Math.round(calmBox.y)}) measuring ${Math.round(calmBox.width)}x${Math.round(calmBox.height)}`;
 
       try {
-        const artResult = await ctx.artProvider.generateArt({
+        // The image, its refusals and its verifier are attempts of one substep (ADR-122).
+        const artProvider = ctx.artProvider;
+        const artResult = await inStudioSubstep(studioSubstepKey('art', `candidate-${cand.ordinal + 1}`), () => artProvider.generateArt({
           artPrompt: basePrompt,
           palette: ctx.referencePack.palette,
           aspect: width >= height ? '16:9' : '9:16',
           calmRegionDescription: calmRegionDesc,
           width,
           height,
-        });
+        }));
 
         const actualSha256 = createHash('sha256').update(artResult.imageBuffer).digest('hex');
         if (actualSha256 !== artResult.receipt.sha256) {
