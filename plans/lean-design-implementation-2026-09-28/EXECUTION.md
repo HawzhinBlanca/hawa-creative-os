@@ -593,3 +593,137 @@ Open: Core delivery projection for this origin was exercised only through the ow
 
 Files are in the worktree above; evidence logs are gitignored under output/acceptance/2026-09-28-initial-native-*. I did not write to the wiki; the lead owns the merged record.
 
+## 2026-09-28 — studio-v2 integration (ADR-127)
+
+2026-09-28 STUDIO-V2 INTEGRATION (ADR-127, LOCAL, NOT DEPLOYED). Base 7b8de71e, head acc9b387 on worktree-wf_512e9b2d-671-1.
+- Ported or adapted:
+  - Client packs (5 packs; KAAE live, 4 onboarding with no automatic drafts), the thumbnail playbook, KAAE persona and palette out of shared code, v1 KAAE templates retired (410), and 9 audit fixes.
+  - Deploy health retry and task-control OpenAPI; CI on a clean runner with Pango; release-manifest ancestor check.
+  - Adaptive Canva panel poll; file store backfill fixes and staged release B keys (checked against 023-064); Restate backup recovery after SIGKILL, plus the watchdog.
+  - Load scripts and the runbook (only three test-server blocks re-run; the rest marked not re-run); history documents with supersession notes.
+- Not ported: studio-v2's RequestLifecycle and its migration 023; the release-manifest chores.
+- Red first, per item (all logs are in output/acceptance/2026-09-28-studio-v2-integration/):
+  - deploy 7, OpenAPI 3, poll (module missing), art temp 1, manifest check 4, file store 10 plus the missing staged file
+  - Restate (import failure plus SIGKILL demo), runbook 2, packs 2, thumbnail, shared code 7 of 9, templates 3, audit 7
+- Full suite (w3): 10 failed, 4535 passed; each failure is explained above. After the fixes, the affected files pass; r11 (manifest) and the two pre-existing studio-ledger cases still fail.
+- Build, typecheck, lint, security and validate_pack pass.
+- Proof: plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json.
+- Not executed: chaos and load runs, pnpm test:db, production, native Canva, paid calls, Telegram, a live Restate rehearsal, deployment, RELEASE_MANIFEST.
+
+## 2026-09-28 — studio-v2 integration review fixes (ADR-127)
+
+2026-09-28, integration fix round (worktree-wf_512e9b2d-671-1, 89b15dcc..4482f671; ADR-127; no migration, 070 unused).
+- Done: the watchdog now restarts and reports stopped stack containers whatever the backup recovery says, and never starts Restate while a backup holds the archive lock. Also: KAAE is named "Association" in its pack profile; a packaged-KAAE run without its exemplar pack is refused 503 CLIENT_EXEMPLARS_UNAVAILABLE; the CTA contrast is checked again after the fallback; the stable prefix names no client; client-pack rows are tested as hawa_app; the Canva panel refreshes when the office comes back to the tab; the studio-ledger stubs admit the task.
+- Evidence: red and green logs are in output/acceptance/2026-09-28-studio-v2-integration/review-*.log, referenced by hash in STUDIO_V2_INTEGRATION_PROOF.json. Full suite 4560/4621 passed; only r11 fails, on the manifest. Build, typecheck and lint pass (any 955 of 1053; egress 9 existing exceptions). Security scan: 0 secrets. 79 backup Python tests pass.
+- Open: RELEASE_MANIFEST.json (lead). Watchdog verified only against stubbed docker, curl, open and sleep.
+- Next: lead merges; owner steps unchanged.
+
+STUDIO-V2 COMMIT TABLE (integration total, this branch's commits in brackets):
+| Commit | Outcome |
+|---|---|
+| 8b0d140b, d5a884cf, 5fb37d29, 736b0e9b, 3904fe07, 6269ef4e | Superseded by this branch's own RequestLifecycle (ADR-034, ADR-052, ADR-059+); migration 023 not ported |
+| 5e64ae31 | Adapted [f49bf1ce]: runbook Phase 2 sections rewritten for this branch's lifecycle; command blocks say whether they were re-run |
+| e8169f44 | Skipped: a duplicate-key YAML load finds no duplicate in this branch's compose file |
+| 644fd8dd | Adapted [f1d81424]: deploy health retry; OpenAPI task-control paths |
+| 4e2e6e58, 75153027 | Ported/adapted [ef2e57a7, 88da484f]: backfill fixes, staged release-B keys (not a migration), PHASE3_EVIDENCE |
+| 088ce5e6 | Superseded by ADR-053 to 057 and ADR-081 (backup, restore, drill not ported) |
+| 4eb16341 | Adapted [dd0c5343, 89b15dcc]: recovery of a killed backup through restate_nightly.py --recover and the watchdog; wave 8a evidence kept as history |
+| ecc9af71 | Adapted [d97c9149, 8b33a064]: 5 s/60 s poll, live-event refresh, plus refresh on tab focus |
+| 82240d9e, 9a4a38b3, 1869518d | Kept as history [11192568] with a supersession note |
+| 1a160953, 9cd4afeb, c2bf4943 | Ported/adapted [45d4949b, 9925e1f6, 4e167b7d]: CI on a clean runner (Pango headers), manifest check accepts merges |
+| a5a50dad | Adapted [a85e136f]: client packs route and scope; Client DNA stays the brand authority; ADR-038 renumbered to ADR-127 |
+| 1d07664b | Playbook ported [aff64337]; logo half superseded by ADR-047/ADR-109 (stricter) |
+| d66804ce | Superseded by ADR-047/ADR-109 |
+| 27e9e4f1, f6d6ed1b | Adapted [144941e9, 8b33a064]: persona and palette out of shared code; guard extended to the stable prefix |
+| 24a787cd | Adapted, narrowed [144941e9]: packs name their exemplar manifest; retrieval stays ADR-115, KAAE only |
+| 4d3f393d | Ported [7d57f7a3]: v1 KAAE templates retired (410) |
+| 66e483e8 | Adapted [f4d652f7]: audit #2 #3 #11 #14 #15 #16 #17 #21 #22 ported; #12 and #16's drift check superseded by stricter branch behaviour |
+| 59150ca3, ce851ee0, b58f8a59, 10af521a, 674ed84b, 1d5644b9, f423cea6, d9ae139f, f55ab8d3, 809e1073, b646b42d | Skipped as instructed ("chore(release): record manifest"); MANIFEST.json and SHA256SUMS.txt refreshed instead |
+
+## 2026-09-28 — Security boundary repairs (ADR-128)
+
+ADR-128 closes Phase 4 security findings 7, 8, 10, 11, 12 and 28. Each intake switch has one role rule on every route that changes it. WhatsApp is the administrator's in both directions, as POST /waha/kill-switch already was. Telegram stays with operator, administrator and art director, so the Desk and the nightly Restate backup keep working unchanged. /operations/kill-switch now answers only after PostgreSQL has the switch, and a WhatsApp change there also sets WAHA_KILL_SWITCH. The Delivery internal routes accept only the service role from verifyRequestAuth, so a worker token that is short or equal to another key closes them as it already closed intake. HAWA_DEV_TOKEN joins the keys the worker token must differ from, and /auth/session never issues a session for the service token. The query-string session is retired. nginx no longer logs missing stored files, and it answers /v1/internal/ and its /api prefixes with 404. The worker reaches Core at http://core:3001 on the compose network. db/03-grants.sql is init-only: once hawa.schema_upgrades exists it changes nothing.
+
+Initial red: 16 failed/58 passed, each reproducing its finding. Final: six files/74 passed/0 failed/0 skipped. Directly affected: 48 files/537 passed/1 failed/2 opt-in skips; the failure is a stale migration constant that also fails at the base. Full suite once: 4467 passed/9 failed/60 skipped; the same 9 tests fail at 7b8de71e. Isolated PostgreSQL through hawa_app, and the production nginx image with stub Core and Desk on a throwaway network. Source/scripts types and 534 strict test roots pass; any/egress/security checks pass. See SECURITY_BOUNDARY_PROOF.json.
+
+No deployment, production read or write, live nginx reload, live backup rehearsal or credential rotation. Next: the owner deploys Core and nginx together and checks the next nightly backup; the stale fixtures behind the 9 pre-existing failures need repair. The six-package objective remains active.
+
+## 2026-09-28 — Operations fix round (ADR-129)
+
+This round fixes Phase 4 operations findings 1, 2, 3, 4, 6 and 26. No migration.
+
+- **Poller switch (1).** deploy.sh no longer moves HAWA_TELEGRAM_POLLER to Core before the colour that takes over exists. Core keeps the value it runs with (or core, when no Core container exists) until register succeeds, and is then recreated once. The idle worker image is built and verified before step 7. A failed exit now says which process polls.
+- **Rollback split (2).** register reads the new colour's /ready service list and refuses, before any POST, a build that lacks a service Restate already routes to the worker. A build without a list counts as TaskWorkflow and TaskService only. The README advice that could not work is replaced: a worker rollback below a service-adding build is unsupported, and an existing split has no repository recovery.
+- **Poller health (3).** Core probes getMe whichever process polls and names the poller in /v1/health. The polling worker colour degrades on a poller that did not start, a 401/404 token or five minutes without a working cycle. The watchdog alerts when Core names the worker and no colour polls.
+- **Worker token rotation (4).** Rotation now takes two deploys. Core and the worker accept HAWA_WORKER_TOKEN_PREVIOUS, and Core signs with it while it is set. deploy.sh refuses a running token that matches neither value and never prints values.
+- **Log shipper config (6).** vector.yaml is validated before step 7 and vector is restarted when it sees another file.
+- **Restore (26).** Restores now go into a new database, are checked against the dump's policies, foreign keys and triggers, and are swapped in by two renames in one transaction.
+
+Red: 44 tests; 42 failed, 2 passed, and one worker file did not load. Behavioural reds: the fake Restate registered a TaskWorkflow/TaskService-only rollback build, Core answered 401 to the previous token, production skipped getMe, and health had no poller owner.
+
+Final affected run: 49 files, 447 tests, 444 passed, 1 failed, 2 skipped. The failure is the pre-existing stale LAST constant in startup-schema-check. The skips are opt-in process-kill drills. All 47 new tests pass.
+
+Full suite (539 files, 4563 tests): 8 failed, in 7 files. The same 8 fail with the tree restored to 7b8de71e.
+
+Restore drill on the test server: a production pre-deploy dump (counts only) with migrations 022-064 applied, 116/194/28 → 160/258/70 (policies/FKs/triggers).
+- The old runbook command exited 1 and left 44 policies; the application role then saw 0 tasks.
+- The docs/25 variant exited 1 with 84 errors and a mixed schema.
+- The runbook block, read from the file, restored 116/194/28 and schema 021. The application role saw 1612 tasks with its tenant context and 0 without it.
+- All scratch databases were dropped.
+
+Source, script and 540 test-root types, lint (any 954/1053, egress) and the security scan (0 secrets) pass.
+
+Not executed: deploy.sh --apply, a live poller switch or Restate registration, a production rotation or restore, Compose run/restart of vector, the plain-SQL restore path and the watchdog alert path. See OPERATIONS_FIXES_PROOF.json.
+
+Next:
+- The owner runs a deploy with this change.
+- Repair the 8 pre-existing suite failures on this branch.
+- Decide whether the existing split-colour state needs a tested Restate admin procedure.
+
+Additional notes:
+- Finding 4 required one-line signing edits in native-review.routes.ts, decisions.routes.ts and delivery.routes.ts, outside the files the finding names. native-review.routes.ts is a native revision path that another engineer may be changing, so expect a small merge conflict there.
+- The worktree's pre-commit hook failed until I copied the gitignored output/audits/2026-09-25-architecture-design-reality/REPORT.md from the main checkout into the worktree. It is a real file, not committed; PLAN.md links to it and validate_pack checks that link.
+- The scratchpad is shared with other agents: my commit-msg.txt there was overwritten after I committed. I checked that commit 72cb6fae carries my own message.
+
+## 2026-09-28 — Operations review fixes (ADR-129)
+
+A separate review of 72cb6fae found a blocking regression in the poller hold. Core was held at worker on a switch back to Core. When register exited 4 and the new colour, created with core, was kept, nobody polled, and the exit note said the worker colour did. Only a move to the worker is held now; a move back takes effect at step 7. A kept colour that will not poll makes Core poll. The note states Core's own value and the ChatInbox rule. "--hosts unknown" now means no list, not a service named unknown. deploy.sh reads the service list from the built worker image (no network, no pull), and check-hosts refuses a split build before step 7 replaces Core and the Desk. The restore-swap block now copies the database owner, grants and scalar settings, and swaps only when they compare equal. With a production pre-deploy dump on the test server, CONNECT revoked from PUBLIC and two settings set, the earlier block swapped in a database that hawa_app could connect to, and the login role lost statement_timeout and work_mem. The new block kept both, and the login role saw its 1612 tasks. Red: 13 of 36 new/changed tests, 2 of 4 block tests, and a failing drill verdict. Final: 19 affected files, 152 passed and 0 failed. The full suite (540 files, 4579 tests) had 8 failures, the same 8 as recorded at 72cb6fae. Types, lint, security scan and validate_pack pass. No migration. Production's datacl and pg_db_role_setting were not read; the block checks them at restore time. No deploy, live poller switch, Restate registration or production restore took place. See OPERATIONS_REVIEW_FIXES_PROOF.json.
+
+## 2026-09-28 — Phase 4 lifecycle and Desk fixes (ADR-130)
+
+ADR-130 closes findings 22, 13 and 19 of the Phase 4 review, verified at `7b8de71e`.
+A Telegram refusal whose failed mark cannot be written is journaled; a retried step
+corrects the mark before the sender waits and resends, or answers refused for a 4xx.
+A 5xx, a lost answer or a crash before the answer was journaled stays uncertain,
+is never resent and alerts the office once. A requester reply to a request in review,
+approved, delivering or delivered keeps its words under the update ID, alerts the
+office with them and tells the requester plainly they were not applied. A new
+request-owned Deliver is held until an office member acknowledges each change; the
+actor and action are recorded. The Desk Deliver key includes the task version, so a
+press after a failed delivery is a new action. No migration.
+
+Red runs first: sender 8 of 38 failed; Deliver key 1 failed; late words 10 of 108 failed;
+Desk prompt 2 failed. Final affected run: 13 files, 222 passed, zero failed or skipped,
+with crash before and after every journal entry, an injected PostgreSQL outage and
+isolated per-file databases. 533 strict test roots, any ceiling, egress and security
+checks pass. The full suite gave 4471 passed and 8 failed; the same 8 fail on `7b8de71e`.
+See LIFECYCLE_DESK_FIXES_PROOF.json.
+
+The journal is a Restate test double, not the server; there was no process-kill drill,
+no live Telegram send, no browser run of the Desk dialog and no deployment. Unlinked
+messages after approval and replies to delivery files or notices are not covered. A
+sent mark that cannot be written after a successful send still answers uncertain.
+The six-package objective remains active. Next: decide on unlinked late messages, and
+refresh the stale route-inventory, migration-list and release-manifest fixtures
+separately.
+
+## 2026-09-28 — Merged mainline (lead)
+
+`claude/mainline` = `7b8de71e` plus the continuation (ADR-122..126), the studio-v2 integration
+(ADR-127) and the Phase 4 fix rounds (ADR-128..130). Merge decisions: migrations renumbered to
+065/066; the operations kill-switch route keeps ADR-127's administrator-only rule while the office's
+ingress toggle keeps ADR-128's per-channel rule (the nightly backup uses the toggle); the watchdog
+carries both the worker-poller check (ADR-129) and the backup recovery (ADR-127). The 44 migrations
+023-066 were applied to the 2026-09-28 nightly dump restored into a scratch database on the test
+server: 0.70 s, 1,612 tasks and 2,090 events unchanged, a second run applied nothing and verified 66;
+the scratch database was dropped. Release gate results follow in the release record.
