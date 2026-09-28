@@ -101,6 +101,61 @@ class FakeDocker(Runner):
         raise AssertionError(args)
 
 
+class FakeVolumeDocker(Runner):
+    """A named volume held in memory: listing, extraction and the guards restore_into asks about."""
+
+    def __init__(self, *, mounted: bool = False, running_node: str | None = None, preexisting: bool = False,
+                 corrupt: bool = False):
+        self.files: dict[str, bytes] = {"stale/file": b"old"} if preexisting else {}
+        self.mounted, self.running_node, self.corrupt = mounted, running_node, corrupt
+        self.calls: list[list[str]] = []
+        self.helpers: set[str] = set()
+
+    def run(self, args: list[str], *, timeout: int = 30, stdin: BinaryIO | None = None) -> str:
+        if args[0] == "openssl":
+            return super().run(args, timeout=timeout, stdin=stdin)
+        self.calls.append(args)
+        if args[:3] == ["docker", "image", "inspect"]:
+            return IMAGE
+        if args[:3] == ["docker", "volume", "inspect"]:
+            return "[]"
+        if args[:3] == ["docker", "ps", "-aq"] and args[4].startswith("volume="):
+            return "c0ffee" if self.mounted else ""
+        if args[:3] == ["docker", "ps", "-q"]:
+            return "abc123" if self.running_node else ""
+        if args[:3] == ["docker", "inspect", "--format"]:
+            return json.dumps([f"RESTATE_NODE_NAME={self.running_node}", "PATH=/bin"])
+        if args[:3] == ["docker", "ps", "-aq"]:
+            return "\n".join(sorted(self.helpers))
+        if args[:3] == ["docker", "rm", "-f"]:
+            self.helpers.discard(args[-1])
+            return args[-1]
+        if args[:2] == ["docker", "run"] and "-xpf" in args:
+            assert stdin is not None and "--network" in args and args[args.index("--network") + 1] == "none"
+            with tarfile.open(fileobj=stdin, mode="r:") as archive:
+                for item in archive:
+                    if item.isfile():
+                        stream = archive.extractfile(item)
+                        assert stream is not None
+                        self.files[item.name.removeprefix("./")] = stream.read()
+            if self.corrupt:
+                self.files[f"{NODE}/journal"] = b"changed"
+            return ""
+        raise AssertionError(args)
+
+    def to_file(self, args: list[str], path: Path, *, timeout: int = 3600) -> None:
+        self.calls.append(args)
+        assert "readonly" in args[args.index("--mount") + 1]
+        with tarfile.open(path, "w") as archive:
+            root = tarfile.TarInfo(".")
+            root.type = tarfile.DIRTYPE
+            archive.addfile(root)
+            for name, data in sorted(self.files.items()):
+                item = tarfile.TarInfo(f"./{name}")
+                item.size = len(data)
+                archive.addfile(item, io.BytesIO(data))
+
+
 class RestoreRehearsalTest(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
@@ -205,6 +260,42 @@ class RestoreRehearsalTest(unittest.TestCase):
                     self.rehearsal(fake).apply()
                 self.assertFalse(fake.containers)
                 self.assertIsNone(fake.volume)
+
+    def test_source_volume_defaults_to_production_and_a_rehearsal_names_its_own(self) -> None:
+        fake = FakeDocker()
+        self.assertEqual(self.rehearsal(fake).source_volume, "hawa-production_restate_data")
+        other = Rehearsal(self.pair, self.key, self.compose, fake, source_volume="hawa-chaos-r10s_chaos_restate")
+        with self.assertRaisesRegex(BackupError, "not the selected single-node Restate volume"):
+            other.plan()
+
+    def test_restore_into_fills_an_empty_unmounted_volume_with_exactly_the_archive(self) -> None:
+        fake = FakeVolumeDocker()
+        plan, restored = Rehearsal(self.pair, self.key, self.compose, fake).restore_into("hawa-r10-target")
+        self.assertEqual(fake.files, {f"{NODE}/journal": b"journal"})
+        self.assertEqual(restored["regularFiles"], 1)
+        self.assertTrue(restored["identicalToArchive"])
+        self.assertEqual(plan.node_name, NODE)
+        self.assertFalse(fake.helpers)
+        extract = next(call for call in fake.calls if "-xpf" in call)
+        self.assertIn("--pull=never", extract)
+        self.assertIn("type=volume,source=hawa-r10-target,target=/restate-data", extract)
+
+    def test_restore_into_refuses_before_writing(self) -> None:
+        for fake, reason in ((FakeVolumeDocker(mounted=True), "mounted by a container"),
+                             (FakeVolumeDocker(running_node=NODE), "never run two copies"),
+                             (FakeVolumeDocker(preexisting=True), "not empty")):
+            with self.subTest(reason=reason):
+                with self.assertRaisesRegex(BackupError, reason):
+                    Rehearsal(self.pair, self.key, self.compose, fake).restore_into("hawa-r10-target")
+                self.assertFalse(any("-xpf" in call for call in fake.calls))
+        other_node = FakeVolumeDocker(running_node="hawa-restate-other")
+        Rehearsal(self.pair, self.key, self.compose, other_node).restore_into("hawa-r10-target")
+        with self.assertRaisesRegex(BackupError, "invalid"):
+            Rehearsal(self.pair, self.key, self.compose, FakeVolumeDocker()).restore_into("--all")
+
+    def test_restore_into_refuses_a_volume_that_differs_after_extraction(self) -> None:
+        with self.assertRaisesRegex(BackupError, "differs from the archive"):
+            Rehearsal(self.pair, self.key, self.compose, FakeVolumeDocker(corrupt=True)).restore_into("hawa-r10-target")
 
     def test_malformed_sql_and_cleanup_failure_cannot_publish_success(self) -> None:
         for query in ('{"rows":[]}', '{"rows":[{"n":true}]}', '{"rows":[{"n":-1}]}', "not json"):

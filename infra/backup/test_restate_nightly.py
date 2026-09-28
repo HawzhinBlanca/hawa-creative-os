@@ -15,7 +15,7 @@ from contextlib import redirect_stderr
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from restate_nightly import BackupError, Config, RestateBackup, Runner, RESTATE_RUNNING, inspect_tar, sha256, verify_archive, verify_pair
+from restate_nightly import BackupError, Config, RestateBackup, Runner, RESTATE_RUNNING, config_from_env, inspect_tar, sha256, verify_archive, verify_pair
 
 
 class FakeDocker(Runner):
@@ -314,6 +314,138 @@ class RestateBackupTest(unittest.TestCase):
         manifest.write_text(json.dumps(facts))
         with self.assertRaisesRegex(BackupError, "authentication failed"):
             verify_archive(manifest, self.key)
+
+
+class TargetConfigurationTest(unittest.TestCase):
+    """ADR-134: the rehearsal names its own stack; unset, every target is today's production value."""
+
+    def test_unset_environment_keeps_every_production_target(self) -> None:
+        root = Path("/srv/hawa")
+        config = config_from_env({"HAWA_BACKUP_ARCHIVE_KEYFILE": "/k", "HAWA_RESTATE_BACKUP_HELPER_IMAGE": "x"}, root)
+        self.assertEqual(config.volume, "hawa-production_restate_data")
+        self.assertEqual(config.container, "hawa-production-restate-1")
+        self.assertEqual(config.core_container, "hawa-production-core-1")
+        self.assertEqual(config.postgres_container, "hawa-production-postgres-1")
+        self.assertEqual(config.node_name, "hawa-restate-prod-1")
+        self.assertEqual(config.database, "hawa")
+        self.assertIsNone(config.compose_project)
+        self.assertEqual(config.compose_file, root / "infra/docker/docker-compose.prod.yml")
+        self.assertEqual(config.extra_compose_files, ())
+        self.assertEqual(config.compose_env, root / "infra/docker/.env")
+        self.assertEqual(config.drain_seconds, 300)
+        self.assertEqual(config.health_seconds, 90)
+        self.assertEqual(config.state_file, Path.home() / ".hawa/restate-backup.state")
+        self.assertEqual(config.archive_dir, Path.home() / ".hawa/snapshots_archive")
+        # Empty values are unset: a launch agent with a blank value cannot empty a production name.
+        blank = config_from_env({name: "" for name in ("HAWA_RESTATE_BACKUP_VOLUME", "HAWA_RESTATE_BACKUP_DATABASE",
+                                                      "HAWA_RESTATE_BACKUP_COMPOSE_PROJECT")}, root)
+        self.assertEqual((blank.volume, blank.database, blank.compose_project),
+                         ("hawa-production_restate_data", "hawa", None))
+
+    def test_rehearsal_targets_reach_every_docker_and_sql_call(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            files = [root / "chaos.yml", root / "override.yml"]
+            env = {
+                "HAWA_RESTATE_BACKUP_COMPOSE_FILES": os.pathsep.join(str(f) for f in files),
+                "HAWA_RESTATE_BACKUP_COMPOSE_ENV": str(root / "chaos.env"),
+                "HAWA_RESTATE_BACKUP_COMPOSE_PROJECT": "hawa-chaos-r10s",
+                "HAWA_RESTATE_BACKUP_VOLUME": "hawa-chaos-r10s_chaos_restate",
+                "HAWA_RESTATE_BACKUP_CONTAINER": "hawa-chaos-r10s-restate-1",
+                "HAWA_RESTATE_BACKUP_CORE_CONTAINER": "hawa-chaos-r10s-core-1",
+                "HAWA_RESTATE_BACKUP_POSTGRES_CONTAINER": "hawa-chaos-r10s-postgres-1",
+                "HAWA_RESTATE_BACKUP_NODE_NAME": "hawa-restate-chaos-1",
+                "HAWA_RESTATE_BACKUP_DATABASE": "hawa_chaos",
+                "HAWA_RESTATE_BACKUP_DRAIN_SECONDS": "20",
+                "HAWA_RESTATE_BACKUP_STATE": str(root / "state"),
+            }
+            config = config_from_env(env, root)
+            self.assertEqual(config.extra_compose_files, (files[1],))
+            fake = FakeDocker()
+            backup = RestateBackup(config, fake)
+            backup.compose("stop", "restate")
+            backup.telegram_enabled()
+            expected = " ".join(["docker compose -p hawa-chaos-r10s -f", str(files[0]), "-f", str(files[1]),
+                                 "--env-file", str(root / "chaos.env"), "stop restate"])
+            self.assertEqual(fake.calls[0], expected)
+            self.assertTrue(any(c.startswith("docker exec hawa-chaos-r10s-core-1 node") for c in fake.calls))
+            self.assertIn("docker exec hawa-chaos-r10s-postgres-1 psql -U hawa_owner -d hawa_chaos", fake.calls[-1])
+            self.assertEqual(config.drain_seconds, 20)
+            self.assertEqual(config.state_file, root / "state")
+
+    def test_invalid_targets_are_refused(self) -> None:
+        for name, value in (("HAWA_RESTATE_BACKUP_VOLUME", "bad name"), ("HAWA_RESTATE_BACKUP_CONTAINER", "--rm"),
+                            ("HAWA_RESTATE_BACKUP_DATABASE", "hawa; DROP"), ("HAWA_RESTATE_BACKUP_DRAIN_SECONDS", "-1"),
+                            ("HAWA_RESTATE_BACKUP_HEALTH_SECONDS", "4000")):
+            with self.subTest(name=name):
+                with self.assertRaises(BackupError):
+                    config_from_env({name: value})
+
+    def test_cli_refuses_an_invalid_target_before_any_docker_call(self) -> None:
+        result = subprocess.run([sys.executable, str(Path(__file__).with_name("restate_nightly.py")), "--recovery-status"],
+                                env={**os.environ, "HAWA_RESTATE_BACKUP_CONTAINER": "--privileged"},
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("not a valid Docker name", result.stderr)
+
+
+class CoreSwitchWireTest(unittest.TestCase):
+    """ADR-134: Core refuses every unauthenticated read but its health paths, the switch status included."""
+
+    def serve(self) -> tuple[ThreadingHTTPServer, list[tuple[str, str, str | None]]]:
+        seen: list[tuple[str, str, str | None]] = []
+
+        class Core(BaseHTTPRequestHandler):
+            def answer(self, status: int, body: dict) -> None:
+                data = json.dumps(body).encode()
+                self.send_response(status)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def do_GET(self) -> None:
+                seen.append(("GET", self.path, self.headers.get("authorization")))
+                if self.headers.get("authorization") != "Bearer synthetic-operator":
+                    self.answer(401, {"title": "Unauthorized"})
+                elif self.path == "/v1/ingress/status":
+                    self.answer(200, {"channels": {"telegram": True}})
+                else:
+                    self.answer(404, {})
+
+            def do_POST(self) -> None:
+                self.rfile.read(int(self.headers["content-length"]))
+                seen.append(("POST", self.path, self.headers.get("authorization")))
+                ok = self.headers.get("authorization") == "Bearer synthetic-operator"
+                self.answer(200 if ok else 401, {"enabled": False, "killSwitchActive": True,
+                                                  "changeTag": "00000000-0000-4000-a000-000000000001"})
+
+            def log_message(self, _format: str, *_args: object) -> None:
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Core)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return server, seen
+
+    def test_status_and_toggle_both_carry_the_operator_bearer(self) -> None:
+        from restate_nightly import CORE_CONTROL
+        server, seen = self.serve()
+        script = CORE_CONTROL.replace("http://127.0.0.1:3001/v1", f"http://127.0.0.1:{server.server_port}/v1")
+        env = {**os.environ, "HAWA_ART_DIRECTOR_KEY": "synthetic-operator"}
+        status = subprocess.run(["node", "--input-type=module", "-e", script, "status"], env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertEqual(json.loads(status.stdout)["channels"], {"telegram": True})
+        pause = subprocess.run(["node", "--input-type=module", "-e", script, "pause"], env=env,
+                               capture_output=True, text=True, timeout=10)
+        self.assertEqual(pause.returncode, 0, pause.stderr)
+        self.assertEqual([(m, p, a) for m, p, a in seen],
+                         [("GET", "/v1/ingress/status", "Bearer synthetic-operator"),
+                          ("POST", "/v1/ingress/channels/telegram/toggle", "Bearer synthetic-operator")])
 
 
 class RestateAdminWireTest(unittest.TestCase):

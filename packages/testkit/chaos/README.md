@@ -7,6 +7,25 @@ request. It covers the legacy path (Core intake → outbox → `TaskWorkflow` �
 outcome → Desk approval → delivery) and the admitted Restate lifecycle slices.
 The dated run histories below preserve their original scope and limitations.
 
+## R10 clean-host restore (2026-09-28, ADR-134)
+
+`r10-restore.ts` runs the real nightly backup with the Restate backup on, twice, against its own source
+project `hawa-chaos-r10s` (ports 57432/57070/57080/57090), then removes that host's stores and restores
+the second night onto a clean project `hawa-chaos-r10d` (58432/58070/58080). Neither is the shared
+`hawa-chaos`, so no lock is taken and nothing of another session's run is touched. Build its images
+once, under their own tag, so a concurrent `hawa-chaos` run's `:local` images are never replaced:
+
+```sh
+docker compose -p hawa-chaos-r10s -f packages/testkit/chaos/docker-compose.chaos.yml --env-file <any chaos env> build fakes core worker-blue  # with CHAOS_IMAGE_TAG=r10 and CHAOS_BUILD_COMMIT set
+HAWA_R10_SCRATCH=<empty private directory outside the repository> npx tsx packages/testkit/chaos/r10-restore.ts
+npx tsx packages/testkit/chaos/r10-restore.ts --down   # only after HAWA_R10_KEEP=1
+```
+
+(`configureStack({project, ports, imageTag})` then `build([...])` from `driver/stack.ts` does the same.)
+The receipt is `.run/r10-restore.json`; the runbook section "Clean-host restore of one paired night"
+records what it proved. `driver/stack.ts` defaults are unchanged: `configureStack()` is the only way to
+point it elsewhere, and a project name must start with `hawa-chaos`.
+
 ## Isolated full-app candidate rehearsal (2026-09-27)
 
 ### Coordinated recovery mode (ADR-080)

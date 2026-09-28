@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -15,11 +16,12 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 
 from restate_nightly import BackupError, inspect_tar, read_archive_metadata, sha256, verify_pair
@@ -40,6 +42,17 @@ class Runner:
         if result.returncode:
             raise BackupError(f"{args[0]} {args[1] if len(args) > 1 else ''} failed: {result.stderr.strip()[-300:]}")
         return result.stdout.strip()
+
+    def to_file(self, args: list[str], path: Path, *, timeout: int = 3600) -> None:
+        """Run a command whose binary standard output is written to `path`."""
+        with path.open("wb") as output:
+            try:
+                result = subprocess.run(args, stdout=output, stderr=subprocess.PIPE, check=False, timeout=timeout)
+            except subprocess.TimeoutExpired as exc:
+                raise BackupError(f"{args[0]} {args[1] if len(args) > 1 else ''} timed out") from exc
+        if result.returncode:
+            raise BackupError(f"{args[0]} {args[1] if len(args) > 1 else ''} failed: "
+                              f"{result.stderr.decode(errors='replace').strip()[-300:]}")
 
 
 @dataclass(frozen=True)
@@ -66,8 +79,12 @@ class RestorePlan:
 
 class Rehearsal:
     def __init__(self, pair: Path, key_file: Path, compose_file: Path,
-                 runner: Runner | None = None, sleep=time.sleep, monotonic=time.monotonic):
+                 runner: Runner | None = None, sleep=time.sleep, monotonic=time.monotonic,
+                 source_volume: str = SOURCE_VOLUME):
         self.pair = pair
+        # The volume the archive must have been captured from: production's, unless a rehearsal
+        # stack's own archive is restored (ADR-134).
+        self.source_volume = source_volume
         self.key_file = key_file
         self.compose_file = compose_file
         self.runner = runner or Runner()
@@ -102,7 +119,7 @@ class Rehearsal:
                 raise BackupError("paired Compose digest is invalid")
             if sha256(self.compose_file) != compose_hash:
                 raise BackupError("supplied Compose file differs from the archived source configuration")
-            if facts.get("volume") != SOURCE_VOLUME:
+            if facts.get("volume") != self.source_volume:
                 raise BackupError("paired archive is not the selected single-node Restate volume")
             if not isinstance(plaintext_hash, str) or not HASH.fullmatch(plaintext_hash):
                 raise BackupError("paired Restate plaintext digest is invalid")
@@ -218,6 +235,94 @@ class Rehearsal:
             return plan, count
 
 
+    def _volume_members(self, volume: str, image_id: str, label: str, name: str) -> dict[str, tuple[int, str | None]]:
+        """Every member of a volume (size and SHA-256), read by a read-only offline helper."""
+        with tempfile.TemporaryDirectory(prefix="hawa-restate-volume-") as work:
+            listing = Path(work) / "volume.tar"
+            self.runner.to_file(["docker", "run", "--rm", "--pull=never", "--network", "none",
+                                 "--name", name, "--label", label, "--read-only",
+                                 "--mount", f"type=volume,source={volume},target=/restate-data,readonly",
+                                 "--entrypoint", "tar", image_id, "-C", "/restate-data", "-cf", "-", "."], listing)
+            return tar_members(listing)
+
+    def restore_into(self, volume: str) -> tuple[RestorePlan, dict]:
+        """Restore the paired archive into an existing, empty, unmounted named volume (ADR-134).
+
+        The clean-host step: the volume is the one the restored node will run on, so it is kept, and
+        nothing is started here. It refuses while any running container of the archived image carries
+        the archive's node name (never two copies of one node) or while any container mounts the
+        target, and it proves the volume holds exactly the archived members before returning.
+        """
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}", volume):
+            raise BackupError("target volume name is invalid")
+        with tempfile.TemporaryDirectory(prefix="hawa-restate-restore-") as work:
+            private = Path(work)
+            plan, lock = self._locked_plan()
+            copied = private / "restate.tar.enc"
+            try:
+                shutil.copyfile(plan.encrypted_archive, copied)
+                if sha256(copied) != plan.ciphertext_sha256:
+                    raise BackupError("paired Restate ciphertext changed while copying for restore")
+            finally:
+                lock.close()
+            plain = private / "restate.tar"
+            self._decrypt(copied, plain, plan)
+            archived = tar_members(plain)
+            self.runner.run(["docker", "volume", "inspect", volume])
+            if self.runner.run(["docker", "ps", "-aq", "--filter", f"volume={volume}"]):
+                raise BackupError(f"target volume {volume} is mounted by a container; restore only into an unused volume")
+            for container_id in self.runner.run(["docker", "ps", "-q", "--filter", f"ancestor={plan.image_id}"]).split():
+                environment = self.runner.run(["docker", "inspect", "--format", "{{json .Config.Env}}", container_id])
+                if f"RESTATE_NODE_NAME={plan.node_name}" in json.loads(environment or "[]"):
+                    raise BackupError(f"a running container already carries node {plan.node_name}; never run two copies of one node")
+            nonce = uuid.uuid4().hex[:16]
+            label = f"hawa.restore-into={nonce}"
+            try:
+                before = self._volume_members(volume, plan.image_id, label, f"hawa-r10-check-{nonce}")
+                if set(before) - {"."}:
+                    raise BackupError(f"target volume {volume} is not empty")
+                with plain.open("rb") as source:
+                    self.runner.run(["docker", "run", "-i", "--rm", "--pull=never", "--network", "none",
+                                     "--name", f"hawa-r10-extract-{nonce}", "--label", label, "--read-only",
+                                     "--mount", f"type=volume,source={volume},target=/restate-data",
+                                     "--entrypoint", "tar", plan.image_id, "-C", "/restate-data", "-xpf", "-"],
+                                    stdin=source, timeout=3600)
+                restored = self._volume_members(volume, plan.image_id, label, f"hawa-r10-verify-{nonce}")
+            finally:
+                for container_id in self.runner.run(["docker", "ps", "-aq", "--filter", f"label={label}"]).split():
+                    self.runner.run(["docker", "rm", "-f", container_id])
+            if {k: v for k, v in restored.items() if k != "."} != {k: v for k, v in archived.items() if k != "."}:
+                raise BackupError(f"restored volume {volume} differs from the archive")
+            files = sum(1 for _, digest in archived.values() if digest is not None)
+            if files != plan.regular_files:
+                raise BackupError("restored file count differs from the manifest")
+            return plan, {"volume": volume, "regularFiles": files, "members": len(archived),
+                          "plaintextSha256": plan.plaintext_sha256, "identicalToArchive": True}
+
+
+def tar_members(path: Path) -> dict[str, tuple[int, str | None]]:
+    """Member name -> (size, SHA-256) for a regular file, (0, None) for a directory."""
+    members: dict[str, tuple[int, str | None]] = {}
+    try:
+        with tarfile.open(path, "r:") as archive:
+            for item in archive:
+                name = str(PurePosixPath(item.name.removeprefix("./") or "."))
+                if name.startswith("/") or ".." in PurePosixPath(name).parts:
+                    raise BackupError("unsafe member in a Restate volume")
+                digest = None
+                if item.isfile():
+                    stream = archive.extractfile(item)
+                    if stream is None:
+                        raise BackupError("unreadable member in a Restate volume")
+                    digest = hashlib.file_digest(stream, "sha256").hexdigest()
+                elif not item.isdir():
+                    raise BackupError("unsupported member in a Restate volume")
+                members[name] = (item.size if item.isfile() else 0, digest)
+    except (tarfile.TarError, EOFError) as exc:
+        raise BackupError(f"Restate volume listing cannot be read: {exc}") from exc
+    return members
+
+
 def main() -> int:
     os.umask(0o077)
     def interrupted(_signum, _frame):
@@ -227,11 +332,19 @@ def main() -> int:
     parser.add_argument("--pair", type=Path, required=True, help="explicit authenticated nightly pair")
     parser.add_argument("--key-file", type=Path, required=True, help="archive passphrase file")
     parser.add_argument("--compose-file", type=Path, required=True, help="matching source Compose file")
-    parser.add_argument("--apply", action="store_true", help="boot a disposable offline restored node")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--apply", action="store_true", help="boot a disposable offline restored node")
+    action.add_argument("--restore-into", metavar="VOLUME",
+                        help="restore into this existing empty named volume and keep it (clean-host restore, ADR-134)")
+    parser.add_argument("--source-volume", default=SOURCE_VOLUME,
+                        help=f"volume the archive must come from (default {SOURCE_VOLUME})")
     args = parser.parse_args()
     try:
-        rehearsal = Rehearsal(args.pair, args.key_file, args.compose_file)
-        if args.apply:
+        rehearsal = Rehearsal(args.pair, args.key_file, args.compose_file, source_volume=args.source_volume)
+        if args.restore_into:
+            plan, restored = rehearsal.restore_into(args.restore_into)
+            print(json.dumps({**plan.receipt("restored_into_volume"), **restored}))
+        elif args.apply:
             plan, count = rehearsal.apply()
             print(json.dumps(plan.receipt("isolated_boot_verified", count)))
         else:
