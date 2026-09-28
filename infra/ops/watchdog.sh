@@ -9,7 +9,9 @@
 #   bash infra/ops/watchdog.sh --announce   # send "watchdog armed" once (proves alerts reach you)
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
-PROD="$ROOT/infra/docker/.env.production"; STATE_DIR="$HOME/.hawa/watchdog"; mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
+# HAWA_WATCHDOG_ENV_FILE points the alerts at another file: the tests use it, so a run of the test suite in
+# this checkout never reads production's Telegram credential (2026-09-28: a test logged it).
+PROD="${HAWA_WATCHDOG_ENV_FILE:-$ROOT/infra/docker/.env.production}"; STATE_DIR="$HOME/.hawa/watchdog"; mkdir -p "$STATE_DIR"; chmod 700 "$STATE_DIR"
 STATE="$STATE_DIR/state"; COOLDOWN=1800; NOW="$(date +%s)"; MODE="${1:-}"
 COMPOSE=(docker compose -f "$ROOT/infra/docker/docker-compose.prod.yml" -f "$ROOT/infra/docker/canva-release.override.yml" --env-file "$ROOT/infra/docker/.env")
 # alerted: the operator has been told about the problem now under way, so its end is announced too

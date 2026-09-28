@@ -58,10 +58,16 @@ function setup() {
     fs.writeFileSync(path.join(bin, tool), `#!/bin/bash\necho "${tool} $*" >> "$STUB_CALLS"\nexit 0\n`, { mode: 0o755 });
   }
   const record = path.join(home, '.hawa', 'restate-backup.state');
+  const envFile = path.join(t, 'env.production');
+  fs.writeFileSync(envFile, `TELEGRAM_BOT_TOKEN=${['700', 'stub', 'watchdog'].join(':')}\nTELEGRAM_ALLOWED_USERS=9000001\n`, { mode: 0o600 });
   return {
     t, bin, home, archive, record,
     calls: () => (fs.existsSync(callsFile) ? fs.readFileSync(callsFile, 'utf8') : ''),
-    env: { PATH: `${bin}:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin`, HOME: home, STUB_CALLS: callsFile, HAWA_RESTATE_BACKUP_HEALTH_SECONDS: '0' },
+    // Never production's credentials: the watchdog reads its alert settings from this fixture, built from
+    // parts so no literal token sits in the repository. Without it, a run in the main checkout read the
+    // real infra/docker/.env.production and the stubbed curl recorded the real bot token in the test log.
+    env: { PATH: `${bin}:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin`, HOME: home, STUB_CALLS: callsFile, HAWA_RESTATE_BACKUP_HEALTH_SECONDS: '0',
+      HAWA_WATCHDOG_ENV_FILE: envFile },
   };
 }
 
@@ -130,7 +136,10 @@ describe('the watchdog and the nightly Restate backup', () => {
     const r = runWatchdog(s);
     expect(r.code, r.out).toBe(1);
     expect(r.out).toMatch(/pause revision was never recorded/);
-    expect(s.calls()).not.toMatch(/ release /);
+    // No release through Core. The office's alert about this (a stubbed curl) may say "release" itself.
+    const coreCalls = s.calls().split('\n').filter((l) => l.startsWith('docker exec hawa-production-core-1 '));
+    expect(coreCalls.join('\n')).not.toMatch(/ release( |$)/m);
+    expect(s.calls()).toMatch(/curl .*sendMessage/);
     expect(fs.existsSync(s.record)).toBe(true);
   });
 

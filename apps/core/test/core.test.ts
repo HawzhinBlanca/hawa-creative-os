@@ -1015,7 +1015,10 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const path = await import('node:path');
     const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' };
     const candidates = ['infra/docker/.env.production', '.env.production', '.env.local', '../../infra/docker/.env.production'].map((p) => path.resolve(process.cwd(), p));
-    const before = candidates.map((p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null));
+    // Hashes, not contents: a failure here must not print a real configuration file into the test log.
+    const { createHash } = await import('node:crypto');
+    const digest = (p: string) => (fs.existsSync(p) ? createHash('sha256').update(fs.readFileSync(p)).digest('hex') : null);
+    const before = candidates.map(digest);
     const res = await app.request('/v1/system/providers', {
       method: 'POST',
       headers,
@@ -1025,7 +1028,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const data = await res.json();
     expect(data.persisted).toBe(false);
     expect(data.activated).toEqual(['ANTHROPIC_API_KEY', 'WAHA_ENDPOINT']);
-    const after = candidates.map((p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null));
+    const after = candidates.map(digest);
     expect(after).toEqual(before);
   });
 
