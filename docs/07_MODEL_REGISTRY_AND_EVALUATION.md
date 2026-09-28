@@ -361,3 +361,29 @@ this allows a new scheduled probe within current limits; it never replays the ol
 call or converts financial evidence into provider health. Original observations
 remain immutable. Pre-ledger observations gain no fabricated costs. See
 runbooks/PAID_HEALTH_PROBES.md and R21_PAID_HEALTH_PROBES_PROOF.json for qualification.
+
+### Brief-bound judge challenger and its experiment (ADR-124, 2026-09-28)
+
+The R06 calibration interface now also accepts the `brief-bound-dimensional-v1`
+protocol: actual brief and exact copy, correctness, communication and aesthetic
+preference judged separately with tie and abstention, localized findings, no
+scores shown, and optional human labels per dimension. The incumbent P07 prompt
+remains unchanged and remains the default.
+
+`scripts/run_judge_experiment.ts` compares both judges on one pinned corpus with
+the same bytes, model and both presentation orders. Its plan is frozen and
+hashed before any run: seeded-defect detection is primary (paired,
+lineage-clustered bootstrap; worthwhile effect +0.10, lower bound above 0), with
+margins for human agreement and order consistency (-0.05), clean-control
+critical findings (at most 0.05) and cost per case (at most 2x). Ties,
+abstentions, flips, invalid replies and missing calls count as failures,
+including a clean control the challenger did not answer validly, which counts
+against the critical-finding ceiling. The analysis reuses the R06 label
+validators and consensus rule and the R-study lineage bootstrap, and reports the
+challenger's validly answered cases through the calibration analyzer, per
+dimension; those dimension results are exploratory and outside the decision. Each request is quoted
+before dispatch with the Studio reservation policy and admitted against a run cap
+and the office daily ledger; the first provider error stops the run; a paid run
+must confirm the plan hash. Synthetic and quote-only runs measure no judgment.
+No outcome admits the challenger; the best outcome is shadow eligibility under
+section 8. The golden-brief corpus is development material only.

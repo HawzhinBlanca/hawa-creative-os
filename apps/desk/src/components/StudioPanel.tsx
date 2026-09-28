@@ -4,6 +4,7 @@ import { apiClient } from '../api/client.js';
 import { AuthorizedImage } from './AuthorizedImage.js';
 import { StudioRecoveryPanel } from './StudioRecoveryPanel.js';
 import { StudioBudgetSummary, type StudioBudgetUsage } from './StudioBudgetSummary.js';
+import { StudioJudgeNotice } from './StudioJudgeNotice.js';
 
 interface CritiqueDetail {
   overall?: number;
@@ -382,6 +383,7 @@ export const StudioPanel: React.FC<{ taskId: string; taskStatus: string; hasCanv
       </header>
 
       {startBlocker && <p role="status">{startBlocker}</p>}
+      {run && <StudioJudgeNotice tournament={run.stages?.tournament} />}
       {run&&<StudioRecoveryPanel key={`${taskId}:${run.id}`} taskId={taskId} runId={run.id} status={run.status}/>}
       {!historyLoaded && <button className="btn" disabled={busy} onClick={() => void refresh()}>Refresh Studio history</button>}
       {calls.length > 0 && <details><summary>Recorded model calls</summary>

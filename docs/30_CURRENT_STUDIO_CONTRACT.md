@@ -124,3 +124,28 @@ binding, task version, request stage, review, approval or delivery. There is no
 HTTP/Desk creation route until native preservation admission. The current human
 handoff remains the review authority. Read/metadata stability does not establish
 atomicity against direct Canva edits. See [ADR-121](../adrs/121_durable_native_copy_candidates.md).
+
+## Brief-bound judge challenger (ADR-124)
+
+P07 remains the default judge. `HAWA_STUDIO_JUDGE_PROTOCOL=brief_bound_v1`
+selects the challenger when the judge stage runs; any value other than unset,
+`incumbent` or `brief_bound_v1` is refused as an unavailable judge, with no call,
+and the higher eligible composite stands. The challenger sees the requester's
+instructions, the recorded brief fields and the exact copy, never layout metrics,
+ranks or prestige wording. It judges correctness, communication and aesthetic
+preference separately, with tie and abstention, and returns no overall winner.
+
+Selection keeps the same eligible top two, rendered bytes, degraded-copy canary,
+ledger client and budget. The application decides: correctness, then
+communication, then aesthetic preference, each stable across both orders. An
+uncertain pair keeps the higher composite and records `humanChoiceRecommended`;
+a failed canary does the same with the judge marked unreliable. A canary that
+renders the same bytes as the pick is not called; the untested pick is not
+trusted, the composite stands and `judgeReliable` is null. An unavailable judge
+records the refusal's `errorCode` and `humanChoiceRecommended`, and the Desk
+Studio panel asks the reviewer to choose whenever that flag is set. The
+challenger accepts up to 24,000 characters of request instructions within a
+30,000-character packet; a longer request is refused, never truncated. Judgments keep
+packet and image hashes, the validated verdict, the decision and the receipt.
+The flag is not admitted for production until the ADR-124 experiment, human
+labels and a shadow run say so. See [ADR-124](../adrs/124_brief_bound_judge_challenger.md).

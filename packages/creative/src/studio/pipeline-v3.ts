@@ -12,6 +12,13 @@ import {
   type PairwiseMatchResult,
 } from './pairwise-judge-v3.js';
 import type { OpenAiStudioClient } from './openai-studio-client.js';
+import {
+  BriefBoundJudgeInputError,
+  compareBriefBoundWithOrderSwap,
+  type BriefBoundJudgeBrief,
+  type BriefBoundPairMatch,
+  type StudioJudgeProtocol,
+} from './brief-bound-judge.js';
 import { normalizeStudioLayout, fitLogoToAspect } from './studio-normalize.js';
 import { ExemplarRetrievalIndex, type ExemplarRetrievalMatch } from './exemplar-retrieval.js';
 import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-qa.js';
@@ -83,6 +90,10 @@ export interface PipelineV3CallOptions {
   renderOptions?: RenderLayoutOptions;
   /** Candidate-specific assets, also used for its degraded canary. */
   renderOptionsForCandidate?: (candidate: RankedCandidateV3) => RenderLayoutOptions;
+  /** ADR-124: which judge selects. Absent keeps the incumbent P07 judge. */
+  judgeProtocol?: StudioJudgeProtocol;
+  /** The actual brief and exact copy; required by the brief-bound challenger. */
+  judgeBrief?: BriefBoundJudgeBrief;
 }
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
@@ -1407,13 +1418,31 @@ export interface WinnerSelectionV3 {
    * composite_after_tie — the judge's two orderings disagreed, so the higher composite stands.
    * composite_judge_unreliable — the judge picked, then failed to beat a degraded copy of its own
    *   pick; a judge that cannot see that is not trusted, and the higher composite stands.
+   * composite_judge_uncertain — (brief-bound challenger) ties, abstention, a position flip or a
+   *   self-contradicted pick left the pair undecided, or the degraded canary rendered identically
+   *   so the pick could not be tested; the higher composite stands and a human choice is recommended.
    */
-  decidedBy: 'single_candidate' | 'judge' | 'composite_after_tie' | 'composite_judge_unreliable';
+  decidedBy: 'single_candidate' | 'judge' | 'composite_after_tie' | 'composite_judge_unreliable' | 'composite_judge_uncertain';
+  /** The incumbent's match. Null when the challenger judged or no judge ran. */
   match: PairwiseMatchResult | null;
-  /** The canary run on `subject` — the judge's pick, or the higher composite after a tie. */
+  /** The incumbent's canary run on `subject` — its pick, or the higher composite after a tie. */
   canary: { passed: boolean; match: PairwiseMatchResult; subject: RankedCandidateV3 } | null;
   /** Whether the judge beat the degraded canary in both orders. Null when no judge ran. */
   judgeReliable: boolean | null;
+  /** ADR-124: the judge protocol that made this selection. */
+  protocol: StudioJudgeProtocol;
+  /** True when automated preference is uncertain or untrusted and a person should choose. */
+  humanChoiceRecommended: boolean;
+  /** The challenger's pair and canary, when it judged. */
+  briefBound?: {
+    match: BriefBoundPairMatch;
+    /** Null when the canary could not be formed; see canaryUnavailable. */
+    canaryMatch: BriefBoundPairMatch | null;
+    /** Null when no canary ran: an untested pick is not trusted. */
+    canaryPassed: boolean | null;
+    canaryUnavailable?: 'degraded_canary_identical_bytes';
+    subject: RankedCandidateV3;
+  };
 }
 
 /**
@@ -1426,6 +1455,14 @@ export async function selectWinnerV3(
   copy: PipelineV3Copy,
   options: PipelineV3CallOptions = {}
 ): Promise<WinnerSelectionV3> {
+  const protocol: StudioJudgeProtocol = options.judgeProtocol ?? 'incumbent';
+  if (protocol !== 'incumbent' && protocol !== 'brief_bound_v1') {
+    throw new BriefBoundJudgeInputError(`Unknown judge protocol '${String(protocol)}'.`);
+  }
+  if (protocol === 'brief_bound_v1' && !options.judgeBrief) {
+    // Refused before any render or call: the challenger without the actual brief is not the challenger.
+    throw new BriefBoundJudgeInputError('The brief-bound judge needs the actual brief and exact copy.');
+  }
   ranked = eligibleCandidatesV3(ranked);
   if (ranked.length === 1) {
     return {
@@ -1435,8 +1472,11 @@ export async function selectWinnerV3(
       match: null,
       canary: null,
       judgeReliable: null,
+      protocol,
+      humanChoiceRecommended: false,
     };
   }
+  if (protocol === 'brief_bound_v1') return selectWinnerBriefBoundV3(ranked, copy, options, options.judgeBrief!);
 
   const judgeOptions = {
     reference: options.reference,
@@ -1484,10 +1524,12 @@ export async function selectWinnerV3(
   const canary = { passed: canaryPassed, match: canaryMatch, subject: tentative };
 
   if (!judgePick) {
-    return { winner: first, runnerUp: second, decidedBy: 'composite_after_tie', match, canary, judgeReliable: canaryPassed };
+    return { winner: first, runnerUp: second, decidedBy: 'composite_after_tie', match, canary, judgeReliable: canaryPassed,
+      protocol, humanChoiceRecommended: false };
   }
   if (!canaryPassed) {
-    return { winner: first, runnerUp: second, decidedBy: 'composite_judge_unreliable', match, canary, judgeReliable: false };
+    return { winner: first, runnerUp: second, decidedBy: 'composite_judge_unreliable', match, canary, judgeReliable: false,
+      protocol, humanChoiceRecommended: false };
   }
   return {
     winner: judgePick,
@@ -1496,5 +1538,68 @@ export async function selectWinnerV3(
     match,
     canary,
     judgeReliable: true,
+    protocol,
+    humanChoiceRecommended: false,
   };
+}
+
+/**
+ * ADR-124 challenger. Same eligible top two, same rendered bytes with each candidate's own assets,
+ * same two-order match and degraded-copy canary as the incumbent, so the experiment compares the
+ * judging protocol and nothing else. The brief-bound judge sees no layout, metric or rank.
+ */
+async function selectWinnerBriefBoundV3(
+  ranked: RankedCandidateV3[],
+  copy: PipelineV3Copy,
+  options: PipelineV3CallOptions,
+  brief: BriefBoundJudgeBrief
+): Promise<WinnerSelectionV3> {
+  const judgeOptions = {
+    brief,
+    reference: options.reference,
+    client: options.client,
+    model: options.model || resolveModel('judge'),
+  };
+  const renderOptionsFor = (candidate: RankedCandidateV3): RenderLayoutOptions => ({
+    ...options.renderOptions, ...options.renderOptionsForCandidate?.(candidate), copyText: copy.text,
+  });
+  const [first, second] = ranked;
+  const firstId = `candidate_${first.sourceIndex}`;
+  const secondId = `candidate_${second.sourceIndex}`;
+  const match = await compareBriefBoundWithOrderSwap(
+    { id: firstId, png: first.renderedPng || renderLayoutV2(first.layout, renderOptionsFor(first)).png },
+    { id: secondId, png: second.renderedPng || renderLayoutV2(second.layout, renderOptionsFor(second)).png },
+    judgeOptions
+  );
+  const judgePick = match.winnerId === firstId ? first : match.winnerId === secondId ? second : null;
+  const tentative = judgePick ?? first;
+  const canaryRenderOptions = renderOptionsFor(tentative);
+  const chosenPng = renderLayoutV2(tentative.layout, canaryRenderOptions).png;
+  const degradedPng = renderLayoutV2(createDegradedCanaryLayout(tentative.layout), canaryRenderOptions).png;
+  const common = { match: null, canary: null, protocol: 'brief_bound_v1' as const };
+  if (chosenPng.equals(degradedPng)) {
+    // The degradation touches only title and body roles; without them the canary is the same image
+    // and cannot test the judge. No call is spent on it, and an untested pick is not trusted.
+    const briefBound = { match, canaryMatch: null, canaryPassed: null, canaryUnavailable: 'degraded_canary_identical_bytes' as const,
+      subject: tentative };
+    return { ...common, briefBound, winner: first, runnerUp: second, decidedBy: 'composite_judge_uncertain',
+      judgeReliable: null, humanChoiceRecommended: true };
+  }
+  const canaryMatch = await compareBriefBoundWithOrderSwap(
+    { id: 'chosen', png: chosenPng },
+    { id: 'degraded_canary', png: degradedPng },
+    judgeOptions
+  );
+  const canaryPassed = canaryMatch.winnerId === 'chosen';
+  const briefBound = { match, canaryMatch, canaryPassed, subject: tentative };
+  if (!judgePick) {
+    return { ...common, briefBound, winner: first, runnerUp: second, decidedBy: 'composite_judge_uncertain',
+      judgeReliable: canaryPassed, humanChoiceRecommended: true };
+  }
+  if (!canaryPassed) {
+    return { ...common, briefBound, winner: first, runnerUp: second, decidedBy: 'composite_judge_unreliable',
+      judgeReliable: false, humanChoiceRecommended: true };
+  }
+  return { ...common, briefBound, winner: judgePick, runnerUp: judgePick === first ? second : first, decidedBy: 'judge',
+    judgeReliable: true, humanChoiceRecommended: false };
 }

@@ -12,8 +12,10 @@ import {
   type NormalizedLayoutCandidate,
   type StudioLayoutV2,
   type HardQaContext,
+  type BriefBoundJudgeBrief,
+  type StudioJudgeProtocol,
 } from '@hawa/creative';
-import type { StageContext, CandidateState, Concept, Archetype, MotifKind } from '../types.js';
+import type { StageContext, CandidateState, Concept, Archetype, MotifKind, CreativeBrief } from '../types.js';
 import { candidateRenderOptions } from './asset-inputs.js';
 
 /**
@@ -48,6 +50,34 @@ export function copyForStageV3(ctx: Pick<StageContext, 'copyBlocks'>): PipelineV
     scripts[i] = b.script === 'arabic' ? 'arabic' : 'latin';
   });
   return { text, scripts };
+}
+
+/**
+ * ADR-124: what the brief-bound judge is bound to — the requester's instructions, the recorded
+ * brief's occasion, audience and must/mustNot, and the run's exact copy with its recorded roles.
+ * The copy is the same text the candidates are rendered from; nothing is summarized or rewritten.
+ */
+export function judgeBriefForStageV3(
+  ctx: Pick<StageContext, 'copyBlocks' | 'instructions'>,
+  brief: Partial<Pick<CreativeBrief, 'occasion' | 'audience' | 'must' | 'mustNot' | 'roles'>> = {}
+): BriefBoundJudgeBrief {
+  // Passed through unchanged. An oversized field is refused by the judge's own bounds, visibly,
+  // rather than truncated here into a brief nobody wrote.
+  const text = (value: unknown) => typeof value === 'string' && value.trim() ? value : undefined;
+  const list = (value: unknown) => Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string' && !!v.trim())
+    : undefined;
+  return {
+    instructions: text(ctx.instructions),
+    occasion: text(brief.occasion),
+    audience: text(brief.audience),
+    must: list(brief.must),
+    mustNot: list(brief.mustNot),
+    copy: ctx.copyBlocks.map((block, copyIndex) => {
+      const role = Array.isArray(brief.roles) ? brief.roles.find((r) => r?.copyIndex === copyIndex)?.role : undefined;
+      return role ? { copyIndex, text: block.text, role } : { copyIndex, text: block.text };
+    }),
+  };
 }
 
 /** Nearest studio archetype for each v3 archetype; the v3 name itself is kept in the concept. */
@@ -320,7 +350,8 @@ export async function runReviseStageV3(
 /** P07: the judge and its canary choose between the top two candidates. */
 export async function runJudgeStageV3(
   ctx: StageContext,
-  candidates: CandidateState[]
+  candidates: CandidateState[],
+  judge: { protocol?: StudioJudgeProtocol; brief?: BriefBoundJudgeBrief } = {}
 ): Promise<{
   selection: WinnerSelectionV3;
   winner: CandidateState;
@@ -333,6 +364,8 @@ export async function runJudgeStageV3(
     client: ctx.client,
     reference: ctx.reference,
     renderOptionsForCandidate: (candidate) => candidateRenderOptions(ctx, ranked.find((r) => r.sourceIndex === candidate.sourceIndex)!.candidate),
+    judgeProtocol: judge.protocol,
+    judgeBrief: judge.brief,
   });
   const find = (r: RankedCandidateV3 | null) =>
     r ? ranked.find((x) => x.sourceIndex === r.sourceIndex)!.candidate : null;

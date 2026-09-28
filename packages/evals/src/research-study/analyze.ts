@@ -52,7 +52,7 @@ export interface StudyKey {
   };
 }
 
-function rng(seed: string): () => number {
+export function rng(seed: string): () => number {
   let state = parseInt(crypto.createHash('sha256').update(seed).digest('hex').slice(0, 8), 16) >>> 0;
   return () => {
     state = (state + 0x6d2b79f5) >>> 0;
@@ -64,6 +64,30 @@ function rng(seed: string): () => number {
 }
 
 const mean = (values: number[]): number => values.reduce((a, b) => a + b, 0) / values.length;
+
+/**
+ * Percentile bootstrap over independent lineages. Each row holds one lineage's values; whole rows
+ * are resampled together, so paired columns stay paired. Returns the 95% interval of each column's
+ * mean. Shared by the R-study preference analysis and the ADR-124 judge experiment.
+ */
+export function bootstrapLineageMeans(rows: number[][], seed: string, iterations: number): Array<{ lower95: number; upper95: number }> {
+  if (!rows.length) return [];
+  const width = rows[0].length;
+  const random = rng(seed);
+  const draws = Array.from({ length: width }, () => [] as number[]);
+  for (let i = 0; i < iterations; i++) {
+    const totals = new Array<number>(width).fill(0);
+    for (let j = 0; j < rows.length; j++) {
+      const row = rows[Math.floor(random() * rows.length)];
+      for (let k = 0; k < width; k++) totals[k] += row[k];
+    }
+    for (let k = 0; k < width; k++) draws[k].push(totals[k] / rows.length);
+  }
+  return draws.map((column) => {
+    column.sort((a, b) => a - b);
+    return { lower95: column[Math.floor(column.length * 0.025)], upper95: column[Math.floor(column.length * 0.975)] };
+  });
+}
 
 export function analyzeCurrentExportVotes(input: {
   key: StudyKey;
@@ -131,16 +155,8 @@ export function analyzeCurrentExportVotes(input: {
   let preference: { point: number; lower95: number; upper95: number; superiorityThresholdMet: boolean } | null = null;
   if (groupScores.length) {
     const point = mean(groupScores);
-    const random = rng(key.seed);
-    const draws: number[] = [];
-    for (let i = 0; i < key.analysisPlan.bootstrapIterations; i++) {
-      let total = 0;
-      for (let j = 0; j < groupScores.length; j++) total += groupScores[Math.floor(random() * groupScores.length)];
-      draws.push(total / groupScores.length);
-    }
-    draws.sort((a, b) => a - b);
-    const lower95 = draws[Math.floor(draws.length * 0.025)];
-    const upper95 = draws[Math.floor(draws.length * 0.975)];
+    const [{ lower95, upper95 }] = bootstrapLineageMeans(groupScores.map((score) => [score]), key.seed,
+      key.analysisPlan.bootstrapIterations);
     preference = { point, lower95, upper95,
       superiorityThresholdMet: complete && point >= key.analysisPlan.superiorityPoint && lower95 > key.analysisPlan.superiorityLower95 };
   }
