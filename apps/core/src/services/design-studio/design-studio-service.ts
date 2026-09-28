@@ -111,10 +111,12 @@ import {
   runCritiqueStageV3,
   runReviseStageV3,
   runJudgeStageV3,
+  judgeBriefForStageV3,
   rankStudioCandidatesV3,
   V3_CANDIDATE_SLOTS,
   pendingV3Concept,
 } from './stages/index.js';
+import { resolveStudioJudgeProtocol, type StudioJudgeProtocol } from '@hawa/creative';
 
 export type Scope = { tenantId: string; actorId: string; role?: string; clientId?: string };
 
@@ -2460,8 +2462,15 @@ export class DesignStudioService {
     const excludedEvidence = (ranked: ReturnType<typeof rankStudioCandidatesV3>) => ranked
       .filter((r) => r.hardQa?.passed !== true)
       .map((r) => ({ candidateId: r.candidate.id, sourceIndex: r.sourceIndex, qa: r.hardQa ? 'failed' : 'unknown', defectCodes: r.hardQa?.defectCodes ?? [] }));
+    // ADR-124: the flag is read when the judge stage runs and recorded with its outcome. An unknown
+    // value is refused below as an unavailable judge, visibly, with no model call.
+    let judgeProtocol: StudioJudgeProtocol = 'incumbent';
     try {
-      outcome = await runJudgeStageV3(ctx, candidateStates);
+      judgeProtocol = resolveStudioJudgeProtocol(process.env.HAWA_STUDIO_JUDGE_PROTOCOL);
+      outcome = await runJudgeStageV3(ctx, candidateStates, judgeProtocol === 'incumbent' ? {} : {
+        protocol: judgeProtocol,
+        brief: judgeBriefForStageV3(ctx, (stages.brief || {}) as Partial<CreativeBrief>),
+      });
     } catch (err) {
       if (isModelCallHoldError(err)) throw err;
       if (err instanceof StudioBudgetExhaustedError) throw err;
@@ -2515,6 +2524,49 @@ export class DesignStudioService {
         });
       }
     }
+    if (selection.briefBound) {
+      // ADR-124 challenger: each order keeps its exact packet identity, the validated verdict with
+      // its three separate dimensions and localized findings, and the receipt.
+      const { match: pair, canaryMatch, canaryPassed, subject: canarySubject } = selection.briefBound;
+      const orderRecord = (order: typeof pair.orderAB) => ({
+        pipeline: 'v3',
+        protocol: order.promptVersion,
+        packetSha256: order.packetSha256,
+        imageASha256: order.imageASha256,
+        imageBSha256: order.imageBSha256,
+        verdict: order.verdict,
+        receipt: order.receipt,
+      });
+      for (const [order, swapped] of [[pair.orderAB, false], [pair.orderBA, true]] as const) {
+        await this.repo.insertJudgment({
+          id: randomUUID(),
+          runId: run.id,
+          tenantId: s.tenantId,
+          kind: 'pairwise',
+          candidateA: idFor(order.candidateAId),
+          candidateB: idFor(order.candidateBId),
+          orderSwapped: swapped,
+          verdict: { ...orderRecord(order), decision: pair.decision,
+            winnerCandidateId: pair.winnerId === 'UNCERTAIN' ? null : idFor(pair.winnerId) } as any,
+        });
+      }
+      const subject = ranked.find((x) => x.sourceIndex === canarySubject.sourceIndex)!.candidate;
+      await this.repo.insertJudgment({
+        id: randomUUID(),
+        runId: run.id,
+        tenantId: s.tenantId,
+        kind: 'canary',
+        candidateA: subject.id,
+        verdict: {
+          pipeline: 'v3',
+          protocol: canaryMatch.orderAB.promptVersion,
+          passed: canaryPassed,
+          decision: canaryMatch.decision,
+          orderAB: orderRecord(canaryMatch.orderAB),
+          orderBA: orderRecord(canaryMatch.orderBA),
+        } as any,
+      });
+    }
     if (selection.canary) {
       const subject = ranked.find((x) => x.sourceIndex === selection.canary!.subject.sourceIndex)!.candidate;
       const m = selection.canary.match;
@@ -2543,11 +2595,15 @@ export class DesignStudioService {
       pipeline: 'v3',
       winnerId: winner.id,
       decidedBy: selection.decidedBy,
-      judgeWinner: selection.match ? idFor(selection.match.winnerId) ?? selection.match.winnerId : null,
-      consistent: selection.match?.isConsistent ?? null,
+      judgeWinner: selection.match ? idFor(selection.match.winnerId) ?? selection.match.winnerId
+        : selection.briefBound && selection.briefBound.match.winnerId !== 'UNCERTAIN'
+          ? idFor(selection.briefBound.match.winnerId) ?? null : null,
+      consistent: selection.match?.isConsistent ?? (selection.briefBound ? !selection.briefBound.match.decision.uncertain : null),
+      judgeProtocol: selection.protocol,
+      humanChoiceRecommended: selection.humanChoiceRecommended,
       excludedCandidates: excludedEvidence(ranked),
     };
-    stages.canary = { passed: selection.canary?.passed ?? null };
+    stages.canary = { passed: selection.canary?.passed ?? selection.briefBound?.canaryPassed ?? null };
 
     await this.repo.updateRunStatus(run.id, s.tenantId, 'qa', {
       stages,

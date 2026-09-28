@@ -39,6 +39,7 @@ export * from './studio/art-generator-v3.js';
 export * from './studio/box-critique-v3.js';
 export * from './studio/refinement-engine-v3.js';
 export * from './studio/pairwise-judge-v3.js';
+export * from './studio/brief-bound-judge.js';
 export * from './studio/pipeline-v3.js';
 export * from './studio/style-spec.js';
 export * from './studio/studio-normalize.js';

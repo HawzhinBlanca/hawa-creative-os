@@ -1,0 +1,303 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "7b8de71ed015616c5a315cf67da07af31c77019a",
+  "branch": "codex/research-grade-design-system (isolated worktree branch worktree-wf_82dde19f-6dc-2)",
+  "status": "CHALLENGER_AND_EXPERIMENT_LOCALLY_QUALIFIED_SYNTHETIC_ONLY_NOT_ADMITTED",
+  "adr": "124",
+  "migration": null,
+  "requirements": [
+    "FR-057",
+    "FR-065",
+    "FR-079",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/124_brief_bound_judge_challenger.md",
+      "sha256": "ef44b1731a48bcd6ae06f35ce119aa1eea1f12d66aad841c42d381e06ce0bfbe"
+    },
+    {
+      "path": "packages/creative/src/studio/brief-bound-judge.ts",
+      "sha256": "07ed38f857f35453bd97ae273a8023df52edb4d9c618704fb695e7646650a7b7"
+    },
+    {
+      "path": "packages/creative/src/studio/pipeline-v3.ts",
+      "sha256": "7e11d0c321149c3da31d759d3c99f4da811b6ab205811b2d5d609a995800d013"
+    },
+    {
+      "path": "packages/creative/src/index.ts",
+      "sha256": "b13da4656acb4f367a0775d5bbf835685e70fb126fd44f1fa951be8b937bf198"
+    },
+    {
+      "path": "packages/creative/test/brief-bound-judge.test.ts",
+      "sha256": "e3d06991c6fac8f0ec4faf5b57361a56f199553b3a558750b1c3ba005088543c"
+    },
+    {
+      "path": "packages/creative/test/pipeline-v3.test.ts",
+      "sha256": "04f8fdbdbcfdaeedcc684c880d0f620c1ae6814aa17b3a30a0e3414b39141ece"
+    },
+    {
+      "path": "packages/evals/src/judge-calibration.ts",
+      "sha256": "2c0540541efb2ba903c6755e32ab3eddef282982be684e2c84a28c4adbfa5a76"
+    },
+    {
+      "path": "packages/evals/src/judge-experiment.ts",
+      "sha256": "335751891179624fd143c69f6635c24ad25c98213d9b064d342c5d4d56a377b0"
+    },
+    {
+      "path": "packages/evals/src/design-studio/offline-runner.ts",
+      "sha256": "49545dfd51652538116f3eae68eae24ee9dfa69a21472c5032102db567e2a388"
+    },
+    {
+      "path": "packages/evals/src/research-study/analyze.ts",
+      "sha256": "d576a612296917b35dd32b8b0c1b98cb618f15b2fe86f0d68c8000b0c0a673d9"
+    },
+    {
+      "path": "packages/evals/src/index.ts",
+      "sha256": "fe944e8146878a00f6ab339176d2fd084b83c18b8bf47fc23080ba4874be0aa2"
+    },
+    {
+      "path": "packages/evals/test/judge-calibration.test.ts",
+      "sha256": "784f1013919069f121e17e58df24e984a8ed141802e8798f10e164accda62b7c"
+    },
+    {
+      "path": "packages/evals/test/judge-experiment.test.ts",
+      "sha256": "a583fe80c9ffa93e59b83db43a4ffc384e1a3a3e4ed51051ee287064f940b94c"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "648d61eac4cb157d762e5082f9643d42dc0a316c9bf3da42f0b17f440e746057"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/v3.stage.ts",
+      "sha256": "a86a1cfc1026386ecde69ac0692e1ccfb53cdfad094032018feae7fb4a75ee92"
+    },
+    {
+      "path": "apps/core/test/design-studio-orchestrator.test.ts",
+      "sha256": "999a72acf41d0a8a2155b2735d9c739dc91be3eab8c711748404cf419231f95e"
+    },
+    {
+      "path": "scripts/run_judge_experiment.ts",
+      "sha256": "11bd070eea03253931425234f40b0d65157a6076394efcc931511f7ad9217e85"
+    },
+    {
+      "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
+      "sha256": "b8a3a88486f9f236f9b3d801bab572c029043a07dcef2cc62cbfddd101c5ec79"
+    },
+    {
+      "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
+      "sha256": "4ac8934edf8a427166064c2c52dbb9387d0342a5d16ed3532f283c6e1bd535a2"
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
+      "sha256": "bf67c629570534be0d25bdad7e90ce48b3573de00fe5933ead69501e7fd47576"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "504d385cc2eefd806012e7896dae3a77853a8de63f25706fe977105ad4b5a671"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/red.json",
+      "sha256": "480ecd64ec0180e4e2a8858e6fbe7e26f4dd25683e16b5889a0854d5ddfe0a4d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/red.log",
+      "sha256": "92ab7c4fa9b40c567017147af1360e9616c952bd8f48afa6d0488413a4183fb6"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/connected.json",
+      "sha256": "cb59e47a59f0545ea975f2ed466aa17658e0bc5bcf6b6d2d074211fe797beaf0"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/connected.log",
+      "sha256": "c4f290a4741a07f9150c1f35cd4d4ae5e5e9f4ce0a5e1257a0599bdbc7bfb8e7"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/ledger-base-source.json",
+      "sha256": "fdc35b1840556ae0e173377358c850124c205b9a31052be03c41beb8aea70e30"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/ledger-base-source.log",
+      "sha256": "cd15d1a9d1b5bfefbc7812e49880556ae4216a6f00059c0121a7151560328c63"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/full-suite.json",
+      "sha256": "2845f41b87ceece8b86fdffaf7de14e9f053d42d49f3369afc8a8f1ec1cdd4be"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/full-suite.log",
+      "sha256": "8401aefa470d7dc5a9f8f3df0ba76dbee4ddd47b4f0444bbd34e37b7e0eec1ab"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/base-failures.json",
+      "sha256": "607ea2f861945aa11870c846327d586980bb1d7b53aa64a4cd15955378f07cad"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/base-failures.log",
+      "sha256": "47c983b871807bacfacbe30c7589ef67cb7ae75d957cdf11adba8c6bf32c8525"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/final.json",
+      "sha256": "bf85aef61d8a9ea0948ef762f2ddcb7fa7de9a4e4c68f483f3b4db1c6ea81bd1"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/final.log",
+      "sha256": "a29ed4fc2aa5504b3e36f370fe74bf0a954ed56be6cf36e20bce1404e217f789"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/typecheck-final.log",
+      "sha256": "9eaa8027f91e4dbd554867ba667ad7579594530096b954d09e2957685983607a"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/lint-final.log",
+      "sha256": "2b48a3338dcd420cf34b7b7f2ca5a024c102c3873cb1f7301a31008dbbf2c083"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/security.log",
+      "sha256": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/corpus-build.log",
+      "sha256": "d022eb065f7de44e096e491113b9aa8eeeab37082f275422d20f78eb24a1c5bb"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/corpus-golden-24/corpus.json",
+      "sha256": "c59f6efb8ea34bace9076d3e49de33f7ef895415e3bb26f786c33da628e491a0"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/quote-only-gpt-4.1-mini/run.json",
+      "sha256": "be3d206534e70e4cec9f228895fd42c5b79e5dd54dd45b87028a61f70e2a7984"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/quote-only-gpt-4.1-mini/analysis.json",
+      "sha256": "fc19584ae4eb940eeb758fe9bdfeb580308fc40dde5c1555491bc341ce167f45"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/quote-only-gpt-6-astra/run.json",
+      "sha256": "f9914f2d12531d7afa5b9f727df884d76117fddf5b74e7822c97530cabd321e1"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/synthetic-gpt-4.1-mini/run.json",
+      "sha256": "efbb5b9886ce8b91696bbc3448c1957e122b8eb27d098f5b8edbc73ad3fb9685"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/synthetic-gpt-4.1-mini/analysis.json",
+      "sha256": "7cee05a6591cc9e7d9b6f94d7efcb7689a00c3fcdc7324ca7ae6e21c7f9d2a26"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger/synthetic-reanalysis.json",
+      "sha256": "7cee05a6591cc9e7d9b6f94d7efcb7689a00c3fcdc7324ca7ae6e21c7f9d2a26"
+    }
+  ],
+  "acceptance": {
+    "files": 21,
+    "passed": 228,
+    "failed": 0,
+    "skipped": 0,
+    "environment": "Isolated PostgreSQL clone per file on the test server; synthetic model transport; no network provider",
+    "challenger_cases": {
+      "creative_protocol": 16,
+      "selection_flag": 5,
+      "core_postgres": 2,
+      "calibration": 3,
+      "experiment": 11
+    },
+    "prior_attempts": [
+      "Red run before implementation: 5 files, 97 tests, 71 passed, 26 failed, and judge-experiment.test.ts could not load its missing module; the Core test reproduced the incumbent judging with HAWA_STUDIO_JUDGE_PROTOCOL=brief_bound_v1 and with an unknown value",
+      "First experiment run: 5 failed because the corpus loader refused a Sorani clean control whose two images were byte-identical (the centred variant skipped right-to-left blocks); every block is now centred",
+      "Visual inspection of the first corpus found the offline runner's layout overlapping its own copy, so the clean side was defective; blocks are now stacked by measured text height and every clean side must pass hard QA before it is written",
+      "First security scan flagged two placeholder API keys of 16+ characters (quoted_secret_assignment); replaced with short placeholders",
+      "Connected run included apps/core/test/studio-ledger.test.ts: 2 failures (db.transaction on a stub database); the same 2 fail with the base Core source restored, so the file is excluded from the final connected count"
+    ],
+    "full_suite": {
+      "files": 534,
+      "passed": 4484,
+      "failed": 9,
+      "skipped": 60,
+      "failures_on_base": "The same 9 tests in 8 files (canva-planner-accounting, hawa-work-desk-cv17 bundle size, route-inventory, startup-schema-check, studio-ledger x2, blob-gc coverage, schema-upgrade, r11-release-gate) fail with the worktree detached at 7b8de71e: 69 passed, 9 failed",
+      "note": "Run once with HAWA_TEST_WORKERS=2, before two placeholder-string edits in judge-experiment source and test; the final connected run covers those edits"
+    },
+    "synthetic_corpus": {
+      "source": "24 KAAE golden briefs (development only)",
+      "cases": 72,
+      "lineages": 24,
+      "seeded_layout": 24,
+      "seeded_copy": 24,
+      "clean_controls": 24,
+      "clean_sides_hard_qa": "all pass",
+      "size_mb": 20
+    },
+    "synthetic_run": {
+      "model": "gpt-4.1-mini (production judge role)",
+      "calls": 288,
+      "stopped": null,
+      "synthetic_spend_usd": 0.44928,
+      "quoted_usd": 2.540234,
+      "office_ledger": "scratch HAWA_SPEND_STATE_DIR, 288 entries, total equals run spend",
+      "decision": "SYNTHETIC_PLUMBING_ONLY",
+      "reanalysis_identical": true
+    },
+    "quote_only": {
+      "gpt-4.1-mini": {
+        "calls": 288,
+        "worst_case_reservation_usd": 2.540234,
+        "incumbent_usd": 1.2254,
+        "challenger_usd": 1.3149
+      },
+      "gpt-6-astra": {
+        "calls": 288,
+        "worst_case_reservation_usd": 99.46953,
+        "incumbent_usd": 41.6368,
+        "challenger_usd": 57.8327
+      },
+      "dispatched": 0
+    },
+    "plan_sha256": "3ab6847dc3f79c622d2b72c3cc10c0afe7f8eedf2fc648946888703098a6b90d"
+  },
+  "checks": {
+    "source_types": "passed",
+    "script_types": "passed",
+    "strict_test_roots": 535,
+    "any_count": 956,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "security": "0 secrets",
+    "validate_pack": "passed after supplying the ignored output/audits link target locally"
+  },
+  "proof_scope": [
+    "brief and exact copy bound into the judge text unchanged; brief data cannot close its tag block",
+    "no layout metric, rank, composite or prestige wording in the challenger request",
+    "correctness, communication and aesthetic judged separately with tie and abstention; strict schema without an overall winner",
+    "application decision rule over both orders; abstention, position flip and self-contradicting findings are uncertain",
+    "invalid reply is an absent answer with its billed cost kept",
+    "flag default incumbent; exact value selects the challenger; unknown value refused visibly without a call",
+    "challenger uses the same eligible pair, rendered bytes, canary, ledger client and budget; uncertainty keeps the composite and recommends a human choice",
+    "Core persists packet hash, image hashes, verdict, decision and receipt on isolated PostgreSQL",
+    "calibration analyzer reports the challenger overall and per dimension against human labels",
+    "frozen hashed plan; paired lineage-clustered bootstrap effect sizes; regression margins; minimum sample; decision rule",
+    "corpus hash, path, PNG and metadata verification",
+    "pre-dispatch ADR-091 quote, run cap and office daily cap refusal; first provider error stops the run; cases not run stay in denominators",
+    "quote-only dispatches nothing; paid mode requires the typed plan hash"
+  ],
+  "not_executed": [
+    "paid model calls for either judge",
+    "human labels, overall or per dimension",
+    "native-language review of the Sorani corpus",
+    "shadow or canary run",
+    "production flag change or deployment",
+    "retained production exports as a corpus",
+    "creator/judge model-family separation",
+    "OS process-kill drill",
+    "full release gate"
+  ],
+  "next": [
+    "owner-approved paid development run on gpt-4.1-mini with the plan hash and a USD 3 run cap",
+    "blind human labels, overall and per dimension, for the 72 development cases, with native Sorani reviewers for the ckb and mixed briefs",
+    "calibration and holdout corpora from retained exports under R04 lineage separation, never golden-brief material",
+    "shadow run only if the decision is CHALLENGER_ELIGIBLE_FOR_SHADOW",
+    "remaining package 5 items: relationship-led composition, governed edit learning, equal-budget human comparison"
+  ]
+}

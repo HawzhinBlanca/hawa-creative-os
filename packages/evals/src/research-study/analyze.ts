@@ -52,7 +52,7 @@ export interface StudyKey {
   };
 }
 
-function rng(seed: string): () => number {
+export function rng(seed: string): () => number {
   let state = parseInt(crypto.createHash('sha256').update(seed).digest('hex').slice(0, 8), 16) >>> 0;
   return () => {
     state = (state + 0x6d2b79f5) >>> 0;

@@ -1043,6 +1043,166 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     }
   }, 60000);
 
+  /** The three generator layouts of 6b, which reach the judge through actual hard QA. */
+  const judgeFixtureLayouts = () => [
+    {
+      id: 'c1', conceptTitle: 'Monolith Centered', compositionArchetype: 'monolith_centered',
+      typeScale: { base: 14, ratio: 1.25 }, grid: { margin: 0.074, columns: 12, gutter: 0.018, baseline: 0.006 },
+      background: { color: '#0A1628' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null, shapes: [],
+      text: [
+        { copyIndex: 0, role: 'title', x: 0.074, y: 0.16, width: 0.852, height: 0.09, fontSize: 0.031, lineHeight: 1.3, letterSpacing: null, fontFamily: 'Cinzel', color: '#C5A059', align: 'center', bold: true, italic: false, rtl: false },
+        { copyIndex: 1, role: 'body', x: 0.092, y: 0.40, width: 0.816, height: 0.18, fontSize: 0.013, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FDF8F3', align: 'center', bold: false, italic: false, rtl: false },
+      ],
+    },
+    {
+      id: 'c2', conceptTitle: 'Asymmetric Editorial', compositionArchetype: 'asymmetric_editorial',
+      typeScale: { base: 16, ratio: 1.333 }, grid: { margin: 0.074, columns: 12, gutter: 0.018, baseline: 0.006 },
+      background: { color: '#0C2340' }, logo: { x: 0.074, y: 0.059, width: 0.185, height: 0.074 }, art: null,
+      shapes: [{ x: 0.074, y: 0.15, width: 0.002, height: 0.75, kind: 'line', color: '#C5A059', opacity: 1, radius: null, strokeWidth: null, strokeColor: null, role: 'rule' }],
+      text: [
+        { copyIndex: 0, role: 'title', x: 0.111, y: 0.18, width: 0.815, height: 0.12, fontSize: 0.035, lineHeight: 1.25, letterSpacing: null, fontFamily: 'Lora', color: '#C5A059', align: 'left', bold: true, italic: false, rtl: false },
+        { copyIndex: 1, role: 'body', x: 0.111, y: 0.45, width: 0.750, height: 0.20, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FFFFFF', align: 'left', bold: false, italic: false, rtl: false },
+      ],
+    },
+    {
+      id: 'c3', conceptTitle: 'Hero Statement Grid', compositionArchetype: 'hero_statement_grid',
+      typeScale: { base: 15, ratio: 1.414 }, grid: { margin: 0.074, columns: 12, gutter: 0.018, baseline: 0.006 },
+      background: { color: '#0A1628' }, logo: { x: 0.407, y: 0.059, width: 0.185, height: 0.074 }, art: null,
+      shapes: [{ x: 0.074, y: 0.48, width: 0.852, height: 0.38, kind: 'roundRect', color: '#1E3A5F', opacity: 0.8, radius: 0.015, strokeWidth: null, strokeColor: null, role: 'panel' }],
+      text: [
+        { copyIndex: 0, role: 'title', x: 0.074, y: 0.18, width: 0.852, height: 0.14, fontSize: 0.038, lineHeight: 1.2, letterSpacing: null, fontFamily: 'Cinzel', color: '#F7B500', align: 'center', bold: true, italic: false, rtl: false },
+        { copyIndex: 1, role: 'body', x: 0.111, y: 0.52, width: 0.778, height: 0.25, fontSize: 0.014, lineHeight: 1.5, letterSpacing: null, fontFamily: 'Verdana', color: '#FDF8F3', align: 'left', bold: false, italic: false, rtl: false },
+      ],
+    },
+  ];
+
+  it('6d. HAWA_STUDIO_JUDGE_PROTOCOL=brief_bound_v1 judges with the actual brief and exact copy and records the challenger (ADR-124)', async () => {
+    const saved = { flag: process.env.DESIGN_PIPELINE_V3, chats: process.env.DESIGN_PIPELINE_V3_CHATS,
+      protocol: process.env.HAWA_STUDIO_JUDGE_PROTOCOL, tier: process.env.HAWA_MODEL_TIER };
+    const pilotChat = `isolated-judge-${randomUUID().slice(0, 8)}`;
+    process.env.DESIGN_PIPELINE_V3 = 'off';
+    process.env.DESIGN_PIPELINE_V3_CHATS = pilotChat;
+    process.env.HAWA_STUDIO_JUDGE_PROTOCOL = 'brief_bound_v1';
+    process.env.HAWA_MODEL_TIER = 'dev';
+    const v3Layouts = judgeFixtureLayouts();
+    const baseFetch = createMockFetch();
+    const challengerRequests: string[] = [];
+    const schemasSeen: string[] = [];
+    let challengerCall = 0;
+    const fetcher = vi.fn().mockImplementation(async (url: any, init: any) => {
+      const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+      const schema: string | undefined = body.response_format?.json_schema?.name;
+      if (schema) schemasSeen.push(schema);
+      const reply = (data: unknown) => ({ ok: true, status: 200, headers: { get: () => `req_${randomUUID().slice(0, 8)}` },
+        json: async () => ({ id: `chatcmpl-${randomUUID().slice(0, 12)}`, model: body.model,
+          choices: [{ message: { content: JSON.stringify(data) } }], usage: { prompt_tokens: 1000, completion_tokens: 100, total_tokens: 1100 } }) });
+      if (schema === 'layout_v3_candidates') return reply({ layouts: v3Layouts });
+      if (schema === 'DesignCritiqueReport') return reply({ overallAssessment: 'Balanced and legible.', comments: [] });
+      if (schema === 'BriefBoundDimensionVerdict') {
+        challengerRequests.push(init.body);
+        challengerCall++;
+        const d = (c: string, m: string, a: string) => ({ correctness: { choice: c, reason: 'Every exact block is present.' },
+          communication: { choice: m, reason: 'The title is found first.' }, aesthetic: { choice: a, reason: 'Calm balance.' } });
+        // Pair: the second-ranked candidate wins communication in both orders. Canary: the chosen design beats its degraded copy.
+        const answers = [d('tie', 'B', 'tie'), d('tie', 'A', 'tie'), d('A', 'A', 'A'), d('B', 'B', 'B')];
+        return reply({ dimensions: answers[challengerCall - 1], findings: [] });
+      }
+      return baseFetch(url, init);
+    });
+    try {
+      const taskId = await createTask(undefined, pilotChat);
+      const mockCanvaService = {
+        importEditableDesign: vi.fn().mockResolvedValue({ operationId: randomUUID(), status: 'submitted', designId: 'DAFV3JUDGE1' }),
+      } as unknown as CanvaConnectService;
+      const service = new DesignStudioService(db, mockCanvaService, { apiKey: 'test-key', fetcher, defaultTier: 'standard' });
+      const { run } = await service.createOrGetRun(scope, taskId, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350, tier: 'standard' });
+      let status = run.status;
+      for (let i = 0; i < 15 && !['transferred', 'failed', 'degraded'].includes(status); i++) {
+        status = (await service.resume(scope, taskId, run.id)).status;
+      }
+      const final = (await sql<any>`SELECT * FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0];
+      expect({ status, diagnostic: final.diagnostic }).toEqual({ status: 'transferred', diagnostic: final.diagnostic });
+      expect(schemasSeen).not.toContain('PairwiseDimensionVerdict');
+      expect(challengerRequests).toHaveLength(4);
+      for (const request of challengerRequests) {
+        expect(request).toContain('EXACT TITLE');
+        expect(request).toContain('Exact body text line. Never rewrite it.');
+        expect(request).toContain('Keep title centered.');
+        expect(request).not.toMatch(/Composite Score|GROUND TRUTH|prestige|gravitas/);
+      }
+      const stages = typeof final.stages === 'string' ? JSON.parse(final.stages) : final.stages;
+      expect(stages.tournament).toMatchObject({ pipeline: 'v3', judgeProtocol: 'brief_bound_v1', decidedBy: 'judge', humanChoiceRecommended: false });
+      expect(stages.canary).toEqual({ passed: true });
+      expect(final.judge_status).toBe('RELIABLE');
+      const judgments = (await sql<any>`SELECT kind, order_swapped, candidate_a, candidate_b, verdict FROM hawa.design_studio_judgments
+        WHERE run_id=${run.id}::uuid AND kind IN ('pairwise','canary') ORDER BY kind, order_swapped`.execute(db)).rows;
+      expect(judgments.map((j: any) => `${j.kind}:${j.order_swapped}`)).toEqual(['canary:false', 'pairwise:false', 'pairwise:true']);
+      for (const j of judgments) {
+        const verdict = typeof j.verdict === 'string' ? JSON.parse(j.verdict) : j.verdict;
+        expect(verdict).toMatchObject({ pipeline: 'v3', protocol: 'brief-bound-dimensional-v1' });
+      }
+      const pairAB = judgments.find((j: any) => j.kind === 'pairwise' && !j.order_swapped);
+      const abVerdict = typeof pairAB.verdict === 'string' ? JSON.parse(pairAB.verdict) : pairAB.verdict;
+      expect(abVerdict.verdict.dimensions.communication.choice).toBe('B');
+      expect(abVerdict.packetSha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(abVerdict.receipt.responseId).toMatch(/^chatcmpl-/);
+      const winner = (await sql<any>`SELECT id FROM hawa.design_studio_candidates WHERE run_id=${run.id}::uuid AND status='winner'`.execute(db)).rows;
+      expect(winner).toHaveLength(1);
+      expect(winner[0].id).toBe(pairAB.candidate_b);
+    } finally {
+      const restore = (key: string, value: string | undefined) => { if (value === undefined) delete process.env[key]; else process.env[key] = value; };
+      restore('DESIGN_PIPELINE_V3', saved.flag);
+      restore('DESIGN_PIPELINE_V3_CHATS', saved.chats);
+      restore('HAWA_STUDIO_JUDGE_PROTOCOL', saved.protocol);
+      restore('HAWA_MODEL_TIER', saved.tier);
+    }
+  }, 60000);
+
+  it('6e. an unknown HAWA_STUDIO_JUDGE_PROTOCOL value is refused visibly; the composite stands without any judge call (ADR-124)', async () => {
+    const saved = { flag: process.env.DESIGN_PIPELINE_V3, chats: process.env.DESIGN_PIPELINE_V3_CHATS, protocol: process.env.HAWA_STUDIO_JUDGE_PROTOCOL };
+    const pilotChat = `isolated-judge-bad-${randomUUID().slice(0, 8)}`;
+    process.env.DESIGN_PIPELINE_V3 = 'off';
+    process.env.DESIGN_PIPELINE_V3_CHATS = pilotChat;
+    process.env.HAWA_STUDIO_JUDGE_PROTOCOL = 'on';
+    const v3Layouts = judgeFixtureLayouts();
+    const baseFetch = createMockFetch();
+    const schemasSeen: string[] = [];
+    const fetcher = vi.fn().mockImplementation(async (url: any, init: any) => {
+      const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+      const schema: string | undefined = body.response_format?.json_schema?.name;
+      if (schema) schemasSeen.push(schema);
+      const reply = (data: unknown) => ({ ok: true, status: 200, headers: { get: () => null },
+        json: async () => ({ id: `chatcmpl-${randomUUID().slice(0, 12)}`, model: body.model,
+          choices: [{ message: { content: JSON.stringify(data) } }], usage: { prompt_tokens: 1000, completion_tokens: 100, total_tokens: 1100 } }) });
+      if (schema === 'layout_v3_candidates') return reply({ layouts: v3Layouts });
+      if (schema === 'DesignCritiqueReport') return reply({ overallAssessment: 'Balanced and legible.', comments: [] });
+      return baseFetch(url, init);
+    });
+    try {
+      const taskId = await createTask(undefined, pilotChat);
+      const mockCanvaService = {
+        importEditableDesign: vi.fn().mockResolvedValue({ operationId: randomUUID(), status: 'submitted', designId: 'DAFV3JUDGE2' }),
+      } as unknown as CanvaConnectService;
+      const service = new DesignStudioService(db, mockCanvaService, { apiKey: 'test-key', fetcher, defaultTier: 'standard' });
+      const { run } = await service.createOrGetRun(scope, taskId, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350, tier: 'standard' });
+      let status = run.status;
+      for (let i = 0; i < 15 && !['transferred', 'failed', 'degraded'].includes(status); i++) {
+        status = (await service.resume(scope, taskId, run.id)).status;
+      }
+      const final = (await sql<any>`SELECT * FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0];
+      expect(schemasSeen.filter((s) => s === 'PairwiseDimensionVerdict' || s === 'BriefBoundDimensionVerdict')).toEqual([]);
+      const stages = typeof final.stages === 'string' ? JSON.parse(final.stages) : final.stages;
+      expect(stages.tournament.decidedBy).toBe('composite_judge_unavailable');
+      expect(stages.tournament.error).toMatch(/HAWA_STUDIO_JUDGE_PROTOCOL/);
+      expect(final.judge_status).toBe('SKIPPED');
+    } finally {
+      const restore = (key: string, value: string | undefined) => { if (value === undefined) delete process.env[key]; else process.env[key] = value; };
+      restore('DESIGN_PIPELINE_V3', saved.flag);
+      restore('DESIGN_PIPELINE_V3_CHATS', saved.chats);
+      restore('HAWA_STUDIO_JUDGE_PROTOCOL', saved.protocol);
+    }
+  }, 60000);
+
   it('7. abandon marks run abandoned and allows a new generation to be started', async () => {
     const taskId = await createTask();
     const fetcher = createMockFetch();

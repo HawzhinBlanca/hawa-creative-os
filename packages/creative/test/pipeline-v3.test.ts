@@ -1212,3 +1212,104 @@ describe('copy fits its box', { timeout: 30000 }, () => {
     expect(ranked.hardQa?.defectCodes).toContain('COPY_OVERFLOW');
   });
 });
+
+describe('pipeline v3 — brief-bound challenger behind its flag (ADR-124)', { timeout: 30000 }, () => {
+  const BRIEF = {
+    instructions: 'Formal notice for university leadership; the deadline must be unmistakable.',
+    audience: 'university leadership',
+    copy: Object.entries(COPY.text).map(([i, text]) => ({ copyIndex: Number(i), text })),
+  };
+  const pair = () => {
+    const a = centred();
+    const b = asymmetric();
+    const render = (layout: StudioLayoutV2) => b64(renderLayoutV2(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png);
+    const names: Record<string, string> = {
+      [render(a)]: 'centred', [render(b)]: 'asymmetric',
+      [render(createDegradedCanaryLayout(a))]: 'degraded', [render(createDegradedCanaryLayout(b))]: 'degraded',
+    };
+    const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: a }, { sourceIndex: 1, layout: b }], COPY);
+    ranked.forEach(admitForJudgeFixture);
+    return { names, ranked };
+  };
+  const dims = (c: string, m: string, a: string) => ({
+    correctness: { choice: c, reason: 'r' }, communication: { choice: m, reason: 'r' }, aesthetic: { choice: a, reason: 'r' },
+  });
+  /** Answers the challenger schema only; any incumbent call fails the test. */
+  function challengerClient(names: Record<string, string>, answer: (left: string, right: string) => ReturnType<typeof dims>) {
+    const calls: Array<{ schema: string; left: string; right: string; user: string; detail: string[] }> = [];
+    const client = {
+      async createStructuredCompletion(params: any) {
+        const content = params.messages[1].content as any[];
+        const images = content.filter((c) => c.type === 'image_url').map((c) => c.image_url);
+        const [left, right] = images.map((i: any) => names[i.url] ?? 'unknown');
+        calls.push({ schema: params.jsonSchema.name, left, right, user: content.filter((c) => c.type === 'text').map((c) => c.text).join('\n'),
+          detail: images.map((i: any) => i.detail) });
+        if (params.jsonSchema.name !== 'BriefBoundDimensionVerdict') throw new Error(`unexpected schema ${params.jsonSchema.name}`);
+        const data = { dimensions: answer(left, right), findings: [] };
+        return { data, rawText: JSON.stringify(data), receipt: { id: 'r', responseId: `resp_${calls.length}`, xRequestId: null,
+          model: params.model, inputTokens: 1000, outputTokens: 100, reasoningTokens: 0, cacheCreationTokens: 0,
+          cacheReadTokens: 0, costUsd: 0.002, sha256: '', latencyMs: 5, attempts: 1 } };
+      },
+    };
+    return { client: client as any, calls };
+  }
+
+  it('keeps the incumbent judge unless the challenger is selected', async () => {
+    const { names, ranked } = pair();
+    const { client, calls } = mockClient({ names, prefer: () => 'A' });
+    const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
+    expect(result.protocol).toBe('incumbent');
+    expect(calls.every((c) => c.schema === 'PairwiseDimensionVerdict')).toBe(true);
+  });
+
+  it('adopts a stable brief-bound pick that also beats the degraded canary', async () => {
+    const { names, ranked } = pair();
+    const secondName = ranked[1].sourceIndex === 0 ? 'centred' : 'asymmetric';
+    const { client, calls } = challengerClient(names, (left, right) => {
+      if (left === 'degraded') return dims('B', 'B', 'B');
+      if (right === 'degraded') return dims('A', 'A', 'A');
+      return left === secondName ? dims('tie', 'A', 'tie') : dims('tie', 'B', 'tie');
+    });
+    const result = await selectWinnerV3(ranked, COPY, {
+      client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, judgeProtocol: 'brief_bound_v1', judgeBrief: BRIEF,
+    });
+    expect(result).toMatchObject({ protocol: 'brief_bound_v1', decidedBy: 'judge', judgeReliable: true, humanChoiceRecommended: false });
+    expect(result.winner.sourceIndex).toBe(ranked[1].sourceIndex);
+    expect(result.match).toBeNull();
+    expect(result.briefBound?.match.decision.decidedBy).toBe('communication');
+    expect(result.briefBound?.canaryPassed).toBe(true);
+    expect(calls).toHaveLength(4);
+    expect(calls.every((c) => c.user.includes(COPY.text[3]) && c.detail.every((d) => d === 'high'))).toBe(true);
+  });
+
+  it('keeps the higher composite and asks for a human choice when the challenger is uncertain', async () => {
+    const { names, ranked } = pair();
+    const { client } = challengerClient(names, (left, right) =>
+      left === 'degraded' ? dims('B', 'B', 'B') : right === 'degraded' ? dims('A', 'A', 'A') : dims('tie', 'tie', 'tie'));
+    const result = await selectWinnerV3(ranked, COPY, {
+      client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, judgeProtocol: 'brief_bound_v1', judgeBrief: BRIEF,
+    });
+    expect(result).toMatchObject({ decidedBy: 'composite_judge_uncertain', humanChoiceRecommended: true, judgeReliable: true });
+    expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
+  });
+
+  it('overrules a challenger that cannot prefer its pick over a degraded copy', async () => {
+    const { names, ranked } = pair();
+    const secondName = ranked[1].sourceIndex === 0 ? 'centred' : 'asymmetric';
+    const { client } = challengerClient(names, (left, right) =>
+      left === 'degraded' || right === 'degraded' ? dims('tie', 'tie', 'tie') : left === secondName ? dims('A', 'A', 'A') : dims('B', 'B', 'B'));
+    const result = await selectWinnerV3(ranked, COPY, {
+      client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, judgeProtocol: 'brief_bound_v1', judgeBrief: BRIEF,
+    });
+    expect(result).toMatchObject({ decidedBy: 'composite_judge_unreliable', judgeReliable: false, humanChoiceRecommended: true });
+    expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
+  });
+
+  it('refuses the challenger without the actual brief, before any call', async () => {
+    const { names, ranked } = pair();
+    const { client, calls } = challengerClient(names, () => dims('tie', 'tie', 'tie'));
+    await expect(selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, judgeProtocol: 'brief_bound_v1' }))
+      .rejects.toThrow(/brief/);
+    expect(calls).toHaveLength(0);
+  });
+});
