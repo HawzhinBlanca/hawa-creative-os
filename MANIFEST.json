@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T03:02:07Z",
+  "generatedAt": "2026-09-28T03:18:39Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 472,
+  "fileCount": 474,
   "files": [
     {
       "path": ".dockerignore",
@@ -668,6 +668,11 @@
       "bytes": 3613
     },
     {
+      "path": "adrs/120_native_text_copy_qualification.md",
+      "sha256": "1f0fa8c7fcc444ce7efe13f3090b59f0497ca44c8c9304302bab0f00e2e8733f",
+      "bytes": 3837
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "0a40a0ee632644cf1c1e0531fb516e5f4f7cb0dc857172785003ae6398e02845",
       "bytes": 45259
@@ -1034,8 +1039,8 @@
     },
     {
       "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
-      "sha256": "db7bca58615eece59011a61730db9ae09105358ce6dc7d53a8ef1181a51912c1",
-      "bytes": 7936
+      "sha256": "5026c641d2a18104e07297b618b105f560fe06f1cb2a8c317033de06f991f3d5",
+      "bytes": 8658
     },
     {
       "path": "docs/30_FUTURE_EVOLUTION.md",
@@ -1119,8 +1124,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
-      "sha256": "67e0ba6882065be2575216fd27357cd860a47821d1ee914c373a96beba290b34",
-      "bytes": 26214
+      "sha256": "28dd748d2a46ecd99e8a897ebee98dfa03900e197104e19859db3ea0d6399137",
+      "bytes": 27863
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/FALLBACK_MEASUREMENT_PROOF.json",
@@ -1146,6 +1151,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/NATIVE_REVISION_HANDOFF_PROOF.json",
       "sha256": "400455eb3f015dca1f76cc1c4077ca926a658ba47e678ca4b1c6b1c92b2c160e",
       "bytes": 10145
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/NATIVE_TEXT_COPY_TRANSPORT_PROOF.json",
+      "sha256": "0797c1162c574055b8e88b8631f28ab27855bb25802a4299ac0239705b9ffb76",
+      "bytes": 4075
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/RETAINED_RESULTS_PROOF.json",
@@ -1599,8 +1609,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "2b890a8a23aff7e6cc052efc377134f10893906653cec97927d738c0fe34ac3d",
-      "bytes": 418516
+      "sha256": "92e34378c3e614c838eda0c731bd49318d80ff2219d6839e989319ea5af8a6da",
+      "bytes": 420448
     },
     {
       "path": "plans/user-stories.csv",

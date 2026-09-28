@@ -98,3 +98,15 @@ does not exclude concurrent edits. A denied capability read remains unknown,
 including when the optional profile:read grant is absent; it does not establish a
 subscription limitation. See [ADR-119](../adrs/119_native_amendment_capability_observation.md)
 and [the inspection runbook](../runbooks/CANVA_AMENDMENT_INSPECTION.md).
+
+## Native text copy qualification (ADR-120)
+
+The integration client can submit a bounded text-only `create_from_design` job
+against observed exact dataset names and read back that same job. It refuses
+in-place results, a source identity returned as a copy, malformed metadata and
+unknown target fields. The caller must retain its claim before dispatch and
+reconcile uncertain outcomes; transport success does not prove the edit or
+preservation. This qualification interface grants no Desk write or production
+revision authority. Current manual handoff and approval requirements remain in
+force until owner integration and native postconditions are qualified. See
+[ADR-120](../adrs/120_native_text_copy_qualification.md).

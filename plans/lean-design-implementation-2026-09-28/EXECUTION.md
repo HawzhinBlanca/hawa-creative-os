@@ -15,7 +15,7 @@ No package is complete merely because a smaller test passes.
 | 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty, reviewed-copy handoff and automatic linked-revision owner recovery locally qualified; actual native preservation and initial manual intake open | ADR-108/113/114; CANVA_UNCERTAINTY_PROOF.json; NATIVE_REVISION_HANDOFF_PROOF.json; LIFECYCLE_NATIVE_RECOVERY_PROOF.json |
 | 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs and Unicode lexical exemplar baseline locally qualified; authorized visual order, multilingual semantic retrieval and human comparison open | ADR-109/115; CREATIVE_HANDOFF_PROOF.json; UNICODE_RETRIEVAL_PROOF.json |
 | 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results, visual input pins and font basis locally qualified; mandatory text evidence and shared fallback measurement locally qualified; native text qualification, branch checkpoints, renderer/cutout runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112/116/117/118; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json; FALLBACK_MEASUREMENT_PROOF.json |
-| 4 | Amend/Adapt routing and actual Canva account capability qualification | Open | Official documentation is not account admission |
+| 4 | Amend/Adapt routing and actual Canva account capability qualification | In progress: scoped observation and typed text-copy transport locally qualified; actual preservation, owner integration and routing open | ADR-119/120; NATIVE_OBSERVATION_PROOF.json; NATIVE_TEXT_COPY_TRANSPORT_PROOF.json; official documentation is not account admission |
 | 5 | Relationship-led composition, calibrated selection, governed edit learning and equal-budget human comparisons | Open | Existing R04–R06/R13/R22–R25 study machinery must be reused |
 | 6 | Complete supervised native review/delivery, release qualification and independent recovery | Open | Prior qualification remains scoped to its own candidate |
 
@@ -385,3 +385,26 @@ and actual qualification of a named-field disposable fixture with protected manu
 changes, readback, reopen/export and uncertainty handling. Independent visual-judge
 qualification identified in the latest research remains in package5; all six
 packages and whole-goal completion remain active.
+
+## 2026-09-28 — Native text copy transport checkpoint
+
+ADR-120 adds typed text-only autofill copy creation and exact-job readback to the
+existing Canva client. It preserves exact requested strings, validates own observed
+field names/types and bounded UTF-8 payloads, freezes the dispatched source basis,
+and retains only validated metadata/error codes. Wrong result kinds, same-source
+copies and mismatched jobs refuse. Existing bounded retry repeats definite
+throttling/pre-send failures; 5xx, lost replies and malformed successes remain
+uncertain without resubmission.
+
+Initial red: 15 missing-method failures. Final six adapter files: 70 passed,
+zero failed/skipped. Source/scripts and all 532 strict test roots compile; any
+ratchet, provider egress and security checks pass. See
+NATIVE_TEXT_COPY_TRANSPORT_PROOF.json for hashes, exact scope and logs.
+
+This is a local transport checkpoint, not native operation admission. The prepared
+synthetic fixture draft still needs the editing interface's explicit preview
+approval before commit. Actual amendment/export/reopen/preservation, owner-scoped
+operation ledger and routing, human review and full release/independent recovery
+remain open. No native mutation, paid call or deployment occurred in this checkpoint.
+The full six-package objective remains active. Independent next work can proceed
+on the owner operation contract and judge experiment while that approval is pending.
