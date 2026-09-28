@@ -1051,8 +1051,10 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         return (await taskState(task.id)) === 'human_review' && r?.stage === 'in_review';
       }, 240_000, 2000);
       const approved = await approve(task.id);
+      events.push(`task ${task.id}: approve HTTP ${approved.status}`);
+      if (approved.status >= 300) throw new Error(`approval of ${task.id} refused: HTTP ${approved.status} ${JSON.stringify(approved.body).slice(0, 300)}`);
       const delivered = await deliver(task.id);
-      events.push(`task ${task.id}: approve HTTP ${approved.status}, deliver HTTP ${delivered.status}`);
+      events.push(`task ${task.id}: deliver HTTP ${delivered.status}`);
     }
     await waitUntil('both deliveries', async () => (await Promise.all(tasks.map((t) => taskState(t.id)))).every((s) => s === 'complete'), 300_000, 2000);
     const requests = await query<{ request_id: string; owner: string; stage: string }>(sql`SELECT request_id::text, owner, stage FROM hawa.requests WHERE chat_id = ${chat}`);
@@ -1061,6 +1063,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     const pubs = await query<{ task_id: string; state: string; executor: string }>(sql`SELECT task_id::text, state::text AS state, executor FROM hawa.publications
       WHERE task_id = ANY(${tasks.map((t) => t.id)}::uuid[])`);
     const docs = (await sentTo(chat)).filter((s) => s.method === 'sendDocument');
+    // The files the office pinned at each approval (the Desk pins the QA-checked export beside the PNG).
+    const pinned = await query<{ n: number }>(sql`SELECT coalesce(sum(jsonb_array_length(decision_payload->'pinnedExports')), 0)::int AS n
+      FROM hawa.approvals WHERE task_id = ANY(${tasks.map((t) => t.id)}::uuid[]) AND decision = 'approved'`);
     const ledger = ((await fakes.modelLedger()).ledger as any[]).filter((l) => l.seq > ledgerSince && l.status === 200 && l.route !== 'billing-probe');
     const twice = [...ledger.reduce((m, l) => m.set(l.fingerprint, (m.get(l.fingerprint) || 0) + 1), new Map<string, number>())].filter(([, n]) => n > 1);
     const kurdish = /[\u0600-\u06FF]/;
@@ -1071,7 +1076,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         scripts.filter((t) => /Kurdish copy only/.test(t.copy ?? '') && kurdish.test((t.copy ?? '').split(/_{3,}/)[1] ?? '')).length === 1,
         detail: JSON.stringify(scripts.map((t) => ({ id: t.id.slice(0, 8), en: /English copy only/.test(t.copy ?? ''), ckb: /Kurdish copy only/.test(t.copy ?? '') }))) },
       { name: 'each request delivered once by its Delivery workflow', ok: pubs.length === 2 && pubs.every((p) => p.state === 'complete' && p.executor === 'restate'), detail: JSON.stringify(pubs) },
-      { name: 'the requester has both approved files, each once', ok: docs.length === 2 && new Set(docs.map((d) => d.documentSha256)).size === 2, detail: `documents=${docs.length}` },
+      { name: 'the requester has every approved file of both designs, each once', ok: docs.length === Number(pinned[0]?.n) && docs.length >= 2 &&
+        new Set(docs.map((d) => d.documentSha256)).size === docs.length, detail: `documents=${docs.length} pinned=${pinned[0]?.n}` },
       { name: 'no paid call runs twice', ok: twice.length === 0, detail: twice.length ? JSON.stringify(twice) : `${ledger.length} paid calls` },
       ...(await onePlannerCallEach(tasks.map((t) => t.id))),
     ] };

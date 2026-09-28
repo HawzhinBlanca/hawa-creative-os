@@ -25,6 +25,7 @@ No migration: the decision is an existing `inbox_events` row with one more field
 
 - The requester gets two acknowledgements and two drafts, as with legacy intake; the office reviews, approves and delivers each.
 - Each request counts against the daily limits and spending allowance on its own.
+- FR-004 ("no more than one task" per source event) reads, for this brief shape only, as one task per language, as it did on legacy intake: the one recorded decision names both, and a repeated event makes neither again.
 - Replies to one of the two waiting requests must be Telegram replies to that request's notice.
 
 ## 4. Verification

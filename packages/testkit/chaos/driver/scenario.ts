@@ -172,7 +172,11 @@ export async function approve(taskId: string, options: { pinDeck?: boolean } = {
   // The Desk sends each decision with its own action key; a request-owned task requires one.
   const res = await fakes.core(`/tasks/${taskId}/revisions/${task.rev}/decisions`, token, {
     headers: { 'Idempotency-Key': randomUUID() },
-    body: { action: 'approve', reason: 'Brand, hierarchy, and exact-copy verified', pinnedExportIds: [...new Set([png?.id, checked?.id, deck?.id].filter(Boolean))] },
+    body: { action: 'approve', reason: 'Brand, hierarchy, and exact-copy verified', pinnedExportIds: [...new Set([png?.id, checked?.id, deck?.id].filter(Boolean))],
+      // Kurdish or Arabic copy needs the reviewer's confirmation of the checked export, as the Desk
+      // sends it (WorkScreen.tsx) with the PNG pinned: first needed by R1.BL (ADR-139).
+      ...(qa?.rtlVisualReviewRequired === true && typeof qa.exportSha256 === 'string'
+        ? { rtlVisualReview: { confirmed: true, exportSha256: qa.exportSha256 } } : {}) },
   });
   return { status: res.status, body: res.json };
 }
