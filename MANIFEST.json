@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T23:52:23Z",
+  "generatedAt": "2026-09-28T23:57:37Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 518,
+  "fileCount": 522,
   "files": [
     {
       "path": ".dockerignore",
@@ -31,6 +31,26 @@
       "path": ".github/workflows/ci.yml",
       "sha256": "dfef4edb419a6a2ab67151c98306ea1dd8cc7e8c5176cc6c5b0d556c9f97d7d1",
       "bytes": 6283
+    },
+    {
+      "path": ".pytest_cache/.gitignore",
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
+      "bytes": 37
+    },
+    {
+      "path": ".pytest_cache/CACHEDIR.TAG",
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
+      "bytes": 191
+    },
+    {
+      "path": ".pytest_cache/README.md",
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
+      "bytes": 302
+    },
+    {
+      "path": ".pytest_cache/v/cache/nodeids",
+      "sha256": "96e2286dd4eccf949d6c287a6f5c0979259f2ba46e0b290f605470f02e2b0af1",
+      "bytes": 4044
     },
     {
       "path": "AGENTS.md",
@@ -69,7 +89,7 @@
     },
     {
       "path": "RELEASE_MANIFEST.json",
-      "sha256": "3d5698868510886e63e4f3eba6dcf3520e1152f667bddfa3d80dd4c3c5d9b638",
+      "sha256": "c4157ec3979622b971a5954d87a92e6da3fba8d7a6da31a2c76d45464ef2da12",
       "bytes": 3977
     },
     {

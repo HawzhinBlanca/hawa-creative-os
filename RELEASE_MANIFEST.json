@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-29T00:12:20+03:00",
+  "generatedAt": "2026-09-29T02:52:47+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "5038a648bb0d8b615ce449b2e584624c94e5f663",
+    "commit": "2b5d4b8ba04e9804c4412e247788cdfc1317aba9",
     "treeClean": true,
-    "commitTimestamp": "2026-09-29T00:12:20+03:00",
+    "commitTimestamp": "2026-09-29T02:52:47+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "f8f21e9fff8a417085ab97cde04e3385147552ff92feea3b503d73d88b76b45f",
+        "apps/core/src/app.ts": "ab01b63090c4b9072d38bea9f3382034e4bdbfad508a34142c23606d8607c542",
         "apps/core/src/index.ts": "6950c3318ab08ddfd7e455bd09c460262572a82e7767dd2afd8e39448635a2e5",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -73,7 +73,7 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "db5b1932ae95c461840864039aefbeaab847b55bb8042ea90671ce0c330c3e6a",
+      "apps/core/src/services/canva-design-planner.ts": "fd0445d25b6d31813b9dae01049745b6a6e9b06b80bd1344b73c169e693704ae",
       "packages/creative/src/studio/layout-generator-v3.ts": "81813207c7ae2327115e743254db2cf05242cc6cc4f1e85dd5672ee44908bccb",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "5ecf25768a864e8e7c1b243bfb6d9aa1c06c2cb8f544cc255d5e78fa9de4fddd",
       "packages/creative/src/studio/box-critique-v3.ts": "8584e3f9ced35d200c821c29250329e830b11760bec615b344e059d69dac76ec"
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "6f673401d1fdba13794fd6cfd70226d63111e0b938f2043a48bf5d61e0adadc0"
+  "sha256": "7d0752dac50e7e640ee7ccd00c2a34069212c5203e2464d76a3e1cdb5c83a3df"
 }
