@@ -21,13 +21,20 @@ paid layout call.
 
 ## Decision
 
-**One versioned negative-space policy.** `studio.negative-space` version `2026-09-28.1` holds the
-occupancy rules, both measure bands, the gap and bottom-void penalties and the pass score. The
+**One versioned negative-space policy.** `studio.negative-space` version `2026-09-28.2` holds the
+occupancy rules, both measure bands, the spans the gap and bottom void are measured from, the gap
+and bottom-void penalties and the pass score. The
 checker scores through it and records its id, version, digest and measure with every result. The
 generator's statement is rendered from the same record, including what the measure does not count
 (photographs and artwork). The numbers are the checker's existing calibration, so no accept or
 reject decision changes; a change of any number needs a new version, a new recorded digest and
-qualification of the decisions it moves. Whether that calibration reflects the owner's exemplars
+qualification of the decisions it moves. Version `2026-09-28.1` (on this branch only, never
+deployed) stated occupancy by measured lines but not that a text block spans its whole declared
+box for the gap and bottom void; `.2` records that and changes no number. Callers that supply the
+copy score measured lines, the measure the generator is told; the declared-box band is the
+fallback of the same policy when no copy is supplied (P01 exemplar scripts, the art gate without
+copy, the refinement gate called without metrics). The art gate now measures lines when the copy
+is supplied. Whether that calibration reflects the owner's exemplars
 remains the open question already recorded on the metric.
 
 **An executable brief contract.** Before the first layout call, a new or afresh-designed Studio run
@@ -49,8 +56,28 @@ identities it was built under. Each fact appears once, in one layer, with one au
 Element IDs are the renderer's (`text-copy-N`, `logo`, `photo-N`), independent of model role
 labels. Validation refuses a model proposal in the exact, protected or permitted layers, duplicate
 facts, unknown elements or relations, and choices outside the authorized list. The digest uses
-canonical JSON so it survives JSONB storage. On resume the recorded contract must be intact and
-equal to the rebuilt one, otherwise the run holds (`BRIEF_CONTRACT_CHANGED`) before the provider.
+canonical JSON so it survives JSONB storage.
+
+The copy authority is what the run lays out: copy the run recorded as its own
+(`stages.effectiveCopy`, including copy inherited from the design being revised when a directed
+edit fails and the revision is designed afresh), else the request's; anything else holds the run.
+Recording the contract is the laying-out stage's only mid-stage write. It leaves out
+`directedFailed`, so a resumed stage replays the failed edit its retained calls begin with, lays
+out the same copy and rebuilds the same contract; the afresh candidate slots are reserved once.
+The write is conditional on the run still laying out (`STUDIO_RUN_STATUS_CHANGED` otherwise).
+
+On resume the recorded contract must be intact. An identity digest covers every authority (copy,
+assets, client words and rules, proposals, elements, relations) and leaves out the policy
+identities and the measurement evidence (unmeasurable faces, unbreakable runs). A different
+identity holds the run (`BRIEF_CONTRACT_CHANGED`) before the provider. The same identity under a
+different policy version, font set or measurer is re-admitted: the contract is rebuilt under the
+current environment and the change is appended to `stages.briefContractReadmissions`, so a deploy
+does not hold every in-flight run. No operator path re-admits a changed identity; that run's
+authorities changed and it needs review.
+
+Every run that reaches laying out records `stages.policies`, the policy identity its layouts are
+asked for and scored by; a successful directed revision, which returns before the contract, is
+included.
 
 Disagreements are recorded with their resolution instead of being resolved silently: a reading
 order proposal that is not adopted, a no-imagery brief with client photos (photos kept), and a
@@ -65,6 +92,11 @@ the result unknown, never a conflict. Copy is never shrunk, omitted, split or re
 The layout call receives a compact rendering of the contract before the unchanged structured brief
 JSON, which is now labelled as proposals. No migration, provider call or dependency is added.
 
+Deploy note: the layout request now contains the rendered contract, so a run sitting in laying out
+with a retained layout call made before this change holds with `MODEL_STAGE_REPLAY_UNSAFE` on
+resume (no repeated charge). Directed revisions are held before any stage by ADR-113 today, so the
+directed resume path above is exercised only by stage-level fixtures.
+
 ## Acceptance
 
 Policy: pinned digest per version; passing interval derived from the scoring function and checked
@@ -75,6 +107,27 @@ and choices, legacy partial briefs, canonical digest. Screen: validator face set
 break opportunity and wide format negatives, Sorani, unmeasurable fonts. Core: real isolated
 PostgreSQL, runtime-role connection, contract recorded before the layout boundary, blocking stop
 with no layout or transport call, intact reuse and changed-contract hold.
+
+## Fix round — 2026-09-28
+
+Review found that an afresh-designed revision interrupted after its contract was written held for
+good: inherited copy was recorded as `source_copy`, `directedFailed` was persisted mid-stage, and
+the resumed stage laid out the request copy (`BRIEF_CONTRACT_CHANGED`). A real-PostgreSQL resume
+test with a synthetic transport reproduced it and also the inferred second half: without inherited
+copy the resumed layout call met the retained directed-edit call first
+(`MODEL_STAGE_REPLAY_UNSAFE`). On the base source the same resume failed the run on the unique
+candidate ordinal (the reviewer's in-memory repository does not enforce it). After the fix both
+cases replay all four retained calls with no transport and reach the layout boundary with the same
+copy and contract. The minor findings are fixed as described above (identity/evidence split with
+recorded re-admission, span semantics in `.2`, art gate measurement, `stages.policies`, conditional
+write); the generator statement now says text spans use the declared box.
+
+Fix-round evidence: the five changed test files first failed 8 of 51 (both resume cases, re-admission,
+conditional write, span semantics, art gate, identity digest, directed `stages.policies`); after the
+fix 51 passed. Affected Core/worker files: 48 files, 530 passed, 2 failed (the same two
+`studio-ledger.test.ts` cases). Affected package files: 37 files, 434 passed. The full suite: 537
+files, 4,477 passed, 9 failed, 60 skipped; the 9 are the same cases recorded above as reproducing on
+the base source. Types (538 strict test roots), any ratchet (954/1053), egress and security pass.
 
 ## Local qualification — 2026-09-28
 

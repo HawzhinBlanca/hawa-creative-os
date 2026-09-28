@@ -9,6 +9,7 @@ import {
 } from '../src/studio/negative-space-policy.js';
 import { computeNegativeSpace, evaluateDesignMetrics } from '../src/studio/design-metrics.js';
 import { buildLayoutV3SystemPrompt } from '../src/studio/layout-generator-v3.js';
+import { artGateMetricsV3 } from '../src/studio/art-generator-v3.js';
 import type { StudioLayoutV2 } from '../src/studio/layout-v2.js';
 
 /**
@@ -17,10 +18,12 @@ import type { StudioLayoutV2 } from '../src/studio/layout-v2.js';
  * definition now produces both the prompt statement and the score.
  */
 
-// Recorded when policy version 2026-09-28.1 was introduced. Changing any number, measure or
-// threshold changes this digest, so the policy version must change with it.
+// Recorded when each policy version was introduced. Changing any number, measure, threshold or
+// stated measurement semantics changes this digest, so the policy version must change with it.
+// 2026-09-28.1 existed only on the unmerged ADR-125 branch; .2 adds the span semantics (same numbers).
 const RECORDED_POLICY_DIGESTS: Record<string, string> = {
   '2026-09-28.1': '34666d51025648a2a502d20a417b47c76ee8615f1b1e3a5a3b3b05d548078b5e',
+  '2026-09-28.2': 'c9d2cbc0c0d68d02468f360e38c72331b7d3707b30c855cb1c592c0f84f8eb69',
 };
 
 /** The design-precision probe's layout: four one-line text boxes of 600x180 and a 200x100 logo. */
@@ -76,6 +79,30 @@ describe('one versioned negative-space policy (ADR-125)', () => {
     // The explicit measurement semantics, including what the measure does not count.
     expect(guidance).toMatch(/measured line count/);
     expect(guidance).toMatch(/Photographs and artwork are not counted/);
+  });
+
+  it('states the span semantics the gap and bottom void are measured with', () => {
+    expect(NEGATIVE_SPACE_POLICY.version).toBe('2026-09-28.2');
+    expect(NEGATIVE_SPACE_POLICY.spans).toEqual({ text: 'declared_box_height', logo: 'box', shape: 'box_at_least_min_height_except_rules', photosAndArt: 'not_counted' });
+    // Occupancy counts the lines a block sets; the gap and the bottom void use its whole declared box.
+    // The logo sits inside the first text span, so it adds no gap of its own.
+    const layout: StudioLayoutV2 = { ...probeLayout(), logo: { x: 820, y: 0, width: 150, height: 100 }, text: [
+      { ...probeLayout().text[0], y: 0, height: 400 },
+      { ...probeLayout().text[1], y: 500, height: 100 },
+    ] };
+    const result = computeNegativeSpace(layout, { 0: 1, 1: 1 });
+    expect(result.details).toMatchObject({ internalGapFraction: 0.1, bottomVoid: 0.4, measure: 'measured_lines' });
+    const guidance = negativeSpacePromptGuidance();
+    expect(guidance).toMatch(/each text box counts at its full declared height/);
+    expect(guidance).not.toMatch(/between consecutive content blocks \(text, logo/);
+  });
+
+  it('gates art on the measured-lines definition whenever the copy is supplied', () => {
+    const layout = probeLayout();
+    const copyText = ['One', 'Two', 'Three', 'Four'];
+    expect(artGateMetricsV3(layout, { copyText }).metrics.negativeSpace.details).toMatchObject({ measure: 'measured_lines' });
+    // Without copy only the declared-box fallback band of the same policy can apply.
+    expect(artGateMetricsV3(layout).metrics.negativeSpace.details).toMatchObject({ measure: 'declared_boxes' });
   });
 
   it('scores through the policy and records the definition with every result', () => {

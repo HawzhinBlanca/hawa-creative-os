@@ -2,7 +2,7 @@ import { useMemoryVisualInputs } from '../test-support/studio-visual-input-fixtu
 import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { NEUTRAL_STYLE_SPEC, evaluateHardQa, OpenAiModelTimeoutError, OpenAiModelHttpError, type StudioLayoutV2 } from '@hawa/creative';
+import { NEUTRAL_STYLE_SPEC, negativeSpacePolicyIdentity, evaluateHardQa, OpenAiModelTimeoutError, OpenAiModelHttpError, type StudioLayoutV2 } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { carryOver, changesWithin, changesShown, dropUnreadableAccents, isModelTransportError } from '../src/services/design-studio/stages/edit.stage.js';
 import { hardQaContextFor } from '../src/services/design-studio/stages/v3.stage.js';
@@ -137,6 +137,15 @@ describe('a revision edits the design the client received', () => {
 
     const note = studioStatusNote({ run: { stages: JSON.parse(run.stages), winner_candidate_id: candidateId.value }, candidates: [{ id: candidateId.value, layouts: saved.layouts }] });
     expect(note).toContain('your change made to the same design (logo top-left)');
+  });
+
+  it('records the negative-space policy identity on a revision that never reaches the brief contract (ADR-125)', async () => {
+    const { service, run } = harness();
+    await service.resume(scope, run.task_id, run.id);
+    expect((await service.resume(scope, run.task_id, run.id)).status).toBe('qa');
+    const stages = JSON.parse(run.stages);
+    expect(stages.briefContract).toBeUndefined();
+    expect(stages.policies).toEqual([negativeSpacePolicyIdentity()]);
   });
 
   it('designs the revision afresh when the change cannot be made to the design as it stands', async () => {

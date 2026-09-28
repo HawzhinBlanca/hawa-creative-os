@@ -15,6 +15,11 @@ export class StudioBriefContractError extends Error {
   readonly code = 'BRIEF_CONTRACT_CHANGED';
 }
 
+/** The run moved on (another process ended or advanced it) before its contract was recorded. */
+export class StudioRunStatusChangedError extends Error {
+  readonly code = 'STUDIO_RUN_STATUS_CHANGED';
+}
+
 /**
  * The run's executable brief contract (ADR-125), from its own authorities: the copy the run
  * renders, the pinned client assets, the client's words and rules, the model brief as proposals,

@@ -358,6 +358,8 @@ export class DesignStudioRepository {
       diagnostic?: string | null;
       budget?: Record<string, unknown>;
       stages?: Record<string, unknown> | Record<string, unknown>[];
+      /** Write only if the run is still at this status; otherwise nothing is written and undefined is returned. */
+      expectedStatus?: DesignStudioStatus;
     },
     trx?: Kysely<Database>
   ) {
@@ -373,13 +375,13 @@ export class DesignStudioRepository {
       if (extra?.budget !== undefined) updates.budget = JSON.stringify(extra.budget);
       if (extra?.stages !== undefined) updates.stages = JSON.stringify(extra.stages);
 
-      const [row] = await client
+      let query = client
         .updateTable('design_studio_runs')
         .set(updates)
         .where('id', '=', id)
-        .where('tenant_id', '=', tenantId)
-        .returningAll()
-        .execute();
+        .where('tenant_id', '=', tenantId);
+      if (extra?.expectedStatus !== undefined) query = query.where('status', '=', extra.expectedStatus);
+      const [row] = await query.returningAll().execute();
       return row;
     });
   }

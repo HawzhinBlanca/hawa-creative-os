@@ -19,7 +19,7 @@ interface Band { floor: number; rampEnd: number; plateauEnd: number; taperEnd: n
 
 export const NEGATIVE_SPACE_POLICY = Object.freeze({
   id: 'studio.negative-space',
-  version: '2026-09-28.1',
+  version: '2026-09-28.2',
   /** fraction = 1 - occupied area / canvas area, clamped to 0..1. */
   occupancy: Object.freeze({
     /** measured_lines: width x min(box height, measured line count x fontSize x lineHeight). */
@@ -40,6 +40,12 @@ export const NEGATIVE_SPACE_POLICY = Object.freeze({
     declared_boxes: Object.freeze({ floor: 0.25, rampEnd: 0.30, plateauEnd: 0.60, taperEnd: 0.65 }),
   }),
   scores: Object.freeze({ belowFloorMax: 0.5, rampStart: 0.75, plateau: 0.95, taperDrop: 0.25, beyondTaper: 0.68, beyondTaperSpan: 0.15 }),
+  /**
+   * The content spans the internal gap and the bottom void are measured from. Unlike occupancy,
+   * a text block spans its whole declared box, not the lines it sets. Added in 2026-09-28.2; the
+   * scoring was already this, and no number changed.
+   */
+  spans: Object.freeze({ text: 'declared_box_height', logo: 'box', shape: 'box_at_least_min_height_except_rules', photosAndArt: 'not_counted' }),
   /** Largest vertical gap between consecutive content spans, as a share of canvas height. */
   internalGap: Object.freeze({ penaltyAbove: 0.22, penalty: 0.35, per: 0.10, spanMinHeightPx: 20, rulesAreSpans: false }),
   /** Canvas height below the lowest content span. */
@@ -122,9 +128,11 @@ export function negativeSpacePromptGuidance(measure: NegativeSpaceMeasure = 'mea
       `and other shapes at ${p.occupancy.otherShapeWeight} of their area. A border or background-coloured frame covering ${p.occupancy.canvasFrameShare * 100}% ` +
       `of the canvas is not content. Photographs and artwork are not counted.`,
     `  * Passing range ${f(pass.min)}-${f(pass.max)}; preferred ${f(band.rampEnd)}-${f(band.plateauEnd)}. Fuller than ${f(pass.min)} or emptier than ${f(pass.max)} fails.`,
-    `  * The largest vertical gap between consecutive content blocks (text, logo, and shapes at least ${p.internalGap.spanMinHeightPx}px tall other than rules) ` +
-      `is penalised above ${f(limits.internalGap.penaltyAbove)} of canvas height and fails alone above ${f(limits.internalGap.failsAbove)}.`,
-    `  * Space below the lowest content block is penalised above ${f(limits.bottomVoid.penaltyAbove)} of canvas height and fails alone above ${f(limits.bottomVoid.failsAbove)}.`,
+    `  * Gaps are measured between content spans: each text box counts at its full declared height (not the lines it sets), ` +
+      `the logo box, and shapes at least ${p.internalGap.spanMinHeightPx}px tall other than rules; photographs and artwork are not spans.`,
+    `  * The largest vertical gap between consecutive spans is penalised above ${f(limits.internalGap.penaltyAbove)} of canvas height ` +
+      `and fails alone above ${f(limits.internalGap.failsAbove)}.`,
+    `  * Space below the lowest span is penalised above ${f(limits.bottomVoid.penaltyAbove)} of canvas height and fails alone above ${f(limits.bottomVoid.failsAbove)}.`,
     `  * Group related elements (title + subtitle, body paragraphs, statutory footer) with intentional proximity.`,
   ].join('\n');
 }

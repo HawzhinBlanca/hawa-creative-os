@@ -10,6 +10,7 @@ import {
   blockingBriefConflicts,
   renderBriefContractForPrompt,
   canonicalJson,
+  briefContractIdentitySha256,
   type BriefContractInput,
 } from '../src/brief-contract.js';
 
@@ -156,6 +157,34 @@ describe('executable brief contract (ADR-125)', () => {
     const changed = buildBriefContract(input({ copy: [{ text: 'Workshop on quality assurance.', script: 'latin' }, input().copy[1]] }));
     expect(changed.sha256).not.toBe(a.sha256);
     expect(verifyBriefContractIntegrity({ ...a, policies: [{ ...policy, version: '2026-09-29.1' }] })).toBe(false);
+  });
+
+  it('separates the run authorities from evidence that depends on fonts, measurer and policy versions', () => {
+    const fit = (status: 'fits' | 'exceeds_safe_width' | 'unknown', narrowestPx?: number) => ({ version: 'copy-feasibility.v1', safeWidthPx: 952, minimumFontPx: 12,
+      blocks: [{ copyIndex: 1, status, ...(narrowestPx ? { narrowestPx, family: 'Amiri' } : {}), measuredFaces: status === 'unknown' ? 0 : 4,
+        unmeasured: status === 'unknown' ? ['Amiri:FONT_UNAVAILABLE'] : [] }] });
+    const recorded = buildBriefContract(input({ copyFeasibility: fit('fits', 400) }));
+    const identity = briefContractIdentitySha256(recorded);
+    expect(identity).toMatch(/^[0-9a-f]{64}$/);
+    // A new policy version, a font that is now unmeasurable, or a measurer that now finds an
+    // unbreakable run changes the evidence (and the full digest) but not whose facts these are.
+    for (const env of [
+      input({ copyFeasibility: fit('fits', 400), policies: [{ ...policy, version: '2026-09-28.2', sha256: 'd'.repeat(64) }] }),
+      input({ copyFeasibility: fit('unknown') }),
+      input({ copyFeasibility: fit('exceeds_safe_width', 1301) }),
+    ]) {
+      const rebuilt = buildBriefContract(env);
+      expect(rebuilt.sha256).not.toBe(recorded.sha256);
+      expect(briefContractIdentitySha256(rebuilt)).toBe(identity);
+    }
+    // A change of any authority is a different contract.
+    for (const changed of [
+      input({ copyFeasibility: fit('fits', 400), copy: [input().copy[0], { text: 'ڕێکەوتی ١٣ی تشرین', script: 'arabic' }] }),
+      input({ copyFeasibility: fit('fits', 400), copyAuthority: 'run_effective_copy' }),
+      input({ copyFeasibility: fit('fits', 400), logo: { sha256: 'e'.repeat(64) } }),
+      input({ copyFeasibility: fit('fits', 400), clientRules: '1. Logo top left.' }),
+      input({ copyFeasibility: fit('fits', 400), brief: { ...input().brief, readingOrder: [0, 1] } }),
+    ]) expect(briefContractIdentitySha256(buildBriefContract(changed))).not.toBe(identity);
   });
 
   it('builds from a legacy partial brief without inventing proposals', () => {

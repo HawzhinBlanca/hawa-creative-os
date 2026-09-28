@@ -290,6 +290,31 @@ export function verifyBriefContractIntegrity(contract: ExecutableBriefContract):
   return bodyDigest(body) === recorded;
 }
 
+/**
+ * Items and conflicts that record measurement evidence rather than a run authority: whether a
+ * face could be measured, and whether a run of copy exceeds the safe width at the minimum size.
+ * They depend on the installed fonts and the measurer, as the policy identities depend on the
+ * deployed policy version.
+ */
+const MEASURED_ITEM_PREFIX = 'unknown/fit/';
+const MEASURED_CONFLICT_CODES = ['COPY_UNBREAKABLE_AT_MINIMUM_SIZE'];
+
+/**
+ * The digest of whose facts these are: copy, assets, client words and rules, model proposals,
+ * elements and relations. It leaves out the policy identities and the measurement evidence, so a
+ * new policy version, font set or measurer changes the full digest but not this one. A resumed run
+ * whose identity still matches is re-screened under the current environment, and the change is
+ * recorded; one whose identity differs is holding a different brief (ADR-125).
+ */
+export function briefContractIdentitySha256(contract: ExecutableBriefContract): string {
+  const { sha256: _sha, policies: _policies, items, conflicts, ...rest } = contract;
+  return sha256(canonicalJson({
+    ...rest,
+    items: items.filter((i) => !i.id.startsWith(MEASURED_ITEM_PREFIX)),
+    conflicts: conflicts.filter((c) => !MEASURED_CONFLICT_CODES.includes(c.code)),
+  }));
+}
+
 export function blockingBriefConflicts(contract: ExecutableBriefContract): BriefContractConflict[] {
   return contract.conflicts.filter((c) => c.blocking);
 }

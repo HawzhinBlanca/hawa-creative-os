@@ -257,6 +257,9 @@ export const REPAIR_JSON_SCHEMA = {
 
 /**
  * Gate check: A candidate is refined ONLY if it fails a P01 metric or scores below the calibrated band (0.850).
+ * Pass the metrics measured with the copy (refineCandidateV3 does): without them negative space is
+ * scored on declared boxes, the no-copy fallback band of the policy, not the measure the layout
+ * generator is told (ADR-125).
  */
 export function checkRefinementGate(
   layout: StudioLayoutV2,

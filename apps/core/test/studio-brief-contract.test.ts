@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext, DesignStudioRepository, StudioVisualInputsError } from '@hawa/db';
 import { renderMotifPng, negativeSpacePolicyIdentity } from '@hawa/creative';
-import { BRIEF_CONTRACT_VERSION, buildBriefContract, renderBriefContractForPrompt } from '@hawa/domain';
+import { BRIEF_CONTRACT_VERSION, buildBriefContract, briefContractIdentitySha256, canonicalJson, renderBriefContractForPrompt } from '@hawa/domain';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { PhotoCutouts } from '../src/services/design-studio/photo-cutouts.js';
 import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
@@ -120,5 +120,63 @@ describe.skipIf(!url)('Studio records one executable brief contract before layou
     await expect(f.svc.resume(scope, taskId, runId)).rejects.toMatchObject({ code: 'BRIEF_CONTRACT_CHANGED' });
     expect(boundary.layout).toHaveBeenCalledTimes(2); expect(f.fetcher).not.toHaveBeenCalled();
     expect((await storedStages()).run?.status).toBe('laying_out');
+  });
+
+  /** A recorded contract with a valid digest over a changed body (as a genuine earlier build would have). */
+  const redigested = (contract: ReturnType<typeof buildBriefContract>): ReturnType<typeof buildBriefContract> => {
+    const { sha256: _old, ...body } = contract;
+    return { ...body, sha256: hash(canonicalJson(body)) } as ReturnType<typeof buildBriefContract>;
+  };
+
+  it('re-admits an intact contract whose environment evidence changed, and records the re-admission', async () => {
+    await createRun([{ text: 'Exact workshop title', script: 'latin' }]);
+    await expect(service().svc.resume(scope, taskId, runId)).rejects.toMatchObject({ code: 'STUDIO_VISUAL_INPUTS_UNSAFE' });
+    const current = (await storedStages()).stages.briefContract;
+    // Recorded under an earlier policy version, when a face could not be measured.
+    const earlier = redigested({ ...current, policies: [{ ...current.policies[0], version: '2026-09-27.9', sha256: 'f'.repeat(64) }],
+      items: [...current.items, { id: 'unknown/fit/text-copy-0', layer: 'unknown', authority: 'house_policy', subject: ['text-copy-0'],
+        value: { version: 'copy-feasibility.v1', unmeasured: ['Cinzel:FONT_UNAVAILABLE'] }, enforcedBy: ['COPY_UNMEASURED'] }] });
+    expect(briefContractIdentitySha256(earlier)).toBe(briefContractIdentitySha256(current));
+    const { stages } = await storedStages();
+    await runs.updateRunStatus(runId, scope.tenantId, 'laying_out', { stages: { ...stages, briefContract: earlier } });
+    const f = service();
+    await expect(f.svc.resume(scope, taskId, runId)).rejects.toMatchObject({ code: 'STUDIO_VISUAL_INPUTS_UNSAFE' });
+    expect(boundary.layout).toHaveBeenCalledTimes(2); expect(f.fetcher).not.toHaveBeenCalled();
+    const after = (await storedStages()).stages;
+    expect(after.briefContract).toEqual(current);
+    expect((boundary.layout.mock.calls[1][0] as StageContext).briefContract).toEqual(current);
+    expect(after.briefContractReadmissions).toEqual([expect.objectContaining({ previousSha256: earlier.sha256, sha256: current.sha256,
+      identitySha256: briefContractIdentitySha256(current), previousPolicies: earlier.policies, policies: current.policies })]);
+  });
+
+  it('holds an intact contract whose authorities differ from the run, before the provider', async () => {
+    await createRun([{ text: 'Exact workshop title', script: 'latin' }]);
+    await expect(service().svc.resume(scope, taskId, runId)).rejects.toMatchObject({ code: 'STUDIO_VISUAL_INPUTS_UNSAFE' });
+    const { stages } = await storedStages();
+    const other = redigested({ ...stages.briefContract, items: stages.briefContract.items.map((i: { id: string; value?: Record<string, unknown> }) =>
+      i.id === 'content/text-copy-0' ? { ...i, value: { ...i.value, sha256: hash('A different title') } } : i) });
+    await runs.updateRunStatus(runId, scope.tenantId, 'laying_out', { stages: { ...stages, briefContract: other } });
+    const f = service();
+    await expect(f.svc.resume(scope, taskId, runId)).rejects.toMatchObject({ code: 'BRIEF_CONTRACT_CHANGED' });
+    expect(boundary.layout).toHaveBeenCalledTimes(1); expect(f.fetcher).not.toHaveBeenCalled();
+    expect((await storedStages()).stages.briefContract).toEqual(other);
+  });
+
+  it('records the contract only while the run is still laying out', async () => {
+    await createRun([{ text: 'Exact workshop title', script: 'latin' }]);
+    const f = service();
+    const repo = (f.svc as unknown as { repo: DesignStudioRepository }).repo;
+    const original = repo.updateRunStatus.bind(repo);
+    vi.spyOn(repo, 'updateRunStatus').mockImplementation(async (...args) => {
+      const extra = args[3] as { stages?: Record<string, unknown> } | undefined;
+      // Another process ends the run between this resume's read and its contract write.
+      if (extra?.stages?.briefContract && args[2] === 'laying_out') await original(runId, scope.tenantId, 'failed', { diagnostic: 'Stopped by another process' });
+      return original(...args);
+    });
+    await expect(f.svc.resume(scope, taskId, runId)).rejects.toMatchObject({ code: 'STUDIO_RUN_STATUS_CHANGED' });
+    expect(boundary.layout).not.toHaveBeenCalled(); expect(f.fetcher).not.toHaveBeenCalled();
+    const { run, stages } = await storedStages();
+    expect(run?.status).toBe('failed'); expect(run?.diagnostic).toBe('Stopped by another process');
+    expect(stages.briefContract).toBeUndefined();
   });
 });
