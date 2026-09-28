@@ -3,11 +3,31 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { blobStoreFromEnv,createDb,sql } from '@hawa/db';
-import { CanvaDesignPlanner,savedDesignCopy } from '../src/services/canva-design-planner.js';
+import { CanvaDesignPlanner,planningRetryAfterMs,planningSlotsFrom,savedDesignCopy,DEFAULT_PLANNING_SLOTS,STALE_PLANNING_MS } from '../src/services/canva-design-planner.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { checkCanvaPptx } from '@hawa/qa';
 
+describe('planning slot policy',()=>{
+  it('reads the slot count from HAWA_CANVA_PLANNING_SLOTS, a whole number from 1 to 16',()=>{
+    expect(planningSlotsFrom({})).toBe(DEFAULT_PLANNING_SLOTS);
+    expect(planningSlotsFrom({HAWA_CANVA_PLANNING_SLOTS:'4'})).toBe(4);
+    for(const bad of ['0','17','2.5','-1','many',''])expect(planningSlotsFrom({HAWA_CANVA_PLANNING_SLOTS:bad})).toBe(DEFAULT_PLANNING_SLOTS);
+  });
+  it('names the time until the oldest plan should finish, from 2 to 15 seconds',()=>{
+    expect(planningRetryAfterMs(5000,20000)).toBe(15000);
+    expect(planningRetryAfterMs(12000,20000)).toBe(8000);
+    expect(planningRetryAfterMs(19500,20000)).toBe(2000);
+    // Running longer than a plan usually takes: come back soon, not never.
+    expect(planningRetryAfterMs(60000,20000)).toBe(2000);
+  });
+  it('names the shortest wait when no finished plan tells how long one takes',()=>{
+    // A guess of 20 s held the second round of an empty office back 15 s after its slots had freed
+    // (chaos load test with instant plans, 2026-09-28).
+    expect(planningRetryAfterMs(0,null)).toBe(2000);
+    expect(planningRetryAfterMs(NaN,null)).toBe(2000);
+  });
+});
 describe('exact copy selection',()=>{
   it('keeps unfamiliar extra paragraphs and long headings; does not trust a lossy template parse',()=>{
     const heading='A VERY LONG HEADING '.repeat(8),raw=`Use navy.\n---\n${heading}\n\nUnexpected third speaker: J. Example\n\nDo not share.`;
@@ -310,7 +330,54 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(allPlans[0].status).toBe('abandoned');
     expect(allPlans[1].status).toBe('planned');
   });
+
+  /**
+   * Planning slots are office-wide. A brief beyond them is refused 429 PLANNING_BUSY and told when a
+   * slot should free (Retry-After), so the worker comes back then instead of doubling its sleep.
+   */
+  describe('planning slots',()=>{
+    const gate=()=>{let open!:()=>void;const opened=new Promise<void>(r=>{open=r;});return {open,fetcher:vi.fn(async()=>{await opened;return response();})};};
+    const planningRows=async()=>Number((await sql<any>`SELECT count(*) AS n FROM hawa.canva_design_plans WHERE tenant_id=${scope.tenantId}::uuid AND status='planning'`.execute(db)).rows[0].n);
+    const until=async(test:()=>Promise<boolean>)=>{for(let i=0;i<200&&!(await test());i++)await new Promise(r=>setTimeout(r,25));};
+    const withSlots=(fetcher:any,planningSlots:number)=>new CanvaDesignPlanner(db,{importEditableDesign:vi.fn().mockResolvedValue({operationId:randomUUID(),status:'submitted'})} as unknown as CanvaConnectService,{apiKey:'test-only',fetcher,planningSlots});
+
+    it('refuses a plan beyond the slots with PLANNING_BUSY and names when a slot should free',async()=>{
+      const held=gate(),planner=withSlots(held.fetcher,2);
+      const [a,b,c]=[await intake(),await intake(),await intake()];
+      const first=planner.generate(scope,a,'slot-key-a1',1200,1697),second=planner.generate(scope,b,'slot-key-b1',1200,1697);
+      await until(async()=>(await planningRows())>=2);
+      let refused:any;try{await planner.generate(scope,c,'slot-key-c1',1200,1697);}catch(e){refused=e;}
+      expect(refused).toMatchObject({status:429,code:'PLANNING_BUSY'});
+      expect(refused.retryAfterMs).toBeGreaterThanOrEqual(2000);expect(refused.retryAfterMs).toBeLessThanOrEqual(15000);
+      // The refused brief made no paid call and left no row: asked again once a slot frees, it plans.
+      expect(held.fetcher).toHaveBeenCalledTimes(2);
+      expect((await sql<any>`SELECT id FROM hawa.canva_design_plans WHERE task_id=${c}::uuid`.execute(db)).rows).toHaveLength(0);
+      held.open();await Promise.all([first,second]);
+      expect((await planner.generate(scope,c,'slot-key-c1',1200,1697)).status).toBe('submitted');
+    });
+
+    it('plans as many at once as it has slots',async()=>{
+      const held=gate(),planner=withSlots(held.fetcher,3);
+      const tasks=[await intake(),await intake(),await intake()];
+      const running=tasks.map((t,i)=>planner.generate(scope,t,'slot-key-three-'+i,1200,1697));
+      await until(async()=>(await planningRows())>=3);
+      expect(await planningRows()).toBe(3);
+      held.open();
+      expect((await Promise.all(running)).map(r=>r.status)).toEqual(['submitted','submitted','submitted']);
+    });
+
+    it('stops counting a plan left in planning past the model timeout, so a crash cannot hold a slot for ever',async()=>{
+      const held=gate(),planner=withSlots(held.fetcher,1);
+      const [a,b]=[await intake(),await intake()];
+      const orphan=planner.generate(scope,a,'slot-key-orphan',1200,1697);
+      await until(async()=>(await planningRows())>=1);
+      // As if Core had died mid-call: the row stays in planning and nothing will ever finish it.
+      await sql`UPDATE hawa.canva_design_plans SET created_at=now()-${STALE_PLANNING_MS+60000}*interval '1 millisecond',updated_at=now()-${STALE_PLANNING_MS+60000}*interval '1 millisecond' WHERE task_id=${a}::uuid AND status='planning'`.execute(db);
+      const next=planner.generate(scope,b,'slot-key-after-orphan',1200,1697);
+      await until(async()=>(await planningRows())>=2);
+      held.open();
+      expect((await next).status).toBe('submitted');
+      await orphan;
+    });
+  });
 });
-
-
-

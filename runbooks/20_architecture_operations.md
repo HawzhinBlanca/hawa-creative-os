@@ -497,7 +497,8 @@ What the numbers say:
   `/tasks/:id/canva`, `/tasks/:id/canva/plans` and `/integrations/canva/status`), plus 2 health
   reads. Three idle tabs make about 114 requests a minute. The panel is not on the query cache or the
   event stream yet.
-- **The draft tail is the planner's limit, not the poller.** Core plans at most two designs at a time
+- **The draft tail is the planner's limit, not the poller** (as measured on 2026-09-24; ADR-131 changed
+  both halves, see "Planning slots and plan time" below). Core plans at most two designs at a time
   for the whole office (`apps/core/src/services/canva-design-planner.ts`, `PLANNING_BUSY`, HTTP 429);
   the other workflows retry after 2, 4, 8 and 16 s, so ten briefs finish in pairs at about 5, 7, 11, 19
   and 35 s. The fakes plan instantly; with real model calls each pair takes longer and the tail grows
@@ -505,3 +506,44 @@ What the numbers say:
   about 100 ms).
 - **Restate is most of the memory** (about 610–650 MiB of the stack's ~1.1 GiB); Postgres doubles
   during the burst and falls back.
+
+### Planning slots and plan time (ADR-131)
+
+The fakes plan instantly, which hides how long a draft waits for a planning slot. `--plan-ms` makes
+every planner call take that long in the fakes (real calls took 23–47 s), and `--planning-slots` sets
+Core's `HAWA_CANVA_PLANNING_SLOTS` (left out, Core's default of 4). The result file's name carries
+both: `load-core-plan30000-slots2.json`.
+
+```sh
+# Ran on the chaos stack, 2026-09-28 11:19Z to 12:15Z (the "before" runs from a throwaway worktree of 4f5e995 with only this harness change).
+npx tsx scripts/load/run.ts --poller core --plan-ms 30000
+npx tsx scripts/load/run.ts --poller core --plan-ms 30000 --planning-slots 2
+npx tsx scripts/load/run.ts --poller core
+```
+
+Brief to first draft, 10 chats at once, from pickup (10 of 10 drafts, no errors, in every run):
+
+| Code | Plan call | Slots | p50 / p95 | Drafts shown at (s) |
+|---|---|---|---|---|
+| before ADR-131 | instant | 2 | 11.2 / 35.4 s | 5, 7, 11, 19, 35 (pairs) |
+| after | instant | 4 | 9.2 / 9.8 s | 5.3 ×4, 9.2 ×4, 9.8 ×2 |
+| before ADR-131 | 30 s | 2 | 125.4 / 245.6 s | 35, 65, 125, 185, 246 (pairs) |
+| after | 30 s | 2 | 97.6 / 161.9 s | 35, 65, 98, 130, 162 (pairs) |
+| after | 30 s | 4 | 65.8 / 97.8 s | 35.3 ×4, 65.8 ×4, 97.8 ×2 |
+| after | 30 s | 5 | 50.5 / 65.8 s | 35.1 ×5, 65.8 ×5 |
+
+- **The planning step no longer doubles its sleep.** Core answers a brief beyond the slots with
+  429 `PLANNING_BUSY` and `Retry-After` (until the oldest running plan should finish, 2–15 s), and the
+  workflow waits exactly that, journalled, for up to 15 minutes. Before, Restate's step retry waited
+  2, 4, 8, 16 and then 30 s, so rounds fell 30 s behind their free slots (125 → 185 → 246 s).
+- **Why 4 slots and not more:** every draft is imported and exported through the office's one Canva
+  connection, and Canva allows 20 exports a minute per user. A draft makes two, so 4 slots keep a
+  ten-brief burst to at most 16 exports in a minute, and 5 put all 20 into one. A Canva 429 that
+  outlasts the Canva client's short retry fails the draft. OpenAI's limits are not what binds.
+- **A plan left in `planning` by a Core that died mid-call** stops holding a slot after 3 minutes. It
+  used to hold one for ever.
+- **Core's memory** peaked at 131–157 MiB with 2, 4 or 5 plans in flight; the slot count is not what
+  sizes Core.
+- **A start can fail** at the first database login with `password authentication failed for user
+  "hawa_owner"` (2 of 11 starts on 2026-09-28). Run it again: it is a harness start-up flake, not a
+  finding.

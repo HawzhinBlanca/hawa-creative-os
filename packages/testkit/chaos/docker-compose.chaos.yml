@@ -207,6 +207,8 @@ services:
       <<: *app-environment
       PORT: 3001
       HAWA_CHAOS_SERVICE: core
+      # The load test's --planning-slots (scripts/load/run.ts); empty keeps Core's default.
+      HAWA_CANVA_PLANNING_SLOTS: ${HAWA_CANVA_PLANNING_SLOTS:-}
     volumes:
       - chaos_ca:/chaos-ca:ro
     networks: [chaos]
