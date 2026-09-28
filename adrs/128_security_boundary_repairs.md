@@ -14,9 +14,11 @@ is the administrator's in both directions, as POST /waha/kill-switch already was
 Telegram stays with operator, administrator and art director: the Desk and the
 nightly Restate backup (restate_nightly.py, art-director key first, then the
 bearer key, releasing with its pause's changeTag) keep working without change.
-/operations/kill-switch applies the same rule and answers only after PostgreSQL
-has the switch; it used to assign the in-memory copy and save in the background.
-A WhatsApp change there also sets WAHA_KILL_SWITCH, as the toggle does.
+/operations/kill-switch answers only after PostgreSQL has the switch; it used to
+assign the in-memory copy and save in the background. A WhatsApp change there also
+sets WAHA_KILL_SWITCH, as the toggle does. Merged with ADR-127 (the ported audit
+#17), that route is the administrator's for both channels: the office pauses and
+releases Telegram with the ingress toggle above, which the backup uses too.
 
 /v1/internal/* has one credential check. The Delivery routes take only what
 verifyRequestAuth maps to the service role, so serviceTokenOf's refusal of a

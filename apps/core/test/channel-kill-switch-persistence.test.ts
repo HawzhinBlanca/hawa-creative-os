@@ -379,7 +379,7 @@ describe('who may change which switch', () => {
     expect(process.env.WAHA_KILL_SWITCH).toBe('false');
   });
 
-  it('Telegram: the art director (the backup\'s credential) and the operator still pause and conditionally release it', async () => {
+  it('Telegram: the art director (the backup\'s credential) pauses and conditionally releases it with the toggle; /operations/kill-switch is the administrator\'s', async () => {
     const app = createApp({ db } as any);
     const paused = await ingressToggle(app, artDirector, 'telegram', { enabled: false });
     expect(paused.status).toBe(200);
@@ -388,16 +388,16 @@ describe('who may change which switch', () => {
     const released = await ingressToggle(app, artDirector, 'telegram', { enabled: true, expectedChangeTag: changeTag });
     expect(released.status).toBe(200);
     expect(await released.json()).toMatchObject({ channel: 'telegram', enabled: true, killSwitchActive: false });
-    const thrown = await opsSwitch(app, operator, 'telegram', true);
-    expect(thrown.status).toBe(200);
-    expect((await switchRow('telegram'))?.state).toBe('disabled');
-    expect((await opsSwitch(app, artDirector, 'telegram', false)).status).toBe(200);
+    // POST /operations/kill-switch stays the administrator's for both channels (ADR-127, audit #17):
+    // the office pauses intake with the toggle above, and the nightly backup uses the toggle too.
+    expect((await opsSwitch(app, operator, 'telegram', true)).status).toBe(403);
+    expect((await opsSwitch(app, artDirector, 'telegram', true)).status).toBe(403);
     expect((await switchRow('telegram'))?.state).not.toBe('disabled');
   });
 
   it('/operations/kill-switch refuses a non-office principal and an anonymous caller before changing anything', async () => {
     const client = createApp({ db, testAuth: { principal: { role: 'client' } } } as any);
-    expect((await client.request('/v1/operations/kill-switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'telegram', active: true }) })).status).toBe(403);
+    expect((await client.request('/v1/operations/kill-switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'telegram', active: true }) })).status).toBe(401);
     const anonymous = await createApp({ db } as any).request('/v1/operations/kill-switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'telegram', active: true }) });
     expect(anonymous.status).toBe(401);
     expect((await switchRow('telegram'))?.state ?? 'unknown').not.toBe('disabled');
