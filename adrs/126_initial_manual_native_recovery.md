@@ -30,7 +30,7 @@ uniqueness refuses a design already linked to another task. An owned capture nee
 a current confirmation. The confirmation is an immutable task event with its own
 schema (`initialNativeCopy`) and export policy kind (`initial_client_dna`).
 
-Migration 069 extends the policy-currency function: an initial policy is current
+Migration 066 extends the policy-currency function: an initial policy is current
 only for the latest human confirmation, its exact copy, the same binding version and
 design, the confirming request's ownership, and the active human-authored Client
 DNA. Once a task has an initial confirmation, other and policy-less captures cannot

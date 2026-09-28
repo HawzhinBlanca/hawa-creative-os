@@ -4,7 +4,7 @@
   "branch": "worktree-wf_82dde19f-6dc-4 (from codex/research-grade-design-system)",
   "status": "LOCAL_INITIAL_MANUAL_RECOVERY_QUALIFIED_NOT_NATIVE_OR_RELEASE",
   "adr": "126",
-  "migration": "069_initial_native_policy.sql",
+  "migration": "066_initial_native_policy.sql",
   "requirements": [
     "FR-029",
     "FR-041",
@@ -105,7 +105,7 @@
       "sha256": "74ee194c2d776bb28f055f0759413a7c928f80155974037e88c2c5b0a8ea3a43"
     },
     {
-      "path": "packages/db/migrations/069_initial_native_policy.sql",
+      "path": "packages/db/migrations/066_initial_native_policy.sql",
       "sha256": "7101f0304df878f8ba80b17ae2f08e7425839d1b11a4d15c9e3bf90250ca868d"
     },
     {
@@ -252,7 +252,7 @@
     "fresh restricted hawa_app connections replay the hash-bound receipt; conflicting body refused; one revision and one QA run",
     "stale confirmation, binding, task version, capture and disabled actor refused without advancing",
     "automatic, fallen-back automatic, stale header, later stage and run-bearing requests fenced with no remote call",
-    "migration 069 policy currency: new confirmation or binding change invalidates; policy-less and other-kind captures refused",
+    "migration 066 policy currency: new confirmation or binding change invalidates; policy-less and other-kind captures refused",
     "run-free owner state: approval and delivery start/finish at owner level; revise refused in owner and Core (rejection not separately exercised)",
     "exact old submission after approval and delivery replays without rewinding",
     "Desk initial variant and rev-1 retained submission across remount"
