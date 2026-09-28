@@ -75,8 +75,11 @@ refuse_stuck_legacy() {
 # Who asks Telegram for updates (Phase 2.1). Core and both worker colours read HAWA_TELEGRAM_POLLER from
 # compose. Step 7 used to recreate Core with a changed value before the worker colour that would take
 # over was built, started and registered, and any failure in between left nobody polling (ADR-129,
-# Phase 4 operations finding 1). Core now keeps the value it runs with until the new colour is
-# registered; a Core that does not exist yet starts polling itself.
+# Phase 4 operations finding 1). A move to the worker (core -> worker) is therefore held: Core keeps
+# polling until the new colour is registered. A move back to Core is not held: Core polls from step 7,
+# because the new colour, created with core, never polls, and once Restate routes ChatInbox to it the
+# old colour stops too. Two pollers at once cost nothing: Telegram refuses one of two concurrent
+# getUpdates (409), and an update both hand on is one ChatInbox invocation. Nobody polling loses time.
 # The value as Core and the worker read it (apps/core/src/services/telegram-poller-owner.ts).
 telegram_poller_of() {
   if [[ "$(tr -d '[:space:]' <<< "${1:-}" | tr '[:upper:]' '[:lower:]')" == worker ]]; then echo worker; else echo core; fi
@@ -87,9 +90,10 @@ running_core_poller() {
   env="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$CORE_CONTAINER" 2>/dev/null)" || return 0
   telegram_poller_of "$(sed -n 's/^HAWA_TELEGRAM_POLLER=//p' <<< "$env" | tail -1)"
 }
-# The value Core runs with until the new colour is registered: $1 is the wanted value, $2 the running one.
+# The value Core runs with until the new colour is registered: $1 is the wanted value, $2 the running
+# one (nothing when no Core container exists). Core stops polling only when it already runs with worker.
 core_poller_hold() {
-  if [[ -n "${2:-}" ]]; then echo "$2"; elif [[ "$1" == worker ]]; then echo core; else echo "$1"; fi
+  if [[ "$1" == worker && "${2:-}" == worker ]]; then echo worker; else echo core; fi
 }
 poller_owner_text() {
   if [[ "$1" == worker ]]; then echo "the live worker colour polls Telegram, Core does not"; else echo "Core polls Telegram, the worker does not"; fi
@@ -102,15 +106,51 @@ release_core_poller() {
   echo "✓ Core recreated with HAWA_TELEGRAM_POLLER=${CORE_POLLER_WANTED}: $(poller_owner_text "$CORE_POLLER_WANTED")"
 }
 # A deploy that stops after step 7 recreated Core says so, and who polls, whatever else it printed.
-CORE_RECREATED=0
+# Only Core's own value is known here; a worker colour polls when it was created with worker and
+# Restate routes ChatInbox to it (its LiveColourGate), so the note says that rather than name one.
+CORE_RECREATED=0; IDLE_KEPT=0
 report_poller_on_exit() {
   local rc=$?
   [[ $rc != 0 && $CORE_RECREATED == 1 ]] || return 0
-  if [[ "$CORE_POLLER_HOLD" != "$CORE_POLLER_WANTED" ]]; then
-    echo "NOTE: Core was recreated by this deploy with HAWA_TELEGRAM_POLLER=${CORE_POLLER_HOLD}, not ${CORE_POLLER_WANTED}: the switch waits for a registered worker colour, so $(poller_owner_text "$CORE_POLLER_HOLD"). Deploy again to apply it."
+  local note
+  if [[ "$CORE_POLLER_HOLD" == core ]]; then
+    note="Core polls Telegram (HAWA_TELEGRAM_POLLER=core)."
+    [[ "$CORE_POLLER_WANTED" == core ]] || note+=" The switch to worker waits for a registered worker colour; deploy again to apply it."
+    if [[ "$CORE_POLLER_WANTED" == worker && ${IDLE_KEPT:-0} == 1 ]]; then
+      note+=" The ${IDLE} colour was kept and was created with worker, so it also polls while Restate routes ChatInbox to it; Telegram refuses one of two concurrent polls (409) and no update is lost."
+    elif [[ "${CORE_POLLER_RUNNING:-}" == worker ]]; then
+      note+=" A worker colour created with worker also polls while Restate routes ChatInbox to it; Telegram refuses one of two concurrent polls (409) and no update is lost."
+    fi
   else
-    echo "NOTE: Core was recreated by this deploy (HAWA_TELEGRAM_POLLER=${CORE_POLLER_HOLD}: $(poller_owner_text "$CORE_POLLER_HOLD"))."
+    note="Core does not poll (HAWA_TELEGRAM_POLLER=worker): the worker colour Restate routes ChatInbox to polls Telegram."
   fi
+  [[ -z "${REGISTERED:-}" ]] || note+=" The ${IDLE} worker is registered: Restate sends new work to it."
+  echo "NOTE: Core was recreated by this deploy. ${note}"
+}
+# The image compose builds for a service, as verify_built_image resolves it.
+compose_image_ref() {
+  "${COMPOSE[@]}" --env-file "$INTERP_FILE" --profile worker config --format json | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const v=JSON.parse(s).services[process.argv[1]];if(!v?.image)process.exit(2);process.stdout.write(v.image)})' "$1"
+}
+# The services a built worker image hosts, read from the image itself, without network: every build
+# since Phase 2.1 has apps/worker/dist/services.js. "unknown" when it has no list or cannot be read.
+image_hosts() {
+  local ref hosts
+  ref="$(compose_image_ref "$1" 2>/dev/null)" || { echo unknown; return 0; }
+  hosts="$(docker run --rm --pull never --network none --entrypoint node "$ref" -e "import('/app/apps/worker/dist/services.js').then(m=>console.log((m.WORKER_SERVICE_NAMES||[]).join(','))).catch(()=>console.log(''))" 2>/dev/null)" || hosts=""
+  if [[ "$hosts" =~ ^[A-Za-z][A-Za-z0-9_]*(,[A-Za-z][A-Za-z0-9_]*)*$ ]]; then echo "$hosts"; else echo unknown; fi
+}
+# Before step 7: a worker build that does not host every service Restate routes to the worker is
+# refused while Core, the Desk and the worker still run the previous build. register's own --hosts
+# check in 7b came after step 7 had replaced Core and the Desk (Phase 4 review of ADR-129).
+refuse_split_worker_build() {
+  local hosts out rc=0
+  hosts="$(image_hosts "$1")"
+  out="$(bluegreen check-hosts --hosts "$hosts" 2>&1)" || rc=$?
+  if [[ $rc != 0 ]]; then
+    echo "ERROR: $(tr '\n' ' ' <<< "$out")Nothing was started: Core, the Desk and the worker still run the previous build."
+    exit 1
+  fi
+  echo "✓ the new worker build hosts every service Restate routes to the worker (${hosts})"
 }
 # The services the new colour's build hosts, from its /ready (listed since Phase 2.1), for register's
 # check that it hosts everything Restate already routes to the worker (ADR-129, finding 2).
@@ -406,6 +446,7 @@ BUILD_SERVICES=(core desk cutout)
 verify_built_image core
 verify_built_image desk
 [[ -z "$PLAN_IDLE" ]] || verify_built_image "worker-${PLAN_IDLE}"
+[[ -z "$PLAN_IDLE" ]] || refuse_split_worker_build "worker-${PLAN_IDLE}"
 # The cut-out engine's own tests, run in the image that ships, against the pinned model.
 docker run --rm --memory 12g -e HAWA_MODELS_DIR=/models -v "${MODELS_DIR}:/models:ro" \
   -v "${ROOT_DIR}/services/cutout/tests:/app/tests:ro" hawa-cutout:1 python -m unittest discover -s /app/tests -q \
@@ -425,9 +466,12 @@ VECTOR_WANT="$(shasum -a 256 "${SCRIPT_DIR}/vector.yaml" | cut -d' ' -f1)"
 validate_vector_config
 # Core keeps the Telegram poller it runs with until 7b has registered the new worker colour.
 CORE_POLLER_WANTED="$(telegram_poller_of "$(compose_value HAWA_TELEGRAM_POLLER core)")"
-CORE_POLLER_HOLD="$(core_poller_hold "$CORE_POLLER_WANTED" "$(running_core_poller)")"
+CORE_POLLER_RUNNING="$(running_core_poller)"
+CORE_POLLER_HOLD="$(core_poller_hold "$CORE_POLLER_WANTED" "$CORE_POLLER_RUNNING")"
 [[ "$CORE_POLLER_HOLD" == "$CORE_POLLER_WANTED" ]] \
   || echo "Telegram poller: ${CORE_POLLER_HOLD} -> ${CORE_POLLER_WANTED}; Core keeps ${CORE_POLLER_HOLD} until the new worker colour is registered"
+[[ "$CORE_POLLER_RUNNING" != worker || "$CORE_POLLER_WANTED" != core ]] \
+  || echo "Telegram poller: worker -> core; Core polls from now on, and the old worker colour stops once Restate routes ChatInbox to the new one"
 trap report_poller_on_exit EXIT
 CORE_RECREATED=1
 HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
@@ -474,7 +518,10 @@ abandon_idle() {
     "${COMPOSE[@]}" --env-file "$INTERP_FILE" rm -sf "worker-${IDLE}" >/dev/null 2>&1 || true
     echo "ERROR: $1 Restate holds no deployment at the new ${IDLE} worker's address, so it was removed; what Restate routes to the live worker (${LIVE}) was not changed."
   else
+    IDLE_KEPT=1
     echo "ERROR: $1 Restate holds a deployment at the new ${IDLE} worker's address, or could not say ($(tr '\n' ' ' <<< "$held")), so it may already send work there: the ${IDLE} worker was NOT removed, and the ${LIVE} worker was not drained. Both keep running. Check where each service goes (GET /services on Restate's admin API) and finish by hand: infra/docker/README.md, 'A switch that did not complete'."
+    # The kept colour may already serve ChatInbox. Created with core it never polls, so Core must.
+    [[ "${CORE_POLLER_WANTED:-}" != core ]] || release_core_poller
   fi
   exit 1
 }

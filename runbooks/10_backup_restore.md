@@ -211,10 +211,16 @@ every later deploy would stop at its drain check. The current `deploy.sh` refuse
    beside it: `[[ "$(shasum -a 256 <dump> | cut -d' ' -f1)" == "$(cat <dump>.sha256)" ]] && echo checksum-ok`.
 3. Restore it into a new database, check it, and swap it in. Run this block as it stands, with `DUMP`
    set to the file from step 2 (from the repository root, in bash). It restores in one transaction, so
-   an error leaves nothing half-restored and the live database untouched. It swaps only when the new
-   database holds every policy, foreign key and trigger the dump lists, and prints `restore-check=ok`;
-   anything else prints `restore-check=MISMATCH`, changes nothing, and leaves the new database for
-   inspection (drop it with `dropdb`). `infra/backup/drill_restore_swap.sh` runs this same block,
+   an error leaves nothing half-restored and the live database untouched. It then copies what belongs
+   to the database itself and not to the dump: its owner, its grants (`GRANT ... ON DATABASE`, such as
+   a revoked `CONNECT`) and its settings (`ALTER DATABASE ... SET`, and `ALTER ROLE ... IN DATABASE ...
+   SET` for the application's login roles). A rename leaves them with the old database, so without the
+   copy the swapped-in database would accept connections the old one refused and drop those settings.
+   `infra/backup/restore_copy_props.sql` does the copy and refuses a setting whose value is a list;
+   `infra/backup/restore_props.sql` compares the two. The block swaps only when the new database holds
+   every policy, foreign key and trigger the dump lists and has the old one's owner, encoding, grants
+   and settings, and prints `restore-check=ok`; anything else prints `restore-check=MISMATCH`, changes
+   nothing, and leaves the new database for inspection (drop it with `dropdb`). `infra/backup/drill_restore_swap.sh` runs this same block,
    read from this file, against the test server.
 
    <!-- restore-swap:begin -->
@@ -224,12 +230,23 @@ every later deploy would stop at its drain check. The current `deploy.sh` refuse
    docker exec "$PG" createdb -U hawa_owner -T template0 "$NEW"
    docker exec -i "$PG" pg_restore -U hawa_owner -d "$NEW" --exit-on-error --single-transaction < "$DUMP"
    TOC="$(docker exec -i "$PG" pg_restore --list < "$DUMP")"
-   WANT="policies=$(grep -cE '^[0-9]+; [0-9]+ [0-9]+ POLICY ' <<< "$TOC") foreign_keys=$(grep -cE '^[0-9]+; [0-9]+ [0-9]+ FK CONSTRAINT ' <<< "$TOC") triggers=$(grep -cE '^[0-9]+; [0-9]+ [0-9]+ TRIGGER ' <<< "$TOC")"
+   toc_count() { grep -cE "^[0-9]+; [0-9]+ [0-9]+ $1 " <<< "$TOC" || true; }   # grep -c exits 1 on 0
+   WANT="policies=$(toc_count POLICY) foreign_keys=$(toc_count 'FK CONSTRAINT') triggers=$(toc_count TRIGGER)"
    HAVE="$(docker exec "$PG" psql -X -qAt -U hawa_owner -d "$NEW" -v ON_ERROR_STOP=1 -c "SELECT 'policies='||(SELECT count(*) FROM pg_policy)||' foreign_keys='||(SELECT count(*) FROM pg_constraint WHERE contype='f')||' triggers='||(SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal)")"
    echo "dump: ${WANT}"; echo "new database ${NEW}: ${HAVE}"
+   # The owner, encoding, grants (GRANT ... ON DATABASE) and settings (ALTER DATABASE ... SET, ALTER ROLE
+   # ... IN DATABASE ... SET) belong to the database, not to what pg_dump -Fc writes, and a rename does
+   # not move them: they are copied from DB to NEW and compared (grants and settings only as a hash).
+   props() { docker exec -i "$PG" psql -X -qAt -U hawa_owner -d postgres -v ON_ERROR_STOP=1 -v name="$1" < infra/backup/restore_props.sql; }
+   copy_props() { docker exec -i "$PG" psql -X -q -U hawa_owner -d postgres -v ON_ERROR_STOP=1 -v src="$DB" -v dst="$NEW" < infra/backup/restore_copy_props.sql; }
    if [[ "$HAVE" != "$WANT" ]]; then
      echo "restore-check=MISMATCH: nothing was swapped; ${DB} is unchanged and ${NEW} is left for inspection"
-   elif docker exec "$PG" psql -X -qAt -U hawa_owner -d postgres -v ON_ERROR_STOP=1 \
+   elif ! copy_props; then
+     echo "restore-check=MISMATCH: the owner, grants or settings of ${DB} could not be copied (the reason is above); nothing was swapped, and ${NEW} is left for inspection"
+   elif P_DB="$(props "$DB")"; P_NEW="$(props "$NEW")"; [[ "$P_DB" != owner=* || "$P_NEW" != "$P_DB" ]]; then
+     echo "database ${DB}: ${P_DB}"; echo "database ${NEW}: ${P_NEW}"
+     echo "restore-check=MISMATCH: ${NEW} does not have the owner, encoding, grants and settings of ${DB}; nothing was swapped, and ${NEW} is left for inspection"
+   elif echo "database ${NEW}: ${P_NEW} (as ${DB})" && docker exec "$PG" psql -X -qAt -U hawa_owner -d postgres -v ON_ERROR_STOP=1 \
        -c "SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE datname IN ('${DB}', '${NEW}') AND pid <> pg_backend_pid()" \
        -c "ALTER DATABASE \"${DB}\" RENAME TO \"${OLD}\"; ALTER DATABASE \"${NEW}\" RENAME TO \"${DB}\"" >/dev/null; then
      echo "restore-check=ok: ${DB} is the restored copy; the database it replaced is kept as ${OLD}"
@@ -241,8 +258,9 @@ every later deploy would stop at its drain check. The current `deploy.sh` refuse
 
    To undo the swap before anything was started: rename the two back
    (`ALTER DATABASE "<DB>" RENAME TO "<NEW>"`, then `ALTER DATABASE "<OLD>" RENAME TO "<DB>"`, connected
-   to `postgres`). Roles and their passwords belong to the server, not the database, so Core and the
-   workers connect to the restored copy with the same `DATABASE_URL`.
+   to `postgres`). Roles and their passwords belong to the server, not the database, and the block
+   copied the database's own grants and settings, so Core and the workers connect to the restored copy
+   with the same `DATABASE_URL` and the same per-database settings.
 4. Restore the files: for each pack that `blobs/index.tsv` names for an entry of `hawa_<stamp>.blobs`,
    decrypt and unpack it into `~/.hawa/blobs` (`openssl enc -d … | tar -xkf - -C ~/.hawa/blobs`). Files
    already there are the same bytes, so `-k` keeps them. Then `chmod 0444` the files and `0755` the

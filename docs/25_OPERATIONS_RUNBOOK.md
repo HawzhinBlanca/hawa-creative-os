@@ -159,7 +159,8 @@ before every migration. It is written as `.partial` and named, with its `.sha256
 a failed one is removed and stops the deploy. Both live under the gitignored, owner-only `infra/backup/snapshots/`. Restore
 either into a **new** database and swap it in by renaming, as `runbooks/10_backup_restore.md`
 ("Restoring for real") gives it, step by step: stop the launch agents, Core and both worker colours, run
-its restore-swap block with `DUMP=<file>`, restore and verify the files, deploy. Never restore with
+its restore-swap block with `DUMP=<file>` (it also copies the database's owner, grants and settings,
+which neither the dump nor the rename carries), restore and verify the files, deploy. Never restore with
 `--clean` over the database the stack uses: once a migration newer than the dump has run, the dump
 cannot drop its own tables, and pg_restore stops after it has already dropped their policies and most
 foreign keys, so the application role sees no rows at all (reproduced 2026-09-28, ADR-129). Without
@@ -168,8 +169,10 @@ a dump over a migrated database on the test server exactly that way. Pre-deploy 
 2026-09-23 are plain SQL compressed as `.sql.zst`: load one into a new database
 (`docker exec hawa-production-postgres-1 createdb -U hawa_owner -T template0 hawa_restore_<stamp>`, then
 `zstd -d --long=27 -c <file> | docker exec -i hawa-production-postgres-1 psql -v ON_ERROR_STOP=1 --single-transaction -U hawa_owner -d hawa_restore_<stamp>`)
-and swap it in with the two renames the runbook's block runs; the block's count check does not apply
-to plain SQL, and this path was not drilled.
+then copy its grants and settings (`infra/backup/restore_copy_props.sql` with `src=hawa` and
+`dst=hawa_restore_<stamp>`), compare them (`infra/backup/restore_props.sql`) and swap it in with the two
+renames the runbook's block runs; the block's count check does not apply to plain SQL, and this path
+was not drilled.
 
 `infra/ops/disk_cleanup.sh` bounds Hawa's own disk use: the newest ten checked pre-deploy dumps (with a
 `.sha256`); one dump a

@@ -66,7 +66,9 @@ describe('finding 1: Core keeps its poller until the new worker colour is regist
   });
 
   it('core_poller_hold keeps the running value, and core when no Core runs', () => {
-    const cases: Array<[string, string, string]> = [['worker', 'core', 'core'], ['core', 'worker', 'worker'], ['worker', '', 'core'], ['worker', 'worker', 'worker'], ['core', '', 'core']];
+    // A switch back to Core (worker -> core) is not held: Core polls from step 7, as before ADR-129.
+    // Holding it left nobody polling when the new colour, created with core, took ChatInbox (review).
+    const cases: Array<[string, string, string]> = [['worker', 'core', 'core'], ['core', 'worker', 'core'], ['worker', '', 'core'], ['worker', 'worker', 'worker'], ['core', '', 'core']];
     for (const [wanted, running, hold] of cases) {
       expect(run(['core_poller_hold'], `core_poller_hold ${wanted} "${running}"`).out.trim(), `${wanted}/${running}`).toBe(hold);
     }
@@ -85,12 +87,67 @@ describe('finding 1: Core keeps its poller until the new worker colour is regist
   it('a deploy that stops after Core was recreated says which process polls, instead of implying nothing changed', () => {
     const held = run(['poller_owner_text', 'report_poller_on_exit'], 'CORE_RECREATED=1; CORE_POLLER_HOLD=core; CORE_POLLER_WANTED=worker; trap report_poller_on_exit EXIT; exit 1');
     expect(held.code).toBe(1);
-    expect(held.out).toMatch(/Core was recreated by this deploy with HAWA_TELEGRAM_POLLER=core, not worker/);
+    expect(held.out).toMatch(/Core was recreated by this deploy\. Core polls Telegram \(HAWA_TELEGRAM_POLLER=core\)\. The switch to worker waits/);
     expect(held.out).toMatch(/Core polls Telegram/);
     const early = run(['poller_owner_text', 'report_poller_on_exit'], 'CORE_RECREATED=0; CORE_POLLER_HOLD=core; CORE_POLLER_WANTED=worker; trap report_poller_on_exit EXIT; exit 1');
     expect(early.out).toBe('');
     const fine = run(['poller_owner_text', 'report_poller_on_exit'], 'CORE_RECREATED=1; CORE_POLLER_HOLD=worker; CORE_POLLER_WANTED=worker; trap report_poller_on_exit EXIT; exit 0');
     expect(fine.out).toBe('');
+  });
+
+  // Phase 4 review of 72cb6fae: bluegreen register exit 4 (Restate registered the new colour, the move
+  // of every service not confirmed) keeps the new colour. With a worker -> core switch held at step 7,
+  // the new colour (created with core) took ChatInbox and did not poll, Core (held at worker) did not
+  // poll, and the NOTE said the live worker colour polled.
+  const exit4 = (preamble: string) => run(
+    ['core_poller_hold', 'poller_owner_text', 'release_core_poller', 'report_poller_on_exit', 'abandon_idle'],
+    [
+      'LIVE=blue; IDLE=green',
+      preamble,
+      'trap report_poller_on_exit EXIT',
+      'CORE_RECREATED=1',
+      'HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d',
+      '"${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --force-recreate "worker-${IDLE}"',
+      'REGISTERED="$(bluegreen register "$IDLE" --hosts X)" || abandon_idle "Restate did not complete the switch to the new ${IDLE} worker."',
+      'release_core_poller',
+    ].join('\n'),
+    'bluegreen() { case "$1" in register) echo "ERROR: registered, ChatInbox move not confirmed" >&2; return 4 ;; removable) echo "registered=dp_green"; return 4 ;; esac; }',
+  );
+
+  it('review: a worker -> core switch whose register exits 4 leaves Core polling, and the note says so', () => {
+    const r = exit4('CORE_POLLER_WANTED=core; CORE_POLLER_RUNNING=worker; CORE_POLLER_HOLD="$(core_poller_hold "$CORE_POLLER_WANTED" "$CORE_POLLER_RUNNING")"');
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/was NOT removed/);
+    // Core is recreated with core at step 7 (it polls from there on); it is never left at worker.
+    expect(r.calls).toContain('CALL compose --env-file /dev/null up -d [poller=core]');
+    expect(r.calls.filter((c) => /core \[poller=worker\]|up -d \[poller=worker\]/.test(c))).toEqual([]);
+    expect(r.out).not.toMatch(/the live worker colour polls Telegram/);
+    expect(r.out).toMatch(/NOTE: .*Core polls Telegram/);
+  });
+
+  it('review: even with Core held at worker, a kept colour that will not poll makes Core poll before exit 1', () => {
+    const r = exit4('CORE_POLLER_WANTED=core; CORE_POLLER_RUNNING=worker; CORE_POLLER_HOLD=worker');
+    expect(r.code).toBe(1);
+    const release = r.calls.indexOf('CALL compose --env-file /dev/null up -d --no-deps --no-build core [poller=core]');
+    expect(release).toBeGreaterThan(-1);
+    expect(r.out).not.toMatch(/the live worker colour polls Telegram/);
+    expect(r.out).toMatch(/NOTE: .*Core polls Telegram/);
+  });
+
+  it('review: a core -> worker switch whose register exits 4 keeps Core polling, and says the kept colour may poll too', () => {
+    const r = exit4('CORE_POLLER_WANTED=worker; CORE_POLLER_RUNNING=core; CORE_POLLER_HOLD=core');
+    expect(r.code).toBe(1);
+    expect(r.calls.filter((c) => /\[poller=worker\]/.test(c))).toEqual([]);
+    expect(r.out).toMatch(/NOTE: .*Core polls Telegram/);
+    expect(r.out).toMatch(/green colour .*kept.* also polls while Restate routes ChatInbox to it/);
+  });
+
+  it('review: a deploy that stops after the switch (step 8) says the worker colour Restate routes ChatInbox to polls, and that the new colour is registered', () => {
+    const r = run(['poller_owner_text', 'report_poller_on_exit'],
+      'LIVE=blue; IDLE=green; REGISTERED=deployment=dp_green; CORE_RECREATED=1; CORE_POLLER_WANTED=worker; CORE_POLLER_RUNNING=core; CORE_POLLER_HOLD=worker; trap report_poller_on_exit EXIT; exit 1');
+    expect(r.out).toMatch(/Core does not poll/);
+    expect(r.out).toMatch(/the worker colour Restate routes ChatInbox to polls/);
+    expect(r.out).toMatch(/green worker is registered/);
   });
 
   it('in the script, the step-7 up -d holds the poller, the worker image is built before it, and the release follows register', () => {
@@ -113,6 +170,40 @@ describe('finding 2: register gets the new colour\'s own service list', () => {
 
   it('the register call passes them', () => {
     expect(deploySh).toMatch(/bluegreen register "\$IDLE" --hosts "\$\(idle_hosts "\$IDLE"\)"/);
+  });
+
+  // Phase 4 review of 72cb6fae: the --hosts refusal came in 7b, after step 7 had already replaced Core
+  // and the Desk with the refused checkout's build. The idle image is built before step 7, so its own
+  // service list is checked there, while everything still runs the previous build.
+  it('image_hosts reads the list from the built image itself, with no network, and "unknown" when it cannot', () => {
+    const stubs = (answer: string) => `compose_image_ref() { echo "hawa-worker:1"; }\ndocker() { echo "$*" >&9; ${answer}; }`;
+    const listed = run(['image_hosts'], 'image_hosts worker-green', stubs('echo "TaskWorkflow,TaskService,ChatInbox"'));
+    expect(listed.out.trim()).toBe('TaskWorkflow,TaskService,ChatInbox');
+    expect(listed.err).toMatch(/^run --rm --pull never --network none --entrypoint node hawa-worker:1 -e .*services\.js/m);
+    expect(run(['image_hosts'], 'image_hosts worker-green', stubs('return 1')).out.trim()).toBe('unknown');
+    expect(run(['image_hosts'], 'image_hosts worker-green', stubs('echo ""')).out.trim()).toBe('unknown');
+    expect(run(['image_hosts'], 'image_hosts worker-green', 'compose_image_ref() { return 1; }\ndocker() { echo TaskWorkflow; }').out.trim()).toBe('unknown');
+  });
+
+  it('refuse_split_worker_build stops the deploy when check-hosts refuses, and goes on when it accepts', () => {
+    const stubs = (rc: number) => `image_hosts() { echo "TaskWorkflow,TaskService"; }\nbluegreen() { echo "BG $*" >&9; [[ ${rc} == 0 ]] && echo "hosts=ok" || echo "ERROR: the new build does not host ChatInbox" >&2; return ${rc}; }`;
+    const refused = run(['refuse_split_worker_build'], 'refuse_split_worker_build worker-green; echo AFTER', stubs(2));
+    expect(refused.code).toBe(1);
+    expect(refused.err).toMatch(/BG check-hosts --hosts TaskWorkflow,TaskService/);
+    expect(refused.out).toMatch(/ChatInbox/);
+    expect(refused.out).toMatch(/Nothing was started.*previous build/);
+    expect(refused.out).not.toMatch(/AFTER/);
+    const unreadable = run(['refuse_split_worker_build'], 'refuse_split_worker_build worker-green; echo AFTER', stubs(1));
+    expect(unreadable.code).toBe(1);
+    const ok = run(['refuse_split_worker_build'], 'refuse_split_worker_build worker-green; echo AFTER', stubs(0));
+    expect(ok.code).toBe(0);
+    expect(ok.out).toMatch(/AFTER/);
+  });
+
+  it('in the script, the idle build is checked after it is built and verified, and before step 7 replaces Core', () => {
+    const at = line('[[ -z "$PLAN_IDLE" ]] || refuse_split_worker_build "worker-${PLAN_IDLE}"\n');
+    expect(at).toBeGreaterThan(line('[[ -z "$PLAN_IDLE" ]] || verify_built_image "worker-${PLAN_IDLE}"'));
+    expect(at).toBeLessThan(line('HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d\n'));
   });
 });
 

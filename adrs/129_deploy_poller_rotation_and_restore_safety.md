@@ -1,6 +1,6 @@
 # ADR-129 — Deploy ordering, poller health, token rotation and restore by swap
 
-Date: 2026-09-28. Status: implementation; production use remains open.
+Date: 2026-09-28 (review fixes the same day). Status: implementation; production use remains open.
 Requirements: NFR-001/002/003/006/013/017, FR-060. Normative sources: MASTER_SPEC.md,
 docs/10_WORKFLOW_RELIABILITY.md, docs/25_OPERATIONS_RUNBOOK.md, runbooks/10_backup_restore.md,
 infra/docker/README.md. Phase 4 adversarial review, operations findings 1, 2, 3, 4, 6 and 26.
@@ -85,3 +85,52 @@ as before the migrations with its tenant context, and 0 without it. Every scratc
 Not executed: `deploy.sh --apply`, a live poller switch, rotation or restore on production, Compose's
 own `run`/`restart` of vector, a real Restate registration with `--hosts`, and the plain-SQL restore
 path. The watchdog's live alert path was not exercised.
+
+## Review fixes — 2026-09-28
+
+A separate review of the first version (commit 72cb6fae) found one blocking defect and three smaller
+ones. Each has a failing test or drill first.
+
+**Poller hold in the wrong direction (blocking).** Core was held at the value it ran with in both
+directions. On a switch back to Core (worker -> core), Core stayed at `worker` while the new colour was
+created with `core`. When `register` exited 4 (Restate registered the new colour but could not confirm
+that every service moved), the new colour was kept, `release_core_poller` never ran, and Restate could
+route ChatInbox to the new colour. Then nobody polled: not Core, not the new colour, and not the old
+colour, whose gate follows ChatInbox. The exit note said the live worker colour polled. Now only a move
+to the worker is held. A move back to Core takes effect at step 7, as before ADR-129: Core polls at
+once, and the old colour may poll beside it until Restate moves ChatInbox. Two pollers cost a 409 from
+Telegram and a duplicate that intake drops; nobody polling costs time. `abandon_idle` also releases
+Core when it keeps a colour that will not poll. The exit note now states Core's own value and the rule
+for worker colours (the colour Restate routes ChatInbox to polls when it was created with `worker`),
+because the script does not know where Restate routes ChatInbox.
+
+**`--hosts unknown`.** `unknown` passed the service-name pattern and became a service named
+`unknown`, so the pre-Phase-2.1 fallback never applied through the CLI. `unknown`, and a list with
+any unusable name, now mean "no list". The refusal says the list may also have been unreadable.
+
+**Hosts check after step 7.** The check ran in 7b, after step 7 had replaced Core and the Desk with the
+refused build. `deploy.sh` now reads `WORKER_SERVICE_NAMES` from the built worker image
+(`apps/worker/dist/services.js`, in a container without network) right after the image is verified.
+`restate-bluegreen.ts check-hosts` refuses the build before anything is started. `register` still
+checks again with `/ready`. When 4b could not name the idle colour (the stack was down), only the 7b
+check applies.
+
+**Database grants and settings on restore.** `pg_dump -Fc` without `--create` carries neither the
+database's grants nor its settings (`ALTER DATABASE ... SET`, `ALTER ROLE ... IN DATABASE ... SET`).
+A rename leaves them with the old database. The restore-swap block now copies the owner, grants and
+scalar settings from the live database to the restored one (`infra/backup/restore_copy_props.sql`). A
+setting whose value is a list is refused, as `rotate-app-role.ts` refuses it. The block then compares
+owner, encoding, locale, grants and settings (`infra/backup/restore_props.sql`), and swaps only when
+they are equal. Production's catalogs were not read (no SQL against production); the block checks them
+at restore time instead.
+
+**getMe in worker mode.** The review also noted that with `worker` set, Core's getMe probe can fail
+step 8 after the switch. This is intended (finding 3). The README and the exit note now say that the
+switch stands and the new colour is registered.
+
+Local qualification: the red run of the new tests had 36 tests, with 13 failed and 23 passed; the
+restore-swap block test had 4 tests, with 2 failed. The restore drill with the earlier block and the
+same production pre-deploy dump swapped in a database without the grants and settings: `hawa_app`
+could connect, and the login role lost `statement_timeout` and `work_mem`. With the new block both were
+kept and the login role saw 1612 tasks. Details, and the results of the full suite, are in
+`plans/lean-design-implementation-2026-09-28/OPERATIONS_REVIEW_FIXES_PROOF.json`.

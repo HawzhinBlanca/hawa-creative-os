@@ -91,3 +91,58 @@ describe('register refuses a build that does not host every service Restate rout
     expect(unknown).toBe(2);
   });
 });
+
+// Phase 4 review of 72cb6fae.
+describe('--hosts unknown and the check-hosts command', () => {
+  it('"--hosts unknown" (deploy.sh when /ready gives no list) is the pre-Phase-2.1 fallback, not a service named "unknown"', async () => {
+    const r = restate(['TaskWorkflow', 'TaskService']);
+    const err: string[] = [];
+    const code = await runCli(['register', 'blue', '--hosts', 'unknown', '--attempts', '1'], {
+      fetcher: r.fetcher as any, out: () => {}, err: (l) => err.push(l), env: {}, ...quiet,
+    });
+    // Accepted like hosts:null: the registration is sent (the switch then reports on the eight services).
+    expect(r.posts).toHaveLength(1);
+    expect(code).toBe(4);
+    expect(err.join('\n')).not.toMatch(/does not host TaskWorkflow/);
+  });
+
+  it('a partly unusable list is treated as no list, not trusted in part', async () => {
+    const r = restate();
+    const err: string[] = [];
+    const code = await runCli(['register', 'blue', '--hosts', 'TaskWorkflow,Task Service;rm', '--attempts', '1'], {
+      fetcher: r.fetcher as any, out: () => {}, err: (l) => err.push(l), env: {}, ...quiet,
+    });
+    expect(code).toBe(2);
+    expect(err.join('\n')).toMatch(/could not be read/);
+    expect(r.posts).toEqual([]);
+  });
+
+  it('check-hosts refuses a build that does not host every routed service, and sends nothing', async () => {
+    const r = restate();
+    const err: string[] = [];
+    const code = await runCli(['check-hosts', '--hosts', 'TaskWorkflow,TaskService'], {
+      fetcher: r.fetcher as any, out: () => {}, err: (l) => err.push(l), env: {}, ...quiet,
+    });
+    expect(code).toBe(2);
+    expect(err.join('\n')).toMatch(/does not host ChatInbox/);
+    expect(r.posts).toEqual([]);
+  });
+
+  it('check-hosts accepts a build that hosts every routed service, and an unlisted build while only TaskWorkflow and TaskService are routed', async () => {
+    const r = restate();
+    const out: string[] = [];
+    expect(await runCli(['check-hosts', '--hosts', ALL.join(',')], { fetcher: r.fetcher as any, out: (l) => out.push(l), err: () => {}, env: {}, ...quiet })).toBe(0);
+    expect(out).toContain('hosts=ok');
+    const old = restate(['TaskWorkflow', 'TaskService']);
+    expect(await runCli(['check-hosts', '--hosts', 'unknown'], { fetcher: old.fetcher as any, out: () => {}, err: () => {}, env: {}, ...quiet })).toBe(0);
+    expect(r.posts).toEqual([]);
+    expect(old.posts).toEqual([]);
+  });
+
+  it('check-hosts refuses when Restate cannot say what it routes, and needs --hosts', async () => {
+    const r = restate();
+    const broken = async (url: string, init: any = {}) => (new URL(url).pathname === '/services' ? new Response('', { status: 503 }) : r.fetcher(url, init));
+    expect(await runCli(['check-hosts', '--hosts', ALL.join(',')], { fetcher: broken as any, out: () => {}, err: () => {}, env: {}, ...quiet })).toBe(2);
+    expect(await runCli(['check-hosts'], { fetcher: r.fetcher as any, out: () => {}, err: () => {}, env: {}, ...quiet })).toBe(64);
+  });
+});

@@ -1,0 +1,271 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "72cb6fae03e2bb59b93e13390c32cc2d112ecce2",
+  "branch": "worktree-wf_d0161674-b76-2 (from codex/research-grade-design-system at 7b8de71e, after 72cb6fae)",
+  "status": "OPERATIONS_REVIEW_FIXES_LOCALLY_QUALIFIED_PRODUCTION_USE_NOT_EXECUTED",
+  "adr": "129",
+  "migration": null,
+  "requirements": [
+    "NFR-001",
+    "NFR-003",
+    "NFR-006",
+    "NFR-013"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/129_deploy_poller_rotation_and_restore_safety.md",
+      "sha256": "2e6367db177f884b4be624744d591a50603f24437dff682e528a0c883c9d1f59"
+    },
+    {
+      "path": "infra/docker/deploy.sh",
+      "sha256": "b613ba0710b8406ab3683205d87f40b640666dd6ccb8597cc4ac44d4abbb5ece"
+    },
+    {
+      "path": "scripts/restate-bluegreen.ts",
+      "sha256": "c6420fde84b306123f45ed2dc6b49ab3dc4b12908cbf870f78231b3c799b2fd0"
+    },
+    {
+      "path": "runbooks/10_backup_restore.md",
+      "sha256": "6c357e057eab173dff1fc25faadef4745debf7828ff29fd1d2105a99604647a2"
+    },
+    {
+      "path": "docs/25_OPERATIONS_RUNBOOK.md",
+      "sha256": "47c583d9dcaf52fe6bd3bc208b62917d4bda4b184a0ad546d95cedec88e6570d"
+    },
+    {
+      "path": "infra/backup/restore_copy_props.sql",
+      "sha256": "8c6bd5053d32725e342ce30c53c5964843db797f5345ae70ff4744153373fc16"
+    },
+    {
+      "path": "infra/backup/restore_props.sql",
+      "sha256": "647a1ae59204fd957fb65cd92a846c0e32d8e3ec63c59ea8115bcedc8d620958"
+    },
+    {
+      "path": "infra/backup/drill_restore_swap.sh",
+      "sha256": "f1f7f5051d81e0232937e1a5e1c2cc5ead216c234de3cbf9c3c11201a20db58e"
+    },
+    {
+      "path": "infra/docker/README.md",
+      "sha256": "3627b49cafb97c203e2980fe0f00f4b8d93542cd8ace582c038f30232b37d61d"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "cfb49156ad86eb27483dc74d26667d600e14819f4a27e885cb165000cac9a8b6"
+    },
+    {
+      "path": "packages/testkit/test/deploy-sh-operations-findings.test.ts",
+      "sha256": "53016b8d68ff7ba5b599caca76329f5f0f0aff7f144f9eeb57f5d9101a5cc23f"
+    },
+    {
+      "path": "packages/testkit/test/restate-bluegreen-rollback-split.test.ts",
+      "sha256": "63477da92fe78268aea9743da7b6d23017e407cd06cb6221468b29254e7fe30b"
+    },
+    {
+      "path": "packages/testkit/test/restore-swap-block.test.ts",
+      "sha256": "58c4665ea932984b8ad09e8c2543e2bf5fe82ef0280ddf4a1ed75f2f5de25e31"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-ops-review-red.json",
+      "sha256": "9a39de6f03e74a18eedde0d0a1d587d89520f43f5cff74070aff2eabb0073b91"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-review-red.log",
+      "sha256": "fa2a347b376a1a561e72c4e8b672a905285efd52f3cca042b8a152f8564e4082"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-restore-swap-block-red.json",
+      "sha256": "81df5915b4b8b129750d13f49e734d53d67b096bd1d8908900a74e031aed94bf"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-restore-swap-props-red.json",
+      "sha256": "af8eecab5997bab2e3bd008a4edfbd9a81672835ef620170b853f123f5b13bfb"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-restore-swap-props-green.json",
+      "sha256": "594b0b9b7df9acbc748cc4ca2a7e617114994d45d4ad01926330e59c7b9662dc"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-restore-props-edge-cases.log",
+      "sha256": "1706e96522fc5a94f09e8b649a100b8e24d6b00611a93ebb4f50b3760f300970"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-image-hosts-local-images.log",
+      "sha256": "ae61a63b036d72e893aca713d7bbaed291d3c6a29978774e88a7ed71ef9590e6"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-review-affected.json",
+      "sha256": "43827aff5272101232d48f6b16997a9c08b64621bff4056b4790722eb32b6f68"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-review-full-suite.json",
+      "sha256": "1b2fa8268a6a16b6e4d71ddaa31245cc2a79915a89dad5a778505c08630e26f7"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-review-typecheck.log",
+      "sha256": "bd5855daffea6c30c3c5d175f16d0dc775a0f74cfefc756026b57fe9f3149c63"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-ops-review-lint.log",
+      "sha256": "58f0e5ef018f0075e06683b72868b12482eeb04c8c0983c1ee802519324eb488"
+    }
+  ],
+  "acceptance": {
+    "files": 19,
+    "passed": 152,
+    "failed": 0,
+    "skipped": 0,
+    "environment": "Isolated per-file PostgreSQL clones on 127.0.0.1:55432 (HAWA_TEST_WORKERS=2); bash with Docker, Compose and Restate stubbed; fake Restate admin API; restore drill on hawa-test-postgres",
+    "findings": {
+      "blocking_worker_to_core_exit_4": "fixed. core_poller_hold now holds Core only on a move to the worker (wanted worker and running worker gives worker; everything else gives core). A worker -> core switch recreates Core with core at step 7. abandon_idle, when it keeps the new colour and the wanted value is core, also runs release_core_poller. report_poller_on_exit states Core's own value and the ChatInbox rule for worker colours, and names the registered colour after register. Test: the review's case (HOLD=worker, WANTED=core, register 4, removable 4) now records 'up -d --no-deps --no-build core [poller=core]' before exit 1, and the note no longer says the live worker colour polls; the same path with HOLD computed by the script recreates Core with core at step 7",
+      "mirror_core_to_worker_exit_4": "kept by design and documented: Core (held at core) and the kept new colour may both poll; Telegram refuses one of two concurrent getUpdates (409) and intake deduplicates. The note says so",
+      "hosts_unknown": "fixed. hostsArg maps 'unknown' and any list with an unusable name to null. The reviewer's scratchpad/ops-review-unknown.mts now prints 'exit 4 posts 1' (the registration is sent) instead of exit 2 with 'does not host TaskWorkflow, TaskService'. A transient /ready failure on a current build is still refused while ChatInbox is routed; the reason now says the list may not have been readable",
+      "hosts_check_after_step_7": "fixed where 4b names the idle colour. deploy.sh image_hosts reads WORKER_SERVICE_NAMES from the built image (docker run --rm --pull never --network none --entrypoint node <image>, apps/worker/dist/services.js); refuse_split_worker_build runs restate-bluegreen.ts check-hosts right after verify_built_image and before step 7. On a stack that was down (no PLAN_IDLE) only register's 7b check applies",
+      "restore_database_properties": "fixed. The restore-swap block copies owner, grants and scalar settings from the live database to the restored one (infra/backup/restore_copy_props.sql) and swaps only when owner, encoding/locale, grants and settings compare equal (infra/backup/restore_props.sql). Production's datacl and pg_db_role_setting were not read (no SQL against production); the block checks them at restore time",
+      "getme_in_worker_mode": "not changed in code; documented in infra/docker/README.md and ADR-129 as intended (finding 3). The exit note now says the new colour is registered when step 8 fails after the switch",
+      "verification_note": "no action; the reviewer's counts agree with this branch's own drills"
+    },
+    "prior_attempts": [
+      "Initial red (deploy-sh-operations-findings and restate-bluegreen-rollback-split): 36 tests, 23 passed, 13 failed. Behavioural reds: core_poller_hold gave worker for wanted core/running worker; the worker -> core exit-4 path never called 'up -d ... core [poller=core]' and the note said the live worker colour polls; --hosts unknown sent nothing (0 POSTs); check-hosts did not exist (exit 64); image_hosts and refuse_split_worker_build did not exist",
+      "restore-swap-block.test.ts against the 72cb6fae runbook: 4 tests, 2 passed, 2 failed (no property copy before the rename; no toc_count)",
+      "Restore drill with the 72cb6fae block (HAWA_DRILL_RUNBOOK): exit 1. The swap succeeded and the schema matched the dump, but grants 4 -> 5 and settings 2 -> 0; hawa_app, which held no CONNECT, could connect afterwards; the scratch login role lost statement_timeout 47s and work_mem 7MB",
+      "First run after the fixes: 2 failures, both in the tests: an existing assertion on the old note wording, and a line() lookup with a leading newline. Test text corrected",
+      "The first edge-case run found that restore_props.sql compared grants in catalog order (string_agg ORDER BY 1 orders by the constant): identical grants in another order compared unequal. Fixed with ORDER BY the value; the block test now rejects ORDER BY 1)",
+      "The first run of the whole block on an empty dump exited 1 under set -e: grep -c exits 1 on zero matches. toc_count() now adds || true",
+      "One affected-files run matched no files because zsh did not split the file list; re-run with the list expanded"
+    ],
+    "restore_drill": {
+      "dump": "production infra/backup/snapshots/predeploy_20260924T204736Z.dump in the main checkout, read only, sha256 c6cf72a7e9fe14b4a1efa725f9abb67452e3c80f3c952db53803859495a05f7f (matches its .sha256); counts only",
+      "server": "hawa-test-postgres, 127.0.0.1:55432; scratch hawa_scratch_20260928t084030z* (red) and hawa_scratch_20260928t084050z* (green) and the scratch login roles, all dropped (0 databases and 0 roles left)",
+      "properties_set_before_swap": "CONNECT, TEMPORARY revoked from PUBLIC; CONNECT granted to the scratch login role; ALTER DATABASE SET statement_timeout 47s; ALTER ROLE <login> IN DATABASE SET work_mem 7MB",
+      "red_72cb6fae_block": {
+        "verdict": {
+          "restored_to_pre_deploy_schema": true,
+          "matches_dump_toc": true,
+          "app_role_sees_rows_only_with_context": true,
+          "database_properties_kept": false,
+          "login_role_connects_with_its_settings": false,
+          "connect_still_refused_to_others": false,
+          "passed": false
+        },
+        "before_swap": "owner=hawa_owner encoding=UTF8/en_US.utf8/en_US.utf8/-1 grants=4 settings=2",
+        "after_swap": "owner=hawa_owner encoding=UTF8/en_US.utf8/en_US.utf8/-1 grants=5 settings=0",
+        "login_after_swap": {
+          "connected": true,
+          "statement_timeout": "0",
+          "work_mem": "4MB",
+          "app_rows_with_context": 1612
+        },
+        "hawa_app_refused_connect": {
+          "before_swap": "true",
+          "after_swap": "false"
+        }
+      },
+      "green_current_block": {
+        "block_sha256": "8701ec1f8b6a76ee6ec96108744468025de76d2a516b0cf02d7912c706106db1",
+        "verdict": {
+          "restored_to_pre_deploy_schema": true,
+          "matches_dump_toc": true,
+          "app_role_sees_rows_only_with_context": true,
+          "database_properties_kept": true,
+          "login_role_connects_with_its_settings": true,
+          "connect_still_refused_to_others": true,
+          "passed": true
+        },
+        "before_swap": "owner=hawa_owner encoding=UTF8/en_US.utf8/en_US.utf8/-1 grants=4 settings=2",
+        "after_swap": "owner=hawa_owner encoding=UTF8/en_US.utf8/en_US.utf8/-1 grants=4 settings=2",
+        "login_after_swap": {
+          "connected": true,
+          "statement_timeout": "47s",
+          "work_mem": "7MB",
+          "app_rows_with_context": 1612
+        },
+        "hawa_app_refused_connect": {
+          "before_swap": "true",
+          "after_swap": "true"
+        },
+        "after_swap_counts": {
+          "policies": 116,
+          "foreign_keys": 194,
+          "triggers": 28,
+          "tables": 76,
+          "force_rls_tables": 66,
+          "last_upgrade": "021_review_comments.sql",
+          "upgrades": 21,
+          "app_rows_with_context": 1612,
+          "app_rows_without_context": 0
+        },
+        "dump_toc": {
+          "policies": 116,
+          "foreign_keys": 194,
+          "triggers": 28
+        }
+      },
+      "still_red_old_steps": {
+        "runbook_clean_restore": {
+          "exit": 1,
+          "policies_left": 44,
+          "app_rows_with_context": "0"
+        },
+        "docs25_variant": {
+          "exit": 1,
+          "errors": 84
+        }
+      },
+      "edge_cases": "output/acceptance/2026-09-28-restore-props-edge-cases.log: a list setting is refused (exit 3) and leaves the destination unchanged; scalar database and role settings and reordered grants copy and compare equal; an unknown database gives no line (the owner=* guard refuses it); the whole block with a grant the copy cannot reproduce (the owner revoked TEMPORARY from itself) prints MISMATCH and swaps nothing; on an ordinary database it prints ok"
+    },
+    "image_hosts_on_local_images": "output/acceptance/2026-09-28-image-hosts-local-images.log: hawa-chaos-worker:local (current source) lists the eight services; an absent tag gives unknown without a pull; the two older hawa-worker:canva-only-20260913 images (built 3 and 4 days earlier) print unknown because they predate apps/worker/dist/services.js. Run with --network none; no production container, database or network was touched",
+    "full_suite": {
+      "files": 540,
+      "tests": 4579,
+      "passed": 4511,
+      "failed": 8,
+      "skipped": 60,
+      "failures": [
+        "apps/core/test/canva-planner-accounting.test.ts: upgrades actual pre-ledger Studio artifacts without inventing or duplicating planner calls",
+        "apps/core/test/route-inventory.test.ts: serves exactly the routes in fixtures/route-inventory.txt",
+        "apps/core/test/startup-schema-check.test.ts: knows every upgrade this build carries, in order",
+        "apps/core/test/studio-ledger.test.ts: refuses to resume a run with an unresolved model call",
+        "apps/core/test/studio-ledger.test.ts: refuses to repay a completed call after a crash before the stage result was saved",
+        "packages/db/test/blob-gc.test.ts: the reference view reads every column that has a foreign key to hawa.blobs (coverage)",
+        "packages/db/test/schema-upgrade.test.ts: applies once and concurrent retries verify the same recorded migrations",
+        "packages/testkit/test/r11-release-gate.test.ts: 1. Release manifest passes cryptographic verification and canonical topology check"
+      ],
+      "base_check": "the same 8 tests are the full-suite failures recorded at 72cb6fae in OPERATIONS_FIXES_PROOF.json, which also records them on the unchanged base 7b8de71e; none is in a file this change touches",
+      "skipped_note": "60 skipped tests are existing opt-in gates; none is in a file this change adds",
+      "timing_note": "the full suite ran before the last edit (--pull never added to image_hosts' docker run, and the matching test pattern); the 19 affected files, typecheck and lint were re-run after it and passed"
+    }
+  },
+  "checks": {
+    "source_types": "passed (tsc -b)",
+    "script_types": "passed (tsconfig.scripts.json)",
+    "strict_test_roots": 541,
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "security": "0 secrets; 53 justified allowlist hits",
+    "bash_syntax": "bash -n passed for infra/docker/deploy.sh and infra/backup/drill_restore_swap.sh",
+    "manifest": "refreshed with scripts/refresh_manifest.py; validate_pack passed"
+  },
+  "proof_scope": [
+    "deploy.sh functions run from the script text in bash with Docker, Compose and Restate stubbed, including the step-7 to register sequence on the exit-4 path",
+    "ordering of the new pre-step-7 hosts check from the script text",
+    "restate-bluegreen.ts register and check-hosts against a fake Restate admin API",
+    "image_hosts against three local worker images, without network",
+    "the restore-swap block, read from runbooks/10, run against a copy of a production pre-deploy dump on the test server, with database grants and settings set first and a real login as a scratch role after the swap",
+    "the property copy and comparison SQL on small scratch databases on the test server"
+  ],
+  "not_executed": [
+    "deploy.sh --apply (no production deploy); a live HAWA_TELEGRAM_POLLER switch in either direction; a real Restate registration or check-hosts call",
+    "Compose's config/run of the real worker image inside deploy.sh (image_hosts was run with the image reference stubbed to local tags)",
+    "reading production's pg_database.datacl and pg_db_role_setting (no SQL against production); whether production holds a list-valued setting the block would refuse is unknown",
+    "a production restore or rollback; the plain-SQL (.sql.zst) path; blob restore",
+    "repair of the 8 pre-existing full-suite failures (outside this change)"
+  ],
+  "next": [
+    "owner: approve and run a deploy with this change; confirm the 'new worker build hosts every service' line before step 7 and the poller lines in its output",
+    "owner: at the next real restore or restore drill on production, read the block's 'database ... owner=... grants=... settings=...' line; a MISMATCH naming a list setting needs that setting set by hand on the new database",
+    "repair the 8 pre-existing full-suite failures on this branch (none is in this change)"
+  ]
+}
