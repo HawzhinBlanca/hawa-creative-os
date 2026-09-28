@@ -200,4 +200,32 @@ describe('the watchdog and the nightly Restate backup', () => {
     expect(r.out).not.toMatch(/Restate backup/);
     expect(s.calls()).toMatch(/^docker /m);
   });
+
+  // e981e59f: in production Core reports Canva and the model provider "unverified" until a scheduled
+  // probe answers, so its status is "degraded" with nothing broken. That alone is not a problem to page.
+  const healthStub = (deps: Record<string, unknown>) => `#!/bin/bash
+echo "curl $*" >> "$STUB_CALLS"
+case "$*" in *"/v1/health"*) echo '${JSON.stringify({ status: 'degraded', dependencies: deps })}' ;; esac
+exit 0
+`;
+  it('a Core that is degraded only by unverified checks is not reported as a problem', () => {
+    const s = setup();
+    fs.writeFileSync(path.join(s.bin, 'curl'), healthStub({ postgres: 'connected', canva: 'unverified', modelProvider: 'unverified', telegram: 'active', restatePausedInvocations: 0 }), { mode: 0o755 });
+    const r = runWatchdog(s, ['--status']);
+    expect(r.out).not.toMatch(/core degraded/);
+  });
+
+  it('a Core degraded by a failed dependency is still reported, unverified checks or not', () => {
+    const s = setup();
+    fs.writeFileSync(path.join(s.bin, 'curl'), healthStub({ postgres: 'disconnected', canva: 'unverified', modelProvider: 'unverified' }), { mode: 0o755 });
+    const r = runWatchdog(s, ['--status']);
+    expect(r.out).toMatch(/core degraded .*postgres/);
+  });
+
+  it('a Core degraded for a reason the watchdog does not name (a thrown kill switch) is still reported', () => {
+    const s = setup();
+    fs.writeFileSync(path.join(s.bin, 'curl'), healthStub({ postgres: 'connected', canva: 'unverified', telegram: 'kill_switch_active' }), { mode: 0o755 });
+    const r = runWatchdog(s, ['--status']);
+    expect(r.out).toMatch(/core degraded/);
+  });
 });

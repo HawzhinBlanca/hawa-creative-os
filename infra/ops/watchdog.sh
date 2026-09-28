@@ -148,7 +148,15 @@ if isinstance(parked,int) and parked>0: bad["parkedClientMessages"]=parked
 # (resume or cancel it in the Restate UI) and said nothing until health reported it.
 paused=d.get("restatePausedInvocations",0)
 if isinstance(paused,int) and paused>0: bad["restatePausedInvocations"]=paused
-print(h.get("status","?")+("" if not bad else " "+json.dumps(bad)))' 2>/dev/null || echo "unparseable")"
+# "unverified" is not a failure: in production Core reports Canva and the model provider unverified until
+# a scheduled probe has answered (e981e59f, ADR-100), and its status is then "degraded" with nothing
+# broken. Alerting on that alone would page the office every 30 minutes; it is shown, not alerted.
+ok={"connected","writable","unconfigured","active","idle","CLOSED","healthy","unverified"}
+others={k:v for k,v in d.items() if not isinstance(v,(int,float)) and v not in ok}
+unverified=sorted(k for k,v in d.items() if v=="unverified")
+status=h.get("status","?")
+if status=="degraded" and not bad and not others and unverified: status="healthy (unverified: "+", ".join(unverified)+")"
+print(status+("" if not bad else " "+json.dumps(bad)))' 2>/dev/null || echo "unparseable")"
   [[ "$summary" == healthy* ]] || problems+=("core ${summary}")
 fi
 # Every running worker colour answers for itself. One of them must be running the outbox: "live" (or
