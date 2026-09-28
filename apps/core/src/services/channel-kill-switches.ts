@@ -36,6 +36,23 @@ export class KillSwitchRevisionConflict extends Error {
 }
 
 export const KILL_SWITCH_CHANNELS: readonly KillSwitchChannel[] = ['telegram', 'waha'];
+
+/**
+ * Who may throw or release each switch, on every route that changes one (ADR-128). WhatsApp is the
+ * administrator's, as POST /waha/kill-switch always was: an art director or operator used to release
+ * it through the ingress toggle or /operations/kill-switch. Telegram is the office's: the Desk, and the
+ * nightly Restate backup (infra/backup/restate_nightly.py, ADR-054), which pauses it with the art
+ * director's key, or the bearer key, and releases it with the pause's changeTag.
+ */
+const KILL_SWITCH_ROLES: Record<KillSwitchChannel, readonly string[]> = {
+  telegram: ['operator', 'administrator', 'art_director'],
+  waha: ['administrator'],
+};
+
+export function mayChangeKillSwitch(channel: KillSwitchChannel, role: string | undefined): boolean {
+  return KILL_SWITCH_ROLES[channel].includes(role ?? '');
+}
+
 /** The `hawa.integrations` name of each channel's switch row. */
 export const KILL_SWITCH_ROW_NAME = 'office-kill-switch';
 /** How old this process's copy may be before a read asks Postgres again. */

@@ -5,7 +5,7 @@ import { isValidUuid } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { taskFromRows } from '../services/task-reader.js';
-import { compareAndSetKillSwitch, KillSwitchRevisionConflict, refreshKillSwitches, setKillSwitch } from '../services/channel-kill-switches.js';
+import { compareAndSetKillSwitch, KillSwitchRevisionConflict, mayChangeKillSwitch, refreshKillSwitches, setKillSwitch } from '../services/channel-kill-switches.js';
 
 export function registerIngressRoutes(ctx: RouteContext) {
   const { registerRoute, unifiedIngress, channelKillSwitches, problem } = ctx;
@@ -45,8 +45,10 @@ export function registerIngressRoutes(ctx: RouteContext) {
     try {
       const auth = ctx.verifyRequestAuth(c);
       if (!auth.authenticated || !auth.actorId) return problem(c, 401, 'Unauthorized', 'Authentication required for the intake switch');
-      if (!['operator', 'administrator', 'art_director'].includes(auth.role ?? '')) {
-        return problem(c, 403, 'Forbidden', 'Only office operators may change the intake switch');
+      if (!mayChangeKillSwitch(channel, auth.role)) {
+        return problem(c, 403, 'Forbidden', channel === 'waha'
+          ? 'Administrator role required for the WhatsApp switch'
+          : 'Only office operators may change the intake switch');
       }
       const changeTag = expectedChangeTag === undefined
         ? await setKillSwitch(channelKillSwitches, channel, !enabled, auth.actorId)

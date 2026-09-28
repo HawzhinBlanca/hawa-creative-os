@@ -10,6 +10,10 @@ import { createApp } from '../src/app.js';
  */
 const WORKER = ['worker', 'token', 'fixture'].join('_');
 const INTAKE = '/v1/internal/telegram/intake';
+const DELIVERY = [
+  `/v1/internal/tasks/${randomUUID()}/delivery-finished`,
+  `/v1/internal/lifecycle/${randomUUID()}/deliveries/${randomUUID()}/prepare`,
+];
 
 function app(options: Record<string, unknown> = {}) {
   const bridge = {
@@ -72,5 +76,55 @@ describe('HAWA_WORKER_TOKEN and /v1/internal/*', () => {
   it('a worker token that is also another key is refused, so the operator key never becomes a service key', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', process.env.HAWA_BEARER_TOKEN!);
     expect((await call(app(), INTAKE, { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` })).status).toBe(401);
+  });
+
+  // ADR-128. The Delivery routes checked HAWA_WORKER_TOKEN themselves and skipped serviceTokenOf, so a
+  // worker token equal to the operator key let the operator key report a delivery or start one.
+  it('the Delivery routes refuse a clashing worker token too, before reading the body', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', process.env.HAWA_BEARER_TOKEN!);
+    const a = app();
+    for (const path of DELIVERY) {
+      const res = await call(a, path, { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` });
+      expect(res.status, path).toBe(401);
+    }
+  });
+
+  it('the Delivery routes refuse a worker token shorter than 16 characters, as intake does', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', 'short_worker');
+    const a = app();
+    expect((await call(a, INTAKE, { Authorization: 'Bearer short_worker' })).status).toBe(401);
+    for (const path of DELIVERY) expect((await call(a, path, { Authorization: 'Bearer short_worker' })).status, path).toBe(401);
+  });
+
+  it('the Delivery routes take the worker token as a service principal: past authentication to body validation', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    const a = app();
+    for (const path of DELIVERY) {
+      const res = await call(a, path, { Authorization: `Bearer ${WORKER}` });
+      expect(res.status, path).toBe(422);
+    }
+    for (const token of [process.env.HAWA_BEARER_TOKEN!, process.env.HAWA_ADMIN_KEY!, process.env.HAWA_ART_DIRECTOR_KEY!]) {
+      for (const path of DELIVERY) expect((await call(a, path, { Authorization: `Bearer ${token}` })).status, path).toBe(401);
+    }
+  });
+
+  // ADR-128. HAWA_DEV_TOKEN is a key POST /auth/session turns into an operator session; a worker token
+  // equal to it made the worker's credential an operator credential.
+  it('a worker token equal to HAWA_DEV_TOKEN is refused on every internal route', async () => {
+    const token = ['dev', 'and', 'worker', 'fixture'].join('_');
+    vi.stubEnv('HAWA_WORKER_TOKEN', token);
+    vi.stubEnv('HAWA_DEV_TOKEN', token);
+    const a = app();
+    expect((await call(a, INTAKE, { Authorization: `Bearer ${token}` })).status).toBe(401);
+    for (const path of DELIVERY) expect((await call(a, path, { Authorization: `Bearer ${token}` })).status, path).toBe(401);
+  });
+
+  it('POST /auth/session never issues a session for the worker token', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    // extraBearerTokens is the one other way a key maps to a role; the worker token must not pass it.
+    const a = app({ extraBearerTokens: { [WORKER]: 'operator' } });
+    const res = await a.request('/v1/auth/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: WORKER }) });
+    expect(res.status).toBe(401);
+    expect((await call(a, INTAKE, { Authorization: `Bearer ${WORKER}` })).status).toBe(200);
   });
 });

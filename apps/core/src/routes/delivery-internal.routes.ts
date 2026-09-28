@@ -2,7 +2,7 @@ import type { DeliveryOutcome } from '@hawa/contracts';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { RouteContext } from './types.js';
-import { isValidUuid, secretsEqual } from '../core-helpers.js';
+import { isValidUuid } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
 
@@ -21,22 +21,18 @@ import { log } from '../logging.js';
  * They are registered straight on the app, not through registerRoute, because they take one
  * credential only: the worker's own HAWA_WORKER_TOKEN, a service principal (PHASE2_DESIGN.md 1.2
  * finding 3). The operator, Desk and API tokens all open registerRoute's guard, and none of them may
- * reach these. When verifyRequestAuth learns the service principal (the internal-auth work of the
- * same phase), a caller it maps to role 'service' is accepted too; until then this module checks the
- * token itself.
+ * reach these. verifyRequestAuth maps that token to role 'service' on /v1/internal/* only, and this
+ * module accepts that role and nothing else.
  */
 export function registerDeliveryInternalRoutes(ctx: RouteContext): void {
   const { app, problem, readCurrentTask, verifyRequestAuth } = ctx;
   const { prepareWorkflowDelivery, finishWorkflowDelivery } = ctx.delivery;
 
+  // Only verifyRequestAuth decides (ADR-128). On /v1/internal/* it accepts HAWA_WORKER_TOKEN alone and
+  // only through serviceTokenOf, which refuses a token shorter than 16 characters or equal to another
+  // key. This check used to compare the raw variable itself, so a worker token equal to the operator
+  // key let the operator key report a delivery or start one, while intake refused it.
   const isWorker = (c: Context): boolean => {
-    const configured = process.env.HAWA_WORKER_TOKEN;
-    const header = String(c.req.header('Authorization') || '');
-    const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
-    if (configured && configured.trim() && presented && secretsEqual(presented, configured)) return true;
-    // Only a request that carries a credential: the test harness signs token-less requests in as an
-    // operator, and an operator is refused anyway, but nothing here relies on that.
-    if (!presented) return false;
     const auth = verifyRequestAuth(c);
     return Boolean(auth.authenticated && auth.role === 'service');
   };

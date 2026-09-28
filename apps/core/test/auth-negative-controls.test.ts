@@ -203,7 +203,10 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
       expect(res.status).toBe(401);
     });
 
-    it('accepts access_token query parameter on studio media endpoints with valid token', async () => {
+    // ADR-128: the query fallback is retired. The token reached nginx's error log whenever a stored
+    // file was missing, and nothing the Desk ships sends it (AuthorizedImage uses the header; an <img>
+    // sends the session cookie).
+    it('refuses a session in the access_token query parameter on studio media endpoints', async () => {
       const sessionRes = await app.request('/v1/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -211,12 +214,13 @@ describe('Phase 0 Security & Authentication Negative Controls', () => {
       });
       expect(sessionRes.status).toBe(201);
       const session = await sessionRes.json();
+      const media = '/v1/tasks/00000000-0000-0000-0000-000000000001/canva/studio/00000000-0000-0000-0000-000000000002/candidates/00000000-0000-0000-0000-000000000003/preview.png';
 
-      const res = await app.request(
-        `/v1/tasks/00000000-0000-0000-0000-000000000001/canva/studio/00000000-0000-0000-0000-000000000002/candidates/00000000-0000-0000-0000-000000000003/preview.png?access_token=${session.token}`
-      );
-      // Fails authorization check if 401; passes auth if not 401 (e.g. 503/404)
-      expect(res.status).not.toBe(401);
+      expect((await app.request(`${media}?access_token=${session.token}`)).status).toBe(401);
+      // The same session opens the same picture through the header or the session cookie: past
+      // authentication (404/503 without a database), never 401.
+      expect((await app.request(media, { headers: { Authorization: `Bearer ${session.token}` } })).status).not.toBe(401);
+      expect((await app.request(media, { headers: { Cookie: `hawa_session=${session.token}` } })).status).not.toBe(401);
     });
 
     it('rejects access_token query parameter on sensitive non-media routes', async () => {

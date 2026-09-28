@@ -52,7 +52,8 @@ export function isInternalPath(path: string): boolean {
 }
 
 /** Keys the worker token must differ from: one of them would turn it into a second use of that key. */
-const OTHER_KEYS = ['HAWA_API_KEY', 'HAWA_BEARER_TOKEN', 'HAWA_DESK_SECRET', 'HAWA_ADMIN_KEY', 'HAWA_REVIEWER_KEY', 'HAWA_ART_DIRECTOR_KEY', 'TELEGRAM_WEBHOOK_SECRET'] as const;
+// HAWA_DEV_TOKEN too: POST /auth/session turns it into an operator session (ADR-128).
+const OTHER_KEYS = ['HAWA_API_KEY', 'HAWA_BEARER_TOKEN', 'HAWA_DESK_SECRET', 'HAWA_DEV_TOKEN', 'HAWA_ADMIN_KEY', 'HAWA_REVIEWER_KEY', 'HAWA_ART_DIRECTOR_KEY', 'TELEGRAM_WEBHOOK_SECRET'] as const;
 const MIN_TOKEN_LENGTH = 16;
 let warnedAbout = '';
 

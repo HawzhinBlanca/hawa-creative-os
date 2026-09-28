@@ -115,6 +115,42 @@ describe.skipIf(!appUrl || !ownerUrl)('migration 019: the blob store schema', ()
       VALUES ($1, $2, $3, 1, '{}', 'draft', 'not-a-hash')`, [randomUUID(), randomUUID(), TENANT])).rejects.toMatchObject({ code: '23514' });
   });
 
+  // ADR-128. 03-grants.sql is the init script of an empty data directory. Run again after the runner,
+  // its blanket GRANT re-widened every table the migrations had narrowed, its REVOKE on publications
+  // dropped migration 022's executor column grants (so Restate-owned deliveries could not be claimed
+  // or finished), and hawa.schema_upgrades became writable by the application role.
+  it('a re-run of db/03-grants.sql after the runner changes no privilege of the application role', async () => {
+    const strip = (file: string) => fs.readFileSync(path.join(repo, file), 'utf8').replace(/^BEGIN;\s*$/m, '').replace(/^COMMIT;\s*$/m, '');
+    const snapshot = async () => (await owner.query(`
+      SELECT c.relname || ':' || a.privilege_type AS p
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        CROSS JOIN LATERAL aclexplode(c.relacl) a
+       WHERE n.nspname = 'hawa' AND a.grantee = 'hawa_app'::regrole
+      UNION ALL
+      SELECT c.relname || '.' || att.attname || ':' || a.privilege_type
+        FROM pg_attribute att JOIN pg_class c ON c.oid = att.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+        CROSS JOIN LATERAL aclexplode(att.attacl) a
+       WHERE n.nspname = 'hawa' AND a.grantee = 'hawa_app'::regrole
+      ORDER BY 1`)).rows.map((r: { p: string }) => r.p);
+    await owner.query('BEGIN');
+    try {
+      expect((await owner.query(`SELECT to_regclass('hawa.schema_upgrades') IS NOT NULL AS ran`)).rows[0].ran).toBe(true);
+      const before = await snapshot();
+      await owner.query(strip('db/03-grants.sql'));
+      const after = await snapshot();
+      expect({ gained: after.filter((p) => !before.includes(p)), lost: before.filter((p) => !after.includes(p)) }).toEqual({ gained: [], lost: [] });
+      const r = await owner.query(`SELECT
+        has_column_privilege('hawa_app', 'hawa.publications', 'executor', 'UPDATE') AS executor,
+        has_column_privilege('hawa_app', 'hawa.publications', 'executor_run', 'UPDATE') AS executor_run,
+        has_column_privilege('hawa_app', 'hawa.publications', 'executor_finished_run', 'UPDATE') AS executor_finished_run,
+        has_table_privilege('hawa_app', 'hawa.schema_upgrades', 'INSERT') AS upgrades_insert,
+        has_table_privilege('hawa_app', 'hawa.schema_upgrades', 'SELECT') AS upgrades_select`);
+      expect(r.rows[0]).toEqual({ executor: true, executor_run: true, executor_finished_run: true, upgrades_insert: false, upgrades_select: true });
+    } finally {
+      await owner.query('ROLLBACK');
+    }
+  });
+
   it('runs twice (psql by hand after the runner) and keeps its grants when db/03-grants.sql runs again', async () => {
     const strip = (file: string) => fs.readFileSync(path.join(repo, file), 'utf8').replace(/^BEGIN;\s*$/m, '').replace(/^COMMIT;\s*$/m, '');
     await owner.query('BEGIN');

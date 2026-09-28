@@ -439,21 +439,10 @@ export function createApp(options?: CreateAppOptions) {
       const cookieSession = rawCookie?.startsWith('hawa_sess_') ? rawCookie : undefined;
       if (cookieSession) authHeader = `Bearer ${cookieSession}`;
     }
-    // Browser <img> elements cannot set request headers: media and preview endpoints may carry the
-    // session token as an `access_token` query parameter (validated against issued sessions). The
-    // event stream no longer does: it takes a one-use ticket instead (ADR-037).
-    let isQueryToken = false;
-    if (
-      !authHeader &&
-      (String(c.req.path || '').includes('/studio/') ||
-        String(c.req.path || '').match(/\.(png|jpg|jpeg|webp|svg|pdf)$/i))
-    ) {
-      const queryToken = c.req.query('access_token');
-      if (queryToken) {
-        authHeader = `Bearer ${queryToken}`;
-        isQueryToken = true;
-      }
-    }
+    // No credential is read from the query string (ADR-128). Media and preview endpoints used to take
+    // the session token as `?access_token=`: it reached nginx's error log whenever a stored file was
+    // missing. The Desk fetches pictures with the header (AuthorizedImage), and an <img> sends the
+    // session cookie read above; the event stream takes a one-use ticket (ADR-037).
     const botSecret = c.req.header('x-telegram-bot-api-secret-token');
 
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -487,11 +476,6 @@ export function createApp(options?: CreateAppOptions) {
             return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
           }
           return session;
-        }
-
-        if (isQueryToken) {
-          // Task R04: Static long-lived bearer credentials must never be passed in URL query parameters
-          return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
         }
 
         // The worker's token opens /v1/internal/* only (above).

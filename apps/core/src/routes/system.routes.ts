@@ -10,6 +10,7 @@ import { ReceiptAuditService, ReceiptAuditError } from '../services/receipt-audi
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus } from '@hawa/contracts';
 import { log } from '../logging.js';
+import { mayChangeKillSwitch, setKillSwitch, type KillSwitchChannel } from '../services/channel-kill-switches.js';
 import { telegramPollerOf } from '../services/telegram-poller-owner.js';
 import { registerAvailabilityRoutes, availabilityConfig, AvailabilityError, readAvailabilityReport } from './availability.routes.js';
 
@@ -508,13 +509,30 @@ export function registerSystemRoutes(ctx: RouteContext) {
     }
     const body = await c.req.json().catch(() => ({}));
     const { channel, active } = body;
-    if (channel === 'telegram' || channel === 'waha') {
-      const ch = channel as 'telegram' | 'waha';
-      channelKillSwitches[ch] = Boolean(active);
-      broadcastEvent('operations:kill_switch_toggled', { channel: ch, active: channelKillSwitches[ch] });
-      return c.json({ channel: ch, active: channelKillSwitches[ch] }, 200);
+    if (channel !== 'telegram' && channel !== 'waha') {
+      return c.json({ error: 'Invalid channel (must be telegram or waha)' }, 400);
     }
-    return c.json({ error: 'Invalid channel (must be telegram or waha)' }, 400);
+    const ch = channel as KillSwitchChannel;
+    // The same rule as the ingress toggle and POST /waha/kill-switch (ADR-128): this route used to
+    // take any signed-in caller and let an art director release the administrator's WhatsApp switch.
+    if (!mayChangeKillSwitch(ch, auth.role)) {
+      return problem(c, 403, 'Forbidden', ch === 'waha'
+        ? 'Administrator role required for the WhatsApp switch'
+        : 'Only office operators may change the intake switch');
+    }
+    // Answered once PostgreSQL has it, like the toggle: the assignment it made before answered at
+    // once and saved in the background.
+    let changeTag: string | undefined;
+    try {
+      changeTag = await setKillSwitch(channelKillSwitches, ch, Boolean(active), auth.actorId);
+    } catch (err: unknown) {
+      log.error(`[core:kill_switch] the ${ch} kill switch could not be saved:`, err instanceof Error ? err.message : err);
+      return problem(c, 503, 'Switch State Unconfirmed', `The ${ch} switch write or readback did not complete; inspect its persisted state before retrying.`);
+    }
+    // The webhook and /waha/health also read the environment's WhatsApp switch (as the toggle does).
+    if (ch === 'waha') process.env.WAHA_KILL_SWITCH = active ? 'true' : 'false';
+    broadcastEvent('operations:kill_switch_toggled', { channel: ch, active: channelKillSwitches[ch] });
+    return c.json({ channel: ch, active: channelKillSwitches[ch], changeTag }, 200);
   });
 
   registerRoute('post', '/operations/canva/simulate-outage', async (c: any) => {
