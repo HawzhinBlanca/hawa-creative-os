@@ -49,22 +49,32 @@ else
   fi
 fi
 if [[ $rb_rc == 75 ]]; then echo "the nightly Restate backup is running; this pass is skipped"; exit 0; fi
-if [[ $rb_rc != 0 && $rb_rc != 2 ]]; then backup_problem_restate="${rb_out:-Restate backup recovery failed}"; fi
+# backup_holds_lock: recovery failed while a backup still holds the archive lock (a run stuck for over
+# two hours). Step 2 then starts every other container but never Restate, which would tear the copy.
+backup_holds_lock=0
+if [[ $rb_rc != 0 && $rb_rc != 2 ]]; then
+  backup_problem_restate="${rb_out:-Restate backup recovery failed}"
+  rs_rc=0; python3 "$ROOT/infra/backup/restate_nightly.py" --recovery-status >/dev/null 2>&1 || rs_rc=$?
+  [[ $rs_rc != 75 ]] || backup_holds_lock=1
+fi
 
 problems=()
-[[ -z "$backup_problem_restate" ]] || problems+=("$backup_problem_restate")
 # 1. Docker daemon (Docker Desktop is not set to auto-start; the agent runs at login and starts it)
+docker_up=1
 if ! docker info >/dev/null 2>&1; then
   [[ "$MODE" == "--status" ]] || open -ga Docker 2>/dev/null || true
   for _ in $(seq 1 36); do docker info >/dev/null 2>&1 && break; sleep 5; done
-  docker info >/dev/null 2>&1 || problems+=("Docker is not running and could not be started")
+  docker info >/dev/null 2>&1 || { docker_up=0; problems+=("Docker is not running and could not be started"); }
 fi
 # 2. Stack containers: the six stack services by name, at least one worker, and the vector log
 #    shipper (stack_containers.sh says why each is matched by name). Only deploy.sh creates a worker
 #    colour; a colour it removed must stay removed.
 running_names() { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; }
 source "$ROOT/infra/ops/stack_containers.sh"
-if [[ ${#problems[@]} -eq 0 ]]; then
+# Step 2 depends only on Docker. A Restate backup that could not be put back is reported (below) but
+# no longer stops the restart: it used to be counted before this step, and a record the office must
+# release by hand then kept every stopped container down, unreported, until it cleared.
+if [[ "$docker_up" == 1 ]]; then
   running="$(count_stack)"; workers="$(count_workers)"
   if [[ "$running" -lt "$STACK_SIZE" || "$workers" -lt 1 ]] || ! vector_running; then
     if [[ "$MODE" != "--status" ]]; then
@@ -73,7 +83,18 @@ if [[ ${#problems[@]} -eq 0 ]]; then
       # missing and never recreates a running one: this checkout can be ahead of the deploy (merged,
       # its gate not yet passed), and on 2026-09-23 `up -d` rebuilt Core from the newer compose file
       # while the deploy that would have migrated for it had stopped at its test gate.
-      "${COMPOSE[@]}" start >/dev/null 2>&1 || true
+      # While a stuck backup holds the archive lock, the stopped containers are started by name and
+      # Restate is left out (a bare `compose start` or `up` starts every service, and `up core` starts
+      # Restate as Core's dependency, hence --no-deps).
+      up_args=(up -d --no-build --no-recreate)
+      if [[ "$backup_holds_lock" == 1 ]]; then
+        up_args+=(--no-deps); for service in "${STACK_SERVICES[@]}" vector; do [[ "$service" == restate ]] || up_args+=("$service"); done
+        for name in $( { docker ps -a --filter name=hawa-production- --filter status=exited --filter status=created --format '{{.Names}}' 2>/dev/null || true; } | grep -E "$STACK_NAME|$VECTOR_NAME" | grep -vx 'hawa-production-restate-1' || true); do
+          docker start "$name" >/dev/null 2>&1 || true
+        done
+      else
+        "${COMPOSE[@]}" start >/dev/null 2>&1 || true
+      fi
       # The worker colours sit behind a compose profile, which `start` and `up` leave alone: start the
       # worker containers that exist (a deploy removes a colour once it has drained).
       for name in $( { docker ps -a --filter name=hawa-production-worker --filter status=exited --filter status=created --format '{{.Names}}' 2>/dev/null || true; } | grep -E "$WORKER_NAME" || true); do
@@ -82,7 +103,7 @@ if [[ ${#problems[@]} -eq 0 ]]; then
       sleep 10
       running="$(count_stack)"
       if [[ "$running" -lt "$STACK_SIZE" ]] || ! vector_running; then
-        "${COMPOSE[@]}" up -d --no-build --no-recreate >/dev/null 2>&1 || problems+=("compose up failed")
+        "${COMPOSE[@]}" "${up_args[@]}" >/dev/null 2>&1 || problems+=("compose up failed")
       fi
       sleep 20
       running="$(count_stack)"; workers="$(count_workers)"
@@ -92,6 +113,7 @@ if [[ ${#problems[@]} -eq 0 ]]; then
     [[ "$workers" -ge 1 ]] || problems+=("no worker container is running (run infra/docker/deploy.sh --apply to start one)")
   fi
 fi
+[[ -z "$backup_problem_restate" ]] || problems=("$backup_problem_restate" ${problems[@]+"${problems[@]}"})
 # 3. Core and worker health
 core="$(curl -fsS -m 10 http://127.0.0.1:8080/v1/health 2>/dev/null || true)"
 if [[ -z "$core" ]]; then problems+=("core health does not answer on 127.0.0.1:8080")

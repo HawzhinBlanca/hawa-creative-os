@@ -37,6 +37,8 @@ case "$*" in
   *" psql "*) echo t ;;
   "exec hawa-production-core-1 node -e"*" release ${TAG}") echo '{"enabled":true,"killSwitchActive":false,"changeTag":"00000000-0000-4000-a000-000000000008","channels":{"telegram":true}}' ;;
   "exec hawa-production-core-1 node -e"*" status") echo '{"channels":{"telegram":true}}' ;;
+  "ps -a "*) [[ -n "\${STUB_EXITED:-}" ]] && printf '%s\\n' \${STUB_EXITED} ;;
+  *" up -d --no-deps restate") [[ -z "\${STUB_RESTATE_UP_FAILS:-}" ]] || exit 1 ;;
 esac
 exit 0
 `;
@@ -77,8 +79,8 @@ async function liveBackup(s: ReturnType<typeof setup>): Promise<void> {
   });
 }
 
-function runWatchdog(s: ReturnType<typeof setup>, args: string[] = []) {
-  const res = spawnSync(BASH, [watchdog, ...args], { encoding: 'utf8', timeout: 60_000, env: s.env });
+function runWatchdog(s: ReturnType<typeof setup>, args: string[] = [], extraEnv: Record<string, string> = {}) {
+  const res = spawnSync(BASH, [watchdog, ...args], { encoding: 'utf8', timeout: 60_000, env: { ...s.env, ...extraEnv } });
   return { code: res.status, out: `${res.stdout}\n${res.stderr}` };
 }
 
@@ -129,6 +131,57 @@ describe('the watchdog and the nightly Restate backup', () => {
     expect(r.code, r.out).toBe(1);
     expect(r.out).toMatch(/pause revision was never recorded/);
     expect(s.calls()).not.toMatch(/ release /);
+    expect(fs.existsSync(s.record)).toBe(true);
+  });
+
+  // Review finding (2026-09-28): a recovery problem was put into `problems` before the Docker check,
+  // and step 2 (start and report the stack containers) ran only with no problem at all, so a record
+  // that could not be put back stopped every restart and every "N/6 running" report until it cleared.
+  const STACK_START = /^docker compose .* (start|up -d --no-build --no-recreate)$/m;
+
+  it('still starts and reports stopped stack containers when a pausing record cannot be put back', () => {
+    const s = setup();
+    writeRecord(s, { switch: 'pausing', changeTag: null, restate: 'running' });
+    fs.writeFileSync(path.join(s.bin, 'docker'), DOCKER_STUB.replace('*" psql "*) echo t ;;', '*" psql "*) echo f ;;').replace(`echo '{"channels":{"telegram":true}}'`, `echo '{"channels":{"telegram":false}}'`), { mode: 0o755 });
+    const r = runWatchdog(s);
+    expect(r.code, r.out).toBe(1);
+    expect(r.out).toMatch(/pause revision was never recorded/);
+    expect(s.calls(), r.out).toMatch(STACK_START);
+    expect(r.out).toMatch(/only 0\/6 stack containers running \(down: nginx,desk,core,cutout,postgres,restate\)/);
+    expect(fs.existsSync(s.record)).toBe(true);
+  });
+
+  it('after a reboot, a failed Restate start in recovery does not stop the stack restart', () => {
+    const s = setup();
+    writeRecord(s, {});
+    const r = runWatchdog(s, [], { STUB_RESTATE_UP_FAILS: '1' });
+    expect(r.code, r.out).toBe(1);
+    expect(r.out).toMatch(/Restate backup recovery failed/);
+    expect(s.calls(), r.out).toMatch(STACK_START);
+    expect(r.out).toMatch(/stack containers running/);
+    expect(fs.existsSync(s.record)).toBe(true);
+  });
+
+  it('with a backup stuck under a live lock, starts the other containers but never Restate', async () => {
+    const s = setup();
+    writeRecord(s, {});
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    fs.utimesSync(s.record, threeHoursAgo, threeHoursAgo);
+    await liveBackup(s);
+    const exited = 'hawa-production-core-1 hawa-production-restate-1 hawa-production-nginx-1 hawa-production-vector-1';
+    const r = runWatchdog(s, [], { STUB_EXITED: exited });
+    expect(r.code, r.out).toBe(1);
+    expect(r.out).toMatch(/has held the archive lock for \d+ minutes/);
+    const calls = s.calls();
+    // Neither a bare `compose start`/`up` (every service, Restate with them) nor Restate by name.
+    expect(calls, r.out).not.toMatch(STACK_START);
+    expect(calls).not.toMatch(/docker start hawa-production-restate-1/);
+    expect(calls).not.toMatch(/ up .*restate/);
+    expect(calls).toMatch(/^docker start hawa-production-core-1$/m);
+    expect(calls).toMatch(/^docker start hawa-production-nginx-1$/m);
+    expect(calls).toMatch(/^docker start hawa-production-vector-1$/m);
+    expect(calls).toMatch(/^docker compose .* up -d --no-build --no-recreate --no-deps nginx desk core cutout postgres vector$/m);
+    expect(r.out).toMatch(/stack containers running \(down: .*restate/);
     expect(fs.existsSync(s.record)).toBe(true);
   });
 
