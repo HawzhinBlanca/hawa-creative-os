@@ -1180,6 +1180,190 @@
           }
         }
       }
+    },
+    "/v1/tasks/{taskId}/canva/amendment-observation": {
+      "get": {
+        "operationId": "canvaAmendmentObservation",
+        "tags": [
+          "Integrations"
+        ],
+        "description": "Read-only observation on the authenticated app connection. Rejects changed task/binding/native metadata. Never authorizes an amendment. Capability reads require profile:read; missing access remains unknown. Invoked explicitly, not by polling.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observed capabilities and named field types, or independent unknown/unavailable/forbidden observations. nativeAmendmentQualified is always false.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "observedAt",
+                    "nativeAmendmentQualified",
+                    "basis",
+                    "capabilities",
+                    "dataset",
+                    "limitation"
+                  ],
+                  "properties": {
+                    "observedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "nativeAmendmentQualified": {
+                      "const": false
+                    },
+                    "basis": {
+                      "type": "object",
+                      "required": [
+                        "taskId",
+                        "clientId",
+                        "taskVersion",
+                        "bindingId",
+                        "bindingVersion",
+                        "designId",
+                        "nativeUpdatedAt",
+                        "pageCount"
+                      ],
+                      "properties": {
+                        "taskId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "clientId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "taskVersion": {
+                          "type": "integer"
+                        },
+                        "bindingId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "bindingVersion": {
+                          "type": "integer"
+                        },
+                        "designId": {
+                          "type": "string"
+                        },
+                        "nativeUpdatedAt": {
+                          "type": "integer"
+                        },
+                        "pageCount": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "capabilities": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "status",
+                            "data"
+                          ],
+                          "properties": {
+                            "status": {
+                              "const": "observed"
+                            },
+                            "data": {
+                              "type": "array",
+                              "maxItems": 100,
+                              "items": {
+                                "type": "string",
+                                "maxLength": 100
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "$ref": "#/components/schemas/CanvaObservationFailure"
+                        }
+                      ]
+                    },
+                    "dataset": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "status",
+                            "data"
+                          ],
+                          "properties": {
+                            "status": {
+                              "const": "observed"
+                            },
+                            "data": {
+                              "type": "object",
+                              "maxProperties": 512,
+                              "additionalProperties": {
+                                "type": "object",
+                                "required": [
+                                  "type"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "enum": [
+                                      "text",
+                                      "image",
+                                      "chart",
+                                      "sheet"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "$ref": "#/components/schemas/CanvaObservationFailure"
+                        }
+                      ]
+                    },
+                    "limitation": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "404": {
+            "description": "Task not found in scope"
+          },
+          "409": {
+            "description": "Binding missing, connection not ready, or observation became stale"
+          },
+          "422": {
+            "description": "Invalid identifier"
+          },
+          "502": {
+            "description": "Native metadata could not be verified"
+          },
+          "503": {
+            "description": "Storage or configuration unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1265,6 +1449,29 @@
           },
           "review": {
             "$ref": "#/components/schemas/CaptureReview"
+          }
+        }
+      },
+      "CanvaObservationFailure": {
+        "type": "object",
+        "required": [
+          "status",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "unknown",
+              "unavailable",
+              "forbidden"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
           }
         }
       }

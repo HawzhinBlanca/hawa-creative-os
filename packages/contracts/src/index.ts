@@ -24,3 +24,4 @@ export * from './evaluation-evidence.js';
 export * from './operations-reliability.js';
 
 export * from './publication-audit.js';
+export * from './canva-amendment.js';

@@ -5,12 +5,15 @@ import {canvaPreviewEvidence} from '../services/canvaPreviewEvidence.js';
 import {NativeRevisionHandoff} from './NativeRevisionHandoff.js';
 import {NativeReviewSubmit} from './NativeReviewSubmit.js';
 import {captureForReview} from '../services/canvaCapture.js';
+import type {CanvaAmendmentObservation} from '@hawa/contracts';
 export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId,taskStatus})=>{
   const generationBlocker=taskGenerationBlocker(taskStatus);
   const [state,setState]=useState<any>(null),[connected,setConnected]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
   useEffect(()=>{setMessage('');},[taskStatus]);
   const [width,setWidth]=useState('1200'),[height,setHeight]=useState('1697'),[results,setResults]=useState<Record<string,any>>({});
   const [plans,setPlans]=useState<any[]>([]);
+  const [amendmentObservation,setAmendmentObservation]=useState<CanvaAmendmentObservation|null>(null);
+  useEffect(()=>setAmendmentObservation(null),[taskId,state?.binding?.id,state?.binding?.version]);
   const [retirementReasons,setRetirementReasons]=useState<Record<string,string>>({});
   const [preview,setPreview]=useState<{url:string;artifactId:string;taskId:string} | null>(null);
   const activeTask=useRef(taskId); activeTask.current=taskId;
@@ -98,6 +101,24 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
         a.format==='pptx'&&a.confirmation_event_id===state?.revisionHandoff?.confirmedEventId&&a.capture_version===latestPng?.capture_version)?.id}/>
     {message&&<p role="status">{message}</p>}
     <details style={{marginTop:12}}><summary>Evidence and operation history</summary>
+    {state?.binding&&<div>
+      <button className="btn" disabled={busy||!connected} onClick={()=>run(async()=>{
+        setAmendmentObservation(null);
+        const observation=await apiClient.canva.amendmentObservation(taskId);
+        if(activeTask.current===taskId)setAmendmentObservation(observation);
+      })}>Inspect automatic-edit support</button>
+      {amendmentObservation?.basis.taskId===taskId&&amendmentObservation.basis.bindingId===state.binding.id&&
+        amendmentObservation.basis.bindingVersion===state.binding.version&&<div role="status">
+        <p>Observed {new Date(amendmentObservation.observedAt).toLocaleString()}. Automatic amendments remain unqualified.</p>
+        <p>{amendmentObservation.capabilities.status==='observed'
+          ? `Account advertises autofill: ${amendmentObservation.capabilities.data.includes('autofill')?'yes':'not reported'}.`
+          : amendmentObservation.capabilities.message}</p>
+        {amendmentObservation.dataset.status==='observed'
+          ? <><p>Named fields: {Object.keys(amendmentObservation.dataset.data).length}.</p><ul>{Object.entries(amendmentObservation.dataset.data).map(([name,field])=><li key={name}>{name} · {field.type}</li>)}</ul></>
+          : <p>{amendmentObservation.dataset.message}</p>}
+        <p>{amendmentObservation.limitation}</p>
+      </div>}
+    </div>}
     {(state?.operations||[]).map((o:any)=>{const r=results[o.id];return <div key={o.id} style={{borderTop:'1px solid var(--border)',padding:'8px 0'}}>
       <span>{o.kind==='create'?'Native design':'Export'} · {r?.status||o.status}</span>
       {o.reconciliation_required&&<p role="status">The original design creation needs reconciliation. Check the original import or link its existing Canva design. Starting another creation is blocked.</p>}

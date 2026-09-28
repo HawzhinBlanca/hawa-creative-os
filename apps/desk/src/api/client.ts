@@ -1,4 +1,5 @@
 import type { ReceiptAuditAction, ReceiptAuditState, ReceiptAuditResult } from '@hawa/contracts';
+import type { CanvaAmendmentObservation } from '@hawa/contracts';
 import type { NativeRecoveryScope, NativeReviewReply } from '@hawa/domain';
 export type NativeReviewBody = {requestId:string;expectedRev:number;expectedTaskVersion:number;artifactId:string;confirmationEventId:string};
 const nativeRecoveryHeaders = (scope?:NativeRecoveryScope):Record<string,string> => scope
@@ -514,6 +515,7 @@ class HawaApiClient {
     resumePlan: (id:string,planId:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans/${encodeURIComponent(planId)}/resume`,{method:'POST'}),
     resumeImport: (id:string,operationId:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/imports/${encodeURIComponent(operationId)}/resume`,{method:'POST'}),
     editor: (id:string) => this.request<{url:string}>(`/tasks/${encodeURIComponent(id)}/canva/editor`),
+    amendmentObservation: (id:string) => this.request<CanvaAmendmentObservation>(`/tasks/${encodeURIComponent(id)}/canva/amendment-observation`),
     create: (id:string,width:number,height:number,key:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/design`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({width,height})}),
     export: (id:string,format:'png'|'pdf'|'pptx',expectedVersion:number,key:string,scope?:NativeRecoveryScope) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/exports`,{method:'POST',headers:{'Idempotency-Key':key,...nativeRecoveryHeaders(scope)},body:JSON.stringify({format,expectedVersion})}),
     resume: (id:string,operationId:string,scope?:NativeRecoveryScope) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/exports/${encodeURIComponent(operationId)}/resume`,{method:'POST',headers:nativeRecoveryHeaders(scope)}),

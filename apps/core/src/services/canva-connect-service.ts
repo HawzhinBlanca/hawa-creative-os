@@ -2,6 +2,7 @@ import { assertTaskGenerationAllowed } from './task-generation-guard.js';
 import { assertNativeRevisionAdmission, nativeRevisionHandoff, latestRevisionCopy } from './native-revision-handoff.js';
 import { canRetryCanvaCreation } from '@hawa/domain';
 import { CanvaFlowError } from './canva-flow-error.js';
+import { inspectCanvaAmendment } from './canva-amendment-observation.js';
 import { lockNativeRecovery, type NativeActorScope } from './lifecycle-native-scope.js';
 import { resolveManualExportPolicy, type ExportCheckPolicy } from './canva-export-policy.js';
 import { checkCanvaPptx } from '@hawa/qa';
@@ -262,6 +263,9 @@ export class CanvaConnectService {
     if (design.id !== binding.canva_design_id) return fail(502,'CANVA_DESIGN_MISMATCH','Canva returned a different design');
     return { url: design.urls.edit_url, designId: design.id, bindingVersion: binding.version,
       verification: 'provider_metadata_verified', updatedAt: design.updated_at, pageCount: design.page_count ?? null };
+  }
+  async amendmentObservation(s:Scope,taskId:string) {
+    return inspectCanvaAmendment(this.db,s,taskId,()=>this.authorizedClient(s));
   }
   async createDesign(s: Scope,taskId: string,key: string,width: number,height: number) {
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(key) || ![width,height].every(n => Number.isInteger(n) && n >= 40 && n <= 8000) || width*height > 25000000) fail(422,'CANVA_DESIGN_REQUEST_INVALID','Specify a stable request key and dimensions between 40 and 8000 pixels');

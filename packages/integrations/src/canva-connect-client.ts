@@ -32,6 +32,15 @@ export interface CanvaDesignResponse {
   };
 }
 
+export interface CanvaCapabilitiesResponse { capabilities: string[] }
+export interface CanvaDesignDatasetResponse {
+  dataset: Record<string, {type:'text'|'image'|'chart'|'sheet'}>;
+}
+
+function providerRecord(value:unknown):value is Record<string,unknown> {
+  return typeof value==='object' && value!==null && !Array.isArray(value);
+}
+
 export interface CanvaExportJobResponse {
   job: {
     id: string;
@@ -451,6 +460,34 @@ export class CanvaConnectClient {
     }
 
     return validateCanvaDesignResponse(await res.json());
+  }
+
+  /** Account observation is distinct from operation qualification or a subscription inference. */
+  public async getCapabilities():Promise<CanvaCapabilitiesResponse> {
+    const res=await this.readWithRetry(`${this.baseUrl}/users/me/capabilities`);
+    if(!res.ok)throw new CanvaHttpError(`Canva capabilities failed (HTTP ${res.status})`,res.status);
+    const body:unknown=await res.json();
+    if(!providerRecord(body) || (body.capabilities!==undefined && (!Array.isArray(body.capabilities) ||
+      body.capabilities.length>100 || body.capabilities.some(v=>typeof v!=='string' || !/^[a-z][a-z0-9_]{0,99}$/.test(v)))))
+      throw new Error('Invalid Canva capabilities response');
+    return {capabilities:[...new Set((body.capabilities??[]) as string[])]};
+  }
+
+  /** Exact names/types must be read before constructing any autofill request; unknown names are skipped remotely. */
+  public async getDesignDataset(designId:string):Promise<CanvaDesignDatasetResponse> {
+    if(!/^[A-Za-z0-9_-]{1,128}$/.test(designId))throw new Error('Invalid Canva design ID');
+    const res=await this.readWithRetry(`${this.baseUrl}/designs/${encodeURIComponent(designId)}/dataset`);
+    if(!res.ok)throw new CanvaHttpError(`Canva dataset failed (HTTP ${res.status})`,res.status);
+    const body:unknown=await res.json();
+    if(!providerRecord(body) || (body.dataset!==undefined && !providerRecord(body.dataset)))throw new Error('Invalid Canva dataset response');
+    const entries=Object.entries(body.dataset??{});
+    if(entries.length>512)throw new Error('Invalid Canva dataset size');
+    const dataset:CanvaDesignDatasetResponse['dataset']=Object.fromEntries(entries.map(([name,value])=>{
+      if(!name || name.length>1024 || !providerRecord(value) || typeof value.type!=='string' || !['text','image','chart','sheet'].includes(value.type))
+        throw new Error('Invalid Canva dataset field');
+      return [name,{type:value.type as 'text'|'image'|'chart'|'sheet'}];
+    }));
+    return {dataset};
   }
 
   public async createImportJob(bytes: Uint8Array, title: string) {

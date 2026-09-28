@@ -60,6 +60,7 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
       db=>confirmNativeRevisionCopy(db,s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body)));
   }));
   ctx.registerRoute('get','/tasks/:taskId/canva/editor',protect(async(c,s,api)=>c.json(await api.editor(s,c.req.param('taskId')))));
+  ctx.registerRoute('get','/tasks/:taskId/canva/amendment-observation',protect(async(c,s,api)=>c.json(await api.amendmentObservation(s,c.req.param('taskId')))));
   ctx.registerRoute('get','/tasks/:taskId/canva/plans',protect(async(c,s)=>c.json({plans:await planner!.state(s,c.req.param('taskId'))})));
   ctx.registerRoute('post','/tasks/:taskId/canva/generate',protect(async(c,s)=>{
     const body=await c.req.json().catch(()=>({}));

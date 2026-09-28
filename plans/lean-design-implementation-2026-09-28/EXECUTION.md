@@ -361,3 +361,27 @@ in the retained local sample, including input identity checks. This is not an
 end-to-end latency, quality or savings claim. Native Canva shaping/reopen/export,
 human Sorani review, all remaining packages and final release/restore remain open.
 No deployment, production write or full release qualification was performed.
+
+## Native amendment prerequisites — ADR-119
+
+The typed Canva client now reads account capabilities and exact named-field types.
+The authenticated scoped GET and explicit Desk action bind results to task/client,
+task version, link identity/version and observed native update metadata; detected
+mid-read changes refuse the result. Unknown field kinds, malformed inventories
+and unsafe errors cannot appear as positive evidence. A capability 403 remains
+unknown because permission and subscription cannot be distinguished from it.
+No native write is enabled and no observation enters the five-second UI poll.
+
+Final affected verification: 8 files/136 passed, zero failed/skipped; all 531 strict
+test roots, source/scripts, Desk build, any ratchet, egress and security checks pass.
+Initial red and intermediate fixture/version failures are retained. Real backend
+OAuth GET probe reaches the prior synthetic multilingual fixture: native metadata
+stable, dataset empty, capability endpoint403. Existing default scopes omit
+profile:read. Ordinary token refresh may update connection metadata; no native
+edit, deployment or full release gate was performed.
+
+Proof: NATIVE_OBSERVATION_PROOF.json. Package4 remains open. Next is preparation
+and actual qualification of a named-field disposable fixture with protected manual
+changes, readback, reopen/export and uncertainty handling. Independent visual-judge
+qualification identified in the latest research remains in package5; all six
+packages and whole-goal completion remain active.

@@ -87,3 +87,14 @@ or reviewing the existing run; the change cannot be silently adopted on resume.
 Historical version-1 bundles lack this evidence and remain held for review. This is
 font-input evidence, not native Canva fidelity or full renderer/OS reproducibility.
 See [ADR-116](../adrs/116_retained_font_basis.md).
+
+## Native amendment observation (ADR-119)
+
+Desk can explicitly inspect the current link's named fields and account capability
+advertisements through the authenticated app connection. These reads retain a task,
+binding and native metadata basis and reject a detected change during inspection.
+They do not authorize writes or establish native preservation. Timestamp equality
+does not exclude concurrent edits. A denied capability read remains unknown,
+including when the optional profile:read grant is absent; it does not establish a
+subscription limitation. See [ADR-119](../adrs/119_native_amendment_capability_observation.md)
+and [the inspection runbook](../runbooks/CANVA_AMENDMENT_INSPECTION.md).

@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T02:39:59Z",
+  "generatedAt": "2026-09-28T03:02:07Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 469,
+  "fileCount": 472,
   "files": [
     {
       "path": ".dockerignore",
@@ -663,9 +663,14 @@
       "bytes": 4004
     },
     {
+      "path": "adrs/119_native_amendment_capability_observation.md",
+      "sha256": "2aea0c4efd1807b3cb5e8787a361bdd1226e34a9fce60f9bf65bfece97f10bd5",
+      "bytes": 3613
+    },
+    {
       "path": "api/canva-connect.openapi.json",
-      "sha256": "88a3d91f3372ecd1bbf4e97e56e8eefe23bfdd4c4a2f8fcb3d022ac079e03143",
-      "bytes": 38168
+      "sha256": "0a40a0ee632644cf1c1e0531fb516e5f4f7cb0dc857172785003ae6398e02845",
+      "bytes": 45259
     },
     {
       "path": "api/events.md",
@@ -674,8 +679,8 @@
     },
     {
       "path": "api/openapi.yaml",
-      "sha256": "3eba181df52ef8d340d3870ba7466f5add644d34fca2e313c3f4e5d4f9208727",
-      "bytes": 95898
+      "sha256": "a94635b074730468aba00273c3a1d9a68600992c9f7667ba6527becf918828b9",
+      "bytes": 96048
     },
     {
       "path": "api/task-controls.openapi.json",
@@ -1029,8 +1034,8 @@
     },
     {
       "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
-      "sha256": "2e9ef54bee4d528961c03f33ac9a1fc6a3e68449032df8e79b3635e97c516e75",
-      "bytes": 7234
+      "sha256": "db7bca58615eece59011a61730db9ae09105358ce6dc7d53a8ef1181a51912c1",
+      "bytes": 7936
     },
     {
       "path": "docs/30_FUTURE_EVOLUTION.md",
@@ -1114,8 +1119,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
-      "sha256": "72b6b14f466ca944a72a361c0d6d929e9ba5d6688101afa94d4467d75b9557d6",
-      "bytes": 24686
+      "sha256": "67e0ba6882065be2575216fd27357cd860a47821d1ee914c373a96beba290b34",
+      "bytes": 26214
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/FALLBACK_MEASUREMENT_PROOF.json",
@@ -1131,6 +1136,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/LIFECYCLE_NATIVE_RECOVERY_PROOF.json",
       "sha256": "cb036a48dfed837ee67f81dd564b3dbf9b54d5c8cdccfa0c2fea2348b61e6710",
       "bytes": 10547
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/NATIVE_OBSERVATION_PROOF.json",
+      "sha256": "13207a8acb69e7ec9d7e22172f07454bd841cfe527c8854b12fde54a911ab174",
+      "bytes": 7903
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/NATIVE_REVISION_HANDOFF_PROOF.json",
@@ -1589,8 +1599,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "387577725d6970840bf302cb1bb36bccc326861b1005b9593187d7ac6f2cf8f3",
-      "bytes": 415896
+      "sha256": "2b890a8a23aff7e6cc052efc377134f10893906653cec97927d738c0fe34ac3d",
+      "bytes": 418516
     },
     {
       "path": "plans/user-stories.csv",
@@ -1691,6 +1701,11 @@
       "path": "runbooks/CALL_COST_ACCOUNTING.md",
       "sha256": "7043296750bf030bbfbff86616c0ee9b8f4bcf64cca36e032c4c3d7f4fc1c6c7",
       "bytes": 3623
+    },
+    {
+      "path": "runbooks/CANVA_AMENDMENT_INSPECTION.md",
+      "sha256": "6ba65a6c10e6381d20faaf55f221731f96e246bc0e47f383cc658266590e322c",
+      "bytes": 1936
     },
     {
       "path": "runbooks/CANVA_CREATION_RECONCILIATION.md",

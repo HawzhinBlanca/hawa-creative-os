@@ -306,6 +306,8 @@ paths:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1integrations~1canva~1disconnect'
   /v1/tasks/{taskId}/canva:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva'
+  /v1/tasks/{taskId}/canva/amendment-observation:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1amendment-observation'
   /v1/tasks/{taskId}/canva/editor:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1editor'
   /v1/tasks/{taskId}/canva-binding:
