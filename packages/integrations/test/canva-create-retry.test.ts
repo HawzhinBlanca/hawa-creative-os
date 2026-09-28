@@ -90,6 +90,25 @@ describe('Canva create calls under transient failures', () => {
     expect(posts(designLimited)).toBe(2);
   });
 
+  it('a 429 it gives up on carries the wait Canva asked for, so the caller can wait durably instead of failing', async () => {
+    const bytes = new Uint8Array(64);
+    const longWait = vi.fn().mockResolvedValue(reply(429, {}, { 'Retry-After': '120' }));
+    await expect(client(longWait).createImportJob(bytes, 'Deck')).rejects.toMatchObject({ name: 'CanvaHttpError', status: 429, retryAfterMs: 120000 });
+    expect(posts(longWait)).toBe(1);
+
+    const exportLimited = vi.fn().mockResolvedValue(reply(429, {}, { 'Retry-After': '45' }));
+    await expect(client(exportLimited).createExportJob('DAtest1', 'png')).rejects.toMatchObject({ status: 429, retryAfterMs: 45000 });
+
+    // Refused on every attempt with no Retry-After: still a 429, with no wait named.
+    const unnamed = vi.fn().mockImplementation(async () => reply(429));
+    const err = await client(unnamed).createExportJob('DAtest1', 'png').catch((e) => e);
+    expect({ status: err.status, retryAfterMs: err.retryAfterMs, attempts: posts(unnamed) }).toEqual({ status: 429, retryAfterMs: undefined, attempts: 5 });
+
+    // Any other refusal names no wait.
+    const refusedOutright = vi.fn().mockResolvedValue(reply(400, {}, { 'Retry-After': '5' }));
+    await expect(client(refusedOutright).createExportJob('DAtest1', 'png')).rejects.toMatchObject({ status: 400, retryAfterMs: undefined });
+  });
+
   it('status reads honour Retry-After too', async () => {
     vi.useFakeTimers();
     try {

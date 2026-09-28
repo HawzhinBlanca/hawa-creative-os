@@ -86,6 +86,8 @@ export function registerDesignStudioRoutes(
       return await fn(c, { tenantId: auth.tenantId, actorId: String(auth.userId || auth.actorId || ""), role: auth.role }, service, repo);
     } catch (error: any) {
       if (error instanceof CanvaFlowError) {
+        // A busy refusal (Canva's rate limit on a transfer) names the wait the worker keeps.
+        if (error.retryAfterMs !== undefined) c.header('Retry-After', String(Math.ceil(error.retryAfterMs / 1000)));
         return ctx.problem(c, error.status, error.code, error.message);
       }
       if (error instanceof StudioBudgetEvidenceError || error instanceof StudioBudgetExhaustedError) {

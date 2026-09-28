@@ -110,6 +110,19 @@ function fakeCore(initial: FakeTask[], opts: { role?: string; listIds?: string[]
     calls,
     listReads: () => calls.filter(isListRead).length,
     reads: (path: string) => calls.filter((c) => c.method === 'GET' && c.path === path).length,
+    /**
+     * Waits until the decision has reached Core. The Desk first digests the action key
+     * (crypto.subtle, decisionActionId.ts): real work that no fake timer drives, so a fixed fake-time
+     * advance after the click could look before the request left. On a loaded CI runner it did
+     * (2026-09-28: 'no decision is waiting', and no POST recorded).
+     */
+    async decisionSent() {
+      await React.act(async () => {
+        await vi.waitFor(() => {
+          if (!answerDecision) throw new Error('the decision has not reached Core yet');
+        }, { timeout: 5000, interval: 5 });
+      });
+    },
     answerDecision(res: Response) {
       if (!answerDecision) throw new Error('no decision is waiting');
       answerDecision(res);
@@ -372,6 +385,7 @@ describe('approve and request revision are mutations', () => {
     expect(view.text()).toContain('Approve Captured Files');
     expect(view.text()).not.toContain('Authorize Release & Approve');
     await click(byText(view.container, 'button', 'Confirm Approval'));
+    await core.decisionSent();
     await advance(100);
     const t1 = core.tasks[0];
     t1.status = 'APPROVED';
@@ -394,6 +408,7 @@ describe('approve and request revision are mutations', () => {
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
     await click(byText(view.container, 'button', 'Confirm Approval'));
+    await core.decisionSent();
     await advance(100);
 
     // Sent, and Core has not answered.
@@ -426,6 +441,7 @@ describe('approve and request revision are mutations', () => {
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
     await click(byText(view.container, 'button', 'Confirm Approval'));
+    await core.decisionSent();
     await advance(100);
     const lists = core.listReads();
     core.answerDecision(json({ title: 'Conflict', detail: 'The revision changed since it was captured' }, 409));
@@ -443,6 +459,7 @@ describe('approve and request revision are mutations', () => {
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
     await click(byText(view.container, 'button', 'Confirm Approval'));
+    await core.decisionSent();
     await advance(100);
     // Core goes away right after recording the approval.
     const answered = core.answerDecision.bind(core);
@@ -484,6 +501,7 @@ describe('approve and request revision are mutations', () => {
       targets.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await click(byText(view.container, 'button', 'Submit Revision Request'));
+    await core.decisionSent();
     await advance(100);
 
     expect(core.calls.find((c) => c.method === 'POST' && c.path.endsWith('/decisions'))?.body).toMatchObject({

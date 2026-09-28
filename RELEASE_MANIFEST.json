@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-28T19:42:51+03:00",
+  "generatedAt": "2026-09-28T18:01:56+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "e069390578bcb632775d2bb1fa7f30d39aa71d8e",
+    "commit": "0fe6abaabd215e3aed77fb24947a6c3957cc9a07",
     "treeClean": true,
-    "commitTimestamp": "2026-09-28T19:42:51+03:00",
-    "branch": "codex/research-grade-design-system"
+    "commitTimestamp": "2026-09-28T18:01:56+03:00",
+    "branch": "claude/elated-payne-b6085b"
   },
   "migrations": {
-    "targetVersion": "067_pre_admission_spending",
-    "latestMigrationFile": "067_pre_admission_spending.sql",
-    "totalMigrations": 67
+    "targetVersion": "066_initial_native_policy",
+    "latestMigrationFile": "066_initial_native_policy.sql",
+    "totalMigrations": 66
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "564ffa5f1c41cf3e54c00eb022e99f4d76586b9063f6dc6d65b19338e0ce9c60"
+  "sha256": "4576cbe3881c8a523f33fe96b389ad55d3ab9caf9202de0cc6d0234dd666b043"
 }
