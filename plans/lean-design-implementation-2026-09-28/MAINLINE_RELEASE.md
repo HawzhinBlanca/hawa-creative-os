@@ -38,3 +38,22 @@ revision handoff, ADR-043/045/046 uncertain sends held for staff).
 No paid model runs, no live Canva native operation, no human quality study, no Google sign-in
 configuration, no Restate backup enablement, no release-B blob keys. Each needs the owner (see the
 ledger and each proof's `next`).
+
+## Deployed (2026-09-28 16:50 +03)
+
+`bash infra/docker/deploy.sh --apply` from the main checkout at `b94de6a6`, after a Restate check showed
+no invocation in flight. Pre-deploy dump `predeploy_20260928T135006Z.dump` (48,339,287 B); migrations
+023-066 applied; Core, Desk and worker-green images stamped with the release; Restate routes new work to
+green (`dp_10SVKnLdqCV8uoaQFN4XpBv`), blue drained and stopped; nginx and Vector on their deployed
+configuration; release receipt `infra/backup/release-receipts/deploy_20260928T135006Z_b94de6a63be4.json`.
+Afterwards: green worker healthy, `background: live`, `outboxActive: true`; Desk 200; GET /v1/tasks
+answers (1,600 tasks); no error lines in Core or the worker.
+
+Two earlier attempts stopped inside the release gate, before any change to production: the branch had
+no upstream (published to origin), and the gate's suite, which runs in the main checkout, failed a
+watchdog test that read production's `.env.production` and logged its bot token into the (gitignored)
+gate log; nothing was sent (curl was stubbed). The log was redacted and the test fixed (c6dd90ce).
+
+After the deploy, Core's status is "degraded" only because Canva and the model provider are
+"unverified" (e981e59f: no scheduled paid probe runs while `HAWA_BILLING_PROBE_ENABLED` is off). The
+watchdog now pages only for named failures (96821a92); `watchdog.sh --status` reads healthy.
