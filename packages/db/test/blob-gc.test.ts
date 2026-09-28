@@ -40,10 +40,16 @@ const BRANCHES = [
   'photo_cutouts.shadow_sha256',
   'comparison_pairs.hawa_sha256',
   'comparison_pairs.designer_sha256',
+  'design_studio_call_results.image_blob_sha256',
+  'studio_visual_input_assets.blob_sha256',
 ] as const;
 type Branch = (typeof BRANCHES)[number];
-/** The references whose foreign key exists from migration 019 on; the rest get theirs in 020. */
-const WITH_FOREIGN_KEY: Branch[] = ['task_files.sha256', 'design_studio_candidates.composite_sha256', 'photo_cutouts.png_sha256', 'photo_cutouts.shadow_sha256'];
+/**
+ * The references whose foreign key exists from migration 019 on, plus the Studio's retained result
+ * image (061, ADR-111) and visual input asset (062, ADR-112); the rest get theirs in 020.
+ */
+const WITH_FOREIGN_KEY: Branch[] = ['task_files.sha256', 'design_studio_candidates.composite_sha256', 'photo_cutouts.png_sha256', 'photo_cutouts.shadow_sha256',
+  'design_studio_call_results.image_blob_sha256', 'studio_visual_input_assets.blob_sha256'];
 
 describe.skipIf(!appUrl || !ownerUrl)('blob garbage collection against PostgreSQL', () => {
   const app = createDb(appUrl!);
@@ -128,6 +134,21 @@ describe.skipIf(!appUrl || !ownerUrl)('blob garbage collection against PostgreSQ
         await asOwnerUnchecked(
           `INSERT INTO hawa.comparison_pairs(study_id, tenant_id, label, width, height, hawa_sha256, designer_sha256) VALUES ($1, $2, 'A-1', 10, 10, $3, $4)`,
           [randomUUID(), tenant, column === 'hawa_sha256' ? sha256 : hex(), column === 'designer_sha256' ? sha256 : hex()],
+        );
+        return;
+      case 'design_studio_call_results':
+        // Replica mode skips the successful-call trigger; the CHECKs still hold the row to an image result.
+        await asOwnerUnchecked(
+          `INSERT INTO hawa.design_studio_call_results(tenant_id, call_id, kind, payload_text, payload_sha256, image_sha256, image_blob_sha256)
+           VALUES ($1, $2, 'image', '{}', encode(digest('{}', 'sha256'), 'hex'), $3, $3)`,
+          [tenant, randomUUID(), sha256],
+        );
+        return;
+      case 'studio_visual_input_assets':
+        // Replica mode skips the same-transaction manifest trigger and the manifest foreign key.
+        await asOwnerUnchecked(
+          `INSERT INTO hawa.studio_visual_input_assets(tenant_id, run_id, asset_key, sha256, blob_sha256) VALUES ($1, $2, 'logo', $3, $3)`,
+          [tenant, randomUUID(), sha256],
         );
         return;
     }
