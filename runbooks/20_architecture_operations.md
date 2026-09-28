@@ -547,3 +547,40 @@ What the numbers say:
   intake within about 100 ms).
 - **Restate was most of the memory** (about 610–650 MiB of the stack's ~1.1 GiB); Postgres doubled
   during the burst and fell back.
+
+### Planning slots and plan time (ADR-131)
+
+The fakes plan instantly, which hides how long a draft waits for a planning slot. `--plan-ms` makes
+every planner call take that long in the fakes (real calls took 23–47 s), and `--planning-slots` sets
+Core's `HAWA_CANVA_PLANNING_SLOTS` (left out, Core's default of 4). The result file's name carries
+both: `load-core-plan30000-slots2.json`.
+
+```sh
+# Ran on the chaos stack (ADR-131 port on codex/research-grade-design-system's line, claude/mainline c2eb23a4, 2026-09-28 13:47Z to 14:02Z).
+npx tsx scripts/load/run.ts --poller core
+npx tsx scripts/load/run.ts --poller core --plan-ms 30000
+```
+
+Brief to first draft, 10 chats at once, from pickup (10 of 10 drafts, no errors, in every run). The
+"before" rows and the 2- and 5-slot rows are studio-v2's (2026-09-28); they were not re-run here.
+
+| Code | Plan call | Slots | p50 / p95 | Drafts shown at (s) |
+|---|---|---|---|---|
+| before ADR-131 (studio-v2) | instant | 2 | 11.2 / 35.4 s | 5, 7, 11, 19, 35 (pairs) |
+| after, this line | instant | 4 | 8.1 / 9.4 s | 6.5, 6.6 ×3, 8.0–8.7 ×5, 10.1 |
+| before ADR-131 (studio-v2) | 30 s | 2 | 125.4 / 245.6 s | 35, 65, 125, 185, 246 (pairs) |
+| after (studio-v2) | 30 s | 2 | 97.6 / 161.9 s | 35, 65, 98, 130, 162 (pairs) |
+| after, this line | 30 s | 4 | 65.4 / 97.4 s | 34.9–35.0 ×4, 65.4 ×4, 97.4 ×2 |
+| after (studio-v2) | 30 s | 5 | 50.5 / 65.8 s | 35.1 ×5, 65.8 ×5 |
+
+- **The planning step no longer doubles its sleep.** Core answers a brief beyond the slots with
+  429 `PLANNING_BUSY` and `Retry-After` (until the oldest running plan should finish, 2–15 s), and the
+  workflow waits exactly that, journalled, for up to 15 minutes, on the legacy TaskWorkflow and on a
+  RequestLifecycle DesignRun alike. Before, Restate's step retry waited 2, 4, 8, 16 and then 30 s.
+- **Why 4 slots and not more:** every draft is imported and exported through the office's one Canva
+  connection, and Canva allows 20 exports a minute per user. A draft makes two, so 4 slots keep a
+  ten-brief burst to at most 16 exports in a minute, and 5 put all 20 into one.
+- **A plan left in `planning` by a Core that died mid-call** stops holding a slot after 3 minutes.
+  Nothing else about it changes: its paid call stays unresolved and its task is not planned again
+  until an operator reconciles it (ADR-101).
+- **A refused brief costs nothing:** no plan row, no admitted call, no allowance reserved.

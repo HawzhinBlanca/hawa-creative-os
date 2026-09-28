@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T13:45:02Z",
+  "generatedAt": "2026-09-28T14:26:24Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -724,8 +724,8 @@
     },
     {
       "path": "adrs/131_planning_slots_and_named_busy_wait.md",
-      "sha256": "2f3637211cb7d9d52547b0990c636a43fb6bd554e508177fc6b11e9b68b6f3b8",
-      "bytes": 12589
+      "sha256": "54057d570d0878d85af3ce0d34c03533919033060423a97a8afebc6dc03aa1e4",
+      "bytes": 14044
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1819,8 +1819,8 @@
     },
     {
       "path": "runbooks/20_architecture_operations.md",
-      "sha256": "d61708530501ff03716ad7c3303c3fed595f0858c545abfbf2eded967fe7a891",
-      "bytes": 37527
+      "sha256": "f005e49abe705f4f195358d5e5d094eebef895e2542838a82bc945bed2b7c893",
+      "bytes": 39968
     },
     {
       "path": "runbooks/AVAILABILITY_MONITORING.md",

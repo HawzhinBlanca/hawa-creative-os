@@ -75,4 +75,11 @@ Load test on the chaos stack: see section 6.
 
 studio-v2's runs (2026-09-28, 10 chats at once, brief to first draft from the fake Telegram's pickup): instant plans p50/p95 11.2/35.4 s before, 9.2/9.8 s after with 4 slots; 30 s plans 125.4/245.6 s before, 65.8/97.8 s after with 4 slots (97.6/161.9 s with the named wait alone on 2 slots).
 
-Runs on `claude/mainline` with this change: recorded below when run.
+Runs on this line, 2026-09-28, commit `c2eb23a4` (this change on `claude/mainline` at `19ffb93f`), chaos stack, `scripts/load/run.ts --poller core`, 10 chats at once, default slots (4), times from the fake Telegram's pickup. 10 of 10 drafts shown in each run; no Core or worker error line, no unmatched model call, no paused or backing-off invocation, no failed tab request. Mac with production running beside the stack.
+
+| Run (UTC) | Plan call | Slots | Drafts shown at (s) | p50 | p95 | Core MiB, peak |
+|---|---|---|---|---|---|---|
+| 13:47–13:54 | instant | 4 (default) | 6.5, 6.6 ×3, 8.0, 8.3, 8.5, 8.6, 8.7, 10.1 | 8.1 s | 9.4 s | 136 |
+| 13:54–14:02 | 30 s (`--plan-ms 30000`) | 4 (default) | 34.9, 35.0 ×3, 65.4 ×4, 97.4 ×2 | 65.4 s | 97.4 s | 127 |
+
+Against studio-v2's numbers for the same change: instant plans 9.2/9.8 s there, 8.1/9.4 s here; 30 s plans 65.8/97.8 s there, 65.4/97.4 s here, in the same three rounds of 4, 4 and 2. Against studio-v2's "before" (11.2/35.4 s and 125.4/245.6 s), which was not re-measured on this line. The instant run's second round is not as sharp as with 30 s plans (8.0–10.1 s): with instant plans the Canva and export steps, not the planner, set the pace. Not measured: how many 429 answers the waiting briefs got. The chaos scenarios R1.0, R1.K3 and R1.K6 passed on the same commit (finished 13:47Z; 3 passed, 40 not selected). Raw results: `packages/testkit/chaos/.run/load-core.json` and `load-core-plan30000.json` (gitignored), copied to the session scratchpad.
