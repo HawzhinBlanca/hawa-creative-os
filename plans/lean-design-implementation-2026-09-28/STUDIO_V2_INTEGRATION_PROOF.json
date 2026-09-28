@@ -23,7 +23,7 @@
   "source_files": [
     {
       "path": "adrs/127_studio_v2_integration.md",
-      "sha256": "98ce9b7fe9d00ab78ccd4fd44c6de7b2828b7709cb70d5c72bbf44f0edc1eccf"
+      "sha256": "396eba6af6634dc58157936052e6995a8dedc07965822eac53b6e54ad70cdd46"
     },
     {
       "path": "infra/docker/deploy.sh",
@@ -39,11 +39,11 @@
     },
     {
       "path": "apps/desk/src/services/canvaPanelPoll.ts",
-      "sha256": "505eee93577a6d7bb3fc7a96164fd188242ad59f30642d9cd40ae0925a3ef181"
+      "sha256": "a7f7472c79096e8fa1f95cdc47baa4f9550eb9ab69f66839f1393349b0c2add2"
     },
     {
       "path": "apps/desk/src/components/CanvaTaskPanel.tsx",
-      "sha256": "4d73ef0b8df7562d200c020685ea756a5cca24d49e3af7c7e9dea0ad01504dfe"
+      "sha256": "59a64fa07248aa80dcacc97df313a601304aaa6f53b11651dc600294c7b21fd9"
     },
     {
       "path": ".github/workflows/ci.yml",
@@ -79,7 +79,7 @@
     },
     {
       "path": "infra/ops/watchdog.sh",
-      "sha256": "926c94b4ab301453aebc7ccb552957e5bcfe785eb27babc5022e5548dde2bca8"
+      "sha256": "2865577ab43d7d5daaedf37820fca5ce8289ea72bcacdb8e06430a57dbb27b82"
     },
     {
       "path": "runbooks/10_backup_restore.md",
@@ -103,7 +103,7 @@
     },
     {
       "path": "packages/creative/assets/clients/kaae.json",
-      "sha256": "9ac570eb44a7fa35a69bd8b88fe7a25a4077603449301b236aa245aaf441c706"
+      "sha256": "119df464341cb6dd0e9e0e7570efe7f7570bf8d158423667d0b7038de83ef208"
     },
     {
       "path": "packages/creative/assets/clients/zar-podcast.json",
@@ -139,7 +139,7 @@
     },
     {
       "path": "apps/core/src/services/client-packs.ts",
-      "sha256": "5b7b0a0cd68d5823346b2ac0fde691505eea5f879cacf45e1c5a91ed40899d9e"
+      "sha256": "7ffd5a4859495f47b9b0af459f944bd59f557afaa3933d11b3b3b53424eff4aa"
     },
     {
       "path": "apps/core/src/services/client-pack-rows.ts",
@@ -155,7 +155,7 @@
     },
     {
       "path": "apps/core/src/services/design-studio/design-studio-service.ts",
-      "sha256": "5b709edf427c4ad95c5dfa761ede04afcad7a0be4f5a07dc5f4a12a222742c5d"
+      "sha256": "064d0fbfc87dae473de36bf659b4a5751e21aa0de3856ffdf302040c032e6147"
     },
     {
       "path": "apps/core/src/routes/delivery.routes.ts",
@@ -176,6 +176,50 @@
     {
       "path": "plans/traceability.csv",
       "sha256": "c1e25d21a11eb451f8c65a05c068dad675331cfb505ffadff56c3aa829c81a8d"
+    },
+    {
+      "path": "packages/testkit/test/watchdog-restate-backup.test.ts",
+      "sha256": "17f5f41f40d331ced617dd78cf557edc49b7013ad131a23d3e015483f817d39c"
+    },
+    {
+      "path": "packages/creative/test/client-packs.test.ts",
+      "sha256": "f9743a8b7705bde4affa125cbe43ec776140b793dbafc9461070af507080db39"
+    },
+    {
+      "path": "packages/creative/test/no-client-in-shared-code.test.ts",
+      "sha256": "e22ebdea2d1f3db190000696240538315309647fa9cccc05d4d2a140f1d11639"
+    },
+    {
+      "path": "packages/creative/src/studio/cost-architecture-v3.ts",
+      "sha256": "2429b20762c1a35be58983a1feb7db0c6a02d967f12fb85637179ae74817caee"
+    },
+    {
+      "path": "packages/creative/src/studio/style-spec.ts",
+      "sha256": "a90bc08f9884e9891511b97e27989f4c64504473b03b0142946868337ba571c3"
+    },
+    {
+      "path": "packages/creative/test/style-spec-cta-contrast.test.ts",
+      "sha256": "94548c3dfe4f1faa72203b78af954c0e3f61e55b97ef772ee574bdacf091bf06"
+    },
+    {
+      "path": "apps/core/test/client-exemplars.test.ts",
+      "sha256": "674daa37401b2f947caccebf980a7c16c6b294f6d417edda622f3877116ae58e"
+    },
+    {
+      "path": "apps/core/test/client-rules.test.ts",
+      "sha256": "f09be9b59d4b845c5d89b06abfd22ce3f7e5610b2f221e3034b910ebcccf9739"
+    },
+    {
+      "path": "apps/core/test/client-pack-rows.test.ts",
+      "sha256": "66b5cec2212c90ffd882f2528083b2a871e7bf5cd14caf1e57e0f7b5f4d09628"
+    },
+    {
+      "path": "apps/core/test/studio-ledger.test.ts",
+      "sha256": "af8a3f875b0143abe9bbbf2166c9aa8599e71a7a0cbb655bc9f71511c04f028c"
+    },
+    {
+      "path": "apps/desk/test/canva-panel-poll.test.ts",
+      "sha256": "e995ba3ce2cc432e0b2cec2573bca2ea29b5798cdd8622a77223d56fd3d3914c"
     }
   ],
   "evidence": [
@@ -346,6 +390,54 @@
     {
       "path": "output/acceptance/2026-09-28-studio-v2-integration/typecheck.log",
       "sha256": "d731e4443e65da012eeba3331dcc921536d8c725265f3b04d27a84dbd21901b3"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-watchdog-red.log",
+      "sha256": "95de48b2359a5cf95aa3932448df6d387fe70f9970933acaf5385705fd072cc6"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-creative-red.log",
+      "sha256": "8badf75b78ff3a253d4ce6de7176b5c3f5caae64c7c2909cc08e44c04e35b52c"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-exemplars-red.log",
+      "sha256": "74866a43642af068520f6d3d5cc68490fdc8b864ca7ae5be3887aad65d0b9d2b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-panel-wake-red.log",
+      "sha256": "6c2b7bebe2df06cef8ac945185abec662138ef1db5217faf499d479e44fa1f7b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-studio-ledger-red.log",
+      "sha256": "ceaecd3b8c513161b21b9852e7fb28cc283d6eebe2c3503031687a87122673d9"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-build.log",
+      "sha256": "f8cbe810fe753ff146745031a1dadb23ffe9ef9bc58c2c8e558fd0fd597c6502"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-green.log",
+      "sha256": "1f2194073297fd677ca366356bcb01da58d7cb162a3d7b1a9dedb14afad6939a"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-typecheck.log",
+      "sha256": "19362b283c1063c64b3f36978927cdec2c35edfa1d0c73cbc6f18586b4167253"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-lint.log",
+      "sha256": "bf6a506574a99e16abdfc6878ea45a2405886cf96032f2223612a31a69e58785"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-security.log",
+      "sha256": "8d854907ff4e04b377eac079ee1781a91b0d6a89c86f124b995762b97d5117c1"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-backup-python.log",
+      "sha256": "774901d2882a0c004b36643f87168d15036df30d959cc4b18f5a69e062f4044e"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-studio-v2-integration/review-full-suite.log",
+      "sha256": "a5b33ae23f70f29f96fd43adc1cdaaa584bcf36b1f44534d0db88ce266a8cf8c"
     }
   ],
   "acceptance": {
@@ -385,7 +477,79 @@
       "client packs: red 2; thumbnail: red; shared code: red 7 of 9; templates: red 3; audit fixes: red 7",
       "first full-suite attempt exited 127 (no timeout binary on macOS); rerun without it",
       "first full suite: 10 failures listed above"
-    ]
+    ],
+    "review_fix_round": {
+      "date": "2026-09-28",
+      "blocking": {
+        "finding": "a Restate-backup recovery problem stopped the watchdog restarting or reporting stopped stack containers",
+        "red": "output/acceptance/2026-09-28-studio-v2-integration/review-watchdog-red.log: 3 failed | 5 passed (pausing record: no compose start or up call; failed Restate start after reboot: none; stuck live lock: no container started by name)",
+        "fix": "step 2 depends only on Docker; the recovery problem is reported with the other problems after it; while a backup still holds the archive lock (recovery-status 75) stopped containers other than Restate are started by name and `up --no-deps` names every service but Restate",
+        "green": "output/acceptance/2026-09-28-studio-v2-integration/review-green.log (watchdog-restate-backup 8/8)",
+        "adr": "ADR-127 backup section corrected: the stuck-backup pass never starts Restate"
+      },
+      "minor": [
+        {
+          "finding": "KAAE profile said 'Agency'",
+          "red": "review-creative-red.log (client-packs name test; guard expectation)",
+          "fix": "profile says 'Association', tied to names.en and the DNA officialName by a test"
+        },
+        {
+          "finding": "packaged-KAAE run silently designed on no exemplars when the pack set failed to load",
+          "red": "review-exemplars-red.log: 2 failed",
+          "fix": "503 CLIENT_EXEMPLARS_UNAVAILABLE through packagedReferenceExemplarManifest"
+        },
+        {
+          "finding": "ADR-127 did not name the ADR-112 visual-policy hold from the client-rules change, or the 400-character cut",
+          "red": "none: documentation; a characterization test (client-rules) passed on its first run",
+          "fix": "ADR-127 names both"
+        },
+        {
+          "finding": "CTA fallback to a mid-tone darkest colour was not re-checked",
+          "red": "review-creative-red.log: 2 palettes under 4.5:1 (2.06, 2.41)",
+          "fix": "contrast checked again; black or white below 4.5:1"
+        },
+        {
+          "finding": "KAAE identity and palette in STABLE_SYSTEM_PROMPT_PREFIX, outside the guard",
+          "red": "review-creative-red.log: guard failed",
+          "fix": "brand block names the client in the request; guard covers cost-architecture-v3.ts; prefix stays over 1,024 estimated tokens (1,120)"
+        },
+        {
+          "finding": "client-pack rows never tested as hawa_app under RLS",
+          "red": "none: the new app-role test passed on its first run, so no defect existed",
+          "fix": "test added"
+        },
+        {
+          "finding": "panel state changing without a task event waited for the 60 s tick",
+          "red": "review-panel-wake-red.log: 2 failed",
+          "fix": "refresh when the tab is shown or focused, at most once per second"
+        },
+        {
+          "finding": "suite not re-run after fixture fixes; two studio-ledger resume cases failing",
+          "red": "review-studio-ledger-red.log: 2 failed (db.transaction missing)",
+          "fix": "stub admits task generation and asserts the admission ran; the full suite was re-run"
+        }
+      ],
+      "full_suite": {
+        "workers": 3,
+        "window": "2026-09-28T09:14:44Z..09:19:20Z",
+        "files": {
+          "failed": 1,
+          "passed": 542,
+          "skipped": 7,
+          "total": 550
+        },
+        "tests": {
+          "failed": 1,
+          "passed": 4560,
+          "skipped": 60,
+          "total": 4621
+        },
+        "failures": [
+          "r11-release-gate test 1: RELEASE_MANIFEST.json verification (expected; the lead regenerates it)"
+        ],
+        "log": "output/acceptance/2026-09-28-studio-v2-integration/review-full-suite.log"
+      }
+    }
   },
   "checks": {
     "build": "passed (build-final.log)",
@@ -396,7 +560,14 @@
     "any_ceiling": 1053,
     "provider_egress": "passed with 9 existing exceptions",
     "security": "0 secrets",
-    "restate_python_tests": 52
+    "restate_python_tests": 52,
+    "review_fix_round": {
+      "build": "passed (review-build.log)",
+      "typecheck": "passed (review-typecheck.log)",
+      "lint": "passed: any 955 of 1053, provider egress 9 existing exceptions (review-lint.log)",
+      "security": "0 secrets, 48 justified allowlist hits (review-security.log)",
+      "backup_python_tests": "79 passed (review-backup-python.log)"
+    }
   },
   "proof_scope": [
     "client packs route intake, gate automatic drafts and name exemplars while Client DNA stays the brand authority",
@@ -410,7 +581,8 @@
     "file store backfill fixes and staged release B keys",
     "Restate backup recovery after SIGKILL and watchdog handling",
     "load-test scripts and runbook with re-run markers",
-    "historical documents with supersession notes"
+    "historical documents with supersession notes",
+    "review fix round: watchdog restarts the stack despite a backup recovery problem and never starts Restate under a live lock; KAAE name; packaged exemplars refused when missing; CTA contrast re-check; neutral stable prefix; client-pack rows as hawa_app; panel refresh on return to the tab; studio-ledger stubs"
   ],
   "not_executed": [
     "chaos stack drills and the load test itself",
@@ -421,13 +593,12 @@
     "Telegram sends",
     "live Restate backup rehearsal",
     "RELEASE_MANIFEST.json regeneration",
-    "a second full-suite run after the fixture updates (affected files re-run instead)"
+    "the watchdog against a real Docker engine (stubbed docker, curl, open and sleep only)"
   ],
   "next": [
     "owner: Client DNA, Kurdish aliases, chats and proof set per onboarding client before setting it live",
     "owner: decide HAWA_RESTATE_BACKUP_ENABLED after a live rehearsal",
     "owner: decide the production fixture row that blocks release B keys",
-    "lead: regenerate RELEASE_MANIFEST.json",
-    "fix the studio-ledger resume stub (pre-existing)"
+    "lead: regenerate RELEASE_MANIFEST.json"
   ]
 }

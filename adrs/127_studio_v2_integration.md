@@ -38,7 +38,8 @@ Kurdish alias or chat guessed.
   the requester is told why. The lifecycle new-brief draft (ADR-059) is built by
   the same function and carries the same `autoGenerate`.
 - Core inserts missing `hawa.clients` rows for every pack at start-up and never
-  changes an existing row; the seed carries the four new rows.
+  changes an existing row; the seed carries the four new rows. The insert and
+  the conflict read are tested as `hawa_app` under RLS, as Core runs them.
 
 Conflict with this branch, and the stricter guarantee kept: studio-v2's pack also
 named a reference pack and logo file the studio and planner read for the client.
@@ -80,7 +81,19 @@ style and ornament fallbacks are neutral greys; a reference without a palette is
 refused rather than filled with KAAE's. KAAE hex values remain only as points in
 colour space for finding the nearest colour of a client's own palette. A guard
 test fails if KAAE's identity or colours return to the judge, critique, layout,
-art or QA code.
+art or QA code, or to the cost architecture's cached stable prefix
+(`STABLE_SYSTEM_PROMPT_PREFIX`, used only by the P09 proof script), whose brand
+block now names the client in the request instead of KAAE (added in review,
+2026-09-28).
+
+KAAE's pack profile names it "Kurdistan Accrediting Association for Education",
+as its `names.en`, its Client DNA's `officialName` and the Desk brand kit do.
+studio-v2's profile said "Agency"; a test now ties the profile to the DNA name.
+
+With the client's palette in place of KAAE's navy, the call-to-action text on its
+button falls back to the palette's darkest colour, which can be mid-tone; the
+contrast is then checked again and, below 4.5:1, the text is black or white,
+whichever reads better on the button (added in review, 2026-09-28).
 
 Kept from this branch where it was already stricter: the art prompt and the
 degraded motif already use the layout's own colours, and `composeArtPrompt` and
@@ -102,7 +115,11 @@ Ported from 24a787cd, narrowed. A pack names its own confirmed exemplar manifest
 KAAE's pack names `kaae-exemplars.json`, the same file, so its exemplar policy
 hash is unchanged. The studio and the Canva planner read the manifest through the
 pack instead of a hard-coded KAAE path, and still only where ADR-115 admits
-exemplar conditioning (KAAE's packaged reference). studio-v2's per-client
+exemplar conditioning (KAAE's packaged reference). On that path a missing pack,
+or a pack naming no set, is refused 503 `CLIENT_EXEMPLARS_UNAVAILABLE` rather than
+designed on no exemplars: a pack set that fails to load is read by Core as no
+packs (so intake falls back to legacy detection), and before the packs a missing
+manifest threw (added in review, 2026-09-28). studio-v2's per-client
 libraries (`add_exemplar.ts --client`, `exemplars/<code>/`, manifest vocabulary
 and retrieval hints) are not ported: ADR-115 replaced that retrieval with Unicode
 lexical ranking over a hash-verified, KAAE-only collection, and another client's
@@ -135,6 +152,15 @@ answers after the revisioned save of ADR-054, returning its `changeTag` (#17); t
 SVG sanitizer strips to a fixed point (#11); the Desk clears its offline copies at
 sign-out (#21); no shipped source names a path on the owner's Mac, and the unused
 named people leave `config/clients/kaae.dna.json` (#22).
+
+#15 and #16 change the pinned visual policy of ADR-112: its hash covers the
+standing rules text (`clientRules`), and both the quoted wording and reading the
+rules in force when the run started change that text. A pinned run of a client
+with standing rules resumed across this change therefore holds with
+`STUDIO_VISUAL_INPUTS_UNSAFE`, in addition to the ADR-111 hold on changed layout
+and judge prompts: safe, and the run must be planned again. Each quoted rule is
+also cut at 400 characters (with an ellipsis), so a longer rule reaches the
+models incomplete; the stored rule is unchanged.
 
 Superseded here: #12 (studio-v2 left the task in PUBLISH_RECONCILIATION when the
 requester's notice could not be queued; this branch enqueues the notice in the same
@@ -172,7 +198,15 @@ Only the missing capability is ported, in this branch's structures:
   backup is alive; `--status` uses the read-only `--recovery-status`. The next
   `--apply` performs the same recovery before it records anything of its own.
 - A record held under a live lock for over two hours is reported as a stuck
-  backup; that pass then continues as before (it may start Restate).
+  backup. That pass still starts the other stopped containers by name (`docker
+  start`, then `up --no-deps` for the services other than Restate) and reports
+  what is down, but never starts Restate, which would tear the copy under way.
+- A recovery that fails for any other reason (a `pausing` record the office must
+  release, or Docker not yet up after a reboot) is reported alongside the pass's
+  other problems and does not stop step 2: the stack containers are started and
+  counted exactly as when there is no record. Found in review on 2026-09-28: the
+  first port counted the recovery problem before step 2, which ran only with no
+  problem at all, so such a record kept stopped containers down and unreported.
 
 Limits: verified with a real SIGKILL of a child process in the middle of the
 archive step against a file-backed fake engine, and with the watchdog run against
@@ -203,7 +237,11 @@ nightly archive, retention and an isolated boot rehearsal.
   and `retry` is documented as the 409 refusal Core returns.
 - Canva panel poll (ecc9af71): 5 s only while Canva or the planner is working,
   otherwise 60 s, and a refresh on the task's live event. The amendment
-  observation stays an explicit action (ADR-119).
+  observation stays an explicit action (ADR-119). Added in review (2026-09-28):
+  some panel state changes with no task event (Canva connected in Settings or in
+  Canva's own window, an export that finished while the tab was hidden, when
+  ticks are skipped), so the panel also reads again when the tab is shown or its
+  window regains focus, once per second at most.
 - Load test and runbook (5e64ae31): ported; the runbook's Phase 2 flag sections
   describe this branch's lifecycle (ADR-052, ADR-059), every command block says
   whether it was run again on this branch, and studio-v2's Deliver-time enrolment
@@ -233,11 +271,14 @@ RELEASE_MANIFEST.json is left for the lead to regenerate.
   supplies their Client DNA (logo, palette, fonts), Kurdish aliases, chats and a
   proof set.
 - Changing the KAAE v3 layout and judge prompts makes a KAAE v3 run resumed across
-  this change hold on its changed retained call input (ADR-111).
+  this change hold on its changed retained call input (ADR-111); a pinned run of a
+  client with standing rules also holds on its visual policy (ADR-112, above).
 - Five test expectations that lagged behind this branch's own migrations 063-064
   and the ADR-111/113/114/119 routes and blob columns were brought up to date in
-  the same integration; the two `studio-ledger` resume cases already failed at the
-  base commit (their stub has no `db.transaction`) and are left for their owner.
+  the same integration. The two `studio-ledger` resume cases, which already
+  failed at the base commit because task-generation admission (e09438a4,
+  7765a9e3) now runs before the call-ledger check and their stub database cannot
+  open a transaction, admit the task in the stub and assert that admission ran.
 
 ## Owner steps
 
