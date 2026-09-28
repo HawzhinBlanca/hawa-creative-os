@@ -11,7 +11,7 @@ import { log, withInvocationLogContext } from './logging.js';
 import { automationMembershipGaps, servedTenantIds } from './automation-identity.js';
 import { chatInbox, useChatInboxCore } from './lifecycle/chat-inbox.js';
 import { createCoreClient } from './lifecycle/core-client.js';
-import { TelegramPoller, pollerConfigFromEnv, runPoller, type PollerLoopHandle } from './lifecycle/telegram-poller.js';
+import { TelegramPoller, pollerConfigFromEnv, pollerProblem, runPoller, type PollerLoopHandle } from './lifecycle/telegram-poller.js';
 import { WORKER_SERVICE_NAMES } from './services.js';
 
 const SERVICE_NAME = 'hawa-worker';
@@ -250,9 +250,13 @@ const server = http.createServer((req, res) => {
       : Promise.resolve({ postgres: 'unconfigured', outbox: null });
     probe.then(({ postgres, outbox }) => {
       const healthy = postgres !== 'disconnected';
+      const pollerBackground = telegramPoller ? (pollerGate ? pollerGate.state() : 'always') : 'not_started';
+      // A poller that should be reading Telegram and is not (ADR-129): Core does not poll either.
+      const pollerIssue = pollerProblem({ mode: pollerConfig.mode, started: Boolean(telegramPoller), background: pollerBackground,
+        status: telegramPoller?.status() ?? null, now: Date.now() });
       // Backlog or dead letters degrade the worker without failing the container health check.
       const degraded = Boolean(outbox && (outbox.staleOver5m > 0 || outbox.failed > 0)) || backgroundMode.mode === 'misconfigured'
-        || Boolean(automationGaps?.length) || pollerConfig.mode === 'misconfigured';
+        || Boolean(automationGaps?.length) || pollerConfig.mode === 'misconfigured' || Boolean(pollerIssue);
       res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: healthy ? (degraded ? 'degraded' : 'healthy') : 'unhealthy',
@@ -270,7 +274,7 @@ const server = http.createServer((req, res) => {
         outbox,
         // The Telegram poller (Phase 2.1): off (Core polls), misconfigured, or where it is.
         telegramPoller: pollerConfig.mode === 'on'
-          ? { mode: 'on', background: telegramPoller ? (pollerGate ? pollerGate.state() : 'always') : 'not_started', ...(telegramPoller?.status() ?? {}) }
+          ? { mode: 'on', background: pollerBackground, ...(telegramPoller?.status() ?? {}), ...(pollerIssue ? { problem: pollerIssue } : {}) }
           : pollerConfig.mode === 'misconfigured' ? { mode: 'misconfigured', reason: pollerConfig.reason } : { mode: 'off' },
         // Served tenants where the worker's own database user has no membership (see automationGaps).
         tenantsWithoutAutomationMembership: automationGaps,

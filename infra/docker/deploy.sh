@@ -72,6 +72,106 @@ refuse_stuck_legacy() {
   echo "ERROR: the old single worker has ${stuck:-an unknown number of} paused or backing-off invocation(s) pinned to it. It would keep running its outbox, with no colour gate, until they finish, beside the new colour's. Resume or cancel them first (restate invocations list --status paused; the Restate UI), then deploy again. No worker was changed."
   exit 1
 }
+# Who asks Telegram for updates (Phase 2.1). Core and both worker colours read HAWA_TELEGRAM_POLLER from
+# compose. Step 7 used to recreate Core with a changed value before the worker colour that would take
+# over was built, started and registered, and any failure in between left nobody polling (ADR-129,
+# Phase 4 operations finding 1). Core now keeps the value it runs with until the new colour is
+# registered; a Core that does not exist yet starts polling itself.
+# The value as Core and the worker read it (apps/core/src/services/telegram-poller-owner.ts).
+telegram_poller_of() {
+  if [[ "$(tr -d '[:space:]' <<< "${1:-}" | tr '[:upper:]' '[:lower:]')" == worker ]]; then echo worker; else echo core; fi
+}
+# What the running Core container was created with; nothing when there is no Core container.
+running_core_poller() {
+  local env
+  env="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$CORE_CONTAINER" 2>/dev/null)" || return 0
+  telegram_poller_of "$(sed -n 's/^HAWA_TELEGRAM_POLLER=//p' <<< "$env" | tail -1)"
+}
+# The value Core runs with until the new colour is registered: $1 is the wanted value, $2 the running one.
+core_poller_hold() {
+  if [[ -n "${2:-}" ]]; then echo "$2"; elif [[ "$1" == worker ]]; then echo core; else echo "$1"; fi
+}
+poller_owner_text() {
+  if [[ "$1" == worker ]]; then echo "the live worker colour polls Telegram, Core does not"; else echo "Core polls Telegram, the worker does not"; fi
+}
+# After the new colour is registered: Core takes the wanted value (a second recreate, only on a switch).
+release_core_poller() {
+  [[ "$CORE_POLLER_HOLD" != "$CORE_POLLER_WANTED" ]] || return 0
+  HAWA_TELEGRAM_POLLER="$CORE_POLLER_WANTED" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --no-build core >/dev/null
+  CORE_POLLER_HOLD="$CORE_POLLER_WANTED"
+  echo "✓ Core recreated with HAWA_TELEGRAM_POLLER=${CORE_POLLER_WANTED}: $(poller_owner_text "$CORE_POLLER_WANTED")"
+}
+# A deploy that stops after step 7 recreated Core says so, and who polls, whatever else it printed.
+CORE_RECREATED=0
+report_poller_on_exit() {
+  local rc=$?
+  [[ $rc != 0 && $CORE_RECREATED == 1 ]] || return 0
+  if [[ "$CORE_POLLER_HOLD" != "$CORE_POLLER_WANTED" ]]; then
+    echo "NOTE: Core was recreated by this deploy with HAWA_TELEGRAM_POLLER=${CORE_POLLER_HOLD}, not ${CORE_POLLER_WANTED}: the switch waits for a registered worker colour, so $(poller_owner_text "$CORE_POLLER_HOLD"). Deploy again to apply it."
+  else
+    echo "NOTE: Core was recreated by this deploy (HAWA_TELEGRAM_POLLER=${CORE_POLLER_HOLD}: $(poller_owner_text "$CORE_POLLER_HOLD"))."
+  fi
+}
+# The services the new colour's build hosts, from its /ready (listed since Phase 2.1), for register's
+# check that it hosts everything Restate already routes to the worker (ADR-129, finding 2).
+idle_hosts() {
+  local hosts
+  hosts="$(docker exec "hawa-production-worker-$1-1" node -e "fetch('http://localhost:9080/ready').then(r=>r.json()).then(j=>console.log(Array.isArray(j.services)?j.services.join(','):'')).catch(()=>console.log(''))" 2>/dev/null)" || hosts=""
+  if [[ "$hosts" =~ ^[A-Za-z][A-Za-z0-9_]*(,[A-Za-z][A-Za-z0-9_]*)*$ ]]; then echo "$hosts"; else echo unknown; fi
+}
+# HAWA_WORKER_TOKEN is shared by Core and every worker colour, and a colour still draining keeps the
+# value it was created with. A changed token therefore needs the old value as HAWA_WORKER_TOKEN_PREVIOUS
+# until nothing runs with it any more (ADR-129, finding 4; docs/25_OPERATIONS_RUNBOOK.md). Values are
+# compared in memory and never printed.
+env_file_value() {
+  local v
+  v="$(grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
+  printf '%s' "$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' <<< "$v")"
+}
+container_env() {
+  local env
+  env="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$1" 2>/dev/null)" || return 0
+  printf '%s' "$(sed -n "s/^$2=//p" <<< "$env" | tail -1 | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+}
+check_worker_token_rotation() {
+  local current previous name held stale=() previous_used=0
+  current="$(env_file_value HAWA_WORKER_TOKEN)"; previous="$(env_file_value HAWA_WORKER_TOKEN_PREVIOUS)"
+  if [[ -n "$previous" && "$previous" == "$current" ]]; then
+    echo "ERROR: HAWA_WORKER_TOKEN_PREVIOUS is the same as HAWA_WORKER_TOKEN in .env.production; set it to the value being replaced, or remove it. No container was changed."
+    exit 1
+  fi
+  for name in $(docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null | grep -E '^hawa-production-(core|worker(-blue|-green)?)-1$' || true); do
+    held="$(container_env "$name" HAWA_WORKER_TOKEN)"
+    [[ -n "$held" ]] || continue
+    if [[ -n "$previous" && "$held" == "$previous" && "$name" != "$CORE_CONTAINER" ]]; then previous_used=1; fi
+    [[ "$held" == "$current" || ( -n "$previous" && "$held" == "$previous" ) ]] || stale+=("${name#hawa-production-}")
+  done
+  if (( ${#stale[@]} )); then
+    local list; list="$(IFS=,; echo "${stale[*]%-1}")"; list="${list//,/, }"
+    echo "ERROR: ${list} run(s) with a HAWA_WORKER_TOKEN that is neither HAWA_WORKER_TOKEN nor HAWA_WORKER_TOKEN_PREVIOUS in .env.production. A colour still draining keeps its token, so a rotation first deploys with the old value as HAWA_WORKER_TOKEN_PREVIOUS, and removes it only once no worker runs with it (docs/25_OPERATIONS_RUNBOOK.md, Credential rotation). No container was changed."
+    exit 1
+  fi
+  if [[ -n "$previous" && $previous_used == 0 ]]; then
+    echo "NOTE: no running worker uses HAWA_WORKER_TOKEN_PREVIOUS any more; remove it from .env.production and deploy again to finish the rotation."
+  fi
+  return 0
+}
+# vector.yaml is a single-file bind mount like nginx.conf: compose does not recreate vector when only the
+# file changed, and vector runs without --watch-config, so a changed pipeline never reached the running
+# shipper (ADR-129, finding 6). The file is validated in a one-off container before anything starts,
+# and vector is restarted when what it sees is not the deployed file.
+vector_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T vector sha256sum /etc/vector/vector.yaml 2>/dev/null | cut -d' ' -f1 || true; }
+validate_vector_config() {
+  "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T vector validate --no-environment /etc/vector/vector.yaml >/dev/null 2>&1 \
+    || { echo "ERROR: infra/docker/vector.yaml fails vector validate; nothing was started with it"; exit 1; }
+}
+apply_vector_config() {
+  if [[ "$(vector_seen)" == "$VECTOR_WANT" ]]; then echo "✓ vector runs the deployed vector.yaml"; return 0; fi
+  "${COMPOSE[@]}" --env-file "$INTERP_FILE" restart vector >/dev/null
+  [[ "$(vector_seen)" == "$VECTOR_WANT" ]] || { echo "ERROR: vector does not see the deployed vector.yaml even after a restart"; exit 1; }
+  echo "✓ vector restarted onto the new vector.yaml"
+}
 # The running build must be able to say which commit it is (GET /v1/system/cutover/status).
 # Unstamped deployments are strictly refused.
 if [[ -n "${HAWA_BUILD_COMMIT+x}" ]]; then
@@ -255,11 +355,15 @@ fi
 
 # 4b. An earlier deploy's drain is finished first (see finish_previous_drains). Core must be running to
 # reach Restate; on a stack that is down this happens in 7b instead.
+PLAN_IDLE=""
 if core_running; then
   PLAN="$(bluegreen plan)" || { echo "ERROR: could not read the live worker colour from Restate"; exit 1; }
   refuse_stuck_legacy "$PLAN"
-  finish_previous_drains "$(sed -n 's/^idle=//p' <<< "$PLAN")"
+  PLAN_IDLE="$(sed -n 's/^idle=//p' <<< "$PLAN")"
+  finish_previous_drains "$PLAN_IDLE"
 fi
+# 4c. A changed worker token needs its previous value while any worker still runs with it (ADR-129).
+check_worker_token_rotation
 
 ensure_blob_store "$BLOBS_DIR" || exit 1
 echo "✓ file store ready at ${BLOBS_DIR}"
@@ -294,9 +398,14 @@ echo "✓ schema upgrades applied or verified"
 
 # 7. Build and start everything but the worker. Its two colours are behind the `worker` compose
 # profile, so the `up -d` below never creates, recreates or stops either; 7b deploys the worker.
-"${COMPOSE[@]}" --env-file "$INTERP_FILE" build core desk cutout
+# The idle colour's image is built here too when 4b could name the colour, so a worker build that fails
+# (no registry, say) stops the deploy before Core is replaced next to the old worker (ADR-129).
+BUILD_SERVICES=(core desk cutout)
+[[ -z "$PLAN_IDLE" ]] || BUILD_SERVICES+=("worker-${PLAN_IDLE}")
+"${COMPOSE[@]}" --env-file "$INTERP_FILE" build "${BUILD_SERVICES[@]}"
 verify_built_image core
 verify_built_image desk
+[[ -z "$PLAN_IDLE" ]] || verify_built_image "worker-${PLAN_IDLE}"
 # The cut-out engine's own tests, run in the image that ships, against the pinned model.
 docker run --rm --memory 12g -e HAWA_MODELS_DIR=/models -v "${MODELS_DIR}:/models:ro" \
   -v "${ROOT_DIR}/services/cutout/tests:/app/tests:ro" hawa-cutout:1 python -m unittest discover -s /app/tests -q \
@@ -312,7 +421,16 @@ NGINX_WANT="$(shasum -a 256 "${SCRIPT_DIR}/nginx.conf" | cut -d' ' -f1)"
 nginx_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx sha256sum /etc/nginx/nginx.conf 2>/dev/null | cut -d' ' -f1 || true; }
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" run --rm --no-deps -T nginx nginx -t >/dev/null 2>&1 \
   || { echo "ERROR: infra/docker/nginx.conf fails nginx -t; nothing was started with it"; exit 1; }
-"${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
+VECTOR_WANT="$(shasum -a 256 "${SCRIPT_DIR}/vector.yaml" | cut -d' ' -f1)"
+validate_vector_config
+# Core keeps the Telegram poller it runs with until 7b has registered the new worker colour.
+CORE_POLLER_WANTED="$(telegram_poller_of "$(compose_value HAWA_TELEGRAM_POLLER core)")"
+CORE_POLLER_HOLD="$(core_poller_hold "$CORE_POLLER_WANTED" "$(running_core_poller)")"
+[[ "$CORE_POLLER_HOLD" == "$CORE_POLLER_WANTED" ]] \
+  || echo "Telegram poller: ${CORE_POLLER_HOLD} -> ${CORE_POLLER_WANTED}; Core keeps ${CORE_POLLER_HOLD} until the new worker colour is registered"
+trap report_poller_on_exit EXIT
+CORE_RECREATED=1
+HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
 if [[ "$(nginx_seen)" == "$NGINX_WANT" ]]; then
   "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -s reload >/dev/null && echo "✓ nginx configuration reloaded"
 else
@@ -320,6 +438,7 @@ else
   [[ "$(nginx_seen)" == "$NGINX_WANT" ]] || { echo "ERROR: nginx does not see the deployed nginx.conf even after a restart"; exit 1; }
   echo "✓ nginx restarted onto the new configuration"
 fi
+apply_vector_config
 echo "✓ containers started"
 
 # 7b. The worker, blue/green (architecture programme 0.1, ADR-034). Restate pins each invocation to the
@@ -338,8 +457,10 @@ LIVE="$(sed -n 's/^live=//p' <<< "$PLAN")"; IDLE="$(sed -n 's/^idle=//p' <<< "$P
 echo "worker: live colour ${LIVE}, deploying to ${IDLE}"
 refuse_stuck_legacy "$PLAN"
 [[ $PREVIOUS_DRAINS_DONE == 1 ]] || finish_previous_drains "$IDLE"
-"${COMPOSE[@]}" --env-file "$INTERP_FILE" build "worker-${IDLE}"
-verify_built_image "worker-${IDLE}"
+if [[ "$IDLE" != "$PLAN_IDLE" ]]; then
+  "${COMPOSE[@]}" --env-file "$INTERP_FILE" build "worker-${IDLE}"
+  verify_built_image "worker-${IDLE}"
+fi
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --force-recreate "worker-${IDLE}"
 # The new colour is removed only when Restate holds no deployment at its address. A registration can be
 # accepted even when its answer was lost or the check after it failed, and then Restate already sends
@@ -364,8 +485,12 @@ for i in $(seq 1 30); do
 done
 # Exit 2 is a refusal, 4 a switch Restate accepted but that did not move every service; abandon_idle
 # asks Restate again either way before it removes anything.
-REGISTERED="$(bluegreen register "$IDLE")" || abandon_idle "Restate did not complete the switch to the new ${IDLE} worker (its reason is above)."
+# --hosts: register refuses, before sending anything, a build that does not host every service Restate
+# already routes to the worker (a rollback below the build that added one; ADR-129).
+REGISTERED="$(bluegreen register "$IDLE" --hosts "$(idle_hosts "$IDLE")")" || abandon_idle "Restate did not complete the switch to the new ${IDLE} worker (its reason is above)."
 echo "✓ restate sends new work to the ${IDLE} worker ($(sed -n 's/^deployment=//p' <<< "$REGISTERED"))"
+# Only now does Core take a changed HAWA_TELEGRAM_POLLER: the colour that takes over is registered.
+release_core_poller
 # Not a failure when it times out: new work already goes to the new colour.
 if DRAINS="$(bluegreen finish-drains --wait-seconds "${HAWA_DRAIN_TIMEOUT_SECONDS:-900}")"; then
   report_drains "$DRAINS"

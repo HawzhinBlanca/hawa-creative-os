@@ -6,6 +6,7 @@ import { nativeReviewReceipt } from '../services/lifecycle-native-review.js';
 import { CanvaFlowError } from '../services/canva-flow-error.js';
 import type { RouteContext } from './types.js';
 import type { Context } from 'hono';
+import { workerSigningSecretOf } from '../services/worker-credential.js';
 
 export function registerNativeReviewRoutes(ctx: RouteContext) {
   ctx.registerRoute('post','/tasks/:taskId/native-review',async (c:Context)=>{
@@ -34,7 +35,7 @@ export function registerNativeReviewRoutes(ctx: RouteContext) {
         return receipt && Number(request?.rev)>receipt.rev ? receipt : undefined;
       });
       if (prior) return c.json(prior);
-      const ingress=(process.env.RESTATE_INGRESS_URL||'').trim().replace(/\/+$/,''),secret=(process.env.HAWA_WORKER_TOKEN||'').trim();
+      const ingress=(process.env.RESTATE_INGRESS_URL||'').trim().replace(/\/+$/,''),secret=workerSigningSecretOf()||'';
       if (!ingress || !secret) return ctx.problem(c,503,'Lifecycle Review Unavailable','The request gateway is not configured.');
       const response=await fetch(`${ingress}/OfficeDecisionGateway/nativeReview`,{method:'POST',
         headers:{'Content-Type':'application/json'},body:JSON.stringify({v:1,event,signature:signLifecycleOfficeEvent(secret,event)}),signal:AbortSignal.timeout(15000)});

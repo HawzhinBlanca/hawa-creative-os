@@ -112,9 +112,12 @@ its poller (worker `/health` reports `telegramPoller: misconfigured`), so with `
 nobody polls: set the token first.
 
 - Switch: set `HAWA_TELEGRAM_POLLER=worker` in `infra/docker/.env` (the compose interpolation file; a
-  value in `.env.production` is overridden by compose's `environment:` block), then deploy. Core stops
-  polling on its restart; the live worker colour starts polling once it has held the role for 30 s
-  (`HAWA_POLLER_TAKEOVER_MS`).
+  value in `.env.production` is overridden by compose's `environment:` block), then deploy. The deploy
+  starts Core with the value it already runs with, and recreates it with the new one only after Restate
+  has registered the new worker colour (ADR-129); the new colour starts polling once it has held the
+  role for 30 s (`HAWA_POLLER_TAKEOVER_MS`). A deploy that fails before that leaves the poller where it
+  was and says so ("Core was recreated by this deploy with HAWA_TELEGRAM_POLLER=core, not worker").
+  A Core container that does not exist yet starts with `core` and changes the same way.
 - Roll back: set it to `core` (or remove it) and deploy again. Both pollers keep the offset in the same
   Postgres row, so the other one carries on from there. Updates already queued in Restate still go to
   Core's intake, which deduplicates them.
@@ -122,7 +125,12 @@ nobody polls: set the token first.
   Postgres before every poll (cached 5 s), and asks Telegram for nothing while the switch is thrown or
   cannot be read.
 - Worker `/health` shows `telegramPoller`: `off`, `misconfigured` with the reason, or `on` with the
-  offset, the count handed on, the last poll and the last error.
+  offset, the count handed on, the last poll, the last error, the last poll that worked (`lastOkAt`)
+  and, when something is wrong, `problem`. The colour that polls reports itself `degraded` when its
+  poller did not start, when Telegram refuses the bot token (401/404), or when no poll has worked for
+  five minutes. Core probes the bot token with getMe whichever process polls, and its `/v1/health`
+  names the poller (`telegramPoller`); the watchdog alerts when that is `worker` and no running colour
+  is polling.
 
 ### Operating it
 
@@ -140,10 +148,22 @@ nobody polls: set the token first.
   service in `build`, `up` or `rm` works without `--profile`.
 - A switch that did not complete (deploy failed with "was NOT removed"): Restate holds the new colour
   and may already send it work. Read `GET /services` (admin API, from inside the Core container) to see
-  where each service goes. If every service is on the new colour, run `finish-drains` by hand. If some
-  service is still on the old one only (the new build dropped or renamed it), either ship a build that
-  hosts it and deploy again, or, once nothing needs that service any more, leave the old colour to
-  drain. Never remove a colour any service is routed to.
+  where each service goes. If every service is on the new colour, run `finish-drains` by hand. Never
+  remove a colour any service is routed to.
+- A build that does not host every service Restate routes to the worker (a rollback below the build
+  that added `ChatInbox`, `Delivery`, `TelegramSender`, `RequestLifecycle`, `DesignRun` or
+  `OfficeDecisionGateway`) is **not supported**. Restate never un-routes a service: registering such a
+  build moves only what it hosts, the old colour keeps the rest, the next deploy plans that colour as
+  the idle one, and `finish-drains --require-drained` keeps refusing, forward or back, so no worker
+  can be deployed again. Deploying another build does not get past that check (the earlier advice
+  here to "ship a build that hosts it and deploy again" could not work). `register` therefore reads
+  the new colour's own list of services from its `/ready` and refuses, before sending anything, a build
+  that lacks one (exit 2: nothing was registered, and the new colour is removed); a build that does not
+  list its services, which every build before Phase 2.1 is, counts as hosting `TaskWorkflow` and
+  `TaskService` only (ADR-129). The `deploy.sh` of an older commit does not have this check: before
+  deploying an older commit, compare its `apps/worker/src/services.ts` with the current one. If the
+  services are already split between the colours (a deploy made without the check), no command in this
+  repository recovers it; it needs a decision on Restate's admin API, not a redeploy.
 - A colour that will not drain: look at what is pinned to it in the Restate UI or with
   `SELECT id, target, status, last_failure FROM sys_invocation WHERE pinned_deployment_id = '<id>' AND status <> 'completed'`.
   A suspended invocation waits for a timer or a promise; a paused one waits for a person (resume or

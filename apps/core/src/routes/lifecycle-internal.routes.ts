@@ -51,30 +51,8 @@ export function isInternalPath(path: string): boolean {
   return /^\/(?:api\/)?(?:v1\/)?internal(?:\/|$)/.test(path);
 }
 
-/** Keys the worker token must differ from: one of them would turn it into a second use of that key. */
-const OTHER_KEYS = ['HAWA_API_KEY', 'HAWA_BEARER_TOKEN', 'HAWA_DESK_SECRET', 'HAWA_ADMIN_KEY', 'HAWA_REVIEWER_KEY', 'HAWA_ART_DIRECTOR_KEY', 'TELEGRAM_WEBHOOK_SECRET'] as const;
-const MIN_TOKEN_LENGTH = 16;
-let warnedAbout = '';
-
-/**
- * HAWA_WORKER_TOKEN when it can be used: set, at least 16 characters, and equal to no other key Core
- * accepts. A worker token that is also the operator's key would make the operator a service and the
- * worker an operator; it is refused (and said once in the log), so /v1/internal/* stays closed.
- */
-export function serviceTokenOf(env: Record<string, string | undefined> = process.env): string | null {
-  const token = env.HAWA_WORKER_TOKEN?.trim();
-  if (!token) return null;
-  let fault = '';
-  if (token.length < MIN_TOKEN_LENGTH) fault = `is shorter than ${MIN_TOKEN_LENGTH} characters`;
-  const clash = OTHER_KEYS.find((k) => env[k]?.trim() === token);
-  if (clash) fault = `is the same as ${clash}`;
-  if (!fault) return token;
-  if (warnedAbout !== fault) {
-    warnedAbout = fault;
-    log.error(`[core:internal] HAWA_WORKER_TOKEN ${fault}; /v1/internal/* refuses every caller until it is a key of its own`);
-  }
-  return null;
-}
+// The worker credential rules live in services/worker-credential.ts (ADR-129: services sign with it too).
+export { acceptedServiceTokensOf, serviceTokenOf, workerSigningSecretOf } from '../services/worker-credential.js';
 
 interface UpdateLike { update_id: number; [kind: string]: unknown }
 

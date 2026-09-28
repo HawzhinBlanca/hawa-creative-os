@@ -13,6 +13,7 @@ import { parsePinnedExportIds } from '../services/pinned-deliverables.js';
 import { pendingChangeOf as findPendingChange, pendingChangeWords } from '../services/pending-change.js';
 import { namedOfficeReviewMode } from '../services/google-oidc.js';
 import { lockNamedReviewAuthority } from '../services/named-review-authority.js';
+import { workerSigningSecretOf } from '../services/worker-credential.js';
 
 /**
  * A reviewer's decision on a design revision, and what the review desk shows before it
@@ -249,7 +250,7 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
           requestId, requestRev: decisionRev }, 201);
       }
       const ingress = (process.env.RESTATE_INGRESS_URL || '').trim().replace(/\/+$/, '');
-      const secret = (process.env.HAWA_WORKER_TOKEN || '').trim();
+      const secret = workerSigningSecretOf() || '';
       if (!ingress || !secret) return problem(c, 503, 'Lifecycle Decision Unavailable',
         'The decision gateway is not configured; retry this action later');
       const event = { v: 1 as const, eventId: `desk:${actionId}`, requestId, taskId, revisionId,

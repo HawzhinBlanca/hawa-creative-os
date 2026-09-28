@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T03:28:35Z",
+  "generatedAt": "2026-09-28T08:16:26Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 476,
+  "fileCount": 478,
   "files": [
     {
       "path": ".dockerignore",
@@ -678,6 +678,11 @@
       "bytes": 3559
     },
     {
+      "path": "adrs/129_deploy_poller_rotation_and_restore_safety.md",
+      "sha256": "e03efb21785cebd2ae5c8d87600ff4a0f8f336fdab47392679a1f6850db88ff5",
+      "bytes": 6503
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "0a40a0ee632644cf1c1e0531fb516e5f4f7cb0dc857172785003ae6398e02845",
       "bytes": 45259
@@ -1019,8 +1024,8 @@
     },
     {
       "path": "docs/25_OPERATIONS_RUNBOOK.md",
-      "sha256": "6133a8963d9547ed18956aaa438a6008b81bc82445a2af1f91e7f3bd34a07b81",
-      "bytes": 17798
+      "sha256": "fa174a04288bcbb12c59d71d1fe548da6f791d2b39cd2671f1d259c94999fa7b",
+      "bytes": 20047
     },
     {
       "path": "docs/26_WHAT_NOT_TO_BUILD.md",
@@ -1166,6 +1171,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/NATIVE_TEXT_COPY_TRANSPORT_PROOF.json",
       "sha256": "0797c1162c574055b8e88b8631f28ab27855bb25802a4299ac0239705b9ffb76",
       "bytes": 4075
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/OPERATIONS_FIXES_PROOF.json",
+      "sha256": "14a657f9ad94f83a23cd2de569a3582fb8202e7443c84c56f06a2556513dcf43",
+      "bytes": 17989
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/RETAINED_RESULTS_PROOF.json",
@@ -1619,8 +1629,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "ef086ccecbba1978e55149ed1d805d14424533595cecc874000d5bdfaaa6cb2f",
-      "bytes": 424669
+      "sha256": "d0231100adf7f46336f701c194ef1af00fbcc9683a7e879f175866f9e6ebbb68",
+      "bytes": 426850
     },
     {
       "path": "plans/user-stories.csv",
@@ -1699,8 +1709,8 @@
     },
     {
       "path": "runbooks/10_backup_restore.md",
-      "sha256": "fdedfde9f2c63321295c9ca08c1a0e011b67014cefa774493bcd792099dd2aef",
-      "bytes": 17079
+      "sha256": "526bb9577b1f53ce27a553b0566bdad60cf1586a7ecfc7c23834c7f2d60c0d9f",
+      "bytes": 22608
     },
     {
       "path": "runbooks/11_upgrade.md",
@@ -2219,8 +2229,8 @@
     },
     {
       "path": "scripts/restate-bluegreen.ts",
-      "sha256": "0de9b27b14178e4eb1df74f9a4318159b8feac6a8bc02adf372b0d3d36e1b32b",
-      "bytes": 27171
+      "sha256": "fd2acb592bf5ddec9c4a9f42982d0918b9eaea8ddb112163ce3d3e9b1d7e3593",
+      "bytes": 30009
     },
     {
       "path": "scripts/run_f07_live_eval.ts",

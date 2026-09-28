@@ -5,6 +5,7 @@ import type { RouteContext } from './types.js';
 import { isValidUuid, secretsEqual } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
+import { acceptedServiceTokensOf } from '../services/worker-credential.js';
 
 /**
  * Core's side of the Restate Delivery workflow (architecture programme Phase 2, slice 2.2;
@@ -30,10 +31,10 @@ export function registerDeliveryInternalRoutes(ctx: RouteContext): void {
   const { prepareWorkflowDelivery, finishWorkflowDelivery } = ctx.delivery;
 
   const isWorker = (c: Context): boolean => {
-    const configured = process.env.HAWA_WORKER_TOKEN;
     const header = String(c.req.header('Authorization') || '');
     const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
-    if (configured && configured.trim() && presented && secretsEqual(presented, configured)) return true;
+    // HAWA_WORKER_TOKEN, or its previous value during a rotation (ADR-129).
+    if (presented && acceptedServiceTokensOf().some((token) => secretsEqual(presented, token))) return true;
     // Only a request that carries a credential: the test harness signs token-less requests in as an
     // operator, and an operator is refused anyway, but nothing here relies on that.
     if (!presented) return false;

@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { lifecycleDesignProofPayload, SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { withRlsContext } from '@hawa/db';
 import type { AuthContext, RouteContext } from './types.js';
-import { serviceTokenOf } from './lifecycle-internal.routes.js';
+import { acceptedServiceTokensOf } from './lifecycle-internal.routes.js';
 import { isServiceUserId } from '@hawa/contracts';
 import { NATIVE_RECOVERY_ROLES, type NativeRecoveryScope } from '@hawa/domain';
 
@@ -76,17 +76,20 @@ export async function rejectUnownedLifecycleDesignWrite(
   const requestId = c.req.header('X-Hawa-Lifecycle-Request-Id') || '';
   const runId = c.req.header('X-Hawa-Lifecycle-Run-Id') || '';
   const proof = c.req.header('X-Hawa-Lifecycle-Proof') || '';
-  const secret = serviceTokenOf();
+  // HAWA_WORKER_TOKEN, or its previous value while a colour created before a rotation drains (ADR-129).
+  const secrets = acceptedServiceTokensOf();
   const shapeOkay = requestId === owner.requestId && UUID.test(requestId) &&
     (runId === `dr-${taskId}` || new RegExp(`^dr-${taskId}-a[1-9][0-9]*$`).test(runId)) &&
     SHA256.test(proof) && owner.request?.owner === 'restate' &&
     owner.request.stage === 'designing' && owner.request.current_task_id === taskId;
-  if (shapeOkay && secret) {
-    const expected = createHmac('sha256', secret).update(lifecycleDesignProofPayload({
-      taskId, requestId, runId, method: 'POST', path,
-    })).digest();
+  if (shapeOkay) {
     const actual = Buffer.from(proof, 'hex');
-    if (actual.length === expected.length && timingSafeEqual(actual, expected)) return null;
+    for (const secret of secrets) {
+      const expected = createHmac('sha256', secret).update(lifecycleDesignProofPayload({
+        taskId, requestId, runId, method: 'POST', path,
+      })).digest();
+      if (actual.length === expected.length && timingSafeEqual(actual, expected)) return null;
+    }
   }
   return ctx.problem(c, 409, 'LIFECYCLE_OWNED',
     'This task is owned by RequestLifecycle; its design writes require the current worker run');
