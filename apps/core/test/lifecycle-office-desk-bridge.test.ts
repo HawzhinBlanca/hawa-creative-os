@@ -1020,3 +1020,75 @@ describe('ADR-064 named reviewer transaction authority', () => {
     }
   });
 });
+
+describe('a requester change after approval holds request-owned delivery (finding 13 of the Phase 4 review)', () => {
+  it('refuses Deliver until an office member acknowledges the stored words, and records who did', async () => {
+    const { requestId, taskId, approval } = await approvedForDelivery();
+    const chat = await withRlsContext(db, scope, async (trx) => String((await trx.selectFrom('requests')
+      .select('chat_id').where('request_id', '=', requestId).executeTakeFirstOrThrow()).chat_id));
+    process.env.TELEGRAM_ALLOWED_USERS = '91000009';
+    await withRlsContext(db, scope, (trx) => sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id,
+        source_event_id, event_kind, payload, payload_hash, verified)
+      VALUES (${tenantId}::uuid, 'telegram_delivery', ${`lc:${requestId}:2:design-outcome:send`},
+        'telegram_message_sent', ${JSON.stringify({ messageId: '901' })}::jsonb, ${`late-${requestId}`}, true)`.execute(trx));
+    const internal = createApp({ db } as any);
+    const workerHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` };
+    const reply = (text: string) => {
+      const id = 1_100_000_000 + Math.floor(Math.random() * 800_000_000);
+      return { update_id: id, message: { message_id: id % 100000, date: 1790000000, text,
+        from: { id: Number(chat), is_bot: false, first_name: 'Requester' }, chat: { id: Number(chat), type: 'private' },
+        reply_to_message: { message_id: 901 } } };
+    };
+    const words = 'The phone number is wrong: it must be 0750 123 4567';
+    const first = reply(words);
+    const intake = await internal.request('/v1/internal/telegram/intake', { method: 'POST', headers: workerHeaders,
+      body: JSON.stringify({ v: 1, update: first, mode: 'lifecycle' }) });
+    expect(await intake.json()).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE', requestId });
+
+    const gateway = vi.fn(async (_url: string, init?: RequestInit) => {
+      const envelope = JSON.parse(String(init?.body)) as SignedOfficeDecision;
+      expect(checkSignedOfficeDecision(envelope, secret)).toBe('ok');
+      return Response.json({ accepted: true, requestId, taskId, approvalId: approval.approvalId,
+        actionId: envelope.event.actionId, deliveryId: randomUUID(), stage: 'delivering', rev: 4 });
+    });
+    vi.stubGlobal('fetch', gateway);
+    try {
+      const desk = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+      const press = (actionId: string, extra: Record<string, unknown> = {}) => desk.request(`/v1/tasks/${taskId}/publish`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': actionId },
+        body: JSON.stringify({ destination: 'google_drive', approvalId: approval.approvalId, ...extra }) });
+
+      const held = await press(randomUUID());
+      expect(held.status).toBe(409);
+      const heldBody = await held.json() as { code: string; lateChanges: Array<{ updateId: string; text: string; stage: string }> };
+      expect(heldBody).toMatchObject({ code: 'LATE_REQUESTER_CHANGE',
+        lateChanges: [{ updateId: String(first.update_id), text: words, stage: 'approved' }] });
+      expect(gateway).not.toHaveBeenCalled();
+
+      expect((await press(randomUUID(), { acknowledgeLateChanges: ['12345'] })).status).toBe(422);
+      expect(gateway).not.toHaveBeenCalled();
+
+      const acknowledgedAction = randomUUID();
+      const delivered = await press(acknowledgedAction, { acknowledgeLateChanges: [String(first.update_id)] });
+      expect(delivered.status, await delivered.clone().text()).toBe(202);
+      expect(gateway).toHaveBeenCalledTimes(1);
+      const acknowledgement = await withRlsContext(db, scope, async (trx) => (await sql<{ payload: Record<string, unknown> }>`
+        SELECT payload FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
+          AND source_account_id = 'lifecycle_late_change_ack' AND source_event_id = ${String(first.update_id)}`.execute(trx)).rows);
+      expect(acknowledgement).toEqual([{ payload: expect.objectContaining({ requestId,
+        updateId: String(first.update_id), actorUserId: userId, actionId: acknowledgedAction }) }]);
+
+      // A second change arrives: only it holds the next press.
+      const second = reply('Also use the new logo');
+      await internal.request('/v1/internal/telegram/intake', { method: 'POST', headers: workerHeaders,
+        body: JSON.stringify({ v: 1, update: second, mode: 'lifecycle' }) });
+      const heldAgain = await press(randomUUID());
+      expect(heldAgain.status).toBe(409);
+      expect((await heldAgain.json() as typeof heldBody).lateChanges.map((change) => change.updateId))
+        .toEqual([String(second.update_id)]);
+      expect(gateway).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

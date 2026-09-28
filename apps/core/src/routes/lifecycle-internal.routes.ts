@@ -33,10 +33,11 @@ import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
-import { linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
+import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
   readRevisionPhotoDecision, recordRevisionPhotoDecision,
   readRoutingRefusal, recordRoutingRefusal,
-  revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests } from '../services/lifecycle-chat-target.js';
+  revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests,
+  type LateRequesterChange } from '../services/lifecycle-chat-target.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
@@ -62,6 +63,17 @@ const chatOf = (u: UpdateLike): string => parkedUpdateChat(u) ?? '';
 const isUpdate = (u: unknown): u is UpdateLike =>
   Boolean(u) && typeof u === 'object' && Number.isSafeInteger((u as UpdateLike).update_id) && (u as UpdateLike).update_id > 0;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The answer for a requester's words that reached a request after its design went to the office
+ * (finding 13 of the Phase 4 review). The same stored change always gives the same answer.
+ */
+function lateChangeAnswer(chatId: string, late: LateRequesterChange): Record<string, unknown> {
+  const office = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
+  const officeAlert = lateChangeOfficeAlert(late, chatId, office);
+  return { code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change', chatId,
+    requestId: late.requestId, requestStage: late.requestStage, ...(officeAlert ? { officeAlert } : {}) };
+}
 
 function requestIdForUpdate(chatId: string, updateId: number): string {
   const bytes = Buffer.from(createHash('sha256').update(`telegram-new-brief:${chatId}:${updateId}`).digest().subarray(0, 16));
@@ -296,6 +308,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         return handled(422, { code: priorRefusal.code, lifecycleAction: 'park-update',
           chatId: sourceChat, reason: 'A lifecycle chat media update needs operator review; no task was started' });
       }
+      if (priorRefusal.code === 'LATE_REQUESTER_CHANGE' && priorRefusal.late) {
+        return handled(409, lateChangeAnswer(sourceChat, priorRefusal.late));
+      }
       return handled(409, { code: priorRefusal.code,
         lifecycleAction: priorRefusal.code === 'AMBIGUOUS_REQUEST' ||
           priorRefusal.code === 'STALE_REQUEST_REPLY' ? 'request-choice-required' : 'revision-blocked',
@@ -416,6 +431,33 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 waiting: await waitingLifecycleRequests(trx, TENANT, chatId),
                 links: replyMessageId ? await linkedLifecycleReplies(trx, TENANT, chatId, replyMessageId) : [],
               }));
+            // A reply to a request whose design already went to the office (in review, approved,
+            // delivering or delivered) cannot change that design, and it was a stale reply that kept
+            // nothing. Its words are kept, the office is alerted, and Deliver waits for someone to
+            // acknowledge them (finding 13 of the Phase 4 review).
+            if (replyMessageId && !newCommand && !priorRevisionPhoto &&
+                (mode === 'lifecycle' || lifecycleOwnsChat(chatId)) &&
+                !links.some((link) => waiting.some((request) =>
+                  request.request_id === link.requestId && Number(request.rev) === link.rev))) {
+              const targets = await withRlsContext(db,
+                { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                (trx) => lateChangeTargets(trx, TENANT, chatId, replyMessageId));
+              if (targets.length === 1) {
+                const text = photoInput
+                  ? `${photoInput.captionless ? '(no words)' : directive}\n[The requester also sent a photo. It is in the Telegram chat and was not kept.]`
+                  : directive;
+                const late: LateRequesterChange = { ...targets[0], text };
+                const stored = await withRlsContext(db,
+                  { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                  (trx) => recordRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id,
+                    { code: 'LATE_REQUESTER_CHANGE', chatId, payloadHash, late }));
+                if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
+                    stored.code !== 'LATE_REQUESTER_CHANGE' || !stored.late) {
+                  return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+                }
+                return handled(409, lateChangeAnswer(chatId, stored.late));
+              }
+            }
             if (replyMessageId && (mode === 'lifecycle' || lifecycleOwnsChat(chatId) || priorRevisionPhoto) &&
                 (links.length === 0 || newCommand)) return refuseWithReceipt('STALE_REQUEST_REPLY');
             if (links.length > 1) return refuseWithReceipt('AMBIGUOUS_REQUEST');

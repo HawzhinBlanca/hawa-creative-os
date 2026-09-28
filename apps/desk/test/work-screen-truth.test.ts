@@ -4,6 +4,7 @@ import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient, ApiError } from '../src/api/client.js';
 import { readQueuePage } from '../src/screens/WorkScreen.js';
+import { completeDecisionAction, reserveDecisionAction } from '../src/services/decisionActionId.js';
 import { approveButtonState, inQueueFilter, queueFilterStatuses, searchFold, taskStatusView } from '../src/services/taskStatus.js';
 import { APPROVABLE_TASK_STATUSES, TASK_API_STATUSES } from '@hawa/contracts/task-status';
 
@@ -149,6 +150,95 @@ describe('Request Revision (WorkScreen handleSendRevisionRequest)', () => {
     await send();
     expect(recordDecision).not.toHaveBeenCalled();
     expect(toasts.map((t) => t.text)).not.toContainEqual(expect.stringContaining('Revision request logged'));
+  });
+});
+
+describe('Deliver (WorkScreen handleDeliver): finding 19 of the Phase 4 review', () => {
+  // A Deliver press whose answer was lost (503 Lifecycle Delivery Uncertain) keeps its action id, so a
+  // retry cannot start a second delivery. Before the fix the id was keyed by user, task and approval
+  // only: after that delivery failed before Drive and the task was APPROVED again, the next press
+  // resent the spent id and Restate answered from the first press, starting nothing.
+  const pressDeliver = (version: number, publish: (...args: unknown[]) => Promise<unknown>) => lift<() => Promise<void>>('handleDeliver', {
+    selectedTask: { id: 'task-19', requestId: 'req-19', status: 'APPROVED', title: 'KAAE', version },
+    detail: { id: 'task-19', requestId: 'req-19', latestApproval: { decisionId: 'approval-19', role: 'art_director', decidedAt: '2026-09-28T08:00:00.000Z' } },
+    sessionUser: { id: 'director-19', role: 'art_director' },
+    setActionLoading: () => {},
+    reserveDecisionAction, completeDecisionAction,
+    apiClient: { tasks: { publish } },
+    readTaskAgain: async () => null,
+    describeDelivery: () => ({ text: 'ok', tone: 'success' }),
+    showToast: () => {},
+  });
+
+  it('a press after the failed delivery moved the task on gets a fresh action id; a retry of the lost answer keeps it', async () => {
+    const ids: string[] = [];
+    let answers = 0;
+    const publish = vi.fn(async (_taskId: unknown, _body: unknown, actionId: unknown) => {
+      ids.push(String(actionId));
+      answers++;
+      if (answers <= 2) throw new ApiError(503, 'Lifecycle Delivery Uncertain');
+      return { status: 'PUBLISHING', executor: 'restate' };
+    });
+    // The first press: its answer is lost.
+    await pressDeliver(7, publish)();
+    // The same press again, before anything changed: the same id, so no second delivery can start.
+    await pressDeliver(7, publish)();
+    expect(ids[1]).toBe(ids[0]);
+    // That delivery started (version 8) and failed before Drive (version 9): APPROVED again.
+    await pressDeliver(9, publish)();
+    expect(ids).toHaveLength(3);
+    expect(ids[2]).not.toBe(ids[0]);
+  });
+});
+
+describe('Deliver after a requester change (WorkScreen handleDeliver): finding 13 of the Phase 4 review', () => {
+  const words = 'The phone number is wrong: it must be 0750 123 4567';
+  const refusal = () => new ApiError(409, 'Requester Change Received', { title: 'Requester Change Received', status: 409,
+    code: 'LATE_REQUESTER_CHANGE',
+    lateChanges: [{ updateId: '7701', text: words, stage: 'approved', receivedAt: '2026-09-28T08:30:00.000Z' }] } as any);
+  const pressDeliver = (publish: (...args: any[]) => Promise<unknown>, confirmLateChanges: (changes: any[]) => boolean,
+    toasts: string[]) => lift<() => Promise<void>>('handleDeliver', {
+    selectedTask: { id: 'task-13', requestId: 'req-13', status: 'APPROVED', title: 'KAAE', version: 4 },
+    detail: { id: 'task-13', requestId: 'req-13', latestApproval: { decisionId: 'approval-13', role: 'art_director', decidedAt: '2026-09-28T08:00:00.000Z' } },
+    sessionUser: { id: 'director-13', role: 'art_director' },
+    setActionLoading: () => {},
+    reserveDecisionAction, completeDecisionAction, confirmLateChanges,
+    apiClient: { tasks: { publish } },
+    readTaskAgain: async () => null,
+    describeDelivery: () => ({ text: 'Publication requested', tone: 'success' }),
+    showToast: (text: string) => { toasts.push(text); },
+  });
+
+  it('shows the words, and delivers only after the office member acknowledges them, under a new action id', async () => {
+    const calls: Array<{ body: any; actionId: string }> = [];
+    const publish = vi.fn(async (_taskId: string, body: any, actionId: string) => {
+      calls.push({ body, actionId });
+      if (!body.acknowledgeLateChanges) throw refusal();
+      return { status: 'PUBLISHING', executor: 'restate' };
+    });
+    const seen: any[] = [];
+    const toasts: string[] = [];
+    await pressDeliver(publish, (changes) => { seen.push(...changes); return true; }, toasts)();
+    expect(seen.map((change) => change.text)).toEqual([words]);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].body).toMatchObject({ approvalId: 'approval-13', acknowledgeLateChanges: ['7701'] });
+    expect(calls[1].actionId).not.toBe(calls[0].actionId);
+    expect(toasts).toEqual(['Publication requested']);
+  });
+
+  it('does not deliver when the office member does not acknowledge, and does not keep the refused id', async () => {
+    const calls: Array<{ body: any; actionId: string }> = [];
+    const publish = vi.fn(async (_taskId: string, body: any, actionId: string) => {
+      calls.push({ body, actionId });
+      throw refusal();
+    });
+    const toasts: string[] = [];
+    await pressDeliver(publish, () => false, toasts)();
+    expect(calls).toHaveLength(1);
+    expect(toasts[0]).toMatch(/not delivered/i);
+    await pressDeliver(publish, () => false, toasts)();
+    // Core refused before asking for any delivery, so the next press is a new action.
+    expect(calls[1].actionId).not.toBe(calls[0].actionId);
   });
 });
 

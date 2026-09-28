@@ -8,7 +8,7 @@ import { RequesterSendEvidencePanel } from '../components/RequesterSendEvidenceP
 import { VectorInspector } from '../components/VectorInspector.js';
 import { OriginalDocument } from '../components/DocumentRequestForm.js';
 import { SubmittedCopy } from '../components/SubmittedCopy.js';
-import { apiClient, ApiError, type DecisionPayload, type TaskListParams, type TaskListResponse, type TaskTimelineEvent } from '../api/client.js';
+import { apiClient, ApiError, type DecisionPayload, type LateRequesterChangeView, type TaskListParams, type TaskListResponse, type TaskTimelineEvent } from '../api/client.js';
 import { captureForReview } from '../services/canvaCapture.js';
 import { read, reasonOf, type Reading } from '../services/statusReport.js';
 import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
@@ -584,6 +584,15 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // Every action button waits while one runs.
   const busy = actionLoading || approve.isPending || reject.isPending || requestRevision.isPending;
 
+  // Words the requester sent after the design reached the office, shown before a delivery (finding 13).
+  const confirmLateChanges = (changes: LateRequesterChangeView[]) => window.confirm([
+    changes.length === 1
+      ? 'The requester sent this after the design reached the office:'
+      : `The requester sent ${changes.length} messages after the design reached the office:`,
+    ...changes.map((change) => `\n"${change.text}"`),
+    '\nThese words were not applied to the design. Deliver the approved design anyway?',
+  ].join('\n'));
+
   // Primary Action 5: Deliver approved files (FR-078, CV-16, H02)
   const handleDeliver = async () => {
     const approval = detail?.latestApproval;
@@ -592,21 +601,44 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     const requestOwned = Boolean(detail.requestId || selectedTask.requestId);
     setActionLoading(true);
     let delivery: unknown;
-    let reservation: ReservedDecisionAction | null = null;
-    let actionKey = '';
-    try {
-      if (requestOwned) {
-        actionKey = JSON.stringify([sessionUser?.id, taskId, approval.decisionId, 'deliver']);
-        reservation = await reserveDecisionAction(actionKey);
+    let acknowledged: string[] = [];
+    for (;;) {
+      let reservation: ReservedDecisionAction | null = null;
+      let actionKey = '';
+      try {
+        if (requestOwned) {
+          // The task version is part of the key: a press whose answer was lost is retried with the same
+          // id, but once that delivery moved the task on (started, then failed back to APPROVED) the next
+          // press is a new action. A kept id would be answered from the spent press (finding 19).
+          actionKey = JSON.stringify([sessionUser?.id, taskId, approval.decisionId, selectedTask.version ?? null, 'deliver',
+            ...(acknowledged.length ? [[...acknowledged].sort()] : [])]);
+          reservation = await reserveDecisionAction(actionKey);
+        }
+        delivery = await apiClient.tasks.publish(taskId,
+          { destination: 'google_drive', ...(requestOwned ? { approvalId: approval.decisionId } : {}),
+            ...(acknowledged.length ? { acknowledgeLateChanges: acknowledged } : {}) },
+          reservation?.actionId);
+        if (reservation) completeDecisionAction(actionKey, reservation);
+        break;
+      } catch (err: any) {
+        const late: LateRequesterChangeView[] | null = err?.problem?.code === 'LATE_REQUESTER_CHANGE' &&
+          Array.isArray(err.problem.lateChanges) ? err.problem.lateChanges : null;
+        if (late && reservation) {
+          // Core refused before asking for any delivery, so this action id was never used.
+          completeDecisionAction(actionKey, reservation);
+          const unseen = late.filter((change) => !acknowledged.includes(change.updateId));
+          if (unseen.length && confirmLateChanges(late)) {
+            acknowledged = [...new Set([...acknowledged, ...late.map((change) => change.updateId)])];
+            continue;
+          }
+          showToast('Not delivered. The requester sent words after this design reached the office; read them before delivering.', 'error');
+          setActionLoading(false);
+          return;
+        }
+        showToast(`Delivery failed: ${err.message || 'Server error'}`, 'error');
+        setActionLoading(false);
+        return;
       }
-      delivery = await apiClient.tasks.publish(taskId,
-        { destination: 'google_drive', ...(requestOwned ? { approvalId: approval.decisionId } : {}) },
-        reservation?.actionId);
-      if (reservation) completeDecisionAction(actionKey, reservation);
-    } catch (err: any) {
-      showToast(`Delivery failed: ${err.message || 'Server error'}`, 'error');
-      setActionLoading(false);
-      return;
     }
     // Core accepted the delivery (202 DELIVERED_TO_CHAT_ONLY included: the requester has the file);
     // a failed refresh after it is not a failed delivery.

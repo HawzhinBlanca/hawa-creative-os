@@ -9,6 +9,7 @@ import { isValidUuid, COPY_REQUIRED_DETAIL } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { pendingChangeWords } from '../services/pending-change.js';
 import { readPublicationReceipt } from '../services/publication-receipt.js';
+import { acknowledgeLateChange, acknowledgedLateChanges, pendingLateChanges } from '../services/lifecycle-chat-target.js';
 import { readRequesterSendEvidence } from '../services/requester-send-evidence.js';
 import { confirmRequesterSendVisible } from '../services/requester-send-resolution.js';
 import { LifecycleProjectionConflict } from '../services/lifecycle-projection.js';
@@ -96,9 +97,12 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         return problem(c, 403, 'Forbidden', 'An authorized office reviewer must start request-owned delivery');
       }
       const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
-      if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['destination', 'approvalId'].includes(key)) ||
+      if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['destination', 'approvalId', 'acknowledgeLateChanges'].includes(key)) ||
           (body.destination !== undefined && body.destination !== 'google_drive') ||
-          (body.approvalId !== undefined && !isValidUuid(String(body.approvalId)))) {
+          (body.approvalId !== undefined && !isValidUuid(String(body.approvalId))) ||
+          (body.acknowledgeLateChanges !== undefined && (!Array.isArray(body.acknowledgeLateChanges) ||
+            body.acknowledgeLateChanges.length > 50 ||
+            (body.acknowledgeLateChanges as unknown[]).some((id: unknown) => typeof id !== 'string' || !/^[1-9][0-9]{0,18}$/.test(id))))) {
         return problem(c, 422, 'Invalid Delivery Request', 'Deliver the current approval to Google Drive with one stable action key');
       }
       if (!db || !taskRepo || !publicationRepo) return problem(c, 503, 'Database Unavailable',
@@ -128,6 +132,35 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       const secret = workerSigningSecretOf() || '';
       if (!ingress || !secret) return problem(c, 503, 'Lifecycle Delivery Unavailable',
         'The signed delivery gateway is not configured; retry this action later');
+      // Words the requester sent after the design reached the office hold a new delivery until an
+      // office member has read them (finding 13). A replay of an action already recorded is not new.
+      if (!current.receipts) {
+        const acknowledged = (body.acknowledgeLateChanges as string[] | undefined) ?? [];
+        const system = { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
+        const late = await withRlsContext(db, system, async (trx) => ({
+          pending: await pendingLateChanges(trx, tenantId, requestId),
+          done: await acknowledgedLateChanges(trx, tenantId, requestId),
+        }));
+        const unknown = acknowledged.filter((id) => !late.pending.some((change) => change.updateId === id) &&
+          !late.done.includes(id));
+        if (unknown.length) return problem(c, 422, 'Unknown Requester Change',
+          'An acknowledged change does not belong to this request; refresh the task');
+        const unread = late.pending.filter((change) => !acknowledged.includes(change.updateId));
+        if (unread.length) {
+          return c.json({ type: 'https://hawa.design/errors/409', title: 'Requester Change Received', status: 409,
+            detail: 'The requester sent words after this design reached the office. Read them and acknowledge them before delivering.',
+            instance: new URL(c.req.url).pathname, code: 'LATE_REQUESTER_CHANGE', lateChanges: unread }, 409);
+        }
+        const reading = late.pending.filter((change) => acknowledged.includes(change.updateId));
+        if (reading.length) {
+          await withRlsContext(db, system, async (trx) => {
+            for (const change of reading) {
+              await acknowledgeLateChange(trx, tenantId, { requestId, updateId: change.updateId,
+                actorUserId: auth.userId, actorRole: officeRole, actionId });
+            }
+          });
+        }
+      }
       const event = { v: 1 as const, kind: 'deliver' as const, eventId: `desk:${actionId}`,
         requestId, taskId, revisionId: current.approval.design_revision_id, approvalId, actionId,
         expectedRev, actor: { userId: auth.userId, role: officeRole }, reason: 'Deliver approved files' };

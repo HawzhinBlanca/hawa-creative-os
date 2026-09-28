@@ -45,6 +45,8 @@ Recommended first bridge:
 
 Telegram downtime does not block Hawa Desk.
 
+A requester reply to a lifecycle message of a request that is in review, approved, delivering or delivered does not change that design. Core keeps the words under the update ID before answering, the office chat receives them quoted, and the requester is told they were not applied. A new request-owned delivery waits until an office member has read and acknowledged every such change; the acknowledging user and action are recorded (ADR-130).
+
 ## 5. WAHA adapter
 
 WAHA is optional for reading existing WhatsApp groups through a dedicated office account.
