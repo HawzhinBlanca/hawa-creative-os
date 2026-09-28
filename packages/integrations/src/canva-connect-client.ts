@@ -67,9 +67,11 @@ export class CanvaNotConfiguredError extends Error {
  * A transport failure (no answer at all) is a plain Error and may have been acted on. Callers tell
  * the two apart by this class (2026-09-24): a 429 on POST /exports used to be recorded as an
  * uncertain export that blocked the format for good. `oauthError` is the token endpoint's `error`.
+ * `retryAfterMs` is the wait Canva asked for on a 429 the client gave up on, when it named one: the
+ * caller waits that long (durably) before sending the same request again.
  */
 export class CanvaHttpError extends Error {
-  constructor(message: string, readonly status: number, readonly oauthError?: string) {
+  constructor(message: string, readonly status: number, readonly oauthError?: string, readonly retryAfterMs?: number) {
     super(message);
     this.name = 'CanvaHttpError';
   }
@@ -105,6 +107,11 @@ function nextWaitMs(res: Response | null, backoffMs: number): number | null {
   return asked > MAX_RETRY_AFTER_MS ? null : asked;
 }
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** A create call Canva refused, as an error; a 429 carries the wait Canva asked for. */
+function createRefused(what: string, res: Response): CanvaHttpError {
+  const asked = res.status === 429 ? retryAfterMs(res) : null;
+  return new CanvaHttpError(`Canva ${what} failed (HTTP ${res.status})`, res.status, undefined, asked ?? undefined);
+}
 
 /**
  * Authentic Canva Connect REST API client (CV-22, R01, Phase 3).
@@ -437,7 +444,7 @@ export class CanvaConnectClient {
     }), false);
 
     if (!res.ok) {
-      throw new CanvaHttpError(`Canva createDesign failed (HTTP ${res.status})`, res.status);
+      throw createRefused('createDesign', res);
     }
 
     return validateCanvaDesignResponse(await res.json());
@@ -461,7 +468,7 @@ export class CanvaConnectClient {
       'Import-Metadata': JSON.stringify({ title_base64: Buffer.from(title.slice(0, 50)).toString('base64'),
         mime_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }),
     }, body: new Uint8Array(bytes) }), false);
-    if (!response.ok) throw new CanvaHttpError(`Canva import failed (HTTP ${response.status})`, response.status);
+    if (!response.ok) throw createRefused('import', response);
     return this.validateImport(await response.json());
   }
 
@@ -495,7 +502,7 @@ export class CanvaConnectClient {
     }), true);
 
     if (!res.ok) {
-      throw new CanvaHttpError(`Canva createExportJob failed (HTTP ${res.status})`, res.status);
+      throw createRefused('createExportJob', res);
     }
 
     return validateCanvaExportJob(await res.json());

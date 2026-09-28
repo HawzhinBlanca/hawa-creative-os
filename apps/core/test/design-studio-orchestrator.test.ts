@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterAll, beforeAll, beforeEach } from 'vites
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { DesignStudioService, isPipelineV3Run } from '../src/services/design-studio/design-studio-service.js';
-import { CanvaConnectService } from '../src/services/canva-connect-service.js';
+import { CanvaConnectService, CanvaFlowError } from '../src/services/canva-connect-service.js';
 import { CanvaDesignPlanner } from '../src/services/canva-design-planner.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import type { StudioLayoutV2 } from '@hawa/creative';
@@ -659,6 +659,33 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
     expect(planRow.source_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(planRow.source_content).toBeDefined();
     expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
+  }, 30000);
+
+  it('6d. a Canva rate limit on the import leaves the run at transfer and names the wait; the next resume imports under the same key', async () => {
+    const taskId = await createTask();
+    const operationId = randomUUID();
+    const mockCanvaService = {
+      importEditableDesign: vi.fn()
+        .mockRejectedValueOnce(new CanvaFlowError(429, 'CANVA_RATE_LIMITED', 'Canva is refusing new imports for now.', 20000))
+        .mockResolvedValue({ operationId, status: 'retrieved', designId: 'DAFRATELIMIT1' }),
+    } as unknown as CanvaConnectService;
+    const service = new DesignStudioService(db, mockCanvaService, { apiKey: 'test-key', fetcher: createMockFetch(), defaultTier: 'standard' });
+    const { run } = await service.createOrGetRun(scope, taskId, `key-${randomUUID().slice(0, 16)}`, { width: 1080, height: 1350, tier: 'standard' });
+    let refusal: any = null;
+    for (let n = 0; n < 15 && !refusal; n++) {
+      const step = await service.resume(scope, taskId, run.id).catch((err) => { refusal = err; return null; });
+      if (step && ['transferred', 'failed', 'degraded'].includes(step.status)) break;
+    }
+    expect({ status: refusal?.status, code: refusal?.code, retryAfterMs: refusal?.retryAfterMs }).toEqual({ status: 429, code: 'CANVA_RATE_LIMITED', retryAfterMs: 20000 });
+    const held = (await sql<any>`SELECT status FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0];
+    expect(held.status).toBe('transferring');
+
+    const done = await service.resume(scope, taskId, run.id);
+    expect({ status: done.status, designId: done.designId }).toEqual({ status: 'transferred', designId: 'DAFRATELIMIT1' });
+    const calls = (mockCanvaService.importEditableDesign as any).mock.calls;
+    expect(calls.map((c: any[]) => c[2])).toEqual([`studio-${run.id}`, `studio-${run.id}`]);
+    const plans = (await sql<any>`SELECT id FROM hawa.canva_design_plans WHERE task_id=${taskId}::uuid`.execute(db)).rows;
+    expect(plans).toHaveLength(1);
   }, 30000);
 
   it('6c. an import Canva has not settled leaves the run at transfer; the next resume follows the same import (2026-09-24)', async () => {

@@ -2123,8 +2123,9 @@ export class DesignStudioService {
       }
     } catch (err: any) {
       // Not a failure: the run waits at its stage for the design it revises, and a later resume
-      // makes the edit.
-      if (err instanceof CanvaFlowError && err.code === 'PARENT_STILL_RUNNING') throw err;
+      // makes the edit. So does a transfer Canva refused with its rate limit (nothing was created):
+      // the worker waits the time named and resumes, and the import is sent again under the run's key.
+      if (err instanceof CanvaFlowError && (err.code === 'PARENT_STILL_RUNNING' || err.code === 'CANVA_RATE_LIMITED')) throw err;
       if (err instanceof StudioBudgetExhaustedError) {
         // Budget exhausted: gracefully handle by selecting best candidate so far
         return this.handleBudgetExhaustion(s, run, ctx, budget);

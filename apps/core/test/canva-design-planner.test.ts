@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { blobStoreFromEnv,createDb,sql } from '@hawa/db';
 import { CanvaDesignPlanner,planningRetryAfterMs,planningSlotsFrom,savedDesignCopy,DEFAULT_PLANNING_SLOTS,STALE_PLANNING_MS } from '../src/services/canva-design-planner.js';
-import { CanvaConnectService } from '../src/services/canva-connect-service.js';
+import { CanvaConnectService, CanvaFlowError } from '../src/services/canva-connect-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { checkCanvaPptx } from '@hawa/qa';
 
@@ -144,6 +144,16 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(good).toHaveBeenCalledTimes(1);expect(fresh.status).toBe('submitted');expect(api2.importEditableDesign).toHaveBeenCalledTimes(1);
     const rows=(await sql<any>`SELECT status FROM hawa.canva_design_plans WHERE task_id=${id}::uuid ORDER BY created_at`.execute(db)).rows.map(r=>r.status);
     expect(rows).toEqual(['abandoned','planned']);
+  });
+  it('a Canva rate limit on the import is a named wait: the paid plan is kept and the same key imports it, with no second model call',async()=>{
+    const id=await intake(),remote=vi.fn(async()=>response()),{api,planner}=make(remote);
+    (api.importEditableDesign as any).mockRejectedValueOnce(new CanvaFlowError(429,'CANVA_RATE_LIMITED','Canva is refusing new imports for now.',30000));
+    await expect(planner.generate(scope,id,'rate-key-001',1200,1697)).rejects.toMatchObject({status:429,code:'CANVA_RATE_LIMITED',retryAfterMs:30000});
+    const [row]=(await sql<any>`SELECT id,status FROM hawa.canva_design_plans WHERE task_id=${id}::uuid`.execute(db)).rows;
+    expect(row.status).toBe('planned');
+    const again=await planner.generate(scope,id,'rate-key-001',1200,1697);
+    expect({status:again.status,modelCalls:remote.mock.calls.length,importKeys:(api.importEditableDesign as any).mock.calls.map((c:any[])=>c[2])})
+      .toEqual({status:'submitted',modelCalls:1,importKeys:['plan-'+row.id,'plan-'+row.id]});
   });
   it('correctly parses model output wrapped in markdown codeblocks and conversational intro/outro',async()=>{
     const id=await intake();
