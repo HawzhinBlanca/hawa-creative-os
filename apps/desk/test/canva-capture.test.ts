@@ -24,8 +24,8 @@ describe('Capture for Review takes a real Canva export through Core', () => {
   it('captures preview and checked source against one binding with stable format keys, then reports the server review receipt', async () => {
     const api = fakeApi();
     const outcome = await captureForReview(api, TASK, { key: 'capture-key-0001', sleep: noSleep });
-    expect(api.export.mock.calls).toEqual([[TASK,'png',3,'capture-key-0001-png'],[TASK,'pptx',3,'capture-key-0001-pptx']]);
-    expect(api.resume).toHaveBeenCalledWith(TASK, OP);
+    expect(api.export.mock.calls).toEqual([[TASK,'png',3,'capture-key-0001-png',undefined],[TASK,'pptx',3,'capture-key-0001-pptx',undefined]]);
+    expect(api.resume).toHaveBeenCalledWith(TASK, OP,undefined);
     expect(outcome).toEqual({
       tone: 'success',
       completed:true,

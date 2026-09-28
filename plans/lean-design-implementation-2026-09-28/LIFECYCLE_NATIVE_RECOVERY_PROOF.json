@@ -1,0 +1,258 @@
+{
+  "date": "2026-09-28",
+  "status": "LOCAL_LINKED_REVISION_RECOVERY_QUALIFIED_NOT_FULL_GOAL_OR_RELEASE",
+  "base_commit": "7765a9e3",
+  "branch": "codex/research-grade-design-system",
+  "adr": "114",
+  "requirements": [
+    "FR-029",
+    "FR-041",
+    "FR-042",
+    "FR-060",
+    "NFR-009",
+    "NFR-024"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/114_lifecycle_native_revision_recovery.md",
+      "sha256": "86305a40d46855949a0a94c320fcbe146c361724495dd821bd5936e3f2ff98f9"
+    },
+    {
+      "path": "api/canva-connect.openapi.json",
+      "sha256": "88a3d91f3372ecd1bbf4e97e56e8eefe23bfdd4c4a2f8fcb3d022ac079e03143"
+    },
+    {
+      "path": "api/openapi.yaml",
+      "sha256": "3eba181df52ef8d340d3870ba7466f5add644d34fca2e313c3f4e5d4f9208727"
+    },
+    {
+      "path": "apps/core/src/routes/canva-outcome.routes.ts",
+      "sha256": "913ce02724b772d5495a1c4426bf3f25c0847096dd202f380f9a3107bf7815be"
+    },
+    {
+      "path": "apps/core/src/routes/canva.routes.ts",
+      "sha256": "4077a6cbae7043e19b4acd32c018d54322769ad37d4a9b92cba7fe5da72f2422"
+    },
+    {
+      "path": "apps/core/src/routes/lifecycle-design-proof.ts",
+      "sha256": "83bfce6af06c005d2d39f64cca07de148f898493078ada6569ecbb20cb3b49d2"
+    },
+    {
+      "path": "apps/core/src/routes/lifecycle-internal.routes.ts",
+      "sha256": "4d9674e2e979318ed6679a7f1a2120d389660059df177638e1de1dff60ba9510"
+    },
+    {
+      "path": "apps/core/src/routes/native-review.routes.ts",
+      "sha256": "bce1591f9ee870a339adbb2ed34853767745e9b21fb5857a37e199c42533533a"
+    },
+    {
+      "path": "apps/core/src/services/canva-connect-service.ts",
+      "sha256": "52c6736893f47d9e7f89708f62304a97c09f943b2880e44679340fb2910ab6b4"
+    },
+    {
+      "path": "apps/core/src/services/canva-export-policy.ts",
+      "sha256": "3710fc1967e60ee5f19ecbdd00d2a1392562dd97bd76ba3f440cd85ae03af5a8"
+    },
+    {
+      "path": "apps/core/src/services/lifecycle-native-review.ts",
+      "sha256": "de9f5171379641e4dffd770d8ade94706164fca951ba2ab9cab8cb4846fd1e6d"
+    },
+    {
+      "path": "apps/core/src/services/lifecycle-native-scope.ts",
+      "sha256": "df95a8d9462e73aefee56e55962774fc7667931c829b3110f772380ea5b4eb3f"
+    },
+    {
+      "path": "apps/core/src/services/manual-canva-review.ts",
+      "sha256": "37e80de3f5a134b3de9d25ea00433d33f50041dc3bfa54874449bcb1faa796fa"
+    },
+    {
+      "path": "apps/core/src/services/native-revision-handoff.ts",
+      "sha256": "d8be9a24091e48af24f134b80cbfc3b050e4f798c3ae0eb1624dbb4488f3665a"
+    },
+    {
+      "path": "apps/core/test/native-revision-handoff.test.ts",
+      "sha256": "ae60691740bb2fc03dd25e228d07ed650d44f60ec05102d1be034764eead35a2"
+    },
+    {
+      "path": "apps/desk/src/api/client.ts",
+      "sha256": "ed951c1a2c9c3ef4ba1b076021284b286456ab0eaa3737ea967334b7889d9781"
+    },
+    {
+      "path": "apps/desk/src/components/CanvaTaskPanel.tsx",
+      "sha256": "c1ee1dd26f02ca18c76cad15e04ede8c389bb5f75aa280bee0eafd638f1ef531"
+    },
+    {
+      "path": "apps/desk/src/components/NativeReviewSubmit.tsx",
+      "sha256": "6cd53f9300abddb4a07f181f1b9aafb4a339dcb7c6402d861e0df5ccc98daa07"
+    },
+    {
+      "path": "apps/desk/src/components/NativeRevisionHandoff.tsx",
+      "sha256": "ddd02e5ae705cf52c4003d60c5a351316ff07b521f184ea36e6340ce531daa9a"
+    },
+    {
+      "path": "apps/desk/src/screens/WorkScreen.tsx",
+      "sha256": "5790bd7db7dc9c9616bb075ac66de67476b37d0248fc9fc2ac15db7c68392578"
+    },
+    {
+      "path": "apps/desk/src/services/canvaCapture.ts",
+      "sha256": "36c8a561356864dfde224c3ab46d1cd75149b07c572833361cbb9a6f468196cc"
+    },
+    {
+      "path": "apps/desk/test/canva-capture.test.ts",
+      "sha256": "4b1062c95a4620038224847c6c36b9a19d349abaf537fae1eca2092da34d159c"
+    },
+    {
+      "path": "apps/desk/test/native-review-submit.test.ts",
+      "sha256": "da0b1d9717a9e2856cb3fa22153ba956ab96a1f88e9a7391dc216f696381e46c"
+    },
+    {
+      "path": "apps/desk/test/native-revision-handoff.test.ts",
+      "sha256": "1343925abe625f5f904ff2d962eacc75ca15e9ab4f5edcf31861b28e440fd181"
+    },
+    {
+      "path": "apps/worker/src/lifecycle/office-decision-gateway.ts",
+      "sha256": "d4d3b1839e30443a7bfc866ae277991d7784c9d2ebbb5ce5c473ad9c5fd5d8fa"
+    },
+    {
+      "path": "apps/worker/src/lifecycle/request-lifecycle.ts",
+      "sha256": "ffd8f71b93ec3d99c6e6424593bc906c7c808f30e56f5d20ba6f95a0fed599dd"
+    },
+    {
+      "path": "apps/worker/test/request-lifecycle-native-review.test.ts",
+      "sha256": "79e59ae33dcd1b50b6249dc1d9f931e40b3be3aa32991dc013a9b7d62ef7ea6b"
+    },
+    {
+      "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
+      "sha256": "64b0e070429628f405041c8737ec6f02822369db4a35a809c361866f11314fa8"
+    },
+    {
+      "path": "packages/domain/src/index.ts",
+      "sha256": "785ce687647ffe8916ca6f98689e4a949dddac0dd33a7a814436d8045ff46984"
+    },
+    {
+      "path": "packages/domain/src/native-review-submission.ts",
+      "sha256": "3b0e07e2600f01baff80134132bceb559092e15fb8cd217942bf3c4e2af5c562"
+    }
+  ],
+  "logs": [
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-affected.log",
+      "sha256": "4095374486dab239aa37b69b152de77caca8f0ce79c51cbe55c32ad2c29574fb"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-desk-build-final.log",
+      "sha256": "c5da86c4eea2a22c17017b3c0431694b2ebf838fbf75b467c4eddbaee022795d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-desk-build.log",
+      "sha256": "1744dcc47d55d63a50dd41643f79598e2142928d09ab0aa76221b3c1bc8ca7cc"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-final-boundaries.log",
+      "sha256": "ee3fd33f9f390ca8e5a92f981ef740120509fcbc5cce613c4d52b34134281b64"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-final-fixed.log",
+      "sha256": "574f00932ef72432ab9d58c0053ae9077a98d2a6cffac334de5b90085d9f9b4f"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-focused.log",
+      "sha256": "941ac0ee0923f0dc7def21cd57ee138ca51ec25a0b91aa6bb13ad79788be873c"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-initial.log",
+      "sha256": "4bd2169b1b9454e6d6a801f5b97f01a4801a7f5f8e76d6706d16c8f9f1bc2a65"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-qualified.log",
+      "sha256": "cea6615aa8c08a5c8d076ddb742d815be9d5fe2ef0cea147a839ecddd06c9861"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-recovery.log",
+      "sha256": "e2ede4c0431a633624f76141e0713857ffb75519990f992f85ce3da56f1d6a5b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-security-final.log",
+      "sha256": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-security-sealed.log",
+      "sha256": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-security.log",
+      "sha256": "0e08f15c0f8cc3ad037a29b64b273ff67bce8dcf6001b88a5eb04ae2787f8c9b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-types-final.log",
+      "sha256": "7f80339ce402a8721e247561555f8cb5a1035d3323a9f48be8b9acd125956d3d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-types-sealed.log",
+      "sha256": "7f80339ce402a8721e247561555f8cb5a1035d3323a9f48be8b9acd125956d3d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-native-types.log",
+      "sha256": "45937c612e67ea7d593265cf5c29593ac815d1c62c87b6e1943127f23b842d8e"
+    }
+  ],
+  "acceptance": {
+    "final_connected": {
+      "files": 24,
+      "passed": 220,
+      "failed": 0,
+      "skipped": 0,
+      "log": "output/acceptance/2026-09-28-lifecycle-native-qualified.log"
+    },
+    "final_boundary": {
+      "files": 6,
+      "passed": 63,
+      "failed": 0,
+      "skipped": 0
+    },
+    "source_scripts_types": "passed",
+    "strict_test_roots": 525,
+    "strict_test_types": "passed",
+    "desk_build": "passed",
+    "any_count": 957,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "secret_scan": "passed; 0 secrets; 53 justified allowlist hits"
+  },
+  "proved": [
+    "Current manual linked revision can bind separate copy, confirm exact text/preservation, retain PNG/PPTX and submit to owner-controlled review.",
+    "Signed public gateway event reaches actual Core transaction; one revision/QA survives lost Core reply and later lost gateway reply.",
+    "Fresh restricted hawa_app connection replays immutable receipt; altered keyed bodies conflict; later approval is not rewound.",
+    "Stale task, confirmation, parent or capture rejects atomically. Request row lock excludes concurrent state mutation.",
+    "Disabled users are refused at active-user snapshot check; service actors and new generation are excluded.",
+    "Desk retains exact action/body across uncertain response and remount; storage failure prevents dispatch."
+  ],
+  "failures_retained": [
+    {
+      "stage": "initial",
+      "result": "36 passed / 6 failed",
+      "cause": "Existing owned-export policy refusal and Desk optional-argument expectation; fixed."
+    },
+    {
+      "stage": "types",
+      "cause": "Two new DesignRunInput fixtures omitted required lifecycle metadata; fixed."
+    },
+    {
+      "stage": "security",
+      "cause": "Synthetic quoted secret pattern; replaced fixture key with randomUUID."
+    },
+    {
+      "stage": "final-boundaries",
+      "result": "62 passed / 1 failed",
+      "cause": "users FOR SHARE triggers UPDATE RLS filtering for hawa_app; scoped SELECT fixes without grants. Final run 220/0/0."
+    }
+  ],
+  "limits": [
+    "Synthetic Canva transport and actual isolated PostgreSQL/retained fixture bytes. Owner test harness is in memory, not a deployed Restate/OS process-kill drill.",
+    "Local database locks cannot prevent direct native Canva edits. Native preservation is a human assertion, not proved from exported files.",
+    "Active-user SELECT checks the current snapshot; it does not serialize concurrent account revocation.",
+    "Initial manual requests without automatic design run remain outside this admission.",
+    "No paid calls, live native operations, live migration, deployment, full release suite, human design study or independent recovery qualification.",
+    "All six packages remain partial or open; this proof qualifies only the linked revision recovery slice."
+  ]
+}

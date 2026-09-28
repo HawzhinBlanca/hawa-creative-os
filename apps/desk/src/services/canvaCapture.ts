@@ -7,10 +7,11 @@
  * button made no server call at all and displayed an invented revision, hash and passing QA report.
  */
 
+import type { NativeRecoveryScope } from '@hawa/domain';
 export interface CaptureApi {
   taskState(taskId: string): Promise<any>;
-  export(taskId: string, format: 'png' | 'pptx', expectedVersion: number, key: string): Promise<any>;
-  resume(taskId: string, operationId: string): Promise<any>;
+  export(taskId: string, format: 'png' | 'pptx', expectedVersion: number, key: string, nativeRecovery?: NativeRecoveryScope): Promise<any>;
+  resume(taskId: string, operationId: string, nativeRecovery?: NativeRecoveryScope): Promise<any>;
 }
 
 export interface CaptureOutcome {
@@ -41,10 +42,10 @@ export async function captureForReview(api: CaptureApi, taskId: string, options:
   if (options.expectedBinding && (options.expectedBinding.designId !== state.binding.designId || options.expectedBinding.version !== state.binding.version))
     return {tone:'error',text:'The linked design changed before capture. Start a fresh capture of the current design.',completed:true};
   const capture = async (format: 'png' | 'pptx') => {
-    let result = await api.export(taskId, format, state.binding.version, `${key}-${format}`);
+    let result = await api.export(taskId, format, state.binding.version, `${key}-${format}`,state.revisionHandoff?.nativeRecovery);
     for (let i = 0; i < attempts && result?.status === 'submitted' && result.operationId; i++) {
       await sleep(waitMs);
-      result = await api.resume(taskId, result.operationId);
+      result = await api.resume(taskId, result.operationId,state.revisionHandoff?.nativeRecovery);
     }
     return result;
   };
@@ -57,6 +58,8 @@ export async function captureForReview(api: CaptureApi, taskId: string, options:
     return {...outcome,text:`The PNG is stored; the checked source is not ready. ${outcome.text}`};
   }
   if (checked.artifact.format !== 'pptx') return {tone:'error',text:'Core did not return the checked PPTX source. Resume the export before review.'};
+  if (state.revisionHandoff?.nativeRecovery) return {tone:'info',completed:true,
+    text:'Preview and checked source are stored. Inspect them, then submit the captured revision for review.'};
   if (checked.review?.status === 'recorded' && typeof checked.review.revisionId === 'string' && checked.review.checkedArtifactId === checked.artifact.id) {
     return {tone:checked.review.qaPassed === true?'success':'info',completed:true,
       text:checked.review.qaPassed === true

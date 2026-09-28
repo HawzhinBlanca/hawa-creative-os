@@ -42,6 +42,9 @@ import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifec
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
 import type { ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
+import { parseNativeReviewSubmission } from '@hawa/domain';
+import { projectLifecycleNativeReview } from '../services/lifecycle-native-review.js';
+import { CanvaFlowError } from '../services/canva-flow-error.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
 export function isInternalPath(path: string): boolean {
@@ -156,6 +159,17 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       if (!auth.authenticated || auth.role !== 'service') return problem(c, 401, 'Authentication Required', 'This route takes the worker\'s credential only');
       return handler(c);
     });
+
+  internal('/lifecycle/:requestId/native-review',async c=>{
+    const event=parseNativeReviewSubmission(await c.req.json().catch(()=>null));
+    if (!event || event.requestId !== c.req.param('requestId')) return problem(c,422,'Invalid Native Review');
+    if (!db) return problem(c,503,'Database Required');
+    try { return c.json(await projectLifecycleNativeReview(db,DEFAULT_TENANT_ID,event)); }
+    catch(error) {
+      if (error instanceof CanvaFlowError) return problem(c,error.status,error.code,error.message);
+      return problem(c,503,'Native Review Unavailable','Retry the identical submission.');
+    }
+  });
 
   const readBody = async (c: Context): Promise<Record<string, unknown> | null> => {
     try {

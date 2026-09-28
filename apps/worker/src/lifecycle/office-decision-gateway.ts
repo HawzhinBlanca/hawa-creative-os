@@ -2,6 +2,7 @@ import * as restate from '@restatedev/restate-sdk';
 import { verifyLifecycleOfficeEvent } from '@hawa/integrations';
 import { parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
 import { withInvocationLogContext } from '../logging.js';
+import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
 import { RequestLifecycleApi, type OfficeDeliveryStartEvent, type OfficeDeliveryStartReply,
   type OfficeRevisionEvent, type OfficeRevisionReply } from './request-lifecycle.js';
 
@@ -50,6 +51,11 @@ export function createOfficeDecisionGateway(secret = process.env.HAWA_WORKER_TOK
   return restate.service({
     name: 'OfficeDecisionGateway',
     handlers: {
+      nativeReview: async (ctx: restate.Context,input: {v:1;event:NativeReviewSubmission;signature:string}):Promise<NativeReviewReply>=>{
+        const verdict=await ctx.run('authenticate',async()=>checkSignedNativeReview(input,secret));
+        if (verdict !== 'ok') throw new restate.TerminalError('INVALID_NATIVE_REVIEW',{errorCode:verdict==='invalid'?400:401});
+        return ctx.objectClient(RequestLifecycleApi,input.event.requestId).nativeReview(input.event);
+      },
       decide: async (ctx: restate.Context, input: SignedOfficeDecision): Promise<OfficeRevisionReply | OfficeDeliveryStartReply> =>
         withInvocationLogContext(ctx, { requestId: input?.event?.requestId }, async () => {
           // Journal the authentication verdict so a credential rotation cannot change a replayed
@@ -65,4 +71,9 @@ export function createOfficeDecisionGateway(secret = process.env.HAWA_WORKER_TOK
       retryPolicy: { initialInterval: 1000, exponentiationFactor: 2, maxInterval: 60_000,
         maxAttempts: 300, onMaxAttempts: 'pause' } },
   });
+}
+
+export function checkSignedNativeReview(input: {v:1;event:NativeReviewSubmission;signature:string},secret:string):'ok'|'invalid'|'unauthorized' {
+  if (input?.v !== 1 || !parseNativeReviewSubmission(input.event)) return 'invalid';
+  return verifyLifecycleOfficeEvent(secret,input.event,input.signature)?'ok':'unauthorized';
 }

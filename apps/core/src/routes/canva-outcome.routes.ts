@@ -10,7 +10,9 @@ import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from '../s
 import { composeDesignerHandoff, type AskRecord } from '../services/requester-actions.js';
 import { createOfficeAlerts } from '../services/office-alerts.js';
 import { createAskHistory } from '../services/ask-history.js';
-import { rejectUnownedLifecycleDesignWrite } from './lifecycle-design-proof.js';
+import { rejectUnownedLifecycleDesignWrite, nativeRecoveryHeaders } from './lifecycle-design-proof.js';
+import { lockNativeRecovery } from '../services/lifecycle-native-scope.js';
+import { CanvaFlowError } from '../services/canva-flow-error.js';
 
 /**
  * The Canva outcome routes (architecture programme 1.3, SPLIT_PLAN.md G4), moved unchanged from
@@ -55,6 +57,8 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
     const taskId = c.req.param('taskId');
     try {
       const binding = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx => {
+        const nativeRecovery = nativeRecoveryHeaders(c);
+        if (nativeRecovery) await lockNativeRecovery(trx,{tenantId:auth.tenantId!,actorId:auth.userId!,role:auth.role,nativeRecovery},taskId);
         const task = await taskRepo.findById(taskId, auth.tenantId!, trx);
         if (!task?.client_id) return null;
         return new CanvaBindingRepository(trx).createBinding({ tenantId: auth.tenantId!, taskId,
@@ -64,6 +68,7 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
       return c.json({ taskId, designId: binding.canva_design_id, designUrl: binding.edit_url,
         version: binding.version, verification: 'handoff_only', captured: false }, 201);
     } catch (err) {
+      if (err instanceof CanvaFlowError) return problem(c,err.status,err.code,err.message);
       if ((err as { code?: string }).code === '23505' || /binding conflict/i.test(String(err))) {
         return problem(c, 409, 'Canva Binding Conflict', 'This design or task already has a binding. Use a separate task copy');
       }

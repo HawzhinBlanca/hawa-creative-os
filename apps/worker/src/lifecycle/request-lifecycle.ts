@@ -13,6 +13,7 @@ import { coreInternalFromEnv, DeliveryApi, type CoreInternal } from './delivery.
 import { TelegramSenderApi } from './telegram-sender.js';
 import { DesignRunApi, type DesignRunInput } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
+import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -69,6 +70,7 @@ export interface OpenAutomaticEvent extends Omit<OpenManualEvent, 'draft'> {
 }
 
 export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'stage' | 'rev'> {
+  nativeReview?: { eventId: string; sha256: string; reply: Extract<NativeReviewReply,{accepted:true}> };
   stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'rejected' | 'delivering' | 'delivered';
   rev: number;
   runId: string;
@@ -442,6 +444,28 @@ export async function recordQuestionSent(ctx: QuestionSentContext, core: CoreInt
 
 const OFFICE_ROLES = new Set(['approver', 'art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
 const APPROVAL_ROLES = new Set(['approver', 'art_director', 'creative_director', 'office_admin', 'administrator']);
+
+export async function recordNativeReview(ctx: AutomaticOpenContext, core: CoreInternal, raw: NativeReviewSubmission): Promise<NativeReviewReply> {
+  const event=parseNativeReviewSubmission(raw);
+  if (!event || ctx.key !== event.requestId) throw invalid('invalid native review submission');
+  const prior=await ctx.get('lc'),fingerprint=hashOf(event);
+  if (!prior || !('runId' in prior) || prior.requestId !== event.requestId) return {accepted:false,code:'WRONG_STAGE'};
+  if (prior.nativeReview?.eventId === event.eventId) {
+    if (prior.nativeReview.sha256 !== fingerprint) throw invalid('native review action has different content');
+    return prior.nativeReview.reply;
+  }
+  if (prior.stage !== 'manual' || prior.rev !== event.expectedRev || prior.taskId !== event.taskId)
+    return {accepted:false,code:'WRONG_STAGE'};
+  const reply=await ctx.run(`native-review:${event.actionId}`,()=>core.post<NativeReviewReply>(
+    `/internal/lifecycle/${encodeURIComponent(event.requestId)}/native-review`,event));
+  if (!reply || reply.accepted !== true || reply.requestId !== event.requestId || reply.taskId !== event.taskId ||
+      reply.actionId !== event.actionId || reply.rev !== event.expectedRev+1 || reply.stage !== 'in_review' ||
+      !UUID.test(reply.revisionId) || typeof reply.qaPassed !== 'boolean') throw new Error('Core did not return a valid native review projection');
+  ctx.set('lc',{...prior,stage:'in_review',rev:reply.rev,question:undefined,officeRevision:undefined,
+    outcome:{eventId:event.eventId,sha256:fingerprint,status:'NEEDS_REVIEW',revisionId:reply.revisionId},
+    nativeReview:{eventId:event.eventId,sha256:fingerprint,reply}});
+  return reply;
+}
 
 /** A request-owned office action (revision-request or proof-bound approval) at any revision round. */
 export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: CoreInternal, event: OfficeRevisionEvent): Promise<OfficeRevisionReply> {
@@ -844,6 +868,15 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
                     delay: delayMs,
                   })),
           }, core, event)),
+      ),
+      nativeReview: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext,event: NativeReviewSubmission)=>withInvocationLogContext(ctx,{requestId:event?.requestId},()=>recordNativeReview({
+          key:ctx.key,get:name=>ctx.get<ManualLifecycleState|AutomaticLifecycleState>(name),
+          run:(name,action)=>ctx.run(name,action,PROJECT_RETRY),set:(name,value)=>ctx.set(name,value),
+          send:()=>{throw new Error('nativeReview does not send unverified notices');},
+          startDesign:()=>{throw new Error('nativeReview cannot start generation');},
+        },core,event)),
       ),
       officeDecision: restate.handlers.object.exclusive(
         { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },

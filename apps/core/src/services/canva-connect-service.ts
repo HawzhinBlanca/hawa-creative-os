@@ -2,6 +2,7 @@ import { assertTaskGenerationAllowed } from './task-generation-guard.js';
 import { assertNativeRevisionAdmission, nativeRevisionHandoff, latestRevisionCopy } from './native-revision-handoff.js';
 import { canRetryCanvaCreation } from '@hawa/domain';
 import { CanvaFlowError } from './canva-flow-error.js';
+import { lockNativeRecovery, type NativeActorScope } from './lifecycle-native-scope.js';
 import { resolveManualExportPolicy, type ExportCheckPolicy } from './canva-export-policy.js';
 import { checkCanvaPptx } from '@hawa/qa';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
@@ -10,7 +11,7 @@ import { sql, withRlsContext, withSessionAdvisoryLock, CanvaBindingRepository, t
 import { blobStoreFor, putToStore } from './blob-store-context.js';
 import { CanvaConnectClient, CanvaCapturePipeline, CanvaHttpError, canvaRequestNeverSent } from '@hawa/integrations';
 
-type Scope = { tenantId: string; actorId: string; role?: string };
+type Scope = NativeActorScope;
 export type CanvaPublicationVersionCheck =
   | { ok: true; capturedVersion: string; observedVersion: string }
   | { ok: false; code: 'CANVA_CAPTURE_UNVERIFIED' | 'CANVA_DESIGN_CHANGED' | 'CANVA_DESIGN_CHECK_UNAVAILABLE'; message: string; retryable: boolean };
@@ -543,6 +544,7 @@ export class CanvaConnectService {
     if (format === 'png' && design.page_count !== 1) fail(422,'CANVA_MULTIPAGE_PNG_UNSUPPORTED','Use PDF for multi-page designs; PNG capture currently requires exactly one page');
     const id = randomUUID(), metadata: { format: string; designUpdatedAt: unknown; checkingPolicy?: ExportCheckPolicy } = { format, designUpdatedAt:design.updated_at };
     const inserted = await this.tx(s, async db => {
+      if (s.nativeRecovery) await lockNativeRecovery(db,s,taskId);
       const task = (await sql<{client_id:string}>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
       const locked = (await sql<{version:number;canva_design_id:string}>`SELECT version,canva_design_id FROM hawa.canva_bindings
         WHERE tenant_id=${s.tenantId}::uuid AND id=${binding.id}::uuid AND status='bound' FOR SHARE`.execute(db)).rows[0];
@@ -557,7 +559,7 @@ export class CanvaConnectService {
       if (format === 'pptx' || revisionCopy) {
         const source = format === 'pptx' ? await this.editableSource(s,taskId,binding.client_id,design.id,db) : undefined;
         if (revisionCopy) {
-          metadata.checkingPolicy=await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id);
+          metadata.checkingPolicy=await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id,s);
         } else if (source) {
           const manifest=source.manifest, blocks=studioSentBlocks(manifest);
           const directionsByIndex=importedSourceDirections(manifest);

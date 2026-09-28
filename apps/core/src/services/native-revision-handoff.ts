@@ -4,9 +4,10 @@ import { nativeRevisionIntent, validReviewedRevisionCopy } from '@hawa/domain';
 import { isServiceUserId } from '@hawa/contracts';
 import { CanvaFlowError } from './canva-flow-error.js';
 import { savedDesignCopy } from './saved-design-copy.js';
+import { lockNativeRecovery, type NativeActorScope } from './lifecycle-native-scope.js';
 
 type Db = Kysely<Database>;
-type Scope = { tenantId: string; actorId: string; role?: string };
+type Scope = NativeActorScope;
 const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const instruction = 'Open the revision handoff in Canva design and exports. Copy the current native design, preserve unrelated edits, link the separate copy and confirm its exact revised text before capture.';
@@ -75,8 +76,12 @@ export async function nativeRevisionHandoff(db: Db, tenantId: string, taskId: st
     parentBindingId: parent.binding_id, parentBindingVersion: parent.binding_version, parentDesignId: parent.design_id,
     bindingId: binding?.id ?? null, bindingVersion: binding?.version ?? null, designId: binding?.canva_design_id ?? null };
   const basisSha256 = digest(basis);
+  const request = task.request_id ? await db.selectFrom('requests').select(['owner','stage','rev','current_task_id'])
+    .where('tenant_id','=',tenantId).where('request_id','=',task.request_id).executeTakeFirst() : undefined;
+  const nativeRecovery = request?.owner === 'restate' && request.stage === 'manual' && request.current_task_id === taskId && Number(request.rev) >= 2
+    ? { requestId: task.request_id!, rev: Number(request.rev) } : undefined;
   return { required: true as const, available: true as const, ...basis, basisSha256, taskVersion: Number(task.version),
-    lifecycleOwned: Boolean(task.request_id), parentEditUrl: parent.edit_url, directive: intent.directive,
+    lifecycleOwned: Boolean(task.request_id), nativeRecovery, parentEditUrl: parent.edit_url, directive: intent.directive,
     copy: confirmed?.copy ?? copy, confirmedEventId: confirmed?.basisSha256 === basisSha256 ? confirmed.id : null,
     message: instruction };
 }
@@ -92,8 +97,9 @@ export async function confirmNativeRevisionCopy(db: Db, s: Scope, taskId: string
       !/^[0-9a-f]{64}$/.test(input.basisSha256 || '') || !validReviewedRevisionCopy(input.copy) ||
       input.reviewedCurrentDesign !== true || input.preservedUnrequestedChanges !== true)
     throw new CanvaFlowError(422, 'REVISION_COPY_REVIEW_REQUIRED', 'Review the current native design, unrelated changes and exact final copy before confirming.');
+  if (s.nativeRecovery) await lockNativeRecovery(db,s,taskId);
   await sql`SELECT id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db);
-  const requestHash = digest({ expectedTaskVersion: input.expectedTaskVersion, basisSha256: input.basisSha256,
+  const requestHash = digest({ ...(s.nativeRecovery ? {nativeRecovery:s.nativeRecovery} : {}), expectedTaskVersion: input.expectedTaskVersion, basisSha256: input.basisSha256,
     copy: input.copy, reviewedCurrentDesign: true, preservedUnrequestedChanges: true });
   const prior = (await sql<{ id: string; actor_id: string; data: { revisionHandoff: RevisionCopyConfirmation } }>`SELECT id,actor_id,data
     FROM hawa.task_events WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid
@@ -104,7 +110,7 @@ export async function confirmNativeRevisionCopy(db: Db, s: Scope, taskId: string
     return { confirmationEventId: prior.id, replayed: true };
   }
   const task = await taskSource(db, s.tenantId, taskId);
-  if (!task || task.request_id || !['received','failed_operator','human_review','revision_requested','approved'].includes(task.state))
+  if (!task || (task.request_id && !s.nativeRecovery) || !['received','failed_operator','human_review','revision_requested','approved'].includes(task.state))
     throw new CanvaFlowError(409, 'REVISION_HANDOFF_UNAVAILABLE', 'Use the current task owner and an open manual revision task.');
   // Lock both bindings and the parent task before validating the expected basis.
   const intent = nativeRevisionIntent(task.source);

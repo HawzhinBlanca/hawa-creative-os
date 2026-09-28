@@ -1,4 +1,8 @@
 import type { ReceiptAuditAction, ReceiptAuditState, ReceiptAuditResult } from '@hawa/contracts';
+import type { NativeRecoveryScope, NativeReviewReply } from '@hawa/domain';
+export type NativeReviewBody = {requestId:string;expectedRev:number;expectedTaskVersion:number;artifactId:string;confirmationEventId:string};
+const nativeRecoveryHeaders = (scope?:NativeRecoveryScope):Record<string,string> => scope
+  ? {'X-Hawa-Manual-Request-Id':scope.requestId,'X-Hawa-Manual-Request-Rev':String(scope.rev)} : {};
 import type { OperationsReliabilityReport } from '@hawa/contracts';
 import type { SpendingPolicyDetail, SpendingPolicyChange, SpendingPolicyResult } from '@hawa/contracts';
 /**
@@ -499,9 +503,11 @@ class HawaApiClient {
     disconnect: () => this.request<any>('/integrations/canva/disconnect',{method:'POST'}),
     authorize: () => this.request<{authorizationUrl:string}>('/integrations/canva/authorize',{method:'POST'}),
     taskState: (id:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva`),
-    confirmRevisionCopy: (id:string,key:string,body:{expectedTaskVersion:number;basisSha256:string;copy:string[];reviewedCurrentDesign:boolean;preservedUnrequestedChanges:boolean}) =>
+    confirmRevisionCopy: (id:string,key:string,body:{expectedTaskVersion:number;basisSha256:string;copy:string[];reviewedCurrentDesign:boolean;preservedUnrequestedChanges:boolean},scope?:NativeRecoveryScope) =>
       this.request<{confirmationEventId:string;replayed:boolean}>(`/tasks/${encodeURIComponent(id)}/canva/revision-copy`,
-        {method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify(body)}),
+        {method:'POST',headers:{'Idempotency-Key':key,...nativeRecoveryHeaders(scope)},body:JSON.stringify(body)}),
+    submitNativeReview: (id:string,key:string,body:NativeReviewBody)=>this.request<NativeReviewReply>(`/tasks/${encodeURIComponent(id)}/native-review`,
+      {method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify(body)}),
     plans: (id:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans`),
     generate: (id:string,width:number,height:number,key:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/generate`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({width,height})}),
     abandonPlan: (id:string,planId:string,reason:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans/${encodeURIComponent(planId)}/abandon`,{method:'POST',body:JSON.stringify({reason})}),
@@ -509,8 +515,8 @@ class HawaApiClient {
     resumeImport: (id:string,operationId:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/imports/${encodeURIComponent(operationId)}/resume`,{method:'POST'}),
     editor: (id:string) => this.request<{url:string}>(`/tasks/${encodeURIComponent(id)}/canva/editor`),
     create: (id:string,width:number,height:number,key:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/design`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({width,height})}),
-    export: (id:string,format:'png'|'pdf'|'pptx',expectedVersion:number,key:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/exports`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({format,expectedVersion})}),
-    resume: (id:string,operationId:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/exports/${encodeURIComponent(operationId)}/resume`,{method:'POST'}),
+    export: (id:string,format:'png'|'pdf'|'pptx',expectedVersion:number,key:string,scope?:NativeRecoveryScope) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/exports`,{method:'POST',headers:{'Idempotency-Key':key,...nativeRecoveryHeaders(scope)},body:JSON.stringify({format,expectedVersion})}),
+    resume: (id:string,operationId:string,scope?:NativeRecoveryScope) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/exports/${encodeURIComponent(operationId)}/resume`,{method:'POST',headers:nativeRecoveryHeaders(scope)}),
     download: async (id:string,artifactId:string):Promise<Blob> => {
       const response=await fetch(`/v1/tasks/${encodeURIComponent(id)}/canva/artifacts/${encodeURIComponent(artifactId)}`,{headers:this.getHeaders()});
       if(!response.ok) throw new ApiError(response.status,'Export download failed');
@@ -606,8 +612,8 @@ class HawaApiClient {
         method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify(input),
       }),
     getEditorUrl: (taskId: string) => this.request<{ url: string }>(`/tasks/${encodeURIComponent(taskId)}/canva/editor`),
-    bindCanva: (taskId: string, editUrl: string) => this.request(`/tasks/${encodeURIComponent(taskId)}/canva-binding`, {
-      method: 'POST', body: JSON.stringify({ editUrl }),
+    bindCanva: (taskId: string, editUrl: string,scope?:NativeRecoveryScope) => this.request(`/tasks/${encodeURIComponent(taskId)}/canva-binding`, {
+      method: 'POST', headers:nativeRecoveryHeaders(scope), body: JSON.stringify({ editUrl }),
     }),
     redrive: (taskId: string) => this.request<any>(`/tasks/${encodeURIComponent(taskId)}/redrive`, { method: 'POST' }),
     /** What the requester asked of this design, round by round (Core: GET /tasks/:taskId/asks). */

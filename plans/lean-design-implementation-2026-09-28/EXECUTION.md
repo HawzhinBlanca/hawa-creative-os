@@ -207,3 +207,32 @@ human preservation judgment, deployment, full release or recovery drill occurred
 The complete six-package objective remains active. Next: implement the owner-controlled
 manual recovery path for RequestLifecycle, then qualify actual native operations and
 continue the outstanding policy, compute, retrieval and human/release packages.
+
+## 2026-09-28 — Owner-controlled native revision recovery
+
+ADR-114 admits separate-copy binding, exact-copy confirmation and export capture
+only for the current linked revision of an automatic request in manual recovery.
+The request ID/revision is explicit and rechecked under the lifecycle lock before
+preparation writes. Capture retains bytes without advancing the request. A separate
+signed office submission goes through RequestLifecycle and one atomic Core
+projection; its hash-bound receipt survives lost replies and cannot rewind a later
+stage. Desk retains the exact pending submission across remounts and retries.
+
+Local qualification: 23 connected files/198 tests passed before the final active-user
+check. The final six-file boundary run passes 63 tests, including restricted runtime
+RLS, disabled-user refusal, lost Core/gateway responses, current task/confirmation/
+capture checks and explicit test-reviewer approval. A users FOR SHARE policy failure
+was reproduced and fixed with a scoped active-user snapshot read, without wider
+privileges; concurrent account revocation is not serialized by that read. No
+migration is needed. Source/scripts and 525 strict test roots pass; Desk build and
+security/any/egress checks pass. Full details, limits and initial failures are in
+LIFECYCLE_NATIVE_RECOVERY_PROOF.json.
+
+The entire six-package objective remains active. This closes the local lifecycle
+handoff gap for automatic linked revisions, not initial manual requests without a
+run, live native preservation, human quality, full release or independent recovery.
+No paid/native calls, production migrations or deployment occurred. Next: qualify
+one exact native amendment and finish intent/typography/multilingual retrieval,
+semantic dependency reuse, calibrated selection and human/release evidence.
+
+Final connected-source verification after the fix: **24 files / 220 tests passed, zero failures or skips**.

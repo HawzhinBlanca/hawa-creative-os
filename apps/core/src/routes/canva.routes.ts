@@ -5,14 +5,17 @@ import { CanvaDesignPlanner } from '../services/canva-design-planner.js';
 import { withRlsContext } from '@hawa/db';
 import { TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
 import { log } from '../logging.js';
-import { rejectUnownedLifecycleDesignWrite } from './lifecycle-design-proof.js';
+import { rejectUnownedLifecycleDesignWrite, nativeRecoveryHeaders } from './lifecycle-design-proof.js';
+import type { NativeActorScope } from '../services/lifecycle-native-scope.js';
+import { registerNativeReviewRoutes } from './native-review.routes.js';
 import { recordManualCanvaReview, type CaptureReview } from '../services/manual-canva-review.js';
 import { confirmNativeRevisionCopy } from '../services/native-revision-handoff.js';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
+  registerNativeReviewRoutes(ctx);
   const service = ctx.db ? new CanvaConnectService(ctx.db,options) : null;
   const planner = ctx.db && service ? new CanvaDesignPlanner(ctx.db,service) : null;
-  const protect = (fn: (c: any,s: {tenantId:string;actorId:string;role?:string},api:CanvaConnectService) => Promise<Response>) => async (c: any) => {
+  const protect = (fn: (c: any,s: NativeActorScope,api:CanvaConnectService) => Promise<Response>) => async (c: any) => {
     c.header('Cache-Control','no-store');
     const auth=ctx.verifyRequestAuth(c);
     if (!auth.authenticated || !auth.tenantId || !auth.userId) return ctx.problem(c,401,'Authentication Required','Sign in to Hawa first');
@@ -25,7 +28,7 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
     if (lifecycleRefusal) return lifecycleRefusal;
     // The role travels with the actor: the service lets an art director or administrator act on
     // another actor's import or source for the task, and the role never reached it (2026-09-24).
-    try { return await fn(c,{tenantId:auth.tenantId,actorId:auth.userId,role:auth.role},service); }
+    try { return await fn(c,{tenantId:auth.tenantId,actorId:auth.userId,role:auth.role,nativeRecovery:nativeRecoveryHeaders(c)},service); }
     catch (error) {
       if (error instanceof CanvaFlowError) return ctx.problem(c,error.status,error.code,error.message);
       // Never echo provider bodies, OAuth tokens or signed download URLs.
@@ -83,6 +86,9 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
   const recordCheck = async (s: {tenantId:string;actorId:string;role?:string}, taskId: string, result: { status?: string; artifact?: { id?: string; format?: string; content_check?: unknown } | null }): Promise<CaptureReview | undefined> => {
     if (result?.status!=='retrieved'||result.artifact?.format!=='pptx'||!result.artifact.content_check||!ctx.db) return;
     try {
+      const owned = await withRlsContext(ctx.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},trx=>
+        trx.selectFrom('tasks').select('request_id').where('tenant_id','=',s.tenantId).where('id','=',taskId).executeTakeFirst());
+      if (owned?.request_id) return {status:'blocked',retryable:false,reason:'The checked files are retained. Submit this native revision through the current request for review.'};
       const [{ recordCheckedExportQc }, { evaluateCanvaExportQc }] = await Promise.all([import('../services/canva-task-outcome.js'), import('../core-helpers.js')]);
       if (result.artifact?.id) {
         const manual = await withRlsContext(ctx.db,

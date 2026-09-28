@@ -308,6 +308,10 @@ paths:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva'
   /v1/tasks/{taskId}/canva/editor:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1editor'
+  /v1/tasks/{taskId}/canva-binding:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva-binding'
+  /v1/tasks/{taskId}/native-review:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1native-review'
   /v1/tasks/{taskId}/canva/revision-copy:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1revision-copy'
   /v1/tasks/{taskId}/canva/design:

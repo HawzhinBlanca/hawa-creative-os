@@ -5,6 +5,7 @@ import { computeDnaHash } from '../core-helpers.js';
 import { CanvaFlowError } from './canva-flow-error.js';
 import { savedDesignCopy, classifyCopyScript } from './saved-design-copy.js';
 import { latestRevisionCopy, nativeRevisionHandoff } from './native-revision-handoff.js';
+import { lockNativeRecovery, type NativeActorScope } from './lifecycle-native-scope.js';
 
 export type ExportCheckPolicy = {
   version: 1;
@@ -23,7 +24,7 @@ export type ExportCheckPolicy = {
 
 /** Caller owns the task/binding locks. No provider calls or fabricated import metadata. */
 export async function resolveManualExportPolicy(
-  db: Kysely<Database>, tenantId: string, taskId: string, clientId: string,
+  db: Kysely<Database>, tenantId: string, taskId: string, clientId: string, recovery?: NativeActorScope,
 ): Promise<ExportCheckPolicy> {
   const task = (await sql<{ request_id: string | null; event_id: string; source: unknown }>`
     SELECT t.request_id,e.id AS event_id,e.data AS source FROM hawa.tasks t
@@ -32,7 +33,8 @@ export async function resolveManualExportPolicy(
     WHERE t.tenant_id=${tenantId}::uuid AND t.id=${taskId}::uuid AND t.client_id=${clientId}::uuid`.execute(db)).rows[0];
   const source = task?.source as { payload?: { body?: { workflow?: string } }; body?: { workflow?: string } } | undefined;
   const revision = await latestRevisionCopy(db, tenantId, taskId);
-  if (!task || task.request_id || (!revision && (source?.payload?.body || source?.body)?.workflow !== 'canva_manual'))
+  if (task?.request_id && recovery?.nativeRecovery) await lockNativeRecovery(db,recovery,taskId);
+  if (!task || (task.request_id && !recovery?.nativeRecovery) || (!revision && (source?.payload?.body || source?.body)?.workflow !== 'canva_manual'))
     throw new CanvaFlowError(422, 'SOURCE_REQUIRED', 'Checked export needs a matching imported source or a manual Desk request with exact copy and active client fonts.');
   if (revision) {
     const handoff = await nativeRevisionHandoff(db, tenantId, taskId);

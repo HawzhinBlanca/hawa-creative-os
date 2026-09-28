@@ -390,6 +390,26 @@
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{8,128}$"
             }
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "For current lifecycle manual revision preparation; required together with the expected request revision."
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Rev",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "description": "Exact current request revision. Rechecked under the owner projection lock before preparation writes."
           }
         ],
         "responses": {
@@ -492,6 +512,26 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "For current lifecycle manual revision preparation; required together with the expected request revision."
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Rev",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "description": "Exact current request revision. Rechecked under the owner projection lock before preparation writes."
           }
         ],
         "responses": {
@@ -826,7 +866,7 @@
         "tags": [
           "Integrations"
         ],
-        "description": "An office human confirms exact copy in a separately linked native revision design. Requires the current task version and parent/child binding basis from taskState.revisionHandoff. Stores an immutable keyed human assertion, not approval or automated preservation proof. Lifecycle-owned tasks remain under their existing owner and cannot use this legacy write. A new confirmation invalidates previous captures for review, approval and publication.",
+        "description": "An office human confirms exact copy in a separately linked native revision design. Requires the current task version and parent/child binding basis from taskState.revisionHandoff. Stores an immutable keyed human assertion, not approval or automated preservation proof. Current lifecycle manual revisions may prepare a separate copy with explicit manual request headers; the request owner alone can submit it for review. A new confirmation invalidates previous captures for review, approval and publication.",
         "parameters": [
           {
             "name": "taskId",
@@ -845,6 +885,26 @@
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{8,128}$"
             }
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "For current lifecycle manual revision preparation; required together with the expected request revision."
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Rev",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "description": "Exact current request revision. Rechecked under the owner projection lock before preparation writes."
           }
         ],
         "security": [
@@ -936,6 +996,187 @@
           },
           "503": {
             "description": "Durable storage unavailable"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{taskId}/native-review": {
+      "post": {
+        "operationId": "submitNativeRevisionReview",
+        "tags": [
+          "Integrations"
+        ],
+        "description": "Submit retained native revision captures through signed RequestLifecycle ownership. Records revision and QA and advances the current manual request atomically. Does not approve. Retries must keep the same actor, action ID and exact body, including after an uncertain response.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "requestId",
+                  "artifactId",
+                  "confirmationEventId",
+                  "expectedRev",
+                  "expectedTaskVersion"
+                ],
+                "properties": {
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "artifactId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "confirmationEventId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedRev": {
+                    "type": "integer",
+                    "minimum": 2
+                  },
+                  "expectedTaskVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Original or newly committed owner review receipt, with requestId, taskId, actionId, revisionId, rev, stage=in_review and qaPassed."
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Human identity required"
+          },
+          "409": {
+            "description": "Stale request, task, confirmation, capture or conflicting action identity"
+          },
+          "422": {
+            "description": "Invalid typed submission or office role"
+          },
+          "503": {
+            "description": "Unavailable or uncertain; retry identical action"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{taskId}/canva-binding": {
+      "post": {
+        "operationId": "bindTaskCanvaDesign",
+        "tags": [
+          "Integrations"
+        ],
+        "description": "Link a separate native design to this task and its fixed client. Current lifecycle manual revisions require both manual request headers. Linking does not capture or approve content.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "For current lifecycle manual revision preparation; required together with the expected request revision."
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Rev",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "description": "Exact current request revision. Rechecked under the owner projection lock before preparation writes."
+          }
+        ],
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "editUrl"
+                ],
+                "properties": {
+                  "editUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Scoped handoff binding saved"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Office role required"
+          },
+          "404": {
+            "description": "Scoped task unavailable"
+          },
+          "409": {
+            "description": "Binding conflict or stale/unsupported lifecycle scope"
+          },
+          "422": {
+            "description": "Invalid Canva design URL"
+          },
+          "503": {
+            "description": "Database unavailable"
           }
         }
       }

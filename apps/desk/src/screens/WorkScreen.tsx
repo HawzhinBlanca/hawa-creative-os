@@ -989,7 +989,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   </div>
                 )}
 
-                <details className="canva-binding-form">
+                {!detail?.requestId && !selectedTask.requestId && <details className="canva-binding-form">
                   <summary>{selectedTask.canvaBinding ? 'Linked Canva design' : 'Link this task’s Canva design'}</summary>
                   {selectedTask.canvaBinding && <p>Design {selectedTask.canvaBinding.designId}</p>}
                   {!selectedTask.canvaBinding && <>
@@ -1010,7 +1010,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     <button className="btn" type="submit" disabled={actionLoading || !canvaLinkInput.trim()}>Save Canva link</button>
                   </form>
                   </>}
-                </details>
+                </details>}
                 <AskLedgerPanel key={`asks-${selectedTask.id}`} taskId={selectedTask.id} />
                 {!detail?.requestId && !selectedTask.requestId && <TaskControls key={`controls-${selectedTask.id}`}
                   taskId={selectedTask.id} status={selectedTask.status} version={selectedTask.version} role={sessionUser?.role}

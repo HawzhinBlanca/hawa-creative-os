@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { createDb, sql, withRlsContext, DesignStudioRepository } from '@hawa/db';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
@@ -11,6 +11,11 @@ import { createApp } from '../src/app.js';
 import { computeDnaHash, evaluateCanvaExportQc } from '../src/core-helpers.js';
 import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 import { createSyntheticValidPng } from '../../../packages/integrations/src/canva-capture-pipeline.js';
+import { projectLifecycleNativeReview } from '../src/services/lifecycle-native-review.js';
+import { recordNativeReview, recordOfficeRevision, type AutomaticLifecycleState, type AutomaticOpenContext } from '../../worker/src/lifecycle/request-lifecycle.js';
+import { checkSignedNativeReview, checkSignedOfficeDecision } from '../../worker/src/lifecycle/office-decision-gateway.js';
+import type { NativeReviewSubmission } from '@hawa/domain';
+import { lockNativeRecovery } from '../src/services/lifecycle-native-scope.js';
 
 const url=process.env.HAWA_ISOLATED_TEST_DB;
 describe.skipIf(!url)('native revision admission and human copy handoff (synthetic Canva transport)',()=>{
@@ -58,6 +63,7 @@ describe.skipIf(!url)('native revision admission and human copy handoff (synthet
     const auth=await canva.startAuthorization(scope);await canva.finishAuthorization(auth.state,auth.state,'test-code');remote.mockClear();
   });
   afterAll(()=>db.destroy());
+  afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
   async function input(){
     const h=await tx(trx=>nativeRevisionHandoff(trx,tenantId,taskId));
     if(!h?.available)throw new Error('Expected scoped handoff');
@@ -67,8 +73,152 @@ describe.skipIf(!url)('native revision admission and human copy handoff (synthet
     const request=body??await input();return tx(trx=>confirmNativeRevisionCopy(trx,scope,taskId,key,request));
   };
   const app=()=>createApp({db,canvaOptions:options,extraBearerTokens:{test_operator_bearer:{role:'operator',sub:actorId}}});
-  const post=async(path:string,body:unknown,key=randomUUID())=>app().request(path,{method:'POST',
-    headers:{'content-type':'application/json',Authorization:'Bearer test_operator_bearer','Idempotency-Key':key},body:JSON.stringify(body)});
+  const post=async(path:string,body:unknown,key=randomUUID(),headers:Record<string,string>={})=>app().request(path,{method:'POST',
+    headers:{'content-type':'application/json',Authorization:'Bearer test_operator_bearer','Idempotency-Key':key,...headers},body:JSON.stringify(body)});
+
+  async function own(){
+    const requestId=randomUUID();
+    await sql`INSERT INTO hawa.requests(request_id,tenant_id,root_task_id,current_task_id,owner,stage,rev,chat_id)
+      VALUES(${requestId}::uuid,${tenantId}::uuid,${parentTaskId}::uuid,${taskId}::uuid,'restate','manual',4,'73004000')`.execute(db);
+    await sql`UPDATE hawa.tasks SET request_id=${requestId}::uuid WHERE id=${taskId}::uuid`.execute(db);
+    return {requestId,headers:{'X-Hawa-Manual-Request-Id':requestId,'X-Hawa-Manual-Request-Rev':'4'},nativeRecovery:{requestId,rev:4}};
+  }
+  async function ownedCaptures(){
+    const owned=await own();
+    const linked=await post(`/tasks/${taskId}/canva-binding`,{editUrl:`https://www.canva.com/design/${designId}/edit`},randomUUID(),owned.headers);
+    expect(linked.status,await linked.clone().text()).toBe(201);
+    const response=await post(`/tasks/${taskId}/canva/revision-copy`,await input(),randomUUID(),owned.headers);
+    expect(response.status,await response.clone().text()).toBe(200);
+    const {confirmationEventId}=await response.json() as {confirmationEventId:string};
+    const artifacts:string[]=[];
+    for(const format of ['png','pptx']){
+      const start=await post(`/tasks/${taskId}/canva/exports`,{format,expectedVersion:1},randomUUID(),owned.headers);
+      expect(start.status,await start.clone().text()).toBe(202);
+      const {operationId}=await start.json() as {operationId:string};
+      const result=await post(`/tasks/${taskId}/canva/exports/${operationId}/resume`,{},randomUUID(),owned.headers);
+      expect(result.status,await result.clone().text()).toBe(200);
+      const value=await result.json() as {artifact:{id:string};review?:{status:string}};
+      artifacts.push(value.artifact.id);
+      if(format==='pptx')expect(value.review?.status).toBe('blocked');
+    }
+    const body={requestId:owned.requestId,expectedRev:4,expectedTaskVersion:(await input()).expectedTaskVersion,
+      artifactId:artifacts[1],confirmationEventId};
+    const actionId=randomUUID();
+    const event:NativeReviewSubmission={...body,v:1,kind:'native_review',eventId:`desk:${actionId}`,actionId,taskId,actor:{userId:actorId,role:'operator'}};
+    return {...owned,artifacts,body,event,actionId};
+  }
+
+  it('completes request-owned preparation, signed review recovery and explicit approval with retained native bytes',async()=>{
+    const prepared=await ownedCaptures();
+    expect((await sql`SELECT id FROM hawa.design_revisions WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
+    expect((await sql<{stage:string;rev:number}>`SELECT stage,rev FROM hawa.requests WHERE request_id=${prepared.requestId}::uuid`.execute(db)).rows[0]).toMatchObject({stage:'manual',rev:'4'});
+    const secret=['native','review','fixture'].join('_');vi.stubEnv('HAWA_WORKER_TOKEN',secret);vi.stubEnv('RESTATE_INGRESS_URL','http://native-review.test');
+    let state:AutomaticLifecycleState={v:1,requestId:prepared.requestId,tenantId,chatId:'73004000',owner:'restate',stage:'manual',rev:4,
+      taskId,openEventId:'fixture-open',openSha256:'a'.repeat(64),runId:`dr-${taskId}`,round:1,
+      designInput:{v:1,taskId,tenantId,clientId,rawText:'Change date',sourcePlatform:'telegram',idempotencyKey:'fixture',canvaAutoGenerate:true,
+        lifecycle:{requestId:prepared.requestId,round:1,runId:`dr-${taskId}`}}};
+    const context:AutomaticOpenContext={key:prepared.requestId,get:async()=>state,run:async(_name,action)=>action(),
+      set:(_name,value)=>{state=value as AutomaticLifecycleState;},send:()=>{},startDesign:()=>{throw new Error('No generation');}};
+    let loseCoreReply=true;
+    const core={post:async<T>(path:string,body:unknown):Promise<T>=>{
+      const response=await app().request(`/v1${path}`,{method:'POST',headers:{Authorization:`Bearer ${secret}`,'content-type':'application/json'},body:JSON.stringify(body)});
+      if(!response.ok)throw new Error(await response.text());
+      if(path.endsWith('/native-review')&&loseCoreReply){loseCoreReply=false;throw new Error('Lost Core projection reply');}
+      return await response.json() as T;
+    }};
+    let loseReply=true;
+    const gateway=vi.fn<typeof fetch>(async(url,init)=>{
+      const signed=JSON.parse(String(init?.body));
+      if(String(url).endsWith('/nativeReview')){
+        expect(checkSignedNativeReview(signed,secret)).toBe('ok');
+        const result=await recordNativeReview(context,core,signed.event);
+        if(loseReply){loseReply=false;throw new Error('Lost gateway reply after durable state save');}
+        return Response.json(result);
+      }
+      expect(checkSignedOfficeDecision(signed,secret)).toBe('ok');
+      return Response.json(await recordOfficeRevision(context,core,signed.event));
+    });vi.stubGlobal('fetch',gateway);
+    expect((await post(`/tasks/${taskId}/native-review`,prepared.body,prepared.actionId)).status).toBe(503);
+    expect(state.stage).toBe('manual');
+    expect((await post(`/tasks/${taskId}/native-review`,prepared.body,prepared.actionId)).status).toBe(503);
+    expect(state.stage).toBe('in_review');expect(state.rev).toBe(5);
+    const replay=await post(`/tasks/${taskId}/native-review`,prepared.body,prepared.actionId);
+    expect(replay.status,await replay.clone().text()).toBe(200);
+    const review=await replay.json() as {revisionId:string;qaPassed:boolean};expect(review.qaPassed).toBe(true);
+    expect(gateway).toHaveBeenCalledTimes(3);
+    expect((await sql`SELECT id FROM hawa.design_revisions WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(1);
+    expect((await sql`SELECT id FROM hawa.approvals WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
+    const approval=await post(`/tasks/${taskId}/revisions/${review.revisionId}/decisions`,
+      {action:'approve',reason:'Synthetic reviewer checked this fixture.',pinnedExportIds:prepared.artifacts},randomUUID(),{Authorization:'Bearer test_art_director_bearer'});
+    expect(approval.status,await approval.clone().text()).toBe(201);expect(state.stage).toBe('approved');
+    const old=await post(`/tasks/${taskId}/native-review`,prepared.body,prepared.actionId);expect(old.status).toBe(200);
+    expect(state.stage).toBe('approved');
+    const altered=await post(`/tasks/${taskId}/native-review`,{...prepared.body,expectedRev:6},prepared.actionId);
+    expect(altered.status).toBe(409);
+    expect(exports).toBe(2);
+  });
+  it('replays a committed projection on a fresh runtime connection without recreating review or QA',async()=>{
+    const p=await ownedCaptures(),runtimeUrl=new URL(url!);runtimeUrl.searchParams.set('options','-c role=hawa_app');
+    const first=createDb(runtimeUrl.toString());
+    const result=await projectLifecycleNativeReview(first,tenantId,p.event);await first.destroy();
+    const second=createDb(runtimeUrl.toString());
+    try{
+      expect(await projectLifecycleNativeReview(second,tenantId,p.event)).toEqual(result);
+      await expect(projectLifecycleNativeReview(second,tenantId,{...p.event,expectedRev:5})).rejects.toMatchObject({code:'NATIVE_REVIEW_CONFLICT'});
+    }finally{await second.destroy();}
+    expect((await sql`SELECT id FROM hawa.qc_runs WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(1);
+  });
+  it('serializes manual preparation with owner transitions and rechecks scope before export dispatch',async()=>{
+    const owned=await own();await bind(taskId,designId);
+    await tx(async trx=>{
+      await lockNativeRecovery(trx,{...scope,nativeRecovery:owned.nativeRecovery},taskId);
+      await expect(db.transaction().execute(async peer=>{
+        await sql`SET LOCAL lock_timeout='100ms'`.execute(peer);
+        await sql`UPDATE hawa.requests SET rev=5,stage='in_review' WHERE request_id=${owned.requestId}::uuid`.execute(peer);
+      })).rejects.toThrow('lock timeout');
+    });
+    await tx(async trx=>confirmNativeRevisionCopy(trx,{...scope,nativeRecovery:owned.nativeRecovery},taskId,randomUUID(),await input()));
+    const original=remote.getMockImplementation()!;
+    remote.mockImplementationOnce(async(url,init)=>{
+      await sql`UPDATE hawa.requests SET rev=5,stage='in_review' WHERE request_id=${owned.requestId}::uuid`.execute(db);
+      return original(url,init);
+    });
+    const response=await post(`/tasks/${taskId}/canva/exports`,{format:'png',expectedVersion:1},randomUUID(),owned.headers);
+    expect(response.status).toBe(409);expect(exports).toBe(0);
+  });
+  it('rejects a disabled submitter before projection and keeps human approval separate',async()=>{
+    const p=await ownedCaptures();
+    await sql`UPDATE hawa.users SET disabled_at=now() WHERE id=${actorId}::uuid`.execute(db);
+    try{await expect(projectLifecycleNativeReview(db,tenantId,p.event)).rejects.toMatchObject({code:'HUMAN_REVIEW_REQUIRED'});}
+    finally{await sql`UPDATE hawa.users SET disabled_at=NULL WHERE id=${actorId}::uuid`.execute(db);}
+    expect((await sql`SELECT id FROM hawa.design_revisions WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
+  });
+  it.each(['confirmation','parent','task','capture'])('refuses a changed %s before owned review without advancing the request',async kind=>{
+    const prepared=await ownedCaptures();
+    // New valid confirmation increments task version; pin its current version to isolate confirmation identity.
+    if(kind==='confirmation'){
+      await tx(async trx=>confirmNativeRevisionCopy(trx,{...scope,nativeRecovery:prepared.nativeRecovery},taskId,randomUUID(),await input()));
+      prepared.event.expectedTaskVersion=(await input()).expectedTaskVersion;
+    }
+    if(kind==='parent')await sql`UPDATE hawa.tasks SET version=version+1 WHERE id=${parentTaskId}::uuid`.execute(db);
+    if(kind==='task')prepared.event.expectedTaskVersion++;
+    if(kind==='capture')prepared.event.artifactId=randomUUID();
+    await expect(projectLifecycleNativeReview(db,tenantId,prepared.event)).rejects.toBeInstanceOf(Error);
+    expect((await sql`SELECT id FROM hawa.design_revisions WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
+    expect((await sql<{stage:string}>`SELECT stage FROM hawa.requests WHERE request_id=${prepared.requestId}::uuid`.execute(db)).rows[0].stage).toBe('manual');
+  });
+  it('fences preparation to the current manual request and never delegates new generation',async()=>{
+    const owned=await own();
+    const base=`/tasks/${taskId}`;
+    for(const route of ['/canva/design','/canva/generate','/canva/studio'])
+      expect((await post(`${base}${route}`,{},randomUUID(),owned.headers)).status).toBe(409);
+    const body={editUrl:`https://www.canva.com/design/${designId}/edit`};
+    expect((await post(`${base}/canva-binding`,body,randomUUID(),{...owned.headers,'X-Hawa-Manual-Request-Rev':'3'})).status).toBe(409);
+    await sql`UPDATE hawa.requests SET stage='in_review',rev=5 WHERE request_id=${owned.requestId}::uuid`.execute(db);
+    expect((await post(`${base}/canva-binding`,body,randomUUID(),owned.headers)).status).toBe(409);
+    expect(remote).not.toHaveBeenCalled();
+    expect((await sql`SELECT id FROM hawa.canva_bindings WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
+  });
 
   it('refuses both generation paths, blank creation and fresh import without paid/native calls',async()=>{
     const studio=new DesignStudioService(db,canva,{apiKey:'synthetic',fetcher:remote});

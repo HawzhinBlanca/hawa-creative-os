@@ -3,6 +3,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {apiClient} from '../api/client.js';
 import {canvaPreviewEvidence} from '../services/canvaPreviewEvidence.js';
 import {NativeRevisionHandoff} from './NativeRevisionHandoff.js';
+import {NativeReviewSubmit} from './NativeReviewSubmit.js';
 import {captureForReview} from '../services/canvaCapture.js';
 export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId,taskStatus})=>{
   const generationBlocker=taskGenerationBlocker(taskStatus);
@@ -22,6 +23,7 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
   const evidence=canvaPreviewEvidence(state?.artifacts,state?.revisionHandoff ? state.revisionHandoff.confirmedEventId ?? null : undefined);
   const latestPng=evidence.preview;
   const latestCheck=evidence.check;
+  const preparationClosed=state?.revisionHandoff?.lifecycleOwned&&!state.revisionHandoff.nativeRecovery;
   useEffect(()=>{let cancelled=false;let objectUrl:string|undefined;setPreview(null);
     if(latestPng)void apiClient.canva.download(taskId,latestPng.id).then(blob=>{if(cancelled)return;objectUrl=URL.createObjectURL(blob);setPreview({url:objectUrl,artifactId:latestPng.id,taskId});}).catch(()=>{});
     return()=>{cancelled=true;if(objectUrl)URL.revokeObjectURL(objectUrl);};
@@ -41,11 +43,11 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
     const current=await apiClient.canva.taskState(taskId);
     if(!current.binding)throw new Error('Link a Canva design first.');
     const key=requestKey(format);
-    const r=await apiClient.canva.export(taskId,format,current.binding.version,key);
+    const r=await apiClient.canva.export(taskId,format,current.binding.version,key,current.revisionHandoff?.nativeRecovery);
     exportRequests.current[r.operationId]={format,key};finishExportRequest(r);
     setResults(v=>({...v,[r.operationId]:r}));setMessage(r.message||'Export submitted to Canva. Check its progress below.');
   });
-  const resume=(id:string)=>run(async()=>{const r=await apiClient.canva.resume(taskId,id);finishExportRequest(r);setResults(v=>({...v,[id]:r}));setMessage(r.message||(r.status==='stale'?'Canva changed during export. Let the design finish saving, then retrieve a fresh export.':`Export status: ${r.status}`));});
+  const resume=(id:string)=>run(async()=>{const r=await apiClient.canva.resume(taskId,id,state?.revisionHandoff?.nativeRecovery);finishExportRequest(r);setResults(v=>({...v,[id]:r}));setMessage(r.message||(r.status==='stale'?'Canva changed during export. Let the design finish saving, then retrieve a fresh export.':`Export status: ${r.status}`));});
   const download=(artifact:any)=>run(async()=>{const blob=await apiClient.canva.download(taskId,artifact.id);const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`canva-${artifact.sha256}.${artifact.format==='png'?'png':artifact.format==='pptx'?'pptx':'pdf'}`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
   return <section aria-label="Canva design and exports" className="rule" style={{marginTop:12}}>
     <h4>Canva design and exports</h4>
@@ -78,9 +80,9 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
       </div>
     </details>}
     {state?.binding&&<div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-      <button className="btn" disabled={busy||!connected} onClick={()=>capture('png')}>Retrieve PNG</button>
-      <button className="btn" disabled={busy||!connected} onClick={()=>capture('pdf')}>Retrieve PDF</button>
-      <button className="btn" disabled={busy||!connected} onClick={()=>capture('pptx')}>Check copy &amp; fonts</button>
+      <button className="btn" disabled={busy||!connected||preparationClosed} onClick={()=>capture('png')}>Retrieve PNG</button>
+      <button className="btn" disabled={busy||!connected||preparationClosed} onClick={()=>capture('pdf')}>Retrieve PDF</button>
+      <button className="btn" disabled={busy||!connected||preparationClosed} onClick={()=>capture('pptx')}>Check copy &amp; fonts</button>
     </div>}
     <p>Exports are stored as evidence pending QA. PDF here is a standard export, not a print certification.</p>
     {latestCheck&&<div role="status" style={{padding:12,borderRadius:8,background:evidence.passed?'var(--surface)':'#3b2022',color:evidence.passed?'inherit':'#ffe1df',marginTop:12}}>
@@ -90,13 +92,17 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
     </div>}
     <div style={{display:'flex',gap:8,marginTop:12}}>{(state?.artifacts||[]).filter((a:any,i:number,all:any[])=>['png','pdf_standard'].includes(a.format)&&all.findIndex(b=>b.format===a.format)===i).map((a:any)=><button key={a.id} className="btn" disabled={busy} onClick={()=>download(a)}>Download {a.format==='png'?'PNG':'PDF'} draft</button>)}</div>
     {preview?.taskId===taskId&&preview.artifactId===latestPng?.id&&<figure style={{margin:'12px 0'}}><img src={preview.url} alt="Retrieved Canva export for visual review" style={{maxWidth:'100%',maxHeight:600,objectFit:'contain'}}/><figcaption>{evidence.caption}</figcaption></figure>}
+    <NativeReviewSubmit taskId={taskId} scope={state?.revisionHandoff?.nativeRecovery} taskVersion={state?.revisionHandoff?.taskVersion}
+      confirmationEventId={state?.revisionHandoff?.confirmedEventId} busy={busy} onAction={run}
+      artifactId={state?.artifacts?.find((a:{id:string;format:string;confirmation_event_id?:string;capture_version?:string})=>
+        a.format==='pptx'&&a.confirmation_event_id===state?.revisionHandoff?.confirmedEventId&&a.capture_version===latestPng?.capture_version)?.id}/>
     {message&&<p role="status">{message}</p>}
     <details style={{marginTop:12}}><summary>Evidence and operation history</summary>
     {(state?.operations||[]).map((o:any)=>{const r=results[o.id];return <div key={o.id} style={{borderTop:'1px solid var(--border)',padding:'8px 0'}}>
       <span>{o.kind==='create'?'Native design':'Export'} · {r?.status||o.status}</span>
       {o.reconciliation_required&&<p role="status">The original design creation needs reconciliation. Check the original import or link its existing Canva design. Starting another creation is blocked.</p>}
       {o.kind==='create'&&o.method==='pptx_import'&&o.status!=='retrieved'&&<button className="btn" disabled={busy||!connected} onClick={()=>run(async()=>{const r=await apiClient.canva.resumeImport(taskId,o.id);setMessage(r.message||`Import status: ${r.status}`);})}>Check import</button>}
-      {o.kind==='export'&&<button className="btn" disabled={busy||!connected} onClick={()=>resume(o.id)} style={{marginLeft:8}}>Check / resume</button>}
+      {o.kind==='export'&&<button className="btn" disabled={busy||!connected||preparationClosed} onClick={()=>resume(o.id)} style={{marginLeft:8}}>Check / resume</button>}
       {o.kind==='create'&&o.design_id&&<p>Returned design ID: {o.design_id}. Link it to recover an interrupted handoff.</p>}
       {r?.artifact?.content_check&&<p role="status">Copy: {r.artifact.content_check.copyPass?'matches':'MISMATCH'} · Font: {r.artifact.content_check.fontPass?'matches':'MISMATCH'} ({r.artifact.content_check.observedFonts.join(', ')}). Logo, layout and release still require review.</p>}
       {r?.artifact&&<div><p>{r.artifact.byte_size.toLocaleString()} bytes · SHA-256 {r.artifact.sha256}</p><button className="btn" disabled={busy} onClick={()=>download(r.artifact)}>Download retrieved file</button></div>}

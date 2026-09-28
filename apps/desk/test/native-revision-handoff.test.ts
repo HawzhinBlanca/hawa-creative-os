@@ -33,7 +33,7 @@ describe('native revision handoff controls',()=>{
     await edit('  New exact copy — 2027  ');await check();await click(button('Confirm revised copy'));
     expect(apiClient.canva.confirmRevisionCopy).toHaveBeenCalledWith('task',expect.any(String),{
       expectedTaskVersion:3,basisSha256:initial.basisSha256,copy:['  New exact copy — 2027  '],
-      reviewedCurrentDesign:true,preservedUnrequestedChanges:true});
+      reviewedCurrentDesign:true,preservedUnrequestedChanges:true},undefined);
     expect(button('Capture revised design').disabled).toBe(true);
   });
   it('retries a lost response with the same key and invalidates human checks after an edit',async()=>{

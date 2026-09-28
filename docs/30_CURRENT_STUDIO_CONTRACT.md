@@ -58,3 +58,21 @@ Existing uncertain imports remain reconcilable. RequestLifecycle retains ownersh
 the legacy handoff cannot mutate its tasks. Native operation admission and completion
 of the lifecycle-owned manual recovery route remain separate work. See
 [ADR-113](../adrs/113_native_revision_handoff.md).
+
+## Request-owned native revision recovery (ADR-114)
+
+The current manual stage of an automatic lifecycle revision delegates only separate
+copy linking, exact-copy confirmation and export preparation to an office human.
+Each write carries the expected request ID/revision and rechecks ownership under
+the lifecycle transaction lock. Initial manual requests without an automatic run
+are outside this revision-specific admission.
+
+Capturing files does not advance the request. A separate signed submission names
+the current confirmation, checked artifact and expected task/request versions.
+RequestLifecycle projects the captured revision, QA and manual-to-in_review change
+in one transaction, retains a keyed content hash, then adopts that projection.
+Identical retries reconcile both projection-response and owner-response loss;
+altered content under the same action is refused. Desk retains pending submission
+identity across reload until a result or definite refusal is known. Approval and
+native preservation qualification remain independent. See
+[ADR-114](../adrs/114_lifecycle_native_revision_recovery.md).

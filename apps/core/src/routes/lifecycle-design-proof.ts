@@ -4,9 +4,19 @@ import { lifecycleDesignProofPayload, SYSTEM_AUTOMATION_USER_ID } from '@hawa/co
 import { withRlsContext } from '@hawa/db';
 import type { AuthContext, RouteContext } from './types.js';
 import { serviceTokenOf } from './lifecycle-internal.routes.js';
+import { isServiceUserId } from '@hawa/contracts';
+import { NATIVE_RECOVERY_ROLES, type NativeRecoveryScope } from '@hawa/domain';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA256 = /^[0-9a-f]{64}$/i;
+
+export function nativeRecoveryHeaders(c: { req: { header(name: string): string | undefined } }): NativeRecoveryScope | undefined {
+  const requestId = c.req.header('X-Hawa-Manual-Request-Id') || '';
+  const revision = c.req.header('X-Hawa-Manual-Request-Rev') || '';
+  const rev = Number(revision);
+  return UUID.test(requestId) && /^[1-9][0-9]*$/.test(revision) && Number.isSafeInteger(rev) && rev >= 2
+    ? { requestId, rev } : undefined;
+}
 
 async function persistedOwner(ctx: RouteContext, auth: AuthContext, taskId: string) {
   return withRlsContext(ctx.db!, {
@@ -15,7 +25,7 @@ async function persistedOwner(ctx: RouteContext, auth: AuthContext, taskId: stri
     const task = await trx.selectFrom('tasks').select('request_id')
       .where('tenant_id', '=', auth.tenantId!).where('id', '=', taskId).executeTakeFirst();
     if (!task?.request_id) return { requestId: null, request: null };
-    const request = await trx.selectFrom('requests').select(['owner', 'stage', 'current_task_id'])
+    const request = await trx.selectFrom('requests').select(['owner', 'stage', 'current_task_id', 'rev'])
       .where('tenant_id', '=', auth.tenantId!).where('request_id', '=', task.request_id).executeTakeFirst();
     return { requestId: task.request_id, request };
   });
@@ -56,6 +66,13 @@ export async function rejectUnownedLifecycleDesignWrite(
   try { owner = await persistedOwner(ctx, auth, taskId); }
   catch { return ctx.problem(c, 503, 'Durable Storage Unavailable', 'Task could not be read from the database; try again'); }
   if (!owner.requestId) return null;
+  const manual = nativeRecoveryHeaders(c);
+  const manualPath = taskPath === `/tasks/${taskId}/canva-binding` ||
+    taskPath === `/tasks/${taskId}/canva/revision-copy` || taskPath === `/tasks/${taskId}/canva/exports` ||
+    new RegExp(`^/tasks/${taskId}/canva/exports/[0-9a-f-]{36}/resume$`, 'i').test(taskPath);
+  if (manualPath && manual?.requestId === owner.requestId && manual.rev === Number(owner.request?.rev) &&
+      owner.request?.owner === 'restate' && owner.request.stage === 'manual' && owner.request.current_task_id === taskId &&
+      auth.userId && !isServiceUserId(auth.userId) && NATIVE_RECOVERY_ROLES.some(role => role === auth.role)) return null;
   const requestId = c.req.header('X-Hawa-Lifecycle-Request-Id') || '';
   const runId = c.req.header('X-Hawa-Lifecycle-Run-Id') || '';
   const proof = c.req.header('X-Hawa-Lifecycle-Proof') || '';

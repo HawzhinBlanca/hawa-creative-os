@@ -4,6 +4,8 @@ import { savedDesignCopy } from './saved-design-copy.js';
 import { resolveQcProfileId, type CanvaQcEvaluation, type ExportRow } from './canva-task-outcome.js';
 import { latestRevisionCopy } from './native-revision-handoff.js';
 import { nativeRevisionIntent } from '@hawa/domain';
+import type { NativeRecoveryScope } from '@hawa/domain';
+import { lockNativeRecovery } from './lifecycle-native-scope.js';
 
 export type CaptureReview =
   | { status: 'recorded'; revisionId: string; qaPassed: boolean; checkedArtifactId: string }
@@ -12,9 +14,11 @@ export type CaptureReview =
 /** Called inside the actor's RLS transaction after a checked export has been retained. */
 export async function recordManualCanvaReview(
   trx: Kysely<Database>, evaluate: (row: ExportRow, copy: string[]) => CanvaQcEvaluation,
-  p: { tenantId: string; taskId: string; actorId: string; artifactId: string },
+  p: { tenantId: string; taskId: string; actorId: string; artifactId: string;
+    lifecycle?: NativeRecoveryScope; role?: string },
 ): Promise<CaptureReview> {
   const blocked = (reason: string): CaptureReview => ({ status: 'blocked', reason, retryable: false });
+  if (p.lifecycle) await lockNativeRecovery(trx,{tenantId:p.tenantId,actorId:p.actorId,role:p.role,nativeRecovery:p.lifecycle},p.taskId);
   const task = (await sql<{ client_id: string; request_id: string | null; state: string; version: number; updated_at: Date; current_design_revision_id: string | null; source: unknown }>`
     SELECT t.client_id,t.request_id,t.state,t.version,t.updated_at,t.current_design_revision_id,
       (SELECT e.data FROM hawa.task_events e WHERE e.tenant_id=t.tenant_id AND e.task_id=t.id
@@ -24,7 +28,7 @@ export async function recordManualCanvaReview(
   const revisionCopy = await latestRevisionCopy(trx, p.tenantId, p.taskId);
   if (nativeRevisionIntent(task?.source) && !revisionCopy)
     return blocked('Confirm the exact revised copy against the current native design before recording review.');
-  if (!task || task.request_id || (!revisionCopy && (source?.payload?.body || source?.body)?.workflow !== 'canva_manual'))
+  if (!task || (task.request_id && !p.lifecycle) || (!revisionCopy && (source?.payload?.body || source?.body)?.workflow !== 'canva_manual'))
     return { status: 'not_applicable', reason: 'The task is not a manual Desk request.' };
   if (!['received', 'failed_operator', 'human_review', 'revision_requested', 'approved'].includes(task.state))
     return blocked('This task is no longer accepting manual design captures for review.');
