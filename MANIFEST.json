@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T08:01:12Z",
+  "generatedAt": "2026-09-28T08:06:51Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 478,
+  "fileCount": 489,
   "files": [
     {
       "path": ".dockerignore",
@@ -1718,6 +1718,11 @@
       "bytes": 809
     },
     {
+      "path": "runbooks/20_architecture_operations.md",
+      "sha256": "f57175b524d739dcb9a6b8f8647a046eae0aeb8857785f2e1e64d69d25fddb71",
+      "bytes": 36703
+    },
+    {
       "path": "runbooks/AVAILABILITY_MONITORING.md",
       "sha256": "68991ee9fa87462b892fc145dd27599be8230bb206c1e91c0e686d688ff2bc04",
       "bytes": 6918
@@ -2076,6 +2081,56 @@
       "path": "scripts/lint_provider_egress.ts",
       "sha256": "de8cdb5c708c37bce4990b91f75302f4a0ecd572d698d1637c2b63cf0c6ab7e6",
       "bytes": 3627
+    },
+    {
+      "path": "scripts/load/desk-tab.ts",
+      "sha256": "1274f79ffdf0e6f9628eba34c64fdb011f4c080236a78e33eeee44dc5ae96a55",
+      "bytes": 12966
+    },
+    {
+      "path": "scripts/load/export-chaos-logs.ts",
+      "sha256": "95e1cb085639a31c3781d09342abe01200c15967c86228e86576cee8ae37ae94",
+      "bytes": 3600
+    },
+    {
+      "path": "scripts/load/load-stats.ts",
+      "sha256": "597d51d9c871cb334b903d5664ed7b584af851685380795a63eaf60e0a14d73a",
+      "bytes": 8332
+    },
+    {
+      "path": "scripts/load/run.ts",
+      "sha256": "37afeff91b915eb8d174ef6a60f075d569c009fdc453dc8d45afdce5d1eb6f8a",
+      "bytes": 22428
+    },
+    {
+      "path": "scripts/load/seed-desk-tasks.ts",
+      "sha256": "2401f116087c298ea0bc4ef9d6518d830cc4c8eb5be068d7822353c713487336",
+      "bytes": 12257
+    },
+    {
+      "path": "scripts/load/test/export-chaos-logs.test.ts",
+      "sha256": "4fac56cdb017f1ef0387b70f16cbe3ca5f419d8c94e9a90fcb50729d14ce9d63",
+      "bytes": 2250
+    },
+    {
+      "path": "scripts/load/test/load-stats.test.ts",
+      "sha256": "b8964d56684c91cef9321f91eaf492b8179caa37990d882047f91cd5b7b8303a",
+      "bytes": 6434
+    },
+    {
+      "path": "scripts/load/test/runbook.test.ts",
+      "sha256": "2d23e410ff7d710631ca0e80b95f451e191fa4ca332362c1e3bfd069e2495975",
+      "bytes": 3899
+    },
+    {
+      "path": "scripts/load/test/seed-desk-tasks.test.ts",
+      "sha256": "715a7bd4ef4e8cacf9d03fd3ddda87883cfc2cff012ae0120c4f3612e708545b",
+      "bytes": 2894
+    },
+    {
+      "path": "scripts/load/with-chaos-db.ts",
+      "sha256": "2b8b27b9d689dd4077f32b40d26bf7cc3cf5a716197dd60de3c7d0c17737c5e2",
+      "bytes": 1855
     },
     {
       "path": "scripts/measure_operations_slo.ts",
