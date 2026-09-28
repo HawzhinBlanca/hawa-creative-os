@@ -23,13 +23,36 @@ save() {
     "$1" "$last_alert" "$last_disk_alert" "$last_cleanup" "$last_msg" "$alerted" "$alerted_other" "$disk_was_full" > "$STATE"
 }
 notify() {
-  local token chat; token="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$PROD" 2>/dev/null | cut -d= -f2-)"; chat="$(grep -E '^TELEGRAM_ALLOWED_USERS=' "$PROD" 2>/dev/null | cut -d= -f2- | cut -d, -f1)"
+  # `|| true`: under set -e and pipefail a missing file or line ended the whole pass here (exit 2), as
+  # nightly_backup.sh's notify already guards against.
+  local token chat; token="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$PROD" 2>/dev/null | cut -d= -f2- || true)"; chat="$(grep -E '^TELEGRAM_ALLOWED_USERS=' "$PROD" 2>/dev/null | cut -d= -f2- | cut -d, -f1 || true)"
   [[ -n "$token" && -n "$chat" ]] || return 0
   curl -s -m 15 -o /dev/null -X POST "https://api.telegram.org/bot${token}/sendMessage" --data-urlencode "chat_id=${chat}" --data-urlencode "text=$1" || true
 }
 if [[ "$MODE" == "--announce" ]]; then notify "🟢 Hawa watchdog armed on $(hostname -s): health every 5 min, self-start after login, nightly backup 03:30."; echo "announced"; exit 0; fi
 
+# The nightly Restate backup (infra/backup/restate_nightly.py, ADR-053/054) pauses Telegram intake and
+# stops Restate for the length of a cold copy. While that run holds the archive lock, starting Restate
+# (step 2) would tear its archive: the pass is skipped. A run killed outright (launchd's SIGKILL, a
+# reboot) runs no cleanup; its run record says what it changed, and --recover puts that back here
+# rather than at the next night's run (ADR-127, ported from studio-v2 4eb16341).
+backup_problem_restate=""
+rb_rc=0
+if [[ "$MODE" == "--status" ]]; then
+  rb_out="$(python3 "$ROOT/infra/backup/restate_nightly.py" --recovery-status 2>&1)" || rb_rc=$?
+  [[ $rb_rc == 2 ]] && backup_problem_restate="a cut-off Restate backup left Restate or intake to put back (the next pass does it)"
+else
+  rb_out="$(python3 "$ROOT/infra/backup/restate_nightly.py" --recover 2>&1)" || rb_rc=$?
+  if [[ $rb_rc == 0 && "$rb_out" == recovered:* ]]; then
+    echo "the nightly Restate backup was cut off; ${rb_out}"
+    notify "🟠 The nightly Restate backup was cut off before it finished; the watchdog put back: ${rb_out#recovered: }."
+  fi
+fi
+if [[ $rb_rc == 75 ]]; then echo "the nightly Restate backup is running; this pass is skipped"; exit 0; fi
+if [[ $rb_rc != 0 && $rb_rc != 2 ]]; then backup_problem_restate="${rb_out:-Restate backup recovery failed}"; fi
+
 problems=()
+[[ -z "$backup_problem_restate" ]] || problems+=("$backup_problem_restate")
 # 1. Docker daemon (Docker Desktop is not set to auto-start; the agent runs at login and starts it)
 if ! docker info >/dev/null 2>&1; then
   [[ "$MODE" == "--status" ]] || open -ga Docker 2>/dev/null || true
