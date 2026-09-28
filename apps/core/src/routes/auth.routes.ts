@@ -8,6 +8,7 @@ import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import type { RouteContext } from './types.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { createGoogleOidcProvider, googleOidcSettings, oidcCodeChallenge, oidcCodeVerifier } from '../services/google-oidc.js';
+import { serviceTokenOf } from './lifecycle-internal.routes.js';
 
 export function registerAuthRoutes(ctx: RouteContext) {
   const {
@@ -154,6 +155,13 @@ export function registerAuthRoutes(ctx: RouteContext) {
       const a = Buffer.from(candidate), b = Buffer.from(configured);
       return a.length === b.length && crypto.timingSafeEqual(a, b);
     };
+
+    // The worker's credential is a service principal on /v1/internal/* and nothing else, so it never
+    // becomes an office session, whatever other key it might also match (ADR-128).
+    const serviceToken = serviceTokenOf();
+    if (key && serviceToken && same(key, serviceToken)) {
+      return problem(c, 401, 'Unauthorized', 'Invalid credentials or access key');
+    }
 
     // 1. Validate by secret key / token
     if (key) {

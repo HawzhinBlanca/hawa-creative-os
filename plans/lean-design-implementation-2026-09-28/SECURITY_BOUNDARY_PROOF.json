@@ -1,0 +1,207 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "7b8de71ed015616c5a315cf67da07af31c77019a",
+  "branch": "worktree-wf_d0161674-b76-1 (from codex/research-grade-design-system)",
+  "status": "SECURITY_FINDINGS_7_8_10_11_12_28_LOCALLY_QUALIFIED_NOT_DEPLOYED",
+  "adr": "128",
+  "migration": "none",
+  "requirements": [
+    "NFR-006",
+    "FR-072",
+    "FR-070"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/128_security_boundary_repairs.md",
+      "sha256": "fbe193ca65d277da4245f6ef2c809938a956e67e97eff0b97ae556b5a0e96e57"
+    },
+    {
+      "path": "apps/core/src/services/channel-kill-switches.ts",
+      "sha256": "7305116504b20b2637e52208c056d4ea20dc4dacf7df7bc280399935550aacdf"
+    },
+    {
+      "path": "apps/core/src/routes/ingress.routes.ts",
+      "sha256": "dc4f515f83dde979897d05333e95af2ae07f906a75fe898f8cba77b9bbf375da"
+    },
+    {
+      "path": "apps/core/src/routes/system.routes.ts",
+      "sha256": "36278a4e8fcc278eb33463454bbe080ec861a26640e87a12004a8eab64dab1bb"
+    },
+    {
+      "path": "apps/core/src/routes/delivery-internal.routes.ts",
+      "sha256": "184398f17fd388b0003f9561c611f3f064e0c7a6e5177f6497cdd3322a3bbc93"
+    },
+    {
+      "path": "apps/core/src/routes/lifecycle-internal.routes.ts",
+      "sha256": "2da7a43e6e30bcb824e21405da79baa03876035eb34a1b74d091f38881700685"
+    },
+    {
+      "path": "apps/core/src/routes/auth.routes.ts",
+      "sha256": "39cd3a0bce326bb9a68b5029664e918dbd9df43edfd4a400312eb293a3874777"
+    },
+    {
+      "path": "apps/core/src/app.ts",
+      "sha256": "92a1aff77838466413d60d8aa2da6c79b0645ede461ceb58e3048733e39afb38"
+    },
+    {
+      "path": "infra/docker/nginx.conf",
+      "sha256": "03a1adb3bf69bcbd729fe7e19ab37e8440308cae6827041f8d171e5e9b3024fc"
+    },
+    {
+      "path": "db/03-grants.sql",
+      "sha256": "859ff7edff7746b53e87c59fedbec7f0cead811fcb268193df6587a4e64cb13c"
+    },
+    {
+      "path": "apps/core/test/channel-kill-switch-persistence.test.ts",
+      "sha256": "7608af8b06a0f996539cfda5938f17b6c7c459f113ea5ae7402cc37c879ee66e"
+    },
+    {
+      "path": "apps/core/test/no-second-system.test.ts",
+      "sha256": "88a0bafa0ce938f2349792dba19d70003d61ed3afe263ff09bf6e680c0d24c77"
+    },
+    {
+      "path": "apps/core/test/lifecycle-internal-auth.test.ts",
+      "sha256": "cdcb5b12d19772c83a2c086e2a1e2fd70ed5939fb31c7e709852ed2f6c09bb2d"
+    },
+    {
+      "path": "apps/core/test/auth-negative-controls.test.ts",
+      "sha256": "7973eb3563508d0ecb458e7a0877e3c508dc44182771e8299b3c4d6c4f2de491"
+    },
+    {
+      "path": "packages/testkit/test/nginx-internal-boundary.test.ts",
+      "sha256": "a7ed26ce75611d99551154ff3137ece4f3077f34496edc6be890a683c99c364c"
+    },
+    {
+      "path": "packages/db/test/blob-migration.test.ts",
+      "sha256": "be3300d9aa186c5eb66e3f1afeea3b10d86a9fa72c2aba99197c4c2a9563ff2f"
+    },
+    {
+      "path": "infra/backup/restate_nightly.py",
+      "sha256": "eda5c1129809f3bd4df9b6a8446f2883a2032d7d5759d50b86dfb381b29676d1"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "6bc9263d0017dfd76281b26ff6f7e2592fb1c9e89a60bc0c47802faf5b4becb7"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-security-round-red.log",
+      "sha256": "0639c4d65fe09ef7c0fd4ff7a31b0d83cbc0b3873407436845089269f8fc5bd5"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-red.json",
+      "sha256": "4ea3c7bf449ad5954120a0c64a2a44a1f64ec3dd046d54143fea46b6a13774ad"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-focused.json",
+      "sha256": "67184c4ff1fed072e655a84752ca675fa48c55fa45f50cd88f4ac73354142a72"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-affected-1.json",
+      "sha256": "c30eb700315a067214a9282f10fa04039a2963cf1fab63dab338a4274a69c21a"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-affected-2.json",
+      "sha256": "32363e0ad30e24a2c26fe0382cf9966bafbe45ba0057675c253f64887c72ddd8"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-backup-py.log",
+      "sha256": "ed710296d25ac9f8b05b12966afee7f483f6490fb2237dd32ffc03afbcc58f93"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-full.json",
+      "sha256": "b338c97ef756072b3d574bc0cdd3593207d9ba91e220931ccdeba3e4d39a3813"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-base-failures.json",
+      "sha256": "a7430026e5205bebda82ae39ea56295d817719a6f13264e56d4f1cf14320579e"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-final.json",
+      "sha256": "45c562bf9a849f1ee70c6c8e2f97434f3a33bae0c2b8e339a4ca9b4591d84444"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-typecheck.log",
+      "sha256": "50fa77a916305acfd65ce72f663c756d660cf4bf103019f05d4d88d340c041df"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-lint.log",
+      "sha256": "58f0e5ef018f0075e06683b72868b12482eeb04c8c0983c1ee802519324eb488"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-security-round-security.log",
+      "sha256": "95dc7aca6c7a8d9913908a33eb562ac198bf49b875c525e29ea10c7822595c26"
+    }
+  ],
+  "acceptance": {
+    "files": 6,
+    "passed": 74,
+    "failed": 0,
+    "skipped": 0,
+    "environment": "Isolated PostgreSQL clones (hawa-test-postgres 55432) through hawa_app; production nginx:1.27-alpine-slim image (local, never pulled) with stub Core/Desk on a throwaway Docker network",
+    "affected_connected": {
+      "files": 48,
+      "passed": 537,
+      "failed": 1,
+      "skipped": 2,
+      "note": "failure: startup-schema-check.test.ts \"knows every upgrade\" (stale LAST constant 060 vs 064), also failing at base; skips: two opt-in process-kill recovery tests"
+    },
+    "full_suite": {
+      "files": 533,
+      "passed": 4467,
+      "failed": 9,
+      "skipped": 60,
+      "note": "the same 9 tests in the same 8 files fail at 7b8de71e in a throwaway worktree (9 failed/69 passed): canva-planner-accounting, hawa-work-desk-cv17 bundle size, route-inventory, startup-schema-check, studio-ledger x2, r11-release-gate manifest, blob-gc coverage, schema-upgrade"
+    },
+    "backup_unit_tests": {
+      "passed": 16,
+      "failed": 0,
+      "command": "python3 -m unittest test_restate_nightly (in infra/backup)"
+    },
+    "prior_attempts": [
+      "Initial red: 16 failed/58 passed across the six changed files, each reproducing its finding: art director/operator released and threw WhatsApp (200, expected 403); /operations/kill-switch answered before PostgreSQL had the switch (row unknown) and accepted a client principal (200); clashing and short worker tokens reached Delivery body validation (422); a HAWA_DEV_TOKEN-equal worker token opened intake (200); /auth/session issued a session for the worker token via extraBearerTokens (201); a query-string session opened a studio image (503, past auth); 03-grants.sql re-run gained 80 and lost 19 hawa_app privileges; nginx proxied /v1/internal/telegram/intake to Core (200) and wrote the query token to the error log for a missing blob",
+      "First focused run after the fix: 73 passed/1 failed; the failure was a superseded expectation (an operator threw WhatsApp through the toggle); the test now uses the administrator",
+      "Python backup tests first failed to import when run from the repository root (module path); run from infra/backup they pass",
+      "A blank-line edit to channel-kill-switches.ts landed while the full suite ran; the final six-file run (74 passed) and lint ran after it"
+    ]
+  },
+  "checks": {
+    "source_types": "passed",
+    "script_types": "passed",
+    "strict_test_roots": 534,
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "security": "0 secrets; 53 justified allowlist hits",
+    "nginx_syntax": "nginx -t passed in nginx:1.27-alpine-slim"
+  },
+  "proof_scope": [
+    "WhatsApp switch administrator-only on all three routes, both directions, row and WAHA_KILL_SWITCH unchanged on refusal",
+    "/operations/kill-switch persisted before answer; client and anonymous refused",
+    "backup Telegram pause and changeTag release with the art-director key; operator Telegram changes",
+    "clashing, short and HAWA_DEV_TOKEN-equal worker tokens refused on intake and both Delivery routes",
+    "valid worker token reaches Delivery body validation; office keys refused there",
+    "no office session for the service token",
+    "query-string session refused; header and cookie session accepted on the same studio image",
+    "real nginx: every internal spelling 404 (GET/POST, /v1, /api/v1, /api, //, %69, dot segments), ordinary routes and stream still proxied, compose-network route to core:3001 unaffected",
+    "real nginx: missing blob after X-Accel-Redirect answers 404 with the token absent from all nginx output",
+    "worker source: every Core base defaults to http://core:3001; no nginx or edge port reference; production .env files do not set HAWA_CORE_INTERNAL_URL (key presence checked only)",
+    "03-grants.sql re-run after the runner leaves every hawa_app table and column privilege unchanged; executor columns writable, schema_upgrades not insertable",
+    "fresh production init through the changed 03-grants.sql (fresh-production-init and startup-schema-check fresh-database tests)"
+  ],
+  "not_executed": [
+    "deployment or production nginx reload",
+    "any production database read or write, or reading production container logs",
+    "live Restate backup rehearsal against the new role rule",
+    "live WAHA or Telegram traffic",
+    "Desk browser check of picture loading without ?access_token=",
+    "credential rotation (not required by these findings)",
+    "repair of the 9 pre-existing full-suite failures"
+  ],
+  "next": [
+    "owner: deploy Core and nginx together; confirm the backup's next nightly run pauses and releases Telegram",
+    "owner: confirm an administrator, not an operator or art director, handles the WhatsApp switch in office practice",
+    "fix the stale constants/fixtures behind the 9 pre-existing failures (route inventory, migration counts, release manifest)"
+  ]
+}
