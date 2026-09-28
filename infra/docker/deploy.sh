@@ -341,6 +341,47 @@ refuse_stuck_legacy "$PLAN"
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" build "worker-${IDLE}"
 verify_built_image "worker-${IDLE}"
 "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --force-recreate "worker-${IDLE}"
+# Core's health, dependency by dependency (not just HTTP 200). A dependency Core reaches over the
+# internet (Telegram, Canva, the model provider) reading 'unreachable' is usually this Mac's own
+# connection dropping for a moment, not the release: it is asked again for up to a minute, and if the
+# internet is still out the deploy ends with a warning, because the new release is already live and
+# failing here would roll nothing back. Every other bad value (a credential refused, Postgres or
+# Restate not connected, a circuit open) still fails the deploy once the retries are spent.
+verify_core_health() {
+  local attempt rc=0 i
+  local attempts="${HAWA_HEALTH_ATTEMPTS:-6}"
+  for attempt in $(seq 1 "$attempts"); do
+    HEALTH=""
+    for i in $(seq 1 30); do
+      if HEALTH="$(curl -fsS -m 5 http://127.0.0.1:8080/v1/health 2>/dev/null)"; then break; fi
+      HEALTH=""
+      sleep 2
+    done
+    [[ -n "${HEALTH:-}" ]] || { echo "ERROR: core health did not answer within 60 s"; return 1; }
+    rc=0
+    echo "$HEALTH" | python3 -c '
+import json,sys
+h=json.load(sys.stdin); d=h.get("dependencies",{})
+external={"telegramApi","canva","modelProvider"}
+bad=[k for k,v in d.items() if v in ("unauthorized","unreachable","disconnected","read_only","outage","unregistered")]
+print("health:", h.get("status"), json.dumps(d))
+if not bad: sys.exit(0)
+offline=[k for k in bad if k in external and d[k]=="unreachable"]
+sys.exit(3 if offline==bad else 1)
+' || rc=$?
+    [[ $rc == 0 ]] && return 0
+    [[ $attempt == "$attempts" ]] && break
+    echo "! health not clean yet (attempt ${attempt} of ${attempts}); asking again in 10 s"
+    sleep 10
+  done
+  if [[ $rc == 3 ]]; then
+    echo "! WARNING: only internet services are unreachable (above). The release is live; check this Mac's internet connection."
+    return 0
+  fi
+  echo "ERROR: unhealthy dependencies (above)"
+  return 1
+}
+
 # The new colour is removed only when Restate holds no deployment at its address. A registration can be
 # accepted even when its answer was lost or the check after it failed, and then Restate already sends
 # new work to this container: removing it would leave every task pointing at a container that is gone,
@@ -374,18 +415,7 @@ else
 fi
 
 # 8. Verify health truthfully (dependencies, not just HTTP 200)
-for i in $(seq 1 30); do
-  if HEALTH="$(curl -fsS -m 5 http://127.0.0.1:8080/v1/health 2>/dev/null)"; then break; fi
-  sleep 2
-done
-[[ -n "${HEALTH:-}" ]] || { echo "ERROR: core health did not answer within 60 s"; exit 1; }
-echo "$HEALTH" | python3 -c '
-import json,sys
-h=json.load(sys.stdin); d=h.get("dependencies",{})
-bad=[k for k,v in d.items() if v in ("unauthorized","unreachable","disconnected","read_only","outage","unregistered")]
-print("health:", h.get("status"), json.dumps(d))
-if bad: print("ERROR: unhealthy dependencies:", bad); sys.exit(1)
-'
+verify_core_health || exit 1
 WORKER="$(docker exec "hawa-production-worker-${IDLE}-1" node -e "fetch('http://localhost:9080/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"
 echo "worker: ${WORKER:-unavailable}"
 CUTOUT="$(docker exec hawa-production-core-1 node -e "fetch('http://cutout:8090/health').then(r=>r.text()).then(t=>console.log(t))" 2>/dev/null || true)"

@@ -288,6 +288,8 @@ paths:
     $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1resume'
   /v1/tasks/{taskId}/cancel:
     $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1cancel'
+  /v1/tasks/{taskId}/retry:
+    $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1retry'
   /v1/tasks/{taskId}/canva/generate:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1generate'
   /v1/tasks/{taskId}/canva/plans:
@@ -514,32 +516,6 @@ paths:
                 maxCostUsd: {type: number, minimum: 0}
       responses:
         '202': {description: Durable generation started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
-        default: {$ref: '#/components/responses/Problem'}
-  /v1/tasks/{taskId}/{control}:
-    post:
-      tags: [Operations]
-      operationId: controlTaskWorkflow
-      parameters:
-        - {$ref: '#/components/parameters/TaskId'}
-        - name: control
-          in: path
-          required: true
-          schema: {enum: [pause, resume, cancel, replay]}
-        - {$ref: '#/components/parameters/IdempotencyKey'}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [reason]
-              properties:
-                reason: {type: string, minLength: 1}
-                checkpoint: {type: [string, 'null']}
-                fallbackDeploymentId: {type: [string, 'null'], format: uuid}
-      responses:
-        '202': {description: Control command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
         default: {$ref: '#/components/responses/Problem'}
   /v1/designs/{designId}/revisions:
     get:
