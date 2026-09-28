@@ -64,9 +64,13 @@ const prepared = (lang: 'ckb' | 'en', k: number) => {
 describe('a style spec read from the reference is enforced on every candidate', () => {
   for (const lang of ['ckb', 'en'] as const) {
     for (const k of [0, 1, 2]) {
-      it(`${lang} candidate ${k}: passes QA and looks like the reference`, () => {
+      it(`${lang} candidate ${k}: preserves reference style and reports any unmeasured fallback`, () => {
         const { layout, qa } = prepared(lang, k);
-        expect(qa.passed).toBe(true);
+        // These Sorani fixtures mix Latin words into the requested Noto face. The rasterizer's
+        // fallback is not measured by fontkit; preserve the style, but never certify that fit.
+        expect(qa.passed, qa.messages.join('; ')).toBe(lang === 'en');
+        expect(qa.defectCodes).toEqual(lang === 'en' ? [] : ['COPY_UNMEASURED']);
+        if (lang === 'ckb') expect(qa.textMeasurements.some((m) => m.status === 'unmeasured' && m.reason === 'MISSING_GLYPHS')).toBe(true);
         const W = layout.width;
         const m = layout.grid.margin;
         const title = layout.text.find((t) => t.role === 'title')!;

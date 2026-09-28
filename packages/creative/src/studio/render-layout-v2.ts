@@ -802,7 +802,7 @@ export function fontFileFor(fontFamily: string, bold?: boolean, italic?: boolean
 /**
  * Loads font binary via fontkit and returns Font instance.
  */
-function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): any {
+function loadFontEntry(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string) {
   const fontPath = fontFileFor(fontFamily, bold, italic, fontsDir);
   const fingerprint = () => {
     const st = fs.statSync(fontPath, { bigint: true });
@@ -810,14 +810,79 @@ function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir
   };
   const before = fingerprint(); // Missing files must never reuse an old object.
   const cached = fontCache.get(fontPath);
-  if (cached?.fingerprint === before) return cached.font;
+  if (cached?.fingerprint === before) return cached;
   const bytes = fs.readFileSync(fontPath);
   if (fingerprint() !== before) throw new Error(`Font changed while loading: ${fontPath}`);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const font = cached?.sha256 === sha256 ? cached.font : fk.create(bytes);
   if (fontCache.size >= 128 && !fontCache.has(fontPath)) fontCache.delete(fontCache.keys().next().value!);
-  fontCache.set(fontPath, { fingerprint: before, sha256, font });
-  return font;
+  const entry = { fingerprint: before, sha256, font };
+  fontCache.set(fontPath, entry);
+  return entry;
+}
+
+function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): any {
+  return loadFontEntry(fontFamily, bold, italic, fontsDir).font;
+}
+
+export type TextMeasurementFailure = 'MISSING_COPY' | 'EMPTY_COPY' | 'INVALID_GEOMETRY' |
+  'FONT_UNAVAILABLE' | 'MISSING_GLYPHS' | 'SHAPING_FAILED';
+
+export type TextMeasurement = { copyIndex: number; fontFamily: string } & (
+  { status: 'measured'; method: 'fontkit-wrap-v1'; copySha256: string; fontSha256: string;
+    inputSha256: string; lineCount: number; maxLineWidthPx: number; requiredHeightPx: number } |
+  { status: 'unmeasured'; reason: TextMeasurementFailure; copySha256?: string; missingCodePoints?: string[] }
+);
+
+/** Mandatory fit evidence. Optional metric helpers below are deliberately best-effort instead. */
+export function measureTextGeometry(
+  layout: StudioLayoutV2,
+  copyText: Record<number, string> | undefined,
+  options: Pick<RenderLayoutOptions, 'fontsDir'> = {}
+): TextMeasurement[] {
+  return layout.text.map((t): TextMeasurement => {
+    const identity = { copyIndex: t.copyIndex, fontFamily: t.fontFamily };
+    const copy = copyText && Object.hasOwn(copyText, t.copyIndex) ? copyText[t.copyIndex] : undefined;
+    const copySha256 = typeof copy === 'string' ? createHash('sha256').update(copy).digest('hex') : undefined;
+    const failed = (reason: TextMeasurementFailure, missingCodePoints?: string[]): TextMeasurement =>
+      ({ ...identity, status: 'unmeasured', reason, ...(copySha256 ? { copySha256 } : {}),
+        ...(missingCodePoints ? { missingCodePoints } : {}) });
+    if (typeof copy !== 'string') return failed('MISSING_COPY');
+    // Default-ignorable controls are preserved in the content hash but cannot make an empty block visible.
+    if (!copy.replace(/[\s\p{Default_Ignorable_Code_Point}]/gu, '')) return failed('EMPTY_COPY');
+    const letterSpacing = effectiveLetterSpacingEm(t);
+    if (![t.width, t.height, t.fontSize, t.lineHeight].every((n) => Number.isFinite(n) && n > 0) ||
+        !Number.isFinite(letterSpacing) || !Number.isFinite(t.letterSpacing ?? 0)) return failed('INVALID_GEOMETRY');
+    let entry: ReturnType<typeof loadFontEntry>;
+    try {
+      // An explicitly unavailable font directory must not turn into the default directory here.
+      if (options.fontsDir && !fs.statSync(options.fontsDir).isDirectory()) return failed('FONT_UNAVAILABLE');
+      entry = loadFontEntry(t.fontFamily, t.bold, t.italic, resolveFontsDir(options));
+    } catch {
+      return failed('FONT_UNAVAILABLE');
+    }
+    try {
+      const { font, sha256: fontSha256 } = entry;
+      if (!Number.isFinite(font.unitsPerEm) || font.unitsPerEm <= 0) return failed('SHAPING_FAILED');
+      const visible = [...new Set(Array.from(copy).filter((ch) => !/[\s\p{Default_Ignorable_Code_Point}]/u.test(ch)))];
+      const missing = visible.filter((ch) => font.glyphForCodePoint(ch.codePointAt(0)).id === 0)
+        .map((ch) => `U+${ch.codePointAt(0)!.toString(16).toUpperCase()}`);
+      if (missing.length) return failed('MISSING_GLYPHS', missing);
+      const lines = wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing);
+      const widths = lines.map((line) => measureTextWidth(line, font, t.fontSize, letterSpacing));
+      const maxLineWidthPx = Math.ceil(Math.max(...widths));
+      const requiredHeightPx = Math.ceil(lines.length * t.fontSize * t.lineHeight);
+      if (!lines.length || widths.some((n) => !Number.isFinite(n) || n < 0) ||
+          !Number.isFinite(requiredHeightPx) || requiredHeightPx <= 0) return failed('SHAPING_FAILED');
+      const inputSha256 = createHash('sha256').update(JSON.stringify({ method: 'fontkit-wrap-v1', copySha256,
+        fontSha256, width: t.width, height: t.height, fontSize: t.fontSize, lineHeight: t.lineHeight,
+        letterSpacing, rtl: t.rtl ?? null, bold: t.bold ?? false, italic: t.italic ?? false })).digest('hex');
+      return { ...identity, status: 'measured', method: 'fontkit-wrap-v1', copySha256: copySha256!, fontSha256,
+        inputSha256, lineCount: lines.length, maxLineWidthPx, requiredHeightPx };
+    } catch {
+      return failed('SHAPING_FAILED');
+    }
+  });
 }
 
 /**

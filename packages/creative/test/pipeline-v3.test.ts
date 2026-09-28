@@ -211,8 +211,8 @@ describe('pipeline v3 — fonts', () => {
 describe('pipeline v3 — ranking', () => {
   it('selects the sole hard-QA eligible candidate without a comparison or canary call', async () => {
     const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }, { sourceIndex: 1, layout: asymmetric() }], COPY);
-    ranked[0].hardQa = { passed: false, defectCodes: ['COPY_OVERFLOW'], messages: ['Too long'], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
-    ranked[1].hardQa = { passed: true, defectCodes: [], messages: [], layout: ranked[1].layout, metrics: computeLayoutMetrics(ranked[1].layout) };
+    ranked[0].hardQa = { textMeasurements: [], passed: false, defectCodes: ['COPY_OVERFLOW'], messages: ['Too long'], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
+    ranked[1].hardQa = { textMeasurements: [], passed: true, defectCodes: [], messages: [], layout: ranked[1].layout, metrics: computeLayoutMetrics(ranked[1].layout) };
     const createStructuredCompletion = vi.fn().mockRejectedValue(new Error('unexpected paid comparison'));
     const result = await selectWinnerV3(ranked, COPY, { client: { createStructuredCompletion } as unknown as OpenAiStudioClient });
     expect(result.winner).toBe(ranked[1]);
@@ -223,7 +223,7 @@ describe('pipeline v3 — ranking', () => {
 
   it.each([false, undefined])('refuses a sole candidate when hard-QA pass is %s', async (passed) => {
     const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }], COPY);
-    if (passed === false) ranked[0].hardQa = { passed, defectCodes: ['COPY_OVERFLOW'], messages: [], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
+    if (passed === false) ranked[0].hardQa = { textMeasurements: [], passed, defectCodes: ['COPY_OVERFLOW'], messages: [], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
     const createStructuredCompletion = vi.fn().mockRejectedValue(new Error('unexpected paid comparison'));
     await expect(selectWinnerV3(ranked, COPY, { client: { createStructuredCompletion } as unknown as OpenAiStudioClient })).rejects.toThrow('NO_ELIGIBLE_CANDIDATE');
     expect(createStructuredCompletion).not.toHaveBeenCalled();
@@ -254,7 +254,7 @@ describe('pipeline v3 — ranking', () => {
 // These isolate judge protocol/rendering, using explicit synthetic QA evidence. Production
 // and the qualification script compute hard QA from the actual client context.
 function admitForJudgeFixture(candidate: ReturnType<typeof rankCandidatesV3>[number]): void {
-  candidate.hardQa = { passed: true, defectCodes: [], messages: [], layout: candidate.layout, metrics: computeLayoutMetrics(candidate.layout) };
+  candidate.hardQa = { textMeasurements: [], passed: true, defectCodes: [], messages: [], layout: candidate.layout, metrics: computeLayoutMetrics(candidate.layout) };
 }
 
 describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
@@ -838,7 +838,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
     const layout = prepareGeneratedLayoutV3(raw, copy, { width: raw.width, height: raw.height, logoAspect: 1, palette: KAAE_PALETTE });
     const qa = evaluateHardQa(layout, {
       width: raw.width, height: raw.height, copyScripts: Object.values(copy.scripts!), latinFont: 'Verdana',
-      arabicFont: 'Noto Sans Arabic', palette: KAAE_PALETTE, logoAspect: 1,
+      arabicFont: 'Noto Sans Arabic', palette: KAAE_PALETTE, logoAspect: 1, copyText: copy.text,
     });
     return { layout, qa };
   };
@@ -869,7 +869,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ]),
       SUMMIT
     );
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages, qa.messages.join('\n')).toEqual([]);
     expect(layout.grid.margin).toBe(115);
     // The footer band stayed; the blocks above it closed up, never tighter than 12px.
     expect(layout.shapes.find((s) => s.role === 'panel')!.y).toBe(886);
@@ -900,7 +900,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
         'هۆڵی کۆبوونەوەکانی KAAE • هەولێر • پەخشی ڕاستەوخۆ',
       ])
     );
-    expect(qa.messages).toEqual([]);
+    // Geometry is repaired; the original footer still needs qualified mixed-font measurement.
+    expect(qa.passed).toBe(false);
+    expect(qa.defectCodes).toEqual(['COPY_UNMEASURED']);
+    expect(qa.textMeasurements.filter((m) => m.status === 'unmeasured')).toMatchObject([{copyIndex: 4, reason: 'MISSING_GLYPHS'}]);
     expect(layout.grid.margin).toBe(64);
     expect(layout.logo!.y).toBe(64);
     const band = layout.shapes.find((s) => s.role === 'panel')!;
@@ -931,7 +934,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
         'هۆڵی سەعد عەبدوڵڵا، هەولێر • ٢٨ی تشرینی یەکەمی ٢٠٢٦',
       ])
     );
-    expect(qa.messages).toEqual([]);
+    // Geometry is repaired; the original footer still needs qualified mixed-font measurement.
+    expect(qa.passed).toBe(false);
+    expect(qa.defectCodes).toEqual(['COPY_UNMEASURED']);
+    expect(qa.textMeasurements.filter((m) => m.status === 'unmeasured')).toMatchObject([{copyIndex: 4, reason: 'MISSING_GLYPHS'}]);
     expect(bottom(byRole(layout, 'eyebrow'))).toBeLessThanOrEqual(byRole(layout, 'title').y);
   });
 
@@ -960,7 +966,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ])
     );
     const { logoClearZone } = await import('../src/index.js');
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages, qa.messages.join('\n')).toEqual([]);
     expect(layout.logo!.y).toBe(123);
     expect(byRole(layout, 'eyebrow').y).toBeGreaterThanOrEqual(bottom(logoClearZone(layout.logo!)));
     expect(layout.art!.prompt).toBe('subtle sun-ray gradient in navy');
@@ -989,7 +995,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ])
     );
     const { logoClearZone } = await import('../src/index.js');
-    expect(qa.messages).toEqual([]);
+    // Geometry is repaired; the original footer still needs qualified mixed-font measurement.
+    expect(qa.passed).toBe(false);
+    expect(qa.defectCodes).toEqual(['COPY_UNMEASURED']);
+    expect(qa.textMeasurements.filter((m) => m.status === 'unmeasured')).toMatchObject([{copyIndex: 4, reason: 'MISSING_GLYPHS'}]);
     const eyebrow = byRole(layout, 'eyebrow');
     const title = byRole(layout, 'title');
     const card = layout.shapes.find((s) => s.role === 'panel')!;
@@ -1016,7 +1025,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ], '#FDF8F3'),
       SUMMIT
     );
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages, qa.messages.join('\n')).toEqual([]);
     expect(measureDesignV3(layout, SUMMIT).metrics.semanticLayout.passed).toBe(true);
     expect(byRole(layout, 'title').y - byRole(layout, 'body').y).toBe(227 - 216);
   });
@@ -1040,7 +1049,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
         'هەولێر • تشرینی دووەمی ٢٠٢٦ • kaae.gov.krd',
       ])
     );
-    expect(qa.messages).toEqual([]);
+    // Geometry is repaired; the original footer still needs qualified mixed-font measurement.
+    expect(qa.passed).toBe(false);
+    expect(qa.defectCodes).toEqual(['COPY_UNMEASURED']);
+    expect(qa.textMeasurements.filter((m) => m.status === 'unmeasured')).toMatchObject([{copyIndex: 4, reason: 'MISSING_GLYPHS'}]);
     expect(layout.grid.margin).toBe(96);
     expect(byRole(layout, 'eyebrow').y).toBeLessThan(648);
   });
@@ -1059,7 +1071,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ], []),
       SUMMIT
     );
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages, qa.messages.join('\n')).toEqual([]);
     expect(layout.logo!.y).toBe(230);
     expect(byRole(layout, 'title').y).toBeGreaterThanOrEqual(bottom(byRole(layout, 'eyebrow')));
   });
@@ -1070,7 +1082,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
     crowded.text[2].y = 500;
     crowded.text[4].y = H - MARGIN - crowded.text[4].height;
     const { qa } = await prepare(crowded, { ...COPY, scripts: { 0: 'latin', 1: 'latin', 2: 'latin', 3: 'latin', 4: 'latin' } });
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages, qa.messages.join('\n')).toEqual([]);
   });
 
   it('leaves a block above the logo that reaches into its clear space for refinement, named', async () => {

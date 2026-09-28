@@ -2028,7 +2028,8 @@ export class DesignStudioService {
           };
 
           const qaResult = await runQAStage(ctx, winnerState);
-          stages.qa = qaResult;
+          stages.qa = { ...qaResult, candidateId: winnerRow.id };
+          const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
 
           if (!qaResult.passed) {
             // Attempt to find any other candidate that passes QA
@@ -2047,12 +2048,15 @@ export class DesignStudioService {
               };
               const otherQA = await runQAStage(ctx, otherState);
               if (otherQA.passed) {
-                await this.repo.updateRunStatus(runId, s.tenantId, 'transferring', {
+                stages.qa = { ...otherQA, candidateId: otherRow.id };
+                stages.qaReplacedWinner = { ...qaResult, candidateId: winnerRow.id };
+                const nextStatus = request.holdForSelection ? 'awaiting_selection' : 'transferring';
+                await this.repo.updateRunStatus(runId, s.tenantId, nextStatus, {
                   winnerCandidateId: otherRow.id,
                   stages,
                   budget,
                 });
-                return { runId, status: 'transferring', stage: 'qa', winnerCandidateId: otherRow.id };
+                return { runId, status: nextStatus, stage: 'qa', winnerCandidateId: otherRow.id };
               }
             }
 
@@ -2061,7 +2065,6 @@ export class DesignStudioService {
           }
 
           // Check if operator requested holdForSelection
-          const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
           if (request.holdForSelection) {
             await this.repo.updateRunStatus(runId, s.tenantId, 'awaiting_selection', { stages, budget });
             return { runId, status: 'awaiting_selection', stage: 'qa', spentUsd: budget.spentUsd };

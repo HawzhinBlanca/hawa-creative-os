@@ -15,5 +15,7 @@ export async function runQAStage(
     passed: outcome.passed,
     defectCodes: outcome.defectCodes,
     metrics: outcome.metrics,
+    textMeasurements: outcome.textMeasurements,
+    messages: outcome.messages,
   };
 }

@@ -61,7 +61,7 @@ describe('an oversized stroke paints a slab across the design', () => {
     expect(qa.messages.join(' ')).toContain('2160px');
   });
 
-  it('preparation repairs the stroke and the repaired design passes QA', () => {
+  it('repairs the stroke while refusing the fixture’s unmeasured mixed-script fallback', () => {
     const prepared = prepareGeneratedLayoutV3(clone(), copy, canvas);
     expect(rule(prepared)).toBeDefined();
     // 2160 is 2 x the 1080px canvas width, so the model asked for a 2px rule.
@@ -69,7 +69,9 @@ describe('an oversized stroke paints a slab across the design', () => {
     const qa = evaluateHardQa(prepared, qaContext);
     expect(qa.defectCodes).not.toContain('OVERSIZED_STROKE');
     expect(qa.defectCodes).not.toContain('SHAPE_PAINT_ESCAPES_BOX');
-    expect(qa.passed).toBe(true);
+    expect(qa.passed).toBe(false);
+    expect(qa.defectCodes).toEqual(['COPY_UNMEASURED']);
+    expect(qa.textMeasurements.some((m) => m.status === 'unmeasured' && m.reason === 'MISSING_GLYPHS')).toBe(true);
   });
 
   it('clamps a stroke that is not an undone denormalisation, and QA accepts what it leaves', () => {
@@ -91,7 +93,9 @@ describe('an oversized stroke paints a slab across the design', () => {
       layout.shapes[0].strokeWidth = width;
       const prepared = prepareGeneratedLayoutV3(layout, copy, canvas);
       expect(rule(prepared)!.strokeWidth).toBe(width);
-      expect(evaluateHardQa(prepared, qaContext).passed).toBe(true);
+      const qa = evaluateHardQa(prepared, qaContext);
+      expect(qa.passed).toBe(false);
+      expect(qa.defectCodes).toEqual(['COPY_UNMEASURED']);
     }
   });
 });

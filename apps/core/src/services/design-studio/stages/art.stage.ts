@@ -23,11 +23,13 @@ export async function runArtStage(
   candidates: CandidateState[]
 ): Promise<CandidateState[]> {
   for (const cand of candidates) {
-    if (ctx.pipelineV3 && cand.currentLayout.art && ctx.imageryStrategy !== 'none') {
+    if (cand.currentLayout.art && ctx.imageryStrategy !== 'none') {
       // Artwork cannot repair overflowing copy, illegal fonts or broken geometry. Contrast is
       // evaluated again against completed imagery; this preflight is not a final QA certificate.
       const qa = evaluateHardQa(cand.currentLayout, hardQaContextFor(ctx));
-      const defects = qa.defectCodes.filter((code) => code !== 'CONTRAST');
+      // Primary-font measurement is mandatory in both pipelines. V3 additionally applies its
+      // admitted composition profile here; that profile is not imposed on other clients.
+      const defects = qa.defectCodes.filter((code) => ctx.pipelineV3 ? code !== 'CONTRAST' : code === 'COPY_UNMEASURED');
       if (defects.length) {
         cand.status = 'eliminated';
         cand.diagnostics = [...new Set([...(cand.diagnostics ?? []), ...defects])];

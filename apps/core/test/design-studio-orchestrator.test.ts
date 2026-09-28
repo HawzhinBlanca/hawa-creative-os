@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterAll, beforeAll, beforeEach } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { blobStoreFromEnv, createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
+import { blobStoreFromEnv, createDb, sql, withRlsContext, DesignStudioRepository, type Database, type Kysely } from '@hawa/db';
 import { DesignStudioService, isPipelineV3Run } from '../src/services/design-studio/design-studio-service.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { CanvaDesignPlanner } from '../src/services/canva-design-planner.js';
@@ -9,6 +9,7 @@ import type { StudioLayoutV2 } from '@hawa/creative';
 import { computeDnaHash } from '../src/core-helpers.js';
 import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
 import { checkCanvaPptx } from '@hawa/qa';
+import type { HardQAResult } from '../src/services/design-studio/types.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
@@ -819,6 +820,45 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       block.locale === 'und' && block.localeCopySha256 === createHash('sha256').update(block.text).digest('hex'))).toBe(true);
     expect(planRow.result.manifest.copyLocales).toEqual(run.request.copyBlocks.map(() => 'und'));
     expect(mockCanvaService.importEditableDesign).toHaveBeenCalledTimes(1);
+    const final = (await sql<{stages: {qa: HardQAResult}}>`SELECT stages FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0];
+    expect(final.stages.qa.passed).toBe(true);
+    expect(final.stages.qa.textMeasurements.map((m) => m.status)).toEqual(run.request.copyBlocks.map(() => 'measured'));
+    expect(final.stages.qa.textMeasurements.map((m) => m.copySha256)).toEqual(run.request.copyBlocks.map((b: {text: string}) => createHash('sha256').update(b.text).digest('hex')));
+  }, 30000);
+
+  it.each([false, true])('6b. retains final QA for the replacement winner and honors selection hold (%s)', async (holdForSelection) => {
+    const taskId = await createTask();
+    const service = new DesignStudioService(db, {} as CanvaConnectService, {apiKey: 'test-key', fetcher: createMockFetch(), defaultTier: 'standard'});
+    const {run} = await service.createOrGetRun(scope, taskId, `measure-${randomUUID()}`, {width: 1080, height: 1350, tier: 'standard', holdForSelection});
+    try {
+      let status = run.status;
+      for (let i = 0; i < 12 && status !== 'qa'; i++) status = (await service.resume(scope, taskId, run.id)).status;
+      expect(status).toBe('qa');
+      const repo = new DesignStudioRepository(db);
+      const row = (await repo.getCandidatesForRun(run.id, scope.tenantId)).find((r) => r.status === 'winner')!;
+      expect(row).toBeDefined();
+      const layouts = (row.layouts as Array<string | StudioLayoutV2>).map((l) => typeof l === 'string' ? JSON.parse(l) as StudioLayoutV2 : l);
+      const replacementId = randomUUID();
+      await repo.insertCandidate({id: replacementId, tenantId: scope.tenantId, runId: run.id, ordinal: 10,
+        concept: {}, layouts: layouts as unknown as Record<string, unknown>[], status: 'active'});
+      const broken = structuredClone(layouts.at(-1)!);
+      broken.text[0].fontFamily = 'Noto Sans Arabic'; // Latin title has no glyphs in this primary font.
+      await repo.updateCandidate(row.id, scope.tenantId, {layouts: [broken as unknown as Record<string, unknown>]});
+      const result = await service.resume(scope, taskId, run.id);
+      expect(result.status).toBe(holdForSelection ? 'awaiting_selection' : 'transferring');
+      expect(result.winnerCandidateId).toBe(replacementId);
+      const saved = (await sql<{winner_candidate_id: string; stages: {qa: HardQAResult & {candidateId: string}; qaReplacedWinner: HardQAResult & {candidateId: string}}}>`SELECT winner_candidate_id,stages
+        FROM hawa.design_studio_runs WHERE id=${run.id}::uuid`.execute(db)).rows[0];
+      expect(saved.winner_candidate_id).toBe(replacementId);
+      expect(saved.stages.qa.passed).toBe(true);
+      expect(saved.stages.qa.candidateId).toBe(replacementId);
+      expect(saved.stages.qa.textMeasurements.every((m) => m.status === 'measured')).toBe(true);
+      expect(saved.stages.qaReplacedWinner.candidateId).toBe(row.id);
+      expect(saved.stages.qaReplacedWinner.passed).toBe(false);
+      expect(saved.stages.qaReplacedWinner.defectCodes).toContain('COPY_UNMEASURED');
+    } finally {
+      await service.abandon(scope, taskId, run.id, 'measurement test cleanup');
+    }
   }, 30000);
 
   it('6c. an import Canva has not settled leaves the run at transfer; the next resume follows the same import (2026-09-24)', async () => {

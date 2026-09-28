@@ -4,6 +4,7 @@ import { runArtStage } from '../src/services/design-studio/stages/art.stage.js';
 import type { CandidateState, StageContext } from '../src/services/design-studio/types.js';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { rankStudioCandidatesV3 } from '../src/services/design-studio/stages/v3.stage.js';
+import { runQAStage } from '../src/services/design-studio/stages/qa.stage.js';
 
 describe('artwork admission', () => {
   it.each([[true, false], [false, false], [false, true]])('checks copy before buying artwork, deferring contrast only (overflow=%s, contrast=%s)', async (overflow, contrast) => {
@@ -77,6 +78,40 @@ describe('Studio selection persistence and fallback', () => {
     expect(f.createStructuredCompletion).not.toHaveBeenCalled();
     expect(f.repo.updateRunStatus).toHaveBeenCalledWith('run', 'tenant', 'failed', expect.objectContaining({ winnerCandidateId: null, judgeStatus: 'SKIPPED' }));
     expect(f.stages.tournament).toMatchObject({ decidedBy: 'no_eligible_candidate', candidates: [{ qa: 'failed', defectCodes: expect.arrayContaining(['COPY_OVERFLOW']) }] });
+  });
+
+  it.each(['', 'Approved \u{10FFFF}'])('blocks unmeasurable content before art, selection and final QA (%j)', async (text) => {
+    const f = fixture(); f.ctx.copyBlocks[0].text = text;
+    const generateArt = vi.fn(); f.ctx.artProvider = {generateArt} as unknown as StageContext['artProvider'];
+    for (const pipelineV3 of [false, true]) {
+      f.ctx.pipelineV3 = pipelineV3;
+      const candidate = f.candidate(0, true);
+      candidate.currentLayout.art = {source: 'generated', prompt: 'Abstract texture',
+        box: {x: 0, y: 0, width: 1080, height: 1350}, calmRegion: {x: 0, y: 0, width: 1080, height: 1350}, opacity: 0.1};
+      await runArtStage(f.ctx, [candidate]);
+      expect(generateArt).not.toHaveBeenCalled();
+      expect(candidate.status).toBe('eliminated');
+      expect(candidate.diagnostics).toContain('COPY_UNMEASURED');
+    }
+    f.ctx.pipelineV3 = true;
+    // Selection rechecks the same real gate even if a historical row is still active.
+    const result = await f.judge([f.candidate(0, true)]);
+    expect(result.status).toBe('failed');
+    expect(result.winnerCandidateId).toBeUndefined();
+    expect(f.createStructuredCompletion).not.toHaveBeenCalled();
+    const qa = await runQAStage(f.ctx, f.candidate(0, true));
+    expect(qa.passed).toBe(false);
+    expect(qa.textMeasurements[0]).toMatchObject({status: 'unmeasured', reason: text ? 'MISSING_GLYPHS' : 'EMPTY_COPY'});
+    expect(qa.messages[0]).toContain('COPY_UNMEASURED');
+  });
+
+  it('returns serializable final measurement evidence for the actual copy and font', async () => {
+    const f = fixture();
+    const qa = await runQAStage(f.ctx, f.candidate(0, true));
+    expect(qa.passed).toBe(true);
+    expect(JSON.parse(JSON.stringify(qa)).textMeasurements[0]).toMatchObject({status: 'measured', method: 'fontkit-wrap-v1',
+      copySha256: createHash('sha256').update(f.ctx.copyBlocks[0].text).digest('hex'),
+      fontSha256: expect.stringMatching(/^[a-f0-9]{64}$/), inputSha256: expect.stringMatching(/^[a-f0-9]{64}$/)});
   });
 
   it('excludes a failed candidate from winner and runner-up when the provider is unavailable', async () => {

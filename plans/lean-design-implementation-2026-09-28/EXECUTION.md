@@ -14,7 +14,7 @@ No package is complete merely because a smaller test passes.
 | --- | --- | --- | --- |
 | 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty, reviewed-copy handoff and automatic linked-revision owner recovery locally qualified; actual native preservation and initial manual intake open | ADR-108/113/114; CANVA_UNCERTAINTY_PROOF.json; NATIVE_REVISION_HANDOFF_PROOF.json; LIFECYCLE_NATIVE_RECOVERY_PROOF.json |
 | 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs and Unicode lexical exemplar baseline locally qualified; authorized visual order, multilingual semantic retrieval and human comparison open | ADR-109/115; CREATIVE_HANDOFF_PROOF.json; UNICODE_RETRIEVAL_PROOF.json |
-| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results, visual input pins and font basis locally qualified; branch checkpoints, renderer/cutout runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112/116; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json |
+| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results, visual input pins and font basis locally qualified; mandatory text evidence locally qualified; mixed-font measurement, branch checkpoints, renderer/cutout runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112/116; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json |
 | 4 | Amend/Adapt routing and actual Canva account capability qualification | Open | Official documentation is not account admission |
 | 5 | Relationship-led composition, calibrated selection, governed edit learning and equal-budget human comparisons | Open | Existing R04–R06/R13/R22–R25 study machinery must be reused |
 | 6 | Complete supervised native review/delivery, release qualification and independent recovery | Open | Prior qualification remains scoped to its own candidate |
@@ -296,3 +296,35 @@ binaries and licensing, concurrent modification during a running stage, native f
 fidelity, authorized visual order, semantic replay, native editing and human/release
 qualification remain open. Source-copy order remains protected; model reading order
 alone grants no authority to rearrange it.
+
+
+## 2026-09-28 — Mandatory measurement evidence (ADR-117)
+
+Mandatory local QA now records one structured geometry result per required block,
+with copy/font/input hashes or an explicit unmeasured reason. Missing/blank copy,
+unavailable/corrupt fonts, missing primary-face glyphs, invalid inputs and shaping
+failures cannot inherit one-line/zero-width defaults. Optional artwork in both
+pipelines rejects unknown measurement before provider use; V3 selection and final
+QA retain their hard refusal. Final QA persists the selected candidate's evidence.
+A reproduced replacement-winner bug now retains the replacement's passed result,
+the former failure separately, and the requested operator selection hold.
+
+Qualification: 16 connected files/208 tests passed; final four-file/48-test boundary
+run after extending artwork admission passes. Source/scripts and 528 strict test
+roots pass. Four missing-copy false passes reproduced before the fix; the real
+isolated DB also reproduced the former-winner QA mismatch. All provider transport
+is synthetic; no paid/native calls, migration or deployment. See
+TEXT_MEASUREMENT_PROOF.json for source hashes, initial failures and exact limits.
+
+The stronger gate exposes an open typography gap: primary-face fontkit measurement
+does not model rasterizer fallback for mixed Sorani/Latin/symbol text. Existing
+fixtures now explicitly expect COPY_UNMEASURED for those blocks while preserving
+the requested style and checking geometry/contrast independently. This is not
+proof that the native designs are visually defective. Broad rollout requires
+qualified mixed-font shaping/wrapping; do not waive the gate or silently replace
+the chosen font to obtain a pass. The historical corpus baseline was not rewritten.
+
+All six packages remain active. Next: actual mixed-font measurement alongside
+native amendment qualification, authorized hierarchy, semantic reuse, human
+quality and integrated release/restore. Local wrapping is not native bidi, painted
+ink, editability or a whole-application completion certificate.

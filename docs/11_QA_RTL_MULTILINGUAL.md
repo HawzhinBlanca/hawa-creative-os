@@ -16,6 +16,21 @@ Q8 publication/source-package verification
 
 A design passes only when every required hard gate passes.
 
+### Mandatory local text measurements (ADR-117)
+
+Studio records measured geometry or an explicit unmeasured reason for every required
+copy block. Missing/blank content, unavailable fonts, missing visible primary-face
+glyphs, invalid inputs and shaping failures cannot inherit guessed geometry.
+`COPY_UNMEASURED` refuses local QA and optional artwork in either pipeline; V3
+selection also excludes it. Final QA retains copy/font/input hashes and measurements
+for the selected candidate, including a replacement winner, and honors selection holds.
+
+A primary font may lack Latin letters or symbols which the rasterizer draws through
+fallback. That fallback's geometry is not yet qualified by this local fontkit pass.
+Keep such results unmeasured, preserve the requested style, and qualify actual
+mixed-font shaping before claiming fit. Local advance-width/wrapping evidence does
+not replace painted-ink, native Canva, bidi or human-language inspection.
+
 ## 2. Hard checks
 
 ### Facts and copy

@@ -1,6 +1,6 @@
 import type { ExemplarRetrievalEvidence } from '@hawa/creative';
 import type { StudioLayoutV2 } from '@hawa/creative';
-import type { LayoutMetrics } from '@hawa/creative';
+import type { LayoutMetrics, TextMeasurement } from '@hawa/creative';
 import type { OpenAiStudioClient } from '@hawa/creative';
 import type { OpenAiImageProvider } from '@hawa/creative';
 import type { DesignStudioRepository } from '@hawa/db';
@@ -126,6 +126,8 @@ export interface HardQAResult {
   passed: boolean;
   defectCodes: string[];
   metrics: LayoutMetrics;
+  textMeasurements: TextMeasurement[];
+  messages: string[];
 }
 
 export interface ParityResult {
