@@ -8,6 +8,9 @@
  *   npx tsx scripts/load/run.ts --poller core      # Core polls Telegram (production today)
  *   npx tsx scripts/load/run.ts --poller worker    # the worker polls, through ChatInbox (Phase 2.1)
  *   options: --tasks 5000 --chats 10 --idle-minutes 3 --after-minutes 2 --keep
+ *            --plan-ms 30000        # every design plan's model call takes this long (the fakes answer
+ *                                   # at once otherwise; real planner calls took 23-47 s, ADR-131)
+ *            --planning-slots 4     # Core's HAWA_CANVA_PLANNING_SLOTS (its default when left out)
  *
  * What it does, in order:
  *  1. Waits until no container named hawa-chaos-* runs (another run, maybe another worktree's: the
@@ -25,7 +28,8 @@
  *  5. Idle again for `--after-minutes`.
  *  6. Reads everything back: the tabs' requests, the fake Telegram's polls and sends, Core's request
  *     and error lines, the worker's error lines, Restate's invocations, memory per container sampled
- *     every 5 s. Writes packages/testkit/chaos/.run/load-<poller>.json (gitignored) and prints a summary.
+ *     every 5 s. Writes packages/testkit/chaos/.run/load-<poller>[-plan<ms>][-slots<n>].json (gitignored)
+ *     and prints a summary.
  *  7. Always takes the project down with its volumes, unless --keep.
  *
  * Measures and where they come from:
@@ -173,14 +177,18 @@ async function main(): Promise<void> {
   const idleMinutes = Number(arg('idle-minutes', '3'));
   const afterMinutes = Number(arg('after-minutes', '2'));
   const keep = process.argv.includes('--keep');
-  // docker compose reads it from this process's environment (docker-compose.chaos.yml).
+  const planMs = Number(arg('plan-ms', '0'));
+  if (!Number.isInteger(planMs) || planMs < 0 || planMs > 80_000) throw new Error('--plan-ms takes 0 to 80000 (the planner aborts a model call at 90 s)');
+  const planningSlots = arg('planning-slots', '');
+  // docker compose reads them from this process's environment (docker-compose.chaos.yml).
   process.env.CHAOS_TELEGRAM_POLLER = poller;
+  process.env.HAWA_CANVA_PLANNING_SLOTS = planningSlots;
 
   const tabs: Tab[] = [];
   const memorySamples: Array<{ at: number; mib: Record<string, number> }> = [];
   let sampling = true;
-  const result: Record<string, unknown> = { poller, taskCount, chatCount, idleMinutes, afterMinutes, startedAt: new Date().toISOString() };
-  const outFile = path.join(CHAOS_DIR, '.run', `load-${poller}.json`);
+  const result: Record<string, unknown> = { poller, taskCount, chatCount, idleMinutes, afterMinutes, planMs, planningSlots: planningSlots || 'default', startedAt: new Date().toISOString() };
+  const outFile = path.join(CHAOS_DIR, '.run', `load-${poller}${planMs ? `-plan${planMs}` : ''}${planningSlots ? `-slots${planningSlots}` : ''}.json`);
 
   const stopEverything = () => {
     for (const t of tabs) t.stop();
@@ -209,6 +217,8 @@ async function main(): Promise<void> {
     const reg = await registerColour('blue');
     if (reg.code !== 0) throw new Error(`register blue: ${reg.lines.join(' | ')}`);
     await fakes.reset();
+    // Each brief makes one planner call; twice as many covers a re-drive.
+    if (planMs) await fakes.modelDelay({ schema: 'canva_design_plan', delayMs: planMs, n: chatCount * 2 });
 
     void (async () => {
       while (sampling) {

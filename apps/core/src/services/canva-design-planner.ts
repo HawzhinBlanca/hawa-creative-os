@@ -19,7 +19,40 @@ const box={x:z.number().nonnegative(),y:z.number().nonnegative(),width:z.number(
 const layout=z.object({width:z.number().int(),height:z.number().int(),background:z.string(),
   text:z.array(z.object({...box,copyIndex:z.number().int().nonnegative(),role:z.enum(['headline','title','subtitle','body','caption','date','location','meta']).optional(),fontSize:z.number(),fontFamily:z.string(),color:z.string(),align:z.enum(['left','center','right']),bold:z.boolean().optional()}).strict()).min(1).max(40),
   shapes:z.array(z.object({...box,color:z.string()}).strict()).max(40),logo:z.object(box).strict()}).strict();
-export interface PlannerOptions {apiKey?:string;fetcher?:typeof fetch}
+export interface PlannerOptions {apiKey?:string;fetcher?:typeof fetch;planningSlots?:number}
+
+/**
+ * How many designs the office plans at once. It was a literal 2 from the Canva cutover (bf7a017,
+ * 2026-09-13), written for an operator pressing Generate in the Desk ("Resume existing work before
+ * starting another"), before Telegram briefs drafted automatically. Ten briefs sent at once then got
+ * their drafts in pairs at about 5, 7, 11, 19 and 35 s on the chaos stack (2026-09-24 load test).
+ * The measured choice and its limits are in ADR-131.
+ */
+export const DEFAULT_PLANNING_SLOTS = 4;
+/** HAWA_CANVA_PLANNING_SLOTS, a whole number from 1 to 16; anything else keeps the default. */
+export function planningSlotsFrom(env:Record<string,string|undefined>):number{
+  const raw=(env.HAWA_CANVA_PLANNING_SLOTS||'').trim();
+  const n=/^\d+$/.test(raw)?Number(raw):NaN;
+  return n>=1&&n<=16?n:DEFAULT_PLANNING_SLOTS;
+}
+/**
+ * A plan still in planning this long after it was claimed was cut off: the model call aborts at 90 s
+ * and the rest takes seconds, so only a Core that died mid-call leaves one. It stops holding a slot,
+ * as a stalled studio run does, or two such crashes would stop the office planning for good. The row
+ * itself is left as it is: its charge is uncertain, and nothing here decides that.
+ */
+export const STALE_PLANNING_MS = 3 * 60 * 1000;
+/**
+ * The wait named to a refused brief (Retry-After): until the oldest running plan should finish,
+ * judged by how long the tenant's recent plans took (typicalMs, null when none has finished), from 2
+ * to 15 s. The worker used to double its own sleep instead (2, 4, 8, 16, 30 s) and so came back long
+ * after a slot had freed. With nothing to judge by the wait is the shortest: a guessed 20 s held the
+ * second round of an empty office back 15 s after its slots had freed (chaos load test, 2026-09-28).
+ */
+export function planningRetryAfterMs(oldestAgeMs:number,typicalMs:number|null):number{
+  if(typicalMs===null||!Number.isFinite(typicalMs)||!Number.isFinite(oldestAgeMs))return 2000;
+  return Math.min(15000,Math.max(2000,Math.round(typicalMs-oldestAgeMs)));
+}
 
 /** The client's own confirmed exemplars (ADR-038), top two by rank. Every client used to get KAAE's. */
 function loadConfirmedExemplars(clientId: string): Array<{ label: string; sha256?: string; base64: string }> {
@@ -225,8 +258,16 @@ export class CanvaDesignPlanner {
       }
       if((await sql`SELECT id FROM hawa.canva_bindings WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND status='bound'`.execute(db)).rows.length)
         throw new CanvaFlowError(409,'CANVA_ALREADY_BOUND','Edit the existing Canva design; generation never overwrites it.');
-      const concurrent=(await sql<any>`SELECT count(*) AS n FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND status='planning'`.execute(db)).rows[0];
-      if(Number(concurrent.n)>=2)throw new CanvaFlowError(429,'PLANNING_BUSY','Two designs are already being planned. Resume existing work before starting another.');
+      const slots=this.options.planningSlots??planningSlotsFrom(process.env);
+      const running=(await sql<any>`SELECT count(*) AS n,extract(epoch FROM now()-min(created_at))*1000 AS oldest_ms FROM hawa.canva_design_plans
+        WHERE tenant_id=${s.tenantId}::uuid AND status='planning' AND created_at>now()-${STALE_PLANNING_MS}*interval '1 millisecond'`.execute(db)).rows[0];
+      if(Number(running.n)>=slots){
+        const typical=(await sql<any>`SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM updated_at-created_at)*1000) AS ms
+          FROM (SELECT created_at,updated_at FROM hawa.canva_design_plans WHERE tenant_id=${s.tenantId}::uuid AND status IN ('planned','failed') AND updated_at>created_at
+          ORDER BY created_at DESC LIMIT 20) recent`.execute(db)).rows[0];
+        const retryAfterMs=planningRetryAfterMs(Number(running.oldest_ms),typical?.ms==null?null:Number(typical.ms));
+        throw new CanvaFlowError(429,'PLANNING_BUSY',`All ${slots} planning slots are taken. Try again in about ${Math.ceil(retryAfterMs/1000)} s.`,retryAfterMs);
+      }
       const apiKey=this.options.apiKey??process.env.OPENAI_API_KEY;
       if(!apiKey)throw new CanvaFlowError(503,'MODEL_NOT_CONFIGURED','Configure the requested design model first.');
       assertModelAllowed(request.model);

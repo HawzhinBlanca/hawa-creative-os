@@ -23,7 +23,10 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
     // another actor's import or source for the task, and the role never reached it (2026-09-24).
     try { return await fn(c,{tenantId:auth.tenantId,actorId:auth.userId,role:auth.role},service); }
     catch (error) {
-      if (error instanceof CanvaFlowError) return ctx.problem(c,error.status,error.code,error.message);
+      if (error instanceof CanvaFlowError) {
+        if (error.retryAfterMs !== undefined) c.header('Retry-After',String(Math.ceil(error.retryAfterMs/1000)));
+        return ctx.problem(c,error.status,error.code,error.message);
+      }
       // Never echo provider bodies, OAuth tokens or signed download URLs.
       return ctx.problem(c,502,'Canva Operation Failed','Canva could not complete this operation. Check the connection and existing operation before retrying.');
     }

@@ -6,7 +6,8 @@ import { CanvaConnectClient, CanvaCapturePipeline, CanvaHttpError, canvaRequestN
 
 type Scope = { tenantId: string; actorId: string; role?: string };
 export class CanvaFlowError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) { super(message); }
+  /** retryAfterMs: when a busy refusal expects the caller to find room, sent as Retry-After. */
+  constructor(readonly status: number, readonly code: string, message: string, readonly retryAfterMs?: number) { super(message); }
 }
 const fail = (status: number, code: string, message: string): never => { throw new CanvaFlowError(status, code, message); };
 const hash = (v: string | Buffer) => createHash('sha256').update(v).digest('hex');
