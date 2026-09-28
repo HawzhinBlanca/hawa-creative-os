@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-09-27T22:45:53+03:00",
+  "generatedAt": "2026-09-28T13:50:07+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "00a29a925e392b0c780369510e802c5924d5e3e9",
+    "commit": "4cc413b6b1025bcff25b45d247102ea2996658bb",
     "treeClean": true,
-    "commitTimestamp": "2026-09-27T22:45:53+03:00",
+    "commitTimestamp": "2026-09-28T13:50:07+03:00",
     "branch": "codex/research-grade-design-system"
   },
   "migrations": {
-    "targetVersion": "060_publication_inspections",
-    "latestMigrationFile": "060_publication_inspections.sql",
-    "totalMigrations": 60
+    "targetVersion": "064_native_copy_claims",
+    "latestMigrationFile": "064_native_copy_claims.sql",
+    "totalMigrations": 64
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -39,7 +39,7 @@
       "service": "core",
       "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "18314949a98f00e53bc6541ff824d6ff04c271e953eaba706342c59b2f79917c",
+        "apps/core/src/app.ts": "34750a0211a8a02812934413221a0b4158a222ad9234a839ef7fbe0e7d9fa250",
         "apps/core/src/index.ts": "6950c3318ab08ddfd7e455bd09c460262572a82e7767dd2afd8e39448635a2e5",
         "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
@@ -73,8 +73,8 @@
     "promptVersion": "2026-09-25.2",
     "promptSourcesSha256": {
       "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
-      "apps/core/src/services/canva-design-planner.ts": "2a2b34f2b03b8882d73e1788d49c93e53ccf538caabda7498e9dab0ca376a417",
-      "packages/creative/src/studio/layout-generator-v3.ts": "c0a14f8490fbebf171fd3c820acecf53f45255926e4ae9f0e55376bb3f469164",
+      "apps/core/src/services/canva-design-planner.ts": "7abadd2e0b257cf3fc66eaeabdb12f815d5feacc90b38930048dc7994c49fe0f",
+      "packages/creative/src/studio/layout-generator-v3.ts": "e2e888608a678a98275528bd708294b15ab5755bf835573cff11252d4c544cd9",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "950d7d5f1701c9a80871f74843e59115b3440c73bade98b6d80a755f12d36889",
       "packages/creative/src/studio/box-critique-v3.ts": "34c2d9b4f8d194ee0e0d8cec0229c3d1a12fbf07a8a5be94c94461f2456672c4"
     }
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "64358910dca6d5a706c5701ee1d64a96d9a5aa7dd8dee819c8f1df3b58b0d806"
+  "sha256": "c469011c67e2b9b73434d85db4a7fcf5ba61080129689dd576f978410980c97a"
 }
