@@ -39,4 +39,15 @@ describe('native review submission recovery',()=>{
     vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('storage unavailable');});
     await click(button());expect(apiClient.canva.submitNativeReview).not.toHaveBeenCalled();expect(errors).toHaveLength(1);
   });
+  it('retains an initial manual request submission at request revision 1 across remount',async()=>{
+    props={...props,scope:{requestId,rev:1},taskVersion:1};await render();
+    vi.mocked(apiClient.canva.submitNativeReview).mockRejectedValueOnce(new Error('response lost'));
+    await click(button());expect(errors).toHaveLength(1);
+    const first=vi.mocked(apiClient.canva.submitNativeReview).mock.calls[0];
+    expect(first[2]).toEqual({requestId,expectedRev:1,expectedTaskVersion:1,confirmationEventId,artifactId});
+    await act(async()=>root.unmount());root=createRoot(container);props={...props,scope:undefined,artifactId:undefined};await render();
+    expect(container.textContent).not.toContain('cannot be read');await click(button());
+    expect(vi.mocked(apiClient.canva.submitNativeReview).mock.calls[1]).toEqual(first);
+    expect(sessionStorage.getItem(`hawa.native-review.${taskId}`)).toBeNull();
+  });
 });

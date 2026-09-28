@@ -77,6 +77,24 @@ identity across reload until a result or definite refusal is known. Approval and
 native preservation qualification remain independent. See
 [ADR-114](../adrs/114_lifecycle_native_revision_recovery.md).
 
+## Initial manual request recovery (ADR-126)
+
+A request whose immutable first projection receipt records a manual open without
+automatic generation, and whose task has no Studio run state, delegates the same
+preparation at request revision 1: link the request's own separate native design,
+confirm its exact final text, and capture PNG/PPTX under that confirmation. There is
+no parent design, so the human assertion is that the linked design is this request's
+own separate design; the global binding uniqueness refuses a design already linked
+elsewhere. Capture before confirmation is refused.
+
+Capture retains files without advancing the request. The same signed submission
+reaches RequestLifecycle, which projects revision, QA and manual-to-in_review once
+and adopts the hash-bound receipt after lost replies. The owner then holds a
+manual-origin state with no run: approval, rejection and delivery proceed as usual;
+a requester revision round is refused because its reply would start generation.
+Frozen initial policy stays current only while its confirmation, binding and Client
+DNA are unchanged. See [ADR-126](../adrs/126_initial_manual_native_recovery.md).
+
 
 ## Retained font basis (ADR-116)
 

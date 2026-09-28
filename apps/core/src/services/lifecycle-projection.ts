@@ -17,6 +17,7 @@ import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { composeCanvaStatusMessage } from './canva-status-message.js';
 import { namedOfficeReviewMode } from './google-oidc.js';
 import { lockNamedReviewAuthority } from './named-review-authority.js';
+import { initialManualOrigin } from './lifecycle-native-scope.js';
 
 /** First projection of a request; later transitions must advance the same revision ledger. */
 export interface OpenLifecycleProjection {
@@ -110,6 +111,11 @@ export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input
     }
     if (request.current_task_id !== taskId) {
       throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The office action names an older request task');
+    }
+    // ADR-126: a request opened without a run has no requester revision round. Its manual stage at a
+    // later revision would route the requester's reply into automatic generation, so it is refused.
+    if (decision === 'revision_requested' && await initialManualOrigin(trx, tenantId, requestId, taskId)) {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'A request opened for manual design can be approved or rejected, not returned for a requester revision');
     }
     const task = await trx.selectFrom('tasks').select(['request_id', 'current_design_revision_id', 'state', 'version', 'client_id', 'project_id'])
       .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirst();

@@ -3,7 +3,7 @@ import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
 import { isServiceUserId } from '@hawa/contracts';
 import { lockNativeRecovery } from './lifecycle-native-scope.js';
-import { latestRevisionCopy } from './native-revision-handoff.js';
+import { latestNativeCopy } from './initial-native-handoff.js';
 import { recordManualCanvaReview } from './manual-canva-review.js';
 import { evaluateCanvaExportQc } from '../core-helpers.js';
 import { CanvaFlowError } from './canva-flow-error.js';
@@ -34,14 +34,14 @@ export async function projectLifecycleNativeReview(db: Kysely<Database>, tenantI
     await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${event.requestId}`},0))`.execute(trx);
     const prior = await nativeReviewReceipt(trx,tenantId,event);
     if (prior) return prior;
-    await lockNativeRecovery(trx,{tenantId,actorId:event.actor.userId,role:event.actor.role,
+    const owner=await lockNativeRecovery(trx,{tenantId,actorId:event.actor.userId,role:event.actor.role,
       nativeRecovery:{requestId:event.requestId,rev:event.expectedRev}},event.taskId);
     const task = await trx.selectFrom('tasks').select(['version','state']).where('tenant_id','=',tenantId)
       .where('id','=',event.taskId).forUpdate().executeTakeFirst();
     if (!task || Number(task.version) !== event.expectedTaskVersion)
       throw new CanvaFlowError(409,'NATIVE_REVIEW_STALE','The task changed. Review the current handoff before submission.');
-    const copy = await latestRevisionCopy(trx,tenantId,event.taskId);
-    if (copy?.id !== event.confirmationEventId)
+    const copy = await latestNativeCopy(trx,tenantId,event.taskId);
+    if (copy?.kind !== owner.kind || copy.id !== event.confirmationEventId)
       throw new CanvaFlowError(409,'NATIVE_REVIEW_STALE','The copy confirmation changed. Capture the current revised design.');
     const review = await recordManualCanvaReview(trx,evaluateCanvaExportQc,{tenantId,taskId:event.taskId,
       actorId:event.actor.userId,role:event.actor.role,artifactId:event.artifactId,

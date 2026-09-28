@@ -60,4 +60,23 @@ describe('native revision handoff controls',()=>{
     expect(container.querySelector('textarea')).toBeNull();expect(button('Confirm revised copy')).toBeUndefined();
     expect(container.textContent).toContain('workflow owns design changes');
   });
+  it('links and confirms an initial manual request design without claiming preservation of a parent',async()=>{
+    vi.spyOn(apiClient.tasks,'bindCanva').mockResolvedValue({});
+    const scope={requestId:'00000000-0000-4000-8000-000000000126',rev:1};
+    handoff={available:true,kind:'initial',message:'Link this request’s own Canva design.',lifecycleOwned:true,nativeRecovery:scope,
+      bindingId:null,basisSha256:'c'.repeat(64),taskVersion:1,confirmedEventId:null,copy:['Initial exact copy']};await render();
+    expect(container.textContent).not.toContain('Open original Canva design');
+    expect(container.textContent).not.toContain('unrelated manual changes');
+    const url=container.querySelector<HTMLInputElement>('input[type=url]')!;
+    await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(url,'https://www.canva.com/design/DAInitial/edit');
+      url.dispatchEvent(new Event('input',{bubbles:true}));});
+    await act(async()=>{container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});
+    expect(apiClient.tasks.bindCanva).toHaveBeenCalledWith('task','https://www.canva.com/design/DAInitial/edit',scope);
+    handoff={...handoff,bindingId:'binding'};await render();
+    expect(button('Confirm final copy').disabled).toBe(true);await check();await click(button('Confirm final copy'));
+    expect(apiClient.canva.confirmRevisionCopy).toHaveBeenCalledWith('task',expect.any(String),{expectedTaskVersion:1,basisSha256:'c'.repeat(64),
+      copy:['Initial exact copy'],reviewedCurrentDesign:true,separateRequestDesign:true},scope);
+    handoff={...handoff,confirmedEventId:'confirmation'};await render();
+    await click(button('Capture design for review'));expect(capture).toHaveBeenCalledTimes(1);
+  });
 });

@@ -19,7 +19,7 @@ export function parseNativeReviewSubmission(value: unknown): NativeReviewSubmiss
   const keys = ['v','kind','eventId','actionId','requestId','taskId','expectedRev','expectedTaskVersion','artifactId','confirmationEventId','actor'];
   if (Object.keys(v).some(k => !keys.includes(k)) || v.v !== 1 || v.kind !== 'native_review' ||
       ['actionId','requestId','taskId','artifactId','confirmationEventId'].some(k => typeof v[k] !== 'string' || !UUID.test(v[k] as string)) ||
-      v.eventId !== `desk:${v.actionId}` || !Number.isSafeInteger(v.expectedRev) || Number(v.expectedRev) < 2 ||
+      v.eventId !== `desk:${v.actionId}` || !Number.isSafeInteger(v.expectedRev) || Number(v.expectedRev) < 1 ||
       !Number.isSafeInteger(v.expectedTaskVersion) || Number(v.expectedTaskVersion) < 1 ||
       !actor || typeof actor !== 'object' || Array.isArray(actor) || Object.keys(actor).some(k => !['userId','role'].includes(k)) ||
       typeof actor.userId !== 'string' || !UUID.test(actor.userId) ||

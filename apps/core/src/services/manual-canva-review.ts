@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { sql, RevisionRepository, TaskRepository, type Kysely, type Database } from '@hawa/db';
 import { savedDesignCopy } from './saved-design-copy.js';
 import { resolveQcProfileId, type CanvaQcEvaluation, type ExportRow } from './canva-task-outcome.js';
-import { latestRevisionCopy } from './native-revision-handoff.js';
+import { latestNativeCopy } from './initial-native-handoff.js';
 import { nativeRevisionIntent } from '@hawa/domain';
 import type { NativeRecoveryScope } from '@hawa/domain';
 import { lockNativeRecovery } from './lifecycle-native-scope.js';
@@ -25,8 +25,8 @@ export async function recordManualCanvaReview(
         AND e.event_type='task.created' ORDER BY e.aggregate_version LIMIT 1) AS source
     FROM hawa.tasks t WHERE t.tenant_id=${p.tenantId}::uuid AND t.id=${p.taskId}::uuid FOR UPDATE OF t`.execute(trx)).rows[0];
   const source = task?.source as { payload?: { body?: { workflow?: string } }; body?: { workflow?: string } } | undefined;
-  const revisionCopy = await latestRevisionCopy(trx, p.tenantId, p.taskId);
-  if (nativeRevisionIntent(task?.source) && !revisionCopy)
+  const revisionCopy = await latestNativeCopy(trx, p.tenantId, p.taskId);
+  if (nativeRevisionIntent(task?.source) && revisionCopy?.kind !== 'revision')
     return blocked('Confirm the exact revised copy against the current native design before recording review.');
   if (!task || (task.request_id && !p.lifecycle) || (!revisionCopy && (source?.payload?.body || source?.body)?.workflow !== 'canva_manual'))
     return { status: 'not_applicable', reason: 'The task is not a manual Desk request.' };
@@ -49,7 +49,7 @@ export async function recordManualCanvaReview(
   if (!checked || !png) return blocked('Capture PNG and check copy and fonts from the same saved Canva version before review.');
   if (revisionCopy) {
     const policy = (checked.content_check as { checkingPolicy?: { kind?: string; confirmationEventId?: string } })?.checkingPolicy;
-    if (policy?.kind !== 'revision_client_dna' || policy.confirmationEventId !== revisionCopy.id)
+    if (policy?.kind !== `${revisionCopy.kind}_client_dna` || policy.confirmationEventId !== revisionCopy.id)
       return blocked('Capture and check this design against the latest confirmed revised copy before review.');
   }
   const policyCurrent=(await sql<{current:boolean}>`SELECT hawa.canva_export_policy_current(o.tenant_id,o.client_id,COALESCE(o.metadata,'{}'::jsonb) || jsonb_build_object('taskId',o.task_id)) AS current
@@ -89,9 +89,11 @@ export async function recordManualCanvaReview(
     neutralManifest: { studio: 'canva', documentId: binding.canva_design_id, designId: binding.canva_design_id,
       copy, nodes: qc.sourceTextObjects, semanticCoverage: 'pptx_live_text_only', nativeVerification: 'unverified',
       checkingPolicy: (checked.content_check as {checkingPolicy?: unknown})?.checkingPolicy || null,
-      ...(revisionCopy ? { nativeRevisionHandoff: { confirmationEventId: revisionCopy.id,
-        parentTaskId: revisionCopy.parentTaskId, parentDesignId: revisionCopy.parentDesignId,
-        preservation: revisionCopy.preservation, nativePreservationVerified: false } } : {}),
+      ...(revisionCopy?.kind === 'revision' ? { nativeRevisionHandoff: { confirmationEventId: revisionCopy.id,
+        parentTaskId: revisionCopy.confirmation.parentTaskId, parentDesignId: revisionCopy.confirmation.parentDesignId,
+        preservation: revisionCopy.confirmation.preservation, nativePreservationVerified: false } } : {}),
+      ...(revisionCopy?.kind === 'initial' ? { nativeInitialHandoff: { confirmationEventId: revisionCopy.id,
+        requestId: revisionCopy.confirmation.requestId, separateDesign: revisionCopy.confirmation.separateDesign } } : {}),
       capturedSource: { artifactId: checked.id, sha256: checked.sha256, format: 'pptx', captureVersion: checked.capture_version },
       preview: { artifactId: png.id, sha256: png.sha256 }, bindingId: binding.id, bindingVersion: binding.version,
       ...(task.current_design_revision_id ? { revisedFrom: task.current_design_revision_id } : {}) },

@@ -1,0 +1,276 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "7b8de71ed015616c5a315cf67da07af31c77019a",
+  "branch": "worktree-wf_82dde19f-6dc-4 (from codex/research-grade-design-system)",
+  "status": "LOCAL_INITIAL_MANUAL_RECOVERY_QUALIFIED_NOT_NATIVE_OR_RELEASE",
+  "adr": "126",
+  "migration": "069_initial_native_policy.sql",
+  "requirements": [
+    "FR-029",
+    "FR-041",
+    "FR-042",
+    "FR-060",
+    "NFR-001",
+    "NFR-009",
+    "NFR-020",
+    "NFR-024"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/126_initial_manual_native_recovery.md",
+      "sha256": "0a6bf3aa8b690fce560697eb2947ddbfe092c9153b748d23803265a9850d1852"
+    },
+    {
+      "path": "api/canva-connect.openapi.json",
+      "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f"
+    },
+    {
+      "path": "apps/core/src/routes/canva.routes.ts",
+      "sha256": "4ff40a443df50055c5a8f565c8b3c51faa552c061ef4c5f2d98f7ab08d94dd2e"
+    },
+    {
+      "path": "apps/core/src/routes/lifecycle-design-proof.ts",
+      "sha256": "391c2ba9f224e76e89d03ea936cee0bad17444e2d4730afba6697a28ad31a457"
+    },
+    {
+      "path": "apps/core/src/services/canva-connect-service.ts",
+      "sha256": "51424d01bbaf01bd507143780c2dfb46564a3ba095c4f181fba75e1864bbb88a"
+    },
+    {
+      "path": "apps/core/src/services/canva-export-policy.ts",
+      "sha256": "0d090c35ccab3f9e67f6290ccb83b8bde17fdc58946eab19079893ec9a0001f4"
+    },
+    {
+      "path": "apps/core/src/services/initial-native-handoff.ts",
+      "sha256": "7f5529a95268d4911f4d695badc192b644749b4861103fe7094fba8c072406ee"
+    },
+    {
+      "path": "apps/core/src/services/lifecycle-native-review.ts",
+      "sha256": "e0b80bfa42339ef085d9ca09a3eb91acf394c58f48a3ed2df02d580aeda3a327"
+    },
+    {
+      "path": "apps/core/src/services/lifecycle-native-scope.ts",
+      "sha256": "14825c6cce0715758b9ee4fc77ce212610461c120456a56c72f54d4dcaeadc3f"
+    },
+    {
+      "path": "apps/core/src/services/lifecycle-projection.ts",
+      "sha256": "8ef802a27b6a01ba014157a9b9b433e5a282aa30ba93b17d7560a64456624d32"
+    },
+    {
+      "path": "apps/core/src/services/manual-canva-review.ts",
+      "sha256": "6d532ed66f1158a1aaa2ecc5ba70eeeb047bb44b5211bc5d3e1af2dbaec301c0"
+    },
+    {
+      "path": "apps/core/test/initial-native-recovery.test.ts",
+      "sha256": "411a77344607d3ad3bf3cc1b17a11b511798075f4aac77642d488ae9126b440c"
+    },
+    {
+      "path": "apps/core/test/canva-planner-accounting.test.ts",
+      "sha256": "a8c2de1ed91b19a13c5bc29d80861a26b13c9cd876fa293e46b08c23ee9d92f1"
+    },
+    {
+      "path": "apps/desk/src/api/client.ts",
+      "sha256": "a12577d20e3504caefa2c434af0f7785f37e54ecb4ca3e85f08261e6e3522759"
+    },
+    {
+      "path": "apps/desk/src/components/NativeReviewSubmit.tsx",
+      "sha256": "23bc9c44bb26dcca85e5356b876d79311d905b7fc8d7ff6a9b4f3baa72501c0c"
+    },
+    {
+      "path": "apps/desk/src/components/NativeRevisionHandoff.tsx",
+      "sha256": "f99ec32821022011b1cffa5850fd249e9ae60e3b46a05e31867449d98f55557a"
+    },
+    {
+      "path": "apps/desk/test/native-review-submit.test.ts",
+      "sha256": "6e5d45f11e92161275ff6224481d147a25f5e76408432cacede9bf5505d7f4fc"
+    },
+    {
+      "path": "apps/desk/test/native-revision-handoff.test.ts",
+      "sha256": "aed5b9bf9e0a6409c805ab882682c8f9c7f0476d9044cfb1140b6e385edec9ff"
+    },
+    {
+      "path": "apps/worker/src/lifecycle/request-lifecycle.ts",
+      "sha256": "53c28b06ea2bf4f6aeb58d89aa64fc4bc871225c2140232abd829db651561a0f"
+    },
+    {
+      "path": "apps/worker/test/request-lifecycle-initial-native-review.test.ts",
+      "sha256": "4b82ad2e9f26e2c1909a440162137dbde69434a64657a6b83eab861d2bed83d6"
+    },
+    {
+      "path": "apps/worker/test/request-lifecycle-native-review.test.ts",
+      "sha256": "fb6702a8d1ae1435a7e1ea576842285975897c8c767445305d42586951f6a06e"
+    },
+    {
+      "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
+      "sha256": "74ee194c2d776bb28f055f0759413a7c928f80155974037e88c2c5b0a8ea3a43"
+    },
+    {
+      "path": "packages/db/migrations/069_initial_native_policy.sql",
+      "sha256": "7101f0304df878f8ba80b17ae2f08e7425839d1b11a4d15c9e3bf90250ca868d"
+    },
+    {
+      "path": "packages/domain/src/native-review-submission.ts",
+      "sha256": "0e24a2d37eb43ff591ab5065165822324595265ab91dc5bbde992599b7ca765f"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "fc7490e450701d30e9a1fa0a37cd1994054e161ff74c75205cdb58efef77a2b3"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-recovery-red.log",
+      "sha256": "16d9128e85295c847265b57e571505b2db9c6973784b0ceeb49883499f471658"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-recovery-red.json",
+      "sha256": "ef0a3210786d897a1a51d53d4a25ea7d34d504d1e5c279e5d400eb4ed0a23802"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-recovery-focused1.json",
+      "sha256": "27390c8ac81c2dcb4087a39d403009d52942bdff8a0dfa34eb6c534c2dfd27a5"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-mutation-revise.log",
+      "sha256": "437b9277abd540ee1606b7f3d5e07367c9624ef14dd7dd344d4b1b97ec609ae3"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-affected1.json",
+      "sha256": "a9294446c14748162b0e831ca38118d347c424dd439fe2d7a1e03437fe803df0"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-affected1-fixups.log",
+      "sha256": "9674240a5aad0b8667b1b4fbaa456641f936191258f6abcb0671ae447b9e1e77"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-affected-final.json",
+      "sha256": "8248402ff05c5c0b31cbbddd7cfc2c9d33fe820a7f8070237794362675ae42a2"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-affected-final.log",
+      "sha256": "12019b48021208c9a02c46d17a90caa34fda708ae0f31d3485f411cf8d7c84ed"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-types.log",
+      "sha256": "8f9e52c571d5de0de744a3d2523401412955eb383ee5cd70cf29c2acb6c8e222"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-types-final.log",
+      "sha256": "9eaa8027f91e4dbd554867ba667ad7579594530096b954d09e2957685983607a"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-lint.log",
+      "sha256": "58f0e5ef018f0075e06683b72868b12482eeb04c8c0983c1ee802519324eb488"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-security.log",
+      "sha256": "95dc7aca6c7a8d9913908a33eb562ac198bf49b875c525e29ea10c7822595c26"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-desk-build.log",
+      "sha256": "a410c28e4609e0999641e981a7cdbcdf8f0283c2b7ec8fe13ed5e06d47e9d79e"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-full-suite.json",
+      "sha256": "5221c671f62a175cf363aa17be4fff6d343e384088c5f34398a07a244ff0c103"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-full-suite.log",
+      "sha256": "1a76a1ad2e208d4129ec1a5d6f3a28fd49e1d3de9d087d442c9bb58c78dfc46f"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-gap-without-standins.log",
+      "sha256": "23ea2cd03f52ec34c07831438fd6e5fc95e368c74b20274d03071aae88df69f9"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-r11.log",
+      "sha256": "424823310d9de62c44828dbf03e133501766d7fc560f45c575cfad62850f7c85"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-release-manifest.log",
+      "sha256": "6a8edd3a60e2a8bc978a942a7af2839bd8d95bf2f890f187ebf834c32069eef5"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-initial-native-validate.log",
+      "sha256": "520ed822a6168097031246f2cf54c7d0b26bf27057fe64f3e04192ce461d0b42"
+    }
+  ],
+  "acceptance": {
+    "files": 29,
+    "passed": 305,
+    "failed": 0,
+    "skipped": 0,
+    "environment": "Isolated PostgreSQL clones; restricted hawa_app runtime connections; synthetic Canva transport; in-memory RequestLifecycle harness through the signed public gateway route; all database runs used local empty stand-in migrations 065-068 (not committed) so the versioned runner accepts 069",
+    "new_cases": {
+      "core_postgres": 18,
+      "worker_owner": 5,
+      "desk": 2
+    },
+    "prior_attempts": [
+      "Initial red: 4 files, 20 failed/11 passed. Worker parse refused expectedRev 1; Core refused rev-1 binding as LIFECYCLE_OWNED; Desk had no initial variant and discarded a rev-1 retained action. The 11 passes were the existing ADR-113/114 Desk cases and fence cases that already refused.",
+      "First implementation focused run: 4 files/31 passed.",
+      "Mutation check: disabling the Core revision guard and the owner revise refusal failed 3 cases (approval journey, owner journey, Core revision refusal); source restored exactly from saved copies.",
+      "First connected run: 29 files, 303 passed/2 failed. ADR-114 test listed expectedRev 1 as invalid (superseded by this decision; now 0). canva-planner-accounting hard-coded the upgrade list through 063 while base already carries 064; it now derives the list from the migration directory after 055 and keeps the explicit 056-063 prefix.",
+      "First test type check: 7 errors in the new worker test (typed mock not assignable to CoreInternal); fixed with a typed wrapper and no explicit any."
+    ]
+  },
+  "checks": {
+    "source_types": "passed (tsc -b)",
+    "script_types": "passed",
+    "strict_test_roots": 535,
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "security": "self-test passed; 0 secrets; 53 justified allowlist hits",
+    "desk_build": "passed",
+    "full_suite": {
+      "files": 534,
+      "passed_files": 521,
+      "failed_files": 6,
+      "skipped_files": 7,
+      "tests_passed": 4474,
+      "tests_failed": 7,
+      "tests_skipped": 60,
+      "failures": [
+        "route-inventory: fixture lacks amendment-observation, revision-copy and native-review routes added by earlier packages; this package adds no route",
+        "startup-schema-check: expects last upgrade 060; base already carries 064",
+        "schema-upgrade: expected list ends at 062; base already carries 063-064",
+        "blob-gc: coverage list omits blob columns from migrations 061/062",
+        "studio-ledger (2): fake database lacks transaction(); test does not reach files changed here",
+        "r11-release-gate: the release manifest checked by scripts/verify_release_manifest.ts is stale at base (apps/core/src/app.ts hash, build commit 00a29a92, prompt source hashes, migration target 060 while base carries 064); rerun after MANIFEST.json refresh still fails for those reasons. This package does not regenerate the release manifest"
+      ],
+      "failure_attribution": "All six are stale expectations at base, inferred from the base tree (expected values predate migrations/routes already present at 7b8de71e); they were not executed at base in this checkout. The full-suite run used local contiguous stand-ins 065-068 (empty BEGIN/COMMIT), removed before commit."
+    }
+  },
+  "proof_scope": [
+    "origin from immutable rev-1 open receipt (manual, autoGenerate false, same root task) and absence of Studio run state",
+    "rev-1 manual preparation under lifecycle lock, active-user snapshot, human role and explicit request headers",
+    "separate design: global binding uniqueness refuses a design linked to another task",
+    "exact-copy confirmation with keyed/concurrent replay, conflicting key, stale basis, missing assertions, no-scope refusal",
+    "capture refused before confirmation; capture retains PNG/PPTX without advancing the request",
+    "signed submission through public route, gateway and owner: lost Core reply, lost gateway reply after state save, exact replay",
+    "fresh restricted hawa_app connections replay the hash-bound receipt; conflicting body refused; one revision and one QA run",
+    "stale confirmation, binding, task version, capture and disabled actor refused without advancing",
+    "automatic, fallen-back automatic, stale header, later stage and run-bearing requests fenced with no remote call",
+    "migration 069 policy currency: new confirmation or binding change invalidates; policy-less and other-kind captures refused",
+    "run-free owner state: approval and delivery start/finish at owner level; revise refused in owner and Core (rejection not separately exercised)",
+    "exact old submission after approval and delivery replays without rewinding",
+    "Desk initial variant and rev-1 retained submission across remount"
+  ],
+  "not_executed": [
+    "live Canva binding, export, native preservation or reopen on the real account",
+    "Core delivery-start/finish projection for a manual-origin request (owner transitions only, with mocked Core)",
+    "deployed Restate/OS process-kill drill",
+    "production migration; the committed branch alone has a 064->069 gap: discoverMigrations refuses it, so test template setup (and every database test) fails without 065-068 (gap-without-standins log)",
+    "full suite at base for attribution of the six pre-existing failures",
+    "human design, language or preservation judgment",
+    "deployment, full release gate and independent recovery"
+  ],
+  "next": [
+    "lead merges 065-068 so 069 is contiguous, then rerun startup-schema/schema-upgrade expectations",
+    "decide whether manual-origin requests need an office-owned revision route instead of rejection",
+    "exercise Core delivery projection for a manual-origin request with a configured deliverable store",
+    "owner-approved live native qualification of one initial manual request",
+    "remaining six-package human, release and recovery gates"
+  ]
+}

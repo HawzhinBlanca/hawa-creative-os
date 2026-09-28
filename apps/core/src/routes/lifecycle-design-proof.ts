@@ -14,7 +14,7 @@ export function nativeRecoveryHeaders(c: { req: { header(name: string): string |
   const requestId = c.req.header('X-Hawa-Manual-Request-Id') || '';
   const revision = c.req.header('X-Hawa-Manual-Request-Rev') || '';
   const rev = Number(revision);
-  return UUID.test(requestId) && /^[1-9][0-9]*$/.test(revision) && Number.isSafeInteger(rev) && rev >= 2
+  return UUID.test(requestId) && /^[1-9][0-9]*$/.test(revision) && Number.isSafeInteger(rev) && rev >= 1
     ? { requestId, rev } : undefined;
 }
 

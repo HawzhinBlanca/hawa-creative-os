@@ -90,6 +90,22 @@ export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'sta
     finishEventId?: string; finishSha256?: string; finishResult?: DeliveryFinishedReply };
 }
 
+/**
+ * ADR-126: an initial manual request after its owner-controlled native review. It has no design
+ * run, never starts one, and has no requester revision round: the office approves or rejects it.
+ */
+export interface ManualOriginLifecycleState extends Omit<AutomaticLifecycleState,
+  'stage' | 'runId' | 'round' | 'designInput' | 'question' | 'revisionRound'> {
+  origin: 'manual';
+  stage: 'in_review' | 'approved' | 'rejected' | 'delivering' | 'delivered';
+}
+
+export type LifecycleState = ManualLifecycleState | AutomaticLifecycleState | ManualOriginLifecycleState;
+/** States that own a reviewed draft: an automatic request, or a manual one after native review. */
+type ReviewOwnedState = AutomaticLifecycleState | ManualOriginLifecycleState;
+const reviewOwned = (state: LifecycleState): state is ReviewOwnedState =>
+  'runId' in state || ('origin' in state && state.origin === 'manual');
+
 export interface OfficeRevisionEvent {
   v: 1; eventId: string; requestId: string; taskId: string; revisionId: string;
   actionId: string;
@@ -171,9 +187,9 @@ const QUESTION_SECOND_REMINDER_DELAY_MS = 5 * 24 * 60 * 60_000;
 
 export interface AutomaticOpenContext {
   key: string;
-  get(name: string): Promise<ManualLifecycleState | AutomaticLifecycleState | null>;
+  get(name: string): Promise<LifecycleState | null>;
   run<T>(name: string, action: () => Promise<T>): Promise<T>;
-  set(name: string, value: ManualLifecycleState | AutomaticLifecycleState): void;
+  set(name: string, value: LifecycleState): void;
   send(message: OutboundMessage): void;
   startDesign(input: DesignRunInput): void;
   startDelivery?(input: DeliveryInput): void;
@@ -217,7 +233,8 @@ function canonical(value: unknown): string {
 const hashOf = (event: unknown) => createHash('sha256').update(canonical(event)).digest('hex');
 const invalid = (reason: string) => new restate.TerminalError(`LIFECYCLE_OPEN_REFUSED: ${reason}`, { errorCode: 409 });
 
-function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>, state: ManualLifecycleState): void {
+function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>,
+  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId'>): void {
   ctx.send({
     v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
     text: 'Request received. An art director will review it.', class: 'critical',
@@ -449,21 +466,25 @@ export async function recordNativeReview(ctx: AutomaticOpenContext, core: CoreIn
   const event=parseNativeReviewSubmission(raw);
   if (!event || ctx.key !== event.requestId) throw invalid('invalid native review submission');
   const prior=await ctx.get('lc'),fingerprint=hashOf(event);
-  if (!prior || !('runId' in prior) || prior.requestId !== event.requestId) return {accepted:false,code:'WRONG_STAGE'};
-  if (prior.nativeReview?.eventId === event.eventId) {
+  if (!prior || prior.requestId !== event.requestId) return {accepted:false,code:'WRONG_STAGE'};
+  if ('nativeReview' in prior && prior.nativeReview?.eventId === event.eventId) {
     if (prior.nativeReview.sha256 !== fingerprint) throw invalid('native review action has different content');
     return prior.nativeReview.reply;
   }
-  if (prior.stage !== 'manual' || prior.rev !== event.expectedRev || prior.taskId !== event.taskId)
+  // An automatic revision (ADR-114) or the initial manual request itself at revision 1 (ADR-126).
+  const initial=!reviewOwned(prior);
+  if (prior.stage !== 'manual' || prior.rev !== event.expectedRev || prior.taskId !== event.taskId || (initial && prior.rev !== 1))
     return {accepted:false,code:'WRONG_STAGE'};
   const reply=await ctx.run(`native-review:${event.actionId}`,()=>core.post<NativeReviewReply>(
     `/internal/lifecycle/${encodeURIComponent(event.requestId)}/native-review`,event));
   if (!reply || reply.accepted !== true || reply.requestId !== event.requestId || reply.taskId !== event.taskId ||
       reply.actionId !== event.actionId || reply.rev !== event.expectedRev+1 || reply.stage !== 'in_review' ||
       !UUID.test(reply.revisionId) || typeof reply.qaPassed !== 'boolean') throw new Error('Core did not return a valid native review projection');
-  ctx.set('lc',{...prior,stage:'in_review',rev:reply.rev,question:undefined,officeRevision:undefined,
-    outcome:{eventId:event.eventId,sha256:fingerprint,status:'NEEDS_REVIEW',revisionId:reply.revisionId},
-    nativeReview:{eventId:event.eventId,sha256:fingerprint,reply}});
+  const reviewed={eventId:event.eventId,sha256:fingerprint,status:'NEEDS_REVIEW',revisionId:reply.revisionId};
+  ctx.set('lc',initial
+    ? {...prior,origin:'manual',stage:'in_review',rev:reply.rev,outcome:reviewed,nativeReview:{eventId:event.eventId,sha256:fingerprint,reply}}
+    : {...prior,stage:'in_review',rev:reply.rev,question:undefined,officeRevision:undefined,outcome:reviewed,
+      nativeReview:{eventId:event.eventId,sha256:fingerprint,reply}});
   return reply;
 }
 
@@ -489,7 +510,7 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
   }
   const fingerprint = hashOf(event);
   const prior = await ctx.get('lc');
-  if (!prior || !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  if (!prior || !reviewOwned(prior)) return { accepted: false, code: 'WRONG_STAGE' };
   const expectedRev = event.expectedRev;
   const nextRev = expectedRev + 1;
   if (prior.rev === nextRev) {
@@ -504,6 +525,8 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
       approvalId: prior.officeRevision.approvalId, stage: prior.stage as 'manual' | 'approved' | 'rejected', rev: nextRev };
   }
   if (prior.rev !== expectedRev || prior.stage !== 'in_review') return { accepted: false, code: 'WRONG_STAGE' };
+  // ADR-126: a manual stage after revise would route the requester's reply into a new design run.
+  if (event.kind === 'revise' && !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
   if (prior.taskId !== event.taskId || prior.outcome?.revisionId !== event.revisionId) {
     return { accepted: false, code: 'NOT_CURRENT_DRAFT' };
   }
@@ -528,17 +551,18 @@ export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: Core
       projected.rev !== nextRev || projected.stage !== expectedStage) {
     throw new Error('Core did not return a valid office revision projection');
   }
-  const next: AutomaticLifecycleState = { ...prior, stage: expectedStage, rev: nextRev,
-    officeRevision: { eventId: event.eventId, sha256: fingerprint,
-      actionId: event.actionId, revisionId: event.revisionId, approvalId: projected.approvalId, kind: event.kind } };
+  const officeRevision = { eventId: event.eventId, sha256: fingerprint,
+    actionId: event.actionId, revisionId: event.revisionId, approvalId: projected.approvalId, kind: event.kind };
+  const next: ReviewOwnedState = 'runId' in prior ? { ...prior, stage: expectedStage, rev: nextRev, officeRevision }
+    : { ...prior, stage: expectedStage as 'approved' | 'rejected', rev: nextRev, officeRevision };
   ctx.set('lc', next);
   if (event.kind === 'revise') sendOfficeRevisionNotice(ctx, next, event);
   return { accepted: true, requestId: event.requestId, taskId: event.taskId, revisionId: event.revisionId,
     actionId: event.actionId, approvalId: projected.approvalId, stage: expectedStage, rev: nextRev };
 }
 
-function sendOfficeRevisionNotice(ctx: AutomaticOpenContext, state: AutomaticLifecycleState,
-  event: OfficeRevisionEvent): void {
+function sendOfficeRevisionNotice(ctx: AutomaticOpenContext,
+  state: Pick<ReviewOwnedState, 'requestId' | 'rev' | 'chatId' | 'tenantId' | 'taskId'>, event: OfficeRevisionEvent): void {
   const comment = event.revisionRequest?.comment?.trim() || event.reason.trim();
   const round = Math.floor((state.rev - 1) / 2);
   ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:office-revision-notify`,
@@ -596,7 +620,7 @@ export async function recordOfficeDeliveryStart(ctx: AutomaticOpenContext, core:
   }
   const sha256 = hashOf(event);
   const prior = await ctx.get('lc');
-  if (!prior || !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  if (!prior || !reviewOwned(prior)) return { accepted: false, code: 'WRONG_STAGE' };
   if (prior.delivery?.startEventId === event.eventId) {
     if (prior.delivery.startSha256 !== sha256) throw invalid('this delivery action was recorded with different content');
     if (!prior.delivery.finishResult) ctx.startDelivery?.(prior.delivery.input);
@@ -632,7 +656,7 @@ export async function recordOfficeDeliveryStart(ctx: AutomaticOpenContext, core:
       projected.delivery.reportTo !== 'lifecycle' || projected.delivery.requestRev !== nextRev) {
     throw new Error('Core did not return a valid request-owned delivery claim');
   }
-  const next: AutomaticLifecycleState = { ...prior, stage: 'delivering', rev: nextRev,
+  const next: ReviewOwnedState = { ...prior, stage: 'delivering', rev: nextRev,
     delivery: { startEventId: event.eventId, startSha256: sha256, actionId: event.actionId,
       input: projected.delivery } };
   ctx.set('lc', next);
@@ -655,7 +679,7 @@ export async function recordDeliveryFinished(ctx: AutomaticOpenContext, core: Co
   }
   const sha256 = hashOf(event);
   const prior = await ctx.get('lc');
-  if (!prior || !('runId' in prior) || !prior.delivery) throw invalid('this request has no delivery to finish');
+  if (!prior || !reviewOwned(prior) || !prior.delivery) throw invalid('this request has no delivery to finish');
   if (prior.delivery.finishEventId === event.eventId) {
     if (prior.delivery.finishSha256 !== sha256 || !prior.delivery.finishResult) {
       throw invalid('the delivery result was recorded with different content');
@@ -685,7 +709,7 @@ export async function recordDeliveryFinished(ctx: AutomaticOpenContext, core: Co
   const reply: DeliveryFinishedReply = { accepted: true, requestId: event.requestId, taskId: event.taskId,
     approvalId: event.approvalId, deliveryId: event.deliveryId,
     stage: projected.stage, taskState: projected.taskState, rev: nextRev };
-  const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: nextRev,
+  const next: ReviewOwnedState = { ...prior, stage: projected.stage, rev: nextRev,
     delivery: { ...prior.delivery, finishEventId: event.eventId, finishSha256: sha256,
       finishResult: reply } };
   ctx.set('lc', next);
@@ -819,7 +843,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
           withInvocationLogContext(ctx, { requestId: event?.requestId, tenantId: event?.tenantId }, () =>
             event?.draft?.autoGenerate === true ? openAutomaticRequest({
               key: ctx.key,
-              get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+              get: (name) => ctx.get<LifecycleState>(name),
               run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
               set: (name, value) => ctx.set(name, value),
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
@@ -843,7 +867,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
         async (ctx: restate.ObjectContext, event: DesignFinishedEvent) =>
           withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordDesignFinished({
             key: ctx.key,
-            get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+            get: (name) => ctx.get<LifecycleState>(name),
             run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
             set: (name, value) => ctx.set(name, value),
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
@@ -856,7 +880,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
         async (ctx: restate.ObjectContext, event: QuestionSentEvent) =>
           withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordQuestionSent({
             key: ctx.key,
-            get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+            get: (name) => ctx.get<LifecycleState>(name),
             run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
             set: (name, value) => ctx.set(name, value),
             now: () => ctx.date.now(),
@@ -872,7 +896,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
       nativeReview: restate.handlers.object.exclusive(
         { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
         async (ctx: restate.ObjectContext,event: NativeReviewSubmission)=>withInvocationLogContext(ctx,{requestId:event?.requestId},()=>recordNativeReview({
-          key:ctx.key,get:name=>ctx.get<ManualLifecycleState|AutomaticLifecycleState>(name),
+          key:ctx.key,get:name=>ctx.get<LifecycleState>(name),
           run:(name,action)=>ctx.run(name,action,PROJECT_RETRY),set:(name,value)=>ctx.set(name,value),
           send:()=>{throw new Error('nativeReview does not send unverified notices');},
           startDesign:()=>{throw new Error('nativeReview cannot start generation');},
@@ -884,7 +908,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
           withInvocationLogContext<OfficeDeliveryStartReply | OfficeRevisionReply>(ctx, { requestId: event?.requestId }, () => {
             const handlers: AutomaticOpenContext = {
             key: ctx.key,
-            get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+            get: (name) => ctx.get<LifecycleState>(name),
             run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
             set: (name, value) => ctx.set(name, value),
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
@@ -909,7 +933,7 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
         async (ctx: restate.ObjectContext, event: RequesterDecisionEvent & { newTaskId: string }) =>
           withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordRequesterDecision({
             key: ctx.key,
-            get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+            get: (name) => ctx.get<LifecycleState>(name),
             run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
             set: (name, value) => ctx.set(name, value),
             send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
@@ -922,22 +946,22 @@ export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv(
         async (ctx: restate.ObjectContext, event: DeliveryFinishedEvent) =>
           withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordDeliveryFinished({
             key: ctx.key,
-            get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+            get: (name) => ctx.get<LifecycleState>(name),
             run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
             set: (name, value) => ctx.set(name, value),
             send: () => { throw new Error('deliveryFinished cannot send from this transition'); },
             startDesign: () => { throw new Error('deliveryFinished cannot start a design run'); },
           }, core, event)),
       ),
-      get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ManualLifecycleState | AutomaticLifecycleState | null> =>
-        (await ctx.get<ManualLifecycleState | AutomaticLifecycleState>('lc')) ?? null),
+      get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<LifecycleState | null> =>
+        (await ctx.get<LifecycleState>('lc')) ?? null),
       /** Fires after a delay when the requester has not submitted a revision directive. */
       reminderTick: restate.handlers.object.exclusive(
         { idempotencyRetention: { days: 2 }, journalRetention: { days: 2 } },
         async (ctx: restate.ObjectContext, event: ReminderTickEvent) =>
           withInvocationLogContext(ctx, { requestId: event?.requestId }, async () => {
             return recordReminderTick({ key: ctx.key,
-              get: (name) => ctx.get<ManualLifecycleState | AutomaticLifecycleState>(name),
+              get: (name) => ctx.get<LifecycleState>(name),
               send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
                 .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
             }, event);

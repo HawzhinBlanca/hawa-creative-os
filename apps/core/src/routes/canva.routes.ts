@@ -9,7 +9,7 @@ import { rejectUnownedLifecycleDesignWrite, nativeRecoveryHeaders } from './life
 import type { NativeActorScope } from '../services/lifecycle-native-scope.js';
 import { registerNativeReviewRoutes } from './native-review.routes.js';
 import { recordManualCanvaReview, type CaptureReview } from '../services/manual-canva-review.js';
-import { confirmNativeRevisionCopy } from '../services/native-revision-handoff.js';
+import { confirmNativeCopy } from '../services/initial-native-handoff.js';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
   registerNativeReviewRoutes(ctx);
@@ -57,7 +57,7 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
   ctx.registerRoute('post','/tasks/:taskId/canva/revision-copy',protect(async(c,s)=>{
     const body=await c.req.json().catch(()=>({}));
     return c.json(await withRlsContext(ctx.db!,{tenantId:s.tenantId,userId:s.actorId,role:s.role},
-      db=>confirmNativeRevisionCopy(db,s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body)));
+      db=>confirmNativeCopy(db,s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body)));
   }));
   ctx.registerRoute('get','/tasks/:taskId/canva/editor',protect(async(c,s,api)=>c.json(await api.editor(s,c.req.param('taskId')))));
   ctx.registerRoute('get','/tasks/:taskId/canva/amendment-observation',protect(async(c,s,api)=>c.json(await api.amendmentObservation(s,c.req.param('taskId')))));

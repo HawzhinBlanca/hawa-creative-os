@@ -504,7 +504,7 @@ class HawaApiClient {
     disconnect: () => this.request<any>('/integrations/canva/disconnect',{method:'POST'}),
     authorize: () => this.request<{authorizationUrl:string}>('/integrations/canva/authorize',{method:'POST'}),
     taskState: (id:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva`),
-    confirmRevisionCopy: (id:string,key:string,body:{expectedTaskVersion:number;basisSha256:string;copy:string[];reviewedCurrentDesign:boolean;preservedUnrequestedChanges:boolean},scope?:NativeRecoveryScope) =>
+    confirmRevisionCopy: (id:string,key:string,body:{expectedTaskVersion:number;basisSha256:string;copy:string[];reviewedCurrentDesign:boolean}&({preservedUnrequestedChanges:boolean}|{separateRequestDesign:boolean}),scope?:NativeRecoveryScope) =>
       this.request<{confirmationEventId:string;replayed:boolean}>(`/tasks/${encodeURIComponent(id)}/canva/revision-copy`,
         {method:'POST',headers:{'Idempotency-Key':key,...nativeRecoveryHeaders(scope)},body:JSON.stringify(body)}),
     submitNativeReview: (id:string,key:string,body:NativeReviewBody)=>this.request<NativeReviewReply>(`/tasks/${encodeURIComponent(id)}/native-review`,

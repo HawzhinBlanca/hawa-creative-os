@@ -5,6 +5,8 @@ import type { NativeRecoveryScope } from '@hawa/domain';
 interface Handoff {
   available: boolean;
   message: string;
+  /** ADR-126: an initial manual request has no parent design to preserve. */
+  kind?: 'initial';
   lifecycleOwned?: boolean;
   nativeRecovery?: NativeRecoveryScope;
   parentEditUrl?: string | null;
@@ -24,41 +26,50 @@ export function NativeRevisionHandoff({taskId,handoff,busy,onAction,onCapture}: 
   const [editUrl,setEditUrl]=useState('');
   const key=useRef<string | null>(null);
   const basis=useRef<string | undefined>(undefined);
+  const initial=handoff.kind==='initial';
   useEffect(()=>{
     setCopy(handoff.copy?.length?handoff.copy:['']);setReviewed(false);setPreserved(false);setDirty(false);key.current=null;basis.current=handoff.basisSha256;
   },[taskId,handoff.basisSha256,handoff.confirmedEventId,handoff.taskVersion,handoff.nativeRecovery?.rev]);
   const edit=(parts:string[])=>{setCopy(parts);setDirty(true);setReviewed(false);setPreserved(false);key.current=null;};
   const canConfirm=handoff.available&&(!handoff.lifecycleOwned||Boolean(handoff.nativeRecovery))&&Boolean(handoff.bindingId)&&reviewed&&preserved&&
     copy.length>0&&copy.every(part=>part.trim().length>0)&&copy.join('\n').length<=16000;
-  return <section aria-label="Native revision handoff">
-    <h5>Preserve the current design</h5>
+  const confirmLabel=initial?'Confirm final copy':'Confirm revised copy';
+  return <section aria-label={initial?'Native design handoff':'Native revision handoff'}>
+    <h5>{initial?'Link this request’s design':'Preserve the current design'}</h5>
     <p>{handoff.message}</p>
     {handoff.directive&&<p><strong>Requested change:</strong> {handoff.directive}</p>}
     {handoff.parentEditUrl&&<a className="btn" href={handoff.parentEditUrl} target="_blank" rel="noopener noreferrer">Open original Canva design</a>}
     {handoff.lifecycleOwned&&!handoff.nativeRecovery?<p>Continue through this request’s current office action. Its workflow owns design changes.</p>:handoff.available&&<>
-      {!handoff.bindingId&&<p>In Canva, duplicate the current original, make the requested changes, then use “Link this task’s Canva design” to link that separate copy.</p>}
+      {!handoff.bindingId&&<p>{initial
+        ?'In Canva, design this request as its own separate design, then use “Link this task’s Canva design” to link it.'
+        :'In Canva, duplicate the current original, make the requested changes, then use “Link this task’s Canva design” to link that separate copy.'}</p>}
       {handoff.nativeRecovery&&!handoff.bindingId&&<form onSubmit={event=>{event.preventDefault();void onAction(async()=>{
         await apiClient.tasks.bindCanva(taskId,editUrl.trim(),handoff.nativeRecovery);setEditUrl('');
       });}}>
-        <label>Separate Canva revision copy<input type="url" required value={editUrl} disabled={busy} onChange={event=>setEditUrl(event.target.value)}/></label>
+        <label>{initial?'Separate Canva design for this request':'Separate Canva revision copy'}<input type="url" required value={editUrl} disabled={busy} onChange={event=>setEditUrl(event.target.value)}/></label>
         <button className="btn" disabled={busy||!editUrl.trim()}>Link this task’s Canva design</button>
       </form>}
-      <p>Review every final text block below against the edited native copy. Keep exact spelling and punctuation. This records copy for export checks; it does not approve the design.</p>
+      <p>Review every final text block below against the {initial?'linked native design':'edited native copy'}. Keep exact spelling and punctuation. This records copy for export checks; it does not approve the design.</p>
       {copy.map((part,index)=><div key={index}>
         <label>Final copy block {index+1}<textarea value={part} dir="auto" disabled={busy} onChange={event=>edit(copy.map((p,i)=>i===index?event.target.value:p))}/></label>
         <button className="btn" disabled={busy||copy.length===1} onClick={()=>edit(copy.filter((_,i)=>i!==index))}>Remove block {index+1}</button>
       </div>)}
       <button className="btn" disabled={busy||copy.length>=128} onClick={()=>edit([...copy,''])}>Add copy block</button>
-      <label><input type="checkbox" checked={reviewed} disabled={busy} onChange={event=>{setReviewed(event.target.checked);key.current=null;}}/> I checked the current original and the exact revised text in the linked copy.</label>
-      <label><input type="checkbox" checked={preserved} disabled={busy} onChange={event=>{setPreserved(event.target.checked);key.current=null;}}/> I checked that unrelated manual changes are preserved.</label>
+      <label><input type="checkbox" checked={reviewed} disabled={busy} onChange={event=>{setReviewed(event.target.checked);key.current=null;}}/> {initial
+        ?'I checked the exact final text in the linked design.'
+        :'I checked the current original and the exact revised text in the linked copy.'}</label>
+      <label><input type="checkbox" checked={preserved} disabled={busy} onChange={event=>{setPreserved(event.target.checked);key.current=null;}}/> {initial
+        ?'I checked that the linked design is this request’s own separate Canva design.'
+        :'I checked that unrelated manual changes are preserved.'}</label>
       <button className="btn" disabled={busy||!canConfirm} onClick={()=>void onAction(async()=>{
         if(basis.current!==handoff.basisSha256)throw new Error('The linked design changed. Review it again.');
         key.current ||= crypto.randomUUID();
+        const assertions=initial?{reviewedCurrentDesign:reviewed,separateRequestDesign:preserved}:{reviewedCurrentDesign:reviewed,preservedUnrequestedChanges:preserved};
         await apiClient.canva.confirmRevisionCopy(taskId,key.current,{expectedTaskVersion:handoff.taskVersion!,basisSha256:handoff.basisSha256!,copy,
-          reviewedCurrentDesign:reviewed,preservedUnrequestedChanges:preserved},handoff.nativeRecovery);
-      })}>Confirm revised copy</button>
-      {handoff.confirmedEventId&&!dirty&&<p role="status">Revised copy recorded. Capture the native design for review, then inspect the resulting files.</p>}
-      <button className="btn" disabled={busy||!handoff.confirmedEventId||dirty} onClick={onCapture}>Capture revised design for review</button>
+          ...assertions},handoff.nativeRecovery);
+      })}>{confirmLabel}</button>
+      {handoff.confirmedEventId&&!dirty&&<p role="status">{initial?'Final copy':'Revised copy'} recorded. Capture the native design for review, then inspect the resulting files.</p>}
+      <button className="btn" disabled={busy||!handoff.confirmedEventId||dirty} onClick={onCapture}>{initial?'Capture design for review':'Capture revised design for review'}</button>
     </>}
   </section>;
 }
