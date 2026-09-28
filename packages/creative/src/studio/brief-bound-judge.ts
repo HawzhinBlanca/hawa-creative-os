@@ -87,6 +87,16 @@ export class BriefBoundJudgeReplyError extends Error {
   }
 }
 
+/**
+ * Bounds on the judge input. Core does not bound a request's instructions, and an emailed request
+ * with its quoted thread is routinely longer than a few thousand characters, so the instructions
+ * may use most of the packet; the whole user text stays under MAX_USER_TEXT_CHARS. What cannot fit
+ * is refused with BRIEF_BOUND_JUDGE_INPUT_INVALID, recorded by Core, never truncated.
+ */
+export const MAX_BRIEF_INSTRUCTIONS_CHARS = 24_000;
+const MAX_BRIEF_ITEM_CHARS = 1_000;
+const MAX_USER_TEXT_CHARS = 30_000;
+
 const refuse = (message: string): never => { throw new BriefBoundJudgeInputError(message); };
 const boundedText = (value: unknown, max: number, label: string): string | undefined => {
   if (value === undefined) return undefined;
@@ -95,7 +105,7 @@ const boundedText = (value: unknown, max: number, label: string): string | undef
 };
 const boundedList = (value: unknown, label: string): string[] | undefined => {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.length > 20 || value.some((v) => typeof v !== 'string' || v.length > 300)) {
+  if (!Array.isArray(value) || value.length > 20 || value.some((v) => typeof v !== 'string' || v.length > MAX_BRIEF_ITEM_CHARS)) {
     refuse(`The brief's ${label} must be a bounded list of short texts.`);
   }
   const items = (value as string[]).map((v) => v.trim()).filter(Boolean);
@@ -120,7 +130,7 @@ function normalizeBrief(brief: BriefBoundJudgeBrief) {
     return role ? { copyIndex: block.copyIndex, role, text: block.text } : { copyIndex: block.copyIndex, text: block.text };
   }).sort((a, b) => a.copyIndex - b.copyIndex);
   const context = {
-    instructions: boundedText(brief.instructions, 6000, 'instructions'),
+    instructions: boundedText(brief.instructions, MAX_BRIEF_INSTRUCTIONS_CHARS, 'instructions'),
     occasion: boundedText(brief.occasion, 300, 'occasion'),
     audience: boundedText(brief.audience, 300, 'audience'),
     must: boundedList(brief.must, 'requirements'),
@@ -165,7 +175,7 @@ export function buildBriefBoundJudgeText(brief: BriefBoundJudgeBrief, options: {
         ? ' Image 3 is the client\'s style reference: use it only for communication and aesthetic judgments, never as copy.'
         : ''),
   ].join('\n');
-  if (userText.length > 30_000) refuse('The brief exceeds the bounded judge input.');
+  if (userText.length > MAX_USER_TEXT_CHARS) refuse('The brief exceeds the bounded judge input.');
   return { systemText: SYSTEM_TEXT, userText };
 }
 

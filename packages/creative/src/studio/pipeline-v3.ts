@@ -1419,8 +1419,8 @@ export interface WinnerSelectionV3 {
    * composite_judge_unreliable — the judge picked, then failed to beat a degraded copy of its own
    *   pick; a judge that cannot see that is not trusted, and the higher composite stands.
    * composite_judge_uncertain — (brief-bound challenger) ties, abstention, a position flip or a
-   *   self-contradicted pick left the pair undecided; the higher composite stands and a human
-   *   choice is recommended.
+   *   self-contradicted pick left the pair undecided, or the degraded canary rendered identically
+   *   so the pick could not be tested; the higher composite stands and a human choice is recommended.
    */
   decidedBy: 'single_candidate' | 'judge' | 'composite_after_tie' | 'composite_judge_unreliable' | 'composite_judge_uncertain';
   /** The incumbent's match. Null when the challenger judged or no judge ran. */
@@ -1436,8 +1436,11 @@ export interface WinnerSelectionV3 {
   /** The challenger's pair and canary, when it judged. */
   briefBound?: {
     match: BriefBoundPairMatch;
-    canaryMatch: BriefBoundPairMatch;
-    canaryPassed: boolean;
+    /** Null when the canary could not be formed; see canaryUnavailable. */
+    canaryMatch: BriefBoundPairMatch | null;
+    /** Null when no canary ran: an untested pick is not trusted. */
+    canaryPassed: boolean | null;
+    canaryUnavailable?: 'degraded_canary_identical_bytes';
     subject: RankedCandidateV3;
   };
 }
@@ -1571,22 +1574,32 @@ async function selectWinnerBriefBoundV3(
   const judgePick = match.winnerId === firstId ? first : match.winnerId === secondId ? second : null;
   const tentative = judgePick ?? first;
   const canaryRenderOptions = renderOptionsFor(tentative);
+  const chosenPng = renderLayoutV2(tentative.layout, canaryRenderOptions).png;
+  const degradedPng = renderLayoutV2(createDegradedCanaryLayout(tentative.layout), canaryRenderOptions).png;
+  const common = { match: null, canary: null, protocol: 'brief_bound_v1' as const };
+  if (chosenPng.equals(degradedPng)) {
+    // The degradation touches only title and body roles; without them the canary is the same image
+    // and cannot test the judge. No call is spent on it, and an untested pick is not trusted.
+    const briefBound = { match, canaryMatch: null, canaryPassed: null, canaryUnavailable: 'degraded_canary_identical_bytes' as const,
+      subject: tentative };
+    return { ...common, briefBound, winner: first, runnerUp: second, decidedBy: 'composite_judge_uncertain',
+      judgeReliable: null, humanChoiceRecommended: true };
+  }
   const canaryMatch = await compareBriefBoundWithOrderSwap(
-    { id: 'chosen', png: renderLayoutV2(tentative.layout, canaryRenderOptions).png },
-    { id: 'degraded_canary', png: renderLayoutV2(createDegradedCanaryLayout(tentative.layout), canaryRenderOptions).png },
+    { id: 'chosen', png: chosenPng },
+    { id: 'degraded_canary', png: degradedPng },
     judgeOptions
   );
   const canaryPassed = canaryMatch.winnerId === 'chosen';
   const briefBound = { match, canaryMatch, canaryPassed, subject: tentative };
-  const common = { match: null, canary: null, protocol: 'brief_bound_v1' as const, briefBound };
   if (!judgePick) {
-    return { ...common, winner: first, runnerUp: second, decidedBy: 'composite_judge_uncertain',
+    return { ...common, briefBound, winner: first, runnerUp: second, decidedBy: 'composite_judge_uncertain',
       judgeReliable: canaryPassed, humanChoiceRecommended: true };
   }
   if (!canaryPassed) {
-    return { ...common, winner: first, runnerUp: second, decidedBy: 'composite_judge_unreliable',
+    return { ...common, briefBound, winner: first, runnerUp: second, decidedBy: 'composite_judge_unreliable',
       judgeReliable: false, humanChoiceRecommended: true };
   }
-  return { ...common, winner: judgePick, runnerUp: judgePick === first ? second : first, decidedBy: 'judge',
+  return { ...common, briefBound, winner: judgePick, runnerUp: judgePick === first ? second : first, decidedBy: 'judge',
     judgeReliable: true, humanChoiceRecommended: false };
 }

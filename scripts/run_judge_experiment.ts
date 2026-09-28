@@ -19,6 +19,8 @@
  *
  *   Analyse again, optionally with human labels collected blind to both judges:
  *     pnpm exec tsx scripts/run_judge_experiment.ts analyze --run <dir>/run.json --out <file> [--labels <labels.json>]
+ *   labels.json maps caseId to { humanVotes: [{ judgeId, vote }], humanDimensionVotes?: [{ judgeId, dimension, vote }] },
+ *   validated by the R06 calibration validators; dimension labels feed the exploratory calibration report only.
  */
 import fs from 'node:fs';
 import path from 'node:path';

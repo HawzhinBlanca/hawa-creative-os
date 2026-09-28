@@ -1305,6 +1305,29 @@ describe('pipeline v3 — brief-bound challenger behind its flag (ADR-124)', { t
     expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
   });
 
+  it('does not trust a pick it could not test, and spends nothing, when the degraded canary renders identically', async () => {
+    // createDegradedCanaryLayout degrades only title and body roles; without them the canary is the same image.
+    const { names, ranked } = pair();
+    for (const r of ranked) r.layout = { ...r.layout, text: r.layout.text.map((t) => ({ ...t, role: 'other' as const })) };
+    const renderOf = (layout: StudioLayoutV2) => renderLayoutV2(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png;
+    expect(renderOf(createDegradedCanaryLayout(ranked[0].layout)).equals(renderOf(ranked[0].layout))).toBe(true);
+    for (const r of ranked) {
+      const name = r.sourceIndex === ranked[1].sourceIndex ? 'second' : 'first';
+      names[b64(renderOf(r.layout))] = name;
+      if (r.renderedPng) names[b64(r.renderedPng)] = name;
+    }
+    const { client, calls } = challengerClient(names, (left) => (left === 'second' ? dims('A', 'A', 'A') : dims('B', 'B', 'B')));
+    const result = await selectWinnerV3(ranked, COPY, {
+      client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, judgeProtocol: 'brief_bound_v1', judgeBrief: BRIEF,
+    });
+    expect(calls).toHaveLength(2);
+    expect(result).toMatchObject({ protocol: 'brief_bound_v1', decidedBy: 'composite_judge_uncertain', judgeReliable: null,
+      humanChoiceRecommended: true });
+    expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
+    expect(result.briefBound).toMatchObject({ canaryPassed: null, canaryMatch: null, canaryUnavailable: 'degraded_canary_identical_bytes' });
+    expect(result.briefBound?.match.decision.winner).toBe('second');
+  });
+
   it('refuses the challenger without the actual brief, before any call', async () => {
     const { names, ranked } = pair();
     const { client, calls } = challengerClient(names, () => dims('tie', 'tie', 'tie'));

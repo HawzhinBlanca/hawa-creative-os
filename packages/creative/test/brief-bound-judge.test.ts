@@ -109,8 +109,23 @@ describe('ADR-124 brief-bound challenger judge — prompt contract', () => {
     expect(() => buildBriefBoundJudgeText({ ...BRIEF, copy: [] })).toThrow(/exact copy/);
     expect(() => buildBriefBoundJudgeText({ ...BRIEF, copy: [BRIEF.copy[0], { ...BRIEF.copy[1], copyIndex: 0 }] })).toThrow(/copy index/);
     expect(() => buildBriefBoundJudgeText({ ...BRIEF, copy: [{ copyIndex: 0, text: '   ' }] })).toThrow(/exact copy/);
-    expect(() => buildBriefBoundJudgeText({ ...BRIEF, instructions: 'x'.repeat(6001) })).toThrow(/bounded/);
+    expect(() => buildBriefBoundJudgeText({ ...BRIEF, instructions: 'x'.repeat(24_001) })).toThrow(/bounded/);
+    expect(() => buildBriefBoundJudgeText({ ...BRIEF, must: ['x'.repeat(1001)] })).toThrow(/bounded/);
     expect(() => buildBriefBoundJudgeText({ ...BRIEF, must: Array.from({ length: 21 }, () => 'x') })).toThrow(/bounded/);
+  });
+
+  it('binds a long emailed request and long recorded requirements whole, within the total input bound', () => {
+    // Core has no bound on task instructions; the challenger must not silently skip ordinary long requests.
+    const instructions = `${'Forwarded thread with the requester\'s full wording. '.repeat(360)}END-OF-REQUEST`;
+    expect(instructions.length).toBeGreaterThan(6000);
+    const must = ['m'.repeat(800)];
+    const { userText } = buildBriefBoundJudgeText({ ...BRIEF, instructions, must });
+    expect(userText).toContain('END-OF-REQUEST');
+    expect(userText).toContain('m'.repeat(800));
+    // The whole packet stays bounded: a request that cannot fit is refused visibly, never truncated.
+    expect(() => buildBriefBoundJudgeText({ ...BRIEF, instructions: 'x'.repeat(23_000),
+      copy: [{ copyIndex: 0, text: 'y'.repeat(2000) }, { copyIndex: 1, text: 'z'.repeat(2000) }, { copyIndex: 2, text: 'w'.repeat(2000) },
+        { copyIndex: 3, text: 'v'.repeat(2000) }] })).toThrow(/bounded judge input/);
   });
 
   it('asks for three separate dimensions, ties and abstention in a strict schema with no overall winner', () => {

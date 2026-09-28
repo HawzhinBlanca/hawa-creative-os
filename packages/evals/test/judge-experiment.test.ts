@@ -129,6 +129,9 @@ describe('ADR-124 judge experiment — end to end with the synthetic provider', 
     expect(bodies).toHaveLength(24);
     expect(run.calls.every((c) => c.status === 'complete' && c.quoteUsd! >= c.costUsd!)).toBe(true);
     expect(run.cases.every((c) => c.incumbent.orders.length === 2 && c.challenger.orders.length === 2)).toBe(true);
+    // Each record binds the exact corpus bytes, so the R06 calibration analyzer can read the same run.
+    expect(run.cases.map((c) => [c.imageASha256, c.imageBSha256]))
+      .toEqual(corpus.manifest.cases.map((c) => [c.candidates.A.sha256, c.candidates.B.sha256]));
     const incumbentBodies = bodies.filter((b) => b.includes('PairwiseDimensionVerdict'));
     const challengerBodies = bodies.filter((b) => b.includes('BriefBoundDimensionVerdict'));
     expect(incumbentBodies).toHaveLength(12);
@@ -248,19 +251,26 @@ describe('ADR-124 judge experiment — analysis and decision rule', () => {
   });
   /** A synthetic record of a paid run, built from raw per-order answers the analysis re-derives. */
   function record(options: { lineages: number; challengerDetects: number; incumbentDetects: number; clean: number;
-    humanAgree?: boolean; challengerCost?: number; incumbentCost?: number; }): JudgeExperimentRun {
+    humanAgree?: boolean; challengerCost?: number; incumbentCost?: number;
+    cleanChallenger?: 'tie' | 'critical' | 'invalid_reply' }): JudgeExperimentRun {
     const cases: JudgeExperimentCaseRecord[] = [];
     const calls: JudgeExperimentRun['calls'] = [];
     const add = (caseId: string, lineageId: string, truth: JudgeExperimentCaseRecord['truth'], incumbentPicks: 'A' | 'B' | 'flip',
       challenger: BriefBoundVerdict['dimensions'][], humanVote?: 'A' | 'B' | 'tie') => {
       const ab = incumbentPicks === 'flip' ? 'A' : incumbentPicks;
       const ba = incumbentPicks === 'flip' ? 'A' : incumbentPicks === 'A' ? 'B' : 'A';
+      const cleanMode = truth.kind === 'clean_control' ? options.cleanChallenger ?? 'tie' : 'tie';
+      const findings = cleanMode === 'critical'
+        ? [{ candidate: 'A' as const, dimension: 'correctness' as const, severity: 'critical' as const,
+          region: { x: 0.1, y: 0.1, width: 0.2, height: 0.1 }, copyIndex: null, explanation: 'Claimed missing fact.' }]
+        : [];
       cases.push({ caseId, lineageId, language: 'ckb', format: '1080x1350', truth,
+        imageASha256: sha(`${caseId}:A`), imageBSha256: sha(`${caseId}:B`),
         humanVotes: humanVote ? ['h1', 'h2', 'h3'].map((judgeId) => ({ judgeId, vote: humanVote })) : [],
         incumbent: { status: 'complete', orders: [{ order: 'AB', winner: ab }, { order: 'BA', winner: ba }] },
-        challenger: { status: 'complete', orders: [
-          { order: 'AB', verdict: { dimensions: challenger[0], findings: [] }, packetSha256: 'a'.repeat(64) },
-          { order: 'BA', verdict: { dimensions: challenger[1], findings: [] }, packetSha256: 'b'.repeat(64) }] } });
+        challenger: cleanMode === 'invalid_reply' ? { status: 'invalid_reply', orders: [] } : { status: 'complete', orders: [
+          { order: 'AB', verdict: { dimensions: challenger[0], findings }, packetSha256: sha(`${caseId}:AB`) },
+          { order: 'BA', verdict: { dimensions: challenger[1], findings }, packetSha256: sha(`${caseId}:BA`) }] } });
       for (const judge of ['incumbent', 'challenger'] as const) for (const order of ['AB', 'BA'] as const) {
         const cost = judge === 'incumbent' ? options.incumbentCost ?? 0.04 : options.challengerCost ?? 0.05;
         calls.push({ caseId, judge, order, status: 'complete', quoteUsd: cost * 2, costUsd: cost, latencyMs: 1000, responseId: `${caseId}-${judge}-${order}`, model: 'gpt-6-astra' });
@@ -320,5 +330,62 @@ describe('ADR-124 judge experiment — analysis and decision rule', () => {
     const labels = { 'seeded-0': { humanVotes: [{ judgeId: 'h1', vote: 'A' as const }, { judgeId: 'h1', vote: 'B' as const }] } };
     expect(() => analyzeJudgeExperiment(run, labels)).toThrow(/distinct/);
     expect(() => analyzeJudgeExperiment(run, { unknown: { humanVotes: [] } })).toThrow(/unknown case/);
+  });
+  it('counts a clean control the challenger did not answer validly as a failure of the false-critical margin', () => {
+    // Replies full of findings are the ones most likely to fail validation; an invalid reply must
+    // never pass the margin that exists to catch over-flagging.
+    const flagged = analyzeJudgeExperiment(record({ lineages: 20, challengerDetects: 20, incumbentDetects: 0, clean: 10,
+      cleanChallenger: 'critical' }));
+    expect(flagged.margins.clean_control_false_critical).toBe(false);
+    expect(flagged.decision).toBe('CHALLENGER_REGRESSES');
+    const invalid = analyzeJudgeExperiment(record({ lineages: 20, challengerDetects: 20, incumbentDetects: 0, clean: 10,
+      cleanChallenger: 'invalid_reply' }));
+    expect(invalid.counts.invalidReplies).toBe(10);
+    expect(invalid.margins.cleanControlFalseCriticalRate).toBe(1);
+    expect(invalid.margins.clean_control_false_critical).toBe(false);
+    expect(invalid.decision).not.toBe('PENDING_HUMAN_LABELS');
+    expect(invalid.decision).toBe('CHALLENGER_REGRESSES');
+    expect(invalid.margins.cleanControl).toEqual({ cases: 10, critical: 0, notValidlyAnswered: 10 });
+  });
+
+  it('never credits an incumbent order flip with agreement when the human consensus is a tie', () => {
+    // Every seeded case: the incumbent flips, the challenger ties in both orders, the humans say tie.
+    const run = record({ lineages: 24, challengerDetects: 0, incumbentDetects: 0, clean: 12 });
+    for (const c of run.cases.filter((x) => x.truth.kind === 'seeded_defect')) {
+      c.challenger.orders = c.challenger.orders.map((o) => ({ ...o, verdict: { dimensions: dims('tie', 'tie', 'tie'), findings: [] } }));
+    }
+    const labels = Object.fromEntries(run.cases.filter((c) => c.truth.kind === 'seeded_defect')
+      .map((c) => [c.caseId, { humanVotes: ['h1', 'h2', 'h3'].map((judgeId) => ({ judgeId, vote: 'tie' as const })) }]));
+    const analysis = analyzeJudgeExperiment(run, labels);
+    expect(analysis.secondary.humanAgreement.cases).toBe(24);
+    expect(analysis.secondary.humanAgreement.incumbent.rate).toBe(0);
+    expect(analysis.secondary.humanAgreement.challenger.rate).toBe(1);
+  });
+
+  it('reports the challenger through the R06 calibration analyzer, per dimension, from the same run and labels', () => {
+    const run = record({ lineages: 24, challengerDetects: 22, incumbentDetects: 12, clean: 12 });
+    const seeded = run.cases.filter((c) => c.truth.kind === 'seeded_defect');
+    const labels = Object.fromEntries(seeded.map((c) => [c.caseId, {
+      humanVotes: ['h1', 'h2', 'h3'].map((judgeId) => ({ judgeId, vote: 'A' as const })),
+      humanDimensionVotes: ['h1', 'h2', 'h3'].flatMap((judgeId) => [
+        { judgeId, dimension: 'correctness' as const, vote: 'A' as const },
+        { judgeId, dimension: 'aesthetic' as const, vote: 'B' as const }]),
+    }]));
+    const analysis = analyzeJudgeExperiment(run, labels);
+    const calibration = analysis.reported.challengerCalibration;
+    expect(calibration.status).toBe('offline_diagnostic_only');
+    expect(calibration.caseCount).toBe(36);
+    expect(calibration.protocols).toEqual({ [BRIEF_BOUND_JUDGE_PROMPT_VERSION]: 36 });
+    // Correctness: the 22 detecting cases pick A in both orders; the 2 others abstain (uncertain).
+    expect(calibration.dimensions.correctness).toMatchObject({ humanQualified: 24, comparable: 22, agreement: 22, judgeUncertain: 2 });
+    // Aesthetic: the detecting cases tie; humans said B, so none agree. Labels are never pooled across dimensions.
+    expect(calibration.dimensions.aesthetic).toMatchObject({ humanQualified: 24, agreement: 0 });
+    expect(calibration.dimensions.communication).toMatchObject({ humanQualified: 0 });
+    // Diagnostic only: the frozen plan's decision is unchanged by dimension labels.
+    expect(analysis.decision).toBe(analyzeJudgeExperiment(run, Object.fromEntries(Object.entries(labels)
+      .map(([k, v]) => [k, { humanVotes: v.humanVotes }]))).decision);
+    expect(() => analyzeJudgeExperiment(run, { 'seeded-0': { humanVotes: [], humanDimensionVotes: [
+      { judgeId: 'h1', dimension: 'correctness', vote: 'A' }, { judgeId: 'h1', dimension: 'correctness', vote: 'B' }] } }))
+      .toThrow(/dimension/);
   });
 });

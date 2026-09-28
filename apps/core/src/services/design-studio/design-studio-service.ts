@@ -2465,8 +2465,10 @@ export class DesignStudioService {
     // ADR-124: the flag is read when the judge stage runs and recorded with its outcome. An unknown
     // value is refused below as an unavailable judge, visibly, with no model call.
     let judgeProtocol: StudioJudgeProtocol = 'incumbent';
+    let judgeProtocolResolved = false;
     try {
       judgeProtocol = resolveStudioJudgeProtocol(process.env.HAWA_STUDIO_JUDGE_PROTOCOL);
+      judgeProtocolResolved = true;
       outcome = await runJudgeStageV3(ctx, candidateStates, judgeProtocol === 'incumbent' ? {} : {
         protocol: judgeProtocol,
         brief: judgeBriefForStageV3(ctx, (stages.brief || {}) as Partial<CreativeBrief>),
@@ -2482,7 +2484,11 @@ export class DesignStudioService {
       const ranked = eligibleCandidatesV3(allRanked).map((r) => r.candidate);
       const winner = ranked[0];
       await this.recordV3Ranking(s, ranked, winner, allRanked.filter((r) => r.hardQa?.passed !== true).map((r) => r.candidate));
-      stages.tournament = { pipeline: 'v3', winnerId: winner.id, decidedBy: 'composite_judge_unavailable', error: message, excludedCandidates: excludedEvidence(allRanked) };
+      // ADR-124: the refusal's code is recorded so an inapplicable request class can be counted, and
+      // with no automated preference a person should choose.
+      const errorCode = typeof (err as { code?: unknown })?.code === 'string' ? (err as { code: string }).code : null;
+      stages.tournament = { pipeline: 'v3', winnerId: winner.id, decidedBy: 'composite_judge_unavailable', error: message, errorCode,
+        ...(judgeProtocolResolved ? { judgeProtocol } : {}), humanChoiceRecommended: true, excludedCandidates: excludedEvidence(allRanked) };
       await this.repo.updateRunStatus(run.id, s.tenantId, 'qa', {
         stages,
         budget,
@@ -2527,7 +2533,7 @@ export class DesignStudioService {
     if (selection.briefBound) {
       // ADR-124 challenger: each order keeps its exact packet identity, the validated verdict with
       // its three separate dimensions and localized findings, and the receipt.
-      const { match: pair, canaryMatch, canaryPassed, subject: canarySubject } = selection.briefBound;
+      const { match: pair, canaryMatch, canaryPassed, canaryUnavailable, subject: canarySubject } = selection.briefBound;
       const orderRecord = (order: typeof pair.orderAB) => ({
         pipeline: 'v3',
         protocol: order.promptVersion,
@@ -2557,14 +2563,20 @@ export class DesignStudioService {
         tenantId: s.tenantId,
         kind: 'canary',
         candidateA: subject.id,
-        verdict: {
+        verdict: (canaryMatch ? {
           pipeline: 'v3',
           protocol: canaryMatch.orderAB.promptVersion,
           passed: canaryPassed,
           decision: canaryMatch.decision,
           orderAB: orderRecord(canaryMatch.orderAB),
           orderBA: orderRecord(canaryMatch.orderBA),
-        } as any,
+        } : {
+          // No canary call was made: the degraded copy was the same image, so the pick went untested.
+          pipeline: 'v3',
+          protocol: pair.orderAB.promptVersion,
+          passed: null,
+          unavailable: canaryUnavailable,
+        }) as any,
       });
     }
     if (selection.canary) {
@@ -2603,7 +2615,8 @@ export class DesignStudioService {
       humanChoiceRecommended: selection.humanChoiceRecommended,
       excludedCandidates: excludedEvidence(ranked),
     };
-    stages.canary = { passed: selection.canary?.passed ?? selection.briefBound?.canaryPassed ?? null };
+    stages.canary = { passed: selection.canary?.passed ?? selection.briefBound?.canaryPassed ?? null,
+      ...(selection.briefBound?.canaryUnavailable ? { unavailable: selection.briefBound.canaryUnavailable } : {}) };
 
     await this.repo.updateRunStatus(run.id, s.tenantId, 'qa', {
       stages,

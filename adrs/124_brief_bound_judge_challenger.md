@@ -53,13 +53,50 @@ used by paid qualification scripts. The first provider error stops the run. A
 paid run must type back the plan hash. The synthetic provider answers from the
 request hash, never from truth labels; its analysis is `SYNTHETIC_PLUMBING_ONLY`.
 
+## Review corrections — 2026-09-28
+
+An independent review found that the clean-control margin counted a clean
+control without a valid challenger answer as clean: an over-flagging reply that
+failed validation improved the challenger's result. The analysis now applies the
+plan's success counting to that margin too: a clean control not validly
+answered in both orders counts against the 0.05 ceiling and stays in the
+denominator, and the counts are reported (`margins.cleanControl`). The plan text
+and hash are unchanged; its success counting already required this.
+
+An incumbent order flip is now its own outcome, never a tie, so it cannot agree
+with a human tie consensus. The analysis reuses the R06 calibration validators,
+consensus rule and, through `bootstrapLineageMeans`, the R-study lineage
+bootstrap (bit-identical on 200 generated cases). Run records now bind both
+image hashes, and the challenger's validly answered cases are passed to
+`analyzeBlindJudgeCalibration`, so per-dimension human labels are reported
+beside the decision. They do not enter the frozen decision rule: the incumbent
+has no matching dimensions, so a paired per-dimension margin cannot be stated,
+and adding one would need a new plan version before the first paid run.
+
+Core does not bound request instructions, so the challenger now accepts up to
+24,000 characters of instructions and 1,000 per must/mustNot item inside the
+unchanged 30,000-character packet bound. A request that still cannot fit is
+refused, never truncated, and Core records the refusal's `errorCode` with the
+unavailable judge so the class can be counted. When the degraded canary renders
+the same bytes as the pick (a layout without title or body roles), no canary
+call is made, the pick is untested and not trusted: the composite stands as
+`composite_judge_uncertain` with `judgeReliable` null. Every challenger
+composite outcome and an unavailable judge under either protocol record
+`humanChoiceRecommended`, and the Desk Studio panel shows it as a request to
+choose. The incumbent's own tie and canary-failure outcomes are unchanged and
+still record it as false.
+
 ## Acceptance
 
 Prompt contract, strict schema, reply validation, decision rule, flag parsing,
 selection branches (adopt, uncertain, canary failure, missing brief), Core
 persistence on isolated PostgreSQL, calibration analysis with dimension labels,
 corpus verification, quote-only, synthetic end to end, budget and office-cap
-refusal, first-refusal stop, invalid-reply accounting and decision rules.
+refusal, first-refusal stop, invalid-reply accounting and decision rules; after
+review, invalid clean controls against the false-critical margin, incumbent
+flips against a human tie, per-dimension calibration from the run record,
+long-request bounds, the identical-canary branch, the recorded refusal code and
+the Desk notice.
 
 ## Local qualification — 2026-09-28
 

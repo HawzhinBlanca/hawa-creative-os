@@ -173,19 +173,19 @@ export interface CalibrationObservation {
     judgeModelId: string; verdict: BlindJudgeVerdict | BriefBoundVerdict; costUsd: number | null; latencyMs: number | null };
 }
 
-interface DimensionCounts { cases: number; humanQualified: number; humanNoConsensus: number; missingHuman: number;
+export interface CalibrationDimensionCounts { cases: number; humanQualified: number; humanNoConsensus: number; missingHuman: number;
   comparable: number; agreement: number; judgeUncertain: number }
-const emptyDimensionCounts = (): DimensionCounts => ({ cases: 0, humanQualified: 0, humanNoConsensus: 0, missingHuman: 0,
+const emptyDimensionCounts = (): CalibrationDimensionCounts => ({ cases: 0, humanQualified: 0, humanNoConsensus: 0, missingHuman: 0,
   comparable: 0, agreement: 0, judgeUncertain: 0 });
 
-interface Counts {
+export interface CalibrationCounts {
   cases: number; humanQualified: number; humanNoConsensus: number; missingHuman: number;
   orderStable: number; orderDisagreements: number; modelAbstentions: number;
   humanAgreement: number; humanComparable: number;
   seededDefects: number; detectedDefects: number; cleanControls: number; falseBlocks: number;
   knownCostUsd: number; unknownCostCalls: number; knownLatencyCalls: number; unknownLatencyCalls: number;
 }
-const emptyCounts = (): Counts => ({ cases: 0, humanQualified: 0, humanNoConsensus: 0, missingHuman: 0,
+const emptyCounts = (): CalibrationCounts => ({ cases: 0, humanQualified: 0, humanNoConsensus: 0, missingHuman: 0,
   orderStable: 0, orderDisagreements: 0, modelAbstentions: 0, humanAgreement: 0, humanComparable: 0,
   seededDefects: 0, detectedDefects: 0, cleanControls: 0, falseBlocks: 0,
   knownCostUsd: 0, unknownCostCalls: 0, knownLatencyCalls: 0, unknownLatencyCalls: 0 });
@@ -193,7 +193,29 @@ const emptyCounts = (): Counts => ({ cases: 0, humanQualified: 0, humanNoConsens
 const sourceChoice = (choice: Choice, swapped: boolean): Choice =>
   choice === 'tie' || choice === 'abstain' ? choice : swapped ? (choice === 'A' ? 'B' : 'A') : choice;
 
-function humanConsensus(votes: Array<{ vote: 'A' | 'B' | 'tie' | 'cannot_judge' }>): 'A' | 'B' | 'tie' | 'none' {
+export type HumanVote = { judgeId: string; vote: 'A' | 'B' | 'tie' | 'cannot_judge' };
+export type HumanDimensionVote = HumanVote & { dimension: BriefBoundDimension };
+
+/** Overall human votes: identified, distinct judges and valid choices. Shared by every analysis of R06 labels. */
+export function assertHumanVotes(votes: unknown, label = 'Human votes'): asserts votes is HumanVote[] {
+  if (!Array.isArray(votes) || votes.some((v) => !v || typeof v.judgeId !== 'string' || !v.judgeId ||
+      !['A', 'B', 'tie', 'cannot_judge'].includes(v.vote))) {
+    throw new Error(`${label}: human votes require identified judges and valid choices`);
+  }
+  if (new Set(votes.map((v) => v.judgeId)).size !== votes.length) throw new Error(`${label}: human votes require distinct judges`);
+}
+
+/** ADR-124 per-dimension human votes: one vote per judge per brief-bound dimension. */
+export function assertHumanDimensionVotes(votes: unknown, label = 'Human dimension votes'): asserts votes is HumanDimensionVote[] {
+  if (!Array.isArray(votes) || votes.some((v) => !v || typeof v.judgeId !== 'string' || !v.judgeId ||
+        !BRIEF_BOUND_DIMENSIONS.includes(v.dimension) || !['A', 'B', 'tie', 'cannot_judge'].includes(v.vote)) ||
+      new Set(votes.map((v) => `${v.judgeId}\u0000${v.dimension}`)).size !== votes.length) {
+    throw new Error(`${label}: human dimension votes require distinct identified judges per dimension and valid choices`);
+  }
+}
+
+/** A strict majority of at least three valid (not cannot_judge) votes; otherwise no consensus. */
+export function humanConsensus(votes: Array<{ vote: 'A' | 'B' | 'tie' | 'cannot_judge' }>): 'A' | 'B' | 'tie' | 'none' {
   const valid = votes.filter((v) => v.vote !== 'cannot_judge');
   if (valid.length < 3) return 'none';
   for (const choice of ['A', 'B', 'tie'] as const) {
@@ -205,14 +227,14 @@ function humanConsensus(votes: Array<{ vote: 'A' | 'B' | 'tie' | 'cannot_judge' 
 /** Case diagnostics are not independent estimates when several cases share one lineage. */
 export function analyzeBlindJudgeCalibration(observations: CalibrationObservation[]) {
   const all = emptyCounts();
-  const byLanguage: Record<string, Counts> = {};
-  const byFormat: Record<string, Counts> = {};
-  const byDefectSeverity: Record<string, Counts> = {};
+  const byLanguage: Record<string, CalibrationCounts> = {};
+  const byFormat: Record<string, CalibrationCounts> = {};
+  const byDefectSeverity: Record<string, CalibrationCounts> = {};
   const caseIds = new Set<string>();
   const lineages = new Set<string>();
   const protocols: Record<string, number> = {};
   const dimensions = Object.fromEntries(BRIEF_BOUND_DIMENSIONS.map((d) => [d, emptyDimensionCounts()])) as
-    Record<BriefBoundDimension, DimensionCounts>;
+    Record<BriefBoundDimension, CalibrationDimensionCounts>;
   for (const sample of observations) {
     if (!sample.caseId || caseIds.has(sample.caseId) || !sample.lineageId || !sample.format ||
         !['en', 'ckb', 'ar', 'mixed'].includes(sample.language) ||
@@ -226,11 +248,7 @@ export function analyzeBlindJudgeCalibration(observations: CalibrationObservatio
             !['minor', 'major', 'critical'].includes(sample.truth.severity)))) {
       throw new Error('Invalid calibration labels');
     }
-    const judges = sample.humanVotes.map((vote) => vote.judgeId);
-    if (judges.some((id) => !id) || new Set(judges).size !== judges.length ||
-        sample.humanVotes.some((v) => !['A', 'B', 'tie', 'cannot_judge'].includes(v.vote))) {
-      throw new Error('Human votes require distinct identified judges and valid choices');
-    }
+    assertHumanVotes(sample.humanVotes, sample.caseId);
     if (sample.orderAB.leftHash !== sample.imageASha256 || sample.orderAB.rightHash !== sample.imageBSha256 ||
         sample.orderBA.leftHash !== sample.imageBSha256 || sample.orderBA.rightHash !== sample.imageASha256) {
       throw new Error('The two model orders do not bind the same exported images');
@@ -243,11 +261,7 @@ export function analyzeBlindJudgeCalibration(observations: CalibrationObservatio
       throw new Error('Both judge orders require a pinned prompt, distinct packets, and the same model');
     }
     const dimensionVotes = sample.humanDimensionVotes ?? [];
-    if (!Array.isArray(dimensionVotes) || dimensionVotes.some((v) => !v?.judgeId ||
-          !BRIEF_BOUND_DIMENSIONS.includes(v.dimension) || !['A', 'B', 'tie', 'cannot_judge'].includes(v.vote)) ||
-        new Set(dimensionVotes.map((v) => `${v.judgeId}\u0000${v.dimension}`)).size !== dimensionVotes.length) {
-      throw new Error('Human dimension votes require distinct identified judges per dimension and valid choices');
-    }
+    assertHumanDimensionVotes(dimensionVotes, sample.caseId);
     protocols[version] = (protocols[version] ?? 0) + 1;
     const briefBound = version === BRIEF_BOUND_JUDGE_PROMPT_VERSION;
     const verdictAB = briefBound ? validateBriefBoundVerdict(sample.orderAB.verdict) : validateBlindJudgeVerdict(sample.orderAB.verdict);

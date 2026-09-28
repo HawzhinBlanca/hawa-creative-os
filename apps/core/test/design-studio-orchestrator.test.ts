@@ -1194,6 +1194,9 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       const stages = typeof final.stages === 'string' ? JSON.parse(final.stages) : final.stages;
       expect(stages.tournament.decidedBy).toBe('composite_judge_unavailable');
       expect(stages.tournament.error).toMatch(/HAWA_STUDIO_JUDGE_PROTOCOL/);
+      // The refusal is countable by its code, not only readable as prose.
+      expect(stages.tournament.errorCode).toBe('STUDIO_JUDGE_PROTOCOL_INVALID');
+      expect(stages.tournament.humanChoiceRecommended).toBe(true);
       expect(final.judge_status).toBe('SKIPPED');
     } finally {
       const restore = (key: string, value: string | undefined) => { if (value === undefined) delete process.env[key]; else process.env[key] = value; };

@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T08:16:55Z",
+  "generatedAt": "2026-09-28T08:41:52Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -679,8 +679,8 @@
     },
     {
       "path": "adrs/124_brief_bound_judge_challenger.md",
-      "sha256": "ef44b1731a48bcd6ae06f35ce119aa1eea1f12d66aad841c42d381e06ce0bfbe",
-      "bytes": 4118
+      "sha256": "686bb296808db6986f72671e1d66154bab2dec60222fd6ef932ff859cee288c5",
+      "bytes": 6494
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -934,8 +934,8 @@
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
-      "sha256": "b8a3a88486f9f236f9b3d801bab572c029043a07dcef2cc62cbfddd101c5ec79",
-      "bytes": 19343
+      "sha256": "5f49f2f14f4fffe6f9c84d176993ec5ab856f042c9f475b3b0317cf5e3d666a0",
+      "bytes": 19742
     },
     {
       "path": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
@@ -1049,8 +1049,8 @@
     },
     {
       "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
-      "sha256": "4ac8934edf8a427166064c2c52dbb9387d0342a5d16ed3532f283c6e1bd535a2",
-      "bytes": 10755
+      "sha256": "1ca5a9c43082011740ffb07c549d784b9b38e8b448a8a503386a597e951661a4",
+      "bytes": 11220
     },
     {
       "path": "docs/30_FUTURE_EVOLUTION.md",
@@ -1149,8 +1149,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/JUDGE_CHALLENGER_PROOF.json",
-      "sha256": "6a70b0d37e521c1916e73838bb105ee06d9bb7f8a6d2b790fc89c30283022257",
-      "bytes": 13745
+      "sha256": "69660d1e1579c3082a1f187908bddd406661c54a6f3e38e2ff84d10aa1f89700",
+      "bytes": 21912
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LIFECYCLE_NATIVE_RECOVERY_PROOF.json",
@@ -1629,8 +1629,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "504d385cc2eefd806012e7896dae3a77853a8de63f25706fe977105ad4b5a671",
-      "bytes": 429084
+      "sha256": "c25679bf51db4806df8f567cbf0f5b9e47b0dc4d4440c919e8e612fa7bfb6e22",
+      "bytes": 431894
     },
     {
       "path": "plans/user-stories.csv",
@@ -2244,8 +2244,8 @@
     },
     {
       "path": "scripts/run_judge_experiment.ts",
-      "sha256": "11bd070eea03253931425234f40b0d65157a6076394efcc931511f7ad9217e85",
-      "bytes": 5426
+      "sha256": "27a1949d7a78af191668b3b52b6da821c0984921974d5f2634c61fd50d2ec0e0",
+      "bytes": 5662
     },
     {
       "path": "scripts/run_model_tournament.ts",

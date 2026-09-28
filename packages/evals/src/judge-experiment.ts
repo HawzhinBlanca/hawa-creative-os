@@ -48,7 +48,15 @@ import {
 import { resolveModel } from '@hawa/domain';
 import { OfflineRunner } from './design-studio/offline-runner.js';
 import type { Concept, StudioGoldenBrief } from './design-studio/types.js';
-import { rng } from './research-study/analyze.js';
+import { bootstrapLineageMeans } from './research-study/analyze.js';
+import {
+  analyzeBlindJudgeCalibration,
+  assertHumanDimensionVotes,
+  assertHumanVotes,
+  humanConsensus,
+  type CalibrationObservation,
+  type HumanDimensionVote,
+} from './judge-calibration.js';
 
 const sha256 = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
 
@@ -110,6 +118,8 @@ export type JudgeExperimentTruth =
   | { kind: 'ordinary' };
 
 export interface JudgeExperimentHumanVote { judgeId: string; vote: 'A' | 'B' | 'tie' | 'cannot_judge' }
+/** R06 human labels for one case: overall, and optionally per brief-bound dimension. */
+export interface JudgeExperimentHumanLabels { humanVotes: JudgeExperimentHumanVote[]; humanDimensionVotes?: HumanDimensionVote[] }
 
 export interface JudgeExperimentCandidate {
   /** Relative to the corpus directory. */
@@ -132,6 +142,7 @@ export interface JudgeExperimentCase {
   candidates: { A: JudgeExperimentCandidate; B: JudgeExperimentCandidate };
   truth: JudgeExperimentTruth;
   humanVotes?: JudgeExperimentHumanVote[];
+  humanDimensionVotes?: HumanDimensionVote[];
 }
 
 export interface JudgeExperimentCorpusManifest {
@@ -154,14 +165,10 @@ export interface LoadedJudgeCorpus {
 const SHA = /^[a-f0-9]{64}$/;
 const LANGUAGES = ['en', 'ckb', 'ar', 'mixed'];
 
-function validateHumanVotes(votes: unknown, label: string): JudgeExperimentHumanVote[] {
-  if (votes === undefined) return [];
-  if (!Array.isArray(votes) || votes.some((v) => !v || typeof v.judgeId !== 'string' || !v.judgeId ||
-      !['A', 'B', 'tie', 'cannot_judge'].includes(v.vote))) {
-    throw new Error(`${label}: human votes need identified judges and valid choices`);
-  }
-  if (new Set(votes.map((v) => v.judgeId)).size !== votes.length) throw new Error(`${label}: human votes need distinct judges`);
-  return votes as JudgeExperimentHumanVote[];
+/** The R06 calibration validators, so the experiment and the calibration analyzer accept the same labels. */
+function validateHumanLabels(votes: unknown, dimensionVotes: unknown, label: string): void {
+  if (votes !== undefined) assertHumanVotes(votes, label);
+  if (dimensionVotes !== undefined) assertHumanDimensionVotes(dimensionVotes, label);
 }
 
 /** Reads and verifies a corpus: paths stay inside, bytes match hashes, PNGs decode, metadata is stripped. */
@@ -193,7 +200,7 @@ export function loadJudgeExperimentCorpus(dir: string): LoadedJudgeCorpus {
           !['layout', 'copy'].includes(t.defectClass)))) {
       throw new Error(`${c.caseId}: invalid truth label`);
     }
-    validateHumanVotes(c.humanVotes, c.caseId);
+    validateHumanLabels(c.humanVotes, c.humanDimensionVotes, c.caseId);
     const dims: Array<{ width: number; height: number }> = [];
     for (const side of ['A', 'B'] as const) {
       const candidate = c.candidates?.[side];
@@ -430,7 +437,11 @@ export interface JudgeExperimentCaseRecord {
   language: string;
   format: string;
   truth: JudgeExperimentTruth;
+  /** The exact corpus bytes both judges saw, so the R06 calibration analyzer can read the same record. */
+  imageASha256: string;
+  imageBSha256: string;
   humanVotes: JudgeExperimentHumanVote[];
+  humanDimensionVotes?: HumanDimensionVote[];
   incumbent: { status: JudgeCaseStatus; orders: Array<{ order: 'AB' | 'BA'; winner: 'A' | 'B' }> };
   challenger: { status: JudgeCaseStatus; orders: Array<{ order: 'AB' | 'BA'; verdict: BriefBoundVerdict; packetSha256: string }> };
 }
@@ -555,7 +566,8 @@ export async function runJudgeExperiment(input: {
   let stoppedReason: JudgeExperimentRun['stoppedReason'] = null;
   const cases: JudgeExperimentCaseRecord[] = corpus.manifest.cases.map((c) => ({
     caseId: c.caseId, lineageId: c.lineageId, language: c.language, format: c.format, truth: c.truth,
-    humanVotes: c.humanVotes ?? [], incumbent: { status: 'not_run', orders: [] }, challenger: { status: 'not_run', orders: [] },
+    imageASha256: c.candidates.A.sha256, imageBSha256: c.candidates.B.sha256,
+    humanVotes: c.humanVotes ?? [], ...(c.humanDimensionVotes ? { humanDimensionVotes: c.humanDimensionVotes } : {}), incumbent: { status: 'not_run', orders: [] }, challenger: { status: 'not_run', orders: [] },
   }));
 
   const attempt = async (record: JudgeExperimentCaseRecord, judge: JudgeName, order: 'AB' | 'BA', run: () => Promise<void>) => {
@@ -629,14 +641,15 @@ export async function runJudgeExperiment(input: {
 // ---------------------------------------------------------------------------------------------
 // Analysis
 
-type SourceChoice = 'A' | 'B' | 'tie' | 'abstain' | null;
+/** 'flip' is an order-dependent answer: a failure, never a tie, and never agreement with anyone. */
+type SourceChoice = 'A' | 'B' | 'tie' | 'abstain' | 'flip' | null;
 
 function incumbentChoice(record: JudgeExperimentCaseRecord): { choice: SourceChoice; consistent: boolean | null } {
   if (record.incumbent.status !== 'complete') return { choice: null, consistent: null };
   const ab = record.incumbent.orders.find((o) => o.order === 'AB')!.winner;
   const ba = record.incumbent.orders.find((o) => o.order === 'BA')!.winner === 'A' ? 'B' : 'A';
-  // An order flip is the incumbent's discarded pair: no choice.
-  return { choice: ab === ba ? ab : 'tie', consistent: ab === ba };
+  // The incumbent cannot answer tie; an order flip is the pair it discards, so it has no choice.
+  return { choice: ab === ba ? ab : 'flip', consistent: ab === ba };
 }
 
 function challengerChoice(record: JudgeExperimentCaseRecord): { choice: SourceChoice; consistent: boolean | null; critical: boolean } {
@@ -652,10 +665,8 @@ function challengerChoice(record: JudgeExperimentCaseRecord): { choice: SourceCh
 }
 
 function consensus(votes: JudgeExperimentHumanVote[]): 'A' | 'B' | 'tie' | null {
-  const valid = votes.filter((v) => v.vote !== 'cannot_judge');
-  if (valid.length < 3) return null;
-  for (const choice of ['A', 'B', 'tie'] as const) if (valid.filter((v) => v.vote === choice).length > valid.length / 2) return choice;
-  return null;
+  const result = humanConsensus(votes);
+  return result === 'none' ? null : result;
 }
 
 interface Rate { rate: number | null; lower95: number | null; upper95: number | null }
@@ -681,24 +692,13 @@ function pairedEndpoint(name: string, rows: Array<{ lineageId: string; incumbent
     const none = { rate: null, lower95: null, upper95: null };
     return { cases: 0, lineages: 0, incumbent: none, challenger: none, difference: { point: null, lower95: null, upper95: null }, discordant };
   }
-  const random = rng(`${JUDGE_EXPERIMENT_PLAN.bootstrap.seed}:${name}`);
-  const inc: number[] = [], chal: number[] = [], diff: number[] = [];
-  for (let i = 0; i < JUDGE_EXPERIMENT_PLAN.bootstrap.iterations; i++) {
-    let a = 0, b = 0;
-    for (let j = 0; j < groups.length; j++) {
-      const g = groups[Math.floor(random() * groups.length)];
-      a += g.inc; b += g.chal;
-    }
-    inc.push(a / groups.length); chal.push(b / groups.length); diff.push((b - a) / groups.length);
-  }
-  const interval = (draws: number[]) => {
-    draws.sort((x, y) => x - y);
-    return { lower95: draws[Math.floor(draws.length * 0.025)], upper95: draws[Math.floor(draws.length * 0.975)] };
-  };
+  // Incumbent, challenger and their paired difference, resampled together by lineage.
+  const [inc, chal, diff] = bootstrapLineageMeans(groups.map((g) => [g.inc, g.chal, g.chal - g.inc]),
+    `${JUDGE_EXPERIMENT_PLAN.bootstrap.seed}:${name}`, JUDGE_EXPERIMENT_PLAN.bootstrap.iterations);
   const incRate = mean(groups.map((g) => g.inc)), chalRate = mean(groups.map((g) => g.chal));
   return { cases: rows.length, lineages: groups.length,
-    incumbent: { rate: incRate, ...interval(inc) }, challenger: { rate: chalRate, ...interval(chal) },
-    difference: { point: chalRate - incRate, ...interval(diff) }, discordant };
+    incumbent: { rate: incRate, ...inc }, challenger: { rate: chalRate, ...chal },
+    difference: { point: chalRate - incRate, ...diff }, discordant };
 }
 
 export type JudgeExperimentDecision =
@@ -711,15 +711,42 @@ const percentile = (values: number[], p: number) => {
   return sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)];
 };
 
+/** The challenger's validly answered cases as R06 calibration observations, with their receipts. */
+function challengerCalibration(run: JudgeExperimentRun, labels: Record<string, JudgeExperimentHumanLabels>) {
+  const observations: CalibrationObservation[] = [];
+  for (const c of run.cases) {
+    if (c.challenger.status !== 'complete') continue;
+    if (!SHA.test(c.imageASha256 ?? '') || !SHA.test(c.imageBSha256 ?? '')) {
+      throw new Error(`${c.caseId}: this run record does not bind its image hashes; re-run it with the current harness`);
+    }
+    const call = (order: 'AB' | 'BA') => run.calls.find((x) => x.caseId === c.caseId && x.judge === 'challenger' &&
+      x.order === order && x.status === 'complete');
+    const side = (order: 'AB' | 'BA') => {
+      const o = c.challenger.orders.find((x) => x.order === order)!;
+      const [leftHash, rightHash] = order === 'AB' ? [c.imageASha256, c.imageBSha256] : [c.imageBSha256, c.imageASha256];
+      return { leftHash, rightHash, promptVersion: JUDGE_EXPERIMENT_PLAN.challenger.id, packetSha256: o.packetSha256,
+        judgeModelId: run.model, verdict: o.verdict, costUsd: call(order)?.costUsd ?? null, latencyMs: call(order)?.latencyMs ?? null };
+    };
+    const label = labels[c.caseId];
+    observations.push({ caseId: c.caseId, lineageId: c.lineageId, language: c.language as CalibrationObservation['language'],
+      format: c.format, imageASha256: c.imageASha256, imageBSha256: c.imageBSha256,
+      humanVotes: label?.humanVotes ?? c.humanVotes,
+      humanDimensionVotes: label?.humanDimensionVotes ?? c.humanDimensionVotes ?? [],
+      truth: c.truth, orderAB: side('AB'), orderBA: side('BA') });
+  }
+  return analyzeBlindJudgeCalibration(observations);
+}
+
 /** Applies the frozen plan. Human labels collected after the run may be supplied per case. */
-export function analyzeJudgeExperiment(run: JudgeExperimentRun, labels: Record<string, { humanVotes: JudgeExperimentHumanVote[] }> = {}) {
+export function analyzeJudgeExperiment(run: JudgeExperimentRun, labels: Record<string, JudgeExperimentHumanLabels> = {}) {
   if (run.schemaVersion !== 1 || run.planVersion !== JUDGE_EXPERIMENT_PLAN.version || run.planSha256 !== JUDGE_EXPERIMENT_PLAN_SHA256) {
     throw new Error('This run is bound to a different experiment plan');
   }
   const known = new Set(run.cases.map((c) => c.caseId));
   for (const [caseId, label] of Object.entries(labels)) {
     if (!known.has(caseId)) throw new Error(`Human labels name an unknown case: ${caseId}`);
-    validateHumanVotes(label.humanVotes, caseId);
+    assertHumanVotes(label?.humanVotes, caseId);
+    validateHumanLabels(undefined, label.humanDimensionVotes, caseId);
   }
   const rows = run.cases.map((c) => {
     const inc = incumbentChoice(c), chal = challengerChoice(c);
@@ -738,7 +765,12 @@ export function analyzeJudgeExperiment(run: JudgeExperimentRun, labels: Record<s
   const humanAgreement = pairedEndpoint('human_agreement', labelled.map((r) => ({ lineageId: r.c.lineageId,
     incumbent: r.inc.choice === r.human ? 1 : 0, challenger: r.chal.choice === r.human ? 1 : 0 })));
   const clean = rows.filter((r) => r.c.truth.kind === 'clean_control');
-  const falseCritical = clean.length ? clean.filter((r) => r.chal.critical).length / clean.length : null;
+  // The plan's success counting: a clean control the challenger did not answer validly in both
+  // orders is a failure of this margin, never a clean pass. Otherwise an over-flagging reply that
+  // fails validation would improve the challenger's result.
+  const cleanControl = { cases: clean.length, critical: clean.filter((r) => r.chal.critical).length,
+    notValidlyAnswered: clean.filter((r) => r.c.challenger.status !== 'complete').length };
+  const falseCritical = clean.length ? (cleanControl.critical + cleanControl.notValidlyAnswered) / clean.length : null;
 
   const costs = (judge: JudgeName) => {
     const calls = run.calls.filter((c) => c.judge === judge && c.status !== 'quoted' && c.status !== 'refused_before_dispatch');
@@ -812,12 +844,18 @@ export function analyzeJudgeExperiment(run: JudgeExperimentRun, labels: Record<s
     counts,
     primary,
     secondary: { copyDefectDetection: byClass('copy'), layoutDefectDetection: byClass('layout'), orderConsistency, humanAgreement },
-    margins: { ...margins, cleanControlFalseCriticalRate: falseCritical, costPerCaseRatio: costRatio, superiority: superior },
+    margins: { ...margins, cleanControlFalseCriticalRate: falseCritical, cleanControl, costPerCaseRatio: costRatio, superiority: superior },
     reported: {
       challengerAbstentionRate: completeChallenger.length ? completeChallenger.filter((r) => r.chal.choice === 'abstain').length / completeChallenger.length : null,
       challengerTieRate: completeChallenger.length ? completeChallenger.filter((r) => r.chal.choice === 'tie').length / completeChallenger.length : null,
       byLanguage: strata('language'),
       byFormat: strata('format'),
+      /**
+       * Exploratory, outside the frozen decision rule: the challenger's validly answered cases through
+       * the R06 calibration analyzer, overall and per dimension against per-dimension human labels.
+       * The incumbent has no matching dimensions, so no paired per-dimension margin exists.
+       */
+      challengerCalibration: challengerCalibration(run, labels),
     },
     cost,
     stoppedReason: run.stoppedReason,

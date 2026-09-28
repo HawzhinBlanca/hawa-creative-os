@@ -139,7 +139,13 @@ Selection keeps the same eligible top two, rendered bytes, degraded-copy canary,
 ledger client and budget. The application decides: correctness, then
 communication, then aesthetic preference, each stable across both orders. An
 uncertain pair keeps the higher composite and records `humanChoiceRecommended`;
-a failed canary does the same with the judge marked unreliable. Judgments keep
+a failed canary does the same with the judge marked unreliable. A canary that
+renders the same bytes as the pick is not called; the untested pick is not
+trusted, the composite stands and `judgeReliable` is null. An unavailable judge
+records the refusal's `errorCode` and `humanChoiceRecommended`, and the Desk
+Studio panel asks the reviewer to choose whenever that flag is set. The
+challenger accepts up to 24,000 characters of request instructions within a
+30,000-character packet; a longer request is refused, never truncated. Judgments keep
 packet and image hashes, the validated verdict, the decision and the receipt.
 The flag is not admitted for production until the ADR-124 experiment, human
 labels and a shadow run say so. See [ADR-124](../adrs/124_brief_bound_judge_challenger.md).

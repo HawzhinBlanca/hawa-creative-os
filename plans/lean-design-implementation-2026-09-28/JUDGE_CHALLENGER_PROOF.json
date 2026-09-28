@@ -2,7 +2,7 @@
   "date": "2026-09-28",
   "base_commit": "7b8de71ed015616c5a315cf67da07af31c77019a",
   "branch": "codex/research-grade-design-system (isolated worktree branch worktree-wf_82dde19f-6dc-2)",
-  "status": "CHALLENGER_AND_EXPERIMENT_LOCALLY_QUALIFIED_SYNTHETIC_ONLY_NOT_ADMITTED",
+  "status": "CHALLENGER_AND_EXPERIMENT_LOCALLY_QUALIFIED_AFTER_REVIEW_FIX_SYNTHETIC_ONLY_NOT_ADMITTED",
   "adr": "124",
   "migration": null,
   "requirements": [
@@ -15,15 +15,15 @@
   "source_files": [
     {
       "path": "adrs/124_brief_bound_judge_challenger.md",
-      "sha256": "ef44b1731a48bcd6ae06f35ce119aa1eea1f12d66aad841c42d381e06ce0bfbe"
+      "sha256": "686bb296808db6986f72671e1d66154bab2dec60222fd6ef932ff859cee288c5"
     },
     {
       "path": "packages/creative/src/studio/brief-bound-judge.ts",
-      "sha256": "07ed38f857f35453bd97ae273a8023df52edb4d9c618704fb695e7646650a7b7"
+      "sha256": "f4c2944c17c10e01226291cd44f9d705bf8d8a784fa4b676864257a850e46ff0"
     },
     {
       "path": "packages/creative/src/studio/pipeline-v3.ts",
-      "sha256": "7e11d0c321149c3da31d759d3c99f4da811b6ab205811b2d5d609a995800d013"
+      "sha256": "a0968c39e3537697836454e6958f95ddf6f5a22a4593d4c2cd954978822cebcd"
     },
     {
       "path": "packages/creative/src/index.ts",
@@ -31,19 +31,19 @@
     },
     {
       "path": "packages/creative/test/brief-bound-judge.test.ts",
-      "sha256": "e3d06991c6fac8f0ec4faf5b57361a56f199553b3a558750b1c3ba005088543c"
+      "sha256": "a6d29738301d74f511029cdc15b65651145d2d8ae68bcdd8b5deb5a605a7b989"
     },
     {
       "path": "packages/creative/test/pipeline-v3.test.ts",
-      "sha256": "04f8fdbdbcfdaeedcc684c880d0f620c1ae6814aa17b3a30a0e3414b39141ece"
+      "sha256": "e4024a1424816e5a10717e5f5ae8d789b18de501aa181acd7cd78681814e7dba"
     },
     {
       "path": "packages/evals/src/judge-calibration.ts",
-      "sha256": "2c0540541efb2ba903c6755e32ab3eddef282982be684e2c84a28c4adbfa5a76"
+      "sha256": "4befedff1836e6e6c5b04da8841898e4366de4aeac3db47af3997ad33e8571b4"
     },
     {
       "path": "packages/evals/src/judge-experiment.ts",
-      "sha256": "335751891179624fd143c69f6635c24ad25c98213d9b064d342c5d4d56a377b0"
+      "sha256": "a8b4a374767c1cf8ebe04c3796b0b2de85e8ac965a3159f543a53edea3173765"
     },
     {
       "path": "packages/evals/src/design-studio/offline-runner.ts",
@@ -51,7 +51,7 @@
     },
     {
       "path": "packages/evals/src/research-study/analyze.ts",
-      "sha256": "d576a612296917b35dd32b8b0c1b98cb618f15b2fe86f0d68c8000b0c0a673d9"
+      "sha256": "1fa9d8a7404811d9a8b2da8eaba57dc02fc96861c833a632ca5c7338a8c637e3"
     },
     {
       "path": "packages/evals/src/index.ts",
@@ -63,11 +63,11 @@
     },
     {
       "path": "packages/evals/test/judge-experiment.test.ts",
-      "sha256": "a583fe80c9ffa93e59b83db43a4ffc384e1a3a3e4ed51051ee287064f940b94c"
+      "sha256": "e4df08102ea698c06244fce1db541895f158e50a69c2d4acf27f88afb77adf04"
     },
     {
       "path": "apps/core/src/services/design-studio/design-studio-service.ts",
-      "sha256": "648d61eac4cb157d762e5082f9643d42dc0a316c9bf3da42f0b17f440e746057"
+      "sha256": "c951f4e22c17bf69386e5f5de7f4037a08f2d3455b0059d30507dc8083ca1e92"
     },
     {
       "path": "apps/core/src/services/design-studio/stages/v3.stage.ts",
@@ -75,19 +75,19 @@
     },
     {
       "path": "apps/core/test/design-studio-orchestrator.test.ts",
-      "sha256": "999a72acf41d0a8a2155b2735d9c739dc91be3eab8c711748404cf419231f95e"
+      "sha256": "2250ddd234310439eaa75335d17792f46f730304c0e6bf59514572025d5b802b"
     },
     {
       "path": "scripts/run_judge_experiment.ts",
-      "sha256": "11bd070eea03253931425234f40b0d65157a6076394efcc931511f7ad9217e85"
+      "sha256": "27a1949d7a78af191668b3b52b6da821c0984921974d5f2634c61fd50d2ec0e0"
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
-      "sha256": "b8a3a88486f9f236f9b3d801bab572c029043a07dcef2cc62cbfddd101c5ec79"
+      "sha256": "5f49f2f14f4fffe6f9c84d176993ec5ab856f042c9f475b3b0317cf5e3d666a0"
     },
     {
       "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
-      "sha256": "4ac8934edf8a427166064c2c52dbb9387d0342a5d16ed3532f283c6e1bd535a2"
+      "sha256": "1ca5a9c43082011740ffb07c549d784b9b38e8b448a8a503386a597e951661a4"
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
@@ -95,7 +95,19 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "504d385cc2eefd806012e7896dae3a77853a8de63f25706fe977105ad4b5a671"
+      "sha256": "c25679bf51db4806df8f567cbf0f5b9e47b0dc4d4440c919e8e612fa7bfb6e22"
+    },
+    {
+      "path": "apps/desk/src/components/StudioJudgeNotice.tsx",
+      "sha256": "f2c9897123f79caf0e49c2efb65d9374f493dfa9d08c9ee1c9469eef6f032f5d"
+    },
+    {
+      "path": "apps/desk/src/components/StudioPanel.tsx",
+      "sha256": "4a631cb0cf62682ed50928b16974290c6af46113b258751c67df7d73be4423e0"
+    },
+    {
+      "path": "apps/desk/test/studio-judge-notice.test.ts",
+      "sha256": "3d7cbf861f86f969ca84a66c1e59dca5a992092bc82b51f75a67e617cb8bb859"
     }
   ],
   "evidence": [
@@ -190,6 +202,70 @@
     {
       "path": "output/acceptance/2026-09-28-judge-challenger/synthetic-reanalysis.json",
       "sha256": "7cee05a6591cc9e7d9b6f94d7efcb7689a00c3fcdc7324ca7ae6e21c7f9d2a26"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/red.json",
+      "sha256": "3b7c312af3d5f6830f363a58cd7fa8455e27289f9ffbf452c5ff6d68e8f96d1c"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/red.log",
+      "sha256": "4f9d2d63b578109d3948714ad8bda6e13f6cb44e6d585fa84375b007c6eef4ba"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/connected.json",
+      "sha256": "6ddb557e521a0622f05e35d4c7a623a91c43993674a27f087830014445466368"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/connected.log",
+      "sha256": "ce69c4a6ca1afda1e2f717301ecd9f00e4b20187f8882dced202ed692361fed6"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/ledger-base-source.log",
+      "sha256": "f46982770bf55c79a7a21f18a147e875bbd390f682fa3c5b635625e608beb8c4"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/full-suite.json",
+      "sha256": "7f2c24bd01dad5dd281009bda3d063576c706b1425ef43519829fcf872cba288"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/full-suite.log",
+      "sha256": "a594bd22b863693b58badd9f277b8f854acc8758f97cfe3d91d030d8c21f64db"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/bootstrap-equivalence.mts",
+      "sha256": "e361ea0d706f1212823f4992527417959d89472c9e4196e4fc64879c3921eae4"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/bootstrap-equivalence.json",
+      "sha256": "1d6ac5d93397f2d45aeb58344bfb761de7dcb1b5034768111883cad93369cd79"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/typecheck.log",
+      "sha256": "139a0e1c4c6dcee45587fbbc1c7ec2f47d013f9046be167f22cb4763d33312c4"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/lint.log",
+      "sha256": "2b48a3338dcd420cf34b7b7f2ca5a024c102c3873cb1f7301a31008dbbf2c083"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/security.log",
+      "sha256": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/synthetic-run.log",
+      "sha256": "69276a5c918c02c7868a0c068587d7ece92acb3801b15fc0793a19c339f9a351"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/synthetic-gpt-4.1-mini/run.json",
+      "sha256": "77ddbff70a0a0d8ec996dc91cec67ce9012183cd7e2fc21b219ce7add40b26c4"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/synthetic-gpt-4.1-mini/analysis.json",
+      "sha256": "ca93ece4bb40a3a54e235f6e01db68a6ebba402c1882f8be1e208814cfd4be19"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-judge-challenger-fix/synthetic-reanalysis.json",
+      "sha256": "ca93ece4bb40a3a54e235f6e01db68a6ebba402c1882f8be1e208814cfd4be19"
     }
   ],
   "acceptance": {
@@ -255,7 +331,51 @@
       },
       "dispatched": 0
     },
-    "plan_sha256": "3ab6847dc3f79c622d2b72c3cc10c0afe7f8eedf2fc648946888703098a6b90d"
+    "plan_sha256": "3ab6847dc3f79c622d2b72c3cc10c0afe7f8eedf2fc648946888703098a6b90d",
+    "review_fix": {
+      "date": "2026-09-28",
+      "base_commit": "ebe3dbf8631ef6c8a3b280b769f10c8e5f0115c3",
+      "blocking": "Clean-control false-critical margin counted an invalid challenger reply as a clean pass. Fixed: a clean control not validly answered in both orders counts against the 0.05 ceiling and stays in the denominator; margins.cleanControl reports cases, critical and notValidlyAnswered. Plan text and hash unchanged (its success counting already required this).",
+      "reproduced_scenario": "Paid-shaped record, 20 seeded lineages detected by the challenger, 10 clean controls: with critical findings CHALLENGER_REGRESSES (rate 1); with invalid replies now rate 1, margin false, CHALLENGER_REGRESSES (was rate 0, margin true, PENDING_HUMAN_LABELS)",
+      "minor_findings": {
+        "incumbent_flip_as_tie": "fixed: a flip is its own outcome and never agrees with a human tie consensus",
+        "reimplemented_analysis": "fixed: R06 assertHumanVotes, assertHumanDimensionVotes and humanConsensus exported and used; lineage bootstrap extracted as bootstrapLineageMeans and used by the R-study analysis and the experiment (bit-identical to the old R-study code on 200 generated cases); run records bind both image hashes and the challenger cases go through analyzeBlindJudgeCalibration, per dimension. Dimension results are reported as exploratory and do not enter the frozen decision rule: the incumbent has no matching dimensions, so no paired margin exists.",
+        "instruction_bounds": "fixed in part: instructions up to 24,000 characters and must/mustNot items up to 1,000 inside the unchanged 30,000-character packet; a request that still cannot fit is refused, never truncated, and Core records errorCode with the unavailable judge so the class can be counted",
+        "identical_canary": "fixed: no canary call is made; the pick is untested and not trusted; composite_judge_uncertain, judgeReliable null, humanChoiceRecommended true; Core records a canary row with passed null and the reason",
+        "human_choice_unread": "fixed: the Desk Studio panel shows a request to choose when stages.tournament.humanChoiceRecommended is true; an unavailable judge now records it as true. Incumbent tie and canary-failure outcomes are unchanged and record false.",
+        "studio_ledger_failures": "confirmed pre-existing: with apps/core/src restored to 7b8de71e the same 2 tests fail with db.transaction is not a function (ledger-base-source.log)"
+      },
+      "red": {
+        "files": 5,
+        "tests": 107,
+        "passed": 100,
+        "failed": 7,
+        "note": "each failed for the reported reason: invalid clean-control rate 0 expected 1; incumbent tie agreement 1 expected 0; run records without image hashes; no challengerCalibration; 6001+ character instructions refused; identical canary threw; errorCode undefined; Desk component missing"
+      },
+      "connected": {
+        "files": 26,
+        "passed": 257,
+        "failed": 0,
+        "skipped": 0,
+        "note": "the 21 connected files of the first round plus 5 Desk files touching the Studio panel"
+      },
+      "full_suite": {
+        "files": 535,
+        "passed": 4493,
+        "failed": 9,
+        "skipped": 60,
+        "failures": "the same 9 tests in the same 8 files as the first round, which reproduced on base 7b8de71e"
+      },
+      "synthetic_rerun": {
+        "corpus": "corpus-golden-24 (unchanged)",
+        "calls": 288,
+        "synthetic_spend_usd": 0.44928,
+        "quoted_usd": 2.540234,
+        "decision": "SYNTHETIC_PLUMBING_ONLY",
+        "reanalysis_identical": true,
+        "challenger_calibration_cases": 72
+      }
+    }
   },
   "checks": {
     "source_types": "passed",
@@ -265,7 +385,16 @@
     "any_ceiling": 1053,
     "provider_egress": "passed with 9 existing exceptions",
     "security": "0 secrets",
-    "validate_pack": "passed after supplying the ignored output/audits link target locally"
+    "validate_pack": "passed after supplying the ignored output/audits link target locally",
+    "review_fix": {
+      "source_types": "passed",
+      "script_types": "passed",
+      "strict_test_roots": 536,
+      "any_count": 956,
+      "any_ceiling": 1053,
+      "provider_egress": "passed with 9 existing exceptions",
+      "security": "0 secrets"
+    }
   },
   "proof_scope": [
     "brief and exact copy bound into the judge text unchanged; brief data cannot close its tag block",
@@ -280,7 +409,14 @@
     "frozen hashed plan; paired lineage-clustered bootstrap effect sizes; regression margins; minimum sample; decision rule",
     "corpus hash, path, PNG and metadata verification",
     "pre-dispatch ADR-091 quote, run cap and office daily cap refusal; first provider error stops the run; cases not run stay in denominators",
-    "quote-only dispatches nothing; paid mode requires the typed plan hash"
+    "quote-only dispatches nothing; paid mode requires the typed plan hash",
+    "a clean control without a valid challenger answer counts against the false-critical margin",
+    "an incumbent order flip never agrees with a human tie",
+    "experiment labels validated and aggregated by the R06 calibration helpers; challenger cases reported through analyzeBlindJudgeCalibration per dimension",
+    "shared lineage bootstrap, bit-identical to the prior R-study computation",
+    "long request instructions bound whole within the packet bound; the refusal code recorded by Core",
+    "identical degraded canary: no call, untrusted pick, composite with human choice",
+    "Desk request to choose when humanChoiceRecommended is set"
   ],
   "not_executed": [
     "paid model calls for either judge",
@@ -291,7 +427,9 @@
     "retained production exports as a corpus",
     "creator/judge model-family separation",
     "OS process-kill drill",
-    "full release gate"
+    "full release gate",
+    "per-dimension human-agreement margin (would need a new plan version before the first paid run)",
+    "humanChoiceRecommended for the incumbent tie and canary-failure outcomes"
   ],
   "next": [
     "owner-approved paid development run on gpt-4.1-mini with the plan hash and a USD 3 run cap",

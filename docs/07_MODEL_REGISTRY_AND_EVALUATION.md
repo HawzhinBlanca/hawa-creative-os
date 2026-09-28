@@ -376,7 +376,12 @@ hashed before any run: seeded-defect detection is primary (paired,
 lineage-clustered bootstrap; worthwhile effect +0.10, lower bound above 0), with
 margins for human agreement and order consistency (-0.05), clean-control
 critical findings (at most 0.05) and cost per case (at most 2x). Ties,
-abstentions, flips and missing calls count as failures. Each request is quoted
+abstentions, flips, invalid replies and missing calls count as failures,
+including a clean control the challenger did not answer validly, which counts
+against the critical-finding ceiling. The analysis reuses the R06 label
+validators and consensus rule and the R-study lineage bootstrap, and reports the
+challenger's validly answered cases through the calibration analyzer, per
+dimension; those dimension results are exploratory and outside the decision. Each request is quoted
 before dispatch with the Studio reservation policy and admitted against a run cap
 and the office daily ledger; the first provider error stops the run; a paid run
 must confirm the plan hash. Synthetic and quote-only runs measure no judgment.
