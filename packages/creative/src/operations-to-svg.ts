@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { sniffImageType } from './studio/image-type.js';
+import { creativeAssetPath } from './studio/asset-paths.js';
 import { defaultFontsDir, pinnedFontconfigFile, rasteriserEnv } from './studio/font-environment.js';
 
 let cachedKaaeLogoDataUri: string | null = null;
@@ -18,16 +19,16 @@ let cachedKaaeLogoDataUri: string | null = null;
 export function getKaaeOfficialLogoDataUri(): string {
   if (cachedKaaeLogoDataUri) return cachedKaaeLogoDataUri;
 
+  // The package's own copy first, found from this module, as in the image; no path on one person's Mac.
+  const shipped = creativeAssetPath('logos/kaae-official-logo.png', { optional: true });
   const candidatePaths = [
+    ...(shipped ? [shipped] : []),
     path.join(process.cwd(), 'packages/creative/assets/logos/kaae-official-logo.png'),
     path.join(process.cwd(), 'apps/desk/public/assets/logos/kaae-official-logo.png'),
     path.join(process.cwd(), 'data/kaae-graphics/references/kaae-logo.png'),
     '/app/packages/creative/assets/logos/kaae-official-logo.png',
     '/app/assets/logos/kaae-official-logo.png',
     '/app/apps/core/assets/logos/kaae-official-logo.png',
-    '/Users/hawzhin/Hawdesign/packages/creative/assets/logos/kaae-official-logo.png',
-    '/Users/hawzhin/Hawdesign/apps/desk/public/assets/logos/kaae-official-logo.png',
-    '/Users/hawzhin/Hawdesign/data/kaae-graphics/references/kaae-logo.png',
   ];
 
   for (const p of candidatePaths) {

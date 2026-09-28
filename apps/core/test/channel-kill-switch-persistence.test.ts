@@ -120,7 +120,11 @@ describe('the kill switches survive a restart', () => {
 
   it('Telegram, thrown with POST /operations/kill-switch: a Core built right after the answer still sees it', async () => {
     const before = createApp({ db } as any);
-    const thrown = await before.request('/v1/operations/kill-switch', { method: 'POST', headers: operator, body: JSON.stringify({ channel: 'telegram', active: true }) });
+    // An administrator's switch: an operator is refused, and nothing is thrown.
+    const refused = await before.request('/v1/operations/kill-switch', { method: 'POST', headers: operator, body: JSON.stringify({ channel: 'telegram', active: true }) });
+    expect(refused.status).toBe(403);
+    expect(await channels(createApp({ db } as any))).toEqual({ telegram: true, waha: true });
+    const thrown = await before.request('/v1/operations/kill-switch', { method: 'POST', headers: admin, body: JSON.stringify({ channel: 'telegram', active: true }) });
     expect(thrown.status).toBe(200);
     const restarted = createApp({ db } as any);
     expect(await channels(restarted)).toEqual({ telegram: false, waha: true });

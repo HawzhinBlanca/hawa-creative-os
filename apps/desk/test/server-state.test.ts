@@ -534,6 +534,25 @@ describe('an expired session reaches sign-in from any screen, once', () => {
     });
   }
 
+  it("clears the offline copies of Core's answers at sign-out (audit 2026-09-27 #21)", async () => {
+    const deleted: string[] = [];
+    const fakeCaches = {
+      keys: async () => ['hawa-api-v1', 'hawa-shell-v1', 'another-app'],
+      delete: async (key: string) => { deleted.push(key); return true; },
+    };
+    Object.defineProperty(window, 'caches', { value: fakeCaches, configurable: true });
+    try {
+      stubCore(expired);
+      const { runtime } = await renderApp('work');
+      await advance(3_000);
+      expect(runtime.session.getState()).toMatchObject({ status: 'signed_out' });
+      await flush();
+      expect(deleted.sort()).toEqual(['hawa-api-v1', 'hawa-shell-v1']);
+    } finally {
+      delete (window as { caches?: unknown }).caches;
+    }
+  });
+
   it('mid-use, from a screen not on the query layer: its first 401 makes the Desk check the session, and sign-in shows once', async () => {
     let sessionEnded = false;
     const calls = stubCore((c) => {

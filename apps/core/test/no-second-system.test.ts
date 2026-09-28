@@ -41,7 +41,7 @@ describe('Task 1: Elimination of Second System & Test-Environment Backdoors', ()
     expect(await channels(a)).toEqual({ telegram: false, waha: true });
     expect(await channels(b)).toEqual({ telegram: true, waha: true });
 
-    const killed = await a.request('/v1/operations/kill-switch', { method: 'POST', headers: operator, body: JSON.stringify({ channel: 'waha', active: true }) });
+    const killed = await a.request('/v1/operations/kill-switch', { method: 'POST', headers: { ...operator, Authorization: 'Bearer test_admin_key' }, body: JSON.stringify({ channel: 'waha', active: true }) });
     expect(killed.status).toBe(200);
     expect(await channels(a)).toEqual({ telegram: false, waha: false });
     expect(await channels(b)).toEqual({ telegram: true, waha: true });

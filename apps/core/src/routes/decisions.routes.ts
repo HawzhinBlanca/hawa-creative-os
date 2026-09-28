@@ -497,7 +497,9 @@ export function registerDecisionsRoutes(ctx: RouteContext): void {
             }
           }
         } catch (err) {
+          // Fail closed: an approval whose QA could not be read used to go through (audit #14).
           log.error('[core:approvals:qc_lookup] DB QC run lookup error:', err);
+          return problem(c, 503, 'Database Unavailable', 'The QA run of this revision could not be read; try again');
         }
       }
 

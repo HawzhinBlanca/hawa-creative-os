@@ -12,6 +12,7 @@ import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus } from '@hawa/con
 import { log } from '../logging.js';
 import { telegramPollerOf } from '../services/telegram-poller-owner.js';
 import { registerAvailabilityRoutes, availabilityConfig, AvailabilityError, readAvailabilityReport } from './availability.routes.js';
+import { setKillSwitch } from '../services/channel-kill-switches.js';
 
 /**
  * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors
@@ -501,18 +502,28 @@ export function registerSystemRoutes(ctx: RouteContext) {
   registerRoute('post','/operations/reconciliation/run',(c: any)=>auditRequest(c,true));
 
   // Operational Security & Outage Simulation (CV-20, FR-065, FR-071)
+  // An administrator's switch, as POST /waha/kill-switch is: any signed-in role could release a switch
+  // an administrator threw, and the answer came before Postgres had it, so a failed save was forgotten
+  // by the next restart (audit 2026-09-27 #17, ported under ADR-127). The save is the same revisioned
+  // write the intake toggle makes (ADR-054), and its changeTag is returned.
   registerRoute('post', '/operations/kill-switch', async (c: any) => {
+    const denied = requireAdministrator(c);
+    if (denied) return denied;
     const auth = verifyRequestAuth(c);
-    if (!auth.authenticated) {
-      return problem(c, 401, 'Unauthorized', 'Authentication required to toggle kill switch');
-    }
     const body = await c.req.json().catch(() => ({}));
     const { channel, active } = body;
     if (channel === 'telegram' || channel === 'waha') {
       const ch = channel as 'telegram' | 'waha';
-      channelKillSwitches[ch] = Boolean(active);
+      let changeTag: string | undefined;
+      try {
+        changeTag = await setKillSwitch(channelKillSwitches, ch, Boolean(active), auth.actorId);
+      } catch (err: unknown) {
+        log.error(`[core:kill_switch] the ${ch} kill switch could not be saved:`, err instanceof Error ? err.message : err);
+        return problem(c, 503, 'Kill switch not saved', `The ${ch} kill switch could not be saved to the database; it is unchanged. Try again.`);
+      }
+      if (ch === 'waha') process.env.WAHA_KILL_SWITCH = active ? 'true' : 'false';
       broadcastEvent('operations:kill_switch_toggled', { channel: ch, active: channelKillSwitches[ch] });
-      return c.json({ channel: ch, active: channelKillSwitches[ch] }, 200);
+      return c.json({ channel: ch, active: channelKillSwitches[ch], ...(changeTag ? { changeTag } : {}) }, 200);
     }
     return c.json({ error: 'Invalid channel (must be telegram or waha)' }, 400);
   });

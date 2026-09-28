@@ -893,10 +893,18 @@ export class DesignStudioService {
    * critique and the judge alike. A read failure stops the run: designing without rules the office
    * set is the silent failure this replaced.
    */
-  private async withClientRules(s: Scope, ctx: StageContext): Promise<StageContext> {
+  private async withClientRules(s: Scope, ctx: StageContext, runStartedAt?: Date | string): Promise<StageContext> {
     // No database (a unit harness) means no rules to read; with one, a failed read stops the run.
     if (!ctx.clientId || typeof (this.db as { transaction?: unknown })?.transaction !== 'function') return ctx;
-    const rules = await this.tx(s, (db) => new ClientRulesRepository(db).listActive(s.tenantId, ctx.clientId));
+    // The rules as they stood when the run started: every stage re-read the current ones, so a rule
+    // sent mid-run changed the critique and the judge but not the brief (audit 2026-09-27 #16).
+    const startedAt = runStartedAt ? new Date(runStartedAt) : undefined;
+    const rules = await this.tx(s, (db) => {
+      const repo = new ClientRulesRepository(db);
+      return startedAt && !Number.isNaN(startedAt.getTime())
+        ? repo.listInForceAt(s.tenantId, ctx.clientId, startedAt)
+        : repo.listActive(s.tenantId, ctx.clientId);
+    });
     const text = formatClientRulesForPrompt(rules);
     if (!text) return ctx;
     ctx.clientRules = text;
@@ -1348,7 +1356,7 @@ export class DesignStudioService {
     // worker to retry for ever, so it is marked failed here with the reason.
     let ctx: StageContext;
     try {
-      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate, replayCalls, Boolean(pinnedVisualInputs)));
+      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate, replayCalls, Boolean(pinnedVisualInputs)), run.created_at);
     } catch (err: any) {
       if (pinnedVisualInputs) throw new CanvaFlowError(409, 'STUDIO_VISUAL_INPUTS_UNSAFE',
         'The pinned design policy cannot currently be verified. Restore its original authorized inputs before continuing.');

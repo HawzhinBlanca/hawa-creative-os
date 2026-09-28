@@ -121,6 +121,28 @@ styling, `generateCommercialBrandOperations` no longer falls back to KAAE's
 templates for an unknown brand, and seven proof scripts bound to the templates
 are deleted (none ran in CI). KAAE is designed only in the studio.
 
+## Decision: the 2026-09-27 audit fixes on KAAE's live chain
+
+Ported from 66e483e8, each against this branch's code. Ported: a stored approval a
+later edit invalidated is delivered only by an administrator with a reason and
+still needs its QC evidence (#2); a pending client change blocks Core delivery
+on every path (#3); an approval whose QA run cannot be read is refused 503 instead
+of reaching the generic 412 (#14; this branch already required a passing run
+everywhere, stricter than studio-v2's production-only rule); standing client
+rules reach the models quoted, as data (#15), and a run reads the rules in force
+when it started (#16); `POST /operations/kill-switch` is an administrator's and
+answers after the revisioned save of ADR-054, returning its `changeTag` (#17); the
+SVG sanitizer strips to a fixed point (#11); the Desk clears its offline copies at
+sign-out (#21); no shipped source names a path on the owner's Mac, and the unused
+named people leave `config/clients/kaae.dna.json` (#22).
+
+Superseded here: #12 (studio-v2 left the task in PUBLISH_RECONCILIATION when the
+requester's notice could not be queued; this branch enqueues the notice in the same
+transaction as the Drive and Sheets receipts, so the whole delivery is held with
+503 `RECEIPTS_NOT_RECORDED`) and #16's reference drift check (studio-v2's
+`CLIENT_SCOPE_CHANGED`; this branch refuses with `CLIENT_REFERENCE_CHANGED` when
+the run's recorded reference or logo hash no longer matches).
+
 ## Decision: a Restate backup killed outright is put back by the watchdog
 
 studio-v2's Restate backup was a shell script; its watchdog skipped a pass while a

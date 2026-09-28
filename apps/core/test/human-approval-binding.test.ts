@@ -726,14 +726,21 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
     // Step 6: ATTEMPT 3 — Publish approved stored Revision A under explicit policy 'deliver_approved_stored'
     // SUCCEEDS and delivers stored files without re-exporting live Canva design!
-    const deliverStoredARes = await app.request(`/tasks/${task.id}/publish-omnichannel`, {
+    // It is an administrator's decision, with a reason (audit 2026-09-27 #2): any role could send it.
+    const storedBody = { policy: 'deliver_approved_stored', designRevisionId: revA, approvalId: approvalIdA };
+    const asArtDirector = await app.request(`/tasks/${task.id}/publish-omnichannel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        policy: 'deliver_approved_stored',
-        designRevisionId: revA,
-        approvalId: approvalIdA,
-      }),
+      body: JSON.stringify({ ...storedBody, reason: 'Client confirmed A' }),
+    });
+    expect(asArtDirector.status).toBe(403);
+    const admin = { 'Content-Type': 'application/json', 'x-user-role': 'administrator' };
+    const noReason = await app.request(`/tasks/${task.id}/publish`, { method: 'POST', headers: admin, body: JSON.stringify(storedBody) });
+    expect(noReason.status).toBe(422);
+    const deliverStoredARes = await app.request(`/tasks/${task.id}/publish-omnichannel`, {
+      method: 'POST',
+      headers: admin,
+      body: JSON.stringify({ ...storedBody, reason: 'The client confirmed revision A by phone' }),
     });
     expect(deliverStoredARes.status).toBe(200);
     const deliverStoredJson = await deliverStoredARes.json();
