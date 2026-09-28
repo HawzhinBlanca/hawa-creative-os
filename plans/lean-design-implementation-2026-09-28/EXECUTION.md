@@ -14,7 +14,7 @@ No package is complete merely because a smaller test passes.
 | --- | --- | --- | --- |
 | 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty, reviewed-copy handoff and automatic linked-revision owner recovery locally qualified; actual native preservation and initial manual intake open | ADR-108/113/114; CANVA_UNCERTAINTY_PROOF.json; NATIVE_REVISION_HANDOFF_PROOF.json; LIFECYCLE_NATIVE_RECOVERY_PROOF.json |
 | 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs and Unicode lexical exemplar baseline locally qualified; authorized visual order, multilingual semantic retrieval and human comparison open | ADR-109/115; CREATIVE_HANDOFF_PROOF.json; UNICODE_RETRIEVAL_PROOF.json |
-| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results and visual input pins locally qualified; branch checkpoints, font/runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json |
+| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results, visual input pins and font basis locally qualified; branch checkpoints, renderer/cutout runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112/116; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json |
 | 4 | Amend/Adapt routing and actual Canva account capability qualification | Open | Official documentation is not account admission |
 | 5 | Relationship-led composition, calibrated selection, governed edit learning and equal-budget human comparisons | Open | Existing R04–R06/R13/R22–R25 study machinery must be reused |
 | 6 | Complete supervised native review/delivery, release qualification and independent recovery | Open | Prior qualification remains scoped to its own candidate |
@@ -267,3 +267,32 @@ files, translate English-only metadata, qualify a multilingual semantic model, o
 establish human design quality. Next: complete the approved multilingual corpus and
 semantic comparison alongside authorized intent/typography and actual native edit
 qualification; retain the remaining compute, human and release gates.
+
+
+## 2026-09-28 — Retained font basis and stale measurement repair
+
+ADR-116 binds new version-2 visual bundles to actual packaged/allowlisted system
+font bytes and registry content. Recovery holds before another model/render stage
+if that basis changed or cannot be read. Restoring the original environment permits
+resumption with the existing retained inputs. Version-1 bundles are held for review;
+current hashes cannot attest to their historical environment. No database migration.
+
+The previous path-only fontkit cache reproduced a stale 472px measurement after
+font replacement. The repaired cache observes file identity including ctime, hashes
+changed bytes, refuses a changing read and never treats deletion as a cache hit.
+Fontconfig/family discovery incorporates content inventory; registry and admission/
+ink caches invalidate on changed content. Actual font inventory reads cost about
+4ms p95 for 27 files over 30 local samples, not an end-to-end latency claim.
+
+Qualification: 11 files / 147 tests passed, zero failed/skipped. Source/scripts and
+527 strict roots pass; two test-only spread typing failures were repaired. Real
+isolated DB/blob recovery uses an injected changed font identity to prove refusal,
+while font replacement/deletion/registry tests use actual temporary files. Original
+loader red proof and exact evidence are in FONT_BASIS_PROOF.json. No paid/native
+call, live migration, deployment, human study or release qualification occurred.
+
+All six packages remain active. Full shaping/rasterizer/OS identity, retained font
+binaries and licensing, concurrent modification during a running stage, native font
+fidelity, authorized visual order, semantic replay, native editing and human/release
+qualification remain open. Source-copy order remains protected; model reading order
+alone grants no authority to rearrange it.

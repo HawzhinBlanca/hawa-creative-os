@@ -22,7 +22,7 @@ import {
 } from './photo-treatments.js';
 import { escapeXml } from '../operations-to-svg.js';
 import { SvgFiles, checkInlineDataUris } from './svg-files.js';
-import { pinnedFontconfigFile, rasteriserEnv } from './font-environment.js';
+import { pinnedFontconfigFile, rasteriserEnv, fontFileInventory, pinnedSystemFontFiles, type FontFileIdentity } from './font-environment.js';
 
 export { PNG };
 
@@ -90,7 +90,7 @@ export interface RenderLayoutV2Result {
 }
 
 // In-memory cache for loaded fontkit Font objects
-const fontCache = new Map<string, any>();
+const fontCache = new Map<string, { fingerprint: string; sha256: string; font: any }>();
 
 /** Families whose script joins cursively, where letter-spacing is always wrong. */
 export const ARABIC_SCRIPT_FAMILIES = new Set([
@@ -804,16 +804,19 @@ export function fontFileFor(fontFamily: string, bold?: boolean, italic?: boolean
  */
 function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): any {
   const fontPath = fontFileFor(fontFamily, bold, italic, fontsDir);
-  if (fontCache.has(fontPath)) {
-    return fontCache.get(fontPath);
-  }
-
-  if (!fs.existsSync(fontPath)) {
-    throw new Error(`Font file not found: ${fontPath}`);
-  }
-
-  const font = fk.openSync(fontPath);
-  fontCache.set(fontPath, font);
+  const fingerprint = () => {
+    const st = fs.statSync(fontPath, { bigint: true });
+    return `${st.dev}:${st.ino}:${st.size}:${st.mtimeNs}:${st.ctimeNs}`;
+  };
+  const before = fingerprint(); // Missing files must never reuse an old object.
+  const cached = fontCache.get(fontPath);
+  if (cached?.fingerprint === before) return cached.font;
+  const bytes = fs.readFileSync(fontPath);
+  if (fingerprint() !== before) throw new Error(`Font changed while loading: ${fontPath}`);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  const font = cached?.sha256 === sha256 ? cached.font : fk.create(bytes);
+  if (fontCache.size >= 128 && !fontCache.has(fontPath)) fontCache.delete(fontCache.keys().next().value!);
+  fontCache.set(fontPath, { fingerprint: before, sha256, font });
   return font;
 }
 
@@ -1058,7 +1061,7 @@ export interface AdmittedFontFace {
   license: string;
 }
 
-const renderFontRegistryCache = new Map<string, RenderFontRegistry>();
+const renderFontRegistryCache = new Map<string, { sha256: string; registry: RenderFontRegistry }>();
 const admittedFaceCache = new Map<string, AdmittedFontFace[]>();
 
 /**
@@ -1088,10 +1091,13 @@ function resolveRenderFontsPath(registryPath?: string): string {
 /** The declared families, the aliases, and the characters each script's faces have to draw. */
 export function loadRenderFontRegistry(options: { registryPath?: string } = {}): RenderFontRegistry {
   const file = resolveRenderFontsPath(options.registryPath);
+  const bytes = fs.readFileSync(file);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
   const cached = renderFontRegistryCache.get(file);
-  if (cached) return cached;
-  const registry = JSON.parse(fs.readFileSync(file, 'utf8')) as RenderFontRegistry;
-  renderFontRegistryCache.set(file, registry);
+  if (cached?.sha256 === sha256) return cached.registry;
+  const registry = JSON.parse(bytes.toString('utf8')) as RenderFontRegistry;
+  admittedFaceCache.clear();
+  renderFontRegistryCache.set(file, { sha256, registry });
   return registry;
 }
 
@@ -2133,4 +2139,27 @@ export function renderAnnotatedLayoutV2(
     png,
     annotations,
   };
+}
+
+
+export interface RenderFontInputs {
+  version: 1;
+  sha256: string;
+  registrySha256: string;
+  files: FontFileIdentity[];
+}
+let lastFontBasis: string | undefined;
+
+/** Recovery evidence for fonts, not an attestation of native rasterizer/OS identity. */
+export function captureRenderFontInputs(options: { fontsDir?: string; registryPath?: string; systemFiles?: string[] } = {}): RenderFontInputs {
+  const registrySha256 = createHash('sha256').update(fs.readFileSync(resolveRenderFontsPath(options.registryPath))).digest('hex');
+  const files = fontFileInventory(options.fontsDir ?? resolveFontsDir(), options.systemFiles ?? pinnedSystemFontFiles());
+  const basis = { version: 1 as const, registrySha256, files };
+  const sha256 = createHash('sha256').update(JSON.stringify(basis)).digest('hex');
+  if (lastFontBasis !== undefined && lastFontBasis !== sha256) {
+    fontCache.clear(); inkCheckCache.clear(); sentinelHashCache.clear();
+    admittedFaceCache.clear(); substitutionWarned.clear();
+  }
+  lastFontBasis = sha256;
+  return { ...basis, sha256 };
 }

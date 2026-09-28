@@ -76,3 +76,14 @@ altered content under the same action is refused. Desk retains pending submissio
 identity across reload until a result or definite refusal is known. Approval and
 native preservation qualification remain independent. See
 [ADR-114](../adrs/114_lifecycle_native_revision_recovery.md).
+
+
+## Retained font basis (ADR-116)
+
+A new Studio visual bundle records the actual font-file and font-registry hashes.
+Recovery verifies this basis before the next model/render stage. A replaced, missing
+or newly available font or changed registry requires restoring the original basis
+or reviewing the existing run; the change cannot be silently adopted on resume.
+Historical version-1 bundles lack this evidence and remain held for review. This is
+font-input evidence, not native Canva fidelity or full renderer/OS reproducibility.
+See [ADR-116](../adrs/116_retained_font_basis.md).

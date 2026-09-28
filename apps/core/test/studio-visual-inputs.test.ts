@@ -1,13 +1,18 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql, withRlsContext, DesignStudioRepository, StudioVisualInputsRepository, StudioVisualInputsError, blobStoreFromEnv } from '@hawa/db';
-import { ExemplarRetrievalIndex, renderMotifPng } from '@hawa/creative';
+import { ExemplarRetrievalIndex, renderMotifPng, captureRenderFontInputs } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
 import { PhotoCutouts } from '../src/services/design-studio/photo-cutouts.js';
 import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
 import { captureVisualInputs, restoreVisualInputs } from '../src/services/design-studio/visual-inputs.js';
 import { layoutVisualInputs } from '../src/services/design-studio/stages/asset-inputs.js';
 import type { StageContext } from '../src/services/design-studio/types.js';
+
+vi.mock('@hawa/creative', async original => {
+  const actual=await original<typeof import('@hawa/creative')>();
+  return {...actual,captureRenderFontInputs:vi.fn(actual.captureRenderFontInputs)};
+});
 
 const boundary = vi.hoisted(() => ({ layout: vi.fn(), critique: vi.fn() }));
 vi.mock('../src/services/design-studio/stages/index.js', async original => ({
@@ -126,6 +131,22 @@ describe.skipIf(!url)('Studio uses one pinned visual basis',()=>{
     expect((await inputs.get(scope,runId))?.manifest).toMatchObject({exemplarRetrieval:context.exemplarRetrieval});
   });
 
+  it('holds a pinned run on changed font bytes and resumes after the original basis is restored',async()=>{
+    const f=service();await expect(f.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
+    expect(boundary.layout).toHaveBeenCalledTimes(1);
+    const original=await inputs.get(scope,runId);
+    expect(original?.manifest).toMatchObject({version:2,fonts:{version:1}});
+    const actual=captureRenderFontInputs();
+    vi.mocked(captureRenderFontInputs).mockReturnValueOnce({...actual,sha256:'0'.repeat(64)});
+    const second=service();
+    await expect(second.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
+    expect(boundary.layout).toHaveBeenCalledTimes(1);expect(second.fetcher).not.toHaveBeenCalled();
+    expect((await runs.getRunById(runId,scope.tenantId))?.status).toBe('laying_out');
+    expect(await inputs.get(scope,runId)).toEqual(original);
+    await expect(second.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
+    expect(boundary.layout).toHaveBeenCalledTimes(2);
+  });
+
   it('refuses changed client policy before layout or a new model call',async()=>{
     const first=service();await expect(first.svc.resume(scope,taskId,runId)).rejects.toThrow();
     const second=service();
@@ -169,5 +190,7 @@ describe('visual bundle interpretation',()=>{
     expect(()=>restoreVisualInputs({...ctx(),promotedRules:'changed'}, {}, bundle)).toThrow(/currently authorized/);
     expect(()=>restoreVisualInputs({...ctx(),pipelineV3:true}, {}, bundle)).toThrow(/currently authorized/);
     expect(()=>restoreVisualInputs(ctx(), {}, {...bundle,assets:[]})).toThrow(/missing/);
+    expect(()=>restoreVisualInputs(ctx(), {}, {...bundle,manifest:{...(bundle.manifest as Record<string,unknown>),version:1}})).toThrow(/currently authorized/);
+    expect(()=>restoreVisualInputs(ctx(), {}, {...bundle,manifest:{...(bundle.manifest as Record<string,unknown>),fonts:undefined}})).toThrow(/currently authorized/);
   });
 });

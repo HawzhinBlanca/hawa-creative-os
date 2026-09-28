@@ -1,0 +1,144 @@
+{
+  "date": "2026-09-28",
+  "status": "LOCAL_FONT_BASIS_RECOVERY_QUALIFIED_NOT_FULL_RENDERER_OR_GOAL",
+  "base_commit": "a38b9f84",
+  "branch": "codex/research-grade-design-system",
+  "adr": "116",
+  "requirements": [
+    "FR-015",
+    "FR-036",
+    "FR-060",
+    "NFR-009",
+    "NFR-024"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/116_retained_font_basis.md",
+      "sha256": "a86b1639764a5dd3b211b1e806d77ddf6b7356c0f33a556caa75d07e1dcdf799"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/visual-inputs.ts",
+      "sha256": "2dd230c1a69e0d35b68f4edb6707c5f68b8baf863b81d98268b301ca49b25315"
+    },
+    {
+      "path": "apps/core/test/studio-visual-inputs.test.ts",
+      "sha256": "15ffa15b683cf659fdc1ffef6e24f17b76d6f0fb04c63690cd6ac619e51c05b5"
+    },
+    {
+      "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
+      "sha256": "2e9ef54bee4d528961c03f33ac9a1fc6a3e68449032df8e79b3635e97c516e75"
+    },
+    {
+      "path": "packages/creative/src/studio/font-environment.ts",
+      "sha256": "7ffcfb758ca18fd9dc0ed6417109a4a57b193ddaf588253211b9ace26e7977da"
+    },
+    {
+      "path": "packages/creative/src/studio/render-layout-v2.ts",
+      "sha256": "bc3cbd520191e89b33d28c9666d31634fc199bce02b2c197e1e62a6e9247e924"
+    },
+    {
+      "path": "packages/creative/test/font-basis.test.ts",
+      "sha256": "d89cc5074bb22178200a35db80d6d9d9c5c4c9d88cf85f8d624991c5569d6919"
+    }
+  ],
+  "evidence_files": [
+    {
+      "path": "output/acceptance/2026-09-28-font-basis-affected.log",
+      "sha256": "52927f29e9199e2e9db2da45addadf94ffe86cb34b50b3a16aeb45a9b0af1ee4"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-font-basis-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-font-basis-final-boundary.log",
+      "sha256": "1c6616404e19156296be14d2f6c3a8497694d56fffff0387c76b13478a409f38"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-font-basis-focused.log",
+      "sha256": "a673064eecc883a4ad4867463741de42932c5c4b01e08ee3f33e54fd689eaf33"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-font-basis-red.json",
+      "sha256": "bb5c0a71fc7b3155993ceb8860d1c21c9b825eac44044e080f007e316269ded1"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-font-basis-red.log",
+      "sha256": "9f23c6dc706f80c0f2a958d8d28acba003bd605a96ba6617ac70517041a8c66d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-font-basis-security.log",
+      "sha256": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-font-basis-timing.json",
+      "sha256": "dc38dcf7edd17a56ac9b1c2cee6c4327c1e5821b460d00bbe811beea6d4e6dc3"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-font-basis-types-final.log",
+      "sha256": "56fa067a0772eedb0232e42cbe106afaa6c10021c0336f417a17d802ac111b0f"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-font-basis-types.log",
+      "sha256": "b43176ec60ce2f9825bb06bb05500fa8480c8520f9abd3aeb9f9a182bff82f11"
+    }
+  ],
+  "acceptance": {
+    "connected": {
+      "files": 11,
+      "passed": 147,
+      "failed": 0,
+      "skipped": 0
+    },
+    "final_boundary": {
+      "files": 2,
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    "strict_test_roots": 527,
+    "source_scripts_and_test_types": "passed",
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "egress": "passed with nine existing exceptions",
+    "security": "passed with zero secrets and 53 justified allowlist hits"
+  },
+  "failures_retained": [
+    {
+      "stage": "red-original-loader",
+      "failed": 1,
+      "skipped": 3,
+      "reason": "Targeted same-path replacement returns unchanged 472px; original loader replayed temporarily and current source restored in finally. Skips are deselected tests, not acceptance skips."
+    },
+    {
+      "stage": "initial-typecheck",
+      "reason": "Two new test spreads applied to unknown manifest; narrowed explicitly and all 527 roots now pass."
+    }
+  ],
+  "proved": [
+    "New bundle version2 retains byte hashes for font inventory and registry; missing/changed/absent historical evidence refuses restoration before another stage.",
+    "Core actual DB/blob bundle remains unchanged after an injected changed font identity; restoring original identity re-enters layout without paid transport.",
+    "Actual temporary file tests replace Noto with Amiri at the same path, restore mtime, delete and restore the font; loaded measurements track current bytes.",
+    "Registry metadata changes refresh the existing loader; content-equivalent copies yield identical font basis.",
+    "Fontconfig and family discovery change with actual font inventory, preventing path-only cache reuse.",
+    "Existing restricted-role fresh-connection visual replay and non-KAAE client journey pass with version2 bundles."
+  ],
+  "local_inventory_timing": {
+    "samples": 30,
+    "files": 27,
+    "sha256": "c7688fd0ad673349ca3cf7952f6605808a73b3060acf809a0f2c3ba46052a2e7",
+    "p50Ms": 3.226791999999989,
+    "p95Ms": 3.9254159999999843,
+    "maxMs": 3.9585420000000227,
+    "limit": "Local font inventory hash capture only; not end-to-end generation or rendering. Full font bytes read each time."
+  },
+  "rollout": "Version1 visual bundles cannot prove historical font inputs and remain held for review. Do not backfill current identities as historical evidence. No migration applied.",
+  "limits": [
+    "Font bytes/registry identity only: native rasterizer, shaping dependencies, OS/shared libraries and Canva font fidelity remain unqualified.",
+    "Font hashes do not retain licensed binaries; recovering original environment may require restoring original files.",
+    "Concurrent external modification during an active stage is not fenced; production artifacts should be immutable.",
+    "Core identity-change test injects the boundary; real font mutation is separately verified with disposable files.",
+    "No paid or native calls, deployment, live changes, human quality comparison, full suite or independent recovery drill.",
+    "Authorized visual order, semantic replay and all remaining six-package requirements remain open."
+  ]
+}

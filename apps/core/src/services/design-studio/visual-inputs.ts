@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto';
 import { StudioVisualInputsError, type StudioVisualBundle, type StudioVisualAsset } from '@hawa/db';
-import type { LayoutVisualInput, PhotoCutoutAsset } from '@hawa/creative';
+import { captureRenderFontInputs, type RenderFontInputs, type LayoutVisualInput, type PhotoCutoutAsset } from '@hawa/creative';
 import type { StageContext, ContentPhoto } from './types.js';
 import { layoutVisualInputs } from './stages/asset-inputs.js';
 
 const sha = (v: string | Buffer) => createHash('sha256').update(v).digest('hex');
 type ImageRef = { key: string; mime: string };
 interface VisualManifest {
-  version: 1;
+  version: 2;
+  fonts: RenderFontInputs;
   runId: string;
   clientId: string;
   policySha256: string;
@@ -20,6 +21,11 @@ interface VisualManifest {
   cutouts: Array<(Omit<PhotoCutoutAsset, 'png' | 'shadowPng'> & { key: string; shadowKey?: string }) | null>;
   outcomes: StageContext['cutoutOutcomes'];
   preparation: { cutoutsWanted?: boolean; photoFocus?: unknown; photoSizes?: unknown };
+}
+
+function currentFontInputs(): RenderFontInputs {
+  try { return captureRenderFontInputs(); }
+  catch { throw new StudioVisualInputsError('The current font files cannot be verified. Restore the pinned font environment before continuing.'); }
 }
 
 /** Current policies must remain authorized even when the old pixels are retained. */
@@ -40,7 +46,7 @@ export async function captureVisualInputs(ctx: StageContext, stages: Record<stri
   };
   const conditioning = ctx.pipelineV3 ? await layoutVisualInputs(ctx) : [];
   const manifest: VisualManifest = {
-    version: 1, runId: ctx.runId, clientId: ctx.clientId, policySha256: visualPolicySha256(ctx),
+    version: 2, fonts: currentFontInputs(), runId: ctx.runId, clientId: ctx.clientId, policySha256: visualPolicySha256(ctx),
     photos: (ctx.photos ?? []).map((p, i) => ({ key: bytes(`photo/${i}`, p.bytes), mime: p.mimeType,
       ...(p.width ? { width: p.width } : {}), ...(p.height ? { height: p.height } : {}), ...(p.notes ? { notes: p.notes } : {}) })),
     ...(ctx.exemplarRetrieval ? { exemplarRetrieval: ctx.exemplarRetrieval } : {}),
@@ -62,7 +68,7 @@ export async function captureVisualInputs(ctx: StageContext, stages: Record<stri
 
 export function restoreVisualInputs(ctx: StageContext, stages: Record<string, unknown>, bundle: StudioVisualBundle): void {
   const m = bundle.manifest as VisualManifest;
-  if (!m || m.version !== 1 || m.runId !== ctx.runId || m.clientId !== ctx.clientId || m.policySha256 !== visualPolicySha256(ctx) ||
+  if (!m || m.version !== 2 || !m.fonts || m.fonts.sha256 !== currentFontInputs().sha256 || m.runId !== ctx.runId || m.clientId !== ctx.clientId || m.policySha256 !== visualPolicySha256(ctx) ||
       !Array.isArray(m.photos) || !Array.isArray(m.exemplars) || !Array.isArray(m.conditioning) || !Array.isArray(m.cutouts)) {
     throw new StudioVisualInputsError('Pinned visual inputs do not match the run or its currently authorized design policy.');
   }
