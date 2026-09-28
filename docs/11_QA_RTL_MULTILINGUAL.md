@@ -26,10 +26,14 @@ selection also excludes it. Final QA retains copy/font/input hashes and measurem
 for the selected candidate, including a replacement winner, and honors selection holds.
 
 A primary font may lack Latin letters or symbols which the rasterizer draws through
-fallback. That fallback's geometry is not yet qualified by this local fontkit pass.
-Keep such results unmeasured, preserve the requested style, and qualify actual
-mixed-font shaping before claiming fit. Local advance-width/wrapping evidence does
-not replace painted-ink, native Canva, bidi or human-language inspection.
+fallback. ADR-118 measures those runs through the pinned Pango environment, retaining
+actual face hashes, implementation identity, line advances, ink bounds and unknown
+glyphs. Preparation, SVG placement and transfer fitting share that wrapper. Missing
+helper, invalid/unpinned evidence or unknown glyphs refuse fit; no primary-face
+estimate is substituted. Symbol subsets include spaces needed inside fallback runs.
+Local rasterizer agreement does not replace native Canva, bidi or human-language
+inspection. Primary-only fontkit checks remain conservative, including nominal
+eyebrow size before optional fitting.
 
 ## 2. Hard checks
 

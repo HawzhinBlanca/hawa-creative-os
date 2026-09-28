@@ -148,10 +148,9 @@ describe('a title colour never breaks the contrast the house rules require', () 
             logoAspect: 1,
             copyText: copyOf(lang).text,
           });
-          expect(qa.passed, `${titleColor} ${lang} ${k}: ${qa.messages.join('; ')}`).toBe(lang === 'en');
-          // Colour remains readable. Mixed-script fallback in the Sorani fixture still needs
-          // actual measurement and cannot inherit a successful fit from its primary font.
-          expect(qa.defectCodes).toEqual(lang === 'en' ? [] : ['COPY_UNMEASURED']);
+          expect(qa.passed, `${titleColor} ${lang} ${k}: ${qa.messages.join('; ')}`).toBe(true);
+          // Colour remains readable; mixed-script fit uses actual fallback measurements.
+          expect(qa.defectCodes).toEqual([]);
         }
       }
     }

@@ -45,7 +45,7 @@ export const PANGO_FONTCONFIG_BACKEND = 'fc';
  * of DejaVu's.
  * Arabic-script families keep fontconfig's order: the "•" of a stored Kurdish footer, which Noto Sans
  * Arabic lacks, is drawn by the face it was before, and only what no face draws (☎ ✉) comes from
- * here. The faces carry no letters, digits or ordinary space, so text is still drawn by the
+ * here. The faces include inter-symbol spaces (ADR-118), but no letters or digits, so text is still drawn by the
  * requested face or, for a family that does not exist, by the same fallback face as before.
  */
 export const SYMBOL_FALLBACK_FAMILY = 'Hawa Symbols';

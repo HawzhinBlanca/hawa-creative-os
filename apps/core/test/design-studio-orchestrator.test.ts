@@ -842,7 +842,7 @@ describe.skipIf(!url)('DesignStudioService Orchestrator (T11)', () => {
       await repo.insertCandidate({id: replacementId, tenantId: scope.tenantId, runId: run.id, ordinal: 10,
         concept: {}, layouts: layouts as unknown as Record<string, unknown>[], status: 'active'});
       const broken = structuredClone(layouts.at(-1)!);
-      broken.text[0].fontFamily = 'Noto Sans Arabic'; // Latin title has no glyphs in this primary font.
+      broken.text[0].fontSize = 0; // Invalid geometry stays unmeasurable even with real fallback fonts.
       await repo.updateCandidate(row.id, scope.tenantId, {layouts: [broken as unknown as Record<string, unknown>]});
       const result = await service.resume(scope, taskId, run.id);
       expect(result.status).toBe(holdForSelection ? 'awaiting_selection' : 'transferring');

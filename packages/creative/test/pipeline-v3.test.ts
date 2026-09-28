@@ -900,10 +900,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
         'هۆڵی کۆبوونەوەکانی KAAE • هەولێر • پەخشی ڕاستەوخۆ',
       ])
     );
-    // Geometry is repaired; the original footer still needs qualified mixed-font measurement.
-    expect(qa.passed).toBe(false);
-    expect(qa.defectCodes).toEqual(['COPY_UNMEASURED']);
-    expect(qa.textMeasurements.filter((m) => m.status === 'unmeasured')).toMatchObject([{copyIndex: 4, reason: 'MISSING_GLYPHS'}]);
+    // Geometry and the original mixed-font footer now have measured local evidence.
+    expect(qa.passed, qa.messages.join('; ')).toBe(true);
+    expect(qa.defectCodes).toEqual([]);
+    expect(qa.textMeasurements.find((m) => m.copyIndex === 4)).toMatchObject({status: 'measured', method: 'pango-wrap-v1'});
     expect(layout.grid.margin).toBe(64);
     expect(layout.logo!.y).toBe(64);
     const band = layout.shapes.find((s) => s.role === 'panel')!;
@@ -934,10 +934,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
         'هۆڵی سەعد عەبدوڵڵا، هەولێر • ٢٨ی تشرینی یەکەمی ٢٠٢٦',
       ])
     );
-    // Geometry is repaired; the original footer still needs qualified mixed-font measurement.
-    expect(qa.passed).toBe(false);
-    expect(qa.defectCodes).toEqual(['COPY_UNMEASURED']);
-    expect(qa.textMeasurements.filter((m) => m.status === 'unmeasured')).toMatchObject([{copyIndex: 4, reason: 'MISSING_GLYPHS'}]);
+    // Geometry and the original mixed-font footer now have measured local evidence.
+    expect(qa.passed, qa.messages.join('; ')).toBe(true);
+    expect(qa.defectCodes).toEqual([]);
+    expect(qa.textMeasurements.find((m) => m.copyIndex === 4)).toMatchObject({status: 'measured', method: 'pango-wrap-v1'});
     expect(bottom(byRole(layout, 'eyebrow'))).toBeLessThanOrEqual(byRole(layout, 'title').y);
   });
 
@@ -995,10 +995,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ])
     );
     const { logoClearZone } = await import('../src/index.js');
-    // Geometry is repaired; the original footer still needs qualified mixed-font measurement.
-    expect(qa.passed).toBe(false);
-    expect(qa.defectCodes).toEqual(['COPY_UNMEASURED']);
-    expect(qa.textMeasurements.filter((m) => m.status === 'unmeasured')).toMatchObject([{copyIndex: 4, reason: 'MISSING_GLYPHS'}]);
+    // Geometry and the original mixed-font footer now have measured local evidence.
+    expect(qa.passed, qa.messages.join('; ')).toBe(true);
+    expect(qa.defectCodes).toEqual([]);
+    expect(qa.textMeasurements.find((m) => m.copyIndex === 4)).toMatchObject({status: 'measured', method: 'pango-wrap-v1'});
     const eyebrow = byRole(layout, 'eyebrow');
     const title = byRole(layout, 'title');
     const card = layout.shapes.find((s) => s.role === 'panel')!;
@@ -1049,10 +1049,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
         'هەولێر • تشرینی دووەمی ٢٠٢٦ • kaae.gov.krd',
       ])
     );
-    // Geometry is repaired; the original footer still needs qualified mixed-font measurement.
-    expect(qa.passed).toBe(false);
-    expect(qa.defectCodes).toEqual(['COPY_UNMEASURED']);
-    expect(qa.textMeasurements.filter((m) => m.status === 'unmeasured')).toMatchObject([{copyIndex: 4, reason: 'MISSING_GLYPHS'}]);
+    // Geometry and the original mixed-font footer now have measured local evidence.
+    expect(qa.passed, qa.messages.join('; ')).toBe(true);
+    expect(qa.defectCodes).toEqual([]);
+    expect(qa.textMeasurements.find((m) => m.copyIndex === 4)).toMatchObject({status: 'measured', method: 'pango-wrap-v1'});
     expect(layout.grid.margin).toBe(96);
     expect(byRole(layout, 'eyebrow').y).toBeLessThan(648);
   });

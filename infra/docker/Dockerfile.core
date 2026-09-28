@@ -19,6 +19,7 @@ RUN sed -i 's/^Components: main$/Components: main contrib/' /etc/apt/sources.lis
 WORKDIR /app
 
 FROM base AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config libpango1.0-dev && rm -rf /var/lib/apt/lists/*
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
 COPY apps/core/package.json ./apps/core/
 COPY apps/desk/package.json ./apps/desk/

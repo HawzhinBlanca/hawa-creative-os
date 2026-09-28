@@ -3,19 +3,19 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T02:10:47Z",
+  "generatedAt": "2026-09-28T02:39:59Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 467,
+  "fileCount": 469,
   "files": [
     {
       "path": ".dockerignore",
-      "sha256": "ecd6bee3df70249fcb5b934d8865357149346a0ba5d6efddd321bebee1a3a46c",
-      "bytes": 149
+      "sha256": "2ea0c7e0c16053d2dc580bf87b4f3b9a69762b82aa83f78c558a5b2f4362cf53",
+      "bytes": 171
     },
     {
       "path": ".env.example",
@@ -29,8 +29,8 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "00210ab9b9c2dc0acfbd411ed2a23349480ddbe7b17fced3d036d087d9738be8",
-      "bytes": 3637
+      "sha256": "74424de2908151f0bc992784d68fed24f6d9de277c10d97eb67806c07f27a794",
+      "bytes": 3818
     },
     {
       "path": "AGENTS.md",
@@ -658,6 +658,11 @@
       "bytes": 3926
     },
     {
+      "path": "adrs/118_shared_fallback_text_measurement.md",
+      "sha256": "de59a6a891b735323ca43dc409a0e1640a4a6c6f2d1ce49df8661702dabfc779",
+      "bytes": 4004
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "88a3d91f3372ecd1bbf4e97e56e8eefe23bfdd4c4a2f8fcb3d022ac079e03143",
       "bytes": 38168
@@ -929,8 +934,8 @@
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
-      "sha256": "356643b5432045379478b695b86a89b3a638835a24ee54cec1930a2665add65e",
-      "bytes": 7662
+      "sha256": "b251b334492203eb97fc561e9f6a6adee6d200f1fcf8ffbd9a75d5168c65b1ae",
+      "bytes": 7957
     },
     {
       "path": "docs/12_HUMAN_REVIEW.md",
@@ -1109,8 +1114,13 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
-      "sha256": "acad892f73daab7a2cde64f3deba77b4986f9cfb6a5fd52e7df4b82d000d7526",
-      "bytes": 22391
+      "sha256": "72b6b14f466ca944a72a361c0d6d929e9ba5d6688101afa94d4467d75b9557d6",
+      "bytes": 24686
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/FALLBACK_MEASUREMENT_PROOF.json",
+      "sha256": "b7b31de3a89c202c7cf384dea704ff0c0880a59254454a25a1732efb7046faa1",
+      "bytes": 15530
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/FONT_BASIS_PROOF.json",
@@ -1579,8 +1589,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "1e6ce0971845fe53a83a990bf1cc7e789c4f27d67735e47f53720065445477a1",
-      "bytes": 414012
+      "sha256": "387577725d6970840bf302cb1bb36bccc326861b1005b9593187d7ac6f2cf8f3",
+      "bytes": 415896
     },
     {
       "path": "plans/user-stories.csv",
@@ -1994,8 +2004,8 @@
     },
     {
       "path": "scripts/generate_symbol_fallback_faces.py",
-      "sha256": "90442e66bc8e578436cf5f469b188b07560a804d1b21626582283cd640b79678",
-      "bytes": 5786
+      "sha256": "cd6748f85d9545e74de62189e7658081f478000cd568c7f9200e53724cfac242",
+      "bytes": 5951
     },
     {
       "path": "scripts/generate_t06_motifs.ts",

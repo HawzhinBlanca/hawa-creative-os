@@ -15,14 +15,16 @@ In the core image those glyphs came from fonts-dejavu-core under /usr/share/font
 rsvg-convert call was pinned to a generated fontconfig listing only assets/fonts (and Verdana), 803
 admitted code points no longer had a glyph in any visible face and ☎ ✉ were drawn as hex boxes.
 
-What is kept: every DejaVu Sans glyph in the gate's non-letter ranges (1035 code points), and nothing
-else. The generated fontconfig (font-environment.ts) appends "Hawa Symbols" to each Latin family, so a
+What is kept: every DejaVu Sans glyph in the gate's non-letter ranges (1035 code points), plus ordinary
+and nonbreaking spaces. Pango can include inter-symbol spaces in the fallback run; excluding them
+produced missing glyphs for valid text such as "☎ ✉ ➤" (ADR-118). The generated fontconfig
+(font-environment.ts) appends "Hawa Symbols" to each Latin family, so a
 symbol the requested face has is still drawn by it and one it lacks comes from these faces. In the image
 such a symbol came from the first system font in fontconfig's order that had it: DejaVu Sans for most,
 Vazirmatn or Arial (not redistributable) for some; left to the pinned set's order, pango took ✓ ★ → from
 Inter for a Cinzel or Verdana line. Arabic-script families keep fontconfig's order, so the "•" of a
 stored Kurdish footer is drawn as before; what no face draws (☎ ✉) still comes from here. The faces
-carry no letters, digits or ordinary space, so text is drawn by the requested face, or for a family
+carry no letters or digits, so text is drawn by the requested face, or for a family
 that does not exist by the same fallback face as before (Vazirmatn). U+27BF is the one symbol the image
 drew that is not restored: only DejaVu Sans Mono Bold has it.
 
@@ -98,7 +100,7 @@ def main() -> int:
         print(__doc__, file=sys.stderr)
         return 2
     source_dir = Path(args[0])
-    keep = {cp for lo, hi in GATE_SYMBOL_RANGES for cp in range(lo, hi + 1)}
+    keep = {0x20, 0xA0} | {cp for lo, hi in GATE_SYMBOL_RANGES for cp in range(lo, hi + 1)}
     differs = 0
     for style, (file, sha) in SOURCES.items():
         source = source_dir / file

@@ -1,3 +1,4 @@
+import { measurePangoText, measurementRuntimeIdentity, type PangoMeasurement, type MeasurementRuntimeIdentity } from './pango-measurement.js';
 import { lineGeometry } from './line-geometry.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -829,7 +830,7 @@ export type TextMeasurementFailure = 'MISSING_COPY' | 'EMPTY_COPY' | 'INVALID_GE
   'FONT_UNAVAILABLE' | 'MISSING_GLYPHS' | 'SHAPING_FAILED';
 
 export type TextMeasurement = { copyIndex: number; fontFamily: string } & (
-  { status: 'measured'; method: 'fontkit-wrap-v1'; copySha256: string; fontSha256: string;
+  { status: 'measured'; method: 'fontkit-wrap-v1' | 'pango-wrap-v1'; shaping?: PangoMeasurement; copySha256: string; fontSha256: string;
     inputSha256: string; lineCount: number; maxLineWidthPx: number; requiredHeightPx: number } |
   { status: 'unmeasured'; reason: TextMeasurementFailure; copySha256?: string; missingCodePoints?: string[] }
 );
@@ -867,17 +868,24 @@ export function measureTextGeometry(
       const visible = [...new Set(Array.from(copy).filter((ch) => !/[\s\p{Default_Ignorable_Code_Point}]/u.test(ch)))];
       const missing = visible.filter((ch) => font.glyphForCodePoint(ch.codePointAt(0)).id === 0)
         .map((ch) => `U+${ch.codePointAt(0)!.toString(16).toUpperCase()}`);
-      if (missing.length) return failed('MISSING_GLYPHS', missing);
-      const lines = wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing);
-      const widths = lines.map((line) => measureTextWidth(line, font, t.fontSize, letterSpacing));
+      const shaping = missing.length ? fallbackMeasurement(t, copy, resolveFontsDir(options)) : undefined;
+      if (missing.length && (!shaping || shaping.lines.some(line => line.unknownGlyphs > 0))) {
+        const actual = shaping ? [...new Set(shaping.lines.flatMap(line => line.missingCodePoints))].map(cp => `U+${cp.toString(16).toUpperCase()}`) : missing;
+        return failed('MISSING_GLYPHS', actual.length ? actual : missing);
+      }
+      const lines = shaping ? shaping.lines.map(line => line.text) : wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing);
+      const widths = shaping ? shaping.lines.map(line => Math.max(line.width, line.ink.x + line.ink.width) - Math.min(0, line.ink.x)) : lines.map((line) => measureTextWidth(line, font, t.fontSize, letterSpacing));
       const maxLineWidthPx = Math.ceil(Math.max(...widths));
-      const requiredHeightPx = Math.ceil(lines.length * t.fontSize * t.lineHeight);
+      const inkHeight = shaping ? (lines.length - 1) * t.fontSize * t.lineHeight +
+        Math.max(0, ...shaping.lines.map(line => -line.ink.y)) + Math.max(0, ...shaping.lines.map(line => line.ink.y + line.ink.height)) : 0;
+      const requiredHeightPx = Math.ceil(Math.max(lines.length * t.fontSize * t.lineHeight, inkHeight));
       if (!lines.length || widths.some((n) => !Number.isFinite(n) || n < 0) ||
           !Number.isFinite(requiredHeightPx) || requiredHeightPx <= 0) return failed('SHAPING_FAILED');
-      const inputSha256 = createHash('sha256').update(JSON.stringify({ method: 'fontkit-wrap-v1', copySha256,
+      const method = shaping ? 'pango-wrap-v1' as const : 'fontkit-wrap-v1' as const;
+      const inputSha256 = createHash('sha256').update(JSON.stringify({ method, ...(shaping ? { shapingSha256: shaping.inputSha256 } : {}), copySha256,
         fontSha256, width: t.width, height: t.height, fontSize: t.fontSize, lineHeight: t.lineHeight,
         letterSpacing, rtl: t.rtl ?? null, bold: t.bold ?? false, italic: t.italic ?? false })).digest('hex');
-      return { ...identity, status: 'measured', method: 'fontkit-wrap-v1', copySha256: copySha256!, fontSha256,
+      return { ...identity, status: 'measured', method, ...(shaping ? { shaping } : {}), copySha256: copySha256!, fontSha256,
         inputSha256, lineCount: lines.length, maxLineWidthPx, requiredHeightPx };
     } catch {
       return failed('SHAPING_FAILED');
@@ -917,7 +925,7 @@ export function measureWrappedLines(
     try {
       const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
       const letterSpacing = effectiveLetterSpacingEm(t);
-      out[t.copyIndex] = wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing).length;
+      out[t.copyIndex] = sharedTextLines(t, copy, font, fontsDir, t.fontSize, letterSpacing).length;
     } catch {
       // unmeasurable family here; the metric falls back to the box for this block
     }
@@ -953,8 +961,12 @@ export function balancedBoxWidths(
     try {
       const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
       const ls = effectiveLetterSpacingEm(t);
-      const wrap = (w: number) => wrapTextWithFontkit(copy, w, font, t.fontSize, ls);
-      const widthOf = (line: string) => measureTextWidth(line, font, t.fontSize, ls);
+      const wrap = (w: number) => sharedTextLines({...t, width: w}, copy, font, fontsDir, t.fontSize, ls);
+      const widthOf = (line: string) => {
+        const fallback = fallbackMeasurement({...t, width: 1000000}, line, fontsDir);
+        if (fallback?.lines.some(l => l.unknownGlyphs)) throw new Error('PANGO_MISSING_GLYPHS');
+        return fallback ? Math.max(...fallback.lines.map(l => l.width)) : measureTextWidth(line, font, t.fontSize, ls);
+      };
       const lines = wrap(t.width);
       if (lines.length < 2) continue;
       const last = lines[lines.length - 1];
@@ -1017,6 +1029,12 @@ export function measureMaxLineWidths(
     try {
       const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
       const letterSpacing = effectiveLetterSpacingEm(t);
+      const fallback = fallbackMeasurement(t, copy, fontsDir);
+      if (fallback) {
+        if (fallback.lines.some(line => line.unknownGlyphs)) throw new Error('PANGO_MISSING_GLYPHS');
+        out[t.copyIndex] = Math.ceil(Math.max(...fallback.lines.map(line => line.width)));
+        continue;
+      }
       const lines = wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing);
       let maxW = 0;
       for (const line of lines) {
@@ -1409,10 +1427,36 @@ export function accentWordRange(copyText: string, accentText: string | undefined
   return undefined;
 }
 
+/** Actual family emitted into SVG; shared with fallback measurement. */
+function drawingFontFamily(t: TextElement, copy: string, fontsDir: string): string {
+  const script: FontProbeScript = t.rtl || /[\u0600-\u06FF]/.test(copy) ? 'arabic' : 'latin';
+  if (probeFontSubstitution(t.fontFamily, {fontsDir}, script) === 'stand-in') {
+    const fallback = t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily) ? 'Noto Sans Arabic' : 'Verdana';
+    if (probeFontSubstitution(fallback, {fontsDir}, script) === 'exact') return fallback;
+  }
+  return t.fontFamily;
+}
+
+function fallbackMeasurement(t: TextElement, copy: string, fontsDir: string, size=t.fontSize, spacing=effectiveLetterSpacingEm(t)): PangoMeasurement | undefined {
+  const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
+  const missing = Array.from(copy).some(ch => !/[\s\p{Default_Ignorable_Code_Point}]/u.test(ch) && font.glyphForCodePoint(ch.codePointAt(0)).id === 0);
+  if (!missing) return undefined;
+  const axes = fontFaceSupports(t.fontFamily, t.bold, t.italic, fontsDir);
+  return measurePangoText({text: copy, family: drawingFontFamily(t, copy, fontsDir), size, width: t.width,
+    spacingPx: Number((spacing * size).toFixed(2)), rtl: t.rtl ?? false, bold: axes.bold, italic: axes.italic, fontsDir});
+}
+
+function sharedTextLines(t: TextElement, copy: string, font: ReturnType<typeof loadFont>, fontsDir: string, size=t.fontSize, spacing=effectiveLetterSpacingEm(t)): string[] {
+  const fallback = fallbackMeasurement(t, copy, fontsDir, size, spacing);
+  if (!fallback) return wrapTextWithFontkit(copy, t.width, font, size, spacing);
+  if (fallback.lines.some(line => line.unknownGlyphs)) throw new Error('PANGO_MISSING_GLYPHS');
+  return fallback.lines.map(line => line.text);
+}
+
 /** The lines one text element wraps to, as the renderer draws them. */
 export function wrappedLinesOf(t: TextElement, copy: string, options: RenderLayoutOptions = {}): string[] {
   const font = loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options));
-  return wrapTextWithFontkit(copy, t.width, font, t.fontSize, effectiveLetterSpacingEm(t));
+  return sharedTextLines(t, copy, font, resolveFontsDir(options));
 }
 
 /**
@@ -1425,16 +1469,16 @@ export function wrappedLinesOf(t: TextElement, copy: string, options: RenderLayo
  * too (fittedTextOf): it wrote the layout's own, so Canva wrapped a shrunk eyebrow onto a second
  * line the approved preview did not have (2026-09-24).
  */
-function fitText(t: TextElement, copyText: string, font: ReturnType<typeof loadFont>): { fontSize: number; letterSpacingEm: number; lines: string[] } {
+function fitText(t: TextElement, copyText: string, font: ReturnType<typeof loadFont>, fontsDir: string): { fontSize: number; letterSpacingEm: number; lines: string[] } {
   let letterSpacingEm = effectiveLetterSpacingEm(t);
   let fontSize = t.fontSize;
-  let lines = wrapTextWithFontkit(copyText, t.width, font, fontSize, letterSpacingEm);
+  let lines = sharedTextLines(t, copyText, font, fontsDir, fontSize, letterSpacingEm);
   if (t.role === 'eyebrow' && lines.length > 1) {
     letterSpacingEm = effectiveLetterSpacingEm(t, { eyebrowShrunkToFit: true });
-    lines = wrapTextWithFontkit(copyText, t.width, font, fontSize, 0);
+    lines = sharedTextLines(t, copyText, font, fontsDir, fontSize, 0);
     while (lines.length > 1 && fontSize > 10) {
       fontSize -= 1;
-      lines = wrapTextWithFontkit(copyText, t.width, font, fontSize, 0);
+      lines = sharedTextLines(t, copyText, font, fontsDir, fontSize, 0);
     }
   }
   return { fontSize, letterSpacingEm, lines };
@@ -1442,7 +1486,7 @@ function fitText(t: TextElement, copyText: string, font: ReturnType<typeof loadF
 
 /** The size (px) and tracking (em) the renderer draws one text element at, for the transfer. */
 export function fittedTextOf(t: TextElement, copy: string, options: RenderLayoutOptions = {}): { fontSize: number; letterSpacingEm: number } {
-  const { fontSize, letterSpacingEm } = fitText(t, copy, loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options)));
+  const { fontSize, letterSpacingEm } = fitText(t, copy, loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options)), resolveFontsDir(options));
   return { fontSize, letterSpacingEm };
 }
 
@@ -1453,7 +1497,7 @@ function renderTextElementToSvg(
 ): { svgSnippet: string; lineCount: number } {
   const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
   // The size and tracking the text is actually measured and drawn at (fitText).
-  const { fontSize: renderFontSize, letterSpacingEm: letterSpacingVal, lines } = fitText(t, copyText, font);
+  const { fontSize: renderFontSize, letterSpacingEm: letterSpacingVal, lines } = fitText(t, copyText, font, fontsDir);
 
   if (lines.length === 0) {
     return { svgSnippet: '', lineCount: 0 };
@@ -1490,7 +1534,12 @@ function renderTextElementToSvg(
   // box gives the real ink extent, so the glyphs can be centred on the box's optical centre.
   let inkAbove = 0;
   let inkBelow = 0;
-  for (const line of lines) {
+  const shaped = fallbackMeasurement(t, copyText, fontsDir, renderFontSize, letterSpacingVal);
+  if (shaped) {
+    inkAbove = Math.max(0, ...shaped.lines.map(line => -line.ink.y));
+    inkBelow = Math.max(0, ...shaped.lines.map(line => line.ink.y + line.ink.height));
+  }
+  for (const line of shaped ? [] : lines) {
     if (!line) continue;
     try {
       const bbox = font.layout(line).bbox;
@@ -1514,7 +1563,7 @@ function renderTextElementToSvg(
   const paragraphs = copyText.split('\n').filter((p) => p.trim());
   const accented = Boolean(t.accentColor) && paragraphs.length > 1;
   const accentFirst = t.accentParagraph === 'first';
-  const wrapped = (p: string) => wrapTextWithFontkit(p, t.width, font, renderFontSize, letterSpacingVal).length;
+  const wrapped = (p: string) => sharedTextLines(t, p, font, fontsDir, renderFontSize, letterSpacingVal).length;
   const accentFrom = accented && !accentFirst ? lines.length - wrapped(paragraphs[paragraphs.length - 1]) : lines.length;
   const accentUntil = accented && accentFirst ? wrapped(paragraphs[0]) : 0;
   // Named words take precedence: the lines wrap on words, so a running word count says which of
@@ -1550,15 +1599,7 @@ function renderTextElementToSvg(
   // family was not used. The family is judged for the script this block is set in: Vazirmatn used to
   // be replaced here because its Latin probe matched the fallback's, while its Kurdish, which is what
   // a Vazirmatn block carries, was drawn from its own file (it *is* the image's fallback face).
-  const blockScript: FontProbeScript = t.rtl || /[\u0600-\u06FF]/.test(copyText) ? 'arabic' : 'latin';
-  let drawFamily = t.fontFamily;
-  if (probeFontSubstitution(t.fontFamily, { fontsDir }, blockScript) === 'stand-in') {
-    const fallback =
-      t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily) ? 'Noto Sans Arabic' : 'Verdana';
-    if (probeFontSubstitution(fallback, { fontsDir }, blockScript) === 'exact') {
-      drawFamily = fallback;
-    }
-  }
+  const drawFamily = drawingFontFamily(t, copyText, fontsDir);
 
   // Ask the rasteriser for exactly the face fontkit measured with — see fontFaceSupports.
   const faceAxes = fontFaceSupports(t.fontFamily, t.bold, t.italic, fontsDir);
@@ -2211,6 +2252,7 @@ export interface RenderFontInputs {
   version: 1;
   sha256: string;
   registrySha256: string;
+  measurement?: MeasurementRuntimeIdentity | { unavailable: true };
   files: FontFileIdentity[];
 }
 let lastFontBasis: string | undefined;
@@ -2219,7 +2261,9 @@ let lastFontBasis: string | undefined;
 export function captureRenderFontInputs(options: { fontsDir?: string; registryPath?: string; systemFiles?: string[] } = {}): RenderFontInputs {
   const registrySha256 = createHash('sha256').update(fs.readFileSync(resolveRenderFontsPath(options.registryPath))).digest('hex');
   const files = fontFileInventory(options.fontsDir ?? resolveFontsDir(), options.systemFiles ?? pinnedSystemFontFiles());
-  const basis = { version: 1 as const, registrySha256, files };
+  let measurement: RenderFontInputs['measurement'];
+  try { measurement = measurementRuntimeIdentity(); } catch { measurement = { unavailable: true }; }
+  const basis = { version: 1 as const, registrySha256, files, measurement };
   const sha256 = createHash('sha256').update(JSON.stringify(basis)).digest('hex');
   if (lastFontBasis !== undefined && lastFontBasis !== sha256) {
     fontCache.clear(); inkCheckCache.clear(); sentinelHashCache.clear();

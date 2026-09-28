@@ -14,7 +14,7 @@ No package is complete merely because a smaller test passes.
 | --- | --- | --- | --- |
 | 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty, reviewed-copy handoff and automatic linked-revision owner recovery locally qualified; actual native preservation and initial manual intake open | ADR-108/113/114; CANVA_UNCERTAINTY_PROOF.json; NATIVE_REVISION_HANDOFF_PROOF.json; LIFECYCLE_NATIVE_RECOVERY_PROOF.json |
 | 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs and Unicode lexical exemplar baseline locally qualified; authorized visual order, multilingual semantic retrieval and human comparison open | ADR-109/115; CREATIVE_HANDOFF_PROOF.json; UNICODE_RETRIEVAL_PROOF.json |
-| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results, visual input pins and font basis locally qualified; mandatory text evidence locally qualified; mixed-font measurement, branch checkpoints, renderer/cutout runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112/116; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json |
+| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results, visual input pins and font basis locally qualified; mandatory text evidence and shared fallback measurement locally qualified; native text qualification, branch checkpoints, renderer/cutout runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112/116/117/118; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json; FALLBACK_MEASUREMENT_PROOF.json |
 | 4 | Amend/Adapt routing and actual Canva account capability qualification | Open | Official documentation is not account admission |
 | 5 | Relationship-led composition, calibrated selection, governed edit learning and equal-budget human comparisons | Open | Existing R04–R06/R13/R22–R25 study machinery must be reused |
 | 6 | Complete supervised native review/delivery, release qualification and independent recovery | Open | Prior qualification remains scoped to its own candidate |
@@ -328,3 +328,36 @@ All six packages remain active. Next: actual mixed-font measurement alongside
 native amendment qualification, authorized hierarchy, semantic reuse, human
 quality and integrated release/restore. Local wrapping is not native bidi, painted
 ink, editability or a whole-application completion certificate.
+
+## Shared fallback text measurement — ADR-118
+
+Source base `1bee749c`. FR-015/037/038/039; normative docs 08/05/11. The current
+mandatory gate refused valid Noto/Sorani mixed with Latin/symbol fallback. One
+bounded Pango helper now supplies the actual shaped lines, advances, ink extents,
+font file hashes and unknown code points. QA, wrapping/balancing, SVG placement and
+transfer fitting share the same fallback path. Requested style and original copy
+remain intact. A missing helper or invalid evidence refuses successful measurement.
+Retained font basis now includes helper/runtime identity; prior incompatible
+measurement environments hold on recovery. Full OS/shared-library pinning remains open.
+
+Real measurement exposed missing spaces inside symbol runs. Both licensed symbol
+subsets were regenerated from the same hash-pinned sources with U+0020/U+00A0;
+letters/digits stay excluded and the fallback-order checks still pass. Build and
+CI install development headers only where compilation is needed; the Linux runner
+uses its existing Pango/librsvg runtime. No new service, npm dependency or paid call.
+
+Final qualification: **24 files, 281 passed, zero failed/skipped** including
+historical Sorani fixture progress, real rasterizer pixels, tracking/italic/RTL,
+font mutation, editable transfer, retained visual recovery, Core zero-spend
+refusal and isolated database winner/revision journeys. Package/source/scripts
+builds and 529 strict test roots pass; any ceiling, egress and security checks pass.
+Debian Pango 1.50.12 and macOS 1.58.2 match the tested actual librsvg ink bounds
+within 2px. Generated fonts reproduce byte-for-byte. Initial red and intermediate
+failures are retained, including subset-space exclusion and an overlapping
+build/test run; the final run starts only after builds complete.
+
+Synthetic one-block timing: approximately 140ms first use and 9.4ms warm median
+in the retained local sample, including input identity checks. This is not an
+end-to-end latency, quality or savings claim. Native Canva shaping/reopen/export,
+human Sorani review, all remaining packages and final release/restore remain open.
+No deployment, production write or full release qualification was performed.

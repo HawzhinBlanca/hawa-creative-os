@@ -74,6 +74,9 @@ jobs:
       - name: Gate C — Strict TypeScript Build (14 packages)
         run: pnpm typecheck
 
+      - name: Native text measurement and renderer dependencies
+        run: sudo apt-get update && sudo apt-get install -y libpango1.0-dev pkg-config build-essential librsvg2-bin
+
       - name: Gates D-P — Full Vitest Suite
         run: pnpm test
 
