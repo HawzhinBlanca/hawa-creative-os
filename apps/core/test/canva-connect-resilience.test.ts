@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, sql } from '@hawa/db';
-import { CanvaConnectService } from '../src/services/canva-connect-service.js';
+import { CanvaConnectService, canvaRateLimitWaitMs } from '../src/services/canva-connect-service.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 if (url && !/^\/hawa_(repair|tr_)/.test(new URL(url).pathname)) throw new Error('Disposable hawa_repair database (or a per-file copy of it) required');
@@ -26,8 +26,15 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
   let refreshDelayMs: number;
   let importCreates: number;
   let refreshCalls: number;
+  /** Export jobs Canva made (POSTs it accepted). */
   let exportCreates: number;
+  /** Every POST /exports, accepted or refused. */
+  let exportPosts: number;
   let exportCreateHttp: number;
+  /** Retry-After Canva sends with a refused POST /imports or /exports; null sends none. */
+  let createRetryAfter: string | null;
+  /** POST /imports loses its connection after it was sent (Canva may have made the design). */
+  let importConnectionLost: boolean;
   /** Refusals Canva answers to POST /exports before exportCreateHttp applies (chaos R1.K9). */
   let exportCreateFaults: number[];
   /** What Canva answers POST /imports with; 200 creates the import job. */
@@ -49,7 +56,10 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     if (u.endsWith('/imports') && init.method === 'POST') {
       importCreates++;
       if (importCreateResponse) return importCreateResponse();
-      if (importCreateHttp !== 200) return new Response('{"code":"internal_error"}', { status: importCreateHttp });
+      if (importConnectionLost) throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } });
+      if (importCreateHttp !== 200) {
+        return new Response('{"code":"internal_error"}', { status: importCreateHttp, headers: createRetryAfter === null ? {} : { 'Retry-After': createRetryAfter } });
+      }
       return Response.json({ job: { id: 'import_' + taskId + '_' + importCreates, status: 'in_progress' } });
     }
     if (u.includes('/imports/')) {
@@ -58,12 +68,16 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
       return Response.json({ job: { id: u.split('/imports/')[1], status: importStatus, ...(importStatus === 'success' ? { result: { designs: [{ id: designId, urls: { edit_url: 'https://www.canva.com/d/x', view_url: 'https://www.canva.com/d/y' } }] } } : {}) } });
     }
     if (u.endsWith('/exports') && init.method === 'POST') {
+      exportPosts++;
       const fault = exportCreateFaults.shift();
       if (fault) return new Response('{"code":"internal_error"}', { status: fault, headers: fault === 429 ? { 'Retry-After': '0' } : {} });
+      if (exportCreateHttp !== 200) {
+        return new Response('{"code":"too_many_requests"}', { status: exportCreateHttp, headers: createRetryAfter === null ? {} : { 'Retry-After': createRetryAfter } });
+      }
       exportCreates++;
-      if (exportCreateHttp !== 200) return new Response('{"code":"too_many_requests"}', { status: exportCreateHttp });
       return Response.json({ job: { id: 'export_' + taskId + '_' + exportCreates, status: 'in_progress' } });
     }
+    if (u.includes('/exports/')) return Response.json({ job: { id: u.split('/exports/')[1], status: 'in_progress' } });
     if (u.includes('/designs/')) {
       return Response.json({ design: { id: designId, created_at: 100, updated_at: 200, page_count: 1, urls: { edit_url: 'https://www.canva.com/api/design/x/edit', view_url: 'https://www.canva.com/d/y' } } });
     }
@@ -92,7 +106,10 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     importCreates = 0;
     refreshCalls = 0;
     exportCreates = 0;
+    exportPosts = 0;
     exportCreateHttp = 200;
+    createRetryAfter = null;
+    importConnectionLost = false;
     exportCreateFaults = [];
     importCreateHttp = 200;
     importReadResponse = undefined;
@@ -153,17 +170,50 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     expect((await service.status(scope)).status).toBe('reconnect_required');
   });
 
-  it('a 429 from Canva on POST /exports is retryable, not an uncertain export that blocks the format', async () => {
+  it('a 429 from Canva on POST /exports is a named wait, not an uncertain export that blocks the format', async () => {
     const binding = await service.importEditableDesign(scope, taskId, 'studio-plan-cccc', source());
     importStatus = 'success';
     await service.resumeImport(scope, taskId, binding.operationId);
-    // Canva's rate limit refuses the preview export: an HTTP answer, so no job was created.
+    // Canva's rate limit refuses the preview export on every one of the client's tries: an HTTP
+    // answer, so no job was created.
     exportCreateHttp = 429;
-    const refused = await service.startExport(scope, taskId, 'workflow-preview-hunt', 'png', 1);
-    // A minute later the office (or a retry) asks again under a new key.
+    const refused = await service.startExport(scope, taskId, 'workflow-preview-hunt', 'png', 1).then(() => null, (e) => e);
+    expect({ status: refused?.status, code: refused?.code, retryAfterMs: refused?.retryAfterMs }).toEqual({ status: 429, code: 'CANVA_RATE_LIMITED', retryAfterMs: 30000 });
+    // A minute later the office asks again under a new key: the refusal holds nothing pending.
     exportCreateHttp = 200;
     const again = await service.startExport(scope, taskId, 'desk-capture-hunt', 'png', 1).then((r) => r.status, (e) => String(e?.code));
-    expect({ refused: refused.status, again }).toEqual({ refused: 'failed', again: 'submitted' });
+    expect(again).toBe('submitted');
+  });
+
+  it('an export Canva refused with 429 is sent again under the same key once Canva accepts: one operation, one job', async () => {
+    const binding = await service.importEditableDesign(scope, taskId, 'studio-plan-rl01', source());
+    importStatus = 'success';
+    await service.resumeImport(scope, taskId, binding.operationId);
+    exportCreateHttp = 429;
+    createRetryAfter = '45';
+    const refused = await service.startExport(scope, taskId, 'workflow-preview-rl01', 'png', 1).then(() => null, (e) => e);
+    // Canva asked for longer than the client waits: one POST, and Core names a bounded wait.
+    expect({ code: refused?.code, retryAfterMs: refused?.retryAfterMs, posts: exportPosts }).toEqual({ code: 'CANVA_RATE_LIMITED', retryAfterMs: 30000, posts: 1 });
+
+    exportCreateHttp = 200;
+    const retried = await service.startExport(scope, taskId, 'workflow-preview-rl01', 'png', 1);
+    const repeated = await service.startExport(scope, taskId, 'workflow-preview-rl01', 'png', 1);
+    const rows = (await sql<{ id: string; status: string; request_key: string }>`SELECT id, status, request_key FROM hawa.canva_remote_operations
+      WHERE task_id=${taskId}::uuid AND kind='export'`.execute(db)).rows;
+    expect({ retried: retried.status, sameOperation: retried.operationId === repeated.operationId, jobsCreated: exportCreates, rows: rows.map((r) => [r.request_key, r.status]) })
+      .toEqual({ retried: 'submitted', sameOperation: true, jobsCreated: 1, rows: [['workflow-preview-rl01', 'submitted']] });
+  });
+
+  it('an export refused for another reason stays final under the same key', async () => {
+    const binding = await service.importEditableDesign(scope, taskId, 'studio-plan-rl02', source());
+    importStatus = 'success';
+    await service.resumeImport(scope, taskId, binding.operationId);
+    exportCreateHttp = 400;
+    createRetryAfter = '5';
+    const refused = await service.startExport(scope, taskId, 'workflow-preview-rl02', 'png', 1);
+    exportCreateHttp = 200;
+    const again = await service.startExport(scope, taskId, 'workflow-preview-rl02', 'png', 1);
+    expect({ refused: refused.status, again: again.status, posts: exportPosts, jobsCreated: exportCreates }).toEqual({ refused: 'failed', again: 'failed', posts: 1, jobsCreated: 0 });
   });
 
   it('a Canva 503 three times and a 429 on POST /exports are asked again: one export job, submitted (chaos R1.K9)', async () => {
@@ -191,6 +241,61 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     importCreateHttp = 200;
     const again = await service.importEditableDesign(scope, taskId, 'studio-plan-iiii', source());
     expect({ first: first.status, again: again.status, importsSentToCanva: importCreates }).toEqual({ first: 'failed', again: 'submitted', importsSentToCanva: 2 });
+  });
+
+  it('an import Canva refused with 429 is a named wait, and the same key sends it again once Canva accepts: one design', async () => {
+    importCreateHttp = 429;
+    createRetryAfter = '120';
+    const refused = await service.importEditableDesign(scope, taskId, 'plan-rate-aaaa', source()).then(() => null, (e) => e);
+    // Canva asked for two minutes, longer than the client waits: one POST, and Core names its bound.
+    expect({ status: refused?.status, code: refused?.code, retryAfterMs: refused?.retryAfterMs, posts: importCreates })
+      .toEqual({ status: 429, code: 'CANVA_RATE_LIMITED', retryAfterMs: 30000, posts: 1 });
+    const [held] = (await sql<{ status: string; metadata: Record<string, unknown> }>`SELECT status, metadata FROM hawa.canva_remote_operations WHERE task_id=${taskId}::uuid`.execute(db)).rows;
+    expect({ status: held.status, method: held.metadata.method, rateLimited: held.metadata.rateLimited }).toEqual({ status: 'failed', method: 'pptx_import', rateLimited: true });
+
+    importCreateHttp = 200;
+    const retried = await service.importEditableDesign(scope, taskId, 'plan-rate-aaaa', source());
+    const followed = await service.importEditableDesign(scope, taskId, 'plan-rate-aaaa', source());
+    const rows = (await sql<{ status: string; request_key: string; remote_job_id: string | null }>`SELECT status, request_key, remote_job_id FROM hawa.canva_remote_operations WHERE task_id=${taskId}::uuid`.execute(db)).rows;
+    expect({ retried: retried.status, followed: followed.status, sameOperation: retried.operationId === followed.operationId, importsSentToCanva: importCreates, rows: rows.map((r) => [r.request_key, r.status, Boolean(r.remote_job_id)]) })
+      .toEqual({ retried: 'submitted', followed: 'submitted', sameOperation: true, importsSentToCanva: 2, rows: [['plan-rate-aaaa', 'submitted', true]] });
+  });
+
+  it('two retries of a rate-limited import at once send it to Canva once', async () => {
+    importCreateHttp = 429;
+    createRetryAfter = '120';
+    await service.importEditableDesign(scope, taskId, 'plan-rate-bbbb', source()).catch(() => undefined);
+    importCreateHttp = 200;
+    await Promise.all([
+      service.importEditableDesign(scope, taskId, 'plan-rate-bbbb', source()),
+      new CanvaConnectService(db, options).importEditableDesign(scope, taskId, 'plan-rate-bbbb', source()),
+    ]);
+    expect(importCreates).toBe(2);
+  });
+
+  it('an import whose outcome is unknown (5xx or a lost connection) is never sent again under the same key', async () => {
+    importCreateHttp = 502;
+    const gateway = await service.importEditableDesign(scope, taskId, 'plan-unknown-01', source());
+    importCreateHttp = 200;
+    const gatewayAgain = await service.importEditableDesign(scope, taskId, 'plan-unknown-01', source());
+    expect({ first: gateway.status, again: gatewayAgain.status, importsSentToCanva: importCreates }).toEqual({ first: 'uncertain', again: 'uncertain', importsSentToCanva: 1 });
+
+    const otherTask = randomUUID();
+    await sql`INSERT INTO hawa.tasks(id,tenant_id,client_id,title) VALUES (${otherTask}::uuid,${tenant}::uuid,${clientId}::uuid,'Hunt Canva task, lost connection')`.execute(db);
+    importConnectionLost = true;
+    const lost = await service.importEditableDesign(scope, otherTask, 'plan-unknown-02', source());
+    importConnectionLost = false;
+    const lostAgain = await service.importEditableDesign(scope, otherTask, 'plan-unknown-02', source());
+    expect({ first: lost.status, again: lostAgain.status, importsSentToCanva: importCreates }).toEqual({ first: 'uncertain', again: 'uncertain', importsSentToCanva: 2 });
+  });
+
+  it('an import refused for another reason stays final under the same key', async () => {
+    importCreateHttp = 403;
+    createRetryAfter = '5';
+    const refused = await service.importEditableDesign(scope, taskId, 'plan-refused-01', source());
+    importCreateHttp = 200;
+    const again = await service.importEditableDesign(scope, taskId, 'plan-refused-01', source());
+    expect({ refused: refused.status, again: again.status, importsSentToCanva: importCreates }).toEqual({ refused: 'failed', again: 'failed', importsSentToCanva: 1 });
   });
 
   it('a second Canva call during a token refresh is served, not refused as CANVA_RECONNECT_REQUIRED', async () => {
@@ -352,4 +457,10 @@ describe.skipIf(!url)('HUNT: Canva Connect under transient provider failures', (
     expect(importCreates).toBe(1);
   });
 
+});
+
+describe('the wait Core names when Canva is still refusing with 429', () => {
+  it('is Canva\'s own Retry-After, bounded to 1 to 30 seconds; 30 s when Canva named none', () => {
+    expect([canvaRateLimitWaitMs(7000), canvaRateLimitWaitMs(120000), canvaRateLimitWaitMs(0), canvaRateLimitWaitMs(undefined)]).toEqual([7000, 30000, 1000, 30000]);
+  });
 });

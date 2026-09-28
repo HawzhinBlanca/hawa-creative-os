@@ -412,7 +412,9 @@ describe.skipIf(!url)('a blinded comparison study (PostgreSQL, application role)
     for (const words of ['Left is better', 'Right is better', 'No preference', 'I received one of these designs myself', 'Which design is better?']) expect(page.text).toContain(words);
     // Blind: nothing on the page or in its answers names an arm, a task, a label or a file.
     const blind = (s: string) => {
-      const scrubbed = s.split(tokenA).join('TOKEN');
+      // The token and the CSP nonce are random base64: CI failed on the nonce "egMTQhI/4oP008CgSIO86Q=="
+      // matching P0\d (2026-09-28), which names nothing.
+      const scrubbed = s.split(tokenA).join('TOKEN').split(nonce!).join('NONCE');
       expect(scrubbed).not.toMatch(/hawa|designer|canva|photoshop|P0\d|X-9|\.png/i);
       expect(scrubbed).not.toContain(sourceTask);
     };

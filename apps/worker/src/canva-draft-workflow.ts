@@ -200,6 +200,12 @@ async function reportOutcome(ctx: WorkflowDurableContext, call: CoreCall, stepNa
  * sleeps the same without reading any header. The planning step used to throw the 429 into the
  * step's own retry, which doubles (2, 4, 8, 16, 30 s): ten briefs sent at once got their drafts in
  * pairs at about 5, 7, 11, 19 and 35 s while slots stood free between tries (2026-09-24 load test).
+ *
+ * Canva's own rate limit is answered the same way (ADR-132): an import or export Canva still refuses
+ * with 429 after the client's short retry comes back as 429 CANVA_RATE_LIMITED with Canva's wait. It
+ * used to be recorded as failed and ended the draft. Only a 429 is repeated, under the same key: Canva
+ * refused it before acting, and Core keeps an import whose outcome is unknown 'uncertain' rather than
+ * sending it again.
  */
 const CORE_BUSY_WAIT_MS = 25000;
 const CORE_BUSY_WINDOW_MS = 15 * 60 * 1000;
@@ -430,10 +436,13 @@ export async function runCanvaDraft(
   }
 
   const variant = resolveCanvaVariant(input);
-  // Still busy after the whole window: the run ends as a busy start always did, with Core's code.
-  const endBusy = (busy: CoreBusy, slot: 'studio' | 'planning') =>
-    finish('DESIGN_SERVER_ERROR', undefined, busy.coreBusy, undefined, {
-      detail: `Core was still busy (${busy.coreBusy}) after ${CORE_BUSY_WINDOW_MS / 60000} minutes of waiting for a free ${slot} slot.`,
+  // Still busy after the whole window: the run ends as a busy start always did, with Core's code. A
+  // preview or check export Canva kept refusing ends as that step's failure, naming the design it has.
+  const endBusy = (busy: CoreBusy, slot: 'studio' | 'planning' | 'export', status = 'DESIGN_SERVER_ERROR', designId?: string) =>
+    finish(status, designId, busy.coreBusy, undefined, {
+      detail: busy.coreBusy === 'CANVA_RATE_LIMITED'
+        ? `Canva was still refusing new imports and exports with its rate limit (${busy.coreBusy}) after ${CORE_BUSY_WINDOW_MS / 60000} minutes of waiting.`
+        : `Core was still busy (${busy.coreBusy}) after ${CORE_BUSY_WINDOW_MS / 60000} minutes of waiting for a free ${slot} slot.`,
     });
   if (input.designStudio) {
     const studioBody = {
@@ -508,11 +517,16 @@ export async function runCanvaDraft(
     if (isCoreBusy(result)) return endBusy(result, 'planning');
     for (let n = 0; n < 30 && ['planning', 'submitted', 'creating'].includes(result.status); n++) {
       if (ctx.sleep) await ctx.sleep(2000);
+      const planId: string = result.planId;
+      let next: any;
       try {
-        result = await ctx.run('canva-resume-draft-' + n, () => call('/canva/plans/' + encodeURIComponent(result.planId) + '/resume', {}));
+        // A resume that sends the saved plan to Canva meets Canva's rate limit like the generation does.
+        next = await runUnlessBusy(ctx, 'canva-resume-draft-' + n, () => call('/canva/plans/' + encodeURIComponent(planId) + '/resume', {}));
       } catch (error) {
         return await handleBoundaryError(error, 'DESIGN_REJECTED');
       }
+      if (isCoreBusy(next)) return endBusy(next, 'planning');
+      result = next;
     }
     if (result.status !== 'retrieved') return finish('DESIGN_' + String(result.status).toUpperCase());
   }
@@ -535,14 +549,15 @@ export async function runCanvaDraft(
   let currentBindingVersion = state.binding?.version;
   let capture: any;
   try {
-    capture = await ctx.run('canva-export-preview', () => call('/canva/exports', { format: 'png', expectedVersion: currentBindingVersion }, 'workflow-preview-' + runKey));
-    for (let n = 0; n < 30 && ['submitted', 'creating'].includes(capture.status); n++) {
+    capture = await runUnlessBusy(ctx, 'canva-export-preview', () => call('/canva/exports', { format: 'png', expectedVersion: currentBindingVersion }, 'workflow-preview-' + runKey));
+    for (let n = 0; n < 30 && !isCoreBusy(capture) && ['submitted', 'creating'].includes(capture.status); n++) {
       if (ctx.sleep) await ctx.sleep(2000);
       capture = await ctx.run('canva-resume-preview-' + n, () => call('/canva/exports/' + encodeURIComponent(capture.operationId) + '/resume', {}));
     }
   } catch (error) {
     return await handleBoundaryError(error, 'CANVA_PREVIEW_FAILED', result?.designId);
   }
+  if (isCoreBusy(capture)) return endBusy(capture, 'export', 'CANVA_PREVIEW_FAILED', result.designId);
   // Canva may finish settling an import during the first export. A stale capture
   // stays rejected; take at most two new snapshots without regenerating the design.
   for (let attempt = 1; attempt <= 2 && capture.status === 'stale'; attempt++) {
@@ -560,26 +575,28 @@ export async function runCanvaDraft(
     }
     currentBindingVersion = fresh.binding.version;
     try {
-      capture = await ctx.run('canva-preview-recovery-' + attempt, () => call('/canva/exports', { format: 'png', expectedVersion: currentBindingVersion }, 'workflow-preview-' + runKey + '-retry-' + attempt));
-      for (let n = 0; n < 30 && ['submitted', 'creating'].includes(capture.status); n++) {
+      capture = await runUnlessBusy(ctx, 'canva-preview-recovery-' + attempt, () => call('/canva/exports', { format: 'png', expectedVersion: currentBindingVersion }, 'workflow-preview-' + runKey + '-retry-' + attempt));
+      for (let n = 0; n < 30 && !isCoreBusy(capture) && ['submitted', 'creating'].includes(capture.status); n++) {
         if (ctx.sleep) await ctx.sleep(2000);
         capture = await ctx.run('canva-resume-preview-recovery-' + attempt + '-' + n, () => call('/canva/exports/' + encodeURIComponent(capture.operationId) + '/resume', {}));
       }
     } catch (error) {
       return await handleBoundaryError(error, 'CANVA_PREVIEW_FAILED', result?.designId);
     }
+    if (isCoreBusy(capture)) return endBusy(capture, 'export', 'CANVA_PREVIEW_FAILED', result.designId);
   }
   if (capture.status !== 'retrieved') return finish('CANVA_PREVIEW_' + String(capture.status).toUpperCase(), result.designId);
   let check: any;
   try {
-    check = await ctx.run('canva-export-copy-font-check', () => call('/canva/exports', { format: 'pptx', expectedVersion: currentBindingVersion }, 'workflow-check-' + runKey));
-    for (let n = 0; n < 30 && ['submitted', 'creating'].includes(check.status); n++) {
+    check = await runUnlessBusy(ctx, 'canva-export-copy-font-check', () => call('/canva/exports', { format: 'pptx', expectedVersion: currentBindingVersion }, 'workflow-check-' + runKey));
+    for (let n = 0; n < 30 && !isCoreBusy(check) && ['submitted', 'creating'].includes(check.status); n++) {
       if (ctx.sleep) await ctx.sleep(2000);
       check = await ctx.run('canva-resume-copy-font-check-' + n, () => call('/canva/exports/' + encodeURIComponent(check.operationId) + '/resume', {}));
     }
   } catch (error) {
     return await handleBoundaryError(error, 'CANVA_CHECK_REQUIRED', result?.designId);
   }
+  if (isCoreBusy(check)) return endBusy(check, 'export', 'CANVA_CHECK_REQUIRED', result.designId);
   if (check.status !== 'retrieved' || !check.artifact?.content_check) return finish('CANVA_CHECK_REQUIRED', result.designId);
   if (!check.artifact.content_check.copyPass) return finish('CANVA_COPY_MISMATCH', result.designId);
   if (!check.artifact.content_check.fontPass) return finish('CANVA_FONT_MISMATCH', result.designId);

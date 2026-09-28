@@ -39,6 +39,24 @@ const overrides = (s: Scope) => OVERRIDE_ROLES.includes(s.role || '');
  */
 const createdNothing = (err: unknown, serverErrorCreatedNothing: boolean) =>
   canvaRequestNeverSent(err) || (err instanceof CanvaHttpError && (err.status < 500 || serverErrorCreatedNothing));
+/**
+ * Canva still refusing a create call with 429 after the client's short retry, or asking for a longer
+ * wait than the client keeps (30 s). Canva's rate limit refuses before acting, so nothing was created
+ * and the same request may be sent again. Such a refusal was recorded as failed and ended the draft
+ * (DESIGN_FAILED, CANVA_PREVIEW_FAILED) until 2026-09-28, although every automatic draft goes through
+ * the office's one connection and Canva allows 20 imports and 20 exports a minute per user (ADR-132).
+ * The operation is now marked failed with `rateLimited`, which lets the same key send it again, and
+ * Core answers 429 CANVA_RATE_LIMITED with Canva's wait, bounded to what the worker keeps (1 to 30 s),
+ * or 30 s when Canva named none.
+ */
+const CANVA_RATE_LIMIT_MIN_WAIT_MS = 1000;
+const CANVA_RATE_LIMIT_MAX_WAIT_MS = 30_000;
+export const canvaRateLimitWaitMs = (askedMs: number | undefined): number =>
+  Math.min(CANVA_RATE_LIMIT_MAX_WAIT_MS, Math.max(CANVA_RATE_LIMIT_MIN_WAIT_MS, askedMs ?? CANVA_RATE_LIMIT_MAX_WAIT_MS));
+const canvaRateLimited = (err: unknown): err is CanvaHttpError => err instanceof CanvaHttpError && err.status === 429;
+/** An operation Canva refused with 429: the only failed operation its own key may send again. */
+const heldByRateLimit = (row: { status?: string; metadata?: { rateLimited?: unknown } | null } | undefined) =>
+  row?.status === 'failed' && row.metadata?.rateLimited === true;
 /** A Canva connection row as the token refresh reads it. */
 type ConnectionRow = { status: string; generation: string; encrypted_tokens: string; expires_at: Date; claimedRefresh?: boolean; refresh_abandoned?: boolean };
 export class CanvaTokenCipher {
@@ -361,10 +379,12 @@ export class CanvaConnectService {
       if(locked?.client_id!==task.client_id)fail(409,'CANVA_CLIENT_CHANGED','Client changed during the operation');
       // This key's own operation, whatever became of it: a failed one is reported, never sent again
       // under the same key (the key is unique, and a second INSERT failed with a database error).
-      const own=(await sql<{ id: string; kind: string; request_hash: string; actor_id: string; metadata: { method?: string } | null }>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows[0];
+      const own=(await sql<{ id: string; kind: string; status: string; request_hash: string; actor_id: string; metadata: { method?: string; rateLimited?: unknown } | null }>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows[0];
       if(own){
         if(own.kind!=='create'||own.request_hash!==requestHash||own.actor_id!==s.actorId||own.metadata?.method!=='pptx_import')fail(409,'CANVA_IDEMPOTENCY_CONFLICT','Request key already belongs to another request');
-        return {id:own.id,created:false};
+        // Except one Canva refused with 429 (it created nothing): that one is sent again below, once
+        // the checks a new import passes still hold. Any other outcome (uncertain above all) is followed.
+        if(!heldByRateLimit(own))return {id:own.id,created:false};
       }
       const prior=(await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND kind='create' ORDER BY created_at`.execute(db)).rows.find(op=>!canRetryCanvaCreation(op));
       if(prior){
@@ -380,6 +400,12 @@ export class CanvaConnectService {
       assertTaskGenerationAllowed(locked.state);
       await assertNativeRevisionAdmission(db,s.tenantId,taskId);
       if(await new CanvaBindingRepository(db).findByTaskId(s.tenantId,taskId))fail(409,'CANVA_ALREADY_BOUND','Edit the existing Canva design');
+      if(own){
+        // The task row is locked, so a second retry of the same key waits here and then follows this one.
+        const reclaimed=(await sql<{ id: string }>`UPDATE hawa.canva_remote_operations SET status='creating',metadata=metadata-'rateLimited'-'failureEvidence',updated_at=now()
+          WHERE tenant_id=${s.tenantId}::uuid AND id=${own.id}::uuid AND status='failed' AND metadata->'rateLimited'='true'::jsonb RETURNING id`.execute(db)).rows[0];
+        return {id:own.id,created:Boolean(reclaimed)};
+      }
       const id=randomUUID();
       await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,metadata)
         VALUES(${id}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${task.client_id}::uuid,${s.actorId},${key},${requestHash},'create','creating','{"method":"pptx_import"}'::jsonb)`.execute(db);
@@ -394,6 +420,7 @@ export class CanvaConnectService {
         metadata=(metadata-'reconciliationReason')||'{"reconciliationRequired":false}'::jsonb,updated_at=now()
         WHERE tenant_id=${s.tenantId}::uuid AND id=${claimed.id}::uuid`.execute(db));
     } catch (err) {
+      if(canvaRateLimited(err))return this.holdForRateLimit(s,claimed.id,'import',err);
       if(createdNothing(err,false)){
         await this.tx(s,db=>sql`UPDATE hawa.canva_remote_operations SET status='failed',
           metadata=metadata||'{"failureEvidence":{"kind":"not_accepted"}}'::jsonb,updated_at=now()
@@ -552,12 +579,14 @@ export class CanvaConnectService {
     if (binding.version !== expectedVersion) fail(409,'CANVA_BINDING_STALE','Refresh the task binding before exporting');
     const requestHash = hash(JSON.stringify({ designId:binding.canva_design_id,format,expectedVersion }));
     const existing = await this.tx(s, async db => (await sql<any>`SELECT * FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows[0]);
-    if (existing) { this.checkReplay(existing,s,requestHash); return this.exportStatus(s,taskId,existing.id); }
+    // An export Canva refused with 429 created nothing: its own key sends it again, as a new one would be.
+    const retrying = heldByRateLimit(existing);
+    if (existing) { this.checkReplay(existing,s,requestHash); if (!retrying) return this.exportStatus(s,taskId,existing.id); }
     const client = await this.authorizedClient(s);
     const { design } = await client.getDesign(binding.canva_design_id);
     if (design.id !== binding.canva_design_id) fail(502,'CANVA_DESIGN_MISMATCH','Canva returned a different design');
     if (format === 'png' && design.page_count !== 1) fail(422,'CANVA_MULTIPAGE_PNG_UNSUPPORTED','Use PDF for multi-page designs; PNG capture currently requires exactly one page');
-    const id = randomUUID(), metadata: { format: string; designUpdatedAt: unknown; checkingPolicy?: ExportCheckPolicy } = { format, designUpdatedAt:design.updated_at };
+    const id: string = retrying ? existing.id : randomUUID(), metadata: { format: string; designUpdatedAt: unknown; checkingPolicy?: ExportCheckPolicy } = { format, designUpdatedAt:design.updated_at };
     const inserted = await this.tx(s, async db => {
       if (s.nativeRecovery) await lockNativeRecovery(db,s,taskId);
       const task = (await sql<{client_id:string}>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
@@ -565,38 +594,44 @@ export class CanvaConnectService {
         WHERE tenant_id=${s.tenantId}::uuid AND id=${binding.id}::uuid AND status='bound' FOR SHARE`.execute(db)).rows[0];
       if (!task || task.client_id !== binding.client_id || !locked || locked.version !== expectedVersion || locked.canva_design_id !== design.id)
         fail(409,'CANVA_BINDING_STALE','The task or binding changed before export admission');
-      // A concurrent retry keeps the first receipt, without reading today's mutable font policy.
-      if ((await sql`SELECT id FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid
-        AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows.length) return undefined;
-      const revisionCopy = await latestNativeCopy(db,s.tenantId,taskId);
-      if (!revisionCopy) await assertNativeRevisionAdmission(db,s.tenantId,taskId);
-      // ADR-126: an owned manual request captures only under its current human copy confirmation.
-      if (!revisionCopy && s.nativeRecovery) fail(409,'NATIVE_COPY_CONFIRMATION_REQUIRED','Confirm the exact final copy against the linked design before capture');
-      // Both preview and editable capture must belong to the same human confirmation.
-      if (format === 'pptx' || revisionCopy) {
-        const source = format === 'pptx' ? await this.editableSource(s,taskId,binding.client_id,design.id,db) : undefined;
-        if (revisionCopy) {
-          metadata.checkingPolicy=await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id,s);
-        } else if (source) {
-          const manifest=source.manifest, blocks=studioSentBlocks(manifest);
-          const directionsByIndex=importedSourceDirections(manifest);
-          if (!Array.isArray(manifest?.copy) || !manifest.copy.length || !manifest.copy.every((part:unknown)=>typeof part==='string') ||
-              (!blocks && !manifest.reference?.rules?.fontFamily))
-            fail(422,'SOURCE_REQUIRED','The imported source has no complete saved copy and font policy');
-          metadata.checkingPolicy={version:1,kind:'imported_source',sourceId:source.id,copy:manifest.copy,
-            ...(blocks ? {options:{fontsByIndex:blocks.map(t=>t.fontFamily),roles:blocks.map(t=>t.role||'body'),directionsByIndex}} :
-              {requiredFont:manifest.reference.rules.fontFamily,options:{scriptFonts:manifest.reference.rules.scriptFonts,directionsByIndex}})};
-        } else {
-          const inaccessible = (await sql`SELECT e.id FROM hawa.canva_editable_sources e JOIN hawa.canva_remote_operations o
-            ON o.id=e.operation_id AND o.tenant_id=e.tenant_id WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid
-            AND e.client_id=${binding.client_id}::uuid AND o.design_id=${design.id} LIMIT 1`.execute(db)).rows.length;
-          if (inaccessible) fail(403,'SOURCE_FORBIDDEN','The imported source belongs to another actor; an art director or administrator must check this design');
-          metadata.checkingPolicy=await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id);
+      // A concurrent retry keeps the first receipt, without reading today's mutable font policy. So
+      // does a retry of an export Canva refused with 429: it was admitted, and keeps its own policy.
+      const own = (await sql<{ status: string; metadata: { rateLimited?: unknown } | null }>`SELECT status, metadata FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid
+        AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows[0];
+      if (own && !(retrying && heldByRateLimit(own))) return undefined;
+      if (!retrying) {
+        const revisionCopy = await latestNativeCopy(db,s.tenantId,taskId);
+        if (!revisionCopy) await assertNativeRevisionAdmission(db,s.tenantId,taskId);
+        // ADR-126: an owned manual request captures only under its current human copy confirmation.
+        if (!revisionCopy && s.nativeRecovery) fail(409,'NATIVE_COPY_CONFIRMATION_REQUIRED','Confirm the exact final copy against the linked design before capture');
+        // Both preview and editable capture must belong to the same human confirmation.
+        if (format === 'pptx' || revisionCopy) {
+          const source = format === 'pptx' ? await this.editableSource(s,taskId,binding.client_id,design.id,db) : undefined;
+          if (revisionCopy) {
+            metadata.checkingPolicy=await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id,s);
+          } else if (source) {
+            const manifest=source.manifest, blocks=studioSentBlocks(manifest);
+            const directionsByIndex=importedSourceDirections(manifest);
+            if (!Array.isArray(manifest?.copy) || !manifest.copy.length || !manifest.copy.every((part:unknown)=>typeof part==='string') ||
+                (!blocks && !manifest.reference?.rules?.fontFamily))
+              fail(422,'SOURCE_REQUIRED','The imported source has no complete saved copy and font policy');
+            metadata.checkingPolicy={version:1,kind:'imported_source',sourceId:source.id,copy:manifest.copy,
+              ...(blocks ? {options:{fontsByIndex:blocks.map(t=>t.fontFamily),roles:blocks.map(t=>t.role||'body'),directionsByIndex}} :
+                {requiredFont:manifest.reference.rules.fontFamily,options:{scriptFonts:manifest.reference.rules.scriptFonts,directionsByIndex}})};
+          } else {
+            const inaccessible = (await sql`SELECT e.id FROM hawa.canva_editable_sources e JOIN hawa.canva_remote_operations o
+              ON o.id=e.operation_id AND o.tenant_id=e.tenant_id WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid
+              AND e.client_id=${binding.client_id}::uuid AND o.design_id=${design.id} LIMIT 1`.execute(db)).rows.length;
+            if (inaccessible) fail(403,'SOURCE_FORBIDDEN','The imported source belongs to another actor; an art director or administrator must check this design');
+            metadata.checkingPolicy=await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id);
+          }
         }
       }
       const pending=(await sql<any>`SELECT id FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid AND task_id=${taskId}::uuid
         AND kind='export' AND design_id=${design.id} AND metadata->>'format'=${format} AND status IN ('creating','submitted','uncertain') AND request_key<>${key} LIMIT 1`.execute(db)).rows[0];
       if(pending) fail(409,'CANVA_EXPORT_PENDING','An export of this format is already pending or uncertain; resume the existing operation');
+      if (retrying) return (await sql<any>`UPDATE hawa.canva_remote_operations SET status='creating',metadata=(metadata-'rateLimited'-'failureEvidence')||${JSON.stringify({ designUpdatedAt:design.updated_at })}::jsonb,updated_at=now()
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${id}::uuid AND status='failed' AND metadata->'rateLimited'='true'::jsonb RETURNING id`.execute(db)).rows[0];
       return (await sql<any>`INSERT INTO hawa.canva_remote_operations
       (id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version,metadata)
       VALUES (${id}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${binding.client_id}::uuid,${s.actorId},${key},${requestHash},'export','creating',${design.id},${expectedVersion},${JSON.stringify(metadata)}::jsonb)
@@ -610,6 +645,7 @@ export class CanvaConnectService {
       const job = await client.createExportJob(design.id,format);
       await this.tx(s, db => sql`UPDATE hawa.canva_remote_operations SET status='submitted',remote_job_id=${job.job.id},updated_at=now() WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
     } catch (err) {
+      if (canvaRateLimited(err)) return this.holdForRateLimit(s, id, 'export', err);
       if (createdNothing(err, true)) {
         await this.tx(s, db => sql`UPDATE hawa.canva_remote_operations SET status='failed',updated_at=now() WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
         return { operationId:id,status:'failed',message:`Canva did not accept the export (${(err as Error)?.message || 'not sent'}); request it again.`,qaStatus:'not_run' };
@@ -632,6 +668,18 @@ export class CanvaConnectService {
         AND o.design_id=${designId} AND o.status='retrieved' AND (e.actor_id=${s.actorId} OR ${overrides(s)})
       ORDER BY e.created_at DESC LIMIT 1`.execute(db)).rows[0];
     return transaction ? read(transaction) : this.tx(s,read);
+  }
+  /**
+   * Records a create call Canva refused with 429 (nothing was created: `failureEvidence` not_accepted,
+   * so it blocks no other creation for the task) so that its own key may send it again, and answers 429 CANVA_RATE_LIMITED with the wait: the worker keeps it and asks again.
+   */
+  private async holdForRateLimit(s: Scope, id: string, what: 'import'|'export', err: CanvaHttpError): Promise<never> {
+    await this.tx(s, db => sql`UPDATE hawa.canva_remote_operations
+      SET status='failed',metadata=coalesce(metadata,'{}'::jsonb)||jsonb_build_object('rateLimited',true,'rateLimitCount',coalesce((metadata->>'rateLimitCount')::int,0)+1,
+        'failureEvidence',jsonb_build_object('kind','not_accepted')),updated_at=now()
+      WHERE id=${id}::uuid AND tenant_id=${s.tenantId}::uuid`.execute(db));
+    const waitMs = canvaRateLimitWaitMs(err.retryAfterMs);
+    throw new CanvaFlowError(429,'CANVA_RATE_LIMITED',`Canva is refusing new ${what}s for the moment (its rate limit); nothing was created. Send the same request again in about ${Math.ceil(waitMs/1000)} s.`,waitMs);
   }
   private checkReplay(row: any,s: Scope,requestHash: string) {
     if (!row || row.actor_id !== s.actorId || row.request_hash !== requestHash || row.kind !== 'export') fail(409,'CANVA_IDEMPOTENCY_CONFLICT','Request key already belongs to a different request or actor');
