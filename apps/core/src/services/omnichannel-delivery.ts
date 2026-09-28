@@ -40,7 +40,7 @@ import { log } from '../logging.js';
 import { loadPinnedDeliverables, type DeliverableStore } from './pinned-deliverables.js';
 import { validatePublicationReceipt } from './publication-receipt-validation.js';
 import { PublicationExpectations, PublicationExpectationConflict } from './publication-expectations.js';
-import { pendingChangeOf } from './pending-change.js';
+import { pendingChangeOf, pendingChangeWords } from './pending-change.js';
 import type { ClientDnaResolver } from './client-dna-resolver.js';
 import type { TaskReader } from './task-reader.js';
 
@@ -159,7 +159,8 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
         (opts.allowInvalidated || !a.invalidated)
     );
     if (match) {
-      if ((isProduction || task?.requireQc || (opts as any).requireQc) && !match.qcReportHash && !opts.allowInvalidated) {
+      // A stored approval still needs its QC evidence: the policy excuses a later edit, not missing QA.
+      if ((isProduction || task?.requireQc || (opts as any).requireQc) && !match.qcReportHash) {
         // Task R05: null/unknown QC cannot publish in production or when requireQc is set
         return null;
       }
@@ -204,8 +205,9 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       if (!opts.allowInvalidated && row.decision_payload?.invalidated === true) {
         return null;
       }
-      if (!opts.allowInvalidated && !row.decision_payload?.qcReportHash && !row.qc_run_id) {
-        // Task R05: null/unknown QC cannot publish
+      if (!row.decision_payload?.qcReportHash && !row.qc_run_id) {
+        // Task R05: null/unknown QC cannot publish, under any policy. deliver_approved_stored used to
+        // skip this too, so an approval with no QA behind it could be delivered (audit #2).
         return null;
       }
       return {
@@ -399,6 +401,19 @@ export function createOmnichannelDelivery(deps: OmnichannelDeliveryDeps) {
       const change = await pendingChangeOf(db, tenantOf(task), taskId);
       if (change) return { ok: false, status: 409, code: 'CLIENT_CHANGE_PENDING',
         message: 'A client-requested change blocks this approved package' };
+    }
+    // A change the client asked for blocks delivery whichever path asks. Only the Desk's publish route
+    // checked it; publish-omnichannel and the WhatsApp approve link reached here without it and could
+    // deliver a version the client had asked to change (audit 2026-09-27 #3). The workflow's own run
+    // is checked by RequestLifecycle before it starts.
+    if (!workflowMode) {
+      const change = await changeBlockingDelivery(task, taskId);
+      if (change === null) {
+        return { ok: false, status: 503, title: 'Database Unavailable', code: 'DATABASE_UNAVAILABLE', message: 'Whether the client asked for a change could not be checked; try again' };
+      }
+      if (change) {
+        return { ok: false, status: 409, title: "Changed At The Client's Request", code: 'CHANGE_PENDING', message: `${pendingChangeWords(change)} The approved version was not delivered.` };
+      }
     }
     if (workflowMode) {
       // The workflow's own run only: a task delivered already, or taken back, is not delivered again.

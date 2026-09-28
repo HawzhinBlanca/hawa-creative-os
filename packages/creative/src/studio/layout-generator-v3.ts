@@ -281,6 +281,36 @@ export function hasTwinCardBlock(layout: StudioLayoutV2): boolean {
 }
 
 /**
+ * The colours the contrast repair below may use, all taken from the client's palette (ADR-127). It
+ * used fixed KAAE colours (cream, navy, and a gold, #C5A059, that is not even in KAAE's palette), so
+ * any other client's text was repaired into KAAE's colours. With no palette it falls back to neutral
+ * white and near-black.
+ */
+export function paletteRepairColours(palette: string[] = []) {
+  const hexes = palette.filter((c) => /^#[0-9a-f]{6}$/i.test(c));
+  const byLum = [...hexes].sort((a, b) => hexToLuminance(a) - hexToLuminance(b));
+  const saturation = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    return max === 0 ? 0 : (max - min) / max;
+  };
+  const darkest = byLum[0] ?? '#111111';
+  const lightest = byLum[byLum.length - 1] ?? '#FFFFFF';
+  return {
+    darkest,
+    lightest,
+    /** Dark colours other than the darkest, for a band on a dark canvas: the next darkest. */
+    deepAlternative: byLum.find((c) => c !== darkest && hexToLuminance(c) < 0.2) ?? darkest,
+    /** The most vivid colour that reads on a dark surface, for eyebrows, dates and venues. */
+    accentOnDark: (bgLum: number, required: number) =>
+      [...hexes]
+        .filter((c) => calculateLuminanceContrastRatio(hexToLuminance(c), bgLum) >= required)
+        .sort((a, b) => saturation(b) - saturation(a))[0] ?? lightest,
+  };
+}
+
+/**
  * Server-side scaling: converts normalized [0..1] candidate layout to target StudioLayoutV2 (PosterLLaVa).
  */
 export function scaleNormalizedLayoutToV2(
@@ -288,8 +318,11 @@ export function scaleNormalizedLayoutToV2(
   canvasWidth: number,
   canvasHeight: number,
   /** The real logo's width over height. When given, the logo is fitted before geometry is settled. */
-  logoAspect?: number
+  logoAspect?: number,
+  /** The client's palette: the contrast repair picks its colours from it. */
+  palette: string[] = []
 ): StudioLayoutV2 {
+  const repair = paletteRepairColours(palette);
   const clamp = (val: number, min = 0, max = 1) => Math.min(max, Math.max(min, val));
   const scaleX = (val: number) => Math.round(clamp(val) * canvasWidth);
   const scaleY = (val: number) => Math.round(clamp(val) * canvasHeight);
@@ -303,7 +336,7 @@ export function scaleNormalizedLayoutToV2(
     baseline: Math.max(4, Math.round(norm.grid.baseline * canvasHeight || 8)),
   };
 
-  const canvasBgLum = hexToLuminance(norm.background?.color || '#0A1628');
+  const canvasBgLum = hexToLuminance(norm.background?.color || repair.darkest);
   const shapes: ShapeElement[] = norm.shapes.map((s) => {
     let resolvedColor = s.color;
     let strokeColor = s.strokeColor || undefined;
@@ -312,8 +345,7 @@ export function scaleNormalizedLayoutToV2(
       const sLum = hexToLuminance(s.color || '#000000');
       // If a panel on a dark background is cream/white (> 0.5 luminance)
       if ((s.role === 'panel' || s.y >= 0.6) && sLum > 0.5) {
-        resolvedColor = '#162B48';
-        if (!strokeColor) strokeColor = '#1E3A5F';
+        resolvedColor = repair.deepAlternative;
       }
     }
     const box = {
@@ -371,7 +403,7 @@ export function scaleNormalizedLayoutToV2(
 
     // WCAG 2.1 AA Contrast Enforcement:
     // Determine underlying surface color (panel behind text or canvas background)
-    let effectiveBg = norm.background?.color || '#0A1628';
+    let effectiveBg = norm.background?.color || repair.darkest;
     for (let i = norm.shapes.length - 1; i >= 0; i--) {
       const s = norm.shapes[i];
       if (s.role === 'panel' || s.kind === 'rect' || s.kind === 'roundRect') {
@@ -392,11 +424,12 @@ export function scaleNormalizedLayoutToV2(
     let resolvedColor = t.color;
     if (contrast < requiredContrast) {
       if (bgLum < 0.2) {
-        // Dark background: Cream or Gold
-        resolvedColor = (t.role === 'eyebrow' || t.role === 'date' || t.role === 'venue') ? '#C5A059' : '#FDF8F3';
+        // Dark background: the palette's lightest colour, or its most vivid readable one for the
+        // small display lines.
+        resolvedColor = (t.role === 'eyebrow' || t.role === 'date' || t.role === 'venue') ? repair.accentOnDark(bgLum, requiredContrast) : repair.lightest;
       } else {
-        // Light background: Deep Navy
-        resolvedColor = '#0A1628';
+        // Light background: the palette's darkest colour.
+        resolvedColor = repair.darkest;
       }
     }
 
@@ -1223,6 +1256,8 @@ export interface GenerateLayoutCandidatesOptions {
   reference?: ClientReference;
   /** Already authorized by the caller within the frozen client scope. */
   visualInputs?: LayoutVisualInput[];
+  /** Who the client is: its client pack's profile (ADR-127). The system prompt names no client. */
+  clientProfile?: string;
 }
 
 export interface GenerateLayoutCandidatesResult {
@@ -1260,8 +1295,8 @@ function admittedFaceList(script: FontScript, role: 'display' | 'body', bold?: b
  * changes the cached prefix once, deliberately, rather than the prompt drifting from the pipeline.
  */
 export function buildLayoutV3SystemPrompt(): string {
-  return `You are the Senior Typographer and Creative Director for KAAE (Kurdistan Accrediting Agency for Education).
-Your mandate is to generate THREE deliberately distinct, research-grade institutional layout candidates as structured JSON.
+  return `You are a Senior Typographer and Creative Director at a design studio that serves several clients. The client you are designing for, its voice and its palette are given in the request (CLIENT and Primary Palette); design for that client and no other, and never borrow another client's identity.
+Your mandate is to generate THREE deliberately distinct, research-grade layout candidates as structured JSON.
 You operate under strict mathematical, spatial, and typographic design rules established in top-tier graphic design and computational aesthetic research (arXiv:2402.06945, PosterLLaVa arXiv:2406.02884, PosterMELD arXiv:2608.02218, LaySPA).
 
 ================================================================================
@@ -1271,10 +1306,10 @@ You operate under strict mathematical, spatial, and typographic design rules est
   Coordinates are scaled to target pixel dimensions server-side.
 - Deliberate Diversity: Return exactly THREE distinct layouts. No two candidates may share the same structural geometry, alignment axis, or component distribution.
   Assign each candidate to a different Composition Archetype:
-  1) monolith_centered: Formal, symmetrical, centered authoritative institutional hierarchy with central spine.
+  1) monolith_centered: Formal, symmetrical, centered authoritative hierarchy with a central spine.
   2) asymmetric_editorial: Dynamic left-aligned (or right-aligned for RTL) editorial with strong vertical rule or offset weight.
   3) hero_statement_grid: High-impact title block framed by grounded card or lower structured panel.
-  4) split_statutory_banner: Distinct top header banner zone with structured statutory details below.
+  4) split_statutory_banner: Distinct top header banner zone with structured details below.
   5) minimal_framed: Generous breathing margins with refined architectural hairline framing.
 - Pairwise Geometric Distance: The spatial distance between any two candidates must exceed 15px when scaled (do NOT return twin or near-identical layouts).
 - Anti-Twin-Card Invariant: NEVER generate side-by-side bilateral symmetric cards (two cards side-by-side with identical width and height in the body) unless the brief explicitly commands a 2-item comparison. Such layouts violate institutional dignity.
@@ -1320,15 +1355,15 @@ why the list is short; a family that is absent is one the renderer cannot set th
 - Logo Placement: Place the logo in a prominent header or anchor position (e.g., top-center or top-left for Latin, top-center or top-right for RTL).
   Ensure the logo box has dignified proportions and does not collide with title text.
 - Text Legibility & Contrast:
-  * Light text on dark background (e.g., Cream #FDF8F3 or Gold #C5A059 on Navy #0A1628 / #0C2340): contrast ratio MUST exceed 4.5:1.
-  * Dark text on light background (e.g., Navy on Cream panel): contrast ratio MUST exceed 4.5:1.
+  * Light text on dark background (e.g., the palette's lightest colour or its warm accent on its darkest colour): contrast ratio MUST exceed 4.5:1.
+  * Dark text on light background (e.g., the palette's darkest colour on a light panel): contrast ratio MUST exceed 4.5:1.
   * NEVER place low-contrast text (e.g., dark blue on dark blue, or pale gray on cream).
 - Eyebrows & Tracking:
   * Eyebrows (role: "eyebrow") must fit cleanly on a SINGLE line. NEVER allow an eyebrow to wrap onto multiple lines.
   * Use restrained tracking (0.02 to 0.04em).
 - Footer and Venue Bands:
-  * If the canvas background is dark, NEVER place a solid cream (#FDF8F3) or white rectangle across the footer or venue area.
-  * Footer and venue bands on dark canvases MUST harmonize with the palette: use a deep tone (#162B48, #1E3A5F), a subtle border/rule (#C5A059), or a translucent container. An unstyled stark cream block on a dark poster is strictly rejected.
+  * If the canvas background is dark, NEVER place a solid light (cream or white) rectangle across the footer or venue area.
+  * Footer and venue bands on dark canvases MUST harmonize with the palette: use a deep tone from the palette, a subtle border or rule in its accent colour, or a translucent container. An unstyled stark cream block on a dark poster is strictly rejected.
 - Vertical Rhythm & Negative Space:
 ${negativeSpacePromptGuidance()}
 
@@ -1396,8 +1431,10 @@ export function buildLayoutV3UserPrompt(options: {
   exemplars?: ExemplarRetrievalMatch[];
   isRtl?: boolean;
   logoAspect?: number;
+  /** Who the client is (its client pack's profile, ADR-127). The system prompt names no client. */
+  clientProfile?: string;
 }): string {
-  const { brief, copyBlocks, palette, canvasWidth, canvasHeight, exemplars, isRtl, logoAspect } = options;
+  const { brief, copyBlocks, palette, canvasWidth, canvasHeight, exemplars, isRtl, logoAspect, clientProfile } = options;
 
   const capacitySlots = copyBlocks.map((b) => computeCapacitySlot(b, canvasWidth, canvasHeight));
 
@@ -1421,7 +1458,10 @@ export function buildLayoutV3UserPrompt(options: {
           .join('\n')
       : 'No descriptor-only examples supplied. Follow the client brief and any explicitly attached scoped examples.';
 
-  return `CREATIVE BRIEF:
+  return `CLIENT:
+${clientProfile || 'Not named. Design only from the brief and the palette below; invent no brand identity.'}
+
+CREATIVE BRIEF:
 ${brief}
 
 CANVAS DIMENSIONS & SPECIFICATIONS:
@@ -1439,7 +1479,7 @@ ${slotsFormatted}
 
 TASK:
 Generate exactly THREE deliberately distinct normalized layout candidates as JSON.
-Choose 3 distinct composition archetypes tailored to the brief from the 14 institutional archetypes:
+Choose 3 distinct composition archetypes tailored to the brief from the 14 archetypes:
 - monolith_centered, asymmetric_editorial, hero_statement_grid, split_statutory_banner, minimal_framed,
 - stat_card_triptych, numbered_standards_stack, executive_roadmap_quad, crest_banner_split,
 - credential_badge_card, chevron_band_institutional, monograph_bilateral_column, academic_citation_folio, commencement_diploma_frame.
@@ -1477,6 +1517,7 @@ export async function generateLayoutCandidatesV3(
 
   const systemPrompt = buildLayoutV3SystemPrompt();
   const userPrompt = buildLayoutV3UserPrompt({
+    clientProfile: options.clientProfile,
     brief: options.brief,
     copyBlocks: options.copyBlocks,
     palette: options.palette,
@@ -1544,7 +1585,7 @@ export async function generateLayoutCandidatesV3(
   for (const b of options.copyBlocks) copyByIndex[b.index] = b.text;
 
   const scaledLayouts: StudioLayoutV2[] = rawCandidates.map((c) => {
-    const layout = scaleNormalizedLayoutToV2(c, canvasWidth, canvasHeight, options.logoAspect);
+    const layout = scaleNormalizedLayoutToV2(c, canvasWidth, canvasHeight, options.logoAspect, options.palette);
     correctFontsThatCannotDrawTheCopy(layout, copyByIndex);
     return layout;
   });

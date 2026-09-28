@@ -9,6 +9,28 @@ import { PROMPT_VERSION } from '../apps/core/src/services/design-studio/prompts.
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+/**
+ * The manifest certifies the tree of its build commit. HEAD may be that commit or any descendant
+ * whose only changes since are the manifest files themselves: the "record manifest" commit, or a
+ * merge commit that brought both in. Until studio-v2 c2bf4943 (2026-09-27) this required the build
+ * commit to be HEAD, HEAD~1 or HEAD~2, which every merge commit failed and a code commit two back
+ * passed.
+ */
+const MANIFEST_FILES = new Set(['MANIFEST.json', 'RELEASE_MANIFEST.json', 'SHA256SUMS.txt']);
+export function buildCommitErrors(commit: string, cwd: string): string[] {
+  const git = (args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+  try {
+    git(['merge-base', '--is-ancestor', commit, 'HEAD']);
+  } catch {
+    return [`Manifest build commit (${commit}) is not an ancestor of HEAD`];
+  }
+  const changed = git(['diff', '--name-only', commit, 'HEAD']).split('\n').filter(Boolean);
+  const drift = changed.filter((file) => !MANIFEST_FILES.has(file));
+  return drift.length > 0
+    ? [`${drift.length} file(s) changed since the manifest build commit (${commit}), e.g. ${drift.slice(0, 5).join(', ')}; record a new manifest`]
+    : [];
+}
+
 export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; errors: string[] } {
   const filePath = manifestPath || path.join(root, 'RELEASE_MANIFEST.json');
   const errors: string[] = [];
@@ -92,21 +114,9 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
 
     if (!commitExists) {
       errors.push(`Manifest build commit (${manifest.build.commit}) does not exist in git repository`);
+    } else {
+      errors.push(...buildCommitErrors(manifest.build.commit, root));
     }
-    try {
-      const gitHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-      let gitParent = '';
-      try {
-        gitParent = execFileSync('git', ['rev-parse', 'HEAD~1'], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-      } catch {}
-      let gitParent2 = '';
-      try {
-        gitParent2 = execFileSync('git', ['rev-parse', 'HEAD~2'], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-      } catch {}
-      if (gitHead && manifest.build.commit !== gitHead && manifest.build.commit !== gitParent && manifest.build.commit !== gitParent2) {
-        errors.push(`Manifest build commit (${manifest.build.commit}) does not match git HEAD (${gitHead}) or recent release commits`);
-      }
-    } catch {}
   }
 
   let isActuallyClean = false;

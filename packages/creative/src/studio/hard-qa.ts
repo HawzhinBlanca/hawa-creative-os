@@ -1,3 +1,4 @@
+import { evaluateThumbnailLayout } from './thumbnail-rules.js';
 import type { StudioLayoutV2 } from './layout-v2.js';
 import { validateLayoutV2, type LayoutValidationContext } from './validate-layout-v2.js';
 import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './layout-metrics.js';
@@ -34,6 +35,11 @@ export interface HardQaContext {
    * and refused every design that placed the client's photos (2026-09-22, run b7fc5555).
    */
   photoCount?: number;
+  /**
+   * The client's playbook (ADR-127). A video thumbnail also answers to the thumbnail rules: nothing
+   * under the platform's badge or buttons, and a hook legible at listing size.
+   */
+  playbook?: 'institutional-announcement' | 'video-thumbnail';
 }
 
 export interface HardQaOutcome {
@@ -258,6 +264,12 @@ export function evaluateHardQa(
     );
   }
 
+  if (ctx.playbook === 'video-thumbnail') {
+    const thumbnail = evaluateThumbnailLayout(checked, { width: ctx.width, height: ctx.height });
+    for (const code of thumbnail.defectCodes) if (!defectCodes.includes(code)) defectCodes.push(code);
+    messages.push(...thumbnail.messages);
+  }
+
   return { passed: defectCodes.length === 0, defectCodes, messages, metrics, layout, textMeasurements };
 }
 
@@ -293,8 +305,13 @@ export interface StudioReferenceRules {
  * not in KAAE's, so its designs could not be checked against the palette production enforces.
  */
 export function studioReferenceFromRaw(rawRef: any): StudioReferenceRules {
+  // A reference pack names its client's palette. One that does not is refused: this used to fill in
+  // KAAE's palette, so any other client's design would have been made in KAAE's colours (ADR-127).
+  if (!Array.isArray(rawRef?.rules?.palette) || rawRef.rules.palette.length === 0) {
+    throw new Error('The client reference pack names no palette (rules.palette); a design cannot be made in borrowed colours.');
+  }
   const rules: StudioReferenceRules = {
-    palette: ['#0A1628', '#1E3A5F', '#4770A3', '#F7B500', '#FDF8F3', '#FFFFFF', '#1A1A1A'],
+    palette: rawRef.rules.palette,
     latinFont: 'Verdana',
     arabicFont: 'Noto Sans Arabic',
     promotedRules: 'Keep title clear and centered. Do not crowd logo. Preserve hierarchy.',

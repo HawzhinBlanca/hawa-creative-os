@@ -6,7 +6,9 @@ import {NativeRevisionHandoff} from './NativeRevisionHandoff.js';
 import {NativeReviewSubmit} from './NativeReviewSubmit.js';
 import {captureForReview} from '../services/canvaCapture.js';
 import type {CanvaAmendmentObservation} from '@hawa/contracts';
-export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId,taskStatus})=>{
+import {canvaPanelPollMs,onCanvaPanelWake} from '../services/canvaPanelPoll.js';
+// `revision` changes when a live event names the task (the Work screen's detail query read it again).
+export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string;revision?:number}>=({taskId,taskStatus,revision})=>{
   const generationBlocker=taskGenerationBlocker(taskStatus);
   const [state,setState]=useState<any>(null),[connected,setConnected]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
   useEffect(()=>{setMessage('');},[taskStatus]);
@@ -21,8 +23,17 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
   const exportRequests=useRef<Record<string,{format:string;key:string}>>({});
   const refresh=async()=>{const [task,account,planning]=await Promise.all([apiClient.canva.taskState(taskId),apiClient.canva.status(),apiClient.canva.plans(taskId)]);if(activeTask.current!==taskId)return;setState(task);setPlans(planning.plans);setConnected(account.authorized===true);setResults(v=>({...v,...Object.fromEntries((task.artifacts||[]).map((a:any)=>[a.operation_id,{operationId:a.operation_id,status:'retrieved',artifact:a}]))}));};
   useEffect(()=>{setState(null);setPlans([]);setRetirementReasons({});setResults({});setMessage('');keys.current={};exportRequests.current={};void refresh().catch(e=>setMessage(e.message));},[taskId]);
-  // A failed poll is retried in 5 s; a 401 among them reaches the Work screen's sign-in prompt through the API client (2026-09-24).
-  useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});},5000);return()=>clearInterval(timer);},[taskId]);
+  // Every 5 s while Canva or the planner is working, otherwise once a minute (canvaPanelPoll.ts), and at
+  // once when a live event names the task. A failed poll is retried at the next tick; a 401 among them
+  // reaches the Work screen's sign-in prompt through the API client (2026-09-24). The amendment
+  // observation stays an explicit action and never joins this poll (ADR-119).
+  const pollMs=canvaPanelPollMs({busy,operations:state?.operations,plans,results});
+  useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});},pollMs);return()=>clearInterval(timer);},[taskId,pollMs]);
+  // And at once when the office comes back to the tab: state that changes with no task event would
+  // otherwise wait for the next idle tick.
+  useEffect(()=>onCanvaPanelWake(()=>void refresh().catch(()=>{}),document,window),[taskId]);
+  const seenRevision=useRef(revision);
+  useEffect(()=>{if(seenRevision.current===revision)return;seenRevision.current=revision;void refresh().catch(()=>{});},[revision]);
   const evidence=canvaPreviewEvidence(state?.artifacts,state?.revisionHandoff ? state.revisionHandoff.confirmedEventId ?? null : undefined);
   const latestPng=evidence.preview;
   const latestCheck=evidence.check;

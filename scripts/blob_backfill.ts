@@ -15,7 +15,8 @@
  *           reference photo. It never changes the bytes, the JSON or an existing hash, so it needs no
  *           trigger disabled and can run while Core runs.
  *   verify  reports rows whose bytes are not in the store yet, stored hashes whose file is missing or
- *           differs, and JSON still carrying a data:image URI. Changes nothing.
+ *           differs, hashes with no file row and no bytes to copy (release B's foreign keys reject
+ *           those: blocksForeignKey), and JSON still carrying a data:image URI. Changes nothing.
  *   strip   (this release: test databases and restored copies only) sets the bytea columns of rows
  *           whose file the store has, verified by hash, to NULL. Each batch runs in one transaction
  *           that disables the table's append-only trigger, updates and enables it again; DDL is
@@ -25,8 +26,12 @@
  * Progress is the data itself: copy selects rows whose bytes are present and not yet in the store
  * (reference photos: every photo, skipped when its hash is already linked to its task), strip rows whose
  * bytes are present and whose file is, in keyset order on the row id, and put() is
- * idempotent. So a second run does nothing, and a run stopped anywhere (SIGINT finishes the batch in
- * hand) resumes where it stopped. Undecodable data URIs and hash mismatches are reported and left.
+ * idempotent. So a second run does nothing, and a run stopped anywhere (SIGINT finishes the row in
+ * hand; strip, the rows of its batch already verified) resumes where it stopped. Undecodable data URIs
+ * and hash mismatches are reported and left.
+ *
+ * Exit status: 0 done and clean; 1 done with problems to read; 3 stopped (a signal or --limit) with
+ * rows left, so run it again; 2 refused or failed.
  *
  * Preconditions, asserted before anything is read: migration 019 is applied; the role bypasses row-level
  * security (every table forces it); the store's marker is present. Production (port 54332 or the
@@ -59,6 +64,12 @@ export interface BackfillProblem {
    * lists these apart and production copy asks for them to be accepted by count.
    */
   leftAsIs?: boolean;
+  /**
+   * The row's hash column names a file the store has no row for. Release B's foreign keys
+   * (output/plans/2026-09-24-architecture-programme/staged/blob_fks.sql) fail to validate while any
+   * such row exists, so a rehearsal counts them apart: copy cannot mend them, a person must decide.
+   */
+  blocksForeignKey?: boolean;
 }
 
 export interface PhaseReport {
@@ -79,7 +90,11 @@ export interface PhaseReport {
   /** verify: JSON rows still carrying a data:image URI. */
   inlineJson: number;
   problems: BackfillProblem[];
-  /** Stopped by --limit or a signal before the phase was done. */
+  /**
+   * Stopped by --limit or a signal with a row left that this mode would write. Rows already linked
+   * and rows left as they are do not count: a run that stops just as its last writable row is done
+   * has finished.
+   */
   stoppedEarly: boolean;
 }
 
@@ -93,7 +108,7 @@ export interface BackfillOptions {
   limit?: number;
   dryRun?: boolean;
   log?: (line: Record<string, unknown>) => void;
-  /** Checked between batches: SIGINT finishes the batch in hand, then stops. */
+  /** Checked before each row that would be written: SIGINT finishes the row in hand, then stops. */
   shouldStop?: () => boolean;
 }
 
@@ -184,6 +199,11 @@ export function decodeImageDataUri(uri: unknown): { bytes: Buffer; mediaType: Bl
   return { bytes, mediaType };
 }
 
+/** Why a row whose bytes differ from the stored file its hash names is left as it is. */
+function differMessage(src: ByteaSource, sha: string, actual: string): string {
+  return `${src.bytes} hashes to ${actual.slice(0, 12)}…, not to the stored file ${src.sha} names (${sha.slice(0, 12)}…); left as it is`;
+}
+
 /** Runs one strip batch with the table's protective trigger disabled, and enabled again, in one transaction. */
 async function withTriggerDisabled<T>(db: Kysely<Database>, table: string, trigger: string | null, fn: (trx: Kysely<Database>) => Promise<T>): Promise<T> {
   return db.transaction().execute(async (trx) => {
@@ -268,13 +288,16 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
   let budget = o.limit ?? Number.POSITIVE_INFINITY;
   const reports: PhaseReport[] = [];
   const stop = () => budget <= 0 || Boolean(o.shouldStop?.());
+  // Every exit below that sets stoppedEarly is taken just before a row this mode would write, never
+  // before a batch: a batch may hold only rows already linked or left as they are, which are not work.
 
   for (const phase of o.phases) {
     const report: PhaseReport = { phase, mode: o.mode, scanned: 0, stored: 0, linked: 0, stripped: 0, notCopied: 0, strippable: 0, inlineJson: 0, problems: [], stoppedEarly: false };
     reports.push(report);
-    const problem = (table: string, id: string, what: string, leftAsIs = false) => {
-      report.problems.push({ table, id, problem: what, ...(leftAsIs ? { leftAsIs } : {}) });
-      log({ phase, mode: o.mode, table, id, problem: what, ...(leftAsIs ? { leftAsIs } : {}) });
+    const problem = (table: string, id: string, what: string, leftAsIs = false, blocksForeignKey = false) => {
+      const flags = { ...(leftAsIs ? { leftAsIs } : {}), ...(blocksForeignKey ? { blocksForeignKey } : {}) };
+      report.problems.push({ table, id, problem: what, ...flags });
+      log({ phase, mode: o.mode, table, id, problem: what, ...flags });
     };
 
     if (phase === 'reference_photos') {
@@ -292,10 +315,6 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
         }
         let after = '00000000-0000-0000-0000-000000000000';
         for (;;) {
-          if (o.mode === 'copy' && stop()) {
-            report.stoppedEarly = true;
-            break;
-          }
           const rows = (
             await sql<{ id: string; tenant_id: string; task_id: string; image: string }>`
               SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.${sql.raw(src.task)}::text AS task_id, ${sql.raw(src.image)} AS image
@@ -321,6 +340,10 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
               report.notCopied++;
               continue;
             }
+            if (stop()) {
+              report.stoppedEarly = true;
+              break;
+            }
             if (o.dryRun) continue;
             const ref = await o.store.put(decoded.bytes, decoded.mediaType);
             report.stored++;
@@ -330,6 +353,7 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
             budget--;
             log({ phase, mode: o.mode, table: src.table, id: row.id, task: row.task_id, sha256: ref.sha256 });
           }
+          if (report.stoppedEarly) break;
         }
       }
       continue;
@@ -341,9 +365,21 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
       const shaCol = sql.raw(src.sha);
       if (o.mode === 'verify') {
         const counts = (await sql<{ strippable: string }>`
-          SELECT count(*) FILTER (WHERE r.${bytesCol} IS NOT NULL AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})) AS strippable
+          SELECT count(*) FILTER (WHERE r.${bytesCol} IS NOT NULL AND encode(sha256(r.${bytesCol}), 'hex') = r.${shaCol}
+            AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})) AS strippable
           FROM ${table} r`.execute(o.db)).rows[0];
         report.strippable += Number(counts?.strippable ?? 0);
+        // Bytes that do not hash to the stored file their hash names: copy skips the row (the file is
+        // there) and strip's update skips it (the bytes differ), so without this nothing would ever say.
+        // The foreign key is satisfied; a person decides which of the two pictures the row means.
+        const differ = (await sql<{ id: string; sha: string; actual: string }>`
+          SELECT r.id::text AS id, r.${shaCol} AS sha, encode(sha256(r.${bytesCol}), 'hex') AS actual FROM ${table} r
+          WHERE r.${bytesCol} IS NOT NULL AND encode(sha256(r.${bytesCol}), 'hex') <> r.${shaCol}
+            AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol}) ORDER BY r.id`.execute(o.db)).rows;
+        for (const d of differ) {
+          report.scanned++;
+          problem(src.table, d.id, differMessage(src, d.sha, d.actual), true);
+        }
         // Every stored hash a row names must have its file, with those bytes.
         const named = (await sql<{ id: string; sha: string }>`SELECT r.id::text AS id, r.${shaCol} AS sha FROM ${table} r
           JOIN hawa.blobs b ON b.sha256 = r.${shaCol}`.execute(o.db)).rows;
@@ -355,16 +391,21 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
             problem(src.table, n.id, `${src.sha} ${n.sha.slice(0, 12)}…: ${(err as Error).message}`);
           }
         }
+        // A hash with no file row and no bytes to copy it from: nothing can mend it by copying, and
+        // release B's foreign key rejects it. (A column 019 added has its foreign key already.)
+        const dangling = (await sql<{ id: string; sha: string }>`SELECT r.id::text AS id, r.${shaCol} AS sha FROM ${table} r
+          WHERE r.${bytesCol} IS NULL AND r.${shaCol} IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol}) ORDER BY r.id`.execute(o.db)).rows;
+        for (const d of dangling) {
+          report.scanned++;
+          problem(src.table, d.id, `${src.sha} ${d.sha.slice(0, 12)}… names a file the store does not have, and the row holds no bytes to copy it from; left as it is`, true, true);
+        }
         // The rows not copied yet are then read as copy reads them (below), so those copy would leave
         // as they are are told apart from those it would copy.
       }
 
       let after = '00000000-0000-0000-0000-000000000000';
-      for (;;) {
-        if (o.mode !== 'verify' && stop()) {
-          report.stoppedEarly = true;
-          break;
-        }
+      while (!report.stoppedEarly) {
         if (o.mode === 'copy' || o.mode === 'verify') {
           const rows = (await sql<{ id: string; bytes: Buffer; sha: string | null }>`
             SELECT r.id::text AS id, r.${bytesCol} AS bytes, r.${shaCol} AS sha FROM ${table} r
@@ -378,17 +419,22 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
             const bytes = Buffer.from(row.bytes);
             const actual = sha256(bytes);
             if (row.sha && row.sha !== actual) {
-              problem(src.table, row.id, `${src.sha} says ${row.sha.slice(0, 12)}…, the bytes hash to ${actual.slice(0, 12)}…; left as it is`, true);
+              problem(src.table, row.id, `${src.sha} says ${row.sha.slice(0, 12)}…, the bytes hash to ${actual.slice(0, 12)}…; left as it is`, true, true);
               continue;
             }
             const mediaType = sniffBlobMediaType(bytes);
             if (!mediaType || (src.expected === 'image' ? !mediaType.startsWith('image/') : mediaType !== src.expected)) {
-              problem(src.table, row.id, `${src.bytes} is ${mediaType ?? 'of no type the store knows'}; left as it is`, true);
+              // Its hash, when it has one, names no file row (copy selects only those): a foreign key blocker.
+              problem(src.table, row.id, `${src.bytes} is ${mediaType ?? 'of no type the store knows'}; left as it is`, true, Boolean(row.sha));
               continue;
             }
             if (o.mode === 'verify') {
               report.notCopied++;
               continue;
+            }
+            if (stop()) {
+              report.stoppedEarly = true;
+              break;
             }
             if (o.dryRun) continue;
             await o.store.put(bytes, mediaType);
@@ -408,8 +454,8 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
         }
 
         // strip: rows whose bytes the store has, verified by hash, in one transaction per batch.
-        const rows = (await sql<{ id: string; sha: string }>`
-          SELECT r.id::text AS id, r.${shaCol} AS sha FROM ${table} r
+        const rows = (await sql<{ id: string; sha: string; actual: string }>`
+          SELECT r.id::text AS id, r.${shaCol} AS sha, encode(sha256(r.${bytesCol}), 'hex') AS actual FROM ${table} r
           WHERE r.${bytesCol} IS NOT NULL AND r.id > ${after}::uuid
             AND EXISTS (SELECT 1 FROM hawa.blobs b WHERE b.sha256 = r.${shaCol})
           ORDER BY r.id LIMIT ${batch}`.execute(o.db)).rows;
@@ -418,12 +464,23 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
         const verified: string[] = [];
         for (const row of rows) {
           report.scanned++;
+          if (row.actual !== row.sha) {
+            problem(src.table, row.id, `not stripped: ${differMessage(src, row.sha, row.actual)}`, true);
+            continue;
+          }
           try {
             await o.store.read(row.sha, { verify: true });
-            verified.push(row.id);
           } catch (err) {
             problem(src.table, row.id, `not stripped: ${(err as Error).message}`);
+            continue;
           }
+          // The budget is spent as rows join the batch, so --limit strips exactly that many.
+          if (stop()) {
+            report.stoppedEarly = true;
+            break;
+          }
+          verified.push(row.id);
+          if (!o.dryRun) budget--;
         }
         if (o.dryRun || !verified.length) continue;
         const done = await withTriggerDisabled(o.db, src.table, src.trigger, async (trx) =>
@@ -433,7 +490,8 @@ export async function runBackfill(o: BackfillOptions): Promise<PhaseReport[]> {
         );
         const n = Number(done.numAffectedRows ?? 0);
         report.stripped += n;
-        budget -= n;
+        // A row whose bytes changed since the select was not stripped and did not spend the budget.
+        budget += verified.length - n;
         log({ phase, mode: o.mode, table: src.table, column: src.bytes, stripped: n, through: after });
       }
     }
@@ -452,8 +510,12 @@ export function rehearsalReceipt(database: string, migrations: Record<string, st
   if (!/^hawa_restore_[A-Za-z0-9_]+$/.test(database)) throw new Error(`A rehearsal receipt comes from a hawa_restore_* database, not ${database}`);
   if (reports.some((r) => r.mode !== 'verify')) throw new Error('A rehearsal receipt is written by a verify run');
   const verifyFailures = reports.reduce((n, r) => n + r.problems.filter((p) => !p.leftAsIs).length + r.notCopied, 0);
-  const leftAsIs = reports.flatMap((r) => r.problems.filter((p) => p.leftAsIs).map(({ table, id, problem }) => ({ table, id, problem })));
-  return { database, migrations, verifyFailures, leftAsIs, phases: reports.map((r) => r.phase), at: new Date().toISOString() };
+  const leftAsIs = reports.flatMap((r) =>
+    r.problems.filter((p) => p.leftAsIs).map(({ table, id, problem, blocksForeignKey }) => ({ table, id, problem, ...(blocksForeignKey ? { blocksForeignKey } : {}) }))
+  );
+  // Release B's foreign keys fail to validate until each of these is decided (FILESTORE_DESIGN.md 5).
+  const foreignKeyBlockers = reports.reduce((n, r) => n + r.problems.filter((p) => p.blocksForeignKey).length, 0);
+  return { database, migrations, verifyFailures, leftAsIs, foreignKeyBlockers, phases: reports.map((r) => r.phase), at: new Date().toISOString() };
 }
 
 /** Database and table sizes, for the evidence (FILESTORE_DESIGN.md section 5, --measure). */
@@ -493,7 +555,7 @@ async function main(args: string[]): Promise<number> {
   let stopping = false;
   process.on('SIGINT', () => {
     stopping = true;
-    process.stderr.write('Stopping after this batch…\n');
+    process.stderr.write('Stopping after the row in hand…\n');
   });
   try {
     const database = (await sql<{ d: string }>`SELECT current_database() AS d`.execute(db)).rows[0]?.d;
@@ -535,6 +597,8 @@ async function main(args: string[]): Promise<number> {
     }
     const summary = { database, mode, phases, reports, ...(before ? { measureBefore: before, measureAfter: after } : {}), ...(receipt ? { receipt } : {}), log: logFile };
     process.stdout.write(`${JSON.stringify(summary)}\n`);
+    // 3: stopped (a signal or --limit) with work left, so run it again; 1: problems to read.
+    if (reports.some((r) => r.stoppedEarly)) return 3;
     return reports.some((r) => r.problems.length) ? 1 : 0;
   } finally {
     await db.destroy();

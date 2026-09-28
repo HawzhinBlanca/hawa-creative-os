@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { PNG } from 'pngjs';
 import {
@@ -141,5 +143,31 @@ describe('P04 — Art Layer Conditioned on Layout (gpt-image-2.5-sunburst & Calm
     expect(result.receipt.imageTokens).toBe(0);
     expect(result.compositeContrast.passed).toBe(true);
     expect(result.occlusionMetric.passed).toBe(true);
+  });
+
+  it('writes the art it hands the renderer only to a private temp directory, never into the checkout', async () => {
+    // Ported from studio-v2 1a160953: the temp file went into output/proofs under the working
+    // directory, which CI's "the suite left the tree clean" step refuses.
+    const written: string[] = [];
+    const real = fs.writeFileSync;
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation(((file: fs.PathOrFileDescriptor, ...rest: unknown[]) => {
+      if (typeof file === 'string') written.push(path.resolve(file));
+      return (real as (...args: unknown[]) => void)(file, ...rest);
+    }) as typeof fs.writeFileSync);
+    try {
+      const result = await generateConditionedArtLayer(layoutWithArt, {
+        openaiApiKey: 'test-key',
+        fetchFn: (async () => ({ ok: false, status: 500, text: async () => 'Provider Internal Error' })) as unknown as typeof fetch,
+        renderOptions: { logoDataUri: KAAE_TEST_LOGO },
+      });
+      expect(result.status).toBe('degraded_procedural_motif');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(written.length).toBeGreaterThan(0);
+    for (const file of written) {
+      expect(file.startsWith(path.resolve(process.cwd()) + path.sep), file).toBe(false);
+      expect(fs.existsSync(file), `${file} was left behind`).toBe(false);
+    }
   });
 });

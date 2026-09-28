@@ -40,7 +40,7 @@ beforeAll(() => {
 afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
-  await createApp({ db } as any).request('/v1/operations/kill-switch', { method: 'POST', headers: operator, body: JSON.stringify({ channel: 'telegram', active: false }) });
+  await createApp({ db } as any).request('/v1/operations/kill-switch', { method: 'POST', headers: { ...operator, Authorization: 'Bearer test_admin_key' }, body: JSON.stringify({ channel: 'telegram', active: false }) });
 });
 afterAll(async () => {
   process.env = saved;
@@ -480,7 +480,7 @@ describe('POST /v1/internal/telegram/intake', () => {
     fakeTelegram();
     const chat = chatId();
     const app = createApp({ db } as any);
-    expect((await app.request('/v1/operations/kill-switch', { method: 'POST', headers: operator, body: JSON.stringify({ channel: 'telegram', active: true }) })).status).toBe(200);
+    expect((await app.request('/v1/operations/kill-switch', { method: 'POST', headers: { ...operator, Authorization: 'Bearer test_admin_key' }, body: JSON.stringify({ channel: 'telegram', active: true }) })).status).toBe(200);
     const paused = await intake(app, brief(updateId(), chat));
     expect(paused.body).toMatchObject({ kind: 'handled', intakeStatus: 503, code: 'INTAKE_PAUSED' });
     expect(await tasksInChat(chat)).toHaveLength(0);
@@ -1069,7 +1069,7 @@ describe('the kill switch the worker\'s poller reads', () => {
     const app = createApp({ db } as any);
     // The worker reads it as System Automation, its own database identity.
     const automation = { tenantId, userId: SYSTEM_AUTOMATION_USER_ID };
-    const set = (active: boolean) => app.request('/v1/operations/kill-switch', { method: 'POST', headers: operator, body: JSON.stringify({ channel: 'telegram', active }) });
+    const set = (active: boolean) => app.request('/v1/operations/kill-switch', { method: 'POST', headers: { ...operator, Authorization: 'Bearer test_admin_key' }, body: JSON.stringify({ channel: 'telegram', active }) });
     // The route answers at once and saves the switch in the background (channel-kill-switches.ts).
     expect((await set(true)).status).toBe(200);
     await vi.waitFor(async () => expect(await readTelegramKillSwitch(db, automation)).toBe(true), { timeout: 5000, interval: 50 });

@@ -5,6 +5,12 @@ The default --plan only checks prerequisites. --apply pauses Telegram intake, st
 archives its complete volume, verifies an encrypted copy, restarts Restate and then publishes the
 archive manifest. This is deliberately separate from the PostgreSQL/blob backup: their clocks are
 not an atomic distributed snapshot. Never restore the archive into a running or shared node.
+
+Before each change --apply writes a run record (HAWA_RESTATE_BACKUP_STATE, by default
+~/.hawa/restate-backup.state): whether it paused intake, with the pause revision, and whether it
+stopped Restate. A run killed outright runs no cleanup; --recover, which the watchdog runs every
+5 minutes, puts back what the record names once no backup holds the archive lock, and the next
+--apply does the same first (ADR-127). --recovery-status reports without changing anything.
 """
 from __future__ import annotations
 
@@ -20,10 +26,11 @@ import sys
 import tarfile
 import tempfile
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Callable
+from typing import Callable, Iterator
 from archive_lock import inherited_lock
 
 
@@ -50,6 +57,48 @@ class Config:
     node_name: str = "hawa-restate-prod-1"
     drain_seconds: int = 300
     health_seconds: int = 90
+    # The run record a cut-off run leaves behind (ADR-127): what this run changed, written before each
+    # change. None keeps no record (the library default; main() always names one).
+    state_file: Path | None = None
+
+
+# A record held under a live lock for longer than this is reported as a stuck backup.
+RECOVERY_MAX_AGE_SECONDS = 2 * 60 * 60
+# Exit status of --recover / --recovery-status while a backup run still holds the archive lock.
+EXIT_RUNNING = 75
+
+
+def write_record(path: Path, record: dict) -> None:
+    """Atomically replace the run record (owner-only), so a kill leaves the old or the new one."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    tmp = path.with_name(path.name + ".tmp")
+    fd = os.open(tmp, os.O_CREAT | os.O_TRUNC | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "w") as out:
+        out.write(json.dumps(record, sort_keys=True) + "\n")
+        out.flush()
+        os.fsync(out.fileno())
+    os.replace(tmp, path)
+
+
+def read_record(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        record = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BackupError(f"Restate backup run record {path} is unreadable; check Restate and the intake switch by hand") from exc
+    if (not isinstance(record, dict) or record.get("v") != 1 or not isinstance(record.get("archiveDir"), str)
+            or record.get("switch") not in ("none", "pausing", "paused")
+            or record.get("restate") not in ("running", "stopping")
+            or not isinstance(record.get("stamp"), str) or not STAMP.fullmatch(record["stamp"])
+            or (record["switch"] == "paused" and not isinstance(record.get("changeTag"), str))):
+        raise BackupError(f"Restate backup run record {path} is malformed; check Restate and the intake switch by hand")
+    return record
+
+
+def is_switch_conflict(exc: Exception) -> bool:
+    """Core refused the conditional release: an operator decided about the switch after our pause."""
+    return "HTTP 409" in str(exc)
 
 
 def sha256(path: Path) -> str:
@@ -425,6 +474,10 @@ class RestateBackup:
             return self._apply_locked(pair_stamp)
 
     def _apply_locked(self, pair_stamp: str | None = None) -> Path:
+        # A run killed outright (SIGKILL, a reboot) runs no finally block: its record says what it had
+        # changed. Put that back before this run records anything of its own (ADR-127).
+        if self.c.state_file is not None and self.c.state_file.exists():
+            self._recover_locked()
         pair = pair_inputs(self.c.archive_dir, pair_stamp) if pair_stamp is not None else None
         if pair_stamp is not None and any((self.c.archive_dir / f"hawa_{pair_stamp}.restate.json{suffix}").exists()
                                           for suffix in ("", ".part")):
@@ -432,6 +485,14 @@ class RestateBackup:
         facts = self.preflight()
         c = self.c
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        record = {"v": 1, "pid": os.getpid(), "stamp": stamp, "archiveDir": str(c.archive_dir),
+                  "switch": "none", "changeTag": None, "restate": "running"}
+
+        def note(**changes: object) -> None:
+            if c.state_file is not None:
+                record.update(changes)
+                write_record(c.state_file, record)
+
         name = f"restate_{stamp}"
         final = c.archive_dir / f"{name}.tar.enc"
         manifest = c.archive_dir / f"{name}.json"
@@ -446,11 +507,17 @@ class RestateBackup:
         recovered = False
         published = False
         try:
+            note()
             if was_enabled:
+                # Written before the call: a kill between Core's answer and the next write leaves
+                # "pausing", which recovery treats as unknown ownership, never as permission to release.
+                note(switch="pausing")
                 pause_change_tag = self.set_telegram(False)
                 paused_by_us = True
+                note(switch="paused", changeTag=pause_change_tag)
             running_at_stop = self.drain()
             stopped = True
+            note(restate="stopping")
             self.compose("stop", "restate")
             captured_at = datetime.now(timezone.utc).isoformat()
             with tempfile.TemporaryDirectory(prefix="hawa-restate-backup-") as work:
@@ -468,9 +535,18 @@ class RestateBackup:
             self.wait_healthy()
             stopped = False
             recovered = True
+            note(restate="running")
             if paused_by_us:
-                self.set_telegram(True, pause_change_tag)
+                try:
+                    self.set_telegram(True, pause_change_tag)
+                except BackupError as exc:
+                    if is_switch_conflict(exc):
+                        # The operator decided after our pause; the switch is theirs now.
+                        paused_by_us = False
+                        note(switch="none", changeTag=None)
+                    raise
                 paused_by_us = False
+                note(switch="none", changeTag=None)
             metadata = {"schemaVersion": 2, "capturedAt": captured_at,
                         "serviceRecoveredAt": datetime.now(timezone.utc).isoformat(),
                         "nodeName": c.node_name, "volume": c.volume, "restateImageId": facts["restateImageId"],
@@ -500,17 +576,118 @@ class RestateBackup:
                     self.compose("up", "-d", "--no-deps", "restate")
                     self.wait_healthy()
                     recovered = True
+                    stopped = False
+                    note(restate="running")
                 except Exception as exc:  # preserve the first failure, but surface the unsafe state
                     print(f"CRITICAL: Restate restart failed; Telegram intake remains paused: {exc}", file=sys.stderr)
             if paused_by_us and recovered:
                 try:
                     self.set_telegram(True, pause_change_tag)
+                    paused_by_us = False
+                    note(switch="none", changeTag=None)
                 except Exception as exc:
+                    if isinstance(exc, BackupError) and is_switch_conflict(exc):
+                        paused_by_us = False
+                        note(switch="none", changeTag=None)
                     print(f"CRITICAL: Restate is healthy but Telegram intake remains paused: {exc}", file=sys.stderr)
             for path in (part, manifest_part):
                 path.unlink(missing_ok=True)
             if not published:
                 final.unlink(missing_ok=True)
+            # Nothing left undone: the record goes. Otherwise it stays for --recover (the watchdog).
+            if c.state_file is not None and not stopped and not paused_by_us and record["switch"] != "pausing":
+                c.state_file.unlink(missing_ok=True)
+
+    def recovery_status(self) -> str:
+        """Read-only: 'none', 'running' (a backup holds the archive lock) or 'needs_recovery'."""
+        if self.c.state_file is None:
+            return "none"
+        record = read_record(self.c.state_file)
+        if record is None:
+            return "none"
+        with self._record_lock(record) as held:
+            return "needs_recovery" if held else "running"
+
+    def recover(self) -> str:
+        """Undo what a cut-off run's record says it changed, once no backup holds the archive lock.
+
+        Returns 'none' (no record), 'running' (the run is alive: leave Restate alone) or a
+        comma-separated list of what was put back. Raises BackupError and keeps the record when
+        something could not be put back, so the next pass tries again.
+        """
+        if self.c.state_file is None:
+            return "none"
+        record = read_record(self.c.state_file)
+        if record is None:
+            return "none"
+        with self._record_lock(record) as held:
+            if not held:
+                age = time.time() - self.c.state_file.stat().st_mtime
+                if age > RECOVERY_MAX_AGE_SECONDS:
+                    raise BackupError(f"the Restate backup of {record['stamp']} has held the archive lock for "
+                                      f"{int(age // 60)} minutes; Restate may be stopped and intake paused")
+                return "running"
+            return self._recover_locked()
+
+    @staticmethod
+    @contextmanager
+    def _record_lock(record: dict) -> Iterator[bool]:
+        """Try the run's archive lock without waiting. Getting it means the run that wrote the record is
+        gone: a process's flock ends with the process, whatever killed it, so no PID can be reused."""
+        archive = Path(record["archiveDir"])
+        if inherited_lock(archive, 'exclusive') or not archive.is_dir():
+            # Our own caller holds it, or nothing can hold a lock in a directory that is gone.
+            yield True
+            return
+        fd = os.open(archive / ".restate-backup.lock", os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                yield False
+                return
+            yield True
+        finally:
+            os.close(fd)
+
+    def _recover_locked(self) -> str:
+        c = self.c
+        assert c.state_file is not None
+        record = read_record(c.state_file)
+        if record is None:
+            return "none"
+        done: list[str] = []
+        if record["restate"] == "stopping":
+            self.compose("up", "-d", "--no-deps", "restate")
+            self.wait_healthy()
+            record["restate"] = "running"
+            write_record(c.state_file, record)
+            done.append("restate")
+        if record["switch"] == "paused":
+            try:
+                self.set_telegram(True, record["changeTag"])
+                done.append("kill_switch")
+            except BackupError as exc:
+                if not is_switch_conflict(exc):
+                    raise
+                done.append("kill_switch_left_to_operator")
+            record.update(switch="none", changeTag=None)
+            write_record(c.state_file, record)
+        elif record["switch"] == "pausing":
+            if not self.telegram_enabled():
+                raise BackupError(f"Telegram intake is paused and the cut-off backup of {record['stamp']} may have "
+                                  "paused it, but its pause revision was never recorded; release intake from the "
+                                  "Desk after checking, and this record clears on the next pass")
+            record.update(switch="none", changeTag=None)
+            write_record(c.state_file, record)
+        archive = Path(record["archiveDir"])
+        name = f"restate_{record['stamp']}"
+        for path in (archive / f"{name}.tar.enc.part", archive / f"{name}.json.part"):
+            path.unlink(missing_ok=True)
+        if not (archive / f"{name}.json").exists():
+            (archive / f"{name}.tar.enc").unlink(missing_ok=True)
+        c.state_file.unlink(missing_ok=True)
+        return ",".join(done) or "nothing_changed"
 
 
 def main() -> int:
@@ -520,6 +697,8 @@ def main() -> int:
     action.add_argument("--apply", action="store_true", help="pause intake and cold-copy the production Restate volume")
     action.add_argument("--verify-archive", type=Path, help="re-read and decrypt a stored archive without contacting production")
     action.add_argument("--verify-pair", type=Path, help="verify the exact database, blobs and Restate archives paired to one night")
+    action.add_argument("--recover", action="store_true", help="put back what a backup killed outright left (the watchdog runs it)")
+    action.add_argument("--recovery-status", action="store_true", help="report whether a cut-off backup left something to put back")
     parser.add_argument("--pair-stamp", help="bind --apply to the same-night database dump and blob manifest")
     args = parser.parse_args()
     if args.pair_stamp and not args.apply:
@@ -528,9 +707,22 @@ def main() -> int:
                     compose_env=ROOT / "infra/docker/.env",
                     archive_dir=Path(os.environ.get("HAWA_BACKUP_ARCHIVE_DEST", str(Path.home() / ".hawa/snapshots_archive"))),
                     key_file=Path(os.environ.get("HAWA_BACKUP_ARCHIVE_KEYFILE", "")),
-                    helper_image=os.environ.get("HAWA_RESTATE_BACKUP_HELPER_IMAGE", ""))
+                    helper_image=os.environ.get("HAWA_RESTATE_BACKUP_HELPER_IMAGE", ""),
+                    health_seconds=int(os.environ.get("HAWA_RESTATE_BACKUP_HEALTH_SECONDS", "90")),
+                    state_file=Path(os.environ.get("HAWA_RESTATE_BACKUP_STATE", str(Path.home() / ".hawa/restate-backup.state"))))
     backup = RestateBackup(config)
     try:
+        if args.recovery_status:
+            status = backup.recovery_status()
+            print(status)
+            return {"none": 0, "running": EXIT_RUNNING}.get(status, 2)
+        if args.recover:
+            outcome = backup.recover()
+            if outcome == "running":
+                print("a Restate backup is running")
+                return EXIT_RUNNING
+            print("nothing to recover" if outcome == "none" else f"recovered: {outcome}")
+            return 0
         if args.verify_pair:
             facts = verify_pair(args.verify_pair, config.key_file)
             print(json.dumps({"status": "verified_pair", "dumpName": facts["dumpName"],
@@ -545,7 +737,8 @@ def main() -> int:
             print(json.dumps({"status": "ready", "target": "single-node Restate", **backup.preflight()}))
         return 0
     except (BackupError, OSError) as exc:
-        print(f"Restate backup refused: {exc}", file=sys.stderr)
+        verb = "recovery failed" if args.recover or args.recovery_status else "refused"
+        print(f"Restate backup {verb}: {exc}", file=sys.stderr)
         return 1
 
 

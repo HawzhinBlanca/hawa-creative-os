@@ -179,7 +179,9 @@ export function applyStyleSpec(
   const rtl = (t: TextElement) => t.rtl === true || ARABIC.test(copy.text[t.copyIndex] || '');
   const title = layout.text.find((t) => t.role === 'title');
   const cta = layout.text.find((t) => t.role === 'cta');
-  const gold = palette.length ? nearest('#F7B500', palette) : '#F7B500';
+  // The palette's warm accent (its colour nearest a gold). With no palette, a neutral light grey:
+  // never KAAE's own gold (ADR-127).
+  const gold = palette.length ? nearest('#F7B500', palette) : '#D9D9D9';
   const ctaBefore = cta ? { x: cta.x, y: cta.y, width: cta.width, height: cta.height } : undefined;
   const fullBleed = (s: ShapeElement) => s.width >= 0.98 * W && s.height >= 0.98 * H;
   // What the reference does not have goes: dividers and accent strokes, cards behind the copy.
@@ -187,7 +189,7 @@ export function applyStyleSpec(
   if (spec.panels === 'none') layout.shapes = (layout.shapes || []).filter((s) => fullBleed(s) || (s.role !== 'panel' && s.role !== 'frame'));
   const darkest = palette.length
     ? [...palette].sort((a, b) => hexToLuminance(a) - hexToLuminance(b))[0]
-    : '#0A1628';
+    : '#111111';
 
   // Typeface: the admitted sans for each script (Verdana has no Kurdish letters; Noto Sans Arabic
   // is the brand's Kurdish sans), or the serif display faces.
@@ -375,9 +377,11 @@ export function applyStyleSpec(
       (s) => !(s.role === 'panel' && small(s) && (intersects(s, cta) || (ctaBefore && intersects(s, ctaBefore))))
     );
     layout.shapes.push(button);
-    // Contrast is checked on the button; navy on gold passes by a wide margin, but say so if not.
-    const on = calculateLuminanceContrastRatio(hexToLuminance(cta.color), hexToLuminance(gold));
-    if (on < 4.5) cta.color = hexToLuminance(gold) > 0.4 ? '#0A1628' : '#FFFFFF';
+    // Contrast is checked on the button, and checked again after the fallback: the client's darkest
+    // colour can be mid-tone (no longer KAAE's navy, ADR-127), and then only black or white is left.
+    const on = (colour: string) => calculateLuminanceContrastRatio(hexToLuminance(colour), hexToLuminance(gold));
+    if (on(cta.color) < 4.5) cta.color = hexToLuminance(gold) > 0.4 ? darkest : '#FFFFFF';
+    if (on(cta.color) < 4.5) cta.color = on('#000000') >= on('#FFFFFF') ? '#000000' : '#FFFFFF';
   }
 
   // Logo in the corner the client or the reference puts it.

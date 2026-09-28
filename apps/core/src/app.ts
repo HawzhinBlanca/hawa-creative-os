@@ -1,6 +1,8 @@
 import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
 import { PostgresTelegramPollState, telegramBotKey } from './services/telegram-poll-state.js';
 import { hydrateClientDnaFromDb } from './services/client-dna-hydration.js';
+import { ensureClientPackRows } from './services/client-pack-rows.js';
+import { clientPacks } from './services/client-packs.js';
 import { probeRestate } from './services/restate-probe.js';
 import { createRestateInvocationProbe } from './services/restate-invocations.js';
 import { log, requestLogContext, bindLogContext, runWithLogContext, requestIdHeaders } from './logging.js';
@@ -1055,6 +1057,13 @@ export function createApp(options?: CreateAppOptions) {
         }
       )
     : Promise.resolve(0);
+
+  // Every client pack has its hawa.clients row (ADR-127): a request routed to a client added since
+  // this database was built could not otherwise be saved. Missing rows only; nothing is changed.
+  if (db) {
+    ensureClientPackRows(db, DEFAULT_TENANT_ID, clientPacks())
+      .catch((err) => log.error('[client-packs] could not check the client rows:', (err as Error)?.message || err));
+  }
 
   // The worker's calls into Core (Phase 2.1): ChatInbox hands each polled update to intake here, and
   // dead-letters one intake keeps failing. Only HAWA_WORKER_TOKEN opens them (verifyRequestAuth).

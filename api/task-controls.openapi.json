@@ -361,6 +361,44 @@
           }
         }
       }
+    },
+    "/v1/tasks/{taskId}/retry": {
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "operationId": "retryTask",
+        "summary": "Refuses a task-state retry",
+        "description": "Kept as an explicit path so it cannot fall through to another route. Core reads no body and changes nothing: a task-state change alone cannot safely retry work. It answers 409 RECOVERY_CHECKPOINT_REQUIRED; resume the saved Studio or Canva run with its own resume action instead. RequestLifecycle-owned tasks use their office action.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "No office authority"
+          },
+          "404": {
+            "description": "Task unavailable in current scope"
+          },
+          "409": {
+            "description": "RECOVERY_CHECKPOINT_REQUIRED for every task Core can read, or lifecycle ownership"
+          },
+          "503": {
+            "description": "Database required"
+          }
+        }
+      }
     }
   }
 }

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "c1000000-0000-4000-8000-000000000012",
+  "code": "halwest-news",
+  "status": "onboarding",
+  "kind": "news",
+  "displayName": "Halwest News",
+  "profile": "Halwest News, a news outlet. Its designs are mostly video thumbnails for YouTube and social video (landscape and vertical). Its tone, palette and type are not set yet.",
+  "names": {
+    "en": "Halwest News"
+  },
+  "languages": [],
+  "routing": {
+    "telegramChatIds": [],
+    "latinAliases": [
+      "halwest"
+    ],
+    "scriptAliases": [],
+    "phrases": []
+  },
+  "formats": [
+    "youtube-thumbnail",
+    "story-reel"
+  ],
+  "defaultFormat": "youtube-thumbnail",
+  "playbook": "video-thumbnail",
+  "exemplars": null,
+  "onboarding": {
+    "missing": [
+      "logo",
+      "palette",
+      "fonts",
+      "client-dna",
+      "exemplars",
+      "telegram-chats",
+      "language",
+      "kurdish-aliases",
+      "proof-set"
+    ]
+  }
+}

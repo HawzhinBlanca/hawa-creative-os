@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "c1000000-0000-4000-8000-000000000013",
+  "code": "kawa-ba-hawlery",
+  "status": "onboarding",
+  "kind": "news",
+  "displayName": "Kawa ba Hawlery",
+  "profile": "Kawa ba Hawlery. Its designs are mostly video thumbnails for YouTube and social video (landscape and vertical). Its tone, palette and type are not set yet.",
+  "names": {
+    "en": "Kawa ba Hawlery"
+  },
+  "languages": [],
+  "routing": {
+    "telegramChatIds": [],
+    "latinAliases": [
+      "kawa ba hawlery"
+    ],
+    "scriptAliases": [],
+    "phrases": []
+  },
+  "formats": [
+    "youtube-thumbnail",
+    "story-reel"
+  ],
+  "defaultFormat": "youtube-thumbnail",
+  "playbook": "video-thumbnail",
+  "exemplars": null,
+  "onboarding": {
+    "missing": [
+      "logo",
+      "palette",
+      "fonts",
+      "client-dna",
+      "exemplars",
+      "telegram-chats",
+      "language",
+      "kurdish-aliases",
+      "proof-set"
+    ]
+  }
+}

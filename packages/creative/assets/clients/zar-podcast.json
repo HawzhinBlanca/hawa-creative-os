@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "c1000000-0000-4000-8000-000000000011",
+  "code": "zar-podcast",
+  "status": "onboarding",
+  "kind": "podcast",
+  "displayName": "ZAR Podcast",
+  "profile": "ZAR Podcast, a podcast. Its designs are mostly video thumbnails for YouTube (landscape) and for reels and shorts (vertical), built around the episode's guest or host. Its tone, palette and type are not set yet.",
+  "names": {
+    "en": "ZAR Podcast"
+  },
+  "languages": [],
+  "routing": {
+    "telegramChatIds": [],
+    "latinAliases": [
+      "zar podcast",
+      "zarpodcast"
+    ],
+    "scriptAliases": [],
+    "phrases": []
+  },
+  "formats": [
+    "youtube-thumbnail",
+    "story-reel"
+  ],
+  "defaultFormat": "youtube-thumbnail",
+  "playbook": "video-thumbnail",
+  "exemplars": null,
+  "onboarding": {
+    "missing": [
+      "logo",
+      "palette",
+      "fonts",
+      "client-dna",
+      "exemplars",
+      "telegram-chats",
+      "language",
+      "kurdish-aliases",
+      "proof-set"
+    ]
+  }
+}

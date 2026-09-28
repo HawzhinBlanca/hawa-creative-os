@@ -90,6 +90,9 @@ export interface CandidateRuleProposal {
   dataLineage: 'client_owned' | 'canva_derived_restricted';
 }
 
+/** The DNA file is missing (the production image has no config/): said once per process. */
+let warnedNoDnaFile = false;
+
 export class FeedbackMiner {
   private candidateRules = new Map<string, CandidateRuleProposal>();
   private observedDeltas: Array<{ clientId: string; taskId: string; delta: FeedbackDelta }> = [];
@@ -449,10 +452,16 @@ export class FeedbackMiner {
         path.join(process.cwd(), '..', '..', 'config', 'clients', 'kaae.dna.json'),
         path.join(process.cwd(), '..', 'config', 'clients', 'kaae.dna.json'),
         '/app/config/clients/kaae.dna.json',
-        '/Users/hawzhin/Hawdesign/config/clients/kaae.dna.json',
       ];
       const found = candidates.find((p) => fs.existsSync(p));
-      if (!found) return;
+      if (!found) {
+        // Said once, not silently skipped: the file is not in the production image.
+        if (!warnedNoDnaFile) {
+          warnedNoDnaFile = true;
+          console.warn(`[feedback-miner] config/clients/kaae.dna.json was not found (${candidates.join(', ')}); its layout rules are not offered as candidates.`);
+        }
+        return;
+      }
 
       const dna = JSON.parse(fs.readFileSync(found, 'utf-8'));
       const targetClientId = clientId || dna.clientId || 'c1000000-0000-4000-8000-000000000002';

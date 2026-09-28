@@ -1,17 +1,9 @@
 import type { StudioOperation } from '@hawa/contracts';
 import type { DesignBrief, DesignPlan, AssetTopology, VisualIngredient, LayoutZone } from '@hawa/domain';
 import {
-  buildKaaeCertificateOperations,
-  buildKaaeAnnouncementOperations,
-  buildKaaeMandateOperations,
-  buildKaaeHigherEdStandardsOperations,
-  buildKaaeStrategicRoadmapOperations,
-  buildKaaeInvitationOperations,
-  parseInvitationContent,
   buildFastpayPromoTemplate,
   buildAsterHealthcareTemplate,
   buildDrusteeClinicalTemplate,
-  KAAE_PRIMARY_LOGO_SHA256,
   FASTPAY_PRIMARY_LOGO_SHA256,
   ASTER_PRIMARY_LOGO_SHA256,
   DRUSTEE_PRIMARY_LOGO_SHA256,
@@ -385,18 +377,14 @@ export class CreativeDirectorRunner {
     targetFormat?: CanonicalFormat
   ): StudioOperation[] {
     const spec = this.resolveCanonicalFormat(brief, targetFormat);
-    const isKaae =
-      primaryLogoSha256 === KAAE_PRIMARY_LOGO_SHA256 ||
-      brief.clientId === 'c1000000-0000-4000-8000-000000000002';
-
     const ops: StudioOperation[] = [];
     const pageId = `page_${spec.format}`;
     const isRtl = brief.direction === 'rtl' || brief.primaryLanguage === 'ckb' || brief.primaryLanguage === 'ar';
 
     // 1. Add background vector/shape
-    const bgFill = isKaae
-      ? '<rect width="100%" height="100%" fill="#0A1628"/>'
-      : '<rect width="100%" height="100%" fill="#0B0F19"/>';
+    // KAAE's own styling left this generic generator with its v1 templates (ADR-127): KAAE's designs
+    // come from the design studio.
+    const bgFill = '<rect width="100%" height="100%" fill="#0B0F19"/>';
 
     ops.push({
       op: 'addVector',
@@ -418,8 +406,8 @@ export class CreativeDirectorRunner {
       height: 120,
     };
 
-    const logoWidth = spec.format === 'print_a4' ? 620 : (isKaae ? 280 : 240);
-    const logoHeight = spec.format === 'print_a4' ? 260 : (isKaae ? 120 : 80);
+    const logoWidth = spec.format === 'print_a4' ? 620 : 240;
+    const logoHeight = spec.format === 'print_a4' ? 260 : 80;
     const logoX = isRtl ? headerZone.x + headerZone.width - logoWidth : headerZone.x;
 
     ops.push({
@@ -455,13 +443,7 @@ export class CreativeDirectorRunner {
       const isEnglish = block.language === 'en' || block.direction === 'ltr';
 
       let fontFamily = isEnglish ? 'Inter' : 'Noto Naskh Arabic';
-      if (isKaae) {
-        if (isEnglish) {
-          fontFamily = block.role === 'headline' ? 'Cinzel' : 'Verdana';
-        } else {
-          fontFamily = block.role === 'headline' ? 'Cairo' : 'Noto Naskh Arabic';
-        }
-      } else if (
+      if (
         brief.clientId === 'c1000000-0000-4000-8000-000000000003' ||
         brief.clientId?.includes('drustee') ||
         brief.clientId === 'c1000000-0000-4000-8000-000000000004' ||
@@ -490,7 +472,7 @@ export class CreativeDirectorRunner {
           fontWeight: block.role === 'headline' ? 'bold' : 'normal',
           fontFamily,
           textAlign: isEnglish ? 'left' : 'right',
-          color: isKaae && block.role === 'subheadline' ? '#D4A94C' : '#FFFFFF',
+          color: '#FFFFFF',
           lineHeight, // Diacritic-safe Kurdish Sorani line height (>= 1.38)
         },
         locked: false, // Invariant 3: Live text must be editable
@@ -523,126 +505,6 @@ export class CreativeDirectorRunner {
     }
 
     return results;
-  }
-
-  /**
-   * Directly routes to specialized authoritative KAAE studio templates
-   */
-  generateKaaeOperations(
-    brief: DesignBrief,
-    templateType: 'announcement' | 'certificate' | 'mandate' | 'standards' | 'roadmap' | 'invitation',
-    customParams?: Record<string, any>
-  ): StudioOperation[] {
-    if (templateType === 'invitation') {
-      const copyText =
-        customParams?.rawText ||
-        customParams?.copyEn ||
-        brief.exactCopy.map((c) => c.text).join('\n\n');
-      const parsed = parseInvitationContent(copyText);
-      const primaryVariant = brief.variants?.[0];
-      const width = customParams?.width || primaryVariant?.width || 1080;
-      const height = customParams?.height || primaryVariant?.height || 1350;
-
-      return buildKaaeInvitationOperations({
-        width,
-        height,
-        ...parsed,
-        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
-        ...customParams,
-      });
-    } else if (templateType === 'certificate') {
-      const recipientBlock = brief.exactCopy.find((c) => c.role === 'headline') || brief.exactCopy[0];
-      const programBlock = brief.exactCopy.find((c) => c.role === 'subheadline') || brief.exactCopy[1];
-      const recipientName = customParams?.recipientName || recipientBlock?.text;
-      const programName = customParams?.programName || programBlock?.text;
-      // A certificate names a real recipient and programme. Without them there is nothing to certify,
-      // and no name is invented. Dates are drawn only when given.
-      if (!recipientName || !programName) {
-        throw new Error('COPY_REQUIRED: a certificate needs the recipient and programme names. None will be invented.');
-      }
-      return buildKaaeCertificateOperations({
-        recipientName,
-        programName,
-        language: brief.primaryLanguage === 'ckb' ? 'ckb' : 'en',
-        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
-        ...customParams,
-      });
-    } else if (templateType === 'mandate') {
-      const enHeadline = brief.exactCopy.find((c) => c.language === 'en' && c.role === 'headline');
-      const ckbHeadline = brief.exactCopy.find((c) => c.language === 'ckb' && c.role === 'headline');
-      const enCopy = brief.exactCopy.find((c) => c.language === 'en' && (c.role === 'subheadline' || c.role === 'body'));
-      const ckbCopy = brief.exactCopy.find((c) => c.language === 'ckb' && (c.role === 'subheadline' || c.role === 'body'));
-
-      return buildKaaeMandateOperations({
-        headlineEn: customParams?.headlineEn || enHeadline?.text,
-        headlineCkb: customParams?.headlineCkb || ckbHeadline?.text,
-        copyEn: customParams?.copyEn || enCopy?.text,
-        copyCkb: customParams?.copyCkb || ckbCopy?.text,
-        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
-        ...customParams,
-      });
-    } else if (templateType === 'standards') {
-      const enHeadline = brief.exactCopy.find((c) => c.language === 'en' && c.role === 'headline');
-      const ckbHeadline = brief.exactCopy.find((c) => c.language === 'ckb' && c.role === 'headline');
-      const enCopy = brief.exactCopy.find((c) => c.language === 'en' && (c.role === 'subheadline' || c.role === 'body'));
-      const ckbCopy = brief.exactCopy.find((c) => c.language === 'ckb' && (c.role === 'subheadline' || c.role === 'body'));
-
-      return buildKaaeHigherEdStandardsOperations({
-        headlineEn: customParams?.headlineEn || enHeadline?.text,
-        headlineCkb: customParams?.headlineCkb || ckbHeadline?.text,
-        copyEn: customParams?.copyEn || enCopy?.text,
-        copyCkb: customParams?.copyCkb || ckbCopy?.text,
-        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
-        ...customParams,
-      });
-    } else if (templateType === 'roadmap') {
-      const enHeadline = brief.exactCopy.find((c) => c.language === 'en' && c.role === 'headline');
-      const ckbHeadline = brief.exactCopy.find((c) => c.language === 'ckb' && c.role === 'headline');
-      const enCopy = brief.exactCopy.find((c) => c.language === 'en' && (c.role === 'subheadline' || c.role === 'body'));
-      const ckbCopy = brief.exactCopy.find((c) => c.language === 'ckb' && (c.role === 'subheadline' || c.role === 'body'));
-
-      return buildKaaeStrategicRoadmapOperations({
-        headlineEn: customParams?.headlineEn || enHeadline?.text,
-        headlineCkb: customParams?.headlineCkb || ckbHeadline?.text,
-        copyEn: customParams?.copyEn || enCopy?.text,
-        copyCkb: customParams?.copyCkb || ckbCopy?.text,
-        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
-        ...customParams,
-      });
-    } else {
-      const isEnglishOnly = brief.primaryLanguage === 'en';
-      const ckbHeadline = brief.exactCopy.find((c) => c.language === 'ckb' && c.role === 'headline');
-      const enHeadline = brief.exactCopy.find((c) => c.language === 'en' && c.role === 'headline');
-      const ckbCopy = brief.exactCopy.find((c) => c.language === 'ckb' && (c.role === 'subheadline' || c.role === 'body'));
-      const enCopy = brief.exactCopy.find((c) => c.language === 'en' && (c.role === 'subheadline' || c.role === 'body'));
-
-      // Copy comes from the caller or the brief, in the language of its slot. When neither has it the
-      // slot stays empty and the template leaves it out; nothing is invented.
-      const firstInLanguage = (language: 'en' | 'ckb', index: number) =>
-        brief.exactCopy.filter((c) => c.language === language)[index]?.text;
-      const headlineEnResolved =
-        customParams?.headlineEn || enHeadline?.text || (isEnglishOnly ? firstInLanguage('en', 0) : undefined);
-      const headlineCkbResolved = isEnglishOnly ? undefined : customParams?.headlineCkb || ckbHeadline?.text || firstInLanguage('ckb', 0);
-
-      const copyEnResolved = customParams?.copyEn || enCopy?.text || (isEnglishOnly ? firstInLanguage('en', 1) : undefined);
-      const copyCkbResolved = isEnglishOnly ? undefined : customParams?.copyCkb || ckbCopy?.text || firstInLanguage('ckb', 1);
-
-      const primaryVariant = brief.variants?.[0];
-      const width = customParams?.width || primaryVariant?.width || 1080;
-      const height = customParams?.height || primaryVariant?.height || 1350;
-
-      return buildKaaeAnnouncementOperations({
-        width,
-        height,
-        headlineCkb: headlineCkbResolved,
-        headlineEn: headlineEnResolved,
-        copyCkb: copyCkbResolved,
-        copyEn: copyEnResolved,
-        categoryBadge: isEnglishOnly ? 'KAAE OFFICIAL · ACCREDITATION COMMISSION' : 'KAAE · ڕاگەیاندنی فەرمی متمانەبەخشین',
-        logoSha256: KAAE_PRIMARY_LOGO_SHA256,
-        ...customParams,
-      });
-    }
   }
 
   /**
@@ -689,10 +551,9 @@ export class CreativeDirectorRunner {
         ...customParams,
       });
     } else {
-      const isInvitation =
-        brief.objective.toLowerCase().includes('invitation') ||
-        brief.exactCopy.some((c) => c.text.toLowerCase().includes('invitation') || c.text.includes('بانگهێشت'));
-      return this.generateKaaeOperations(brief, isInvitation ? 'invitation' : 'announcement', customParams);
+      // Any other brand used to fall through to KAAE's v1 templates, drawing another client's design
+      // in KAAE's identity. Those templates are retired (ADR-127); other clients are designed in the studio.
+      throw new Error(`No legacy template for brand "${brandId}"; its designs are made in the design studio.`);
     }
   }
 }

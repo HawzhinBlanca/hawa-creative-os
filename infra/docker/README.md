@@ -1,7 +1,10 @@
 # Production stack (infra/docker)
 
 `docker-compose.prod.yml` is the one canonical topology; `deploy.sh` deploys it. The operations
-runbook is `docs/25_OPERATIONS_RUNBOOK.md`; this file covers the worker's blue/green deploys.
+runbook is `docs/25_OPERATIONS_RUNBOOK.md`; this file covers the worker's blue/green deploys. For
+operating the new architecture (stuck drains, paused invocations, the Phase 2 flags, one request's
+logs, the file store, test databases, the chaos suite and the load test) see
+[`runbooks/20_architecture_operations.md`](../../runbooks/20_architecture_operations.md).
 
 ## Worker deploys: blue/green
 

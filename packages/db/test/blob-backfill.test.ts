@@ -287,6 +287,78 @@ describe.skipIf(!ownerUrl)('scripts/blob_backfill.ts', () => {
     expect(summary.reports.map((x: PhaseReport) => x.stored)).toEqual([0, 0]);
   }, 120_000);
 
+  it('verify names every row whose hash has no file row (release B\'s foreign keys reject it), and the receipt counts them', async () => {
+    const { ids } = seeded;
+    const run = (await row(sql`SELECT run_id::text AS id FROM hawa.design_studio_candidates WHERE id = ${ids.candidate}::uuid`)).id;
+    // A candidate whose preview hash names a file that was never stored, with no bytes to copy it from.
+    const dangling = randomUUID();
+    await sql`INSERT INTO hawa.design_studio_candidates(id, run_id, tenant_id, ordinal, concept, status, preview_sha256)
+      VALUES (${dangling}::uuid, ${run}::uuid, ${TENANT}::uuid, 4, '{}', 'draft', ${sha(png())})`.execute(db);
+    // A plan whose source is no PPTX, as the rehearsal found in production (an orchestrator test's
+    // fixture, 2026-09-14): copy leaves it, so its hash names no file either.
+    const fixtureTask = await task('backfill fixture plan');
+    const fixturePlan = randomUUID();
+    const fixtureBytes = Buffer.from('fallback-plan-content');
+    await sql`INSERT INTO hawa.canva_design_plans(id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, status, result, source_content, source_sha256)
+      VALUES (${fixturePlan}::uuid, ${TENANT}::uuid, ${fixtureTask}::uuid, ${CLIENT}::uuid, 'test', 'plan-fixture', 'h', '{}'::jsonb, 'planned', '{}'::jsonb, ${fixtureBytes}, ${sha(fixtureBytes)})`.execute(db);
+
+    const reports = await runBackfill({ db, store, phases: ['plan_sources', 'candidates'], mode: 'verify' });
+    const problems = reports.flatMap((r) => r.problems);
+    expect(problems.find((p) => p.id === dangling)).toMatchObject({ table: 'design_studio_candidates', leftAsIs: true, blocksForeignKey: true });
+    expect(problems.find((p) => p.id === fixturePlan)).toMatchObject({ table: 'canva_design_plans', leftAsIs: true, blocksForeignKey: true });
+    // The candidate whose file went missing still has its file row: the foreign key accepts it (verify
+    // fails it for the missing file instead).
+    const missingFile = problems.filter((p) => /missing/.test(p.problem));
+    expect(missingFile.length).toBeGreaterThan(0);
+    expect(missingFile.some((p) => p.blocksForeignKey)).toBe(false);
+
+    const receipt = rehearsalReceipt('hawa_restore_x', {}, reports);
+    expect(receipt.foreignKeyBlockers).toBe(2);
+    expect(receipt.leftAsIs.filter((x) => x.blocksForeignKey).map((x) => x.id).sort()).toEqual([dangling, fixturePlan].sort());
+
+    // Copy cannot mend either: nothing to put.
+    const copy = await runBackfill({ db, store, phases: ['plan_sources', 'candidates'], mode: 'copy' });
+    expect(all(copy).stored).toBe(0);
+    await sql`DELETE FROM hawa.design_studio_candidates WHERE id = ${dangling}::uuid`.execute(db);
+  });
+
+  it('a run stopped by a signal finishes the row in hand, says so, and the next run copies the rest', async () => {
+    const run = (await row(sql`SELECT run_id::text AS id FROM hawa.design_studio_candidates WHERE id = ${seeded.ids.candidate}::uuid`)).id;
+    for (const ordinal of [5, 6, 7]) {
+      await sql`INSERT INTO hawa.design_studio_candidates(id, run_id, tenant_id, ordinal, concept, status, composite_png)
+        VALUES (${randomUUID()}::uuid, ${run}::uuid, ${TENANT}::uuid, ${ordinal}, '{}', 'draft', ${png()})`.execute(db);
+    }
+    let written = 0;
+    const first = await runBackfill({
+      db, store, phases: ['candidates'], mode: 'copy', batch: 1,
+      log: (line) => { if (line.sha256) written++; },
+      shouldStop: () => written >= 1, // SIGINT arrives while the first batch is being written
+    });
+    expect(first[0]).toMatchObject({ stored: 1, linked: 1, stoppedEarly: true });
+    const second = await runBackfill({ db, store, phases: ['candidates'], mode: 'copy', batch: 1 });
+    expect(second[0]).toMatchObject({ stored: 2, linked: 2, stoppedEarly: false });
+  });
+
+  it('the CLI exits 3 when a run stops before it is done, and 0 once a later run finishes', async () => {
+    const run = (await row(sql`SELECT run_id::text AS id FROM hawa.design_studio_candidates WHERE id = ${seeded.ids.candidate}::uuid`)).id;
+    for (const ordinal of [8, 9]) {
+      await sql`INSERT INTO hawa.design_studio_candidates(id, run_id, tenant_id, ordinal, concept, status, composite_png)
+        VALUES (${randomUUID()}::uuid, ${run}::uuid, ${TENANT}::uuid, ${ordinal}, '{}', 'draft', ${png()})`.execute(db);
+    }
+    const cli = () => spawnSync(path.join(repo, 'node_modules/.bin/tsx'), ['scripts/blob_backfill.ts', '--phase', 'candidates', '--mode', 'copy', '--batch', '1', '--limit', '1', '--log', path.join(root, 'tmp', 'limit.ndjson')], {
+      cwd: repo,
+      encoding: 'utf8',
+      timeout: 120_000,
+      env: { PATH: process.env.PATH ?? '', HOME: os.tmpdir(), DATABASE_URL: ownerUrl!, HAWA_BLOB_DIR: root },
+    });
+    const stopped = cli();
+    expect(stopped.status).toBe(3);
+    expect(JSON.parse(stopped.stdout.trim().split('\n').pop()!).reports[0]).toMatchObject({ stored: 1, stoppedEarly: true });
+    const finished = cli();
+    expect(finished.status).toBe(0);
+    expect(JSON.parse(finished.stdout.trim().split('\n').pop()!).reports[0]).toMatchObject({ stored: 1, stoppedEarly: false });
+  }, 120_000);
+
   describe('production', () => {
     const receiptDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-backfill-receipt-'));
     const receipt = path.join(receiptDir, 'rehearsal.json');

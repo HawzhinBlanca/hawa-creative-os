@@ -42,7 +42,7 @@ import {
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError } from '@hawa/domain';
-import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, negativeSpacePolicyIdentity, type OrnamentSettings } from '@hawa/creative';
+import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, negativeSpacePolicyIdentity, thumbnailPlaybookPrompt, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
 import { buildRunBriefContract, StudioBriefContractError, StudioRunStatusChangedError } from './brief-contract.js';
 import { blockingBriefConflicts, briefContractIdentitySha256, verifyBriefContractIntegrity, type BriefProposalInput, type ExecutableBriefContract } from '@hawa/domain';
@@ -51,6 +51,7 @@ import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type Phot
 import { log } from '../../logging.js';
 import { blobStoreFor, putToStore, readPreferringStore } from '../blob-store-context.js';
 import { assertCurrentClientDesignReference, resolveClientDesignReference } from '../client-design-reference.js';
+import { ClientExemplarsUnavailableError, clientPackOf, packagedReferenceExemplarManifest } from '../client-packs.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -913,10 +914,18 @@ export class DesignStudioService {
    * critique and the judge alike. A read failure stops the run: designing without rules the office
    * set is the silent failure this replaced.
    */
-  private async withClientRules(s: Scope, ctx: StageContext): Promise<StageContext> {
+  private async withClientRules(s: Scope, ctx: StageContext, runStartedAt?: Date | string): Promise<StageContext> {
     // No database (a unit harness) means no rules to read; with one, a failed read stops the run.
     if (!ctx.clientId || typeof (this.db as { transaction?: unknown })?.transaction !== 'function') return ctx;
-    const rules = await this.tx(s, (db) => new ClientRulesRepository(db).listActive(s.tenantId, ctx.clientId));
+    // The rules as they stood when the run started: every stage re-read the current ones, so a rule
+    // sent mid-run changed the critique and the judge but not the brief (audit 2026-09-27 #16).
+    const startedAt = runStartedAt ? new Date(runStartedAt) : undefined;
+    const rules = await this.tx(s, (db) => {
+      const repo = new ClientRulesRepository(db);
+      return startedAt && !Number.isNaN(startedAt.getTime())
+        ? repo.listInForceAt(s.tenantId, ctx.clientId, startedAt)
+        : repo.listActive(s.tenantId, ctx.clientId);
+    });
     const text = formatClientRulesForPrompt(rules);
     if (!text) return ctx;
     ctx.clientRules = text;
@@ -1176,7 +1185,17 @@ export class DesignStudioService {
       latinFont = rules.latinFont;
       arabicFont = rules.arabicFont;
       promotedRules = rules.promotedRules;
-      exemplarManifest = JSON.parse(readFileSync(creativeAssetPath('kaae-exemplars.json'), 'utf8'));
+      // The client's own confirmed set, as its pack names it (ADR-127): the same KAAE manifest file,
+      // so its policy hash is unchanged. No pack, or a pack naming no set, is refused rather than
+      // designed on no exemplars (as a missing manifest was refused before the packs).
+      let exemplarManifestPath: string;
+      try {
+        exemplarManifestPath = packagedReferenceExemplarManifest(run.client_id);
+      } catch (err) {
+        if (err instanceof ClientExemplarsUnavailableError) throw new CanvaFlowError(503, err.code, err.message);
+        throw err;
+      }
+      exemplarManifest = JSON.parse(readFileSync(exemplarManifestPath, 'utf8'));
       exemplarPolicySha256 = hash(canonicalCallJson(exemplarManifest));
     } else {
       latinFont = reference.rules.typography.formalBody.latin;
@@ -1240,6 +1259,19 @@ export class DesignStudioService {
 
     const logo = { bytes: logoBytes, sha256: reference.logoSha256, mimeType: 'image/png' as const };
 
+    // The client's playbook (ADR-127). A thumbnail client's stages are all told the thumbnail rules
+    // through the rules every stage reads, and its hard QA checks them. An announcement client's
+    // rules, and so its pinned visual policy, are unchanged.
+    // Who the client is goes to the v3 layout generator and the judge by name (its pack's profile):
+    // their shared prompts no longer name KAAE. It is not added to the rules every stage reads, so a
+    // client's pinned visual policy (ADR-112) does not change with it.
+    const pack = clientPackOf(run.client_id);
+    const playbook = pack?.playbook;
+    const clientProfile = pack?.profile;
+    if (playbook === 'video-thumbnail') {
+      promotedRules = `${promotedRules}\n\n${thumbnailPlaybookPrompt({ width: request.width, height: request.height })}`;
+    }
+
     const ctx: StageContext = {
       runId: run.id,
       tenantId: s.tenantId,
@@ -1253,6 +1285,8 @@ export class DesignStudioService {
       copyBlocks: request.copyBlocks,
       referencePack,
       promotedRules,
+      ...(clientProfile ? { clientProfile } : {}),
+      ...(playbook === 'video-thumbnail' ? { playbook } : {}),
       latinFont,
       arabicFont,
       logoAspect: request.logoAspect || 1.0,
@@ -1384,7 +1418,7 @@ export class DesignStudioService {
     // worker to retry for ever, so it is marked failed here with the reason.
     let ctx: StageContext;
     try {
-      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate, stageCalls, Boolean(pinnedVisualInputs), priorCalls));
+      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate, stageCalls, Boolean(pinnedVisualInputs), priorCalls), run.created_at);
     } catch (err: any) {
       if (pinnedVisualInputs) throw new CanvaFlowError(409, 'STUDIO_VISUAL_INPUTS_UNSAFE',
         'The pinned design policy cannot currently be verified. Restore its original authorized inputs before continuing.');

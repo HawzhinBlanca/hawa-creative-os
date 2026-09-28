@@ -60,6 +60,23 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         }, taskId)
       : Promise.resolve(null);
 
+  /**
+   * Delivering an approval a later edit invalidated (policy deliver_approved_stored) skips the checks
+   * that bind a delivery to the current revision. Any signed-in role could ask for it with one body
+   * field (audit 2026-09-27 #2): it is an administrator's decision now, and needs a reason, which the
+   * delivery records.
+   */
+  const storedPolicyRefusal = (c: any, auth: { role?: string }, body: any): Response | null => {
+    if (body?.policy !== 'deliver_approved_stored') return null;
+    if (auth.role !== 'administrator') {
+      return problem(c, 403, 'Administrator Required', 'Only an administrator may deliver an approval a later edit invalidated.');
+    }
+    if (!String(body.reason || '').trim()) {
+      return problem(c, 422, 'Reason Required', 'Say why the stored approval is delivered instead of approving the current revision.');
+    }
+    return null;
+  };
+
   // Publish Task (Gate G: Truthful, Authenticated, Durable Google Workspace Publication)
   registerRoute('post', '/tasks/:taskId/publish', async (c: any) => {
     const auth = verifyRequestAuth(c);
@@ -143,6 +160,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     }
 
     const body = await c.req.json().catch(() => ({}));
+    const storedRefused = storedPolicyRefusal(c, auth, body);
+    if (storedRefused) return storedRefused;
     const policy = body.policy || 'current_task';
     const targetRevisionId = body.designRevisionId || task?.latestRevisionId;
     const requestedApprovalId = body.approvalId;
@@ -232,7 +251,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const result = await executeOmnichannelPublish(
       taskId,
       { type: 'user', id: auth.userId },
-      'Publication triggered',
+      policy === 'deliver_approved_stored' ? `Stored approval delivered by an administrator: ${String(body.reason).trim()}` : 'Publication triggered',
       false,
       { policy, designRevisionId: targetRevisionId, approvalId: requestedApprovalId }
     );
@@ -506,7 +525,10 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     if (!task) return problem(c, 404, 'Task Not Found');
     if (task.requestId) return problem(c, 409, 'LIFECYCLE_OWNED',
       'Deliver this request through RequestLifecycle; the legacy publisher cannot send it');
+    const auth = verifyRequestAuth(c);
     const body = await c.req.json().catch(() => ({}));
+    const storedRefused = storedPolicyRefusal(c, auth, body);
+    if (storedRefused) return storedRefused;
     const policy = body.policy || 'current_task';
     const targetRevisionId = body.designRevisionId;
     const requestedApprovalId = body.approvalId;
@@ -567,8 +589,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
 
     const result = await executeOmnichannelPublish(
       taskId,
-      { type: 'user', id: 'operator' },
-      'Omnichannel publication started',
+      { type: 'user', id: auth.userId || 'operator' },
+      policy === 'deliver_approved_stored' ? `Stored approval delivered by an administrator: ${String(body.reason).trim()}` : 'Omnichannel publication started',
       false,
       { policy, designRevisionId: targetRevisionId, approvalId: requestedApprovalId }
     );

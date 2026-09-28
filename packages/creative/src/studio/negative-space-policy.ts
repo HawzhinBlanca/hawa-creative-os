@@ -133,6 +133,6 @@ export function negativeSpacePromptGuidance(measure: NegativeSpaceMeasure = 'mea
     `  * The largest vertical gap between consecutive spans is penalised above ${f(limits.internalGap.penaltyAbove)} of canvas height ` +
       `and fails alone above ${f(limits.internalGap.failsAbove)}.`,
     `  * Space below the lowest span is penalised above ${f(limits.bottomVoid.penaltyAbove)} of canvas height and fails alone above ${f(limits.bottomVoid.failsAbove)}.`,
-    `  * Group related elements (title + subtitle, body paragraphs, statutory footer) with intentional proximity.`,
+    `  * Group related elements (title + subtitle, body paragraphs, footer) with intentional proximity.`,
   ].join('\n');
 }

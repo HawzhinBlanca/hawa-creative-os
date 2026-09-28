@@ -13,6 +13,7 @@ import { log } from '../logging.js';
 import { mayChangeKillSwitch, setKillSwitch, type KillSwitchChannel } from '../services/channel-kill-switches.js';
 import { telegramPollerOf } from '../services/telegram-poller-owner.js';
 import { registerAvailabilityRoutes, availabilityConfig, AvailabilityError, readAvailabilityReport } from './availability.routes.js';
+import { setKillSwitch } from '../services/channel-kill-switches.js';
 
 /**
  * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors
@@ -502,11 +503,14 @@ export function registerSystemRoutes(ctx: RouteContext) {
   registerRoute('post','/operations/reconciliation/run',(c: any)=>auditRequest(c,true));
 
   // Operational Security & Outage Simulation (CV-20, FR-065, FR-071)
+  // An administrator's switch, as POST /waha/kill-switch is: any signed-in role could release a switch
+  // an administrator threw, and the answer came before Postgres had it, so a failed save was forgotten
+  // by the next restart (audit 2026-09-27 #17, ported under ADR-127). The save is the same revisioned
+  // write the intake toggle makes (ADR-054), and its changeTag is returned.
   registerRoute('post', '/operations/kill-switch', async (c: any) => {
+    const denied = requireAdministrator(c);
+    if (denied) return denied;
     const auth = verifyRequestAuth(c);
-    if (!auth.authenticated) {
-      return problem(c, 401, 'Unauthorized', 'Authentication required to toggle kill switch');
-    }
     const body = await c.req.json().catch(() => ({}));
     const { channel, active } = body;
     if (channel !== 'telegram' && channel !== 'waha') {

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { describe, expect, it, afterAll } from 'vitest';
-import { createDb } from '@hawa/db';
+import { describe, expect, it, afterAll, vi } from 'vitest';
+import { createDb, OutboxRepository } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import {
   buildDeliveredNotificationPayload,
@@ -116,6 +116,33 @@ describe('the delivery notification', () => {
     const { deliver, notifications, saveDna } = await setup();
     expect((await (await deliver()).json()).status).toBe('PUBLISH_RECONCILIATION');
     await saveDna('sheet-for-no-sheet-notify-client');
+    expect((await (await deliver()).json()).status).toBe('COMPLETE');
+    expect(await notifications()).toHaveLength(1);
+  });
+
+  // Ported from studio-v2 66e483e8 (audit 2026-09-27 #12). studio-v2 completed the files and left
+  // the task in PUBLISH_RECONCILIATION with a notificationProblem; this branch is stricter: the
+  // notice is enqueued in the same transaction as the Drive/Sheets receipts, so a failed write holds
+  // the whole delivery (503 RECEIPTS_NOT_RECORDED) and Deliver retries it.
+  it('must be queued before the task is COMPLETE: a failed write leaves it for Deliver to retry (audit 2026-09-27 #12)', async () => {
+    const { deliver, notifications, saveDna } = await setup();
+    await saveDna('sheet-for-no-sheet-notify-client');
+    const enqueue = OutboxRepository.prototype.enqueue;
+    const spy = vi.spyOn(OutboxRepository.prototype, 'enqueue').mockImplementation(function (this: OutboxRepository, command: any, trx?: any) {
+      if (command?.commandType === 'notify.published') return Promise.reject(new Error('connection reset (fixture)'));
+      return enqueue.call(this, command, trx);
+    } as any);
+    try {
+      const first = await deliver();
+      const body = await first.json();
+      // The files are in Drive, but the requester would never hear: nothing is recorded as delivered.
+      expect(first.status).toBe(503);
+      expect(JSON.stringify(body)).toMatch(/RECEIPTS_NOT_RECORDED|requester delivery remains held/);
+      expect(body.status).not.toBe('COMPLETE');
+      expect(await notifications()).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
+    }
     expect((await (await deliver()).json()).status).toBe('COMPLETE');
     expect(await notifications()).toHaveLength(1);
   });

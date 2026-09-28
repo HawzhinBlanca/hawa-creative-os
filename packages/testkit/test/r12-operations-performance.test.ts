@@ -161,7 +161,7 @@ describe('Task R12: Operations, Performance, and Safe Failure Behavior (FR-062-0
     // Kill switch activation
     const killOn = await app.request('/v1/operations/kill-switch', {
       method: 'POST',
-      headers: authHeaders,
+      headers: { ...authHeaders, Authorization: 'Bearer test_admin_key' }, // an administrator's switch
       body: JSON.stringify({ channel: 'telegram', active: true }),
     });
     expect(killOn.status).toBe(200);
@@ -171,7 +171,7 @@ describe('Task R12: Operations, Performance, and Safe Failure Behavior (FR-062-0
     // Reset kill switch
     const killOff = await app.request('/v1/operations/kill-switch', {
       method: 'POST',
-      headers: authHeaders,
+      headers: { ...authHeaders, Authorization: 'Bearer test_admin_key' }, // an administrator's switch
       body: JSON.stringify({ channel: 'telegram', active: false }),
     });
     expect(killOff.status).toBe(200);

@@ -66,55 +66,61 @@ export function sanitizeSvg(rawSvg: string): SvgSanitizationResult {
   cleaned = cleaned.replace(/<!DOCTYPE[^>]*>/gi, '');
   cleaned = cleaned.replace(/<!(?:ENTITY|ELEMENT|ATTLIST|NOTATION)\b[\s\S]*?>/gi, '');
 
-  // 2. Block and strip <script> tags and enclosed scripts
-  if (/<script\b[^>]*>([\s\S]*?)<\/script>/gi.test(cleaned) || /<script\b/gi.test(cleaned)) {
-    violations.push('Blocked executable <script> element');
-    cleaned = cleaned.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi, '');
-    cleaned = cleaned.replace(/<script\b[^>]*\/?>/gi, '');
-  }
-
-  // 3. Block and strip embedded external objects (<foreignObject>, <object>, <embed>, <iframe>, <applet>, <meta>, <link>, <base>, forms)
-  const dangerousTags = [
-    'foreignobject', 'object', 'embed', 'iframe', 'applet',
-    'meta', 'link', 'audio', 'video', 'base',
-    'form', 'input', 'button', 'select', 'textarea',
-  ];
-  for (const tag of dangerousTags) {
-    const tagRegex = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
-    const selfClosingRegex = new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi');
-    if (tagRegex.test(cleaned) || selfClosingRegex.test(cleaned)) {
-      violations.push(`Blocked dangerous SVG tag: <${tag}>`);
-      cleaned = cleaned.replace(tagRegex, '');
-      cleaned = cleaned.replace(selfClosingRegex, '');
+  // Every strip runs until the text stops changing: one pass turned "<scr<script/>ipt>" into a live
+  // "<script>" and reported the SVG safe (audit 2026-09-27 #11).
+  for (let pass = 0; pass < 10; pass++) {
+    const before = cleaned;
+    // 2. Block and strip <script> tags and enclosed scripts
+    if (/<script\b[^>]*>([\s\S]*?)<\/script>/gi.test(cleaned) || /<script\b/gi.test(cleaned)) {
+      violations.push('Blocked executable <script> element');
+      cleaned = cleaned.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi, '');
+      cleaned = cleaned.replace(/<script\b[^>]*\/?>/gi, '');
     }
-  }
 
-  // 4. Block attribute animation attacks (<set>, <animate> manipulating href or javascript)
-  const dangerousAnimRegex = /<(set|animate|animateTransform)\b[^>]*(href|javascript:)[^>]*\/?>/gi;
-  if (dangerousAnimRegex.test(cleaned)) {
-    violations.push('Blocked malicious attribute animation');
-    cleaned = cleaned.replace(dangerousAnimRegex, '');
-  }
+    // 3. Block and strip embedded external objects (<foreignObject>, <object>, <embed>, <iframe>, <applet>, <meta>, <link>, <base>, forms)
+    const dangerousTags = [
+      'foreignobject', 'object', 'embed', 'iframe', 'applet',
+      'meta', 'link', 'audio', 'video', 'base',
+      'form', 'input', 'button', 'select', 'textarea',
+    ];
+    for (const tag of dangerousTags) {
+      const tagRegex = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
+      const selfClosingRegex = new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi');
+      if (tagRegex.test(cleaned) || selfClosingRegex.test(cleaned)) {
+        violations.push(`Blocked dangerous SVG tag: <${tag}>`);
+        cleaned = cleaned.replace(tagRegex, '');
+        cleaned = cleaned.replace(selfClosingRegex, '');
+      }
+    }
 
-  // 5. Strip inline event handlers (support whitespace or slash boundaries, e.g. <svg/onload=...>)
-  const eventHandlerRegex = /(?:[\s/]|^)(on[a-zA-Z0-9_-]{3,30})\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
-  if (eventHandlerRegex.test(cleaned)) {
-    violations.push('Stripped inline event handler attributes (XSS prevention)');
-    cleaned = cleaned.replace(eventHandlerRegex, '');
-  }
+    // 4. Block attribute animation attacks (<set>, <animate> manipulating href or javascript)
+    const dangerousAnimRegex = /<(set|animate|animateTransform)\b[^>]*(href|javascript:)[^>]*\/?>/gi;
+    if (dangerousAnimRegex.test(cleaned)) {
+      violations.push('Blocked malicious attribute animation');
+      cleaned = cleaned.replace(dangerousAnimRegex, '');
+    }
 
-  // 6. Neutralize dangerous URI schemes in href, xlink:href, src, action (both quoted and unquoted)
-  const dangerousSchemeRegex = /(href|xlink:href|src|action)\s*=\s*(?:"\s*(?:javascript:|vbscript:|data:(?:text\/html|image\/svg\+xml|application\/)|[^"]*javascript:)[^"]*"|'\s*(?:javascript:|vbscript:|data:(?:text\/html|image\/svg\+xml|application\/)|[^']*javascript:)[^']*'|(?:javascript:|vbscript:|data:)[^\s>]+)/gi;
-  if (dangerousSchemeRegex.test(cleaned)) {
-    violations.push('Blocked malicious URI scheme (javascript/data:html)');
-    cleaned = cleaned.replace(dangerousSchemeRegex, '$1="#blocked"');
-  }
+    // 5. Strip inline event handlers (support whitespace or slash boundaries, e.g. <svg/onload=...>)
+    const eventHandlerRegex = /(?:[\s/]|^)(on[a-zA-Z0-9_-]{3,30})\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+    if (eventHandlerRegex.test(cleaned)) {
+      violations.push('Stripped inline event handler attributes (XSS prevention)');
+      cleaned = cleaned.replace(eventHandlerRegex, '');
+    }
 
-  // 7. Neutralize malicious inline style attributes (javascript:, expression(), @import, or dangerous data: URIs)
-  const dangerousStyleAttrRegex = /style\s*=\s*(?:"[^"]*(?:javascript:|expression\s*\(|@import|url\s*\(\s*["']?data:text\/html)[^"]*"|'[^']*(?:javascript:|expression\s*\(|@import|url\s*\(\s*["']?data:text\/html)[^']*')/gi;
-  if (dangerousStyleAttrRegex.test(cleaned)) {
-    violations.push('Stripped malicious CSS directive from style attribute');
-    cleaned = cleaned.replace(dangerousStyleAttrRegex, 'style=""');
+    // 6. Neutralize dangerous URI schemes in href, xlink:href, src, action (both quoted and unquoted)
+    const dangerousSchemeRegex = /(href|xlink:href|src|action)\s*=\s*(?:"\s*(?:javascript:|vbscript:|data:(?:text\/html|image\/svg\+xml|application\/)|[^"]*javascript:)[^"]*"|'\s*(?:javascript:|vbscript:|data:(?:text\/html|image\/svg\+xml|application\/)|[^']*javascript:)[^']*'|(?:javascript:|vbscript:|data:)[^\s>]+)/gi;
+    if (dangerousSchemeRegex.test(cleaned)) {
+      violations.push('Blocked malicious URI scheme (javascript/data:html)');
+      cleaned = cleaned.replace(dangerousSchemeRegex, '$1="#blocked"');
+    }
+
+    // 7. Neutralize malicious inline style attributes (javascript:, expression(), @import, or dangerous data: URIs)
+    const dangerousStyleAttrRegex = /style\s*=\s*(?:"[^"]*(?:javascript:|expression\s*\(|@import|url\s*\(\s*["']?data:text\/html)[^"]*"|'[^']*(?:javascript:|expression\s*\(|@import|url\s*\(\s*["']?data:text\/html)[^']*')/gi;
+    if (dangerousStyleAttrRegex.test(cleaned)) {
+      violations.push('Stripped malicious CSS directive from style attribute');
+      cleaned = cleaned.replace(dangerousStyleAttrRegex, 'style=""');
+    }
+    if (cleaned === before) break;
   }
 
   // 8. Clean <style> blocks from CSS expressions, @import, or javascript URIs
@@ -133,13 +139,20 @@ export function sanitizeSvg(rawSvg: string): SvgSanitizationResult {
     return { ok: false, violations };
   }
 
-  // If severe attacks (XXE or scripts) were detected, fail validation or return sanitized copy
-  const isSafe = violations.length === 0 || !violations.some((v) => v.includes('XXE') || v.includes('Invalid SVG'));
+  // Anything executable still there after the passes means the input was built to survive them.
+  if (/<script\b/i.test(cleaned) || /<(?:foreignobject|iframe|object|embed)\b/i.test(cleaned) || /(?:[\s/]|^)on[a-z0-9_-]{3,30}\s*=/i.test(cleaned) || /javascript:/i.test(cleaned)) {
+    violations.push('Executable content could not be neutralized');
+  }
+
+  // If severe attacks (XXE, scripts that survived, an invalid root) were detected, the SVG is refused;
+  // otherwise the sanitized copy is returned with what was stripped.
+  const unique = [...new Set(violations)];
+  const isSafe = unique.length === 0 || !unique.some((v) => v.includes('XXE') || v.includes('Invalid SVG') || v.includes('could not be neutralized'));
 
   return {
     ok: isSafe,
     sanitized: cleaned.trim(),
-    violations,
+    violations: unique,
   };
 }
 

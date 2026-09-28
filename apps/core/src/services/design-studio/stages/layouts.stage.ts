@@ -224,6 +224,7 @@ export async function runLayoutsStage(
       visualInputs,
       logoAspect: ctx.logoAspect || 1.0,
       reference: ctx.reference,
+      clientProfile: ctx.clientProfile,
     }));
 
     const prepared = v3Result.layouts.map((rawLayout, i) => {
@@ -437,6 +438,6 @@ export function layoutBriefV3(
       styleSummary(ctx.style),
     ]
       .filter(Boolean)
-      .join('\n') || 'Official Institutional Communication'
+      .join('\n') || 'A communication for the client named above'
   );
 }

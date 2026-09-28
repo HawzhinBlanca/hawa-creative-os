@@ -290,37 +290,22 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
     };
 
     const isKaae = currentClientId === KAAE_CLIENT_ID || currentClientId === 'client-office-1' || currentClientId === 'client-kaae' || String(currentClientId).includes('kaae');
-    const isInvitation =
-      (brief as any).templateSuggestion?.templateId === 'kaae_invitation' ||
-      (brief as any).templateSuggestion?.templateId === 'vip_invitation' ||
-      /invitation|honour|honor of your presence/i.test((task || dbTask)?.payloadText || (task || dbTask)?.title || '');
-
     const effectiveRules = currentClientId ? globalFeedbackMiner.getPromotedRules(currentClientId) : [];
-    const kaaeLogoSha = '40dab5f8ca1fe647e8bb1a443b3c9934408a8f177e79b430616e14f41fdb2ebc';
-    const primaryVariant = brief.variants?.[0];
-    const variantWidth = primaryVariant?.width || 1080;
-    const variantHeight = primaryVariant?.height || 1350;
-
     const isBrandClient = currentClientId === 'client-fastpay' || currentClientId === 'client-aster' || currentClientId === 'client-drustee';
     const template = isKaae ? 'kaae' : isBrandClient ? 'brand' : null;
     if (template && inlineTemplateCopyMissing(template, task || dbTask || {})) {
       return problem(c, 422, 'COPY_REQUIRED', COPY_REQUIRED_DETAIL);
     }
 
-    let ops: StudioOperation[] = [];
+    // KAAE's v1 templates are retired (ADR-127): KAAE's designs are made only in the design studio.
+    // The generic legacy draft is not a substitute: it can pass QA, and would reach review and approval
+    // as a KAAE design no one designed.
     if (isKaae) {
-      ops = creativeDirector.generateKaaeOperations(brief, isInvitation ? 'invitation' : 'announcement', {
-        headlineEn: (task || dbTask)?.headlineEn,
-        headlineCkb: (task || dbTask)?.headlineCkb,
-        copyEn: (task || dbTask)?.copyEn,
-        copyCkb: (task || dbTask)?.copyCkb,
-        rawText: (task || dbTask)?.payloadText || (task || dbTask)?.kurdishText,
-        width: variantWidth,
-        height: variantHeight,
-        logoSha256: kaaeLogoSha,
-        learnedRules: effectiveRules,
-      });
-    } else if (isBrandClient) {
+      return problem(c, 410, 'LEGACY_TEMPLATES_RETIRED', "KAAE's designs are made in the design studio; this legacy generator no longer drafts them.");
+    }
+
+    let ops: StudioOperation[] = [];
+    if (isBrandClient) {
       ops = creativeDirector.generateCommercialBrandOperations(currentClientId.replace('client-', ''), brief, {
         headlineEn: (task || dbTask)?.headlineEn,
         headlineCkb: (task || dbTask)?.headlineCkb,
