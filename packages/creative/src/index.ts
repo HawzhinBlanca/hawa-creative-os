@@ -50,3 +50,4 @@ export * from './studio/reference-manager.js';
 export * from './studio/asset-paths.js';
 
 export * from './studio/spending-reservation.js';
+export * from './clients/client-pack.js';

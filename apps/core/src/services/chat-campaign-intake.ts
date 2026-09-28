@@ -10,6 +10,8 @@ import { withRlsContext, toApiTaskStatus, sql } from '@hawa/db';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { normalizeKurdishIncomingText, type CostReceipt, KAAE_CLIENT_ID, escapeTelegramHtml } from '@hawa/integrations';
 import { unwrapCopyEnvelope } from './canva-design-planner.js';
+import { autoDraftAllowedFor, clientPackOf, matchRequestClient } from './client-packs.js';
+import { defaultCanvasFor } from '@hawa/creative';
 import { isValidUuid, inlineTemplateCopyMissing, cutText } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, DEFAULT_CLIENT_ID } from '../core-context.js';
 import type { CoreContext } from '../core-context.js';
@@ -61,12 +63,23 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     deskBaseUrl?: string;
     isInstructionOnly?: boolean;
   }, prepareOnly = false) {
-    const { platform, sourceEventId, sourceChannelId, senderName, rawText, voiceTranscript, referenceImageBase64, explicitClientId, autoGenerate, deskBaseUrl, isInstructionOnly } = input;
+    const { platform, sourceEventId, sourceChannelId, senderName, rawText, voiceTranscript, referenceImageBase64, explicitClientId, autoGenerate: autoGenerateRequested, deskBaseUrl, isInstructionOnly } = input;
     const normalizedText = normalizeKurdishIncomingText(rawText);
 
     // 1. Client Routing & Lock (Invariant #4)
     let clientId = explicitClientId || null;
+    // Client packs first (ADR-127): the chat's bound client, else the one client its words name. A
+    // message naming two pack clients is left for the office to assign, and never guessed.
+    let clientAmbiguous = false;
     if (!clientId) {
+      const packMatch = matchRequestClient({ chatId: sourceChannelId, rawText, normalizedText });
+      if (packMatch.kind === 'chat' || packMatch.kind === 'named') clientId = packMatch.pack.id;
+      else if (packMatch.kind === 'ambiguous') {
+        clientAmbiguous = true;
+        log.info(`[intake] The message names ${packMatch.packs.map((p) => p.code).join(' and ')}; left for the office to assign.`);
+      }
+    }
+    if (!clientId && !clientAmbiguous) {
       const lower = rawText.toLowerCase();
       // Latin brand keywords match whole words only ('faster' is not FastPay, 'corona' is not Rona).
       // The left edge is a Unicode letter class rather than \b, which counts only ASCII word
@@ -129,6 +142,8 @@ function buildChatCampaignIntake(ctx: CoreContext) {
     }
 
     const isKaae = clientId === KAAE_CLIENT_ID;
+    // A client still being set up is saved for the art director, not drafted automatically (ADR-127).
+    const autoGenerate = Boolean(autoGenerateRequested) && autoDraftAllowedFor(clientId);
     let taskId = crypto.randomUUID();
 
     // No model was called during intake: do not manufacture cost or generation receipts.
@@ -249,9 +264,11 @@ function buildChatCampaignIntake(ctx: CoreContext) {
           language: primaryLanguage, direction, approved: true, protectedTokens: [],
         }));
 
-    const variantWidth = 1080;
-    const variantHeight = isInvitation || isKaae ? 1350 : 1080;
-    const variantAspect = isInvitation || isKaae ? '4:5' : '1:1';
+    // A pack client other than KAAE gets its own default canvas (a thumbnail client: 1280x720).
+    const packCanvas = (() => { const pack = isKaae ? undefined : clientPackOf(clientId); return pack ? defaultCanvasFor(pack) : undefined; })();
+    const variantWidth = packCanvas?.width ?? 1080;
+    const variantHeight = packCanvas?.height ?? (isInvitation || isKaae ? 1350 : 1080);
+    const variantAspect = packCanvas?.aspect ?? (isInvitation || isKaae ? '4:5' : '1:1');
     const variantRole: 'instagram_post' | 'instagram_story' | 'billboard' | 'banner' | 'custom' = isInvitation ? 'custom' : 'instagram_post';
 
     const brief: DesignBrief = {
@@ -473,11 +490,14 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       );
     }
     if (platform === 'telegram' && sourceChannelId && sourceChannelId !== 'tg_default') {
+      // A pack names its client (ADR-127); the legacy demo clients keep their names until retired.
+      const clientPack = clientPackOf(clientId);
       let clientDisplayName = isKaae ? 'KAAE (Accreditation)' : senderName;
       if (clientId === 'client-fastpay' || clientId === 'c1000000-0000-4000-8000-000000000004') clientDisplayName = 'FastPay Mobile Wallet';
       else if (clientId === 'client-aster') clientDisplayName = 'Aster Pharmacy';
       else if (clientId === 'client-drustee' || clientId === 'c1000000-0000-4000-8000-000000000003') clientDisplayName = 'Drustee Health';
       else if (clientId === 'c1000000-0000-4000-8000-000000000001') clientDisplayName = 'Hawa Studio';
+      if (clientPack) clientDisplayName = clientPack.displayName;
 
       // The Canva draft itself is produced by the durable worker workflow (Restate), never inline
       // in the webhook: the model call and the Canva import can take minutes, must survive a Core
@@ -485,7 +505,11 @@ function buildChatCampaignIntake(ctx: CoreContext) {
       // POST /v1/tasks/:taskId/notifications/canva-status, which sends the link or the reason.
       const deskLink = officeReviewUrl({ taskId }, deskBaseUrl);
       // An unscoped brief named the sender here, as if they were the client.
-      const clientLabel = escapeTelegramHtml(isKaae ? 'KAAE (Accreditation)' : task.clientId ? clientDisplayName : 'not named in the message');
+      const clientLabel = escapeTelegramHtml(isKaae ? clientDisplayName : task.clientId ? clientDisplayName : 'not named in the message');
+      // A client still being set up (ADR-127) has no Client DNA to design with, so nothing is drafted for it.
+      const onboardingNote = task.clientId && clientPack?.status === 'onboarding'
+        ? `\n\n🛠 <i>${escapeTelegramHtml(clientPack.displayName)} is still being set up in Hawa, so no automatic draft is made yet. The art director will design this one in Canva.</i>`
+        : '';
       const safeTitle = escapeTelegramHtml(title || 'Campaign Design');
       const automaticDraft = Boolean(autoGenerate && task.clientId && !task.autoGenerateDeclined);
       const capNote = task.autoGenerateDeclined
@@ -493,7 +517,7 @@ function buildChatCampaignIntake(ctx: CoreContext) {
         : '';
       const scopeNote = (task.clientId
         ? ''
-        : `\n\n⚠️ <i>No client was named, so nothing is designed automatically. Send it again with the client's name in it (for example KAAE) to get a Canva draft, or assign the client in Hawa Desk.</i>`) + capNote;
+        : `\n\n⚠️ <i>No client was named, so nothing is designed automatically. Send it again with the client's name in it (for example KAAE) to get a Canva draft, or assign the client in Hawa Desk.</i>`) + onboardingNote + capNote;
       const text =
         `📥 <b>${automaticDraft ? 'Request saved. Preparing your Canva draft' : 'Brief received and queued in Hawa Desk'}</b>\n\n` +
         `📌 <b>Task ID:</b> <code>${taskId}</code>\n` +

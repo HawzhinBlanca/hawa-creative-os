@@ -6,6 +6,7 @@ import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { computeDnaHash, isValidUuid } from '../core-helpers.js';
 import { blobStoreFor } from './blob-store-context.js';
 import { CanvaFlowError } from './canva-connect-service.js';
+import { onboardingGapOf } from './client-packs.js';
 
 type Scope = { tenantId: string; actorId: string };
 type Resolved = { reference: Record<string, any>; logo: Buffer };
@@ -44,7 +45,12 @@ export async function resolveClientDesignReference(
         AND (${historicalVersion ?? null}::integer IS NULL AND status = 'active'
           OR version = ${historicalVersion ?? null}::integer AND status IN ('active','superseded'))
       ORDER BY version DESC LIMIT 1`.execute(trx)).rows[0]);
-  if (!row) throw new CanvaFlowError(422, 'CLIENT_REFERENCE_REQUIRED', 'This client needs an active versioned design reference before planning.');
+  if (!row) {
+    // A client still being set up says what it lacks (ADR-127); the refusal itself is unchanged.
+    const gap = onboardingGapOf(clientId);
+    throw new CanvaFlowError(422, 'CLIENT_REFERENCE_REQUIRED',
+      `${gap ? `${gap} ` : ''}This client needs an active versioned design reference before planning.`);
+  }
   const dna = typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna;
   if (!dna || typeof dna !== 'object') throw new CanvaFlowError(422, 'CLIENT_REFERENCE_INVALID', 'The client reference is not a structured record.');
   const d = dna as Record<string, any>;

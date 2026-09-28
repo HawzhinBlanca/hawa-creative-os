@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "c1000000-0000-4000-8000-000000000014",
+  "code": "erbil-edition",
+  "status": "onboarding",
+  "kind": "news",
+  "displayName": "Erbil Edition",
+  "names": {
+    "en": "Erbil Edition"
+  },
+  "languages": [],
+  "routing": {
+    "telegramChatIds": [],
+    "latinAliases": [
+      "erbil edition"
+    ],
+    "scriptAliases": [],
+    "phrases": []
+  },
+  "formats": [
+    "youtube-thumbnail",
+    "story-reel"
+  ],
+  "defaultFormat": "youtube-thumbnail",
+  "playbook": "video-thumbnail",
+  "onboarding": {
+    "missing": [
+      "logo",
+      "palette",
+      "fonts",
+      "client-dna",
+      "telegram-chats",
+      "language",
+      "kurdish-aliases",
+      "proof-set"
+    ]
+  }
+}
