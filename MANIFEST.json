@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-27T21:42:42Z",
+  "generatedAt": "2026-09-28T10:54:40Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -699,8 +699,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "3c2cf44f5fc322fbea6e6110f057d2e3bc2f70c6db4551aec6621760de133714",
-      "bytes": 78223
+      "sha256": "f7af9c6812bb620bffba7258f654d44672b7addb671907dd5f2da1e10a5aedc6",
+      "bytes": 78668
     },
     {
       "path": "plans/user-stories.csv",
@@ -794,8 +794,8 @@
     },
     {
       "path": "runbooks/20_architecture_operations.md",
-      "sha256": "3345665f8bd5e526ec39c78dfe8bbde1199e727bd0dc43d5e3903fc9642ed086",
-      "bytes": 31127
+      "sha256": "da12619d017e7b4ddf2112619f950822181f9fc3e00c23a5f9c0a991a6a2310a",
+      "bytes": 31849
     },
     {
       "path": "schemas/ApprovalDecision.schema.json",
@@ -1214,8 +1214,8 @@
     },
     {
       "path": "scripts/request_logs.ts",
-      "sha256": "8d4d0c436d626919f628567e4b579b2e59c5ae36aec3f94b635c3e90520b261c",
-      "bytes": 7773
+      "sha256": "767a6f1d83f608eee26b8e8c8aaccd589a7cc63ebbf25eff50b351b31182c2b3",
+      "bytes": 9620
     },
     {
       "path": "scripts/rerender_font_pinning.mjs",
