@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T08:41:52Z",
+  "generatedAt": "2026-09-28T08:35:46Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 479,
+  "fileCount": 478,
   "files": [
     {
       "path": ".dockerignore",
@@ -678,9 +678,9 @@
       "bytes": 3559
     },
     {
-      "path": "adrs/124_brief_bound_judge_challenger.md",
-      "sha256": "686bb296808db6986f72671e1d66154bab2dec60222fd6ef932ff859cee288c5",
-      "bytes": 6494
+      "path": "adrs/125_executable_brief_contract.md",
+      "sha256": "1884c15232359f525e9074b47dda8f3837d3744e3207c4d307f5b6d4d2852d7b",
+      "bytes": 11247
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -934,8 +934,8 @@
     },
     {
       "path": "docs/07_MODEL_REGISTRY_AND_EVALUATION.md",
-      "sha256": "5f49f2f14f4fffe6f9c84d176993ec5ab856f042c9f475b3b0317cf5e3d666a0",
-      "bytes": 19742
+      "sha256": "9d11f4aca5ee29782ed03fe0963d2d31037af86fe84d5be05dfffe5bd86ecfe1",
+      "bytes": 17994
     },
     {
       "path": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
@@ -1049,8 +1049,8 @@
     },
     {
       "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
-      "sha256": "1ca5a9c43082011740ffb07c549d784b9b38e8b448a8a503386a597e951661a4",
-      "bytes": 11220
+      "sha256": "4ac4d23d4ce75246c3d804e02ac2eb4259173a425fed995380d7f3140720c9fd",
+      "bytes": 10853
     },
     {
       "path": "docs/30_FUTURE_EVOLUTION.md",
@@ -1118,6 +1118,11 @@
       "bytes": 26365
     },
     {
+      "path": "plans/lean-design-implementation-2026-09-28/BRIEF_CONTRACT_PROOF.json",
+      "sha256": "a7b9e30f5372effbe627fed27f07f80d1d9b6daee2a4c84b3c5bf869f62e36dc",
+      "bytes": 22343
+    },
+    {
       "path": "plans/lean-design-implementation-2026-09-28/CANVA_UNCERTAINTY_PROOF.json",
       "sha256": "2383a49ea693396c534b42993728348e4c56b70ce105175820cca0d7624749e9",
       "bytes": 5034
@@ -1146,11 +1151,6 @@
       "path": "plans/lean-design-implementation-2026-09-28/FONT_BASIS_PROOF.json",
       "sha256": "51c34f0b54a5d47bad869145191a58a374539c090196e80c5520479e490c02ff",
       "bytes": 6235
-    },
-    {
-      "path": "plans/lean-design-implementation-2026-09-28/JUDGE_CHALLENGER_PROOF.json",
-      "sha256": "69660d1e1579c3082a1f187908bddd406661c54a6f3e38e2ff84d10aa1f89700",
-      "bytes": 21912
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LIFECYCLE_NATIVE_RECOVERY_PROOF.json",
@@ -1629,8 +1629,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "c25679bf51db4806df8f567cbf0f5b9e47b0dc4d4440c919e8e612fa7bfb6e22",
-      "bytes": 431894
+      "sha256": "883164b8b37b61f9bf86181bebd8a587702dba7b4b395a3463c64d6d32136506",
+      "bytes": 427051
     },
     {
       "path": "plans/user-stories.csv",
@@ -2241,11 +2241,6 @@
       "path": "scripts/run_independent_completion_audit.ts",
       "sha256": "633110bedd284ce4fa4c1f70ec06808b7b510afec2d88f4ea4db2cd42b4e1752",
       "bytes": 75127
-    },
-    {
-      "path": "scripts/run_judge_experiment.ts",
-      "sha256": "27a1949d7a78af191668b3b52b6da821c0984921974d5f2634c61fd50d2ec0e0",
-      "bytes": 5662
     },
     {
       "path": "scripts/run_model_tournament.ts",

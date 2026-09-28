@@ -5,7 +5,7 @@ import { PNG } from 'pngjs';
 import type { StudioLayoutV2, Box, Hex } from './layout-v2.js';
 import { evaluateDesignMetrics, computeOcclusion } from './design-metrics.js';
 import { rgbToLuminance, evaluateCompositeContrast, type CompositeContrastResult } from './composite-contrast.js';
-import { assertClientLogoForLayout, renderLayoutV2, type RenderLayoutOptions, type RenderLayoutV2Result } from './render-layout-v2.js';
+import { assertClientLogoForLayout, measureWrappedLines, renderLayoutV2, type RenderLayoutOptions, type RenderLayoutV2Result } from './render-layout-v2.js';
 import { renderMotifPng, type ProceduralMotifType } from './motifs.js';
 import { assertModelAllowed } from '@hawa/domain';
 
@@ -216,6 +216,15 @@ export function deriveConditionedArtPrompt(layout: StudioLayoutV2): string {
 }
 
 /**
+ * The P01 report that gates art. With the copy it scores the lines the copy sets, the measure the
+ * layout generator is told (ADR-125); without copy only the declared-box fallback band applies.
+ */
+export function artGateMetricsV3(layout: StudioLayoutV2, renderOptions?: RenderLayoutOptions) {
+  const copyText = renderOptions?.copyText;
+  return evaluateDesignMetrics(layout, copyText ? { wrappedLines: measureWrappedLines(layout, copyText, renderOptions) } : {});
+}
+
+/**
  * Generates an art layer conditioned on the layout architecture with gpt-image-2.5-sunburst.
  */
 export async function generateConditionedArtLayer(
@@ -227,7 +236,7 @@ export async function generateConditionedArtLayer(
   }
 
   // 1. Hard Gate: Only generate art after P01 passes
-  const p01Report = evaluateDesignMetrics(layout);
+  const p01Report = artGateMetricsV3(layout, options.renderOptions);
   if (!p01Report.passed) {
     throw new Error(
       `P01 deterministic design metrics failed on layout. Gated from calling image model. Failing metrics: ${p01Report.failingMetrics.join(', ')}`

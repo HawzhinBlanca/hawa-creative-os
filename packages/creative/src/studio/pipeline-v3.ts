@@ -102,6 +102,9 @@ function scriptOf(copy: PipelineV3Copy, copyIndex: number): CopyScriptV3 {
   return copy.scripts?.[copyIndex] ?? (ARABIC_SCRIPT.test(copy.text[copyIndex] ?? '') ? 'arabic' : 'latin');
 }
 
+/** The script the pipeline measures a block in: the declared one, else detected from its text. */
+export const copyScriptV3 = scriptOf;
+
 /**
  * Maps a family the model chose onto the admitted set, by the role, script and weight of its block.
  * Body and footer copy use the formal body faces; display copy keeps an admitted display face.

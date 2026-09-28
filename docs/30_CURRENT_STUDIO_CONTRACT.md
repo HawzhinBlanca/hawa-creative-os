@@ -149,3 +149,21 @@ challenger accepts up to 24,000 characters of request instructions within a
 packet and image hashes, the validated verdict, the decision and the receipt.
 The flag is not admitted for production until the ADR-124 experiment, human
 labels and a shadow run say so. See [ADR-124](../adrs/124_brief_bound_judge_challenger.md).
+
+## Executable brief contract and negative-space policy (ADR-125)
+
+The v3 layout prompt states the negative-space definition the checker scores, rendered from one
+versioned policy (`studio.negative-space` `2026-09-28.2`); every score records that version, and
+every run that reaches laying out records it in `stages.policies`.
+
+Before the first layout call a new or afresh-designed run records one executable brief contract
+on its stages: exact copy and client assets by hash, source-copy order and checked relations as
+protected, composition freedoms as permitted, and every model brief field as a proposal or an
+unknown. The model's readingOrder remains a proposal. A recorded contract whose authorities
+changed holds the run; one whose only change is policy or measurement evidence is re-admitted and
+the re-admission recorded. An afresh-designed revision records the copy it lays out as its own, and
+its resume replays the failed edit's retained calls.
+Copy with a run no admitted face can set inside the safe width at the minimum size stops the run
+before layout with an explanation and only the authorized choices (revised approved copy, or a
+wider approved format); nothing is shrunk, omitted, split or reworded. Directed edits do not yet
+carry an edit contract. See [ADR-125](../adrs/125_executable_brief_contract.md).

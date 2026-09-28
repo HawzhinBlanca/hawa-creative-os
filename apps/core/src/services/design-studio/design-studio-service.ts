@@ -40,8 +40,10 @@ import {
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError } from '@hawa/domain';
-import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, type OrnamentSettings } from '@hawa/creative';
+import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, negativeSpacePolicyIdentity, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
+import { buildRunBriefContract, StudioBriefContractError, StudioRunStatusChangedError } from './brief-contract.js';
+import { blockingBriefConflicts, briefContractIdentitySha256, verifyBriefContractIntegrity, type BriefProposalInput, type ExecutableBriefContract } from '@hawa/domain';
 import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
 import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type PhotoFaces } from './photo-cutouts.js';
 import { log } from '../../logging.js';
@@ -1520,6 +1522,10 @@ export class DesignStudioService {
         case 'laying_out': {
           const brief: CreativeBrief = stages.brief;
           const concepts: Concept[] = stages.concepts;
+          // Every run records the negative-space policy its layouts are asked for and scored by, a
+          // directed revision included (ADR-125); an afresh run's contract carries it as well.
+          stages.policies = [negativeSpacePolicyIdentity()];
+          let inherited: CopyBlock[] | undefined;
           if (stages.directed && !stages.directedFailed) {
             const parent = await this.parentWinner(s, undefined, stages.directed.parentCandidateId);
             try {
@@ -1530,7 +1536,7 @@ export class DesignStudioService {
               // revision's task carries the first request's copy, and would put the old words back.
               const parentRun = await this.repo.getRunById(parent.runId, s.tenantId).catch(() => undefined);
               const parentStages = parentRun ? (typeof parentRun.stages === 'string' ? JSON.parse(parentRun.stages) : parentRun.stages) : undefined;
-              const inherited = Array.isArray(parentStages?.effectiveCopy) && parentStages.effectiveCopy.length === ctx.copyBlocks.length ? parentStages.effectiveCopy : undefined;
+              inherited = Array.isArray(parentStages?.effectiveCopy) && parentStages.effectiveCopy.length === ctx.copyBlocks.length ? parentStages.effectiveCopy : undefined;
               if (inherited) ctx.copyBlocks = inherited;
               const edited = await runDirectedEditStage(ctx, parent, stages.directed.directive, earlier, {
                 mayAsk: directedRequest?.clarified !== true,
@@ -1601,11 +1607,23 @@ export class DesignStudioService {
               // afresh with the change in its instructions, which is how every revision used to run.
               log.warn(`[studio] run ${run.id}: directed edit failed (${err?.message || err}); designing the revision afresh.`);
               stages.directedFailed = err?.message || String(err);
+              // The afresh design lays out the copy the client received, so every later stage (and
+              // the brief contract) must read that copy as this run's, not the request's.
+              if (inherited) stages.effectiveCopy = inherited;
+              // A resumed stage replays the failed edit and reaches here again: the slots are
+              // reserved once (run_id, ordinal is unique).
+              const reserved = new Set((await this.repo.getCandidatesForRun(run.id, s.tenantId)).map((r) => r.ordinal));
               for (let i = 1; i < V3_CANDIDATE_SLOTS; i++) {
+                if (reserved.has(i)) continue;
                 await this.repo.insertCandidate({ id: randomUUID(), runId: run.id, tenantId: s.tenantId, ordinal: i, concept: pendingV3Concept(i) as unknown as Record<string, unknown>, status: 'draft' });
               }
             }
           }
+          // The executable brief contract is recorded before the paid layout call; a conflict no
+          // layout can satisfy stops the run here with its explanation (ADR-125).
+          const requestCopy = ((typeof run.request === 'string' ? JSON.parse(run.request) : run.request)?.copyBlocks ?? []) as CopyBlock[];
+          const contractStop = await this.admitBriefContract(s, runId, ctx, brief, stages, budget, requestCopy);
+          if (contractStop) return contractStop;
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
 
           const candidateStates = await runLayoutsStage(
@@ -2236,7 +2254,7 @@ export class DesignStudioService {
         throw new CanvaFlowError(409, err.code, err.message);
       }
       if (isModelCallHoldError(err)) {
-        if (err.code === 'STUDIO_VISUAL_INPUTS_UNSAFE') throw new CanvaFlowError(409, err.code, err.message);
+        if (['STUDIO_VISUAL_INPUTS_UNSAFE', 'BRIEF_CONTRACT_CHANGED', 'STUDIO_RUN_STATUS_CHANGED'].includes(err.code)) throw new CanvaFlowError(409, err.code, err.message);
         if (err instanceof CanvaFlowError && err.code === 'MODEL_STAGE_REPLAY_UNSAFE') throw err;
         const code = ['MODEL_CALL_ADMISSION_CONFLICT', 'MODEL_CALL_FINALIZATION_CONFLICT', 'MODEL_CALL_ACCOUNTING_FAILED'].includes(err?.code)
           ? err.code : 'MODEL_CALL_UNCERTAIN';
@@ -2437,6 +2455,63 @@ export class DesignStudioService {
     }
     await this.repo.updateRunStatus(runId, s.tenantId, 'rendering', { stages, budget });
     return { runId, status: 'rendering', stage: 'layouts', spentUsd: budget.spentUsd };
+  }
+
+  /**
+   * Records the run's executable brief contract once, before the first layout call, and reuses
+   * that record on resume. A blocking conflict stops the run with the contract's explanation and
+   * authorized choices, before any provider call and without shrinking, omitting or rewording the
+   * copy (ADR-125).
+   *
+   * On resume the recorded contract must be intact. If its authorities (identity digest) differ
+   * from the run's, the run holds (BRIEF_CONTRACT_CHANGED). If only environment evidence changed
+   * (policy versions, font measurement), the contract is re-admitted under the current environment
+   * and the change is recorded, so a deploy does not hold every in-flight run for good.
+   *
+   * The write is the stage's only mid-stage snapshot. It leaves out directedFailed: a resumed stage
+   * must replay the failed directed edit its retained calls begin with, lay out the same copy and
+   * rebuild the same contract. It is conditional on the run still laying out.
+   */
+  private async admitBriefContract(
+    s: Scope, runId: string, ctx: StageContext, brief: CreativeBrief, stages: Record<string, any>,
+    budget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number }, requestCopy: CopyBlock[],
+  ): Promise<StudioResumeResult | undefined> {
+    // The authority is what the run lays out: the copy this run recorded as its own, else the request's.
+    const sameCopy = (a: unknown, b: CopyBlock[]) => Array.isArray(a) && a.length === b.length &&
+      a.every((x: CopyBlock, i) => x?.text === b[i].text && x?.script === b[i].script);
+    const authority = sameCopy(stages.effectiveCopy, ctx.copyBlocks) ? 'run_effective_copy'
+      : sameCopy(requestCopy, ctx.copyBlocks) ? 'source_copy' : undefined;
+    if (!authority) {
+      throw new StudioBriefContractError('The copy this run would lay out is neither the request copy nor copy the run recorded as its own. Review the run before any layout call.');
+    }
+    const built = buildRunBriefContract(ctx, (brief ?? {}) as unknown as BriefProposalInput, authority);
+    const recorded = stages.briefContract as ExecutableBriefContract | undefined;
+    if (recorded !== undefined && (!verifyBriefContractIntegrity(recorded) || briefContractIdentitySha256(recorded) !== briefContractIdentitySha256(built))) {
+      throw new StudioBriefContractError('The recorded brief contract does not match this run: its copy, assets, brief or relations changed. Review the run before any layout call.');
+    }
+    if (recorded?.sha256 === built.sha256) {
+      ctx.briefContract = recorded;
+    } else {
+      if (recorded) {
+        log.warn(`[studio] run ${runId}: brief contract re-admitted; policy or measurement evidence changed (${recorded.sha256.slice(0, 12)} -> ${built.sha256.slice(0, 12)}).`);
+        stages.briefContractReadmissions = [...(Array.isArray(stages.briefContractReadmissions) ? stages.briefContractReadmissions : []), {
+          previousSha256: recorded.sha256, sha256: built.sha256, identitySha256: briefContractIdentitySha256(built),
+          previousPolicies: recorded.policies, policies: built.policies, reason: 'environment_evidence_changed' }];
+      }
+      stages.briefContract = built;
+      ctx.briefContract = built;
+      const { directedFailed: _inMemoryUntilStageSnapshot, ...snapshot } = stages;
+      const written = await this.repo.updateRunStatus(runId, s.tenantId, 'laying_out', { stages: snapshot, expectedStatus: 'laying_out' });
+      if (!written) {
+        throw new StudioRunStatusChangedError('The run left laying_out while its brief contract was being recorded. Nothing was written and no layout call was made.');
+      }
+    }
+    const blocking = blockingBriefConflicts(ctx.briefContract);
+    if (!blocking.length) return undefined;
+    const diagnostic = `BRIEF_CONTRACT_CONFLICT: ${blocking
+      .map((c) => `${c.explanation} Authorized choices: ${c.authorizedChoices.join(' or ')}.`).join(' ')}`;
+    await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
+    return { runId, status: 'failed', stage: 'brief_contract', diagnostic, message: diagnostic, code: 'BRIEF_CONTRACT_CONFLICT', spentUsd: budget.spentUsd };
   }
 
   /**

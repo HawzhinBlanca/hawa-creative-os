@@ -4,7 +4,7 @@ import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './la
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
 import { declaredBackgroundColour, declaredTextContrast } from './composite-contrast.js';
 import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions } from './render-layout-v2.js';
-import { requiredContrast } from './house-rules.js';
+import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
 
 /**
@@ -202,7 +202,7 @@ export function evaluateHardQa(
       );
     }
     const actualWidth = measurement.maxLineWidthPx;
-    if (actualWidth > t.width + 4) {
+    if (actualWidth > t.width + COPY_WIDTH_TOLERANCE_PX) {
       if (!defectCodes.includes('COPY_OVERFLOW')) defectCodes.push('COPY_OVERFLOW');
       messages.push(
         `COPY_OVERFLOW: block ${t.copyIndex} (${t.role}) text exceeds box width (${actualWidth}px > ${t.width}px); word or line runs past box boundary`

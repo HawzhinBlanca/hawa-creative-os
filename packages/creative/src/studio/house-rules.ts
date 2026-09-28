@@ -46,6 +46,9 @@ export const HOUSE_RULES = {
   },
 } as const;
 
+/** Pixels a measured line may exceed its box before hard QA reports COPY_OVERFLOW for width. */
+export const COPY_WIDTH_TOLERANCE_PX = 4;
+
 export function isStoryFormat(width: number, height: number): boolean {
   return height / width >= 1.7;
 }
