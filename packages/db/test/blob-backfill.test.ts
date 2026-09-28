@@ -322,7 +322,7 @@ describe.skipIf(!ownerUrl)('scripts/blob_backfill.ts', () => {
     await sql`DELETE FROM hawa.design_studio_candidates WHERE id = ${dangling}::uuid`.execute(db);
   });
 
-  it('a run stopped by a signal finishes the batch in hand, says so, and the next run copies the rest', async () => {
+  it('a run stopped by a signal finishes the row in hand, says so, and the next run copies the rest', async () => {
     const run = (await row(sql`SELECT run_id::text AS id FROM hawa.design_studio_candidates WHERE id = ${seeded.ids.candidate}::uuid`)).id;
     for (const ordinal of [5, 6, 7]) {
       await sql`INSERT INTO hawa.design_studio_candidates(id, run_id, tenant_id, ordinal, concept, status, composite_png)
