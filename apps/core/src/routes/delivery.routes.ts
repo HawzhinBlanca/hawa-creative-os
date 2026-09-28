@@ -13,7 +13,6 @@ import { acknowledgeLateChange, acknowledgedLateChanges, pendingLateChanges } fr
 import { readRequesterSendEvidence } from '../services/requester-send-evidence.js';
 import { confirmRequesterSendVisible } from '../services/requester-send-resolution.js';
 import { LifecycleProjectionConflict } from '../services/lifecycle-projection.js';
-import { DELIVERY_OWNED_BY_CORE } from '../services/omnichannel-delivery.js';
 import { workerSigningSecretOf } from '../services/worker-credential.js';
 
 /**
@@ -44,7 +43,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
   const verifyRequestAuth = ctx.verifyRequestAuth as (c: Context) => Required<AuthContext> & { displayName?: string };
   const {
     executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery,
-    requesterChatOf, deliveryExecutorOfTask, startWorkflowDelivery,
+    requesterChatOf, deliveryExecutorOfTask,
   } = ctx.delivery;
   const defaultClientId = DEFAULT_CLIENT_ID;
 
@@ -213,58 +212,21 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       return problem(c, 409, 'Conflict', `Approval ID mismatch: requested approval '${requestedApprovalId}' does not match active approval.`);
     }
 
-    // ADR-052: the executor was pinned at task creation. A later chat-flag change cannot switch an
-    // approved legacy task. A delivery already started keeps its recorded publication/effect owner.
+    // ADR-052 pinned the executor at task creation. Stage 2 of ADR-135 removed the Delivery workflow
+    // for tasks RequestLifecycle does not own (none was open when it merged: GET
+    // /v1/operations/legacy-path, stage2Ready). A task pinned to it, or whose publication it started,
+    // is refused here rather than handed to Core's own delivery, which would send its files again.
     const executor = await deliveryExecutorOfTask(task, taskId).catch((err: unknown) => {
       log.warn('[core:publish] Could not read who delivers this task; Core\'s own delivery checks again under its lock:', err);
       return undefined;
     });
-    const requesterChat = executor === 'restate' ? await requesterChatOf(task, taskId) : null;
-    const byWorkflow = executor === 'restate';
-    let started: Awaited<ReturnType<typeof startWorkflowDelivery>> | null = null;
-    if (byWorkflow) {
-      const change = await changeBlockingDelivery(task, taskId);
-      if (change === null) return problem(c, 503, 'Database Unavailable', 'Whether the client asked for a change could not be checked; try again');
-      if (change) return problem(c, 409, 'Changed At The Client\'s Request', `${pendingChangeWords(change)} The approved version was not delivered.`);
-      const status = (task?.status || '').toLowerCase();
-      if (status === 'requester_send_reconciliation') {
-        return problem(c, 409, 'Requester Delivery Needs Review',
-          'A previous Telegram send may have reached the requester. An operator must inspect the send evidence before any new delivery action');
-      }
-      if (status === 'complete') {
+    if (executor === 'restate') {
+      if ((task?.status || '').toLowerCase() === 'complete') {
         const stored = await storedCompletePublication(task, taskId);
         if (stored) return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: stored.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
       }
-      if (policy !== 'deliver_approved_stored' && !['approved', 'publishing', 'archive_reconciliation', 'publish_reconciliation'].includes(status)) {
-        return problem(c, status === 'awaiting_approval' ? 409 : 422, 'Cannot Publish Unapproved Task', `Task ${taskId} is in status '${status}', not 'approved'`);
-      }
-      started = await startWorkflowDelivery(taskId, {
-        actorId: auth.userId, chatId: requesterChat, policy, designRevisionId: targetRevisionId, approvalId: requestedApprovalId,
-      });
-    }
-    // Core's own delivery had started this publication after all (read under the lock): it finishes it.
-    if (started && !started.ok && started.code === DELIVERY_OWNED_BY_CORE) started = null;
-    if (started) {
-      if (!started.ok) {
-        const titles: Record<number, string> = { 404: 'Task Not Found', 409: 'Conflict', 422: 'Nothing Approved To Deliver', 503: 'Delivery Not Started' };
-        return problem(c, started.status, titles[started.status] || 'Publication Failed', started.message);
-      }
-      if ('complete' in started) {
-        const stored = await storedCompletePublication(task, taskId);
-        return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: started.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
-      }
-      // Accepted, not done: the workflow sends the files and reports back, and the task moves then.
-      return c.json({
-        commandId: crypto.randomUUID(),
-        taskId,
-        workflowId: started.deliveryId,
-        deliveryId: started.deliveryId,
-        executor: 'restate',
-        status: started.recorded ? 'DELIVERY_RECORDED' : 'PUBLISHING',
-        alreadyDelivering: started.alreadyRunning,
-        ...(started.recorded ? { recordedOutcome: started.recorded } : {}),
-        acceptedAt: new Date().toISOString(),
-      }, 202);
+      return problem(c, 409, 'Delivery Workflow Retired',
+        `Task ${taskId} belongs to the legacy Delivery workflow, which ADR-135 removed; an operator must deliver it by hand`);
     }
 
     let currentStatus = (task?.status || '').toLowerCase();

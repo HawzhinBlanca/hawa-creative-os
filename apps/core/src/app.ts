@@ -810,7 +810,7 @@ export function createApp(options?: CreateAppOptions) {
   // Delivery of an approved design to Drive, Sheets and the requester (services/omnichannel-delivery.ts).
   const {
     executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery,
-    requesterChatOf, deliveryExecutorOfTask, startWorkflowDelivery, prepareWorkflowDelivery, finishWorkflowDelivery,
+    requesterChatOf, deliveryExecutorOfTask, prepareWorkflowDelivery,
   } = createOmnichannelDelivery({
     db, taskRepo, outboxRepo, publicationRepo, publisher, deliverableStore, events,
     isProduction, readCurrentTask, resolveClientDna, broadcastEvent: broadcast,
@@ -939,7 +939,7 @@ export function createApp(options?: CreateAppOptions) {
     resolveClientDna,
     delivery: {
       executeOmnichannelPublish, storedCompletePublication, reopenInterruptedDelivery, changeBlockingDelivery,
-      requesterChatOf, deliveryExecutorOfTask, startWorkflowDelivery, prepareWorkflowDelivery, finishWorkflowDelivery,
+      requesterChatOf, deliveryExecutorOfTask, prepareWorkflowDelivery,
     },
     probeModelProvider,
     paidModelHealth,

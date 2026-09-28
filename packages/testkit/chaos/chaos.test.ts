@@ -935,7 +935,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   // is opened that way.
   scenario('L2.0', 'the Delivery workflow sends both approved files and the notice once, no faults', async (chat, events) => {
     const { deliveryId } = await workflowRequest(chat, 'L2.0', events);
-    // Core reads a finished run's outcome here when its report never arrived (startWorkflowDelivery).
+    // Restate keeps a finished run's outcome (Core's legacy startWorkflowDelivery read it here until
+    // stage 2 of ADR-135 removed that path).
     const output = await fetch(`http://127.0.0.1:${PORTS.restateIngress}/restate/workflow/Delivery/${encodeURIComponent(deliveryId)}/output`);
     const outcome = output.ok ? await output.json() as { outcome?: string } : null;
     events.push(`workflow output: HTTP ${output.status} ${JSON.stringify(outcome)}`);

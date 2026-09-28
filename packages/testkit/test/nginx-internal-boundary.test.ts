@@ -152,7 +152,7 @@ http { server { listen 80; location / { default_type text/plain; return 200 "des
   }
 
   it('does not proxy the worker-only address from outside, under any prefix or spelling nginx normalises', async () => {
-    for (const p of ['/v1/internal/telegram/intake', '/v1/internal/tasks/x/delivery-finished', '/api/v1/internal/telegram/intake',
+    for (const p of ['/v1/internal/telegram/intake', '/v1/internal/lifecycle/x/delivery-finished', '/api/v1/internal/telegram/intake',
       '/api/internal/telegram/intake', '/v1/internal', '/v1//internal/telegram/intake', '/v1/%69nternal/telegram/intake',
       '/v1/./internal/telegram/intake', '/v1/x/../internal/telegram/intake']) {
       for (const method of ['GET', 'POST']) {

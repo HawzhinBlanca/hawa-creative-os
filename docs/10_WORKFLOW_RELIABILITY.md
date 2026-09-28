@@ -269,6 +269,8 @@ Every Telegram chat is owned by RequestLifecycle; `HAWA_LIFECYCLE_CHATS` no long
 
 2026-09-29 (ADR-139): an English-and-Kurdish brief of the shape legacy intake split (English copy under a "text to add on each of the … graphics:" line, Kurdish copy below the divider) opens one lifecycle request per language, each with its own task, draft, review, approval and delivery. Both are recorded in the update's one new-brief decision and opened by ChatInbox under their own keys; Core splits only for a worker that says it opens every request of the answer, and never replays a two-language decision to one that does not.
 
+Stage 2b (merged only on `stage2Ready`): the Delivery workflow delivers only requests RequestLifecycle owns. A task it does not own is delivered by Core; one still pinned `restate` is refused (`409`) rather than delivered twice, and the prepare route answers `409 LEGACY_WORKFLOW_DELIVERY_RETIRED` for it.
+
 ## 11. Availability design
 
 The first office deployment can use one core server, but it must include:
