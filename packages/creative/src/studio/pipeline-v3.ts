@@ -83,6 +83,8 @@ export interface PipelineV3CallOptions {
   renderOptions?: RenderLayoutOptions;
   /** Candidate-specific assets, also used for its degraded canary. */
   renderOptionsForCandidate?: (candidate: RankedCandidateV3) => RenderLayoutOptions;
+  /** Who the client is (its client pack's profile, ADR-127): the judge scores brand fit against it. */
+  clientProfile?: string;
 }
 
 const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
@@ -1201,7 +1203,8 @@ export function addBrandOrnament(
       t.height = wanted;
     }
   }
-  const gold = palette.length ? nearestPaletteColour('#F7B500', palette) : '#F7B500';
+  // The palette's warm accent; a neutral grey with no palette, never KAAE's gold (ADR-127).
+  const gold = palette.length ? nearestPaletteColour('#F7B500', palette) : '#D9D9D9';
   const sameColumn = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x;
   const below = (b: Rect) =>
     layout.text.filter((t) => t !== b && t.y >= b.y + b.height - 1 && sameColumn(t, b)).sort((p, q) => p.y - q.y)[0];
@@ -1440,6 +1443,7 @@ export async function selectWinnerV3(
 
   const judgeOptions = {
     reference: options.reference,
+    clientProfile: options.clientProfile,
     client: options.client,
     model: options.model || resolveModel('judge'),
     renderOptions: { ...options.renderOptions, copyText: copy.text },

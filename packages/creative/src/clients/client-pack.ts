@@ -32,6 +32,7 @@ const onboardingItem = z.enum([
   'palette',
   'fonts',
   'client-dna',
+  'exemplars',
   'telegram-chats',
   'language',
   'kurdish-aliases',
@@ -53,6 +54,12 @@ export const clientPackSchema = z
     kind: z.enum(['institution', 'podcast', 'news', 'brand']),
     /** What the requester is shown, and the row's name. */
     displayName: z.string().min(2),
+    /**
+     * Who the client is, as the v3 layout generator and the judge are told it: what it is, what it orders, its voice.
+     * Shared prompts name no client (ADR-127); this is the only place a client's identity lives.
+     * Only what the office has said: a client being set up says its tone is not set yet.
+     */
+    profile: z.string().min(40),
     names: z.object({ en: z.string().min(2), ckb: z.string().min(1).optional(), ar: z.string().min(1).optional() }),
     /** Languages the client's copy is written in, main one first. Empty until the office says. */
     languages: z.array(z.enum(['ckb', 'ar', 'en'])),
@@ -69,6 +76,12 @@ export const clientPackSchema = z
     formats: z.array(formatPresetName).min(1),
     defaultFormat: formatPresetName,
     playbook: z.enum(['institutional-announcement', 'video-thumbnail']),
+    /**
+     * The client's own confirmed exemplar manifest, an asset path, or null until the office has
+     * confirmed some. Core reads it only where the client's references are admitted for exemplar
+     * conditioning (today KAAE's packaged reference, ADR-115); another client never reads it.
+     */
+    exemplars: z.string().regex(/^[a-z0-9][a-z0-9/._-]*\.json$/).nullable(),
     onboarding: z.object({ missing: z.array(onboardingItem) }),
   })
   .strict()
@@ -81,6 +94,9 @@ export const clientPackSchema = z
     }
     if (pack.status === 'onboarding' && pack.onboarding.missing.length === 0) {
       ctx.addIssue({ code: 'custom', path: ['onboarding'], message: 'an onboarding client lists what it still needs' });
+    }
+    if (pack.exemplars && pack.status !== 'live') {
+      ctx.addIssue({ code: 'custom', path: ['exemplars'], message: 'only a live client has confirmed exemplars' });
     }
   });
 
@@ -100,6 +116,7 @@ export function assertPacksConsistent(packs: ClientPack[]): void {
   for (const pack of packs) {
     claim('id', pack.id, pack.code);
     claim('code', pack.code, pack.code);
+    if (pack.exemplars) claim('exemplar manifest', pack.exemplars, pack.code);
     for (const chat of pack.routing.telegramChatIds) claim('telegram chat', chat, pack.code);
     for (const alias of [...pack.routing.latinAliases, ...pack.routing.scriptAliases, ...pack.routing.phrases]) {
       claim('alias', alias.toLowerCase(), pack.code);
@@ -192,6 +209,14 @@ export function matchClientPack(
   if (named.length === 1) return { kind: 'named', pack: named[0] };
   if (named.length > 1) return { kind: 'ambiguous', packs: named };
   return { kind: 'none' };
+}
+
+/**
+ * The absolute path of a pack's confirmed exemplar manifest, or undefined when it names none. Throws
+ * when the named file is not in the package: a design is never conditioned on a guessed set.
+ */
+export function clientExemplarManifestPath(pack: ClientPack): string | undefined {
+  return pack.exemplars ? creativeAssetPath(pack.exemplars) : undefined;
 }
 
 /** The canvas a client's request gets when it names no size. */

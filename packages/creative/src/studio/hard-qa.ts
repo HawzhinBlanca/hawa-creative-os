@@ -305,8 +305,13 @@ export interface StudioReferenceRules {
  * not in KAAE's, so its designs could not be checked against the palette production enforces.
  */
 export function studioReferenceFromRaw(rawRef: any): StudioReferenceRules {
+  // A reference pack names its client's palette. One that does not is refused: this used to fill in
+  // KAAE's palette, so any other client's design would have been made in KAAE's colours (ADR-127).
+  if (!Array.isArray(rawRef?.rules?.palette) || rawRef.rules.palette.length === 0) {
+    throw new Error('The client reference pack names no palette (rules.palette); a design cannot be made in borrowed colours.');
+  }
   const rules: StudioReferenceRules = {
-    palette: ['#0A1628', '#1E3A5F', '#4770A3', '#F7B500', '#FDF8F3', '#FFFFFF', '#1A1A1A'],
+    palette: rawRef.rules.palette,
     latinFont: 'Verdana',
     arabicFont: 'Noto Sans Arabic',
     promotedRules: 'Keep title clear and centered. Do not crowd logo. Preserve hierarchy.',

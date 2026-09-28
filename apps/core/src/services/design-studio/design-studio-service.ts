@@ -47,7 +47,7 @@ import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type Phot
 import { log } from '../../logging.js';
 import { blobStoreFor, putToStore, readPreferringStore } from '../blob-store-context.js';
 import { assertCurrentClientDesignReference, resolveClientDesignReference } from '../client-design-reference.js';
-import { clientPackOf } from '../client-packs.js';
+import { clientExemplarManifestOf, clientPackOf } from '../client-packs.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -1125,7 +1125,10 @@ export class DesignStudioService {
       latinFont = rules.latinFont;
       arabicFont = rules.arabicFont;
       promotedRules = rules.promotedRules;
-      exemplarManifest = JSON.parse(readFileSync(creativeAssetPath('kaae-exemplars.json'), 'utf8'));
+      // The client's own confirmed set, as its pack names it (ADR-127): the same KAAE manifest file,
+      // so its policy hash is unchanged. A pack that names none conditions on none.
+      const exemplarManifestPath = clientExemplarManifestOf(run.client_id);
+      exemplarManifest = exemplarManifestPath ? JSON.parse(readFileSync(exemplarManifestPath, 'utf8')) : { exemplars: [] };
       exemplarPolicySha256 = hash(canonicalCallJson(exemplarManifest));
     } else {
       latinFont = reference.rules.typography.formalBody.latin;
@@ -1192,7 +1195,12 @@ export class DesignStudioService {
     // The client's playbook (ADR-127). A thumbnail client's stages are all told the thumbnail rules
     // through the rules every stage reads, and its hard QA checks them. An announcement client's
     // rules, and so its pinned visual policy, are unchanged.
-    const playbook = clientPackOf(run.client_id)?.playbook;
+    // Who the client is goes to the v3 layout generator and the judge by name (its pack's profile):
+    // their shared prompts no longer name KAAE. It is not added to the rules every stage reads, so a
+    // client's pinned visual policy (ADR-112) does not change with it.
+    const pack = clientPackOf(run.client_id);
+    const playbook = pack?.playbook;
+    const clientProfile = pack?.profile;
     if (playbook === 'video-thumbnail') {
       promotedRules = `${promotedRules}\n\n${thumbnailPlaybookPrompt({ width: request.width, height: request.height })}`;
     }
@@ -1210,6 +1218,7 @@ export class DesignStudioService {
       copyBlocks: request.copyBlocks,
       referencePack,
       promotedRules,
+      ...(clientProfile ? { clientProfile } : {}),
       ...(playbook === 'video-thumbnail' ? { playbook } : {}),
       latinFont,
       arabicFont,

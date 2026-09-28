@@ -1,4 +1,4 @@
-import { findClientPack, loadClientPacks, matchClientPack, type ClientMatch, type ClientPack } from '@hawa/creative';
+import { clientExemplarManifestPath, findClientPack, loadClientPacks, matchClientPack, type ClientMatch, type ClientPack } from '@hawa/creative';
 import { log } from '../logging.js';
 
 /**
@@ -37,6 +37,16 @@ export function matchRequestClient(input: { chatId?: string | null; rawText: str
  */
 export function autoDraftAllowedFor(clientId: string | null | undefined): boolean {
   return clientPackOf(clientId)?.status !== 'onboarding';
+}
+
+/**
+ * The client's own confirmed exemplar manifest, as its pack names it, or undefined (ADR-127). Every
+ * client used to be conditioned on KAAE's; callers still read it only for a client whose references
+ * are admitted for exemplar conditioning (ADR-115: KAAE's packaged reference).
+ */
+export function clientExemplarManifestOf(clientId: string | null | undefined): string | undefined {
+  const pack = clientPackOf(clientId);
+  return pack ? clientExemplarManifestPath(pack) : undefined;
 }
 
 /** What an onboarding client still lacks, in words, for a refusal; undefined for any other client. */

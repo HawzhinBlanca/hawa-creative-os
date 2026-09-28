@@ -5,6 +5,8 @@ import {
   findClientPack,
   matchClientPack,
   defaultCanvasFor,
+  clientExemplarManifestPath,
+  creativeAssetPath,
   FORMAT_PRESETS,
   ClientPackError,
   type ClientPack,
@@ -105,6 +107,26 @@ describe('which client a request belongs to', () => {
     const bound = packs.map((p) => (p.code === 'halwest-news' ? { ...p, routing: { ...p.routing, telegramChatIds: ['-1001234567890'] } } : p));
     expect(match('Poster for KAAE conference', '-1001234567890', bound)).toBe('chat:halwest-news');
     expect(match('Poster for KAAE conference', '555', bound)).toBe('named:kaae');
+  });
+});
+
+describe("a client's own exemplars (ported from studio-v2 24a787cd)", () => {
+  it("are KAAE's manifest for KAAE, and none for a client being set up", () => {
+    expect(kaae.exemplars).toBe('kaae-exemplars.json');
+    expect(clientExemplarManifestPath(kaae)).toBe(creativeAssetPath('kaae-exemplars.json'));
+    for (const code of ['zar-podcast', 'halwest-news', 'kawa-ba-hawlery', 'erbil-edition']) {
+      const pack = findClientPack(code)!;
+      expect(pack.exemplars).toBeNull();
+      expect(clientExemplarManifestPath(pack)).toBeUndefined();
+      expect(pack.onboarding.missing).toContain('exemplars');
+    }
+  });
+
+  it('are refused for a client being set up, or when two packs claim one manifest', () => {
+    const zar = findClientPack('zar-podcast')!;
+    expect(() => parseClientPacks([doc({ ...zar, exemplars: 'zar-exemplars.json' })])).toThrow(/only a live client has confirmed exemplars/);
+    const twin = { ...kaae, id: 'c1000000-0000-4000-8000-0000000000ff', code: 'kaae-twin', routing: { ...kaae.routing, latinAliases: [], phrases: [] } };
+    expect(() => parseClientPacks([doc(kaae), doc(twin)])).toThrow(/exemplar manifest "kaae-exemplars.json" is claimed by both/);
   });
 });
 

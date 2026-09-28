@@ -15,6 +15,7 @@ export { savedDesignCopy, classifyCopyScript, unwrapCopyEnvelope, withoutEmoji }
 import { log } from '../logging.js';
 import { blobStoreFor, putToStore, readPreferringStore } from './blob-store-context.js';
 import { assertCurrentClientDesignReference, resolveClientDesignReference } from './client-design-reference.js';
+import { clientExemplarManifestOf } from './client-packs.js';
 
 const PPTX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation' as const;
 
@@ -87,12 +88,18 @@ export function assertPlannerLogoRules(
   }
 }
 
-function loadConfirmedExemplars(): Array<{ label: string; sha256?: string; base64: string }> {
+function loadConfirmedExemplars(clientId: string): Array<{ label: string; sha256?: string; base64: string }> {
   try {
-    // Resolved inside @hawa/creative, from that package's own location. Candidates built here from
-    // cwd or from this file's depth under apps/core all missed in the image, and the bare catch
-    // below turned that into an empty list with nothing in the logs.
-    const rawEx = JSON.parse(readFileSync(creativeAssetPath('kaae-exemplars.json'), 'utf8'));
+    // The client's own confirmed set, as its pack names it (ADR-127); resolved inside @hawa/creative,
+    // from that package's own location. Candidates built here from cwd or from this file's depth
+    // under apps/core all missed in the image, and the bare catch below turned that into an empty
+    // list with nothing in the logs.
+    const manifestPath = clientExemplarManifestOf(clientId);
+    if (!manifestPath) {
+      log.warn(`[canva-planner] Client ${clientId} has no confirmed exemplars; the plan is drafted without one rather than with another client's.`);
+      return [];
+    }
+    const rawEx = JSON.parse(readFileSync(manifestPath, 'utf8'));
     const list = Array.isArray(rawEx.exemplars) ? rawEx.exemplars.slice(0, 2) : [];
     const results = [];
     for (const item of list) {
@@ -334,7 +341,7 @@ export class CanvaDesignPlanner {
         : '';
 
       const exemplars = request.reference.status === 'reference_for_draft_not_release_approval'
-        ? loadConfirmedExemplars() : [];
+        ? loadConfirmedExemplars(request.clientId) : [];
       const exemplarImages = exemplars.map(e => ({
         type: 'image_url' as const,
         image_url: { url: `data:image/png;base64,${e.base64}` }

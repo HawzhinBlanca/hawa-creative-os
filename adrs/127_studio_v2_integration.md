@@ -69,6 +69,46 @@ guidance: the copy is exact. An announcement client's rules, and therefore its
 pinned visual policy (ADR-112), are unchanged. studio-v2's "no brand ornament for a
 thumbnail" is already true here: only KAAE's packaged reference gets an ornament.
 
+## Decision: KAAE's persona and palette leave shared design code
+
+Ported from 27e9e4f1 and f6d6ed1b. The v3 layout system prompt no longer names
+KAAE; the client comes in the request (`CLIENT:` from the pack's `profile`), and
+the pairwise judge scores brand fit against that profile instead of
+"institutional prestige, elegance, academic gravitas". The critique prompt is
+neutral. The layout normaliser repairs contrast from the client's palette;
+style and ornament fallbacks are neutral greys; a reference without a palette is
+refused rather than filled with KAAE's. KAAE hex values remain only as points in
+colour space for finding the nearest colour of a client's own palette. A guard
+test fails if KAAE's identity or colours return to the judge, critique, layout,
+art or QA code.
+
+Kept from this branch where it was already stricter: the art prompt and the
+degraded motif already use the layout's own colours, and `composeArtPrompt` and
+the motifs refuse art without a client palette (studio-v2 fell back to neutral
+tones); the Canva planner already states and corrects to the client's palette
+(`buildPlannerSystemPrompt`, `correctPlannerPalette`).
+
+The profile reaches the v3 layout generator and the judge through the stage
+context; it is not appended to the rules every stage reads (studio-v2 did), so a
+client's pinned visual policy hash (ADR-112) does not change. The v3 layout and
+judge prompts do change for KAAE: a KAAE v3 run resumed across this change finds
+its retained layout or judge call input changed and holds (ADR-111), which is the
+intended safe outcome, not a replay.
+
+## Decision: a client's exemplars are named by its pack
+
+Ported from 24a787cd, narrowed. A pack names its own confirmed exemplar manifest
+(`exemplars`) or null; only a live pack may, and no two packs may name one file.
+KAAE's pack names `kaae-exemplars.json`, the same file, so its exemplar policy
+hash is unchanged. The studio and the Canva planner read the manifest through the
+pack instead of a hard-coded KAAE path, and still only where ADR-115 admits
+exemplar conditioning (KAAE's packaged reference). studio-v2's per-client
+libraries (`add_exemplar.ts --client`, `exemplars/<code>/`, manifest vocabulary
+and retrieval hints) are not ported: ADR-115 replaced that retrieval with Unicode
+lexical ranking over a hash-verified, KAAE-only collection, and another client's
+library needs its own admission design (approval, hashes, pinning) before any
+client other than KAAE is conditioned on exemplars.
+
 ## Decision: a Restate backup killed outright is put back by the watchdog
 
 studio-v2's Restate backup was a shell script; its watchdog skipped a pass while a
