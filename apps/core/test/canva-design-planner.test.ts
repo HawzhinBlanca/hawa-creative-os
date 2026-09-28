@@ -7,12 +7,38 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { blobStoreFromEnv,createDb,sql,withRlsContext,DesignStudioRepository } from '@hawa/db';
-import { CanvaDesignPlanner,assertPlannerLogoRules,buildPlannerSystemPrompt,correctPlannerPalette,savedDesignCopy } from '../src/services/canva-design-planner.js';
+import { CanvaDesignPlanner,assertPlannerLogoRules,buildPlannerSystemPrompt,correctPlannerPalette,savedDesignCopy,planningRetryAfterMs,planningSlotsFrom,DEFAULT_PLANNING_SLOTS,STALE_PLANNING_MS } from '../src/services/canva-design-planner.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { checkCanvaPptx } from '@hawa/qa';
 import { computeDnaHash } from '../src/core-helpers.js';
 
+describe('planning slot policy (ADR-131)',()=>{
+  it('reads the slot count from HAWA_CANVA_PLANNING_SLOTS, a whole number from 1 to 16',()=>{
+    expect(DEFAULT_PLANNING_SLOTS).toBe(4);
+    expect(planningSlotsFrom({})).toBe(DEFAULT_PLANNING_SLOTS);
+    expect(planningSlotsFrom({HAWA_CANVA_PLANNING_SLOTS:'1'})).toBe(1);
+    expect(planningSlotsFrom({HAWA_CANVA_PLANNING_SLOTS:' 16 '})).toBe(16);
+    for(const bad of ['0','17','2.5','-1','many','','1e1'])expect(planningSlotsFrom({HAWA_CANVA_PLANNING_SLOTS:bad})).toBe(DEFAULT_PLANNING_SLOTS);
+  });
+  it('names the time until the oldest plan should finish, from 2 to 15 seconds',()=>{
+    expect(planningRetryAfterMs(5000,20000)).toBe(15000);
+    expect(planningRetryAfterMs(12000,20000)).toBe(8000);
+    expect(planningRetryAfterMs(19500,20000)).toBe(2000);
+    // Running longer than a plan usually takes: come back soon, not never.
+    expect(planningRetryAfterMs(60000,20000)).toBe(2000);
+  });
+  it('names the shortest wait when no finished plan tells how long one takes',()=>{
+    // A guess of 20 s held the second round of an empty office back 15 s after its slots had freed
+    // (studio-v2 chaos load test with instant plans, 2026-09-28).
+    expect(planningRetryAfterMs(0,null)).toBe(2000);
+    expect(planningRetryAfterMs(NaN,null)).toBe(2000);
+    expect(planningRetryAfterMs(NaN,20000)).toBe(2000);
+  });
+  it('treats a plan as cut off at twice the 90 s model timeout',()=>{
+    expect(STALE_PLANNING_MS).toBe(180000);
+  });
+});
 describe('exact copy selection',()=>{
   it('plans the current Desk manual request shape without changing either language or treating its title as copy',()=>{
     const copyEn='  Office trial — 123.45 USD\n27 September 2026  ';
@@ -622,4 +648,87 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     }
   },25000);
 
+  /**
+   * Planning slots are office-wide (ADR-131). A brief beyond them is refused 429 PLANNING_BUSY before
+   * any paid admission and told when a slot should free (Retry-After), so the worker comes back then
+   * instead of doubling its sleep. Other tests in this file leave plans in planning (a retained layout
+   * awaiting cost evidence, for instance), so each test sets its slots above what is already running.
+   */
+  describe('planning slots',()=>{
+    const gate=()=>{let open!:()=>void;const opened=new Promise<void>(r=>{open=r;});return {open,fetcher:vi.fn(async()=>{await opened;return response();})};};
+    const planningRows=async()=>Number((await sql<any>`SELECT count(*) AS n FROM hawa.canva_design_plans WHERE tenant_id=${scope.tenantId}::uuid AND status='planning'
+      AND created_at>now()-${STALE_PLANNING_MS}*interval '1 millisecond'`.execute(db)).rows[0].n);
+    const until=async(test:()=>boolean|Promise<boolean>)=>{for(let i=0;i<400&&!(await test());i++)await new Promise(r=>setTimeout(r,25));};
+    const withSlots=(fetcher:any,planningSlots:number)=>new CanvaDesignPlanner(db,{importEditableDesign:vi.fn().mockResolvedValue({operationId:randomUUID(),status:'submitted'})} as unknown as CanvaConnectService,{apiKey:'test-only',fetcher,planningSlots});
+
+    it('refuses a plan beyond the slots with PLANNING_BUSY, names when a slot should free, and admits nothing',async()=>{
+      const base=await planningRows(),held=gate(),planner=withSlots(held.fetcher,base+2);
+      const [a,b,c]=[await intake(),await intake(),await intake()];
+      const first=planner.generate(scope,a,'slot-key-a1',1200,1697),second=planner.generate(scope,b,'slot-key-b1',1200,1697);
+      await until(()=>held.fetcher.mock.calls.length>=2);
+      let refused:any;try{await planner.generate(scope,c,'slot-key-c1',1200,1697);}catch(e){refused=e;}
+      expect(refused).toMatchObject({status:429,code:'PLANNING_BUSY'});
+      expect(refused.retryAfterMs).toBeGreaterThanOrEqual(2000);expect(refused.retryAfterMs).toBeLessThanOrEqual(15000);
+      expect(refused.message).toContain(`All ${base+2} planning slots are taken`);
+      // The refused brief made no paid call, reserved no allowance and left no plan row: asked again
+      // with the same key once a slot frees, it plans.
+      expect(held.fetcher).toHaveBeenCalledTimes(2);
+      expect((await sql<any>`SELECT id FROM hawa.canva_design_plans WHERE task_id=${c}::uuid`.execute(db)).rows).toHaveLength(0);
+      expect((await sql<any>`SELECT id FROM hawa.canva_planner_calls WHERE task_id=${c}::uuid`.execute(db)).rows).toHaveLength(0);
+      held.open();await Promise.all([first,second]);
+      expect((await planner.generate(scope,c,'slot-key-c1',1200,1697)).status).toBe('submitted');
+      expect(held.fetcher).toHaveBeenCalledTimes(3);
+    });
+
+    it('names the shortest wait while the office\'s recent plans held their slot only briefly',async()=>{
+      // Every plan this file finished held its slot for well under the 2 s floor.
+      const base=await planningRows(),held=gate(),planner=withSlots(held.fetcher,base+1);
+      const [a,b]=[await intake(),await intake()];
+      const running=planner.generate(scope,a,'slot-key-named-a',1200,1697);
+      await until(()=>held.fetcher.mock.calls.length>=1);
+      await expect(planner.generate(scope,b,'slot-key-named-b',1200,1697)).rejects.toMatchObject({code:'PLANNING_BUSY',retryAfterMs:2000});
+      held.open();await running;
+    });
+
+    it('plans as many at once as it has slots',async()=>{
+      const base=await planningRows(),held=gate(),planner=withSlots(held.fetcher,base+3);
+      const tasks=[await intake(),await intake(),await intake()];
+      const running=tasks.map((t,i)=>planner.generate(scope,t,'slot-key-three-'+i,1200,1697));
+      await until(()=>held.fetcher.mock.calls.length>=3);
+      expect(held.fetcher).toHaveBeenCalledTimes(3);
+      expect(await planningRows()).toBe(base+3);
+      held.open();
+      expect((await Promise.all(running)).map(r=>r.status)).toEqual(['submitted','submitted','submitted']);
+    });
+
+    it('stops counting a plan left in planning past the model timeout, without deciding its uncertain charge',async()=>{
+      const base=await planningRows(),held=gate(),planner=withSlots(held.fetcher,base+1);
+      const [a,b]=[await intake(),await intake()];
+      const orphan=planner.generate(scope,a,'slot-key-orphan',1200,1697);
+      await until(()=>held.fetcher.mock.calls.length>=1);
+      // As if Core had died mid-call: the plan stays in planning and its admitted call stays started.
+      // created_at is immutable evidence (migration 056), so only this test ages it, with that guard off.
+      const aged=STALE_PLANNING_MS+60000;
+      await sql`ALTER TABLE hawa.canva_design_plans DISABLE TRIGGER immutable_canva_plan`.execute(db);
+      try{
+        await sql`UPDATE hawa.canva_design_plans SET created_at=now()-${aged}*interval '1 millisecond',updated_at=now()-${aged}*interval '1 millisecond'
+          WHERE task_id=${a}::uuid AND status='planning'`.execute(db);
+      }finally{await sql`ALTER TABLE hawa.canva_design_plans ENABLE TRIGGER immutable_canva_plan`.execute(db);}
+      const next=planner.generate(scope,b,'slot-key-after-orphan',1200,1697);
+      let nextError:unknown;next.catch(e=>{nextError=e;});
+      await until(()=>held.fetcher.mock.calls.length>=2||nextError!==undefined);
+      expect(nextError).toBeUndefined();
+      expect(held.fetcher).toHaveBeenCalledTimes(2);
+      // The cut-off plan is left exactly as it was: still planning, its paid call still unresolved,
+      // and its own task is not planned again, whatever key asks (ADR-101).
+      const orphanRows=(await sql<any>`SELECT id,status FROM hawa.canva_design_plans WHERE task_id=${a}::uuid`.execute(db)).rows;
+      expect(orphanRows).toEqual([expect.objectContaining({status:'planning'})]);
+      expect((await sql<any>`SELECT status FROM hawa.canva_planner_calls WHERE id=${orphanRows[0].id}::uuid`.execute(db)).rows[0].status).toBe('started');
+      expect(await planner.generate(scope,a,'slot-key-orphan-redrive',1200,1697)).toMatchObject({planId:orphanRows[0].id,status:'planning'});
+      expect(held.fetcher).toHaveBeenCalledTimes(2);
+      held.open();
+      expect((await next).status).toBe('submitted');
+      await orphan;
+    });
+  });
 });

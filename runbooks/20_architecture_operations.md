@@ -538,7 +538,8 @@ What the numbers say:
   reads. The panel now polls every 5 s only while Canva or the planner is working and otherwise once
   a minute, and refreshes on the task's live event (studio-v2 ecc9af71, ported to this branch); the
   new rate has not been measured with the load test.
-- **The draft tail was the planner's limit, not the poller.** Core planned at most two designs at a
+- **The draft tail was the planner's limit, not the poller** (as measured on 2026-09-24; ADR-131
+  changed both halves, see "Planning slots and plan time" below). Core planned at most two designs at a
   time for the whole office (`apps/core/src/services/canva-design-planner.ts`, `PLANNING_BUSY`, HTTP
   429); the other workflows retried after 2, 4, 8 and 16 s, so ten briefs finished in pairs at about
   5, 7, 11, 19 and 35 s. The fakes plan instantly; with real model calls each pair takes longer and

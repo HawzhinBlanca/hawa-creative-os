@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T13:28:13Z",
+  "generatedAt": "2026-09-28T13:45:02Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 502,
+  "fileCount": 503,
   "files": [
     {
       "path": ".dockerignore",
@@ -721,6 +721,11 @@
       "path": "adrs/130_refused_sends_late_requester_words.md",
       "sha256": "4d2db6e8396e4d8423f103b62d5b62b93c30fa076cef5606d7dff68ff96e4d0f",
       "bytes": 5840
+    },
+    {
+      "path": "adrs/131_planning_slots_and_named_busy_wait.md",
+      "sha256": "2f3637211cb7d9d52547b0990c636a43fb6bd554e508177fc6b11e9b68b6f3b8",
+      "bytes": 12589
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1719,8 +1724,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "baca866383856b29a1bfa6155bd0ab0f4c725b17b2ed820ec00b52e8208f0715",
-      "bytes": 467019
+      "sha256": "5bb58b78e525407475e613d91d9fd8195705db69e01c23d4acc619abf74d65f2",
+      "bytes": 469371
     },
     {
       "path": "plans/user-stories.csv",
@@ -1814,8 +1819,8 @@
     },
     {
       "path": "runbooks/20_architecture_operations.md",
-      "sha256": "d8ecefe148c5c174ae21a2176f8533f287a6efb59fd062569bd9c6a02f8b633f",
-      "bytes": 37426
+      "sha256": "d61708530501ff03716ad7c3303c3fed595f0858c545abfbf2eded967fe7a891",
+      "bytes": 37527
     },
     {
       "path": "runbooks/AVAILABILITY_MONITORING.md",
@@ -2179,8 +2184,8 @@
     },
     {
       "path": "scripts/load/run.ts",
-      "sha256": "37afeff91b915eb8d174ef6a60f075d569c009fdc453dc8d45afdce5d1eb6f8a",
-      "bytes": 22428
+      "sha256": "7a1a9872f160da3144cb05fa3a73787816cadb82afd212b4b400883b887763fa",
+      "bytes": 23524
     },
     {
       "path": "scripts/load/seed-desk-tasks.ts",
