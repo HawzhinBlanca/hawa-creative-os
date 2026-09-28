@@ -56,7 +56,7 @@ describe('one write owner for lifecycle-owned designs', () => {
     const base = `/v1/tasks/${taskId}`;
     const paths = [`${base}/canva/generate`, `${base}/canva/plans/${operationId}/resume`,
       `${base}/canva/plans/${operationId}/abandon`, `${base}/canva/imports/${operationId}/resume`,
-      `${base}/canva/design`, `${base}/canva/exports`, `${base}/canva/exports/${operationId}/resume`,
+      `${base}/canva/design`, `${base}/canva/revision-copy`, `${base}/canva/exports`, `${base}/canva/exports/${operationId}/resume`,
       `${base}/canva/studio`, `${base}/canva/studio/${operationId}/resume`,
       `${base}/canva/studio/${operationId}/select`, `${base}/canva/studio/${operationId}/abandon`,
       `${base}/canva/parity-check`, `${base}/canva/studio/${operationId}/parity`,

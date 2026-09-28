@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { sql, RevisionRepository, TaskRepository, type Kysely, type Database } from '@hawa/db';
 import { savedDesignCopy } from './saved-design-copy.js';
 import { resolveQcProfileId, type CanvaQcEvaluation, type ExportRow } from './canva-task-outcome.js';
+import { latestRevisionCopy } from './native-revision-handoff.js';
+import { nativeRevisionIntent } from '@hawa/domain';
 
 export type CaptureReview =
   | { status: 'recorded'; revisionId: string; qaPassed: boolean; checkedArtifactId: string }
@@ -19,7 +21,10 @@ export async function recordManualCanvaReview(
         AND e.event_type='task.created' ORDER BY e.aggregate_version LIMIT 1) AS source
     FROM hawa.tasks t WHERE t.tenant_id=${p.tenantId}::uuid AND t.id=${p.taskId}::uuid FOR UPDATE OF t`.execute(trx)).rows[0];
   const source = task?.source as { payload?: { body?: { workflow?: string } }; body?: { workflow?: string } } | undefined;
-  if (!task || task.request_id || (source?.payload?.body || source?.body)?.workflow !== 'canva_manual')
+  const revisionCopy = await latestRevisionCopy(trx, p.tenantId, p.taskId);
+  if (nativeRevisionIntent(task?.source) && !revisionCopy)
+    return blocked('Confirm the exact revised copy against the current native design before recording review.');
+  if (!task || task.request_id || (!revisionCopy && (source?.payload?.body || source?.body)?.workflow !== 'canva_manual'))
     return { status: 'not_applicable', reason: 'The task is not a manual Desk request.' };
   if (!['received', 'failed_operator', 'human_review', 'revision_requested', 'approved'].includes(task.state))
     return blocked('This task is no longer accepting manual design captures for review.');
@@ -27,19 +32,26 @@ export async function recordManualCanvaReview(
     FROM hawa.canva_bindings WHERE tenant_id=${p.tenantId}::uuid AND task_id=${p.taskId}::uuid
       AND client_id=${task.client_id}::uuid AND status='bound' FOR SHARE`.execute(trx)).rows[0];
   if (!binding) return blocked('Link the current client’s Canva design before recording review.');
-  const rows = (await sql<ExportRow & { created_at: Date }>`SELECT b.id,b.sha256,b.format,b.content,b.content_check,b.created_at,
-      o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
+  const rows = (await sql<ExportRow & { created_at: Date; confirmation_event_id: string | null }>`SELECT b.id,b.sha256,b.format,b.content,b.content_check,b.created_at,
+      o.metadata->>'designUpdatedAt' AS capture_version,
+      o.metadata->'checkingPolicy'->>'confirmationEventId' AS confirmation_event_id FROM hawa.canva_export_bytes b
     JOIN hawa.canva_remote_operations o ON o.id=b.operation_id AND o.tenant_id=b.tenant_id
     WHERE b.tenant_id=${p.tenantId}::uuid AND b.task_id=${p.taskId}::uuid AND b.client_id=${task.client_id}::uuid
       AND o.design_id=${binding.canva_design_id} AND o.binding_version=${binding.version} AND o.status='retrieved'
       AND (b.id=${p.artifactId}::uuid OR b.format='png') ORDER BY b.created_at DESC`.execute(trx)).rows;
   const checked = rows.find(row => row.id === p.artifactId && row.format === 'pptx' && row.content_check);
-  const png = checked?.capture_version ? rows.find(row => row.format === 'png' && row.capture_version === checked.capture_version) : undefined;
+  const png = checked?.capture_version ? rows.find(row => row.format === 'png' && row.capture_version === checked.capture_version &&
+    (!revisionCopy || row.confirmation_event_id === revisionCopy.id)) : undefined;
   if (!checked || !png) return blocked('Capture PNG and check copy and fonts from the same saved Canva version before review.');
-  const policyCurrent=(await sql<{current:boolean}>`SELECT hawa.canva_export_policy_current(o.tenant_id,o.client_id,o.metadata) AS current
+  if (revisionCopy) {
+    const policy = (checked.content_check as { checkingPolicy?: { kind?: string; confirmationEventId?: string } })?.checkingPolicy;
+    if (policy?.kind !== 'revision_client_dna' || policy.confirmationEventId !== revisionCopy.id)
+      return blocked('Capture and check this design against the latest confirmed revised copy before review.');
+  }
+  const policyCurrent=(await sql<{current:boolean}>`SELECT hawa.canva_export_policy_current(o.tenant_id,o.client_id,COALESCE(o.metadata,'{}'::jsonb) || jsonb_build_object('taskId',o.task_id)) AS current
     FROM hawa.canva_remote_operations o JOIN hawa.canva_export_bytes b ON b.operation_id=o.id AND b.tenant_id=o.tenant_id
     WHERE b.id=${checked.id}::uuid AND b.tenant_id=${p.tenantId}::uuid`.execute(trx)).rows[0];
-  if (!policyCurrent?.current) return blocked('The client font policy changed. Capture and check the design with the active Client DNA before review.');
+  if (!policyCurrent?.current) return blocked('The revision basis or client font policy changed. Capture and check the current design before review.');
   const priorQc = task.current_design_revision_id ? (await sql<{ critical_pass: boolean; status: string; artifact_id: string; started_at: Date }>`
     SELECT critical_pass,status,report->>'exportArtifactId' AS artifact_id,started_at FROM hawa.qc_runs
     WHERE tenant_id=${p.tenantId}::uuid AND design_revision_id=${task.current_design_revision_id}::uuid
@@ -54,7 +66,7 @@ export async function recordManualCanvaReview(
       createHash('sha256').update(row.content).digest('hex') !== row.sha256))
     return blocked('The stored capture failed its integrity check. Capture fresh files before review.');
   let copy: string[];
-  try { copy = savedDesignCopy(task.source, '').copy; }
+  try { copy = revisionCopy?.copy ?? savedDesignCopy(task.source, '').copy; }
   catch { return blocked('The saved request has no valid exact copy. Review the request before capture.'); }
   const qc = evaluate(checked, copy);
   if (!qc.sourceTextObjects?.length)
@@ -73,6 +85,9 @@ export async function recordManualCanvaReview(
     neutralManifest: { studio: 'canva', documentId: binding.canva_design_id, designId: binding.canva_design_id,
       copy, nodes: qc.sourceTextObjects, semanticCoverage: 'pptx_live_text_only', nativeVerification: 'unverified',
       checkingPolicy: (checked.content_check as {checkingPolicy?: unknown})?.checkingPolicy || null,
+      ...(revisionCopy ? { nativeRevisionHandoff: { confirmationEventId: revisionCopy.id,
+        parentTaskId: revisionCopy.parentTaskId, parentDesignId: revisionCopy.parentDesignId,
+        preservation: revisionCopy.preservation, nativePreservationVerified: false } } : {}),
       capturedSource: { artifactId: checked.id, sha256: checked.sha256, format: 'pptx', captureVersion: checked.capture_version },
       preview: { artifactId: png.id, sha256: png.sha256 }, bindingId: binding.id, bindingVersion: binding.version,
       ...(task.current_design_revision_id ? { revisedFrom: task.current_design_revision_id } : {}) },

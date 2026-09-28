@@ -12,7 +12,7 @@ No package is complete merely because a smaller test passes.
 
 | Package | Scope | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty slice locally qualified; native revision preservation open | ADR-108; CANVA_UNCERTAINTY_PROOF.json |
+| 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty and native-revision admission/manual handoff locally qualified; lifecycle-owned recovery and actual native preservation open | ADR-108/113; CANVA_UNCERTAINTY_PROOF.json; NATIVE_REVISION_HANDOFF_PROOF.json |
 | 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs locally qualified; authorized visual-order contract, multilingual retrieval and human comparison open | ADR-109; CREATIVE_HANDOFF_PROOF.json |
 | 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results and visual input pins locally qualified; branch checkpoints, font/runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json |
 | 4 | Amend/Adapt routing and actual Canva account capability qualification | Open | Official documentation is not account admission |
@@ -172,3 +172,38 @@ pre-layout stage pins, durable substep checkpoints, region/crop mapping and safe
 concurrency remain open. Next priority: current native Canva revision admission
 and preservation of manual edits, the remaining P0 item in the report. Then finish
 the remaining compute/retrieval improvements and integrated human/release gates.
+
+## 2026-09-28 — Native revision admission and reviewed-copy handoff
+
+ADR-113/migration 063 prevents linked revisions from silently reconstructing an
+old generated layout. Studio start/resume/selection, the older planner, and fresh
+Canva creation/import admission enforce the hold. Original uncertain jobs remain
+reconcilable. A recovered old import cannot qualify a fresh revision review or
+approval without the current human confirmation, including legacy policy-free
+captures at the server-derived task boundary.
+
+For non-lifecycle tasks, Desk now presents the original native design and directive,
+requires a separately linked copy, and records exact reviewed text plus an explicit
+preservation assertion. The immutable event binds actor, request key/hash, expected
+task version and parent/child basis. PNG and PPTX freeze the same confirmation and
+active human-authored Client DNA. Old previews cannot pair with a new source even
+at an equal native timestamp; Desk, approval pins and publication checks use the
+confirmation identity too. The parent and bindings remain locked during database
+policy validation. Those locks cannot fence direct native Canva edits.
+
+Final affected acceptance: 22 files / 284 tests passed, zero failed/skipped. The
+public synthetic-provider journey reaches actual retained PNG/PPTX bytes, recorded
+review, explicit test-reviewer approval and publication admission; a new confirmation
+invalidates it. Runtime-role connections, keyed/concurrent replay, stale bindings,
+scope refusal, policy row locking, malformed input and Desk controls are covered.
+Initial fixture mistakes, two reproduced implementation defects (stale preview and
+null request), and obsolete reconstruction/migration expectations are retained in
+NATIVE_REVISION_HANDOFF_PROOF.json. Existing photo-context checks remain without
+granting automatic reconstruction. Stage-only directed-edit fixtures bypass admission
+and are not evidence of native preservation.
+
+This is local qualification of the legacy/manual slice. No live native operation,
+human preservation judgment, deployment, full release or recovery drill occurred.
+The complete six-package objective remains active. Next: implement the owner-controlled
+manual recovery path for RequestLifecycle, then qualify actual native operations and
+continue the outstanding policy, compute, retrieval and human/release packages.

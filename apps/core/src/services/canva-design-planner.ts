@@ -1,4 +1,5 @@
 import { assertTaskGenerationAllowed, assertStudioCallsResolved } from './task-generation-guard.js';
+import { assertNativeRevisionAdmission } from './native-revision-handoff.js';
 import { orderedAlbumImages } from './lifecycle-album.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -243,6 +244,7 @@ export class CanvaDesignPlanner {
         throw new CanvaFlowError(409,'GENERATION_CONFLICT','This request key belongs to a different saved plan.');
       return this.resume(s,taskId,existing.id);
     }
+    await this.tx(s,db=>assertNativeRevisionAdmission(db,s.tenantId,taskId));
     const {request,ownedImageDataUrls,taskVersion}=await this.context(s,taskId,width,height),requestHash=hash(JSON.stringify(request));
     const claim=await this.tx(s,async db=>{
       await sql`SELECT pg_advisory_xact_lock(hashtextextended(${'canva-planning:'+s.tenantId},0))`.execute(db);
@@ -504,6 +506,7 @@ export class CanvaDesignPlanner {
         const task=(await sql<{state:string;client_id:string;request_id:string|null;version:string}>`SELECT state,client_id,request_id,version
           FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
         assertTaskGenerationAllowed(task?.state);
+        await assertNativeRevisionAdmission(db,s.tenantId,taskId,request.parentTaskId);
         if(Number(task.version)!==taskVersion)throw new CanvaFlowError(409,'TASK_CHANGED','The task changed before model admission.');
         if(task.client_id!==request.clientId||(task.request_id||null)!==request.requestId)
           throw new CanvaFlowError(409,'REQUEST_CHANGED','Task ownership changed before model admission.');
@@ -617,6 +620,7 @@ export class CanvaDesignPlanner {
         const task=(await sql<{state:string;client_id:string;request_id:string|null;version:string}>`SELECT state,client_id,request_id,version FROM hawa.tasks
           WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
         assertTaskGenerationAllowed(task?.state);
+        await assertNativeRevisionAdmission(db,s.tenantId,taskId,request.parentTaskId);
         if(Number(task.version)!==current.taskVersion)throw new CanvaFlowError(409,'TASK_CHANGED','The task changed during layout recovery. Resume against its current state.');
         if(task.client_id!==request.clientId||(task.request_id||null)!==request.requestId)
           throw new CanvaFlowError(409,'REQUEST_CHANGED','Task ownership changed during layout recovery.');

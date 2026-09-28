@@ -202,7 +202,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Operation result; no QA approval implied"
+            "description": "Current scoped bindings, operations and artifacts; optional revisionHandoff describes required native revision action, availability, basisSha256, taskVersion, exact copy and current confirmedEventId. A cross-client or missing parent never exposes its native link. No QA approval implied."
           },
           "401": {
             "description": "Authentication required"
@@ -465,7 +465,7 @@
             "officeBearer": []
           }
         ],
-        "description": "Retains export evidence. A retrieved checked PPTX can record a manual review when a PNG from the same Canva version is retained. Inspect the optional review receipt; missing or blocked review must not be presented as ready. No approval is created. Replay the same operation after an uncertain response. Checked PPTX admission freezes the matching imported source policy, or exact manual Desk copy with active human-authored Client DNA font families. Replay retains that original policy. Superseded manual policy cannot qualify new review, approval or publication; capture again using current Client DNA."
+        "description": "Retains export evidence. A retrieved checked PPTX can record a manual review when a PNG from the same Canva version is retained. Inspect the optional review receipt; missing or blocked review must not be presented as ready. No approval is created. Replay the same operation after an uncertain response. Checked PPTX admission freezes the matching imported source policy, or exact manual Desk copy with active human-authored Client DNA font families. Replay retains that original policy. Superseded manual policy cannot qualify new review, approval or publication; capture again using current Client DNA. For confirmed native revision handoffs, all formats freeze the current copy confirmation and Client DNA. Both PNG and PPTX must carry the latest confirmation identity before the pair can record review, even if their Canva update timestamps match older captures."
       }
     },
     "/v1/tasks/{taskId}/canva/exports/{operationId}/resume": {
@@ -818,6 +818,126 @@
           }
         ],
         "summary": "Resume the existing imports checkpoint without repeating a model charge or document creation"
+      }
+    },
+    "/v1/tasks/{taskId}/canva/revision-copy": {
+      "post": {
+        "operationId": "canvaConfirmRevisionCopy",
+        "tags": [
+          "Integrations"
+        ],
+        "description": "An office human confirms exact copy in a separately linked native revision design. Requires the current task version and parent/child binding basis from taskState.revisionHandoff. Stores an immutable keyed human assertion, not approval or automated preservation proof. Lifecycle-owned tasks remain under their existing owner and cannot use this legacy write. A new confirmation invalidates previous captures for review, approval and publication.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,128}$"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expectedTaskVersion",
+                  "basisSha256",
+                  "copy",
+                  "reviewedCurrentDesign",
+                  "preservedUnrequestedChanges"
+                ],
+                "properties": {
+                  "expectedTaskVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "basisSha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "copy": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 128,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": "Exact final text blocks; nonblank, no NUL, combined newline-joined length at most 16000 characters. No normalization is applied."
+                  },
+                  "reviewedCurrentDesign": {
+                    "const": true
+                  },
+                  "preservedUnrequestedChanges": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Copy confirmation retained, or identical actor/key/body replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "confirmationEventId",
+                    "replayed"
+                  ],
+                  "properties": {
+                    "confirmationEventId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Human office role required"
+          },
+          "409": {
+            "description": "Stale basis, missing separate native copy, key conflict, closed task or lifecycle ownership"
+          },
+          "422": {
+            "description": "Invalid copy, key, basis or missing explicit review confirmations"
+          },
+          "502": {
+            "description": "Storage operation failed"
+          },
+          "503": {
+            "description": "Durable storage unavailable"
+          }
+        }
       }
     }
   },

@@ -26,3 +26,4 @@ export {auditPublicationReceipts} from './publication-audit.js';
 export * from './availability.js';
 export * from './publication-inspection.js';
 export * from './canva-creation.js';
+export * from './native-revision.js';

@@ -71,6 +71,9 @@ export function composeCanvaStatusMessage(input: CanvaStatusMessageInput): Teleg
   } else if (status === 'MANUAL_DESIGN_REQUIRED') {
     title = '📥 <b>Request queued for manual design</b>';
     body = `This request has been queued in Hawa Desk. The art director will review the brief and create the design manually in Canva.\n`;
+  } else if (code === 'NATIVE_REVISION_HANDOFF_REQUIRED') {
+    title = '📥 <b>Revision saved for native editing</b>';
+    body = 'This change needs the current Canva design so existing manual edits can be preserved. An office designer can open the original from the revision handoff in Hawa Desk, edit a separate copy and capture it for review.\n';
   } else if (status === 'DESIGN_REJECTED' && code === 'COPY_REQUIRED') {
     title = '📥 <b>Request saved, copy needed</b>';
     body = `No design copy was found in your request, so no automatic draft was started and no text was made up. Please send the exact text to put on the design, for example below a divider line (---) after your instructions.\n`;

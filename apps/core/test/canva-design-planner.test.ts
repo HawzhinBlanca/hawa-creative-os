@@ -314,7 +314,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(result.status).toBe('failed');
     expect(api.importEditableDesign).not.toHaveBeenCalled();
   });
-  it('threads prior layout and revision directive into a 4-turn conversational session for revisions',async()=>{
+  it('preserves a completed initial plan but holds linked revisions before reconstructing a native design',async()=>{
     // 1. First draft creates an initial plan
     const initialTaskId=await intake();
     const remoteInitial=vi.fn<typeof fetch>(async()=>response('gpt-6-astra',plan));
@@ -354,33 +354,10 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const remoteRevision=vi.fn<typeof fetch>(async()=>response('gpt-6-astra',updatedPlan));
     const {planner:planner2}=make(remoteRevision);
 
-    const revisionResult=await planner2.generate(scope,revisionTaskId,'plan-rev-001',1200,1697);
-    expect(revisionResult.status).toBe('submitted');
-    expect(remoteRevision).toHaveBeenCalledTimes(1);
-
-    const revisionSent=JSON.parse(String(remoteRevision.mock.calls[0][1]?.body));
-    expect(revisionSent.messages).toHaveLength(2);
-
-    // Turn 0: System with revision mode guidelines
-    expect(revisionSent.messages[0].role).toBe('system');
-    expect(revisionSent.messages[0].content).toContain('REVISION MODE');
-
-    // Turn 1: User content with directive
-    expect(revisionSent.messages[1].role).toBe('user');
-    const userContentText = Array.isArray(revisionSent.messages[1].content)
-      ? revisionSent.messages[1].content[0].text
-      : revisionSent.messages[1].content;
-    expect(userContentText).toContain(revisionDirective);
-
-    // Prior layout was NOT forced as an assistant turn constraint
-    expect(revisionSent.messages.some((m: any) => m.role === 'assistant')).toBe(false);
-
-    // Verify DB manifest records revision evidence
-    const revisionSaved=(await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${revisionTaskId}::uuid`.execute(db)).rows[0];
-    expect(revisionSaved.status).toBe('planned');
-    expect(revisionSaved.result.manifest.isRevision).toBe(true);
-    expect(revisionSaved.result.manifest.priorPlanId).toBe(initialSaved.id);
-    expect(revisionSaved.result.manifest.turns).toBe(2);
+    await expect(planner2.generate(scope,revisionTaskId,'plan-rev-001',1200,1697))
+      .rejects.toMatchObject({code:'NATIVE_REVISION_HANDOFF_REQUIRED'});
+    expect(remoteRevision).not.toHaveBeenCalled();
+    expect((await sql`SELECT id FROM hawa.canva_design_plans WHERE task_id=${revisionTaskId}::uuid`.execute(db)).rows).toHaveLength(0);
   });
 
   it('sends every confirmed album image in manifest order and refuses a lost image before the model',async()=>{
@@ -419,7 +396,7 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     expect(refused).not.toHaveBeenCalled();
   });
 
-  it('sends only the child task-owned photo with a lifecycle revision, pinned by hash',async()=>{
+  it('retains child-owned revision photos for recovery while holding automatic reconstruction',async()=>{
     const parentTaskId=await intake();
     await make(vi.fn(async()=>response())).planner.generate(scope,parentTaskId,'owned-photo-parent-01',1200,1697);
     const childTaskId=(await persistChatIntake(db,{
@@ -442,20 +419,18 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
         VALUES(${scope.tenantId}::uuid,${childTaskId}::uuid,${stored.sha256},'reference_image')`.execute(trx);
     });
     const remote=vi.fn<typeof fetch>(async()=>response());
-    const result=await make(remote).planner.generate(scope,childTaskId,'owned-photo-child-01',1200,1697);
-    expect(result.status).toBe('submitted');
-    const sent=JSON.parse(String(remote.mock.calls[0][1]?.body));
-    const parts=sent.messages[1].content;
-    expect(parts.filter((part:any)=>part.type==='image_url')).toEqual([
-      {type:'image_url',image_url:{url:`data:image/png;base64,${photo.toString('base64')}`}},
-    ]);
-    expect(parts[0].text).toContain('new requester reference image');
-    const saved=(await sql<any>`SELECT request,result FROM hawa.canva_design_plans
-      WHERE task_id=${childTaskId}::uuid`.execute(db)).rows[0];
-    expect(saved.request.ownedReferenceImage).toMatchObject({sha256:stored.sha256,mediaType:'image/png'});
-    expect(saved.request.referenceImageBase64).toBeNull();
-    expect(JSON.stringify(saved.request)).not.toContain(photo.toString('base64'));
-    expect(saved.result.manifest).toMatchObject({hasReferenceImage:true,referenceImageSha256:stored.sha256});
+    const planner=make(remote).planner;
+    await expect(planner.generate(scope,childTaskId,'owned-photo-child-01',1200,1697))
+      .rejects.toMatchObject({code:'NATIVE_REVISION_HANDOFF_REQUIRED'});
+    expect(remote).not.toHaveBeenCalled();
+    // The preserved scoped context remains usable by a future qualified native route.
+    // Inspect preparation directly; this does not authorize generation or bypass the public hold.
+    const {request,ownedImageDataUrls}=await planner['context'](scope,String(childTaskId),1200,1697);
+    expect(ownedImageDataUrls).toEqual([`data:image/png;base64,${photo.toString('base64')}`]);
+    expect(request.ownedReferenceImage).toMatchObject({sha256:stored.sha256,mediaType:'image/png'});
+    expect(request.referenceImageBase64).toBeNull();
+    expect(JSON.stringify(request)).not.toContain(photo.toString('base64'));
+    expect((await sql`SELECT id FROM hawa.canva_design_plans WHERE task_id=${childTaskId}::uuid`.execute(db)).rows).toHaveLength(0);
 
     const blobStore=blobStoreFromEnv(db);
     const missing=await blobStore.put(Buffer.concat([photo,Buffer.from(randomUUID())]),'image/png');
@@ -465,12 +440,12 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     });
     unlinkSync(blobStore.pathOf(missing));
     const refused=vi.fn(async()=>response());
-    await expect(make(refused).planner.generate(scope,childTaskId,'owned-photo-child-02',1200,1697))
+    await expect(make(refused).planner['context'](scope,String(childTaskId),1200,1697))
       .rejects.toMatchObject({code:'REFERENCE_IMAGE_UNAVAILABLE'});
     expect(refused).not.toHaveBeenCalled();
   });
 
-  it('breaks free from previous layout coordinates and supports multimodal reference photo when user requests redesign', async () => {
+  it('does not infer permission to reconstruct a linked native design from redesign language or a reference photo', async () => {
     // 1. Initial plan
     const initialTaskId = await intake();
     const remoteInitial = vi.fn<typeof fetch>(async () => response('gpt-6-astra', plan));
@@ -501,36 +476,10 @@ describe.skipIf(!url)('durable design planner, real PostgreSQL and mocked model/
     const remoteRedesign = vi.fn<typeof fetch>(async () => response('gpt-6-astra', freshPlan));
     const { planner: planner2 } = make(remoteRedesign);
 
-    const result = await planner2.generate(scope, redesignTaskId, 'plan-redesign-001', 1200, 1697);
-    expect(result.status).toBe('submitted');
-    expect(remoteRedesign).toHaveBeenCalledTimes(1);
-
-    const sent = JSON.parse(String(remoteRedesign.mock.calls[0][1]?.body));
-    expect(sent.messages).toHaveLength(2);
-    // Turn 0: System prompt has redesign directive and vision note
-    expect(sent.messages[0].role).toBe('system');
-    expect(sent.messages[0].content).toContain('CREATIVE REDESIGN DIRECTIVE');
-    expect(sent.messages[0].content).toContain('COMPLETELY BREAK FREE');
-    expect(sent.messages[0].content).toContain('REFERENCE IMAGE ATTACHED');
-
-    // Turn 1: User content is multimodal with image_url and critique
-    expect(sent.messages[1].role).toBe('user');
-    expect(Array.isArray(sent.messages[1].content)).toBe(true);
-    expect(sent.messages[1].content[0].type).toBe('text');
-    expect(sent.messages[1].content[0].text).toContain(redesignDirective);
-    expect(sent.messages[1].content[1].type).toBe('image_url');
-    expect(sent.messages[1].content[1].image_url.url).toBe(fakeBase64);
-
-    // Prior layout was NOT forced as an assistant turn constraint
-    expect(sent.messages.some((m: any) => m.role === 'assistant')).toBe(false);
-
-    // Verify DB manifest records redesign & reference image
-    const redesignSaved = (await sql<any>`SELECT * FROM hawa.canva_design_plans WHERE task_id=${redesignTaskId}::uuid`.execute(db)).rows[0];
-    expect(redesignSaved.status).toBe('planned');
-    expect(redesignSaved.result.manifest.isRedesign).toBe(true);
-    expect(redesignSaved.result.manifest.conversationalRevision).toBe(false);
-    expect(redesignSaved.result.manifest.hasReferenceImage).toBe(true);
-    expect(redesignSaved.result.manifest.turns).toBe(2);
+    await expect(planner2.generate(scope,redesignTaskId,'plan-redesign-001',1200,1697))
+      .rejects.toMatchObject({code:'NATIVE_REVISION_HANDOFF_REQUIRED'});
+    expect(remoteRedesign).not.toHaveBeenCalled();
+    expect((await sql`SELECT id FROM hawa.canva_design_plans WHERE task_id=${redesignTaskId}::uuid`.execute(db)).rows).toHaveLength(0);
   });
 
   it('replays a failed key unchanged and requires an explicit new key for another paid plan', async () => {

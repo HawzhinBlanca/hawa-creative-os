@@ -1,0 +1,252 @@
+{
+  "date": "2026-09-28",
+  "status": "LOCAL_MANUAL_NATIVE_REVISION_SLICE_QUALIFIED_NOT_FULL_GOAL_OR_RELEASE",
+  "base_commit": "dae01b0b",
+  "branch": "codex/research-grade-design-system",
+  "adr": "113",
+  "requirements": [
+    "FR-013",
+    "FR-014",
+    "FR-029",
+    "FR-032",
+    "FR-041",
+    "FR-042",
+    "FR-060",
+    "FR-079",
+    "NFR-009",
+    "NFR-024"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/113_native_revision_handoff.md",
+      "sha256": "9030cee4e976ed98817bbcdc988f2c3189c6b8986156894f4071eb3e1c90c63f"
+    },
+    {
+      "path": "api/canva-connect.openapi.json",
+      "sha256": "9079da135b4caebc7b6bc2624df8e2c2a19a8bdaa5f131d07ef203ecd2152456"
+    },
+    {
+      "path": "api/openapi.yaml",
+      "sha256": "bfe611480e8ffa60a4c6c6284704ba6becb6e838308eec4e07c38d470027e018"
+    },
+    {
+      "path": "apps/core/src/routes/canva.routes.ts",
+      "sha256": "1ab1dd2c44c0dc76e889e2756649dab6873594f48d1a2a2764eeca76c3adc2d1"
+    },
+    {
+      "path": "apps/core/src/services/canva-connect-service.ts",
+      "sha256": "c03ba2edb3f71c856160e947648ff9911e7a2e7c22a4475f93259ebf58734961"
+    },
+    {
+      "path": "apps/core/src/services/canva-design-planner.ts",
+      "sha256": "7abadd2e0b257cf3fc66eaeabdb12f815d5feacc90b38930048dc7994c49fe0f"
+    },
+    {
+      "path": "apps/core/src/services/canva-export-policy.ts",
+      "sha256": "d93de3869bb85dace4264f747199485f99dc017fe0809a3f00bebc2195313ed7"
+    },
+    {
+      "path": "apps/core/src/services/canva-status-message.ts",
+      "sha256": "589f4197747cc93e6d5597893d96731c57d322bccb586a4085dbde912504c4d4"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "6f46702235fc884ddb2582d7cdd6993d0b6dd6b83d99e3ed66693874be9ea601"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/types.ts",
+      "sha256": "5fed770b32c062241a5507e24518c3713aed11ec05b855a839f7e83bc8efe5a6"
+    },
+    {
+      "path": "apps/core/src/services/manual-canva-review.ts",
+      "sha256": "5a9fcd8ebb700b88b3913d21a5d0ec6070a3d1118257e99dc0d5051a8920efb4"
+    },
+    {
+      "path": "apps/core/src/services/native-revision-handoff.ts",
+      "sha256": "24429460483f9a3c5f557aef328edffcadd807646739eca6e6aa45193f3c8b0c"
+    },
+    {
+      "path": "apps/core/test/canva-design-planner.test.ts",
+      "sha256": "8b7d602213adfb3e5927edee92a9a751eea2d0b6dff8c77f77b007c87a62f020"
+    },
+    {
+      "path": "apps/core/test/canva-planner-accounting.test.ts",
+      "sha256": "afa48e0aaa1ca7c734acce6ac748059d658494326fbb4c0f8671924e3b8e551a"
+    },
+    {
+      "path": "apps/core/test/lifecycle-design-proof.test.ts",
+      "sha256": "e04f1eb2ff430bde94d4618e0d76bd678f988bf4a0e5bd6a3b769b12c8a945ab"
+    },
+    {
+      "path": "apps/core/test/native-revision-handoff.test.ts",
+      "sha256": "2ebe4bb994cfcfdfaae9165a98794805b93b45aeefef83abfd64f370775fa8eb"
+    },
+    {
+      "path": "apps/desk/src/api/client.ts",
+      "sha256": "7d3dd03c973ac6e8c996e5f8117da32a37fee95f8d19e8d3feefafefc321cc4e"
+    },
+    {
+      "path": "apps/desk/src/components/CanvaTaskPanel.tsx",
+      "sha256": "608ceb087d8124c33a37e7402eec5001015bffbdc31c3aa20a15a4455a0f4088"
+    },
+    {
+      "path": "apps/desk/src/components/NativeRevisionHandoff.tsx",
+      "sha256": "e4b1c2a1416abd5414e4ca8b80f488d87cddbe92361ab52c3add7d39b75aaafb"
+    },
+    {
+      "path": "apps/desk/src/services/canvaPreviewEvidence.ts",
+      "sha256": "abaa1dd0cffce4796fc7d3af38757bcb876112814ede1a5f76e76135c4c9361d"
+    },
+    {
+      "path": "apps/desk/test/canva-preview-evidence.test.ts",
+      "sha256": "6260572c8a488e0e01c167e60e2c263a391f4c16b8c45e1da8aabb48454cc11b"
+    },
+    {
+      "path": "apps/desk/test/native-revision-handoff.test.ts",
+      "sha256": "51df5fae97cbb6b0652fea34666f9206a31d1451d4cd58fe930a4f06bd8b74b9"
+    },
+    {
+      "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
+      "sha256": "f963fb99e8e449a7499b2911c759b4dd0965395396d066e8f3ffda167dd30ee9"
+    },
+    {
+      "path": "packages/db/migrations/063_native_revision_policy.sql",
+      "sha256": "52e883b954b9eed358e29a05f43ef6abb5289379914daf74cdaca18253161a5d"
+    },
+    {
+      "path": "packages/db/src/repositories/revision.repository.ts",
+      "sha256": "1e2a5c97f9f30ae265afa5f3c613eafd28c41d14c7a13a5378891760066f70ec"
+    },
+    {
+      "path": "packages/domain/src/index.ts",
+      "sha256": "f996a43499c5fef3cdd2bbacc172256f93d3d3dff684f92ee01d37aa2ceb93c9"
+    },
+    {
+      "path": "packages/domain/src/native-revision.ts",
+      "sha256": "458e576ce073c3550ae07a0f739e3ed865c7f79c6754b4e5c48981b05489d124"
+    },
+    {
+      "path": "packages/domain/test/native-revision.test.ts",
+      "sha256": "6c9e087d415dacd912688e889c14f3c55b5f0540df450da8362da8982e2625d4"
+    }
+  ],
+  "acceptance": {
+    "files": 22,
+    "passed": 284,
+    "failed": 0,
+    "skipped": 0,
+    "strict_test_roots": 523,
+    "source_and_scripts_types": "passed",
+    "desk_build": "passed",
+    "any_count": 957,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "secret_scan": "passed with 0 secrets and 53 justified allowlist hits"
+  },
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-native-revision-handoff/affected-tests.log",
+      "sha256": "0561ab8e31831addad79cda78998481803c352400b11a8b64280d49dd22320a6"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-revision-handoff/corrected-tests.log",
+      "sha256": "75079ca8e9bac3d4d2df355b82051b6bebd986a8db924dc2cdd7314f32d2b783"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-revision-handoff/desk-build.log",
+      "sha256": "e64d7ec0e3af59314350ad57b42668e86f547eb5779ce81a6d8ab01fc1d8b9af"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-revision-handoff/final-boundary-tests.log",
+      "sha256": "4c06ba343724884c9ffc3ace85937389324072091f63ec45f30994ae0c18e73f"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-revision-handoff/initial-affected-tests.log",
+      "sha256": "9369a99082eb3cafbdad8c73055218d7b4922e4b2d32b2cf46036ed185f155b7"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-revision-handoff/security.log",
+      "sha256": "4b3ec654b043c67b6858381d2857377cce0b3755eb58f7aea15373bfd7c7cab3"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-revision-handoff/types.log",
+      "sha256": "b8d21ca285829cbe916ea10bf1c52ef9be73dac67ebf848b3ea3c97ca9c025ca"
+    }
+  ],
+  "proved": [
+    "linked revision start/resume/planner/new creation and import refuse before replacement effects",
+    "original import reconciliation remains available in affected existing tests",
+    "scoped separate-copy confirmation is immutable, optimistic and keyed; concurrent replay returns one event",
+    "real isolated PostgreSQL with restricted runtime-role connections and parent/binding policy row locks",
+    "public routes capture actual synthetic PNG/PPTX bytes against exact revised text, record review and accept explicit test-reviewer approval",
+    "all approval/export pins and publication admission reject superseded confirmation; old PNG cannot pair with new PPTX at equal native timestamp",
+    "server-derived task identity holds historical unconfirmed revision policy including policy-free captures",
+    "Desk requires human checks, keeps a retry key, resets after edit/basis changes and filters old preview evidence",
+    "lifecycle-owned legacy writes remain refused; no owner bypass"
+  ],
+  "initial_failures": [
+    {
+      "scope": "pending initial focused run",
+      "passed": 4,
+      "failed": 6,
+      "causes": [
+        "four run fixtures missing required id",
+        "operator bearer absent from test auth configuration",
+        "cross-client fixture violated task/binding foreign key"
+      ],
+      "disposition": "fixed test setup; constraints preserved"
+    },
+    {
+      "scope": "new boundary red run",
+      "passed": 10,
+      "failed": 2,
+      "causes": [
+        "old preview paired with a new confirmation at identical native timestamp",
+        "null request incorrectly returned 502"
+      ],
+      "disposition": "fixed implementation; dedicated regression assertions pass"
+    },
+    {
+      "scope": "initial affected suite",
+      "passed": 275,
+      "failed": 4,
+      "causes": [
+        "three planner tests expected the superseded reconstruction behavior",
+        "historical migration fixture omitted newly added migrations"
+      ],
+      "disposition": "updated expectations to ADR-113; kept actual photo-ownership preparation and missing-blob refusal checks"
+    },
+    {
+      "scope": "strict test compile",
+      "causes": [
+        "missing required run id",
+        "new UI fixture inferred too narrow a type"
+      ],
+      "disposition": "corrected; final 523 roots pass"
+    },
+    {
+      "scope": "first commit hook",
+      "cause": "proof metadata was appended after package manifest generation; proof is included in the manifest",
+      "disposition": "commit correctly refused; refreshed manifest before retry, no hooks bypassed"
+    }
+  ],
+  "limits": [
+    "Canva HTTP transport, users and design content are synthetic; real database/byte inspection does not prove actual native preservation",
+    "human confirmation is testimony, not automated preservation verification or human-study evidence",
+    "existing stage-only directed edit tests explicitly bypass generation admission and are not native qualification",
+    "lifecycle-owned manual recovery remains unimplemented in this slice",
+    "no paid/model calls, production migration/deployment, full release suite, OS process-kill drill or independent restore",
+    "local task/binding locks do not fence concurrent edits inside Canva"
+  ],
+  "next": [
+    "implement owner-controlled native handoff for RequestLifecycle",
+    "qualify actual native operations and preservation",
+    "continue all remaining compute/policy/retrieval/human/release packages"
+  ],
+  "package_validation": {
+    "command": "python3 scripts/refresh_manifest.py && python3 scripts/validate_pack.py",
+    "passed": 1069,
+    "warnings": 0,
+    "failed": 0
+  }
+}

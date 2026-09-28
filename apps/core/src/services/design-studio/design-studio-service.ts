@@ -4,6 +4,7 @@ import { reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } 
 import { studioUsdMicros, type StudioCallReservation } from '@hawa/domain';
 import { TaskGenerationBlockedError } from '@hawa/db';
 import { assertTaskGenerationAllowed, assertStudioCallsResolved } from '../task-generation-guard.js';
+import { assertNativeRevisionAdmission } from '../native-revision-handoff.js';
 import { orderedAlbumImages } from '../lifecycle-album.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -519,6 +520,7 @@ export class DesignStudioService {
       (process.env.DESIGN_STUDIO_IMAGERY_DEFAULT as any) ||
       'auto';
 
+    await this.tx(s, db => assertNativeRevisionAdmission(db, s.tenantId, taskId));
     const taskCtx = await this.getTaskContext(s, taskId, params.width, params.height);
 
     // Which pipeline a run uses is decided once, here, from the chat the task came from, and
@@ -1211,11 +1213,12 @@ export class DesignStudioService {
    * Interrupted runs resume from the current stage without duplicating prior stage calls.
    * Concurrent requests for the same run share the in-flight promise to prevent race conditions.
    */
-  private async assertTaskCanGenerate(s: Scope, taskId: string): Promise<void> {
+  private async assertTaskCanGenerate(s: Scope, taskId: string, historicalParent?: unknown): Promise<void> {
     await this.tx(s, async db => {
       const task = (await sql<{state:string}>`SELECT state FROM hawa.tasks
         WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
       assertTaskGenerationAllowed(task?.state);
+      await assertNativeRevisionAdmission(db, s.tenantId, taskId, historicalParent);
     });
   }
 
@@ -1257,6 +1260,8 @@ export class DesignStudioService {
       };
     }
 
+    const nativeParent = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request)?.directed?.parentTaskId;
+    await this.assertTaskCanGenerate(s, taskId, nativeParent);
     if (run.status === 'awaiting_selection') {
       await this.assertTaskCanGenerate(s, taskId);
       return {
@@ -2677,6 +2682,8 @@ export class DesignStudioService {
       const task = (await sql<{state:string}>`SELECT state FROM hawa.tasks
         WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
       assertTaskGenerationAllowed(task?.state);
+      await assertNativeRevisionAdmission(db, s.tenantId, taskId,
+        (typeof run.request === 'string' ? JSON.parse(run.request) : run.request)?.directed?.parentTaskId);
       await this.repo.updateRunStatus(runId, s.tenantId, 'transferring', { winnerCandidateId: candidateId }, db);
     });
 

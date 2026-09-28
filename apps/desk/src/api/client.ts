@@ -499,6 +499,9 @@ class HawaApiClient {
     disconnect: () => this.request<any>('/integrations/canva/disconnect',{method:'POST'}),
     authorize: () => this.request<{authorizationUrl:string}>('/integrations/canva/authorize',{method:'POST'}),
     taskState: (id:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva`),
+    confirmRevisionCopy: (id:string,key:string,body:{expectedTaskVersion:number;basisSha256:string;copy:string[];reviewedCurrentDesign:boolean;preservedUnrequestedChanges:boolean}) =>
+      this.request<{confirmationEventId:string;replayed:boolean}>(`/tasks/${encodeURIComponent(id)}/canva/revision-copy`,
+        {method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify(body)}),
     plans: (id:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans`),
     generate: (id:string,width:number,height:number,key:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/generate`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({width,height})}),
     abandonPlan: (id:string,planId:string,reason:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans/${encodeURIComponent(planId)}/abandon`,{method:'POST',body:JSON.stringify({reason})}),

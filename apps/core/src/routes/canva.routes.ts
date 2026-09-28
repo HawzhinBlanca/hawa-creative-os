@@ -7,6 +7,7 @@ import { TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
 import { log } from '../logging.js';
 import { rejectUnownedLifecycleDesignWrite } from './lifecycle-design-proof.js';
 import { recordManualCanvaReview, type CaptureReview } from '../services/manual-canva-review.js';
+import { confirmNativeRevisionCopy } from '../services/native-revision-handoff.js';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
   const service = ctx.db ? new CanvaConnectService(ctx.db,options) : null;
@@ -50,6 +51,11 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
     } catch { return c.text('Canva connection was not completed. Return to Hawa Settings and connect again.',400); }
   });
   ctx.registerRoute('get','/tasks/:taskId/canva',protect(async(c,s,api)=>c.json(await api.taskState(s,c.req.param('taskId')))));
+  ctx.registerRoute('post','/tasks/:taskId/canva/revision-copy',protect(async(c,s)=>{
+    const body=await c.req.json().catch(()=>({}));
+    return c.json(await withRlsContext(ctx.db!,{tenantId:s.tenantId,userId:s.actorId,role:s.role},
+      db=>confirmNativeRevisionCopy(db,s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body)));
+  }));
   ctx.registerRoute('get','/tasks/:taskId/canva/editor',protect(async(c,s,api)=>c.json(await api.editor(s,c.req.param('taskId')))));
   ctx.registerRoute('get','/tasks/:taskId/canva/plans',protect(async(c,s)=>c.json({plans:await planner!.state(s,c.req.param('taskId'))})));
   ctx.registerRoute('post','/tasks/:taskId/canva/generate',protect(async(c,s)=>{

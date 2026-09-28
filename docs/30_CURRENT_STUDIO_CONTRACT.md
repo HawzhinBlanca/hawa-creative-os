@@ -37,3 +37,24 @@ imported-source record. Superseded policy remains historical evidence but cannot
 qualify a new review, approval or publication. Family membership does not establish
 font-file glyph coverage, native editability or visual quality. See
 [ADR-077](../adrs/077_manual_canva_export_policy.md) for the boundary and acceptance.
+
+## Revisions of an existing native design (ADR-113)
+
+An earlier generated layout is not the current native revision basis. Until a
+native patch operation is qualified, linked revision requests stop before new
+creative work or a fresh import. Desk directs an operator to duplicate the current
+Canva design, preserve unrelated edits, link the separate copy and confirm its exact
+final text. The confirmation retains the actor, request key, expected task version
+and parent/child binding basis as an immutable event. It is human testimony, not
+automated native-preservation evidence or approval.
+
+PNG and checked PPTX must belong to that current confirmation and the same observed
+native update version before they become a review. New confirmation, changed binding
+or parent task basis, or superseded Client DNA invalidates previous policy evidence.
+Approval and publication retain their existing independent gates. Native timestamps
+and local task versions do not prove absence of concurrent Canva edits.
+
+Existing uncertain imports remain reconcilable. RequestLifecycle retains ownership;
+the legacy handoff cannot mutate its tasks. Native operation admission and completion
+of the lifecycle-owned manual recovery route remain separate work. See
+[ADR-113](../adrs/113_native_revision_handoff.md).

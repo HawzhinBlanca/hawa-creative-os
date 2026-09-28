@@ -1,4 +1,5 @@
 import { assertTaskGenerationAllowed } from './task-generation-guard.js';
+import { assertNativeRevisionAdmission, nativeRevisionHandoff, latestRevisionCopy } from './native-revision-handoff.js';
 import { canRetryCanvaCreation } from '@hawa/domain';
 import { CanvaFlowError } from './canva-flow-error.js';
 import { resolveManualExportPolicy, type ExportCheckPolicy } from './canva-export-policy.js';
@@ -282,6 +283,7 @@ export class CanvaConnectService {
       const bound = await new CanvaBindingRepository(db).findByTaskId(s.tenantId,taskId);
       if (previous || bound) return false;
       assertTaskGenerationAllowed(locked.state);
+      await assertNativeRevisionAdmission(db,s.tenantId,taskId);
       await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,metadata)
         VALUES (${id}::uuid,${s.tenantId}::uuid,${taskId}::uuid,${task.client_id}::uuid,${s.actorId},${key},${requestHash},'create','creating',${JSON.stringify({width,height})}::jsonb)`.execute(db);
       return true;
@@ -321,12 +323,14 @@ export class CanvaConnectService {
             reconciliation_reason:legacyUnknown?'legacy_failed_without_evidence':metadata?.reconciliationReason??null};
         });
       const artifacts=binding ? (await sql<any>`SELECT b.id,b.operation_id,b.format,b.sha256,b.content_check,octet_length(b.content) AS byte_size,
-          o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
+          o.metadata->>'designUpdatedAt' AS capture_version,
+          o.metadata->'checkingPolicy'->>'confirmationEventId' AS confirmation_event_id FROM hawa.canva_export_bytes b
         JOIN hawa.canva_remote_operations o ON o.id=b.operation_id AND o.tenant_id=b.tenant_id
         WHERE b.tenant_id=${s.tenantId}::uuid AND b.task_id=${taskId}::uuid AND o.status='retrieved'
           AND o.design_id=${binding.canva_design_id} AND o.binding_version=${binding.version}
         ORDER BY b.created_at DESC LIMIT 20`.execute(db)).rows : [];
-      return { artifacts, binding:binding ? { designId:binding.canva_design_id,version:binding.version,status:binding.status } : null,operations,semanticCapture:'unverified',approvalReady:false };
+      return { artifacts, binding:binding ? { designId:binding.canva_design_id,version:binding.version,status:binding.status } : null,operations,semanticCapture:'unverified',approvalReady:false,
+        revisionHandoff:await nativeRevisionHandoff(db,s.tenantId,taskId) };
     });
   }
   async importEditableDesign(s:Scope,taskId:string,key:string,source:{bytes:Buffer;sha256:string;manifest:Record<string,unknown>}) {
@@ -360,6 +364,7 @@ export class CanvaConnectService {
         return {id:prior.id,created:false};
       }
       assertTaskGenerationAllowed(locked.state);
+      await assertNativeRevisionAdmission(db,s.tenantId,taskId);
       if(await new CanvaBindingRepository(db).findByTaskId(s.tenantId,taskId))fail(409,'CANVA_ALREADY_BOUND','Edit the existing Canva design');
       const id=randomUUID();
       await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,metadata)
@@ -546,9 +551,14 @@ export class CanvaConnectService {
       // A concurrent retry keeps the first receipt, without reading today's mutable font policy.
       if ((await sql`SELECT id FROM hawa.canva_remote_operations WHERE tenant_id=${s.tenantId}::uuid
         AND task_id=${taskId}::uuid AND request_key=${key}`.execute(db)).rows.length) return undefined;
-      if (format === 'pptx') {
-        const source = await this.editableSource(s,taskId,binding.client_id,design.id,db);
-        if (source) {
+      const revisionCopy = await latestRevisionCopy(db,s.tenantId,taskId);
+      if (!revisionCopy) await assertNativeRevisionAdmission(db,s.tenantId,taskId);
+      // Both preview and editable capture must belong to the same human confirmation.
+      if (format === 'pptx' || revisionCopy) {
+        const source = format === 'pptx' ? await this.editableSource(s,taskId,binding.client_id,design.id,db) : undefined;
+        if (revisionCopy) {
+          metadata.checkingPolicy=await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id);
+        } else if (source) {
           const manifest=source.manifest, blocks=studioSentBlocks(manifest);
           const directionsByIndex=importedSourceDirections(manifest);
           if (!Array.isArray(manifest?.copy) || !manifest.copy.length || !manifest.copy.every((part:unknown)=>typeof part==='string') ||
@@ -767,9 +777,9 @@ export class CanvaConnectService {
           || row.capture_version !== approval.version)) return null;
         const checked = rows.find(row => row.id === approval.checked_id);
         if (checked) {
-          const current=(await sql<{current:boolean}>`SELECT hawa.canva_export_policy_current(o.tenant_id,o.client_id,o.metadata) AS current
+          const current=(await sql<{current:boolean}>`SELECT bool_and(hawa.canva_export_policy_current(o.tenant_id,o.client_id,COALESCE(o.metadata,'{}'::jsonb) || jsonb_build_object('taskId',o.task_id))) AS current
             FROM hawa.canva_remote_operations o JOIN hawa.canva_export_bytes b ON b.operation_id=o.id AND b.tenant_id=o.tenant_id
-            WHERE b.id=${checked.id}::uuid AND b.tenant_id=${input.tenantId}::uuid`.execute(db)).rows[0];
+            WHERE b.id=ANY(${rows.map(row=>row.id)}::uuid[]) AND b.tenant_id=${input.tenantId}::uuid`.execute(db)).rows[0];
           if (!current?.current) return null;
         }
         return checked ? { designId: binding.design_id, actorId: checked.actor_id, version: approval.version } : null;

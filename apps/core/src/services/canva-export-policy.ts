@@ -4,10 +4,11 @@ import { isServiceUserId } from '@hawa/contracts';
 import { computeDnaHash } from '../core-helpers.js';
 import { CanvaFlowError } from './canva-flow-error.js';
 import { savedDesignCopy, classifyCopyScript } from './saved-design-copy.js';
+import { latestRevisionCopy, nativeRevisionHandoff } from './native-revision-handoff.js';
 
 export type ExportCheckPolicy = {
   version: 1;
-  kind: 'imported_source' | 'manual_client_dna';
+  kind: 'imported_source' | 'manual_client_dna' | 'revision_client_dna';
   copy: string[];
   requiredFont?: string;
   options: PptxCheckOptions;
@@ -16,6 +17,8 @@ export type ExportCheckPolicy = {
   clientId?: string;
   dnaVersion?: number;
   dnaContentHash?: string;
+  confirmationEventId?: string;
+  taskId?: string;
 };
 
 /** Caller owns the task/binding locks. No provider calls or fabricated import metadata. */
@@ -28,9 +31,15 @@ export async function resolveManualExportPolicy(
       AND event_type='task.created' ORDER BY aggregate_version LIMIT 1) e ON true
     WHERE t.tenant_id=${tenantId}::uuid AND t.id=${taskId}::uuid AND t.client_id=${clientId}::uuid`.execute(db)).rows[0];
   const source = task?.source as { payload?: { body?: { workflow?: string } }; body?: { workflow?: string } } | undefined;
-  if (!task || task.request_id || (source?.payload?.body || source?.body)?.workflow !== 'canva_manual')
+  const revision = await latestRevisionCopy(db, tenantId, taskId);
+  if (!task || task.request_id || (!revision && (source?.payload?.body || source?.body)?.workflow !== 'canva_manual'))
     throw new CanvaFlowError(422, 'SOURCE_REQUIRED', 'Checked export needs a matching imported source or a manual Desk request with exact copy and active client fonts.');
-  const copy = savedDesignCopy(task.source, '').copy;
+  if (revision) {
+    const handoff = await nativeRevisionHandoff(db, tenantId, taskId);
+    if (!handoff?.available || handoff.confirmedEventId !== revision.id)
+      throw new CanvaFlowError(409, 'REVISION_BASIS_CHANGED', 'Confirm the exact copy against the current linked native design before export.');
+  }
+  const copy = revision?.copy ?? savedDesignCopy(task.source, '').copy;
   if (copy.join('\n').length > 16000 || copy.some(text => classifyCopyScript(text) === 'unsupported'))
     throw new CanvaFlowError(422, 'COPY_UNSUPPORTED', 'The checked export supports up to 16,000 characters of Latin and Sorani/Arabic copy.');
   const row = (await sql<{ dna: Record<string, unknown>; version: number; content_hash: string; created_by: string | null }>`
@@ -53,6 +62,7 @@ export async function resolveManualExportPolicy(
   if (copy.some(text => (/[A-Za-z\u00C0-\u024F]/u.test(text) || classifyCopyScript(text) === 'latin') && !allowedFontsByScript.latin.length) ||
       copy.some(text => classifyCopyScript(text) === 'arabic' && !allowedFontsByScript.arabic.length))
     throw new CanvaFlowError(422, 'BRAND_FONTS_REQUIRED', 'The active Client DNA needs explicit licensed font families for every script in the saved copy.');
-  return { version: 1, kind: 'manual_client_dna', copy, options: { allowedFontsByScript },
+  return { version: 1, kind: revision ? 'revision_client_dna' : 'manual_client_dna', copy, options: { allowedFontsByScript },
+    ...(revision ? { confirmationEventId: revision.id, taskId } : {}),
     creationEventId: task.event_id, clientId, dnaVersion: row.version, dnaContentHash: row.content_hash };
 }

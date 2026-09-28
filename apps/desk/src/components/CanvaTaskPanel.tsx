@@ -2,6 +2,8 @@ import {taskGenerationBlocker} from '@hawa/contracts/task-status';
 import React,{useEffect,useRef,useState} from 'react';
 import {apiClient} from '../api/client.js';
 import {canvaPreviewEvidence} from '../services/canvaPreviewEvidence.js';
+import {NativeRevisionHandoff} from './NativeRevisionHandoff.js';
+import {captureForReview} from '../services/canvaCapture.js';
 export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId,taskStatus})=>{
   const generationBlocker=taskGenerationBlocker(taskStatus);
   const [state,setState]=useState<any>(null),[connected,setConnected]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
@@ -17,7 +19,7 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
   useEffect(()=>{setState(null);setPlans([]);setRetirementReasons({});setResults({});setMessage('');keys.current={};exportRequests.current={};void refresh().catch(e=>setMessage(e.message));},[taskId]);
   // A failed poll is retried in 5 s; a 401 among them reaches the Work screen's sign-in prompt through the API client (2026-09-24).
   useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});},5000);return()=>clearInterval(timer);},[taskId]);
-  const evidence=canvaPreviewEvidence(state?.artifacts);
+  const evidence=canvaPreviewEvidence(state?.artifacts,state?.revisionHandoff ? state.revisionHandoff.confirmedEventId ?? null : undefined);
   const latestPng=evidence.preview;
   const latestCheck=evidence.check;
   useEffect(()=>{let cancelled=false;let objectUrl:string|undefined;setPreview(null);
@@ -47,8 +49,10 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
   const download=(artifact:any)=>run(async()=>{const blob=await apiClient.canva.download(taskId,artifact.id);const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`canva-${artifact.sha256}.${artifact.format==='png'?'png':artifact.format==='pptx'?'pptx':'pdf'}`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
   return <section aria-label="Canva design and exports" className="rule" style={{marginTop:12}}>
     <h4>Canva design and exports</h4>
+    {state?.revisionHandoff&&<NativeRevisionHandoff taskId={taskId} handoff={state.revisionHandoff} busy={busy} onAction={run}
+      onCapture={()=>void run(async()=>{const result=await captureForReview(apiClient.canva,taskId,{key:requestKey('revision-capture')});setMessage(result.text);if(result.completed)delete keys.current['revision-capture'];})}/>}
     {!connected&&<p>Connect Canva in Settings to create a native design or retrieve its exports.</p>}
-    {state&&!state.binding&&<div>
+    {state&&!state.binding&&!state.revisionHandoff&&<div>
       <p>Create an editable draft from the saved copy and verified client references. The saved plan records the model used. Native font, layout and copy still require review.</p>
       <label>Draft proportions <select value={`${width}x${height}`} onChange={e=>{const [w,h]=e.target.value.split('x');setWidth(w);setHeight(h);}}>
         <option value="1200x1697">Portrait invitation</option><option value="1080x1350">Portrait post</option><option value="1080x1080">Square post</option></select></label>
@@ -65,7 +69,7 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string}>=({taskId
         <button className="btn" disabled={busy||(retirementReasons[p.id]||'').trim().length<3}
           onClick={()=>run(async()=>{const r=await apiClient.canva.abandonPlan(taskId,p.id,retirementReasons[p.id]);delete keys.current.generate;setMessage(r.message);})}>Retire plan</button>
       </details>}</div>)}
-    {state&&!state.binding&&<details><summary>Create a blank Canva design</summary>
+    {state&&!state.binding&&!state.revisionHandoff&&<details><summary>Create a blank Canva design</summary>
       <p>This creates an editable canvas. Add your approved content in Canva. Canva removes unused blank designs after seven days.</p>
       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
         <label>Width (px) <input type="number" min="40" max="8000" value={width} onChange={e=>setWidth(e.target.value)} style={{width:100}} /></label>
