@@ -15,7 +15,7 @@
  *    longer than `timeoutMs` counts as this update's retryable failure.
  * "Wait" is a thrown error: Restate retries the step and does not journal it.
  */
-import type { ChatInboxCore, IntakeAnswer, IntakeMode } from './chat-inbox.js';
+import type { ChatInboxCore, IntakeAnswer, IntakeMode, LateChangeStage } from './chat-inbox.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -67,6 +67,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         chatId?: string; questionId?: string; draft?: unknown; reason?: string;
         albumMessage?: string; albumNoticeKey?: string;
         sourceMessage?: string; sourceNoticeKey?: string;
+        requestStage?: string; officeAlert?: { chatId?: unknown; text?: unknown } | null;
       };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
@@ -120,6 +121,19 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
               ...(body.lifecycleAction === 'requester-answer' && body.questionId
                 ? { questionId: body.questionId } : {}),
               ...(body.rawText !== undefined ? { rawText: body.rawText } : {}) };
+          }
+          if (body.lifecycleAction === 'late-change') {
+            const alert = body.officeAlert;
+            if (body.code !== 'LATE_REQUESTER_CHANGE' || !body.chatId || typeof body.requestId !== 'string' ||
+                !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId) ||
+                !['in_review', 'approved', 'delivering', 'delivered'].includes(String(body.requestStage)) ||
+                (alert !== undefined && (!alert || typeof alert.chatId !== 'string' || !alert.chatId ||
+                  typeof alert.text !== 'string' || !alert.text || alert.text.length > 4000))) {
+              throw new Error(`Core returned an invalid late change for update ${update.update_id}`);
+            }
+            return { ...base, lifecycleAction: 'late-change', code: body.code, chatId: body.chatId,
+              requestId: body.requestId, requestStage: body.requestStage as LateChangeStage,
+              ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}) };
           }
           if (body.lifecycleAction === 'request-choice-required' && body.chatId &&
               (body.code === 'AMBIGUOUS_REQUEST' || body.code === 'STALE_REQUEST_REPLY')) {

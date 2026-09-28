@@ -39,20 +39,26 @@ export interface HandleUpdateInput {
 
 export type IntakeMode = 'legacy' | 'lifecycle';
 
+/** The request stages in which a requester's reply is kept as a late change (finding 13). */
+export type LateChangeStage = 'in_review' | 'approved' | 'delivering' | 'delivered';
+
 /** What Core's intake answered, as journaled. */
 export type IntakeAnswer =
   | { kind: 'done'; intakeStatus: number; duplicate?: boolean;
       /** When mode=lifecycle and Core routed the update as a requester revision. */
       lifecycleAction?: 'open-request' | 'new-brief-required' | 'requester-revision' | 'requester-answer' |
-        'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message' | 'source-message';
+        'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message' | 'source-message' |
+        'late-change';
       albumMessage?: string; albumNoticeKey?: string;
       sourceMessage?: string; sourceNoticeKey?: string;
       draft?: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'];
       requestId?: string; newTaskId?: string; round?: number; directive?: string;
       priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
       code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
-        'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' | 'LIFECYCLE_MEDIA_NOT_ADMITTED';
-      reason?: string; }
+        'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' | 'LIFECYCLE_MEDIA_NOT_ADMITTED' | 'LATE_REQUESTER_CHANGE';
+      reason?: string;
+      /** late-change: the stage the request was in, and Core's alert for the office chat (if any). */
+      requestStage?: LateChangeStage; officeAlert?: { chatId: string; text: string }; }
   | { kind: 'retry'; reason: string };
 
 /** The Core calls ChatInbox makes (core-client.ts). A thrown error means "wait and try again". */
@@ -195,6 +201,24 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
         text: done.code === 'STALE_REQUEST_REPLY'
           ? 'That design is no longer waiting for changes. Please reply to the current revision notice for the design you mean.'
           : 'More than one design is waiting for your changes. Please reply directly to the revision notice for the design you mean.',
+      });
+    }
+    if (done.lifecycleAction === 'late-change') {
+      // The requester replied after the design reached the office. Core kept the words; the office
+      // hears them quoted, and the requester is told plainly that they changed nothing by themselves.
+      if (done.code !== 'LATE_REQUESTER_CHANGE' || !done.chatId || !done.requestId || !done.requestStage) {
+        throw new Error('Core returned an incomplete late change');
+      }
+      if (done.officeAlert) {
+        ctx.sendNotice({ v: 1, key: `notify.office:late-change:${done.requestId}:${update.update_id}`,
+          chatId: done.officeAlert.chatId, kind: 'text', class: 'critical', text: done.officeAlert.text });
+      }
+      const when = done.requestStage === 'delivered' ? 'after this design was delivered'
+        : 'after this design went to the office';
+      ctx.sendNotice({ v: 1, key: `chatinbox:late-change:${update.update_id}`,
+        chatId: done.chatId, kind: 'text', class: 'critical',
+        text: `Your message arrived ${when}, so it was not applied to the design. ` +
+          (done.officeAlert ? 'The office has been told and has your words.' : 'Your words were saved for the office.'),
       });
     }
     if (done.lifecycleAction === 'new-brief-required' && done.chatId) {

@@ -113,6 +113,8 @@ For outbound Telegram messages, a provider 5xx or HTTP success without a valid A
 
 The legacy outbox also requires a positive Bot API message ID and a committed `sent` mark before it completes a new Telegram message or approved-file notification. It retries a failed *local mark write* for a bounded period, then leaves the command uncertain and the earlier `attempted` mark in place. A later outbox requeue cannot repeat that send. Historical `sent` marks without IDs remain non-replayable and must not be upgraded to a fabricated receipt.
 
+A request-owned TelegramSender attempt that Telegram definitely refused (429, pre-connection failure, unknown refusal or 4xx) never leaves `attempted` behind for good when the `failed` mark cannot be written. The refusal is journaled; a separate step writes `failed` over that attempt's `attempted` mark and is retried until PostgreSQL takes it; only then does the sender wait and try again, or answer `refused`. A process that dies after Telegram answered and before the answer was journaled still leaves `attempted`, which stays uncertain and alerts the office (ADR-130).
+
 - **Transient:** definite pre-connection failure, 429, safe idempotent provider operations, lock contention — bounded exponential retry with jitter.
 - **Capacity:** GPU queue/full, provider quota — durable wait or evaluated fallback.
 - **Invalid input:** schema, missing asset, exact-copy conflict — no blind retry; request correction.

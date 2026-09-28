@@ -47,6 +47,18 @@ export interface ApiProblemDetails {
   status: number;
   detail?: string;
   instance?: string;
+  /** A machine-readable reason some routes add, e.g. LATE_REQUESTER_CHANGE. */
+  code?: string;
+  /** With LATE_REQUESTER_CHANGE: the requester's words that nobody has acknowledged yet. */
+  lateChanges?: LateRequesterChangeView[];
+}
+
+/** Words a requester sent after the design reached the office, as Core holds a delivery for them. */
+export interface LateRequesterChangeView {
+  updateId: string;
+  text: string;
+  stage: string;
+  receivedAt: string;
 }
 
 export class ApiError extends Error {
@@ -688,7 +700,7 @@ class HawaApiClient {
       });
     },
 
-    publish: async <T = any>(taskId: string, body?: { destination?: string; policy?: string; approvalId?: string }, actionId?: string): Promise<T> => {
+    publish: async <T = any>(taskId: string, body?: { destination?: string; policy?: string; approvalId?: string; acknowledgeLateChanges?: string[] }, actionId?: string): Promise<T> => {
       return this.request<T>(`/tasks/${taskId}/publish`, {
         method: 'POST',
         ...(actionId ? { headers: { 'Idempotency-Key': actionId } } : {}),

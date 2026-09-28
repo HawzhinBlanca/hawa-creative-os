@@ -336,3 +336,202 @@ describe('TelegramSender: the office hears of an uncertain critical message once
     await expect(handleSend(ctx, depsWith(bridge), { ...text(), key: '' })).rejects.toBeInstanceOf(restate.TerminalError);
   });
 });
+
+/**
+ * Finding 22 (Phase 4 review): a message Telegram definitely did not take (429, a pre-connection
+ * failure, an unknown refusal) was left 'attempted' for good when Postgres could not take the 'failed'
+ * mark, so every later attempt answered uncertain and never sent it. These tests run the handler in a
+ * fake Restate object context with a journal: an entry is recorded only when a step returns, a thrown
+ * step is retried (the whole invocation replays its journal), and a crash can be injected right
+ * before or right after any entry is recorded.
+ */
+class Crash extends Error {}
+type Entry = { name: string; value: unknown };
+type CrashPlan = { beforeEntry?: number; afterEntry?: number };
+
+/** One invocation of handleSend, replayed from its journal until it returns (Restate's retries). */
+async function invokeJournaled(deps: TelegramSenderDeps, m: OutboundMessage, plan: CrashPlan = {}) {
+  const journal: Entry[] = [];
+  const forwarded: OutboundMessage[] = [];
+  const sleeps: number[] = [];
+  const failures: string[] = [];
+  const pending = { ...plan };
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let index = 0;
+    const record = (name: string, value: unknown) => {
+      if (pending.beforeEntry === journal.length + 1) {
+        pending.beforeEntry = undefined;
+        throw new Crash(`crash before entry ${journal.length + 1} (${name}) was recorded`);
+      }
+      journal.push({ name, value: value === undefined ? undefined : JSON.parse(JSON.stringify(value)) });
+      if (pending.afterEntry === journal.length) {
+        pending.afterEntry = undefined;
+        throw new Crash(`crash after entry ${journal.length} (${name}) was recorded`);
+      }
+    };
+    const replayed = (name: string) => {
+      const i = index++;
+      if (i >= journal.length) return undefined;
+      expect(journal[i].name).toBe(name);
+      return journal[i];
+    };
+    const ctx: SenderContext = {
+      run: async (name, action) => {
+        const prior = replayed(name);
+        if (prior) return prior.value as never;
+        const value = await action();
+        record(name, value);
+        return value;
+      },
+      sleep: async (ms: number) => {
+        if (replayed('sleep')) return;
+        sleeps.push(ms);
+        record('sleep', ms);
+      },
+      sendTo: (message) => {
+        if (replayed(`sendTo:${message.key}`)) return;
+        forwarded.push(message);
+        record(`sendTo:${message.key}`, message.key);
+      },
+    };
+    try {
+      const result = await handleSend(ctx, deps, m);
+      return { result, journal, forwarded, sleeps, failures, attempts: attempt + 1 };
+    } catch (err) {
+      if (err instanceof restate.TerminalError) throw err;
+      failures.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+  throw new Error(`the invocation did not finish: ${failures.slice(-3).join(' | ')}`);
+}
+
+/** A database whose next `remaining` transactions fail, as while Postgres restarts. */
+function outageDb() {
+  const outage = { remaining: 0, failed: 0 };
+  const flaky = {
+    isTransaction: false,
+    transaction() {
+      if (outage.remaining > 0) {
+        outage.remaining--;
+        outage.failed++;
+        return { execute: async () => { throw new Error('Connection terminated unexpectedly'); } };
+      }
+      return db.transaction();
+    },
+  } as unknown as Kysely<Database>;
+  return { flaky, outage };
+}
+
+/**
+ * The bridge answers `first`, then success. Postgres goes down right after the first answer, for
+ * exactly the tries the attempt makes at its mark (markRetryDelaysMs [1, 1]: three) plus `extra`.
+ */
+function refusalDuringOutage(first: TelegramSendResult, extra = 1) {
+  const { flaky, outage } = outageDb();
+  const answers: TelegramSendResult[] = [first, { success: true, messageId: '4242' }];
+  const calls: string[] = [];
+  const answer = (method: string) => {
+    calls.push(method);
+    const next = answers.length > 1 ? answers.shift()! : answers[0];
+    if (calls.length === 1) outage.remaining = 3 + extra;
+    return next;
+  };
+  const bridge: BridgeLike = {
+    async dispatchOutboundMessage() { return answer('sendMessage'); },
+    async dispatchOutboundDocument() { return answer('sendDocument'); },
+  };
+  return { flaky, outage, bridge, calls };
+}
+
+describe('TelegramSender: a definite refusal is retried even when its failed mark cannot be written (finding 22)', () => {
+  const depsFor = (bridge: BridgeLike, flaky: Kysely<Database>): TelegramSenderDeps =>
+    ({ ...depsWith(bridge), db: flaky, markRetryDelaysMs: [1, 1] });
+
+  it.each([
+    ['429 with retry_after', { success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 }],
+    ['a pre-connection network failure', { success: false, error: 'TELEGRAM_NETWORK_ERROR' }],
+    ['a refusal this sender does not know', { success: false, error: 'TELEGRAM_UNEXPECTED_ANSWER' }],
+  ] as Array<[string, TelegramSendResult]>)('%s during a Postgres outage: sent on the retry, marked sent, no office alert', async (_what, first) => {
+    const { flaky, bridge, calls, outage } = refusalDuringOutage(first);
+    const m = text();
+    const run = await invokeJournaled(depsFor(bridge, flaky), m);
+    expect(outage.failed).toBeGreaterThanOrEqual(3);
+    expect(run.result).toEqual({ outcome: 'sent', messageId: '4242' });
+    expect(calls).toHaveLength(2);
+    expect(await markOf(m.key)).toBe('sent');
+    expect(run.forwarded).toEqual([]);
+  });
+
+  it("a 429 waits for Telegram's retry_after before the second send", async () => {
+    const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 3 });
+    const run = await invokeJournaled(depsFor(bridge, flaky), text());
+    expect(run.sleeps).toEqual([3000]);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('a definite 4xx refusal during an outage answers refused and is not left attempted', async () => {
+    const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_403' });
+    const m = text();
+    const run = await invokeJournaled(depsFor(bridge, flaky), m);
+    expect(run.result).toEqual({ outcome: 'refused', error: 'TELEGRAM_REJECTED_403' });
+    expect(calls).toHaveLength(1);
+    expect(await markOf(m.key)).toBe('failed');
+    expect(run.forwarded).toEqual([]);
+  });
+
+  it('a 5xx during an outage stays uncertain: never resent, the office alerted once', async () => {
+    const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_502' });
+    const m = text();
+    const run = await invokeJournaled(depsFor(bridge, flaky), m);
+    expect(run.result.outcome).toBe('uncertain');
+    expect(calls).toHaveLength(1);
+    expect(['attempted', 'uncertain']).toContain(await markOf(m.key));
+    expect(run.forwarded.map((f) => f.key)).toEqual([`${m.key}:uncertain-alert`]);
+  });
+
+  it('a crash after every recorded entry: the 429 message reaches Telegram twice in total and nobody is alerted', async () => {
+    const clean = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 });
+    const cleanRun = await invokeJournaled(depsFor(clean.bridge, clean.flaky), text());
+    expect(cleanRun.journal.length).toBeGreaterThanOrEqual(3);
+    for (let k = 1; k <= cleanRun.journal.length; k++) {
+      const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 });
+      const m = text();
+      const run = await invokeJournaled(depsFor(bridge, flaky), m, { afterEntry: k });
+      expect({ k, result: run.result, calls: calls.length, alerts: run.forwarded.length })
+        .toEqual({ k, result: { outcome: 'sent', messageId: '4242' }, calls: 2, alerts: 0 });
+      expect(run.journal.map((e) => e.name)).toEqual(cleanRun.journal.map((e) => e.name));
+      expect(await markOf(m.key)).toBe('sent');
+    }
+  });
+
+  it('a crash before each entry is recorded: only a lost answer to the first send is uncertain, and it is alerted, never resent', async () => {
+    const clean = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 });
+    const cleanRun = await invokeJournaled(depsFor(clean.bridge, clean.flaky), text());
+    for (let k = 1; k <= cleanRun.journal.length; k++) {
+      const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 });
+      const m = text();
+      const run = await invokeJournaled(depsFor(bridge, flaky), m, { beforeEntry: k });
+      if (k === 1) {
+        // The process died after Telegram's 429 and before its answer was journaled, with the mark
+        // still 'attempted': nothing durable says it was refused. It stays uncertain and visible.
+        expect(run.result.outcome).toBe('uncertain');
+        expect(calls).toHaveLength(1);
+        expect(run.forwarded.map((f) => f.key)).toEqual([`${m.key}:uncertain-alert`]);
+        expect(await markOf(m.key)).toBe('attempted');
+      } else {
+        expect({ k, result: run.result, calls: calls.length, alerts: run.forwarded.length })
+          .toEqual({ k, result: { outcome: 'sent', messageId: '4242' }, calls: 2, alerts: 0 });
+        expect(await markOf(m.key)).toBe('sent');
+      }
+    }
+  });
+
+  it('a later request for the same message after the recovered refusal sends nothing again', async () => {
+    const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 });
+    const m = text();
+    await invokeJournaled(depsFor(bridge, flaky), m);
+    const again = await invokeJournaled(depsFor(bridge, flaky), m);
+    expect(again.result).toEqual({ outcome: 'sent', messageId: '4242' });
+    expect(calls).toHaveLength(2);
+  });
+});

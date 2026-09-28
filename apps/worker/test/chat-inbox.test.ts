@@ -402,6 +402,51 @@ describe('album collection notices', () => {
   });
 });
 
+describe('a requester change after the design reached the office (finding 13 of the Phase 4 review)', () => {
+  const requestId = '3f1c2b7a-1d2e-4f5a-8b6c-7d8e9f0a1b2c';
+  const words = 'The phone number is wrong: it must be 0750 123 4567';
+  const lateAnswer = (extra: Record<string, unknown> = {}) => ({ v: 1, kind: 'handled', intakeStatus: 409,
+    code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change', chatId: '555', requestId,
+    requestStage: 'approved', officeAlert: { chatId: '9000', text: `A requester sent words after approval.\n\n${words}` }, ...extra });
+
+  it('alerts the office with the words and tells the requester plainly, once per update, after a crash', async () => {
+    const transport = vi.fn(async () => Response.json(lateAnswer()));
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: transport });
+    const ctx = new FakeContext(); ctx.crashOnSet = 1;
+    await untilSettled(ctx, () => handleUpdate(ctx, input, client));
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(ctx.lifecycleDecisions).toHaveLength(0);
+    // The fake context does not deduplicate; Restate does, by each message's key.
+    const keys = [...new Set(ctx.notices.map((n: any) => n.key))];
+    expect(keys).toEqual([`notify.office:late-change:${requestId}:${update.update_id}`, `chatinbox:late-change:${update.update_id}`]);
+    const [office, requester] = ctx.notices as any[];
+    expect(office).toMatchObject({ chatId: '9000', kind: 'text', class: 'critical', text: expect.stringContaining(words) });
+    expect(office.parseMode).toBeUndefined();
+    expect(requester).toMatchObject({ chatId: '555', kind: 'text', class: 'critical' });
+    expect(requester.text).toMatch(/office has been told/i);
+    expect(requester.text).not.toMatch(/revision notice|will follow up/i);
+  });
+
+  it('does not claim the office was told when Core had no office chat to alert', async () => {
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token',
+      fetch: async () => Response.json(lateAnswer({ officeAlert: undefined })) });
+    const ctx = new FakeContext();
+    await handleUpdate(ctx, input, client);
+    expect(ctx.notices).toHaveLength(1);
+    expect((ctx.notices[0] as any).text).not.toMatch(/office has been told/i);
+    expect((ctx.notices[0] as any).text).toMatch(/saved/i);
+  });
+
+  it('refuses a malformed late-change answer from Core', async () => {
+    for (const extra of [{ requestId: 'not-a-request' }, { requestStage: 'designing' },
+      { officeAlert: { chatId: '9000', text: 'x'.repeat(4001) } }, { officeAlert: { chatId: '', text: words } }]) {
+      const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token',
+        fetch: async () => Response.json(lateAnswer(extra)) });
+      await expect(client.intake(update, 'lifecycle')).rejects.toThrow('invalid late change');
+    }
+  });
+});
+
 describe('source review notices', () => {
   it('replays one stable copy-review notice after a journal crash without starting design', async () => {
     const transport = vi.fn(async () => Response.json({ intakeStatus: 200, lifecycleAction: 'source-message',

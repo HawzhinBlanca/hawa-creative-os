@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T03:28:35Z",
+  "generatedAt": "2026-09-28T09:24:38Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 476,
+  "fileCount": 478,
   "files": [
     {
       "path": ".dockerignore",
@@ -678,6 +678,11 @@
       "bytes": 3559
     },
     {
+      "path": "adrs/130_refused_sends_late_requester_words.md",
+      "sha256": "4d2db6e8396e4d8423f103b62d5b62b93c30fa076cef5606d7dff68ff96e4d0f",
+      "bytes": 5840
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "0a40a0ee632644cf1c1e0531fb516e5f4f7cb0dc857172785003ae6398e02845",
       "bytes": 45259
@@ -939,13 +944,13 @@
     },
     {
       "path": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
-      "sha256": "08f47f26c6e41a0446b4c41daaa107148fde0fd8f053edcc2e5efc7def7ddc63",
-      "bytes": 4403
+      "sha256": "3e2a6f6bb488640fef211bef189542cd726f579a16fa994192418ce663d1b66e",
+      "bytes": 4847
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "70b6928736a7fa5f6aec89a1d6751b2a354a29b92e90f9f52f3de1e7d7e4392e",
-      "bytes": 32491
+      "sha256": "30e6640bdc68338bec7daa5a15bc783a704c819267c1337ab01221875728af4d",
+      "bytes": 33066
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1141,6 +1146,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/FONT_BASIS_PROOF.json",
       "sha256": "51c34f0b54a5d47bad869145191a58a374539c090196e80c5520479e490c02ff",
       "bytes": 6235
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/LIFECYCLE_DESK_FIXES_PROOF.json",
+      "sha256": "5a3d6d963d2cc12f80880b9f2fa390989528e945ed80dced1f6a03f8a62a0a36",
+      "bytes": 9755
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LIFECYCLE_NATIVE_RECOVERY_PROOF.json",
@@ -1619,8 +1629,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "ef086ccecbba1978e55149ed1d805d14424533595cecc874000d5bdfaaa6cb2f",
-      "bytes": 424669
+      "sha256": "527737aaf03d4153275046d9322d8b87b6153320ad5a4ae29872e8716b1d64c1",
+      "bytes": 428929
     },
     {
       "path": "plans/user-stories.csv",

@@ -111,6 +111,132 @@ async function seedWaitingRequest(app: any, chat: number) {
   return { requestId, taskId };
 }
 
+/** A request-owned request at a later stage, with one sent lifecycle message the requester can reply to. */
+async function seedRequestAt(app: any, chat: number, stage: string, rev: number, sent: { key: string; messageId: string }) {
+  const { requestId, taskId } = await seedWaitingRequest(app, chat);
+  await withRlsContext(db, scope, async (trx) => {
+    await sql`UPDATE hawa.requests SET stage = ${stage}, rev = ${rev}
+      WHERE tenant_id = ${tenantId}::uuid AND request_id = ${requestId}::uuid`.execute(trx);
+    await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id,
+        event_kind, payload, payload_hash, verified)
+      VALUES (${tenantId}::uuid, 'telegram_delivery', ${`lc:${requestId}:${sent.key}:send`},
+        'telegram_message_sent', ${JSON.stringify({ messageId: sent.messageId })}::jsonb,
+        ${`test-sent-${requestId}`}, true)`.execute(trx);
+  });
+  return { requestId, taskId };
+}
+
+const lateReceipt = async (id: number) => (await withRlsContext(db, scope, (trx) => sql<{ event_kind: string; payload: Record<string, unknown> }>`
+  SELECT event_kind, payload FROM hawa.inbox_events WHERE tenant_id = ${tenantId}::uuid
+    AND source_account_id = 'lifecycle_chat_routing' AND source_event_id = ${String(id)}`.execute(trx))).rows;
+
+describe('a requester change after the design reached the office (finding 13 of the Phase 4 review)', () => {
+  const words = 'The phone number is wrong: it must be 0750 123 4567';
+
+  it('keeps the words of a reply to the approved draft, alerts the office and starts nothing', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const { requestId, taskId } = await seedRequestAt(app, chat, 'approved', 3, { key: '2:design-outcome', messageId: '811' });
+    const reply = brief(updateId(), chat);
+    reply.message.text = words;
+    (reply.message as Record<string, unknown>).reply_to_message = { message_id: 811 };
+    const answer = await intake(app, reply, 'lifecycle', requestId);
+    expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE',
+      lifecycleAction: 'late-change', chatId: String(chat), requestId, requestStage: 'approved',
+      officeAlert: { chatId: String(OFFICE), text: expect.stringContaining(words) } });
+    expect(answer.body.officeAlert.text).toContain(taskId);
+    expect(answer.body.officeAlert.text).toMatch(/acknowledge/i);
+    expect(await tasksInChat(chat)).toHaveLength(1);
+    expect(await lateReceipt(reply.update_id)).toEqual([{ event_kind: 'lifecycle_late_requester_change',
+      payload: expect.objectContaining({ code: 'LATE_REQUESTER_CHANGE', chatId: String(chat), requestId,
+        taskId, requestRev: 3, requestStage: 'approved', text: words }) }]);
+
+    // A lost answer replays the stored decision, even after the request moved on.
+    await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requests SET stage = 'delivered', rev = 5
+      WHERE tenant_id = ${tenantId}::uuid AND request_id = ${requestId}::uuid`.execute(trx));
+    const replay = await intake(createApp({ db } as any), reply, 'lifecycle', requestId);
+    expect(replay.body).toEqual(answer.body);
+    const changed = await intake(app, { ...reply, message: { ...reply.message, text: 'Something else' } }, 'lifecycle', requestId);
+    expect(changed.body).toMatchObject({ intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
+    expect(await tasksInChat(chat)).toHaveLength(1);
+  });
+
+  it.each([
+    ['in_review', 2, '2:design-outcome'],
+    ['approved', 5, '3:office-revision-notify'],
+    ['delivering', 4, '2:design-outcome'],
+    ['delivered', 5, '2:design-outcome'],
+  ] as const)('a reply while the request is %s (rev %s, to %s) is a late change, not a stale reply', async (stage, rev, key) => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const { requestId } = await seedRequestAt(app, chat, stage, rev, { key, messageId: '812' });
+    const reply = brief(updateId(), chat);
+    reply.message.text = words;
+    (reply.message as Record<string, unknown>).reply_to_message = { message_id: 812 };
+    const answer = await intake(app, reply, 'lifecycle', requestId);
+    expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE',
+      lifecycleAction: 'late-change', requestId, requestStage: stage });
+    expect(answer.body.officeAlert.text).toContain(words);
+  });
+
+  it('a captioned photo reply after approval keeps the caption, says a photo came, and downloads nothing', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const bridge = { downloadFile: vi.fn(async () => Buffer.from('not used')),
+      dispatchOutboundMessage: vi.fn(async () => ({ success: true })) };
+    const app = createApp({ db, telegramBridge: bridge } as any);
+    const { requestId } = await seedRequestAt(app, chat, 'approved', 3, { key: '2:design-outcome', messageId: '815' });
+    const reply = brief(updateId(), chat);
+    const message = reply.message as Record<string, unknown>;
+    delete message.text;
+    message.caption = words;
+    message.photo = [{ file_id: 'late-photo-small', file_size: 100, width: 90, height: 90 },
+      { file_id: 'late-photo', file_size: 1000, width: 900, height: 900 }];
+    message.reply_to_message = { message_id: 815 };
+    const answer = await intake(app, reply, 'lifecycle', requestId);
+    expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE', requestId });
+    expect(bridge.downloadFile).not.toHaveBeenCalled();
+    const [stored] = await lateReceipt(reply.update_id);
+    expect(stored.payload.text).toContain(words);
+    expect(stored.payload.text).toContain('also sent a photo');
+    expect(answer.body.officeAlert.text).toContain('also sent a photo');
+  });
+
+  it('a reply to a request that is designing again stays a stale reply', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const { requestId } = await seedRequestAt(app, chat, 'designing', 4, { key: '3:office-revision-notify', messageId: '813' });
+    const reply = brief(updateId(), chat);
+    reply.message.text = words;
+    (reply.message as Record<string, unknown>).reply_to_message = { message_id: 813 };
+    expect((await intake(app, reply, 'lifecycle', requestId)).body).toMatchObject({
+      intakeStatus: 409, code: 'STALE_REQUEST_REPLY', lifecycleAction: 'request-choice-required' });
+  });
+
+  it('without an office chat the words are still kept, and no alert is claimed', async () => {
+    vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);
+    vi.stubEnv('TELEGRAM_ALLOWED_USERS', '');
+    fakeTelegram();
+    const chat = chatId();
+    const app = createApp({ db } as any);
+    const { requestId } = await seedRequestAt(app, chat, 'approved', 3, { key: '2:design-outcome', messageId: '814' });
+    const reply = brief(updateId(), chat);
+    reply.message.text = words;
+    (reply.message as Record<string, unknown>).reply_to_message = { message_id: 814 };
+    const answer = await intake(app, reply, 'lifecycle', requestId);
+    expect(answer.body).toMatchObject({ intakeStatus: 409, code: 'LATE_REQUESTER_CHANGE', requestId });
+    expect(answer.body.officeAlert).toBeUndefined();
+    expect(await lateReceipt(reply.update_id)).toHaveLength(1);
+  });
+});
+
 describe('POST /v1/internal/telegram/intake', () => {
   it('prepares a flagged first brief without a Core task and replays its open after the flag changes', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', WORKER);

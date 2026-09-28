@@ -1,4 +1,5 @@
 /** PostgreSQL reads used to bind a Telegram reply to one RequestLifecycle owner. */
+import { createHash } from 'node:crypto';
 import { sql, type Database, type Kysely } from '@hawa/db';
 import { parseBlobRef, type BlobRef } from '@hawa/contracts';
 import type { ChatIntake } from './chat-intake.js';
@@ -152,8 +153,36 @@ export interface LinkedLifecycleReply { requestId: string; rev: number }
 
 export interface RoutingRefusal { code: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' |
   'DAILY_CAP_REACHED' | 'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' |
-  'LIFECYCLE_MEDIA_NOT_ADMITTED'; chatId: string;
-  payloadHash: string }
+  'LIFECYCLE_MEDIA_NOT_ADMITTED' | 'LATE_REQUESTER_CHANGE'; chatId: string;
+  payloadHash: string;
+  /** Only for LATE_REQUESTER_CHANGE: the request the reply was bound to and the requester's words. */
+  late?: LateRequesterChange }
+
+/** The stages in which a requester's words can no longer change the design by themselves. */
+export const LATE_CHANGE_STAGES = ['in_review', 'approved', 'delivering', 'delivered'] as const;
+export type LateChangeStage = typeof LATE_CHANGE_STAGES[number];
+const isLateStage = (value: unknown): value is LateChangeStage =>
+  typeof value === 'string' && (LATE_CHANGE_STAGES as readonly string[]).includes(value);
+
+/**
+ * A reply that reached a request after its design went to the office (finding 13 of the Phase 4
+ * review). The words are kept as they were sent; they are not applied to any design.
+ */
+export interface LateRequesterChange {
+  requestId: string; taskId: string; requestRev: number; requestStage: LateChangeStage; text: string;
+}
+
+const ROUTING_CODES = new Set(['AMBIGUOUS_REQUEST', 'STALE_REQUEST_REPLY', 'DAILY_CAP_REACHED',
+  'PARENT_BRIEF_MISSING', 'QUESTION_MISSING', 'LIFECYCLE_MEDIA_NOT_ADMITTED', 'LATE_REQUESTER_CHANGE']);
+const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseLateChange(payload: Record<string, unknown>): LateRequesterChange | null {
+  const { requestId, taskId, requestRev, requestStage, text } = payload;
+  if (typeof requestId !== 'string' || !UUID_TEXT.test(requestId) || typeof taskId !== 'string' ||
+      !UUID_TEXT.test(taskId) || !Number.isSafeInteger(requestRev) || !isLateStage(requestStage) ||
+      typeof text !== 'string' || !text.trim()) return null;
+  return { requestId, taskId, requestRev: requestRev as number, requestStage, text };
+}
 
 export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string,
   updateId: number): Promise<RoutingRefusal | null> {
@@ -163,21 +192,29 @@ export async function readRoutingRefusal(trx: Kysely<Database>, tenantId: string
     LIMIT 1`.execute(trx)).rows[0];
   const code = row?.payload?.code;
   const chatId = row?.payload?.chatId;
-  if (!row || (code !== 'AMBIGUOUS_REQUEST' && code !== 'STALE_REQUEST_REPLY' &&
-      code !== 'DAILY_CAP_REACHED' && code !== 'PARENT_BRIEF_MISSING' &&
-      code !== 'QUESTION_MISSING' && code !== 'LIFECYCLE_MEDIA_NOT_ADMITTED') ||
-      typeof chatId !== 'string') return null;
-  return { code, chatId, payloadHash: row.payload_hash };
+  if (!row || typeof code !== 'string' || !ROUTING_CODES.has(code) || typeof chatId !== 'string') return null;
+  if (code === 'LATE_REQUESTER_CHANGE') {
+    const late = parseLateChange(row.payload);
+    if (!late) throw new Error('Invalid stored late requester change');
+    return { code, chatId, payloadHash: row.payload_hash, late };
+  }
+  return { code: code as RoutingRefusal['code'], chatId, payloadHash: row.payload_hash };
 }
 
 /** Save an actionable refusal before answering Core; a lost answer replays the same choice. */
 export async function recordRoutingRefusal(trx: Kysely<Database>, tenantId: string,
   updateId: number, refusal: RoutingRefusal): Promise<RoutingRefusal> {
+  if ((refusal.code === 'LATE_REQUESTER_CHANGE') !== Boolean(refusal.late) ||
+      (refusal.late && !parseLateChange({ ...refusal.late }))) {
+    throw new Error('A late requester change carries its request and words, and only it does');
+  }
+  const kind = refusal.code === 'LIFECYCLE_MEDIA_NOT_ADMITTED' ? 'lifecycle_media_not_admitted'
+    : refusal.code === 'LATE_REQUESTER_CHANGE' ? 'lifecycle_late_requester_change'
+      : 'lifecycle_request_choice_required';
   await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id,
       event_kind, payload, payload_hash, verified)
-    VALUES (${tenantId}::uuid, 'lifecycle_chat_routing', ${String(updateId)},
-      ${refusal.code === 'LIFECYCLE_MEDIA_NOT_ADMITTED' ? 'lifecycle_media_not_admitted' : 'lifecycle_request_choice_required'},
-      ${JSON.stringify({ code: refusal.code, chatId: refusal.chatId })}::jsonb,
+    VALUES (${tenantId}::uuid, 'lifecycle_chat_routing', ${String(updateId)}, ${kind},
+      ${JSON.stringify({ code: refusal.code, chatId: refusal.chatId, ...(refusal.late ?? {}) })}::jsonb,
       ${refusal.payloadHash}, true)
     ON CONFLICT DO NOTHING`.execute(trx);
   const stored = await readRoutingRefusal(trx, tenantId, updateId);
@@ -210,4 +247,98 @@ export async function linkedLifecycleReplies(trx: Kysely<Database>, tenantId: st
     found.set(`${row.request_id}:${rev}`, { requestId: row.request_id, rev });
   }
   return [...found.values()];
+}
+
+/**
+ * The requests a reply points at when it answers a lifecycle message this chat received (the first
+ * draft at rev 2 included), and that request is past the point where the requester's words change the
+ * design: in review, approved, delivering or delivered.
+ */
+export async function lateChangeTargets(trx: Kysely<Database>, tenantId: string,
+  chatId: string, replyMessageId: string): Promise<Array<Omit<LateRequesterChange, 'text'>>> {
+  const rows = (await sql<{ request_id: string; rev: number | string; stage: string; current_task_id: string }>`
+    SELECT DISTINCT r.request_id::text, r.rev, r.stage, r.current_task_id::text
+    FROM hawa.inbox_events e JOIN hawa.requests r
+      ON r.tenant_id = e.tenant_id
+      AND e.source_event_id LIKE ('lc:' || r.request_id::text || ':%')
+    WHERE e.tenant_id = ${tenantId}::uuid AND r.chat_id = ${chatId}
+      AND r.owner = 'restate' AND e.source_account_id = 'telegram_delivery'
+      AND e.event_kind IN ('telegram_message_sent', 'telegram_document_sent')
+      AND e.payload->>'messageId' = ${replyMessageId}
+      AND r.stage IN ('in_review', 'approved', 'delivering', 'delivered')`.execute(trx)).rows;
+  return rows.filter((row) => isLateStage(row.stage)).map((row) => ({ requestId: row.request_id,
+    taskId: row.current_task_id, requestRev: Number(row.rev), requestStage: row.stage as LateChangeStage }));
+}
+
+const STAGE_WORDS: Record<LateChangeStage, string> = {
+  in_review: 'waiting for office review',
+  approved: 'approved',
+  delivering: 'being delivered',
+  delivered: 'delivered',
+};
+
+/**
+ * The office's alert for a late change. Plain text (no parse mode): the requester's words are quoted as
+ * they were sent. Null when there is no office chat, or the office chat is the requester's own.
+ */
+export function lateChangeOfficeAlert(late: LateRequesterChange, requesterChatId: string,
+  officeChatId: string | null | undefined): { chatId: string; text: string } | null {
+  if (!officeChatId || officeChatId === requesterChatId) return null;
+  const words = late.text.length > 1500 ? `${late.text.slice(0, 1500)}…` : late.text;
+  const consequence = late.requestStage === 'delivering'
+    ? 'A delivery had already started; it was not stopped.'
+    : late.requestStage === 'delivered'
+      ? 'The design had already been delivered.'
+      : 'Deliver will ask someone in the Desk to read and acknowledge these words first.';
+  return { chatId: officeChatId, text: [
+    `The requester in chat ${requesterChatId} replied after the design was ${STAGE_WORDS[late.requestStage]}. Their words were not applied to any design.`,
+    `Task ${late.taskId}, request ${late.requestId}.`,
+    '',
+    'Their words:',
+    words,
+    '',
+    consequence,
+  ].join('\n') };
+}
+
+export interface PendingLateChange { updateId: string; text: string; stage: LateChangeStage; receivedAt: string }
+
+/** Late changes of one request that nobody has acknowledged yet, oldest first. */
+export async function pendingLateChanges(trx: Kysely<Database>, tenantId: string,
+  requestId: string): Promise<PendingLateChange[]> {
+  const rows = (await sql<{ source_event_id: string; payload: Record<string, unknown>; received_at: Date | string }>`
+    SELECT l.source_event_id, l.payload, l.received_at FROM hawa.inbox_events l
+    WHERE l.tenant_id = ${tenantId}::uuid AND l.source_account_id = 'lifecycle_chat_routing'
+      AND l.event_kind = 'lifecycle_late_requester_change' AND l.payload->>'requestId' = ${requestId}
+      AND NOT EXISTS (SELECT 1 FROM hawa.inbox_events a WHERE a.tenant_id = l.tenant_id
+        AND a.source_account_id = 'lifecycle_late_change_ack' AND a.source_event_id = l.source_event_id)
+    ORDER BY l.received_at, l.id`.execute(trx)).rows;
+  return rows.map((row) => {
+    const late = parseLateChange(row.payload);
+    if (!late) throw new Error('Invalid stored late requester change');
+    return { updateId: row.source_event_id, text: late.text, stage: late.requestStage,
+      receivedAt: new Date(row.received_at).toISOString() };
+  });
+}
+
+/** Late changes of one request an office member has already acknowledged. */
+export async function acknowledgedLateChanges(trx: Kysely<Database>, tenantId: string,
+  requestId: string): Promise<string[]> {
+  return (await sql<{ source_event_id: string }>`SELECT source_event_id FROM hawa.inbox_events
+    WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'lifecycle_late_change_ack'
+      AND payload->>'requestId' = ${requestId}`.execute(trx)).rows.map((row) => row.source_event_id);
+}
+
+/** Records who read a late change before delivering; the first acknowledgement of each change stays. */
+export async function acknowledgeLateChange(trx: Kysely<Database>, tenantId: string, input: {
+  requestId: string; updateId: string; actorUserId: string; actorRole: string; actionId: string;
+}): Promise<void> {
+  const payload = JSON.stringify({ requestId: input.requestId, updateId: input.updateId,
+    actorUserId: input.actorUserId, actorRole: input.actorRole, actionId: input.actionId });
+  await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id,
+      event_kind, payload, payload_hash, verified)
+    VALUES (${tenantId}::uuid, 'lifecycle_late_change_ack', ${input.updateId},
+      'lifecycle_late_change_acknowledged', ${payload}::jsonb,
+      ${createHash('sha256').update(payload).digest('hex')}, true)
+    ON CONFLICT DO NOTHING`.execute(trx);
 }
