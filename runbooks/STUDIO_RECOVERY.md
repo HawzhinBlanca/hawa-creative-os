@@ -93,8 +93,17 @@ Recovery matches retained results per substep, so a persisted rebrief branch and
 interleaved definite image refusal resume without transport. `MODEL_STAGE_REPLAY_UNSAFE`
 now names the substep and attempt: "retained for different inputs" means its request,
 schema, authority or renderer basis changed; "cannot be reproduced" means a failed
-attempt preceded retained work in that substep. Calls admitted before migration 065
-keep the ordered-prefix rule. Unpinned derivations may still require review.
+attempt preceded saved work anywhere in the interrupted stage (the detail names the
+first such substep). Calls admitted before migration 065 keep the ordered-prefix rule
+and are matched by request digest only. A resume that leaves saved results unread
+logs `the <stage> resume did not read N saved result(s)` with each call id, substep
+and attempt; compare each with the stored stage before settling or discarding it.
+Unpinned derivations may still require review.
+
+Deploying migration 065: it takes an ACCESS EXCLUSIVE lock on
+`hawa.design_studio_calls` until it commits (a validated CHECK and a non-concurrent
+unique index in one transaction). Stop Core and the worker, take the backup, apply
+it through the normal deployment migration gate, then start Core.
 Parity reruns, concurrent substeps, production process-kill/restore qualification
 and recovery of replies lost before retention are not covered by this slice.
 

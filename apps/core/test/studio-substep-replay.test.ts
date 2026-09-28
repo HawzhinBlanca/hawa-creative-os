@@ -6,6 +6,23 @@ import { DesignStudioService } from '../src/services/design-studio/design-studio
 import { inStudioSubstep } from '../src/services/design-studio/substeps.js';
 import { resolveClientDesignReference } from '../src/services/client-design-reference.js';
 import type { StageContext } from '../src/services/design-studio/types.js';
+import { log } from '../src/logging.js';
+
+// Per-exemplar approval lives in the packaged manifest: an entry is admitted only while its
+// status is CONFIRMED (or inherits the collection's confirmation). A curator withdrawing one sets
+// it back to "pending". The packaged file is never modified here; one test reads a withdrawn copy.
+const manifest = vi.hoisted(() => ({ withdrawn: false }));
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  const readFileSync = ((path: Parameters<typeof actual.readFileSync>[0], options?: unknown) => {
+    const text = actual.readFileSync(path as never, options as never);
+    if (!manifest.withdrawn || !String(path).endsWith('kaae-exemplars.json')) return text;
+    const parsed = JSON.parse(String(text)) as { exemplars: Array<Record<string, unknown>> };
+    const [withdrawn, ...kept] = parsed.exemplars;
+    return JSON.stringify({ ...parsed, exemplars: [{ ...withdrawn, status: 'pending' }, ...kept] });
+  }) as typeof actual.readFileSync;
+  return { ...actual, readFileSync, default: { ...actual, readFileSync } };
+});
 
 // ADR-122: retained work is consumed by semantic substep and attempt, not by the run's
 // global call order. Every provider transport here is synthetic; no paid call is made.
@@ -50,7 +67,7 @@ describe.skipIf(!url)('semantic Studio substeps recover retained work across bra
     request = { clientId, width: 1080, height: 1350, instructions: 'A clear institutional announcement',
       copyBlocks: [{ text: 'Synthetic exact title', script: 'latin' }], referenceHash: sha(JSON.stringify(reference)), logoSha256: sha(logo) };
   });
-  afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+  afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); manifest.withdrawn = false; });
   afterAll(() => db.destroy());
 
   async function create(maxCalls: number, status?: DesignStudioStatus, stages?: Record<string, unknown>) {
@@ -100,12 +117,18 @@ describe.skipIf(!url)('semantic Studio substeps recover retained work across bra
     runtimeUrl.searchParams.set('options', '-c role=hawa_app');
     const peer = createDb(runtimeUrl.toString());
     const fetcher = vi.fn<typeof fetch>(async () => { throw new Error('No second transport is authorized'); });
+    const warn = vi.spyOn(log, 'warn');
     try {
       const service = new DesignStudioService(peer, undefined, { fetcher, apiKey: 'synthetic-key' });
       Object.assign(service, { imagesForRun: async () => images });
       const result = await service.resume(scope, taskId, runId);
       expect(result.status).toBe('laying_out');
       expect(fetcher).not.toHaveBeenCalled();
+      // The saved rebrief is already applied in the stored brief; the resume says it did not read it.
+      const [rebriefCall] = await repo.getCallsForRun(runId, scope.tenantId);
+      const unread = warn.mock.calls.map(([message]) => String(message)).filter(message => message.includes('did not read'));
+      expect(unread).toHaveLength(1);
+      expect(unread[0]).toContain(`${rebriefCall.id} (brief/images-rebrief attempt 1)`);
       const recovered = await new DesignStudioRepository(peer).getRunById(runId, scope.tenantId);
       expect((recovered?.stages as { concepts?: unknown[] }).concepts).toHaveLength(5);
       expect(await repo.getBudgetUsage(runId, scope.tenantId, scope.actorId)).toEqual(before);
@@ -226,6 +249,34 @@ describe.skipIf(!url)('semantic Studio substeps recover retained work across bra
     expect(noTransport).not.toHaveBeenCalled();
   });
 
+  it('holds a failed late-reference re-read that preceded a saved board, instead of paying for it again', async () => {
+    await create(6, 'conceiving');
+    const run = (await repo.getRunById(runId, scope.tenantId))!;
+    const budget: Budget = { maxUsd: 5, maxCalls: 6, spentUsd: 0, calls: 0 };
+    const fetcher = vi.fn<typeof fetch>(async (_url, init) => schemaOf(init) === 'CreativeBrief'
+      ? new Response(JSON.stringify({ error: { message: 'Synthetic bad request' } }), { status: 400 }) : completion(concepts()));
+    const first = await harness(new DesignStudioService(db, undefined, { fetcher, apiKey: 'synthetic-key' }))
+      .createStageContext(scope, run, 'conceiving', budget, async cost => { budget.spentUsd += cost; }, []);
+    const reread = (ctx: StageContext) => inStudioSubstep('brief/late-reference', () => ctx.client.completeJson({
+      system: 'Brief', prompt: 'Re-read with the late reference', schema: { type: 'object' }, schemaName: 'CreativeBrief' }));
+    const board = (ctx: StageContext, prompt: string) => inStudioSubstep('concepts/board', () => ctx.client.completeJson({
+      system: 'Concepts', prompt, schema: { type: 'object' }, schemaName: 'ConceptBoard' }));
+    await expect(reread(first)).rejects.toMatchObject({ status: 400 });
+    await board(first, 'Board for blind brief');
+    const recorded = await repo.getCallsForRun(runId, scope.tenantId);
+    expect(recorded).toMatchObject([
+      { substep_key: 'brief/late-reference', status: 'error', cost_basis: 'not_accepted' },
+      { substep_key: 'concepts/board', status: 'ok', has_retained_result: true }]);
+    const spend = budget.spentUsd;
+    const resumeTransport = vi.fn<typeof fetch>(async () => completion(brief));
+    const second = await harness(new DesignStudioService(db, undefined, { fetcher: resumeTransport, apiKey: 'synthetic-key' }))
+      .createStageContext(scope, run, 'conceiving', budget, async cost => { budget.spentUsd += cost; }, recorded);
+    await expect(reread(second)).rejects.toMatchObject({ code: 'MODEL_STAGE_REPLAY_UNSAFE' });
+    expect(resumeTransport).not.toHaveBeenCalled();
+    expect(budget.spentUsd).toBe(spend);
+    expect(await repo.getCallsForRun(runId, scope.tenantId)).toHaveLength(2);
+  });
+
   it('applies one retained reply once: a repeated request in the same substep is a new admission, and replay is stable', async () => {
     await create(4, 'conceiving');
     const run = (await repo.getRunById(runId, scope.tenantId))!;
@@ -271,5 +322,34 @@ describe.skipIf(!url)('semantic Studio substeps recover retained work across bra
     second.exemplarPolicySha256 = sha('approval withdrawn');
     await expect(second.client.completeJson(call)).rejects.toMatchObject({ code: 'MODEL_STAGE_REPLAY_UNSAFE' });
     expect(noTransport).not.toHaveBeenCalled();
+  });
+
+  it('holds retained work when the curator withdraws an exemplar from the packaged manifest, with unchanged request bytes', async () => {
+    await create(4, 'conceiving');
+    const run = (await repo.getRunById(runId, scope.tenantId))!;
+    const budget: Budget = { maxUsd: 5, maxCalls: 4, spentUsd: 0, calls: 0 };
+    const fetcher = vi.fn<typeof fetch>(async () => completion(concepts()));
+    const first = await harness(new DesignStudioService(db, undefined, { fetcher, apiKey: 'synthetic-key' }))
+      .createStageContext(scope, run, 'conceiving', budget, async cost => { budget.spentUsd += cost; }, []);
+    const call = { system: 'Concepts', prompt: 'Board', schema: { type: 'object' }, schemaName: 'ConceptBoard' };
+    const original = await first.client.completeJson(call);
+    const recorded = await repo.getCallsForRun(runId, scope.tenantId);
+    const noTransport = vi.fn<typeof fetch>(async () => { throw new Error('Unexpected replay transport'); });
+    // Control: the same manifest resumes the retained reply.
+    const same = await harness(new DesignStudioService(db, undefined, { fetcher: noTransport, apiKey: 'synthetic-key' }))
+      .createStageContext(scope, run, 'conceiving', budget, async () => {}, recorded);
+    expect(same.exemplarPolicySha256).toBe(first.exemplarPolicySha256);
+    expect(await same.client.completeJson(call)).toEqual(original);
+    manifest.withdrawn = true;
+    const withdrawn = await harness(new DesignStudioService(db, undefined, { fetcher: noTransport, apiKey: 'synthetic-key' }))
+      .createStageContext(scope, run, 'conceiving', budget, async () => {}, recorded);
+    expect(withdrawn.exemplarPolicySha256).toBeDefined();
+    expect(withdrawn.exemplarPolicySha256).not.toBe(first.exemplarPolicySha256);
+    // The withdrawal is real for the run: one fewer exemplar is eligible for retrieval.
+    expect(first.exemplarRetrieval?.eligibleCount).toBeGreaterThan(0);
+    expect(withdrawn.exemplarRetrieval?.eligibleCount).toBe(first.exemplarRetrieval!.eligibleCount - 1);
+    await expect(withdrawn.client.completeJson(call)).rejects.toMatchObject({ code: 'MODEL_STAGE_REPLAY_UNSAFE' });
+    expect(noTransport).not.toHaveBeenCalled();
+    expect(await repo.getCallsForRun(runId, scope.tenantId)).toHaveLength(1);
   });
 });

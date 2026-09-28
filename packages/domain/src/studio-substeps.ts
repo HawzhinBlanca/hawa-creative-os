@@ -128,11 +128,19 @@ const unaccepted = (call: RecordedStudioAttempt) => call.status === 'error' && c
 const paidWithoutResult = (call: RecordedStudioAttempt) =>
   (call.status === 'ok' && !call.retained) || (call.status === 'error' && call.usd > 0);
 
+/** A retained result the resume did not read, reported so bypassed paid work stays visible. */
+export interface UnconsumedStudioAttempt {
+  callId: string;
+  substep: string | null;
+  attempt: number | null;
+}
+
 /**
  * Decides, per call, whether to return a retained result, reproduce a recorded refusal, admit a
  * new attempt, or hold. Replay is active only when the pool holds at least one retained result
  * (ADR-111). A pool containing any pre-ADR-122 row keeps ADR-111's ordered-prefix rule for all
- * of it. Each recorded attempt is consumed at most once.
+ * of it; post-065 rows in such a pool must still match their substep and binding. Each recorded
+ * attempt is consumed at most once.
  */
 export class StudioSubstepReplay {
   readonly replaying: boolean;
@@ -142,6 +150,9 @@ export class StudioSubstepReplay {
   private readonly positions = new Map<string, number>();
   private readonly assigned = new Map<string, number>();
   private readonly historyMax = new Map<string, number>();
+  /** Admission order within the pool: call ordinal, then started_at (the order `recorded` arrives in). */
+  private readonly admission = new Map<string, number>();
+  private readonly consumed = new Set<string>();
   private legacyPosition = 0;
 
   /**
@@ -153,6 +164,7 @@ export class StudioSubstepReplay {
       if (call.substep !== null) this.historyMax.set(call.substep, Math.max(this.historyMax.get(call.substep) ?? 0, call.attempt ?? 0));
     }
     this.ordered = [...recorded].sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0));
+    this.ordered.forEach((call, index) => this.admission.set(call.callId, index));
     this.replaying = this.ordered.some((call) => call.status === 'ok' && call.retained);
     this.legacy = this.ordered.some((call) => call.substep === null);
     for (const call of this.ordered) {
@@ -188,14 +200,25 @@ export class StudioSubstepReplay {
     return this.legacy ? this.nextLegacy(request) : this.nextBySubstep(request);
   }
 
+  /** Retained results in the pool that no decision has returned yet, in admission order. */
+  unconsumed(): UnconsumedStudioAttempt[] {
+    return this.ordered.filter((call) => call.status === 'ok' && call.retained && !this.consumed.has(call.callId))
+      .map((call) => ({ callId: call.callId, substep: call.substep, attempt: call.attempt }));
+  }
+
   private nextLegacy(request: StudioReplayRequest): StudioReplayDecision {
     const previous = this.ordered[this.legacyPosition];
     if (!previous) return this.execute(request.substep);
+    // A pool that crossed the migration 065 deploy: its post-065 rows still carry a binding, so
+    // their authority and renderer basis are rechecked; pre-065 rows can only match the request.
+    const bindingChanged = previous.substep !== null &&
+      (previous.substep !== request.substep || previous.bindingSha256 !== request.bindingSha256);
     if (previous.stage !== request.stage || previous.provider !== request.provider || previous.model !== request.model ||
-        previous.status !== 'ok' || !previous.retained || previous.requestSha256 !== request.requestSha256) {
+        previous.status !== 'ok' || !previous.retained || previous.requestSha256 !== request.requestSha256 || bindingChanged) {
       return { action: 'hold', reason: 'ORDER_CHANGED', detail: 'The interrupted stage no longer matches its recorded model-call order.' };
     }
     this.legacyPosition++;
+    this.consumed.add(previous.callId);
     return { action: 'reuse', callId: previous.callId,
       attempt: this.assign(request.substep, (this.assigned.get(request.substep) ?? 0) + 1) };
   }
@@ -214,19 +237,25 @@ export class StudioSubstepReplay {
     if (recorded.status === 'ok') {
       if (!matches) return { action: 'hold', reason: 'INPUT_CHANGED', detail: `Attempt ${attempt} of ${request.substep} was retained for different inputs.` };
       this.positions.set(request.substep, position + 1);
+      this.consumed.add(recorded.callId);
       return { action: 'reuse', callId: recorded.callId, attempt };
     }
     // An attempt that failed without charge. Reproduce it exactly where the recorded outcome is
-    // known to be the same one the caller would see; otherwise re-attempt only when nothing
-    // retained depends on the control flow that followed it.
+    // known to be the same one the caller would see. Otherwise re-attempt it only when nothing was
+    // saved after it anywhere in the stage: work admitted later, in any substep, may have been
+    // designed from the control flow that followed the failure (a board from the brief a failed
+    // re-read left in place), and no declared dependency proves otherwise.
     if (unaccepted(recorded) && matches && request.kind === 'image' && recorded.costBasis === 'not_accepted' &&
         recorded.errorCode === REPRODUCIBLE_IMAGE_REFUSAL) {
       this.positions.set(request.substep, position + 1);
       return { action: 'replay_refusal', attempt };
     }
-    if (queue.slice(position + 1).some((call) => call.status === 'ok')) {
+    const failedAt = this.admission.get(recorded.callId) ?? -1;
+    const savedLater = this.ordered.slice(failedAt + 1).find((call) => call.status === 'ok') ??
+      queue.slice(position + 1).find((call) => call.status === 'ok');
+    if (savedLater) {
       return { action: 'hold', reason: 'ATTEMPT_NOT_REPRODUCIBLE',
-        detail: `Attempt ${attempt} of ${request.substep} failed before later retained work; its outcome cannot be reproduced.` };
+        detail: `Attempt ${attempt} of ${request.substep} failed before later saved work (${savedLater.substep ?? savedLater.stage}); its outcome cannot be reproduced.` };
     }
     this.positions.set(request.substep, queue.length);
     return this.execute(request.substep);

@@ -1256,6 +1256,7 @@ export class DesignStudioService {
       requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
       ornament: packagedKaae ? ornamentSettings() : undefined,
       style: (runStages(run).brief as CreativeBrief | undefined)?.styleSpec,
+      unconsumedRetainedCalls: () => replayLedger.unconsumed(),
     };
     boundContext = ctx;
     return ctx;
@@ -2309,6 +2310,15 @@ export class DesignStudioService {
 
       // If failure happened during generation stages, execute Rung 4 fallback
       return this.executeRung4Fallback(s, run, err.message || 'Studio stage failed');
+    } finally {
+      // ADR-122: saved paid work this resume bypassed stays visible to the operator. A result
+      // already applied in the stored stage (a persisted rebrief) is listed too; the operator
+      // compares it with the stage before settling or discarding it.
+      const unread = ctx.unconsumedRetainedCalls?.() ?? [];
+      if (unread.length) {
+        log.warn(`[studio] run ${runId}: the ${run.status} resume did not read ${unread.length} saved result(s): ` +
+          unread.map((call) => `${call.callId} (${call.substep ?? 'ordered prefix'} attempt ${call.attempt ?? '-'})`).join(', ') + '.');
+      }
     }
   }
 

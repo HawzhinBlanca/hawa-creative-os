@@ -94,6 +94,37 @@ describe('attempt replay by semantic substep', () => {
       .toMatchObject({ action: 'hold', reason: 'ATTEMPT_NOT_REPRODUCIBLE' });
   });
 
+  it('holds a failed attempt followed by saved work in another substep of the stage, without admitting a new attempt', () => {
+    // brief/late-reference failed (400, no charge); concepts/board was then designed from the blind
+    // brief and saved. Re-running the re-read would pay for a brief that orphans the saved board.
+    const failed = call({ callId: 'late', substep: 'brief/late-reference', ordinal: 1, status: 'error', retained: false, usd: 0,
+      costBasis: 'not_accepted', errorCode: 'CALL_FAILED', requestSha256: sha('late'), bindingSha256: sha('binding-late') });
+    const replay = new StudioSubstepReplay([failed, call({ callId: 'board', ordinal: 2 })]);
+    expect(replay.next(ask('brief/late-reference', 'late'))).toMatchObject({ action: 'hold', reason: 'ATTEMPT_NOT_REPRODUCIBLE' });
+    // The same failure after the saved board is trailing: nothing saved followed it.
+    const trailing = new StudioSubstepReplay([call({ callId: 'board', ordinal: 1 }), { ...failed, ordinal: 2 }]);
+    expect(trailing.next(ask('concepts/board'))).toEqual({ action: 'reuse', callId: 'board', attempt: 1 });
+    expect(trailing.next(ask('brief/late-reference', 'late'))).toEqual({ action: 'execute', attempt: 2 });
+    // Parity rows carry no ordinal; their admission (started_at) order decides.
+    const unordered = new StudioSubstepReplay([{ ...failed, ordinal: null }, call({ callId: 'board', ordinal: null })]);
+    expect(unordered.next(ask('brief/late-reference', 'late'))).toMatchObject({ action: 'hold', reason: 'ATTEMPT_NOT_REPRODUCIBLE' });
+  });
+
+  it('reports saved results the resume never read', () => {
+    const replay = new StudioSubstepReplay([
+      call({ callId: 'rebrief', substep: 'brief/images-rebrief', ordinal: 1, requestSha256: sha('rebrief'), bindingSha256: sha('binding-rebrief') }),
+      call({ callId: 'board', ordinal: 2 }),
+      call({ callId: 'refused', substep: 'layout/concept-1', ordinal: 3, status: 'error', retained: false, usd: 0, costBasis: 'not_accepted' }),
+    ]);
+    expect(replay.unconsumed().map(c => c.callId)).toEqual(['rebrief', 'board']);
+    replay.next(ask('concepts/board'));
+    expect(replay.unconsumed()).toEqual([{ callId: 'rebrief', substep: 'brief/images-rebrief', attempt: 1 }]);
+    const legacy = new StudioSubstepReplay([call({ callId: 'first', substep: null, attempt: null, bindingSha256: null })]);
+    expect(legacy.unconsumed()).toEqual([{ callId: 'first', substep: null, attempt: null }]);
+    legacy.next(ask('concepts/board'));
+    expect(legacy.unconsumed()).toEqual([]);
+  });
+
   it('keeps legacy rows without a substep on the original ordered prefix', () => {
     const legacy = new StudioSubstepReplay([
       call({ callId: 'first', substep: null, attempt: null, bindingSha256: null, requestSha256: sha('rebrief') }),
@@ -103,6 +134,23 @@ describe('attempt replay by semantic substep', () => {
     const inOrder = new StudioSubstepReplay([call({ callId: 'first', substep: null, attempt: null, bindingSha256: null })]);
     expect(inOrder.next(ask('concepts/board'))).toEqual({ action: 'reuse', callId: 'first', attempt: 1 });
     expect(inOrder.next(ask('concepts/board'))).toEqual({ action: 'execute', attempt: 2 });
+  });
+
+  it('checks the binding of a post-065 row even in a pool that crossed the deploy', () => {
+    const mixed = () => new StudioSubstepReplay([
+      call({ callId: 'before-deploy', substep: null, attempt: null, bindingSha256: null, requestSha256: sha('brief') }),
+      call({ callId: 'after-deploy', ordinal: 2 }),
+    ]);
+    const first = mixed();
+    expect(first.next(ask('brief/request', 'brief'))).toEqual({ action: 'reuse', callId: 'before-deploy', attempt: 1 });
+    expect(first.next(ask('concepts/board'))).toEqual({ action: 'reuse', callId: 'after-deploy', attempt: 1 });
+    // Same request bytes, withdrawn authority: the new-format row's binding differs.
+    const withdrawn = mixed();
+    withdrawn.next(ask('brief/request', 'brief'));
+    expect(withdrawn.next(ask('concepts/board', 'board', 'binding-withdrawn'))).toMatchObject({ action: 'hold', reason: 'ORDER_CHANGED' });
+    const otherSubstep = mixed();
+    otherSubstep.next(ask('brief/request', 'brief'));
+    expect(otherSubstep.next(ask('layout/concept-1'))).toMatchObject({ action: 'hold', reason: 'ORDER_CHANGED' });
   });
 
   it('numbers attempts but reuses nothing when no result was retained', () => {

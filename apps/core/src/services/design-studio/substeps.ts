@@ -31,9 +31,11 @@ export function substepBindsRenderer(substep: string, stage: string): boolean {
 
 /**
  * Artwork binds only its own request, provider, model and capability policy: a copy or policy
- * change elsewhere does not invalidate an image. Every other call binds the current authority
- * (client reference, exemplar approvals, standing rules), so a withdrawn approval is rechecked
- * even when the bytes sent to the provider are unchanged.
+ * change elsewhere does not invalidate an image. The art verifier runs in the same substep and
+ * also binds no authority: it asks a fixed compliance question about the image bytes and reads
+ * no client policy, so its request digest is its whole input. Every other call binds the current
+ * authority (client reference, exemplar approvals, standing rules), so a withdrawn approval is
+ * rechecked even when the bytes sent to the provider are unchanged.
  */
 export function substepBindsAuthority(substep: string, stage: string): boolean {
   const family = substep.split('/')[0];

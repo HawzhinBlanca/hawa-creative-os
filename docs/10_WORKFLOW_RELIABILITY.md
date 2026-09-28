@@ -89,7 +89,9 @@ ADR-122 (migration 065) records a semantic substep, attempt and canonical bindin
 with every new Studio call. Recovery consumes retained results per substep in
 attempt order, so a persisted rebrief branch or an interleaved image refusal no
 longer holds retained work; a changed binding, an unreproducible failure before
-retained work, an unknown outcome or a paid call without a result still holds.
+saved work anywhere in the stage, an unknown outcome or a paid call without a
+result still holds. Post-065 rows in a pool with pre-065 rows keep their binding
+check; saved results a resume did not read are logged.
 Bindings add schema, capability policy, current authority (except artwork) and
 the renderer/font basis where local rendering feeds the request. A persisted
 rebrief continues from its stored form. The domain's `planStudioReuse` defines

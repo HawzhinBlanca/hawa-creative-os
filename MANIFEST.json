@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T08:06:02Z",
+  "generatedAt": "2026-09-28T08:30:57Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -679,8 +679,8 @@
     },
     {
       "path": "adrs/122_semantic_studio_substeps.md",
-      "sha256": "2c9c6655480fd825294c7f197764869abc5f09c18713e20aa43e7f68c50fca8a",
-      "bytes": 4906
+      "sha256": "a98530e90db6c9b3495c74b9cfccf30e5973bbe0a242a2a549c88fcfa3dca1ac",
+      "bytes": 7757
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -949,8 +949,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "ae11235782e3ee8468fe267a3957c6d5b31d1fa6c8a06c517323f84443a20a4d",
-      "bytes": 33203
+      "sha256": "5d82c1be236a687ef814ddd20028985cab1926079d698af82e039b6c14f54115",
+      "bytes": 33338
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1179,8 +1179,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SUBSTEP_RECOVERY_PROOF.json",
-      "sha256": "2a28cb36555fe83fc3f776518b779200390a23b6eab925f3a42b06b1355041bf",
-      "bytes": 12613
+      "sha256": "f0ff8dfedef9a7e59e4e492685446216185550db23302891be5e2c51386935c5",
+      "bytes": 16879
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/TEXT_MEASUREMENT_PROOF.json",
@@ -1629,8 +1629,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "f52789bf71de92aa84ec169dceeea18f728dde8730f469f3ac1be45c9d7ba475",
-      "bytes": 426425
+      "sha256": "4e2693907cf160f98c902b1872ad11bd7cb436a896c9cf92c2c1f1722072e9f4",
+      "bytes": 426671
     },
     {
       "path": "plans/user-stories.csv",
@@ -1809,8 +1809,8 @@
     },
     {
       "path": "runbooks/STUDIO_RECOVERY.md",
-      "sha256": "2f888aa4d29f4bb37af3536e565dfa8a1c29a95921afc3a97efc65f099aaa08a",
-      "bytes": 10535
+      "sha256": "90998af4e3fa212f6cb863da2dcf2fa6b44109afa16bf2dd53b6049752a93e52",
+      "bytes": 11135
     },
     {
       "path": "schemas/ApprovalDecision.schema.json",
