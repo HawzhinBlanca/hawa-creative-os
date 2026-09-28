@@ -88,6 +88,33 @@ export function normalizeHex(hex: string): string {
 
 const FORBIDDEN_ART_REGEX = new RegExp(`\\b(${FORBIDDEN_ART_WORDS.join('|')})\\b`, 'i');
 
+/** Display faces QA admits for Latin copy when the client has no admitted-font list of its own. */
+const DEFAULT_ADMITTED_LATIN_DISPLAY = [
+  'Cinzel', 'Playfair Display', 'Montserrat', 'Lora', 'Bodoni Moda', 'Cairo', 'Plus Jakarta Sans', 'Vazirmatn', 'Inter', 'Verdana',
+];
+const DEFAULT_ADMITTED_ARABIC = ['Noto Sans Arabic', 'Amiri', 'IBM Plex Sans Arabic'];
+
+/**
+ * The font families QA admits for each script, as the validator applies them (case-insensitive).
+ * Shared so the copy feasibility screen (ADR-125) measures exactly the faces a passing layout
+ * could use, and cannot declare copy unsettable in a face QA would have accepted.
+ */
+export function admittedFamiliesForQa(input: {
+  latinFont?: string; arabicFont?: string; draftFont?: string; admittedDisplayFonts?: { latin: string[]; arabic: string[] };
+}): { latin: string[]; arabic: string[] } {
+  const unique = (names: Array<string | undefined>) => {
+    const byKey = new Map<string, string>();
+    for (const name of names) if (name && !byKey.has(name.toLowerCase())) byKey.set(name.toLowerCase(), name);
+    return [...byKey.values()];
+  };
+  const client = input.admittedDisplayFonts;
+  const arabicScriptFont = input.arabicFont || 'Noto Sans Arabic';
+  return client
+    ? { latin: unique([input.latinFont, ...client.latin]), arabic: unique([arabicScriptFont, ...client.arabic]) }
+    : { latin: unique([input.latinFont || 'Verdana', input.draftFont || 'Verdana', 'Verdana', ...DEFAULT_ADMITTED_LATIN_DISPLAY]),
+      arabic: unique([...DEFAULT_ADMITTED_ARABIC, input.arabicFont]) };
+}
+
 export function validateLayoutV2(
   layout: StudioLayoutV2,
   context: LayoutValidationContext
@@ -148,29 +175,16 @@ export function validateLayoutV2(
   const normalized: StudioLayoutV2 = JSON.parse(JSON.stringify(layout));
 
   // 4. FONT_NOT_ADMITTED & Script Normalization
-  const admittedDisplayFonts = [
-    'cinzel',
-    'playfair display',
-    'montserrat',
-    'lora',
-    'bodoni moda',
-    'cairo',
-    'plus jakarta sans',
-    'vazirmatn',
-    'inter',
-    'verdana',
-  ];
   const clientDisplay = context.reference.rules.admittedDisplayFonts;
-  const admittedLatinFonts = new Set(clientDisplay
-    ? [(context.reference.rules.fontFamily || '').toLowerCase(), ...clientDisplay.latin.map((font) => font.toLowerCase())]
-    : [(context.reference.rules.fontFamily || 'Verdana').toLowerCase(), (context.draftFont || 'Verdana').toLowerCase(),
-      'verdana', ...admittedDisplayFonts]);
+  const admitted = admittedFamiliesForQa({
+    latinFont: context.reference.rules.fontFamily,
+    arabicFont: context.reference.rules.scriptFonts?.arabic,
+    draftFont: context.draftFont,
+    admittedDisplayFonts: clientDisplay,
+  });
+  const admittedLatinFonts = new Set(admitted.latin.map((font) => font.toLowerCase()));
   const arabicScriptFont = context.reference.rules.scriptFonts?.arabic || 'Noto Sans Arabic';
-  const admittedArabicFonts = new Set((clientDisplay
-    ? [arabicScriptFont.toLowerCase(), ...clientDisplay.arabic.map((font) => font.toLowerCase())]
-    : ['noto sans arabic', 'amiri', 'ibm plex sans arabic', (context.reference.rules.scriptFonts?.arabic || '').toLowerCase()]
-  ).filter(Boolean));
-
+  const admittedArabicFonts = new Set(admitted.arabic.map((font) => font.toLowerCase()));
   for (let i = 0; i < normalized.text.length; i++) {
     const t = normalized.text[i];
     const script = context.copyScripts[t.copyIndex] || 'latin';

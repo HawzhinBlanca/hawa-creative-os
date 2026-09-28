@@ -42,6 +42,8 @@ import { checkCanvaPptx } from '@hawa/qa';
 import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError } from '@hawa/domain';
 import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
+import { buildRunBriefContract, StudioBriefContractError } from './brief-contract.js';
+import { blockingBriefConflicts, verifyBriefContractIntegrity, type BriefProposalInput, type ExecutableBriefContract } from '@hawa/domain';
 import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
 import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type PhotoFaces } from './photo-cutouts.js';
 import { log } from '../../logging.js';
@@ -1604,6 +1606,10 @@ export class DesignStudioService {
               }
             }
           }
+          // The executable brief contract is recorded before the paid layout call; a conflict no
+          // layout can satisfy stops the run here with its explanation (ADR-125).
+          const contractStop = await this.admitBriefContract(s, runId, ctx, brief, stages, budget);
+          if (contractStop) return contractStop;
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
 
           const candidateStates = await runLayoutsStage(
@@ -2234,7 +2240,7 @@ export class DesignStudioService {
         throw new CanvaFlowError(409, err.code, err.message);
       }
       if (isModelCallHoldError(err)) {
-        if (err.code === 'STUDIO_VISUAL_INPUTS_UNSAFE') throw new CanvaFlowError(409, err.code, err.message);
+        if (err.code === 'STUDIO_VISUAL_INPUTS_UNSAFE' || err.code === 'BRIEF_CONTRACT_CHANGED') throw new CanvaFlowError(409, err.code, err.message);
         if (err instanceof CanvaFlowError && err.code === 'MODEL_STAGE_REPLAY_UNSAFE') throw err;
         const code = ['MODEL_CALL_ADMISSION_CONFLICT', 'MODEL_CALL_FINALIZATION_CONFLICT', 'MODEL_CALL_ACCOUNTING_FAILED'].includes(err?.code)
           ? err.code : 'MODEL_CALL_UNCERTAIN';
@@ -2435,6 +2441,37 @@ export class DesignStudioService {
     }
     await this.repo.updateRunStatus(runId, s.tenantId, 'rendering', { stages, budget });
     return { runId, status: 'rendering', stage: 'layouts', spentUsd: budget.spentUsd };
+  }
+
+  /**
+   * Records the run's executable brief contract once, before the first layout call, and reuses
+   * that record on resume. A recorded contract whose digest or inputs changed holds the run; a
+   * blocking conflict stops it with the contract's explanation and authorized choices, before any
+   * provider call and without shrinking, omitting or rewording the copy (ADR-125).
+   */
+  private async admitBriefContract(
+    s: Scope, runId: string, ctx: StageContext, brief: CreativeBrief, stages: Record<string, any>,
+    budget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
+  ): Promise<StudioResumeResult | undefined> {
+    const authority = Array.isArray(stages.effectiveCopy) ? 'run_effective_copy' : 'source_copy';
+    const built = buildRunBriefContract(ctx, (brief ?? {}) as unknown as BriefProposalInput, authority);
+    const recorded = stages.briefContract as ExecutableBriefContract | undefined;
+    if (recorded !== undefined) {
+      if (!verifyBriefContractIntegrity(recorded) || recorded.sha256 !== built.sha256) {
+        throw new StudioBriefContractError('The recorded brief contract does not match this run: its copy, assets, brief or policies changed. Review the run before any layout call.');
+      }
+      ctx.briefContract = recorded;
+    } else {
+      stages.briefContract = built;
+      ctx.briefContract = built;
+      await this.repo.updateRunStatus(runId, s.tenantId, 'laying_out', { stages });
+    }
+    const blocking = blockingBriefConflicts(ctx.briefContract);
+    if (!blocking.length) return undefined;
+    const diagnostic = `BRIEF_CONTRACT_CONFLICT: ${blocking
+      .map((c) => `${c.explanation} Authorized choices: ${c.authorizedChoices.join(' or ')}.`).join(' ')}`;
+    await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
+    return { runId, status: 'failed', stage: 'brief_contract', diagnostic, message: diagnostic, code: 'BRIEF_CONTRACT_CONFLICT', spentUsd: budget.spentUsd };
   }
 
   /**

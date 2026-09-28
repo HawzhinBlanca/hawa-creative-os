@@ -1,6 +1,7 @@
 import { clientReferenceInstruction, clientReferencePart, type ClientReference } from './client-reference.js';
 import type { LayoutVisualInput } from './visual-conditioning.js';
 import { HOUSE_RULES, FORBIDDEN_ART_WORDS } from './house-rules.js';
+import { negativeSpacePromptGuidance } from './negative-space-policy.js';
 import { fitLogoToAspect, resolveRadius, resolveStrokeWidth } from './studio-normalize.js';
 import { z } from 'zod';
 import type {
@@ -1329,9 +1330,7 @@ why the list is short; a family that is absent is one the renderer cannot set th
   * If the canvas background is dark, NEVER place a solid cream (#FDF8F3) or white rectangle across the footer or venue area.
   * Footer and venue bands on dark canvases MUST harmonize with the palette: use a deep tone (#162B48, #1E3A5F), a subtle border/rule (#C5A059), or a translucent container. An unstyled stark cream block on a dark poster is strictly rejected.
 - Vertical Rhythm & Negative Space:
-  * Negative space fraction must stay in the optimal band (0.35 to 0.58 of canvas area, matching confirmed exemplars).
-  * Avoid excessive dead voids (no single uncomposed vertical void > 0.20 of canvas height). Never leave 40% of the canvas empty.
-  * Group related elements (title + subtitle, body paragraphs, statutory footer) with intentional proximity.
+${negativeSpacePromptGuidance()}
 
 ================================================================================
 4. RTL (SORANI KURDISH) RULES

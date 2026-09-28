@@ -124,3 +124,17 @@ binding, task version, request stage, review, approval or delivery. There is no
 HTTP/Desk creation route until native preservation admission. The current human
 handoff remains the review authority. Read/metadata stability does not establish
 atomicity against direct Canva edits. See [ADR-121](../adrs/121_durable_native_copy_candidates.md).
+
+## Executable brief contract and negative-space policy (ADR-125)
+
+The v3 layout prompt states the negative-space definition the checker scores, rendered from one
+versioned policy (`studio.negative-space` `2026-09-28.1`); every score records that version.
+
+Before the first layout call a new or afresh-designed run records one executable brief contract
+on its stages: exact copy and client assets by hash, source-copy order and checked relations as
+protected, composition freedoms as permitted, and every model brief field as a proposal or an
+unknown. The model's readingOrder remains a proposal. A changed recorded contract holds the run.
+Copy with a run no admitted face can set inside the safe width at the minimum size stops the run
+before layout with an explanation and only the authorized choices (revised approved copy, or a
+wider approved format); nothing is shrunk, omitted, split or reworded. Directed edits do not yet
+carry an edit contract. See [ADR-125](../adrs/125_executable_brief_contract.md).

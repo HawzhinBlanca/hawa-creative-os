@@ -1,5 +1,6 @@
 import type { StudioLayoutV2, Box, TextElement, ShapeElement } from './layout-v2.js';
 import { hexToLuminance, calculateLuminanceContrastRatio } from './composite-contrast.js';
+import { NEGATIVE_SPACE_POLICY, negativeSpacePolicyIdentity, scoreNegativeSpace, type NegativeSpaceMeasure } from './negative-space-policy.js';
 
 export interface MetricResult {
   score: number; // 0..1
@@ -566,14 +567,15 @@ export function computeNegativeSpace(
     // of the canvas counted as 60% occupied and flipped a 76%-empty design to "29% empty". A
     // background-filled shape that large is a border whatever it is called. Smaller outlined
     // cards still count: the P01 calibration deliberately treats content frames as occupied.
+    const occupancy = NEGATIVE_SPACE_POLICY.occupancy;
     const isCanvasFrame =
       ((s.role === 'frame' || sameColour(s.color, layout.background?.color)) &&
-        s.width >= layout.width * 0.85 &&
-        s.height >= layout.height * 0.85) ||
-      (s.width >= layout.width * 0.95 && s.height >= layout.height * 0.95);
+        s.width >= layout.width * occupancy.canvasFrameShare &&
+        s.height >= layout.height * occupancy.canvasFrameShare) ||
+      (s.width >= layout.width * occupancy.canvasShapeShare && s.height >= layout.height * occupancy.canvasShapeShare);
     if (isCanvasFrame) continue;
-    occupiedArea += s.width * s.height * (s.role === 'panel' || s.role === 'frame' ? 0.6 : 0.4);
-    if (s.height >= 20 && s.role !== 'rule') {
+    occupiedArea += s.width * s.height * (s.role === 'panel' || s.role === 'frame' ? occupancy.panelOrFrameWeight : occupancy.otherShapeWeight);
+    if (s.height >= NEGATIVE_SPACE_POLICY.internalGap.spanMinHeightPx && s.role !== 'rule') {
       substantiveSpans.push({ y1: s.y, y2: s.y + s.height });
       maxSubstantiveY = Math.max(maxSubstantiveY, s.y + s.height);
     }
@@ -595,23 +597,9 @@ export function computeNegativeSpace(
   // inside the plateau, median just below its upper edge, the emptiest design just past it into
   // the taper. That preserves every accept/reject decision the metric already makes on real work
   // while removing the reason it preferred one composition, which is the whole point of switching.
-  const band = wrappedLines
-    ? { floor: 0.36, rampEnd: 0.44, plateauEnd: 0.78, taperEnd: 0.84 }
-    : { floor: 0.25, rampEnd: 0.30, plateauEnd: 0.60, taperEnd: 0.65 };
-
-  let score = 1.0;
-  if (fraction < band.floor) {
-    score = Math.max(0, (fraction / band.floor) * 0.5);
-  } else if (fraction < band.rampEnd) {
-    score = 0.75 + ((fraction - band.floor) / (band.rampEnd - band.floor)) * 0.2;
-  } else if (fraction <= band.plateauEnd) {
-    score = 0.95;
-  } else if (fraction <= band.taperEnd) {
-    score = 0.95 - ((fraction - band.plateauEnd) / (band.taperEnd - band.plateauEnd)) * 0.25;
-  } else {
-    // Past the taper: excessive emptiness fails the gate (< 0.70).
-    score = Math.max(0, 0.68 - ((fraction - band.taperEnd) / 0.15) * 0.68);
-  }
+  // Both bands, the gap and bottom-void penalties and the pass score live in the versioned policy
+  // the layout generator is told (ADR-125).
+  const measure: NegativeSpaceMeasure = wrappedLines ? 'measured_lines' : 'declared_boxes';
 
   // Detect largest internal dead gap between consecutive substantive content blocks
   substantiveSpans.sort((a, b) => a.y1 - b.y1);
@@ -628,21 +616,11 @@ export function computeNegativeSpace(
   }
 
   const internalGapFraction = maxInternalGap / layout.height;
-  if (internalGapFraction > 0.22) {
-    // Dead void > 22% canvas height penalizes
-    const gapPenalty = ((internalGapFraction - 0.22) / 0.10) * 0.35;
-    score = Math.max(0, score - gapPenalty);
-  }
-
-  // Bottom void penalty: substantive institutional content must span >= 75% of canvas height (bottomVoid <= 0.25)
+  // Substantive institutional content should reach far enough down the canvas (bottom void).
   const bottomVoid = (layout.height - maxSubstantiveY) / layout.height;
-  if (bottomVoid > 0.25) {
-    const penalty = ((bottomVoid - 0.25) / 0.15) * 0.40;
-    score = Math.max(0, score - penalty);
-  }
-
-  score = Math.max(0, Math.min(1, score));
-  const passed = score >= 0.70;
+  const score = scoreNegativeSpace({ fraction, internalGapFraction, bottomVoid, measure });
+  const passed = score >= NEGATIVE_SPACE_POLICY.passScore;
+  const policy = negativeSpacePolicyIdentity();
 
   return {
     score: parseFloat(score.toFixed(3)),
@@ -654,6 +632,10 @@ export function computeNegativeSpace(
       bottomVoid: parseFloat(bottomVoid.toFixed(3)),
       occupiedArea: Math.round(occupiedArea),
       totalArea,
+      measure,
+      policyId: policy.id,
+      policyVersion: policy.version,
+      policySha256: policy.sha256,
     },
   };
 }
