@@ -151,7 +151,9 @@ if isinstance(paused,int) and paused>0: bad["restatePausedInvocations"]=paused
 # "unverified" is not a failure: in production Core reports Canva and the model provider unverified until
 # a scheduled probe has answered (e981e59f, ADR-100), and its status is then "degraded" with nothing
 # broken. Alerting on that alone would page the office every 30 minutes; it is shown, not alerted.
-ok={"connected","writable","unconfigured","active","idle","CLOSED","healthy","unverified"}
+# The funnel is "in_progress" while a recent brief has no draft yet; a real stall is "stalled", with
+# its own alert (apps/core/src/services/funnel-monitor.ts), and is still reported.
+ok={"connected","writable","unconfigured","active","idle","in_progress","CLOSED","healthy","unverified"}
 others={k:v for k,v in d.items() if not isinstance(v,(int,float)) and v not in ok}
 unverified=sorted(k for k,v in d.items() if v=="unverified")
 status=h.get("status","?")

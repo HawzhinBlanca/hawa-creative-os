@@ -215,6 +215,14 @@ exit 0
     expect(r.out).not.toMatch(/core degraded/);
   });
 
+  it('a funnel with a recent brief and no draft yet is not reported; a stalled funnel is', () => {
+    const s = setup();
+    fs.writeFileSync(path.join(s.bin, 'curl'), healthStub({ postgres: 'connected', canva: 'unverified', funnel: 'in_progress' }), { mode: 0o755 });
+    expect(runWatchdog(s, ['--status']).out).not.toMatch(/core degraded/);
+    fs.writeFileSync(path.join(s.bin, 'curl'), healthStub({ postgres: 'connected', canva: 'unverified', funnel: 'stalled' }), { mode: 0o755 });
+    expect(runWatchdog(s, ['--status']).out).toMatch(/core degraded/);
+  });
+
   it('a Core degraded by a failed dependency is still reported, unverified checks or not', () => {
     const s = setup();
     fs.writeFileSync(path.join(s.bin, 'curl'), healthStub({ postgres: 'disconnected', canva: 'unverified', modelProvider: 'unverified' }), { mode: 0o755 });
