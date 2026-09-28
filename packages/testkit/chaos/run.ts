@@ -5,6 +5,7 @@
  *   npx tsx packages/testkit/chaos/run.ts                 # every scenario, then tear down
  *   npx tsx packages/testkit/chaos/run.ts --keep          # leave hawa-chaos running afterwards
  *   npx tsx packages/testkit/chaos/run.ts --only R1.0,R4  # some scenarios
+ *   npx tsx packages/testkit/chaos/run.ts --only R1.K0 --repeat 3   # one scenario three times
  *   npx tsx packages/testkit/chaos/run.ts --down          # take a kept project down (with its volumes)
  *   npx tsx packages/testkit/chaos/run.ts --poller worker # the worker polls Telegram (the only poller since ADR-135)
  *   npx tsx packages/testkit/chaos/run.ts --seed-dump infra/backup/snapshots/predeploy_<stamp>.dump
@@ -51,6 +52,11 @@ if (args.includes('--lifecycle-chats')) {
   console.error('--lifecycle-chats is gone: every chat is lifecycle-owned (ADR-135)');
   process.exit(2);
 }
+const repeatAt = args.indexOf('--repeat');
+if (repeatAt >= 0 && !/^(10|[1-9])$/.test(args[repeatAt + 1] ?? '')) {
+  console.error('--repeat takes a count from 1 to 10');
+  process.exit(2);
+}
 const previousAt = args.indexOf('--previous-release');
 if (previousAt >= 0 && !/^[0-9a-f]{7,40}$/.test(args[previousAt + 1] ?? '')) {
   console.error('--previous-release takes a commit (7 to 40 hex digits)');
@@ -75,6 +81,8 @@ const env = {
   CHAOS_TELEGRAM_POLLER: 'worker',
   // A copy of production's data under the scenarios (driver/seed.ts); compose never sees the path.
   ...(seedDump ? { HAWA_CHAOS_SEED_DUMP: seedDump } : {}),
+  // Each selected scenario this many times (chaos.test.ts), for a flaky one's repeat evidence.
+  ...(repeatAt >= 0 ? { HAWA_CHAOS_REPEAT: args[repeatAt + 1] } : {}),
   // The release R10 starts from and rolls back to (driver/cutover.ts buildPreviousRelease).
   ...(previousAt >= 0 ? { HAWA_CHAOS_PREVIOUS_RELEASE: args[previousAt + 1] } : {}),
   // The Mac also runs the office: one test file, one worker.

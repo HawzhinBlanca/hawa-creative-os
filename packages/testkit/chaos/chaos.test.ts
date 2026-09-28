@@ -7,6 +7,7 @@
  *   HAWA_CHAOS=1 npx vitest run packages/testkit/chaos/chaos.test.ts
  *   HAWA_CHAOS_KEEP=1   leave the project running afterwards (default: taken down with its volumes)
  *   HAWA_CHAOS_ONLY=R1.0,R4   run only these scenarios
+ *   HAWA_CHAOS_REPEAT=3       run each selected scenario three times (run.ts --repeat 3)
  *   HAWA_CHAOS_SEED_DUMP=<file>    the scenarios run on a copy of production's data (run.ts --seed-dump; driver/seed.ts)
  *   HAWA_CHAOS_PREVIOUS_RELEASE=<commit>   the release R10 starts from and rolls back to (run.ts --previous-release)
  *
@@ -27,7 +28,7 @@ import { neutralise, restoreDump, verifyEgressFence, type EgressProbe, type Neut
 import { buildPreviousRelease, startOnRelease } from './driver/cutover.js';
 import { handoffOfOldRequests, retiredSettingsIgnored, rollbackToPreviousRelease } from './driver/cutover-scenarios.js';
 import {
-  approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
+  approve, briefToDraft, captionedPhotoUpdate, RequestEndedError, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
   OFFICE_CHAT, sendToChatInbox, sentTo, sleep, staffConfirmVisible, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
 } from './driver/scenario.js';
 
@@ -97,8 +98,15 @@ interface Expectation {
   executor?: 'core' | 'restate';
 }
 
+// run.ts --repeat N (HAWA_CHAOS_REPEAT): each selected scenario runs N times, reported as <name>#<n>.
+const repeat = Math.max(1, Math.min(10, Number(process.env.HAWA_CHAOS_REPEAT) || 1));
+
 function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000) {
   const run = enabled && (only.length === 0 ? !name.startsWith('R10.') : only.includes(name));
+  for (let n = 1; n <= repeat; n++) runScenario(repeat > 1 ? `${name}#${n}` : name, what, script, timeoutMs, run);
+}
+
+function runScenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs: number, run: boolean) {
   it.skipIf(!run)(`${name}: ${what}`, async () => {
     const chat = newChat();
     const events: string[] = [];
@@ -237,7 +245,8 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
   // send, and the request must go on to delivery with one task and one acknowledgement.
   scenario('R1.K0', 'Core killed while the acknowledgement is sent (the send slowed to 4 s), back after 5 s', async (chat, events) => {
     await fakes.telegramFault({ method: 'sendMessage', chat, kind: 'delay', delayMs: 4000, n: 1 });
-    const request = fullRequest(chat, 'R1.K0', events);
+    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+    const request = fullRequest(chat, 'R1.K0', events).then(() => null, (error: unknown) => error);
     await waitUntil('the acknowledgement send', async () => (await fakes.telegramCalls()).some((c) => c.method === 'sendMessage' && c.chat === chat), 60_000, 200);
     kill('core');
     // Where the design's plan stood when Core died (ADR-138: a claim with no admitted call is carried on).
@@ -248,8 +257,29 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     await sleep(5000);
     start('core');
     await waitHealthy('core');
-    await request;
+    const ended = await request;
+    // A kill while the paid planner call was in flight (admitted, no outcome) leaves a call that may
+    // have reached the provider: ADR-101 never sends it again, so that design cannot finish on its own
+    // and the office settles it. Every other moment of planning is recovered (ADR-138).
+    if (plans.some((p) => p.call === 'started')) {
+      if (!(ended instanceof RequestEndedError) || !/DESIGN_PLANNING/.test(ended.message)) throw ended ?? new Error('the in-flight paid call was finished without its outcome');
+      events.push('the kill landed while the paid planner call was in flight: the uncertain call is not sent again');
+      return { delivered: false, skipRequestChecks: true, extra: await uncertainPlannerCall(chat, ledgerSince) };
+    }
+    if (ended) throw ended;
     return { delivered: true, extra: await onePlannerCall(chat) };
+  });
+
+  // ADR-138/ADR-101: a Core killed after the paid call is admitted and before it is sent. From outside
+  // this cannot be told from a call in flight, so it is never sent again: the request ends for the
+  // office to settle, with one admitted call and no model request.
+  scenario('R1.K0A', 'Core killed after the paid planner call is admitted, before it is sent: never sent again', async (chat, events) => {
+    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+    const k = await killAtPoint('core.planner.after-admission', {});
+    const ended = await fullRequest(chat, 'R1.K0A', events).then(() => null, (error: unknown) => error);
+    events.push(`killed ${(await k.done).killed} at core.planner.after-admission; the request ${ended ? `ended: ${ended instanceof Error ? ended.message : String(ended)}` : 'was delivered'}`);
+    if (!(ended instanceof RequestEndedError) || !/DESIGN_PLANNING/.test(ended.message)) throw ended ?? new Error('an admitted call with no outcome was finished');
+    return { delivered: false, skipRequestChecks: true, extra: await uncertainPlannerCall(chat, ledgerSince) };
   });
 
   // ADR-138: the same kill at a fixed moment, after the design's plan is claimed and before its paid
@@ -1045,6 +1075,28 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
  * PPTX are pinned, so two files go to the requester and a fault can fall between them. The Deliver
  * press is answered at once (202, executor restate); nothing presses it again.
  */
+/**
+ * ADR-101 at a Core kill with the paid call admitted and no outcome: the call is never sent again (at
+ * most the one model request), the task waits for an operator, the office is told once and the
+ * requester hears each message once.
+ */
+async function uncertainPlannerCall(chat: string, ledgerSince: number): Promise<InvariantResult[]> {
+  const [task] = await tasksOfChat(chat);
+  const rows = task ? await query<{ plan: string; call: string | null }>(sql`SELECT p.status AS plan, c.status AS call FROM hawa.canva_design_plans p
+    LEFT JOIN hawa.canva_planner_calls c ON c.id = p.id WHERE p.task_id = ${task.id}::uuid`) : [];
+  const planner = ((await fakes.modelLedger()).ledger as any[]).filter((l) => l.seq > ledgerSince && l.route === 'canva_design_plan');
+  const alerts = task ? (await sentTo(OFFICE_CHAT)).filter((s) => s.text?.includes(task.id) && /needs an operator/.test(s.text)) : [];
+  const shown = await sentTo(chat);
+  const dupes = shown.length - new Set(shown.map((s) => `${s.method}:${s.documentSha256 ?? s.textHash}`)).size;
+  return [
+    { name: 'one plan, its admitted call left uncertain (started), never completed by a second send', ok: rows.length === 1 && rows[0].call === 'started', detail: JSON.stringify(rows) },
+    { name: 'at most one planner request reached the model', ok: planner.length <= 1, detail: `planner requests=${planner.length}` },
+    { name: 'the task waits for an operator', ok: task?.state === 'failed_operator', detail: `state=${task?.state}` },
+    { name: 'the office is told once', ok: alerts.length === 1, detail: `alerts=${alerts.length}` },
+    { name: 'each message reaches the requester once', ok: dupes === 0, detail: `${shown.length} sends, ${dupes} duplicate(s)` },
+  ];
+}
+
 /** ADR-138: the chat's design made one planner call, admitted once and completed, and its plan is planned. */
 async function onePlannerCall(chat: string): Promise<InvariantResult[]> {
   const rows = await query<{ plan: string; call: string | null }>(sql`SELECT p.status AS plan, c.status AS call FROM hawa.canva_design_plans p
