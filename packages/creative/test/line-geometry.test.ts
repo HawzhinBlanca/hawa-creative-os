@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { lineGeometry, renderLayoutV2ToSvg, type StudioLayoutV2 } from '../src/index.js';
@@ -60,7 +61,7 @@ describe('the preview renderer draws lines through lineGeometry', () => {
       { kind: 'line', role: 'rule', color: '#F7B500', x: 100, y: 500, width: 205, height: 4 },
       { kind: 'line', role: 'accent', color: '#F7B500', x: 228, y: 600, width: 6, height: 202 },
     ];
-    const { svg } = renderLayoutV2ToSvg(layout, { copyText: Object.fromEntries(fixture.copy.map((c, i) => [i, c])) });
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: Object.fromEntries(fixture.copy.map((c, i) => [i, c])) });
     const rule = lineAttrs(svg, 'shape-0');
     expect(rule.y1).toBe(rule.y2);
     expect(rule.stroke).toBe(4);

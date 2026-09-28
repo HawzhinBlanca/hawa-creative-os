@@ -1,15 +1,17 @@
 import http from 'node:http';
 import * as restate from '@restatedev/restate-sdk';
+import { withStepChaosPoints, type WorkflowDurableContext, type WorkflowStepRetry } from './durable-context.js';
 import { withRlsContext, sql, createDb, PostgresTelegramPollState, readTelegramKillSwitch, telegramBotKey } from '@hawa/db';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { TaskWorkflowRunner, asTerminalIfNotRunnable, type WorkflowInput } from './workflow.js';
 import { OutboxConsumer } from './outbox-consumer.js';
 import { TaskWorkflowDispatcher } from './workflow-dispatcher.js';
 import { LiveColourGate, runWhileLive, backgroundLoopsFromEnv, type LoopHandle } from './live-colour.js';
-import { log } from './logging.js';
+import { log, withInvocationLogContext } from './logging.js';
 import { automationMembershipGaps, servedTenantIds } from './automation-identity.js';
-import { useChatInboxCore } from './lifecycle/chat-inbox.js';
+import { chatInbox, useChatInboxCore } from './lifecycle/chat-inbox.js';
 import { createCoreClient } from './lifecycle/core-client.js';
-import { TelegramPoller, pollerConfigFromEnv, runPoller, type PollerLoopHandle } from './lifecycle/telegram-poller.js';
+import { TelegramPoller, pollerConfigFromEnv, pollerProblem, runPoller, type PollerLoopHandle } from './lifecycle/telegram-poller.js';
 import { WORKER_SERVICE_NAMES } from './services.js';
 
 const SERVICE_NAME = 'hawa-worker';
@@ -26,9 +28,13 @@ process.on('uncaughtException', (err: Error) => {
   log.fatal(`[${SERVICE_NAME}] FATAL uncaughtException: ${err.message}`, err);
   process.exit(1);
 });
+import { runCanvaDraft } from './canva-draft-workflow.js';
 import { outcomeRecorder } from './outcome-without-core.js';
-import { missingHandlers } from './lifecycle/shims.js';
-import { workerServices } from './worker-services.js';
+import { createTelegramSender, telegramSenderDepsFromEnv } from './lifecycle/telegram-sender.js';
+import { createDeliveryWorkflow } from './lifecycle/delivery.js';
+import { RequestLifecycleApi } from './lifecycle/request-lifecycle.js';
+import { createOfficeDecisionGateway } from './lifecycle/office-decision-gateway.js';
+import { DesignRunApi } from './lifecycle/design-run.js';
 export * from './workflow.js';
 export * from './canva-draft-workflow.js';
 export * from './outbox-consumer.js';
@@ -38,8 +44,95 @@ export * from './workflow-dispatcher.js';
 const dbUrl = process.env.DATABASE_URL;
 const sharedDb = dbUrl ? createDb(dbUrl) : undefined;
 
+/**
+ * How long a step keeps retrying a Core that does not answer. Every step this worker journals is a
+ * call to Core (runCanvaDraft, reportNotRunnable). Five attempts at the SDK's default spacing (50 ms,
+ * doubling) ended a step in under a second, so a Core restart or deploy (10–60 s) during a design
+ * failed the step, the workflow reported DESIGN_SERVER_ERROR to a Core that was still down, and the
+ * requester of a paid run was never told (2026-09-23). Core deduplicates these calls (idempotency
+ * keys, studio stages persisted before advancing, one in-flight resume per run, the outbox for the
+ * outcome), so a retry pays for nothing twice. They now back off from 2 s to a 30 s ceiling for up to
+ * 10 minutes: that outlasts a restart, and a real outage still ends in a reported outcome.
+ *
+ * A step that pays for work Core does not deduplicate (the parity check's model call) passes its own
+ * options and keeps the old bound of five quick attempts.
+ *
+ * A step that names its own duration keeps this schedule and only stretches it: the outcome report
+ * waits an hour for Core, since a report lost with Core is the requester's only answer (2026-09-24).
+ */
+const CORE_STEP_RETRY = {
+  initialRetryInterval: 2000,
+  retryIntervalFactor: 2,
+  maxRetryInterval: 30000,
+  maxRetryDuration: 10 * 60 * 1000,
+};
+const stepRetry = (options?: WorkflowStepRetry) =>
+  !options ? CORE_STEP_RETRY : options.maxRetryDuration !== undefined ? { ...CORE_STEP_RETRY, ...options } : { maxRetryAttempts: 5, ...options };
+
 /** Outcomes Core would not take are written to the outbox through the worker's own database. */
 const recordOutcome = sharedDb ? outcomeRecorder(sharedDb) : undefined;
+
+/**
+ * Wraps a Restate context so that errors the workflow marks as terminal (refused request,
+ * scope mismatch) surface as Restate TerminalErrors. Without this, Restate would retry the
+ * failing step forever and the requester would never hear the outcome.
+ */
+function durableContext(ctx: restate.Context | restate.WorkflowContext, taskId?: string): WorkflowDurableContext {
+  const isTerminal = (error: any) => Boolean(error?.terminal || error?.cause?.terminal);
+  // The chaos suite can stop the worker between a step's side effect and its journal entry.
+  return withStepChaosPoints({
+    key: (ctx as any).key,
+    run: (name, action, options) => ctx.run(name, async () => {
+      try { return await action(); }
+      catch (error: any) {
+        if (isTerminal(error)) {
+          // Keep the original error reachable so the workflow can still report the refusal reason.
+          const terminal = new restate.TerminalError(error?.message || 'terminal workflow failure', { errorCode: 400 });
+          (terminal as any).cause = error;
+          throw terminal;
+        }
+        throw error;
+      }
+    }, stepRetry(options)),
+    sleep: (millis) => ctx.sleep(millis),
+  }, taskId);
+}
+
+const taskService = restate.service({
+  name: 'TaskService',
+  handlers: {
+    runTask: async (ctx: restate.Context, input: WorkflowInput) => withInvocationLogContext(ctx, input, async () => {
+      if (input.canvaAutoGenerate) {
+        return await runCanvaDraft(input, durableContext(ctx, input.taskId), fetch, recordOutcome);
+      }
+      const runner = new TaskWorkflowRunner({ db: sharedDb });
+      try { return await runner.run(input, durableContext(ctx, input.taskId)); }
+      catch (error) { throw asTerminalIfNotRunnable(error); }
+    }),
+  },
+});
+
+const taskWorkflow = restate.workflow({
+  name: 'TaskWorkflow',
+  handlers: {
+    run: async (ctx: restate.WorkflowContext, input: WorkflowInput) => withInvocationLogContext(ctx, input, async () => {
+      if (input.canvaAutoGenerate) {
+        return await runCanvaDraft(input, durableContext(ctx, input.taskId), fetch, recordOutcome);
+      }
+      const runner = new TaskWorkflowRunner({ db: sharedDb });
+      try { return await runner.run(input, durableContext(ctx, input.taskId)); }
+      catch (error) { throw asTerminalIfNotRunnable(error); }
+    }),
+  },
+});
+
+// Slice 2.2 (PHASE2_DESIGN.md 2.5, 2.6): the Delivery workflow and the per-chat TelegramSender. A
+// service is never removed from this build once bound (scripts/restate-bluegreen.ts WORKER_SERVICES).
+const telegramSender = createTelegramSender(telegramSenderDepsFromEnv(sharedDb));
+const delivery = createDeliveryWorkflow();
+const requestLifecycle = RequestLifecycleApi;
+const designRun = DesignRunApi;
+const officeDecisionGateway = createOfficeDecisionGateway();
 
 // ChatInbox calls Core's internal intake with its own credential (HAWA_WORKER_TOKEN), never the
 // operator's bearer. Without it an update waits in its chat until the worker is configured.
@@ -47,23 +140,25 @@ if (process.env.HAWA_WORKER_TOKEN?.trim()) {
   useChatInboxCore(createCoreClient({ baseUrl: process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001', token: process.env.HAWA_WORKER_TOKEN.trim() }));
 }
 
-// Every service any build ever hosted stays bound (services.ts), and every handler the record
-// requires (lifecycle/shims.ts). A build that binds less would strand what Restate still routes to
-// it (a delayed reminder, an old invocation), so it does not start.
-const boundServices = workerServices({ db: sharedDb, recordOutcome });
+// Every service any build ever hosted stays bound (services.ts). A build that binds another set
+// would strand what Restate still routes to the old one, so it does not start.
+const boundServices = [taskService, taskWorkflow, chatInbox, delivery, telegramSender, requestLifecycle, designRun, officeDecisionGateway];
 const boundNames = boundServices.map((s) => s.name).sort();
 if (boundNames.join(',') !== [...WORKER_SERVICE_NAMES].sort().join(',')) {
   log.fatal(`[${SERVICE_NAME}] FATAL this build binds ${boundNames.join(', ')} but hosts ${WORKER_SERVICE_NAMES.join(', ')} (services.ts); not serving`);
   process.exit(1);
 }
-const missing = missingHandlers(boundServices);
-if (missing.length) {
-  log.fatal(`[${SERVICE_NAME}] FATAL this build lacks handlers Restate may still route to: ${missing.join(', ')} (lifecycle/shims.ts HANDLERS_EVER); not serving`);
-  process.exit(1);
-}
 
-const restateHandler = boundServices
-  .reduce((endpoint, service) => endpoint.bind(service), restate.endpoint())
+const restateHandler = restate
+  .endpoint()
+  .bind(taskService)
+  .bind(taskWorkflow)
+  .bind(chatInbox)
+  .bind(delivery)
+  .bind(telegramSender)
+  .bind(requestLifecycle)
+  .bind(designRun)
+  .bind(officeDecisionGateway)
   .http1Handler();
 
 let outboxConsumer: OutboxConsumer | null = null;
@@ -155,9 +250,13 @@ const server = http.createServer((req, res) => {
       : Promise.resolve({ postgres: 'unconfigured', outbox: null });
     probe.then(({ postgres, outbox }) => {
       const healthy = postgres !== 'disconnected';
+      const pollerBackground = telegramPoller ? (pollerGate ? pollerGate.state() : 'always') : 'not_started';
+      // A poller that should be reading Telegram and is not (ADR-129): Core does not poll either.
+      const pollerIssue = pollerProblem({ mode: pollerConfig.mode, started: Boolean(telegramPoller), background: pollerBackground,
+        status: telegramPoller?.status() ?? null, now: Date.now() });
       // Backlog or dead letters degrade the worker without failing the container health check.
       const degraded = Boolean(outbox && (outbox.staleOver5m > 0 || outbox.failed > 0)) || backgroundMode.mode === 'misconfigured'
-        || Boolean(automationGaps?.length) || pollerConfig.mode === 'misconfigured';
+        || Boolean(automationGaps?.length) || pollerConfig.mode === 'misconfigured' || Boolean(pollerIssue);
       res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: healthy ? (degraded ? 'degraded' : 'healthy') : 'unhealthy',
@@ -175,7 +274,7 @@ const server = http.createServer((req, res) => {
         outbox,
         // The Telegram poller (Phase 2.1): off (Core polls), misconfigured, or where it is.
         telegramPoller: pollerConfig.mode === 'on'
-          ? { mode: 'on', background: telegramPoller ? (pollerGate ? pollerGate.state() : 'always') : 'not_started', ...(telegramPoller?.status() ?? {}) }
+          ? { mode: 'on', background: pollerBackground, ...(telegramPoller?.status() ?? {}), ...(pollerIssue ? { problem: pollerIssue } : {}) }
           : pollerConfig.mode === 'misconfigured' ? { mode: 'misconfigured', reason: pollerConfig.reason } : { mode: 'off' },
         // Served tenants where the worker's own database user has no membership (see automationGaps).
         tenantsWithoutAutomationMembership: automationGaps,

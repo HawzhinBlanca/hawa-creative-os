@@ -1,0 +1,129 @@
+{
+  "date": "2026-09-28",
+  "status": "LOCAL_SLICE_QUALIFIED_NOT_FULL_GOAL_OR_RELEASE",
+  "base_commit": "67cbc2e9",
+  "branch": "codex/research-grade-design-system",
+  "adr": "108",
+  "requirements": [
+    "FR-060",
+    "NFR-001",
+    "NFR-020",
+    "NFR-024"
+  ],
+  "source_files": [
+    {
+      "path": "apps/core/src/services/canva-connect-service.ts",
+      "sha256": "8b32ca193ead6fc6cc35b8b98030f5e55da0279d7f6c9e98dc272fa4879e50a1"
+    },
+    {
+      "path": "apps/core/src/app.ts",
+      "sha256": "34750a0211a8a02812934413221a0b4158a222ad9234a839ef7fbe0e7d9fa250"
+    },
+    {
+      "path": "packages/domain/src/canva-creation.ts",
+      "sha256": "380e1f2656d0e1fff6cf8059ea7b5cfa8cb595d59dc781ffd7569ac5645c4e3d"
+    },
+    {
+      "path": "packages/domain/src/index.ts",
+      "sha256": "faec7f6fc22bb375c30f41e6f696cb7115797893266daf13c039a3706125998c"
+    },
+    {
+      "path": "apps/desk/src/components/CanvaTaskPanel.tsx",
+      "sha256": "dfd879d83492ad4459c87fbfc7072b7e5e1a067bbb6852170ef2db0c9dda856f"
+    },
+    {
+      "path": "apps/core/test/canva-connect-resilience.test.ts",
+      "sha256": "651c475af11b11eee053f41c286c827d027ae4b1a9f342e88de9ef7306f67820"
+    },
+    {
+      "path": "apps/core/test/canva-stranded-sweeper.test.ts",
+      "sha256": "658556422820efebf8e31a045ecb5ea3547b60c305dec3e88c7e216ae24228fa"
+    },
+    {
+      "path": "apps/core/test/canva-connect-live-boundary.test.ts",
+      "sha256": "138640107cb0cf0f95d79c574e80c1b87d3ae39ab299cfb43280efe1db89caff"
+    },
+    {
+      "path": "packages/domain/test/canva-creation.test.ts",
+      "sha256": "b1757cf5c6faef118fc2f2c10c3bdf33a2a15942cbef2bb022cad737ef09d5d8"
+    }
+  ],
+  "checks": [
+    {
+      "command": "pnpm exec vitest run apps/core/test/canva-connect-resilience.test.ts (new cases, before source fix)",
+      "exit_code": 1,
+      "passed": 9,
+      "failed": 6,
+      "evidence": "/Users/hawzhin/Hawdesign/output/acceptance/2026-09-28-canva-uncertainty/red.log"
+    },
+    {
+      "command": "pnpm exec vitest run apps/core/test/canva-*.test.ts packages/domain/test/canva-creation.test.ts apps/desk/test/canva-*.test.ts",
+      "exit_code": 0,
+      "files": 23,
+      "passed": 296,
+      "failed": 0,
+      "skipped": 0,
+      "evidence": "/Users/hawzhin/Hawdesign/output/acceptance/2026-09-28-canva-uncertainty/affected.log"
+    },
+    {
+      "command": "node --import tsx scripts/typecheck_tests.ts",
+      "exit_code": 0,
+      "active_test_roots": 514,
+      "evidence": "/Users/hawzhin/Hawdesign/output/acceptance/2026-09-28-canva-uncertainty/test-types.log"
+    },
+    {
+      "command": "pnpm --filter @hawa/desk build",
+      "exit_code": 0,
+      "evidence": "/Users/hawzhin/Hawdesign/output/acceptance/2026-09-28-canva-uncertainty/desk-build.log"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit && pnpm exec tsc -p tsconfig.scripts.json",
+      "exit_code": 0
+    },
+    {
+      "command": "node --import tsx scripts/ratchet_any.ts",
+      "exit_code": 0,
+      "any_count": 962,
+      "ceiling": 1053
+    },
+    {
+      "command": "node --import tsx scripts/lint_provider_egress.ts",
+      "exit_code": 0,
+      "existing_exceptions": 9
+    },
+    {
+      "command": "python3 infra/security/security_scan.py",
+      "exit_code": 0,
+      "evidence": "output/acceptance/2026-09-28-canva-uncertainty/security.log"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "behaviors": [
+    "lost create reply remains uncertain after sweeping and fresh key",
+    "old in-progress/read-503/read-404 imports held then manually recover original job",
+    "legacy failed without evidence remains blocking and displayed uncertain",
+    "missing job cannot authorize replacement before deadline",
+    "matching definite provider failure and dispatch refusal allow a new key",
+    "late missing-job read cannot demote concurrent successful reconciliation",
+    "mismatched job ID or multiple/contradictory returned designs remain held",
+    "late original creation receipt clears its own hold and resumes polling",
+    "unavailable owner authorization does not establish failure",
+    "held operations excluded from automatic polling"
+  ],
+  "limits": [
+    "Canva transport faked; test PostgreSQL real and isolated",
+    "No live provider operations or paid model calls",
+    "No full release suite or deployment this slice",
+    "No native manual recovery or human quality test",
+    "Remaining five packages and native revision half of package one remain open"
+  ],
+  "failures_retained": [
+    "Initial sandbox prevented local PostgreSQL connection; escalated isolated test run succeeded",
+    "pnpm typecheck source and scripts compiled, but tsx CLI IPC was sandbox-blocked; identical test checker succeeded via node --import tsx",
+    "Two older expectations encoded superseded uncertainty semantics; replaced with definite-failure evidence and uncertainty assertions",
+    "One broader test asserted old diagnostic wording; now checks stable CANVA_CREATE_CONFLICT code"
+  ]
+}

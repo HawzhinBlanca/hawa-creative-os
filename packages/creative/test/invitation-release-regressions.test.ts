@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderOperationsToSvg } from '../src/operations-to-svg.js';
 
-// The KAAE invitation template these controls exercised is retired (ADR-038); KAAE's invitations are
+// The KAAE invitation template these controls exercised is retired (ADR-127); KAAE's invitations are
 // made in the design studio. What is left guards the renderer itself.
 describe('FR-027/038 renderer regression controls', () => {
   it('a similarly named unknown client logo never becomes KAAE or a placeholder', () => {

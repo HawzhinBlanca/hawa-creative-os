@@ -1,0 +1,9 @@
+# Preserve the office's measured PostgreSQL/pgvector base. Build explicitly; never auto-upgrade.
+FROM pgvector/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pgbackrest=2.59.1-1.pgdg12+1 \
+    && test "$(pgbackrest version)" = "pgBackRest 2.59.1" \
+    && postgres --version | grep -F '17.11' \
+    && install -d -o postgres -g postgres -m 750 /var/lib/pgbackrest /var/log/pgbackrest /etc/pgbackrest/conf.d \
+    && rm -rf /var/lib/apt/lists/*
+LABEL org.hawa.pgbackrest.version="2.59.1" org.hawa.postgres.version="17.11"

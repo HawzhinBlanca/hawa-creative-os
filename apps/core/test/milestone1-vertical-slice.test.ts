@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { assert, describe, it, expect, beforeAll, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -186,6 +186,11 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
     const qaResult = await qaEngine.run(qaCtx, {
       taskId,
       designRevisionId: revisionId,
+      sourceHash: crypto.createHash('sha256').update(JSON.stringify(nodes)).digest('hex'),
+      document: { documentId: `doc_${taskId}`, sourceRevision: 1,
+        sourceSha256: crypto.createHash('sha256').update(JSON.stringify(nodes)).digest('hex'),
+        studio: 'canva', studioVersion: '1', schemaVersion: '1' },
+      renders: [],
       brief: {
         briefId: `brief_${taskId}`,
         taskId,
@@ -256,7 +261,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
         ],
       } as any,
     });
-    expect(qaResult.ok).toBe(true);
+    expect(qaResult.ok).toBe(true); assert(qaResult.ok);
     if (!qaResult.ok) throw new Error('QA run failed');
     expect(qaResult.value.criticalPass).toBe(true);
 
@@ -415,7 +420,7 @@ describe('Milestone 1 Vertical Slice: Authenticated Intake -> Durable Storage ->
 
     // Execute publisher with real physical byte inspection & readback
     const pubResult = await publisher.publish(pubCtx, pubRequest);
-    expect(pubResult.ok).toBe(true);
+    expect(pubResult.ok).toBe(true); assert(pubResult.ok);
     if (!pubResult.ok) throw new Error('Publisher failed');
 
     const receipt = pubResult.value;

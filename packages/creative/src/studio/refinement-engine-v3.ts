@@ -1,5 +1,5 @@
-import type { RenderLayoutOptions } from './render-layout-v2.js';
-import { measureWrappedLines } from './render-layout-v2.js';
+import { measureWrappedLines, type RenderLayoutOptions } from './render-layout-v2.js';
+import type { ClientReference } from './client-reference.js';
 import { assertModelAllowed, resolveModel } from '@hawa/domain';
 import type { StudioLayoutV2, TextElement, ShapeElement } from './layout-v2.js';
 import {
@@ -83,8 +83,9 @@ export interface RefineOptions {
    * metrics fall back to box area instead of the measured lines the ranking uses.
    */
   copyText?: Record<number, string>;
-  /** The client's logo and photos for the critique's renders (see PipelineV3CallOptions.render). */
-  render?: Pick<RenderLayoutOptions, 'logoDataUri' | 'logoPath' | 'photoFiles' | 'photoCutouts'>;
+  /** Explicit scoped assets used when the critique renders a candidate. */
+  renderOptions?: RenderLayoutOptions;
+  reference?: ClientReference;
   /**
    * Refine even when the metric gate would skip: the caller knows of a failure the metrics do not
    * see — a hard-QA defect, for instance.
@@ -256,6 +257,9 @@ export const REPAIR_JSON_SCHEMA = {
 
 /**
  * Gate check: A candidate is refined ONLY if it fails a P01 metric or scores below the calibrated band (0.850).
+ * Pass the metrics measured with the copy (refineCandidateV3 does): without them negative space is
+ * scored on declared boxes, the no-copy fallback band of the policy, not the measure the layout
+ * generator is told (ADR-125).
  */
 export function checkRefinementGate(
   layout: StudioLayoutV2,
@@ -407,11 +411,12 @@ export async function refineCandidate(
   for (let r = 1; r <= maxRounds; r++) {
     // a. Obtain box-grounded visual critique
     const critiqueResult = await generateBoxGroundedCritique(currentLayout, {
+      reference: options.reference,
       client,
       deterministicMetrics: currentMetrics,
       model,
       detail: 'low',
-      renderOptions: copyText || options.render ? { ...options.render, ...(copyText ? { copyText } : {}) } : undefined,
+      renderOptions: { ...options.renderOptions, ...(copyText ? { copyText } : {}) },
     });
 
     const issues = options.issuesFor ? options.issuesFor(currentLayout) : [];

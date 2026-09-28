@@ -10,6 +10,9 @@ import { isValidUuid } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { askLedger } from '../services/ask-ledger.js';
 import { readTaskBrief } from '../services/brief-reader.js';
+import { rejectLegacyTaskDesignWrite } from './lifecycle-design-proof.js';
+
+class LifecycleOwnedRevisionConflict extends Error {}
 
 /** A hawa.design_revisions row. */
 type RevisionRow = NonNullable<Awaited<ReturnType<RevisionRepository['findRevisionById']>>>;
@@ -246,6 +249,8 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to create a design revision');
     }
+    const lifecycleRefusal = await rejectLegacyTaskDesignWrite(ctx, c, auth, true);
+    if (lifecycleRefusal) return lifecycleRefusal;
 
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
     let task = await readCurrentTask(taskId);
@@ -294,17 +299,29 @@ export function registerRevisionsRoutes(ctx: RouteContext): void {
         dbRevision = await withRlsContext(
           db,
           { tenantId, userId: auth.userId, role: auth.role },
-          async (trx) => await revisionRepo.createRevision({
-            id: revisionId,
-            tenantId,
-            taskId,
-            neutralManifest: manifest,
-            authorType: (auth.role === 'adapter' ? 'workflow' : 'user') as any,
-            authorId: auth.actorId || auth.userId,
-            status: 'review',
-          }, trx)
+          async (trx) => {
+            const owner = await trx.selectFrom('tasks').select('request_id')
+              .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirst();
+            if (owner?.request_id) {
+              const request = await trx.selectFrom('requests').select(['owner', 'stage', 'current_task_id'])
+                .where('tenant_id', '=', tenantId).where('request_id', '=', owner.request_id)
+                .forUpdate().executeTakeFirst();
+              if (request?.owner !== 'restate' || request.stage !== 'manual' ||
+                  request.current_task_id !== taskId) throw new LifecycleOwnedRevisionConflict();
+            }
+            return revisionRepo.createRevision({
+              id: revisionId,
+              tenantId,
+              taskId,
+              neutralManifest: manifest,
+              authorType: (auth.role === 'adapter' ? 'workflow' : 'user') as any,
+              authorId: auth.actorId || auth.userId,
+              status: 'review',
+            }, trx);
+          }
         );
       } catch (err: any) {
+        if (err instanceof LifecycleOwnedRevisionConflict) return problem(c, 409, 'LIFECYCLE_OWNED');
         log.error('[core:revisions:create] DB revision error:', err);
         return problem(c, 503, 'Durable Storage Unavailable', `Failed to persist revision: ${err.message}`);
       }

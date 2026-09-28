@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "designId": "DAHWWrLK0so",
+  "stage": "reconstructed",
+  "expectedUpdatedAt": 1790477617,
+  "sourceCommit": "751556fb1feebe221a89129ed3ddabde44fe4d16",
+  "startedAt": "2026-09-27T02:54:43.636Z",
+  "sourceHashes": {
+    "apps/core/src/services/canva-connect-service.ts": "1d20812e9290ec73ccf9d0c27fb85d90930f7a07e06ed020fe4903e71804aab4",
+    "packages/integrations/src/canva-connect-client.ts": "3fe7ec3e9b0883213c0f1b8e941178454c155a87a46512be35c3db8676e6e8ac"
+  },
+  "formats": {
+    "png": {
+      "status": "captured",
+      "claimedAt": "2026-09-27T02:54:43.956Z",
+      "jobId": "0100944a-f17f-4c0b-ae87-5ca422d4ff45",
+      "file": "reconstructed.png",
+      "sha256": "a425ecf264bfab1d8fc745cfa15ab9b7ad960a9277b284961618ee3e4d7041fd",
+      "bytes": 26732,
+      "capturedAt": "2026-09-27T02:54:48.510Z"
+    }
+  },
+  "scope": "Real Connect API exports of a disposable connector-created copy; no Hawa task/binding, approval or delivery.",
+  "before": {
+    "id": "DAHWWrLK0so",
+    "title": "[TEST] Hawa PPTX reconstruction 2026-09-27",
+    "pages": 1,
+    "createdAt": 1790477617,
+    "updatedAt": 1790477617
+  },
+  "after": {
+    "id": "DAHWWrLK0so",
+    "title": "[TEST] Hawa PPTX reconstruction 2026-09-27",
+    "pages": 1,
+    "createdAt": 1790477617,
+    "updatedAt": 1790477617
+  },
+  "completedAt": "2026-09-27T02:54:48.724Z",
+  "status": "captured",
+  "limit": "Equal provider timestamps are a consistency observation, not an atomic Canva revision lock."
+}

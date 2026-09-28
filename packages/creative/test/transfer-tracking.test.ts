@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -40,6 +41,7 @@ const previewTrackingPx = (svg: string, copyIndex: number): number | null => {
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 const baseLayout = (text: StudioLayoutV2['text']): StudioLayoutV2 => ({
+  version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
   width: 1080,
   height: 1350,
   background: { color: '#0A1628' },
@@ -72,7 +74,7 @@ describe('letter spacing crosses to Canva as points, not as em', () => {
     // 0.06em at 48px = 2.88px = 2.16pt, which pptxgenjs writes as spc="216".
     expect(spcValues(slideXmlOf(encoded.bytes))).toEqual([216]);
 
-    const { svg } = renderLayoutV2ToSvg(clone(layout), { copyText: { 0: copy[0] } });
+    const { svg } = renderLayoutV2ToSvg(clone(layout), { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: copy[0] } });
     expect(previewTrackingPx(svg, 0)).toBe(2.88);
 
     // The two numbers are the same tracking in two units, which is the whole point of the fix.
@@ -104,7 +106,7 @@ describe('letter spacing crosses to Canva as points, not as em', () => {
     const encoded = await encodeStudioTransferV2(clone(rtlLayout), copy);
     expect(spcValues(slideXmlOf(encoded.bytes))).toEqual([]);
 
-    const { svg } = renderLayoutV2ToSvg(clone(rtlLayout), { copyText: { 0: copy[0] } });
+    const { svg } = renderLayoutV2ToSvg(clone(rtlLayout), { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: copy[0] } });
     expect(previewTrackingPx(svg, 0)).toBeNull();
 
     // An Arabic-script family without the rtl flag is the same case.
@@ -163,7 +165,7 @@ describe('letter spacing crosses to Canva as points, not as em', () => {
     const shapes = textShapes(slideXmlOf(encoded.bytes));
     expect(shapes).toHaveLength(fixture.layout.text.length);
 
-    const { svg } = renderLayoutV2ToSvg(clone(fixture.layout), { copyText });
+    const { svg } = renderLayoutV2ToSvg(clone(fixture.layout), { logoDataUri: KAAE_TEST_LOGO, copyText });
     const blocks = [...fixture.layout.text].sort((a, b) => a.copyIndex - b.copyIndex);
 
     let tracked = 0;

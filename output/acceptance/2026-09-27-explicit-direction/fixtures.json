@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "8e79320253f14053148c85947f3457141acfc8f8",
+  "sourceTreeClean": false,
+  "corpus": {
+    "path": "output/acceptance/2026-09-27-canva-locale/fixtures.json",
+    "sha256": "a8ee5a1c250515102b17a29d2207e1170bc8e0233a1061bb7c176a8eb85e2dec",
+    "caseCount": 6
+  },
+  "sourceHashes": {
+    "packages/creative/src/editable-transfer.ts": "f3ee3f99e6a48a89c4aebc683f3923b532cf5d712ca224f2236d3ebe17c4efc6",
+    "packages/creative/src/studio/transfer-v2.ts": "075a3dc7aed971502040edd5132e8d9bde1d9e5d9d27a0526b8adf6c7c310ad9",
+    "packages/qa/src/canva-pptx-check.ts": "739e6d00d19cb4bc2eceb7853810d13bc8bb7f47d060ba8c5d7827e0ff492c99",
+    "packages/integrations/src/canva-connect-client.ts": "3fe7ec3e9b0883213c0f1b8e941178454c155a87a46512be35c3db8676e6e8ac",
+    "apps/core/src/services/canva-connect-service.ts": "9f08396c07b9b6abe8fcaf28203253b5415b8bea077ec7ae6c0fcfd928e61d6c"
+  },
+  "groups": [
+    {
+      "id": "direction-v2",
+      "file": "direction-v2-input.pptx",
+      "bytes": 53733,
+      "sha256": "1d12d63cbba018eb7fcde07f4cd9a22bdb14a6e4ed4108cdc21f6df3190c1da6",
+      "cases": [
+        {
+          "id": "STYLE-AR",
+          "text": "مرحبا NOVA بالعالم\nالسعر الخاص: ٢٥٬٠٠٠ دينار",
+          "language": "ar",
+          "locale": "ar-IQ",
+          "font": "Noto Sans Arabic",
+          "rtl": true,
+          "align": "right",
+          "accentColor": "#A23E16"
+        },
+        {
+          "id": "STYLE-CKB",
+          "text": "سڵاو NOVA جیهان\nنرخی تایبەت: ٢٥٬٠٠٠ دینار",
+          "language": "ckb",
+          "locale": "ckb",
+          "font": "Cairo",
+          "rtl": true,
+          "align": "center",
+          "accentColor": "#A23E16"
+        },
+        {
+          "id": "STYLE-EN",
+          "text": "MEET NOVA AT\nWorkshop 2026",
+          "language": "en",
+          "locale": "en-GB",
+          "font": "Verdana",
+          "rtl": false,
+          "align": "left",
+          "accentColor": "#A23E16",
+          "accentText": "NOVA"
+        },
+        {
+          "id": "STYLE-MIXED",
+          "text": "NOVA ONE — بۆ هەنگاوی داهاتوو\nکاتژمێر 8:30 PM",
+          "language": "mixed",
+          "locale": "und",
+          "font": "Noto Sans Arabic",
+          "rtl": false,
+          "align": "left"
+        },
+        {
+          "id": "LTR-ACCENT",
+          "text": "NOVA — سڵاو جیهان\nکاتژمێر 8:30 PM",
+          "language": "mixed",
+          "locale": "und",
+          "font": "Cairo",
+          "rtl": false,
+          "align": "left",
+          "accentColor": "#A23E16"
+        },
+        {
+          "id": "LTR-ARABIC-FIRST",
+          "text": "سڵاو جیهان\nNOVA at 8:30 PM",
+          "language": "mixed",
+          "locale": "und",
+          "font": "Noto Sans Arabic",
+          "rtl": false,
+          "align": "left"
+        }
+      ],
+      "manifest": {
+        "width": 1080,
+        "height": 1740,
+        "copy": [
+          "مرحبا NOVA بالعالم\nالسعر الخاص: ٢٥٬٠٠٠ دينار",
+          "سڵاو NOVA جیهان\nنرخی تایبەت: ٢٥٬٠٠٠ دینار",
+          "MEET NOVA AT\nWorkshop 2026",
+          "NOVA ONE — بۆ هەنگاوی داهاتوو\nکاتژمێر 8:30 PM",
+          "NOVA — سڵاو جیهان\nکاتژمێر 8:30 PM",
+          "سڵاو جیهان\nNOVA at 8:30 PM"
+        ],
+        "copyLocales": [
+          "ar-IQ",
+          "ckb",
+          "en-GB",
+          "und",
+          "und",
+          "und"
+        ],
+        "copySha256": "a1bc56c180fe3fb49277751aeea0af16768059bcc0edd07c4f1d18ddcd4262d7",
+        "logoSha256": null,
+        "artSha256": null,
+        "plan": {
+          "width": 1080,
+          "height": 1740,
+          "background": "#F6F8FC",
+          "shapes": [],
+          "text": [
+            {
+              "copyIndex": 0,
+              "x": 60,
+              "y": 80,
+              "width": 460,
+              "height": 410,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "bold": false,
+              "italic": false,
+              "letterSpacing": 0,
+              "lineHeight": 1.7,
+              "rtl": true
+            },
+            {
+              "copyIndex": 1,
+              "x": 560,
+              "y": 80,
+              "width": 460,
+              "height": 410,
+              "fontSize": 32,
+              "fontFamily": "Cairo",
+              "color": "#14253D",
+              "align": "center",
+              "bold": false,
+              "italic": false,
+              "letterSpacing": 0,
+              "lineHeight": 1.7,
+              "rtl": true
+            },
+            {
+              "copyIndex": 2,
+              "x": 60,
+              "y": 620,
+              "width": 460,
+              "height": 410,
+              "fontSize": 32,
+              "fontFamily": "Verdana",
+              "color": "#14253D",
+              "align": "left",
+              "bold": false,
+              "italic": false,
+              "letterSpacing": 0,
+              "lineHeight": 1.7,
+              "rtl": false
+            },
+            {
+              "copyIndex": 3,
+              "x": 560,
+              "y": 620,
+              "width": 460,
+              "height": 410,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "bold": false,
+              "italic": false,
+              "letterSpacing": 0,
+              "lineHeight": 1.7,
+              "rtl": false
+            },
+            {
+              "copyIndex": 4,
+              "x": 60,
+              "y": 1160,
+              "width": 460,
+              "height": 410,
+              "fontSize": 32,
+              "fontFamily": "Cairo",
+              "color": "#14253D",
+              "align": "left",
+              "bold": false,
+              "italic": false,
+              "letterSpacing": 0,
+              "lineHeight": 1.7,
+              "rtl": false
+            },
+            {
+              "copyIndex": 5,
+              "x": 560,
+              "y": 1160,
+              "width": 460,
+              "height": 410,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "bold": false,
+              "italic": false,
+              "letterSpacing": 0,
+              "lineHeight": 1.7,
+              "rtl": false
+            }
+          ],
+          "logo": {
+            "x": 0,
+            "y": 0,
+            "width": 10,
+            "height": 10
+          }
+        },
+        "pptxSha256": "1d12d63cbba018eb7fcde07f4cd9a22bdb14a6e4ed4108cdc21f6df3190c1da6",
+        "version": 2
+      },
+      "layout": {
+        "version": 2,
+        "width": 1080,
+        "height": 1740,
+        "background": {
+          "color": "#F6F8FC"
+        },
+        "grid": {
+          "margin": 60,
+          "columns": 12,
+          "gutter": 24,
+          "baseline": 8
+        },
+        "shapes": [],
+        "logo": {
+          "x": 0,
+          "y": 0,
+          "width": 10,
+          "height": 10
+        },
+        "text": [
+          {
+            "copyIndex": 0,
+            "role": "body",
+            "x": 60,
+            "y": 80,
+            "width": 460,
+            "height": 410,
+            "fontSize": 32,
+            "lineHeight": 1.7,
+            "fontFamily": "Noto Sans Arabic",
+            "color": "#14253D",
+            "align": "right",
+            "rtl": true,
+            "accentColor": "#A23E16"
+          },
+          {
+            "copyIndex": 1,
+            "role": "body",
+            "x": 560,
+            "y": 80,
+            "width": 460,
+            "height": 410,
+            "fontSize": 32,
+            "lineHeight": 1.7,
+            "fontFamily": "Cairo",
+            "color": "#14253D",
+            "align": "center",
+            "rtl": true,
+            "accentColor": "#A23E16"
+          },
+          {
+            "copyIndex": 2,
+            "role": "body",
+            "x": 60,
+            "y": 620,
+            "width": 460,
+            "height": 410,
+            "fontSize": 32,
+            "lineHeight": 1.7,
+            "fontFamily": "Verdana",
+            "color": "#14253D",
+            "align": "left",
+            "rtl": false,
+            "accentColor": "#A23E16",
+            "accentText": "NOVA"
+          },
+          {
+            "copyIndex": 3,
+            "role": "body",
+            "x": 560,
+            "y": 620,
+            "width": 460,
+            "height": 410,
+            "fontSize": 32,
+            "lineHeight": 1.7,
+            "fontFamily": "Noto Sans Arabic",
+            "color": "#14253D",
+            "align": "left",
+            "rtl": false
+          },
+          {
+            "copyIndex": 4,
+            "role": "body",
+            "x": 60,
+            "y": 1160,
+            "width": 460,
+            "height": 410,
+            "fontSize": 32,
+            "lineHeight": 1.7,
+            "fontFamily": "Cairo",
+            "color": "#14253D",
+            "align": "left",
+            "rtl": false,
+            "accentColor": "#A23E16"
+          },
+          {
+            "copyIndex": 5,
+            "role": "body",
+            "x": 560,
+            "y": 1160,
+            "width": 460,
+            "height": 410,
+            "fontSize": 32,
+            "lineHeight": 1.7,
+            "fontFamily": "Noto Sans Arabic",
+            "color": "#14253D",
+            "align": "left",
+            "rtl": false
+          }
+        ]
+      },
+      "baseline": "output/acceptance/2026-09-27-canva-locale/locale-v2-canva.png",
+      "baselineSha256": "4b0953eb4e39c72c08c7f5e1daf7be8a7ab7b997443e8bf161ce74e7f2257c61",
+      "scope": "Same first four blocks as retained negative control, plus LTR Arabic-font accent and Arabic-first cases; height extended for last row. Direction comes from the explicit layout flags. No human language approval."
+    }
+  ],
+  "fullMultilingualAdmission": false
+}

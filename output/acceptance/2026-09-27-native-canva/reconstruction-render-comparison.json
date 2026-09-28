@@ -1,0 +1,14 @@
+{
+  "sameDimensions": true,
+  "pixels": [
+    1024,
+    768
+  ],
+  "pixelIdentical": false,
+  "changedPixels": 17657,
+  "totalPixels": 786432,
+  "changedFraction": 0.022452036539713543,
+  "maxChannelDelta": 225,
+  "meanAbsoluteChannelDelta": 2.644057379828559,
+  "scope": "Exact decoded PNG comparison; not a human visual-quality rating."
+}

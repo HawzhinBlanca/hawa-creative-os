@@ -67,6 +67,6 @@ describe('TelegramBridgeDaemon outbound resilience', () => {
 
     const failedRes = await configured.dispatchOutboundPhoto(12345, Buffer.from('test'));
     expect(failedRes.success).toBe(false);
-    expect(failedRes.error).toContain('TELEGRAM_PHOTO_FAILED_');
+    expect(failedRes).toEqual({ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' });
   });
 });

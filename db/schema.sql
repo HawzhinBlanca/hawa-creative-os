@@ -263,66 +263,11 @@ CREATE TABLE tasks (
   updated_at timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz,
   deleted_at timestamptz,
-  -- The request this task is a round of (migration 023, ADR-034); NULL = a request Core owns.
-  request_id uuid,
   FOREIGN KEY (tenant_id, client_id) REFERENCES clients(tenant_id, id),
   FOREIGN KEY (tenant_id, project_id) REFERENCES projects(tenant_id, id),
   FOREIGN KEY (tenant_id, source_message_id) REFERENCES message_events(tenant_id, id),
   UNIQUE (tenant_id, id)
 );
-CREATE INDEX tasks_request_idx ON tasks(tenant_id, request_id) WHERE request_id IS NOT NULL;
-
--- The request lifecycle's projection (migration 023, ADR-034; PHASE2_DESIGN.md 2.8): one row per
--- request the RequestLifecycle object in Restate owns, written by Core's projection endpoint only,
--- with every projection recorded under its idempotency key. The migration explains each column.
-CREATE TABLE requests (
-  request_id uuid PRIMARY KEY,
-  tenant_id uuid NOT NULL REFERENCES tenants(id),
-  root_task_id uuid NOT NULL,
-  current_task_id uuid NOT NULL,
-  parent_request_id uuid,
-  owner text NOT NULL CHECK (owner IN ('core', 'restate')),
-  stage text NOT NULL CHECK (stage IN ('designing', 'awaiting_answer', 'in_review', 'manual', 'approved', 'delivering', 'delivered', 'expired', 'cancelled')),
-  rev bigint NOT NULL DEFAULT 0 CHECK (rev >= 0),
-  chat_id text CHECK (chat_id IS NULL OR length(chat_id) <= 64),
-  draft_sent_at timestamptz,
-  question_asked_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (tenant_id, request_id),
-  FOREIGN KEY (tenant_id, root_task_id) REFERENCES tasks(tenant_id, id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, current_task_id) REFERENCES tasks(tenant_id, id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, parent_request_id) REFERENCES requests(tenant_id, request_id)
-);
-CREATE INDEX requests_tenant_stage_idx ON requests(tenant_id, stage, updated_at DESC);
-
-CREATE TABLE lifecycle_projections (
-  tenant_id uuid NOT NULL,
-  request_id uuid NOT NULL,
-  rev bigint NOT NULL CHECK (rev > 0),
-  idempotency_key text NOT NULL CHECK (length(idempotency_key) BETWEEN 1 AND 300),
-  request_hash text NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
-  result jsonb NOT NULL,
-  applied_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, idempotency_key),
-  UNIQUE (tenant_id, request_id, rev),
-  FOREIGN KEY (tenant_id, request_id) REFERENCES requests(tenant_id, request_id) ON DELETE CASCADE
-);
-
--- A revision never goes back, and a request never changes tenant, owner or root task.
-CREATE OR REPLACE FUNCTION requests_guard() RETURNS trigger
-LANGUAGE plpgsql SET search_path = hawa, public AS $$
-BEGIN
-  IF NEW.rev < OLD.rev THEN
-    RAISE EXCEPTION 'request % is at revision %, it cannot go back to %', OLD.request_id, OLD.rev, NEW.rev USING ERRCODE = 'check_violation';
-  END IF;
-  IF NEW.owner IS DISTINCT FROM OLD.owner OR NEW.tenant_id IS DISTINCT FROM OLD.tenant_id OR NEW.root_task_id IS DISTINCT FROM OLD.root_task_id THEN
-    RAISE EXCEPTION 'request %: owner, tenant and root task are written once', OLD.request_id USING ERRCODE = 'check_violation';
-  END IF;
-  NEW.updated_at := now();
-  RETURN NEW;
-END $$;
-CREATE TRIGGER requests_guard BEFORE UPDATE ON requests FOR EACH ROW EXECUTE FUNCTION requests_guard();
 
 CREATE TABLE task_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -766,7 +711,7 @@ CREATE TABLE review_requests (
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   task_id uuid NOT NULL,
   design_revision_id uuid NOT NULL,
-  qc_run_id uuid NOT NULL,
+  qc_run_id uuid,
   stage text NOT NULL,
   assigned_user_id uuid REFERENCES users(id),
   assigned_role membership_role,
@@ -790,13 +735,14 @@ CREATE TABLE approvals (
   task_id uuid NOT NULL,
   review_request_id uuid NOT NULL REFERENCES review_requests(id),
   design_revision_id uuid NOT NULL,
-  qc_run_id uuid NOT NULL,
+  qc_run_id uuid,
   decision approval_decision NOT NULL,
   decided_by uuid NOT NULL REFERENCES users(id),
   reason text,
   decision_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   nonce text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT approvals_approved_requires_qc CHECK (decision <> 'approved' OR qc_run_id IS NOT NULL),
   FOREIGN KEY (tenant_id, task_id) REFERENCES tasks(tenant_id, id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, design_revision_id) REFERENCES design_revisions(tenant_id, id),
   FOREIGN KEY (tenant_id, qc_run_id) REFERENCES qc_runs(tenant_id, id),
@@ -877,7 +823,65 @@ CREATE TABLE eval_runs (
   status text NOT NULL CHECK (status IN ('queued','running','completed','failed','cancelled')),
   summary jsonb NOT NULL DEFAULT '{}'::jsonb,
   started_at timestamptz NOT NULL DEFAULT now(),
-  completed_at timestamptz
+  completed_at timestamptz,
+  action_id uuid,
+  request_hash text,
+  actor_id uuid REFERENCES users(id),
+  name text
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS eval_runs_action_key ON eval_runs(tenant_id,action_id);
+CREATE UNIQUE INDEX IF NOT EXISTS eval_runs_tenant_identity ON eval_runs(tenant_id,id);
+CREATE TABLE eval_model_calls (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  run_id uuid NOT NULL,
+  ordinal integer NOT NULL CHECK (ordinal > 0),
+  request_hash text NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
+  role text NOT NULL,
+  deployment jsonb NOT NULL,
+  status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','completed','uncertain')),
+  outcome jsonb,
+  started_at timestamptz NOT NULL DEFAULT now(),
+  finished_at timestamptz,
+  FOREIGN KEY(tenant_id,run_id) REFERENCES eval_runs(tenant_id,id),
+  UNIQUE(tenant_id,run_id,ordinal),
+  CHECK ((status='pending' AND outcome IS NULL AND finished_at IS NULL) OR
+         (status<>'pending' AND outcome IS NOT NULL AND finished_at IS NOT NULL))
+);
+
+-- ADR-087: Studio run/client FKs and admission trigger are added by migration 049.
+CREATE TABLE studio_run_settlements (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  task_id uuid NOT NULL,
+  client_id uuid NOT NULL,
+  run_id uuid NOT NULL,
+  action_id uuid NOT NULL,
+  actor_user_id uuid NOT NULL REFERENCES users(id),
+  request_hash text NOT NULL CHECK(request_hash ~ '^[a-f0-9]{64}$'),
+  snapshot_hash text NOT NULL CHECK(snapshot_hash ~ '^[a-f0-9]{64}$'),
+  reason text NOT NULL CHECK(length(trim(reason)) BETWEEN 1 AND 500),
+  calls jsonb NOT NULL CHECK(jsonb_typeof(calls)='array' AND jsonb_array_length(calls) BETWEEN 1 AND 1000),
+  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  FOREIGN KEY(tenant_id,task_id) REFERENCES tasks(tenant_id,id),
+  UNIQUE(tenant_id,action_id)
+);
+
+CREATE TABLE eval_run_settlements (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  run_id uuid NOT NULL,
+  action_id uuid NOT NULL,
+  actor_user_id uuid NOT NULL REFERENCES users(id),
+  request_hash text NOT NULL CHECK(request_hash ~ '^[a-f0-9]{64}$'),
+  snapshot_hash text NOT NULL CHECK(snapshot_hash ~ '^[a-f0-9]{64}$'),
+  reason text NOT NULL CHECK(length(trim(reason)) BETWEEN 1 AND 500),
+  calls jsonb NOT NULL CHECK(jsonb_typeof(calls)='array'),
+  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  FOREIGN KEY(tenant_id,run_id) REFERENCES eval_runs(tenant_id,id),
+  UNIQUE(tenant_id,run_id),
+  UNIQUE(tenant_id,action_id)
 );
 
 CREATE TABLE eval_results (
@@ -914,6 +918,27 @@ CREATE TABLE publications (
   FOREIGN KEY (tenant_id, design_revision_id) REFERENCES design_revisions(tenant_id, id),
   UNIQUE (tenant_id, publication_key),
   UNIQUE (tenant_id, id)
+);
+CREATE INDEX publications_tenant_task_created_idx
+  ON publications (tenant_id, task_id, created_at DESC);
+
+-- ADR-044: a provider-generated ID is committed before any file upload.
+CREATE TABLE drive_upload_reservations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  publication_id uuid NOT NULL,
+  artifact_id uuid NOT NULL,
+  task_id uuid NOT NULL,
+  package_sha256 text NOT NULL,
+  folder_id text NOT NULL,
+  file_name text NOT NULL,
+  mime_type text NOT NULL,
+  expected_sha256 text NOT NULL,
+  drive_file_id text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  FOREIGN KEY (tenant_id, publication_id) REFERENCES publications(tenant_id, id),
+  UNIQUE (publication_id, artifact_id),
+  UNIQUE (drive_file_id)
 );
 
 CREATE TABLE drive_refs (

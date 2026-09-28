@@ -29,6 +29,7 @@ describe('Task 4: app.ts Modular Route Decomposition', () => {
       method: 'GET',
       headers: { Authorization: 'Bearer test_bearer' },
     });
-    expect([200, 204]).toContain(evalsRes.status);
+    expect(evalsRes.status).toBe(503);
+    expect((await evalsRes.json()).title).toBe('Evaluation Database Required');
   });
 });

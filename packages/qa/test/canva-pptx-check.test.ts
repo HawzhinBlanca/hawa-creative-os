@@ -11,6 +11,28 @@ const make = (text = 'Exact copy &amp; facts', font = 'Verdana') =>
   });
 
 describe('Canva native round-trip inspection', () => {
+  it('checks explicit client fonts for every script in a mixed run without a default or prefix match', () => {
+    const deck=(latin:string,arabic:string)=>zipSync({'ppt/presentation.xml':strToU8('<p:presentation/>'),
+      'ppt/slides/slide1.xml':strToU8(`<p:sld><p:sp><p:txBody><a:p><a:r><a:rPr><a:latin typeface="${latin}"/><a:cs typeface="${arabic}"/></a:rPr><a:t>Hello سڵاو</a:t></a:r></a:p></p:txBody></p:sp></p:sld>`)});
+    const options={allowedFontsByScript:{latin:['Verdana'],arabic:['Noto Sans Arabic']}};
+    expect(checkCanvaPptx(deck('Verdana','Noto Sans Arabic'),['Hello سڵاو'],options).fontPass).toBe(true);
+    for(const [latin,arabic] of [['Arial','Noto Sans Arabic'],['Verdana','Arial'],['Verdana Fake','Noto Sans Arabic'],['Verdana','']])
+      expect(checkCanvaPptx(deck(latin,arabic),['Hello سڵاو'],options).fontPass).toBe(false);
+    expect(checkCanvaPptx(make(),['Exact copy & facts'],{allowedFontsByScript:{latin:[],arabic:[]}}).fontPass).toBe(false);
+  });
+  it('maps only observed live text with unique source identities, preserving source whitespace', () => {
+    const shape = (id: string, text: string) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}"/></p:nvSpPr><p:txBody><a:p><a:r><a:rPr><a:latin typeface="Verdana"/></a:rPr><a:t>${text}</a:t></a:r></a:p></p:txBody></p:sp>`;
+    const deck = (xml: string) => zipSync({'ppt/presentation.xml':strToU8('<p:presentation/>'),
+      'ppt/slides/slide1.xml':strToU8(`<p:sld>${xml}</p:sld>`)});
+    const checked = checkCanvaPptx(deck(shape('7', '  Real &amp; live  ')), ['Real & live']);
+    expect(checked.sourceTextObjects).toEqual([{id:'ppt/slides/slide1.xml#7',type:'text',text:'  Real & live  ',
+      source:{format:'pptx',part:'ppt/slides/slide1.xml',shapeId:'7'}}]);
+    expect(checked.fullReleasePass).toBe(false);
+    expect(checkCanvaPptx(make(), ['Exact copy & facts']).sourceTextObjects).toBeNull();
+    expect(checkCanvaPptx(deck(shape('7','one')+shape('7','two')), ['one','two']).sourceTextObjects).toBeNull();
+    expect(checkCanvaPptx(deck(shape('7','one')+'<p:pic><p:nvPicPr><p:cNvPr id="7"/></p:nvPicPr></p:pic>'), ['one']).sourceTextObjects).toBeNull();
+    expect(checkCanvaPptx(deck('<p:pic><p:nvPicPr><p:cNvPr id="7"/></p:nvPicPr></p:pic>'), []).sourceTextObjects).toEqual([]);
+  });
   it('decodes exact live text and the actual per-run font without claiming full release', () => {
     const r = checkCanvaPptx(make(), ['Exact copy & facts'], 'Verdana');
     expect(r.copyPass).toBe(true);

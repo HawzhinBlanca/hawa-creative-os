@@ -38,8 +38,28 @@ export function packageBlindPairs(config: BlindPairConfig): {
   ratingsCsvTemplatePath: string;
   count: number;
 } {
+  if (config.pairs.length === 0) throw new Error('Blind study needs at least one pair');
   const blindDir = path.join(config.outputDir, 'blind-pairs');
-  fs.mkdirSync(blindDir, { recursive: true });
+  const keyPath = path.join(config.outputDir, 'pair-key.json');
+  const ratingsCsvTemplatePath = path.join(config.outputDir, 'human-ratings.csv');
+  if (fs.existsSync(keyPath) || fs.existsSync(ratingsCsvTemplatePath)) {
+    throw new Error('Blind study key or rating sheet already exists; choose a new output directory');
+  }
+  const ids = new Set<string>();
+  const checked = config.pairs.map((pair) => {
+    if (!pair.briefId || ids.has(pair.briefId)) throw new Error(`Missing or duplicate blind brief: ${pair.briefId}`);
+    ids.add(pair.briefId);
+    if (!fs.existsSync(pair.v1PngPath) || !fs.existsSync(pair.v2PngPath)) {
+      throw new Error(`${pair.briefId}: both exported images must exist`);
+    }
+    const v1Bytes = fs.readFileSync(pair.v1PngPath);
+    const v2Bytes = fs.readFileSync(pair.v2PngPath);
+    if (!v1Bytes.length || !v2Bytes.length || v1Bytes.equals(v2Bytes)) {
+      throw new Error(`${pair.briefId}: exported images must be nonempty and distinct`);
+    }
+    return { pair, v1Bytes, v2Bytes };
+  });
+  fs.mkdirSync(blindDir, { recursive: true, mode: 0o700 });
 
   const seed = config.seed || randomBytes(16).toString('hex');
   const sealedEntries: SealedPairKeyEntry[] = [];
@@ -49,16 +69,13 @@ export function packageBlindPairs(config: BlindPairConfig): {
     'pairId,briefId,choice,ratingA,ratingB,notes',
   ];
 
-  for (let i = 0; i < config.pairs.length; i++) {
-    const pair = config.pairs[i];
+  for (let i = 0; i < checked.length; i++) {
+    const { pair, v1Bytes, v2Bytes } = checked[i];
     const pairId = `pair-${String(i + 1).padStart(2, '0')}`;
 
     // Simple deterministic PRNG from seed + pair index
     const hashVal = createHash('sha256').update(`${seed}-${i}`).digest('hex');
     const isV2Left = parseInt(hashVal.substring(0, 2), 16) % 2 === 0;
-
-    const v1Bytes = fs.existsSync(pair.v1PngPath) ? fs.readFileSync(pair.v1PngPath) : Buffer.from('');
-    const v2Bytes = fs.existsSync(pair.v2PngPath) ? fs.readFileSync(pair.v2PngPath) : Buffer.from('');
 
     const v1Sha256 = createHash('sha256').update(v1Bytes).digest('hex');
     const v2Sha256 = createHash('sha256').update(v2Bytes).digest('hex');
@@ -66,8 +83,8 @@ export function packageBlindPairs(config: BlindPairConfig): {
     const leftBytes = isV2Left ? v2Bytes : v1Bytes;
     const rightBytes = isV2Left ? v1Bytes : v2Bytes;
 
-    fs.writeFileSync(path.join(blindDir, `${pairId}-L.png`), leftBytes);
-    fs.writeFileSync(path.join(blindDir, `${pairId}-R.png`), rightBytes);
+    fs.writeFileSync(path.join(blindDir, `${pairId}-L.png`), leftBytes, { flag: 'wx', mode: 0o600 });
+    fs.writeFileSync(path.join(blindDir, `${pairId}-R.png`), rightBytes, { flag: 'wx', mode: 0o600 });
 
     sealedEntries.push({
       pairId,
@@ -91,11 +108,9 @@ export function packageBlindPairs(config: BlindPairConfig): {
     pairs: sealedEntries,
   };
 
-  const keyPath = path.join(config.outputDir, 'pair-key.json');
-  fs.writeFileSync(keyPath, JSON.stringify(sealedKey, null, 2), 'utf8');
+  fs.writeFileSync(keyPath, JSON.stringify(sealedKey, null, 2), { flag: 'wx', mode: 0o600 });
 
-  const ratingsCsvTemplatePath = path.join(config.outputDir, 'human-ratings.csv');
-  fs.writeFileSync(ratingsCsvTemplatePath, csvLines.join('\n') + '\n', 'utf8');
+  fs.writeFileSync(ratingsCsvTemplatePath, csvLines.join('\n') + '\n', { flag: 'wx', mode: 0o600 });
 
   return {
     keyPath,

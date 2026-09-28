@@ -1,26 +1,35 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { readFixtureDataset } from './datasets.js';
 import { FakeModelGateway } from '@hawa/testkit';
 import { extractProtectedTokens } from '@hawa/domain';
 import { RetrievalService } from '@hawa/retrieval';
 import { checkKurdishTypographyClearance, validateKurdishOrthography } from '@hawa/qa';
-import type { RequestContext, ModelGateway } from '@hawa/contracts';
+import type { RequestContext, ModelGateway, AppError, EvaluationCaseResult } from '@hawa/contracts';
+import { ROUTING_RESPONSE_SCHEMA, VISUAL_RESPONSE_SCHEMA } from './response-schemas.js';
 
-function resolveEvalPath(relPath: string): string {
-  const p1 = resolve(process.cwd(), relPath);
-  if (existsSync(p1)) return p1;
-  const p2 = resolve(process.cwd(), '../../', relPath);
-  if (existsSync(p2)) return p2;
-  return p1;
-}
+const stopsModelBatch = (error: AppError) => error.detail?.requiresReconciliation === true ||
+  error.code.startsWith('MODEL_BUDGET_') || error.code === 'MODEL_DEADLINE_EXCEEDED' || error.code === 'MODEL_SCHEMA_INVALID';
+
+const fixtureSource = (file: string, definition: unknown) => ({ file, sha256: createHash('sha256').update(JSON.stringify(definition)).digest('hex') });
 
 export interface EvalSummary {
   dataset: string;
+  /** Fixture contracts can pass without constituting an independent model or retrieval study. */
+  admissionEligible?: boolean;
   totalCases: number;
   passedCases: number;
   failedCases: number;
-  passRate: number;
+  passRate: number | null;
+  source?: { file: string; sha256: string };
+  caseResults?: EvaluationCaseResult[];
+  unreportedCases?: number;
   criticalViolations: number;
+  execution?: {
+    status: 'complete' | 'stopped';
+    attemptedCases: number;
+    unexecutedCases: number;
+    stopReason?: AppError;
+  };
 }
 
 export class EvaluationRunner {
@@ -31,15 +40,15 @@ export class EvaluationRunner {
   }
 
   async runRoutingAndBriefTournament(): Promise<EvalSummary> {
-    const filePath = resolveEvalPath('evals/routing_brief.jsonl');
-    const content = readFileSync(filePath, 'utf-8');
-
-    const lines = content.split('\n').filter((l) => l.trim().length > 0);
-    const cases = lines.map((l) => JSON.parse(l));
+    const dataset = readFixtureDataset('brief')!;
+    const cases = dataset.content.split('\n').filter(line => line.trim()).map(line => JSON.parse(line));
+    const caseResults: EvaluationCaseResult[] = [];
 
     let passed = 0;
     let failed = 0;
     let criticalViolations = 0;
+    let attemptedCases = 0;
+    let stopReason: AppError | undefined;
 
     const ctx: RequestContext = {
       tenantId: 'tenant-eval',
@@ -50,132 +59,148 @@ export class EvaluationRunner {
     };
 
     for (const c of cases) {
-      // Test routing
-      const routeRes = await this.gateway.generateStructured<{ decision: string; confidence: number }>(ctx, {
-        role: 'intake_router',
-        inputs: [{ kind: 'text', text: c.input_text || c.message || '' }],
-        systemPromptVersion: '1.0',
-        responseSchema: {},
-        budget: { maxCostUsd: 0.01, maxLatencyMs: 1000, maxAttempts: 1 },
-        egressPolicy: { mode: 'approved_providers', allowedProviders: ['google'] },
-        cachePolicy: 'disabled',
-      });
+      attemptedCases++;
+      const beforePassed = passed, beforeCritical = criticalViolations;
+      try {
+        // Test routing
+        const routeRes = await this.gateway.generateStructured<{ decision: string; confidence: number }>(ctx, {
+          role: 'intake_router',
+          inputs: [{ kind: 'text', text: c.input_text || c.message || '' }],
+          systemPromptVersion: '1.0',
+          responseSchema: ROUTING_RESPONSE_SCHEMA,
+          maxOutputTokens: 2048,
+          budget: { maxCostUsd: 0.01, maxLatencyMs: 1000, maxAttempts: 1 },
+          egressPolicy: { mode: 'approved_providers', allowedProviders: ['google'] },
+          cachePolicy: 'disabled',
+        });
 
-      if (!routeRes.ok) {
-        failed += 1;
-        if (c.critical) criticalViolations += 1;
-        continue;
-      }
-
-      const val = (routeRes.value as any)?.value !== undefined ? (routeRes.value as any).value : routeRes.value;
-      const validDecisions = new Set(['route_matched', 'abstain', 'needs_clarification', 'route_ambiguous']);
-
-      // HQ-06 & D14: Validate decision against allowed schema and ground truth
-      if (
-        !val ||
-        typeof val !== 'object' ||
-        typeof val.decision !== 'string' ||
-        !validDecisions.has(val.decision) ||
-        typeof val.confidence !== 'number' ||
-        val.confidence < 0 ||
-        val.confidence > 1.0 ||
-        isNaN(val.confidence)
-      ) {
-        failed += 1;
-        criticalViolations += 1;
-        continue;
-      }
-
-      // Ground truth comparison:
-      if (c.expected?.must_abstain) {
-        if (val.decision !== 'abstain') {
+        if (!routeRes.ok) {
           failed += 1;
           if (c.critical) criticalViolations += 1;
-          continue;
-        }
-      } else {
-        // Cases that do not require abstention must route, not abstain
-        if (val.decision === 'abstain') {
-          failed += 1;
-          if (c.critical) criticalViolations += 1;
-          continue;
-        }
-        if (val.decision !== 'route_matched') {
-          failed += 1;
-          if (c.critical) criticalViolations += 1;
-          continue;
-        }
-        // Validate client identity when expected (reject ambiguous concatenations)
-        if (c.expected?.client) {
-          const resClient = val.clientId || val.client;
-          if (!resClient) {
-            failed += 1;
-            if (c.critical) criticalViolations += 1;
-            continue;
+          if (stopsModelBatch(routeRes.error)) {
+            stopReason = routeRes.error;
+            break;
           }
-          const strRes = String(resClient).trim();
-          if (strRes.includes('|') || strRes.includes(':') || strRes.includes(',') || strRes.includes(';')) {
-            failed += 1;
-            if (c.critical) criticalViolations += 1;
-            continue;
-          }
+          continue;
+        }
 
-          const normRes = strRes.toUpperCase().replace(/^CLIENT-/, '');
-          const normExp = String(c.expected.client).trim().toUpperCase().replace(/^CLIENT-/, '');
-          if (normRes !== normExp) {
-            failed += 1;
-            if (c.critical) criticalViolations += 1;
-            continue;
-          }
-        }
-        // Validate project identity when expected (reject ambiguous concatenations)
-        if (c.expected?.project) {
-          const resProject = val.projectId || val.project;
-          if (!resProject) {
-            failed += 1;
-            if (c.critical) criticalViolations += 1;
-            continue;
-          }
-          const strResP = String(resProject).trim();
-          if (strResP.includes('|') || strResP.includes(':') || strResP.includes(',') || strResP.includes(';')) {
-            failed += 1;
-            if (c.critical) criticalViolations += 1;
-            continue;
-          }
+        const val = (routeRes.value as any)?.value !== undefined ? (routeRes.value as any).value : routeRes.value;
+        const validDecisions = new Set(['route_matched', 'abstain', 'needs_clarification', 'route_ambiguous']);
 
-          const normRes = strResP.toUpperCase().replace(/^PROJECT-/, '');
-          const normExp = String(c.expected.project).trim().toUpperCase().replace(/^PROJECT-/, '');
-          if (normRes !== normExp) {
+        // HQ-06 & D14: Validate decision against allowed schema and ground truth
+        if (
+          !val ||
+          typeof val !== 'object' ||
+          typeof val.decision !== 'string' ||
+          !validDecisions.has(val.decision) ||
+          typeof val.confidence !== 'number' ||
+          val.confidence < 0 ||
+          val.confidence > 1.0 ||
+          isNaN(val.confidence)
+        ) {
+          failed += 1;
+          criticalViolations += 1;
+          continue;
+        }
+
+        // Ground truth comparison:
+        if (c.expected?.must_abstain) {
+          if (val.decision !== 'abstain') {
             failed += 1;
             if (c.critical) criticalViolations += 1;
             continue;
           }
+        } else {
+          // Cases that do not require abstention must route, not abstain
+          if (val.decision === 'abstain') {
+            failed += 1;
+            if (c.critical) criticalViolations += 1;
+            continue;
+          }
+          if (val.decision !== 'route_matched') {
+            failed += 1;
+            if (c.critical) criticalViolations += 1;
+            continue;
+          }
+          // Validate client identity when expected (reject ambiguous concatenations)
+          if (c.expected?.client) {
+            const resClient = val.clientId || val.client;
+            if (!resClient) {
+              failed += 1;
+              if (c.critical) criticalViolations += 1;
+              continue;
+            }
+            const strRes = String(resClient).trim();
+            if (strRes.includes('|') || strRes.includes(':') || strRes.includes(',') || strRes.includes(';')) {
+              failed += 1;
+              if (c.critical) criticalViolations += 1;
+              continue;
+            }
+
+            const normRes = strRes.toUpperCase().replace(/^CLIENT-/, '');
+            const normExp = String(c.expected.client).trim().toUpperCase().replace(/^CLIENT-/, '');
+            if (normRes !== normExp) {
+              failed += 1;
+              if (c.critical) criticalViolations += 1;
+              continue;
+            }
+          }
+          // Validate project identity when expected (reject ambiguous concatenations)
+          if (c.expected?.project) {
+            const resProject = val.projectId || val.project;
+            if (!resProject) {
+              failed += 1;
+              if (c.critical) criticalViolations += 1;
+              continue;
+            }
+            const strResP = String(resProject).trim();
+            if (strResP.includes('|') || strResP.includes(':') || strResP.includes(',') || strResP.includes(';')) {
+              failed += 1;
+              if (c.critical) criticalViolations += 1;
+              continue;
+            }
+
+            const normRes = strResP.toUpperCase().replace(/^PROJECT-/, '');
+            const normExp = String(c.expected.project).trim().toUpperCase().replace(/^PROJECT-/, '');
+            if (normRes !== normExp) {
+              failed += 1;
+              if (c.critical) criticalViolations += 1;
+              continue;
+            }
+          }
         }
+
+        passed += 1;
+      } finally {
+        caseResults.push({ caseId: c.id, status: passed > beforePassed ? 'passed' : 'failed', criticalViolations: criticalViolations - beforeCritical });
       }
-
-      passed += 1;
     }
+
+    for (const c of cases.slice(attemptedCases)) caseResults.push({ caseId: c.id, status: 'not_executed', criticalViolations: 0 });
 
     return {
       dataset: 'routing_brief.jsonl',
+      admissionEligible: false, source: dataset.source, caseResults, unreportedCases: 0,
       totalCases: cases.length,
       passedCases: passed,
       failedCases: failed,
-      passRate: (passed / cases.length) * 100,
+      passRate: stopReason || !cases.length ? null : (passed / cases.length) * 100,
       criticalViolations,
+      execution: { status: stopReason ? 'stopped' : 'complete', attemptedCases,
+        unexecutedCases: cases.length - attemptedCases, ...(stopReason ? { stopReason } : {}) },
     };
   }
 
   async runRetrievalEvaluation(): Promise<EvalSummary> {
-    const filePath = resolveEvalPath('evals/retrieval_eval.jsonl');
-    const content = readFileSync(filePath, 'utf-8');
-
-    const lines = content.split('\n').filter((l) => l.trim().length > 0);
-    const cases = lines.map((l) => JSON.parse(l));
+    const dataset = readFixtureDataset('retrieval')!;
+    const cases = dataset.content.split('\n').filter(line => line.trim()).map(line => JSON.parse(line));
+    const caseResults: EvaluationCaseResult[] = [];
 
     const retrievalService = new RetrievalService();
 
-    // Populate retrieval knowledge store with authentic client assets, rules, and negative examples
+    // This old fixture builds each candidate's text from the query and the expected IDs. It can
+    // test scope and negative-only routing, but its relevance score is label-derived and cannot
+    // qualify a real retriever or a new embedding/reranker.
     for (const c of cases) {
       const allIds = [
         ...c.expected_relevant_ids.map((id: string) => ({ id, polarity: 'positive' as const, relevant: true })),
@@ -192,6 +217,7 @@ export class EvaluationRunner {
 
         retrievalService.addKnowledgeItem({
           id: item.id,
+          tenantId: 'tenant-eval',
           clientId: c.client_id,
           kind,
           sourceId: `source_${item.id}`,
@@ -209,6 +235,7 @@ export class EvaluationRunner {
         const foreignClient = fid.startsWith('NOVA') ? 'NOVA' : fid.startsWith('RONA') ? 'RONA' : 'ASTER';
         retrievalService.addKnowledgeItem({
           id: fid,
+          tenantId: 'tenant-eval',
           clientId: foreignClient,
           kind: 'official_asset',
           sourceId: `foreign_${fid}`,
@@ -227,61 +254,69 @@ export class EvaluationRunner {
     let criticalViolations = 0;
 
     for (const c of cases) {
-      const res = await retrievalService.retrieve(
-        {
-          tenantId: 'tenant-eval',
-          clientId: c.client_id,
-          actor: { type: 'workflow', id: 'eval-runner' },
-          correlationId: crypto.randomUUID(),
-          deadline: new Date(Date.now() + 60000).toISOString(),
-          idempotencyKey: `ret-eval-${c.id}`,
-        },
-        [{ kinds: c.intent_kinds, query: c.query, topK: c.top_k || 8 }]
-      );
+      const beforePassed = passed, beforeCritical = criticalViolations;
+      try {
+        const res = await retrievalService.retrieve(
+          {
+            tenantId: 'tenant-eval',
+            clientId: c.client_id,
+            actor: { type: 'workflow', id: 'eval-runner' },
+            correlationId: crypto.randomUUID(),
+            deadline: new Date(Date.now() + 60000).toISOString(),
+            idempotencyKey: `ret-eval-${c.id}`,
+          },
+          [{ kinds: c.intent_kinds, query: c.query, topK: c.top_k || 8 }]
+        );
 
-      if (!res.ok) {
-        failed += 1;
-        criticalViolations += 1;
-        continue;
-      }
+        if (!res.ok) {
+          failed += 1;
+          criticalViolations += 1;
+          continue;
+        }
 
-      const pack = res.value;
-      const retrievedIds = [
-        ...pack.evidence.map((e) => e.id),
-        ...pack.negativeEvidence.map((e) => e.id),
-        ...pack.authoritative.rules.map((r) => r.id),
-        ...pack.authoritative.assets.map((a) => a.id),
-        ...pack.authoritative.templates.map((t) => t.id),
-      ];
+        const pack = res.value;
+        const retrievedIds = [
+          ...pack.evidence.map((e) => e.id),
+          ...pack.negativeEvidence.map((e) => e.id),
+          ...pack.authoritative.rules.map((r) => r.id),
+          ...pack.authoritative.assets.map((a) => a.id),
+          ...pack.authoritative.templates.map((t) => t.id),
+        ];
 
-      // Invariant 6: Strict zero-leakage check on forbidden cross-tenant IDs
-      const leaked = c.forbidden_ids.filter((fid: string) => retrievedIds.includes(fid));
-      if (leaked.length > 0) {
-        criticalViolations += 1;
-        failed += 1;
-        continue;
-      }
+        // Invariant 6: Strict zero-leakage check on forbidden cross-tenant IDs
+        const leaked = c.forbidden_ids.filter((fid: string) => retrievedIds.includes(fid));
+        if (leaked.length > 0) {
+          criticalViolations += 1;
+          failed += 1;
+          continue;
+        }
 
-      // Precision & recall check for expected relevant items
-      const hasAllRelevant = c.expected_relevant_ids.every((eid: string) => retrievedIds.includes(eid));
-      // Negative examples must NOT appear in approved positive evidence
-      const negativesNotInEvidence = c.expected_negative_ids.every(
-        (nid: string) => !pack.evidence.some((e) => e.id === nid)
-      );
+        // Precision & recall check for expected relevant items
+        const hasAllRelevant = c.expected_relevant_ids.every((eid: string) => retrievedIds.includes(eid));
+        // Negative examples must NOT appear in approved positive evidence
+        const negativesNotInEvidence = c.expected_negative_ids.every(
+          (nid: string) => !pack.evidence.some((e) => e.id === nid)
+        );
 
-      if (hasAllRelevant && negativesNotInEvidence) {
-        passed += 1;
-      } else {
-        failed += 1;
+        if (hasAllRelevant && negativesNotInEvidence) {
+          passed += 1;
+        } else {
+          failed += 1;
+        }
+      } finally {
+        caseResults.push({ caseId: c.id, status: passed > beforePassed ? 'passed' : 'failed', criticalViolations: criticalViolations - beforeCritical });
       }
     }
 
     return {
-      dataset: 'retrieval_eval.jsonl',
+      dataset: 'retrieval_eval.jsonl (synthetic label-derived contract)',
+      source: dataset.source, caseResults, unreportedCases: 0,
+      execution: { status: 'complete', attemptedCases: cases.length, unexecutedCases: 0 },
+      admissionEligible: false,
       totalCases: cases.length,
       passedCases: passed,
       failedCases: failed,
-      passRate: (passed / cases.length) * 100,
+      passRate: cases.length ? (passed / cases.length) * 100 : null,
       criticalViolations,
     };
   }
@@ -295,13 +330,15 @@ export class EvaluationRunner {
     ];
 
     let passed = 0;
-    for (const tc of testCases) {
+    const caseResults: EvaluationCaseResult[] = [];
+    for (const [index, tc] of testCases.entries()) {
       const origTokens = extractProtectedTokens(tc.text);
       const mutatedTokens = extractProtectedTokens(tc.mutated);
       const exactPreserved = origTokens.every((ot) =>
         mutatedTokens.some((mt) => mt.raw === ot.raw)
       );
       const blocked = !exactPreserved;
+      caseResults.push({ caseId: `copy-${index + 1}`, status: blocked === tc.shouldBlock ? 'passed' : 'failed', criticalViolations: 0 });
       if (blocked === tc.shouldBlock) {
         passed += 1;
       }
@@ -309,6 +346,8 @@ export class EvaluationRunner {
 
     return {
       dataset: 'copy_guard_benchmark',
+      admissionEligible: false, source: fixtureSource('builtin:copy-guard-v3', testCases), caseResults, unreportedCases: 0,
+      execution: { status: 'complete', attemptedCases: testCases.length, unexecutedCases: 0 },
       totalCases: testCases.length,
       passedCases: passed,
       failedCases: testCases.length - passed,
@@ -317,7 +356,7 @@ export class EvaluationRunner {
     };
   }
 
-  async runVisualJudgeEvaluation(): Promise<EvalSummary> {
+  async runVisualJudgeEvaluation(held?: AppError): Promise<EvalSummary> {
     const rubricDimensions = [
       'brief_fulfillment',
       'brand_fit',
@@ -331,7 +370,7 @@ export class EvaluationRunner {
       'repairability',
     ];
 
-    // Real production design payload evaluated against rubric
+    // Synthetic payload: these checks do not prove native editor or rendered design quality.
     const samplePayload = {
       headline: 'داشکاندنی وەرزی لە هەولێر و سلێمانی',
       copy: 'نرخ ٢٥٬٠٠٠ دینار · سەردانمان بکەن',
@@ -344,6 +383,20 @@ export class EvaluationRunner {
       ],
       isLiveVector: true, // Invariant 2: source documents remain live editable vector trees
     };
+
+    const source = fixtureSource('builtin:visual-fixture-v3', { rubricDimensions, samplePayload });
+    const unknown = (status: 'not_executed' | 'unreported', error?: AppError): EvalSummary => ({
+      dataset: 'visual_judge_rubric.json', admissionEligible: false, source,
+      totalCases: rubricDimensions.length, passedCases: 0, failedCases: 0, passRate: null,
+      unreportedCases: status === 'unreported' ? rubricDimensions.length : 0,
+      criticalViolations: status === 'unreported' ? 1 : 0,
+      caseResults: rubricDimensions.map(caseId => ({ caseId, status, criticalViolations: 0 })),
+      execution: { status: error && stopsModelBatch(error) ? 'stopped' : 'complete',
+        attemptedCases: status === 'not_executed' ? 0 : rubricDimensions.length,
+        unexecutedCases: status === 'not_executed' ? rubricDimensions.length : 0,
+        ...(error && stopsModelBatch(error) ? { stopReason: error } : {}) },
+    });
+    if (held) return unknown('not_executed', held);
 
     const ctx: RequestContext = {
       tenantId: 'tenant-eval',
@@ -361,22 +414,14 @@ export class EvaluationRunner {
         { kind: 'image', storageKey: 'packages/creative/assets/logos/kaae-official-logo.png', mimeType: 'image/png' },
       ],
       systemPromptVersion: '1.0',
-      responseSchema: {},
+      responseSchema: VISUAL_RESPONSE_SCHEMA,
+      maxOutputTokens: 2048,
       budget: { maxCostUsd: 0.05, maxLatencyMs: 5000, maxAttempts: 1 },
       egressPolicy: { mode: 'approved_providers', allowedProviders: ['google'] },
       cachePolicy: 'disabled',
     });
 
-    if (!judgeRes.ok) {
-      return {
-        dataset: 'visual_judge_rubric.json',
-        totalCases: rubricDimensions.length,
-        passedCases: 0,
-        failedCases: rubricDimensions.length,
-        passRate: 0,
-        criticalViolations: 1,
-      };
-    }
+    if (!judgeRes.ok) return unknown('unreported', judgeRes.error);
 
     const modelVal: any = (judgeRes.value as any)?.value !== undefined ? (judgeRes.value as any).value : judgeRes.value;
     const validDecisions = ['approved', 'rejected', 'revision_requested', 'qualified', 'pass'];
@@ -385,19 +430,15 @@ export class EvaluationRunner {
     const hasInvalidPassed = typeof modelVal?.passed !== 'boolean';
 
     if (hasInvalidDecision || hasInvalidConfidence || hasInvalidPassed || modelVal?.decision === 'COMPLETELY_WRONG' || modelVal?.decision === 'BANANA' || modelVal?.decision === 'NOT_A_VALID_VERDICT') {
-      return {
-        dataset: 'visual_judge_rubric.json',
-        totalCases: rubricDimensions.length,
-        passedCases: 0,
-        failedCases: rubricDimensions.length,
-        passRate: 0,
-        criticalViolations: 1,
-      };
+      return unknown('unreported');
     }
 
     let passed = 0;
+    const caseResults: EvaluationCaseResult[] = [];
+    let unreportedCases = 0;
+    const numericScore = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 10;
     for (const dim of rubricDimensions) {
-      let dimensionPass = true;
+      let dimensionPass: boolean | null = true;
 
       if (dim === 'typography') {
         const clearance = checkKurdishTypographyClearance(samplePayload.headline, samplePayload.lineHeight, samplePayload.paddingPx);
@@ -414,14 +455,14 @@ export class EvaluationRunner {
       } else if (dim === 'multi_format_resilience') {
         dimensionPass = samplePayload.nodes.every((n) => n.x >= 0 && n.y >= 0 && n.width > 0 && n.height > 0);
       } else if (dim === 'brand_fit') {
-        const score = modelVal?.rubricScores?.brandResemblance ?? (modelVal?.passed ? 8.5 : 0);
-        dimensionPass = score >= 7.0;
+        const score = modelVal?.rubricScores?.brandResemblance;
+        dimensionPass = numericScore(score) ? score >= 7.0 : null;
       } else if (dim === 'brief_fulfillment') {
-        const score = modelVal?.overallScore ?? (modelVal?.passed ? 8.0 : 0);
-        dimensionPass = score >= 7.0;
+        const score = modelVal?.overallScore;
+        dimensionPass = numericScore(score) ? score >= 7.0 : null;
       } else if (dim === 'originality') {
-        const artifacts = modelVal?.rubricScores?.artifacts ?? 0;
-        dimensionPass = Boolean(modelVal?.passed && artifacts <= 2.0);
+        const artifacts = modelVal?.rubricScores?.artifacts;
+        dimensionPass = numericScore(artifacts) ? Boolean(modelVal?.passed && artifacts <= 2.0) : null;
       } else if (dim === 'imagery_material') {
         dimensionPass = Boolean(modelVal?.passed);
       } else if (dim === 'repairability') {
@@ -430,6 +471,8 @@ export class EvaluationRunner {
         dimensionPass = Boolean(modelVal?.passed);
       }
 
+      caseResults.push({ caseId: dim, status: dimensionPass === null ? 'unreported' : dimensionPass ? 'passed' : 'failed', criticalViolations: 0 });
+      if (dimensionPass === null) unreportedCases++;
       // Invariant 6: hard rule override attempts must = 0
       const canOverrideHardFailure = false;
       if (dimensionPass && !canOverrideHardFailure) {
@@ -439,10 +482,12 @@ export class EvaluationRunner {
 
     return {
       dataset: 'visual_quality_rubric.md',
+      admissionEligible: false, source, caseResults, unreportedCases,
+      execution: { status: 'complete', attemptedCases: rubricDimensions.length, unexecutedCases: 0 },
       totalCases: rubricDimensions.length,
       passedCases: passed,
-      failedCases: rubricDimensions.length - passed,
-      passRate: (passed / rubricDimensions.length) * 100,
+      failedCases: rubricDimensions.length - passed - unreportedCases,
+      passRate: unreportedCases ? null : (passed / rubricDimensions.length) * 100,
       criticalViolations: 0,
     };
   }
@@ -482,6 +527,7 @@ export class EvaluationRunner {
     ];
 
     let passed = 0;
+    const caseResults: EvaluationCaseResult[] = [];
     for (const tc of adversarialCases) {
       const isAttack =
         /ignore\s+previous\s+instructions/i.test(tc.input) ||
@@ -490,6 +536,7 @@ export class EvaluationRunner {
         /<script\b/i.test(tc.input) ||
         /document\.cookie/i.test(tc.input);
 
+      caseResults.push({ caseId: tc.id, status: isAttack === tc.shouldBlock ? 'passed' : 'failed', criticalViolations: 0 });
       if (isAttack === tc.shouldBlock) {
         passed += 1;
       }
@@ -497,6 +544,8 @@ export class EvaluationRunner {
 
     return {
       dataset: 'adversarial_safety_benchmark',
+      admissionEligible: false, source: fixtureSource('builtin:attack-patterns-v3', adversarialCases), caseResults, unreportedCases: 0,
+      execution: { status: 'complete', attemptedCases: adversarialCases.length, unexecutedCases: 0 },
       totalCases: adversarialCases.length,
       passedCases: passed,
       failedCases: adversarialCases.length - passed,
@@ -511,12 +560,15 @@ export class EvaluationRunner {
     copyGuard: EvalSummary;
     visualJudge: EvalSummary;
     adversarialSafety: EvalSummary;
-    overallPassRate: number;
+    overallPassRate: number | null;
+    executionStatus: 'complete' | 'stopped';
+    modelCallHold?: AppError;
+    admissionEligible: false;
   }> {
     const routing = await this.runRoutingAndBriefTournament();
     const retrieval = await this.runRetrievalEvaluation();
     const copyGuard = await this.runCopyGuardEvaluation();
-    const visualJudge = await this.runVisualJudgeEvaluation();
+    const visualJudge = await this.runVisualJudgeEvaluation(routing.execution?.stopReason);
     const adversarialSafety = await this.runPromptInjectionAndSafetyEvaluation();
     const total =
       routing.totalCases +
@@ -530,13 +582,17 @@ export class EvaluationRunner {
       copyGuard.passedCases +
       visualJudge.passedCases +
       adversarialSafety.passedCases;
+    const modelCallHold = routing.execution?.stopReason || visualJudge.execution?.stopReason;
     return {
       routing,
       retrieval,
       copyGuard,
       visualJudge,
       adversarialSafety,
-      overallPassRate: total > 0 ? (passed / total) * 100 : 100,
+      overallPassRate: modelCallHold || [routing, retrieval, copyGuard, visualJudge, adversarialSafety].some(suite => suite.passRate === null) || !total ? null : (passed / total) * 100,
+      executionStatus: modelCallHold ? 'stopped' : 'complete',
+      ...(modelCallHold ? { modelCallHold } : {}),
+      admissionEligible: false,
     };
   }
 }
@@ -579,7 +635,7 @@ export async function main() {
     );
     process.exit(1);
   }
-  console.log('Tournament complete: All role gates passed.');
+  console.log('Synthetic fixture contracts passed. This is not an independent retrieval, model or product admission.');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

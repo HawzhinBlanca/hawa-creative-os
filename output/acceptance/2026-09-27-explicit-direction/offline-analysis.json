@@ -1,0 +1,391 @@
+{
+  "schemaVersion": 1,
+  "captureBaseCommit": "8e79320253f14053148c85947f3457141acfc8f8",
+  "captureSourceTreeClean": false,
+  "captureSourceHashes": {
+    "packages/creative/src/editable-transfer.ts": "f3ee3f99e6a48a89c4aebc683f3923b532cf5d712ca224f2236d3ebe17c4efc6",
+    "packages/creative/src/studio/transfer-v2.ts": "075a3dc7aed971502040edd5132e8d9bde1d9e5d9d27a0526b8adf6c7c310ad9",
+    "packages/qa/src/canva-pptx-check.ts": "739e6d00d19cb4bc2eceb7853810d13bc8bb7f47d060ba8c5d7827e0ff492c99",
+    "packages/integrations/src/canva-connect-client.ts": "3fe7ec3e9b0883213c0f1b8e941178454c155a87a46512be35c3db8676e6e8ac",
+    "apps/core/src/services/canva-connect-service.ts": "9f08396c07b9b6abe8fcaf28203253b5415b8bea077ec7ae6c0fcfd928e61d6c"
+  },
+  "imports": 1,
+  "exports": 3,
+  "exactPptxStrings": 6,
+  "groups": [
+    {
+      "id": "direction-v2",
+      "designId": "DAHWXIJunxg",
+      "pngDimensions": [
+        1080,
+        1740
+      ],
+      "blocks": [
+        {
+          "caseId": "STYLE-AR",
+          "exactPptxText": true,
+          "source": {
+            "text": "مرحبا NOVA بالعالم\nالسعر الخاص: ٢٥٬٠٠٠ دينار",
+            "shapeId": "2",
+            "geometryPx": [
+              60.0,
+              80.0,
+              460.0,
+              410.0
+            ],
+            "languages": [
+              "ar-IQ"
+            ],
+            "paragraphRtl": [
+              "1",
+              "1"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "مرحبا NOVA بالعالم\nالسعر الخاص: ٢٥٬٠٠٠ دينار",
+            "shapeId": "4",
+            "geometryPx": [
+              0.0,
+              -12.0,
+              613.3333333333334,
+              558.6666666666666
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true",
+              "true"
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "STYLE-CKB",
+          "exactPptxText": true,
+          "source": {
+            "text": "سڵاو NOVA جیهان\nنرخی تایبەت: ٢٥٬٠٠٠ دینار",
+            "shapeId": "3",
+            "geometryPx": [
+              560.0,
+              80.0,
+              460.0,
+              410.0
+            ],
+            "languages": [
+              "ckb"
+            ],
+            "paragraphRtl": [
+              "1",
+              "1"
+            ],
+            "declaredFonts": [
+              "Cairo"
+            ]
+          },
+          "exported": {
+            "text": "سڵاو NOVA جیهان\nنرخی تایبەت: ٢٥٬٠٠٠ دینار",
+            "shapeId": "7",
+            "geometryPx": [
+              0.0,
+              -12.0,
+              613.3333333333334,
+              558.6666666666666
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              "true",
+              "true"
+            ],
+            "declaredFonts": [
+              "Cairo"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "STYLE-EN",
+          "exactPptxText": true,
+          "source": {
+            "text": "MEET NOVA AT\nWorkshop 2026",
+            "shapeId": "4",
+            "geometryPx": [
+              60.0,
+              620.0,
+              460.0,
+              410.0
+            ],
+            "languages": [
+              "en-GB"
+            ],
+            "paragraphRtl": [
+              null,
+              null
+            ],
+            "declaredFonts": [
+              "Verdana"
+            ]
+          },
+          "exported": {
+            "text": "MEET NOVA AT\nWorkshop 2026",
+            "shapeId": "10",
+            "geometryPx": [
+              0.0,
+              -11.0,
+              613.3333333333334,
+              557.6666666666666
+            ],
+            "languages": [
+              "en-US"
+            ],
+            "paragraphRtl": [
+              null,
+              null
+            ],
+            "declaredFonts": [
+              "Verdana"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "STYLE-MIXED",
+          "exactPptxText": true,
+          "source": {
+            "text": "NOVA ONE — بۆ هەنگاوی داهاتوو\nکاتژمێر 8:30 PM",
+            "shapeId": "5",
+            "geometryPx": [
+              560.0,
+              620.0,
+              460.0,
+              410.0
+            ],
+            "languages": [
+              "und"
+            ],
+            "paragraphRtl": [
+              null,
+              null
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "NOVA ONE — بۆ هەنگاوی داهاتوو\nکاتژمێر 8:30 PM",
+            "shapeId": "13",
+            "geometryPx": [
+              0.0,
+              -12.0,
+              613.3333333333334,
+              558.6666666666666
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              null,
+              null
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "LTR-ACCENT",
+          "exactPptxText": true,
+          "source": {
+            "text": "NOVA — سڵاو جیهان\nکاتژمێر 8:30 PM",
+            "shapeId": "6",
+            "geometryPx": [
+              60.0,
+              1160.0,
+              460.0,
+              410.0
+            ],
+            "languages": [
+              "und"
+            ],
+            "paragraphRtl": [
+              null,
+              null
+            ],
+            "declaredFonts": [
+              "Cairo"
+            ]
+          },
+          "exported": {
+            "text": "NOVA — سڵاو جیهان\nکاتژمێر 8:30 PM",
+            "shapeId": "16",
+            "geometryPx": [
+              0.0,
+              -12.0,
+              613.3333333333334,
+              558.6666666666666
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              null,
+              null
+            ],
+            "declaredFonts": [
+              "Cairo"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        },
+        {
+          "caseId": "LTR-ARABIC-FIRST",
+          "exactPptxText": true,
+          "source": {
+            "text": "سڵاو جیهان\nNOVA at 8:30 PM",
+            "shapeId": "7",
+            "geometryPx": [
+              560.0,
+              1160.0,
+              460.0,
+              410.0
+            ],
+            "languages": [
+              "und"
+            ],
+            "paragraphRtl": [
+              null,
+              null
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "exported": {
+            "text": "سڵاو جیهان\nNOVA at 8:30 PM",
+            "shapeId": "19",
+            "geometryPx": [
+              0.0,
+              -12.0,
+              613.3333333333334,
+              558.6666666666666
+            ],
+            "languages": [
+              "ar-EG",
+              "en-US"
+            ],
+            "paragraphRtl": [
+              null,
+              null
+            ],
+            "declaredFonts": [
+              "Noto Sans Arabic"
+            ]
+          },
+          "perCharacterColorsPreserved": true,
+          "allExportRunLanguageTagsMatchSource": false
+        }
+      ],
+      "pdfFontResources": [
+        {
+          "name": "/AAAAAA+NotoSansArabic-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "name": "/BAAAAA+NotoSans-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "name": "/CAAAAA+Cairo-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "name": "/DAAAAA+NotoSansArabic-Regular",
+          "subtype": "/Type0"
+        },
+        {
+          "name": "/EAAAAA+Verdana",
+          "subtype": "/Type0"
+        }
+      ],
+      "nativeFlatTextMatchesWithoutParagraphBreaks": true,
+      "nativeElementIdentityAndLineBreaks": "unavailable_from_read_tool",
+      "humanVisualReview": "not_run",
+      "baselineComparison": {
+        "scope": "First four matching boxes only; new canvas is taller",
+        "blocks": [
+          {
+            "caseId": "STYLE-AR",
+            "crop": [
+              60,
+              80,
+              520,
+              490
+            ],
+            "changedPixels": 0,
+            "totalPixels": 188600
+          },
+          {
+            "caseId": "STYLE-CKB",
+            "crop": [
+              560,
+              80,
+              1020,
+              490
+            ],
+            "changedPixels": 0,
+            "totalPixels": 188600
+          },
+          {
+            "caseId": "STYLE-EN",
+            "crop": [
+              60,
+              620,
+              520,
+              1030
+            ],
+            "changedPixels": 0,
+            "totalPixels": 188600
+          },
+          {
+            "caseId": "STYLE-MIXED",
+            "crop": [
+              560,
+              620,
+              1020,
+              1030
+            ],
+            "changedPixels": 9247,
+            "totalPixels": 188600
+          }
+        ]
+      }
+    }
+  ],
+  "fullMultilingualAdmission": false,
+  "limits": [
+    "Canva rewrites language tags; retain original language provenance outside its exports.",
+    "Read-only native text tool concatenates internal paragraphs and gives no element IDs or style spans.",
+    "Explicit LTR no longer becomes RTL; absent Canva LTR flags remain unknown metadata, requiring visual review. Mixed time-token isolation remains visually unqualified.",
+    "Human native-language review, committed edit/save/reopen, full office corpus and deployed-image qualification are not run.",
+    "Font-family/resource names do not establish actual font-file glyph coverage or licenses.",
+    "Equal provider timestamps are not an atomic revision lock."
+  ]
+}

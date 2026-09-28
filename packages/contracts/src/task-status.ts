@@ -29,7 +29,8 @@ export type TaskDbState = (typeof TASK_DB_STATES)[number];
 export const TASK_API_STATUSES = [
   'RECEIVED', 'PROMOTION_PENDING', 'ROUTING', 'ROUTING_REVIEW', 'BRIEFING', 'BRIEF_REVIEW',
   'PLANNING', 'ASSET_GENERATION', 'COMPOSING', 'QA', 'REPAIRING', 'AWAITING_APPROVAL',
-  'REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'PUBLISH_RECONCILIATION', 'COMPLETE',
+  'REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'ARCHIVE_RECONCILIATION', 'PUBLISH_RECONCILIATION',
+  'REQUESTER_SEND_RECONCILIATION', 'COMPLETE',
   'PAUSED', 'OPERATOR_REQUIRED', 'REJECTED', 'CANCELLED',
 ] as const;
 export type TaskApiStatus = (typeof TASK_API_STATUSES)[number];
@@ -65,9 +66,9 @@ export const API_STATUS_OF_DB_STATE: Readonly<Record<TaskDbState, TaskApiStatus>
 };
 
 /**
- * The database state each API status is stored as. PUBLISH_RECONCILIATION (the files are in Drive,
- * the Sheets row is not confirmed) has no state of its own and is stored as `publishing`, so a task
- * read back from the database reports PUBLISHING until the row is retried.
+ * The database state each API status is stored as. Archive and Sheet reconciliation have no task
+ * state of their own: both are stored as `publishing`, and the latest publication error distinguishes
+ * them on read. A plain state-only conversion remains PUBLISHING.
  */
 export const DB_STATE_OF_API_STATUS: Readonly<Record<TaskApiStatus, TaskDbState>> = {
   RECEIVED: 'received',
@@ -85,7 +86,9 @@ export const DB_STATE_OF_API_STATUS: Readonly<Record<TaskApiStatus, TaskDbState>
   REVISION_REQUESTED: 'revision_requested',
   APPROVED: 'approved',
   PUBLISHING: 'publishing',
+  ARCHIVE_RECONCILIATION: 'publishing',
   PUBLISH_RECONCILIATION: 'publishing',
+  REQUESTER_SEND_RECONCILIATION: 'publishing',
   COMPLETE: 'complete',
   PAUSED: 'paused',
   OPERATOR_REQUIRED: 'failed_operator',
@@ -131,8 +134,20 @@ export function toApiTaskStatus(word: string): TaskApiStatus {
   throw new UnknownTaskStatusError(word);
 }
 
+/** A publishing task's durable publication error distinguishes work from a staffed recovery. */
+export function publicationAwareTaskStatus(
+  state: TaskDbState,
+  publication?: { errorClass?: string | null } | null,
+): TaskApiStatus {
+  if (state === 'publishing' && publication?.errorClass === 'ARCHIVE_UNCONFIRMED') return 'ARCHIVE_RECONCILIATION';
+  if (state === 'publishing' && publication?.errorClass === 'SHEET_UNCONFIRMED') return 'PUBLISH_RECONCILIATION';
+  if (state === 'publishing' && publication?.errorClass === 'REQUESTER_SEND_UNCONFIRMED') return 'REQUESTER_SEND_RECONCILIATION';
+  return API_STATUS_OF_DB_STATE[state];
+}
+
 /**
- * The legal moves between API statuses. Taken from the domain state machine as it stood on
+ * Normal pipeline moves between API statuses. Conditional operator pause/resume/cancel
+ * use the retained-checkpoint policy in domain/task-control.ts (ADR-078). Taken from the domain state machine as it stood on
  * 2026-09-24 and reconciled with what Core records:
  *  - NEEDS_INFORMATION is gone: it had no database state (it was stored as 'received'), and PAUSED is
  *    the same wait for the requester. Its moves are PAUSED's.
@@ -160,8 +175,10 @@ export const TASK_TRANSITIONS: Readonly<Record<TaskApiStatus, readonly TaskApiSt
   REVISION_REQUESTED: ['PLANNING', 'COMPOSING', 'OPERATOR_REQUIRED', 'AWAITING_APPROVAL'],
   APPROVED: ['PUBLISHING', 'AWAITING_APPROVAL', 'REVISION_REQUESTED'],
   // Back to APPROVED when the delivery failed before any file reached Drive, so it can be retried.
-  PUBLISHING: ['COMPLETE', 'PUBLISH_RECONCILIATION', 'OPERATOR_REQUIRED', 'APPROVED'],
+  PUBLISHING: ['COMPLETE', 'ARCHIVE_RECONCILIATION', 'PUBLISH_RECONCILIATION', 'REQUESTER_SEND_RECONCILIATION', 'OPERATOR_REQUIRED', 'APPROVED'],
+  ARCHIVE_RECONCILIATION: ['PUBLISHING', 'PUBLISH_RECONCILIATION', 'REQUESTER_SEND_RECONCILIATION', 'COMPLETE', 'OPERATOR_REQUIRED'],
   PUBLISH_RECONCILIATION: ['COMPLETE', 'OPERATOR_REQUIRED', 'APPROVED'],
+  REQUESTER_SEND_RECONCILIATION: ['COMPLETE', 'OPERATOR_REQUIRED'],
   COMPLETE: [],
   PAUSED: ['ROUTING', 'BRIEFING', 'REJECTED', 'CANCELLED', 'APPROVED'],
   OPERATOR_REQUIRED: ['ROUTING', 'BRIEFING', 'PLANNING', 'COMPOSING', 'QA', 'AWAITING_APPROVAL', 'PUBLISHING', 'REJECTED', 'PAUSED', 'APPROVED'],
@@ -190,9 +207,11 @@ export const TASK_STATUS_LABELS: Readonly<Record<TaskApiStatus, string>> = {
   REVISION_REQUESTED: 'CHANGES REQUESTED',
   APPROVED: 'APPROVED',
   PUBLISHING: 'DELIVERING',
+  ARCHIVE_RECONCILIATION: 'CHECK DRIVE ARCHIVE',
   PUBLISH_RECONCILIATION: 'SHEETS ROW PENDING',
+  REQUESTER_SEND_RECONCILIATION: 'CHECK TELEGRAM DELIVERY',
   COMPLETE: 'COMPLETE',
-  PAUSED: 'WAITING FOR ANSWER',
+  PAUSED: 'PAUSED',
   OPERATOR_REQUIRED: 'NEEDS A DESIGNER',
   REJECTED: 'REJECTED',
   CANCELLED: 'CANCELLED',
@@ -209,7 +228,7 @@ export const TASK_STATUS_LABELS: Readonly<Record<TaskApiStatus, string>> = {
  * approvable (isApprovableTaskStatus).
  */
 export const APPROVABLE_TASK_STATUSES: readonly TaskApiStatus[] = TASK_API_STATUSES.filter(
-  (s) => !(['REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'COMPLETE', 'REJECTED', 'CANCELLED'] as readonly string[]).includes(s)
+  (s) => !(['REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'ARCHIVE_RECONCILIATION', 'PUBLISH_RECONCILIATION', 'REQUESTER_SEND_RECONCILIATION', 'COMPLETE', 'REJECTED', 'CANCELLED'] as readonly string[]).includes(s)
 );
 
 /** The statuses nothing moves a task out of. */
@@ -230,6 +249,18 @@ export function isApprovableTaskStatus(status: unknown): boolean {
 
 export function isTerminalTaskStatus(status: unknown): boolean {
   return isTaskApiStatus(status) && TERMINAL_TASK_STATUSES.includes(status);
+}
+
+/** New generation uses current task authority; historical results remain readable. */
+export function taskGenerationBlocker(status: unknown): string | null {
+  const apiStatus = isTaskDbState(status) ? API_STATUS_OF_DB_STATE[status] : status;
+  if (!isTaskApiStatus(apiStatus)) return 'Task state is unavailable. Refresh the task before starting design work.';
+  if (isTerminalTaskStatus(apiStatus)) return 'This task is closed. Create a new request for further design work; existing results remain available.';
+  if (apiStatus === 'PAUSED') return 'This task is paused. Resolve its pending question or resume it before starting design work.';
+  if (['APPROVED', 'PUBLISHING', 'ARCHIVE_RECONCILIATION', 'PUBLISH_RECONCILIATION', 'REQUESTER_SEND_RECONCILIATION'].includes(apiStatus)) {
+    return 'This design is approved or being delivered. Request a revision before starting further design work.';
+  }
+  return null;
 }
 
 export function isInProgressTaskStatus(status: unknown): boolean {

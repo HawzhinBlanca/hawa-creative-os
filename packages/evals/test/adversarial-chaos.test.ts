@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import {
   extractProtectedTokens,
   normalizeSoraniText,
@@ -19,8 +19,9 @@ describe('Horizon 3: Adversarial Red-Team Penetration & Chaos Drills', () => {
       // Seed knowledge items
       retrieval.addKnowledgeItem({
         id: 'k-1',
+        tenantId: 'tenant-1',
         clientId: client1Id,
-        kind: 'brand_rule',
+        kind: 'rule',
         sourceId: 'src-1',
         title: 'Office Primary Colors',
         text: 'Primary brand accent is #38BDF8 with 10% safe margin.',
@@ -32,8 +33,9 @@ describe('Horizon 3: Adversarial Red-Team Penetration & Chaos Drills', () => {
 
       retrieval.addKnowledgeItem({
         id: 'k-2',
+        tenantId: 'tenant-1',
         clientId: client2Id,
-        kind: 'brand_rule',
+        kind: 'rule',
         sourceId: 'src-2',
         title: 'Bank Secret Vault Codes',
         text: 'Confidential bank brand rules and private pricing ledger.',
@@ -46,7 +48,7 @@ describe('Horizon 3: Adversarial Red-Team Penetration & Chaos Drills', () => {
       const ctx = {
         tenantId: 'tenant-1',
         clientId: client1Id,
-        actor: { type: 'operator' as const, id: 'op-1' },
+        actor: { type: 'user' as const, id: 'op-1' },
         correlationId: 'corr-1',
         deadline: new Date(Date.now() + 60000).toISOString(),
         idempotencyKey: 'idem-1',
@@ -57,14 +59,13 @@ describe('Horizon 3: Adversarial Red-Team Penetration & Chaos Drills', () => {
 
       const result = await retrieval.retrieve(ctx, [
         {
-          kinds: ['brand_rule'],
+          kinds: ['rule'],
           query: injectionQuery,
-          limit: 10,
-          threshold: 0.1,
+          topK: 10,
         },
       ]);
 
-      expect(result.ok).toBe(true);
+      expect(result.ok).toBe(true); assert(result.ok);
       if (result.ok) {
         const evidence = result.value.evidence;
         const leakedClient2 = evidence.some((c) => c.id === 'k-2');

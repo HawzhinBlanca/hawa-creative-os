@@ -5,12 +5,17 @@ import { CanvaDesignPlanner } from '../services/canva-design-planner.js';
 import { withRlsContext } from '@hawa/db';
 import { TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
 import { log } from '../logging.js';
-import { decideForLifecycle, officeActionIdOf, readTaskLifecycle, type DecisionAnswer } from '../services/office-decisions.js';
+import { rejectUnownedLifecycleDesignWrite, nativeRecoveryHeaders } from './lifecycle-design-proof.js';
+import type { NativeActorScope } from '../services/lifecycle-native-scope.js';
+import { registerNativeReviewRoutes } from './native-review.routes.js';
+import { recordManualCanvaReview, type CaptureReview } from '../services/manual-canva-review.js';
+import { confirmNativeCopy } from '../services/initial-native-handoff.js';
 
 export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOptions) {
+  registerNativeReviewRoutes(ctx);
   const service = ctx.db ? new CanvaConnectService(ctx.db,options) : null;
   const planner = ctx.db && service ? new CanvaDesignPlanner(ctx.db,service) : null;
-  const protect = (fn: (c: any,s: {tenantId:string;actorId:string;role?:string},api:CanvaConnectService) => Promise<Response>) => async (c: any) => {
+  const protect = (fn: (c: any,s: NativeActorScope,api:CanvaConnectService) => Promise<Response>) => async (c: any) => {
     c.header('Cache-Control','no-store');
     const auth=ctx.verifyRequestAuth(c);
     if (!auth.authenticated || !auth.tenantId || !auth.userId) return ctx.problem(c,401,'Authentication Required','Sign in to Hawa first');
@@ -19,11 +24,14 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
     for (const name of ['taskId','operationId','artifactId']) {
       const value=c.req.param(name); if (value && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return ctx.problem(c,422,'Invalid Identifier','Use a valid task or operation identifier');
     }
+    const lifecycleRefusal = await rejectUnownedLifecycleDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
     // The role travels with the actor: the service lets an art director or administrator act on
     // another actor's import or source for the task, and the role never reached it (2026-09-24).
-    try { return await fn(c,{tenantId:auth.tenantId,actorId:auth.userId,role:auth.role},service); }
+    try { return await fn(c,{tenantId:auth.tenantId,actorId:auth.userId,role:auth.role,nativeRecovery:nativeRecoveryHeaders(c)},service); }
     catch (error) {
       if (error instanceof CanvaFlowError) {
+        // A busy refusal names when to come back (PLANNING_BUSY, ADR-131); the worker waits exactly that.
         if (error.retryAfterMs !== undefined) c.header('Retry-After',String(Math.ceil(error.retryAfterMs/1000)));
         return ctx.problem(c,error.status,error.code,error.message);
       }
@@ -50,7 +58,13 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
     } catch { return c.text('Canva connection was not completed. Return to Hawa Settings and connect again.',400); }
   });
   ctx.registerRoute('get','/tasks/:taskId/canva',protect(async(c,s,api)=>c.json(await api.taskState(s,c.req.param('taskId')))));
+  ctx.registerRoute('post','/tasks/:taskId/canva/revision-copy',protect(async(c,s)=>{
+    const body=await c.req.json().catch(()=>({}));
+    return c.json(await withRlsContext(ctx.db!,{tenantId:s.tenantId,userId:s.actorId,role:s.role},
+      db=>confirmNativeCopy(db,s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body)));
+  }));
   ctx.registerRoute('get','/tasks/:taskId/canva/editor',protect(async(c,s,api)=>c.json(await api.editor(s,c.req.param('taskId')))));
+  ctx.registerRoute('get','/tasks/:taskId/canva/amendment-observation',protect(async(c,s,api)=>c.json(await api.amendmentObservation(s,c.req.param('taskId')))));
   ctx.registerRoute('get','/tasks/:taskId/canva/plans',protect(async(c,s)=>c.json({plans:await planner!.state(s,c.req.param('taskId'))})));
   ctx.registerRoute('post','/tasks/:taskId/canva/generate',protect(async(c,s)=>{
     const body=await c.req.json().catch(()=>({}));
@@ -69,28 +83,23 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
   }));
   /**
    * A copy-and-font check retrieved here (the Desk's "Check copy & fonts", or the worker's own) becomes
-   * the draft's latest QC run when the task already has its Desk revision, so capturing again after a
+   * the manual task's captured revision, or the automatic draft's latest QC run, so capturing again after a
    * failed or timed-out check unblocks approval; after a revision request it becomes the new revision
    * (recordCheckedExportQc). Nothing recorded it until 2026-09-24. The evaluator lives in app.ts,
    * which has loaded by the time a request arrives.
    */
-  const recordCheck = async (s: {tenantId:string;actorId:string;role?:string}, taskId: string, result: { status?: string; artifact?: { format?: string; content_check?: unknown } | null }, actionHeader?: string): Promise<{ actionId: string; answer: DecisionAnswer } | undefined> => {
+  const recordCheck = async (s: {tenantId:string;actorId:string;role?:string}, taskId: string, result: { status?: string; artifact?: { id?: string; format?: string; content_check?: unknown } | null }): Promise<CaptureReview | undefined> => {
     if (result?.status!=='retrieved'||result.artifact?.format!=='pptx'||!result.artifact.content_check||!ctx.db) return;
     try {
+      const owned = await withRlsContext(ctx.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},trx=>
+        trx.selectFrom('tasks').select('request_id').where('tenant_id','=',s.tenantId).where('id','=',taskId).executeTakeFirst());
+      if (owned?.request_id) return {status:'blocked',retryable:false,reason:'The checked files are retained. Submit this native revision through the current request for review.'};
       const [{ recordCheckedExportQc }, { evaluateCanvaExportQc }] = await Promise.all([import('../services/canva-task-outcome.js'), import('../core-helpers.js')]);
-      // A round of a request the lifecycle owns (slice 2.4): the capture the office made after sending
-      // the draft back (stage manual) is offered to RequestLifecycle, whose projection records it as the
-      // revision and puts the request back in review. In any other stage the check is only the draft's
-      // new QC run: no move, since the task is not waiting for a rework.
-      const lifecycle = await readTaskLifecycle(ctx.db, s.tenantId, taskId);
-      if (lifecycle?.owner === 'restate') {
-        if (lifecycle.stage === 'manual') {
-          const { actionId } = officeActionIdOf(actionHeader ? `cap-${actionHeader}` : undefined);
-          const { answer } = await decideForLifecycle(ctx.db, s.tenantId, lifecycle, { actionId, actor: { userId: s.actorId, role: s.role || 'operator' }, kind: 'draftCaptured', taskId });
-          return { actionId, answer };
-        }
-        await withRlsContext(ctx.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},(trx)=>recordCheckedExportQc(trx,evaluateCanvaExportQc,{tenantId:s.tenantId,taskId,actorId:s.actorId}));
-        return;
+      if (result.artifact?.id) {
+        const manual = await withRlsContext(ctx.db,
+          {tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'}, trx=>recordManualCanvaReview(trx,evaluateCanvaExportQc,
+            {tenantId:s.tenantId,taskId,actorId:s.actorId,artifactId:result.artifact!.id!}));
+        if (manual.status !== 'not_applicable') return manual;
       }
       const recorded = await withRlsContext(ctx.db,{tenantId:s.tenantId,userId:s.actorId,role:s.role||'operator'},(trx)=>recordCheckedExportQc(trx,evaluateCanvaExportQc,{tenantId:s.tenantId,taskId,actorId:s.actorId,rework:true}));
       // The revision, its QC run and the task's move are Postgres's; approval reads them there.
@@ -103,21 +112,24 @@ export function registerCanvaRoutes(ctx: RouteContext, options?: CanvaServiceOpt
           log.error(`[canva] Task ${taskId}: ${TASK_TRANSITIONED_EVENT} not sent:`, (err as Error)?.message || err);
         }
       }
+      if (recorded.recorded) return { status:'recorded',revisionId:recorded.revisionId,
+        qaPassed:recorded.qc.status==='passed'&&recorded.qc.criticalPass,
+        checkedArtifactId:String(recorded.qc.qaReport.exportArtifactId) };
     } catch (err) {
       log.warn(`[canva] Task ${taskId}: the retrieved check could not be recorded as a QC run:`, (err as Error)?.message || err);
+      return {status:'blocked',retryable:true,reason:'The export is retained, but its review could not be recorded. Resume this operation to retry safely.'};
     }
   };
   ctx.registerRoute('post','/tasks/:taskId/canva/exports',protect(async(c,s,api)=>{
     const body=await c.req.json().catch(()=>({}));
     const result=await api.startExport(s,c.req.param('taskId'),c.req.header('Idempotency-Key')||'',body.format,body.expectedVersion);
-    const captured=await recordCheck(s,c.req.param('taskId'),result,c.req.header('Idempotency-Key'));
-    return c.json(captured?{...result,lifecycleCapture:{actionId:captured.actionId,status:captured.answer.status,code:captured.answer.code,detail:captured.answer.detail}}:result,202);
+    const review=await recordCheck(s,c.req.param('taskId'),result);
+    return c.json({...result,...(review?{review}:{})},202);
   }));
   ctx.registerRoute('post','/tasks/:taskId/canva/exports/:operationId/resume',protect(async(c,s,api)=>{
     const result=await api.exportStatus(s,c.req.param('taskId'),c.req.param('operationId'));
-    // The operation's id names the capture: asked again, the lifecycle answers it once.
-    const captured=await recordCheck(s,c.req.param('taskId'),result,c.req.param('operationId'));
-    return c.json(captured?{...result,lifecycleCapture:{actionId:captured.actionId,status:captured.answer.status,code:captured.answer.code,detail:captured.answer.detail}}:result);
+    const review=await recordCheck(s,c.req.param('taskId'),result);
+    return c.json({...result,...(review?{review}:{})});
   }));
   ctx.registerRoute('get','/tasks/:taskId/canva/artifacts/:artifactId',protect(async(c,s,api)=>{
     const file=await api.artifact(s,c.req.param('taskId'),c.req.param('artifactId'));

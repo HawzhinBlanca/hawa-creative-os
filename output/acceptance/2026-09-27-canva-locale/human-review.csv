@@ -1,0 +1,19 @@
+case_id,text,design_id,png,review_status,reviewer,reviewed_at,notes
+RTL-001,سڵاو جیهان,DAHWW0iRrsI,locale-v1-canva.png,not_reviewed,,,
+RTL-002,مرحبا بالعالم,DAHWW0iRrsI,locale-v1-canva.png,not_reviewed,,,
+RTL-003,Hello world,DAHWW0iRrsI,locale-v1-canva.png,not_reviewed,,,
+RTL-004,نرخی تایبەت: ٢٥٬٠٠٠ دینار,DAHWW0iRrsI,locale-v1-canva.png,not_reviewed,,,
+RTL-005,السعر الخاص: ٢٥٬٠٠٠ دينار,DAHWW0iRrsI,locale-v1-canva.png,not_reviewed,,,
+RTL-006,NOVA ONE — بۆ هەنگاوی داهاتوو,DAHWW0iRrsI,locale-v1-canva.png,not_reviewed,,,
+RTL-007,بۆ هەنگاوی داهاتوو — NOVA ONE,DAHWW0iRrsI,locale-v1-canva.png,not_reviewed,,,
+RTL-008,کاتژمێر 8:30 PM,DAHWW0iRrsI,locale-v1-canva.png,not_reviewed,,,
+RTL-009,الساعة 8:30 PM,DAHWW0iRrsI,locale-v1-canva.png,not_reviewed,,,
+RTL-010,ژمارە: ٠٧٥٠ ١٢٣ ٤٥٦٧,DAHWW0iRrsI,locale-v1-canva.png,not_reviewed,,,
+STYLE-AR,"مرحبا NOVA بالعالم
+السعر الخاص: ٢٥٬٠٠٠ دينار",DAHWW7M4nIw,locale-v2-canva.png,not_reviewed,,,
+STYLE-CKB,"سڵاو NOVA جیهان
+نرخی تایبەت: ٢٥٬٠٠٠ دینار",DAHWW7M4nIw,locale-v2-canva.png,not_reviewed,,,
+STYLE-EN,"MEET NOVA AT
+Workshop 2026",DAHWW7M4nIw,locale-v2-canva.png,not_reviewed,,,
+STYLE-MIXED,"NOVA ONE — بۆ هەنگاوی داهاتوو
+کاتژمێر 8:30 PM",DAHWW7M4nIw,locale-v2-canva.png,not_reviewed,,,

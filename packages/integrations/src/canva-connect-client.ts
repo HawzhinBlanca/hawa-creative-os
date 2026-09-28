@@ -32,6 +32,32 @@ export interface CanvaDesignResponse {
   };
 }
 
+export interface CanvaCapabilitiesResponse { capabilities: string[] }
+export interface CanvaDesignDatasetResponse {
+  dataset: Record<string, {type:'text'|'image'|'chart'|'sheet'}>;
+}
+
+export interface CanvaTextAutofillCopyParams {
+  designId: string;
+  title: string;
+  text: Record<string, string>;
+  /** The caller must read this from the same source immediately before admission. */
+  dataset: CanvaDesignDatasetResponse['dataset'];
+}
+
+export interface CanvaTextAutofillCopyResponse {
+  job:
+    | { id: string; status: 'in_progress' }
+    | { id: string; status: 'failed'; error?: { code: string } }
+    | { id: string; status: 'success'; result: { type: 'create_design'; design: CanvaDesignResponse['design'] } };
+}
+
+const CANVA_IDENTIFIER = /^[A-Za-z0-9_-]{1,128}$/;
+
+function providerRecord(value:unknown):value is Record<string,unknown> {
+  return typeof value==='object' && value!==null && !Array.isArray(value);
+}
+
 export interface CanvaExportJobResponse {
   job: {
     id: string;
@@ -63,7 +89,8 @@ export class CanvaNotConfiguredError extends Error {
 }
 
 /**
- * Canva answered with an HTTP error, so the request reached Canva and was refused: nothing was created.
+ * Canva answered with an HTTP error. Definite refusal can permit retry; a 5xx may follow an
+ * accepted effect and is still uncertain. Callers must classify the status, not only this class.
  * A transport failure (no answer at all) is a plain Error and may have been acted on. Callers tell
  * the two apart by this class (2026-09-24): a 429 on POST /exports used to be recorded as an
  * uncertain export that blocked the format for good. `oauthError` is the token endpoint's `error`.
@@ -460,6 +487,58 @@ export class CanvaConnectClient {
     return validateCanvaDesignResponse(await res.json());
   }
 
+  /** Account observation is distinct from operation qualification or a subscription inference. */
+  public async getCapabilities():Promise<CanvaCapabilitiesResponse> {
+    const res=await this.readWithRetry(`${this.baseUrl}/users/me/capabilities`);
+    if(!res.ok)throw new CanvaHttpError(`Canva capabilities failed (HTTP ${res.status})`,res.status);
+    const body:unknown=await res.json();
+    if(!providerRecord(body) || (body.capabilities!==undefined && (!Array.isArray(body.capabilities) ||
+      body.capabilities.length>100 || body.capabilities.some(v=>typeof v!=='string' || !/^[a-z][a-z0-9_]{0,99}$/.test(v)))))
+      throw new Error('Invalid Canva capabilities response');
+    return {capabilities:[...new Set((body.capabilities??[]) as string[])]};
+  }
+
+  /** Exact names/types must be read before constructing any autofill request; unknown names are skipped remotely. */
+  public async getDesignDataset(designId:string):Promise<CanvaDesignDatasetResponse> {
+    if(!/^[A-Za-z0-9_-]{1,128}$/.test(designId))throw new Error('Invalid Canva design ID');
+    const res=await this.readWithRetry(`${this.baseUrl}/designs/${encodeURIComponent(designId)}/dataset`);
+    if(!res.ok)throw new CanvaHttpError(`Canva dataset failed (HTTP ${res.status})`,res.status);
+    const body:unknown=await res.json();
+    if(!providerRecord(body) || (body.dataset!==undefined && !providerRecord(body.dataset)))throw new Error('Invalid Canva dataset response');
+    const entries=Object.entries(body.dataset??{});
+    if(entries.length>512)throw new Error('Invalid Canva dataset size');
+    const dataset:CanvaDesignDatasetResponse['dataset']=Object.fromEntries(entries.map(([name,value])=>{
+      if(!name || name.length>1024 || !providerRecord(value) || typeof value.type!=='string' || !['text','image','chart','sheet'].includes(value.type))
+        throw new Error('Invalid Canva dataset field');
+      return [name,{type:value.type as 'text'|'image'|'chart'|'sheet'}];
+    }));
+    return {dataset};
+  }
+
+  /**
+   * Copy only. A durable caller claim is required before dispatch; a lost/malformed reply or
+   * 5xx cannot authorize a new POST. A successful job still needs native postcondition checks.
+   */
+  public async createTextAutofillCopy(input: CanvaTextAutofillCopyParams): Promise<CanvaTextAutofillCopyResponse> {
+    const { body, sourceId } = prepareCanvaTextAutofillCopy(input);
+    this.assertConfigured();
+    const response = await this.createWithRetry(`${this.baseUrl}/autofills`, async () => ({
+      method: 'POST', headers: { Authorization: await this.getAuthHeader(), 'Content-Type': 'application/json' }, body,
+    }), false);
+    if (!response.ok) throw new CanvaHttpError(`Canva autofill copy failed (HTTP ${response.status})`, response.status);
+    return validateTextAutofillCopy(await response.json(), sourceId);
+  }
+
+  public async getTextAutofillCopyJob(jobId: string, sourceDesignId: string): Promise<CanvaTextAutofillCopyResponse> {
+    if (typeof jobId !== 'string' || !CANVA_IDENTIFIER.test(jobId) ||
+        typeof sourceDesignId !== 'string' || !CANVA_IDENTIFIER.test(sourceDesignId)) {
+      throw new Error('Invalid Canva autofill identifier');
+    }
+    const response = await this.readWithRetry(`${this.baseUrl}/autofills/${encodeURIComponent(jobId)}`);
+    if (!response.ok) throw new CanvaHttpError(`Canva autofill status failed (HTTP ${response.status})`, response.status);
+    return validateTextAutofillCopy(await response.json(), sourceDesignId, jobId);
+  }
+
   public async createImportJob(bytes: Uint8Array, title: string) {
     if (bytes.byteLength < 32 || bytes.byteLength > 25 * 1024 * 1024) throw new Error('Import must be between 32 bytes and 25 MiB');
     this.assertConfigured();
@@ -540,6 +619,65 @@ export class CanvaConnectClient {
     }
 
     throw new Error(`Canva export job ${exportId} timed out after ${maxAttempts} attempts`);
+  }
+}
+
+/** Pure preparation also lets durable callers reject invalid requests before claiming a send. */
+export function prepareCanvaTextAutofillCopy(input: CanvaTextAutofillCopyParams): { body: string; sourceId: string } {
+  if (!input || typeof input.designId !== 'string' || !CANVA_IDENTIFIER.test(input.designId) ||
+      typeof input.title !== 'string' || input.title.length < 1 || input.title.length > 255 ||
+      !providerRecord(input.text) || !providerRecord(input.dataset)) {
+    throw new Error('Invalid Canva autofill input');
+  }
+  const entries = Object.entries(input.text);
+  if (entries.length < 1 || entries.length > 32) throw new Error('Invalid Canva autofill field count');
+  const data = Object.fromEntries(entries.map(([name, text]) => {
+    if (!name || name.length > 1024 || typeof text !== 'string' || text.length > 16384) {
+      throw new Error('Invalid Canva autofill text field');
+    }
+    if (!Object.hasOwn(input.dataset, name) || input.dataset[name]?.type !== 'text') {
+      throw new Error('Canva autofill field is not an observed text field');
+    }
+    return [name, { type: 'text', text }];
+  }));
+  const sourceId = input.designId;
+  const body = JSON.stringify({ type: 'create_from_design', design_id: sourceId, title: input.title, data });
+  if (Buffer.byteLength(body, 'utf8') > 128 * 1024) throw new Error('Invalid Canva autofill payload size');
+  return { body, sourceId };
+}
+
+/** Whitelist native job evidence; provider prose and unrecognized properties are not retained. */
+function validateTextAutofillCopy(value: unknown, sourceId: string, expectedJobId?: string): CanvaTextAutofillCopyResponse {
+  const job = providerRecord(value) ? value.job : undefined;
+  if (!providerRecord(job) || typeof job.id !== 'string' || !CANVA_IDENTIFIER.test(job.id) ||
+      (expectedJobId !== undefined && job.id !== expectedJobId)) throw new Error('Invalid Canva autofill job');
+  const id = job.id;
+  if (job.status !== 'success' && Object.hasOwn(job, 'result')) throw new Error('Invalid Canva autofill contradictory result');
+  if (job.status === 'in_progress') return { job: { id, status: 'in_progress' } };
+  if (job.status === 'failed') {
+    if (job.error === undefined) return { job: { id, status: 'failed' } };
+    if (!providerRecord(job.error) || typeof job.error.code !== 'string' || !/^[a-z][a-z0-9_]{0,99}$/.test(job.error.code)) {
+      throw new Error('Invalid Canva autofill error code');
+    }
+    return { job: { id, status: 'failed', error: { code: job.error.code } } };
+  }
+  if (job.status !== 'success' || !providerRecord(job.result) || job.result.type !== 'create_design') {
+    throw new Error('Invalid Canva autofill result');
+  }
+  try {
+    const d = validateCanvaDesignResponse({ design: job.result.design }).design;
+    if (!CANVA_IDENTIFIER.test(d.id) || d.id === sourceId || d.created_at < 0 || d.updated_at < 0 ||
+        (d.title !== undefined && (typeof d.title !== 'string' || d.title.length > 255)) ||
+        (d.page_count !== undefined && (!Number.isSafeInteger(d.page_count) || d.page_count < 1))) throw new Error('Invalid copy');
+    const design: CanvaDesignResponse['design'] = {
+      id: d.id, created_at: d.created_at, updated_at: d.updated_at,
+      urls: { edit_url: d.urls.edit_url, view_url: d.urls.view_url },
+      ...(d.title === undefined ? {} : { title: d.title }),
+      ...(d.page_count === undefined ? {} : { page_count: d.page_count }),
+    };
+    return { job: { id, status: 'success', result: { type: 'create_design', design } } };
+  } catch {
+    throw new Error('Invalid Canva autofill copy metadata');
   }
 }
 

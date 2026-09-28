@@ -18,3 +18,4 @@ export * from './historical-design-migrator.js';
 export * from './canva-design-studio-adapter.js';
 export * from './canva-connect-client.js';
 export * from './telegram-pick-flow.js';
+export * from './lifecycle-office-auth.js';

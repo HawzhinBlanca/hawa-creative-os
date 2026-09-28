@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import { createDb } from '@hawa/db';
+import { CanvaBindingRepository, createDb, withRlsContext } from '@hawa/db';
 import crypto from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
@@ -51,7 +51,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       body: JSON.stringify({
         update_id: Math.floor(Math.random() * 1000000),
         message: {
-          text: `Annual Gala Invitation Campaign for ${clientName}`,
+          text: `/task Annual Gala Invitation Campaign for ${clientName}`,
           chat: { id: 888123 },
         },
       }),
@@ -100,14 +100,64 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
 
     expect(deskData.taskId).toBe(task.id);
     expect(deskData.revisionId).toBe(revId);
-    expect(deskData.canvaEditUrl).toContain('canva.com/design/');
-    expect(deskData.canvaEditUrl).toContain('return_url=');
-    expect(deskData.capturedFiles.length).toBeGreaterThan(0);
+    expect(deskData).toMatchObject({
+      canvaStatus: 'not_configured', canvaDesignId: null, canvaEditUrl: null,
+      captureStatus: 'not_captured', capturedFiles: [], capturedArtifactSetHash: null,
+    });
     expect(deskData.exactCopy.some((c: any) => c.text.includes('بانگهێشتنامەی فەرمی'))).toBe(true);
     expect(deskData.exactCopy.some((c: any) => c.isKurdishRtl === true)).toBe(true);
-    expect(deskData.brandReferences.officialLogoSha256).toBeDefined();
+    expect(deskData.brandReferences).toMatchObject({
+      status: 'not_configured', officialLogoSha256: null, brandColors: [], approvedFonts: [],
+    });
+    expect(JSON.stringify(deskData)).not.toContain('canva-design-kaae-001');
+    expect(JSON.stringify(deskData)).not.toContain('sha256_mock_capture_set');
     // No QA ran on this revision, so the evidence says so instead of reporting a pass.
     expect(deskData.qaEvidence).toMatchObject({ status: 'not_run', criticalPass: null, qcReportHash: null, qcRunId: null });
+  });
+
+  it('shows a stored bound Canva design without inventing a capture for it', async () => {
+    const task = await createTestTask();
+    const designId = `DA-${crypto.randomUUID()}`;
+    const binding = await withRlsContext(testDb, { tenantId: defaultTenantId, userId: operatorUserId, role: 'operator' },
+      (trx) => new CanvaBindingRepository(trx).createBinding({
+        tenantId: defaultTenantId, taskId: task.id, clientId: task.clientId,
+        canvaDesignId: designId, editUrl: `https://www.canva.com/design/${designId}/edit`,
+      }, trx));
+    const res = await app.request(`/tasks/${task.id}/review-desk`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}` },
+    });
+    expect(res.status).toBe(200);
+    const desk = await res.json();
+    expect(desk.revisionId).toBeNull();
+    expect(desk.canvaStatus).toBe('recorded');
+    expect(desk.canvaDesignId).toBe(designId);
+    expect(desk.canvaEditUrl).toBe(`https://www.canva.com/design/${designId}/edit`);
+    expect(desk).toMatchObject({ captureStatus: 'not_captured', captureArtifactCount: 0, capturedFiles: [], capturedArtifactSetHash: null });
+    expect((await app.request(`/tasks/${task.id}/review-desk?revisionId=rev-1`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}` },
+    })).status).toBe(422);
+    expect((await app.request(`/tasks/${task.id}/review-desk?revisionId=${crypto.randomUUID()}`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}` },
+    })).status).toBe(404);
+
+    const revId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId: revId, document: { id: 'captured-design', nodes: [{ id: 'title', type: 'text', text: 'Approved copy', role: 'headline' }] } }),
+    })).status).toBe(201);
+    await withRlsContext(testDb, { tenantId: defaultTenantId, userId: operatorUserId, role: 'operator' },
+      (trx) => new CanvaBindingRepository(trx).captureArtifactSet({
+        tenantId: defaultTenantId, bindingId: binding.id, taskId: task.id, clientId: task.clientId,
+        canvaDesignId: designId, expectedVersion: binding.version, parentRevisionId: revId,
+        capturedArtifactSetHash: 'a'.repeat(64),
+        artifacts: [{ format: 'png', storageKey: 'private/capture.png', sha256: 'b'.repeat(64), byteSize: 1024 }],
+        semanticCoverage: { textNodesCount: 1, imageFillsCount: 0, hasLogo: true, isComplete: true },
+        authActor: { actorType: 'operator', actorId: operatorUserId },
+      }));
+    const captured = await (await app.request(`/tasks/${task.id}/review-desk?revisionId=${revId}`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}` },
+    })).json();
+    expect(captured).toMatchObject({ captureStatus: 'recorded_metadata_only', captureArtifactCount: 1,
+      capturedFiles: [], capturedArtifactSetHash: 'a'.repeat(64) });
   });
 
   it('2. Enforces real role authorization on review decisions (FR-043)', async () => {
@@ -172,7 +222,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
         'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
-      body: JSON.stringify({ decision: 'approved', displayName: 'Lead Art Director' }),
+      body: JSON.stringify({ decision: 'approved', displayName: 'Lead Art Director', pinnedExportIds: [exports.add(task.id)] }),
     });
     expect(artDirectorRes.status).toBe(201);
   });
@@ -314,9 +364,18 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
       body: JSON.stringify({
         decision: 'approved',
         expectedTaskVersion: version,
+        pinnedExportIds: [exports.add(task.id)],
       }),
     });
     expect(op1Res.status).toBe(201);
+    const afterDecision = await (await app.request(`/tasks/${task.id}`)).json();
+    expect(afterDecision.version).toBe(version + 1);
+    const decisionEvents = await withRlsContext(testDb,
+      { tenantId: defaultTenantId, userId: operatorUserId, role: 'art_director' },
+      (trx) => trx.selectFrom('task_events').select(['event_type', 'aggregate_version'])
+        .where('task_id', '=', task.id).where('aggregate_version', '>', version).execute());
+    expect(decisionEvents.map((event) => ({ ...event, aggregate_version: Number(event.aggregate_version) })))
+      .toEqual([{ event_type: 'design.approved', aggregate_version: version + 1 }]);
 
     // Operator 2 sends a concurrent approval with the same, now stale, version -> Fails with 409
     const op2Res = await app.request(`/tasks/${task.id}/revisions/${revId}/decisions`, {
@@ -332,6 +391,158 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
     });
     expect(op2Res.status).toBe(409);
     expect((await op2Res.json()).detail).toContain('Concurrent modification detected');
+  });
+
+  it('replays the same Desk action after a lost response without another approval or version', async () => {
+    const task = await createTestTask();
+    const revisionId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId, document: { id: 'retry-draft', nodes: [{ id: 'title', type: 'text', text: 'Reviewed' }] } }),
+    })).status).toBe(201);
+    await passQa(task.id, revisionId);
+    const actionId = crypto.randomUUID();
+    const pinnedExportIds = [exports.add(task.id)];
+    const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': actionId,
+      Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}` };
+    const body = { action: 'approve', pinnedExportIds };
+    const decide = (payload: unknown) => app.request(`/tasks/${task.id}/revisions/${revisionId}/decisions`, {
+      method: 'POST', headers, body: JSON.stringify(payload),
+    });
+    const first = await decide(body);
+    expect(first.status).toBe(201);
+    const decisionId = (await first.json()).decisionId;
+    const version = (await (await app.request(`/tasks/${task.id}`)).json()).version;
+    // A fresh Core process has no route-local memory of the first HTTP response.
+    const restartedCore = createAppWithClientFixtures({ db: testDb,
+      testAuth: { principal: { role: 'art_director' }, roleHeader: true },
+      deliverableStore: exports.store, qaEngine: passingQa as never });
+    const retry = await restartedCore.request(`/tasks/${task.id}/revisions/${revisionId}/decisions`, {
+      method: 'POST', headers, body: JSON.stringify(body),
+    });
+    expect(retry.status).toBe(200);
+    expect((await retry.json()).decisionId).toBe(decisionId);
+    expect((await (await app.request(`/tasks/${task.id}`)).json()).version).toBe(version);
+    const approvals = await withRlsContext(testDb,
+      { tenantId: defaultTenantId, userId: operatorUserId, role: 'art_director' },
+      (trx) => trx.selectFrom('approvals').select('id').where('task_id', '=', task.id).execute());
+    expect(approvals.map((row) => row.id)).toEqual([decisionId]);
+    expect((await decide({ ...body, reason: 'Different action' })).status).toBe(409);
+  });
+
+  it('serializes simultaneous revision requests with one Desk action key', async () => {
+    const task = await createTestTask();
+    const revisionId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId, document: { id: 'change-draft', nodes: [{ id: 'title', type: 'text', text: 'Change me' }] } }),
+    })).status).toBe(201);
+    const beforeVersion = (await (await app.request(`/tasks/${task.id}`)).json()).version;
+    const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID(),
+      Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}` };
+    const send = () => app.request(`/tasks/${task.id}/revisions/${revisionId}/decisions`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ action: 'revision_requested', revisionRequest: { comment: 'Adjust spacing' } }),
+    });
+    const [a, b] = await Promise.all([send(), send()]);
+    expect([a.status, b.status].sort()).toEqual([200, 201]);
+    expect((await a.json()).decisionId).toBe((await b.json()).decisionId);
+    const current = await (await app.request(`/tasks/${task.id}`)).json();
+    expect(current.version).toBe(beforeVersion + 1);
+    const approvals = await withRlsContext(testDb,
+      { tenantId: defaultTenantId, userId: operatorUserId, role: 'art_director' },
+      (trx) => trx.selectFrom('approvals').select(['id', 'decision']).where('task_id', '=', task.id).execute());
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0].decision).toBe('revision_requested');
+  });
+
+  it('refuses a malformed keyed decision before writing an approval', async () => {
+    const task = await createTestTask();
+    const revisionId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId, document: { id: 'invalid-draft', nodes: [{ id: 'title', type: 'text', text: 'Draft' }] } }),
+    })).status).toBe(201);
+    const path = `/tasks/${task.id}/revisions/${revisionId}/decisions`;
+    const invalidKey = await app.request(path, { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'not-a-uuid' },
+      body: JSON.stringify({ action: 'revision_requested' }) });
+    expect(invalidKey.status).toBe(422);
+    const invalidBody = await app.request(path, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: 'null' });
+    expect(invalidBody.status).toBe(400);
+    const approvals = await withRlsContext(testDb,
+      { tenantId: defaultTenantId, userId: operatorUserId, role: 'art_director' },
+      (trx) => trx.selectFrom('approvals').select('id').where('task_id', '=', task.id).execute());
+    expect(approvals).toHaveLength(0);
+  });
+
+  it('replays an escalated action using its recorded revision-request decision', async () => {
+    const task = await createTestTask();
+    const revisionId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId, document: { id: 'escalation-draft', nodes: [{ id: 'title', type: 'text', text: 'Draft' }] } }),
+    })).status).toBe(201);
+    const input = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID(),
+      Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}` }, body: JSON.stringify({ action: 'escalate' }) };
+    const path = `/tasks/${task.id}/revisions/${revisionId}/decisions`;
+    const first = await app.request(path, input);
+    expect(first.status).toBe(201);
+    const firstId = (await first.json()).decisionId;
+    const retry = await app.request(path, input);
+    expect(retry.status).toBe(200);
+    expect((await retry.json()).decisionId).toBe(firstId);
+  });
+
+  it('refuses a chat approval action when no recorded revision exists', async () => {
+    const task = await createTestTask();
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+    };
+    const fakeRevision = await app.request(`/tasks/${task.id}/chat-approval-action`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ revisionId: 'rev-1', decision: 'approved' }),
+    });
+    expect(fakeRevision.status).toBe(412);
+    expect((await fakeRevision.json()).detail).toContain('recorded revision');
+
+    const missingRevision = await app.request(`/tasks/${task.id}/chat-approval-action`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ decision: 'approved' }),
+    });
+    expect(missingRevision.status).toBe(412);
+  });
+
+  it('does not claim a validated chat button recorded an approval', async () => {
+    const task = await createTestTask();
+    const revisionId = crypto.randomUUID();
+    expect((await app.request(`/tasks/${task.id}/revisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionId, document: { id: 'chat-draft', nodes: [{ id: 'title', type: 'text', text: 'Draft' }] } }),
+    })).status).toBe(201);
+    const invalid = await app.request(`/tasks/${task.id}/chat-approval-action`, {
+      method: 'POST', headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+      },
+      body: JSON.stringify({ revisionId: 'rev-1', decision: 'approved' }),
+    });
+    expect(invalid.status).toBe(422);
+    const response = await app.request(`/tasks/${task.id}/chat-approval-action`, {
+      method: 'POST', headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN || 'test_bearer'}`,
+      },
+      body: JSON.stringify({ revisionId, decision: 'approved' }),
+    });
+    expect(response.status).toBe(409);
+    const handoff = await response.json();
+    expect(handoff.detail).toContain('not recorded');
+    expect(handoff).toMatchObject({ title: 'Desk Review Required', decisionRecorded: false,
+      reviewPath: `/#/work?task=${task.id}&revision=${revisionId}` });
+    expect((await (await app.request(`/tasks/${task.id}`)).json()).latestApproval).toBeUndefined();
   });
 
   it('6. Rejects stale two-way chat approval actions when task has advanced (Stale Chat Action)', async () => {
@@ -659,7 +870,7 @@ describe('CV-15: Bind Human Approval to Captured Revision & Review Desk (FR-041.
         'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}`,
       },
-      body: JSON.stringify({ action: 'approve' }),
+      body: JSON.stringify({ action: 'approve', pinnedExportIds: [exports.add(task.id)] }),
     });
     expect(uiApproveRes.status).toBe(201);
     const uiApproveJson = await uiApproveRes.json();

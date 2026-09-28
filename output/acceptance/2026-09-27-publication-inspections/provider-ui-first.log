@@ -1,0 +1,78 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_7cc7f808220741fc and hawa_tpl_repair_7cc7f808220741fc (27 ms)
+····················xxxx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desk/test/publication-inspections.test.ts > loads stored evidence without writes and clears old success after a failed read
+Error: A function to advance timers was called but the timers APIs are not mocked. Call `vi.useFakeTimers()` in the test file first.
+ ❯ apps/desk/test/support/desk-harness.ts:112:14
+    110| export async function advance(ms: number) {
+    111|   await act(async () => {
+    112|     await vi.advanceTimersByTimeAsync(ms);
+       |              ^
+    113|   });
+    114| }
+ ❯ process.env.NODE_ENV.exports.act node_modules/.pnpm/react@19.2.8/node_modules/react/cjs/react.development.js:814:22
+ ❯ advance apps/desk/test/support/desk-harness.ts:111:9
+ ❯ flush apps/desk/test/support/desk-harness.ts:118:9
+ ❯ apps/desk/test/publication-inspections.test.ts:14:81
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  apps/desk/test/publication-inspections.test.ts > rejects malformed evidence instead of presenting a success
+Error: A function to advance timers was called but the timers APIs are not mocked. Call `vi.useFakeTimers()` in the test file first.
+ ❯ apps/desk/test/support/desk-harness.ts:112:14
+    110| export async function advance(ms: number) {
+    111|   await act(async () => {
+    112|     await vi.advanceTimersByTimeAsync(ms);
+       |              ^
+    113|   });
+    114| }
+ ❯ process.env.NODE_ENV.exports.act node_modules/.pnpm/react@19.2.8/node_modules/react/cjs/react.development.js:814:22
+ ❯ advance apps/desk/test/support/desk-harness.ts:111:9
+ ❯ flush apps/desk/test/support/desk-harness.ts:118:9
+ ❯ apps/desk/test/publication-inspections.test.ts:21:81
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  apps/desk/test/publication-inspections.test.ts > shows stale uncertainty, absent permission policy and all findings with safe provider links
+Error: A function to advance timers was called but the timers APIs are not mocked. Call `vi.useFakeTimers()` in the test file first.
+ ❯ apps/desk/test/support/desk-harness.ts:112:14
+    110| export async function advance(ms: number) {
+    111|   await act(async () => {
+    112|     await vi.advanceTimersByTimeAsync(ms);
+       |              ^
+    113|   });
+    114| }
+ ❯ process.env.NODE_ENV.exports.act node_modules/.pnpm/react@19.2.8/node_modules/react/cjs/react.development.js:814:22
+ ❯ advance apps/desk/test/support/desk-harness.ts:111:9
+ ❯ flush apps/desk/test/support/desk-harness.ts:118:9
+ ❯ apps/desk/test/publication-inspections.test.ts:27:110
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  apps/desk/test/publication-inspections.test.ts > does not restore evidence from a slow response after leaving the screen
+Error: A function to advance timers was called but the timers APIs are not mocked. Call `vi.useFakeTimers()` in the test file first.
+ ❯ apps/desk/test/support/desk-harness.ts:112:14
+    110| export async function advance(ms: number) {
+    111|   await act(async () => {
+    112|     await vi.advanceTimersByTimeAsync(ms);
+       |              ^
+    113|   });
+    114| }
+ ❯ process.env.NODE_ENV.exports.act node_modules/.pnpm/react@19.2.8/node_modules/react/cjs/react.development.js:814:22
+ ❯ advance apps/desk/test/support/desk-harness.ts:111:9
+ ❯ flush apps/desk/test/support/desk-harness.ts:118:9
+ ❯ apps/desk/test/publication-inspections.test.ts:34:82
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  4 failed | 20 passed (24)
+   Start at  22:21:33
+   Duration  803ms (transform 183ms, setup 150ms, import 170ms, tests 117ms, environment 461ms)
+

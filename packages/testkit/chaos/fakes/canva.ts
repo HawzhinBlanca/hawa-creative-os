@@ -21,7 +21,7 @@ export interface CanvaFault {
 
 export interface CanvaLedgerEntry {
   seq: number;
-  kind: 'import' | 'export' | 'design' | 'token' | 'download';
+  kind: 'import' | 'export' | 'design' | 'token' | 'download' | 'manual_edit';
   id: string;
   sourceSha256?: string;
   designId?: string;
@@ -69,6 +69,14 @@ export class FakeCanva {
   private jobs = new Map<string, Job>();
   private faults: CanvaFault[] = [];
   readonly ledger: CanvaLedgerEntry[] = [];
+
+  /** Test control only: synthetic bytes stand in for a person's native edit. Never an import. */
+  editDesign(id: string, source: Buffer): void {
+    const design=this.designs.get(id);
+    if (!design || source.length < 32 || source.length > 25*1024*1024) throw new Error('Invalid synthetic edit');
+    design.source=source; design.updatedAt++;
+    this.note({kind:'manual_edit',id,designId:id,sourceSha256:sha256(source),status:200});
+  }
 
   reset(): void {
     this.faults = [];

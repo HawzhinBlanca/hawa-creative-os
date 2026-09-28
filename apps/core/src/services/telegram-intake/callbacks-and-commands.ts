@@ -323,6 +323,14 @@ export function createTelegramCallbacksAndCommands(
           }
           // redriveTask says what it did (a new draft queued, or the design that already exists).
           const redriveRes = await redriveTask(targetTaskId, sourceChannelId);
+          if (!redriveRes.ok && redriveRes.code === 'LIFECYCLE_OWNED') {
+            await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+              text: 'This request is managed by the office. No new design was started by /redo.',
+              parse_mode: 'HTML',
+            });
+            return c.json({ ok: false, command: true, action: 'redrive',
+              taskId: targetTaskId, code: 'LIFECYCLE_OWNED' });
+          }
           return c.json({ ok: true, command: true, action: 'redrive', taskId: targetTaskId, result: redriveRes });
         }
 

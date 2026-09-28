@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import * as restate from '@restatedev/restate-sdk';
 import type { DeliveryInput, OutboundMessage, PreparedDelivery, SendResult } from '@hawa/contracts';
 import { deliveryWorkflowId } from '@hawa/contracts';
+import { signLifecycleDeliveryClaim } from '@hawa/integrations';
 import { runDelivery, type CoreInternal, type DeliveryContext } from '../src/lifecycle/delivery.js';
 
 /**
@@ -56,6 +57,33 @@ function harness(options: { prepare: () => Promise<PreparedDelivery>; answer?: (
 }
 
 describe('Delivery workflow', () => {
+  it('refuses lifecycle reporting before any external effect without a private request owner', async () => {
+    const i = input({ reportTo: 'lifecycle' });
+    const h = harness({ prepare: async () => prepared(i.taskId, 1) });
+    await expect(runDelivery(h.ctx, h.core, i)).rejects.toThrow(/LIFECYCLE_DELIVERY_NOT_AVAILABLE/);
+    expect(h.posts).toEqual([]);
+    expect(h.sends).toEqual([]);
+    expect(h.steps).toEqual([]);
+  });
+
+  it('keeps a signed request-owned outcome pending when its private owner refuses the report', async () => {
+    const prior = process.env.HAWA_WORKER_TOKEN;
+    process.env.HAWA_WORKER_TOKEN = ['request', 'owner', 'delivery', 'test'].join('_');
+    try {
+      const unsigned = input({ requestId: randomUUID(), reportTo: 'lifecycle', requestRev: 4 });
+      const i = { ...unsigned, claimSignature: signLifecycleDeliveryClaim(process.env.HAWA_WORKER_TOKEN, unsigned) };
+      const h = harness({ prepare: async () => prepared(i.taskId, 1) });
+      h.ctx.reportLifecycle = async () => { throw new restate.TerminalError('Core refused stale report', { errorCode: 409 }); };
+      await expect(runDelivery(h.ctx, h.core, i)).rejects.toThrow('Core refused stale report');
+      expect(h.steps).toEqual(['prepare']);
+      expect(h.posts).toHaveLength(1);
+      expect(h.sends.filter((m) => m.chatId === i.chatId)).toHaveLength(2);
+    } finally {
+      if (prior === undefined) delete process.env.HAWA_WORKER_TOKEN;
+      else process.env.HAWA_WORKER_TOKEN = prior;
+    }
+  });
+
   it('sends each approved file once, then the notice with the count, then reports delivered to Core', async () => {
     const i = input();
     const h = harness({ prepare: async () => prepared(i.taskId, 2) });
@@ -106,6 +134,16 @@ describe('Delivery workflow', () => {
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toMatchObject({ key: `${i.deliveryId}:failed-alert`, class: 'critical' });
     expect(alerts[0].text).toContain(i.taskId);
+  });
+
+  it('never calls an archive-only result delivered when no requester chat or approved file can be sent', async () => {
+    for (const change of [{ chatId: null }, { files: [] }]) {
+      const i = input({ chatId: null });
+      const h = harness({ prepare: async () => prepared(i.taskId, 1, change) });
+      const outcome = await runDelivery(h.ctx, h.core, i);
+      expect(outcome).toMatchObject({ outcome: 'failed', archived: true, sheetsConfirmed: true, filesSent: 0 });
+      expect(h.posts.at(-1)?.body.outcome).toEqual(outcome);
+    }
   });
 
   it('Core refuses the prepare step for good: nothing is sent to the requester, the office is told, and Core hears failed', async () => {

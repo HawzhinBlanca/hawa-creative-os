@@ -1,0 +1,128 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (25 ms)
+ ❯ apps/core/test/scoped-receipt-audits.test.ts (3 tests | 3 failed) 154ms
+   × never returns another user's client audit through the shared Core process 86ms
+   × keeps a completed audit when a fresh Core instance reads PostgreSQL 31ms
+   × hides an old audit immediately when the actor loses one of its recorded clients 22ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > never returns another user's client audit through the shared Core process
+AssertionError: expected { …(11) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "anomalies": [
+    {
+      "description": "Task 5133c465-6eea-411e-8891-6ef28c60581b is COMPLETE but no Drive delivery is recorded for it",
+      "detectedAt": "2026-09-27T14:20:55.950Z",
+      "kind": "MISSING_DRIVE_ASSET",
+      "severity": "high",
+      "taskId": "5133c465-6eea-411e-8891-6ef28c60581b",
+    },
+    {
+      "description": "Task 5133c465-6eea-411e-8891-6ef28c60581b has no Sheets reporting row recorded",
+      "detectedAt": "2026-09-27T14:20:55.950Z",
+      "kind": "MISSING_SHEET_ROW",
+      "severity": "medium",
+      "taskId": "5133c465-6eea-411e-8891-6ef28c60581b",
+    },
+  ],
+  "auditId": "audit_56815c90_1790518855950",
+  "basis": "PostgreSQL task and publication records against the verified delivery receipts Core stored. Google Drive and Google Sheets were not read, and nothing was repaired.",
+  "driftCount": 2,
+  "inSyncCount": 0,
+  "simulated": false,
+  "status": "divergent",
+  "timestamp": "2026-09-27T14:20:55.950Z",
+  "totalDriveDeliverablesChecked": 0,
+  "totalSheetRowsAudited": 0,
+  "totalTasksAudited": 1,
+}
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:35:57
+     33|  expect(report.anomalies.some((a:any)=>a.taskId===f.a.taskId)).toBe(tr…
+     34|  expect(JSON.stringify(report)).not.toContain(f.b.taskId);
+     35|  expect(latest(await(await get(app,f.b.token)).json())).toBeNull();
+       |                                                         ^
+     36|  expect((await get(app,g.a.token)).status).toBe(401);
+     37| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > keeps a completed audit when a fresh Core instance reads PostgreSQL
+AssertionError: expected undefined to be 'audit_d3c21344_1790518855980' // Object.is equality
+
+- Expected:
+"audit_d3c21344_1790518855980"
+
++ Received:
+undefined
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:40:123
+     38| it('keeps a completed audit when a fresh Core instance reads PostgreSQ…
+     39|  const f=await fixture(),r=await run(createApp({db}),f.a.token);expect…
+     40|  const read=await get(createApp({db}),f.a.token);expect(read.status).t…
+       |                                                                                                                           ^
+     41| });
+     42| it('hides an old audit immediately when the actor loses one of its rec…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > hides an old audit immediately when the actor loses one of its recorded clients
+AssertionError: expected { …(11) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "anomalies": [
+    {
+      "description": "Task cb8db370-140d-4f16-b84e-4e968f2d996d is COMPLETE but no Drive delivery is recorded for it",
+      "detectedAt": "2026-09-27T14:20:56.008Z",
+      "kind": "MISSING_DRIVE_ASSET",
+      "severity": "high",
+      "taskId": "cb8db370-140d-4f16-b84e-4e968f2d996d",
+    },
+    {
+      "description": "Task cb8db370-140d-4f16-b84e-4e968f2d996d has no Sheets reporting row recorded",
+      "detectedAt": "2026-09-27T14:20:56.008Z",
+      "kind": "MISSING_SHEET_ROW",
+      "severity": "medium",
+      "taskId": "cb8db370-140d-4f16-b84e-4e968f2d996d",
+    },
+  ],
+  "auditId": "audit_56457057_1790518856008",
+  "basis": "PostgreSQL task and publication records against the verified delivery receipts Core stored. Google Drive and Google Sheets were not read, and nothing was repaired.",
+  "driftCount": 2,
+  "inSyncCount": 0,
+  "simulated": false,
+  "status": "divergent",
+  "timestamp": "2026-09-27T14:20:56.008Z",
+  "totalDriveDeliverablesChecked": 0,
+  "totalSheetRowsAudited": 0,
+  "totalTasksAudited": 1,
+}
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:45:93
+     43|  const f=await fixture(),app=createApp({db});expect((await run(app,f.a…
+     44|  await sql`UPDATE hawa.client_memberships SET active=false WHERE tenan…
+     45|  const r=await get(app,f.a.token);expect(r.status).toBe(200);expect(la…
+       |                                                                                             ^
+     46| });
+     47|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  17:20:54
+   Duration  1.77s (transform 1.01s, setup 104ms, import 1.37s, tests 154ms, environment 0ms)
+

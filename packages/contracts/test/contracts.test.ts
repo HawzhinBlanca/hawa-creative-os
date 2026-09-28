@@ -38,10 +38,13 @@ describe('Contracts: Type & Structure Validation', () => {
     const { validateReleaseManifest } = await import('../src/release-manifest.js');
 
     const validManifest = {
-      manifestVersion: '1.0.0',
+      manifestVersion: '2.0.0',
+      evidenceKind: 'source_candidate',
+      targetEnvironment: 'production',
       topology: { canonical: 'infra/docker/docker-compose.prod.yml' },
       build: { commit: '664ad55b85930b3cd29c6be170fc13f0d2876f66', treeClean: true },
       flags: { DESIGN_PIPELINE_V3: 'off', DESIGN_STUDIO_V2: 'off' },
+      models: { runtimeOverrides: 'unobserved' },
     };
 
     const valid = validateReleaseManifest(validManifest);
@@ -60,6 +63,11 @@ describe('Contracts: Type & Structure Validation', () => {
       flags: { DESIGN_PIPELINE_V3: 'on', DESIGN_STUDIO_V2: 'off' },
     });
     expect(enabledFlags.ok).toBe(false);
+
+    const fabricatedImage = validateReleaseManifest({
+      ...validManifest,
+      components: { core: { service: 'core', imageStatus: 'unbuilt', image: 'hawa-core:latest' } },
+    });
+    expect(fabricatedImage.ok).toBe(false);
   });
 });
-

@@ -2,6 +2,15 @@ import type { WorkflowDurableContext } from './durable-context.js';
 import type { WorkflowInput, WorkflowOutput } from './workflow.js';
 import type { OutcomeRecorder } from './outcome-without-core.js';
 import { log, requestIdHeaders } from './logging.js';
+import { lifecycleDesignProofHeaders } from './lifecycle/design-proof.js';
+
+/** The one-way outcome channel of a RequestLifecycle-owned DesignRun. */
+export interface LifecycleOutcomeReporter {
+  requestId: string;
+  runId: string;
+  report(outcome: { status: string; designId?: string; code?: string; runId?: string;
+    parity?: string; parityError?: string; detail?: string; notifyRequester?: boolean }): void;
+}
 
 /**
  * A failure that retrying can never fix (rejected request, scope mismatch). The Restate
@@ -27,7 +36,7 @@ export class CoreBoundaryError extends Error {
   readonly terminal: boolean;
   /** A 409 that is retried before it is believed (RETRIED_REFUSALS). */
   readonly retriedRefusal: boolean;
-  /** retryAfterMs: Core's Retry-After on a busy answer, when it named one. */
+  /** retryAfterMs: Core's Retry-After on a busy answer, when it named one (ADR-131). */
   constructor(readonly httpStatus: number, readonly code?: string, readonly retryAfterMs?: number) {
     super(`Canva workflow Core boundary HTTP ${httpStatus}${code ? ` ${code}` : ''}`);
     this.name = 'CoreBoundaryError';
@@ -116,15 +125,22 @@ export function resolveCanvaVariant(input: Pick<WorkflowInput, 'canvaVariant'>):
 type CoreCall = (path: string, body?: unknown, key?: string) => Promise<any>;
 
 /** The worker's authenticated line to Core for one task. */
-function coreClient(input: Pick<WorkflowInput, 'taskId'>, fetcher: typeof fetch): CoreCall {
+function coreClient(input: Pick<WorkflowInput, 'taskId'>, fetcher: typeof fetch, lifecycle?: Pick<LifecycleOutcomeReporter, 'requestId' | 'runId'>): CoreCall {
   const base = process.env.HAWA_CORE_INTERNAL_URL || 'http://core:3001';
   const token = process.env.HAWA_BEARER_TOKEN;
   if (!token) throw new Error('Worker Core credential is not configured');
   return async (path: string, body?: unknown, key?: string) => {
-    const res = await fetcher(base + '/v1/tasks/' + encodeURIComponent(input.taskId) + path, {
-      method: body === undefined ? 'GET' : 'POST',
+    const method = body === undefined ? 'GET' : 'POST';
+    const pathname = '/v1/tasks/' + encodeURIComponent(input.taskId) + path;
+    const res = await fetcher(base + pathname, {
+      method,
       // Core logs the call under the request this invocation belongs to (logging.ts).
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}), ...requestIdHeaders() },
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json',
+        ...(key ? { 'Idempotency-Key': key } : {}), ...requestIdHeaders(),
+        ...(method === 'POST' && lifecycle ? lifecycleDesignProofHeaders({
+          taskId: input.taskId, requestId: lifecycle.requestId, runId: lifecycle.runId, method, path: pathname,
+        }) : {}),
+      },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(300000),
     });
@@ -172,8 +188,7 @@ async function reportOutcome(ctx: WorkflowDurableContext, call: CoreCall, stepNa
 
 /**
  * Core answers a studio start with 429 STUDIO_BUSY while two of the tenant's runs are unfinished, and a
- * generation with 429 PLANNING_BUSY while every planning slot is taken. The
- * step retried that five times in under a second and the workflow then told the requester "We could
+ * generation with 429 PLANNING_BUSY while every planning slot is taken (ADR-131). The step retried that five times in under a second and the workflow then told the requester "We could
  * not make the automatic draft", although nothing was wrong with the request: it only had to wait its
  * turn (2026-09-23). A busy answer is now journalled as an answer rather than thrown, and the same
  * request is asked again after a durable 25 s wait, for up to 15 minutes. Only then does the run end
@@ -181,10 +196,10 @@ async function reportOutcome(ctx: WorkflowDurableContext, call: CoreCall, stepNa
  * reaches the same decision at the same try.
  *
  * When Core names the wait (Retry-After, which PLANNING_BUSY carries: until the oldest running plan
- * should finish), that wait is kept, from 1 to 30 s, and journalled with the answer. The planning step
- * used to throw the 429 into the step's own retry, which doubles (2, 4, 8, 16, 30 s): ten briefs sent at
- * once got their drafts in pairs at about 5, 7, 11, 19 and 35 s while slots stood free between tries
- * (2026-09-24 load test).
+ * should finish), that wait is kept, from 1 to 30 s, and journalled with the answer, so a replay
+ * sleeps the same without reading any header. The planning step used to throw the 429 into the
+ * step's own retry, which doubles (2, 4, 8, 16, 30 s): ten briefs sent at once got their drafts in
+ * pairs at about 5, 7, 11, 19 and 35 s while slots stood free between tries (2026-09-24 load test).
  *
  * Canva's own rate limit is answered the same way (ADR-132): an import or export Canva still refuses
  * with 429 after the client's short retry comes back as 429 CANVA_RATE_LIMITED with Canva's wait. It
@@ -213,7 +228,9 @@ async function runUnlessBusy<T>(ctx: WorkflowDurableContext, stepName: string, r
         return await request();
       } catch (err) {
         if (err instanceof CoreBoundaryError && err.httpStatus === 429) {
-          return err.retryAfterMs === undefined ? { coreBusy: err.code || 'HTTP_429' } : { coreBusy: err.code || 'HTTP_429', retryAfterMs: err.retryAfterMs };
+          return err.retryAfterMs === undefined
+            ? { coreBusy: err.code || 'HTTP_429' }
+            : { coreBusy: err.code || 'HTTP_429', retryAfterMs: err.retryAfterMs };
         }
         // A change whose original design is still being made waits for it the same way: the studio
         // refuses it with 409 PARENT_STILL_RUNNING rather than designing the change from nothing.
@@ -270,59 +287,20 @@ export async function reportNotRunnable(input: WorkflowInput, ctx: WorkflowDurab
 }
 
 /**
- * Where a DesignRun (slice 2.3, PHASE2_DESIGN.md 2.4) reports its outcome instead of Core: a one-way,
- * journaled send to its RequestLifecycle, exactly once, with no Core to wait for.
- */
-export type OutcomeReport = (status: string, body: Record<string, unknown>) => Promise<void>;
-
-/** Restate's answer at the next await of an invocation that was cancelled (a live one, or from the journal). */
-export const isCancellation = (error: unknown): boolean => {
-  const e = error as { name?: unknown; code?: unknown; message?: unknown } | null | undefined;
-  return e?.name === 'CancelledError' || (e?.code === 409 && /^cancell?ed$/i.test(String(e?.message ?? '')));
-};
-
-/**
  * Restate orchestrates retries; Core journals model charges and Canva side effects. `recordOutcome`
  * writes an outcome Core would not take to the outbox instead (outcome-without-core.ts); without it
  * such an outcome is only logged.
- *
- * With `report` (a DesignRun of the request lifecycle) the outcome goes there instead of to Core, and
- * neither Core's report step nor the outbox fallback runs. A cancelled run (the request was cancelled)
- * abandons the studio run it was following and reports CANCELLED, which the lifecycle ignores.
  */
 export async function runCanvaDraft(
   input: WorkflowInput,
   ctx: WorkflowDurableContext,
   fetcher: typeof fetch = fetch,
   recordOutcome?: OutcomeRecorder,
-  report?: OutcomeReport
-): Promise<WorkflowOutput> {
-  if (!report) return draftRun(input, ctx, fetcher, recordOutcome);
-  const hooks: DraftHooks = {};
-  try {
-    return await draftRun(input, ctx, fetcher, recordOutcome, report, hooks);
-  } catch (error) {
-    if (isCancellation(error) && hooks.finishCancelled) return hooks.finishCancelled();
-    throw error;
-  }
-}
-
-interface DraftHooks {
-  /** Set once the run can finish: abandons what it was following and reports CANCELLED. */
-  finishCancelled?: () => Promise<WorkflowOutput>;
-}
-
-async function draftRun(
-  input: WorkflowInput,
-  ctx: WorkflowDurableContext,
-  fetcher: typeof fetch,
-  recordOutcome?: OutcomeRecorder,
-  report?: OutcomeReport,
-  hooks?: DraftHooks
+  lifecycle?: LifecycleOutcomeReporter
 ): Promise<WorkflowOutput> {
   const output = (status: string, documentId?: string): WorkflowOutput =>
     ({ taskId: input.taskId, status, documentId, qcPassed: false, auditEventsCount: 0, executedSteps: [], replayedSteps: [] });
-  const call = coreClient(input, fetcher);
+  const call = coreClient(input, fetcher, lifecycle);
   // A re-drive is a new run of the same task: its keys must not collide with the first run's, or
   // Core would hand back the first run's (failed) answer instead of starting again.
   const runKey = Number.isInteger(input.redriveAttempt) && (input.redriveAttempt as number) > 0
@@ -390,7 +368,7 @@ async function draftRun(
     extra: { detail?: string; notifyRequester?: boolean } = {}
   ) => {
     await abandonUnsettledRun(status, code);
-    const body = {
+    const report = {
       status,
       designId,
       code,
@@ -399,19 +377,18 @@ async function draftRun(
       ...(extra.detail ? { detail: extra.detail } : {}),
       ...(extra.notifyRequester === false ? { notifyRequester: false } : {}),
     };
-    if (report) {
-      await report(status, body);
-      return output(status, designId);
-    }
-    try {
-      await reportOutcome(ctx, call, 'canva-notify-' + status.toLowerCase(), body);
-    } catch (error) {
-      if (!stepGaveUp(error)) throw error;
-      await recordWithoutCore(status, body);
+    if (lifecycle) {
+      lifecycle.report(report);
+    } else {
+      try {
+        await reportOutcome(ctx, call, 'canva-notify-' + status.toLowerCase(), report);
+      } catch (error) {
+        if (!stepGaveUp(error)) throw error;
+        await recordWithoutCore(status, report);
+      }
     }
     return output(status, designId);
   };
-  if (hooks) hooks.finishCancelled = () => finish('CANCELLED', result?.designId, 'CANCELLED');
 
   const handleBoundaryError = async (error: unknown, fallbackStatus: string = 'DESIGN_REJECTED', designId?: string) => {
     const boundary = boundaryOf(error);
@@ -436,6 +413,19 @@ async function draftRun(
   } catch (error) {
     return await handleBoundaryError(error, 'DESIGN_REJECTED');
   }
+  // The task read above is already a durable workflow step. Use its persisted request owner to
+  // refuse a direct TaskWorkflow/TaskService invocation before Studio or Canva can spend money.
+  // A future DesignRun needs an owner-aware report path; the legacy status endpoint cannot record
+  // this outcome, and retrying the invocation cannot change the owner. Check before the scope
+  // mismatch handler so even a malformed direct invocation sends no legacy outcome.
+  if (task.requestId && (!lifecycle || task.requestId !== lifecycle.requestId)) {
+    log.warn(`[worker] Task ${input.taskId}: direct legacy workflow refused; RequestLifecycle owns ${task.requestId}.`);
+    return output('LIFECYCLE_OWNED');
+  }
+  if (lifecycle && !task.requestId) {
+    log.warn(`[worker] Task ${input.taskId}: DesignRun refused a task with no matching RequestLifecycle owner.`);
+    return output('LIFECYCLE_OWNER_MISMATCH');
+  }
   // A mismatch is final: retrying replays the same journalled answer. It used to be thrown outside
   // any step, as an ordinary error, so Restate retried the invocation without end and the requester,
   // promised "the link or an explanation", heard nothing. It now ends the run and is reported.
@@ -448,7 +438,7 @@ async function draftRun(
   const variant = resolveCanvaVariant(input);
   // Still busy after the whole window: the run ends as a busy start always did, with Core's code. A
   // preview or check export Canva kept refusing ends as that step's failure, naming the design it has.
-  const endBusy = (busy: CoreBusy, slot: string, status = 'DESIGN_SERVER_ERROR', designId?: string) =>
+  const endBusy = (busy: CoreBusy, slot: 'studio' | 'planning' | 'export', status = 'DESIGN_SERVER_ERROR', designId?: string) =>
     finish(status, designId, busy.coreBusy, undefined, {
       detail: busy.coreBusy === 'CANVA_RATE_LIMITED'
         ? `Canva was still refusing new imports and exports with its rate limit (${busy.coreBusy}) after ${CORE_BUSY_WINDOW_MS / 60000} minutes of waiting.`
@@ -519,6 +509,7 @@ async function draftRun(
     }
   } else {
     try {
+      // The first try keeps its step name, so an invocation journalled before ADR-131 replays unchanged.
       result = await runUnlessBusy(ctx, 'canva-create-draft', () => call('/canva/generate', variant, 'workflow-' + runKey));
     } catch (error) {
       return await handleBoundaryError(error, 'DESIGN_REJECTED');
@@ -655,4 +646,3 @@ async function draftRun(
     parity
   );
 }
-

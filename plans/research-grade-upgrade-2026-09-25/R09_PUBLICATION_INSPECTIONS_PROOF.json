@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-27",
+  "status": "locally_qualified_live_pilot_pending",
+  "baseCommit": "0514a387c4d9ccfd6db0d69eba494504394cf954",
+  "requirements": [
+    "FR-047",
+    "FR-048",
+    "FR-049",
+    "FR-050",
+    "FR-064",
+    "NFR-006"
+  ],
+  "sourceHashes": {
+    "adrs/107_scheduled_external_publication_inspection.md": "df49a0f6752b865121b522e82ad749895c73bccab578d7c16d972fa5b2bdec0f",
+    "api/openapi.yaml": "b2ad479f5a2cdd1eb8552fb7809f1579665ab53433094d410af20c1b558a52ed",
+    "apps/core/src/app.ts": "18314949a98f00e53bc6541ff824d6ff04c271e953eaba706342c59b2f79917c",
+    "apps/core/src/core-helpers.ts": "59f35c4e8227690dfac8856c220da265f2b53e0c16c1cd41fc946083c031606d",
+    "apps/core/src/entrypoint-options.ts": "79ab867fa4e91a1b074bdfe6954dada6fa195fb4fefc460c0b4e9205c2efbfc3",
+    "apps/core/src/routes/publication-inspections.routes.ts": "7df0ce0a99f285644fb0b17a8730a33590ac859db2dc08ef613c94ec80aabff7",
+    "apps/core/src/services/publication-inspections.ts": "c663a0f685e9caea131b4c1e3ac5d35e34b7f70a7dccb0437d41aa23f6b5af36",
+    "apps/core/test/canva-planner-accounting.test.ts": "2f735b13ddffe0ccb4e0c9929e0b0712259077e79e0dc6af27e9d4a6211a09cf",
+    "apps/core/test/fixtures/publication-inspection-child.ts": "835df594d4f3ae76daa03e72aad2aa66451374423465c2b03e7bbe8777f8ffaf",
+    "apps/core/test/fixtures/route-inventory.txt": "6ce40a5ade81f5b8a459aeaab19f4f0a813784c90fc50efd9662f266ff48ae97",
+    "apps/core/test/production-entrypoint.test.ts": "e286d53f6cd856ff91da2503b58b9f45e6952d82531a89a6e9573d15184b4d40",
+    "apps/core/test/publication-inspection-schedule.test.ts": "44b6fc84b26f9976167050b6a2b1688b87741f10476a47e2cfe6ea9631351c24",
+    "apps/core/test/publication-inspections.test.ts": "393f3ff360816f74bab5043d9f1a2e2f3963652100c643ff1fd9974e776edcf5",
+    "apps/core/test/startup-schema-check.test.ts": "9866704f2a8df7b8264b6114e143e5d197d8b451cb1e8af1c51d48b6afa69a34",
+    "apps/desk/src/api/client.ts": "a4a72aabb583992c849bba88a0f06b2971b2ab0829430723c7865b33a2e7b10e",
+    "apps/desk/src/components/PublicationInspectionPanel.tsx": "36e7e977000b7de8aed21397e7170f22d30996ce7523cc6a64838a029ccfe12c",
+    "apps/desk/src/screens/OpsScreen.tsx": "21ef27e3072edf40e31d0dc395c05c8731cd27adbd7137a26f01ffbe8e9890ab",
+    "apps/desk/test/publication-inspections.test.ts": "bc59ea22f7f2d93c1cc1248b0a7f90e02c528eec1e1e2ef3cd6f2609b03e6188",
+    "docs/13_GOOGLE_DRIVE_SHEETS.md": "053814b90f7e6b2526c1d9491510405c1b6c7cbe235b9c40ff34d56e28786903",
+    "packages/contracts/src/index.ts": "2092aa75108976b841e423d710ed7e99d22f7e3b5ff64efd46020fa08fa491d5",
+    "packages/contracts/src/publication-inspection.ts": "529461ccade298706a4d4459c94b125f392db23a68e1503260f5593fbca301f2",
+    "packages/db/migrations/060_publication_inspections.sql": "8f0c9a181cd95fe1f751f216eaa51cc8ad252a64b60e91c942da184a31a3af34",
+    "packages/db/test/schema-upgrade.test.ts": "6adae8456a66161ba8af06325448464b1cdb5004419765ef4455356526ead441",
+    "packages/domain/src/index.ts": "c896f64350e8a32228499fce1dd1bffd9ea37d6b4d552cd22bab135ed336e605",
+    "packages/domain/src/publication-inspection.ts": "66530d5796b7793df3e266e44e67c09a10a44b438bb63f5f944c621ee47cb656",
+    "packages/integrations/src/google-publication-inspector.ts": "c50d7e773edcc906b0136fc20b0e2a49d7e39b5f6bca25ffb251ff313ac25037",
+    "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3",
+    "packages/integrations/test/google-publication-inspector.test.ts": "357aa8975abecc54f3b0ffee688997939b99802f860a1e740ec76ea9fc2907ff",
+    "runbooks/GOOGLE_PUBLICATION_CHECKS.md": "024eefd5fa63801e1a74cfc53768231ba2b98a9382ee1a8019715b7045b7dd82",
+    "packages/integrations/src/google-sheet-row.ts": "4fef8d40b0ea20700e077453a6a0a18a694e85ebab368d8a08f9cfb67188c13d",
+    "packages/integrations/test/google-sheet-identity.test.ts": "def654be3e8eb8a9f4ca216690d3ef6f2febb5e2a4eeacce72f071aed0c86b99",
+    "packages/testkit/test/pilot-exit-drill.test.ts": "b016d65b27256a7736a28e16ea324b471e9e8df8728b11720926ee747a0ed080",
+    "infra/docker/nginx.conf": "b1bab311ff10ff434af23ba7882ad4993cef2fb6cd57cf032a2b57e2ff557f00",
+    "runbooks/GOOGLE_SHEET_ROW_IDENTITY.md": "2b94b705d69e0ff4f0f074f42fadb16e73b252fc6539f60de1967737594c2947",
+    "runbooks/LIVE_PILOT.md": "fb06346d1f242ccc27926264077d93f7ac307a0727e42af7fd8710087153c512",
+    "packages/db/test/blob-nginx.test.ts": "d64a702a0d70c7ed10335c732a27c53f3d0e58f2e2bc83809d3dd0c3c4c4bf9b"
+  },
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-publication-inspections/STATUS.md": "72590eb4c443ff350455f94664d98f4444c7d7658afe3f5fdbd8ebdd19e44719",
+    "output/acceptance/2026-09-27-publication-inspections/browser-final.json": "3125d914a7cd6f75513d8ae70bae652abac6930fde4048c5689524e7bf745c22",
+    "output/acceptance/2026-09-27-publication-inspections/browser-final.png": "720fbe34638afcfe4b42c78dea34a773400b86ec76ca7a852306cea27e53c866",
+    "output/acceptance/2026-09-27-publication-inspections/build.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-publication-inspections/build1.log": "2f730f93d5dbf683b4652020273940ebe7990808d0794bdd602dfbc6b7b50e98",
+    "output/acceptance/2026-09-27-publication-inspections/build2.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-publication-inspections/build3.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-publication-inspections/build4.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-publication-inspections/build5.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-publication-inspections/candidate-before-final-corrections.json": "12679f636053f811bd981bf0264af35749b09346efd86f083eb60721318cd367",
+    "output/acceptance/2026-09-27-publication-inspections/candidate-before-final-corrections.log": "b1253203db12c528b4ea8bfe923c1ba3fd3e83f05636193a407cd30dfe3dd121",
+    "output/acceptance/2026-09-27-publication-inspections/candidate-final.json": "c4663bbc0b9a2c8bb7ba1459d894dedfcf8f613db7c9cb5fffd9a10e94dfb785",
+    "output/acceptance/2026-09-27-publication-inspections/candidate-final.log": "e4113b17efa53f6f6b511ee7f11e93c37f25a56d13e48adcb3d39d0d623239ec",
+    "output/acceptance/2026-09-27-publication-inspections/candidate-first.log": "531550857648bde8679e983308e13cd43b6ad457d8d36a752b8b991aafdab1bf",
+    "output/acceptance/2026-09-27-publication-inspections/concurrency-corrected.log": "93eee0330f0f56a9a29798929e05a0ad0eb3b0bbafca519163c8e3786fdae222",
+    "output/acceptance/2026-09-27-publication-inspections/concurrency-first.log": "d6454571119b1bbaca089ffed988517ca2f1a110421c16c04f22efee14011d51",
+    "output/acceptance/2026-09-27-publication-inspections/correction-build.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-publication-inspections/correction-types.log": "30e66586091116f998700b4b33a43421e9a7dfdb7ec5b2f67bec595d7edfa9c9",
+    "output/acceptance/2026-09-27-publication-inspections/crash.log": "6b0b3adfe6edb259abe6c32c01c80fa87092ae464bcb9e9aa53ea4c88b997ef3",
+    "output/acceptance/2026-09-27-publication-inspections/db-corrected.log": "ec9a0dad4294ed5d100646080f0f3ab477e0a2dfd707dd7d3b71f92a4dadfba7",
+    "output/acceptance/2026-09-27-publication-inspections/db-first.log": "02db6a27878b0aa39ed0913db1e42a5cc0677563df9bb5b18805ec3000a03e2d",
+    "output/acceptance/2026-09-27-publication-inspections/focused-final.log": "aab8548482d94e7cec4ba701ecd7e34c54cb714f07abcd663743c9431e9d639b",
+    "output/acceptance/2026-09-27-publication-inspections/full-final.log": "ca929872d2c5370578d748d52c21d774a2df8262e6ff21ca1cc9bf2f1ab7f194",
+    "output/acceptance/2026-09-27-publication-inspections/full-first.log": "fc5c2bd08b1078bde92193cadf352843514c4c7b8e0d5766878a05428968d067",
+    "output/acceptance/2026-09-27-publication-inspections/lint-final.log": "d899edf631e5ced5db5f4227294e1b9510019a980e20f6b06b8c3846d4ddeb4b",
+    "output/acceptance/2026-09-27-publication-inspections/lint-sandbox-first.log": "2a057b186f80d3a22a409ca9530a9d723b690545ce36a5b8cb9de51bcb7c93f6",
+    "output/acceptance/2026-09-27-publication-inspections/lint.log": "d899edf631e5ced5db5f4227294e1b9510019a980e20f6b06b8c3846d4ddeb4b",
+    "output/acceptance/2026-09-27-publication-inspections/migration-rehearsal.json": "1bf2ea534bc031117a1649ef519368a69c519f28eaa664f5fe9efbda15be4406",
+    "output/acceptance/2026-09-27-publication-inspections/migration-rehearsal.log": "c8a7ae7cfbd65c5b4fd026ee12744f666912bf9dea89aab43f269b1aef929fd5",
+    "output/acceptance/2026-09-27-publication-inspections/production-preflight-after.json": "8a479d0d42b8cec16c131d3f7014a20b98246eab590c9e9143987c5fc213a1eb",
+    "output/acceptance/2026-09-27-publication-inspections/production-preflight-before.json": "1e298b33de1438531ce6776ee3bb2d48bb014549f020638f23ad0436a9ce7db2",
+    "output/acceptance/2026-09-27-publication-inspections/production-proxy-fix.json": "801e77d0e2c756ce74d978c24b596afa5035e0c91693610436a9c342545e11bf",
+    "output/acceptance/2026-09-27-publication-inspections/provider-ui-first.log": "ddfc2747946e0420e41976e2a41907b62196052728333fcf4d803668a92e2658",
+    "output/acceptance/2026-09-27-publication-inspections/proxy-dns-drill.json": "f875304bb2c6e4961a8c07d9402c5ee9df6fddeb0f865e6adfd8e920547ed419",
+    "output/acceptance/2026-09-27-publication-inspections/proxy-dns-drill.py": "af5056cd99b0ba0a2c8d77582a01e28198506631a951918021c0566380da4fdb",
+    "output/acceptance/2026-09-27-publication-inspections/proxy-file-delivery-final.log": "6a4016e072160ab185e00752ce245f7280c8cf9e954ced02fad3aaf43fc1ebd2",
+    "output/acceptance/2026-09-27-publication-inspections/proxy-file-delivery-first.log": "343fda07e29d058a56308fe02717e67ebf8b9cbb94cc57c089b54d3247e49792",
+    "output/acceptance/2026-09-27-publication-inspections/security.log": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d",
+    "output/acceptance/2026-09-27-publication-inspections/types.log": "30e66586091116f998700b4b33a43421e9a7dfdb7ec5b2f67bec595d7edfa9c9",
+    "output/acceptance/2026-09-27-publication-inspections/ui-corrected.log": "94407191d64b62dd54177a2bf034d03b9e007a66a426e5fbb4adeb79f4299cdf"
+  },
+  "verification": {
+    "focused": {
+      "passed": 72,
+      "failed": 0,
+      "skipped": 1,
+      "files": 9
+    },
+    "actualProcessKill": {
+      "passed": 8,
+      "failed": 0,
+      "durationSeconds": 124
+    },
+    "strictTestRoots": 513,
+    "sourceBuild": true,
+    "lint": true,
+    "securityFindings": 0,
+    "firstFullRegression": {
+      "passed": 4234,
+      "failed": 1,
+      "skipped": 60
+    },
+    "concurrencyCorrection": {
+      "passed": 48,
+      "failed": 0,
+      "syntheticTasks": 100,
+      "files": 300
+    },
+    "proxyDnsDrill": {
+      "passed": 8,
+      "failed": 0,
+      "productionConfigOnlyApplied": true
+    },
+    "proxyFileDelivery": {
+      "passed": 6,
+      "failed": 0
+    },
+    "finalFullRegression": {
+      "passed": 4237,
+      "failed": 0,
+      "skipped": 60,
+      "passedFiles": 505,
+      "skippedFiles": 7
+    },
+    "finalCandidate": {
+      "passedScenarios": 1,
+      "unselectedScenarios": 43,
+      "passedInvariants": 63,
+      "providers": "synthetic fakes",
+      "parser": "real pinned offline Docling"
+    },
+    "liveDataMigrationRehearsal": {
+      "applied": 38,
+      "verifiedOnReplay": 60,
+      "historicalTablesUnchanged": 76,
+      "privateCloneRemoved": true,
+      "productionMigrated": false
+    },
+    "browser": {
+      "checked": true,
+      "evidence": "output/acceptance/2026-09-27-publication-inspections/browser-final.json",
+      "liveGoogleVerified": false
+    }
+  },
+  "limits": [
+    "Approved permission baselines unavailable; historical adoption and full reporting columns remain open",
+    "Missing original inputs and incomplete provider evidence remain explicitly unverified",
+    "Real Workspace sign-in, named reviewer approval and real end-to-end delivery are pending",
+    "Whole-app, multilingual human quality, held-out quality/cost and independent-host recovery admission remain open",
+    "No production app/schema upgrade; only tested nginx config repair applied; simulated providers in isolated candidate"
+  ],
+  "testedCommit": "b38f60dd670cf1c665a9edbab4485fa11e56832b",
+  "runtimeCommit": "b38f60dd670cf1c665a9edbab4485fa11e56832b"
+}

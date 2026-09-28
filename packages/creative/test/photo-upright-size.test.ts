@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import { uprightPhotoDataUrl } from '../src/studio/photo-upright.js';
@@ -36,12 +37,12 @@ describe.skipIf(!file)('review of 2026-09-24: a 12 MP photo turned upright', () 
     const upright = await uprightPhotoDataUrl(inUrl, rsvg);
     const turnMs = Date.now() - t;
     t = Date.now();
-    await renderLayoutV2Async(layout(), { copyText: { 0: 'TITLE' }, photoDataUris: [inUrl], ...(rsvg || {}) });
+    await renderLayoutV2Async(layout(), { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: 'TITLE' }, photoDataUris: [inUrl], ...(rsvg || {}) });
     const renderJpegMs = Date.now() - t;
     t = Date.now();
     let renderUpright = '';
     try {
-      await renderLayoutV2Async(layout(), { copyText: { 0: 'TITLE' }, photoDataUris: [upright], ...(rsvg || {}) });
+      await renderLayoutV2Async(layout(), { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: 'TITLE' }, photoDataUris: [upright], ...(rsvg || {}) });
       renderUpright = `${Date.now() - t} ms`;
     } catch (err) {
       renderUpright = `FAILED after ${Date.now() - t} ms: ${String((err as Error).message).replace(/\/var\/folders\S+/, '<tmp>').slice(0, 160)}`;

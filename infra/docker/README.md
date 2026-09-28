@@ -115,17 +115,34 @@ its poller (worker `/health` reports `telegramPoller: misconfigured`), so with `
 nobody polls: set the token first.
 
 - Switch: set `HAWA_TELEGRAM_POLLER=worker` in `infra/docker/.env` (the compose interpolation file; a
-  value in `.env.production` is overridden by compose's `environment:` block), then deploy. Core stops
-  polling on its restart; the live worker colour starts polling once it has held the role for 30 s
-  (`HAWA_POLLER_TAKEOVER_MS`).
-- Roll back: set it to `core` (or remove it) and deploy again. Both pollers keep the offset in the same
-  Postgres row, so the other one carries on from there. Updates already queued in Restate still go to
-  Core's intake, which deduplicates them.
+  value in `.env.production` is overridden by compose's `environment:` block), then deploy. The deploy
+  starts Core with `core` still set, and recreates it with `worker` only after Restate has registered
+  the new worker colour (ADR-129); the new colour starts polling once it has held the role for 30 s
+  (`HAWA_POLLER_TAKEOVER_MS`). A deploy that fails before that leaves Core polling and says so ("NOTE:
+  Core was recreated by this deploy. Core polls Telegram (HAWA_TELEGRAM_POLLER=core). The switch to
+  worker waits for a registered worker colour"). If the new colour was kept (a switch Restate accepted
+  but could not confirm), the note adds that it may poll too. A Core container that does not exist yet
+  starts with `core` and changes the same way.
+- Roll back: set it to `core` (or remove it) and deploy again. This direction is not held: Core polls
+  from step 7, because the new colour is created with `core` and never polls, and the old colour stops
+  once Restate routes `ChatInbox` to the new one. Holding it, as the first version of ADR-129 did, left
+  nobody polling when `register` exited 4 with the new colour kept. Until then Core and the old colour
+  may both poll: Telegram refuses one of two concurrent `getUpdates` (409), both keep the offset in the
+  same Postgres row, and an update both hand on is one `ChatInbox` invocation; Core's intake
+  deduplicates what is already queued in Restate.
+- With `worker` set, Core still probes getMe (finding 3), so step 8 fails on `telegramApi: unreachable`
+  after the switch when Telegram does not answer Core. The switch stands: the new colour is registered
+  and polls, and the exit note says so ("The <colour> worker is registered").
 - The kill switch stops the worker's poller too: it reads the channel's `office-kill-switch` row in
   Postgres before every poll (cached 5 s), and asks Telegram for nothing while the switch is thrown or
   cannot be read.
 - Worker `/health` shows `telegramPoller`: `off`, `misconfigured` with the reason, or `on` with the
-  offset, the count handed on, the last poll and the last error.
+  offset, the count handed on, the last poll, the last error, the last poll that worked (`lastOkAt`)
+  and, when something is wrong, `problem`. The colour that polls reports itself `degraded` when its
+  poller did not start, when Telegram refuses the bot token (401/404), or when no poll has worked for
+  five minutes. Core probes the bot token with getMe whichever process polls, and its `/v1/health`
+  names the poller (`telegramPoller`); the watchdog alerts when that is `worker` and no running colour
+  is polling.
 
 ### Operating it
 
@@ -143,10 +160,25 @@ nobody polls: set the token first.
   service in `build`, `up` or `rm` works without `--profile`.
 - A switch that did not complete (deploy failed with "was NOT removed"): Restate holds the new colour
   and may already send it work. Read `GET /services` (admin API, from inside the Core container) to see
-  where each service goes. If every service is on the new colour, run `finish-drains` by hand. If some
-  service is still on the old one only (the new build dropped or renamed it), either ship a build that
-  hosts it and deploy again, or, once nothing needs that service any more, leave the old colour to
-  drain. Never remove a colour any service is routed to.
+  where each service goes. If every service is on the new colour, run `finish-drains` by hand. Never
+  remove a colour any service is routed to.
+- A build that does not host every service Restate routes to the worker (a rollback below the build
+  that added `ChatInbox`, `Delivery`, `TelegramSender`, `RequestLifecycle`, `DesignRun` or
+  `OfficeDecisionGateway`) is **not supported**. Restate never un-routes a service: registering such a
+  build moves only what it hosts, the old colour keeps the rest, the next deploy plans that colour as
+  the idle one, and `finish-drains --require-drained` keeps refusing, forward or back, so no worker
+  can be deployed again. Deploying another build does not get past that check (the earlier advice
+  here to "ship a build that hosts it and deploy again" could not work). `deploy.sh` therefore reads
+  the list of services from the built worker image itself (`apps/worker/dist/services.js`, in a
+  container without network) before step 7, and `restate-bluegreen.ts check-hosts` refuses a build that
+  lacks one while Core, the Desk and the worker still run the previous build (ADR-129). `register`
+  checks again with the new colour's own `/ready` list and refuses, before sending anything (exit 2:
+  nothing was registered, and the new colour is removed). A build that does not list its services,
+  which every build before Phase 2.1 is, or whose list could not be read (`--hosts unknown`), counts as
+  hosting `TaskWorkflow` and `TaskService` only. The `deploy.sh` of an older commit does not have this check: before
+  deploying an older commit, compare its `apps/worker/src/services.ts` with the current one. If the
+  services are already split between the colours (a deploy made without the check), no command in this
+  repository recovers it; it needs a decision on Restate's admin API, not a redeploy.
 - A colour that will not drain: look at what is pinned to it in the Restate UI or with
   `SELECT id, target, status, last_failure FROM sys_invocation WHERE pinned_deployment_id = '<id>' AND status <> 'completed'`.
   A suspended invocation waits for a timer or a promise; a paused one waits for a person (resume or

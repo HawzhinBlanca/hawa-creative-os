@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { withRlsContext } from '@hawa/db';
 import { globalFeedbackMiner } from '@hawa/creative';
-import { globalCostGovernor, KAAE_CLIENT_ID } from '@hawa/integrations';
+import { KAAE_CLIENT_ID } from '@hawa/integrations';
 import type { ClientDnaSnapshot, RouteContext } from './types.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { computeDnaHash } from '../core-helpers.js';
@@ -32,29 +32,14 @@ export function registerClientLearningRoutes(ctx: RouteContext): void {
   const defaultTenantId = DEFAULT_TENANT_ID;
   const operatorUserId = OPERATOR_USER_ID;
 
-  // --- Real-Time AI Generation Budget & Cost Controller (B-082, FR-079) ---
-  registerRoute('get', '/clients/budgets', (c: any) => {
-    const budgets = globalCostGovernor.getAllSummaries();
-    return c.json({ budgets, count: budgets.length }, 200);
-  });
-
-  registerRoute('get', '/clients/:clientId/budget', (c: any) => {
-    const clientId = c.req.param('clientId');
-    const budget = globalCostGovernor.getOrCreateClientBudget(clientId);
-    return c.json(budget, 200);
-  });
-
-  registerRoute('post', '/clients/:clientId/budget/allocate', async (c: any) => {
-    const auth = verifyRequestAuth(c);
-    if (!auth.authenticated) {
-      return problem(c, 401, 'Unauthorized', 'Authentication required to allocate client budget');
-    }
-    const clientId = c.req.param('clientId');
-    const body = await c.req.json().catch(() => ({}));
-    const capUsd = Number(body.capUsd || 10.0);
-    const updated = globalCostGovernor.allocateBudget(clientId, capUsd);
-    broadcast('client:budget_allocated', { clientId, capUsd });
-    return c.json(updated, 200);
+  // Seeded monthly fixture balances are not the paid-call ledger (ADR-102).
+  for (const [method, route] of [
+    ['get', '/clients/budgets'], ['get', '/clients/:clientId/budget'],
+    ['post', '/clients/:clientId/budget/allocate'],
+  ] as const) registerRoute(method, route, (c: any) => {
+    c.header('Cache-Control', 'no-store');
+    return problem(c, 410, 'Legacy Monthly Budget Retired',
+      'Use /v1/spending/policy for audited office, client and role daily limits and /v1/spending/calls for recorded cost evidence. Monthly fixture balances are not billing records.');
   });
 
   // --- Governed Learning & Studio Feedback Loop Miner (B-055, B-056, B-057) ---

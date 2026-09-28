@@ -1,0 +1,127 @@
+{
+  "checkedAt": "2026-09-27T03:22:02.792Z",
+  "sourceCommit": "be2b70c023720866221dc79e2501b4a886494f4b",
+  "scope": "Read-only deployment/provider prerequisites; no task, migration, approval, export, message or model call.",
+  "deployments": [
+    {
+      "project": "hawa-production",
+      "services": [
+        {
+          "service": "core",
+          "imageId": "sha256:513966bba4c0899d180d93632749c8b47e9f0d6fbae54856dd8ad6d758c5b433",
+          "commit": null,
+          "status": "running",
+          "health": "healthy"
+        },
+        {
+          "service": "desk",
+          "imageId": "sha256:fbaca066f4a79cbef4ee5614cf445f86bb39faa39d256749ccf9128e915714c4",
+          "commit": null,
+          "status": "running",
+          "health": "healthy"
+        },
+        {
+          "service": "worker-blue",
+          "imageId": "sha256:3ea410c10ab4f6dd62527a66d2c4be29b168fff95bad0ffeadd89ac32abd2764",
+          "commit": null,
+          "status": "running",
+          "health": "healthy"
+        }
+      ]
+    },
+    {
+      "project": "hawa-chaos",
+      "services": [
+        {
+          "service": "core",
+          "imageId": "sha256:b5696695a9429e47e77b4ca57954651e72d9f6390acfe7ddc7bd4f1af5d85b0b",
+          "commit": "a3de8c31c14fbcc4a931723fa9d7948f586d1d44",
+          "status": "running",
+          "health": "healthy"
+        },
+        {
+          "service": "desk",
+          "imageId": "sha256:8ff9ee95bdd402301d8be3702c090dc4a7fca88d2ebd134925aba18651c294d5",
+          "commit": "a3de8c31c14fbcc4a931723fa9d7948f586d1d44",
+          "status": "running",
+          "health": "healthy"
+        },
+        {
+          "service": "worker-blue",
+          "imageId": "sha256:e1c4e24914d83d5522951a4d0dd0ccfeba1a80d1a6a4af17d16127a80f649077",
+          "commit": "a3de8c31c14fbcc4a931723fa9d7948f586d1d44",
+          "status": "running",
+          "health": "healthy"
+        }
+      ]
+    }
+  ],
+  "configuration": {
+    "namedGoogleReviewConfigured": false,
+    "googleOidcFieldsPresent": {
+      "HAWA_GOOGLE_OIDC_CLIENT_ID": false,
+      "HAWA_GOOGLE_OIDC_CLIENT_SECRET": false,
+      "HAWA_GOOGLE_OIDC_REDIRECT_URI": false,
+      "HAWA_GOOGLE_OIDC_HOSTED_DOMAINS": false
+    },
+    "canvaFieldsPresent": {
+      "CANVA_CLIENT_ID": true,
+      "CANVA_CLIENT_SECRET": true,
+      "CANVA_REDIRECT_URI": true,
+      "CANVA_TOKEN_ENCRYPTION_KEY": true
+    }
+  },
+  "tablesPresent": {
+    "schema_upgrades": true,
+    "office_review_assignments": false,
+    "office_oidc_flows": false,
+    "canva_connections": true,
+    "canva_review_checkpoints": false,
+    "requests": false,
+    "model_call_reservations": false
+  },
+  "schema": {
+    "applied": 22,
+    "required": 46,
+    "latestApplied": "022_publication_executor.sql",
+    "missing": [
+      "023_request_lifecycle_projection.sql",
+      "024_paid_model_health_observations.sql",
+      "025_nullable_nonapproval_qa.sql",
+      "026_publication_task_reconciliation_index.sql",
+      "027_drive_upload_reservations.sql",
+      "028_studio_call_admission.sql",
+      "029_studio_provider_receipt_provenance.sql",
+      "030_studio_call_receipt_immutability.sql",
+      "031_task_delivery_executor_pin.sql",
+      "032_lifecycle_photo_retention.sql",
+      "033_lifecycle_revision_photo_retention.sql",
+      "034_request_lifecycle_rejection.sql",
+      "035_office_oidc_sessions.sql",
+      "036_office_oidc_subject_lookup.sql",
+      "037_office_review_assignments.sql",
+      "038_office_review_assignment_audit.sql",
+      "039_office_review_return.sql",
+      "040_lifecycle_album_retention.sql",
+      "041_client_documents.sql",
+      "042_document_knowledge.sql",
+      "043_lifecycle_source_retention.sql",
+      "044_voice_source_admission.sql",
+      "045_canva_review_checkpoints.sql",
+      "046_canva_export_policy.sql"
+    ],
+    "changed": []
+  },
+  "clientDnaCounts": {
+    "count": "4"
+  },
+  "health": {
+    "errorClass": "SyntaxError"
+  },
+  "canvaConnection": {
+    "httpStatus": 200,
+    "configured": true,
+    "authorized": true,
+    "status": "active"
+  }
+}

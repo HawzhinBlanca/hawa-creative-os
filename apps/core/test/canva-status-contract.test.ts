@@ -26,12 +26,12 @@ describe('Core answers the worker\'s canva-status reports as recorded', () => {
   afterAll(() => db.destroy());
   afterEach(() => vi.restoreAllMocks());
 
-  const telegramTask = async (studioOptions?: Record<string, unknown>) =>
+  const telegramTask = async (studioOptions?: Record<string, unknown>, sourceChannelId?: string) =>
     (
       await persistChatIntake(db, {
         platform: 'telegram',
         sourceEventId: randomUUID(),
-        sourceChannelId: String(9_000_000_000 + Math.floor(Math.random() * 999_999_999)),
+        sourceChannelId: sourceChannelId || String(9_000_000_000 + Math.floor(Math.random() * 999_999_999)),
         clientId: 'c1000000-0000-4000-8000-000000000002',
         title: 'KAAE: contract',
         rawText: 'Launch announcement\n---\nStandards Framework 2.0',
@@ -88,8 +88,9 @@ describe('Core answers the worker\'s canva-status reports as recorded', () => {
   });
 
   it('tells nobody about a task that only carries a reference image for another request', async () => {
-    const other = await telegramTask();
-    const photoTask = await telegramTask({ referenceFor: other });
+    const chat = String(9_000_000_000 + Math.floor(Math.random() * 999_999_999));
+    const other = await telegramTask(undefined, chat);
+    const photoTask = await telegramTask({ referenceFor: other }, chat);
     await expectAnswer(await report(core(), photoTask, contract.requests.manualDesignToldAtIntake), 'referenceForAnotherRequest');
   });
 

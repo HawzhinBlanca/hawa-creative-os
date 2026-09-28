@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import { EvaluationRunner } from '../src/runner.js';
+import type { RequestContext, StructuredModelRequest } from '@hawa/contracts';
 import { FakeModelGateway } from '@hawa/testkit';
 import { LiveRunner } from '../src/design-studio/live-runner.js';
 import { generateMarkdownReport } from '../src/design-studio/report-generator.js';
@@ -11,8 +12,8 @@ import { verifyReleaseManifest } from '../../../scripts/verify_release_manifest.
 describe('Proof Machinery Negative Controls & Qualification Honesty (W01)', () => {
   it('strictly rejects decisions missing required client and project identity', async () => {
     class MissingIdentityGateway extends FakeModelGateway {
-      async generateStructured(ctx: any, req: any) {
-        const result = await super.generateStructured(ctx, req);
+      async generateStructured<T>(ctx: RequestContext, req: StructuredModelRequest) {
+        const result = await super.generateStructured<T>(ctx, req);
         if (result.ok && result.value?.value) {
           result.value.value = {
             decision: (result.value.value as any).decision,

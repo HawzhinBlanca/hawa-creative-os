@@ -1,0 +1,133 @@
+{
+  "date": "2026-09-28",
+  "status": "LOCAL_RETAINED_SERIAL_RESULTS_QUALIFIED_NOT_FULL_GOAL_OR_RELEASE",
+  "base_commit": "fa65ff15",
+  "branch": "codex/research-grade-design-system",
+  "adr": "111",
+  "requirements": [
+    "NFR-001",
+    "NFR-014",
+    "FR-079"
+  ],
+  "source_files": [
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "dd28a2885179f74c2fa12d6ab335cc74e8051b13d2b4160e65e302f09bf8fb7e"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/types.ts",
+      "sha256": "0adb87aeb199284d1ffc960eda2261bd878232f66d3f25746f59b948487804a6"
+    },
+    {
+      "path": "packages/creative/src/studio/gemini-image-provider.ts",
+      "sha256": "e26aef267f22e651b0de1ed070916309d31b2edf8836bd46f29d3aa6f1557d32"
+    },
+    {
+      "path": "packages/db/src/repositories/design-studio.repository.ts",
+      "sha256": "f91b4086f84216a8093f3c03f082bdf85e43bd3e9ed6d3868885889bb6d7a9ed"
+    },
+    {
+      "path": "packages/db/src/types.ts",
+      "sha256": "ad5486ae105972e9326cbe4bf31a684fa1c4e6c47f0a5188b3ef5a5c63814363"
+    },
+    {
+      "path": "packages/db/migrations/061_studio_retained_results.sql",
+      "sha256": "7b6d22c84c4875938e1dc601286a3b3adab43383b4d5e6fce8e0dadbb566f775"
+    },
+    {
+      "path": "apps/core/test/studio-retained-replay.test.ts",
+      "sha256": "89d5ec934ae66c068d4c4f0083cf944131597dc7c8b3b852f9e783f250e16a1a"
+    },
+    {
+      "path": "packages/db/test/studio-retained-results.test.ts",
+      "sha256": "d541ab6c257d95667c231f389e9d4dc72eaf19ca6a98ccbf993737d61d13e807"
+    },
+    {
+      "path": "packages/db/test/schema-upgrade.test.ts",
+      "sha256": "18d81ee7b61ac4d2de631efc57c4d3eaa68227e37b0390135ea8ee3248329948"
+    }
+  ],
+  "checks": [
+    {
+      "kind": "affected-acceptance",
+      "files": 6,
+      "passed": 45,
+      "failed": 0,
+      "skipped": 0,
+      "evidence": "output/acceptance/2026-09-28-retained-results/final.log"
+    },
+    {
+      "kind": "source-types",
+      "passed": true,
+      "evidence": "output/acceptance/2026-09-28-retained-results/source-types.log"
+    },
+    {
+      "kind": "script-types",
+      "passed": true,
+      "evidence": "output/acceptance/2026-09-28-retained-results/script-types.log"
+    },
+    {
+      "kind": "strict-test-types",
+      "roots": 518,
+      "passed": true,
+      "evidence": "output/acceptance/2026-09-28-retained-results/test-types.log"
+    },
+    {
+      "kind": "any-ratchet",
+      "passed": true,
+      "evidence": "output/acceptance/2026-09-28-retained-results/any.log"
+    },
+    {
+      "kind": "provider-egress",
+      "passed": true,
+      "existing_exceptions": 9,
+      "evidence": "output/acceptance/2026-09-28-retained-results/egress.log"
+    },
+    {
+      "kind": "security",
+      "secrets": 0,
+      "justified_exceptions": 53,
+      "evidence": "output/acceptance/2026-09-28-retained-results/security.log"
+    },
+    {
+      "kind": "blueprint-validation",
+      "passed": 1061,
+      "warnings": 0,
+      "failed": 0,
+      "evidence": "output/acceptance/2026-09-28-retained-results/pack.log"
+    },
+    {
+      "kind": "manifest-refresh",
+      "entries": 455,
+      "sha256sum_lines": 457,
+      "evidence": "output/acceptance/2026-09-28-retained-results/manifest.log"
+    }
+  ],
+  "qualified_behaviors": [
+    "Atomic successful receipt and validated result retention; failed retention rolls back receipt finalization",
+    "Fresh application-role public resume after injected receipt-to-snapshot failure, at maxCalls, without provider transport or repeated spending",
+    "Empty historical stage arrays normalize; repository-created runs initialize an object so named brief data persists",
+    "Exact request/stage/provider/model matching; changed derivation holds with MODEL_STAGE_REPLAY_UNSAFE",
+    "Cancellation checked before reuse; original uncertain and legacy paid records without content retain holds",
+    "Image and verifier reuse through a fresh connection; interruption before verification reuses image and admits only the missing verifier",
+    "Immutable runtime-role tenant/client-scoped content; ordinary call lists reveal only availability",
+    "SHA-256 verified private blobs rooted against GC; bounded bytea fallback only when no store configured; corrupt/missing bytes refuse recovery",
+    "61 migrations verified under concurrent upgrade retries"
+  ],
+  "initial_failures": {
+    "notes": "Implementation-first tests; no claim that all new tests were run against prior source. Initial DB test had a wrong SQL function-column name. Initial replay test exposed a genuine stage-array persistence defect and a wrong task-state fixture. Follow-up client-scope fixture used a nonexistent role; corrected to designer. Initial compile caught MIME union and budget-field type errors; corrected before final checks.",
+    "evidence": [
+      "output/acceptance/2026-09-28-retained-results/initial-db.log",
+      "output/acceptance/2026-09-28-retained-results/initial-replay.log",
+      "output/acceptance/2026-09-28-retained-results/corrected-fixtures.log"
+    ]
+  },
+  "limits": [
+    "Synthetic provider responses; no paid provider calls or measured invoice savings",
+    "Injected exceptions plus fresh service/connection, not actual OS process kill or backup/restore",
+    "Ordered serial prefix only: persisted rebrief branch changes and interleaved failures may safely hold",
+    "Parity reruns, branch-aware substep checkpoints, pinned derivations and safe concurrency remain open",
+    "No current runtime deployment, full release suite, native Canva qualification or human-quality comparison",
+    "Full six-package implementation goal remains active"
+  ]
+}

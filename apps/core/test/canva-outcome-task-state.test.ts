@@ -80,6 +80,27 @@ describe('a Canva outcome moves the task truthfully and tells the requester plai
     expect(await qcRuns(taskId)).toHaveLength(1);
   });
 
+  it('binds the notification link to the stored revision and keeps it on outbox replay', async () => {
+    const taskId = await telegramTask(channel());
+    const { telegramBridge, sent } = bridge();
+    const app = createApp({ db, telegramBridge } as any);
+    const payload = { status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', designId: 'DAGreviewlink01',
+      reviewUrl: 'https://outside.test/forged', revisionId: randomUUID() };
+    vi.stubEnv('PUBLIC_TUNNEL_URL', 'https://desk.example.test');
+    try {
+      expect((await notify(app, taskId, payload)).status).toBe(200);
+      const revisionId = (await taskRow(taskId)).current_design_revision_id;
+      expect(sent).toHaveLength(1);
+      expect(sent[0].message.text).toContain(`https://desk.example.test/#/work?task=${taskId}&amp;revision=${revisionId}`);
+      expect(sent[0].message.text).not.toContain('outside.test');
+      expect(sent[0].message.reply_markup.inline_keyboard.at(-1)[0].url)
+        .toBe(`https://desk.example.test/#/work?task=${taskId}&revision=${revisionId}`);
+      vi.stubEnv('PUBLIC_TUNNEL_URL', 'https://changed.example.test');
+      expect((await notify(app, taskId, payload)).status).toBe(200);
+      expect(sent).toHaveLength(1);
+    } finally { vi.unstubAllEnvs(); }
+  });
+
   it('moves a failed run to OPERATOR_REQUIRED, keeps the code in the history, and tells the requester in plain words', async () => {
     const taskId = await telegramTask(channel());
     const { telegramBridge, sent } = bridge();

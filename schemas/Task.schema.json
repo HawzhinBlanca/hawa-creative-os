@@ -23,6 +23,18 @@
         }
       ]
     },
+    "requestId": {
+      "description": "Persisted RequestLifecycle owner; null for a legacy task.",
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "projectId": {
       "oneOf": [
         {
@@ -99,7 +111,9 @@
         "REVISION_REQUESTED",
         "APPROVED",
         "PUBLISHING",
+        "ARCHIVE_RECONCILIATION",
         "PUBLISH_RECONCILIATION",
+        "REQUESTER_SEND_RECONCILIATION",
         "COMPLETE",
         "PAUSED",
         "OPERATOR_REQUIRED",

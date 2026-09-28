@@ -1,0 +1,121 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (25 ms)
+ ❯ apps/core/test/operations-evidence.test.ts (3 tests | 3 failed) 51ms
+   × reports unmeasured production availability without substituting a fake benchmark 24ms
+   × refuses synthetic publication through the operational probe endpoint 22ms
+   × retires sample monthly budget inspection and mutation without changing stored governor state 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/operations-evidence.test.ts > reports unmeasured production availability without substituting a fake benchmark
+AssertionError: expected { Object (summary, recentProbes) } to match object { schemaVersion: 1, …(3) }
+(13 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "availability": {
+-     "observationCount": 0,
+-     "observedPercent": null,
+-     "sloCompliant": null,
+-     "targetPercent": 99.5,
++   "recentProbes": [],
++   "summary": {
++     "circuitBreakers": [
++       {
++         "consecutiveFailures": 0,
++         "name": "google",
++         "state": "CLOSED",
++         "totalTrips": 0,
++       },
++       {
++         "consecutiveFailures": 0,
++         "name": "anthropic",
++         "state": "CLOSED",
++         "totalTrips": 0,
++       },
++       {
++         "consecutiveFailures": 0,
++         "name": "openai",
++         "state": "CLOSED",
++         "totalTrips": 0,
++       },
++       {
++         "consecutiveFailures": 0,
++         "name": "local",
++         "state": "CLOSED",
++         "totalTrips": 0,
+        },
+-   "evidenceKind": "unmeasured",
+-   "latency": {
+-     "observationCount": 0,
+-     "p50Ms": null,
+-     "p95Ms": null,
+-     "p99Ms": null,
++     ],
++     "errorBudgetRemaining": null,
++     "failedProbes": 0,
++     "p50DurationMs": null,
++     "p95DurationMs": null,
++     "p99DurationMs": null,
++     "sloCompliant": null,
++     "successRate": null,
++     "successfulProbes": 0,
++     "targetP99Ms": 1500,
++     "totalProbes": 0,
+    },
+-   "schemaVersion": 1,
+  }
+
+ ❯ apps/core/test/operations-evidence.test.ts:11:25
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  apps/core/test/operations-evidence.test.ts > refuses synthetic publication through the operational probe endpoint
+AssertionError: expected 201 to be 410 // Object.is equality
+
+- Expected
++ Received
+
+- 410
++ 201
+
+ ❯ apps/core/test/operations-evidence.test.ts:17:19
+     15|  const app=createAppWithClientFixtures({testAuth:{principal:{role:'adm…
+     16|  const r=await app.request('/v1/operations/slo/run',{method:'POST',hea…
+     17|  expect(r.status).toBe(410);expect(probe).not.toHaveBeenCalled();
+       |                   ^
+     18| });
+     19| it('retires sample monthly budget inspection and mutation without chan…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  apps/core/test/operations-evidence.test.ts > retires sample monthly budget inspection and mutation without changing stored governor state
+AssertionError: expected 200 to be 410 // Object.is equality
+
+- Expected
++ Received
+
+- 410
++ 200
+
+ ❯ apps/core/test/operations-evidence.test.ts:23:20
+     21|  for(const [path,method] of [['/clients/budgets','GET'],['/clients/cli…
+     22|   const r=await app.request('/v1'+path,{method,headers:{'Content-Type'…
+     23|   expect(r.status).toBe(410);expect((await r.json()).detail).toContain…
+       |                    ^
+     24|  }
+     25|  expect(JSON.stringify(globalCostGovernor.exportState())).toBe(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  16:34:04
+   Duration  1.62s (transform 1.03s, setup 43ms, import 1.38s, tests 51ms, environment 0ms)
+

@@ -47,9 +47,11 @@ export function registerClientsRoutes(ctx: RouteContext) {
       try {
         const rows = await withRlsContext(db, { tenantId, userId: auth.userId || operatorUserId, role: auth.role || 'administrator' }, (trx) =>
           trx.selectFrom('client_dna_versions as v')
+            .innerJoin('clients as client', join => join.onRef('client.id', '=', 'v.client_id').onRef('client.tenant_id', '=', 'v.tenant_id'))
             .select((eb) => [
               'v.client_id',
               'v.dna',
+              'v.version',
               eb.selectFrom('client_dna_versions as all_v')
                 .select((inner) => inner.fn.countAll<string>().as('n'))
                 .whereRef('all_v.client_id', '=', 'v.client_id')
@@ -58,10 +60,12 @@ export function registerClientsRoutes(ctx: RouteContext) {
             ])
             .where('v.tenant_id', '=', tenantId)
             .where('v.status', '=', 'active')
+            .where('client.status', '=', 'active')
+            .orderBy('client.name').orderBy('client.id')
             .execute());
         const list = rows.flatMap((row) => {
           const dna = (typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna) as ClientDNA | null;
-          return dna && typeof dna === 'object' ? [listed({ ...dna, clientId: dna.clientId || row.client_id }, Number(row.versions ?? 0))] : [];
+          return dna && typeof dna === 'object' ? [listed({ ...dna, clientId: row.client_id, version: row.version, status: 'active' }, Number(row.versions ?? 0))] : [];
         });
         return c.json(list, 200);
       } catch (err) {
@@ -97,7 +101,7 @@ export function registerClientsRoutes(ctx: RouteContext) {
           });
           if (row && row.dna) {
             const parsed = typeof row.dna === 'string' ? JSON.parse(row.dna) : row.dna;
-            return c.json(parsed);
+            return c.json({ ...parsed, clientId: targetId, tenantId, version: row.version });
           }
         }
       } catch {

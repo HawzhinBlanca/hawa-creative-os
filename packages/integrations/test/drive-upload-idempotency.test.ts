@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PackageFile, PublishRequest, RequestContext } from '@hawa/contracts';
-import { GooglePublisher } from '../src/google-publisher.js';
+import { DriveUploadIdentityConflict, GooglePublisher, type DriveUploadIdentityStore } from '../src/google-publisher.js';
 import { startFakeDrive, type FakeDrive } from './fake-drive.js';
 
 /**
@@ -47,7 +47,130 @@ const request = (files: PackageFile[], key = 'pub-idem'): PublishRequest => ({
 /** A process that has just started: no memory of anything. */
 const freshProcess = () => new GooglePublisher({ oauthToken: 'live-token', driveApiBaseUrl: fake.base, driveUploadBaseUrl: fake.base, sheetsApiBaseUrl: fake.base });
 
+function sharedReservations(): DriveUploadIdentityStore {
+  const rows = new Map<string, { id: string; fingerprint: string }>();
+  return { async reserve(identity, allocate) {
+    const key = `${identity.tenantId}:${identity.publicationKey}:${identity.artifactId}`;
+    const fingerprint = JSON.stringify([identity.taskId, identity.packageHash, identity.folderId,
+      identity.filename, identity.mimeType, identity.sha256]);
+    let row = rows.get(key);
+    if (!row) {
+      const id = await allocate();
+      row = rows.get(key);
+      if (!row) { row = { id, fingerprint }; rows.set(key, row); }
+    }
+    if (row.fingerprint !== fingerprint) throw new DriveUploadIdentityConflict('Changed publication identity');
+    return row.id;
+  } };
+}
+
+const reservedProcess = (store: DriveUploadIdentityStore) => new GooglePublisher({ oauthToken: 'live-token',
+  driveApiBaseUrl: fake.base, driveUploadBaseUrl: fake.base, sheetsApiBaseUrl: fake.base,
+  uploadIdentityStore: store });
+
 describe('Drive delivery: one logical delivery, one file', () => {
+  it('two publisher processes race on one reserved ID and leave one Drive file', async () => {
+    const store = sharedReservations();
+    fake.fault.uploadDelayMs = 30;
+    const req = request([file('approved poster bytes')]);
+    const [first, second] = await Promise.all([
+      reservedProcess(store).publish(ctx, req), reservedProcess(store).publish(ctx, req),
+    ]);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(fake.files).toHaveLength(1);
+    expect(fake.uploadsReceived).toBe(2);
+    expect(first.value.driveFiles[0].fileId).toBe(second.value.driveFiles[0].fileId);
+    expect(first.value.driveFiles[0].verified).toBe(true);
+    expect(second.value.driveFiles[0].verified).toBe(true);
+  });
+
+  it('a lost upload reply and delayed search retry the same ID without a second file', async () => {
+    const store = sharedReservations();
+    const req = request([file('approved poster bytes')]);
+    fake.fault.dropUploadReply = 1;
+    const first = await reservedProcess(store).publish(ctx, req);
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.error).toMatchObject({ code: 'DRIVE_UPLOAD_UNCERTAIN', retryable: true });
+    expect(fake.files).toHaveLength(1);
+    fake.fault.hideSearches = 1;
+
+    const retry = await reservedProcess(store).publish(ctx, req);
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    expect(retry.value.driveFiles[0]).toMatchObject({ fileId: fake.files[0].id, verified: true });
+    expect(fake.uploadsReceived).toBe(2);
+    expect(fake.generatedIdsIssued).toBe(1);
+    expect(fake.files).toHaveLength(1);
+  });
+
+  it('does not call an uploaded file absent when its independent readback is unavailable', async () => {
+    const store = sharedReservations();
+    const req = request([file('approved poster bytes')]);
+    fake.fault.readbackStatus = 503;
+    const first = await reservedProcess(store).publish(ctx, req);
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.error.code).toBe('DRIVE_READBACK_FAILED');
+    expect(fake.files).toHaveLength(1);
+    fake.fault.readbackStatus = 0;
+    fake.fault.hideSearches = 1;
+
+    const retry = await reservedProcess(store).publish(ctx, req);
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    expect(retry.value.driveFiles[0]).toMatchObject({ fileId: fake.files[0].id, verified: true });
+    expect(fake.files).toHaveLength(1);
+    expect(fake.generatedIdsIssued).toBe(1);
+  });
+
+  it('never caches an unverified upload as a successful publication', async () => {
+    const store = sharedReservations();
+    const publisher = reservedProcess(store);
+    const req = request([file('approved poster bytes')]);
+    fake.fault.readbackChecksum = 'f'.repeat(64);
+    const first = await publisher.publish(ctx, req);
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.error.code).toBe('DRIVE_VERIFICATION_FAILED');
+    expect(fake.files).toHaveLength(1);
+    fake.fault.readbackChecksum = undefined;
+
+    const retry = await publisher.publish(ctx, req);
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    expect(retry.value.driveFiles[0]).toMatchObject({ fileId: fake.files[0].id, verified: true });
+    expect(fake.uploadsReceived).toBe(1);
+  });
+
+  it('refuses a conflicting reserved file on retry even when Drive search is delayed', async () => {
+    const store = sharedReservations();
+    const req = request([file('approved poster bytes')]);
+    const first = await reservedProcess(store).publish(ctx, req);
+    expect(first.ok).toBe(true);
+    expect(fake.files).toHaveLength(1);
+    fake.files[0].properties.packageHash = 'another-publication';
+    fake.fault.hideSearches = 1;
+
+    const retry = await reservedProcess(store).publish(ctx, req);
+    expect(retry.ok).toBe(false);
+    if (retry.ok) return;
+    expect(retry.error.code).toBe('DRIVE_READBACK_FAILED');
+    expect(fake.files).toHaveLength(1);
+  });
+
+  it('does not upload when the durable ID cannot be reserved', async () => {
+    const unavailable: DriveUploadIdentityStore = {
+      reserve: async () => { throw new Error('reservation store unavailable'); },
+    };
+    const result = await reservedProcess(unavailable).publish(ctx, request([file('approved poster bytes')]));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('DRIVE_RESERVATION_FAILED');
+    expect(fake.uploadsReceived).toBe(0);
+  });
   it('a restart after a successful delivery adopts the file instead of uploading it again', async () => {
     const f = file('approved poster bytes');
     const first = await freshProcess().publish(ctx, request([f]));
@@ -65,14 +188,10 @@ describe('Drive delivery: one logical delivery, one file', () => {
   it('an upload whose reply was lost is found by the next process, not repeated', async () => {
     const f = file('approved poster bytes');
     fake.fault.dropUploadReply = 1;
-    let firstOutcome: 'threw' | 'failed' | 'ok' = 'ok';
-    try {
-      const first = await freshProcess().publish(ctx, request([f]));
-      firstOutcome = first.ok ? 'ok' : 'failed';
-    } catch {
-      firstOutcome = 'threw';
-    }
-    expect(firstOutcome).not.toBe('ok');
+    const first = await freshProcess().publish(ctx, request([f]));
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.error).toMatchObject({ code: 'DRIVE_UPLOAD_UNCERTAIN', retryable: false });
     expect(fake.files).toHaveLength(1); // Drive kept the file although nobody was told
 
     const second = await freshProcess().publish(ctx, request([f]));
@@ -107,12 +226,33 @@ describe('Drive delivery: one logical delivery, one file', () => {
 
   it('uploads a changed revision of the same artifact beside the old one, and adopts neither wrongly', async () => {
     await freshProcess().publish(ctx, request([file('revision one')], 'pub-rev-1'));
-    const second = await freshProcess().publish(ctx, request([file('revision two, edited in Canva')], 'pub-rev-2'));
+    const revised = request([file('revision two, edited in Canva')], 'pub-rev-2');
+    revised.packageHash = 'revised-package-hash';
+    const second = await freshProcess().publish(ctx, revised);
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(fake.files).toHaveLength(2);
     expect(second.value.driveFiles[0].fileId).toBe('file_2');
     expect(second.value.driveFiles[0].verified).toBe(true);
+  });
+
+  it('refuses a changed file under the same package hash without uploading a second copy', async () => {
+    await freshProcess().publish(ctx, request([file('revision one')], 'pub-rev-1'));
+    const second = await freshProcess().publish(ctx, request([file('revision two')], 'pub-rev-2'));
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.error.code).toBe('DRIVE_ARTIFACT_CONFLICT');
+    expect(fake.uploadsReceived).toBe(1);
+    expect(fake.files).toHaveLength(1);
+  });
+
+  it('refuses two existing copies of the same package and artifact', async () => {
+    const f = file('approved poster bytes');
+    await freshProcess().publish(ctx, request([f]));
+    fake.files.push({ ...fake.files[0], id: 'accidental-copy' });
+    const second = await freshProcess().publish(ctx, request([f]));
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.error.code).toBe('DRIVE_ARTIFACT_CONFLICT');
+    expect(fake.uploadsReceived).toBe(1);
   });
 
   it("does not adopt a stranger's file that merely has the same name and size", async () => {

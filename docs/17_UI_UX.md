@@ -55,6 +55,26 @@ Required affordances:
 - cost/latency/provenance collapsible—not cluttering primary review;
 - safe next action on every blocked state.
 
+Studio spending uses cumulative call-ledger totals, including checks after Canva
+transfer. Display recorded estimates, additional administrator-reported cost,
+unknown costs, admitted call count and admission refusal separately. Missing
+accounting is unavailable, never an invented zero or default cap. Also display
+funds reserved for unfinished/estimated calls and remaining funds. Every new call
+must fit its conservative reservation within that remainder before transport.
+Provider billing can differ from the quote; an overrun blocks further calls for
+pricing review. Preserve original snapshots and receipts. See ADRs 088/091 and
+runbooks/STUDIO_RECOVERY.md.
+
+The Studio spending panel also shows office, client and model-role daily limits,
+recorded charges, held obligations and remaining allocations in the Asia/Baghdad
+office day (ADR-092). It distinguishes the run balance from the daily balances,
+flags historical accounting gaps and exposes no other client identifiers. These
+now aggregate Studio, fixture evaluation and retained-voice calls (ADR-096).
+The evaluation Calls panel also shows shared daily balances and each original
+daily allocation, separately from actual usage and the gateway request bound.
+Other provider paths still require integration. A blocked voice admission keeps
+the original audio and manual copy-review flow available.
+
 ## 5. Client DNA screen
 
 Tabs:
@@ -134,3 +154,137 @@ Users can choose Hawa Desk, Telegram, WhatsApp, or email notification routes, bu
 ## 11. Wireframes
 
 Browser-viewable wireframes are provided in `ui/wireframes.html`. They define information architecture and interactions, not final visual branding.
+
+
+Evaluation call receipts distinguish the original request cost bound and output
+cap from an estimate based on reported usage (ADR-093). Missing usage remains
+unknown, including historical receipts whose usage completeness was not recorded.
+An observed overrun stays visible beside the original bound. The displayed request
+bound does not imply that evaluation has joined the office's durable allocation.
+
+
+### Exact-call cost evidence (ADR-097, 2026-09-27)
+
+A named administrator can append snapshot-bound terminal cost evidence for an
+exact Studio, evaluation or retained-voice call, including completed replies with
+missing billing data. SQL verifies current authority, source identity, revision,
+terminal evidence and the observed snapshot under parent/source and office locks.
+Original receipts and all earlier attestations remain immutable. Shared daily and
+Studio run admission retain the highest original, settled or attested cost; unused
+reservations can then be released. A late receipt preserves any higher charge and
+shows disagreement. Accounting does not clear execution holds or replay paid work.
+Desk Operations shows paginated original costs, reserved amounts, attributed
+history and conflicts. Unknown cost remains unknown; evidence files stay local.
+See runbooks/CALL_COST_ACCOUNTING.md. Live billing, policy administration and typed
+result recovery retain separate acceptance gates.
+
+
+### Named daily budget administration (ADR-098, 2026-09-27)
+
+Desk Operations exposes the existing shared office/client/role spending policy,
+consistent current-day ledger usage and paginated revision history. Only a current
+named administrator can append a policy after reviewing old and proposed limits
+and supplying a reason. SQL checks session, tenant, actor, version and limits hash
+under the same short lock as paid admissions. Runtime direct table writes remain
+denied. The database records human identity separately from its connection identity;
+historical owner revisions do not acquire fabricated human attribution.
+
+Limits use nonnegative whole micro-dollars, including an explicit zero stop.
+Removing a client or role override restores the displayed default. Lowering a cap
+retains existing obligations; raising one never clears uncertain execution or
+missing history. The fixed Asia/Baghdad day and current ledger accounting remain.
+Desk retains an exact action scoped to the office and user before POST and retries
+it after an uncertain answer or remount. Replay rechecks authority and returns the
+original receipt before checking whether newer policy revisions exist. See
+runbooks/SPENDING_POLICY.md. Other paid paths and live admission remain open.
+
+
+### Source-bound fixture evidence (ADR-099, 2026-09-27)
+
+Saved fixture reports identify corpus bytes by SHA-256 and individual cases as
+passed, failed, not executed or unreported. Missing visual rubric scores cannot
+be replaced by numeric defaults; incomplete scoring has no aggregate pass rate.
+The replay protocol is v3. Completed legacy reports remain immutable and can
+supply only their recorded aggregates, not reconstructed per-case outcomes.
+
+Desk selects a saved run explicitly and matches case evidence to the exact corpus
+identity. Dataset counts are measured from validated files, not fixture constants.
+Browsing RTL definitions does not run the RTL corpus. Suite counts, call models,
+latency and timestamps come from retained evidence. Candidate ranking, native
+editability, canary results and human scores remain unknown unless independently
+measured. Reading these views sends no generation request. Existing retained-action
+retry, shared spending, and named settlement boundaries remain authoritative.
+
+
+### Durable paid health probes (ADR-100, 2026-09-27)
+
+Scheduled OpenAI health probes reserve their exact bounded request against the
+shared office and `health_probe` role allowance before transport. PostgreSQL
+serializes admission across Core instances and restarts, enforcing the longer of
+the previous/current intervals and retaining uncertain calls across configuration
+changes and midnight. Each attempt has a stable call ID, protocol, request hash,
+reservation/policy version and one immutable outcome with actual receipt metadata,
+latency and complete usage. Unknown facts remain null. Health GETs never dispatch.
+
+Timeouts, ambiguous HTTP failures, invalid successful receipts, model mismatches
+and bound overruns require reconciliation. A named administrator can append exact
+terminal cost evidence through existing Operations accounting. After the interval,
+this allows a new scheduled probe within current limits; it never replays the old
+call or converts financial evidence into provider health. Original observations
+remain immutable. Pre-ledger observations gain no fabricated costs. See
+runbooks/PAID_HEALTH_PROBES.md and R21_PAID_HEALTH_PROBES_PROOF.json for qualification.
+
+### Canva planner recovery (ADR-101)
+
+The task's Canva panel exposes retained layouts, original call IDs, missing cost
+evidence, resume, and retirement with a reason. Retirement preserves paid holds.
+Operations call accounting includes Canva planning and keeps original usage and
+named cost attestations separate. Resume uses a saved result; a fresh design is
+an explicit new request subject to current task authority and shared spending.
+
+### Operations evidence authority (ADR-102, 2026-09-27)
+
+Office intake/review availability targets 99.5% per calendar month. Without a
+durable independent observation series, observed availability, compliance and
+latency remain null. Fixture timings and local circuit breakers cannot establish
+production availability. The synthetic operational execution endpoint is retired.
+
+Operations uses the existing audited daily spending policy and original paid-call
+accounting. Legacy monthly fixture-budget routes return 410; no sample balance or
+monthly cap is converted into the daily ledger. Unknown telemetry stays unknown,
+failed reads clear prior successful results, and late older refreshes cannot
+replace newer evidence. Stored publication receipt audits show their scope,
+timestamp and anomalies; no-task audits are empty, not proof of external storage
+consistency. No audit claims to repair a drift or read live Drive/Sheets state.
+
+Private API responses are excluded from service-worker caching. Activation purges
+legacy Hawa API caches; Desk JSON requests use HTTP no-store. Offline shell/font
+caching does not authorize replay of task, policy or health data from another
+session or an older successful read (ADR-102 browser correction).
+
+Operations metric cards, component health and safe actions must remain reachable
+on narrow screens. Failure rows become labelled cards; inspection stays within
+the viewport. Browser qualification checks their actual bounds and the inspection
+interaction, followed by screenshot review. A document-width assertion alone does
+not detect children clipped by an overflow rule.
+
+### Scoped audit history and recovery (ADR-103, 2026-09-27)
+
+Operations shows the current actor/client scope, latest stored snapshot, bounded
+history and actual anomalies. A reason is required for a new audit. Save its exact
+UUID/scope/predecessor in browser session storage before transport, verify that
+write, and refuse dispatch if it fails. A lost response retains the same action
+across reload. Clearing it is an explicit local action and never changes database
+history. Refused or failed reads clear prior evidence; older responses cannot
+replace a newer authorized scope. Work not yet due for publication is displayed
+separately from confirmed delivery consistency. Reports remain after Core restart.
+
+### Availability evidence (ADR-104)
+
+Operations separates sampled office readiness from real workflow and creative
+quality. Its month selector reads authoritative observations with no-store transport.
+Show target, month completeness, current collector freshness, observation/receipt
+times, coverage, successful/failed/unknown/missing slots, uncertainty bounds and
+successful readiness-probe latency. No samples means unknown measurements. Failed,
+malformed or mismatched-month reads clear earlier evidence; stale replies cannot
+replace a newer selection. Never turn partial coverage into a compliant month.

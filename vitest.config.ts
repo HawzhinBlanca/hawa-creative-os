@@ -92,6 +92,11 @@ export default defineConfig({
       HAWA_SPEND_STATE_DIR: spendStateDir,
       HAWA_BLOB_DIR: blobDir,
       HAWA_RETRY_DELAY_MS: '10',
+      // Tests must opt into a mocked provider explicitly. Never inherit an office key and make a
+      // paid, nondeterministic classifier or image call from the local test process.
+      OPENAI_API_KEY: '',
+      ANTHROPIC_API_KEY: '',
+      GEMINI_API_KEY: '',
       HISTORICAL_DESIGNS_ARCHIVE_ROOT: resolve(import.meta.dirname, 'node_modules/.cache/historical-designs-test'),
       HAWA_EMULATE_PUBLISHER: 'true',
       // Core logs a line per request (apps/core/src/logging.ts); thousands of them would bury failures.

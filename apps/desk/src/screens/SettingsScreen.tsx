@@ -1,4 +1,5 @@
 import { CanvaConnectionPanel } from '../components/CanvaConnectionPanel.js';
+import { ReviewerAssignmentsPanel } from '../components/ReviewerAssignmentsPanel.js';
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../api/client.js';
 import {
@@ -358,6 +359,8 @@ export const SettingsScreen: React.FC = () => {
         </div>
       </div>
 
+      <ReviewerAssignmentsPanel />
+
       {/* Admission Inspector Modal */}
       {activeModal === 'admission' && (
         <div
@@ -544,4 +547,3 @@ export const SettingsScreen: React.FC = () => {
     </section>
   );
 };
-

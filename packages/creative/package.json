@@ -11,9 +11,10 @@
     }
   },
   "scripts": {
-    "build": "tsc && node -e \"require('node:fs').copyFileSync('src/studio/pricing.json','dist/studio/pricing.json')\"",
+    "build": "pnpm build:native && tsc && node -e \"require('node:fs').copyFileSync('src/studio/pricing.json','dist/studio/pricing.json')\"",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "pnpm build:native && vitest run",
+    "build:native": "node native/build.mjs"
   },
   "dependencies": {
     "@hawa/contracts": "workspace:*",

@@ -3,7 +3,14 @@ import crypto from 'node:crypto';
 
 export type ApprovalState = 'approved' | 'revision_requested' | 'rejected';
 
+export type RejectionCategory = 'concept' | 'content' | 'brand_direction' | 'task';
+export function parseRejectionCategory(input: unknown): RejectionCategory | null {
+  return input === 'concept' || input === 'content' || input === 'brand_direction' || input === 'task'
+    ? input : null;
+}
+
 export type StandardReviewerRole =
+  | 'approver'
   | 'art_director'
   | 'creative_director'
   | 'account_lead'
@@ -13,6 +20,7 @@ export type StandardReviewerRole =
   | 'administrator';
 
 export const AUTHORIZED_REVIEWER_ROLES: readonly StandardReviewerRole[] = [
+  'approver',
   'art_director',
   'creative_director',
   'account_lead',
@@ -34,6 +42,27 @@ export interface StructuredRevisionRequest {
     target: 'copy' | 'color' | 'layout' | 'asset' | 'dimensions' | 'general';
     description: string;
   }>;
+}
+
+/** Complete, bounded review instructions for a lifecycle-owned revision. Legacy records may be partial. */
+export function parseCompleteRevisionRequest(input: unknown): StructuredRevisionRequest | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const value = input as Record<string, unknown>;
+  const keys = ['scope', 'category', 'targetNodes', 'priority', 'isReusableFeedback', 'comment'];
+  if (Object.keys(value).some((key) => !keys.includes(key))) return null;
+  if (!['full_design', 'typography', 'layout', 'color', 'assets', 'copy'].includes(String(value.scope)) ||
+      !['factual_error', 'brand_violation', 'aesthetic_preference', 'legal_compliance', 'technical_defect'].includes(String(value.category)) ||
+      !['low', 'medium', 'high', 'critical'].includes(String(value.priority)) ||
+      typeof value.isReusableFeedback !== 'boolean' ||
+      typeof value.comment !== 'string' || !value.comment.trim() || value.comment.length > 2000 ||
+      !Array.isArray(value.targetNodes) || value.targetNodes.length > 32 ||
+      value.targetNodes.some((node) => typeof node !== 'string' || !node.trim() || node.length > 128)) return null;
+  const targets = (value.targetNodes as string[]).map((node) => node.trim());
+  if (new Set(targets).size !== targets.length || (value.scope !== 'full_design' && targets.length === 0)) return null;
+  return { scope: value.scope as StructuredRevisionRequest['scope'],
+    category: value.category as StructuredRevisionRequest['category'], targetNodes: targets,
+    priority: value.priority as StructuredRevisionRequest['priority'],
+    isReusableFeedback: value.isReusableFeedback, comment: value.comment.trim() };
 }
 
 export interface ApprovalActor {
@@ -72,6 +101,50 @@ export interface PinnedExport {
   byteSize: number;
 }
 
+/** Evidence Core derived from stored bytes for one request-owned office approval. */
+export interface OfficeApprovalProof {
+  qcRunId: UUID;
+  qcReportHash: SHA256;
+  pinnedExports: PinnedExport[];
+  rtlVisualReview?: { confirmed: true; exportSha256: SHA256 };
+}
+
+const OFFICE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const OFFICE_SHA256 = /^[a-f0-9]{64}$/;
+
+/** Reject browser-shaped, unbounded or ambiguous evidence before a signed object invocation. */
+export function parseOfficeApprovalProof(input: unknown): OfficeApprovalProof | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const value = input as Record<string, unknown>;
+  if (Object.keys(value).some((key) => !['qcRunId', 'qcReportHash', 'pinnedExports', 'rtlVisualReview'].includes(key)) ||
+      typeof value.qcRunId !== 'string' || !OFFICE_UUID.test(value.qcRunId) ||
+      typeof value.qcReportHash !== 'string' || !OFFICE_SHA256.test(value.qcReportHash) ||
+      !Array.isArray(value.pinnedExports) || value.pinnedExports.length < 1 || value.pinnedExports.length > 20) return null;
+  const seen = new Set<string>();
+  const pins: PinnedExport[] = [];
+  for (const raw of value.pinnedExports) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const pin = raw as Record<string, unknown>;
+    if (Object.keys(pin).some((key) => !['artifactId', 'format', 'sha256', 'byteSize'].includes(key)) ||
+        typeof pin.artifactId !== 'string' || !OFFICE_UUID.test(pin.artifactId) ||
+        !['png', 'pdf', 'pptx'].includes(String(pin.format)) ||
+        typeof pin.sha256 !== 'string' || !OFFICE_SHA256.test(pin.sha256) ||
+        typeof pin.byteSize !== 'number' || !Number.isSafeInteger(pin.byteSize) || pin.byteSize < 1) return null;
+    const id = pin.artifactId.toLowerCase();
+    if (seen.has(id)) return null;
+    seen.add(id);
+    pins.push({ artifactId: id, format: pin.format as PinnedExport['format'], sha256: pin.sha256, byteSize: pin.byteSize });
+  }
+  const visual = value.rtlVisualReview;
+  if (visual !== undefined && (!visual || typeof visual !== 'object' || Array.isArray(visual) ||
+      Object.keys(visual).some((key) => !['confirmed', 'exportSha256'].includes(key)) ||
+      (visual as Record<string, unknown>).confirmed !== true ||
+      typeof (visual as Record<string, unknown>).exportSha256 !== 'string' ||
+      !OFFICE_SHA256.test((visual as Record<string, unknown>).exportSha256 as string))) return null;
+  return { qcRunId: value.qcRunId.toLowerCase(), qcReportHash: value.qcReportHash,
+    pinnedExports: pins, ...(visual ? { rtlVisualReview: visual as OfficeApprovalProof['rtlVisualReview'] } : {}) };
+}
+
 export interface ApprovalBindingRecord {
   id: UUID;
   tenantId: UUID;
@@ -95,10 +168,13 @@ export interface ApprovalBindingRecord {
 
 export interface ReviewDeskInspection {
   taskId: UUID;
-  revisionId: UUID;
+  revisionId: UUID | null;
   designTitle: string;
-  canvaDesignId: string;
-  canvaEditUrl: string;
+  canvaStatus: 'recorded' | 'not_configured';
+  canvaDesignId: string | null;
+  canvaEditUrl: string | null;
+  captureStatus: 'captured' | 'recorded_metadata_only' | 'not_captured';
+  captureArtifactCount: number;
   capturedFiles: Array<{
     artifactId: UUID;
     relativePath: string;
@@ -109,7 +185,7 @@ export interface ReviewDeskInspection {
     previewUrl: string;
     stagedPath?: string;
   }>;
-  capturedArtifactSetHash: SHA256;
+  capturedArtifactSetHash: SHA256 | null;
   exactCopy: Array<{
     nodeId: string;
     role: string;
@@ -117,8 +193,9 @@ export interface ReviewDeskInspection {
     isKurdishRtl: boolean;
   }>;
   brandReferences: {
-    clientId: UUID;
-    officialLogoSha256: SHA256;
+    status: 'verified' | 'not_configured';
+    clientId: UUID | null;
+    officialLogoSha256: SHA256 | null;
     brandColors: string[];
     approvedFonts: string[];
   };

@@ -9,8 +9,12 @@ export interface ValidationReference {
     scriptFonts?: {
       arabic?: string;
     };
+    /** When present, only these client-approved display faces may augment the body face. */
+    admittedDisplayFonts?: { latin: string[]; arabic: string[] };
   };
   logoAspect: number; // width / height
+  logoMinimumWidthPx?: number;
+  logoClearSpacePx?: number;
 }
 
 export interface LayoutValidationContext {
@@ -84,6 +88,33 @@ export function normalizeHex(hex: string): string {
 
 const FORBIDDEN_ART_REGEX = new RegExp(`\\b(${FORBIDDEN_ART_WORDS.join('|')})\\b`, 'i');
 
+/** Display faces QA admits for Latin copy when the client has no admitted-font list of its own. */
+const DEFAULT_ADMITTED_LATIN_DISPLAY = [
+  'Cinzel', 'Playfair Display', 'Montserrat', 'Lora', 'Bodoni Moda', 'Cairo', 'Plus Jakarta Sans', 'Vazirmatn', 'Inter', 'Verdana',
+];
+const DEFAULT_ADMITTED_ARABIC = ['Noto Sans Arabic', 'Amiri', 'IBM Plex Sans Arabic'];
+
+/**
+ * The font families QA admits for each script, as the validator applies them (case-insensitive).
+ * Shared so the copy feasibility screen (ADR-125) measures exactly the faces a passing layout
+ * could use, and cannot declare copy unsettable in a face QA would have accepted.
+ */
+export function admittedFamiliesForQa(input: {
+  latinFont?: string; arabicFont?: string; draftFont?: string; admittedDisplayFonts?: { latin: string[]; arabic: string[] };
+}): { latin: string[]; arabic: string[] } {
+  const unique = (names: Array<string | undefined>) => {
+    const byKey = new Map<string, string>();
+    for (const name of names) if (name && !byKey.has(name.toLowerCase())) byKey.set(name.toLowerCase(), name);
+    return [...byKey.values()];
+  };
+  const client = input.admittedDisplayFonts;
+  const arabicScriptFont = input.arabicFont || 'Noto Sans Arabic';
+  return client
+    ? { latin: unique([input.latinFont, ...client.latin]), arabic: unique([arabicScriptFont, ...client.arabic]) }
+    : { latin: unique([input.latinFont || 'Verdana', input.draftFont || 'Verdana', 'Verdana', ...DEFAULT_ADMITTED_LATIN_DISPLAY]),
+      arabic: unique([...DEFAULT_ADMITTED_ARABIC, input.arabicFont]) };
+}
+
 export function validateLayoutV2(
   layout: StudioLayoutV2,
   context: LayoutValidationContext
@@ -144,32 +175,16 @@ export function validateLayoutV2(
   const normalized: StudioLayoutV2 = JSON.parse(JSON.stringify(layout));
 
   // 4. FONT_NOT_ADMITTED & Script Normalization
-  const admittedDisplayFonts = [
-    'cinzel',
-    'playfair display',
-    'montserrat',
-    'lora',
-    'bodoni moda',
-    'cairo',
-    'plus jakarta sans',
-    'vazirmatn',
-    'inter',
-    'verdana',
-  ];
-  const admittedLatinFonts = new Set([
-    (context.reference.rules.fontFamily || 'Verdana').toLowerCase(),
-    (context.draftFont || 'Verdana').toLowerCase(),
-    'verdana',
-    ...admittedDisplayFonts,
-  ]);
+  const clientDisplay = context.reference.rules.admittedDisplayFonts;
+  const admitted = admittedFamiliesForQa({
+    latinFont: context.reference.rules.fontFamily,
+    arabicFont: context.reference.rules.scriptFonts?.arabic,
+    draftFont: context.draftFont,
+    admittedDisplayFonts: clientDisplay,
+  });
+  const admittedLatinFonts = new Set(admitted.latin.map((font) => font.toLowerCase()));
   const arabicScriptFont = context.reference.rules.scriptFonts?.arabic || 'Noto Sans Arabic';
-  const admittedArabicFonts = new Set([
-    'noto sans arabic',
-    'amiri',
-    'ibm plex sans arabic',
-    (context.reference.rules.scriptFonts?.arabic || '').toLowerCase(),
-  ].filter(Boolean));
-
+  const admittedArabicFonts = new Set(admitted.arabic.map((font) => font.toLowerCase()));
   for (let i = 0; i < normalized.text.length; i++) {
     const t = normalized.text[i];
     const script = context.copyScripts[t.copyIndex] || 'latin';
@@ -177,6 +192,10 @@ export function validateLayoutV2(
     if (script === 'arabic') {
       t.rtl = true;
       if (!t.fontFamily || !admittedArabicFonts.has(t.fontFamily.toLowerCase())) {
+        if (clientDisplay) return {
+          ok: false, code: 'FONT_NOT_ADMITTED',
+          message: `Font family '${t.fontFamily}' is not admitted for this client's Arabic-script text`,
+        };
         t.fontFamily = arabicScriptFont;
       }
       if (t.align !== 'center' && t.align !== 'right') {
@@ -516,7 +535,7 @@ export function validateLayoutV2(
   }
 
   // 12. LOGO
-  const minLogoWidth = houseMinLogoWidth(layout.width);
+  const minLogoWidth = Math.max(houseMinLogoWidth(layout.width), context.reference.logoMinimumWidthPx ?? 0);
   if (layout.logo.width < minLogoWidth) {
     return {
       ok: false,
@@ -534,16 +553,16 @@ export function validateLayoutV2(
     };
   }
 
-  // Clear space: 0.5 * logo.height free of text and rules
-  const cs = HOUSE_RULES.logo.clearSpaceShareOfHeight * layout.logo.height;
-  const logoClearSpace: Box = logoClearZone(layout.logo);
+  // Respect the stronger of the house rule and the client's stated minimum.
+  const cs = Math.max(HOUSE_RULES.logo.clearSpaceShareOfHeight * layout.logo.height, context.reference.logoClearSpacePx ?? 0);
+  const logoClearSpace: Box = logoClearZone(layout.logo, context.reference.logoClearSpacePx);
 
   for (const t of layout.text) {
     if (boxesIntersect(t, logoClearSpace)) {
       return {
         ok: false,
         code: 'LOGO',
-        message: `Text box copyIndex ${t.copyIndex} violates logo clear space (0.5x logo height = ${cs.toFixed(1)}px)`,
+        message: `Text box copyIndex ${t.copyIndex} violates logo clear space (${cs.toFixed(1)}px)`,
       };
     }
   }
@@ -552,7 +571,7 @@ export function validateLayoutV2(
       return {
         ok: false,
         code: 'LOGO',
-        message: `Rule shape violates logo clear space (0.5x logo height = ${cs.toFixed(1)}px)`,
+        message: `Rule shape violates logo clear space (${cs.toFixed(1)}px)`,
       };
     }
   }

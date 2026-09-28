@@ -46,16 +46,15 @@ export interface CreateTaskAggregateParams {
   traceId?: string | null;
   metadata?: Record<string, unknown>;
   payload?: Record<string, unknown>;
+  /** Original HTTP body, excluding server-derived evidence. Legacy receipts retain it as payload.body. */
+  requestBody?: Record<string, unknown>;
   enqueueOutbox?: boolean;
-  /**
-   * 'recorded': the task.created row is written already delivered, owned by the request lifecycle
-   * (PHASE2_DESIGN.md 2.8, ADR-034). Legacy queries still read it as the request's facts (the daily
-   * cap, reply lookups, reminders), and the outbox consumer never claims it: the RequestLifecycle
-   * object starts the design run itself. Default 'pending', as always.
-   */
+  /** New intake validation/enrichment only; exact committed replays retain their recorded metadata. */
+  prepareCreatePayload?: (trx: Kysely<Database>) => Promise<Record<string, unknown>>;
+  /** A lifecycle-owned task records its creation without making it claimable by the legacy worker. */
   outboxState?: 'pending' | 'recorded';
-  /** The request this task is a round of (tasks.request_id); only a lifecycle-owned task has one. */
-  requestId?: string | null;
+  /** Immutable at task creation; an enrolled chat cannot switch an existing task at Deliver. */
+  deliveryExecutorPin?: 'core' | 'restate';
 }
 
 /**
@@ -71,12 +70,15 @@ export const TASK_STATES: readonly TaskState[] = TASK_DB_STATES;
 /**
  * The database states the list shows under the given API statuses: every state whose API status is
  * one of them. Built from the state-to-status mapping rather than toDbTaskState, so a filter matches
- * exactly the tasks the list would label with that status (OPERATOR_REQUIRED takes failed_retryable
- * too). A word the API never reports is a filter that matches nothing, not an error.
+ * the tasks the list may label with that status (OPERATOR_REQUIRED takes failed_retryable too).
+ * The reconciliation statuses share the publishing state; the page/count query checks the
+ * latest publication error when either is requested. An unknown word matches nothing.
  */
 export function dbStatesForApiStatuses(statuses: readonly string[]): TaskState[] {
   const wanted = new Set(statuses.map((s) => String(s || '').trim().toUpperCase()).filter(Boolean));
-  return TASK_STATES.filter((state) => wanted.has(API_STATUS_OF_DB_STATE[state]));
+  return TASK_STATES.filter((state) => wanted.has(API_STATUS_OF_DB_STATE[state]) ||
+    (state === 'publishing' && (wanted.has('PUBLISH_RECONCILIATION') || wanted.has('ARCHIVE_RECONCILIATION') ||
+      wanted.has('REQUESTER_SEND_RECONCILIATION'))));
 }
 
 /** Where a task page starts: the last row of the page before it, in list order. */
@@ -123,6 +125,8 @@ export interface TaskPageParams {
   clientId?: string | null;
   /** Only tasks in these states; an empty list matches nothing. Undefined means every state. */
   states?: readonly TaskState[];
+  /** The publication substates requested by the API filter, for rows stored as publishing. */
+  publishingStatuses?: readonly ('archive' | 'sheet' | 'requester_send' | 'ordinary')[];
   /** Text to find in the title, the description, the client's name or the task id. */
   search?: string | null;
 }
@@ -137,6 +141,7 @@ export interface TaskListRow {
   tenant_id: string;
   client_id: string | null;
   project_id: string | null;
+  request_id: string | null;
   state: TaskState;
   priority: number;
   title: string;
@@ -169,6 +174,8 @@ export interface TaskListRow {
   rev_version: number | null;
   rev_sha256: string | null;
   rev_created_at: Date | null;
+  delivery_error_class: string | null;
+  delivery_executor: string | null;
 }
 
 export interface TaskPage {
@@ -224,7 +231,20 @@ const fold = (expr: RawBuilder<unknown>) => sql`translate(lower(${expr}), ${FOLD
 function taskListFilter(params: TaskPageParams) {
   const conditions = [sql`t.tenant_id = ${params.tenantId}::uuid`, sql`t.deleted_at IS NULL`];
   if (params.clientId) conditions.push(sql`t.client_id = ${params.clientId}::uuid`);
-  if (params.states) conditions.push(sql`t.state = ANY(${[...params.states]}::hawa.task_state[])`);
+  if (params.states) {
+    const states = [...params.states];
+    const publicationStatus = sql`COALESCE((SELECT CASE
+      WHEN p.error_class = 'ARCHIVE_UNCONFIRMED' THEN 'archive'
+      WHEN p.error_class = 'SHEET_UNCONFIRMED' THEN 'sheet'
+      WHEN p.error_class = 'REQUESTER_SEND_UNCONFIRMED' THEN 'requester_send'
+      ELSE 'ordinary' END
+      FROM hawa.publications p WHERE p.tenant_id = t.tenant_id AND p.task_id = t.id
+      ORDER BY p.created_at DESC LIMIT 1), 'ordinary')`;
+    conditions.push(params.publishingStatuses && states.includes('publishing')
+      ? sql`(t.state = ANY(${states}::hawa.task_state[]) AND
+          (t.state <> 'publishing' OR ${publicationStatus} = ANY(${[...params.publishingStatuses]}::text[])))`
+      : sql`t.state = ANY(${states}::hawa.task_state[])`);
+  }
   if (params.search && params.search.trim()) {
     const pattern = searchPattern(params.search);
     conditions.push(sql`(
@@ -271,7 +291,7 @@ export function buildTaskPageQuery(params: TaskPageParams) {
   const offset = params.cursor ? 0 : Math.max(0, Math.floor(Number(params.offset) || 0));
   // One row more than the page shows tells whether an older page exists.
   return sql<TaskListRow>`
-    SELECT t.id, t.tenant_id, t.client_id, t.project_id, t.state, t.priority, t.title, t.description, t.version,
+    SELECT t.id, t.tenant_id, t.client_id, t.project_id, t.request_id, t.state, t.priority, t.title, t.description, t.version,
       t.current_design_revision_id, t.created_at, t.updated_at,
       to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at,
       c.name AS client_name,
@@ -287,9 +307,10 @@ export function buildTaskPageQuery(params: TaskPageParams) {
       q.status AS qc_status, q.critical_pass AS qc_critical_pass, q.report AS qc_report,
       a.id AS approval_id, a.created_at AS approval_created_at, a.role AS approval_role, a.decided_by AS approval_actor_id,
       b.canva_design_id, b.edit_url AS canva_edit_url,
-      r.id AS rev_id, r.revision AS rev_version, r.source_sha256 AS rev_sha256, r.created_at AS rev_created_at
+      r.id AS rev_id, r.revision AS rev_version, r.source_sha256 AS rev_sha256, r.created_at AS rev_created_at,
+      p.error_class AS delivery_error_class, p.executor AS delivery_executor
     FROM (
-      SELECT t.id, t.tenant_id, t.client_id, t.project_id, t.state, t.priority, t.title, t.description, t.version,
+      SELECT t.id, t.tenant_id, t.client_id, t.project_id, t.request_id, t.state, t.priority, t.title, t.description, t.version,
         t.current_design_revision_id, t.created_at, t.updated_at
       FROM hawa.tasks t
       WHERE ${sql.join(conditions, sql` AND `)}
@@ -308,7 +329,10 @@ export function buildTaskPageQuery(params: TaskPageParams) {
       SELECT q.status, q.critical_pass,
         jsonb_build_object(
           'bidiIsolation', q.report -> 'bidiIsolation', 'safeMargins', q.report -> 'safeMargins',
+          'rtlVisualReviewRequired', q.report -> 'rtlVisualReviewRequired',
           'contrastCompliant', q.report -> 'contrastCompliant', 'fontCoverage', q.report -> 'fontCoverage',
+          'fontFamilyPass', COALESCE(q.report -> 'fontFamilyPass',
+            jsonb_path_query_first(q.report, '$.checks[*] ? (@.name == "fontPass").passed')),
           'copyFidelity', q.report -> 'copyFidelity', 'errors', q.report -> 'errors'
         ) AS report
       FROM hawa.qc_runs q
@@ -331,6 +355,12 @@ export function buildTaskPageQuery(params: TaskPageParams) {
       LIMIT 1
     ) b ON true
     LEFT JOIN hawa.design_revisions r ON r.id = t.current_design_revision_id
+    LEFT JOIN LATERAL (
+      SELECT p.error_class, p.executor FROM hawa.publications p
+      WHERE p.tenant_id = t.tenant_id AND p.task_id = t.id
+        AND t.state = 'publishing'
+      ORDER BY p.created_at DESC LIMIT 1
+    ) p ON true
     ORDER BY t.created_at DESC, t.id DESC`;
 }
 
@@ -454,7 +484,7 @@ export class TaskRepository {
   async createTaskAggregate(
     params: CreateTaskAggregateParams,
     trx?: Kysely<Database>
-  ): Promise<{ task: any; created: boolean }> {
+  ): Promise<{ task: any; created: boolean; payload: Record<string, unknown> }> {
     const runner = async (dbClient: Kysely<Database>) => {
       // 1. Check idempotency in outbox_commands
       const existingCmd = await dbClient
@@ -470,7 +500,7 @@ export class TaskRepository {
         description: params.description || '',
         priority: params.priority || 3,
       };
-      const incomingHash = this.computePayloadHash(incomingPayload);
+      const incomingHash = this.computePayloadHash(params.requestBody || incomingPayload);
 
       if (existingCmd) {
         const storedPayload = typeof existingCmd.payload === 'string' ? JSON.parse(existingCmd.payload) : existingCmd.payload;
@@ -478,7 +508,12 @@ export class TaskRepository {
           (storedPayload as any)?.requestHash ||
           this.computePayloadHash(storedPayload as Record<string, unknown>);
 
-        if (storedHash !== incomingHash) {
+        const matchesRequest = params.requestBody
+          ? existingCmd.command_type === 'task.created' && (storedPayload.requestIdentityHash
+              ? storedPayload.requestIdentityHash === incomingHash
+              : storedPayload.body && this.computePayloadHash(storedPayload.body) === incomingHash)
+          : storedHash === incomingHash;
+        if (!matchesRequest) {
           throw new IdempotencyConflictError(
             `Idempotency conflict: key '${params.idempotencyKey}' already used with differing payload`
           );
@@ -492,9 +527,12 @@ export class TaskRepository {
           .executeTakeFirst();
 
         if (existingTask) {
-          return { task: existingTask, created: false };
+          return { task: existingTask, created: false, payload: storedPayload as Record<string, unknown> };
         }
       }
+
+      // Enrichment is server evidence, not part of the submitted request's idempotency identity.
+      const recordedPayload = { ...(params.payload || {}), ...(await params.prepareCreatePayload?.(dbClient) || {}) };
 
       // 2. Insert into tasks
       const priorityNum = typeof params.priority === 'number' ? params.priority : 3;
@@ -508,6 +546,7 @@ export class TaskRepository {
           title: params.title,
           description: params.description || '',
           state: 'received',
+          delivery_executor_pin: params.deliveryExecutorPin || 'core',
           task_type: params.taskType || null,
           language: params.language || null,
           direction: params.direction || null,
@@ -517,7 +556,6 @@ export class TaskRepository {
           assigned_to: null,
           due_at: null,
           version: 1,
-          ...(params.requestId ? { request_id: params.requestId } : {}),
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -542,16 +580,16 @@ export class TaskRepository {
             clientId: task.client_id,
             state: task.state,
             priority: task.priority,
+            deliveryExecutorPin: task.delivery_executor_pin,
             metadata: params.metadata || {},
-            payload: params.payload || {},
-            ...(params.payload || {}),
+            payload: recordedPayload,
+            ...recordedPayload,
           },
         })
         .execute();
 
       // 4. Insert into outbox_commands if requested
       if (params.enqueueOutbox !== false) {
-        const recorded = params.outboxState === 'recorded';
         await dbClient
           .insertInto('outbox_commands')
           .values({
@@ -561,26 +599,25 @@ export class TaskRepository {
             command_type: 'task.created',
             idempotency_key: params.idempotencyKey,
             payload: withRequestId({
-              ...(params.payload || {}),
+              ...recordedPayload,
               taskId: task.id,
               tenantId: params.tenantId,
               title: task.title,
               clientId: task.client_id,
               priority: task.priority,
-              // The hash is of the payload asked for, so a repeat with the same payload matches.
+              deliveryExecutorPin: task.delivery_executor_pin,
               requestHash: incomingHash,
-              ...(recorded ? { lifecycleOwner: 'restate' } : {}),
+              ...(params.requestBody ? { requestIdentityHash: incomingHash } : {}),
             }),
-            // A recorded row is a fact, not a command: claimDue selects only pending (or expired
-            // leased) rows, so it is never dispatched.
-            ...(recorded
-              ? { state: 'delivered' as const, delivered_at: new Date(), last_error: 'OWNED_BY_LIFECYCLE' }
-              : { state: 'pending' as const }),
+            state: params.outboxState === 'recorded' ? 'delivered' : 'pending',
+            ...(params.outboxState === 'recorded'
+              ? { delivered_at: new Date(), last_error: 'OWNED_BY_LIFECYCLE' }
+              : {}),
           })
           .execute();
       }
 
-      return { task, created: true };
+      return { task, created: true, payload: recordedPayload };
     };
 
     if (trx) {

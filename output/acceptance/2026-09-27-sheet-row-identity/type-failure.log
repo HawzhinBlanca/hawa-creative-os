@@ -1,0 +1,4 @@
+[Typecheck:tests] Compiling 509/509 active test roots and their dependencies.
+packages/integrations/src/google-publisher.ts(377,67): error TS2739: Type '{ code: string; message: string; }' is missing the following properties from type 'AppError': retryable, safeAction
+[Typecheck:tests] Compiler failed for tsconfig.test.json (exit=2, signal=none).
+[Typecheck:tests] FAILED. Preserve and repair every compiler error above.

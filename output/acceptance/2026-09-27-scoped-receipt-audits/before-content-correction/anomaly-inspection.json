@@ -1,0 +1,28 @@
+[
+  {
+    "id": "67b1b73c-5312-4761-9d89-741f5cabeda2",
+    "title": "Hawa source page one 123.45\nHawa source page two 678.90\nRevised for 27 September 2026",
+    "state": "complete",
+    "publication_id": "c2298d5f-e3a3-419a-adc7-be4562cdab8b",
+    "design_revision_id": "3fcb2324-bc2c-4156-bb83-39f41bfc79b5",
+    "package_manifest": {
+      "files": [
+        {
+          "name": "client-c1000000-017297e5.pptx",
+          "size": 1559760,
+          "sha256": "cde2ca267f005f513969780f8f8ac2b6b5ed5cf62ddcb861edc8724b99724674",
+          "artifactId": "017297e5-c113-43d2-891a-c5969b6f2374"
+        }
+      ]
+    },
+    "receipts": [
+      {
+        "hash": "cde2ca267f005f513969780f8f8ac2b6b5ed5cf62ddcb861edc8724b99724674",
+        "name": "kurdistan-accrediting-association-for-education-017297e5.pptx",
+        "size": 1559760,
+        "status": "verified"
+      }
+    ],
+    "artifacts": null
+  }
+]

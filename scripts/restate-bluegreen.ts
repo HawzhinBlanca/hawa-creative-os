@@ -29,7 +29,8 @@
  *
  *   npx tsx scripts/restate-bluegreen.ts plan [--via-container hawa-production-core-1]
  *   npx tsx scripts/restate-bluegreen.ts finish-drains --wait-seconds 900 [--require-drained blue]
- *   npx tsx scripts/restate-bluegreen.ts register green
+ *   npx tsx scripts/restate-bluegreen.ts register green [--hosts TaskWorkflow,TaskService,…|unknown]
+ *   npx tsx scripts/restate-bluegreen.ts check-hosts --hosts TaskWorkflow,TaskService,…|unknown
  *   npx tsx scripts/restate-bluegreen.ts removable green
  */
 import { spawnSync } from 'node:child_process';
@@ -179,10 +180,11 @@ export type RegisterOutcome =
 /**
  * The services a worker build hosts (apps/worker/src/services.ts, which the worker checks what it
  * binds against); checked even when GET /services is short. Every service ever hosted stays here:
- * ChatInbox since Phase 2.1; Delivery and TelegramSender since Phase 2.2; RequestLifecycle and
- * DesignRun since Phase 2.3.
+ * ChatInbox since Phase 2.1; Delivery and TelegramSender since Phase 2.2.
  */
-export const WORKER_SERVICES = ['TaskWorkflow', 'TaskService', 'ChatInbox', 'Delivery', 'TelegramSender', 'RequestLifecycle', 'DesignRun'] as const;
+export const WORKER_SERVICES = ['TaskWorkflow', 'TaskService', 'ChatInbox', 'Delivery', 'TelegramSender', 'RequestLifecycle', 'DesignRun', 'OfficeDecisionGateway'] as const;
+/** What a worker build from before Phase 2.1 hosts; such builds do not list their services on /ready. */
+const PRE_PHASE_2_1_SERVICES = ['TaskWorkflow', 'TaskService'] as const;
 
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -197,10 +199,46 @@ async function retrying<T>(attempts: number, fn: () => Promise<T>, sleep: (ms: n
   }
 }
 
+/**
+ * Why a build hosting `hosts` must not be registered, or null when it hosts every service Restate
+ * routes to a worker deployment now. null hosts: the build's list is missing or could not be read,
+ * and it counts as a pre-Phase-2.1 build (TaskWorkflow and TaskService). An unreadable route list is a
+ * refusal too. deploy.sh asks this before step 7 (check-hosts) and register asks it again.
+ */
+export async function hostsRefusal(
+  admin: RestateAdmin,
+  hosts: readonly string[] | null,
+  addresses: WorkerAddresses = DEFAULT_WORKER_ADDRESSES,
+  deployments?: Array<{ id: string; uri: string }>,
+): Promise<string | null> {
+  let routed: string[];
+  try {
+    const workerIds = new Set((deployments ?? await admin.deployments()).filter((d) => slotOf(d.uri, addresses)).map((d) => d.id));
+    routed = (await admin.services()).filter((s) => s.deploymentId && workerIds.has(s.deploymentId)).map((s) => s.name);
+  } catch (err) {
+    return `which services Restate routes to the worker could not be read (${messageOf(err)}), so whether the new build hosts them all is unknown`;
+  }
+  const hosted = new Set(hosts ?? PRE_PHASE_2_1_SERVICES);
+  const missing = routed.filter((name) => !hosted.has(name));
+  if (!missing.length) return null;
+  const which = hosts === null
+    ? 'the new build does not list the services it hosts, or its list could not be read (a build from before Phase 2.1 has none and hosts only TaskWorkflow and TaskService), and it'
+    : 'the new build';
+  return `${which} does not host ${missing.join(', ')}, which Restate routes to the worker now. Registering it would leave ${missing.length === 1 ? 'that service' : 'those services'} on the old colour for good, and every later deploy would stop at finish-drains. A worker rollback below the build that added a service is not supported (infra/docker/README.md)`;
+}
+
 export async function registerColour(
   admin: RestateAdmin,
   colour: Colour,
-  options: Clock & { attempts?: number; intervalMs?: number; addresses?: WorkerAddresses } = {},
+  options: Clock & {
+    attempts?: number; intervalMs?: number; addresses?: WorkerAddresses;
+    /**
+     * The services the new build hosts, from its own /ready (deploy.sh passes them). null: the build
+     * does not list them, which every build before Phase 2.1 is, and those host TaskWorkflow and
+     * TaskService only. Undefined skips the check (callers that predate it).
+     */
+    hosts?: readonly string[] | null;
+  } = {},
 ): Promise<RegisterOutcome> {
   const addresses = options.addresses || DEFAULT_WORKER_ADDRESSES;
   const uri = addresses[colour];
@@ -215,6 +253,15 @@ export async function registerColour(
   const held = atAddress(before);
   if (held) {
     return { ok: false, state: 'refused', reason: `${uri} is already registered as ${held.id}; force:false never replaces its handlers (finish that colour's drain first)` };
+  }
+
+  // Restate never un-routes a service. A build that does not host a service Restate already routes to
+  // the worker would move only the others: the old colour keeps that service, the next deploy plans it
+  // as the idle colour, finish-drains keeps it, and every later deploy stops at step 4b (ADR-129). So
+  // such a build is refused here, before anything is sent, while every service is still on one colour.
+  if (options.hosts !== undefined) {
+    const refusal = await hostsRefusal(admin, options.hosts, addresses, before);
+    if (refusal) return { ok: false, state: 'refused', reason: `${refusal}; nothing was registered` };
   }
 
   let accepted: string | null = null;
@@ -403,9 +450,13 @@ export interface CliDeps extends Clock {
 
 /**
  * Exit codes: 0 done; 1 Restate could not be read; 64 bad usage.
- * register: 2 refused, Restate holds nothing new at the colour's address (removing it is safe);
+ * register: 2 refused, Restate holds nothing new at the colour's address (removing it is safe); with
+ *   --hosts, also when the new build does not host every service Restate routes to the worker;
  *   4 Restate registered it but not every service moved there, or that could not be confirmed
  *   (the colour must stay).
+ * check-hosts --hosts A,B|unknown: 0 a build hosting these services may be registered; 2 it may not
+ *   (it lacks a service Restate routes to the worker, or the route list could not be read). Nothing
+ *   is sent to Restate.
  * removable: 0 Restate holds no deployment at the colour's address; 4 it holds one.
  * finish-drains --require-drained C: 3 when colour C, or the old single `worker` (whose outbox has
  *   no colour gate), is still registered: invocations pinned to it, a service routed to it, or a
@@ -427,6 +478,14 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number
   const admin = new RestateAdmin(flags.get('admin') || env.RESTATE_ADMIN_URL || 'http://restate:9070', fetcher);
   const addresses = addressesFromEnv(env);
   const colourArg = (value: string | undefined): Colour | null => (value === 'blue' || value === 'green' ? value : null);
+  // --hosts A,B,C from the new build's own list; "unknown" when it has none or it could not be read.
+  // "unknown" and a list with any unusable name are null (no list), never trusted in part: "unknown"
+  // itself passes the name pattern and used to become a service named "unknown" (Phase 4 review).
+  const hostsArg = (value: string | undefined): string[] | null => {
+    const names = (value || '').split(',').map((s) => s.trim());
+    if (names.length === 1 && names[0].toLowerCase() === 'unknown') return null;
+    return names.length && names.every((s) => /^[A-Za-z][A-Za-z0-9_]*$/.test(s)) ? names : null;
+  };
   const seconds = (name: string, fallback: number) => {
     const n = Number(flags.get(name));
     return flags.has(name) && Number.isFinite(n) && n >= 0 ? n : fallback;
@@ -453,6 +512,7 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number
       if (!colour) { err('usage: register blue|green'); return 64; }
       const outcome = await registerColour(admin, colour, {
         attempts: seconds('attempts', 30), intervalMs: seconds('interval-seconds', 2) * 1000, sleep: deps.sleep, now: deps.now, addresses,
+        ...(flags.has('hosts') ? { hosts: hostsArg(flags.get('hosts')) } : {}),
       });
       if (!outcome.ok && outcome.state === 'refused') {
         err(`ERROR: Restate refused to register the ${colour} colour (${addresses[colour]}): ${outcome.reason}. Restate holds nothing new at that address, so what it routes was not changed.`);
@@ -464,6 +524,13 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number
         return 4;
       }
       out(`deployment=${outcome.deploymentId}`);
+      return 0;
+    }
+    if (command === 'check-hosts') {
+      if (!flags.has('hosts')) { err('usage: check-hosts --hosts A,B|unknown'); return 64; }
+      const refusal = await hostsRefusal(admin, hostsArg(flags.get('hosts')), addresses);
+      if (refusal) { err(`ERROR: the new worker build must not be registered: ${refusal}.`); return 2; }
+      out('hosts=ok');
       return 0;
     }
     if (command === 'removable') {
@@ -491,7 +558,7 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number
       const blocking = [...report.draining, ...report.kept].filter((d) => d.slot === required || d.slot === 'legacy');
       return blocking.length ? 3 : 0;
     }
-    err('usage: restate-bluegreen.ts plan | register blue|green | removable blue|green | finish-drains [--wait-seconds N] [--require-drained blue|green]  [--via-container NAME] [--admin URL]');
+    err('usage: restate-bluegreen.ts plan | register blue|green [--hosts A,B|unknown] | check-hosts --hosts A,B|unknown | removable blue|green | finish-drains [--wait-seconds N] [--require-drained blue|green]  [--via-container NAME] [--admin URL]');
     return 64;
   } catch (e) {
     err(`ERROR: ${e instanceof Error ? e.message : String(e)}`);

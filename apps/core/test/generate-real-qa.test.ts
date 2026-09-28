@@ -125,7 +125,7 @@ describe('/generate with a database', () => {
 });
 
 describe('/generate for KAAE', () => {
-  it("is refused: KAAE's v1 templates are retired and its designs are made in the design studio (ADR-038)", async () => {
+  it("is refused: KAAE's v1 templates are retired and its designs are made in the design studio (ADR-127)", async () => {
     const db = createDb(process.env.TEST_DATABASE_URL!);
     try {
       const auth = { ...json, Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };

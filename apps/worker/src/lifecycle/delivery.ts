@@ -8,12 +8,14 @@
  * `notify.published` command:
  * 1. prepare: Core does the Drive and Sheets work (idempotent by the publication key) and answers
  *    with what the requester is sent. A Core that does not answer is asked again for 10 minutes; a
- *    refusal or a Core gone for longer ends the delivery `failed`, and the task goes back to APPROVED.
+ *    refusal or a Core gone for longer ends the delivery `failed`. Core keeps a possible Drive upload
+ *    in archive reconciliation; only a definite pre-upload failure can return the task to APPROVED.
  * 2. each approved file, then the notice, through the chat's TelegramSender, awaited one at a time.
  *    Their keys are the publication's, not the run's (`dl-<task>-<approval>:file:<artifact>`,
  *    `…:notice`), so a later run never sends a file twice; a send that may have arrived is never
  *    repeated and the office hears of it once (TelegramSender).
- * 3. report: to Core's delivery-finished endpoint (reportTo 'core', slice 2.2), which moves the task.
+ * 3. report: legacy runs report to Core; request-owned runs report to the private RequestLifecycle
+ *    owner, which applies one versioned Core projection before confirming completion.
  *
  * A workflow may await a Virtual Object; the Virtual Objects never await this (section 4).
  */
@@ -27,9 +29,12 @@ import {
   type SendResult,
 } from '@hawa/contracts';
 import { chaosPoint } from '@hawa/observability';
+import { verifyLifecycleDeliveryClaim } from '@hawa/integrations';
 import { composeDeliveredMessage, composeDeliveryFailedAlert } from '../delivery-notification.js';
 import { log, requestIdHeaders, withInvocationLogContext } from '../logging.js';
 import { TelegramSenderApi } from './telegram-sender.js';
+import { RequestLifecycleApi } from './request-lifecycle.js';
+import { acceptedWorkerSecrets } from './worker-secrets.js';
 
 /** A Core step's retry: from 2 s doubling to 30 s, for up to 10 minutes (as TaskWorkflow's steps). */
 export const PREPARE_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30000, maxRetryDuration: 10 * 60 * 1000 };
@@ -40,16 +45,16 @@ export const PREPARE_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 
  * and records it (startWorkflowDelivery in Core).
  */
 export const REPORT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 60000, maxRetryDuration: 60 * 60 * 1000 };
-
-type StepRetry = typeof PREPARE_RETRY;
+type StepRetry = { initialRetryInterval: number; retryIntervalFactor: number;
+  maxRetryInterval: number; maxRetryDuration?: number };
 
 /** The part of a Restate workflow context a delivery uses; tests pass a plain object. */
 export interface DeliveryContext {
   run<T>(name: string, action: () => Promise<T>, retry: StepRetry): Promise<T>;
   /** An awaited call to the chat's TelegramSender. */
   send(message: OutboundMessage): Promise<SendResult>;
-  /** Slice 2.3: the one-way report to RequestLifecycle. */
-  reportToLifecycle?(requestId: string, event: Record<string, unknown>): void;
+  /** Private RequestLifecycle report for a request-owned delivery. */
+  reportLifecycle?(input: DeliveryInput, outcome: DeliveryOutcome): Promise<unknown>;
 }
 
 /** Core's internal API as the worker reaches it (HAWA_WORKER_TOKEN, a service principal). */
@@ -89,6 +94,21 @@ const messageOf = (err: unknown) => (err instanceof Error ? err.message : String
 
 /** The workflow's body. */
 export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, input: DeliveryInput): Promise<DeliveryOutcome> {
+  if (input.reportTo === 'lifecycle' && (!ctx.reportLifecycle ||
+      !Number.isInteger(input.requestRev) || Number(input.requestRev) < 4 ||
+      input.requestId === input.taskId)) {
+    throw new restate.TerminalError('LIFECYCLE_DELIVERY_NOT_AVAILABLE: a bound request owner and revision are required', { errorCode: 409 });
+  }
+  if (input.reportTo === 'lifecycle') {
+    const { claimSignature, ...claim } = input;
+    // HAWA_WORKER_TOKEN, or its previous value while a rotation is under way (ADR-129).
+    if (!acceptedWorkerSecrets().some((secret) => verifyLifecycleDeliveryClaim(secret, claim, claimSignature))) {
+      throw new restate.TerminalError('INVALID_LIFECYCLE_DELIVERY_CLAIM', { errorCode: 401 });
+    }
+  }
+  if (input.reportTo !== 'core' && input.reportTo !== 'lifecycle') {
+    throw new restate.TerminalError('INVALID_DELIVERY_REPORT_TARGET', { errorCode: 400 });
+  }
   const run = Number.isInteger(input.run) && Number(input.run) > 0 ? Number(input.run) : 1;
   const base = deliveryBaseId(input.taskId, input.approvalId);
   const officeChat = input.officeChatId || (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((s) => s.trim()).find(Boolean) || null;
@@ -99,7 +119,8 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
   try {
     prepared = await ctx.run('prepare', () => core.post<PreparedDelivery>(
       `/internal/lifecycle/${encodeURIComponent(input.requestId)}/deliveries/${encodeURIComponent(input.approvalId)}/prepare`,
-      { taskId: input.taskId, tenantId: input.tenantId, revisionId: input.revisionId, deliveryId: input.deliveryId, run, ...(input.policy ? { policy: input.policy } : {}) }
+      { taskId: input.taskId, tenantId: input.tenantId, revisionId: input.revisionId, deliveryId: input.deliveryId, run,
+        ...(input.requestRev ? { requestRev: input.requestRev } : {}), ...(input.policy ? { policy: input.policy } : {}) }
     ), PREPARE_RETRY);
   } catch (err) {
     if (!isTerminal(err)) throw err;
@@ -141,8 +162,11 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
       if (notice.outcome === 'uncertain') uncertain.push('delivery notice');
       else if (notice.outcome === 'refused') refused.push(`delivery notice (${notice.error})`);
     }
-  } else if (prepared && !chatId && prepared.chatOnly) {
-    failure = 'NO_REQUESTER_CHAT: the Drive archive was not written and the task has no chat to send the files to';
+  } else if (prepared && !chatId) {
+    failure = 'NO_REQUESTER_CHAT: the task has no chat to receive the approved files';
+  }
+  if (prepared && prepared.files.length === 0) {
+    failure = 'NO_DELIVERABLE_FILES: Core prepared no approved files for the requester';
   }
 
   const outcome: DeliveryOutcome = {
@@ -170,20 +194,23 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
     });
   }
 
-  if (input.reportTo === 'lifecycle' && ctx.reportToLifecycle) {
-    ctx.reportToLifecycle(input.requestId, { v: 1, eventId: `dl-finished:${input.deliveryId}`, deliveryId: input.deliveryId, ...outcome });
-    return outcome;
-  }
   try {
-    await ctx.run('report', () => core.post(`/internal/tasks/${encodeURIComponent(input.taskId)}/delivery-finished`, {
-      tenantId: input.tenantId,
-      deliveryId: input.deliveryId,
-      approvalId: input.approvalId,
-      run,
-      outcome,
-    }), REPORT_RETRY);
+    if (input.reportTo === 'lifecycle') {
+      // This is already a Restate object call. Nesting it inside ctx.run creates an extra journal
+      // command around the RPC and can strand a completed delivery on replay (Restate 570).
+      await ctx.reportLifecycle!(input, outcome);
+    } else {
+      await ctx.run('report', () => core.post(`/internal/tasks/${encodeURIComponent(input.taskId)}/delivery-finished`, {
+        tenantId: input.tenantId,
+        deliveryId: input.deliveryId,
+        approvalId: input.approvalId,
+        run,
+        outcome,
+      }), REPORT_RETRY);
+    }
   } catch (err) {
     if (!isTerminal(err)) throw err;
+    if (input.reportTo === 'lifecycle') throw err;
     // The requester has what was sent; the task stays PUBLISHING until Deliver is pressed again, which
     // reads this run's output and records it.
     log.error(`[Delivery] ${input.deliveryId} ended ${outcome.outcome}, and Core did not take the report: ${messageOf(err)}`);
@@ -205,11 +232,13 @@ export function createDeliveryWorkflow(core: CoreInternal = coreInternalFromEnv(
           return runDelivery({
             run: (name, action, retry) => ctx.run(name, action, retry),
             send: (message) => ctx.objectClient(TelegramSenderApi, message.chatId).send(message),
-            reportToLifecycle: (requestId, event) => {
-              ctx.objectSendClient<{ deliveryFinished: (c: restate.ObjectContext, e: Record<string, unknown>) => Promise<void> }>(
-                { name: 'RequestLifecycle' }, requestId
-              ).deliveryFinished(event, restate.rpc.sendOpts({ idempotencyKey: String(event.eventId) }));
-            },
+            reportLifecycle: (delivery, outcome) =>
+              ctx.objectClient(RequestLifecycleApi, delivery.requestId).deliveryFinished({
+                v: 1, eventId: `delivery:${delivery.deliveryId}`, requestId: delivery.requestId,
+                taskId: delivery.taskId, approvalId: delivery.approvalId,
+                deliveryId: delivery.deliveryId, run: Number(delivery.run || 1),
+                expectedRev: Number(delivery.requestRev), outcome,
+              }),
           }, core, input);
         }),
     },
@@ -217,3 +246,6 @@ export function createDeliveryWorkflow(core: CoreInternal = coreInternalFromEnv(
     options: { ingressPrivate: false, workflowRetention: { days: 7 }, abortTimeout: { minutes: 10 } },
   });
 }
+
+/** Stable workflow client definition used by the private RequestLifecycle owner. */
+export const DeliveryApi = createDeliveryWorkflow();

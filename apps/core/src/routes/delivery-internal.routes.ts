@@ -2,7 +2,7 @@ import type { DeliveryOutcome } from '@hawa/contracts';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { RouteContext } from './types.js';
-import { isValidUuid, secretsEqual } from '../core-helpers.js';
+import { isValidUuid } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
 
@@ -15,28 +15,24 @@ import { log } from '../logging.js';
  *   archive and the Sheets row (both idempotent through the publication key), then what the requester
  *   is sent. Asked again after a lost answer, it adopts the Drive files it already wrote.
  * - POST /v1/internal/tasks/:taskId/delivery-finished: the workflow's report, which moves the task
- *   (COMPLETE, PUBLISH_RECONCILIATION or back to APPROVED) once. In slice 2.3 the report goes to
- *   RequestLifecycle instead.
+ *   (COMPLETE, PUBLISH_RECONCILIATION or back to APPROVED) once for legacy runs. Request-owned
+ *   runs report to RequestLifecycle, which applies one versioned Core projection.
  *
  * They are registered straight on the app, not through registerRoute, because they take one
  * credential only: the worker's own HAWA_WORKER_TOKEN, a service principal (PHASE2_DESIGN.md 1.2
  * finding 3). The operator, Desk and API tokens all open registerRoute's guard, and none of them may
- * reach these. When verifyRequestAuth learns the service principal (the internal-auth work of the
- * same phase), a caller it maps to role 'service' is accepted too; until then this module checks the
- * token itself.
+ * reach these. verifyRequestAuth maps that token to role 'service' on /v1/internal/* only, and this
+ * module accepts that role and nothing else.
  */
 export function registerDeliveryInternalRoutes(ctx: RouteContext): void {
   const { app, problem, readCurrentTask, verifyRequestAuth } = ctx;
   const { prepareWorkflowDelivery, finishWorkflowDelivery } = ctx.delivery;
 
+  // Only verifyRequestAuth decides (ADR-128). On /v1/internal/* it accepts HAWA_WORKER_TOKEN alone and
+  // only through serviceTokenOf, which refuses a token shorter than 16 characters or equal to another
+  // key. This check used to compare the raw variable itself, so a worker token equal to the operator
+  // key let the operator key report a delivery or start one, while intake refused it.
   const isWorker = (c: Context): boolean => {
-    const configured = process.env.HAWA_WORKER_TOKEN;
-    const header = String(c.req.header('Authorization') || '');
-    const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
-    if (configured && configured.trim() && presented && secretsEqual(presented, configured)) return true;
-    // Only a request that carries a credential: the test harness signs token-less requests in as an
-    // operator, and an operator is refused anyway, but nothing here relies on that.
-    if (!presented) return false;
     const auth = verifyRequestAuth(c);
     return Boolean(auth.authenticated && auth.role === 'service');
   };
@@ -63,12 +59,20 @@ export function registerDeliveryInternalRoutes(ctx: RouteContext): void {
     }
     const taskTenant = task?.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
     if (!task || taskTenant !== tenantId) return failed(c, 404, 'TASK_NOT_FOUND', `Task ${taskId} is not in tenant ${tenantId}`);
+    const requestId = c.req.param('requestId') || '';
+    if (task.requestId ? requestId !== task.requestId || !Number.isInteger(body?.requestRev) ||
+        !Number.isInteger(body?.run) || typeof body?.deliveryId !== 'string'
+      : requestId !== taskId || body?.requestRev !== undefined) {
+      return failed(c, 409, 'LIFECYCLE_DELIVERY_NOT_CURRENT', 'The workflow input does not match this task\'s owner');
+    }
 
     const result = await prepareWorkflowDelivery(taskId, {
       tenantId,
       approvalId,
       revisionId: typeof body?.revisionId === 'string' ? body.revisionId : undefined,
       policy: typeof body?.policy === 'string' ? body.policy : undefined,
+      ...(task.requestId ? { lifecycle: { requestId, requestRev: Number(body.requestRev),
+        deliveryId: String(body.deliveryId), run: Number(body.run) } } : {}),
     });
     if (result?.ok && result.prepared) return c.json(result.prepared, 200);
     const status = Number(result?.status) || 500;

@@ -2,7 +2,8 @@ import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
 import { createHash } from 'node:crypto';
 import { withRlsContext } from '../client.js';
-import { parseBlobRef, sniffBlobMediaType, type BlobRef } from '@hawa/contracts';
+import { assertStudioBudgetAdmission, isStudioSubstepKey, studioBudgetUsage, StudioBudgetExhaustedError, StudioBudgetEvidenceError, type StudioDailyBudget, type StudioBudgetUsage, validateStudioReservation, type StudioCallReservation, type StudioCostBasis } from '@hawa/domain';
+import { parseBlobRef, sniffBlobMediaType, taskGenerationBlocker, type BlobRef } from '@hawa/contracts';
 import { BlobCorruptError, BlobMissingError, type BlobStore } from '../blobs/store.js';
 import type {
   Database,
@@ -67,21 +68,98 @@ export interface RecordCallStartParams {
   id: string;
   runId: string;
   tenantId: string;
+  /** Authenticated caller for the task's membership/RLS check; never provider input. */
+  actorId?: string;
   stage: string;
   provider: string;
   model: string;
   requestedModel: string;
+  /** Per-run sequence number for generation; parity checks use a content-only identity. */
+  callOrdinal: number | null;
+  logicalCallSha256: string;
+  reservation: StudioCallReservation;
+  /** ADR-122: the semantic substep, its attempt and the exact binding the result is valid for. */
+  substep?: { key: string; attempt: number; bindingText: string; bindingSha256: string };
+}
+
+export class ModelCallAdmissionConflictError extends Error {
+  readonly code = 'MODEL_CALL_ADMISSION_CONFLICT';
+  constructor() {
+    super('This logical Studio model call was already admitted by another process.');
+    this.name = 'ModelCallAdmissionConflictError';
+  }
+}
+
+export class TaskGenerationBlockedError extends Error {
+  readonly code = 'TASK_GENERATION_BLOCKED';
+  constructor(message: string) {
+    super(message);
+    this.name = 'TaskGenerationBlockedError';
+  }
+}
+
+export class StudioCallUncertainError extends Error {
+  readonly code = 'MODEL_CALL_UNCERTAIN';
+  readonly status = 409;
+  readonly isUncertain = true;
+  constructor() {
+    super('This task has an unresolved model call or active planner attempt. Reconcile its outcome before starting more paid work.');
+    this.name = 'StudioCallUncertainError';
+  }
+}
+
+/** Caller holds the task row lock, shared by run replacement, abandonment and call admission. */
+export async function assertStudioCallsResolved(
+  db: Kysely<Database>, tenantId: string, taskId: string, executingRunId?: string, executingPlanId?: string
+): Promise<void> {
+  let query = db.selectFrom('design_studio_calls as c')
+    .innerJoin('design_studio_runs as r', join => join.onRef('r.id', '=', 'c.run_id')
+      .onRef('r.tenant_id', '=', 'c.tenant_id'))
+    .select('c.id').where('r.tenant_id', '=', tenantId).where('r.task_id', '=', taskId)
+    .where('c.status', '=', 'uncertain')
+    .where(sql<boolean>`NOT EXISTS (SELECT 1 FROM hawa.studio_run_settlements s
+      WHERE s.tenant_id=c.tenant_id AND s.run_id=c.run_id
+        AND s.calls @> jsonb_build_array(jsonb_build_object('callId',c.id::text)))`);
+  if (executingRunId) query = query.where(eb => eb.or([
+    eb('r.id', '!=', executingRunId), eb('c.finished_at', 'is not', null),
+  ]));
+  if (await query.executeTakeFirst()) throw new StudioCallUncertainError();
+  const planner=(await sql`SELECT p.id FROM hawa.canva_design_plans p
+    LEFT JOIN hawa.canva_planner_calls c ON c.tenant_id=p.tenant_id AND c.id=p.id
+    WHERE p.tenant_id=${tenantId}::uuid AND p.task_id=${taskId}::uuid
+      AND p.id IS DISTINCT FROM ${executingPlanId??null}::uuid AND (
+        p.status='planning' OR ((p.paid_protocol IS NULL OR c.reconciliation_required) AND NOT EXISTS(
+          SELECT 1 FROM hawa.call_cost_attestations a WHERE a.tenant_id=p.tenant_id
+            AND a.call_kind='canva_planner' AND a.call_id=p.id))) LIMIT 1`.execute(db)).rows[0];
+  if(planner)throw new StudioCallUncertainError();
+}
+
+export class ModelCallFinalizationConflictError extends Error {
+  readonly code = 'MODEL_CALL_FINALIZATION_CONFLICT';
+  constructor() {
+    super('This Studio model call is missing or already has a recorded outcome.');
+    this.name = 'ModelCallFinalizationConflictError';
+  }
 }
 
 export interface FinalizeCallParams {
+  /** Private content, committed atomically with the successful receipt; not exposed in call lists. */
+  retainedResult?: { kind: 'structured' | 'image'; payload: unknown; image?: Buffer };
+  actorId?: string;
   id: string;
   tenantId: string;
   responseId?: string | null;
+  servedModel?: string | null;
+  providerRequestId?: string | null;
+  responseSha256?: string | null;
+  latencyMs?: number | null;
+  attempts?: number | null;
   inputTokens: number;
   cachedInputTokens?: number;
   outputTokens: number;
   images?: number;
   usdEstimate: number | string;
+  costBasis?: StudioCostBasis;
   status: DesignStudioCallStatus;
   errorCode?: string | null;
   finishedAt?: Date;
@@ -197,14 +275,14 @@ export class DesignStudioRepository {
 
   private async withClient<T>(
     trx: Kysely<Database> | undefined,
-    scope: { tenantId?: string; clientId?: string } | string | undefined,
+    scope: { tenantId?: string; clientId?: string; actorId?: string } | string | undefined,
     fn: (client: Kysely<Database>) => Promise<T>
   ): Promise<T> {
     const base = trx || this.db;
     const tenantId = typeof scope === 'string' ? scope : scope?.tenantId;
     const clientId = typeof scope === 'object' ? scope?.clientId : undefined;
     if (tenantId) {
-      return withRlsContext(base, { tenantId, clientId }, fn);
+      return withRlsContext(base, { tenantId, clientId, userId: typeof scope === 'object' ? scope.actorId : undefined }, fn);
     }
     return fn(base);
   }
@@ -224,6 +302,7 @@ export class DesignStudioRepository {
           request: JSON.stringify(params.request),
           tier: params.tier,
           status: 'briefing',
+          stages: JSON.stringify({}),
           budget: params.budget ? JSON.stringify(params.budget) : JSON.stringify({ maxUsd: 6.0, maxCalls: 40, spentUsd: 0.0, calls: 0 }),
         })
         .returningAll()
@@ -281,6 +360,8 @@ export class DesignStudioRepository {
       diagnostic?: string | null;
       budget?: Record<string, unknown>;
       stages?: Record<string, unknown> | Record<string, unknown>[];
+      /** Write only if the run is still at this status; otherwise nothing is written and undefined is returned. */
+      expectedStatus?: DesignStudioStatus;
     },
     trx?: Kysely<Database>
   ) {
@@ -296,13 +377,13 @@ export class DesignStudioRepository {
       if (extra?.budget !== undefined) updates.budget = JSON.stringify(extra.budget);
       if (extra?.stages !== undefined) updates.stages = JSON.stringify(extra.stages);
 
-      const [row] = await client
+      let query = client
         .updateTable('design_studio_runs')
         .set(updates)
         .where('id', '=', id)
-        .where('tenant_id', '=', tenantId)
-        .returningAll()
-        .execute();
+        .where('tenant_id', '=', tenantId);
+      if (extra?.expectedStatus !== undefined) query = query.where('status', '=', extra.expectedStatus);
+      const [row] = await query.returningAll().execute();
       return row;
     });
   }
@@ -506,7 +587,44 @@ export class DesignStudioRepository {
    * This guarantees that any initiated spend is journaled prior to network dispatch.
    */
   async recordCallStart(params: RecordCallStartParams, trx?: Kysely<Database>) {
-    return this.withClient(trx, params.tenantId, async (client) => {
+    validateStudioReservation(params.reservation);
+    if (params.callOrdinal !== null && (!Number.isSafeInteger(params.callOrdinal) || params.callOrdinal < 1)) {
+      throw new TypeError('Studio call ordinal must be a positive safe integer.');
+    }
+    if (!/^[0-9a-f]{64}$/.test(params.logicalCallSha256)) {
+      throw new TypeError('Studio logical call identity must be a SHA-256 digest.');
+    }
+    const substep = params.substep;
+    if (substep) {
+      let bound: unknown;
+      try { bound = JSON.parse(substep.bindingText); } catch { bound = undefined; }
+      if (!isStudioSubstepKey(substep.key) || !Number.isSafeInteger(substep.attempt) || substep.attempt < 1 ||
+          (bound as { substep?: unknown } | undefined)?.substep !== substep.key ||
+          createHash('sha256').update(substep.bindingText).digest('hex') !== substep.bindingSha256) {
+        throw new TypeError('Studio substep identity and binding must be valid and self-consistent.');
+      }
+    }
+    return withRlsContext(trx || this.db, { tenantId: params.tenantId, userId: params.actorId }, async (client) => {
+      // Cancellation and admission serialize on the same task row. Do not gate finalization:
+      // a request admitted before closure may still return a paid response afterwards.
+      const task = await client.selectFrom('tasks as t')
+        .innerJoin('design_studio_runs as r', join => join.onRef('r.task_id', '=', 't.id')
+          .onRef('r.tenant_id', '=', 't.tenant_id').onRef('r.client_id', '=', 't.client_id'))
+        .select(['t.id', 't.state']).where('r.id', '=', params.runId).where('t.tenant_id', '=', params.tenantId)
+        .forUpdate('t').executeTakeFirst();
+      const blocker = taskGenerationBlocker(task?.state);
+      if (blocker) throw new TaskGenerationBlockedError(blocker);
+      // Read after acquiring the task lock: abandonment may have committed while we waited.
+      const run = await client.selectFrom('design_studio_runs').select(['status', 'budget'])
+        .where('id', '=', params.runId).where('tenant_id', '=', params.tenantId).executeTakeFirst();
+      if (!run || ['abandoned', 'failed', 'degraded'].includes(run.status) ||
+          (run.status === 'transferred' && params.stage !== 'parity')) {
+        throw new TaskGenerationBlockedError('This Studio run is closed to new model requests.');
+      }
+      await assertStudioCallsResolved(client, params.tenantId, task!.id, params.runId);
+      // Different logical calls must compete for the same remaining slots under the task lock.
+      // The run JSON may be stale after a crash or permanently frozen after Canva transfer.
+      assertStudioBudgetAdmission(await this.readBudgetUsage(client, params.runId, params.tenantId, run.budget), params.reservation.usd);
       const [row] = await client
         .insertInto('design_studio_calls')
         .values({
@@ -517,11 +635,27 @@ export class DesignStudioRepository {
           provider: params.provider,
           model: params.model,
           requested_model: params.requestedModel,
+          call_ordinal: params.callOrdinal,
+          logical_call_sha256: params.logicalCallSha256,
+          reservation: params.reservation,
+          substep_key: substep?.key ?? null,
+          substep_attempt: substep?.attempt ?? null,
+          binding_text: substep?.bindingText ?? null,
+          binding_sha256: substep?.bindingSha256 ?? null,
           status: 'uncertain',
         })
+        .onConflict((oc) => oc.doNothing())
         .returningAll()
         .execute();
+      if (!row) throw new ModelCallAdmissionConflictError();
       return row;
+    }).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : '';
+      if (message.startsWith('STUDIO_SCOPE_BUDGET_EXHAUSTED:')) throw new StudioBudgetExhaustedError(message);
+      for (const code of ['STUDIO_BUDGET_INVALID', 'STUDIO_BUDGET_HISTORY_INCOMPLETE'] as const) {
+        if (message.startsWith(`${code}:`)) throw new StudioBudgetEvidenceError(code, message);
+      }
+      throw error;
     });
   }
 
@@ -529,39 +663,126 @@ export class DesignStudioRepository {
    * Finalizes the call in the ledger with exact tokens and USD spend.
    */
   async finalizeCall(params: FinalizeCallParams, trx?: Kysely<Database>) {
-    return this.withClient(trx, params.tenantId, async (client) => {
+    const retained = params.retainedResult;
+    let retainedValues: Omit<import('../types.js').DesignStudioCallResultsTable, 'created_at'> | undefined;
+    if (retained) {
+      if (params.status !== 'ok') throw new TypeError('Only a successful validated result may be retained.');
+      const payload = JSON.stringify(retained.payload);
+      if (!payload || !retained.payload || typeof retained.payload !== 'object' || Array.isArray(retained.payload) || Buffer.byteLength(payload) > 4194304) {
+        throw new TypeError('Retained Studio payload must be a bounded JSON object.');
+      }
+      const image = retained.image;
+      if (retained.kind === 'image' && (!image?.length || image.length > 33554432) || retained.kind === 'structured' && image) {
+        throw new TypeError('Retained Studio image is missing, oversized or incompatible with its result kind.');
+      }
+      const imageSha = image ? createHash('sha256').update(image).digest('hex') : null;
+      const imageType = image ? sniffBlobMediaType(image) : null;
+      if (image && (!imageType || !imageType.startsWith('image/'))) throw new TypeError('Retained image bytes have an unsupported format.');
+      const imageBlob = image && imageType && this.blobStore ? await this.blobStore.put(image, imageType) : null;
+      retainedValues = { tenant_id: params.tenantId, call_id: params.id, kind: retained.kind,
+        payload_text: payload, payload_sha256: createHash('sha256').update(payload).digest('hex'),
+        image_sha256: imageSha, image_blob_sha256: imageBlob?.sha256 ?? null, image_bytes: imageBlob ? null : image ?? null };
+    }
+    const usdEstimate = typeof params.usdEstimate === 'string' && !params.usdEstimate.trim() ? NaN : Number(params.usdEstimate);
+    if (!Number.isFinite(usdEstimate) || usdEstimate < 0) {
+      throw new TypeError('Studio call cost must be a finite nonnegative estimate.');
+    }
+    if (params.responseSha256 != null && !/^[0-9a-f]{64}$/.test(params.responseSha256)) {
+      throw new TypeError('Studio response identity must be a SHA-256 digest.');
+    }
+    if (params.latencyMs != null && (!Number.isSafeInteger(params.latencyMs) || params.latencyMs < 0)) {
+      throw new TypeError('Studio call latency must be a nonnegative integer.');
+    }
+    if (params.attempts != null && (!Number.isSafeInteger(params.attempts) || params.attempts < 1)) {
+      throw new TypeError('Studio call attempts must be a positive integer.');
+    }
+    return this.withClient(trx, { tenantId: params.tenantId, actorId: params.actorId }, async (client) => {
       const [row] = await client
         .updateTable('design_studio_calls')
         .set({
           response_id: params.responseId || null,
+          served_model: params.servedModel || null,
+          provider_request_id: params.providerRequestId || null,
+          response_sha256: params.responseSha256 || null,
+          latency_ms: params.latencyMs ?? null,
+          attempts: params.attempts ?? null,
           input_tokens: params.inputTokens,
           cached_input_tokens: params.cachedInputTokens || 0,
           output_tokens: params.outputTokens,
           images: params.images || 0,
-          usd_estimate: params.usdEstimate.toString(),
+          usd_estimate: usdEstimate.toString(),
+          cost_basis: params.costBasis ?? (params.status === 'uncertain' ? 'unavailable' : 'estimate'),
           status: params.status,
           error_code: params.errorCode || null,
           finished_at: params.finishedAt || new Date(),
         })
         .where('id', '=', params.id)
         .where('tenant_id', '=', params.tenantId)
+        .where('finished_at', 'is', null)
         .returningAll()
         .execute();
+      if (!row) throw new ModelCallFinalizationConflictError();
+      if (retainedValues) await client.insertInto('design_studio_call_results').values(retainedValues).execute();
       return row;
     });
   }
 
-  async getCallsForRun(runId: string, tenantId?: string, trx?: Kysely<Database>) {
-    return this.withClient(trx, tenantId, async (client) => {
+  async getCallsForRun(runId: string, tenantId?: string, trx?: Kysely<Database>, actorId?: string) {
+    return this.withClient(trx, { tenantId, actorId }, async (client) => {
       let query = client
         .selectFrom('design_studio_calls')
         .selectAll()
+        .select(sql<boolean>`EXISTS(SELECT 1 FROM hawa.design_studio_call_results retained
+          WHERE retained.tenant_id=design_studio_calls.tenant_id AND retained.call_id=design_studio_calls.id)`.as('has_retained_result'))
         .where('run_id', '=', runId)
         .orderBy('started_at', 'asc');
       if (tenantId) {
         query = query.where('tenant_id', '=', tenantId);
       }
       return await query.execute();
+    });
+  }
+
+  async getRetainedCallResult(callId: string, tenantId: string, actorId?: string) {
+    const row = await this.withClient(undefined, { tenantId, actorId }, client => client.selectFrom('design_studio_call_results')
+      .selectAll().where('call_id', '=', callId).where('tenant_id', '=', tenantId).executeTakeFirst());
+    if (!row) return null;
+    if (createHash('sha256').update(row.payload_text).digest('hex') !== row.payload_sha256) throw new Error('STUDIO_RETAINED_RESULT_CORRUPT');
+    let image: Buffer | undefined;
+    if (row.kind === 'image') {
+      if (row.image_blob_sha256) {
+        if (!this.blobStore) throw new Error('STUDIO_RETAINED_BLOB_STORE_UNAVAILABLE');
+        image = await this.blobStore.read(row.image_blob_sha256, { verify: true });
+      } else image = row.image_bytes ? Buffer.from(row.image_bytes) : undefined;
+      if (!image || createHash('sha256').update(image).digest('hex') !== row.image_sha256) throw new Error('STUDIO_RETAINED_IMAGE_CORRUPT');
+    }
+    return { kind: row.kind, payload: JSON.parse(row.payload_text) as unknown, image };
+  }
+
+  private async readBudgetUsage(client: Kysely<Database>, runId: string, tenantId: string, snapshot: unknown): Promise<StudioBudgetUsage> {
+    const calls = await sql<{ status: 'ok' | 'error' | 'uncertain'; estimated_usd: string; settled_usd: string | null; attested_usd: string | null; reservation: StudioCallReservation | null; cost_basis: StudioCostBasis | null }>`
+      SELECT c.status, c.reservation, c.cost_basis, c.usd_estimate AS estimated_usd,
+        (SELECT max((e.value->>'reportedCostUsd')::numeric)
+         FROM hawa.studio_run_settlements s CROSS JOIN LATERAL jsonb_array_elements(s.calls) e
+         WHERE s.tenant_id=c.tenant_id AND s.run_id=c.run_id AND e.value->>'callId'=c.id::text) AS settled_usd,
+        (SELECT max(a.reported_cost_usd) FROM hawa.call_cost_attestations a
+         WHERE a.tenant_id=c.tenant_id AND a.call_kind='studio' AND a.call_id=c.id) AS attested_usd
+      FROM hawa.design_studio_calls c WHERE c.tenant_id=${tenantId}::uuid AND c.run_id=${runId}::uuid
+      ORDER BY c.started_at,c.id`.execute(client);
+    return studioBudgetUsage(snapshot, calls.rows.map(c => ({ status: c.status,
+      reservedUsd: c.reservation?.usd ?? null, costBasis: c.cost_basis,
+      estimatedUsd: Number(c.estimated_usd), settledUsd: c.settled_usd === null ? null : Number(c.settled_usd),
+      attestedUsd: c.attested_usd === null ? null : Number(c.attested_usd) })));
+  }
+
+  async getBudgetUsage(runId: string, tenantId: string, actorId?: string): Promise<StudioBudgetUsage | null> {
+    return withRlsContext(this.db, { tenantId, userId: actorId }, async client => {
+      const run = await client.selectFrom('design_studio_runs').select(['budget', 'client_id'])
+        .where('tenant_id', '=', tenantId).where('id', '=', runId).executeTakeFirst();
+      if (!run) return null;
+      const usage = await this.readBudgetUsage(client, runId, tenantId, run.budget);
+      const daily = await sql<{ daily: StudioDailyBudget | null }>`SELECT hawa.studio_scope_budget(${run.client_id}::uuid) AS daily`.execute(client);
+      return { ...usage, daily: daily.rows[0]?.daily ?? null };
     });
   }
 
@@ -643,4 +864,3 @@ export class DesignStudioRepository {
     });
   }
 }
-

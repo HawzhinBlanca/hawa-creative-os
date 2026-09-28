@@ -47,7 +47,8 @@ export class OfflineRunner {
     };
   }
 
-  private createLayoutForConcept(
+  /** Deterministic layout for a concept; also the ADR-124 synthetic judge corpus basis. */
+  createLayoutForConcept(
     brief: StudioGoldenBrief,
     concept: Concept
   ): StudioLayoutV2 {

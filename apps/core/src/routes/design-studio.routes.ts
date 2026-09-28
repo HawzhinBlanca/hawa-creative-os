@@ -5,11 +5,13 @@ import {
   type DesignStudioServiceOptions,
 } from '../services/design-studio/index.js';
 import { CanvaConnectService, CanvaFlowError } from '../services/canva-connect-service.js';
-import { DesignStudioRepository, type CandidateImageKind } from '@hawa/db';
+import { DesignStudioRepository, withRlsContext, type CandidateImageKind } from '@hawa/db';
 import { isSha256Hex } from '@hawa/contracts';
+import { StudioBudgetEvidenceError, StudioBudgetExhaustedError } from '@hawa/domain';
 import { globalFeedbackMiner } from '@hawa/creative';
 import { blobStoreFor, storedFileLost } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
+import { rejectUnownedLifecycleDesignWrite } from './lifecycle-design-proof.js';
 
 /**
  * A candidate picture's address. With its hash in the path it is immutable (a revision renders a new
@@ -74,6 +76,9 @@ export function registerDesignStudioRoutes(
       }
     }
 
+    const lifecycleRefusal = await rejectUnownedLifecycleDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
+
     try {
       // The actor is the user's id, a uuid: studio runs, calls and Canva connections are keyed by it.
       // auth.actorId is a label ('operator_1' for API-key callers such as the worker); passing it
@@ -85,6 +90,9 @@ export function registerDesignStudioRoutes(
         if (error.retryAfterMs !== undefined) c.header('Retry-After', String(Math.ceil(error.retryAfterMs / 1000)));
         return ctx.problem(c, error.status, error.code, error.message);
       }
+      if (error instanceof StudioBudgetEvidenceError || error instanceof StudioBudgetExhaustedError) {
+        return ctx.problem(c, 409, error.code, error.message);
+      }
       return ctx.problem(
         c,
         500,
@@ -95,6 +103,16 @@ export function registerDesignStudioRoutes(
   };
 
   // 1. POST /tasks/:taskId/canva/studio — start studio run
+  ctx.registerRoute('get', '/tasks/:taskId/canva/studio', protect(async (c, s, _svc, repo) => {
+    const taskId = c.req.param('taskId');
+    return withRlsContext(ctx.db!, { tenantId: s.tenantId, userId: s.actorId, role: s.role }, async db => {
+      const task = await db.selectFrom('tasks').select('id').where('id', '=', taskId)
+        .where('tenant_id', '=', s.tenantId).executeTakeFirst();
+      if (!task) return ctx.problem(c, 404, 'Task Not Found');
+      const run = await repo.getLatestRunForTask(taskId, s.tenantId, db);
+      return c.json({ runId: run?.id ?? null, status: run?.status ?? null });
+    });
+  }));
   ctx.registerRoute(
     'post',
     '/tasks/:taskId/canva/studio',
@@ -159,6 +177,7 @@ export function registerDesignStudioRoutes(
       const candidateRows = await r.getCandidatesForRun(runId, s.tenantId, undefined, { images: false });
       const judgments = await r.getJudgmentsForRun(runId, s.tenantId);
       const calls = await r.getCallsForRun(runId, s.tenantId);
+      const budgetUsage = await r.getBudgetUsage(runId, s.tenantId, s.actorId);
 
       const candidates = candidateRows.map((row) => ({
         id: row.id,
@@ -190,6 +209,7 @@ export function registerDesignStudioRoutes(
           winnerCandidateId: run.winner_candidate_id,
           judgeStatus: run.judge_status,
           budget: typeof run.budget === 'string' ? JSON.parse(run.budget) : run.budget,
+          budgetUsage,
           stages: typeof run.stages === 'string' ? JSON.parse(run.stages || '{}') : run.stages,
           diagnostic: run.diagnostic,
           createdAt: run.created_at,
@@ -206,13 +226,32 @@ export function registerDesignStudioRoutes(
           createdAt: j.created_at,
         })),
         callsCount: calls.length,
-        totalUsdEstimate: calls.reduce((acc, call) => acc + Number(call.usd_estimate ?? 0), 0),
-        // Which model answered each call, as the provider reported it (the ledger's `model`).
+        // An unresolved provider acceptance may have been billed. Never show its stored zero
+        // placeholder as a complete estimate for the run.
+        uncertainCallsCount: calls.filter((call) => call.status === 'uncertain').length,
+        totalUsdEstimate: calls.some((call) => call.status === 'uncertain')
+          ? null : calls.reduce((acc, call) => acc + Number(call.usd_estimate ?? 0), 0),
+        knownUsdEstimate: calls.filter((call) => call.status !== 'uncertain')
+          .reduce((acc, call) => acc + Number(call.usd_estimate ?? 0), 0),
+        // `model` is the requested deployment; `servedModel` is provider-reported when known.
         calls: calls.map((call) => ({
+          id: call.id,
+          callOrdinal: call.call_ordinal,
+          logicalCallSha256: call.logical_call_sha256,
           stage: call.stage,
+          provider: call.provider,
           model: call.model,
+          servedModel: call.served_model,
+          responseId: call.response_id,
+          providerRequestId: call.provider_request_id,
+          responseSha256: call.response_sha256,
+          latencyMs: call.latency_ms,
+          attempts: call.attempts,
           status: call.status,
-          usdEstimate: Number(call.usd_estimate ?? 0),
+          errorCode: call.error_code,
+          startedAt: call.started_at,
+          finishedAt: call.finished_at,
+          usdEstimate: call.status === 'uncertain' ? null : Number(call.usd_estimate ?? 0),
         })),
       });
     })
@@ -442,4 +481,3 @@ export function registerDesignStudioRoutes(
   ctx.registerRoute('post', '/tasks/:taskId/canva/parity-check', protect(handleParityCheck));
   ctx.registerRoute('post', '/tasks/:taskId/canva/studio/:runId/parity', protect(handleParityCheck));
 }
-

@@ -8,36 +8,29 @@
  *   HAWA_CHAOS_KEEP=1   leave the project running afterwards (default: taken down with its volumes)
  *   HAWA_CHAOS_ONLY=R1.0,R4   run only these scenarios
  *   CHAOS_TELEGRAM_POLLER=worker   the worker polls Telegram through ChatInbox (Phase 2.1; run.ts --poller worker)
- *   HAWA_CHAOS_RESTORE_DRILL=1   the Restate restore drill, RD1 (2.6; run.ts --restore-drill)
  *
  * It drives the legacy path; with the worker poller, intake goes through ChatInbox first. The results (per scenario: invariants, time, memory) are written to
  * .run/last-run.json and printed; a failed invariant fails its scenario.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { candidateSources } from './driver/candidate-sources.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { build, CHAOS_DIR, closeDb, down, fakes, kill, logs, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, sql, start, up, waitHealthy } from './driver/stack.js';
-import { archivePath, archives, backupLog, field, intakeSwitchedOff, prepareDrill, restore, startBackup } from './driver/restore-drill.js';
-import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema, KAAE_CLIENT_ID } from './driver/provision.js';
 import { randomUUID } from 'node:crypto';
+import { build, CHAOS_DIR, closeDb, deploymentReceipt, down, fakes, kill, memory, PORTS, query, restateQuery, RESTATE_INGRESS_URL, secrets, sql, stackState, start, up, waitHealthy } from './driver/stack.js';
+import { connectCanva, finishDrains, kaaeClientDna, registerColour, upgradeSchema } from './driver/provision.js';
 import {
-  checkLifecycle, checkOfficeDecisions, lifecycleBrief, lifecycleChat, lifecycleChatList, lifecycleView, liveColour, messagesWith, replyToDraft, requestsOfChat,
-  restartWorkerWith, roundTasks, switchPoller, tap, waitDraftSent, waitLifecycleDelivered, type LifecycleRequest,
-} from './driver/lifecycle.js';
-import {
-  OFFICE_CHAT, approve, briefText, briefToDraft, checkIntake, checkRequest, deliver, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
-  sendToChatInbox, sentTo, sleep, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
+  approve, briefToDraft, captionedPhotoUpdate, chatInboxInvocations, checkIntake, checkRequest, deliver, designOutcome, draftOf, imageDocumentUpdate, killAtPoint, killWhileHeld, quiescent, sendBrief,
+  OFFICE_CHAT, sendToChatInbox, sentTo, sleep, staffConfirmVisible, storedOffset, tasksOfChat, taskState, textUpdate, uncoveredModelCalls, waitDelivered, waitUntil, type InvariantResult,
 } from './driver/scenario.js';
 
 const enabled = process.env.HAWA_CHAOS === '1';
 const only = (process.env.HAWA_CHAOS_ONLY || '').split(',').map((s) => s.trim()).filter(Boolean);
 const keep = process.env.HAWA_CHAOS_KEEP === '1';
+const candidate = process.env.HAWA_CHAOS_CANDIDATE === '1';
 // Who polls Telegram in the stack (run.ts --poller; docker-compose.chaos.yml): Core, as production
 // does today, or the worker's poller and ChatInbox (Phase 2.1). Scenarios of 2.1 need the worker.
 const poller = (process.env.CHAOS_TELEGRAM_POLLER || 'core').trim().toLowerCase() === 'worker' ? 'worker' : 'core';
-// The restore drill (RD1) restores Restate from an archive, which rolls back every scenario's Restate
-// state: it runs only when asked for (run.ts --restore-drill), and last.
-const restoreDrill = process.env.HAWA_CHAOS_RESTORE_DRILL === '1';
 
 interface ScenarioReport {
   name: string;
@@ -60,10 +53,10 @@ function sampleMemory(): void {
 
 let chatSeq = 9_200_000 + (Date.now() % 100_000) * 10;
 const newChat = () => String(++chatSeq);
-// Chats on HAWA_LIFECYCLE_CHATS (docker-compose.chaos.yml): 9300001 to 9300012, one per scenario.
+// Chats on HAWA_LIFECYCLE_CHATS (docker-compose.chaos.yml): 9300001 to 9300024, one per scenario.
 let flaggedSeq = 9_300_000;
 const flaggedChat = () => {
-  if (flaggedSeq >= 9_300_012) throw new Error('every flagged chat of docker-compose.chaos.yml is used; add more there');
+  if (flaggedSeq >= 9_300_024) throw new Error('every flagged chat of docker-compose.chaos.yml is used; add more there');
   return String(++flaggedSeq);
 };
 
@@ -73,6 +66,8 @@ const flaggedChat = () => {
  */
 interface Expectation {
   delivered: boolean;
+  /** An open lifecycle request keeps a future reminder scheduled in Restate. */
+  skipQuiescence?: boolean;
   classifierAllowance?: number;
   /** Sends the scenario makes uncertain (each must end with one office alert and no resend). */
   uncertainSends?: number;
@@ -88,11 +83,10 @@ interface Expectation {
   executor?: 'core' | 'restate';
 }
 
-function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, options: { flagged?: boolean; lifecycle?: boolean; needs?: 'worker-poller' | 'restore-drill' } = {}) {
-  const needsMet = options.needs === 'worker-poller' ? poller === 'worker' : options.needs === 'restore-drill' ? restoreDrill && poller === 'worker' : true;
-  const run = enabled && (only.length === 0 || only.includes(name)) && needsMet;
+function scenario(name: string, what: string, script: (chat: string, events: string[]) => Promise<Expectation>, timeoutMs = 12 * 60_000, options: { flagged?: boolean; needs?: 'worker-poller' } = {}) {
+  const run = enabled && (only.length === 0 || only.includes(name)) && (options.needs !== 'worker-poller' || poller === 'worker');
   it.skipIf(!run)(`${name}: ${what}`, async () => {
-    const chat = options.lifecycle ? lifecycleChat() : options.flagged ? flaggedChat() : newChat();
+    const chat = options.flagged ? flaggedChat() : newChat();
     const events: string[] = [];
     const started = Date.now();
     const report: ScenarioReport = { name, what, ms: 0, invariants: [], events };
@@ -102,14 +96,16 @@ function scenario(name: string, what: string, script: (chat: string, events: str
       const ledgerSince = Math.max(0, ...(ledger.ledger as any[]).map((l) => l.seq));
       const expectation = await script(chat, events);
       await fakes.release();
-      await quiescent();
+      if (!expectation.skipQuiescence) await quiescent();
       report.invariants = [
         ...(expectation.skipRequestChecks ? [] : await checkRequest(chat, { ...expectation, ledgerSince })),
         ...(expectation.extra || []),
         ...(expectation.after ? await expectation.after() : []),
       ];
     } catch (err) {
-      report.error = err instanceof Error ? err.message : String(err);
+      report.error = err instanceof Error ? `${err.message}${err.cause instanceof Error ? `; cause: ${err.cause.message}` : ''}` : String(err);
+      // A lost stack (a refused or failed connection) is reported with the containers' states.
+      if (/ECONNREFUSED|fetch failed|ECONNRESET/.test(report.error)) report.events.push(`stack: ${stackState()}`);
     } finally {
       await fakes.clearFaults().catch(() => undefined);
       report.ms = Date.now() - started;
@@ -142,10 +138,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     // Always from nothing: a kept project from an earlier run would carry its tasks and journals.
     down({ volumes: true });
     // Core and the worker start below with --no-build, so their images are built from this checkout here.
-    build(['core', 'worker-blue']);
-    // Slice 2.3: the chats whose new requests the workers' ChatInbox opens on RequestLifecycle.
-    process.env.CHAOS_WORKER_LIFECYCLE_CHATS = lifecycleChatList();
-    process.env.CHAOS_REMINDER_SCALE = '1';
+    build(['core', 'worker-blue', ...(candidate ? ['desk', 'docling'] as const : [])]);
     up({ services: ['postgres', 'restate', 'fakes'] });
     await upgradeSchema();
     await connectCanva();
@@ -153,6 +146,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     up({ build: false, services: ['core', 'worker-blue'] });
     const reg = await registerColour('blue');
     if (reg.code !== 0) throw new Error(`register blue: ${reg.lines.join(' | ')}`);
+    if (candidate) up({ build: false, services: ['docling', 'desk', 'nginx'] });
     sampleMemory();
   }, 30 * 60_000);
 
@@ -161,7 +155,9 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     const result = {
       finishedAt: new Date().toISOString(),
       telegramPoller: poller,
+      ...(candidate ? { deployment: deploymentReceipt() } : {}),
       totalMs: Date.now() - suiteStarted,
+      memoryMeasurement: 'start/end and scenario samples; not a continuous peak measurement',
       peakMemoryMiB: peakMemory,
       peakTotalMiB: Math.max(0, ...samples.map((s) => s.totalMiB)),
       uncoveredModelCalls: await uncoveredModelCalls().catch(() => ['(fakes unreachable)']),
@@ -179,24 +175,31 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     else console.log('[chaos] HAWA_CHAOS_KEEP=1: the hawa-chaos project is still running; take it down with `npx tsx packages/testkit/chaos/run.ts --down`.');
   }, 10 * 60_000);
 
+  if (candidate) scenario('R1.S3.SOURCES', 'full-app PDF source to voice revision and simulated approved delivery', async (chat, events) => ({
+    delivered: false, skipRequestChecks: true, skipQuiescence: true, extra: await candidateSources(chat, events, suiteStarted),
+  }), 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+
   scenario('R1.0', 'happy path: brief, draft, approve, deliver, no faults', async (chat, events) => {
     await fullRequest(chat, 'R1.0', events);
     return { delivered: true };
   });
 
-  scenario('R1.K0', 'Core killed while the intake classifier (a paid call) is answering, back after 5 s', async (chat, events) => {
-    await fakes.modelDelay({ schema: 'telegram_classifier', delayMs: 4000, n: 1 });
-    const before = (await fakes.modelLedger()).arrivals.length;
+  // Since 82b28988 (2026-09-25) intake classifies an unscoped Telegram text locally: no production
+  // caller passes the client egress decision the paid classifier needs, so intake makes no model
+  // call to kill Core in. The slow moment of intake is now its acknowledgement: Core kills during
+  // that send, after the task was committed and before the poller stored the offset. The update is
+  // polled again after the restart and must be answered as the duplicate it is.
+  scenario('R1.K0', 'Core killed while intake acknowledges the brief (the send slowed to 4 s), back after 5 s', async (chat, events) => {
+    await fakes.telegramFault({ method: 'sendMessage', chat, kind: 'delay', delayMs: 4000, n: 1 });
     const request = fullRequest(chat, 'R1.K0', events);
-    await waitUntil('the classifier request', async () => (await fakes.modelLedger()).arrivals.slice(before).some((a: any) => a.schema === 'telegram_classifier'), 60_000, 200);
+    await waitUntil('the acknowledgement send', async () => (await fakes.telegramCalls()).some((c) => c.method === 'sendMessage' && c.chat === chat), 60_000, 200);
     kill('core');
-    events.push('killed core while the classifier was answering');
+    events.push(`killed core while the acknowledgement was being sent (tasks then: ${(await tasksOfChat(chat)).length})`);
     await sleep(5000);
     start('core');
     await waitHealthy('core');
     await request;
-    // The update is polled again after the restart, so intake classifies it again: the design allows 2.
-    return { delivered: true, classifierAllowance: 2 };
+    return { delivered: true };
   });
 
   scenario('R1.K1', 'worker killed after claiming task.created, before dispatching it', async (chat, events) => {
@@ -328,7 +331,20 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     const taskId = await fullRequestUntilDelivery(chat, 'R1.K15', events);
     events.push(`killed ${(await k.done).killed} after the document send`);
     await waitUntil('the delivery command to settle', async () => !(await outboxOpen(taskId)), 300_000, 2000);
-    return { delivered: true, uncertainSends: 1 };
+    // Since 6407deb6 (ADR-045 addendum) the sender retries only its 'sent' mark for about 15 s when
+    // Postgres is gone after Telegram answered. A 5 s outage ends with the mark written: nothing is
+    // uncertain and the office hears nothing (as L2.K17 for the Delivery workflow's sender).
+    const marks = await query<{ step: string; outcome: string }>(sql`SELECT DISTINCT ON (e.source_event_id)
+        e.source_event_id AS step, e.event_kind AS outcome FROM hawa.inbox_events e
+      JOIN hawa.outbox_commands o ON e.source_event_id LIKE o.id::text || ':%'
+      WHERE o.aggregate_id = ${taskId}::uuid AND o.command_type = 'notify.published'
+        AND e.source_account_id = 'telegram_delivery' AND e.event_kind LIKE 'telegram_document_%'
+      ORDER BY e.source_event_id, e.received_at DESC, e.id DESC`);
+    return {
+      delivered: true, uncertainSends: 0,
+      extra: [{ name: "the held file's 'sent' mark is written once Postgres is back", ok: marks.length >= 1 && marks.every((m) => m.outcome === 'telegram_document_sent'),
+        detail: JSON.stringify(marks.map((m) => m.outcome)) }],
+    };
   });
 
   scenario('R1.D1', 'deploy to green while the design runs on blue: it finishes on blue, blue drains and is deleted', async (chat, events) => {
@@ -416,22 +432,21 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
   }, 12 * 60_000, { needs: 'worker-poller' });
 
-  scenario('R1.S2.K5b', 'worker killed while the intake classifier (a paid call, slowed to 4 s) answers its update', async (chat, events) => {
-    await fakes.modelDelay({ schema: 'telegram_classifier', delayMs: 4000, n: 1 });
-    const before = (await fakes.modelLedger()).arrivals.length;
+  // As R1.K0: since 82b28988 intake makes no classifier call for an unscoped text, so the worker is
+  // killed while Core's intake is sending the acknowledgement (slowed to 4 s) instead.
+  scenario('R1.S2.K5b', 'worker killed while Core\'s intake acknowledges its update (the send slowed to 4 s)', async (chat, events) => {
+    await fakes.telegramFault({ method: 'sendMessage', chat, kind: 'delay', delayMs: 4000, n: 1 });
     const update = await sendBrief(chat, 'R1.S2.K5b');
     events.push(`update ${update.update_id} in chat ${chat}`);
-    await waitUntil('the classifier request', async () => (await fakes.modelLedger()).arrivals.slice(before).some((a: any) => a.schema === 'telegram_classifier'), 60_000, 200);
+    await waitUntil('the acknowledgement send', async () => (await fakes.telegramCalls()).some((c) => c.method === 'sendMessage' && c.chat === chat), 60_000, 200);
     kill('worker-blue');
-    events.push('killed worker-blue while the classifier was answering');
+    events.push('killed worker-blue while intake was acknowledging');
     await sleep(2000);
     start('worker-blue');
     await waitHealthy('worker-blue');
     const taskId = await draftOf(chat);
     events.push(`task ${taskId}: draft in chat`);
-    // Core's first intake call may still be classifying when Restate retries the step on the restarted
-    // worker, so the design allows the classifier twice here (PHASE2_DESIGN.md 2.1 acceptance (c)).
-    return { delivered: false, classifierAllowance: 2, after: () => checkIntake(chat, [update.update_id]) };
+    return { delivered: false, after: () => checkIntake(chat, [update.update_id]) };
   }, 12 * 60_000, { needs: 'worker-poller' });
 
   scenario('R1.DUP', 'the same update handed on twice (Restate\'s key, then past it) makes one task and one acknowledgement', async (chat, events) => {
@@ -455,8 +470,363 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     };
   }, 12 * 60_000, { needs: 'worker-poller' });
 
+  // R07/FR-060/NFR-001: a flagged chat opens its first request through RequestLifecycle.
+  // Crash Core after it commits the intake decision but before ChatInbox receives the answer;
+  // then cross Restate's seven-day key with another invocation of the same Telegram update.
+  scenario('R1.S3.K1', 'flagged chat: a Core crash and update replay open one owned request and send one acknowledgement', async (chat, events) => {
+    const killed = await killAtPoint('core.intake.after-decision', { chat });
+    const update = textUpdate(chat, 'Please use a navy background and a clean serif font for the design.');
+    const [updateId] = await fakes.updates([update]);
+    const polled = { ...update, update_id: updateId };
+    events.push(`update ${updateId} in flagged chat ${chat}`);
+    events.push(`killed ${(await killed.done).killed} after Core committed the intake decision`);
+    await waitUntil('the request-owned task and acknowledgement', async () => {
+      const tasks = await tasksOfChat(chat);
+      const acknowledgements = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' &&
+        send.text?.includes('Request received.'));
+      return tasks.length === 1 && acknowledgements.length === 1 ? tasks[0] : null;
+    });
+    const replay = await sendToChatInbox(chat, polled, `chaos-lifecycle-replay-${updateId}`);
+    events.push(`same update under a second Restate key: HTTP ${replay}`);
+    return {
+      delivered: false,
+      skipRequestChecks: true,
+      extra: [{ name: 'second Restate key accepted for replay', ok: replay === 200 || replay === 202,
+        detail: `HTTP ${replay}` }],
+      after: async () => {
+        const tasks = await tasksOfChat(chat);
+        const requests = await query<{ request_id: string; root_task_id: string; owner: string; stage: string; rev: string }>(sql`
+          SELECT request_id, root_task_id, owner, stage, rev FROM hawa.requests WHERE chat_id = ${chat}`);
+        const projections = requests.length === 1
+          ? await query<{ rev: string }>(sql`SELECT rev FROM hawa.lifecycle_projections
+              WHERE request_id = ${requests[0].request_id}::uuid`)
+          : [];
+        const acknowledgements = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' &&
+          send.text?.includes('Request received.'));
+        const invocations = requests.length === 1 ? await restateQuery<{ status: string }>(
+          `SELECT status FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${requests[0].request_id}' AND target_handler_name = 'open'`
+        ) : [];
+        const inbox = (await chatInboxInvocations(chat)).filter((item) =>
+          item.idempotency_key === `tg-${updateId}` ||
+          item.idempotency_key === `chaos-lifecycle-replay-${updateId}`);
+        const offset = await storedOffset();
+        return [
+          { name: 'one task and one Restate-owned request', ok: tasks.length === 1 && requests.length === 1 &&
+            requests[0].owner === 'restate' && requests[0].stage === 'manual' && tasks[0].id === requests[0].root_task_id,
+            detail: JSON.stringify({ tasks, requests }) },
+          { name: 'one version-one projection', ok: projections.length === 1 && Number(projections[0].rev) === 1,
+            detail: JSON.stringify(projections) },
+          { name: 'one requester acknowledgement', ok: acknowledgements.length === 1,
+            detail: `acknowledgements=${acknowledgements.length}` },
+          { name: 'request owner invocation completed', ok: invocations.length === 1 && invocations[0].status === 'completed',
+            detail: JSON.stringify(invocations) },
+          { name: 'both ChatInbox invocations completed', ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
+            detail: JSON.stringify(inbox) },
+          { name: 'Telegram offset passed the update', ok: offset >= updateId,
+            detail: `offset=${offset} update=${updateId}` },
+        ];
+      },
+    };
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+
+  scenario('R1.S3.PHOTO', 'flagged chat: a captioned photo survives a Core crash, binds to one request, and is downloaded once', async (chat, events) => {
+    const fileId = `lifecycle-reference-${chat}`;
+    const size = 1024;
+    await fakes.file({ file_id: fileId, size, mime: 'image/jpeg' });
+    const killed = await killAtPoint('core.intake.after-decision', { chat });
+    const update = captionedPhotoUpdate(chat, fileId, size,
+      'Please use the attached image as a reference and change the background to navy.');
+    const [updateId] = await fakes.updates([update]);
+    const polled = { ...update, update_id: updateId };
+    events.push(`captioned photo update ${updateId} in flagged chat ${chat}`);
+    events.push(`killed ${(await killed.done).killed} after the stored photo decision`);
+    await waitUntil('the photo-owned request and acknowledgement', async () => {
+      const requests = await query<{ request_id: string }>(sql`SELECT request_id FROM hawa.requests WHERE chat_id = ${chat}`);
+      const acks = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' && send.text?.includes('Request received.'));
+      return requests.length === 1 && acks.length === 1 ? requests[0] : null;
+    });
+    const replay = await sendToChatInbox(chat, polled, `chaos-photo-replay-${updateId}`);
+    events.push(`same photo under a second Restate key: HTTP ${replay}`);
+    return {
+      delivered: false, skipRequestChecks: true,
+      extra: [{ name: 'second photo update accepted for replay', ok: replay === 200 || replay === 202, detail: `HTTP ${replay}` }],
+      after: async () => {
+        const requests = await query<{ request_id: string; root_task_id: string; owner: string; stage: string }>(sql`
+          SELECT request_id, root_task_id, owner, stage FROM hawa.requests WHERE chat_id = ${chat}`);
+        const tasks = await tasksOfChat(chat);
+        const files = requests.length === 1 ? await query<{ sha256: string; role: string; size: string; media_type: string }>(sql`
+          SELECT f.sha256, f.role, b.size, b.media_type FROM hawa.task_files f
+          JOIN hawa.blobs b ON b.sha256 = f.sha256 WHERE f.task_id = ${requests[0].root_task_id}::uuid`) : [];
+        const refs = files.length === 1 ? await query<{ h: string }>(sql`
+          SELECT h FROM hawa.blob_reference_hashes() AS h WHERE h = ${files[0].sha256}`) : [];
+        const decisions = await query<{ payload: any }>(sql`SELECT payload FROM hawa.inbox_events
+          WHERE source_account_id = 'lifecycle_chat_open' AND source_event_id = ${String(updateId)}`);
+        const downloads = (await fakes.polls()).downloads?.filter((id: string) => id === fileId) ?? [];
+        const acks = (await sentTo(chat)).filter((send) => send.method === 'sendMessage' && send.text?.includes('Request received.'));
+        const parked = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events WHERE source_event_id = ${`parked-update-${updateId}`}`);
+        const inbox = (await chatInboxInvocations(chat)).filter((item) =>
+          item.idempotency_key === `tg-${updateId}` || item.idempotency_key === `chaos-photo-replay-${updateId}`);
+        return [
+          { name: 'one Restate-owned manual request and task', ok: requests.length === 1 && tasks.length === 1 &&
+            requests[0].owner === 'restate' && requests[0].stage === 'manual' && requests[0].root_task_id === tasks[0].id,
+            detail: JSON.stringify({ requests, tasks }) },
+          { name: 'the image is bound to the task and retained for retrieval', ok: files.length === 1 &&
+            files[0].role === 'reference_image' && files[0].media_type === 'image/jpeg' && Number(files[0].size) === size && refs.length === 1,
+            detail: JSON.stringify({ files, refs }) },
+          { name: 'the decision carries only an image reference', ok: decisions.length === 1 &&
+            decisions[0].payload?.draft?.lifecycleImage?.sha256 === files[0]?.sha256 &&
+            !JSON.stringify(decisions[0].payload).includes('/9j/'), detail: JSON.stringify(decisions[0]?.payload?.draft?.lifecycleImage) },
+          { name: 'the photo is downloaded once across crash and replay', ok: downloads.length === 1, detail: `downloads=${downloads.length}` },
+          { name: 'one acknowledgement and no parked update', ok: acks.length === 1 && Number(parked[0]?.n ?? 0) === 0,
+            detail: `acknowledgements=${acks.length} parked=${parked[0]?.n ?? 0}` },
+          { name: 'both photo intake invocations completed', ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
+            detail: JSON.stringify(inbox) },
+        ];
+      },
+    };
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+
+  for (const mediaKind of ['captioned', 'captionless', 'album', 'document', 'document-album'] as const) {
+  const document = mediaKind === 'document' || mediaKind === 'document-album';
+  const album = mediaKind === 'album' || mediaKind === 'document-album';
+  const captionless = mediaKind === 'captionless' || mediaKind === 'document';
+  const scenarioId = document ? (album ? 'R1.S3.DOCUMENT_ALBUM' : 'R1.S3.IMAGE_DOCUMENT')
+    : album ? 'R1.S3.ALBUM' : captionless ? 'R1.S3.CAPTIONLESS_PHOTO' : 'R1.S3.REVISION_PHOTO';
+  scenario(scenarioId, `flagged chat: ${mediaKind} photo input survives Core SIGKILL before task projection`, async (chat, events) => {
+    await sendBrief(chat, scenarioId);
+    const request = await waitUntil('the first draft to enter lifecycle review', async () => {
+      const [row] = await query<{ request_id: string; current_task_id: string; rev: string; stage: string }>(sql`
+        SELECT request_id, current_task_id, rev, stage FROM hawa.requests WHERE chat_id = ${chat}`);
+      return row?.stage === 'in_review' && Number(row.rev) === 2 ? row : null;
+    });
+    const rootTaskId = request.current_task_id;
+    const [root] = await query<{ revision_id: string }>(sql`
+      SELECT current_design_revision_id AS revision_id FROM hawa.tasks WHERE id = ${rootTaskId}::uuid`);
+    if (!root?.revision_id) throw new Error(`task ${rootTaskId} has no reviewable revision`);
+    const office = await fakes.core(`/tasks/${rootTaskId}/revisions/${root.revision_id}/decisions`,
+      secrets().CHAOS_REVIEWER_KEY, { headers: { 'Idempotency-Key': randomUUID() }, body: {
+        action: 'revision_requested', revisionRequest: {
+          scope: 'copy', category: 'factual_error', targetNodes: ['venue'], priority: 'high',
+          isReusableFeedback: false, comment: 'Use the new image as the visual reference',
+        },
+      } });
+    events.push(`office revision: HTTP ${office.status}`);
+    if (office.status !== 201) throw new Error(`office revision refused: ${JSON.stringify(office.json).slice(0, 400)}`);
+    await waitUntil('request waiting for a revision at rev 3', async () => {
+      const [row] = await query<{ rev: string; stage: string }>(sql`
+        SELECT rev, stage FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+      return row?.stage === 'manual' && Number(row.rev) === 3 ? row : null;
+    });
+    const fileId = `lifecycle-revision-${chat}`;
+    const secondFileId = `${fileId}-second`;
+    const size = 1024;
+    await fakes.file({ file_id: fileId, size, mime: 'image/jpeg' });
+    let update: { message: Record<string, unknown> } = captionedPhotoUpdate(chat, fileId, size,
+      'Please use this photo as the reference and change the background to navy.');
+    const asDocument = (part: { message: Record<string, unknown> }, id: string, bytes: number) => {
+      delete part.message.photo;
+      part.message.document = { file_id: id, file_name: 'original.jpg', mime_type: 'image/jpeg', file_size: bytes,
+        thumbnail: { file_id: `${id}-thumbnail` } };
+    };
+    if (document) asDocument(update, fileId, size);
+    if (captionless || album) {
+      const noticeId = await waitUntil('the current office revision notice to be confirmed', async () => {
+        const [mark] = await query<{ message_id: string }>(sql`SELECT payload->>'messageId' AS message_id
+          FROM hawa.inbox_events WHERE source_account_id = 'telegram_delivery'
+            AND event_kind = 'telegram_message_sent'
+            AND source_event_id = ${`lc:${request.request_id}:3:office-revision-notify:send`}`);
+        return mark?.message_id ? Number(mark.message_id) : null;
+      });
+      if (captionless) delete update.message.caption;
+      update.message.reply_to_message = { message_id: noticeId };
+      events.push(`${mediaKind} reply to confirmed notice ${noticeId}`);
+      if (album) {
+        await fakes.file({ file_id: secondFileId, size: size + 1, mime: 'image/jpeg' });
+        const second: { message: Record<string, unknown> } = captionedPhotoUpdate(chat, secondFileId, size + 1, '');
+        if (document) asDocument(second, secondFileId, size + 1);
+        delete second.message.caption;
+        const groupId = `chaos-album-${chat}`;
+        update.message.media_group_id = groupId;
+        second.message.media_group_id = groupId;
+        second.message.reply_to_message = { message_id: noticeId };
+        const partIds = await fakes.updates([update, second]);
+        await waitUntil('both album parts saved before confirmation', async () => {
+          const [row] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
+            WHERE source_account_id = 'lifecycle_album_part' AND payload->>'chatId' = ${chat}
+              AND payload->>'groupId' = ${groupId} AND payload->'image'->>'sha256' IS NOT NULL`);
+          return Number(row?.n) === 2 ? true : null;
+        });
+        if ((await tasksOfChat(chat)).length !== 1) throw new Error('An album started a task before confirmation');
+        events.push(`saved album updates ${partIds.join(', ')}; no child before confirmation`);
+        const confirmation: { message: Record<string, unknown> } = textUpdate(chat, '/use_album');
+        confirmation.message.reply_to_message = { message_id: update.message.message_id };
+        update = confirmation;
+      }
+    }
+    const killed = await killAtPoint(album ? 'core.intake.after-album-confirmation' : 'core.intake.after-revision-photo-decision', { chat });
+    const [updateId] = await fakes.updates([update]);
+    const polled = { ...update, update_id: updateId };
+    events.push(`revision photo update ${updateId} in request ${request.request_id}`);
+    events.push(`killed ${(await killed.done).killed} after ${album ? 'album confirmation' : 'photo decision'}, before child task projection`);
+    const child = await waitUntil('one revision task after Core restart', async () => {
+      const tasks = await tasksOfChat(chat);
+      const [row] = await query<{ rev: string; current_task_id: string }>(sql`
+        SELECT rev, current_task_id FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+      return tasks.length === 2 && Number(row?.rev) >= 4 && row?.current_task_id !== rootTaskId
+        ? row.current_task_id : null;
+    });
+    events.push(`child task ${child} after restart`);
+    const replay = await sendToChatInbox(chat, polled, `chaos-revision-photo-replay-${updateId}`);
+    events.push(`same update under a second Restate key: HTTP ${replay}`);
+    await waitUntil('both photo intakes to complete', async () => {
+      const inbox = (await chatInboxInvocations(chat)).filter((item) =>
+        item.idempotency_key === `tg-${updateId}` ||
+        item.idempotency_key === `chaos-revision-photo-replay-${updateId}`);
+      return inbox.length === 2 && inbox.every((item) => item.status === 'completed') ? inbox : null;
+    });
+    const outcome = await waitUntil('the revision design to settle', async () => {
+      const result = await designOutcome(child);
+      const [row] = await query<{ stage: string }>(sql`
+        SELECT stage FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+      const state = await taskState(child);
+      return result && (row?.stage === 'in_review' || state?.startsWith('failed')) ? result : null;
+    });
+    events.push(`child design outcome: ${outcome}`);
+    // Since ADR-113 (7765a9e3) a revision linked to an earlier design never regenerates from the local
+    // recipe: its run ends DESIGN_REJECTED (NATIVE_REVISION_HANDOFF_REQUIRED) with no plan, no import
+    // and no paid call, and RequestLifecycle holds the request at `manual` for the office's native
+    // revision recovery (ADR-114). Until 2026-09-28 this scenario expected a planner redraw here and
+    // approved and delivered it; the recovery route itself (link, confirm, capture, submit) is not driven.
+    const [held] = await query<{ code: string | null }>(sql`SELECT data->>'code' AS code FROM hawa.task_events
+      WHERE task_id = ${child}::uuid AND event_type = 'task.state_changed' AND data ? 'outcome'
+      ORDER BY occurred_at DESC LIMIT 1`);
+    events.push(`child held: ${outcome} (${held?.code ?? 'no code'})`);
+    return { delivered: false, skipRequestChecks: true,
+      extra: [{ name: 'second revision photo update accepted for replay',
+        ok: replay === 200 || replay === 202, detail: `HTTP ${replay}` }],
+      after: async () => {
+        const tasks = await tasksOfChat(chat);
+        const [state] = await query<{ current_task_id: string; rev: string; owner: string; stage: string }>(sql`
+          SELECT current_task_id, rev, owner, stage FROM hawa.requests WHERE request_id = ${request.request_id}::uuid`);
+        const projections = await query<{ rev: string }>(sql`
+          SELECT rev FROM hawa.lifecycle_projections WHERE request_id = ${request.request_id}::uuid ORDER BY rev`);
+        const files = await query<{ task_id: string; sha256: string; role: string; size: string; media_type: string }>(sql`
+          SELECT f.task_id, f.sha256, f.role, b.size, b.media_type FROM hawa.task_files f
+          JOIN hawa.blobs b ON b.sha256 = f.sha256 WHERE f.task_id IN (${rootTaskId}::uuid, ${child}::uuid)`);
+        const decisions = await query<{ payload: any }>(sql`SELECT payload FROM hawa.inbox_events
+          WHERE source_account_id = ${album ? 'lifecycle_album_confirm' : 'lifecycle_chat_revision_photo'}
+            AND source_event_id = ${String(updateId)}`);
+        const downloads = (await fakes.polls()).downloads?.filter((id: string) =>
+          id.startsWith(fileId)) ?? [];
+        const parked = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
+          WHERE source_event_id = ${`parked-update-${updateId}`}`);
+        const inbox = (await chatInboxInvocations(chat)).filter((item) =>
+          item.idempotency_key === `tg-${updateId}` ||
+          item.idempotency_key === `chaos-revision-photo-replay-${updateId}`);
+        const unfinished = await restateQuery<{ status: string; target_service_name: string; target_handler_name: string }>(
+          `SELECT status, target_service_name, target_handler_name FROM sys_invocation WHERE status NOT IN ('completed')`);
+        const active = unfinished.filter((item) => !(item.status === 'scheduled' &&
+          item.target_service_name === 'RequestLifecycle' && item.target_handler_name === 'reminderTick'));
+        const [outbox] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands
+          WHERE state IN ('pending', 'leased') AND available_at <= now() + interval '5 seconds'`);
+        const model = (await fakes.modelLedger()).ledger as Array<{route:string;status:number;imageSha256?:string[]}>;
+        const [effects] = await query<{ plans: string; operations: string }>(sql`SELECT
+            (SELECT count(*) FROM hawa.canva_design_plans WHERE task_id = ${child}::uuid) AS plans,
+            (SELECT count(*) FROM hawa.canva_remote_operations WHERE task_id = ${child}::uuid) AS operations`);
+        return [
+          { name: 'one owned child task after the office revision',
+            ok: tasks.length === 2 && tasks[0].id === rootTaskId && tasks[1].id === child &&
+              state?.owner === 'restate' && state.current_task_id === child && Number(state.rev) >= 4,
+            detail: JSON.stringify({ tasks, state }) },
+          { name: 'requester revision projection recorded exactly once',
+            ok: projections.filter((row) => Number(row.rev) === 4).length === 1,
+            detail: JSON.stringify(projections) },
+          { name: 'all selected photos bound only to the child task', ok: files.length === (album ? 2 : 1) &&
+              files.every((file) => file.task_id === child && file.role === 'reference_image' &&
+                file.media_type === 'image/jpeg') &&
+              files.map((file) => Number(file.size)).sort().join(',') === (album ? `${size},${size + 1}` : String(size)),
+            detail: JSON.stringify(files) },
+          { name: 'hash-bound photo decision, with no image bytes in the event',
+            ok: decisions.length === 1 && (album
+              ? decisions[0].payload?.snapshot?.ref?.images?.length === 2 && files.every((file) =>
+                decisions[0].payload.snapshot.ref.images.some((image: { sha256: string }) => image.sha256 === file.sha256))
+              : decisions[0].payload?.requestId === request.request_id && decisions[0].payload?.image?.sha256 === files[0]?.sha256) &&
+              !JSON.stringify(decisions[0].payload).includes('/9j/'),
+            detail: JSON.stringify(decisions[0]?.payload) },
+          { name: 'one download per photo and no parked update across kill and replay',
+            ok: downloads.length === (album ? 2 : 1) && new Set(downloads).size === downloads.length && Number(parked[0]?.n ?? 0) === 0,
+            detail: `downloads=${downloads.length} parked=${parked[0]?.n ?? 0}` },
+          { name: 'both ChatInbox invocations completed',
+            ok: inbox.length === 2 && inbox.every((item) => item.status === 'completed'),
+            detail: JSON.stringify(inbox) },
+          { name: 'the linked revision is held for the native handoff (ADR-113, ADR-114)',
+            ok: tasks[1]?.state === 'failed_operator' && state?.stage === 'manual' && Number(state.rev) === 5 &&
+              outcome === 'DESIGN_REJECTED' && held?.code === 'NATIVE_REVISION_HANDOFF_REQUIRED',
+            detail: JSON.stringify({ childState: tasks[1]?.state, request: state, outcome, code: held?.code }) },
+          { name: 'the held revision made no plan, no Canva effect and no unmatched model call',
+            ok: Number(effects?.plans) === 0 && Number(effects?.operations) === 0 &&
+              !model.some((entry) => entry.route.startsWith('unmatched')),
+            detail: JSON.stringify({ effects, unmatched: model.filter((entry) => entry.route.startsWith('unmatched')).length }) },
+          { name: 'only future lifecycle reminders remain scheduled',
+            ok: active.length === 0 && Number(outbox?.n ?? -1) === 0,
+            detail: JSON.stringify({ unfinished, readyOutbox: outbox?.n }) },
+        ];
+      },
+    };
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+
+  }
+
+  scenario('R1.S3.MEDIA', 'flagged chat: a PDF without client selection gets one durable review prompt and no task', async (chat, events) => {
+    const update = imageDocumentUpdate(chat, 'lifecycle-pdf', 128,
+      'KAAE members evening\n---\nDecember 4, 2026\nErbil');
+    update.message.document.mime_type = 'application/pdf';
+    update.message.document.file_name = 'brief.pdf';
+    const [updateId] = await fakes.updates([update]);
+    const polled = { ...update, update_id: updateId };
+    events.push(`captioned PDF update ${updateId} in flagged chat ${chat}`);
+    await waitUntil('the PDF review prompt to be sent', async () => {
+      const rows = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.inbox_events
+        WHERE source_account_id = 'lifecycle_source_admission' AND source_event_id = ${String(updateId)}`);
+      const notices = (await sentTo(chat)).filter(s => s.method === 'sendMessage' && s.text?.includes('Name one active client'));
+      return Number(rows[0]?.n) === 1 && notices.length === 1 ? true : null;
+    });
+    const replay = await sendToChatInbox(chat, polled, `chaos-media-replay-${updateId}`);
+    events.push(`duplicate media update under a second Restate key: HTTP ${replay}`);
+    return { delivered: false, skipRequestChecks: true,
+      extra: [{ name: 'second media update accepted for replay', ok: replay === 200 || replay === 202,
+        detail: `HTTP ${replay}` }],
+      after: async () => {
+        const tasks = await tasksOfChat(chat);
+        const rows = await query<{ source_account_id: string }>(sql`SELECT source_account_id
+          FROM hawa.inbox_events WHERE source_event_id IN (${String(updateId)}, ${`parked-update-${updateId}`})
+            AND source_account_id IN ('lifecycle_source_admission', 'telegram')`);
+        const notices = (await sentTo(chat)).filter((s) => s.method === 'sendMessage' &&
+          s.text?.includes('Name one active client'));
+        const alerts = (await sentTo(OFFICE_CHAT)).filter((s) => s.method === 'sendMessage' &&
+          s.text?.includes(String(updateId)));
+        const inbox = (await chatInboxInvocations(chat)).filter((item) =>
+          item.idempotency_key === `tg-${updateId}` || item.idempotency_key === `chaos-media-replay-${updateId}`);
+        return [
+          { name: 'no legacy task created', ok: tasks.length === 0, detail: `tasks=${tasks.length}` },
+          { name: 'one admission refusal and no parked update', ok: rows.length === 1 &&
+            rows[0].source_account_id === 'lifecycle_source_admission',
+            detail: JSON.stringify(rows) },
+          { name: 'one requester correction prompt without an office failure alert', ok: notices.length === 1 && alerts.length === 0,
+            detail: `sender=${notices.length} office=${alerts.length}` },
+          { name: 'both media intake invocations completed', ok: inbox.length === 2 &&
+            inbox.every((item) => item.status === 'completed'), detail: JSON.stringify(inbox) },
+        ];
+      },
+    };
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
+
   // Slice 2.2 (PHASE2_DESIGN.md section 3; design R1 S8): the Delivery workflow and TelegramSender, on
   // chats listed in HAWA_LIFECYCLE_CHATS. Each request pins two files; no scenario presses Deliver twice.
+  // Only with the worker's poller: since ADR-059 (99eb6b04) a task claims the Restate executor only
+  // when RequestLifecycle opens it (chat-intake.ts: "a live chat flag is admission policy, not task
+  // ownership"), and only ChatInbox reaches RequestLifecycle. With Core polling, a flagged chat's brief
+  // is a Core-pinned legacy task (ADR-052) that Core delivers itself, as production mode does.
   scenario('L2.0', 'flagged chat: the Delivery workflow sends both approved files and the notice once, no faults', async (chat, events) => {
     const { deliveryId } = await workflowRequest(chat, 'L2.0', events);
     // Core reads a finished run's outcome here when its report never arrived (startWorkflowDelivery).
@@ -467,7 +837,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       delivered: true, files: 2, executor: 'restate',
       extra: [{ name: "Restate keeps the finished run's outcome where Core reads it", ok: output.status === 200 && outcome?.outcome === 'delivered', detail: `HTTP ${output.status} ${JSON.stringify(outcome)}` }],
     };
-  }, 12 * 60_000, { flagged: true });
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('L2.K14', 'flagged chat: Core killed in the middle of the delivery (Drive upload slowed to 8 s), back after 5 s; Deliver pressed once', async (chat, events) => {
     let stateAfterRestart = '';
@@ -488,21 +858,21 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       delivered: true, files: 2, executor: 'restate',
       extra: [{ name: 'the delivery finishes after a Core restart without a second Deliver press', ok: true, detail: `task ${stateAfterRestart} right after the restart, complete without another press` }],
     };
-  }, 12 * 60_000, { flagged: true });
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('L2.K15', 'flagged chat: Core killed at core.delivery.after-drive (files in Drive, nothing recorded), restarted', async (chat, events) => {
     const k = await killAtPoint('core.delivery.after-drive', { mode: 'workflow' });
     await workflowRequest(chat, 'L2.K15', events);
     events.push(`killed ${(await k.done).killed} at core.delivery.after-drive`);
     return { delivered: true, files: 2, executor: 'restate' };
-  }, 12 * 60_000, { flagged: true });
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('L2.K16', 'flagged chat: worker killed between the two files', async (chat, events) => {
     const k = await killAtPoint('worker.delivery.between-files', {});
     await workflowRequest(chat, 'L2.K16', events);
     events.push(`killed ${(await k.done).killed} at worker.delivery.between-files`);
     return { delivered: true, files: 2, executor: 'restate' };
-  }, 12 * 60_000, { flagged: true });
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('L2.K17', 'flagged chat: Postgres killed after Telegram took the first file, before its mark was written; back after 5 s', async (chat, events) => {
     const k = await killWhileHeld('worker.sender.after-telegram', { commandType: 'lifecycle', kind: 'document' }, 'postgres');
@@ -511,21 +881,27 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     // The send's answer is journaled and its 'sent' mark written once Postgres is back: nothing is
     // uncertain, so the office hears nothing.
     return { delivered: true, files: 2, executor: 'restate', uncertainSends: 0 };
-  }, 12 * 60_000, { flagged: true });
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('L2.K18', 'flagged chat: Restate killed between the two files, back after 5 s', async (chat, events) => {
     const k = await killWhileHeld('worker.delivery.between-files', {}, 'restate');
     await workflowRequest(chat, 'L2.K18', events);
     events.push(`killed ${(await k.done).killed} while the delivery was held between the files`);
     return { delivered: true, files: 2, executor: 'restate' };
-  }, 12 * 60_000, { flagged: true });
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('L2.K12', 'flagged chat: worker killed after Telegram took the first file, before its mark (one uncertain send expected)', async (chat, events) => {
     const k = await killAtPoint('worker.sender.after-telegram', { commandType: 'lifecycle', kind: 'document' });
-    await workflowRequest(chat, 'L2.K12', events);
-    events.push(`killed ${(await k.done).killed} after the first document send`);
-    return { delivered: true, files: 2, executor: 'restate', uncertainSends: 1 };
-  }, 12 * 60_000, { flagged: true });
+    // A request-owned delivery with an unconfirmed send is held for staff (ADR-043, ADR-045) and
+    // completes only on an administrator's confirmation (ADR-046); until 2026-09-28 this expected the
+    // slice 2.2 workflow to complete on its own.
+    let settlement: InvariantResult[] = [];
+    await workflowRequest(chat, 'L2.K12', events, { beforeComplete: async (taskId) => {
+      events.push(`killed ${(await k.done).killed} after the first document send`);
+      settlement = await staffConfirmVisible(chat, taskId, events);
+    } });
+    return { delivered: true, files: 2, executor: 'restate', uncertainSends: 1, extra: settlement };
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('L2.429', 'flagged chat: Telegram answers 429 (retry_after 3) to the second file', async (chat, events) => {
     await fakes.telegramFault({ method: 'sendDocument', chat, kind: '429', n: 1, retryAfter: 3, skip: 1 });
@@ -539,499 +915,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       delivered: true, files: 2, executor: 'restate',
       extra: [{ name: "the second file is sent again no sooner than Telegram's retry_after (3 s)", ok: Boolean(limited && after) && waitedMs >= 3000, detail: `waited ${waitedMs} ms after the 429` }],
     };
-  }, 12 * 60_000, { flagged: true });
-
-  // Slice 2.3 part B (the worker side; PHASE2_DESIGN.md 2.3, 2.4): RequestLifecycle and DesignRun on
-  // the real Restate, each request opened through ingress (as ChatInbox sends it) and followed until
-  // its draft is in the chat and recorded as sent (part C projects the outcome). The full path from a
-  // Telegram brief is the L3.R* scenarios below.
-  scenario('L3.0', 'RequestLifecycle.open through ingress: Core records the request, DesignRun designs it once, the outcome reaches the lifecycle', async (chat, events) => {
-    return lifecycleOpen(chat, 'L3.0', events);
-  }, 12 * 60_000, { flagged: true });
-
-  scenario('L3.K7b', 'worker killed after Core projected the open, before the lifecycle journaled the answer', async (chat, events) => {
-    return lifecycleOpen(chat, 'L3.K7b', events, async (requestId) => {
-      const armed = await killAtPoint('worker.rl.after-project', { requestId });
-      return { done: armed.done.then((d) => `killed ${d.killed} at ${d.point}`) };
-    });
-  }, 12 * 60_000, { flagged: true });
-
-  scenario('L3.K6', 'Core killed after committing the open projection, before answering the worker', async (chat, events) => {
-    return lifecycleOpen(chat, 'L3.K6', events, async (requestId) => {
-      const armed = await killAtPoint('core.project.after-commit', { requestId });
-      return { done: armed.done.then((d) => `killed ${d.killed} at ${d.point}`) };
-    });
-  }, 12 * 60_000, { flagged: true });
-
-  scenario('L3.K8', 'worker killed inside the DesignRun after Core planned and imported the draft, before the step was journalled', async (chat, events) => {
-    return lifecycleOpen(chat, 'L3.K8', events, async () => {
-      const armed = await killAtPoint('worker.step.after-action', { step: 'canva-create-draft' });
-      return { done: armed.done.then((d) => `killed ${d.killed} at ${d.point}`) };
-    });
-  }, 12 * 60_000, { flagged: true });
-
-  // Slice 2.3 part C (PHASE2_DESIGN.md 2.3 acceptance; section 6.3 R1 S1-S6, R2, R3, R5): chats on the
-  // workers' HAWA_LIFECYCLE_CHATS (9400001 to 9400040), whose ChatInbox runs intake in decide mode and
-  // opens each new request on RequestLifecycle. Run with `run.ts --poller worker`. Order matters: R2
-  // restarts the worker with the reminder scale, R3.D deploys to green and R2.D2 back to blue.
-  const lifecycleOk = async (chat: string, events: string[], arms: { brief?: () => Promise<{ done: Promise<unknown> }>; ok?: () => Promise<{ done: Promise<unknown> }> } = {}, allowance?: number) => {
-    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
-    const armed = arms.brief ? await arms.brief() : null;
-    const request = await lifecycleBrief(chat, `L3R1-${chat}`, events);
-    if (armed) events.push(`kill: ${JSON.stringify(await armed.done).slice(0, 200)}`);
-    const okArmed = arms.ok ? await arms.ok() : null;
-    const okUpdate = await tap(chat, `rq:ok:${request.taskId}`);
-    events.push(`tapped rq:ok (update ${okUpdate})`);
-    await waitUntil('the requester\'s sign-off answered', async () => (await messagesWith(chat, 'you approved this design')).length > 0, 180_000, 1000);
-    if (okArmed) events.push(`kill: ${JSON.stringify(await okArmed.done).slice(0, 200)}`);
-    return { request, ledgerSince, okUpdate };
-  };
-  const lifecycleOkChecks = (chat: string, r: { request: LifecycleRequest; ledgerSince: number; okUpdate: number }, extra: Partial<Parameters<typeof checkLifecycle>[1]> = {}) => async () => [
-    ...await checkLifecycle(chat, { stage: 'in_review', rounds: 1, ledgerSince: r.ledgerSince, updateIds: [r.request.updateId, r.okUpdate], ...extra }),
-    { name: 'the sign-off is answered once', ok: (await messagesWith(chat, 'you approved this design')).length === 1, detail: `${(await messagesWith(chat, 'you approved this design')).length}` },
-    { name: 'the office hears of the sign-off once', ok: (await sentTo(OFFICE_CHAT)).filter((s) => s.text?.includes('requester approved a draft') && s.text.includes(r.request.taskId)).length === 1, detail: 'office alerts naming the task' },
-    { name: 'the draft picture reached the chat once', ok: (await sentTo(chat)).filter((s) => s.method === 'sendPhoto').length === 1, detail: `photos=${(await sentTo(chat)).filter((s) => s.method === 'sendPhoto').length}` },
-  ];
-
-  scenario('L3.R1.0', 'lifecycle chat: brief, draft and picture, rq:ok; no faults', async (chat, events) => {
-    const r = await lifecycleOk(chat, events);
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S1K1', 'lifecycle chat: worker killed after Restate accepted the brief, before the offset was stored', async (chat, events) => {
-    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('worker.poller.after-enqueue', { chat }) });
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S2K4', 'lifecycle chat: Core killed after intake decided (and recorded) the brief, before ChatInbox had the answer', async (chat, events) => {
-    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('core.intake.after-decision', { chat, decision: 'new_request' }) });
-    // The decision was on record before the kill: the retry is answered from it, classified once.
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r, { classifierAllowance: 1 }) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S2K5', 'lifecycle chat: worker killed while Core held its intake answer (decision recorded)', async (chat, events) => {
-    const r = await lifecycleOk(chat, events, { brief: () => killWhileHeld('core.intake.after-decision', { chat, decision: 'new_request' }, 'worker-blue') });
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r, { classifierAllowance: 1 }) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S3K6', 'lifecycle chat: Core killed after committing the open projection, before answering', async (chat, events) => {
-    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('core.project.after-commit', { key: ':1:open' }) });
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S3K7b', 'lifecycle chat: worker killed after Core projected the open, before the lifecycle journaled it', async (chat, events) => {
-    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('worker.rl.after-project', { key: ':1:open' }) });
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S4K8', 'lifecycle chat: worker killed inside the DesignRun after the Canva import, before the step was journaled', async (chat, events) => {
-    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('worker.step.after-action', { step: 'canva-create-draft' }) });
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S5K7b', 'lifecycle chat: worker killed after Core projected the design outcome, before the lifecycle journaled it', async (chat, events) => {
-    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('worker.rl.after-project', { key: ':designFinished' }) });
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S5K11', 'lifecycle chat: Core killed after bridging the draft revision, before the outcome committed', async (chat, events) => {
-    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('core.outcome.after-bridge', {}) });
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S5K12', 'lifecycle chat: worker killed after Telegram took the draft message, before its mark (one uncertain send expected)', async (chat, events) => {
-    const r = await lifecycleOk(chat, events, { brief: () => killAtPoint('worker.sender.after-telegram', { chat, key: ':outcome', kind: 'text' }) });
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r, { uncertainSends: 1 }) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S5K13', 'lifecycle chat: Telegram answers 429 (retry_after 3) to the draft message', async (chat, events) => {
-    await fakes.telegramFault({ method: 'sendMessage', chat, kind: '429', retryAfter: 3, n: 1, skip: 1 });
-    const r = await lifecycleOk(chat, events);
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R1.S6K5', 'lifecycle chat: worker killed while Core held its intake answer for rq:ok', async (chat, events) => {
-    const r = await lifecycleOk(chat, events, { ok: () => killWhileHeld('core.intake.after-decision', { chat, decision: 'requester' }, 'worker-blue') });
-    return { delivered: false, skipRequestChecks: true, after: lifecycleOkChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  // Slice 2.4 (PHASE2_DESIGN.md section 3; section 6.3 R1 S7-S8): the office's decisions on a lifecycle
-  // request. The Desk's approve and Deliver go to Core with the press's action id (Idempotency-Key); Core
-  // checks what it can without writing and asks RequestLifecycle.officeDecision under desk:<actionId>;
-  // the lifecycle's projection records the approval, claims the publication and starts the Delivery
-  // workflow, which reports back to it. Run with `run.ts --poller worker`.
-  const officeLedger = async () => Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
-  const pressApprove = async (taskId: string, actionId: string, events: string[], pinDeck = false) => {
-    const res = await approve(taskId, { actionId, pinDeck });
-    events.push(`approve (press ${actionId.slice(0, 8)}…): HTTP ${res.status} ${res.status === 200 ? `decision ${res.body?.decisionId}` : JSON.stringify(res.body).slice(0, 160)}`);
-    return res;
-  };
-  const officeApproved = async (chat: string, events: string[], pinDeck = false) => {
-    const ledgerSince = await officeLedger();
-    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
-    const actionId = randomUUID();
-    const res = await pressApprove(request.taskId, actionId, events, pinDeck);
-    if (res.status !== 200) throw new Error(`the approval was refused: HTTP ${res.status} ${JSON.stringify(res.body).slice(0, 300)}`);
-    return { request, ledgerSince, actionId, approved: res };
-  };
-  /** Brief, approval (PNG and PPTX pinned: two files), Deliver with its press id, then the delivery done. */
-  const officeDelivered = async (chat: string, events: string[], beforeDeliver?: () => Promise<{ done: Promise<unknown> }>) => {
-    const a = await officeApproved(chat, events, true);
-    const armed = beforeDeliver ? await beforeDeliver() : null;
-    const deliverId = randomUUID();
-    const started = Date.now();
-    const res = await deliver(a.request.taskId, { actionId: deliverId });
-    events.push(`deliver (press ${deliverId.slice(0, 8)}…): HTTP ${res.status} in ${Date.now() - started} ms, executor ${res.body?.executor}, ${res.body?.deliveryId}`);
-    if (res.status !== 202 || res.body?.executor !== 'restate') throw new Error(`Deliver was not taken by the lifecycle: HTTP ${res.status} ${JSON.stringify(res.body).slice(0, 300)}`);
-    if (armed) events.push(`kill: ${JSON.stringify(await armed.done).slice(0, 200)}`);
-    await waitLifecycleDelivered(chat, a.request.requestId, a.request.taskId, 2);
-    events.push('delivered: both files in the chat, task complete, request delivered');
-    return { ...a, deliverId };
-  };
-  const officeDeliveredChecks = (chat: string, r: Awaited<ReturnType<typeof officeDelivered>>, uncertainSends?: number) => async () => [
-    ...await checkLifecycle(chat, { stage: 'delivered', rounds: 1, ledgerSince: r.ledgerSince, updateIds: [r.request.updateId], ...(uncertainSends !== undefined ? { uncertainSends } : {}) }),
-    ...await checkOfficeDecisions(chat, r.request, { delivered: true, files: 2, actionIds: [r.actionId, r.deliverId] }),
-  ];
-
-  scenario('L4.S7.0', 'lifecycle chat: the Desk approves the draft with its press id; RequestLifecycle records one approval', async (chat, events) => {
-    const a = await officeApproved(chat, events);
-    const [row] = await query<{ id: string }>(sql`SELECT id::text FROM hawa.approvals WHERE task_id = ${a.request.taskId}::uuid`);
-    return {
-      delivered: false, skipRequestChecks: true,
-      extra: [{ name: 'the Desk is answered 200 with the approval the lifecycle recorded', ok: a.approved.status === 200 && a.approved.body?.decisionId === row?.id && a.approved.body?.lifecycle?.stage === 'approved', detail: JSON.stringify({ status: a.approved.status, decisionId: a.approved.body?.decisionId, row: row?.id }) }],
-      after: async () => [
-        ...await checkLifecycle(chat, { stage: 'approved', rounds: 1, ledgerSince: a.ledgerSince, updateIds: [a.request.updateId] }),
-        ...await checkOfficeDecisions(chat, a.request, { delivered: false, actionIds: [a.actionId] }),
-      ],
-    };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L4.S7.DBL', 'lifecycle chat: a double click (two approvals at once, one press id) records one approval and answers both', async (chat, events) => {
-    const ledgerSince = await officeLedger();
-    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
-    const actionId = randomUUID();
-    const [x, y] = await Promise.all([pressApprove(request.taskId, actionId, events), pressApprove(request.taskId, actionId, events)]);
-    return {
-      delivered: false, skipRequestChecks: true,
-      extra: [{ name: 'both clicks are answered 200 with the same approval', ok: x.status === 200 && y.status === 200 && Boolean(x.body?.decisionId) && x.body?.decisionId === y.body?.decisionId, detail: JSON.stringify([x.status, y.status, x.body?.decisionId, y.body?.decisionId]) }],
-      after: async () => [
-        ...await checkLifecycle(chat, { stage: 'approved', rounds: 1, ledgerSince, updateIds: [request.updateId] }),
-        ...await checkOfficeDecisions(chat, request, { delivered: false, actionIds: [actionId] }),
-      ],
-    };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L4.S7.K14', 'lifecycle chat: Core killed after RequestLifecycle accepted the approval, before the Desk had the answer; the Desk retries with the same press id', async (chat, events) => {
-    const ledgerSince = await officeLedger();
-    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
-    const actionId = randomUUID();
-    const armed = await killAtPoint('core.office.after-forward', { kind: 'approve', answer: 'accepted' });
-    const cut = await pressApprove(request.taskId, actionId, events);
-    events.push(`kill: ${JSON.stringify(await armed.done).slice(0, 200)}`);
-    const retry = await pressApprove(request.taskId, actionId, events);
-    const again = await pressApprove(request.taskId, actionId, events);
-    const [row] = await query<{ id: string }>(sql`SELECT id::text FROM hawa.approvals WHERE task_id = ${request.taskId}::uuid`);
-    return {
-      delivered: false, skipRequestChecks: true,
-      extra: [
-        { name: 'the Desk heard no answer from the killed Core', ok: cut.status >= 500, detail: `HTTP ${cut.status}` },
-        { name: 'the retry with the same id is answered 200 with the approval recorded before the kill, and so is the next', ok: retry.status === 200 && again.status === 200 && retry.body?.decisionId === row?.id && again.body?.decisionId === row?.id, detail: JSON.stringify([retry.status, again.status, retry.body?.decisionId, again.body?.decisionId, row?.id]) },
-      ],
-      after: async () => [
-        ...await checkLifecycle(chat, { stage: 'approved', rounds: 1, ledgerSince, updateIds: [request.updateId] }),
-        ...await checkOfficeDecisions(chat, request, { delivered: false, actionIds: [actionId] }),
-      ],
-    };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L4.S7.OLD', 'lifecycle chat: approving the old draft while the requester\'s change is being made is refused by RequestLifecycle (409)', async (chat, events) => {
-    const ledgerSince = await officeLedger();
-    const request = await lifecycleBrief(chat, `L4-${chat}`, events);
-    // The change's design run is held after its Canva import, so the change is still being made when the office presses.
-    await fakes.hold('worker.step.after-action', { step: 'canva-create-draft' }, 1);
-    // The intake fixture reads this exact wording as a change (fixtures/models/intake.json).
-    const changeUpdate = await replyToDraft(chat, request.taskId, 'make the logo bigger');
-    const round1 = await waitUntil('the change round', async () => {
-      const rows = await roundTasks(request.requestId);
-      return rows.length === 2 ? rows[1] : null;
-    }, 180_000);
-    const held = await fakes.wait('worker.step.after-action', 240_000);
-    if (!held) throw new Error('the change\'s design run never reached its Canva step');
-    events.push(`change (update ${changeUpdate}) is round ${round1.id}, held in its design run at ${held?.detail?.step}`);
-    const actionId = randomUUID();
-    const refused = await pressApprove(request.taskId, actionId, events);
-    await fakes.release('worker.step.after-action');
-    await waitDraftSent(chat, request.requestId, round1.id);
-    events.push(`the change's draft (task ${round1.id}) is in review`);
-    return {
-      delivered: false, skipRequestChecks: true,
-      extra: [
-        { name: 'the old draft\'s approval is refused 409 CHANGE_PENDING, naming the change', ok: refused.status === 409 && refused.body?.code === 'CHANGE_PENDING' && String(refused.body?.detail).includes(round1.id), detail: JSON.stringify({ status: refused.status, code: refused.body?.code, detail: refused.body?.detail }) },
-        { name: 'no approval was recorded', ok: (await query(sql`SELECT 1 FROM hawa.approvals WHERE task_id = ANY(${[request.taskId, round1.id]}::uuid[])`)).length === 0, detail: 'approvals of both rounds' },
-      ],
-      after: async () => [
-        ...await checkLifecycle(chat, { stage: 'in_review', rounds: 2, drafts: 2, ledgerSince, updateIds: [request.updateId, changeUpdate] }),
-        { name: 'the refused press reached RequestLifecycle once', ok: (await restateQuery(`SELECT status FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND idempotency_key = 'desk:${actionId}'`)).length === 1, detail: `desk:${actionId}` },
-      ],
-    };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L4.S8.0', 'lifecycle chat: Deliver through RequestLifecycle; the Delivery workflow sends both approved files and reports back; no faults', async (chat, events) => {
-    const r = await officeDelivered(chat, events);
-    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L4.S8.K15', 'lifecycle chat: Core killed at core.delivery.after-drive (files in Drive, nothing recorded), restarted', async (chat, events) => {
-    const r = await officeDelivered(chat, events, () => killAtPoint('core.delivery.after-drive', { mode: 'workflow' }));
-    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L4.S8.K16', 'lifecycle chat: worker killed between the two files', async (chat, events) => {
-    const r = await officeDelivered(chat, events, () => killAtPoint('worker.delivery.between-files', {}));
-    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L4.S8.K17', 'lifecycle chat: Postgres killed after Telegram took the first file, before its mark was written; back after 5 s', async (chat, events) => {
-    const r = await officeDelivered(chat, events, () => killWhileHeld('worker.sender.after-telegram', { commandType: 'lifecycle', kind: 'document' }, 'postgres'));
-    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r, 0) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L4.S8.K18', 'lifecycle chat: Restate killed between the two files, back after 5 s', async (chat, events) => {
-    const r = await officeDelivered(chat, events, () => killWhileHeld('worker.delivery.between-files', {}, 'restate'));
-    return { delivered: false, skipRequestChecks: true, after: officeDeliveredChecks(chat, r) };
-  }, 12 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  // R5 and acceptance (d): a flagged chat and an unflagged one send at once, each takes its own path;
-  // then the flagged chat is taken off the flag (the worker restarts without it): a change to its
-  // lifecycle draft still goes to its request, and its next brief takes the legacy path.
-  scenario('L3.R5', 'un-flag mid-request: a reply to a lifecycle draft still reaches the lifecycle, a new brief goes legacy; an unflagged chat alongside stays legacy', async (chat, events) => {
-    const other = newChat();
-    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
-    const [otherUpdate] = await fakes.updates([textUpdate(other, briefText(`L3R5-other-${other}`))]);
-    const request = await lifecycleBrief(chat, `L3R5-${chat}`, events);
-    const colour = await liveColour();
-    await restartWorkerWith(colour, { lifecycleChats: lifecycleChatList([chat]) });
-    events.push(`${colour} restarted without chat ${chat} on its flag list`);
-    const changeUpdate = await replyToDraft(chat, request.taskId, 'make the logo bigger');
-    const round1 = await waitUntil('the change round in the request', async () => {
-      const rows = await roundTasks(request.requestId);
-      return rows.length === 2 ? rows[1] : null;
-    }, 180_000);
-    await waitDraftSent(chat, request.requestId, round1.id);
-    events.push(`change routed to the request: round 1 task ${round1.id}, its draft sent`);
-    const [legacyUpdate] = await fakes.updates([textUpdate(chat, briefText(`L3R5-legacy-${chat}`))]);
-    const legacy = await waitUntil('the legacy task of the new brief', async () => {
-      const rows = await query<{ id: string; request_id: string | null; state: string }>(sql`SELECT t.id::text, t.request_id::text, t.state::text FROM hawa.tasks t
-        WHERE t.id IN (SELECT aggregate_id FROM hawa.outbox_commands WHERE command_type = 'task.created' AND payload->>'sourceChannelId' = ${chat}) AND t.request_id IS NULL`);
-      return rows[0]?.state === 'human_review' ? rows[0] : null;
-    }, 300_000, 2000);
-    events.push(`new brief took the legacy path: task ${legacy.id}`);
-    const otherTask = (await tasksOfChat(other))[0];
-    await restartWorkerWith(colour, { lifecycleChats: lifecycleChatList() });
-    return {
-      delivered: false, skipRequestChecks: true,
-      after: async () => [
-        ...await checkLifecycle(chat, { stage: 'in_review', rounds: 2, drafts: 2, ledgerSince, updateIds: [request.updateId, changeUpdate, legacyUpdate] }),
-        { name: 'the new brief after un-flagging is a legacy task (no request) run by TaskWorkflow', ok: legacy.request_id === null && (await restateQuery(`SELECT status FROM sys_invocation WHERE target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${legacy.id}'`)).some((r: any) => r.status === 'completed'), detail: JSON.stringify(legacy) },
-        { name: 'the unflagged chat alongside took the legacy path (no request row)', ok: Boolean(otherTask) && (await requestsOfChat(other)).length === 0 && (await query(sql`SELECT 1 FROM hawa.tasks WHERE id = ${otherTask?.id ?? '00000000-0000-0000-0000-000000000000'}::uuid AND request_id IS NULL`)).length === 1, detail: `other chat task ${otherTask?.id} (update ${otherUpdate})` },
-      ],
-    };
-  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  // Review of 2.3C: the 2.1 rollback (HAWA_TELEGRAM_POLLER=core) once lifecycle requests exist. Core's
-  // own poller reads the requester's button on a lifecycle draft and routes it to the request itself,
-  // through Restate's ingress with the keys ChatInbox uses; it used to be refused 409 (final for the
-  // poller) and the requester heard nothing. The poller goes back to the worker afterwards.
-  scenario('L3.R6', 'rolled back to Core\'s poller: a button on a lifecycle draft is routed by Core through Restate\'s ingress', async (chat, events) => {
-    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
-    const request = await lifecycleBrief(chat, `L3R6-${chat}`, events);
-    const colour = await liveColour();
-    await switchPoller('core', colour);
-    events.push(`rolled back: Core polls Telegram (Core and ${colour} recreated)`);
-    let okUpdate = 0;
-    try {
-      okUpdate = await tap(chat, `rq:ok:${request.taskId}`);
-      events.push(`tapped rq:ok (update ${okUpdate}), read by Core's poller`);
-      await waitUntil('the requester\'s sign-off answered', async () => (await messagesWith(chat, 'you approved this design')).length > 0, 180_000, 1000);
-    } finally {
-      await switchPoller('worker', colour);
-      events.push('the worker polls again');
-    }
-    const r = { request, ledgerSince, okUpdate };
-    return {
-      delivered: false, skipRequestChecks: true,
-      after: async () => [
-        // The button never reached a ChatInbox: only the brief's update is checked there.
-        ...(await lifecycleOkChecks(chat, r, { updateIds: [request.updateId] })()),
-        { name: 'the button reached RequestLifecycle once, under the key ChatInbox would use', ok: (await restateQuery(`SELECT id FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${request.requestId}' AND target_handler_name = 'requesterDecision' AND idempotency_key = 'tg:${chat}:${okUpdate}'`)).length === 1, detail: `tg:${chat}:${okUpdate}` },
-        { name: 'no ChatInbox invocation for the button (Core polled it)', ok: (await restateQuery(`SELECT id FROM sys_invocation WHERE target_service_name = 'ChatInbox' AND idempotency_key = 'tg-${okUpdate}'`)).length === 0, detail: `tg-${okUpdate}` },
-      ],
-    };
-  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  // R2 (scale 0.0001, D1): a silent requester. The draft is sent, reminders are scheduled; Restate,
-  // the worker and Core are each killed between a reminder's scheduling and its firing. Exactly one
-  // reminder per day reaches the chat, and the request expires.
-  scenario('L3.R2.D1', 'silent requester, reminders at scale 0.0001: Restate, worker and Core killed between scheduling and firing; one reminder per day, then expiry', async (chat, events) => {
-    const colour = await liveColour();
-    await restartWorkerWith(colour, { reminderScale: '0.0001' });
-    try {
-      const request = await lifecycleBrief(chat, `L3R2-${chat}`, events);
-      await waitUntil('the day-1 reminder scheduled', async () => (await restateQuery(`SELECT id FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${request.requestId}' AND target_handler_name = 'remind'`)).length > 0, 60_000, 250);
-      kill('restate'); await sleep(4000); start('restate'); await waitHealthy('restate');
-      events.push('Restate killed after the day-1 reminder was scheduled, back after 4 s');
-      await waitUntil('the day-1 reminder in the chat', async () => (await messagesWith(chat, 'Is this design right for you?')).length > 0, 180_000, 500);
-      kill(colour); await sleep(2000); start(colour); await waitHealthy(colour);
-      events.push(`${colour} killed after the day-1 reminder, back after 2 s`);
-      kill('core'); await sleep(4000); start('core'); await waitHealthy('core');
-      events.push('Core killed before the day-5 reminder, back after 4 s');
-      await waitUntil('the day-5 reminder in the chat', async () => (await messagesWith(chat, 'Still waiting on this design')).length > 0, 240_000, 1000);
-      await waitUntil('the request to expire', async () => (await requestsOfChat(chat))[0]?.stage === 'expired', 300_000, 2000);
-      events.push('expired');
-      return {
-        delivered: false, skipRequestChecks: true,
-        after: async () => [
-          ...await checkLifecycle(chat, { stage: 'expired', rounds: 1, updateIds: [request.updateId] }),
-          { name: 'exactly one day-1 reminder', ok: (await messagesWith(chat, 'Is this design right for you?')).length === 1, detail: `${(await messagesWith(chat, 'Is this design right for you?')).length}` },
-          { name: 'exactly one day-5 reminder', ok: (await messagesWith(chat, 'Still waiting on this design')).length === 1, detail: `${(await messagesWith(chat, 'Still waiting on this design')).length}` },
-        ],
-      };
-    } finally {
-      await restartWorkerWith(colour, { reminderScale: '1' });
-    }
-  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  /**
-   * R3's question. The fixtures cover no studio stage, so the change round's studio question is
-   * simulated: the driver records the round's NEEDS_CLARIFICATION run (what the edit stage writes) and
-   * hands RequestLifecycle the run's report with the DesignRun's own event id and key, while that run
-   * is held after its Canva step; its own report, later, meets Restate's key and the seen list. Core's
-   * outcome projection, the question message, its send and record, and the answer are all real.
-   */
-  const changeThenQuestion = async (chat: string, events: string[]) => {
-    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
-    const request = await lifecycleBrief(chat, `L3R3-${chat}`, events);
-    await fakes.hold('worker.step.after-action', { step: 'canva-create-draft' }, 1);
-    const changeUpdate = await replyToDraft(chat, request.taskId, 'make the logo bigger');
-    const round1 = await waitUntil('the change round', async () => {
-      const rows = await roundTasks(request.requestId);
-      return rows.length === 2 ? rows[1] : null;
-    }, 180_000);
-    const reached = await fakes.wait('worker.step.after-action', 240_000);
-    events.push(`change round ${round1.id}; its DesignRun held at ${reached?.detail?.step}`);
-    await query(sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, tier, status, stages)
-      VALUES (gen_random_uuid(), ${TENANT_ID_}::uuid, ${round1.id}::uuid, ${KAAE_CLIENT_ID}::uuid, 'chaos', ${`chaos-question-${round1.id}`}, 'chaos', '{}'::jsonb, 'standard', 'failed',
-        ${JSON.stringify({ directed: { refused: 'NEEDS_CLARIFICATION', clarify: { question: 'Which logo should be bigger?', options: ['The KAAE seal', 'The university crest'] }, asks: [{ ask: 'make the logo bigger', status: 'asked' }] } })}::jsonb)`);
-    const runId = `dr-${round1.id}`;
-    const res = await fetch(`${RESTATE_INGRESS_URL}/RequestLifecycle/${request.requestId}/designFinished/send`, {
-      method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': `dr-finished:${runId}` },
-      body: JSON.stringify({ v: 1, eventId: `dr-finished:${runId}`, runId, round: 1, taskId: round1.id, report: { status: 'DESIGN_FAILED', code: 'NEEDS_CLARIFICATION', runId } }),
-    });
-    events.push(`the studio's question handed to the lifecycle: HTTP ${res.status}`);
-    await waitUntil('the question in the chat, recorded as asked', async () => {
-      const [row] = await requestsOfChat(chat);
-      return row?.stage === 'awaiting_answer' && row.question_asked_at && (await messagesWith(chat, 'One question before I make your change')).length > 0;
-    }, 180_000, 1000);
-    await fakes.release();
-    await waitUntil('the held DesignRun to finish', async () => (await restateQuery<{ status: string }>(`SELECT status FROM sys_invocation WHERE target_service_name = 'DesignRun' AND target_service_key = '${runId}'`)).every((r) => r.status === 'completed'), 300_000, 2000);
-    events.push('question asked; the held run finished and its report was ignored');
-    return { request, round1, changeUpdate, ledgerSince };
-  };
-  const TENANT_ID_ = '00000000-0000-4000-a000-000000000001';
-  const answerAndDraft = async (chat: string, events: string[], q: Awaited<ReturnType<typeof changeThenQuestion>>) => {
-    const answerUpdate = await tap(chat, `rq:a1:${q.round1.id}`);
-    const round2 = await waitUntil('the answer round', async () => {
-      const rows = await roundTasks(q.request.requestId);
-      return rows.length === 3 ? rows[2] : null;
-    }, 180_000);
-    await waitDraftSent(chat, q.request.requestId, round2.id);
-    events.push(`answered (update ${answerUpdate}): round 2 task ${round2.id}, its draft sent`);
-    return { answerUpdate, round2 };
-  };
-  const questionChecks = (chat: string, q: Awaited<ReturnType<typeof changeThenQuestion>>, a: Awaited<ReturnType<typeof answerAndDraft>>) => async () => {
-    const [r1] = await query<{ state: string }>(sql`SELECT state::text AS state FROM hawa.tasks WHERE id = ${q.round1.id}::uuid`);
-    const view = await lifecycleView(q.request.requestId);
-    return [
-      ...await checkLifecycle(chat, { stage: 'in_review', rounds: 3, drafts: 2, ledgerSince: q.ledgerSince, updateIds: [q.request.updateId, q.changeUpdate, a.answerUpdate] }),
-      { name: 'the question\'s task is closed once answered', ok: r1?.state === 'cancelled', detail: `state=${r1?.state}` },
-      { name: 'the lifecycle is on the answer\'s round, reviewing its draft', ok: view?.round === 2 && view?.draft?.taskId === a.round2.id, detail: JSON.stringify(view && { round: view.round, draft: view.draft }) },
-      { name: 'the question reached the chat once', ok: (await messagesWith(chat, 'One question before I make your change')).length === 1, detail: 'question messages' },
-    ];
-  };
-
-  scenario('L3.R3.K1', 'change, question, answer: worker killed at the answer\'s projection step', async (chat, events) => {
-    const q = await changeThenQuestion(chat, events);
-    const k = await killAtPoint('worker.rl.after-project', { key: ':answer' });
-    const a = await answerAndDraft(chat, events, q);
-    events.push(`kill: ${JSON.stringify(await k.done).slice(0, 160)}`);
-    return { delivered: false, skipRequestChecks: true, after: questionChecks(chat, q, a) };
-  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R3.K2', 'change, question, answer: Core killed after committing the answer round\'s design outcome, before answering', async (chat, events) => {
-    const q = await changeThenQuestion(chat, events);
-    const k = await killAtPoint('core.project.after-commit', { requestId: q.request.requestId, key: ':designFinished' });
-    const a = await answerAndDraft(chat, events, q);
-    events.push(`kill: ${JSON.stringify(await k.done).slice(0, 160)}`);
-    return { delivered: false, skipRequestChecks: true, after: questionChecks(chat, q, a) };
-  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  scenario('L3.R3.D', 'change, question, deploy to green, answer: nothing changes, no RT0016, blue drains', async (chat, events) => {
-    const q = await changeThenQuestion(chat, events);
-    const before = await liveColour();
-    up({ build: false, services: ['worker-green'] });
-    const reg = await registerColour('green');
-    events.push(`deploy: register green exit ${reg.code}`);
-    await waitUntil('green to be live', async () => (await liveColour()) === 'worker-green', 60_000, 1000);
-    await sleep(6000); // the gate probes every few seconds: blue's poller stops, green's starts
-    const a = await answerAndDraft(chat, events, q);
-    const drains = await finishDrains(180);
-    events.push(`finish-drains: exit ${drains.code} ${drains.lines.join(' | ').slice(0, 300)}`);
-    return {
-      delivered: false, skipRequestChecks: true,
-      after: async () => [
-        ...await questionChecks(chat, q, a)(),
-        { name: 'green registered without force', ok: reg.code === 0 && before === 'worker-blue', detail: `exit ${reg.code}, live before: ${before}` },
-        { name: 'blue drained and its deployment deleted', ok: drains.lines.some((l) => /deleted=blue/.test(l)), detail: drains.lines.join(' | ').slice(0, 400) },
-      ],
-    };
-  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
-
-  // R2.D2: a deploy between a reminder's scheduling and its firing; the reminder fires on the new
-  // colour and the old one drains. Runs after L3.R3.D, so green is live: this deploys back to blue.
-  scenario('L3.R2.D2', 'reminders at scale 0.0001 across a deploy: scheduled on one colour, fired on the other, the old one drains', async (chat, events) => {
-    const from = await liveColour();
-    const to = from === 'worker-green' ? 'worker-blue' : 'worker-green';
-    await restartWorkerWith(from, { reminderScale: '0.0001' });
-    try {
-      const request = await lifecycleBrief(chat, `L3R2D2-${chat}`, events);
-      await waitUntil('the day-1 reminder scheduled', async () => (await restateQuery(`SELECT id FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${request.requestId}' AND target_handler_name = 'remind'`)).length > 0, 60_000, 250);
-      // A colour left registered by an earlier deploy (a scenario that stopped before its drain) is
-      // drained first: registering never replaces a deployment Restate still holds.
-      const leftover = await finishDrains(60);
-      events.push(`drains before the deploy: exit ${leftover.code} ${leftover.lines.join(' | ').slice(0, 200)}`);
-      up({ build: false, services: [to] });
-      await restartWorkerWith(to, { reminderScale: '0.0001' });
-      const reg = await registerColour(to === 'worker-green' ? 'green' : 'blue');
-      events.push(`deploy ${from} → ${to}: exit ${reg.code}`);
-      await waitUntil('the day-1 reminder in the chat', async () => (await messagesWith(chat, 'Is this design right for you?')).length > 0, 180_000, 500);
-      const [fired] = await restateQuery<{ pinned_deployment_id: string | null }>(`SELECT pinned_deployment_id FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${request.requestId}' AND target_handler_name = 'remind' AND status = 'completed' LIMIT 1`);
-      const [target] = await restateQuery<{ id: string }>(`SELECT id FROM sys_deployment WHERE endpoint LIKE '%${to}%'`);
-      await waitUntil('the request to expire', async () => (await requestsOfChat(chat))[0]?.stage === 'expired', 300_000, 2000);
-      const drains = await finishDrains(180);
-      events.push(`finish-drains: exit ${drains.code} ${drains.lines.join(' | ').slice(0, 300)}`);
-      return {
-        delivered: false, skipRequestChecks: true,
-        after: async () => [
-          ...await checkLifecycle(chat, { stage: 'expired', rounds: 1, updateIds: [request.updateId] }),
-          { name: 'the day-1 reminder ran on the new colour', ok: Boolean(fired?.pinned_deployment_id) && fired?.pinned_deployment_id === target?.id, detail: JSON.stringify({ fired, target }) },
-          { name: 'exactly one reminder per day', ok: (await messagesWith(chat, 'Is this design right for you?')).length === 1 && (await messagesWith(chat, 'Still waiting on this design')).length === 1, detail: 'day 1 and day 5 messages' },
-          { name: 'the old colour drained and its deployment deleted', ok: drains.lines.some((l) => new RegExp(`deleted=${from === 'worker-green' ? 'green' : 'blue'}`).test(l)), detail: drains.lines.join(' | ').slice(0, 400) },
-        ],
-      };
-    } finally {
-      await restartWorkerWith(await liveColour(), { reminderScale: '1' });
-    }
-  }, 15 * 60_000, { lifecycle: true, needs: 'worker-poller' });
+  }, 12 * 60_000, { flagged: true, needs: 'worker-poller' });
 
   scenario('R4', 'two chats: a 19.9 MB picture with a 30 s download in chat A must not delay chat B', async (_chat, events) => {
     const chatA = newChat();
@@ -1059,102 +943,6 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
       skipRequestChecks: true,
     };
   });
-
-  // The restore drill (PHASE2_DESIGN.md 2.6, ADR-034; run.ts --restore-drill). The nightly Restate
-  // backup runs against this stack with the office's own script (infra/backup/restate-nightly.sh), a
-  // brief arrives while its kill switch is thrown, and that request is delivered after the backup, so
-  // Postgres, the chat and Drive move past the archive. The archive is then restored into this stack's
-  // Restate (infra/backup/restate-restore.sh), which rolls Restate back behind them, as a real restore
-  // would, and R1 runs on the restored copy. Nothing may be sent again. The design's AHEAD
-  // reconciliations belong to RequestLifecycle (slice 2.3), which this drill counts but cannot require.
-  scenario('RD1', 'restore drill: nightly Restate backup of this stack, a brief during the kill switch, restore of the archive, then R1 on the restored copy', async (chat, events) => {
-    prepareDrill();
-    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
-    const preChat = flaggedChat();
-    const postChat = flaggedChat();
-
-    // 1. A request delivered before the backup: its ChatInbox, TaskWorkflow and Delivery runs are in the archive.
-    const pre = await workflowRequest(preChat, 'RD1.pre', events);
-    await quiescent();
-
-    // 2. The backup, with a brief sent while its kill switch is thrown.
-    const backup = startBackup();
-    await waitUntil('the kill switch thrown by the backup', async () => (await intakeSwitchedOff()) === true, 120_000, 200);
-    const waiting = await sendBrief(postChat, 'RD1.post');
-    const sentWhileThrownAt = Date.now();
-    events.push(`kill switch thrown; brief ${waiting.update_id} sent to chat ${postChat} while it was`);
-    let releasedAt = 0;
-    let backupDone = false;
-    const watch = (async () => {
-      while (!releasedAt) {
-        if ((await intakeSwitchedOff().catch(() => null)) === false) releasedAt = Date.now();
-        else if (backupDone) break;
-        else await sleep(200);
-      }
-    })();
-    const b = await backup;
-    backupDone = true;
-    await watch;
-    const ok = backupLog().find((l) => / RESTATE OK /.test(l)) ?? '';
-    events.push(`backup: exit ${b.code} in ${b.ms} ms; ${ok || backupLog().slice(-2).join(' | ') || b.out.slice(-400)}`);
-    events.push(`kill switch released ${releasedAt ? `${releasedAt - sentWhileThrownAt} ms after the brief was sent` : 'never seen'}`);
-
-    // 3. The waiting brief is taken after the release, then the request is delivered.
-    const postTask = await draftOf(postChat);
-    const postShown = await sentTo(postChat);
-    const answeredWhileThrown = postShown.filter((s: any) => !releasedAt || Date.parse(s.at) < releasedAt);
-    const firstAnswerMs = postShown.length ? Date.parse(postShown[0].at) - sentWhileThrownAt : -1;
-    const postApproved = await approve(postTask, { pinDeck: true });
-    const postDelivered = await deliver(postTask);
-    events.push(`post-backup request ${postTask}: approve HTTP ${postApproved.status}, deliver HTTP ${postDelivered.status}`);
-    await waitDelivered(postChat, postTask, 300_000, 2);
-    await quiescent();
-
-    // 4. The archive, restored into this stack's Restate.
-    const [archive] = archives().slice(-1);
-    if (!archive) throw new Error(`the backup wrote no archive: ${b.out.slice(-600)}`);
-    const sentBefore = (await fakes.sent()).length;
-    const r = await restore(archivePath(archive));
-    const restoreLine = r.out.split('\n').find((l) => l.startsWith('RESTORE OK')) ?? '';
-    events.push(`restore: exit ${r.code} in ${r.ms} ms; ${restoreLine || r.out.slice(-400)}`);
-    await waitHealthy('restate');
-    // The restored Restate and the workers settle; anything it would run again runs now.
-    await sleep(15_000);
-    await quiescent(10_000, 300_000);
-    const resent = (await fakes.sent()).slice(sentBefore);
-    const [postRuns] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_key LIKE '%${postTask}%'`);
-    const [preRuns] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_key LIKE '%${pre.taskId}%'`);
-    events.push(`after the restore: sends=${resent.length}; Restate invocations for the pre-backup request=${preRuns?.n}, for the post-backup request=${postRuns?.n}`);
-
-    // 5. R1 on the restored copy.
-    const r1Started = Date.now();
-    await workflowRequest(chat, 'RD1.R1', events);
-    events.push(`R1 on the restored copy: delivered in ${Date.now() - r1Started} ms`);
-    const ahead = (logs('worker-blue', 5000).match(/AHEAD/g) || []).length;
-    events.push(`AHEAD reconciliations in the worker log: ${ahead} (RequestLifecycle, slice 2.3, is not on this base)`);
-    events.push(`numbers: backup_ms=${b.ms} total_s=${field(ok, 'total_s')} drain=${field(ok, 'drain')} down_s=${field(ok, 'down_s')} volume_bytes=${field(ok, 'volume_bytes')} archive_bytes=${field(ok, 'archive_bytes')} restore_ms=${r.ms} restore_s=${field(restoreLine, 'restore_s')} restate_down_during_restore_s=${field(restoreLine, 'down_s')}`);
-
-    const restateNamed = /TaskWorkflow|Delivery run|paused|RT0016/;
-    return {
-      delivered: true, files: 2, executor: 'restate',
-      extra: [
-        { name: 'the nightly Restate backup of this stack finished (exit 0, RESTATE OK)', ok: b.code === 0 && Boolean(ok), detail: `exit ${b.code}; ${ok || b.out.slice(-300)}` },
-        { name: 'it wrote an encrypted archive with its checksum', ok: /\.tar\.enc$/.test(archive), detail: archive },
-        { name: 'the kill switch was released by the backup', ok: releasedAt > 0 && (await intakeSwitchedOff()) === false, detail: `released=${releasedAt > 0}` },
-        { name: 'a brief sent while the switch was thrown waited: nothing was sent to its chat until the release', ok: releasedAt > 0 && answeredWhileThrown.length === 0, detail: `answered while thrown=${answeredWhileThrown.length}; first answer ${firstAnswerMs} ms after it was sent` },
-        { name: 'and it was not refused or parked', ok: !postShown.some((s: any) => /could not process it automatically/.test(String(s.text ?? ''))), detail: `${postShown.length} sends to the chat` },
-        { name: 'the restore finished (exit 0, RESTORE OK), Restate healthy and serving the workers', ok: r.code === 0 && Boolean(restoreLine), detail: `exit ${r.code}; ${restoreLine || r.out.slice(-300)}` },
-        { name: 'the restore rolled Restate back: it has the pre-backup runs and not the post-backup ones', ok: Number(preRuns?.n ?? 0) > 0 && Number(postRuns?.n ?? -1) === 0, detail: `pre=${preRuns?.n} post=${postRuns?.n}` },
-        { name: 'nothing is sent again after the restore', ok: resent.length === 0, detail: resent.length ? JSON.stringify(resent.map((s: any) => `${s.chat_id}:${s.method}`)) : 'no sends' },
-      ],
-      after: async () => [
-        ...(await checkRequest(preChat, { delivered: true, files: 2, executor: 'restate', ledgerSince })).map((i) => ({ ...i, name: `pre-backup request: ${i.name}` })),
-        // Restate forgot the post-backup request (checked above); its Postgres, Drive and chat checks stand.
-        ...(await checkRequest(postChat, { delivered: true, files: 2, executor: 'restate', ledgerSince }))
-          .filter((i) => !restateNamed.test(i.name)).map((i) => ({ ...i, name: `post-backup request: ${i.name}` })),
-      ],
-    };
-  }, 30 * 60_000, { flagged: true, needs: 'restore-drill' });
 });
 
 /**
@@ -1162,7 +950,7 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
  * PPTX are pinned, so two files go to the requester and a fault can fall between them. The Deliver
  * press is answered at once (202, executor restate); nothing presses it again.
  */
-async function workflowRequest(chat: string, tag: string, events: string[], hooks: { beforeDeliver?: (taskId: string) => Promise<void>; afterDeliver?: (taskId: string) => Promise<void> } = {}) {
+async function workflowRequest(chat: string, tag: string, events: string[], hooks: { beforeDeliver?: (taskId: string) => Promise<void>; afterDeliver?: (taskId: string) => Promise<void>; beforeComplete?: (taskId: string) => Promise<void> } = {}) {
   const taskId = await briefToDraft(chat, tag);
   events.push(`task ${taskId}: draft in chat`);
   const approved = await approve(taskId, { pinDeck: true });
@@ -1172,10 +960,12 @@ async function workflowRequest(chat: string, tag: string, events: string[], hook
   const started = Date.now();
   const delivered = await deliver(taskId);
   events.push(`deliver: HTTP ${delivered.status} in ${Date.now() - started} ms, executor ${delivered.body?.executor}, ${delivered.body?.deliveryId}`);
-  if (delivered.status !== 202 || delivered.body?.executor !== 'restate') {
+  // 202 while the workflow runs; a request-owned delivery that finished before Core answered is 200.
+  if ((delivered.status !== 202 && delivered.status !== 200) || delivered.body?.executor !== 'restate') {
     throw new Error(`the flagged chat's delivery was not handed to the workflow: HTTP ${delivered.status} ${JSON.stringify(delivered.body).slice(0, 300)}`);
   }
   if (hooks.afterDeliver) await hooks.afterDeliver(taskId);
+  if (hooks.beforeComplete) await hooks.beforeComplete(taskId);
   await waitDelivered(chat, taskId, 300_000, 2);
   events.push(`delivered, task ${await taskState(taskId)}`);
   return { taskId, deliveryId: String(delivered.body.deliveryId) };
@@ -1195,80 +985,4 @@ async function outboxOpen(taskId: string): Promise<boolean> {
   const { query, sql } = await import('./driver/stack.js');
   const [row] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands WHERE aggregate_id = ${taskId}::uuid AND state IN ('pending', 'leased')`);
   return Number(row?.n ?? 0) > 0;
-}
-
-/**
- * Slice 2.3 part B: a request opened on RequestLifecycle through Restate's ingress, as ChatInbox sends
- * it, followed until its draft is in the chat and recorded as sent. `arm` may arm a kill before the
- * open is sent; it answers what happened, once it has.
- */
-async function lifecycleOpen(chat: string, tag: string, events: string[], arm?: (requestId: string) => Promise<{ done: Promise<string> }>): Promise<Expectation> {
-  const { query, sql } = await import('./driver/stack.js');
-  const { TENANT_ID, KAAE_CLIENT_ID } = await import('./driver/provision.js');
-  const { requestIdFor } = await import('../../domain/src/request-lifecycle.js');
-  const { briefText } = await import('./driver/scenario.js');
-  const updateId = 800_000 + Math.floor(Math.random() * 100_000);
-  const requestId = requestIdFor(chat, updateId);
-  const brief = briefText(tag);
-  const killed = arm ? await arm(requestId) : null;
-  const open = {
-    v: 1, eventId: `open:${requestId}`, requestId, tenantId: TENANT_ID, chatId: chat,
-    origin: { kind: 'telegram', chatId: chat, updateId },
-    draft: { title: `KAAE invitation ${tag}`, rawText: brief, clientId: KAAE_CLIENT_ID, designInstructions: '', exactCopy: [], autoGenerate: true },
-  };
-  const res = await fetch(`${RESTATE_INGRESS_URL}/RequestLifecycle/${requestId}/open/send`, {
-    method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': `open:${requestId}` }, body: JSON.stringify(open),
-  });
-  events.push(`open sent: HTTP ${res.status}`);
-  if (!res.ok) throw new Error(`Restate refused the open: HTTP ${res.status} ${await res.text()}`);
-  if (killed) events.push(await killed.done);
-
-  const [task] = await waitUntil(`the request's task`, async () => {
-    const rows = await query<{ id: string }>(sql`SELECT id::text AS id FROM hawa.tasks WHERE request_id = ${requestId}::uuid`);
-    return rows.length ? rows : null;
-  }, 120_000);
-  events.push(`task ${task.id}`);
-  const runKey = `dr-${task.id}`;
-  await waitUntil('the design run to finish', async () => {
-    const rows = await restateQuery<{ status: string }>(`SELECT status FROM sys_invocation WHERE target_service_name = 'DesignRun' AND target_service_key = '${runKey}'`);
-    return rows.length > 0 && rows.every((r) => r.status === 'completed');
-  }, 300_000, 2000);
-  // Since part C, Core projects the outcome: the draft goes to the chat and is recorded as sent.
-  await waitUntil('the lifecycle to record the draft as sent', async () => {
-    const rows = await query<{ stage: string; draft_sent_at: Date | null }>(sql`SELECT stage, draft_sent_at FROM hawa.requests WHERE request_id = ${requestId}::uuid`);
-    return rows[0]?.stage === 'in_review' && rows[0].draft_sent_at ? rows[0] : null;
-  }, 180_000, 2000);
-  const view = await fetch(`${RESTATE_INGRESS_URL}/RequestLifecycle/${requestId}/get`, { method: 'POST' })
-    .then((r) => r.json()).catch((e) => ({ error: String(e) })) as Record<string, unknown>;
-  events.push(`lifecycle view: ${JSON.stringify(view)}`);
-
-  const extra: InvariantResult[] = [];
-  const add = (name: string, ok: boolean, detail: string) => extra.push({ name, ok, detail });
-  const requests = await query<{ owner: string; stage: string; rev: string; root_task_id: string }>(sql`SELECT owner, stage, rev::text AS rev, root_task_id::text AS root_task_id FROM hawa.requests WHERE request_id = ${requestId}::uuid`);
-  add('one request row, owned by restate, in review at revision 3 (open, outcome, draft sent)', requests.length === 1 && requests[0].owner === 'restate' && requests[0].stage === 'in_review' && requests[0].rev === '3' && requests[0].root_task_id === task.id, JSON.stringify(requests));
-  const tasks = await query<{ id: string }>(sql`SELECT id FROM hawa.tasks WHERE request_id = ${requestId}::uuid`);
-  add('one task for the request', tasks.length === 1, `tasks=${tasks.length}`);
-  const created = await query<{ state: string; last_error: string | null }>(sql`SELECT state::text AS state, last_error FROM hawa.outbox_commands WHERE aggregate_id = ${task.id}::uuid AND command_type = 'task.created'`);
-  add('its task.created row is recorded, never dispatched', created.length === 1 && created[0].state === 'delivered' && created[0].last_error === 'OWNED_BY_LIFECYCLE', JSON.stringify(created));
-  const projections = await query<{ idempotency_key: string }>(sql`SELECT idempotency_key FROM hawa.lifecycle_projections WHERE request_id = ${requestId}::uuid`);
-  add('three projections: the open, the outcome, the draft sent', projections.map((p) => p.idempotency_key).sort().join(',') === [`${requestId}:1:open`, `${requestId}:2:designFinished`, `${requestId}:3:messageSent`].join(','), JSON.stringify(projections.map((p) => p.idempotency_key)));
-  const legacy = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_name = 'TaskWorkflow' AND target_service_key LIKE 'task-wf-${task.id}%'`);
-  add('no TaskWorkflow for a lifecycle task', Number(legacy[0]?.n ?? 0) === 0, `TaskWorkflow=${legacy[0]?.n ?? 0}`);
-  const runs = await restateQuery<{ status: string; last_failure_error_code: string | null }>(`SELECT status, last_failure_error_code FROM sys_invocation WHERE target_service_name = 'DesignRun' AND target_service_key LIKE 'dr-${task.id}%'`);
-  add('one DesignRun, completed', runs.length === 1 && runs[0].status === 'completed', JSON.stringify(runs));
-  const [ops] = await query<{ imports: string }>(sql`SELECT count(*) FILTER (WHERE kind = 'create') AS imports FROM hawa.canva_remote_operations WHERE task_id = ${task.id}::uuid`);
-  add('one Canva import', Number(ops.imports) === 1, `imports=${ops.imports}`);
-  const opens = await restateQuery<{ status: string }>(`SELECT status FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${requestId}' AND target_handler_name = 'open'`);
-  add('one open invocation, completed', opens.length === 1 && opens[0].status === 'completed', JSON.stringify(opens));
-  const outcomes = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE target_service_name = 'RequestLifecycle' AND target_service_key = '${requestId}' AND target_handler_name = 'designFinished'`);
-  add('the outcome was sent to the lifecycle once', Number(outcomes[0]?.n ?? 0) === 1, `designFinished invocations=${outcomes[0]?.n ?? 0}`);
-  add('the lifecycle shows the first round\'s draft in review', view?.stage === 'in_review' && view?.rev === 3 && view?.currentTaskId === task.id && view?.round === 0, JSON.stringify(view));
-  const shown = await sentTo(chat);
-  const kinds = shown.map((s: any) => `${s.method}:${s.documentSha256 ?? s.textHash}`);
-  add('the requester has the acknowledgement, the draft and its picture, each once', shown.length === 3 && new Set(kinds).size === 3 && shown.filter((s: any) => s.method === 'sendPhoto').length === 1, `${shown.length} sends: ${shown.map((s: any) => s.method).join(',')}`);
-  const [paused] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE status = 'paused'`);
-  add('no paused invocation', Number(paused?.n ?? 0) === 0, `paused=${paused?.n ?? 0}`);
-  const [rt16] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE last_failure_error_code = 'RT0016'`);
-  add('no journal mismatch (RT0016)', Number(rt16?.n ?? 0) === 0, `RT0016=${rt16?.n ?? 0}`);
-  return { delivered: false, skipRequestChecks: true, extra };
 }

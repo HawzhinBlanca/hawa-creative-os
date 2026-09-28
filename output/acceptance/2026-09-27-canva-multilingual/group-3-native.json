@@ -1,0 +1,231 @@
+{
+  "designId": "DAHWWwCxPqk",
+  "pages": [
+    {
+      "page_id": "PBHQghk2rHzpjF4G",
+      "page_number": 1,
+      "notes": "1",
+      "dimension": {
+        "width": 1200,
+        "height": 2000
+      },
+      "is_responsive": false,
+      "is_empty": false,
+      "is_editable": true
+    }
+  ],
+  "richtexts": [
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "ڕووداو [10 September]"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 60,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBHQghk2rHzpjF4G-LBWlLlgCVytvXltM"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "⁧NOVA ONE⁩ — بەرهەمی نوێ"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 250,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBHQghk2rHzpjF4G-LBK06Dv4W330qMzc"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "⁦careers.rona.example/jobs⁩ داواکاری"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 440,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBHQghk2rHzpjF4G-LB850Chs7zgsHr0g"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "د. لینا ڕەحمان"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 630,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBHQghk2rHzpjF4G-LBmWF5KwD750dL7Q"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "د. لينا رحمن"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 820,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBHQghk2rHzpjF4G-LBBf1z06k0bF700t"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "ئەڵقەی ٢١: «شارەکان چۆن بیر دەکەنەوە؟»"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1010,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBHQghk2rHzpjF4G-LBHHyfsZlwCNYzR5"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "الحلقة 21: «كيف تتذكر المدن؟»"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1200,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBHQghk2rHzpjF4G-LBlqbcFqVJ9gyMZt"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "٢٩٬٥٠٠ IQD — سەبەتەی خێزان"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1390,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBHQghk2rHzpjF4G-LB1CZ6NXmpbgfNc1"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "29,500 IQD — سلة العائلة"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1580,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBHQghk2rHzpjF4G-LBqRWsNtj0NdPnWB"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "ئیمەیڵ: team@example.com"
+        }
+      ],
+      "containerElement": {
+        "type": "SHAPE",
+        "position": {
+          "top": 1770,
+          "left": 80
+        },
+        "dimension": {
+          "width": 1040,
+          "height": 174
+        }
+      },
+      "element_id": "PBHQghk2rHzpjF4G-LBwZpCKVDqXmZkZF"
+    }
+  ],
+  "inspectionTransaction": "cancelled without edits",
+  "scope": "Observed native text and geometry; no human language approval."
+}

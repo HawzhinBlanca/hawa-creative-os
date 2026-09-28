@@ -153,7 +153,7 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
       ? `The client sent the ${several.length} images shown, in this order (index 0 first), with the request above. For each, fill imageRoles: which are photographs to place in the design, which is a design to follow, which is a logo. The client's words say what they sent them for. For a style reference also fill referenceRole 'style_reference' and referenceNotes, and fill styleSpec from it and the client's instructions (the instructions win where they differ): these values are enforced on the design.`
       : attached
         ? `${opts?.lateReference ? SENT_JUST_AFTER_THE_REQUEST : ATTACHED_WITH_THE_REQUEST} Also fill imageRoles with one entry for it (index 0): 'content_photo' if it is a photograph the client wants placed in the design, otherwise the role that matches referenceRole.\n\nFill styleSpec from the reference and the client's instructions (the instructions win where they differ): these values are enforced on the design, so read them off the image precisely.`
-        : `Fill styleSpec only from what the client's instructions ask for explicitly (a font, a gold button, where the logo goes); 'as_generated' for everything else. imageRoles is empty: no image was sent.`;
+        : `Fill styleSpec only from what the client's instructions ask for explicitly (a font, a palette-accent button, where the logo goes); 'as_generated' for everything else. imageRoles is empty: no image was sent.`;
   // Standing rules decide styleSpec values they name (a font, the title's colour, the logo's
   // corner) the way the request's own words do; this request's words and its reference still win.
   const rulesPrompt = ctx.clientRules

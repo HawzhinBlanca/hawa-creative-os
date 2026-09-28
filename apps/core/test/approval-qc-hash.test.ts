@@ -28,7 +28,7 @@ function approve(app: ReturnType<typeof createApp>, taskId: string, revisionId: 
   });
 }
 
-/** A seeded client the legacy generator still drafts: KAAE's designs are made in the studio (ADR-038). */
+/** A seeded client the legacy generator still drafts: KAAE's designs are made in the studio (ADR-127). */
 const HAWA_STUDIO = 'c1000000-0000-4000-8000-000000000001';
 
 describe('an approval without a QA report', () => {
@@ -79,6 +79,10 @@ describe('an approval after QA ran', () => {
     expect(desk.qaEvidence.qcReportHash).toMatch(HEX64);
     // Real QA ran on the generated design and failed (the generic generator draws a placeholder logo).
     expect(desk.qaEvidence).toMatchObject({ status: 'failed', criticalPass: false });
+    // This QC run did not measure glyph coverage or inspect every Canva layer. A stored run alone
+    // must not turn either field into a passing review claim.
+    expect(desk.qaEvidence.glyphCoveragePass).toBeNull();
+    expect(desk.qaEvidence.unobservedLayersCount).toBeNull();
 
     // The echoed hash matches (a forged one is 422, below); the refusal is the QA gate's.
     const echoed = await approve(app, taskId, latestRevisionId, { qcReportHash: desk.qaEvidence.qcReportHash });

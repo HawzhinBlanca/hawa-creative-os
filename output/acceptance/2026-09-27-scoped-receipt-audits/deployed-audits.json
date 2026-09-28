@@ -1,0 +1,167 @@
+{
+  "completed": true,
+  "checkedAt": "2026-09-27T15:27:23.799Z",
+  "buildCommit": "9cdeb25c06317cd831680bda7a695cd4fc90514b",
+  "checks": [
+    {
+      "name": "exact candidate is deployed",
+      "passed": true
+    },
+    {
+      "name": "named scope starts with empty durable history and no-store",
+      "passed": true
+    },
+    {
+      "name": "Chrome shows identity-scoped receipt history without repairs",
+      "passed": true
+    },
+    {
+      "name": "lost browser response follows a real committed audit",
+      "passed": true
+    },
+    {
+      "name": "Chrome reload retries the original body and recovers one identity",
+      "passed": true
+    },
+    {
+      "name": "one original durable audit has recomputable input and report hashes",
+      "passed": true
+    },
+    {
+      "name": "current scope includes the synthetic incomplete delivery",
+      "passed": true
+    },
+    {
+      "name": "delivered content with archive display filenames is not falsely flagged",
+      "passed": true
+    },
+    {
+      "name": "Core returns with the exact build after a real container restart",
+      "passed": true
+    },
+    {
+      "name": "browser sees the same PostgreSQL report after Core restart",
+      "passed": true
+    },
+    {
+      "name": "history opens the original report after a later audit",
+      "passed": true
+    },
+    {
+      "name": "replaying an older action retains the latest history head",
+      "passed": true
+    },
+    {
+      "name": "another actor cannot read the administrator audit",
+      "passed": true
+    },
+    {
+      "name": "designer audit contains only assigned and unassigned tasks",
+      "passed": true
+    },
+    {
+      "name": "administrator history does not expose another actor audit",
+      "passed": true
+    },
+    {
+      "name": "revocation removes old reports from latest and history",
+      "passed": true
+    },
+    {
+      "name": "revoked-scope action cannot be replayed",
+      "passed": true
+    },
+    {
+      "name": "inactive office membership cannot read audit state",
+      "passed": true
+    },
+    {
+      "name": "different header identity is refused",
+      "passed": true
+    },
+    {
+      "name": "browser supplied rows are refused",
+      "passed": true
+    },
+    {
+      "name": "automatic repair is refused",
+      "passed": true
+    },
+    {
+      "name": "cookie mutation without CSRF proof is refused",
+      "passed": true
+    },
+    {
+      "name": "failed browser read clears report and history",
+      "passed": true
+    },
+    {
+      "name": "mobile audit fields, counters and actions fit without clipped children",
+      "passed": true
+    },
+    {
+      "name": "browser credentials and resolved audit action do not remain in browser storage",
+      "passed": true
+    },
+    {
+      "name": "no browser execution errors",
+      "passed": true
+    },
+    {
+      "name": "receipt audits, restart and retries send no model requests",
+      "passed": true
+    }
+  ],
+  "originalReport": {
+    "basis": "PostgreSQL task and publication records against the verified delivery receipts Core stored. Google Drive and Google Sheets were not read, and nothing was repaired.",
+    "status": "divergent",
+    "auditId": "71f1d09c-6932-4637-a256-14efac1841f8",
+    "anomalies": [
+      {
+        "kind": "MISSING_DRIVE_ASSET",
+        "taskId": "6b79f2a6-d05f-4d9a-a646-6a3419403615",
+        "severity": "high",
+        "detectedAt": "2026-09-27T15:27:18.120Z",
+        "description": "Task 6b79f2a6-d05f-4d9a-a646-6a3419403615 is COMPLETE but no Drive delivery is recorded for it"
+      },
+      {
+        "kind": "MISSING_SHEET_ROW",
+        "taskId": "6b79f2a6-d05f-4d9a-a646-6a3419403615",
+        "severity": "medium",
+        "detectedAt": "2026-09-27T15:27:18.120Z",
+        "description": "Task 6b79f2a6-d05f-4d9a-a646-6a3419403615 has no Sheets reporting row recorded"
+      },
+      {
+        "kind": "INCOMPLETE_PUBLICATION_EVIDENCE",
+        "taskId": "6b79f2a6-d05f-4d9a-a646-6a3419403615",
+        "severity": "high",
+        "detectedAt": "2026-09-27T15:27:18.120Z",
+        "description": "The current publication has no usable artifact manifest."
+      }
+    ],
+    "simulated": false,
+    "timestamp": "2026-09-27T15:27:18.120Z",
+    "driftCount": 3,
+    "inSyncCount": 3,
+    "pendingTaskCount": 3,
+    "totalTasksAudited": 7,
+    "totalSheetRowsAudited": 3,
+    "totalDriveDeliverablesChecked": 5,
+    "revision": 1,
+    "actorUserId": "8366781f-dd8b-4507-9a2c-95402ddba110",
+    "reason": "Inspect stored receipts after an uncertain delivery",
+    "scopeSha256": "31b020b81eafad25621302a77be6ab00b942eaaf5e3574bdd3d04c0625049e08",
+    "inputsSha256": "1254c27500e682244cd383b19fe8583c09d11f18eab5742df62abaca685f2dc2",
+    "reportSha256": "e4f5b3e262924bd1ee651bb675b7ccdb23235c19fd8723683954fd03c6f621e2",
+    "replayed": false
+  },
+  "originalAction": {
+    "actionId": "71f1d09c-6932-4637-a256-14efac1841f8",
+    "expectedScopeSha256": "31b020b81eafad25621302a77be6ab00b942eaaf5e3574bdd3d04c0625049e08",
+    "expectedLatestAuditId": null,
+    "reason": "Inspect stored receipts after an uncertain delivery"
+  },
+  "revokedSyntheticSessions": true,
+  "productionChanged": false,
+  "realProviderCalls": false
+}

@@ -76,7 +76,21 @@ describe('TelegramSender: one attempt, classified', () => {
     expect(await sendAttempt(depsWith(bridge), m)).toEqual({ outcome: 'sent', messageId: '41' });
     expect(calls).toHaveLength(1);
     expect(await markOf(m.key)).toBe('sent');
+    expect(await asAutomation((trx) => readSendMark(trx, tenantId, markIdOf(m.key), SEND_STEP)))
+      .toMatchObject({ outcome: 'sent', messageId: '41' });
   });
+
+  it.each([undefined, '0', 'not-a-message-id'])(
+    'a success response without a valid message id (%s) remains uncertain', async (messageId) => {
+      const { bridge, calls } = scriptedBridge([{ success: true, ...(messageId ? { messageId } : {}) }]);
+      const m = text();
+      expect(await sendAttempt(depsWith(bridge), m)).toMatchObject({ outcome: 'uncertain', error: 'TELEGRAM_RECEIPT_INVALID' });
+      expect(await markOf(m.key)).toBe('uncertain');
+      expect(calls).toHaveLength(1);
+      expect((await sendAttempt(depsWith(bridge), m)).outcome).toBe('uncertain');
+      expect(calls).toHaveLength(1);
+    },
+  );
 
   it("429: marks it failed and asks Restate to try again after Telegram's retry_after", async () => {
     const { bridge } = scriptedBridge([{ success: false, error: 'TELEGRAM_DOCUMENT_REJECTED_429', retryAfterSeconds: 3 }]);
@@ -97,10 +111,17 @@ describe('TelegramSender: one attempt, classified', () => {
     expect(await markOf(m.key)).toBe('sent');
   });
 
-  it.each([
-    ['a 5xx', 'TELEGRAM_REJECTED_502'],
-    ['no connection (before anything reached Telegram)', 'TELEGRAM_NETWORK_ERROR'],
-  ])('%s: marks it failed and throws an error Restate retries (not terminal)', async (_what, error) => {
+  it('a 5xx can follow an accepted send and must never be retried automatically', async () => {
+    const { bridge, calls } = scriptedBridge([{ success: false, error: 'TELEGRAM_REJECTED_502' }]);
+    const m = text();
+    expect(await sendAttempt(depsWith(bridge), m)).toMatchObject({ outcome: 'uncertain' });
+    expect(await markOf(m.key)).toBe('uncertain');
+    expect((await sendAttempt(depsWith(bridge), m)).outcome).toBe('uncertain');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('a pre-connection failure marks failed and asks Restate to retry', async () => {
+    const error = 'TELEGRAM_NETWORK_ERROR';
     const { bridge } = scriptedBridge([{ success: false, error }]);
     const m = text();
     const err = await sendAttempt(depsWith(bridge), m).catch((e) => e);
@@ -147,6 +168,14 @@ describe('TelegramSender: marks already present', () => {
     const m = text();
     await asAutomation((trx) => writeSendMark(trx, tenantId, markIdOf(m.key), SEND_STEP, 'message', 'sent'));
     expect(await sendAttempt(depsWith(bridge), m)).toEqual({ outcome: 'sent' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('reuses a recorded Bot API message id without another send', async () => {
+    const { bridge, calls } = scriptedBridge([{ success: true, messageId: '99' }]);
+    const m = text();
+    await asAutomation((trx) => writeSendMark(trx, tenantId, markIdOf(m.key), SEND_STEP, 'message', 'sent', '87'));
+    expect(await sendAttempt(depsWith(bridge), m)).toEqual({ outcome: 'sent', messageId: '87' });
     expect(calls).toHaveLength(0);
   });
 
@@ -208,6 +237,24 @@ describe('TelegramSender: marks already present', () => {
     expect(calls).toHaveLength(1);
     expect(await markOf(m.key)).toBe('sent');
   });
+
+  it('does not claim delivery when the sent mark remains unwritten after retries', async () => {
+    const { bridge, calls } = scriptedBridge([{ success: true, messageId: '91' }]);
+    const m = text();
+    let transactions = 0;
+    const broken = {
+      isTransaction: false,
+      transaction() {
+        transactions++;
+        if (transactions >= 3) return { execute: async () => { throw new Error('Postgres write unavailable'); } };
+        return db.transaction();
+      },
+    } as unknown as Kysely<Database>;
+    expect(await sendAttempt({ ...depsWith(bridge), db: broken, markRetryDelaysMs: [1] }, m))
+      .toEqual({ outcome: 'uncertain', error: 'SEND_MARK_UNCONFIRMED' });
+    expect(await markOf(m.key)).toBe('attempted');
+    expect(calls).toHaveLength(1);
+  });
 });
 
 describe('TelegramSender: the office hears of an uncertain critical message once', () => {
@@ -244,6 +291,45 @@ describe('TelegramSender: the office hears of an uncertain critical message once
     expect(forwarded).toEqual([]);
   });
 
+  it('notifies a question send after its confirmed mark, including after a callback crash', async () => {
+    const requestId = randomUUID();
+    const taskId = randomUUID();
+    const questionId = randomUUID();
+    const m = text(`${requestId}:2:design-outcome`, { taskId, onSent: {
+      kind: 'question', requestId, requestRev: 2, taskId, questionId,
+    } });
+    const { bridge, calls } = scriptedBridge([{ success: true, messageId: '739' }]);
+    const callbacks: string[] = [];
+    let fail = true;
+    const ctx: SenderContext = { run: (_name, action) => action(), sendTo: () => {},
+      notifySent: (_message, messageId) => {
+        if (fail) { fail = false; throw new Error('callback crashed'); }
+        callbacks.push(messageId);
+      } };
+    await expect(handleSend(ctx, depsWith(bridge), m)).rejects.toThrow('callback crashed');
+    expect(await markOf(m.key)).toBe('sent');
+    expect(await handleSend(ctx, depsWith(bridge), m)).toEqual({ outcome: 'sent', messageId: '739' });
+    expect(calls).toHaveLength(1);
+    expect(callbacks).toEqual(['739']);
+  });
+
+  it('does not start a question timer for an uncertain send or mismatched callback identity', async () => {
+    const requestId = randomUUID();
+    const taskId = randomUUID();
+    const message = text(`${requestId}:2:design-outcome`, { taskId, onSent: {
+      kind: 'question', requestId, requestRev: 2, taskId, questionId: randomUUID(),
+    } });
+    const { bridge, calls } = scriptedBridge([{ success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' }]);
+    const callbacks: string[] = [];
+    const ctx: SenderContext = { run: (_name, action) => action(), sendTo: () => {},
+      notifySent: (_message, messageId) => { callbacks.push(messageId); } };
+    expect((await handleSend(ctx, depsWith(bridge), message)).outcome).toBe('uncertain');
+    expect(callbacks).toEqual([]);
+    await expect(handleSend(ctx, depsWith(bridge), { ...message, key: `wrong:${randomUUID()}` }))
+      .rejects.toBeInstanceOf(restate.TerminalError);
+    expect(calls).toHaveLength(1);
+  });
+
   it('a message without a key or chat is refused for good', async () => {
     const { bridge } = scriptedBridge([{ success: true }]);
     const { ctx } = fakeContext();
@@ -251,34 +337,201 @@ describe('TelegramSender: the office hears of an uncertain critical message once
   });
 });
 
-describe('TelegramSender: the draft as a photo (slice 2.3)', () => {
-  it('reads the stored export by reference, checks its hash, sends it as a photo with its caption and buttons, and fences it', async () => {
-    const calls: Array<{ chatId: string; bytes: number; caption?: string; markup?: unknown }> = [];
-    const { bridge } = scriptedBridge([{ success: true, messageId: '9' }]);
-    bridge.dispatchOutboundPhoto = async (chatId, photo, caption, replyMarkup) => {
-      calls.push({ chatId: String(chatId), bytes: photo.length, caption, markup: replyMarkup });
-      return { success: true, messageId: '77' };
+/**
+ * Finding 22 (Phase 4 review): a message Telegram definitely did not take (429, a pre-connection
+ * failure, an unknown refusal) was left 'attempted' for good when Postgres could not take the 'failed'
+ * mark, so every later attempt answered uncertain and never sent it. These tests run the handler in a
+ * fake Restate object context with a journal: an entry is recorded only when a step returns, a thrown
+ * step is retried (the whole invocation replays its journal), and a crash can be injected right
+ * before or right after any entry is recorded.
+ */
+class Crash extends Error {}
+type Entry = { name: string; value: unknown };
+type CrashPlan = { beforeEntry?: number; afterEntry?: number };
+
+/** One invocation of handleSend, replayed from its journal until it returns (Restate's retries). */
+async function invokeJournaled(deps: TelegramSenderDeps, m: OutboundMessage, plan: CrashPlan = {}) {
+  const journal: Entry[] = [];
+  const forwarded: OutboundMessage[] = [];
+  const sleeps: number[] = [];
+  const failures: string[] = [];
+  const pending = { ...plan };
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let index = 0;
+    const record = (name: string, value: unknown) => {
+      if (pending.beforeEntry === journal.length + 1) {
+        pending.beforeEntry = undefined;
+        throw new Crash(`crash before entry ${journal.length + 1} (${name}) was recorded`);
+      }
+      journal.push({ name, value: value === undefined ? undefined : JSON.parse(JSON.stringify(value)) });
+      if (pending.afterEntry === journal.length) {
+        pending.afterEntry = undefined;
+        throw new Crash(`crash after entry ${journal.length} (${name}) was recorded`);
+      }
     };
-    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
-    const m: OutboundMessage = { ...doc(bytes), kind: 'photo', key: `lc-test:${randomUUID()}:outcome:photo`, caption: 'Canva draft · Task ID: t', filename: undefined,
-      // Core puts the caption in `text` too, for a sender built before 'photo'; this one sends the picture.
-      text: 'Canva draft · Task ID: t' };
-    const deps = depsWith(bridge, { [m.exportRef!.artifactId]: bytes });
-    expect(await sendAttempt(deps, m)).toEqual({ outcome: 'sent', messageId: '77' });
-    expect(calls).toEqual([{ chatId: m.chatId, bytes: bytes.length, caption: 'Canva draft · Task ID: t', markup: undefined }]);
+    const replayed = (name: string) => {
+      const i = index++;
+      if (i >= journal.length) return undefined;
+      expect(journal[i].name).toBe(name);
+      return journal[i];
+    };
+    const ctx: SenderContext = {
+      run: async (name, action) => {
+        const prior = replayed(name);
+        if (prior) return prior.value as never;
+        const value = await action();
+        record(name, value);
+        return value;
+      },
+      sleep: async (ms: number) => {
+        if (replayed('sleep')) return;
+        sleeps.push(ms);
+        record('sleep', ms);
+      },
+      sendTo: (message) => {
+        if (replayed(`sendTo:${message.key}`)) return;
+        forwarded.push(message);
+        record(`sendTo:${message.key}`, message.key);
+      },
+    };
+    try {
+      const result = await handleSend(ctx, deps, m);
+      return { result, journal, forwarded, sleeps, failures, attempts: attempt + 1 };
+    } catch (err) {
+      if (err instanceof restate.TerminalError) throw err;
+      failures.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+  throw new Error(`the invocation did not finish: ${failures.slice(-3).join(' | ')}`);
+}
+
+/** A database whose next `remaining` transactions fail, as while Postgres restarts. */
+function outageDb() {
+  const outage = { remaining: 0, failed: 0 };
+  const flaky = {
+    isTransaction: false,
+    transaction() {
+      if (outage.remaining > 0) {
+        outage.remaining--;
+        outage.failed++;
+        return { execute: async () => { throw new Error('Connection terminated unexpectedly'); } };
+      }
+      return db.transaction();
+    },
+  } as unknown as Kysely<Database>;
+  return { flaky, outage };
+}
+
+/**
+ * The bridge answers `first`, then success. Postgres goes down right after the first answer, for
+ * exactly the tries the attempt makes at its mark (markRetryDelaysMs [1, 1]: three) plus `extra`.
+ */
+function refusalDuringOutage(first: TelegramSendResult, extra = 1) {
+  const { flaky, outage } = outageDb();
+  const answers: TelegramSendResult[] = [first, { success: true, messageId: '4242' }];
+  const calls: string[] = [];
+  const answer = (method: string) => {
+    calls.push(method);
+    const next = answers.length > 1 ? answers.shift()! : answers[0];
+    if (calls.length === 1) outage.remaining = 3 + extra;
+    return next;
+  };
+  const bridge: BridgeLike = {
+    async dispatchOutboundMessage() { return answer('sendMessage'); },
+    async dispatchOutboundDocument() { return answer('sendDocument'); },
+  };
+  return { flaky, outage, bridge, calls };
+}
+
+describe('TelegramSender: a definite refusal is retried even when its failed mark cannot be written (finding 22)', () => {
+  const depsFor = (bridge: BridgeLike, flaky: Kysely<Database>): TelegramSenderDeps =>
+    ({ ...depsWith(bridge), db: flaky, markRetryDelaysMs: [1, 1] });
+
+  it.each([
+    ['429 with retry_after', { success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 }],
+    ['a pre-connection network failure', { success: false, error: 'TELEGRAM_NETWORK_ERROR' }],
+    ['a refusal this sender does not know', { success: false, error: 'TELEGRAM_UNEXPECTED_ANSWER' }],
+  ] as Array<[string, TelegramSendResult]>)('%s during a Postgres outage: sent on the retry, marked sent, no office alert', async (_what, first) => {
+    const { flaky, bridge, calls, outage } = refusalDuringOutage(first);
+    const m = text();
+    const run = await invokeJournaled(depsFor(bridge, flaky), m);
+    expect(outage.failed).toBeGreaterThanOrEqual(3);
+    expect(run.result).toEqual({ outcome: 'sent', messageId: '4242' });
+    expect(calls).toHaveLength(2);
     expect(await markOf(m.key)).toBe('sent');
-    // Asked again (a retried invocation): the mark answers, nothing is sent twice.
-    expect(await sendAttempt(deps, m)).toEqual({ outcome: 'sent' });
-    expect(calls).toHaveLength(1);
+    expect(run.forwarded).toEqual([]);
   });
 
-  it('a photo whose stored bytes changed since it was composed is refused, not sent', async () => {
-    const { bridge } = scriptedBridge([{ success: true }]);
-    let sent = 0;
-    bridge.dispatchOutboundPhoto = async () => { sent++; return { success: true }; };
-    const m: OutboundMessage = { ...doc(new Uint8Array([1, 2, 3])), kind: 'photo', key: `lc-test:${randomUUID()}:outcome:photo` };
-    const result = await sendAttempt(depsWith(bridge, { [m.exportRef!.artifactId]: new Uint8Array([9, 9, 9]) }), m);
-    expect(result).toMatchObject({ outcome: 'refused', error: expect.stringContaining('DELIVERED_FILE_CHANGED') });
-    expect(sent).toBe(0);
+  it("a 429 waits for Telegram's retry_after before the second send", async () => {
+    const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 3 });
+    const run = await invokeJournaled(depsFor(bridge, flaky), text());
+    expect(run.sleeps).toEqual([3000]);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('a definite 4xx refusal during an outage answers refused and is not left attempted', async () => {
+    const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_403' });
+    const m = text();
+    const run = await invokeJournaled(depsFor(bridge, flaky), m);
+    expect(run.result).toEqual({ outcome: 'refused', error: 'TELEGRAM_REJECTED_403' });
+    expect(calls).toHaveLength(1);
+    expect(await markOf(m.key)).toBe('failed');
+    expect(run.forwarded).toEqual([]);
+  });
+
+  it('a 5xx during an outage stays uncertain: never resent, the office alerted once', async () => {
+    const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_502' });
+    const m = text();
+    const run = await invokeJournaled(depsFor(bridge, flaky), m);
+    expect(run.result.outcome).toBe('uncertain');
+    expect(calls).toHaveLength(1);
+    expect(['attempted', 'uncertain']).toContain(await markOf(m.key));
+    expect(run.forwarded.map((f) => f.key)).toEqual([`${m.key}:uncertain-alert`]);
+  });
+
+  it('a crash after every recorded entry: the 429 message reaches Telegram twice in total and nobody is alerted', async () => {
+    const clean = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 });
+    const cleanRun = await invokeJournaled(depsFor(clean.bridge, clean.flaky), text());
+    expect(cleanRun.journal.length).toBeGreaterThanOrEqual(3);
+    for (let k = 1; k <= cleanRun.journal.length; k++) {
+      const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 });
+      const m = text();
+      const run = await invokeJournaled(depsFor(bridge, flaky), m, { afterEntry: k });
+      expect({ k, result: run.result, calls: calls.length, alerts: run.forwarded.length })
+        .toEqual({ k, result: { outcome: 'sent', messageId: '4242' }, calls: 2, alerts: 0 });
+      expect(run.journal.map((e) => e.name)).toEqual(cleanRun.journal.map((e) => e.name));
+      expect(await markOf(m.key)).toBe('sent');
+    }
+  });
+
+  it('a crash before each entry is recorded: only a lost answer to the first send is uncertain, and it is alerted, never resent', async () => {
+    const clean = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 });
+    const cleanRun = await invokeJournaled(depsFor(clean.bridge, clean.flaky), text());
+    for (let k = 1; k <= cleanRun.journal.length; k++) {
+      const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 });
+      const m = text();
+      const run = await invokeJournaled(depsFor(bridge, flaky), m, { beforeEntry: k });
+      if (k === 1) {
+        // The process died after Telegram's 429 and before its answer was journaled, with the mark
+        // still 'attempted': nothing durable says it was refused. It stays uncertain and visible.
+        expect(run.result.outcome).toBe('uncertain');
+        expect(calls).toHaveLength(1);
+        expect(run.forwarded.map((f) => f.key)).toEqual([`${m.key}:uncertain-alert`]);
+        expect(await markOf(m.key)).toBe('attempted');
+      } else {
+        expect({ k, result: run.result, calls: calls.length, alerts: run.forwarded.length })
+          .toEqual({ k, result: { outcome: 'sent', messageId: '4242' }, calls: 2, alerts: 0 });
+        expect(await markOf(m.key)).toBe('sent');
+      }
+    }
+  });
+
+  it('a later request for the same message after the recovered refusal sends nothing again', async () => {
+    const { flaky, bridge, calls } = refusalDuringOutage({ success: false, error: 'TELEGRAM_REJECTED_429', retryAfterSeconds: 1 });
+    const m = text();
+    await invokeJournaled(depsFor(bridge, flaky), m);
+    const again = await invokeJournaled(depsFor(bridge, flaky), m);
+    expect(again.result).toEqual({ outcome: 'sent', messageId: '4242' });
+    expect(calls).toHaveLength(2);
   });
 });

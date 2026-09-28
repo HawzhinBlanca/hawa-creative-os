@@ -140,6 +140,20 @@ describe('Design Studio v2: Color Science & CIEDE2000 (color-science.ts)', () =>
 describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-image-provider.ts)', () => {
   const PALETTE: Hex[] = ['#0A1628', '#1E3A5F', '#4770A3', '#D4E2F0', '#F7B500'];
 
+  it('refuses an absent client palette before any image-provider request', async () => {
+    const fetchFn = vi.fn();
+    expect(() => composeArtPrompt('Botanical paper cutouts', { palette: [] })).toThrow(/MOTIF_PALETTE_REQUIRED/);
+    await expect(generateArtImage({ artPrompt: 'Botanical paper cutouts', palette: [], openaiApiKey: 'mock-key', fetchFn: fetchFn as unknown as typeof fetch })).rejects.toThrow(/MOTIF_PALETTE_REQUIRED/);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('keeps another client’s palette and art direction free of house colors', () => {
+    const prompt = composeArtPrompt('Botanical paper cutouts', { palette: ['#123828', '#E5DCC3'], calmRegion: 'center third', aspect: '1:1' });
+    expect(prompt).toContain('Botanical paper cutouts');
+    expect(prompt).toContain('#123828, #E5DCC3');
+    expect(prompt).not.toMatch(/#0A1628|#F7B500|navy|academic|dark and low-detail/i);
+  });
+
   it('composes art prompt adhering to Section 5.4 / P7 specification', () => {
     const concept = 'Dramatic Kurdish mountain ridges at dawn with layered mist';
     const composed = composeArtPrompt(concept, {
@@ -149,10 +163,10 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     });
 
     expect(composed).toContain(concept);
-    expect(composed).toContain('Photographic or painterly still image, no text of any kind');
+    expect(composed).toContain('text-free visual art described above: no text of any kind');
     expect(composed).toContain('no people, faces or hands');
-    expect(composed).toContain('Palette limited to #0A1628, #1E3A5F, #4770A3, #D4E2F0, #F7B500 with soft neutrals');
-    expect(composed).toContain('Keep the region bottom third calm, dark and low-detail');
+    expect(composed).toContain('Palette limited to #0A1628, #1E3A5F, #4770A3, #D4E2F0, #F7B500');
+    expect(composed).toContain('Keep the region bottom third calm and low-detail');
     expect(composed).toContain('Aspect 4:5');
   });
 
@@ -326,14 +340,60 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
     expect(result.receipt.verificationReport?.passed).toBe(true);
   });
 
-  it('falls back to procedural motif when image provider attempts are exhausted', async () => {
+  it('holds the art workflow when visual verification has unknown acceptance', async () => {
+    const validBase64 = createSolidPng(64, 64, [30, 58, 95]).toString('base64');
+    const imageCalls: string[] = [];
+    const fakeFetcher: typeof fetch = vi.fn(async (url: any) => {
+      const address = String(url);
+      if (address.includes('/images/generations')) {
+        imageCalls.push(address);
+        return { ok: true, status: 200, json: async () => ({ data: [{ b64_json: validBase64 }] }) } as any;
+      }
+      if (address.includes('/chat/completions')) {
+        return { ok: false, status: 503, text: async () => 'unavailable' } as any;
+      }
+      throw new Error(`Unexpected URL: ${address}`);
+    });
+    await expect(generateArtImage({
+      artPrompt: 'Minimalist navy gradient textured backdrop', palette: PALETTE,
+      openaiApiKey: 'mock-key', fetchFn: fakeFetcher,
+    })).rejects.toMatchObject({ code: 'UNCERTAIN_HTTP', isUncertain: true, costUsd: 0.04 });
+    expect(imageCalls).toHaveLength(1);
+  });
+
+  it.each([{}, { containsForbidden: 'false', what: 'clean' }, { containsForbidden: false },
+    { containsForbidden: false, what: '' }, null, []])('does not accept malformed vision verdict %j', async verdict => {
+    const fetchFn = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      id: 'synthetic-verdict', model: 'gpt-6-astra', usage: { prompt_tokens: 1000, completion_tokens: 200 },
+      choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(verdict) } }],
+    })));
+    await expect(runVisionCheck(createSolidPng(16, 16, [30, 58, 95]), 'image/png', {
+      openaiApiKey: 'synthetic-key', fetchFn, model: 'gpt-6-astra',
+    })).rejects.toMatchObject({ code: 'ART_VERDICT_INVALID', costUsd: 0.02 });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps billed malformed vision cost when selecting a reported procedural fallback', async () => {
+    const fetchFn = vi.fn<typeof fetch>(async url => String(url).includes('/images/')
+      ? new Response(JSON.stringify({ data: [{ b64_json: createSolidPng(16, 16, [30, 58, 95]).toString('base64') }] }))
+      : new Response(JSON.stringify({ id: 'synthetic-verdict', model: 'gpt-6-astra',
+        usage: { prompt_tokens: 1000, completion_tokens: 200 },
+        choices: [{ finish_reason: 'stop', message: { content: '{}' } }] })));
+    const result = await generateArtImage({ artPrompt: 'Navy texture', palette: PALETTE,
+      openaiApiKey: 'synthetic-key', fetchFn, width: 16, height: 16 });
+    expect(result.receipt).toMatchObject({ provider: 'procedural', fallbackReason: 'vision_check_unavailable' });
+    expect(result.receipt.costUsd).toBeGreaterThan(0.04);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops after one server error with unknown image acceptance', async () => {
     const fakeFetcher: typeof fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
       text: async () => 'Internal Server Error',
     } as any);
 
-    const result = await generateArtImage({
+    await expect(generateArtImage({
       artPrompt: 'Minimalist backdrop',
       palette: PALETTE,
       width: 1080,
@@ -341,14 +401,18 @@ describe('Design Studio v2: Gemini Image Provider & Vision Verification (gemini-
       openaiApiKey: 'mock-key',
       fetchFn: fakeFetcher,
       motifFallbackType: 'guilloche',
-    });
+    })).rejects.toMatchObject({ code: 'UNCERTAIN_ACCEPTANCE', isUncertain: true });
+    expect(fakeFetcher).toHaveBeenCalledTimes(1);
+  });
 
-    expect(result.receipt.provider).toBe('procedural');
-    expect(result.receipt.artFallback).toBe('procedural');
-    expect(result.receipt.synthId).toBe(false);
-    expect(result.receipt.costUsd).toBe(0.0);
-    expect(result.receipt.attempts).toBe(2);
-    expect(result.imageBuffer.length).toBeGreaterThan(100);
+  it('does not repeat a generated-art call when the connection drops before a response', async () => {
+    const fakeFetcher = vi.fn().mockRejectedValue(Object.assign(new TypeError('fetch failed'), {
+      cause: { code: 'ECONNRESET' },
+    }));
+    await expect(generateArtImage({ artPrompt: 'Minimalist backdrop', palette: PALETTE,
+      openaiApiKey: 'mock-key', fetchFn: fakeFetcher as unknown as typeof fetch }))
+      .rejects.toMatchObject({ code: 'UNCERTAIN_ACCEPTANCE', isUncertain: true });
+    expect(fakeFetcher).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -364,18 +428,17 @@ describe('Image requests are bounded (2026-09-23)', () => {
       { provider: 'google' as const, model: 'gemini-3.1-flash-lite-image', size: '1K', quality: 'auto', aspectRatio: '1:1' },
       { provider: 'openai' as const, model: 'gpt-image-2.5-sunburst', size: '1024x1024', quality: 'auto', aspectRatio: '1:1' },
     ]) {
-      const result = await generateArtImage({
+      await expect(generateArtImage({
         artPrompt: 'Minimalist backdrop',
         palette: ['#0A1628', '#1E3A5F'],
         geminiApiKey: 'mock-key',
         openaiApiKey: 'mock-key',
         fetchFn: fakeFetcher,
         settings,
-      });
-      expect(result.receipt.artFallback).toBe('procedural');
+      })).rejects.toMatchObject({ code: 'UNCERTAIN_ACCEPTANCE', isUncertain: true });
     }
 
-    expect(signals).toHaveLength(4);
+    expect(signals).toHaveLength(2);
     for (const signal of signals) {
       expect(signal).toBeInstanceOf(AbortSignal);
       expect(signal?.aborted).toBe(false);

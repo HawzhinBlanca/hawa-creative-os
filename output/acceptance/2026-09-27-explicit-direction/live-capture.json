@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "8e79320253f14053148c85947f3457141acfc8f8",
+  "sourceHashes": {
+    "packages/creative/src/editable-transfer.ts": "f3ee3f99e6a48a89c4aebc683f3923b532cf5d712ca224f2236d3ebe17c4efc6",
+    "packages/creative/src/studio/transfer-v2.ts": "075a3dc7aed971502040edd5132e8d9bde1d9e5d9d27a0526b8adf6c7c310ad9",
+    "packages/qa/src/canva-pptx-check.ts": "739e6d00d19cb4bc2eceb7853810d13bc8bb7f47d060ba8c5d7827e0ff492c99",
+    "packages/integrations/src/canva-connect-client.ts": "3fe7ec3e9b0883213c0f1b8e941178454c155a87a46512be35c3db8676e6e8ac",
+    "apps/core/src/services/canva-connect-service.ts": "9f08396c07b9b6abe8fcaf28203253b5415b8bea077ec7ae6c0fcfd928e61d6c"
+  },
+  "sourceTreeClean": false,
+  "corpusSha256": "a8ee5a1c250515102b17a29d2207e1170bc8e0233a1061bb7c176a8eb85e2dec",
+  "startedAt": "2026-09-27T04:07:03.726Z",
+  "groups": {
+    "direction-v2": {
+      "caseIds": [
+        "STYLE-AR",
+        "STYLE-CKB",
+        "STYLE-EN",
+        "STYLE-MIXED",
+        "LTR-ACCENT",
+        "LTR-ARABIC-FIRST"
+      ],
+      "sourceSha256": "1d12d63cbba018eb7fcde07f4cd9a22bdb14a6e4ed4108cdc21f6df3190c1da6",
+      "exports": {
+        "png": {
+          "status": "captured",
+          "operationKey": "explicit-direction-20260927-direction-v2-png",
+          "at": "2026-09-27T04:07:12.801Z",
+          "jobId": "ca18128e-4df0-4e2b-b120-89ebcd21c705",
+          "file": "direction-v2-canva.png",
+          "bytes": 60911,
+          "sha256": "892f3625fe670d45e869cad2b49212d0427a82a4c8da8b015ac7a4eba7569bda",
+          "capturedAt": "2026-09-27T04:07:16.374Z",
+          "pixels": [
+            1080,
+            1740
+          ]
+        },
+        "pdf": {
+          "status": "captured",
+          "operationKey": "explicit-direction-20260927-direction-v2-pdf",
+          "at": "2026-09-27T04:07:19.887Z",
+          "jobId": "c44d83a3-410a-4cca-8676-79d3ed31c720",
+          "file": "direction-v2-canva.pdf",
+          "bytes": 39510,
+          "sha256": "28bda2541338ddd7e861bd57c2ed0aa449112baaf9c76a95b898bcce32c1b15e",
+          "capturedAt": "2026-09-27T04:07:23.269Z"
+        },
+        "pptx": {
+          "status": "captured",
+          "operationKey": "explicit-direction-20260927-direction-v2-pptx",
+          "at": "2026-09-27T04:07:26.782Z",
+          "jobId": "a3958bb4-d754-4c9a-ab7b-93b3d42da132",
+          "file": "direction-v2-canva.pptx",
+          "bytes": 336678,
+          "sha256": "d8f87c4388f60ec56b7d800e549dae24bd03c02df587ec6945451dd5a11f2e2b",
+          "capturedAt": "2026-09-27T04:07:29.081Z",
+          "qa": {
+            "file": "direction-v2-qa.json",
+            "sha256": "4bbf40c4e8154858ee59c1fe60c1bc9c584debfa9b01d3ac5fb3428cce4fd263",
+            "copyPass": true,
+            "fontPass": true,
+            "rtlPass": true,
+            "rtlNote": "Paragraph direction metadata is present; rendered reading direction and isolation must be verified visually.",
+            "textObjectCount": 6,
+            "observedFonts": [
+              "Noto Sans Arabic",
+              "Cairo",
+              "Verdana"
+            ],
+            "fullReleasePass": false
+          }
+        }
+      },
+      "import": {
+        "status": "completed",
+        "operationKey": "explicit-direction-20260927-direction-v2-import",
+        "at": "2026-09-27T04:07:03.757Z",
+        "jobId": "b8126803-aa70-4abc-9b21-39c97ef7b7ea"
+      },
+      "design": {
+        "id": "DAHWXIJunxg",
+        "title": "[TEST] Hawa direction 2026-09-27 direction-v2",
+        "pageCount": 1,
+        "createdAt": 1790482024,
+        "updatedAt": 1790482024
+      },
+      "metadataSamples": [
+        {
+          "updatedAt": 1790482024,
+          "observedAt": "2026-09-27T04:07:06.330Z"
+        },
+        {
+          "updatedAt": 1790482028,
+          "observedAt": "2026-09-27T04:07:09.574Z"
+        },
+        {
+          "updatedAt": 1790482028,
+          "observedAt": "2026-09-27T04:07:12.791Z"
+        }
+      ],
+      "captureBefore": {
+        "id": "DAHWXIJunxg",
+        "updatedAt": 1790482028,
+        "pageCount": 1
+      },
+      "captureAfter": {
+        "id": "DAHWXIJunxg",
+        "updatedAt": 1790482028,
+        "pageCount": 1
+      },
+      "captureMetadataUnchanged": true,
+      "status": "captured"
+    }
+  },
+  "scope": "One synthetic six-block direction sheet; real Hawa typed provider client, no full task/approval/delivery workflow.",
+  "status": "captured",
+  "completedAt": "2026-09-27T04:07:32.864Z",
+  "fullMultilingualAdmission": false
+}

@@ -1,0 +1,124 @@
+{
+  "date": "2026-09-27",
+  "status": "local_safety_slice_qualified_live_recovery_open",
+  "decision": "ADR-086",
+  "requirements": [
+    "FR-060",
+    "FR-065",
+    "NFR-001"
+  ],
+  "checks": {
+    "redBefore": {
+      "passed": 12,
+      "failed": 4
+    },
+    "firstFocused": {
+      "files": 6,
+      "passed": 95,
+      "failed": 0
+    },
+    "qualified": {
+      "files": 8,
+      "passed": 116,
+      "failed": 0,
+      "skipped": 0
+    },
+    "sourceBuild": "passed",
+    "testTypes": "passed",
+    "processKills": "Two actual SIGKILL drills; missing-response drill now also refuses stale replacement and replacement after abandonment, with one fake provider request.",
+    "concurrency": "PostgreSQL lock wait observed before abandonment commit; waiting call refused, earlier admitted result finalized.",
+    "firstFullSuite": {
+      "passed": 3758,
+      "failed": 5,
+      "skipped": 59,
+      "reason": "Existing scope fixture passed an empty object as the transaction; the new SQL lock could not execute. Authorization assertions preserved; use query-only Kysely fixture."
+    },
+    "fixtureCorrection": "Scope file:13 tests pass. An initial direct Kysely import was unavailable in Core; query-only helper lives in the DB package that already owns that dependency. Failed import log retained.",
+    "fullSuite": {
+      "passed": 3763,
+      "failed": 0,
+      "skipped": 59,
+      "files": 472,
+      "scope": "Sealed runtime source plus corrected authorization fixture; no deployed-image claim."
+    },
+    "releaseManifest": "verified",
+    "anyRatchet": "1007 <= 1053; passed",
+    "providerEgress": "passed;9 existing exceptions"
+  },
+  "limits": [
+    "No production change or newly deployed candidate in this slice.",
+    "No live provider or human approval.",
+    "General Studio settlement and lost-response replay remain open.",
+    "Original uncertain receipts are unchanged; an explicit new run is allowed only once original pending calls have definitive late outcomes.",
+    "This is application admission enforcement, not a new SQL trigger against arbitrary database writes."
+  ],
+  "sourceHashes": {
+    "adrs/086_studio_task_uncertainty_fence.md": "df8b85864454affa1d9daecce6ab193ae177f14cfde64882032f5e9189655dc6",
+    "apps/core/src/services/design-studio/design-studio-service.ts": "35b06616ac5e40aa84c66c9e0d8fa7b84c7d2eb81d056230a34a3ad9529e09b1",
+    "apps/core/src/services/canva-design-planner.ts": "ed92d4afec7a6b3d1ded71f6726d26342a53e6090cfd578b68bfbe61836fa8be",
+    "apps/core/src/services/task-generation-guard.ts": "ccb3174de070698d375c9468d1cc176e3d5acea0ff8e3343b6d1ca06d50dff20",
+    "packages/db/src/repositories/design-studio.repository.ts": "cd4517972188f4b8671450be3fefe0a047fe8a0c154a62db63a133eecc8c1e9a",
+    "apps/core/test/studio-run-guards.test.ts": "0e9622d92503c576b8f3ac66825f62e0e2ee82ed427876eeb759fbf147599ad5",
+    "apps/core/test/canva-design-planner.test.ts": "b1158e4454db2d89b4d5b366abb2fbe2986c02049b5b2d1522d312d99e127033",
+    "apps/core/test/studio-model-kill-recovery.test.ts": "9fbbd58407a46ad5fb28b8d08246c6972d049e9d1de2003d3a10f1798ae25fc3",
+    "packages/db/test/design-studio.test.ts": "7ff052298ff3d3b5d20ad52b32e7e06c310158fbc22b6120abfd8cf78550090b",
+    "apps/core/test/r04-scope-enforcement.test.ts": "3038252f6f208e8441616c0b5faf4973b9b06f4798835f93bc872e488aea47a9",
+    "packages/db/test-support/query-only-db.ts": "af7686be00dbb4c89bd81994e72b93c017b8778cd7d929550d4ef688f422c3a8"
+  },
+  "artifacts": {
+    "output/acceptance/2026-09-27-studio-task-hold/build.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/focused.log": {
+      "sha256": "e3228a6d72eea8d21b3407727e127b8cd52e349728ef0193239e4d6e29420441",
+      "bytes": 325
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/full-tests-first.json": {
+      "sha256": "7614a87247de1bee6a447d63ea4861b7a5b413faa7e227e14bc4785a63a6809b",
+      "bytes": 1574040
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/full-tests-first.log": {
+      "sha256": "fe0d87f30a556e4512ee211f2507c3063ce4748fdac5f6f499afe89b1f63fd39",
+      "bytes": 494514
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/full-tests.json": {
+      "sha256": "dd3ba056d8e6dbdcc37e2c9d87cafca7f9ba2d1791baa82a1d3128a0e7747905",
+      "bytes": 1568522
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/full-tests.log": {
+      "sha256": "aea293498b0dff8bd14b1b34b100b28f009ad655fe6e2b31c9d3eed0199ba160",
+      "bytes": 483225
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/qualified.log": {
+      "sha256": "e865adf0401d65ebffab7a4f1ab49d4f2a588955d482ecff0931375d13506626",
+      "bytes": 1537
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/red.log": {
+      "sha256": "2464a07e9144324ec49284c84109fce61b6fd8d51ed3158de8dc5f44950b5454",
+      "bytes": 10238
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/scope-final.log": {
+      "sha256": "fe8fc642a7a02b2313b5c0b811fdb4849a3e566e9cca2822b4f1373337bc7840",
+      "bytes": 1255
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/scope.log": {
+      "sha256": "79e0f4760407f62cae9f34262e97e3b7ddaaecd5368662fc03bfc8b4f6b80581",
+      "bytes": 1083
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/types-final.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/types-qualified.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    },
+    "output/acceptance/2026-09-27-studio-task-hold/types.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    }
+  },
+  "sourceCommit": "4bcd54d72674a925a8eb8129cc4376f5abd0a8a2",
+  "sealedRuntimeCommit": "ab78c1dea21158f9f492992e1d643e235c2bd1b4"
+}

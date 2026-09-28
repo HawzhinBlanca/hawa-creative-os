@@ -1,19 +1,23 @@
 # Runbook 20: Operating the new architecture
 
 *Architecture programme Phase 4 (output/plans/2026-09-24-architecture-programme/PLAN.md). Written
-2026-09-25 against `studio-v2` at 1c1316d.*
+2026-09-25 against `studio-v2` at 1c1316d; carried to `codex/research-grade-design-system`, the
+mainline since the owner's decision of 2026-09-28, under ADR-127.*
 
 This runbook covers what changed with the programme: two worker colours and their drains, Restate
 invocations that wait for a person, the Phase 2 flags, one request's logs, the file store, the test
 databases, the chaos suite and the load test. Background: `infra/docker/README.md` (blue/green, the
-poller), `runbooks/10_backup_restore.md` (backups), ADR-034 to ADR-037.
+poller), `runbooks/10_backup_restore.md` (backups, authoritative for this branch's Restate and
+PostgreSQL recovery), ADR-034 to ADR-037, and this branch's lifecycle ADRs from ADR-052 and ADR-059 on.
 
 ## How to read the commands
 
-**Every command block below was run by the author on the chaos stack or on the test server, never on
-production.** The first line of each block says which, and when. A test
-(`scripts/load/test/runbook.test.ts`) fails if a block does not say so, or names production's
-containers, port or database.
+**Every command block below was run by its author on the chaos stack or on the test server, never on
+production.** The first line of each block says which, when, and on which branch. Most blocks were run
+on studio-v2's chaos stack before the two branches' lifecycle work was reconciled; those say **not
+re-run on this branch**, and their output is studio-v2's. Blocks run again on
+`codex/research-grade-design-system` say so. A test (`scripts/load/test/runbook.test.ts`) fails if a
+block does not say both, or names production's containers, port or database.
 
 - **Chaos stack**: the compose project `hawa-chaos` (`packages/testkit/chaos`), a copy of production
   (Postgres 17, Restate 1.7.10, Core, the worker colours) whose provider hosts are fakes on an internal
@@ -42,10 +46,12 @@ In the blocks, `S` is a scratch directory; the author's was
 
 The live colour is the one Restate sends new work to; a deploy starts the other colour, registers it
 with `force: false`, and deletes the old deployment only once nothing is pinned to it
-(`infra/docker/README.md` has the why). `deploy.sh --apply` does all of it; by hand it is:
+(`infra/docker/README.md` has the why). `deploy.sh --apply` does all of it; by hand it is below.
+`scripts/restate-bluegreen.ts` is the same on both branches (`plan`, `register`, `removable`,
+`finish-drains`).
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:16Z: where would a deploy go?
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:16Z; not re-run on this branch): where would a deploy go?
 npx tsx scripts/restate-bluegreen.ts plan --admin http://127.0.0.1:56070
 # live=blue
 # live_deployment=dp_13aB1bFnHcXzMrinxtpHKc9
@@ -54,7 +60,7 @@ npx tsx scripts/restate-bluegreen.ts plan --admin http://127.0.0.1:56070
 ```
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:16Z: start the idle colour, register it, try to finish the drain.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:16Z; not re-run on this branch): start the idle colour, register it, try to finish the drain.
 CHAOS_TELEGRAM_POLLER=worker docker compose -p hawa-chaos -f packages/testkit/chaos/docker-compose.chaos.yml \
   --env-file packages/testkit/chaos/.run/chaos.env up -d --no-build --no-deps --wait worker-green
 npx tsx scripts/restate-bluegreen.ts register green --admin http://127.0.0.1:56070
@@ -74,7 +80,7 @@ by itself. The deploy leaves the old colour running and still succeeds (after
 (`finish-drains --require-drained`). Look at what is pinned:
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:16Z: what keeps blue from draining.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:16Z; not re-run on this branch): what keeps blue from draining.
 curl -s http://127.0.0.1:56070/query -H 'content-type: application/json' -H 'accept: application/json' \
   -d "{\"query\":\"SELECT id, target, status, retry_count, next_retry_at FROM sys_invocation WHERE pinned_deployment_id = 'dp_13aB1bFnHcXzMrinxtpHKc9' AND status <> 'completed'\"}"
 # {"rows":[{"id":"inv_1eC7FuOzjLTO4txeTfIUpz4yOrcPlZbjxE","target":"ChatInbox/9500001/handleUpdate","status":"backing-off","retry_count":4,…}]}
@@ -93,7 +99,7 @@ What each status means, and what to do:
 stopped; once Core was back and the invocation resumed (next section), the drain finished:
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:17Z: finish the drain, then remove the drained colour's container.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:17Z; not re-run on this branch): finish the drain, then remove the drained colour's container.
 npx tsx scripts/restate-bluegreen.ts finish-drains --wait-seconds 60 --admin http://127.0.0.1:56070
 # deleted=blue
 npx tsx scripts/restate-bluegreen.ts removable blue --admin http://127.0.0.1:56070
@@ -108,7 +114,7 @@ The worker's own view after the switch (the new colour takes over the outbox and
 takeover delay; `background` goes from `taking_over` to `live`):
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:17Z.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:17Z; not re-run on this branch).
 docker exec hawa-chaos-worker-green-1 node -e "fetch('http://localhost:9080/health').then(r=>r.json()).then(j=>console.log(JSON.stringify({colour:j.colour,background:j.background,telegramPoller:j.telegramPoller})))"
 # {"colour":"green","background":"taking_over","telegramPoller":{"mode":"on","background":"live","offset":90284190566,…}}
 ```
@@ -116,12 +122,13 @@ docker exec hawa-chaos-worker-green-1 node -e "fetch('http://localhost:9080/heal
 ## Paused and backing-off invocations
 
 **How you learn of them.** Core's `/v1/health` reports `restateInvocations` (`paused`, `backingOff`,
-`inbox`; cached 10 s) and `dependencies.restatePausedInvocations`. Any paused invocation makes health
-`degraded`, and the watchdog alerts on it. The drill paused the invocation above (as Restate does when
-its retries run out, after about an hour) and read health:
+`inbox`; cached 10 s) and `dependencies.restatePausedInvocations`; on this branch both are in
+`apps/core/src/app.ts`. Any paused invocation makes health `degraded`, and the watchdog alerts on it.
+The drill paused the invocation above (as Restate does when its retries run out, after about an hour)
+and read health:
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:16Z: pause (drill only), then read what the office's health shows.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:16Z; not re-run on this branch): pause (drill only), then read what the office's health shows.
 curl -s -o /dev/null -w "pause HTTP %{http_code}\n" -X PATCH http://127.0.0.1:56070/invocations/inv_1eC7FuOzjLTO4txeTfIUpz4yOrcPlZbjxE/pause
 # pause HTTP 202
 docker start hawa-chaos-core-1        # the cause fixed (Core had been stopped for the drain drill)
@@ -132,7 +139,7 @@ curl -s http://127.0.0.1:56090/__core/v1/health | python3 -c "import json,sys; d
 **Which ones, and why.** `last_failure` carries the error the handler threw:
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:16Z.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:16Z; not re-run on this branch).
 curl -s http://127.0.0.1:56070/query -H 'content-type: application/json' -H 'accept: application/json' \
   -d "{\"query\":\"SELECT id, target, status, retry_count, last_failure, pinned_deployment_id FROM sys_invocation WHERE status IN ('paused', 'backing-off')\"}"
 # … "status":"backing-off","last_failure":"[500 Internal] Core is unreachable, update 90284190566 waits: fetch failed …"
@@ -144,7 +151,7 @@ admin API can move it with `?deployment=`, which replays its journal on that bui
 code, never across a change of handlers):
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:17Z.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:17Z; not re-run on this branch).
 curl -s -w "\nresume HTTP %{http_code}\n" -X PATCH http://127.0.0.1:56070/invocations/inv_1eC7FuOzjLTO4txeTfIUpz4yOrcPlZbjxE/resume
 # resume HTTP 200
 curl -s http://127.0.0.1:56070/query -H 'content-type: application/json' -H 'accept: application/json' \
@@ -160,17 +167,42 @@ invocation's own retry had won the race.
 it and keeps its object state consistent; `…/kill` does not (Restate's warning: no guarantee for
 object state or calls in flight), so prefer cancel. Neither was needed in the drills. After a cancel,
 look at the task in the Desk: a request whose `ChatInbox` update was cancelled never reached intake.
+On this branch a `RequestLifecycle` object (one per request) holds the request's stage: cancelling one
+of its invocations can leave the request waiting for an event that will not come. Read its state with
+the object's `get` handler before and after, and prefer fixing the cause and resuming.
 
 ## Phase 2 flags per chat, and rolling back
+
+This section describes `codex/research-grade-design-system`'s own lifecycle (ADR-034, ADR-052,
+ADR-059 and the admissions after it), which replaced studio-v2's. studio-v2 read
+`HAWA_LIFECYCLE_CHATS` when Deliver was pressed; this branch does not.
 
 | Flag | Read by | Values | Where it is set in production |
 |---|---|---|---|
 | `HAWA_TELEGRAM_POLLER` | Core and the worker, at start | `core` (default) or `worker` | `infra/docker/.env` (compose interpolation), then deploy |
-| `HAWA_LIFECYCLE_CHATS` | Core, when Deliver is pressed | chat ids, comma-separated, or `*`; empty enrols nobody | `infra/docker/.env.production`, then deploy |
+| `HAWA_LIFECYCLE_CHATS` | Core's internal intake (`/v1/internal/telegram/intake`), for each update the worker's `ChatInbox` hands on | chat ids, comma-separated, or `*`; empty enrols nobody | `infra/docker/.env.production`, then deploy |
 | `HAWA_WORKER_TOKEN` | Core (`/v1/internal/*`) and every worker colour | a long random value of its own (`openssl rand -hex 32`) | `infra/docker/.env.production`, then deploy |
 
-Each is read when the process starts: a change takes a restart of Core and the worker, which in
-production is a deploy. On the chaos stack the author recreated the containers with the new value.
+Each is read from the process environment, which a container gets when it starts: a change takes a
+restart of Core and the worker, which in production is a deploy.
+
+**What enrolment does here.** Only the worker's poller reaches `ChatInbox`, so `HAWA_LIFECYCLE_CHATS`
+has an effect only with `HAWA_TELEGRAM_POLLER=worker`; Core's own poller has no lifecycle routing. In an
+enrolled chat, a new brief (and no waiting request, or an explicit `/new`) makes Core prepare a
+versioned new-brief draft under the update's identity and answer `open-request`; `ChatInbox` then sends
+one keyed `RequestLifecycle.open`, and the request object alone creates and owns the task (ADR-059).
+Such a task is pinned to the Restate executor when it is created (`delivery_executor_pin = 'restate'`);
+every other Telegram task is pinned to `core`. The pin never changes afterwards (ADR-052; since then
+only a committed lifecycle open may claim Restate, `apps/core/src/services/chat-intake.ts`). A chat
+with earlier Core tasks needs an explicit `/new` for its first lifecycle request, because an ordinary
+message there could be a change to an older design. Media and PDF sources have their own admissions
+(ADR-061, ADR-068, ADR-069, ADR-071).
+
+Once a chat's first lifecycle request opens, `ChatInbox` keeps that chat in lifecycle mode for good
+(`apps/worker/src/lifecycle/chat-inbox.ts`, `setMode`): replies to a request's notices keep reaching
+that request. A request-owned task is delivered through its request: the Desk's Deliver needs an office
+reviewer and a UUID `Idempotency-Key` (`apps/core/src/routes/delivery.routes.ts`), and the older
+omnichannel publisher answers `409 LIFECYCLE_OWNED`.
 
 ### The poller: switching and rolling back
 
@@ -179,7 +211,7 @@ token first. Both pollers keep the offset in the same Postgres row, so either ca
 other stopped.
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:17Z: roll back from worker to core.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:17Z; not re-run on this branch): roll back from worker to core.
 CHAOS_TELEGRAM_POLLER=core docker compose -p hawa-chaos -f packages/testkit/chaos/docker-compose.chaos.yml \
   --env-file packages/testkit/chaos/.run/chaos.env up -d --no-build --no-deps --wait core worker-green
 curl -s http://127.0.0.1:56090/__core/v1/adapters/telegram/status | python3 -c "import json,sys; d=json.load(sys.stdin); print('core says poller =', d['poller'], '| bridge mode', d['bridge']['mode'])"
@@ -194,12 +226,20 @@ them. Switching forward is the same with `worker`; the worker starts polling onc
 live for 30 s (`HAWA_POLLER_TAKEOVER_MS`), and its health then shows `"mode":"on"` with `handedOn`
 counting updates. Core's "Poll now" answers 409 while the worker polls.
 
+**On this branch, rolling the poller back to `core` also stops every enrolled chat from opening new
+lifecycle requests**, because nothing reaches `ChatInbox` any more. Requests already open keep their
+Restate ownership, but their requesters' replies now arrive through Core's own poller, which does not
+route to `RequestLifecycle` (no lifecycle routing in `apps/core/src/services/polled-update-dispatch.ts`
+or the legacy Telegram intake). How legacy intake treats such a reply has not been exercised for this
+runbook. Before rolling back with lifecycle requests open, finish them or take them over in the Desk.
+No drill of this rollback has been run on either branch.
+
 ### The worker token: rotating, and a half-done rotation
 
 Rotate by giving Core and every worker colour the same new value and restarting them together:
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:18Z: rotate the token (generated inline, never printed) and switch to the worker poller.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:18Z; not re-run on this branch): rotate the token (generated inline, never printed) and switch to the worker poller.
 CHAOS_WORKER_TOKEN=$(openssl rand -hex 24) CHAOS_TELEGRAM_POLLER=worker docker compose -p hawa-chaos \
   -f packages/testkit/chaos/docker-compose.chaos.yml --env-file packages/testkit/chaos/.run/chaos.env \
   up -d --no-build --no-deps --wait core worker-green
@@ -211,7 +251,7 @@ curl -s http://127.0.0.1:56090/__core/v1/adapters/telegram/status | python3 -c "
 lost, but every update waits. `ChatInbox` invocations back off with a 401:
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:18Z: Core alone gets a new token, then a brief arrives (chat 9500004).
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:18Z; not re-run on this branch): Core alone gets a new token, then a brief arrives (chat 9500004).
 CHAOS_WORKER_TOKEN=$(openssl rand -hex 24) CHAOS_TELEGRAM_POLLER=worker docker compose -p hawa-chaos \
   -f packages/testkit/chaos/docker-compose.chaos.yml --env-file packages/testkit/chaos/.run/chaos.env \
   up -d --no-build --no-deps --wait core
@@ -221,53 +261,34 @@ curl -s http://127.0.0.1:56070/query -H 'content-type: application/json' -H 'acc
 ```
 
 The fix is to give both the same value and restart both (the rotation block above). The waiting
-invocation then finishes on its next retry, or at once with a resume. A Delivery workflow whose calls
-to Core meet the 401 waits the same way. Rolling back a token is the same operation with the old
-value.
+invocation then finishes on its next retry, or at once with a resume. On this branch the
+`RequestLifecycle`, `Delivery` and design-proof calls to Core's `/v1/internal/*` use the same token and
+wait the same way. Rolling back a token is the same operation with the old value. Recreating only
+Core also gives it whatever worker token that compose invocation carries: restart Core and the workers
+together, from one environment.
 
 ### The lifecycle chats: enrolling a chat and rolling back
 
-`HAWA_LIFECYCLE_CHATS` decides, when Deliver is pressed, whether the Restate `Delivery` workflow
-delivers the task (`publications.executor = 'restate'`) or Core's own delivery does (`core`). A
-publication the workflow owns stays the workflow's even after its chat is taken off the list, and one
-Core started stays Core's: taking a chat off the list never moves a delivery in flight. The chaos
-compose file lists its chats literally, so the drill set the value with an override file
-(`services: core: environment: HAWA_LIFECYCLE_CHATS: ${DRILL_LIFECYCLE_CHATS:-}`, saved as
-`$S/lifecycle-override.yml`). The author recreated Core first and the worker second; the worker's
-recreate was needed only because the token drill had left it with a token of its own (see the note
-after these blocks):
+Enrol a chat by adding its id to `HAWA_LIFECYCLE_CHATS` in `infra/docker/.env.production` and deploying
+(with `HAWA_TELEGRAM_POLLER=worker` and the token already in place). Roll back by removing it and
+deploying again. What rolling back changes (ADR-052, ADR-059):
 
-```sh
-# Ran on the chaos stack, 2026-09-24 21:19Z: enrol chat 9500005 only, then deliver one request there.
-DRILL_LIFECYCLE_CHATS=9500005 CHAOS_TELEGRAM_POLLER=worker docker compose -p hawa-chaos \
-  -f packages/testkit/chaos/docker-compose.chaos.yml -f $S/lifecycle-override.yml \
-  --env-file packages/testkit/chaos/.run/chaos.env up -d --no-build --no-deps --wait core
-docker exec hawa-chaos-core-1 printenv HAWA_LIFECYCLE_CHATS
-# 9500005
-DRILL_LIFECYCLE_CHATS=9500005 CHAOS_TELEGRAM_POLLER=worker docker compose -p hawa-chaos \
-  -f packages/testkit/chaos/docker-compose.chaos.yml -f $S/lifecycle-override.yml \
-  --env-file packages/testkit/chaos/.run/chaos.env up -d --no-build --no-deps --wait worker-green
-npx tsx scripts/load/deliver-one.ts 9500005
-# Deliver: HTTP 202, executor restate
-# delivered: publications [{"executor":"restate","state":"complete"}]
-```
+- New briefs in that chat no longer open lifecycle requests. `mayOpen` in
+  `apps/core/src/routes/lifecycle-internal.routes.ts` needs the chat on the list (or an admitted
+  album); an ordinary message then takes Core's legacy intake, and its task is pinned to `core`.
+- Requests already open are not moved. Their tasks keep `delivery_executor_pin = 'restate'` and their
+  request ownership; `ChatInbox` stays in lifecycle mode for the chat, so replies to their notices
+  still reach them, and an unlinked message in a chat with a waiting request is still treated as a
+  possible change to it, or refused as ambiguous.
+- A delivery already started keeps its recorded executor.
 
-```sh
-# Ran on the chaos stack, 2026-09-24 21:20Z: roll back (nobody enrolled), deliver in another chat.
-DRILL_LIFECYCLE_CHATS= CHAOS_TELEGRAM_POLLER=worker docker compose -p hawa-chaos \
-  -f packages/testkit/chaos/docker-compose.chaos.yml -f $S/lifecycle-override.yml \
-  --env-file packages/testkit/chaos/.run/chaos.env up -d --no-build --no-deps --wait core
-npx tsx scripts/load/deliver-one.ts 9500006
-# delivered: publications [{"executor":"core","state":"complete"}]
-docker exec hawa-chaos-postgres-1 psql -U hawa_owner -d hawa_chaos -Atc "SELECT p.executor, p.state, count(*) FROM hawa.publications p GROUP BY 1, 2 ORDER BY 1"
-# core|complete|1
-# restate|complete|1
-```
-
-Recreating only Core also gives it whatever worker token that compose invocation carries: the
-author's first recreate here put Core back on the env file's token while the worker still had the
-one from the token drill (the 401 above), and the worker had to be recreated too. Restart Core and
-the workers together, from one environment.
+studio-v2's drill of this section (a chat enrolled, delivered through its `Delivery` workflow with
+`scripts/load/deliver-one.ts`, then rolled back) exercised studio-v2's Deliver-time rule, which this
+branch does not have; that helper was not ported and the drill has **not** been run on this branch. The
+evidence here is the lifecycle intake, projection and delivery tests
+(`apps/core/test/lifecycle-internal-intake.test.ts`, `apps/core/test/delivery-workflow.test.ts`,
+`apps/core/test/chat-intake-flag-scoping.test.ts`) and the chaos suite's L2 scenarios. Run a chaos
+enrolment drill before enrolling a production chat.
 
 ## Reading one request's logs
 
@@ -280,7 +301,7 @@ The chaos stack runs no Vector, so the drill exported its containers' logs into 
 first (`scripts/load/export-chaos-logs.ts`), then read them:
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:20Z.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:20Z; not re-run on this branch).
 npx tsx scripts/load/export-chaos-logs.ts $S/../chaos-logs
 # core: 15 line(s)  worker-green: 85 line(s)  postgres: 271 line(s)  restate: 1089 line(s) …
 npx tsx scripts/request_logs.ts 5c4fd738-b47d-4071-aa53-da5fcab14be9 --dir $S/../chaos-logs
@@ -300,7 +321,7 @@ Two things the drill showed:
   worker's lines logged under `restate-inv_…`. Searching by the invocation id still works:
 
   ```sh
-  # Ran on the chaos stack, 2026-09-28 13:51Z.
+  # Ran on the chaos stack (studio-v2 at 50b3a94a, 2026-09-28 13:51Z; not re-run on this branch).
   npx tsx scripts/load/export-chaos-logs.ts $S/chaos-logs
   npx tsx scripts/request_logs.ts 399c154a-fef8-4182-a9d1-a2a1a2141780 --dir $S/chaos-logs
   # … worker-blue  [restate][2026-09-28T10:44:54.595Z][TaskWorkflow/task-wf-399c154a-…/run][inv_1jQLgVMhRi8800zKle1fGXCpKb7JarQsHN] INFO: Starting invocation.
@@ -312,6 +333,9 @@ Two things the drill showed:
   `restate.invocation.target`, …), and each is stored as its own line: the `target` line is found by
   the task id, the error text above it is not. Read Restate's lines around that time for the rest.
 
+  For a lifecycle request on this branch, also search by its request id: the `RequestLifecycle` object
+  is keyed by it.
+
 - **`docker logs` goes with its container.** Core had been recreated four times in the drills and its
   export held 15 lines: the first delivery's Core lines were gone. That is why production keeps
   Vector's files; `docker logs` alone is not enough after a deploy.
@@ -319,30 +343,34 @@ Two things the drill showed:
 ## The file store
 
 Files live content-addressed under `~/.hawa/blobs` (ADR-035); `hawa.blobs` rows name them and
-`hawa.blob_references` lists every reference. Three jobs keep it safe, all described in
-`runbooks/10_backup_restore.md`: the nightly backup (dump, then the files the dump references, then
-the garbage collector), the monthly restore drill, and a restore for real. The drill ran each one
-against the chaos database and a scratch store, with the same scripts the launch agents run, pointed
-elsewhere through their environment; `HAWA_BACKUP_NOTIFY_ENV` names a file that does not exist, so no
-alert can be sent.
+`hawa.blob_references` lists every reference (on this branch it also covers the lifecycle photo,
+album and source uploads, client documents, retained studio results and pinned visual inputs). Three
+jobs keep it safe, all described in `runbooks/10_backup_restore.md`: the nightly backup (dump, then
+the files the dump references, the paired Restate archive when enabled, then the garbage collector),
+the monthly restore drill, and a restore for real. The drill ran each one against the chaos database
+and a scratch store, with the same scripts the launch agents run, pointed elsewhere through their
+environment; `HAWA_BACKUP_NOTIFY_ENV` names a file that does not exist, so no alert can be sent.
 
 Bytes still in the database (written before the store) are copied out by the backfill. The chaos
 stack's twelve plan sources (PPTX) were:
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:21Z. S/blobs holds sha256/, tmp/ and the marker .hawa-blob-store ("sha256-v1").
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:21Z; not re-run on this branch). S/blobs holds sha256/, tmp/ and the marker .hawa-blob-store ("sha256-v1").
 HAWA_BLOB_DIR=$S/blobs npx tsx scripts/load/with-chaos-db.ts npx tsx scripts/blob_backfill.ts --phase plan_sources --mode copy
 # {"database":"hawa_chaos","mode":"copy",…,"reports":[{"phase":"plan_sources","scanned":12,"stored":12,…,"problems":[]}],"log":"/Users/…/.hawa/logs/blob_backfill_2026-09-24T21-21-26-892Z.ndjson"}
 ```
 
 Without `--log <file>` the backfill writes its log into `~/.hawa/logs`, the office's own log
 directory, even for the chaos database; the author moved that file out afterwards. Give `--log` when
-rehearsing.
+rehearsing. The backfill's exit status: 0 done and clean, 1 done with problems to read, 3 stopped
+with rows left (run it again), 2 refused. `--mode verify` counts the rows release B's foreign keys
+would reject (`blocksForeignKey`), which are staged in
+`output/plans/2026-09-24-architecture-programme/staged/blob_fks.sql`.
 
 ### Nightly backup
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:22Z.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:22Z; not re-run on this branch).
 HAWA_BACKUP_SNAPSHOT_DIR=$S/snapshots HAWA_BACKUP_ARCHIVE_DEST=$S/archive HAWA_BACKUP_ARCHIVE_KEYFILE=$S/passphrase \
   HAWA_BACKUP_PG_CONTAINER=hawa-chaos-postgres-1 HAWA_BACKUP_DB=hawa_chaos HAWA_BACKUP_NOTIFY_ENV=$S/no-such-env \
   HAWA_BLOBS_DIR=$S/blobs HAWA_BLOB_DIR=$S/blobs HAWA_BLOB_GC_CMD="node apps/core/dist/tools/blob-gc.js" \
@@ -355,12 +383,15 @@ tail -2 $S/snapshots/backup.log
 
 What to look at: the `OK` line (a `FAIL` line says why, and alerts); `refs_without_row` (files whose
 bytes are still in the database: run the backfill); the archive holds the encrypted dump, its
-`.blobs` manifest and a `blobs/blobpack_<stamp>.tar.enc` of the new files.
+`.blobs` manifest and a `blobs/blobpack_<stamp>.tar.enc` of the new files. On this branch the `OK`
+line also carries `restate=<off|paired_archive>` before `gc_deleted` (ADR-055), the whole night holds
+the archive lock (ADR-081), and a Restate backup cut off by a kill is put back by the watchdog
+(ADR-127).
 
 ### Monthly restore drill
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:22Z.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:22Z; not re-run on this branch).
 HAWA_BACKUP_ARCHIVE_DEST=$S/archive HAWA_BACKUP_ARCHIVE_KEYFILE=$S/passphrase HAWA_BACKUP_PG_CONTAINER=hawa-chaos-postgres-1 \
   HAWA_BACKUP_DB=hawa_chaos HAWA_BACKUP_NOTIFY_ENV=$S/no-such-env HAWA_DRILL_DIR=$S/drill \
   npx tsx scripts/load/with-chaos-db.ts bash infra/backup/restore_drill.sh
@@ -370,7 +401,8 @@ docker exec hawa-chaos-postgres-1 psql -U hawa_owner -d hawa_chaos -Atc "SELECT 
 ```
 
 `missing` must be 0. The drill drops its scratch database and directory at the end (checked: no
-`hawa_drill_*` database was left on the chaos server).
+`hawa_drill_*` database was left on the chaos server). On this branch the drill also verifies the
+paired Restate archive when the Restate backup is enabled (ADR-055 to ADR-057).
 
 ### The collector and the store check by hand
 
@@ -378,7 +410,7 @@ docker exec hawa-chaos-postgres-1 psql -U hawa_owner -d hawa_chaos -Atc "SELECT 
 only after a verified backup: the nightly backup runs it. Run it by hand only as a dry run:
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:22Z.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:22Z; not re-run on this branch).
 HAWA_BLOB_DIR=$S/blobs npx tsx scripts/load/with-chaos-db.ts node apps/core/dist/tools/blob-gc.js --dry-run
 # {"graceDays":15,"dryRun":true,"marked":0,"cleared":0,"deleted":0,"unlinked":0,"orphans":0,"tmp":0,"bytesFreed":0,"storeFiles":12,"storeBytes":18726961}
 npx tsx scripts/load/with-chaos-db.ts node apps/core/dist/tools/blob-verify.js --dir $S/blobs
@@ -397,24 +429,24 @@ their file finishes, and clones older than 6 hours (a killed run) are pruned at 
 The connection guard refuses anything but the test server's per-file names, and production outright.
 
 ```sh
-# Ran on the test server, 2026-09-24 21:24Z: the server and its two base databases (idempotent; it re-applies db/test-fixtures.sql to hawa_test).
+# Ran on the test server (studio-v2 at 1c1316d, 2026-09-24 21:24Z; not re-run on this branch, whose server other worktrees' agents were using): the server and its two base databases (idempotent; it re-applies db/test-fixtures.sql to hawa_test).
 pnpm test:db
 # hawa_test already exists; versioned upgrades applied=0 verified=22. …
 # ready: hawa_test, hawa_repair on hawa-test-postgres (127.0.0.1:55432)
 ```
 
 ```sh
-# Ran on the test server, 2026-09-24 20:58Z: a file run clones its own databases.
+# Ran on the test server on codex/research-grade-design-system, 2026-09-28 08:03Z: a file run clones its own databases.
 HAWA_TEST_WORKERS=2 npx vitest run scripts/load/test/load-stats.test.ts
-# [test databases] per-file clones of hawa_tpl_test_0b95675010215311 and hawa_tpl_repair_0b95675010215311 (25 ms)
+# [test databases] per-file clones of hawa_tpl_test_92dd954bd4e8519e and hawa_tpl_repair_92dd954bd4e8519e (31 ms)
 ```
 
 ```sh
-# Ran on the test server, 2026-09-24 21:25Z: which template this checkout uses, and the clones alive now.
+# Ran on the test server on codex/research-grade-design-system, 2026-09-28 08:03Z: which template this checkout uses, and the clones alive now.
 npx tsx -e "import('./packages/db/src/test-template.ts').then((m) => console.log(m.templateName('test', m.templateHash(process.cwd()))))"
-# hawa_tpl_test_0b95675010215311
-docker exec hawa-test-postgres psql -U hawa_owner -d postgres -Atc "SELECT datname FROM pg_database WHERE datname ~ '^hawa_(t|tr)_' ORDER BY 1"
-# (nothing while no test file runs)
+# hawa_tpl_test_92dd954bd4e8519e
+docker exec hawa-test-postgres psql -U hawa_owner -d postgres -Atc "SELECT count(*) FILTER (WHERE datname ~ '^hawa_(t|tr)_') AS clones, count(*) FILTER (WHERE datname ~ '^hawa_tpl_') AS templates FROM pg_database"
+# 2|8        (two clones of other worktrees' running files; eight templates of several worktrees' schemas)
 ```
 
 - The Mac also runs the office: keep `HAWA_TEST_WORKERS` at 2 and run the files you need.
@@ -432,24 +464,27 @@ the acceptance test of every Phase 2 slice. One stack at a time on the machine; 
 starts from nothing and takes the project down with its volumes unless `--keep`.
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:23Z: a legacy request and a flagged-chat (Delivery workflow) request.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:23Z; not re-run on this branch): a legacy request and a flagged-chat (Delivery workflow) request.
 npx tsx packages/testkit/chaos/run.ts --only R1.0,L2.0
 # Tests  2 passed | 33 skipped (35)      (72 s; peak memory 956 MiB)
 # .run/last-run.json: R1.0 13 s, 14 of 14 invariants hold; L2.0 13 s, 18 of 18 invariants hold
 ```
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:23Z: take a kept project down (with its volumes and throwaway secrets).
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:23Z; not re-run on this branch): take a kept project down (with its volumes and throwaway secrets).
 npx tsx packages/testkit/chaos/run.ts --down
 # hawa-chaos is down; its volumes and throwaway secrets are gone.
 ```
 
 `--poller worker` runs the Phase 2.1 scenarios; `--keep` leaves the stack up for inspection (the
 drills in this runbook ran on a stack the load test kept). Results: `packages/testkit/chaos/.run/last-run.json`.
+This branch's suite has more scenarios than studio-v2's (its README: the isolated candidate rehearsal,
+coordinated recovery, PDF sources, confirmed albums); run the ones for the slice you change.
 
-The chaos compose file on `studio-v2` at 1c1316d named `HAWA_WORKER_TOKEN` twice in one mapping (the
-merges of slices 2.1 and 2.2 each added it) and Docker Compose 5.5.1 refused to parse it, so no chaos
-run could start; the duplicate was removed on 2026-09-25.
+studio-v2's compose file at 1c1316d named `HAWA_WORKER_TOKEN` twice in one mapping, which Docker Compose
+5.5.1 refused. This branch's compose file does not: a duplicate-key YAML load of
+`packages/testkit/chaos/docker-compose.chaos.yml` finds none (checked 2026-09-28; the same check finds
+the duplicate in studio-v2's file at 1c1316d).
 
 ## The load test
 
@@ -458,16 +493,21 @@ Desk's tenant before Core starts, three Desk tabs (the Desk's own App, query cac
 event stream in jsdom, one process each: `scripts/load/desk-tab.ts`), 3 idle minutes, then 10
 Telegram chats sending a brief at the same moment while one tab pages 20 pages back and forth and
 another opens ten tasks, then 2 more idle minutes. Results go to
-`packages/testkit/chaos/.run/load-<poller>.json`.
+`packages/testkit/chaos/.run/load-<poller>.json`. The chats (9400001 onwards) are not enrolled, so
+their requests take the legacy path on both branches.
 
 ```sh
-# Ran on the chaos stack, 2026-09-24 21:02Z to 21:09Z and 21:09Z to 21:16Z.
+# Ran on the chaos stack (studio-v2 at 1c1316d, 2026-09-24 21:02Z to 21:09Z and 21:09Z to 21:16Z; not re-run on this branch).
 npx tsx scripts/load/run.ts --poller core
 npx tsx scripts/load/run.ts --poller worker --keep
 ```
 
-Results (Mac with production running beside it; fakes answer every provider at once, so design times
-exclude real model and Canva latency):
+On this branch the seeded rows were written into a per-file test clone of its schema
+(`scripts/load/test/seed-desk-tasks.test.ts`), which shows they still fit its tables; the load test
+itself has not been run here.
+
+Results on studio-v2 (Mac with production running beside it; fakes answer every provider at once, so
+design times exclude real model and Canva latency):
 
 | Measure | Core polls | Worker polls (Phase 2.1) |
 |---|---|---|
@@ -489,23 +529,24 @@ that EventSource is experimental; the tabs now start with that notice turned off
 
 What the numbers say:
 
-- **The list meets its target.** Every page read at 5,000 tasks, under load, stayed under 100 ms
-  end to end (target: p95 ≤ 150 ms), and an idle tab reads the list **0** times a minute while the
-  stream is up (target ≤ 2).
-- **An idle tab still makes 38 requests a minute**: 36 of them are the Canva panel beside the selected
-  task (`apps/desk/src/components/CanvaTaskPanel.tsx`, a 5 s `setInterval` reading
+- **The list met its target.** Every page read at 5,000 tasks, under load, stayed under 100 ms
+  end to end (target: p95 ≤ 150 ms), and an idle tab read the list **0** times a minute while the
+  stream was up (target ≤ 2).
+- **An idle tab still made 38 requests a minute**: 36 of them were the Canva panel beside the
+  selected task (`apps/desk/src/components/CanvaTaskPanel.tsx`, a 5 s `setInterval` reading
   `/tasks/:id/canva`, `/tasks/:id/canva/plans` and `/integrations/canva/status`), plus 2 health
-  reads. Three idle tabs make about 114 requests a minute. The panel is not on the query cache or the
-  event stream yet.
-- **The draft tail is the planner's limit, not the poller** (as measured on 2026-09-24; ADR-131 changed
-  both halves, see "Planning slots and plan time" below). Core plans at most two designs at a time
-  for the whole office (`apps/core/src/services/canva-design-planner.ts`, `PLANNING_BUSY`, HTTP 429);
-  the other workflows retry after 2, 4, 8 and 16 s, so ten briefs finish in pairs at about 5, 7, 11, 19
-  and 35 s. The fakes plan instantly; with real model calls each pair takes longer and the tail grows
-  with it. Which poller runs makes no measurable difference here (both hand ten briefs to intake within
-  about 100 ms).
-- **Restate is most of the memory** (about 610–650 MiB of the stack's ~1.1 GiB); Postgres doubles
-  during the burst and falls back.
+  reads. The panel now polls every 5 s only while Canva or the planner is working and otherwise once
+  a minute, and refreshes on the task's live event (studio-v2 ecc9af71, ported to this branch); the
+  new rate has not been measured with the load test.
+- **The draft tail was the planner's limit, not the poller** (as measured on 2026-09-24; ADR-131
+  changed both halves, see "Planning slots and plan time" below). Core planned at most two designs at a
+  time for the whole office (`apps/core/src/services/canva-design-planner.ts`, `PLANNING_BUSY`, HTTP
+  429); the other workflows retried after 2, 4, 8 and 16 s, so ten briefs finished in pairs at about
+  5, 7, 11, 19 and 35 s. The fakes plan instantly; with real model calls each pair takes longer and
+  the tail grows with it. Which poller runs made no measurable difference (both handed ten briefs to
+  intake within about 100 ms).
+- **Restate was most of the memory** (about 610–650 MiB of the stack's ~1.1 GiB); Postgres doubled
+  during the burst and fell back.
 
 ### Planning slots and plan time (ADR-131)
 
@@ -515,35 +556,31 @@ Core's `HAWA_CANVA_PLANNING_SLOTS` (left out, Core's default of 4). The result f
 both: `load-core-plan30000-slots2.json`.
 
 ```sh
-# Ran on the chaos stack, 2026-09-28 11:19Z to 12:15Z (the "before" runs from a throwaway worktree of 4f5e995 with only this harness change).
-npx tsx scripts/load/run.ts --poller core --plan-ms 30000
-npx tsx scripts/load/run.ts --poller core --plan-ms 30000 --planning-slots 2
+# Ran on the chaos stack (ADR-131 port on codex/research-grade-design-system's line, claude/mainline c2eb23a4, 2026-09-28 13:47Z to 14:02Z).
 npx tsx scripts/load/run.ts --poller core
+npx tsx scripts/load/run.ts --poller core --plan-ms 30000
 ```
 
-Brief to first draft, 10 chats at once, from pickup (10 of 10 drafts, no errors, in every run):
+Brief to first draft, 10 chats at once, from pickup (10 of 10 drafts, no errors, in every run). The
+"before" rows and the 2- and 5-slot rows are studio-v2's (2026-09-28); they were not re-run here.
 
 | Code | Plan call | Slots | p50 / p95 | Drafts shown at (s) |
 |---|---|---|---|---|
-| before ADR-131 | instant | 2 | 11.2 / 35.4 s | 5, 7, 11, 19, 35 (pairs) |
-| after | instant | 4 | 9.2 / 9.8 s | 5.3 ×4, 9.2 ×4, 9.8 ×2 |
-| before ADR-131 | 30 s | 2 | 125.4 / 245.6 s | 35, 65, 125, 185, 246 (pairs) |
-| after | 30 s | 2 | 97.6 / 161.9 s | 35, 65, 98, 130, 162 (pairs) |
-| after | 30 s | 4 | 65.8 / 97.8 s | 35.3 ×4, 65.8 ×4, 97.8 ×2 |
-| after | 30 s | 5 | 50.5 / 65.8 s | 35.1 ×5, 65.8 ×5 |
+| before ADR-131 (studio-v2) | instant | 2 | 11.2 / 35.4 s | 5, 7, 11, 19, 35 (pairs) |
+| after, this line | instant | 4 | 8.1 / 9.4 s | 6.5, 6.6 ×3, 8.0–8.7 ×5, 10.1 |
+| before ADR-131 (studio-v2) | 30 s | 2 | 125.4 / 245.6 s | 35, 65, 125, 185, 246 (pairs) |
+| after (studio-v2) | 30 s | 2 | 97.6 / 161.9 s | 35, 65, 98, 130, 162 (pairs) |
+| after, this line | 30 s | 4 | 65.4 / 97.4 s | 34.9–35.0 ×4, 65.4 ×4, 97.4 ×2 |
+| after (studio-v2) | 30 s | 5 | 50.5 / 65.8 s | 35.1 ×5, 65.8 ×5 |
 
 - **The planning step no longer doubles its sleep.** Core answers a brief beyond the slots with
   429 `PLANNING_BUSY` and `Retry-After` (until the oldest running plan should finish, 2–15 s), and the
-  workflow waits exactly that, journalled, for up to 15 minutes. Before, Restate's step retry waited
-  2, 4, 8, 16 and then 30 s, so rounds fell 30 s behind their free slots (125 → 185 → 246 s).
+  workflow waits exactly that, journalled, for up to 15 minutes, on the legacy TaskWorkflow and on a
+  RequestLifecycle DesignRun alike. Before, Restate's step retry waited 2, 4, 8, 16 and then 30 s.
 - **Why 4 slots and not more:** every draft is imported and exported through the office's one Canva
   connection, and Canva allows 20 exports a minute per user. A draft makes two, so 4 slots keep a
-  ten-brief burst to at most 16 exports in a minute, and 5 put all 20 into one. A Canva 429 that
-  outlasts the Canva client's short retry fails the draft. OpenAI's limits are not what binds.
-- **A plan left in `planning` by a Core that died mid-call** stops holding a slot after 3 minutes. It
-  used to hold one for ever.
-- **Core's memory** peaked at 131–157 MiB with 2, 4 or 5 plans in flight; the slot count is not what
-  sizes Core.
-- **A start can fail** at the first database login with `password authentication failed for user
-  "hawa_owner"` (2 of 11 starts on 2026-09-28). Run it again: it is a harness start-up flake, not a
-  finding.
+  ten-brief burst to at most 16 exports in a minute, and 5 put all 20 into one.
+- **A plan left in `planning` by a Core that died mid-call** stops holding a slot after 3 minutes.
+  Nothing else about it changes: its paid call stays unresolved and its task is not planned again
+  until an operator reconciles it (ADR-101).
+- **A refused brief costs nothing:** no plan row, no admitted call, no allowance reserved.

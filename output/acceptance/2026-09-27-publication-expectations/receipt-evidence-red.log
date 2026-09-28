@@ -1,0 +1,35 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_0cc4e05fa7130d52 and hawa_tpl_repair_0cc4e05fa7130d52 (92 ms)
+{"level":"error","time":"2026-09-27T16:54:39.516Z","service":"core","requestId":"2d605245-fcdc-4c07-81bb-a1dd7f5c0adb","taskId":"3ff01f7c-96ef-47ff-943d-0dc7229c1d8a","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"injected receipt write failure","stack":"Error: injected receipt write failure\n    at PublicationRepository.<anonymous> (/Users/hawzhin/Hawdesign/apps/core/test/e2e-canva-to-delivery-chain.test.ts:227:51)\n    at PublicationRepository.recordDriveRef (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:968:35\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:18)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at doPublish (/Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:966:9)\n    at /Users/hawzhin/Hawdesign/packages/db/src/session-lock.ts:30:39"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+{"level":"error","time":"2026-09-27T16:54:39.618Z","service":"core","requestId":"1affbbc5-f0ea-4c02-b687-2faefd983ce1","taskId":"3ff01f7c-96ef-47ff-943d-0dc7229c1d8a","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"injected outbox commit failure","stack":"Error: injected outbox commit failure\n    at OutboxRepository.<anonymous> (/Users/hawzhin/Hawdesign/apps/core/test/e2e-canva-to-delivery-chain.test.ts:252:51)\n    at OutboxRepository.enqueue (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:1022:30\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at doPublish (/Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:966:9)\n    at /Users/hawzhin/Hawdesign/packages/db/src/session-lock.ts:30:39"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+x·
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/e2e-canva-to-delivery-chain.test.ts > E2E Canva-to-Delivery Closed Loop > completes the entire chain from intake to Canva draft, PostgreSQL revision & QC, Desk approval, delivery, and outbox notification
+AssertionError: expected null to be 123 // Object.is equality
+
+- Expected:
+123
+
++ Received:
+null
+
+ ❯ apps/core/test/e2e-canva-to-delivery-chain.test.ts:390:30
+    388|     expect(Number(late.row_number)).toBe(42);
+    389|     expect(late.attempts).toBe(3);
+    390|     expect(late.metadata_id).toBe(rowEvidence.metadataId);
+       |                              ^
+    391|     expect(late.expected_values).toEqual(rowEvidence.expectedValues);
+    392|     expect(late.expected_row_hash).toBe(rowEvidence.expectedRowHash);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  19:54:37
+   Duration  2.46s (transform 1.12s, setup 110ms, import 1.50s, tests 630ms, environment 0ms)
+

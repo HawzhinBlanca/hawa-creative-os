@@ -135,13 +135,14 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !fs.existsSync(verifyCli))(
     expect(rows[0].evidence).toMatchObject({ missing: 0, rows: 1, referenced_without_row: 1 });
   }, 180_000);
 
-  it('a drill that fails records one row and says why, whether the store check or a pack fails', async () => {
+  it('a refused corrupt or locked pack records one failed drill before database restore', async () => {
     const packDir = path.join(dirs.archive, 'blobs');
     const pack = fs.readdirSync(packDir).find((n) => /^blobpack_.*\.tar$/.test(n))!;
     const original = fs.readFileSync(path.join(packDir, pack));
     const index = fs.readFileSync(path.join(packDir, 'index.tsv'), 'utf8');
     try {
-      // 1. A file in the pack with other bytes under its name: the store check reports it (exit 1).
+      // ADR-081 validates the pack before creating a scratch database. No database/file counts
+      // may be invented when archive validation prevents the store check from running.
       const x = path.join(t, 'repack');
       fs.mkdirSync(x);
       expect(spawnSync('tar', ['-xf', path.join(packDir, pack), '-C', x]).status).toBe(0);
@@ -154,11 +155,17 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !fs.existsSync(verifyCli))(
       const before = (await drills()).length;
       const corrupt = run('infra/backup/restore_drill.sh');
       expect(corrupt.code).toBe(1);
-      expect(corrupt.out).toMatch(/the store check found missing=0 corrupt=1/);
+      expect(corrupt.out).toMatch(/File archive verification refused:/);
+      expect(corrupt.out).toMatch(/file archive verification failed before database restore/);
+      expect(corrupt.out.match(/DRILL FAIL/g)).toHaveLength(1);
       expect(corrupt.out).not.toMatch(/stopped unexpectedly/);
       const afterCorrupt = await drills();
       expect(afterCorrupt).toHaveLength(before + 1);
-      expect(afterCorrupt[0]).toMatchObject({ status: 'failed', evidence: { missing: 0, referenced_without_row: 1 } });
+      expect(afterCorrupt[0]).toMatchObject({ status: 'failed', evidence: {
+        missing: null, rows: null, blobs_checked: null, referenced_without_row: null,
+        detail: 'file archive verification failed before database restore',
+      } });
+      expect((await owner.query('SELECT datname FROM pg_database WHERE datname LIKE $1', [`hawa_drill_%_${scratchSuffix}`])).rows).toEqual([]);
 
       // 2. A pack named .enc with no readable passphrase: the unpack fails, once.
       fs.writeFileSync(path.join(packDir, pack), original);
@@ -166,7 +173,8 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !fs.existsSync(verifyCli))(
       fs.writeFileSync(path.join(packDir, 'index.tsv'), index.replaceAll(`\t${pack}\n`, `\t${pack}.enc\n`));
       const locked = run('infra/backup/restore_drill.sh');
       expect(locked.code).toBe(1);
-      expect(locked.out).toMatch(new RegExp(`pack ${pack.replace('.', '\\.')}\\.enc does not decrypt and unpack`));
+      expect(locked.out).toMatch(/File archive verification refused:/);
+      expect(locked.out).toMatch(/file archive verification failed before database restore/);
       expect(locked.out.match(/DRILL FAIL/g)).toHaveLength(1);
       const afterLocked = await drills();
       expect(afterLocked).toHaveLength(before + 2);
@@ -187,17 +195,18 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !fs.existsSync(verifyCli))(
     expect(r.out).not.toMatch(/stopped unexpectedly/);
     const lines = fs.readFileSync(path.join(dirs.snapshots, 'backup.log'), 'utf8').trim().split('\n');
     const stamp = / OK (\d{8}T\d{6}Z) /.exec(lines[lines.length - 1])?.[1];
-    expect(lines[lines.length - 1]).toMatch(/ gc_deleted=failed( |$)/);
+    expect(lines[lines.length - 1]).toMatch(/ gc_deleted=failed$/);
     expect(lines.filter((l) => l.includes(`${stamp}`) && / FAIL /.test(l))).toEqual([]);
     expect(lines.filter((l) => l.includes(`GC-FAIL ${stamp}: collector broke`))).toHaveLength(1);
   }, 180_000);
 
-  it('with a gs:// destination, where the files are not archived, the collector does not run', async () => {
+  it('refuses the incomplete gs:// transport before dump, upload or collection', async () => {
     // gsutil is stubbed first on PATH: nothing leaves this machine, and the stub records that it ran.
     const bin = path.join(t, 'bin');
     const calls = path.join(t, 'calls');
     fs.mkdirSync(bin, { recursive: true });
     fs.writeFileSync(path.join(bin, 'gsutil'), `#!/bin/sh\necho "gsutil $*" >> ${JSON.stringify(calls)}\n`, { mode: 0o755 });
+    const before = fs.readdirSync(dirs.snapshots).filter(n => n.endsWith('.dump')).sort();
     await new Promise((resolve) => setTimeout(resolve, 1100)); // a new second, so a new dump name
     const r = run('infra/backup/nightly_backup.sh', {
       PATH: `${bin}:${process.env.PATH ?? '/usr/bin:/bin'}`,
@@ -205,13 +214,11 @@ describe.skipIf(!ownerUrl || !appUrl || !dockerOk || !fs.existsSync(verifyCli))(
       HAWA_BLOB_GC: 'on',
       HAWA_BLOB_GC_CMD: `sh -c 'echo ran >> ${JSON.stringify(calls).slice(1, -1)}' gc`,
     });
-    expect(r.code).toBe(0);
-    expect(r.out).toMatch(/the file store is not archived to a gs:\/\/ destination/);
-    expect(r.out).toMatch(/the file store collector did not run/);
-    const recorded = fs.readFileSync(calls, 'utf8');
-    expect(recorded).toMatch(/^gsutil cp /m);
-    expect(recorded).not.toMatch(/^ran$/m);
-    const ok = fs.readFileSync(path.join(dirs.snapshots, 'backup.log'), 'utf8').trim().split('\n').pop() ?? '';
-    expect(ok).toMatch(/ OK .* gc_deleted=skipped_unarchived( |$)/);
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/gs:\/\/ is not supported for complete database and file recovery/);
+    expect(fs.existsSync(calls)).toBe(false);
+    expect(fs.readdirSync(dirs.snapshots).filter(n => n.endsWith('.dump')).sort()).toEqual(before);
+    const outcome = fs.readFileSync(path.join(dirs.snapshots, 'backup.log'), 'utf8').trim().split('\n').pop() ?? '';
+    expect(outcome).toMatch(/ FAIL .*gs:\/\/ is not supported/);
   }, 180_000);
 });

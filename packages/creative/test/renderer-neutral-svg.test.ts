@@ -233,16 +233,42 @@ describe('image types from magic bytes', () => {
   });
 });
 
+describe('client logo isolation at the renderer boundary', () => {
+  const layout = () => layoutWith([], { logo: { x: 80, y: 60, width: 160, height: 120 } });
+
+  it('refuses a logo-bearing layout without explicit client logo bytes', () => {
+    expect(() => renderLayoutV2ToSvg(layout(), {})).toThrow(/CLIENT_LOGO_REQUIRED/);
+    expect(() => renderLayoutV2ToSvg(layout(), { logoPath: '/missing/client-logo.png' })).toThrow(/CLIENT_LOGO_UNAVAILABLE/);
+    expect(() => renderLayoutV2ToSvg(layout(), { logoDataUri: 'data:image/png;base64,bm90IGFuIGltYWdl' })).toThrow(/not a PNG/);
+  });
+
+  it('draws an explicitly supplied packaged KAAE logo only for its own caller', () => {
+    const { svg, files } = renderLayoutV2ToSvg(layout(), { logoDataUri: getKaaeOfficialLogoDataUri() });
+    expect(svg).toContain('id="logo"');
+    expect(Object.keys(files)).toHaveLength(1);
+  });
+
+  it('uses another client’s supplied pixels without reading the packaged KAAE logo', () => {
+    const otherLogo = new PNG({ width: 8, height: 8 });
+    otherLogo.data.fill(255);
+    for (let i = 0; i < otherLogo.data.length; i += 4) otherLogo.data[i] = 15;
+    const bytes = PNG.sync.write(otherLogo);
+    const supplied = renderLayoutV2ToSvg(layout(), { logoDataUri: `data:image/png;base64,${bytes.toString('base64')}` });
+    const packaged = renderLayoutV2ToSvg(layout(), { logoDataUri: getKaaeOfficialLogoDataUri() });
+    expect(supplied.svg).toContain('id="logo"');
+    expect(Object.values(supplied.files)[0]).not.toEqual(Object.values(packaged.files)[0]);
+  });
+});
+
 describe('the logo is scaled once per logo and size, not on every render', () => {
   const box = { x: 80, y: 60, width: 160, height: 120 };
   const layout = () => layoutWith([], { logo: { ...box }, background: { color: '#0A1628' } });
-  // A render draws only the logo it is handed (ADR-038: there is no KAAE default any more).
-  const kaae = { logoDataUri: getKaaeOfficialLogoDataUri() };
+  const logo = () => ({ logoDataUri: getKaaeOfficialLogoDataUri() });
 
   it('embeds the logo at the size it is drawn, and reuses it', () => {
     const before = logoPrescaleStats();
-    const a = inlinedSvgOf(layout(), kaae).svg;
-    const b = inlinedSvgOf(layout(), kaae).svg;
+    const a = inlinedSvgOf(layout(), logo()).svg;
+    const b = inlinedSvgOf(layout(), logo()).svg;
     const after = logoPrescaleStats();
     const href = /<image id="logo" xlink:href="data:image\/png;base64,([^"]+)"/.exec(a)?.[1];
     expect(href).toBeDefined();
@@ -255,7 +281,7 @@ describe('the logo is scaled once per logo and size, not on every render', () =>
 
   it('draws the same pixels as scaling the full-size logo inside the design', async () => {
     // Both logos are files beside the SVG (ADR-035): the full-size one as a data URI is 2 MB.
-    const { svg, noTextSvg, files } = renderLayoutV2ToSvg(layout(), kaae);
+    const { svg, noTextSvg, files } = renderLayoutV2ToSvg(layout(), logo());
     const original = Buffer.from(getKaaeOfficialLogoDataUri().split(',')[1], 'base64');
     const unscaled = svg.replace(
       /<image id="logo"[^>]*\/>/,
@@ -271,21 +297,6 @@ describe('the logo is scaled once per logo and size, not on every render', () =>
     expect(noTextSvg).toContain('id="logo"');
   });
 
-  it('draws no logo it was not handed, and never KAAE\'s', () => {
-    const { svg } = inlinedSvgOf(layout(), {});
-    expect(svg).not.toContain('<image id="logo"');
-    expect(svg).toContain('id="logo-placeholder"');
-    expect(svg).not.toContain('#F7B500');
-    const kaaeBytes = getKaaeOfficialLogoDataUri().split(',')[1].slice(0, 200);
-    expect(svg).not.toContain(kaaeBytes);
-  });
-
-  it('draws the logo of the client it renders for', () => {
-    const other = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><circle r="5" cx="5" cy="5"/></svg>').toString('base64')}`;
-    const { svg } = inlinedSvgOf(layout(), { logoDataUri: other });
-    expect(svg).toContain(`xlink:href="${other}"`);
-  });
-
   it('leaves a vector logo as it is', () => {
     const vector = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>').toString('base64')}`;
     const { svg } = inlinedSvgOf(layout(), { logoDataUri: vector });
@@ -293,8 +304,8 @@ describe('the logo is scaled once per logo and size, not on every render', () =>
   });
 
   it('the async render pre-scales without blocking and gives the same bytes', async () => {
-    const sync = renderLayoutV2(layout(), kaae);
-    const async = await renderLayoutV2Async(layout(), kaae);
+    const sync = renderLayoutV2(layout(), logo());
+    const async = await renderLayoutV2Async(layout(), logo());
     expect(async.svg).toBe(sync.svg);
     expect(Buffer.compare(async.png, sync.png)).toBe(0);
   });

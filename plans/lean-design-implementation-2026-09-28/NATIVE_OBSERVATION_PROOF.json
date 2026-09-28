@@ -1,0 +1,204 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "0173e724a6c7f082b4a3b332a9f5c329fce81ee3",
+  "branch": "codex/research-grade-design-system",
+  "status": "SCOPED_OBSERVATION_QUALIFIED_NATIVE_AMENDMENT_NOT_ADMITTED",
+  "adr": "119",
+  "requirements": [
+    "FR-029",
+    "FR-032",
+    "FR-042",
+    "NFR-009",
+    "NFR-020"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/119_native_amendment_capability_observation.md",
+      "sha256": "2aea0c4efd1807b3cb5e8787a361bdd1226e34a9fce60f9bf65bfece97f10bd5"
+    },
+    {
+      "path": "api/canva-connect.openapi.json",
+      "sha256": "0a40a0ee632644cf1c1e0531fb516e5f4f7cb0dc857172785003ae6398e02845"
+    },
+    {
+      "path": "api/openapi.yaml",
+      "sha256": "a94635b074730468aba00273c3a1d9a68600992c9f7667ba6527becf918828b9"
+    },
+    {
+      "path": "apps/core/src/routes/canva.routes.ts",
+      "sha256": "3fcb07b98f1d3bcc52c2e11d1dee9db5b011af9bb4a963bab20744b4518597d1"
+    },
+    {
+      "path": "apps/core/src/services/canva-connect-service.ts",
+      "sha256": "69573a77a3c3fbd0d419b18374fea99bc45c332133660a0a3b4e6088331d1361"
+    },
+    {
+      "path": "apps/core/src/services/canva-amendment-observation.ts",
+      "sha256": "5af147bbb3ee2bf0514e4fcdc9912aa09b778ea9c0cd8cae4d4349e14f422846"
+    },
+    {
+      "path": "apps/core/test/canva-amendment-observation.test.ts",
+      "sha256": "0b68d6ed5b16d86f05f11a6b0a6d384284a67f35fb41d21dd96facb160e8e375"
+    },
+    {
+      "path": "apps/desk/src/api/client.ts",
+      "sha256": "05920abb479e6aa8a302e88f036d245898ef7873bdd20ff8d6b73302f794a835"
+    },
+    {
+      "path": "apps/desk/src/components/CanvaTaskPanel.tsx",
+      "sha256": "27e29f768f17127bd2ea1a2dbe184c0b118d9e750c22fc031bcca6e861578a1b"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "sha256": "69488aadef71f085ca1507c2dfd7839a6840452c6ee553fa2af13efa77a9dcc8"
+    },
+    {
+      "path": "packages/contracts/src/canva-amendment.ts",
+      "sha256": "6136ba5caca8d9290c24605be7d0b566072a80f31018f319569f1e74b623080e"
+    },
+    {
+      "path": "packages/integrations/src/canva-connect-client.ts",
+      "sha256": "c4397b13c0f65842b4fb7d5cd3e5aea48541de40e417415e9ffaa033dd314800"
+    },
+    {
+      "path": "packages/integrations/test/canva-capabilities.test.ts",
+      "sha256": "87da369284b3b9b5c9232584270d9deedcb62e8fc1ca914cb0b590ae1b3a6b7c"
+    },
+    {
+      "path": "runbooks/CANVA_AMENDMENT_INSPECTION.md",
+      "sha256": "6ba65a6c10e6381d20faaf55f221731f96e246bc0e47f383cc658266590e322c"
+    },
+    {
+      "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
+      "sha256": "db7bca58615eece59011a61730db9ae09105358ce6dc7d53a8ef1181a51912c1"
+    }
+  ],
+  "evidence_files": [
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-connected.json",
+      "sha256": "c8f3234952646e56591480085a4826d750bf32865cc8993fcfc2e8ad17e43130"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-focused.json",
+      "sha256": "19eb99867d73f94bc1241f38e1e1d33fdb10ca15a6ca984e98d5a80198556c66"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-red.json",
+      "sha256": "1180dcc69d71f9e271f69ad55efd48429624bc000f2236d177948746e3e20e94"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation/LIVE_ACCOUNT.json",
+      "sha256": "87082890229f0e0c0e8e1ffea5aff9e961c1d58fbc6cbaaff5274d9396e2cf60"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation/probe-live.mts",
+      "sha256": "acd2b2a56ee706627593dc1b742cdfef988a47beb362b2c64cf96346f9f89f20"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-connected.log",
+      "sha256": "03d170791b65ddf39b620083c702d35e5080764401248bf787a27bbc44b5c895"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-desk.log",
+      "sha256": "42f13aef53fd13909cfb4fbe5bfb84ad87cc1e3ccd2fa8285a3609673f03cb79"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-focused.log",
+      "sha256": "5de4ba38efb11ae648b9f94df792bd98e315e57f6635d239f74a2e370ec9991d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-red.log",
+      "sha256": "56d6d617f879827ec2a8aaab0e23e545ba3d9d81c8538245209264ca147aafc6"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-scripts.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-test-types.log",
+      "sha256": "8cfdc8e5b05b935028fb28cf440c316115c0cafd5d1346a3fc1bcad642c8970c"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-any.log",
+      "sha256": "6fb44bfeee165198da579f53dd494bdadf3fc876cb0d00996c1f2bc5ee52dc07"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-egress.log",
+      "sha256": "b6e716bda86ecb080e1fd6c96efaf64b06b2bbb78001c634eaf7a1137a63edf8"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-observation-security.log",
+      "sha256": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d"
+    }
+  ],
+  "acceptance": {
+    "affected_files": 8,
+    "passed": 136,
+    "failed": 0,
+    "skipped": 0,
+    "strict_test_roots": 531,
+    "source_scripts_types": "passed",
+    "desk_build": "passed",
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "egress": "passed with nine existing exceptions",
+    "security": "zero secrets in committable files",
+    "blueprint": {
+      "passed": 1095,
+      "warn": 0,
+      "failed": 0
+    }
+  },
+  "real_account_probe": {
+    "surface": "Hawdesign backend OAuth connection, not Codex connector",
+    "design_fixture": "prior synthetic multilingual design",
+    "metadata_stable": true,
+    "capabilities_http_status": 403,
+    "capabilities_conclusion": "unknown; default scope omits profile:read",
+    "dataset": "observed empty",
+    "native_write_count": 0,
+    "connection_writes": "ordinary journaled token refresh allowed; not claimed zero"
+  },
+  "failures_retained": [
+    {
+      "stage": "client red",
+      "artifact": "output/acceptance/2026-09-28-native-capability-red.json",
+      "reason": "methods absent before implementation"
+    },
+    {
+      "stage": "client first green attempt",
+      "artifact": "output/acceptance/2026-09-28-native-capability-client.json",
+      "reason": "one test reused a consumed Response; fixture corrected"
+    },
+    {
+      "stage": "service red",
+      "passed": 0,
+      "failed": 8,
+      "reason": "method and route absent"
+    },
+    {
+      "stage": "first focused",
+      "passed": 15,
+      "failed": 2,
+      "reason": "raw bigint version response and invalid cross-client fixture refused by existing FK; normalized safe revisions and test now verifies FK refusal"
+    }
+  ],
+  "proved": [
+    "Authenticated GET operations use the existing typed app client; no connector token reuse.",
+    "Exact named fields and capability inventories validated with explicit limits, no provider error bodies exposed.",
+    "Scoped linked task basis rechecked after native reads; detected task, binding or native changes refuse results.",
+    "Capability access failure remains independent from dataset result and cannot declare subscription unsupported.",
+    "Explicit Desk action adds no capability/dataset polling and does not enable writes."
+  ],
+  "not_proved": [
+    "Actual native amendment, manual-crop/position preservation, edit/reopen/export qualification",
+    "Autofill entitlement on the app account",
+    "Absence of concurrent edits from native timestamps",
+    "Human language/design quality or current whole-job cost/latency",
+    "Whole-app release, deployment, independent recovery or full six-package completion"
+  ]
+}

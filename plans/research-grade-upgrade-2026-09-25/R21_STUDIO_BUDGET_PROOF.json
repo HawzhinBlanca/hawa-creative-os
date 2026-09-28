@@ -1,0 +1,163 @@
+{
+  "date": "2026-09-27",
+  "status": "qualified_local_slice_with_open_gates",
+  "decision": "ADR-088",
+  "requirements": [
+    "FR-065",
+    "FR-079",
+    "NFR-001"
+  ],
+  "baselineCommit": "30c5494",
+  "checks": {
+    "redBefore": {
+      "failed": 4,
+      "passed": 0,
+      "scope": "PostgreSQL parity cap, lost snapshot, concurrent final slot, incomplete history"
+    },
+    "initialBuild": "Failed string-or-number cost comparison; explicit numeric validation corrected it before qualification.",
+    "connectedBeforePartialChargeCorrection": {
+      "files": 10,
+      "passed": 119,
+      "failed": 0
+    },
+    "fullBeforePartialChargeCorrection": {
+      "files": 477,
+      "passed": 3807,
+      "failed": 0,
+      "skipped": 59
+    },
+    "partialChargeRed": {
+      "passed": 21,
+      "failed": 1
+    },
+    "finalConnected": {
+      "files": 10,
+      "passed": 120,
+      "failed": 0,
+      "skipped": 0
+    },
+    "finalSourceBuild": "passed",
+    "deskBuild": "passed",
+    "scriptTypes": "passed",
+    "anyRatchet": "1008 <= 1053; passed",
+    "providerEgress": "passed;9 existing exceptions",
+    "wholeTestConfig": {
+      "result": "failed",
+      "importedSourceErrors": 88,
+      "testFileErrors": 0,
+      "note": "Existing wrapper filters imported-source errors. No clean whole-program test-type claim."
+    },
+    "connectedTypeConfig": {
+      "result": "failed",
+      "importedSourceErrors": 5,
+      "note": "Explicit connected files with strictNullChecks; unrelated imported-source errors retained."
+    },
+    "testFileTypeWrapper": "passed its narrower filtered check; not a whole-program type check",
+    "blueprint": "945 passed;0 warnings;0 failed"
+  },
+  "limits": [
+    "USD is a recorded-cost stop threshold; unknown final costs of admitted calls are not reserved.",
+    "Strict USD reservations and office/day/role budgets remain unqualified.",
+    "Historical counters above available receipts refuse admission; no historical offset is fabricated.",
+    "Administrator cost attestations are not automated provider billing verification.",
+    "Application repository admission is protected; no new SQL budget trigger for arbitrary privileged inserts.",
+    "Full regression predates the final conservative partial-charge correction; final connected tests qualify that change.",
+    "No new isolated image deployment, native browser inspection, paid provider call or production change.",
+    "Test-type configuration repair, typed response recovery, live pilot, human quality, independent restore and held-out qualification remain open."
+  ],
+  "sourceHashes": {
+    "adrs/088_studio_ledger_budget_admission.md": "6df6c04a43eb375b19a0f0f145ced9b136d094112372c38269695ffa6f468d4a",
+    "packages/domain/src/studio-budget.ts": "ad9d15472b575bfb95409504d7d263f2262f245dcfc77ba462c69f637844ce3e",
+    "packages/domain/src/index.ts": "f04d561f83d92905f91e826859137bdd4b8a604f382c777f8bd9b8bdf71f3e6b",
+    "packages/db/src/repositories/design-studio.repository.ts": "a00d6fa39801dc246d10bf7374e57ad9efa106c42fe5ea5643bbb72404b33acd",
+    "apps/core/src/services/design-studio/design-studio-service.ts": "c9ad6441c28a80ef56f8dc5decde6e75ad4118a9cf715319dadd60efc4bae4ad",
+    "apps/core/src/services/design-studio/types.ts": "df5253b8cce684f4fbea5111a35b3236aceef7a8a0f43e6f9ecbab19b51eb61b",
+    "apps/core/src/routes/design-studio.routes.ts": "0b61d308c73ecbf8abda28a4049b68db436f31e08acc7112103dba5623b80adc",
+    "apps/desk/src/components/StudioBudgetSummary.tsx": "665cb3be285bc71918ecd33250d6c1ceaa1b84e6777bbd3aa377954733a3bd57",
+    "apps/desk/src/components/StudioPanel.tsx": "7fd6f07b482c989bd90e899b902b7d08d816d69ac30ed6fd5bfd8d0cdf724ea9",
+    "packages/domain/test/studio-budget.test.ts": "e4cd2a2d4206cd433cfc70d78fe1b8a7cb87e005c82cabcfa91f17f264da33d6",
+    "packages/db/test/studio-budget.test.ts": "9f29086978997ffd4f2b17d758ec9a401ce185c638c0a847eebf3b35fafcb461",
+    "apps/core/test/studio-run-guards.test.ts": "c7ea27b6aa5ecf6c3579624b4e4c8393ca678d47a0c8014c2911ec08d5dd0608",
+    "apps/core/test/studio-call-settlement.test.ts": "6eb0bfc9bca552e42a53356ff01a83638d37e87258ff6b16291281e3ccb98bf5",
+    "apps/core/test/design-studio-routes.test.ts": "9787869ce7d6382498fbb1e79b30200b54e1cb712937575274a575ea99c31f80",
+    "apps/desk/test/studio-budget.test.ts": "825462265c177244ba4337aefe9fe4edb270635e3b44f43a72c39c8e82872583",
+    "api/openapi.yaml": "48fd22467fa19f19ae42f0052ad63933e20f94fd882d4db3cfb471f1875cc9ff",
+    "docs/10_WORKFLOW_RELIABILITY.md": "608b94af094d85a197220703b791c805b3a23ce86639923b13a2e529be6b8175",
+    "docs/17_UI_UX.md": "39a3ec5eea1e6847f446244ccd0c9a7ae67fa9b82a42bce0f7f3649e82b2487b",
+    "runbooks/STUDIO_RECOVERY.md": "dacd0e83748728d1f95a6909b751e0bc1d495fcc05671dd23b259cd34af8b141"
+  },
+  "artifacts": {
+    "output/acceptance/2026-09-27-studio-budget/any-ratchet.log": {
+      "sha256": "47da7f2568d9746cdedcc79a38e05e8b472eab1a56019bc6fd3c6d560411af34",
+      "bytes": 153
+    },
+    "output/acceptance/2026-09-27-studio-budget/build.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-studio-budget/connected-types.log": {
+      "sha256": "ceb4d3428b415d4bcb10df9413fa6d81e721f0ce43c5e7b516d3662bc812eafc",
+      "bytes": 1118
+    },
+    "output/acceptance/2026-09-27-studio-budget/connected.log": {
+      "sha256": "59a45389cd015167831477df09196d8ed2c8bb4dce63b65432c6b3e2f9fd525e",
+      "bytes": 1395
+    },
+    "output/acceptance/2026-09-27-studio-budget/desk-build.log": {
+      "sha256": "5341dde9b1a5ace494377976d17786a2a9c44ecc4d810b7163010f1aa515dea4",
+      "bytes": 745
+    },
+    "output/acceptance/2026-09-27-studio-budget/egress.log": {
+      "sha256": "b6e716bda86ecb080e1fd6c96efaf64b06b2bbb78001c634eaf7a1137a63edf8",
+      "bytes": 133
+    },
+    "output/acceptance/2026-09-27-studio-budget/final-build.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-studio-budget/final-connected.log": {
+      "sha256": "1199d2fe34ceb833c4c218a4eea74a0b9873861362fb10312612e58c4d7ae145",
+      "bytes": 1395
+    },
+    "output/acceptance/2026-09-27-studio-budget/focused-first.log": {
+      "sha256": "47f11cbbbf602ddd1e8f75457fcbc6aa8c19bfab7a20ac8665fb9833a6b98670",
+      "bytes": 821
+    },
+    "output/acceptance/2026-09-27-studio-budget/full-tests.json": {
+      "sha256": "aba57ec3dd3ef20b185c0725b454f2bc1202714ffd255b1e6966cc001b594676",
+      "bytes": 1582222
+    },
+    "output/acceptance/2026-09-27-studio-budget/full-tests.log": {
+      "sha256": "f6d9dc7b52af40eafdeaebc88fd70aa8710b9434315a6f79515f18ec9640db4b",
+      "bytes": 477244
+    },
+    "output/acceptance/2026-09-27-studio-budget/partial-cost-red.log": {
+      "sha256": "d34151810b2e9ec27298cc1dae3b040b5c14796b95105f6ab9e433ed4eecc488",
+      "bytes": 2710
+    },
+    "output/acceptance/2026-09-27-studio-budget/red.log": {
+      "sha256": "a8d4b7ee61b7957b9f62da8b1184b9d6c986c5c1c7683548f05d025fb75311da",
+      "bytes": 6465
+    },
+    "output/acceptance/2026-09-27-studio-budget/script-types.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-studio-budget/test-file-types.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    },
+    "output/acceptance/2026-09-27-studio-budget/test-types.log": {
+      "sha256": "121db789ec7a148a9940c420cfd3b067c3e77835ecf093e39f44e9f177b26db3",
+      "bytes": 23435
+    },
+    "output/acceptance/2026-09-27-studio-budget/tsconfig.connected.json": {
+      "sha256": "08291cb9a71e158a50328eb9a2318aba1693a3ebcd7b7fed2658a50f1a709383",
+      "bytes": 889
+    },
+    "output/acceptance/2026-09-27-studio-budget/pack.log": {
+      "sha256": "4f8c64e31055b4190a02af8792ed5782a07ef90e2db5be450a2a5c63b082fc84",
+      "bytes": 69
+    }
+  }
+}

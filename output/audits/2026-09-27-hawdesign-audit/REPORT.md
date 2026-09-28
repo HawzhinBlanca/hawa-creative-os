@@ -1,5 +1,12 @@
 # Hawdesign audit — 27 September 2026
 
+> **History only (2026-09-28, ADR-127).** This audits `studio-v2` at `59150ca`; its file:line
+> references are to that commit. On the owner's decision of 2026-09-28,
+> `codex/research-grade-design-system` is the mainline and studio-v2's RequestLifecycle (wave 7) was
+> superseded there by that branch's own implementation. The CI and release-manifest findings were
+> addressed on studio-v2 (1a16095, 9cd4afe, c2bf494) and those fixes were ported; the other findings
+> have not been re-verified against the mainline.
+
 **Baseline:** `studio-v2` at `59150ca` (2026-09-25). Every file:line below refers to that commit.
 **Mode:** read-only. No application code was changed, nothing was deployed, no paid model call was made, no production system was touched.
 **Method:** the full check suite was run here (install, lint, typecheck, pack validation, secret scan, `pnpm audit`, the 430-file vitest suite twice), the GitHub Actions history was read, and seven reviewers each re-verified one slice of the 21 September ledger (`output/audits/2026-09-21-engineering-rank-audit/FINDINGS.md`) against the current code and hunted for new defects. The headline claims below were re-checked by hand; the ones marked **reproduced** were executed. Full ledger: [FINDINGS.md](FINDINGS.md).

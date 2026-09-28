@@ -14,6 +14,7 @@ const tenantId = '00000000-0000-4000-a000-000000000001';
 const operatorUserId = '00000000-0000-4000-b000-000000000001';
 const operator = { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` };
 const admin = { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' };
+const artDirector = { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.HAWA_ART_DIRECTOR_KEY}` };
 
 const db = createDb(process.env.TEST_DATABASE_URL!);
 const saved = { ...process.env };
@@ -23,10 +24,12 @@ beforeAll(() => {
   delete process.env.TELEGRAM_BOT_TOKEN;
 });
 afterEach(async () => {
-  // Release both switches for the next test, through the route an operator uses.
+  // Release both switches for the next test: Telegram through the route an operator uses, WhatsApp
+  // through the same route as an administrator, the only role that may change it (ADR-128).
   const app = createApp({ db } as any);
-  for (const channel of ['telegram', 'waha']) {
-    await app.request(`/v1/ingress/channels/${channel}/toggle`, { method: 'POST', headers: operator, body: JSON.stringify({ enabled: true }) });
+  for (const [channel, headers] of [['telegram', operator], ['waha', admin]] as const) {
+    const released = await app.request(`/v1/ingress/channels/${channel}/toggle`, { method: 'POST', headers, body: JSON.stringify({ enabled: true }) });
+    expect(released.status).toBe(200);
   }
   process.env.WAHA_KILL_SWITCH = 'false';
 });
@@ -52,6 +55,56 @@ const telegramWebhook = (app: ReturnType<typeof createApp>) =>
   });
 
 describe('the kill switches survive a restart', () => {
+  it('refuses a non-office principal before changing the persisted switch', async () => {
+    const client = createApp({ db, testAuth: { principal: { role: 'client' } } } as any);
+    const refused = await client.request('/v1/ingress/channels/telegram/toggle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: false }),
+    });
+    expect(refused.status).toBe(403);
+    expect(await channels(createApp({ db } as any))).toMatchObject({ telegram: true });
+  });
+
+  it('a backup-style conditional release refuses a newer operator decision, even if still paused', async () => {
+    const firstCore = createApp({ db } as any);
+    const paused = await toggle(firstCore, 'telegram', false);
+    const firstTag = ((await paused.json()) as { changeTag: string }).changeTag;
+    expect(firstTag).toMatch(/^[0-9a-f-]{36}$/);
+
+    const operatorCore = createApp({ db } as any);
+    const rethrown = await toggle(operatorCore, 'telegram', false);
+    const newerTag = ((await rethrown.json()) as { changeTag: string }).changeTag;
+    expect(newerTag).not.toBe(firstTag);
+
+    const staleRelease = await firstCore.request('/v1/ingress/channels/telegram/toggle', {
+      method: 'POST', headers: operator, body: JSON.stringify({ enabled: true, expectedChangeTag: firstTag }),
+    });
+    expect(staleRelease.status).toBe(409);
+    expect((await switchRow('telegram'))?.state).toBe('disabled');
+    expect(await channels(createApp({ db } as any))).toMatchObject({ telegram: false });
+
+    const validRelease = await firstCore.request('/v1/ingress/channels/telegram/toggle', {
+      method: 'POST', headers: operator, body: JSON.stringify({ enabled: true, expectedChangeTag: newerTag }),
+    });
+    expect(validRelease.status).toBe(200);
+    expect(((await validRelease.json()) as { changeTag: string }).changeTag).not.toBe(newerTag);
+    expect(await channels(createApp({ db } as any))).toMatchObject({ telegram: true });
+  });
+
+  it('only one of two Core instances with separate database handles can consume a switch revision', async () => {
+    const paused = await toggle(createApp({ db } as any), 'telegram', false);
+    const changeTag = ((await paused.json()) as { changeTag: string }).changeTag;
+    const body = JSON.stringify({ enabled: true, expectedChangeTag: changeTag });
+    const otherDb = createDb(process.env.TEST_DATABASE_URL!);
+    try {
+      const attempts = await Promise.all([createApp({ db } as any), createApp({ db: otherDb } as any)].map((app) =>
+        app.request('/v1/ingress/channels/telegram/toggle', { method: 'POST', headers: operator, body })));
+      expect(attempts.map((response) => response.status).sort()).toEqual([200, 409]);
+      expect(await channels(createApp({ db } as any))).toMatchObject({ telegram: true });
+    } finally {
+      await otherDb.destroy();
+    }
+  });
+
   it('Telegram, thrown with the ingress toggle: a new Core reports it, refuses the webhook and pauses the poller', async () => {
     const before = createApp({ db } as any);
     const thrown = await toggle(before, 'telegram', false);
@@ -135,7 +188,8 @@ describe('the kill switches survive a restart', () => {
     const a = createApp({ db } as any);
     const b = createApp({ db } as any);
     expect(await channels(b)).toEqual({ telegram: true, waha: true });
-    await toggle(a, 'waha', false);
+    // WhatsApp is the administrator's switch (ADR-128).
+    expect((await a.request('/v1/ingress/channels/waha/toggle', { method: 'POST', headers: admin, body: JSON.stringify({ enabled: false }) })).status).toBe(200);
     expect(await channels(b)).toEqual({ telegram: true, waha: false });
   });
 });
@@ -259,7 +313,7 @@ describe('the WhatsApp switch has one state', () => {
   it('thrown with POST /waha/kill-switch and released with the ingress toggle: WhatsApp intake is back on', async () => {
     const app = createApp({ db } as any);
     expect((await app.request('/v1/waha/kill-switch', { method: 'POST', headers: admin, body: JSON.stringify({ enabled: false }) })).status).toBe(200);
-    expect((await toggle(app, 'waha', true)).status).toBe(200);
+    expect((await app.request('/v1/ingress/channels/waha/toggle', { method: 'POST', headers: admin, body: JSON.stringify({ enabled: true }) })).status).toBe(200);
     expect(await channels(app)).toEqual({ telegram: true, waha: true });
     const realFetch = globalThis.fetch;
     const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: any) => {
@@ -273,6 +327,80 @@ describe('the WhatsApp switch has one state', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+/**
+ * Who may change which switch (ADR-128). WhatsApp is administrator-only, as POST /waha/kill-switch
+ * always was: an art director or operator released the administrator's WhatsApp switch through the
+ * ingress toggle or /operations/kill-switch, durably, and the toggle also cleared WAHA_KILL_SWITCH.
+ * Telegram stays open to the office roles: the Desk and the nightly Restate backup
+ * (infra/backup/restate_nightly.py, art-director key first, then the bearer key) throw and release it.
+ */
+describe('who may change which switch', () => {
+  const opsSwitch = (app: ReturnType<typeof createApp>, headers: Record<string, string>, channel: 'telegram' | 'waha', active: boolean) =>
+    app.request('/v1/operations/kill-switch', { method: 'POST', headers, body: JSON.stringify({ channel, active }) });
+  const ingressToggle = (app: ReturnType<typeof createApp>, headers: Record<string, string>, channel: 'telegram' | 'waha', body: Record<string, unknown>) =>
+    app.request(`/v1/ingress/channels/${channel}/toggle`, { method: 'POST', headers, body: JSON.stringify(body) });
+
+  it('an art director or operator cannot release the administrator\'s WhatsApp switch through either route', async () => {
+    const app = createApp({ db } as any);
+    expect((await app.request('/v1/waha/kill-switch', { method: 'POST', headers: admin, body: JSON.stringify({ enabled: false }) })).status).toBe(200);
+    expect(process.env.WAHA_KILL_SWITCH).toBe('true');
+    for (const headers of [artDirector, operator]) {
+      expect((await ingressToggle(app, headers, 'waha', { enabled: true })).status).toBe(403);
+      expect((await opsSwitch(app, headers, 'waha', false)).status).toBe(403);
+    }
+    expect((await switchRow('waha'))?.state).toBe('disabled');
+    expect(process.env.WAHA_KILL_SWITCH).toBe('true');
+    expect(await channels(createApp({ db } as any))).toEqual({ telegram: true, waha: false });
+  });
+
+  it('nor throw it: the WhatsApp switch has one rule in both directions', async () => {
+    const app = createApp({ db } as any);
+    for (const headers of [artDirector, operator]) {
+      expect((await ingressToggle(app, headers, 'waha', { enabled: false })).status).toBe(403);
+      expect((await opsSwitch(app, headers, 'waha', true)).status).toBe(403);
+    }
+    expect((await switchRow('waha'))?.state ?? 'unknown').not.toBe('disabled');
+    expect(process.env.WAHA_KILL_SWITCH).toBe('false');
+  });
+
+  it('an administrator changes WhatsApp through /operations/kill-switch: saved before the answer, and the environment switch follows', async () => {
+    const app = createApp({ db } as any);
+    const thrown = await opsSwitch(app, admin, 'waha', true);
+    expect(thrown.status).toBe(200);
+    expect(await thrown.json()).toMatchObject({ channel: 'waha', active: true });
+    expect((await switchRow('waha'))?.state).toBe('disabled');
+    expect(process.env.WAHA_KILL_SWITCH).toBe('true');
+    const released = await opsSwitch(app, admin, 'waha', false);
+    expect(released.status).toBe(200);
+    expect((await switchRow('waha'))?.state).not.toBe('disabled');
+    expect(process.env.WAHA_KILL_SWITCH).toBe('false');
+  });
+
+  it('Telegram: the art director (the backup\'s credential) pauses and conditionally releases it with the toggle; /operations/kill-switch is the administrator\'s', async () => {
+    const app = createApp({ db } as any);
+    const paused = await ingressToggle(app, artDirector, 'telegram', { enabled: false });
+    expect(paused.status).toBe(200);
+    const changeTag = ((await paused.json()) as { changeTag: string }).changeTag;
+    expect(changeTag).toMatch(/^[0-9a-f-]{36}$/);
+    const released = await ingressToggle(app, artDirector, 'telegram', { enabled: true, expectedChangeTag: changeTag });
+    expect(released.status).toBe(200);
+    expect(await released.json()).toMatchObject({ channel: 'telegram', enabled: true, killSwitchActive: false });
+    // POST /operations/kill-switch stays the administrator's for both channels (ADR-127, audit #17):
+    // the office pauses intake with the toggle above, and the nightly backup uses the toggle too.
+    expect((await opsSwitch(app, operator, 'telegram', true)).status).toBe(403);
+    expect((await opsSwitch(app, artDirector, 'telegram', true)).status).toBe(403);
+    expect((await switchRow('telegram'))?.state).not.toBe('disabled');
+  });
+
+  it('/operations/kill-switch refuses a non-office principal and an anonymous caller before changing anything', async () => {
+    const client = createApp({ db, testAuth: { principal: { role: 'client' } } } as any);
+    expect((await client.request('/v1/operations/kill-switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'telegram', active: true }) })).status).toBe(401);
+    const anonymous = await createApp({ db } as any).request('/v1/operations/kill-switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'telegram', active: true }) });
+    expect(anonymous.status).toBe(401);
+    expect((await switchRow('telegram'))?.state ?? 'unknown').not.toBe('disabled');
   });
 });
 

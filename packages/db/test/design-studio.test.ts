@@ -1,7 +1,7 @@
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
 import { createDb, withRlsContext } from '../src/client.js';
-import { DesignStudioRepository } from '../src/repositories/design-studio.repository.js';
+import { DesignStudioRepository, ModelCallFinalizationConflictError } from '../src/repositories/design-studio.repository.js';
 import { sql } from 'kysely';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
@@ -90,7 +90,9 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
         stage: 'critique',
         provider: 'anthropic',
         model: 'claude-fable-5-1',
-        requestedModel: 'claude-fable-5-1',
+        reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'claude-fable-5-1',
+        callOrdinal: 1,
+        logicalCallSha256: createHash('sha256').update(callIdA).digest('hex'),
       });
 
       await repoTrx.recordFeedback({
@@ -146,6 +148,108 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       const feedback = await trx.selectFrom('design_feedback').selectAll().where('task_id', '=', taskA).execute();
       expect(feedback).toHaveLength(0);
     });
+  });
+
+  it('admits only one cross-Core reservation for the same next paid call', async () => {
+    const taskId = await createTask(tenantA, clientA);
+    const runId = randomUUID();
+    await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA,
+      actorId: 'test_user', requestKey: `admission-${runId}`,
+      requestHash: createHash('sha256').update(runId).digest('hex'),
+      request: { prompt: 'admission race' }, tier: 'premium' });
+    const peerDb = createDb(url!);
+    const peer = new DesignStudioRepository(peerDb);
+    const call = (id: string, digest: string) => ({ id, runId, tenantId: tenantA,
+      stage: 'briefing', provider: 'openai', model: 'model-test', reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'model-test',
+      callOrdinal: 1, logicalCallSha256: digest });
+    try {
+      const results = await Promise.allSettled([
+        repo.recordCallStart(call(randomUUID(), 'a'.repeat(64))),
+        peer.recordCallStart(call(randomUUID(), 'b'.repeat(64))),
+      ]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      expect(await repo.getCallsForRun(runId, tenantA)).toHaveLength(1);
+    } finally {
+      await peerDb.destroy();
+    }
+  });
+
+  it('enforces task admission under the restricted runtime database role', async () => {
+    const taskId = await createTask(tenantA, clientA), runId = randomUUID(), actorId = randomUUID();
+    await sql`INSERT INTO hawa.users(id,email,display_name) VALUES(${actorId}::uuid,${actorId + '@example.test'},'Synthetic runtime operator')`.execute(db);
+    await sql`INSERT INTO hawa.tenant_memberships(tenant_id,user_id,role) VALUES(${tenantA}::uuid,${actorId}::uuid,'operator')`.execute(db);
+    await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA,
+      actorId: 'test_user', requestKey: `runtime-${runId}`, requestHash: 'b'.repeat(64), request: {}, tier: 'premium' });
+    const admit = () => withRlsContext(db, { tenantId: tenantA, clientId: clientA, role: 'operator' }, async trx => {
+      await sql`SET LOCAL ROLE hawa_app`.execute(trx);
+      return repo.recordCallStart({ id: randomUUID(), runId, tenantId: tenantA, actorId, stage: 'parity',
+        provider: 'openai', model: 'test', reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'test', callOrdinal: null,
+        logicalCallSha256: createHash('sha256').update(randomUUID()).digest('hex') }, trx);
+    });
+    await expect(admit()).resolves.toMatchObject({ status: 'uncertain' });
+    await sql`UPDATE hawa.tenant_memberships SET active=false WHERE tenant_id=${tenantA}::uuid AND user_id=${actorId}::uuid`.execute(db);
+    await expect(admit()).rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED' });
+    await sql`UPDATE hawa.tenant_memberships SET active=true WHERE tenant_id=${tenantA}::uuid AND user_id=${actorId}::uuid`.execute(db);
+    await sql`UPDATE hawa.tasks SET state='complete' WHERE id=${taskId}::uuid`.execute(db);
+    await expect(admit()).rejects.toMatchObject({ code: 'TASK_GENERATION_BLOCKED' });
+    expect(await repo.getCallsForRun(runId, tenantA)).toHaveLength(1);
+  });
+
+  it.each(['cancellation', 'abandonment'])('serializes call admission behind %s and still finalizes an earlier admitted call', async closure => {
+    const taskId = await createTask(tenantA, clientA);
+    const runId = randomUUID();
+    await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA,
+      actorId: 'test_user', requestKey: `cancel-${runId}`, requestHash: 'a'.repeat(64), request: {}, tier: 'premium' });
+    const admittedId = randomUUID();
+    const call = (id: string, ordinal: number) => ({ id, runId, tenantId: tenantA, stage: 'briefing',
+      provider: 'openai', model: 'test', reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'test', callOrdinal: ordinal,
+      logicalCallSha256: createHash('sha256').update(id).digest('hex') });
+    await repo.recordCallStart(call(admittedId, 1));
+    const peer = createDb(url!);
+    try {
+      let pending!: Promise<unknown>;
+      await withRlsContext(db, { tenantId: tenantA }, async trx => {
+        await sql`SELECT id FROM hawa.tasks WHERE id=${taskId}::uuid FOR UPDATE`.execute(trx);
+        if (closure === 'cancellation') await sql`UPDATE hawa.tasks SET state='cancelled' WHERE id=${taskId}::uuid`.execute(trx);
+        else await repo.updateRunStatus(runId, tenantA, 'abandoned', {}, trx);
+        pending = new DesignStudioRepository(peer).recordCallStart(call(randomUUID(), 2)).catch(error => error);
+        // Confirm the peer actually reached the task lock before releasing cancellation.
+        let blocked = false;
+        for (let attempt = 0; attempt < 100; attempt++) {
+          await sql`SELECT pg_stat_clear_snapshot()`.execute(trx);
+          const locks = await sql<{blocked:boolean}>`SELECT EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+              AND pid<>pg_backend_pid() AND pg_backend_pid()=ANY(pg_blocking_pids(pid))
+          ) AS blocked`.execute(trx);
+          if (locks.rows[0].blocked) { blocked = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        expect(blocked).toBe(true);
+      });
+      expect(await pending).toMatchObject({ code: 'TASK_GENERATION_BLOCKED' });
+      await repo.finalizeCall({ id: admittedId, tenantId: tenantA, status: 'ok',
+        inputTokens: 100, outputTokens: 10, usdEstimate: 0.01, responseId: 'synthetic-paid-reply' });
+      expect(await repo.getCallsForRun(runId, tenantA)).toMatchObject([{ id: admittedId, status: 'ok', response_id: 'synthetic-paid-reply' }]);
+    } finally { await peer.destroy(); }
+  });
+
+  it('holds new ordinals after a finished uncertain call without affecting a different task', async () => {
+    const taskId = await createTask(tenantA, clientA), runId = randomUUID();
+    await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA, actorId: 'test_user',
+      requestKey: `uncertain-${runId}`, requestHash: 'c'.repeat(64), request: {}, tier: 'premium' });
+    const id = randomUUID();
+    const call = { id, runId, tenantId: tenantA, stage: 'briefing', provider: 'openai', model: 'test',
+      reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'test', callOrdinal: 1, logicalCallSha256: 'c'.repeat(64) };
+    await repo.recordCallStart(call);
+    await repo.finalizeCall({ id, tenantId: tenantA, status: 'uncertain', inputTokens: 0, outputTokens: 0, usdEstimate: 0 });
+    await expect(repo.recordCallStart({ ...call, id: randomUUID(), callOrdinal: 2, logicalCallSha256: 'd'.repeat(64) }))
+      .rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
+    const otherTask = await createTask(tenantA, clientA), otherRun = randomUUID();
+    await repo.createRun({ id: otherRun, tenantId: tenantA, taskId: otherTask, clientId: clientA, actorId: 'test_user',
+      requestKey: `other-${otherRun}`, requestHash: 'd'.repeat(64), request: {}, tier: 'premium' });
+    await expect(repo.recordCallStart({ ...call, id: randomUUID(), runId: otherRun }))
+      .resolves.toMatchObject({ status: 'uncertain' });
   });
 
   it('rejects deletion or mutation of completed run via immutability trigger', async () => {
@@ -225,18 +329,26 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
         stage: 'render',
         provider: 'anthropic',
         model: 'claude-fable-5-1',
-        requestedModel: 'claude-fable-5-1',
+        reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'claude-fable-5-1',
+        callOrdinal: 1,
+        logicalCallSha256: createHash('sha256').update(callId).digest('hex'),
       });
 
       const pendingCall = (await repoTrx.getCallsForRun(runId, tenantA))[0];
       expect(pendingCall.status).toBe('uncertain');
       expect(pendingCall.input_tokens).toBe(0);
+      expect(pendingCall.served_model).toBeNull();
 
       // 2. Finalize call after network response
       await repoTrx.finalizeCall({
         id: callId,
         tenantId: tenantA,
         responseId: 'msg_12345',
+        servedModel: 'claude-fable-5-1-snapshot',
+        providerRequestId: 'provider_req_12345',
+        responseSha256: 'b'.repeat(64),
+        latencyMs: 42,
+        attempts: 1,
         inputTokens: 1500,
         cachedInputTokens: 1200,
         outputTokens: 450,
@@ -248,6 +360,11 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       const completedCall = (await repoTrx.getCallsForRun(runId, tenantA))[0];
       expect(completedCall.status).toBe('ok');
       expect(Number(completedCall.usd_estimate)).toBeCloseTo(0.0125, 4);
+      expect(completedCall).toMatchObject({
+        model: 'claude-fable-5-1', served_model: 'claude-fable-5-1-snapshot',
+        provider_request_id: 'provider_req_12345', response_sha256: 'b'.repeat(64),
+        latency_ms: 42, attempts: 1,
+      });
     });
 
     // 3. Immutability: completed call cannot be updated again!
@@ -262,6 +379,48 @@ describe.skipIf(!url)('real PostgreSQL Design Studio v2 DB qualification', () =>
       await expect(
         sql`DELETE FROM hawa.design_studio_calls WHERE id = ${callId}::uuid`.execute(trx)
       ).rejects.toThrow('Design studio calls ledger is append-only');
+    });
+  });
+
+  it('preserves a pending call identity and seals the first uncertain receipt', async () => {
+    const taskId = await createTask(tenantA, clientA);
+    const runId = randomUUID();
+    const callId = randomUUID();
+    await repo.createRun({ id: runId, tenantId: tenantA, taskId, clientId: clientA,
+      actorId: 'test_user', requestKey: `sealed-call-${runId}`,
+      requestHash: createHash('sha256').update(runId).digest('hex'),
+      request: { prompt: 'seal the call identity' }, tier: 'premium' });
+    await repo.recordCallStart({ id: callId, runId, tenantId: tenantA,
+      stage: 'briefing', provider: 'openai', model: 'requested-model',
+      reservation: { version: 1 as const, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.5, inputTokens: 100, outputTokens: 100 }, requestedModel: 'requested-model', callOrdinal: 1,
+      logicalCallSha256: createHash('sha256').update(callId).digest('hex') });
+
+    for (const change of [
+      sql`UPDATE hawa.design_studio_calls SET stage = 'judging' WHERE id = ${callId}::uuid`,
+      sql`UPDATE hawa.design_studio_calls SET model = 'other-model' WHERE id = ${callId}::uuid`,
+      sql`UPDATE hawa.design_studio_calls SET call_ordinal = 2 WHERE id = ${callId}::uuid`,
+    ]) {
+      await expect(withRlsContext(db, { tenantId: tenantA }, (trx) => change.execute(trx)))
+        .rejects.toThrow('Design studio call identity is immutable');
+    }
+    await expect(withRlsContext(db, { tenantId: tenantA }, (trx) =>
+      sql`UPDATE hawa.design_studio_calls SET usd_estimate = 0.03 WHERE id = ${callId}::uuid`.execute(trx)))
+      .rejects.toThrow('Design studio call update must record its first outcome');
+
+    await repo.finalizeCall({ id: callId, tenantId: tenantA, inputTokens: 0,
+      outputTokens: 0, usdEstimate: 0, status: 'uncertain', errorCode: 'ACCEPTANCE_UNKNOWN' });
+    const sealed = (await repo.getCallsForRun(runId, tenantA))[0];
+    expect(sealed).toMatchObject({ stage: 'briefing', model: 'requested-model',
+      status: 'uncertain', error_code: 'ACCEPTANCE_UNKNOWN' });
+    expect(sealed.finished_at).not.toBeNull();
+    await expect(repo.finalizeCall({ id: callId, tenantId: tenantA, inputTokens: 10,
+      outputTokens: 10, usdEstimate: 0.03, status: 'ok' }))
+      .rejects.toBeInstanceOf(ModelCallFinalizationConflictError);
+    await expect(withRlsContext(db, { tenantId: tenantA }, (trx) =>
+      sql`UPDATE hawa.design_studio_calls SET status = 'ok', usd_estimate = 0.03 WHERE id = ${callId}::uuid`.execute(trx)))
+      .rejects.toThrow('Completed design studio call is immutable');
+    expect((await repo.getCallsForRun(runId, tenantA))[0]).toMatchObject({
+      status: 'uncertain', error_code: 'ACCEPTANCE_UNKNOWN',
     });
   });
 

@@ -15,26 +15,6 @@ import { DurableStepJournal } from './durable-context.js';
 import type { OutboxCommandRecord } from './outbox-consumer.js';
 import { requestIdHeaders } from './logging.js';
 
-/**
- * What a design run needs from the request's `task.created` payload: the fields the dispatcher sends
- * TaskWorkflow, which DesignRun (slice 2.3) reads from the same recorded row, so the two start a run
- * of one request alike.
- */
-export function designRunFieldsOf(payload: Record<string, unknown> | null | undefined): Pick<WorkflowInput, 'rawText' | 'canvaAutoGenerate' | 'canvaVariant' | 'designStudio' | 'studioOptions' | 'sourcePlatform' | 'clientId'> {
-  const p = (payload ?? {}) as Partial<Record<'rawRequestText' | 'rawText' | 'title' | 'sourcePlatform' | 'clientId' | 'workflow', string>> & {
-    autoGenerate?: unknown; designStudio?: unknown; variant?: WorkflowInput['canvaVariant']; studioOptions?: WorkflowInput['studioOptions'];
-  };
-  return {
-    rawText: p.rawRequestText || p.rawText || p.title || '',
-    canvaAutoGenerate: p.workflow === 'canva' && p.autoGenerate === true,
-    canvaVariant: p.variant,
-    designStudio: p.designStudio === true,
-    studioOptions: p.studioOptions,
-    sourcePlatform: p.sourcePlatform || 'inbox',
-    clientId: p.clientId,
-  };
-}
-
 export interface WorkflowSubmissionReceipt {
   workflowId: string;
   aggregateId: string;
@@ -114,7 +94,13 @@ export class TaskWorkflowDispatcher {
           body: JSON.stringify({
             taskId: cmd.aggregate_id,
             tenantId: cmd.tenant_id,
-            ...designRunFieldsOf(cmd.payload),
+            rawText: cmd.payload?.rawRequestText || cmd.payload?.rawText || cmd.payload?.title || '',
+            canvaAutoGenerate: cmd.payload?.workflow==='canva' && cmd.payload?.autoGenerate===true,
+            canvaVariant: cmd.payload?.variant,
+            designStudio: cmd.payload?.designStudio === true,
+            studioOptions: cmd.payload?.studioOptions,
+            sourcePlatform: cmd.payload?.sourcePlatform || 'inbox',
+            clientId: cmd.payload?.clientId,
             idempotencyKey,
             ...(redriveAttempt ? { redriveAttempt } : {}),
             requesterToldAtIntake,

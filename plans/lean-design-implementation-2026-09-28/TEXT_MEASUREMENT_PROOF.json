@@ -1,0 +1,209 @@
+{
+  "date": "2026-09-28",
+  "adr": "ADR-117",
+  "status": "locally-qualified; mixed-font/native qualification and six-package completion remain open",
+  "sourceBaseCommit": "779bba0e6f4adaea1ce5d92f00e4584118eb3525",
+  "sourceFiles": [
+    {
+      "path": "adrs/117_mandatory_text_measurement.md",
+      "sha256": "63f5973a7aa42a9ea629da262dc1050e8bade7a9cd36361e6da3f453daf7c75a"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "5a78882265f530e1b124851f0caebbcbae3f5d34e7c46ca4e7c09953cef80687"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/art.stage.ts",
+      "sha256": "c539541d1a296ffdb98da93a30d188fb7e7db1c10d9ffc6c4f3ba86ab8cf7c06"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/qa.stage.ts",
+      "sha256": "9d92327b17f0ea1316a768455f658bc77471f5d2b344e9012f44d37fc14349d4"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/types.ts",
+      "sha256": "3f262c56878eddf75cefeba0100607f44d9bda718f25a702ec13a562a452fdb1"
+    },
+    {
+      "path": "apps/core/test/design-studio-orchestrator.test.ts",
+      "sha256": "7db15510864e261601aa2dda2bc600ab90cd2c558003c470d8c3b58ec27fe6d3"
+    },
+    {
+      "path": "apps/core/test/studio-compute-gates.test.ts",
+      "sha256": "425f10b90119687376032d1396d2cd88285d71bc1fe9fe134a99d1f648a1e2ef"
+    },
+    {
+      "path": "docs/11_QA_RTL_MULTILINGUAL.md",
+      "sha256": "356643b5432045379478b695b86a89b3a638835a24ee54cec1930a2665add65e"
+    },
+    {
+      "path": "packages/creative/src/studio/hard-qa.ts",
+      "sha256": "1a94d59ed8703fbacc2c85c3d5d76310068e8004b7b59e84bd1a85945290ff65"
+    },
+    {
+      "path": "packages/creative/src/studio/render-layout-v2.ts",
+      "sha256": "fd25a942a66cae1b90a3bc1ef0b5cbf9337d3dc0979bad7328ac598dd1785b7a"
+    },
+    {
+      "path": "packages/creative/test/mandatory-text-measurement.test.ts",
+      "sha256": "278cad832907893fdbbcfacad03d4bd27cf68de9bb2b66e9370e392e44158ad2"
+    },
+    {
+      "path": "packages/creative/test/pipeline-v3.test.ts",
+      "sha256": "57137318341b198fc89da5b1a719d9f2cefe1a868cc87bab825225e7eee46711"
+    },
+    {
+      "path": "packages/creative/test/stroke-width-slab.test.ts",
+      "sha256": "768dd4afa3bdc1ffde9b79b2b50e3c0de8057837422221a186755188a0bea603"
+    },
+    {
+      "path": "packages/creative/test/style-spec.test.ts",
+      "sha256": "44ac12acae9cf8909be23c279595b9f43714f40b6984315eb157dcf422de2020"
+    },
+    {
+      "path": "packages/creative/test/title-color.test.ts",
+      "sha256": "e179c8f7ca8a7eabf3d8a18e663e4144aa7b7484f0a86c3c698fdb55e31c00f1"
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
+      "sha256": "acad892f73daab7a2cde64f3deba77b4986f9cfb6a5fd52e7df4b82d000d7526"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "1e6ce0971845fe53a83a990bf1cc7e789c4f27d67735e47f53720065445477a1"
+    },
+    {
+      "path": "scripts/proofs/reprepare_stored_runs.mjs",
+      "sha256": "a7a20c306074edef12b50b7da4afd21156c140618c3d5d069ba0eb969b550800"
+    }
+  ],
+  "requirements": [
+    "FR-015",
+    "FR-037",
+    "FR-038",
+    "FR-039"
+  ],
+  "tests": {
+    "red": {
+      "path": "output/acceptance/2026-09-28-text-measurement-red.json",
+      "sha256": "f2df96b6a2b898af50151e76082705a89dfdab21bfbc5f9a8029b26e7c0c933e",
+      "files": 1,
+      "passed": 0,
+      "failed": 4,
+      "pendingOrDeselected": 0
+    },
+    "winner-red": {
+      "path": "output/acceptance/2026-09-28-text-measurement-winner-red.json",
+      "sha256": "46bddc97b93fa29f696441fb5931237a62bbe1ddb116ec454eb9bbd7ce3ecb11",
+      "files": 1,
+      "passed": 2,
+      "failed": 1,
+      "pendingOrDeselected": 11
+    },
+    "focused": {
+      "path": "output/acceptance/2026-09-28-text-measurement-focused.json",
+      "sha256": "829db723c732baa0bbe9b892eef9efc6834c3df23ee5b259f395ad64d141410b",
+      "files": 2,
+      "passed": 24,
+      "failed": 3,
+      "pendingOrDeselected": 0
+    },
+    "affected": {
+      "path": "output/acceptance/2026-09-28-text-measurement-affected.json",
+      "sha256": "578db481311b5f55d4ee4daf0a5a60c346b88cef083ddad255166928611f7f40",
+      "files": 16,
+      "passed": 190,
+      "failed": 16,
+      "pendingOrDeselected": 0
+    },
+    "fixtures": {
+      "path": "output/acceptance/2026-09-28-text-measurement-fixtures.json",
+      "sha256": "e4578faf3a1efdd26eb55789609b8befe522e9d8857572d2dda03065e6d56be6",
+      "files": 5,
+      "passed": 88,
+      "failed": 4,
+      "pendingOrDeselected": 0
+    },
+    "pipeline": {
+      "path": "output/acceptance/2026-09-28-text-measurement-pipeline.json",
+      "sha256": "2ec7f447eee024a2b3259bc5245f9bbfa4baf10db75285a457bf0ca287c955cb",
+      "files": 1,
+      "passed": 49,
+      "failed": 4,
+      "pendingOrDeselected": 0
+    },
+    "final": {
+      "path": "output/acceptance/2026-09-28-text-measurement-final.json",
+      "sha256": "f6f301489ef550d55a2029e1fb534cebda2fccbae0e8fd299ebce66839f863aa",
+      "files": 16,
+      "passed": 204,
+      "failed": 4,
+      "pendingOrDeselected": 0
+    },
+    "qualified": {
+      "path": "output/acceptance/2026-09-28-text-measurement-qualified.json",
+      "sha256": "4959126c4a2e61ad5b613879387017328fea939b1a98f1fe1223cf8139b92abc",
+      "files": 16,
+      "passed": 208,
+      "failed": 0,
+      "pendingOrDeselected": 0
+    },
+    "boundary": {
+      "path": "output/acceptance/2026-09-28-text-measurement-boundary.json",
+      "sha256": "1d2ff077a02fc94ec0e31aa0fb7fc4e740f3b29a5911aa1a68cf93f98721e076",
+      "files": 4,
+      "passed": 48,
+      "failed": 0,
+      "pendingOrDeselected": 0
+    },
+    "malformed-font": {
+      "path": "output/acceptance/2026-09-28-text-measurement-malformed-font.json",
+      "sha256": "6dd8388a14c1e37cff4f211d0ee9f78ce99580d4069f7ad00be07a3e89f2ac2b",
+      "files": 1,
+      "passed": 18,
+      "failed": 0,
+      "pendingOrDeselected": 0
+    }
+  },
+  "types": {
+    "source": "passed; output/acceptance/2026-09-28-text-measurement-build-verified.log",
+    "scripts": "passed; output/acceptance/2026-09-28-text-measurement-script-types-final.log",
+    "tests": "528/528 roots passed; output/acceptance/2026-09-28-text-measurement-types-sealed.log"
+  },
+  "checks": {
+    "any": {
+      "count": 954,
+      "ceiling": 1053,
+      "status": "pass"
+    },
+    "egress": "pass, 9 existing exceptions; no new egress",
+    "security": "pass, 0 secrets, 53 justified allowlist hits",
+    "diffWhitespace": "pass"
+  },
+  "reproductions": [
+    "Four missing/blank copy cases wrongly passed old mandatory QA.",
+    "Real isolated DB persisted rejected winner QA after a replacement passed; corrected selected-candidate binding and selection hold."
+  ],
+  "initialFailures": [
+    "First sandbox harness attempt could not connect to isolated PostgreSQL port55432 (EPERM); escalated isolated run reproduced all four real failures.",
+    "Three new multilingual fixtures used invalid leading; corrected to admitted leading. Noto punctuation absence is real, so positive mixed/punctuation case uses covering Amiri while existing style fixtures retain their original requested face and explicitly refuse unmeasured fallback.",
+    "Old geometry tests omitted their available copy map; updated to exercise real mandatory checks. Mixed-script historical fixtures now expect COPY_UNMEASURED, never a waived fit.",
+    "Existing corpus option coverage omitted allowArt; historical modes now explicitly pass their existing true default; no-art has connected Studio coverage. No historical baseline rewritten.",
+    "Type errors: new calmRegion omitted, empty-map union inference, synthetic HardQaOutcome fixtures missing textMeasurements; all repaired.",
+    "New held test runs occupied active tenant slots; added finally-abandon cleanup; qualified run has no failed/skipped tests."
+  ],
+  "scope": [
+    "Real font bytes in temporary directories; missing/corrupt/replaced/restored checks and exact-copy identity.",
+    "Real isolated database and file storage in orchestrator journeys; synthetic provider transport, no native account qualification.",
+    "Both artwork pipelines refuse unmeasured content. V3 eligibility and final QA refuse it. Final DB snapshots include selected measurement evidence.",
+    "Mandatory geometry computed in one block pass; optional heuristic helpers retain best-effort behavior and cannot certify QA.",
+    "Parseable temporary TrueType font with zero unitsPerEm produces SHAPING_FAILED, never nonfinite successful geometry; focused final file passes 18 tests."
+  ],
+  "limits": [
+    "No paid/native call, production mutation, migration, deployment or complete release/restore suite.",
+    "Mixed-script fallback measurement is unqualified. Some formerly passing stored layouts are now explicitly held. Native output may visually render fallback correctly; primary-font measurement cannot prove fit.",
+    "No claimed performance speedup; full shaping/rasterizer runtime identity, painted ink/clipping and native bidi/editability/human approval remain separate work.",
+    "Legacy V2 selection before final QA is not newly qualified as a complete eligibility policy.",
+    "All six programme packages remain active."
+  ]
+}

@@ -1,9 +1,17 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Hono } from 'hono';
-import { registerCanvaRoutes } from '../src/routes/canva.routes.js';
-import { registerDesignStudioRoutes } from '../src/routes/design-studio.routes.js';
-import { CanvaConnectService, CanvaFlowError } from '../src/services/canva-connect-service.js';
 import type { DesignStudioService } from '../src/services/design-studio/index.js';
+
+// The lifecycle ownership guard reads the task from Postgres; this test has none and is about the
+// refusal's header only, so the guard lets the request through.
+vi.mock('../src/routes/lifecycle-design-proof.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/routes/lifecycle-design-proof.js')>()),
+  rejectUnownedLifecycleDesignWrite: async () => null,
+}));
+
+const { registerCanvaRoutes } = await import('../src/routes/canva.routes.js');
+const { registerDesignStudioRoutes } = await import('../src/routes/design-studio.routes.js');
+const { CanvaConnectService, CanvaFlowError } = await import('../src/services/canva-connect-service.js');
 
 /**
  * Canva refusing an import or export with 429 past the client's short retry used to fail the draft.

@@ -11,9 +11,13 @@
  * The answer is classified into what Restate should do:
  * - sent: `sent`;
  * - 429: `failed`, and a RetryableError asking Restate to try again after Telegram's retry_after;
- * - no connection, or a 5xx: `failed`, and an error Restate retries;
+ * - a definite pre-connection failure: `failed`, and an error Restate retries;
+ * - a 5xx: `uncertain`, since the provider may have accepted the message before failing;
  * - Telegram's answer lost or not a valid receipt: `uncertain`, not retried;
  * - any other 4xx (bot blocked, chat not found, file too large): `failed`, answered `refused`.
+ * A 'failed' mark that cannot be written is never left as 'attempted' for good: the refusal is
+ * journaled, a step of its own writes the mark (retried until Postgres takes it), and only then is the
+ * message tried again or answered `refused` (finding 22 of the Phase 4 review).
  *
  * The whole attempt is one `ctx.run`, so its answer is journaled: a worker killed after the send and
  * before the journal entry finds `attempted` on its retry and answers `uncertain`, which is the one
@@ -24,7 +28,7 @@
  * ever travels through Restate's journal.
  */
 import * as restate from '@restatedev/restate-sdk';
-import type { LifecycleMessage, MessageSentEvent, OutboundMessage, SendResult, SentHook } from '@hawa/contracts';
+import type { OutboundMessage, SendResult } from '@hawa/contracts';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { TelegramBridge } from '@hawa/integrations';
@@ -41,6 +45,7 @@ import {
   type SendStepKind,
   type TelegramSender as TelegramBridgeLike,
   type TelegramSendResult,
+  validTelegramMessageId,
 } from '../delivery-notification.js';
 import { log, withInvocationLogContext } from '../logging.js';
 
@@ -72,13 +77,15 @@ export function telegramSenderDepsFromEnv(db: Kysely<Database> | undefined): Tel
 /** The part of a Restate object context the handler uses; tests pass a plain object. */
 export interface SenderContext {
   run<T>(name: string, action: () => Promise<T>): Promise<T>;
+  /**
+   * Restate's durable sleep, used only to wait out a refusal whose failed mark had to be written in a
+   * step of its own. Without it (plain test contexts) the next attempt starts at once.
+   */
+  sleep?(ms: number): Promise<void>;
   /** A one-way send to another chat's TelegramSender, deduplicated by the message's key. */
   sendTo(message: OutboundMessage): void;
-  /**
-   * Slice 2.3: tells the request's RequestLifecycle that a message it asked to hear about (`onSent`)
-   * went out (messageSent, a one-way send keyed `sent:<key>`).
-   */
-  reportSent?(hook: SentHook, event: Omit<MessageSentEvent, 'at'>): Promise<void>;
+  /** A one-way, keyed notice that the critical message has a confirmed Telegram mark. */
+  notifySent?(message: OutboundMessage, messageId: string): Promise<void> | void;
 }
 
 /** The step every message is fenced under: `lc:<key>:send`. */
@@ -88,17 +95,26 @@ export const markIdOf = (key: string) => `lc:${key}`;
 const UNCERTAIN = /DELIVERY_UNCERTAIN|RECEIPT_INVALID/;
 const SERVER_ERROR = /_5\d\d$/;
 const RATE_LIMITED = /_429$/;
-const REFUSED = /_4\d\d$|^INVALID_(DOCUMENT|PHOTO)_BUFFER$|^PHOTO_UNSUPPORTED_BY_BRIDGE$/;
+const REFUSED = /_4\d\d$|^INVALID_(DOCUMENT|PHOTO)_BUFFER$/;
 
 const tenantOf = (m: OutboundMessage) => m.tenantId || m.exportRef?.tenantId || process.env.HAWA_TENANT_ID || DEFAULT_TENANT_ID;
 const stepKind = (m: OutboundMessage): SendStepKind => (m.kind === 'document' ? 'document' : 'message');
 
 /**
+ * What one attempt journals: a result, or a message Telegram definitely did not take whose 'failed'
+ * mark could not be written. `retryAfterMs` is the wait before the next attempt, or null when the
+ * refusal is final (a 4xx: answered `refused` once the mark is written).
+ */
+export type AttemptAnswer = SendResult | { outcome: 'not_sent'; error: string; retryAfterMs: number | null };
+
+/** The wait before another attempt after a pre-connection failure or an unknown refusal. */
+const NOT_SENT_RETRY_MS = 5000;
+
+/**
  * One attempt at one message: the body of the handler's `ctx.run('send')`. It answers, or throws an
  * error Restate retries (a RetryableError carrying Telegram's retry_after on a 429).
  */
-export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage): Promise<SendResult> {
-  if (m.kind === 'callback_answer') return answerCallback(deps, m);
+export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage): Promise<AttemptAnswer> {
   const critical = m.class === 'critical';
   const tenantId = tenantOf(m);
   const markId = markIdOf(m.key);
@@ -106,25 +122,25 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
     if (!deps.db) throw new Error('DATABASE_NOT_CONFIGURED: a critical Telegram message is fenced by send marks in Postgres');
     return withRlsContext(deps.db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, fn);
   };
-  const mark = (outcome: SendMarkOutcome) => inTenant((trx) => writeSendMark(trx, tenantId, markId, SEND_STEP, stepKind(m), outcome));
+  const mark = (outcome: SendMarkOutcome, messageId?: string) =>
+    inTenant((trx) => writeSendMark(trx, tenantId, markId, SEND_STEP, stepKind(m), outcome, messageId));
 
   if (critical) {
-    const prior = (await inTenant((trx) => readSendMark(trx, tenantId, markId, SEND_STEP)))?.outcome;
-    if (prior === 'sent') return { outcome: 'sent' };
+    const prior = await inTenant((trx) => readSendMark(trx, tenantId, markId, SEND_STEP));
+    if (prior?.outcome === 'sent') return { outcome: 'sent', ...(prior.messageId ? { messageId: prior.messageId } : {}) };
     // It may have arrived: never sent twice, whatever else happens. Only an administrator's release
     // (after looking in the chat) frees it.
-    if (prior === 'attempted' || prior === 'uncertain') return { outcome: 'uncertain', error: `PREVIOUS_ATTEMPT_UNCONFIRMED: an earlier attempt at ${m.key} may have reached the chat` };
+    if (prior?.outcome === 'attempted' || prior?.outcome === 'uncertain') return { outcome: 'uncertain', error: `PREVIOUS_ATTEMPT_UNCONFIRMED: an earlier attempt at ${m.key} may have reached the chat` };
   }
 
   const botToken = deps.botToken();
   if (!botToken) throw new Error('TELEGRAM_NOT_CONFIGURED: TELEGRAM_BOT_TOKEN is not set; the message waits for it');
 
   // The bytes first, checked against their approved hash: a missing or changed file is never sent.
-  // A photo (the draft, slice 2.3) is read the same way, by reference to its stored export.
   let bytes: Uint8Array | null = null;
-  if (m.kind === 'document' || m.kind === 'photo') {
+  if (m.kind === 'document') {
     const ref = m.exportRef;
-    if (!ref) return { outcome: 'refused', error: `${m.kind === 'photo' ? 'PHOTO' : 'DOCUMENT'}_WITHOUT_EXPORT: a ${m.kind} names the stored export it sends` };
+    if (!ref) return { outcome: 'refused', error: 'DOCUMENT_WITHOUT_EXPORT: a document names the stored export it sends' };
     if (!deps.db) throw new Error('DATABASE_NOT_CONFIGURED: the approved file is read from Postgres');
     bytes = await withRlsContext(deps.db, { tenantId: ref.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, (trx) =>
       deps.readExportBytes(trx, ref.tenantId, ref.taskId, ref.artifactId));
@@ -140,22 +156,13 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
   const bridge = deps.bridge(botToken);
   let res: TelegramSendResult;
   try {
-    res = m.kind === 'photo'
-      ? (bridge.dispatchOutboundPhoto
-          ? await bridge.dispatchOutboundPhoto(m.chatId, Buffer.from(bytes!), m.caption, (m as LifecycleMessage).replyMarkup)
-          : { success: false, error: 'PHOTO_UNSUPPORTED_BY_BRIDGE' })
-      : m.kind === 'document'
+    res = m.kind === 'document'
       ? await bridge.dispatchOutboundDocument(m.chatId, bytes!, m.filename || 'file', {
           mimeType: m.mimeType,
           caption: m.caption,
           ...(m.parseMode ? { parseMode: m.parseMode } : {}),
         })
-      : await bridge.dispatchOutboundMessage(m.chatId, {
-          text: m.text || '',
-          ...(m.parseMode ? { parse_mode: m.parseMode } : {}),
-          // The requester's buttons under a draft or a question (slice 2.3).
-          ...((m as LifecycleMessage).replyMarkup ? { reply_markup: (m as LifecycleMessage).replyMarkup } : {}),
-        });
+      : await bridge.dispatchOutboundMessage(m.chatId, { text: m.text || '', ...(m.parseMode ? { parse_mode: m.parseMode } : {}) });
   } catch (err) {
     // The bridge answers with a result; a throw is unexpected, and whether anything left is unknown.
     res = { success: false, error: `TELEGRAM_DELIVERY_UNCERTAIN: ${err instanceof Error ? err.message : String(err)}` };
@@ -167,58 +174,77 @@ export async function sendAttempt(deps: TelegramSenderDeps, m: OutboundMessage):
   // journaled by Restate once this returns. It is asked for a little while (a Postgres restart takes
   // seconds), because a message left at 'attempted' answers uncertain to anyone who asks for it later
   // (a Delivery run that retries the archive), which would alert the office about a file that arrived.
-  const record = async (outcome: SendMarkOutcome) => {
-    if (!critical) return;
+  const record = async (outcome: SendMarkOutcome, messageId?: string): Promise<boolean> => {
+    if (!critical) return true;
     const delays = deps.markRetryDelaysMs ?? [500, 1000, 2000, 4000, 8000];
     for (let attempt = 0; ; attempt++) {
       try {
-        await mark(outcome);
-        return;
+        await mark(outcome, messageId);
+        return true;
       } catch (err) {
         if (attempt >= delays.length) {
-          log.warn(`[TelegramSender] Could not record ${m.key} as ${outcome}; it stays 'attempted' on record:`, err instanceof Error ? err.message : err);
-          return;
+          log.warn(`[TelegramSender] Could not record ${m.key} as ${outcome}; ${outcome === 'failed'
+            ? 'the refusal is journaled and a step of its own writes the mark before any retry'
+            : "it stays 'attempted' on record"}:`, err instanceof Error ? err.message : err);
+          return false;
         }
         await new Promise((r) => setTimeout(r, delays[attempt]));
       }
     }
   };
-  if (res.success) {
-    await record('sent');
-    return { outcome: 'sent', ...(res.messageId ? { messageId: res.messageId } : {}) };
+  if (res.success && validTelegramMessageId(res.messageId)) {
+    if (!await record('sent', res.messageId)) {
+      return { outcome: 'uncertain', error: 'SEND_MARK_UNCONFIRMED' };
+    }
+    return { outcome: 'sent', messageId: res.messageId };
   }
-  const error = res.error || 'TELEGRAM_SEND_FAILED';
-  if (UNCERTAIN.test(error)) {
+  const error = res.success ? 'TELEGRAM_RECEIPT_INVALID' : res.error || 'TELEGRAM_SEND_FAILED';
+  if (UNCERTAIN.test(error) || SERVER_ERROR.test(error)) {
     await record('uncertain');
     return { outcome: 'uncertain', error };
   }
-  if (RATE_LIMITED.test(error) || res.retryAfterSeconds !== undefined) {
-    await record('failed');
-    const seconds = res.retryAfterSeconds ?? 5;
-    throw new restate.RetryableError(`TELEGRAM_RATE_LIMITED: Telegram asked to wait ${seconds} s (${error})`, { retryAfter: Math.max(1, seconds) * 1000 });
+  // From here on Telegram definitely did not take the message. Asking again is safe only once the
+  // mark says 'failed': a retry that finds 'attempted' answers uncertain and never sends. When the mark
+  // cannot be written, the refusal is journaled instead (not_sent), and the handler writes the mark in
+  // a step of its own, retried until Postgres takes it, before anything else is decided (finding 22).
+  const rateLimited = RATE_LIMITED.test(error) || res.retryAfterSeconds !== undefined;
+  const retryAfterMs = rateLimited ? Math.max(1, res.retryAfterSeconds ?? 5) * 1000 : null;
+  const failedRecorded = await record('failed');
+  if (rateLimited) {
+    if (!failedRecorded) return { outcome: 'not_sent', error, retryAfterMs: retryAfterMs! };
+    throw new restate.RetryableError(`TELEGRAM_RATE_LIMITED: Telegram asked to wait ${retryAfterMs! / 1000} s (${error})`, { retryAfter: retryAfterMs! });
   }
-  if (SERVER_ERROR.test(error) || /NETWORK_ERROR|NOT_CONFIGURED/.test(error)) {
-    await record('failed');
+  if (/NETWORK_ERROR|NOT_CONFIGURED/.test(error)) {
+    if (!failedRecorded) return { outcome: 'not_sent', error, retryAfterMs: NOT_SENT_RETRY_MS };
     throw new Error(`${error}: Telegram did not take ${m.key}; asked again`);
   }
-  await record('failed');
-  if (REFUSED.test(error)) return { outcome: 'refused', error };
+  if (REFUSED.test(error)) {
+    return failedRecorded ? { outcome: 'refused', error } : { outcome: 'not_sent', error, retryAfterMs: null };
+  }
   // An answer this table does not know: it did not arrive (Telegram said no), so asking again is safe.
+  if (!failedRecorded) return { outcome: 'not_sent', error, retryAfterMs: NOT_SENT_RETRY_MS };
   throw new Error(`${error}: Telegram refused ${m.key} for a reason this sender does not know; asked again`);
 }
 
 /**
- * The answer to a tapped button (slice 2.3): a courtesy, never retried and never fenced. Telegram
- * refuses an answer that comes too late, which is harmless: the button only stops spinning later.
+ * The step that corrects the mark of a definite refusal whose 'failed' mark the attempt could not
+ * write. It throws (and Restate retries it) until Postgres takes the write. It changes only a mark this
+ * attempt left 'attempted'; any other latest mark is left as it is and decides the next attempt.
  */
-async function answerCallback(deps: TelegramSenderDeps, m: OutboundMessage): Promise<SendResult> {
-  if (!m.callbackQueryId) return { outcome: 'refused', error: 'CALLBACK_WITHOUT_QUERY: a callback answer names the tapped button' };
-  const botToken = deps.botToken();
-  if (!botToken) throw new Error('TELEGRAM_NOT_CONFIGURED: TELEGRAM_BOT_TOKEN is not set; the message waits for it');
-  const bridge = deps.bridge(botToken);
-  if (!bridge.answerCallbackQuery) return { outcome: 'refused', error: 'CALLBACK_ANSWER_UNSUPPORTED' };
-  const answered = await bridge.answerCallbackQuery(m.callbackQueryId, m.text).catch(() => false);
-  return answered ? { outcome: 'sent' } : { outcome: 'refused', error: 'CALLBACK_ANSWER_FAILED' };
+export async function recordDefiniteRefusal(deps: TelegramSenderDeps, m: OutboundMessage): Promise<{ mark: SendMarkOutcome | 'none' }> {
+  if (!deps.db) throw new Error('DATABASE_NOT_CONFIGURED: a critical Telegram message is fenced by send marks in Postgres');
+  const tenantId = tenantOf(m);
+  const markId = markIdOf(m.key);
+  try {
+    return await withRlsContext(deps.db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+      const prior = await readSendMark(trx, tenantId, markId, SEND_STEP);
+      if (prior?.outcome !== 'attempted') return { mark: prior?.outcome ?? 'none' };
+      await writeSendMark(trx, tenantId, markId, SEND_STEP, stepKind(m), 'failed');
+      return { mark: 'failed' as const };
+    });
+  } catch (err) {
+    throw new Error(`SEND_MARK_UNRECORDED: Telegram did not take ${m.key}, and its failed mark could not be written yet: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 /** The office's alert for a critical message that may not have arrived. */
@@ -245,7 +271,36 @@ export async function handleSend(ctx: SenderContext, deps: TelegramSenderDeps, m
   if (!m || typeof m.key !== 'string' || !m.key || !m.chatId) {
     throw new restate.TerminalError('INVALID_MESSAGE: a message names its key and chat', { errorCode: 400 });
   }
-  const result = await ctx.run('send', () => sendAttempt(deps, m));
+  const onSent = m.onSent;
+  if (onSent && (onSent.kind !== 'question' || m.class !== 'critical' || m.kind !== 'text' ||
+      m.taskId !== onSent.taskId || !Number.isInteger(onSent.requestRev) || onSent.requestRev < 2 ||
+      ![onSent.requestId, onSent.taskId, onSent.questionId].every((id) =>
+        typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) ||
+      m.key !== `${onSent.requestId}:${onSent.requestRev}:design-outcome`)) {
+    throw new restate.TerminalError('INVALID_MESSAGE: question send callback identity does not match the notice', { errorCode: 400 });
+  }
+  if (onSent && !ctx.notifySent) throw new Error('QUESTION_CALLBACK_UNAVAILABLE: the sender cannot confirm this question');
+  let result: SendResult;
+  for (let round = 0; ; round++) {
+    const step = round === 0 ? 'send' : `send-${round}`;
+    const answer = await ctx.run(step, () => sendAttempt(deps, m));
+    if (answer.outcome !== 'not_sent') {
+      result = answer;
+      break;
+    }
+    // Telegram said no and the attempt could not write 'failed'. The refusal is in the journal now, so
+    // a crash from here on replays it; the mark is corrected before another attempt reads it.
+    await ctx.run(`${step}-failed-mark`, () => recordDefiniteRefusal(deps, m));
+    if (answer.retryAfterMs === null) {
+      result = { outcome: 'refused', error: answer.error };
+      break;
+    }
+    await ctx.sleep?.(answer.retryAfterMs);
+  }
+  if (onSent && result.outcome === 'sent') {
+    if (!result.messageId) throw new Error('QUESTION_SEND_RECEIPT_MISSING: a confirmed question needs a Telegram message ID');
+    await ctx.notifySent!(m, result.messageId);
+  }
   if (m.class === 'critical' && result.outcome === 'uncertain') {
     const office = deps.officeChatId();
     if (office && office !== String(m.chatId)) {
@@ -256,28 +311,12 @@ export async function handleSend(ctx: SenderContext, deps: TelegramSenderDeps, m
     }
   }
   if (result.outcome === 'refused') log.warn(`[TelegramSender] Telegram refused ${m.key} for chat ${m.chatId}: ${result.error}`);
-  // A draft or question that went out (or may have) starts its reminders; one Telegram refused did not go out.
-  const hook = (m as LifecycleMessage).onSent;
-  if (hook && ctx.reportSent && result.outcome !== 'refused') {
-    await ctx.reportSent(hook, {
-      v: 1,
-      eventId: `sent:${m.key}`,
-      key: m.key,
-      what: hook.what,
-      taskId: hook.taskId,
-      ...(result.outcome === 'sent' && result.messageId ? { messageId: result.messageId } : {}),
-      ...(result.outcome === 'uncertain' ? { uncertain: true } : {}),
-    });
-  }
   return result;
 }
 
 export type TelegramSenderHandlers = {
   send: (ctx: restate.ObjectContext, m: OutboundMessage) => Promise<SendResult>;
 };
-/** RequestLifecycle's messageSent, named here (not imported) because RequestLifecycle sends to this object. */
-const RequestLifecycleSent: restate.VirtualObjectDefinition<'RequestLifecycle', { messageSent: (ctx: restate.ObjectContext, e: MessageSentEvent) => Promise<unknown> }> = { name: 'RequestLifecycle' };
-
 /** How other services name it (objectClient / objectSendClient). */
 export const TelegramSenderApi: restate.VirtualObjectDefinition<'TelegramSender', TelegramSenderHandlers> = { name: 'TelegramSender' };
 
@@ -289,18 +328,24 @@ export function createTelegramSender(deps: TelegramSenderDeps) {
         withInvocationLogContext(ctx, { taskId: m?.taskId, tenantId: m?.tenantId }, () =>
           handleSend({
             run: (name, action) => ctx.run(name, action),
+            sleep: (ms) => ctx.sleep(ms),
             sendTo: (message) => {
               ctx.objectSendClient(TelegramSenderApi, message.chatId).send(message, restate.rpc.sendOpts({ idempotencyKey: message.key }));
             },
-            reportSent: async (hook, event) => {
-              const at = await ctx.date.now();
-              ctx.objectSendClient(RequestLifecycleSent, hook.requestId).messageSent({ ...event, at }, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
+            notifySent: async (message, messageId) => {
+              const { RequestLifecycleApi } = await import('./request-lifecycle.js');
+              const sent = message.onSent!;
+              ctx.objectSendClient(RequestLifecycleApi, sent.requestId).questionSent({
+                v: 1, requestId: sent.requestId, expectedRev: sent.requestRev,
+                taskId: sent.taskId, questionId: sent.questionId,
+                messageKey: message.key, messageId,
+              }, restate.rpc.sendOpts({ idempotencyKey: `lifecycle:question-sent:${message.key}` }));
             },
           }, deps, m)),
     },
     options: {
       // Core sends office alerts through ingress in slice 2.5; the Delivery workflow calls it inside Restate.
-      ingressPrivate: false,
+      ingressPrivate: true,
       idempotencyRetention: { days: 7 },
       retryPolicy: { initialInterval: 1000, exponentiationFactor: 2, maxInterval: 60000, maxAttempts: 200, onMaxAttempts: 'pause' },
     },

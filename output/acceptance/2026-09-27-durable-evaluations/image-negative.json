@@ -1,0 +1,27 @@
+{
+  "sourceCommit": "448c79c756639c0ed5e6b26e04704951a47a0f0f",
+  "files": [
+    {
+      "path": "/app/evals/routing_brief.jsonl",
+      "present": false
+    },
+    {
+      "path": "/app/evals/retrieval_eval.jsonl",
+      "present": false
+    },
+    {
+      "path": "/app/evals/rtl_golden_cases.jsonl",
+      "present": false
+    },
+    {
+      "path": "/app/RELEASE_MANIFEST.json",
+      "present": false
+    }
+  ],
+  "httpStatus": 503,
+  "title": "Evaluation Outcome Unavailable",
+  "providerCalls": 0,
+  "expectedNegativeControl": true,
+  "workflowInvariants": 36,
+  "productionChanged": false
+}

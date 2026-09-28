@@ -15,7 +15,6 @@ import { sniffImageMime, isUsableImage, TELEGRAM_BOT_DOWNLOAD_MAX_BYTES } from '
 import type { GuidelinesModel } from '../brand-guidelines.js';
 import { handleGuidelinesPdf, type RulesIntakeDeps } from '../telegram-rules-intake.js';
 import { createTelegramUpdateState, type TelegramUpdateJson } from './update-state.js';
-import { firstOfAlbumInSession, lifecycleMode } from './decide-mode.js';
 
 /** What the webhook read of an update before its media (routes/telegram-webhook.routes.ts). */
 export interface TelegramUpdateRead {
@@ -32,8 +31,8 @@ export type TelegramMediaReading = Exclude<Awaited<ReturnType<TelegramMedia['rea
 
 export type TelegramMedia = ReturnType<typeof createTelegramMedia>;
 
-export function createTelegramMedia(deps: Pick<CoreContext, 'db' | 'voiceTranscriber' | 'options' | 'guidelineReadings' | 'telegramAllowedUsers' | 'problem' | 'broadcastEvent' | 'telegramBridge'>, acknowledgedAlbums: Set<string>) {
-  const { db, voiceTranscriber, options, guidelineReadings, telegramAllowedUsers, problem, broadcastEvent: broadcast } = deps;
+export function createTelegramMedia(deps: Pick<CoreContext, 'db' | 'options' | 'guidelineReadings' | 'telegramAllowedUsers' | 'problem' | 'broadcastEvent' | 'telegramBridge'>, acknowledgedAlbums: Set<string>) {
+  const { db, options, guidelineReadings, telegramAllowedUsers, problem, broadcastEvent: broadcast } = deps;
   // createApp always builds the bridge; the shared context types it as optional.
   const telegramBridge = deps.telegramBridge ?? (() => { throw new Error('Telegram intake needs the Telegram bridge'); })();
   const { markTelegramUpdateHandled, studioRunInProgressForChat } = createTelegramUpdateState(deps);
@@ -45,42 +44,23 @@ export function createTelegramMedia(deps: Pick<CoreContext, 'db' | 'voiceTranscr
    */
   async function readMedia(c: Context, update: TelegramUpdateRead) {
     const { json, msg, sourceEventId, verifiedSender } = update;
+    const sourceChannelId = String(msg.chat?.id || json.sourceChannelId || 'tg_default');
     let rawText = msg.text || msg.caption || json.text || '';
-    let voiceTranscript: string | undefined = undefined;
+    const voiceTranscript: string | undefined = undefined;
 
     // Detect Voice or Audio Ingress (Telegram voice or audio message)
     const voiceObj = msg.voice || msg.audio || json.voice || json.audio;
     if (voiceObj) {
-      const fileId = voiceObj.file_id;
-      let audioBuf: Buffer | undefined;
-      if (fileId) {
-        try {
-          const downloaded = await telegramBridge.downloadFile(fileId);
-          if (downloaded) {
-            audioBuf = downloaded;
-          }
-        } catch (err) {
-          log.warn('[TelegramIngress] Failed to download audio file:', err);
-        }
-      } else if (json.audioBase64) {
-        audioBuf = Buffer.from(json.audioBase64, 'base64');
+      // Legacy intake has no locked client or durable paid-call admission. Hold the entire
+      // source before download; a caption cannot stand in for unheard spoken instructions.
+      await markTelegramUpdateHandled(sourceChannelId, sourceEventId, 'telegram_voice_policy_blocked',
+        { audioStatus: 'policy_blocked', hadCaption: Boolean(rawText) }, true);
+      if (sourceChannelId !== 'tg_default') {
+        await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+          text: 'Your voice note was received but cannot be transcribed in this intake flow yet. Please resend the full brief as text so no spoken instruction is missed.',
+        }).catch(() => undefined);
       }
-
-      const duration = voiceObj.duration || json.durationSeconds || 15;
-      const transcription = await voiceTranscriber.transcribe(
-        {
-          audioBuffer: audioBuf,
-          audioBase64: json.audioBase64,
-          audioMimeType: voiceObj.mime_type || 'audio/ogg',
-          durationSeconds: duration,
-          languageHint: 'ckb',
-        },
-        rawText || json.transcriptFallback
-      );
-
-      voiceTranscript = transcription.transcript;
-      // The caption and what was said, together (the transcriber joins them).
-      rawText = transcription.normalizedText || rawText;
+      return c.json({ ok: true, ignored: true, reason: 'VOICE_POLICY_UNRESOLVED', updateId: sourceEventId }, 200);
     }
 
     // Detect Photo or Image Reference Ingress (Telegram photo or document image)
@@ -142,7 +122,6 @@ export function createTelegramMedia(deps: Pick<CoreContext, 'db' | 'voiceTranscr
       rawText = PICTURE_ONLY_DIRECTIVE;
     }
 
-    const sourceChannelId = String(msg.chat?.id || json.sourceChannelId || 'tg_default');
     const rulesDeps: RulesIntakeDeps | null = db
       ? {
           db,
@@ -228,9 +207,6 @@ export function createTelegramMedia(deps: Pick<CoreContext, 'db' | 'voiceTranscr
     // One answer per album: each of its photos arrives as its own message.
     const firstOfAlbum = (() => {
       if (!albumId) return true;
-      // A lifecycle chat's albums are remembered by its ChatInbox (PHASE2_DESIGN.md 2.2), so a restart
-      // between two photos of one album does not answer it twice.
-      if (lifecycleMode()) return firstOfAlbumInSession(albumId);
       const key = `${sourceChannelId}:${albumId}`;
       if (acknowledgedAlbums.has(key)) return false;
       acknowledgedAlbums.add(key);

@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "limits": "Disposable local stack, fake Telegram/model/Canva/Drive/Sheets; approval simulated by the test, not independent human creative acceptance. No production deployment.",
+  "sourceFileSha256": {
+    "apps/core/src/routes/lifecycle-internal.routes.ts": "67430b869346d6c0caf89f857a346ce86a6f98ab482f441bef7075fa97d16a99",
+    "apps/core/src/services/lifecycle-photo.ts": "80fcf88c1097dfb77d42e058fb00c8fe722452d4e3d7c35210154185d52369ef",
+    "apps/core/src/services/lifecycle-projection.ts": "14a16a19db032d95cce8bde74ac8cf193d680d7e2d1afa98513b3b3d6428978f",
+    "apps/core/test/lifecycle-internal-intake.test.ts": "cfb3452189ac2ffae0b92b6417b1e50210aecfa14c310a49ea7d5b37651f0657",
+    "packages/testkit/chaos/chaos.test.ts": "0798ceb02e056359777ec5010d1511f3b8750488c1571bedfc3a8f281f429f0c"
+  },
+  "run": {
+    "finishedAt": "2026-09-26T18:45:06.495Z",
+    "telegramPoller": "worker",
+    "totalMs": 78755,
+    "peakMemoryMiB": {
+      "hawa-chaos-core-1": 98,
+      "hawa-chaos-worker-blue-1": 72,
+      "hawa-chaos-postgres-1": 115,
+      "hawa-chaos-restate-1": 617,
+      "hawa-chaos-fakes-1": 75
+    },
+    "peakTotalMiB": 976,
+    "uncoveredModelCalls": [],
+    "scenarios": [
+      {
+        "name": "R1.S3.CAPTIONLESS_PHOTO",
+        "what": "flagged chat: a captionless reply photo survives Core SIGKILL before task projection",
+        "ms": 20066,
+        "invariants": [
+          {
+            "name": "second revision photo update accepted for replay",
+            "ok": true,
+            "detail": "HTTP 202"
+          },
+          {
+            "name": "one owned child task after the office revision",
+            "ok": true,
+            "detail": "{\"tasks\":[{\"id\":\"401c6b9a-e217-457c-968a-6738462270f5\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"98327bce-de02-4489-aae3-d723832662a9\",\"state\":\"complete\",\"version\":\"8\"}],\"state\":{\"current_task_id\":\"98327bce-de02-4489-aae3-d723832662a9\",\"rev\":\"8\",\"owner\":\"restate\",\"stage\":\"delivered\"}}"
+          },
+          {
+            "name": "requester revision projection recorded exactly once",
+            "ok": true,
+            "detail": "[{\"rev\":\"1\"},{\"rev\":\"2\"},{\"rev\":\"3\"},{\"rev\":\"4\"},{\"rev\":\"5\"},{\"rev\":\"6\"},{\"rev\":\"7\"},{\"rev\":\"8\"}]"
+          },
+          {
+            "name": "photo bound only to the child task",
+            "ok": true,
+            "detail": "[{\"task_id\":\"98327bce-de02-4489-aae3-d723832662a9\",\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"role\":\"reference_image\",\"size\":\"1024\",\"media_type\":\"image/jpeg\"}]"
+          },
+          {
+            "name": "hash-bound photo decision, with no image bytes in the event",
+            "ok": true,
+            "detail": "{\"image\":{\"size\":1024,\"sha256\":\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\",\"mediaType\":\"image/jpeg\"},\"chatId\":\"9300001\",\"requestId\":\"b3695218-04b7-50bf-a7cb-cf912dabda5d\"}"
+          },
+          {
+            "name": "one download and no parked update across kill and replay",
+            "ok": true,
+            "detail": "downloads=1 parked=0"
+          },
+          {
+            "name": "both ChatInbox invocations completed",
+            "ok": true,
+            "detail": "[{\"id\":\"inv_1hvUuXij6tHU32V7F6UeL4kX4Gx7ejB7zX\",\"status\":\"completed\",\"idempotency_key\":\"chaos-revision-photo-replay-90448271273\"},{\"id\":\"inv_1hvUuXij6tHU08q0I3XXfCf9dGh1y4erBA\",\"status\":\"completed\",\"idempotency_key\":\"tg-90448271273\"}]"
+          },
+          {
+            "name": "revised draft passes human review and reaches approved delivery",
+            "ok": true,
+            "detail": "{\"childState\":\"complete\",\"request\":{\"current_task_id\":\"98327bce-de02-4489-aae3-d723832662a9\",\"rev\":\"8\",\"owner\":\"restate\",\"stage\":\"delivered\"},\"outcome\":\"CANVA_DRAFT_READY_FOR_VISUAL_REVIEW\"}"
+          },
+          {
+            "name": "the planner received the child photo by content hash",
+            "ok": true,
+            "detail": "[{\"seq\":1,\"provider\":\"openai\",\"route\":\"canva_design_plan\",\"model\":\"gpt-6-astra\",\"fingerprint\":\"9d51378612504be6c82d3a0dda80040c6ecaf34c07d9a8206260cc5743dbb1c4\",\"status\":200,\"at\":\"2026-09-26T18:44:44.948Z\"},{\"seq\":2,\"provider\":\"openai\",\"route\":\"canva_design_plan\",\"model\":\"gpt-6-astra\",\"fingerprint\":\"dac3c07cd0581969863de28ff57829f4bc97f64bd7abccb85ea164b30af62c9d\",\"status\":200,\"imageSha256\":[\"31ca6200fae5a9cb339df35cf5886c0a0ca9d97c9edfbdc5f6c5034e34d849df\",\"707dddbbcafd4c92535805da6fc8200eb0f13d49e5d03437cc66587447e635a3\"],\"at\":\"2026-09-26T18:44:56.013Z\"}]"
+          },
+          {
+            "name": "only future lifecycle reminders remain scheduled",
+            "ok": true,
+            "detail": "{\"unfinished\":[{\"status\":\"scheduled\",\"target_service_name\":\"RequestLifecycle\",\"target_handler_name\":\"reminderTick\"}],\"readyOutbox\":\"0\"}"
+          }
+        ],
+        "events": [
+          "office revision: HTTP 201",
+          "captionless reply to confirmed notice 5004",
+          "revision photo update 90448271273 in request b3695218-04b7-50bf-a7cb-cf912dabda5d",
+          "killed core after photo decision, before child task projection",
+          "child task 98327bce-de02-4489-aae3-d723832662a9 after restart",
+          "same update under a second Restate key: HTTP 202",
+          "child design outcome: CANVA_DRAFT_READY_FOR_VISUAL_REVIEW",
+          "office approval of revised draft: HTTP 201",
+          "approved revised draft delivery: HTTP 202"
+        ]
+      }
+    ]
+  }
+}

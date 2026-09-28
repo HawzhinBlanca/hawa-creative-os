@@ -55,6 +55,17 @@ Names are human-friendly; IDs are authoritative.
 
 A notification failure does not undo valid publication.
 
+For a task with a Canva approval, Core reads the selected bytes before taking its per-task
+publication lock, then rechecks that same approval after taking the lock and before changing task
+state or calling Google. A completed Canva export takes the same lock while it commits its bytes and
+retrieval status; if delivery holds the lock, the export stays submitted for retry. The capture
+transaction also locks the task row and stamps the actual insertion time, so a capture committed
+after approval is visible to the freshness check. The legacy Delivery workflow repeats this check
+under the lock when claiming a run, and its preparation repeats it before provider effects. This
+serializes **locally committed** captures with publication. An edit made only in Canva, without a
+new capture, is not yet observable by this database guard; live provider-version checking and an
+end-to-end race drill remain release work under R17.
+
 ## 5. Idempotency
 
 File identity:
@@ -65,7 +76,80 @@ sha256(task_id | design_revision | variant | artifact_kind | content_hash)
 
 The app stores Drive file IDs. On an ambiguous network result, it queries by stored ID/app property or deterministic metadata before uploading again.
 
+For a retry of the same task/artifact, the publisher reads every Drive result page and compares the stored package hash and SHA-256 before uploading. A file with missing package identity, a same-package checksum mismatch, duplicate same-package files, an incomplete search, or an unreadable result page stops publication for reconciliation. A different package hash identifies a later revision of the artifact. This lookup alone does not serialize simultaneous publishers or establish immediate search visibility after an upload.
+
+ADR-044 adds a durable Drive file ID reservation for the default Core publisher. After the paged preflight, Core obtains a Google-generated binary-file ID and commits it in PostgreSQL under the publication/artifact key **before** upload. Concurrent Core processes reuse the committed ID. A retry after an uncertain upload uses that ID; Drive's 409 response is accepted only after independent readback confirms the task, artifact, package, parent folder, size, MIME type and SHA-256. A failed reservation or conflicting readback stops publication. Direct `GooglePublisher` users without a reservation store still use the paged preflight and do not have this cross-process guarantee. A live Shared Drive drill and operator repair path remain required before an exactly-once operational claim.
+
+An upload timeout, lost response, transient Drive error, unreadable response, failed independent readback, or conflicting Drive identity is an unresolved archive outcome. Core keeps the publication pending and does not tell the requester that the archive is absent or queue the files as chat-only. A retry with the same publication key reconciles the reserved ID and verifies the file before requester delivery. An unverified file is never cached as a successful publication. A definite pre-upload failure such as missing credentials may use the separate chat-only path only when the publication has no earlier attempt or reserved/recorded Drive file. A later credential or destination failure cannot prove that an earlier upload did not commit. The office still needs a staffed resolution action for an unresolved Drive conflict.
+
+Core records `ARCHIVE_UNCONFIRMED` on the publication before returning an uncertain Drive outcome, and exposes the task as `ARCHIVE_RECONCILIATION` in Desk Needs Action and in the publication-state endpoint. “Recheck Drive Archive” starts a new attempt on the same publication and reserved file ID after Google access is restored; a persistent identity conflict stays open for operator investigation. The internal reconciliation audit flags this as an **unconfirmed** archive, never as proof that a Drive file is missing. A failed Delivery workflow report, including a terminal prepare error, must preserve the marker and leave the task publishing. A later request-owned run must keep that marker until verified Drive receipts replace it. Once Drive is verified, an unconfirmed Sheet row is separately recorded as `SHEET_UNCONFIRMED` and shown as `PUBLISH_RECONCILIATION`; a completed publication clears the error. This is local PostgreSQL bookkeeping and fake-provider recovery. It does not replace live Drive readback or a staffed conflict-resolution procedure.
+
+For Core's own delivery, verified Drive references, any Sheet receipt, publication/task completion, and the requester outbox command commit in one PostgreSQL transaction after the provider call. An unconfirmed Sheet row leaves the task publishing with its receipts and one durable requester command. If any database write fails, the transaction rolls back, Core returns an error, records `ARCHIVE_UNCONFIRMED` in a fresh transaction where possible, and retries the same reserved Drive ID. No requester command or complete task is exposed from the failed attempt. The Telegram send still occurs later through the outbox; a failure of that external send does not undo a valid publication. The Delivery workflow's prepare step commits receipts without a Core outbox command, then its separate finish projection decides completion after requester-send evidence.
+
+Under ADR-045, a publication with `REQUESTER_SEND_UNCONFIRMED` is exposed as `REQUESTER_SEND_RECONCILIATION` in task detail and the Desk queue, separate from `PUBLISH_RECONCILIATION` for an unconfirmed Sheet row. The Desk does not offer delivery or Sheet retry for this requester-send status. An operator must inspect Telegram and durable send records; this status alone does not prove receipt, authorize replay, or close the request. A staffed, audited resolution action and live requester receipt are still required.
+
+The staff evidence endpoint reads only the current request-owned publication and the exact TelegramSender keys of its approved file manifest and delivery notice. It reports the latest local send mark, number of attempted sends and mark time, and explicitly says the requester receipt is unavailable. It does not search all tenant messages, infer a Telegram receipt from a worker mark, or change publication state.
+
+For new critical sends, the Telegram sender records the positive Bot API message ID in the append-only `sent` mark. The staff evidence view displays it as a provider send acknowledgement, not as a person-level receipt. Missing or malformed message IDs are uncertain, including on the plain-text fallback; a successful provider answer that cannot be durably marked `sent` also stays uncertain after bounded database retries. Older `sent` marks without an ID remain historical evidence with no invented ID.
+
+Telegram text, document and photo sends classify a 5xx or a successful HTTP response without a definite Bot API result as uncertain, since a second call could duplicate an accepted message. Text and photo formatting fallbacks run only after an explicit parse-entity rejection. A 429 with a definite rejection remains retryable after the provider's requested delay. The sender retains its mark and exposes the case to staff rather than blindly replaying an ambiguous effect.
+
+ADR-046 adds a separate office-administrator settlement for a request-owned `REQUESTER_SEND_UNCONFIRMED` case. Staff must inspect the exact requester chat and enter one observed Telegram message ID for each approved file and the notice. The current request revision, approval, publication, chat, file set and any locally recorded Bot API IDs must match. Core rechecks stored Drive and Sheet receipts before atomically completing the request, task and publication and recording the staff actor, observed IDs and package hash in an immutable task event. An identical repeated action returns its recorded result; a changed or stale action is refused. Inconclusive cases remain open, no send mark is released, and no automatic replay occurs. The publication-state response identifies staff-visible completion separately from workflow-reported completion. Staff visibility is a human attestation, not proof the requester opened a message; the live requester receipt gate remains open.
+
+Completion locks the named publication and task in that order, verifies the publication belongs to the task, and checks the task state and version before writing `complete`. A cancellation committed after the Drive upload but before the receipt transaction wins: completion rolls back, no requester command is queued, and the task remains cancelled. The archive may still exist externally, so the publication retains `ARCHIVE_UNCONFIRMED`; the internal audit flags it even though the task status remains `CANCELLED`. The publication-state response tells staff to inspect the reserved Drive identity and apply retention policy, without suggesting a requester-delivery retry. A second call on an already complete publication is idempotent and does not append another task event. These checks prevent a local task-state overwrite; they are not a live Drive inspection or a staffed removal/retention operation.
+
+Before Core records a successful publisher answer, it checks that the answer names the same publication key and every approved artifact exactly once, with distinct verified Drive file IDs, expected content hashes, MIME types and byte sizes. An emulated answer cannot qualify. A claimed complete Sheet result must name the configured spreadsheet, task ID, package hash, observed hash and positive row number; a Drive-only result must not claim a synced Sheet row. A false success leaves the publication pending with `ARCHIVE_UNCONFIRMED` and withholds requester delivery. This validates the provider result at Core's trust boundary; it does not independently query Google. The publisher's readback and a live reconciliation drill are separate evidence gates.
+
+The Sheets publisher treats a blank or unreadable cached row identity as untrusted: it searches for the immutable task ID again before updating, rather than writing into the cached row. A Sheet receipt's `observedHash` now comes from an actual row readback; an accepted write without readback leaves it absent and cannot set `completedAt`. A later `reconcile` call that observes a changed row or cannot read it clears the current completion claim and returns `drive_complete` with Sheet sync unconfirmed. These are local adapter and fake-HTTP checks; the live Google row, permissions and staffed repair path remain admission work.
+
 ## 6. Sheet columns
+
+### Durable original inputs (ADR-106, 2026-09-27)
+
+Before the publisher can perform an external effect, Core freezes the approved
+publication input in PostgreSQL. The record binds tenant/task/client/project,
+approval/revision, exact file metadata and hashes, Drive destination, configured
+Sheet destination and timestamp. Retries rehydrate approved bytes against this
+record. Changed client names or destinations do not redirect an attempted archive.
+
+After verified Drive readback and before contacting Sheets, the Google adapter
+stores the exact seven expected values and metadata identity. Its Drive link must
+match the first artifact's durable reserved file ID. Discovered existing uploads
+also adopt or verify that reservation. If the original Sheet destination was empty,
+the first configured attempt binds it; subsequent attempts use the saved binding.
+Failure to persist this expectation leaves Sheets untouched and completion held.
+
+SQL hashes these immutable records and checks current receipt metadata and complete
+row hashes against them. A delayed pending receipt for the same publication retains
+confirmed evidence; a failed observation or another package cannot inherit it.
+Historical protocol-0 publications have no fabricated original input. An unfinished
+one requires supervised reconciliation. This prerequisite does not implement the
+scheduled external inspection or establish current provider permissions.
+
+### Current row identity protocol (ADR-105, 2026-09-27)
+
+The metadata protocol supersedes the process-cached row-number upsert described
+above. Core carries the configured numeric tab ID through the publisher, receipt
+validation, persistence and staff link. Reads use numeric grid data filters.
+Existing rows are updated by an exact tenant/spreadsheet/tab/task metadata identity,
+including the full identity value in the update filter. New rows are inserted,
+written as literal values, and assigned that unique metadata ID in one atomic
+Google batch. A rejected duplicate ID or uncertain response is independently
+read back; it never authorizes a blind append.
+
+Readback compares all seven currently implemented columns and returns a separate
+whole-row hash alongside the existing package-hash field. Duplicate tasks,
+conflicting metadata, unavailable or malformed reads, oversized grids and changed
+links cannot qualify. A row number is an observed position, not write authority.
+Legacy rows lacking metadata need a supervised migration, which is still an open
+release gate. The wider visible/hidden column schema below remains required.
+
+The provider identity survives process death, but durable PostgreSQL storage of
+the complete expected row and scheduled external observations remain FR-050 work.
+The adapter's old receipt-ID-only reconcile API is still process-local and must
+not be used as the scheduled reconciler. The new stateless Sheet verifier accepts
+explicit scoped expected values. Live Google sorting/metadata behavior and
+permission checks still need provider qualification.
 
 Required visible columns:
 
@@ -114,6 +198,14 @@ Drive and Sheets cannot share one transaction. Use a saga/reconciliation model:
 
 ## 8. Permissions
 
+ADR-107 adds bounded hourly independent inspection of current publications, with
+immutable PostgreSQL snapshots, leases and observations. Operations exposes current
+client-scoped findings and freshness. The saved original folder/file/row identities
+are authoritative; new reads never rewrite completion. Changed permissions are
+flagged against prior observations, while the absence of an approved access baseline
+remains unverified. See `runbooks/GOOGLE_PUBLICATION_CHECKS.md`. Full reporting
+columns, approved permission baselines and supervised historical migration remain open.
+
 Use a dedicated Google identity/service account with access only to required Shared Drives/folders and Sheets. Avoid domain-wide delegation unless a documented use case proves it necessary.
 
 The app must not inherit broad employee Drive access.
@@ -134,3 +226,20 @@ Only configured curated folders are indexed. File changes are detected by Drive 
 - task is republished after approved revision change.
 
 All must converge without duplicate logical artifacts.
+
+## Stored receipt audit snapshots (ADR-103, 2026-09-27)
+
+The internal Operations audit is immutable PostgreSQL evidence for one actor and
+exact current authorized client set. Tasks, current-revision publications and
+receipts are read and the report appended in one serializable transaction. Exact
+action replay returns the original result; a changed scope/body/predecessor is
+refused. Reports retain input/report hashes and a database timestamp, survive Core
+restart and are protected by current membership RLS. Process-wide cached reports
+and audit-result broadcasts are removed.
+
+Not-yet-published tasks are counted separately. Current manifest artifacts must
+match verified receipt hashes, sizes and multiplicity; archive display filenames
+may differ from stable intent labels. Old-revision receipts cannot mask
+missing current evidence. Sheet expected and observed hashes remain distinct.
+Caller-supplied simulation rows cannot enter the operational audit. This stored
+comparison does not complete the scheduled external checks in section 7.

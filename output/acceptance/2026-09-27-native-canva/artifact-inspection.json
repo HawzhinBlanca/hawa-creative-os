@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "artifactHashesMatch": true,
+  "png": {
+    "pixels": [
+      1024,
+      768
+    ]
+  },
+  "pdf": {
+    "pages": 1,
+    "sizePoints": [
+      0.0,
+      7.92,
+      768.0,
+      583.92
+    ],
+    "exactTextPresent": true,
+    "fonts": [
+      {
+        "baseFont": "/AAAAAA+ArialMT",
+        "type": "/Type0"
+      }
+    ]
+  },
+  "pptx": {
+    "pages": 1,
+    "textObjects": [
+      {
+        "id": "4",
+        "text": "HAWA EDITABLE IMPORT TEST",
+        "fonts": [
+          "Arial"
+        ]
+      },
+      {
+        "id": "5",
+        "text": "Exact copy: Mr. / Ms. / Dr. [EDITABLE TEST]",
+        "fonts": [
+          "Arial"
+        ]
+      },
+      {
+        "id": "6",
+        "text": "13 September 2026 | 2:30 PM",
+        "fonts": [
+          "Arial"
+        ]
+      }
+    ],
+    "exactCopyPass": true
+  },
+  "draftIsolation": {
+    "uncommittedReplacementAbsentInPdfAndPptx": true
+  },
+  "limits": [
+    "English-only three-text fixture; no print certification or multilingual glyph review.",
+    "PPTX object IDs are not native Canva element IDs."
+  ]
+}

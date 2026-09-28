@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { assert, describe, it, expect, beforeEach } from 'vitest';
 import crypto from 'node:crypto';
 import { DeterministicQAEngine } from '@hawa/qa';
 import type {
@@ -23,8 +23,10 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
     tenantId,
     taskId,
     clientId,
-    actor: { type: 'system', id: 'hawa_qa_auditor', role: 'qa_agent' },
+    actor: { type: 'system', id: 'hawa_qa_auditor' },
     correlationId: crypto.randomUUID(),
+    deadline: new Date(Date.now() + 60000).toISOString(),
+    idempotencyKey: crypto.randomUUID(),
   };
 
   const documentRef: StudioDocumentRef = {
@@ -107,7 +109,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
         role: 'official_logo',
         locked: true,
         zIndex: 10,
-        assetSha256: (kaaeClientDNA.assets?.logos?.primary?.sha256 || 'accadd24fd04d26d8e700ef2fb07ce50f128beb2924562d7cc4a5b02e4670be7') as SHA256,
+        assetSha256: (kaaeClientDNA.assets.find(asset => asset.role === 'logo_primary')?.sha256 || 'accadd24fd04d26d8e700ef2fb07ce50f128beb2924562d7cc4a5b02e4670be7') as SHA256,
         box: { x: 410, y: 80, width: 260, height: 110 },
       },
       {
@@ -162,7 +164,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
     ],
     assets: [
       {
-        sha256: (kaaeClientDNA.assets?.logos?.primary?.sha256 || 'accadd24fd04d26d8e700ef2fb07ce50f128beb2924562d7cc4a5b02e4670be7') as SHA256,
+        sha256: (kaaeClientDNA.assets.find(asset => asset.role === 'logo_primary')?.sha256 || 'accadd24fd04d26d8e700ef2fb07ce50f128beb2924562d7cc4a5b02e4670be7') as SHA256,
         mimeType: 'image/png',
         sourceId: 'logo_primary',
       },
@@ -207,7 +209,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       const report = res.value;
@@ -237,7 +239,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.status).toBe('failed');
@@ -268,7 +270,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.status).toBe('failed');
@@ -299,7 +301,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.status).toBe('failed');
@@ -330,7 +332,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.status).toBe('failed');
@@ -359,7 +361,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.status).toBe('failed');
@@ -389,7 +391,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.status).toBe('failed');
@@ -419,7 +421,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.status).toBe('failed');
@@ -449,7 +451,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.status).toBe('failed');
@@ -475,7 +477,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.status).toBe('failed');
@@ -501,7 +503,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       expect(res.value.status).toBe('failed');
@@ -531,7 +533,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       const report = res.value;
@@ -567,7 +569,7 @@ describe('CV-14: Make Quality Checks Inspect the Actual Work', () => {
       };
 
       const res = await qaEngine.run(mockCtx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       // Status must be blocked, not passed

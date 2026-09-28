@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-09-27T19:37:37.425283+00:00",
+  "scope": "Read-only production HTTP status after proxy-only fix; no application upgrade, approval, publication or message.",
+  "health": {
+    "httpStatus": 200,
+    "status": "healthy"
+  },
+  "canva": {
+    "httpStatus": 200,
+    "status": "active",
+    "configured": true,
+    "authorized": true
+  },
+  "loginProviders": {
+    "errorClass": "HTTPError"
+  }
+}

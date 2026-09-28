@@ -1,5 +1,11 @@
 # Phase 3.1 evidence: the file store rehearsal on a restored copy (2026-09-25)
 
+> **On codex/research-grade-design-system (2026-09-28, ADR-127):** this is studio-v2's record,
+> kept as history. The backfill fixes, the staged release B keys and their tests were ported
+> unchanged in substance (studio-v2 4e2e6e58 and 75153027); the tests ran again on the test server
+> against this branch's schema (migrations to 064). The rehearsal on a restored nightly dump below
+> was **not** repeated on this branch; its numbers describe studio-v2 at `1c1316d`.
+
 ADR-035, FILESTORE_DESIGN.md sections 2.3, 4, 5 and 7 ("Order and gates", step 2). Worktree branch `worktree-wf_8f9499c9-d1e-1`, from `studio-v2` at `1c1316d`. Everything below ran on this Mac against the **test** server (`hawa-test-postgres`, 127.0.0.1:55432). Nothing touched production: no SQL, no port 54332, no `hawa-production-*` container, no chaos stack. The dump holds client data; it stayed in the session scratchpad, and it and the database are gone (section 9). This file gives counts and sizes only.
 
 **Fix round (pass 3).** A review found that bug 2 (section 6) was only partly fixed, and an older gap in verify and strip. Both are fixed tests first (section 6, bugs 3 and 4). The whole rehearsal was then run again on a fresh restore of the same dump with the fixed script (pass 3), and the receipt was rewritten from pass 3. **Every number in this file is from pass 3** unless it says pass 1 or pass 2.

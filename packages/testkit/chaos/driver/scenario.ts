@@ -6,6 +6,7 @@
  * Each request runs in its own chat, so one scenario's messages, tasks and paid calls never mix with
  * another's, and nothing is reset between scenarios.
  */
+import { randomUUID } from 'node:crypto';
 import { RESTATE_INGRESS_URL, fakes, kill, query, restateQuery, secrets, sql, start, waitHealthy, type Service } from './stack.js';
 
 export const OFFICE_CHAT = '9000001';
@@ -62,6 +63,19 @@ export function imageDocumentUpdate(chat: string, fileId: string, size: number, 
   };
 }
 
+export function captionedPhotoUpdate(chat: string, fileId: string, size: number, caption: string, from = REQUESTER_ID) {
+  return {
+    message: {
+      message_id: ++messageSeq,
+      date: Math.floor(Date.now() / 1000),
+      from: { id: from, is_bot: false, first_name: 'Chaos' },
+      chat: { id: Number(chat), type: 'private' },
+      caption,
+      photo: [{ file_id: fileId, file_unique_id: `u-${fileId}`, width: 800, height: 600, file_size: size }],
+    },
+  };
+}
+
 /** Tasks Core created for a chat's requests (read from the intake's own outbox rows). */
 export async function tasksOfChat(chat: string): Promise<Array<{ id: string; state: string; version: number }>> {
   return query(sql`SELECT t.id, t.state::text AS state, t.version FROM hawa.tasks t
@@ -106,9 +120,28 @@ export async function briefToDraft(chat: string, tag: string, timeoutMs = 240_00
     if (outcome && outcome !== 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW') {
       throw new RequestEndedError(`task ${task.id}: the design run ended as ${outcome}, so there is no draft to approve`);
     }
-    return (await sentTo(chat)).some(isDraft) && (await taskState(task.id)) === 'human_review';
+    return (await draftShown(chat, task.id)) && (await taskState(task.id)) === 'human_review';
   }, timeoutMs, 2000);
   return task.id;
+}
+
+/**
+ * The draft has reached review: a legacy draft reaches the chat with the requester's buttons; a
+ * request RequestLifecycle owns (ADR-059) sends a notice without them and hands review to the Desk
+ * (ADR-065), and is then `in_review` on this task.
+ */
+async function draftShown(chat: string, taskId: string): Promise<boolean> {
+  if ((await sentTo(chat)).some(isDraft)) return true;
+  const [request] = await query<{ stage: string }>(sql`SELECT stage FROM hawa.requests
+    WHERE chat_id = ${chat} AND current_task_id = ${taskId}::uuid`);
+  return request?.stage === 'in_review';
+}
+
+/** The request RequestLifecycle owns for this task, if any (ADR-059). */
+async function requestOf(taskId: string): Promise<{ request_id: string; stage: string; rev: string } | null> {
+  const [row] = await query<{ request_id: string; stage: string; rev: string }>(sql`SELECT request_id, stage, rev
+    FROM hawa.requests WHERE current_task_id = ${taskId}::uuid`);
+  return row ?? null;
 }
 
 /**
@@ -116,26 +149,43 @@ export async function briefToDraft(chat: string, tag: string, timeoutMs = 240_00
  * director. `pinDeck` pins the PPTX too, so a delivery sends two files (the slice 2.2 scenarios kill
  * and throttle between them).
  */
-export async function approve(taskId: string, options: { pinDeck?: boolean; actionId?: string } = {}): Promise<{ status: number; body: any }> {
+export async function approve(taskId: string, options: { pinDeck?: boolean } = {}): Promise<{ status: number; body: any }> {
   const token = secrets().CHAOS_REVIEWER_KEY;
   const state = await fakes.core(`/tasks/${taskId}/canva`, token);
   const artifacts: any[] = Array.isArray(state.json?.artifacts) ? state.json.artifacts : [];
-  const png = artifacts.find((a) => String(a.format).toLowerCase() === 'png');
-  const deck = options.pinDeck ? artifacts.find((a) => String(a.format).toLowerCase() === 'pptx') : null;
+  // As the Desk pins (approvalPins.defaultPins): a PNG of the Canva version QA checked, plus the
+  // export QA checked. Since 3e900a08 Core refuses an approval without the checked export.
+  const detail = await fakes.core(`/tasks/${taskId}`, token);
+  const qa = detail.json?.qaReport ?? detail.json?.task?.qaReport ?? null;
+  const checkedId: string | null = typeof qa?.exportArtifactId === 'string' ? qa.exportArtifactId : null;
+  const captureVersion: string | null = typeof qa?.captureVersion === 'string' ? qa.captureVersion : null;
+  const sameCapture = (a: any) => !captureVersion || a.capture_version == null || String(a.capture_version) === captureVersion;
+  const png = artifacts.find((a) => String(a.format).toLowerCase() === 'png' && sameCapture(a))
+    ?? artifacts.find((a) => String(a.format).toLowerCase() === 'png');
+  const checked = checkedId ? artifacts.find((a) => a.id === checkedId) : null;
+  const deck = options.pinDeck ? (checked && String(checked.format).toLowerCase() === 'pptx' ? checked
+    : artifacts.find((a) => String(a.format).toLowerCase() === 'pptx')) : null;
   if (options.pinDeck && !deck) throw new Error(`task ${taskId} has no stored PPTX export to pin`);
   const [task] = await query<{ rev: string | null }>(sql`SELECT current_design_revision_id AS rev FROM hawa.tasks WHERE id = ${taskId}::uuid`);
   if (!task?.rev) throw new Error(`task ${taskId} has no design revision to approve`);
+  // The Desk sends each decision with its own action key; a request-owned task requires one.
   const res = await fakes.core(`/tasks/${taskId}/revisions/${task.rev}/decisions`, token, {
-    body: { action: 'approve', reason: 'Brand, hierarchy, and exact-copy verified', pinnedExportIds: [png?.id, deck?.id].filter(Boolean) },
-    // The Desk's press id (slice 2.4): a lifecycle request's decision is applied once per id.
-    ...(options.actionId ? { headers: { 'idempotency-key': options.actionId } } : {}),
+    headers: { 'Idempotency-Key': randomUUID() },
+    body: { action: 'approve', reason: 'Brand, hierarchy, and exact-copy verified', pinnedExportIds: [...new Set([png?.id, checked?.id, deck?.id].filter(Boolean))] },
   });
   return { status: res.status, body: res.json };
 }
 
-/** The Desk's Deliver button. */
-export async function deliver(taskId: string, options: { actionId?: string } = {}): Promise<{ status: number; body: any }> {
-  const res = await fakes.core(`/tasks/${taskId}/publish`, secrets().CHAOS_REVIEWER_KEY, { body: {}, ...(options.actionId ? { headers: { 'idempotency-key': options.actionId } } : {}) });
+/**
+ * The Desk's Deliver button, with its action key (request-owned delivery requires a UUID one). For a
+ * request RequestLifecycle owns, the Desk offers Deliver once the request has taken the approval.
+ */
+export async function deliver(taskId: string): Promise<{ status: number; body: any }> {
+  const request = await requestOf(taskId);
+  if (request) await waitUntil(`request ${request.request_id} to take the approval`, async () =>
+    (await requestOf(taskId))?.stage === 'approved', 60_000, 500);
+  const res = await fakes.core(`/tasks/${taskId}/publish`, secrets().CHAOS_REVIEWER_KEY,
+    { headers: { 'Idempotency-Key': randomUUID() }, body: {} });
   return { status: res.status, body: res.json };
 }
 
@@ -147,13 +197,15 @@ export async function waitDelivered(chat: string, taskId: string, timeoutMs = 18
 }
 
 /**
- * Nothing left to do: no Restate invocation running or backing off, no outbox command pending or
- * leased, and the fake Telegram has had no call for `idleMs`. A delayed invocation waiting for its
- * time (`scheduled`: a lifecycle reminder or expiry days ahead, slice 2.3) is not work in flight.
+ * No work ready now: no Restate invocation running or backing off, no ready outbox command,
+ * and no fake Telegram call for `idleMs`. Durable lifecycle reminders may remain scheduled
+ * until their business deadline; they must not prevent the next scenario from settling.
  */
 export async function quiescent(idleMs = 5000, timeoutMs = 240_000): Promise<void> {
   await waitUntil('quiescence', async () => {
-    const [inv] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE status NOT IN ('completed', 'scheduled')`);
+    const [inv] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation
+      WHERE status NOT IN ('completed') AND NOT (status = 'scheduled'
+        AND target_service_name = 'RequestLifecycle' AND target_handler_name = 'reminderTick')`);
     const [outbox] = await query<{ n: string }>(sql`SELECT count(*) AS n FROM hawa.outbox_commands WHERE state IN ('pending', 'leased') AND available_at <= now() + interval '5 seconds'`);
     const sent = await fakes.sent();
     const last = sent.length ? Date.parse(sent[sent.length - 1].at) : 0;
@@ -251,7 +303,10 @@ export async function checkRequest(chat: string, options: {
   // A send nobody can confirm (the fake dropped its answer, or the worker died between the send and
   // its record) is not repeated, and the office hears about it once. Without one, no alert at all.
   const uncertain = options.uncertainSends ?? shown.filter((s) => s.fault === 'drop-after-processing').length;
-  const alerts = (await sentTo(OFFICE_CHAT)).filter((s) => s.text && s.text.includes(task.id));
+  // RequestLifecycle tells the office a draft is ready for its Desk review (ADR-065, 8682bd97): a
+  // notice of the review, not an alert about a send.
+  const alerts = (await sentTo(OFFICE_CHAT)).filter((s) => s.text && s.text.includes(task.id) &&
+    !s.text.startsWith('A design is ready for office review in Hawa Desk.'));
   add(uncertain ? 'an uncertain send has exactly one office alert' : 'no office alert without an uncertain send', alerts.length === uncertain, `uncertain sends expected=${uncertain} office alerts naming the task=${alerts.length}`);
 
   // Paid calls: every fingerprint once (the classifier may run again when intake died before saving).
@@ -265,7 +320,10 @@ export async function checkRequest(chat: string, options: {
 
   if (options.delivered) {
     // Drive: the approved file archived once, however often delivery was pressed or restarted.
-    const expected = options.files ?? 1;
+    // The files the office pinned at approval (the Desk pins the QA-checked export beside the PNG).
+    const [pin] = await query<{ n: number | null }>(sql`SELECT jsonb_array_length(a.decision_payload->'pinnedExports') AS n
+      FROM hawa.approvals a WHERE a.task_id = ${task.id}::uuid AND a.decision = 'approved' ORDER BY a.created_at DESC LIMIT 1`);
+    const expected = options.files ?? (Number(pin?.n) || 1);
     const files = (await fakes.driveFiles()).filter((f: any) => f.properties?.taskId === task.id);
     add(expected === 1 ? 'the approved file is archived to Drive once' : `the ${expected} approved files are archived to Drive once each`, files.length === expected, `drive files for the task=${files.length}`);
     // Telegram: each approved file reached the requester (once each is checked above).
@@ -288,11 +346,13 @@ export async function checkRequest(chat: string, options: {
   const [ops] = await query<{ imports: string; exports: string }>(sql`SELECT count(*) FILTER (WHERE kind = 'create') AS imports, count(*) FILTER (WHERE kind = 'export') AS exports FROM hawa.canva_remote_operations WHERE task_id = ${task.id}::uuid`);
   add('one Canva import per task', Number(ops.imports) === 1, `imports=${ops.imports} exports=${ops.exports}`);
 
-  // Restate: one workflow for the task, finished; nothing paused; no journal mismatch.
-  const inv = await restateQuery<{ id: string; status: string; last_failure_error_code: string | null }>(
-    `SELECT id, status, last_failure_error_code FROM sys_invocation WHERE target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${task.id}'`
+  // Restate: one design run for the task, finished; nothing paused; no journal mismatch. A legacy task
+  // is designed by TaskWorkflow; a task RequestLifecycle owns by its DesignRun (ADR-034, ADR-059).
+  const inv = await restateQuery<{ id: string; status: string; target_service_name: string }>(
+    `SELECT id, status, target_service_name FROM sys_invocation WHERE (target_service_name = 'TaskWorkflow' AND target_service_key = 'task-wf-${task.id}')
+       OR (target_service_name = 'DesignRun' AND target_service_key = 'dr-${task.id}')`
   );
-  add('one TaskWorkflow invocation, completed', inv.length === 1 && inv[0].status === 'completed', JSON.stringify(inv.map((i) => i.status)));
+  add('one design run (TaskWorkflow or DesignRun), completed', inv.length === 1 && inv[0].status === 'completed', JSON.stringify(inv.map((i) => `${i.target_service_name}:${i.status}`)));
   const [paused] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE status = 'paused'`);
   add('no paused invocation', Number(paused?.n ?? 0) === 0, `paused=${paused?.n ?? 0}`);
   const [rt16] = await restateQuery<{ n: number }>(`SELECT count(*) AS n FROM sys_invocation WHERE last_failure_error_code = 'RT0016'`);
@@ -374,7 +434,44 @@ export async function draftOf(chat: string, timeoutMs = 240_000): Promise<string
     if (outcome && outcome !== 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW') {
       throw new RequestEndedError(`task ${task.id}: the design run ended as ${outcome}, so there is no draft to approve`);
     }
-    return (await sentTo(chat)).some(isDraft) && (await taskState(task.id)) === 'human_review';
+    return (await draftShown(chat, task.id)) && (await taskState(task.id)) === 'human_review';
   }, timeoutMs, 2000);
   return task.id;
+}
+
+/**
+ * A request-owned delivery whose requester send Telegram never confirmed stays `delivering`, the task
+ * `publishing` with REQUESTER_SEND_UNCONFIRMED (ADR-043, ADR-045), until an office administrator
+ * records what they saw in the requester's chat (ADR-046). This waits for that hold, then settles it
+ * as a synthetic administrator with the message IDs the fake chat shows, and returns the checks.
+ * It is not a human's observation, nor a requester's receipt.
+ */
+export async function staffConfirmVisible(chat: string, taskId: string, events: string[]): Promise<InvariantResult[]> {
+  const out: InvariantResult[] = [];
+  const bearer = secrets().CHAOS_BEARER_TOKEN;
+  const held = await waitUntil('the delivery to wait for staff reconciliation', async () => {
+    const res = await fakes.core(`/tasks/${taskId}/publication-state`, bearer);
+    return res.status === 200 && res.json?.state === 'requester_send_reconciliation' ? res.json : null;
+  }, 240_000, 2000);
+  out.push({ name: 'an unconfirmed requester send holds the delivery for staff reconciliation', ok: held.state === 'requester_send_reconciliation', detail: `state=${held.state}` });
+  const evidence = await fakes.core(`/tasks/${taskId}/requester-send-evidence`, bearer);
+  if (evidence.status !== 200) throw new Error(`requester-send evidence: HTTP ${evidence.status} ${JSON.stringify(evidence.json).slice(0, 300)}`);
+  const visible = await sentTo(chat);
+  const observed = (evidence.json.files as Array<{ sendKey: string; sha256: string }>).map((file) => {
+    const shown = visible.find((s) => s.method === 'sendDocument' && s.documentSha256 === file.sha256);
+    if (!shown?.messageId) throw new Error(`the fake chat does not show approved file ${file.sha256.slice(0, 12)}`);
+    return { sendKey: file.sendKey, messageId: String(shown.messageId) };
+  });
+  const notice = visible.find((s) => String(s.messageId) === String(evidence.json.notice?.messageId));
+  if (!notice) throw new Error('the fake chat does not show the delivery notice');
+  observed.push({ sendKey: evidence.json.notice.sendKey, messageId: String(notice.messageId) });
+  const confirmation = { actionId: randomUUID(), expectedRev: evidence.json.requestRev, publicationId: evidence.json.publicationId,
+    approvalId: evidence.json.approvalId, requesterChatId: chat, observed, attested: true };
+  const settled = await fakes.core(`/tasks/${taskId}/requester-send-confirmation`, secrets().CHAOS_ADMIN_KEY, { body: confirmation });
+  events.push(`synthetic administrator confirmed ${observed.length} sends visible in the fake chat: HTTP ${settled.status}`);
+  out.push({ name: 'the administrator\'s confirmation settles the delivery', ok: settled.status === 200 && settled.json?.confirmationSource === 'staff_visible',
+    detail: `HTTP ${settled.status} ${JSON.stringify(settled.json).slice(0, 200)}` });
+  const after = await sentTo(chat);
+  out.push({ name: 'the settlement sends nothing to the requester', ok: after.length === visible.length, detail: `sends before=${visible.length} after=${after.length}` });
+  return out;
 }

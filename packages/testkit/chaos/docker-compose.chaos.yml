@@ -27,8 +27,9 @@ x-app-environment: &app-environment
   # The worker's own credential for Core's /v1/internal/* endpoints (a service principal).
   HAWA_WORKER_TOKEN: ${CHAOS_WORKER_TOKEN:?}
   # The chats whose requests Restate's lifecycle runs (Phase 2 slices; 2.2: the Delivery workflow).
-  # The driver's flagged scenarios use these chats; every other chat takes the legacy path.
-  HAWA_LIFECYCLE_CHATS: "9300001,9300002,9300003,9300004,9300005,9300006,9300007,9300008,9300009,9300010,9300011,9300012"
+  # The driver's flagged scenarios use these chats; every other chat takes the legacy path. With the
+  # worker's poller the R1.S3 and L2 scenarios together use 16 of them (17 with --candidate).
+  HAWA_LIFECYCLE_CHATS: "9300001,9300002,9300003,9300004,9300005,9300006,9300007,9300008,9300009,9300010,9300011,9300012,9300013,9300014,9300015,9300016,9300017,9300018,9300019,9300020,9300021,9300022,9300023,9300024"
   HAWA_BEARER_TOKEN: ${CHAOS_BEARER_TOKEN:?}
   HAWA_ART_DIRECTOR_KEY: ${CHAOS_REVIEWER_KEY:?}
   HAWA_ADMIN_KEY: ${CHAOS_ADMIN_KEY:?}
@@ -63,23 +64,17 @@ x-app-environment: &app-environment
   HAWA_CHAOS_CONTROL_URL: http://fakes:9000/__chaos
   # Phase 2.1: `core` (default) polls Telegram in Core, as production does today; `worker` (run.ts
   # --poller worker) polls in the live worker colour and hands each update to its chat's ChatInbox,
-  # which calls Core's /v1/internal/* with the worker's own token (HAWA_WORKER_TOKEN, above).
+  # which calls Core's /v1/internal/* with the worker's own token.
   HAWA_TELEGRAM_POLLER: ${CHAOS_TELEGRAM_POLLER:-core}
   NODE_EXTRA_CA_CERTS: /chaos-ca/ca.pem
   HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
-
-# Slice 2.3: the chats whose new requests the worker's ChatInbox opens on RequestLifecycle (the
-# driver sets 9400001 to 9400040, driver/lifecycle.ts; a scenario takes one off the list and restarts
-# the worker, R5), and the reminder scale (1: real days; R2 restarts the worker with 0.0001). Core's
-# own HAWA_LIFECYCLE_CHATS above is slice 2.2's delivery list and stays as it is.
-x-worker-lifecycle: &worker-lifecycle
-  HAWA_LIFECYCLE_CHATS: ${CHAOS_WORKER_LIFECYCLE_CHATS:-}
-  HAWA_LIFECYCLE_REMINDER_SCALE: ${CHAOS_REMINDER_SCALE:-1}
 
 x-worker: &worker
   build:
     context: ../../..
     dockerfile: infra/docker/Dockerfile.worker
+    args:
+      HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
   image: hawa-chaos-worker:local
   restart: "no"
   logging: *logging
@@ -93,6 +88,16 @@ x-worker: &worker
     restate: { condition: service_healthy }
 
 services:
+  blob-init:
+    image: hawa-chaos-core:local
+    user: root
+    restart: "no"
+    logging: *logging
+    command: ["sh", "-c", "mkdir -p /var/lib/hawa/blobs/sha256 /var/lib/hawa/blobs/tmp && printf 'sha256-v1\\n' > /var/lib/hawa/blobs/.hawa-blob-store && chown -R 10001:10001 /var/lib/hawa/blobs"]
+    volumes:
+      - chaos_blobs:/var/lib/hawa/blobs
+    networks: [chaos]
+
   postgres:
     image: pgvector/pgvector:pg17
     restart: "no"
@@ -109,7 +114,7 @@ services:
     # cache) never loses power; it models no power loss. synchronous_commit stays on, as in
     # production: off, a killed Postgres forgets commits it had already acknowledged, and the suite
     # would report losses production cannot have (seen in the first run on 2026-09-24).
-    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=80", "-c", "fsync=off", "-c", "full_page_writes=off"]
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=80", "-c", "fsync=${CHAOS_PG_FSYNC:-off}", "-c", "full_page_writes=${CHAOS_PG_FULL_PAGE_WRITES:-off}"]
     ports:
       - "127.0.0.1:56432:5432"
     volumes:
@@ -136,10 +141,7 @@ services:
     logging: *logging
     mem_limit: 768m
     environment:
-      # Restate keeps its data under /restate-data/<node name>/ and starts empty under another name.
-      # The restore drill sets CHAOS_RESTATE_NODE_NAME to the node an archive holds (production's is
-      # hawa-restate-prod-1) so the restored data is the data it serves (infra/backup/restate-restore.sh).
-      RESTATE_NODE_NAME: ${CHAOS_RESTATE_NODE_NAME:-hawa-restate-chaos-1}
+      RESTATE_NODE_NAME: hawa-restate-chaos-1
       # The default RocksDB budget is sized for a server; the chaos stack runs beside production.
       RESTATE_ROCKSDB_TOTAL_MEMORY_SIZE: 256 MiB
     ports:
@@ -174,6 +176,7 @@ services:
     volumes:
       - ./:/repo/packages/testkit/chaos:ro
       - ../../integrations/test/fake-drive-server.ts:/repo/packages/integrations/test/fake-drive-server.ts:ro
+      - ../../integrations/test/fake-sheets.ts:/repo/packages/integrations/test/fake-sheets.ts:ro
       - chaos_ca:/chaos-ca
     networks:
       chaos:
@@ -199,6 +202,8 @@ services:
     build:
       context: ../../..
       dockerfile: infra/docker/Dockerfile.core
+      args:
+        HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
     image: hawa-chaos-core:local
     restart: "no"
     logging: *logging
@@ -207,15 +212,24 @@ services:
       <<: *app-environment
       PORT: 3001
       HAWA_CHAOS_SERVICE: core
-      # The load test's --planning-slots (scripts/load/run.ts); empty keeps Core's default.
+      # The load test's --planning-slots (scripts/load/run.ts); empty keeps Core's default (ADR-131).
       HAWA_CANVA_PLANNING_SLOTS: ${HAWA_CANVA_PLANNING_SLOTS:-}
+      # Standalone host collector: no scheduled monitor runs unless the qualification driver starts it.
+      HAWA_AVAILABILITY_MONITOR_ID: "00000000-0000-4000-a000-000000000104"
+      HAWA_AVAILABILITY_TARGET_ORIGIN: http://127.0.0.1:56081
+      HAWA_AVAILABILITY_MONITOR_SECRET: ${CHAOS_AVAILABILITY_SECRET:?}
+      HAWA_AVAILABILITY_WORKER_URLS: http://worker-blue:9080/health,http://worker-green:9080/health
+      HAWA_BLOB_DIR: /var/lib/hawa/blobs
+      HAWA_DOCLING_URL: ${CHAOS_DOCLING_URL:-}
     volumes:
       - chaos_ca:/chaos-ca:ro
-    networks: [chaos]
+      - chaos_blobs:/var/lib/hawa/blobs
+    networks: [chaos, parser]
     depends_on:
       fakes: { condition: service_healthy }
       postgres: { condition: service_healthy }
       restate: { condition: service_healthy }
+      blob-init: { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/ready').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
       interval: 2s
@@ -225,8 +239,7 @@ services:
   worker-blue:
     <<: *worker
     environment:
-      # The worker's own lifecycle settings first: in a merge list the first mapping wins.
-      <<: [*worker-lifecycle, *app-environment]
+      <<: *app-environment
       PORT: 9080
       HAWA_WORKER_COLOUR: blue
       HAWA_WORKER_SELF_URI: http://worker-blue:9080
@@ -237,19 +250,73 @@ services:
     # Started only for a deploy scenario; blue is the live colour.
     profiles: ["green"]
     environment:
-      # The worker's own lifecycle settings first: in a merge list the first mapping wins.
-      <<: [*worker-lifecycle, *app-environment]
+      <<: *app-environment
       PORT: 9080
       HAWA_WORKER_COLOUR: green
       HAWA_WORKER_SELF_URI: http://worker-green:9080
       HAWA_CHAOS_SERVICE: worker-green
 
+  # Explicit full-app rehearsal profile. These use production images/configuration,
+  # synthetic office data, and the existing isolated project; never office credentials.
+  docling:
+    profiles: [candidate]
+    build: ../../../services/docling
+    image: hawa-chaos-docling:local
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 32
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    networks: [parser]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=2).read()"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  desk:
+    profiles: [candidate]
+    build:
+      context: ../../..
+      dockerfile: infra/docker/Dockerfile.desk
+      args:
+        HAWA_BUILD_COMMIT: ${CHAOS_BUILD_COMMIT:-unknown}
+    image: hawa-chaos-desk:local
+    restart: "no"
+    mem_limit: 128m
+    networks: [chaos]
+
+  nginx:
+    profiles: [candidate]
+    image: nginx:1.27-alpine-slim
+    restart: "no"
+    mem_limit: 128m
+    ports: ["127.0.0.1:56081:80"]
+    volumes:
+      - ../../../infra/docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - chaos_blobs:/srv/hawa-blobs:ro
+    networks: [chaos, chaos-edge]
+    depends_on:
+      core: {condition: service_healthy}
+      desk: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
 networks:
   chaos:
     internal: true
   chaos-edge: {}
+  parser:
+    internal: true
 
 volumes:
   chaos_postgres: {}
   chaos_restate: {}
   chaos_ca: {}
+  chaos_blobs: {}

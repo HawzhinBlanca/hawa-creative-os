@@ -1,0 +1,95 @@
+{
+  "status": "degraded",
+  "timestamp": "2026-09-27T13:20:02.248Z",
+  "buildCommit": "6c1f8b5528b39a3880bf50b424ad7caa3f6f8f8e",
+  "flags": {
+    "DESIGN_PIPELINE_V3": "off",
+    "DESIGN_STUDIO_V2": "off"
+  },
+  "lastVerifiedProgressAt": "2026-09-27T13:20:01.177Z",
+  "lastPaidProbe": {
+    "at": null,
+    "status": "unverified",
+    "observedStatus": null,
+    "schemaVersion": null,
+    "detail": null,
+    "callId": null,
+    "lastAlertMessageId": null,
+    "everyMinutes": 30
+  },
+  "funnel": {
+    "windowHours": 48,
+    "briefsCount": 7,
+    "draftsCount": 5,
+    "approvalsCount": 6,
+    "deliveriesCount": 6,
+    "status": "healthy",
+    "alert": null,
+    "oldestUnapprovedHours": 0,
+    "stalledTaskCount": 0,
+    "oldestStalledTaskId": null,
+    "oldestStalledTaskHours": null,
+    "stageDurations": {
+      "briefToDraft": {
+        "samples": 5,
+        "p50Hours": 0,
+        "p95Hours": 0
+      },
+      "draftToApproval": {
+        "samples": 3,
+        "p50Hours": 0,
+        "p95Hours": 0
+      },
+      "approvalToDelivery": {
+        "samples": 3,
+        "p50Hours": 0,
+        "p95Hours": 0
+      }
+    },
+    "nextAction": null,
+    "measuredAt": "2026-09-27T13:20:02.240Z"
+  },
+  "restateInvocations": {
+    "status": "ok",
+    "paused": 0,
+    "backingOff": 0,
+    "inbox": 0,
+    "checkedAt": "2026-09-27T13:20:02.232Z"
+  },
+  "models": {
+    "tier": "production",
+    "text": "gpt-6-astra",
+    "layout": "gpt-6-astra",
+    "critique": "gpt-6-astra",
+    "judge": "gpt-4.1-mini",
+    "ornament": {
+      "dividers": true,
+      "texture": "sun-rays",
+      "textureOpacity": 0.25,
+      "balance": true
+    },
+    "image": {
+      "provider": "openai",
+      "model": "gpt-image-2.5-sunburst",
+      "size": "1024x1024",
+      "quality": "auto",
+      "aspectRatio": "1:1",
+      "key": "present"
+    }
+  },
+  "dependencies": {
+    "postgres": "connected",
+    "parkedClientMessages": 0,
+    "canva": "unverified",
+    "canvaCircuitBreaker": "CLOSED",
+    "telegram": "active",
+    "waha": "unconfigured",
+    "disk": "writable",
+    "restate": "connected",
+    "restatePausedInvocations": 0,
+    "modelProvider": "unverified",
+    "telegramApi": "unverified",
+    "funnel": "healthy",
+    "cutout": "unconfigured"
+  }
+}

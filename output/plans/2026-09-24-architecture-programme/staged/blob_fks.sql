@@ -1,10 +1,18 @@
 -- Architecture programme 3.1, release B (ADR-035, FILESTORE_DESIGN.md sections 2.3 and 5): foreign keys
 -- from the hash columns the old Core already writes to hawa.blobs.
 --
--- STAGED, NOT A MIGRATION YET. It moves into packages/db/migrations/ under the next free number (020 is
--- taken) only for release B, after the production copy backfill has run and verified clean: until then
--- production has no hawa.blobs rows, and this file would fail the deploy at its migrate step. At the move,
--- add it to the expected list in packages/db/test/schema-upgrade.test.ts.
+-- STAGED, NOT A MIGRATION YET. It moves into packages/db/migrations/ under the next free number only for
+-- release B, after the production copy backfill has run and verified clean: until then production has no
+-- hawa.blobs rows, and this file would fail the deploy at its migrate step. At the move, add it to the
+-- expected list in packages/db/test/schema-upgrade.test.ts. (Written on studio-v2, where 020 was the
+-- next number; on codex/research-grade-design-system migrations run to 064 and 065-070 are held by
+-- packages in flight on 2026-09-28, so take the first number free at the move.)
+--
+-- Checked against codex/research-grade-design-system's migrations 023-064 (ADR-127): the hash columns
+-- they added to hawa.blob_references (client_documents.source_sha256, design_studio_call_results.
+-- image_blob_sha256, studio_visual_input_assets.blob_sha256) carry their foreign keys already, and the
+-- lifecycle photo, album and source hashes live in inbox_events JSON, where no foreign key can reach.
+-- The six relational columns below are still the only ones without one.
 --
 -- The gate: VALIDATE fails the migration, before any container is swapped, while any row names a hash
 -- the store has no row for (an incomplete copy, a missing file row, or a row copy leaves as it is).

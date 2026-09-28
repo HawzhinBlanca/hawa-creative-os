@@ -1,0 +1,114 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "fd978ebb1ab1a357fac18fcce41a9a8dd9057eaf",
+  "branch": "codex/research-grade-design-system",
+  "status": "TRANSPORT_LOCALLY_QUALIFIED_NATIVE_OPERATION_NOT_ADMITTED",
+  "adr": "120",
+  "requirements": [
+    "FR-029",
+    "FR-032",
+    "FR-042",
+    "NFR-020"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/120_native_text_copy_qualification.md",
+      "sha256": "1f0fa8c7fcc444ce7efe13f3090b59f0497ca44c8c9304302bab0f00e2e8733f"
+    },
+    {
+      "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
+      "sha256": "5026c641d2a18104e07297b618b105f560fe06f1cb2a8c317033de06f991f3d5"
+    },
+    {
+      "path": "packages/integrations/src/canva-connect-client.ts",
+      "sha256": "312b3e1c0927e3a72237de999e3602ee37028269b822d6ec81c0e75ad3de0a45"
+    },
+    {
+      "path": "packages/integrations/test/canva-autofill-copy.test.ts",
+      "sha256": "946f2bef83e6fcd8ab1730f02d77bf420fb3505947690ed86b805f160d46f264"
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
+      "sha256": "28dd748d2a46ecd99e8a897ebee98dfa03900e197104e19859db3ea0d6399137"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "92e34378c3e614c838eda0c731bd49318d80ff2219d6839e989319ea5af8a6da"
+    }
+  ],
+  "acceptance": {
+    "files": 6,
+    "passed": 70,
+    "failed": 0,
+    "skipped": 0,
+    "transport": "fake Canva HTTP responses",
+    "red_before": {
+      "failed": 15,
+      "cause": "createTextAutofillCopy/getTextAutofillCopyJob absent"
+    },
+    "intermediate": {
+      "passed": 36,
+      "failed": 0
+    },
+    "cases": [
+      "exact Unicode and whitespace",
+      "own observed text fields including __proto__",
+      "field/title/UTF-8 total bounds before dispatch",
+      "no resubmission after 5xx, lost response or malformed success",
+      "bounded definite throttle and transient read retries",
+      "source identity frozen across caller mutation",
+      "job identity, separate-copy result and returned metadata checks",
+      "safe provider error/body filtering"
+    ]
+  },
+  "checks": {
+    "source_types": "passed",
+    "script_types": "passed",
+    "strict_test_roots": 532,
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "secret_scan": "0 secrets;53 justified allowlist hits"
+  },
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-native-amendment-red.json",
+      "sha256": "16fd9af75953ecc1eda76512d964585b17747d2c624f4cbfc831f6aaecd75995"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-amendment-client-tests.json",
+      "sha256": "13072fe42f751e0aa6feb23772f671b6667b94fe95bc7e286a59faf616812348"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-amendment-client-final.json",
+      "sha256": "9ab4955ea8140c633e5cd0e59a821cef5ed04d2c06c4895e507370714c5774c7"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-amendment-source-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-amendment-script-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-amendment-test-types.log",
+      "sha256": "4660338ffb3927cf231f00f7eb68c49e99eabb11b2bd86714459f3c4982bcdea"
+    }
+  ],
+  "native_state": "Prepared fixture draft awaiting explicit preview approval; no native call in this transport checkpoint",
+  "not_claimed": [
+    "native autofill entitlement or preservation",
+    "durable owner operation or production routing",
+    "human language/design quality",
+    "current full release qualification",
+    "deployment",
+    "independent recovery"
+  ],
+  "next": [
+    "commit native fixture only after required explicit preview approval",
+    "native amendment capture/export/reopen and preservation checks",
+    "owner-scoped durable operation and postconditions",
+    "independent judge qualification and remaining six-package work"
+  ]
+}

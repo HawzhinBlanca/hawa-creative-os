@@ -81,6 +81,9 @@ describe('fake Telegram', () => {
       ['92', 'drop-after-processing', true],
     ]);
     expect(sent[0].textHash).toBe(crypto.createHash('sha256').update('draft ready').digest('hex'));
+    expect(sent[0].messageId).toBeNull();
+    expect(sent[1].messageId).toBe(ok.json.result.message_id);
+    expect(sent[2].messageId).toBeGreaterThan(sent[1].messageId);
   });
 
   it('records uploaded documents by content hash', async () => {
@@ -144,14 +147,26 @@ describe('fake models and the paid-call ledger', () => {
     expect(ledger.map((l: any) => l.route)).toEqual(['unmatched', 'unmatched:/v1beta/models/gemini:generateContent']);
   });
 
-  it('answers the planner for a revision, whose request follows "Design Brief:" (slice 2.3 change rounds)', async () => {
+  it('answers a tagged Canva revision and records the attached image by hash only', async () => {
     await admin('/reset', {});
-    const request = { width: 1080, height: 1350, copy: ['Title', 'Body'], copyScripts: ['latin', 'latin'], logoAspect: 1.37, formalBodyFonts: { latin: 'Verdana', arabic: 'Noto Sans Arabic' }, reference: { rules: { palette: ['#0A1628'] } } };
-    const res = await chat('canva_design_plan', `Design Brief:\n${JSON.stringify(request)}\n\nOperator Revision Directive: "make the logo bigger"\n\nRule: Change what the feedback asks; keep copy and brand.`);
-    expect(res.status).toBe(200);
-    expect(JSON.parse(res.json.choices[0].message.content).text.map((t: any) => t.copyIndex)).toEqual([0, 1]);
+    const image = Buffer.from([0xff, 0xd8, 0xff, 0x01, 0x02]);
+    const request = { width: 1080, height: 1350, copy: ['Exact title'], copyScripts: ['latin'],
+      logoAspect: 1.37, formalBodyFonts: { latin: 'Verdana' },
+      reference: { rules: { palette: ['#0A1628', '#FDF8F3'] } } };
+    const text = `Design Brief:\n${JSON.stringify(request)}\n\nOperator Revision Directive: "Use the new image."`;
+    const response = await chat('canva_design_plan', '', { messages: [
+      { role: 'system', content: 'Return the complete revised layout JSON.' },
+      { role: 'user', content: [
+        { type: 'text', text },
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${image.toString('base64')}` } },
+      ] },
+    ] });
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.json.choices[0].message.content).text[0].copyIndex).toBe(0);
     const { ledger } = await admin('/models/ledger');
-    expect(ledger.map((l: any) => l.route)).toEqual(['canva_design_plan']);
+    expect(ledger).toMatchObject([{ route: 'canva_design_plan', status: 200,
+      imageSha256: [crypto.createHash('sha256').update(image).digest('hex')] }]);
+    expect(JSON.stringify(ledger)).not.toContain(image.toString('base64'));
   });
 
   it('builds a planner layout that places every copy block once, at the logo aspect Core checks', () => {

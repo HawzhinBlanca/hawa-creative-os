@@ -104,6 +104,6 @@ describe('Governed Feedback & Adaptive Learning Engine (ADR-0044)', () => {
     expect(dna.identity.officialName).toContain('Kurdistan Accrediting Association for Education');
     expect(Array.isArray(dna.guidelines.layoutRules)).toBe(true);
   });
-  // The tests that fed promoted rules into KAAE's v1 templates went with those templates (ADR-038):
+  // The tests that fed promoted rules into KAAE's v1 templates went with those templates (ADR-127):
   // KAAE's designs are made in the design studio, which reads the client's standing rules instead.
 });

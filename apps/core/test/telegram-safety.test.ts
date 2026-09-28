@@ -8,6 +8,7 @@ import { resolveQcProfileId } from '../src/services/canva-task-outcome.js';
 import { PostgresTelegramPollState, telegramBotKey } from '../src/services/telegram-poll-state.js';
 import { PARKED_UPDATE_NOTICE, POLLED_UPDATE_MAX_ATTEMPTS } from '../src/services/polled-update-dispatch.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
+import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 /**
  * Telegram safety (architecture programme 0.4, 2026-09-24), against hawa-test-postgres as hawa_app
@@ -230,8 +231,9 @@ describe('handlers that act on a task read its status from Postgres', () => {
     ).task.id as string;
 
   /** A Canva draft as the bridge records it: a revision and a passing QC run. */
-  const draft = async (taskId: string, headline = 'KAAE members evening') =>
-    withRlsContext(db, scope, async (trx) => {
+  const draft = async (taskId: string, headline = 'KAAE members evening') => {
+    const checked = await checkedCanvaExportFixture(headline);
+    return withRlsContext(db, scope, async (trx) => {
       const revision = await new RevisionRepository(db).createRevision(
         {
           tenantId, taskId, studio: 'canva',
@@ -241,8 +243,8 @@ describe('handlers that act on a task read its status from Postgres', () => {
         trx
       );
       const qc = evaluateCanvaExportQc({
-        sha256: 'b'.repeat(64), format: 'pptx',
-        content_check: { copyPass: true, fontPass: true, rtlPass: true, status: 'passed', observedFonts: ['Verdana'] },
+        sha256: createHash('sha256').update(checked.bytes).digest('hex'), format: 'pptx',
+        content: checked.bytes, content_check: checked.contentCheck,
       });
       await trx.insertInto('qc_runs').values({
         tenant_id: tenantId, task_id: taskId, design_revision_id: revision.id, qc_profile_id: await resolveQcProfileId(trx, tenantId),
@@ -251,6 +253,7 @@ describe('handlers that act on a task read its status from Postgres', () => {
       }).execute();
       return revision.id as string;
     });
+  };
 
   const decide = (app: any, taskId: string, revisionId: string, body: Record<string, unknown>) =>
     app.request(`/v1/tasks/${taskId}/revisions/${revisionId}/decisions`, { method: 'POST', headers: artDirector, body: JSON.stringify(body) });
@@ -262,9 +265,10 @@ describe('handlers that act on a task read its status from Postgres', () => {
   it('publish: a task another process sent back for changes is not delivered by the Core that approved it', async () => {
     const taskId = await request('KAAE: stale status (publish)');
     const revisionId = await draft(taskId);
-    const coreA = createApp({ db } as any);
-    const coreB = createApp({ db } as any);
-    expect((await decide(coreA, taskId, revisionId, { action: 'approve' })).status).toBe(201);
+    const exports = memoryExportStore();
+    const coreA = createApp({ db, deliverableStore: exports.store } as any);
+    const coreB = createApp({ db, deliverableStore: exports.store } as any);
+    expect((await decide(coreA, taskId, revisionId, { action: 'approve', pinnedExportIds: [exports.add(taskId)] })).status).toBe(201);
     expect((await sendBack(coreB, taskId, revisionId)).status).toBe(201);
     expect((await dbTask(taskId)).state).toBe('revision_requested');
 
@@ -278,13 +282,14 @@ describe('handlers that act on a task read its status from Postgres', () => {
   it('approve: a draft recorded behind Core\'s back is the current one, and the one checked', async () => {
     const taskId = await request('KAAE: stale status (approve)');
     const first = await draft(taskId);
-    const core = createApp({ db } as any);
+    const exports = memoryExportStore();
+    const core = createApp({ db, deliverableStore: exports.store } as any);
     // Core reads the task (an answer it refuses still loads it into Core's memory).
     expect((await decide(core, taskId, first, { action: 'nonsense' })).status).toBe(400);
     // The worker records the next draft in Postgres; Core's copy still names the first.
     const second = await draft(taskId, 'KAAE members evening, corrected');
 
-    const approved = await decide(core, taskId, second, { action: 'approve' });
+    const approved = await decide(core, taskId, second, { action: 'approve', pinnedExportIds: [exports.add(taskId)] });
     const body = await approved.json();
     expect(`${approved.status} ${body.detail || ''}`).not.toMatch(/Cannot approve stale revision/);
     expect(approved.status).toBe(201);
@@ -325,13 +330,14 @@ describe('delivery ignores an approval that exists only in Core\'s memory', () =
         exactCopy: [{ id: 'copy_0', role: 'headline', text: 'KAAE members evening' }], autoGenerate: false,
       } as any)
     ).task.id as string;
+    const checked = await checkedCanvaExportFixture('KAAE members evening');
     const revisionId = await withRlsContext(db, scope, async (trx) => {
       const revision = await new RevisionRepository(db).createRevision({
         tenantId, taskId, studio: 'canva',
         neutralManifest: { documentId: `DAGmem${taskId.slice(0, 6)}`, studio: 'canva', width: 1200, height: 1697, nodes: [{ id: 'headline', type: 'text', text: 'KAAE members evening' }] },
         authorType: 'model', authorId: 'canva_generator', status: 'review',
       } as any, trx);
-      const qc = evaluateCanvaExportQc({ sha256: 'c'.repeat(64), format: 'pptx', content_check: { copyPass: true, fontPass: true, rtlPass: true, status: 'passed', observedFonts: ['Verdana'] } });
+      const qc = evaluateCanvaExportQc({ sha256: createHash('sha256').update(checked.bytes).digest('hex'), format: 'pptx', content: checked.bytes, content_check: checked.contentCheck });
       await trx.insertInto('qc_runs').values({
         tenant_id: tenantId, task_id: taskId, design_revision_id: revision.id, qc_profile_id: await resolveQcProfileId(trx, tenantId),
         status: qc.status, critical_pass: qc.criticalPass, report: qc.qaReport as any,

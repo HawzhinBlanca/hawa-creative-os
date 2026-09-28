@@ -1,0 +1,27 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_7cc7f808220741fc and hawa_tpl_repair_7cc7f808220741fc (24 ms)
+···············································stdout | packages/testkit/test/pilot-exit-drill.test.ts > Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation Drill (Pilot Exit, NFR-001, NFR-005, Invariants #1–#15) > executes 100 concurrent end-to-end production tasks with >=95% completion, 0 flattened raster layers, and 0 cross-tenant leaks
+
+======================================================
+PILOT EXIT 100-TASK SIMULATION DRILL SCORECARD
+======================================================
+Total Tasks Simulated:          100
+Completed Tasks:                100/100 (100%)
+Failed Tasks:                   0
+Flattened Raster Layers:        0 (Target: 0)
+Cross-Tenant Contamination:     0 (Target: 0)
+Deterministic QA 100% Pass:     true
+Total Wall-Clock Time:          388 ms
+Average Latency per Task:       3.88 ms
+======================================================
+
+
+·
+
+ Test Files  3 passed (3)
+      Tests  48 passed (48)
+   Start at  22:32:52
+   Duration  1.39s (transform 708ms, setup 153ms, import 949ms, tests 480ms, environment 0ms)
+

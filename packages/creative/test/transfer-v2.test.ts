@@ -5,6 +5,7 @@ import type { StudioLayoutV2 } from '../src/studio/layout-v2.js';
 
 describe('encodeStudioTransferV2 robustness & tolerance', () => {
   const baseLayout: StudioLayoutV2 = {
+      version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
     width: 1080,
     height: 1080,
     background: { color: '#0A1628' },
@@ -19,6 +20,7 @@ describe('encodeStudioTransferV2 robustness & tolerance', () => {
         width: 952,
         height: 120,
         fontSize: 48,
+          lineHeight: 1.3,
         fontFamily: 'cinzel', // lowercase
         color: '#FFFFFF',
         align: 'center',
@@ -32,6 +34,7 @@ describe('encodeStudioTransferV2 robustness & tolerance', () => {
         width: 952,
         height: 80,
         fontSize: 28,
+          lineHeight: 1.3,
         fontFamily: 'Cairo',
         color: '#E2E8F0',
         align: 'center',
@@ -68,6 +71,7 @@ describe('encodeStudioTransferV2 robustness & tolerance', () => {
 
   it('permits large poster font sizes up to 25% canvas height without crashing', async () => {
     const posterLayout: StudioLayoutV2 = {
+      version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
       width: 1920,
       height: 1080,
       background: { color: '#000000' },
@@ -82,6 +86,7 @@ describe('encodeStudioTransferV2 robustness & tolerance', () => {
           width: 1760,
           height: 300,
           fontSize: 220, // > 160, within 25% of 1080 (270px)
+          lineHeight: 1.3,
           fontFamily: 'Inter',
           color: '#FFFFFF',
           align: 'left',
@@ -95,6 +100,7 @@ describe('encodeStudioTransferV2 robustness & tolerance', () => {
           width: 800,
           height: 100,
           fontSize: 32,
+          lineHeight: 1.3,
           fontFamily: 'Inter',
           color: '#CCCCCC',
           align: 'left',

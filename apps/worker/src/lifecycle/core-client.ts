@@ -15,8 +15,7 @@
  *    longer than `timeoutMs` counts as this update's retryable failure.
  * "Wait" is a thrown error: Restate retries the step and does not journal it.
  */
-import type { ChatIntakeState, IntakeAnswerBody, IntakeRequestBody } from '@hawa/contracts';
-import type { ChatInboxCore, IntakeAnswer, IntakeMode } from './chat-inbox.js';
+import type { ChatInboxCore, IntakeAnswer, IntakeMode, LateChangeStage } from './chat-inbox.js';
 import type { TelegramUpdateLike } from './telegram-poller.js';
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -48,28 +47,107 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
   });
 
   return {
-    async intake(update: TelegramUpdateLike, mode: IntakeMode, chat?: ChatIntakeState): Promise<IntakeAnswer> {
+    async intake(update: TelegramUpdateLike, mode: IntakeMode, requestId?: string): Promise<IntakeAnswer> {
       let res: Response;
       try {
         res = await doFetch(`${base}/v1/internal/telegram/intake`, {
           method: 'POST',
           headers: headers(update),
-          // routesDecisions: this ChatInbox routes what intake decides (Core routes it for one that does not).
-          body: JSON.stringify({ v: 1, update, mode, ...(chat ? { chat } : {}), routesDecisions: true } satisfies IntakeRequestBody),
+          body: JSON.stringify({ v: 1, update, mode, ...(requestId ? { requestId } : {}) }),
           signal: AbortSignal.timeout(options.timeoutMs ?? 8 * 60_000),
         });
       } catch (err) {
         if (isTimeout(err)) return { kind: 'retry', reason: `intake did not answer within ${Math.round((options.timeoutMs ?? 480_000) / 1000)} s` };
         throw new Error(`Core is unreachable, update ${update.update_id} waits: ${errorText(err)}`);
       }
-      const body = (await res.json().catch(() => ({}))) as Partial<IntakeAnswerBody> & { title?: string };
+      const body = (await res.json().catch(() => ({}))) as {
+        intakeStatus?: number; code?: string; duplicate?: boolean; title?: string;
+        lifecycleAction?: string; requestId?: string; newTaskId?: string;
+        round?: number; directive?: string; priorTaskId?: string; rawText?: string;
+        chatId?: string; questionId?: string; draft?: unknown; reason?: string;
+        albumMessage?: string; albumNoticeKey?: string;
+        sourceMessage?: string; sourceNoticeKey?: string;
+        requestStage?: string; officeAlert?: { chatId?: unknown; text?: unknown } | null;
+      };
       if (res.status === 200 && typeof body.intakeStatus === 'number') {
         const status = body.intakeStatus;
-        // Slice 2.3: intake decided, and saved nothing; ChatInbox routes the decision.
-        if (body.kind === 'decision' && body.decision && typeof body.decision === 'object') {
-          return { kind: 'done', intakeStatus: status, decision: body.decision, ...(body.chat ? { chat: body.chat } : {}) };
+        if (!retryable(status)) {
+          const base: Extract<IntakeAnswer, { kind: 'done' }> = { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true };
+          if (body.lifecycleAction === 'source-message') {
+            if (!body.chatId || typeof body.sourceMessage !== 'string' || !body.sourceMessage || body.sourceMessage.length > 3000 ||
+                typeof body.sourceNoticeKey !== 'string' || !/^source-review:[0-9]+$/.test(body.sourceNoticeKey))
+              throw new Error(`Core returned an invalid source notice for update ${update.update_id}`);
+            return { ...base, lifecycleAction: 'source-message', chatId: body.chatId,
+              sourceMessage: body.sourceMessage, sourceNoticeKey: body.sourceNoticeKey };
+          }
+          if (body.lifecycleAction === 'album-message') {
+            if (!body.chatId || typeof body.albumMessage !== 'string' || !body.albumMessage ||
+                body.albumMessage.length > 2000 || typeof body.albumNoticeKey !== 'string' ||
+                !/^album-[a-z]+:[a-zA-Z0-9-]+$/.test(body.albumNoticeKey))
+              throw new Error(`Core returned an invalid album notice for update ${update.update_id}`);
+            return { ...base, lifecycleAction: 'album-message', chatId: body.chatId,
+              albumMessage: body.albumMessage, albumNoticeKey: body.albumNoticeKey };
+          }
+          if (body.lifecycleAction === 'open-request') {
+            const draft = body.draft as Record<string, unknown> | undefined;
+            if (!body.requestId || !body.chatId || !draft || draft.platform !== 'telegram' ||
+                draft.sourceEventId !== `lc-${body.requestId}-r0` ||
+                draft.sourceChannelId !== body.chatId ||
+                (draft.autoGenerate !== true && draft.autoGenerate !== false) ||
+                typeof draft.rawText !== 'string' || typeof draft.title !== 'string') {
+              throw new Error(`Core returned an invalid lifecycle open for update ${update.update_id}`);
+            }
+            return { ...base, lifecycleAction: 'open-request', requestId: body.requestId,
+              chatId: body.chatId, draft: draft as Extract<IntakeAnswer, { kind: 'done' }>['draft'] };
+          }
+          if (body.lifecycleAction === 'new-brief-required' && body.chatId) {
+            return { ...base, lifecycleAction: 'new-brief-required', chatId: body.chatId };
+          }
+          if (body.lifecycleAction === 'park-update') {
+            if (body.code !== 'LIFECYCLE_MEDIA_NOT_ADMITTED' || !body.chatId || !body.reason) {
+              throw new Error(`Core returned an invalid media hold for update ${update.update_id}`);
+            }
+            return { ...base, lifecycleAction: 'park-update', code: body.code,
+              chatId: body.chatId, reason: body.reason };
+          }
+          if ((body.lifecycleAction === 'requester-revision' ||
+               (body.lifecycleAction === 'requester-answer' && body.questionId)) &&
+              body.requestId && body.newTaskId &&
+              typeof body.round === 'number' && body.directive && body.priorTaskId) {
+            return { ...base, lifecycleAction: body.lifecycleAction,
+              requestId: body.requestId, newTaskId: body.newTaskId, round: body.round,
+              directive: body.directive, priorTaskId: body.priorTaskId,
+              ...(body.chatId ? { chatId: body.chatId } : {}),
+              ...(body.lifecycleAction === 'requester-answer' && body.questionId
+                ? { questionId: body.questionId } : {}),
+              ...(body.rawText !== undefined ? { rawText: body.rawText } : {}) };
+          }
+          if (body.lifecycleAction === 'late-change') {
+            const alert = body.officeAlert;
+            if (body.code !== 'LATE_REQUESTER_CHANGE' || !body.chatId || typeof body.requestId !== 'string' ||
+                !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId) ||
+                !['in_review', 'approved', 'delivering', 'delivered'].includes(String(body.requestStage)) ||
+                (alert !== undefined && (!alert || typeof alert.chatId !== 'string' || !alert.chatId ||
+                  typeof alert.text !== 'string' || !alert.text || alert.text.length > 4000))) {
+              throw new Error(`Core returned an invalid late change for update ${update.update_id}`);
+            }
+            return { ...base, lifecycleAction: 'late-change', code: body.code, chatId: body.chatId,
+              requestId: body.requestId, requestStage: body.requestStage as LateChangeStage,
+              ...(alert ? { officeAlert: { chatId: String(alert.chatId), text: String(alert.text) } } : {}) };
+          }
+          if (body.lifecycleAction === 'request-choice-required' && body.chatId &&
+              (body.code === 'AMBIGUOUS_REQUEST' || body.code === 'STALE_REQUEST_REPLY')) {
+            return { ...base, lifecycleAction: 'request-choice-required',
+              chatId: body.chatId, code: body.code };
+          }
+          if (body.lifecycleAction === 'revision-blocked' && body.chatId &&
+              (body.code === 'DAILY_CAP_REACHED' || body.code === 'PARENT_BRIEF_MISSING' ||
+                body.code === 'QUESTION_MISSING')) {
+            return { ...base, lifecycleAction: 'revision-blocked',
+              chatId: body.chatId, code: body.code };
+          }
+          return base;
         }
-        if (!retryable(status)) return { kind: 'done', intakeStatus: status, duplicate: body.duplicate === true, ...(body.chat ? { chat: body.chat } : {}) };
         if (body.code && WAIT_CODES.has(body.code)) throw new Error(`intake waits: ${body.code} (HTTP ${status})`);
         return { kind: 'retry', reason: `intake answered HTTP ${status}` };
       }

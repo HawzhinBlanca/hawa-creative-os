@@ -16,6 +16,25 @@ Q8 publication/source-package verification
 
 A design passes only when every required hard gate passes.
 
+### Mandatory local text measurements (ADR-117)
+
+Studio records measured geometry or an explicit unmeasured reason for every required
+copy block. Missing/blank content, unavailable fonts, missing visible primary-face
+glyphs, invalid inputs and shaping failures cannot inherit guessed geometry.
+`COPY_UNMEASURED` refuses local QA and optional artwork in either pipeline; V3
+selection also excludes it. Final QA retains copy/font/input hashes and measurements
+for the selected candidate, including a replacement winner, and honors selection holds.
+
+A primary font may lack Latin letters or symbols which the rasterizer draws through
+fallback. ADR-118 measures those runs through the pinned Pango environment, retaining
+actual face hashes, implementation identity, line advances, ink bounds and unknown
+glyphs. Preparation, SVG placement and transfer fitting share that wrapper. Missing
+helper, invalid/unpinned evidence or unknown glyphs refuse fit; no primary-face
+estimate is substituted. Symbol subsets include spaces needed inside fallback runs.
+Local rasterizer agreement does not replace native Canva, bidi or human-language
+inspection. Primary-only fontkit checks remain conservative, including nominal
+eyebrow size before optional fitting.
+
 ## 2. Hard checks
 
 ### Facts and copy
@@ -26,9 +45,16 @@ A design passes only when every required hard gate passes.
 - correct locale and numeral policy;
 - Unicode normalization recorded, not silently substituted in source text.
 
+Transfer language metadata comes from explicitly labelled saved copy fields, independently of
+font and direction. Unknown language is `und`; Arabic script does not establish Arabic versus
+Sorani, and historical script-derived `exactCopy.language` labels are not authoritative.
+The import manifest records one validated language tag per exact-copy index. Studio binds
+known labels to the copy's SHA-256 and discards the label after a wording change. These source
+tags do not establish native Canva preservation, shaping, normalization or visual quality.
+
 ### Source/editability
 
-- valid `.hyc` schema and supported schema version;
+- real Canva design ID, captured source metadata and export bound to the pinned revision;
 - every required factual element is live text/vector/official asset;
 - source round-trip succeeds;
 - required assets/fonts available and hashed;
@@ -61,6 +87,11 @@ For every text run:
 
 ### Bidirectional behavior
 
+Studio must respect explicit `rtl:false` even with an Arabic-script font. Legacy
+font-based direction fallback applies only when direction is unspecified. Cursive
+tracking and line spacing are typography rules, independent of paragraph direction.
+Canva may omit LTR attributes; absent metadata is not positive rendering evidence.
+
 Golden tests include:
 
 - pure Sorani and Arabic;
@@ -77,7 +108,14 @@ Golden tests include:
 - copied text versus typed text;
 - explicit direction versus auto direction.
 
-HyCanvas’s current bidi implementation explicitly omits full handling of isolate controls and the paired-bracket algorithm. Those cases are therefore mandatory proof tests and may trigger a Chromium/native-text fallback or upstream patch.
+Canva's actual native edit and final export are the subject of these proof tests. Isolate controls, paired brackets, mixed style runs, glyph fallback and Sorani punctuation must be inspected in the captured export and by a native reader. If inspection is unavailable, the result is unknown and requires operator review; another renderer's success does not establish Canva export fidelity.
+
+ADR-082 separates paragraph direction metadata from rendered bidi/isolation. Inspect
+every paragraph and both XML boolean spellings; pin explicit source directions with
+the export checking policy. An explicit conflict or malformed value fails. Mixed
+text without a saved direction stays unspecified. Matching flags still require the
+hash-bound visual assertion for Arabic/Sorani approval. Retain source language
+provenance: real Canva exports rewrite language tags and cannot establish it.
 
 ## 4. Spelling and terminology
 

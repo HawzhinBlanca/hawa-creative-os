@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import {
   OpenAiStudioClient,
   ExemplarRetrievalIndex,
@@ -35,7 +36,7 @@ describe('T5 Full Pipeline Qualification Path', () => {
         typeof m.content === 'string' && m.content.includes('blind pairwise design comparison')
       );
       // The critique is recognised by the report it asks for, not its prompt's wording, which names
-      // no client and changed when KAAE's persona left shared code (ADR-038).
+      // no client and changed when KAAE's persona left shared code (ADR-127, studio-v2 f6d6ed1b).
       const isCritique = body.response_format?.json_schema?.name === 'DesignCritiqueReport';
 
       if (isCritique) {
@@ -116,6 +117,7 @@ describe('T5 Full Pipeline Qualification Path', () => {
     const critique = await generateBoxGroundedCritique(baseLayout, {
       client,
       model: 'gpt-6-astra',
+      renderOptions: { logoDataUri: KAAE_TEST_LOGO },
     });
     expect(critique.status).toBe('success');
     expect(critique.comments.length).toBe(1);
@@ -134,6 +136,7 @@ describe('T5 Full Pipeline Qualification Path', () => {
     const match = await comparePairWithOrderSwap(cand1, cand2, {
       client,
       model: 'gpt-6-astra',
+      renderOptions: { logoDataUri: KAAE_TEST_LOGO },
     });
     expect(match.isConsistent).toBe(true);
     expect(match.winnerId).toBe('cand_lead');
@@ -148,6 +151,7 @@ describe('T5 Full Pipeline Qualification Path', () => {
     const canaryMatch = await evaluatePairOrder(cand1, canaryCand, 'AB', {
       client,
       model: 'gpt-6-astra',
+      renderOptions: { logoDataUri: KAAE_TEST_LOGO },
     });
     expect(canaryMatch.majorityWinner).toBe('A');
     expect(canaryMatch.winnerCandidateId).toBe('cand_lead');

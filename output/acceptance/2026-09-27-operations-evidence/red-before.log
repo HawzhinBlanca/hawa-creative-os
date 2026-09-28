@@ -1,0 +1,148 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (32 ms)
+ ❯ apps/desk/test/operations-evidence.test.ts (3 tests | 3 failed) 96ms
+   × shows unmeasured office reliability and an empty receipt audit; never calls the sample budget endpoints 77ms
+   × clears stale successful evidence on failed or malformed refresh 9ms
+   × ignores an older response which completes after a newer refresh 10ms
+ ❯ packages/testkit/test/slo-traffic.test.ts (6 tests | 1 failed) 49ms
+   × does not manufacture latency, success or compliance without synthetic samples 4ms
+ ❯ apps/core/test/operations-evidence.test.ts (3 tests | 3 failed) 33ms
+   × reports unmeasured production availability without substituting a fake benchmark 21ms
+   × refuses synthetic publication through the operational probe endpoint 7ms
+   × retires sample monthly budget inspection and mutation without changing stored governor state 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/operations-evidence.test.ts > reports unmeasured production availability without substituting a fake benchmark
+AssertionError: expected 401 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 401
+
+ ❯ apps/core/test/operations-evidence.test.ts:10:67
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  apps/core/test/operations-evidence.test.ts > refuses synthetic publication through the operational probe endpoint
+AssertionError: expected 401 to be 410 // Object.is equality
+
+- Expected
++ Received
+
+- 410
++ 401
+
+ ❯ apps/core/test/operations-evidence.test.ts:17:19
+     15|  const app=createAppWithClientFixtures();const probe=vi.spyOn(Syntheti…
+     16|  const r=await app.request('/v1/operations/slo/run',{method:'POST',hea…
+     17|  expect(r.status).toBe(410);expect(probe).not.toHaveBeenCalled();
+       |                   ^
+     18| });
+     19| it('retires sample monthly budget inspection and mutation without chan…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  apps/core/test/operations-evidence.test.ts > retires sample monthly budget inspection and mutation without changing stored governor state
+AssertionError: expected 401 to be 410 // Object.is equality
+
+- Expected
++ Received
+
+- 410
++ 401
+
+ ❯ apps/core/test/operations-evidence.test.ts:23:20
+     21|  for(const [path,method] of [['/clients/budgets','GET'],['/clients/cli…
+     22|   const r=await app.request('/v1'+path,{method,headers:{'Content-Type'…
+     23|   expect(r.status).toBe(410);expect((await r.json()).detail).toContain…
+       |                    ^
+     24|  }
+     25|  expect(JSON.stringify(globalCostGovernor.exportState())).toBe(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  apps/desk/test/operations-evidence.test.ts > shows unmeasured office reliability and an empty receipt audit; never calls the sample budget endpoints
+AssertionError: expected 'Daily spending policyShared limits fo…' to contain 'Availability unmeasured'
+
+Expected: "Availability unmeasured"
+Received: "Daily spending policyShared limits for Studio, Canva planning, fixture evaluation, retained voice and scheduled health probes. Unresolved costs keep their allocation reserved.Review budget policyCall cost accountingReview Studio, Canva planning, evaluation, voice and scheduled health probe charges. Calls without complete billing evidence keep their remaining allocation reserved.Review call costsTelemetry read · last checked 4:30:42 PM⚡ Run Synthetic Benchmark (not enabled)↻ RefreshOperations & Telemetry Overview0critical incidents0recoverable failures0adapters not verified—last backup age (not reported to the Desk)Design request progressDesign progress unknown. No result has been read yet.🔄 PostgreSQL · Drive · Sheets Reconciliation Ledger100% In SyncCompares Core's task list with the publication receipts Core holds in memory. It does not read Google Drive or Google Sheets, and repairs nothing.Run Reconciliation Audit0Tasks Audited0Drive Files0Sheet Rows0In Sync0Drifts Repaired⚡Client AI Generation Budgets & Cost GovernanceLangfuse / Helicone GradeReal-time token & GPU spend meters, automated quota enforcement, and tenant margin protection.🔄 Refresh BudgetsActionable operationsComponent / TaskStateEvidenceSafe actionComponent healthNo components reported"
+
+ ❯ apps/desk/test/operations-evidence.test.ts:13:19
+     11|  const calls=stubCore(c=>c.path.endsWith('/slo')?json(unmeasured):c.pa…
+     12|  const v=await mount(React.createElement(OpsScreen));await flush();
+     13|  expect(v.text()).toContain('Availability unmeasured');expect(v.text()…
+       |                   ^
+     14|  expect(v.text()).not.toMatch(/SLO: COMPLIANT|100% In Sync|Drifts Repa…
+     15|  expect(calls.some(c=>c.path.includes('/clients/budgets'))).toBe(false…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  apps/desk/test/operations-evidence.test.ts > clears stale successful evidence on failed or malformed refresh
+AssertionError: expected 'Daily spending policyShared limits fo…' to contain 'No tasks audited'
+
+Expected: "No tasks audited"
+Received: "Daily spending policyShared limits for Studio, Canva planning, fixture evaluation, retained voice and scheduled health probes. Unresolved costs keep their allocation reserved.Review budget policyCall cost accountingReview Studio, Canva planning, evaluation, voice and scheduled health probe charges. Calls without complete billing evidence keep their remaining allocation reserved.Review call costsTelemetry read · last checked 4:30:42 PM⚡ Run Synthetic Benchmark (not enabled)↻ RefreshOperations & Telemetry Overview0critical incidents0recoverable failures0adapters not verified—last backup age (not reported to the Desk)Design request progressDesign progress unknown. No result has been read yet.🔄 PostgreSQL · Drive · Sheets Reconciliation Ledger100% In SyncCompares Core's task list with the publication receipts Core holds in memory. It does not read Google Drive or Google Sheets, and repairs nothing.Run Reconciliation Audit0Tasks Audited0Drive Files0Sheet Rows0In Sync0Drifts Repaired⚡Client AI Generation Budgets & Cost GovernanceLangfuse / Helicone GradeReal-time token & GPU spend meters, automated quota enforcement, and tenant margin protection.🔄 Refresh BudgetsActionable operationsComponent / TaskStateEvidenceSafe actionComponent healthNo components reported"
+
+ ❯ apps/desk/test/operations-evidence.test.ts:21:85
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  apps/desk/test/operations-evidence.test.ts > ignores an older response which completes after a newer refresh
+Error: nothing to click
+ ❯ click apps/desk/test/support/desk-harness.ts:122:18
+    120|
+    121| export async function click(el: Element | null | undefined) {
+    122|   if (!el) throw new Error('nothing to click');
+       |                  ^
+    123|   await act(async () => {
+    124|     (el as HTMLElement).click();
+ ❯ apps/desk/test/operations-evidence.test.ts:33:8
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  packages/testkit/test/slo-traffic.test.ts > does not manufacture latency, success or compliance without synthetic samples
+AssertionError: expected { totalProbes: +0, …(10) } to match object { totalProbes: +0, …(6) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "errorBudgetRemaining": null,
+-   "p50DurationMs": null,
+-   "p95DurationMs": null,
+-   "p99DurationMs": null,
+-   "sloCompliant": null,
+-   "successRate": null,
++   "errorBudgetRemaining": 100,
++   "p50DurationMs": 0,
++   "p95DurationMs": 0,
++   "p99DurationMs": 0,
++   "sloCompliant": true,
++   "successRate": 100,
+    "totalProbes": 0,
+  }
+
+ ❯ packages/testkit/test/slo-traffic.test.ts:98:18
+     96| it('does not manufacture latency, success or compliance without synthe…
+     97|  const summary=new SyntheticTrafficDaemon(0).getSummary();
+     98|  expect(summary).toMatchObject({totalProbes:0,successRate:null,errorBu…
+       |                  ^
+     99| });
+    100|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  7 failed | 5 passed (12)
+   Start at  16:30:41
+   Duration  1.77s (transform 1.74s, setup 141ms, import 2.47s, tests 178ms, environment 486ms)
+

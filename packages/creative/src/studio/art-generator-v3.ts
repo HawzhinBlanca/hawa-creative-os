@@ -6,7 +6,7 @@ import { PNG } from 'pngjs';
 import type { StudioLayoutV2, Box, Hex } from './layout-v2.js';
 import { evaluateDesignMetrics, computeOcclusion } from './design-metrics.js';
 import { rgbToLuminance, evaluateCompositeContrast, type CompositeContrastResult } from './composite-contrast.js';
-import { renderLayoutV2, type RenderLayoutV2Result } from './render-layout-v2.js';
+import { assertClientLogoForLayout, measureWrappedLines, renderLayoutV2, type RenderLayoutOptions, type RenderLayoutV2Result } from './render-layout-v2.js';
 import { renderMotifPng, type ProceduralMotifType } from './motifs.js';
 import { assertModelAllowed } from '@hawa/domain';
 
@@ -15,6 +15,8 @@ export interface ArtGeneratorOptions {
   fetchFn?: typeof fetch;
   quality?: 'medium' | 'high';
   timeoutMs?: number;
+  /** Exact client logo and copy for the composite; the renderer has no packaged-logo default. */
+  renderOptions?: RenderLayoutOptions;
 }
 
 export interface RegionMeasurements {
@@ -180,9 +182,20 @@ export function canvasBoxToArtPixels(box: Box, artBox: Box, art: { width: number
   };
 }
 
-/**
- * Derives an art generation prompt conditioned on the layout architecture.
- */
+/** Colors already admitted into this layout; no hidden house-brand palette. */
+export function artPaletteForLayout(layout: StudioLayoutV2): Hex[] {
+  const colors = [
+    layout.background.color,
+    layout.art?.scrim?.color,
+    ...layout.shapes.flatMap((shape) => [shape.color, shape.strokeColor]),
+    ...layout.text.flatMap((block) => [block.color, block.accentColor]),
+  ];
+  const palette = [...new Set(colors.filter((color): color is Hex => typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)))].slice(0, 8);
+  if (!palette.length) throw new Error('ART_PALETTE_REQUIRED: layout contains no valid client colors');
+  return palette;
+}
+
+/** Derives art instructions from this layout without imposing one client's visual style. */
 export function deriveConditionedArtPrompt(layout: StudioLayoutV2): string {
   if (!layout.art) {
     throw new Error('Cannot derive art prompt for layout without art layer configuration');
@@ -192,20 +205,24 @@ export function deriveConditionedArtPrompt(layout: StudioLayoutV2): string {
   // The art fills its own box, not the canvas, so the frame is described from the box.
   const { aspectDesc } = artFrameForBox(layout.art.box || { x: 0, y: 0, width: layout.width, height: layout.height });
 
-  // Gather unique colors from background, panels, and rules
-  const colorSet = new Set<string>([layout.background.color]);
-  for (const s of layout.shapes) {
-    if (s.color) colorSet.add(s.color);
-  }
-  const paletteStr = Array.from(colorSet).join(', ');
+  const paletteStr = artPaletteForLayout(layout).join(', ');
 
-  const calmDesc = `Keep the central typography zone (normalized x: ${Number((calm.x / layout.width).toFixed(2))}, y: ${Number((calm.y / layout.height).toFixed(2))}, w: ${Number((calm.width / layout.width).toFixed(2))}, h: ${Number((calm.height / layout.height).toFixed(2))}) exceptionally calm, dark, and low-contrast with minimal texture, so overlaid text has flawless legibility.`;
+  const calmDesc = `Keep the reserved typography zone (normalized x: ${Number((calm.x / layout.width).toFixed(2))}, y: ${Number((calm.y / layout.height).toFixed(2))}, w: ${Number((calm.width / layout.width).toFixed(2))}, h: ${Number((calm.height / layout.height).toFixed(2))}) calm with low visual detail, so overlaid text remains legible.`;
 
-  const concept = layout.art.prompt || 'Abstract architectural lines and subtle gradient textures';
+  const concept = layout.art.prompt || 'Abstract visual texture supporting the composition';
 
   const p7Suffix = `Strict Negative Constraints: No text of any kind, no typography, no letters, no words, no numbers, no logos, no emblems, no seals, no flags, no coats of arms, no people, no faces, no hands, no watermarks, no borders.`;
 
-  return `${concept}. Clean modern aesthetic in ${aspectDesc} format. Palette restricted to ${paletteStr}, its darkest tones dominant with subtle accents. ${calmDesc} Confine any visual texture and subtle architectural geometry to the outer perimeter and corners. ${p7Suffix}`;
+  return `${concept}. Compose text-free background art in ${aspectDesc} format. Use only these layout colors: ${paletteStr}. ${calmDesc} Place the most active detail outside that reserved zone. ${p7Suffix}`;
+}
+
+/**
+ * The P01 report that gates art. With the copy it scores the lines the copy sets, the measure the
+ * layout generator is told (ADR-125); without copy only the declared-box fallback band applies.
+ */
+export function artGateMetricsV3(layout: StudioLayoutV2, renderOptions?: RenderLayoutOptions) {
+  const copyText = renderOptions?.copyText;
+  return evaluateDesignMetrics(layout, copyText ? { wrappedLines: measureWrappedLines(layout, copyText, renderOptions) } : {});
 }
 
 /**
@@ -220,12 +237,14 @@ export async function generateConditionedArtLayer(
   }
 
   // 1. Hard Gate: Only generate art after P01 passes
-  const p01Report = evaluateDesignMetrics(layout);
+  const p01Report = artGateMetricsV3(layout, options.renderOptions);
   if (!p01Report.passed) {
     throw new Error(
       `P01 deterministic design metrics failed on layout. Gated from calling image model. Failing metrics: ${p01Report.failingMetrics.join(', ')}`
     );
   }
+
+  assertClientLogoForLayout(layout, options.renderOptions);
 
   const apiKey = options.openaiApiKey || process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -293,9 +312,7 @@ export async function generateConditionedArtLayer(
       // not the whole canvas.
       width: Math.round(box.width),
       height: Math.round(box.height),
-      // The layout's own colours (background and shapes), as the image prompt uses: it was a fixed
-      // KAAE navy and gold for every client (ADR-038).
-      palette: [layout.background.color, ...layout.shapes.map((s) => s.color).filter(Boolean)] as Hex[],
+      palette: artPaletteForLayout(layout),
       // Drawn at full strength, the same rule the production art stage follows: the layer's
       // opacity is applied once, by the render and by the deck. Baking it in here as well made the
       // degraded motif twice as faint as the layout asked for, in the preview and in Canva alike.
@@ -330,13 +347,17 @@ export async function generateConditionedArtLayer(
 
   // 3. Composite behind text with scrim
   // The renderer reads the art from a file. It goes in a private temp directory, never the working
-  // directory (it used to land in output/proofs, and stayed there whenever the render threw).
+  // directory (it used to land in output/proofs). A missing client logo fails closed; the directory
+  // is removed on that path too.
   const tempArtDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hawa-art-'));
   const tempArtPath = path.join(tempArtDir, 'art.png');
   let renderResult: RenderLayoutV2Result;
   try {
     fs.writeFileSync(tempArtPath, artBuffer!);
-    renderResult = renderLayoutV2(layout, { artImagePath: tempArtPath });
+    renderResult = renderLayoutV2(layout, {
+      ...options.renderOptions,
+      artImagePath: tempArtPath,
+    });
   } finally {
     fs.rmSync(tempArtDir, { recursive: true, force: true });
   }

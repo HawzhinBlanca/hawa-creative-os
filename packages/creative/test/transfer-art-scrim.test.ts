@@ -235,7 +235,8 @@ describe('the declared art scrim reaches the deck', () => {
 
 describe('a delivered design, as it was stored', () => {
   // The winner of task 8fb76534: a 1080x1350 canvas whose art layer is the whole canvas at 0.25.
-  const stored = deadBandFixture as { copy: string[]; layout: StudioLayoutV2 };
+  // Deliberately preserve legacy nullable fields: this regression exercises stored historical JSON.
+  const stored = deadBandFixture as unknown as { copy: string[]; layout: StudioLayoutV2 };
 
   it('crops the square art the image model returns into the stored 4:5 canvas', async () => {
     const encoded = await encodeStudioTransferV2(structuredClone(stored.layout), stored.copy, undefined, {

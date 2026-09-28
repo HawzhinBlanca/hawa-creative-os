@@ -7,7 +7,7 @@ describe('requester-facing Canva outcome messages', () => {
   it('sends the Canva link only when a design actually exists', () => {
     const ready = composeCanvaStatusMessage({ taskId, title: 'Invitation', status: 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW', canvaUrl: 'https://www.canva.com/design/DA_x/edit' });
     expect(ready.text).toContain('draft is ready');
-    expect(ready.reply_markup?.inline_keyboard[0][0].url).toBe('https://www.canva.com/design/DA_x/edit');
+    expect(ready.reply_markup?.inline_keyboard[0][0]).toMatchObject({ url: 'https://www.canva.com/design/DA_x/edit' });
     const noDesign = composeCanvaStatusMessage({ taskId, title: 'Invitation', status: 'DRAFT_READY' });
     expect(noDesign.text).not.toContain('draft is ready');
     expect(noDesign.reply_markup).toBeUndefined();

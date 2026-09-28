@@ -49,7 +49,12 @@ export interface PublicationReceipt {
   driveFolderId: string;
   driveFiles: DriveFileReceipt[];
   /** rowNumber is present only when Google Sheets reported the row it wrote. */
-  sheet: { spreadsheetId: string; sheetId: number; rowKey: string; rowNumber?: number; expectedHash: SHA256; observedHash?: SHA256; synced: boolean };
+  sheet: {
+    spreadsheetId: string; sheetId: number; rowKey: string; rowNumber?: number;
+    expectedHash: SHA256; observedHash?: SHA256; synced: boolean;
+    /** Stable provider row identity and complete seven-column readback, absent in historical receipts. */
+    metadataId?: number; expectedValues?: string[]; expectedRowHash?: SHA256; observedRowHash?: SHA256;
+  };
   completedAt?: ISODateTime;
   state: 'drive_complete' | 'complete' | 'failed';
   detail: JsonObject;

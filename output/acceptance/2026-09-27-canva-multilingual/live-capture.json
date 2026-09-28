@@ -1,0 +1,531 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "2d4c4de1f8dafa8d3761ebd44b4d74e57c6fc78c",
+  "corpusSha256": "903601e57d2570a58545ef93b0dda45c2b6d01d7be01880a7df803990eee1148",
+  "startedAt": "2026-09-27T03:00:52.355Z",
+  "groups": {
+    "group-1": {
+      "caseIds": [
+        "RTL-001",
+        "RTL-002",
+        "RTL-003",
+        "RTL-004",
+        "RTL-005",
+        "RTL-006",
+        "RTL-007",
+        "RTL-008",
+        "RTL-009",
+        "RTL-010"
+      ],
+      "sourceSha256": "7f6aa0d3a57973664b3a4ef37d2b1e1ab06bcf9e63e0648a97b57859499cfa62",
+      "exports": {
+        "png": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-1-png",
+          "at": "2026-09-27T03:00:54.759Z",
+          "jobId": "e8f01a32-8270-4f48-b416-8aabbe02a617",
+          "file": "group-1-canva.png",
+          "bytes": 66889,
+          "sha256": "30c83ee6c720c01e63856e967fcecfd648dea37025ff202ba479f631413689e8",
+          "capturedAt": "2026-09-27T03:00:57.039Z",
+          "pixels": [
+            1200,
+            2000
+          ]
+        },
+        "pdf": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-1-pdf",
+          "at": "2026-09-27T03:01:00.551Z",
+          "jobId": "58aa592c-ee21-41c9-a137-77227e642496",
+          "file": "group-1-canva.pdf",
+          "bytes": 23182,
+          "sha256": "8f3df170c1d9578c0b09c49c774634793807b81a35bece32f103bbe83b9bcaba",
+          "capturedAt": "2026-09-27T03:01:04.057Z"
+        },
+        "pptx": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-1-pptx",
+          "at": "2026-09-27T03:01:07.572Z",
+          "jobId": "9b45771a-ac30-4179-8ca3-f3cf847b5cc5",
+          "file": "group-1-canva.pptx",
+          "bytes": 113741,
+          "sha256": "5689cc5e9c6c1a1711cd23df2f60fe54eb4e62f545214781b76067b33c821541",
+          "capturedAt": "2026-09-27T03:01:09.834Z",
+          "qa": {
+            "file": "group-1-qa.json",
+            "sha256": "786fbad1f97b075200fc85b0152eaa108f0ef224fd9806a99bd2c3417ff9cf05",
+            "copyPass": true,
+            "fontPass": true,
+            "rtlPass": true,
+            "rtlNote": "Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.",
+            "textObjectCount": 10,
+            "observedFonts": [
+              "Noto Sans Arabic"
+            ],
+            "fullReleasePass": false
+          }
+        }
+      },
+      "import": {
+        "status": "completed",
+        "operationKey": "rtl-20260927-group-1-import",
+        "at": "2026-09-27T03:00:52.389Z",
+        "jobId": "fa26c330-a4d8-4017-bf42-04d0e19bb101"
+      },
+      "design": {
+        "id": "DAHWW-oflAo",
+        "title": "[TEST] Hawa RTL 2026-09-27 group-1",
+        "pageCount": 1,
+        "createdAt": 1790478053,
+        "updatedAt": 1790478053
+      },
+      "captureMetadataUnchanged": false,
+      "status": "design_changed",
+      "captureBefore": {
+        "id": "DAHWW-oflAo",
+        "title": "[TEST] Hawa RTL 2026-09-27 group-1",
+        "pageCount": 1,
+        "createdAt": 1790478053,
+        "updatedAt": 1790478053
+      },
+      "captureAfter": {
+        "id": "DAHWW-oflAo",
+        "updatedAt": 1790478055,
+        "pageCount": 1
+      }
+    },
+    "group-2": {
+      "caseIds": [
+        "RTL-011",
+        "RTL-012",
+        "RTL-013",
+        "RTL-014",
+        "RTL-015",
+        "RTL-016",
+        "RTL-017",
+        "RTL-018",
+        "RTL-019",
+        "RTL-020"
+      ],
+      "sourceSha256": "d775ec16c6ac05534b574e173ae8ea30478cf622bb88c4824a65811143485caa",
+      "exports": {
+        "png": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-2-png",
+          "at": "2026-09-27T03:04:59.577Z",
+          "jobId": "cf8acab2-0993-466c-8289-3b11b3b54e2a",
+          "file": "group-2-canva.png",
+          "bytes": 81673,
+          "sha256": "af70dec6f74ff2d02350abfcd8fb0175576f2878292d047c44a8edf5cd93a1c7",
+          "capturedAt": "2026-09-27T03:05:03.084Z",
+          "pixels": [
+            1200,
+            2000
+          ]
+        },
+        "pdf": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-2-pdf",
+          "at": "2026-09-27T03:05:06.597Z",
+          "jobId": "d0467d81-4626-4d25-b66d-6267413551c4",
+          "file": "group-2-canva.pdf",
+          "bytes": 24517,
+          "sha256": "60574bfc52ea63b0fdb26b10f6c9284af1ae4cd98d38cdb49c35f000c3290fc4",
+          "capturedAt": "2026-09-27T03:05:08.931Z"
+        },
+        "pptx": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-2-pptx",
+          "at": "2026-09-27T03:05:12.442Z",
+          "jobId": "faf01de0-75b0-46fc-8750-de674ddc782e",
+          "file": "group-2-canva.pptx",
+          "bytes": 113824,
+          "sha256": "4f139e585e8eaf1142f818e6b690a76e4c0a281e5b04e5acb476aac3edd80757",
+          "capturedAt": "2026-09-27T03:05:14.613Z",
+          "qa": {
+            "file": "group-2-qa.json",
+            "sha256": "6498072088a07672392c053d9a2c47cdfff17fa800f69df2118959205b0c7ae5",
+            "copyPass": true,
+            "fontPass": true,
+            "rtlPass": true,
+            "rtlNote": "Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.",
+            "textObjectCount": 10,
+            "observedFonts": [
+              "Noto Sans Arabic"
+            ],
+            "fullReleasePass": false
+          }
+        }
+      },
+      "import": {
+        "status": "completed",
+        "operationKey": "rtl-20260927-group-2-import",
+        "at": "2026-09-27T03:03:00.055Z",
+        "jobId": "46bdaad4-a013-49ae-88d7-4363febec8b7"
+      },
+      "design": {
+        "id": "DAHWW7k0bDA",
+        "title": "[TEST] Hawa RTL 2026-09-27 group-2",
+        "pageCount": 1,
+        "createdAt": 1790478181,
+        "updatedAt": 1790478182
+      },
+      "metadataSamples": [
+        {
+          "updatedAt": 1790478182,
+          "observedAt": "2026-09-27T03:04:56.316Z"
+        },
+        {
+          "updatedAt": 1790478182,
+          "observedAt": "2026-09-27T03:04:59.564Z"
+        }
+      ],
+      "captureBefore": {
+        "id": "DAHWW7k0bDA",
+        "updatedAt": 1790478182,
+        "pageCount": 1
+      },
+      "captureAfter": {
+        "id": "DAHWW7k0bDA",
+        "updatedAt": 1790478182,
+        "pageCount": 1
+      },
+      "captureMetadataUnchanged": true,
+      "status": "captured"
+    },
+    "group-3": {
+      "caseIds": [
+        "RTL-021",
+        "RTL-022",
+        "RTL-023",
+        "RTL-024",
+        "RTL-025",
+        "RTL-026",
+        "RTL-027",
+        "RTL-028",
+        "RTL-029",
+        "RTL-030"
+      ],
+      "sourceSha256": "e0a6731d0c628f66ed50e96061044d4631c09e98cc7debad2c838f81dcad0cd5",
+      "exports": {
+        "png": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-3-png",
+          "at": "2026-09-27T03:05:27.357Z",
+          "jobId": "07991e2c-f7ae-4765-a1f6-048adede646e",
+          "file": "group-3-canva.png",
+          "bytes": 78343,
+          "sha256": "a9c0e7fcf4c50d5b1249e72a88ad9d8b8095ff6be9db57fc0561136eca26f0ca",
+          "capturedAt": "2026-09-27T03:05:34.497Z",
+          "pixels": [
+            1200,
+            2000
+          ]
+        },
+        "pdf": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-3-pdf",
+          "at": "2026-09-27T03:05:38.010Z",
+          "jobId": "4cedb959-bbba-4433-aa1f-285fe6e2c229",
+          "file": "group-3-canva.pdf",
+          "bytes": 24637,
+          "sha256": "b8a89b2ecab562dc8b121c8b797d7a696e6a5c89d129fd9b3bc8e3ea452d0268",
+          "capturedAt": "2026-09-27T03:05:40.187Z"
+        },
+        "pptx": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-3-pptx",
+          "at": "2026-09-27T03:05:43.698Z",
+          "jobId": "3abc50a7-eb36-4756-b08e-b3591a201883",
+          "file": "group-3-canva.pptx",
+          "bytes": 113869,
+          "sha256": "5486d2cd427a5bd28b06fe090c6653b6fe408620cb70a5f874ecc8f628129ff2",
+          "capturedAt": "2026-09-27T03:05:45.955Z",
+          "qa": {
+            "file": "group-3-qa.json",
+            "sha256": "2efad433ec219db0945390fc1c0e64307fc95d916dd921187d0d63176f7be3c9",
+            "copyPass": true,
+            "fontPass": true,
+            "rtlPass": true,
+            "rtlNote": "Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.",
+            "textObjectCount": 10,
+            "observedFonts": [
+              "Noto Sans Arabic"
+            ],
+            "fullReleasePass": false
+          }
+        }
+      },
+      "import": {
+        "status": "completed",
+        "operationKey": "rtl-20260927-group-3-import",
+        "at": "2026-09-27T03:05:18.370Z",
+        "jobId": "6af481cc-0f7c-4319-982b-e0ba3dfcb56e"
+      },
+      "design": {
+        "id": "DAHWWwCxPqk",
+        "title": "[TEST] Hawa RTL 2026-09-27 group-3",
+        "pageCount": 1,
+        "createdAt": 1790478319,
+        "updatedAt": 1790478319
+      },
+      "metadataSamples": [
+        {
+          "updatedAt": 1790478319,
+          "observedAt": "2026-09-27T03:05:20.904Z"
+        },
+        {
+          "updatedAt": 1790478321,
+          "observedAt": "2026-09-27T03:05:24.123Z"
+        },
+        {
+          "updatedAt": 1790478321,
+          "observedAt": "2026-09-27T03:05:27.348Z"
+        }
+      ],
+      "captureBefore": {
+        "id": "DAHWWwCxPqk",
+        "updatedAt": 1790478321,
+        "pageCount": 1
+      },
+      "captureAfter": {
+        "id": "DAHWWwCxPqk",
+        "updatedAt": 1790478321,
+        "pageCount": 1
+      },
+      "captureMetadataUnchanged": true,
+      "status": "captured"
+    },
+    "group-4": {
+      "caseIds": [
+        "RTL-031",
+        "RTL-032",
+        "RTL-033",
+        "RTL-034",
+        "RTL-035",
+        "RTL-036",
+        "RTL-037",
+        "RTL-038",
+        "RTL-039",
+        "RTL-040"
+      ],
+      "sourceSha256": "ac61eb164265de2b44b0b1824567e51f45fb0d428ef19c449ba5d37a407b6c1e",
+      "exports": {
+        "png": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-4-png",
+          "at": "2026-09-27T03:05:58.669Z",
+          "jobId": "62ece534-5334-4712-bc54-8e7bfb684d79",
+          "file": "group-4-canva.png",
+          "bytes": 80405,
+          "sha256": "8f2a8dd8ecfe2406d763ca76fd76766424f7eb7e5509c917996c0a87937bafc5",
+          "capturedAt": "2026-09-27T03:06:02.135Z",
+          "pixels": [
+            1200,
+            2000
+          ]
+        },
+        "pdf": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-4-pdf",
+          "at": "2026-09-27T03:06:05.647Z",
+          "jobId": "86a2d956-2502-4c84-87e5-ca4efa29a7c0",
+          "file": "group-4-canva.pdf",
+          "bytes": 30329,
+          "sha256": "04e7bf986a173156a8cee6151c06c007c10bf08a5f062c516fffa5904f967f58",
+          "capturedAt": "2026-09-27T03:06:09.071Z"
+        },
+        "pptx": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-4-pptx",
+          "at": "2026-09-27T03:06:12.584Z",
+          "jobId": "f6ad1e2b-c3f0-4c8c-b344-5c95593520fe",
+          "file": "group-4-canva.pptx",
+          "bytes": 113870,
+          "sha256": "ff92c95c150b6c1affa26808e8514abff7f1eaf3c43638f6cc9cdc60d9ef3c3c",
+          "capturedAt": "2026-09-27T03:06:14.763Z",
+          "qa": {
+            "file": "group-4-qa.json",
+            "sha256": "02d439c1283438d16e4c313c35db6bcdb39ce30e94c6a33d0f014f9c154700a2",
+            "copyPass": true,
+            "fontPass": true,
+            "rtlPass": true,
+            "rtlNote": "Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.",
+            "textObjectCount": 10,
+            "observedFonts": [
+              "Noto Sans Arabic"
+            ],
+            "fullReleasePass": false
+          }
+        }
+      },
+      "import": {
+        "status": "completed",
+        "operationKey": "rtl-20260927-group-4-import",
+        "at": "2026-09-27T03:05:49.773Z",
+        "jobId": "ac5ca3b0-4897-446f-9ffd-c7c442a35815"
+      },
+      "design": {
+        "id": "DAHWWxcep-I",
+        "title": "[TEST] Hawa RTL 2026-09-27 group-4",
+        "pageCount": 1,
+        "createdAt": 1790478350,
+        "updatedAt": 1790478350
+      },
+      "metadataSamples": [
+        {
+          "updatedAt": 1790478350,
+          "observedAt": "2026-09-27T03:05:52.178Z"
+        },
+        {
+          "updatedAt": 1790478353,
+          "observedAt": "2026-09-27T03:05:55.415Z"
+        },
+        {
+          "updatedAt": 1790478353,
+          "observedAt": "2026-09-27T03:05:58.658Z"
+        }
+      ],
+      "captureBefore": {
+        "id": "DAHWWxcep-I",
+        "updatedAt": 1790478353,
+        "pageCount": 1
+      },
+      "captureAfter": {
+        "id": "DAHWWxcep-I",
+        "updatedAt": 1790478353,
+        "pageCount": 1
+      },
+      "captureMetadataUnchanged": true,
+      "status": "captured"
+    },
+    "group-1-round-2": {
+      "caseIds": [
+        "RTL-001",
+        "RTL-002",
+        "RTL-003",
+        "RTL-004",
+        "RTL-005",
+        "RTL-006",
+        "RTL-007",
+        "RTL-008",
+        "RTL-009",
+        "RTL-010"
+      ],
+      "sourceSha256": "7f6aa0d3a57973664b3a4ef37d2b1e1ab06bcf9e63e0648a97b57859499cfa62",
+      "exports": {
+        "png": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-1-round-2-png",
+          "at": "2026-09-27T03:06:57.013Z",
+          "jobId": "03fdebe6-3ae8-48d0-93b2-64e360695629",
+          "file": "group-1-round-2-canva.png",
+          "bytes": 66889,
+          "sha256": "9867c1f667f2925280bd1a4ea447973c3b6ef2f568cee89c0b967cfdf3ae560b",
+          "capturedAt": "2026-09-27T03:07:00.509Z",
+          "pixels": [
+            1200,
+            2000
+          ]
+        },
+        "pdf": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-1-round-2-pdf",
+          "at": "2026-09-27T03:07:04.019Z",
+          "jobId": "819376b3-f34d-48f2-8f25-08b9b4de9176",
+          "file": "group-1-round-2-canva.pdf",
+          "bytes": 23182,
+          "sha256": "bf4a9d2a6260d041b0b881b025df3bbbbfb75615c603c9f719bda9756d430cc2",
+          "capturedAt": "2026-09-27T03:07:07.405Z"
+        },
+        "pptx": {
+          "status": "captured",
+          "operationKey": "rtl-20260927-group-1-round-2-pptx",
+          "at": "2026-09-27T03:07:10.920Z",
+          "jobId": "83a24b93-8f81-427a-9c73-6fdc080729f1",
+          "file": "group-1-round-2-canva.pptx",
+          "bytes": 113741,
+          "sha256": "5138c60337e629fd2fc6c04c3993ca9aa64b323d497420d936fb8bed6eae1512",
+          "capturedAt": "2026-09-27T03:07:13.059Z",
+          "qa": {
+            "file": "group-1-round-2-qa.json",
+            "sha256": "786fbad1f97b075200fc85b0152eaa108f0ef224fd9806a99bd2c3417ff9cf05",
+            "copyPass": true,
+            "fontPass": true,
+            "rtlPass": true,
+            "rtlNote": "Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.",
+            "textObjectCount": 10,
+            "observedFonts": [
+              "Noto Sans Arabic"
+            ],
+            "fullReleasePass": false
+          }
+        }
+      },
+      "import": {
+        "status": "completed",
+        "operationKey": "rtl-20260927-group-1-import",
+        "at": "2026-09-27T03:00:52.389Z",
+        "jobId": "fa26c330-a4d8-4017-bf42-04d0e19bb101"
+      },
+      "design": {
+        "id": "DAHWW-oflAo",
+        "title": "[TEST] Hawa RTL 2026-09-27 group-1",
+        "pageCount": 1,
+        "createdAt": 1790478053,
+        "updatedAt": 1790478053
+      },
+      "reason": "New capture after observed initial metadata change; first failed set retained.",
+      "metadataSamples": [
+        {
+          "updatedAt": 1790478055,
+          "observedAt": "2026-09-27T03:06:53.781Z"
+        },
+        {
+          "updatedAt": 1790478055,
+          "observedAt": "2026-09-27T03:06:57.002Z"
+        }
+      ],
+      "captureBefore": {
+        "id": "DAHWW-oflAo",
+        "updatedAt": 1790478055,
+        "pageCount": 1
+      },
+      "captureAfter": {
+        "id": "DAHWW-oflAo",
+        "updatedAt": 1790478055,
+        "pageCount": 1
+      },
+      "captureMetadataUnchanged": true,
+      "status": "captured"
+    }
+  },
+  "scope": "Four synthetic one-page sheets; real Hawa typed provider client, no full task/approval/delivery workflow.",
+  "lastFailure": {
+    "at": "2026-09-27T03:03:00.499Z",
+    "phase": "group-2:import",
+    "errorClass": "TypeError",
+    "code": null,
+    "httpStatus": null
+  },
+  "failures": [
+    {
+      "at": "2026-09-27T03:01:13.598Z",
+      "phase": "group-1:capture-consistency",
+      "errorClass": "Error",
+      "finding": "Provider updated_at advanced from 1790478053 to 1790478055; first export set refused."
+    },
+    {
+      "at": "2026-09-27T03:03:00.499Z",
+      "phase": "group-2:import",
+      "errorClass": "TypeError",
+      "code": null,
+      "httpStatus": null,
+      "clarification": "Probe ordering bug: stability check dereferenced record.design before saved import job was polled. Not a Canva transport failure; job ID retained. Fixed ordering and resume existing job."
+    }
+  ],
+  "status": "captures_include_refused_set",
+  "completedAt": "2026-09-27T03:07:16.814Z",
+  "fullMultilingualAdmission": false
+}

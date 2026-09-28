@@ -17,12 +17,6 @@ export interface MotifOptions {
 }
 
 /**
- * Neutral greys for a motif drawn without a palette. It was KAAE's palette, so a motif for any
- * client that passed none came out in KAAE's navy and gold (ADR-038). Callers pass the client's.
- */
-const DEFAULT_PALETTE: Hex[] = ['#1A1A1A', '#3A3A3A', '#6B6B6B', '#BDBDBD', '#FFFFFF'];
-
-/**
  * Deterministic pseudo-random number generator (Mulberry32).
  */
 export function createPrng(seed = 12345678): () => number {
@@ -35,8 +29,11 @@ export function createPrng(seed = 12345678): () => number {
   };
 }
 
-function normalizePalette(palette?: Hex[]): Hex[] {
-  if (!palette || palette.length === 0) return DEFAULT_PALETTE;
+export function requireClientPalette(palette?: Hex[]): Hex[] {
+  if (!palette || palette.length === 0) throw new Error('MOTIF_PALETTE_REQUIRED: supply this client’s approved layout colors');
+  if (palette.some((color) => typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color))) {
+    throw new Error('MOTIF_PALETTE_INVALID: colors must be six-digit hex values');
+  }
   return palette.map((c) => c.toUpperCase());
 }
 
@@ -191,9 +188,9 @@ function generateGradientWashSvg(
   globalOpacity: number
 ): string {
   const gradId = `wash-grad-${Math.floor(prng() * 100000)}`;
-  const c1 = palette[0] || DEFAULT_PALETTE[0];
-  const c2 = palette[1 % palette.length] || DEFAULT_PALETTE[1];
-  const c3 = palette[2 % palette.length] || DEFAULT_PALETTE[2];
+  const c1 = palette[0];
+  const c2 = palette[1 % palette.length];
+  const c3 = palette[2 % palette.length];
 
   const isRadial = prng() > 0.5;
 
@@ -220,9 +217,8 @@ function generateGradientWashSvg(
  * step lighter than the field. The texture of the owner's K-12 reference (task 89c242f2).
  */
 function generateDiagonalLinesSvg(width: number, height: number, palette: Hex[], globalOpacity: number): string {
-  // The palette colours nearest a deep blue (the lighter plane) and a mid blue (the lines). The two
-  // are only points in colour space: what is drawn is always the client's own colours. (Sorting by
-  // lightness instead picked a near-black from a palette with several dark tones.)
+  // The brand's royal navy for the lighter plane and its primary blue for the lines, or the palette
+  // colours nearest them (sorting by lightness picked a near-black from the KAAE palette).
   const plane = nearestTo('#1E3A5F', palette);
   const line = nearestTo('#4770A3', palette);
   const spacing = Math.max(14, Math.round(Math.min(width, height) / 60));
@@ -249,7 +245,7 @@ function nearestTo(want: Hex, palette: Hex[]): Hex {
     const [x, y, z] = rgb(h);
     return (x - r) ** 2 + (y - g) ** 2 + (z - b) ** 2;
   };
-  return [...palette].sort((p, q) => d(p) - d(q))[0] || want;
+  return [...palette].sort((p, q) => d(p) - d(q))[0];
 }
 
 /**
@@ -258,7 +254,7 @@ function nearestTo(want: Hex, palette: Hex[]): Hex {
  */
 export function generateMotifSvg(type: ProceduralMotifType, options: MotifOptions): string {
   const prng = createPrng(options.seed ?? 42);
-  const palette = normalizePalette(options.palette);
+  const palette = requireClientPalette(options.palette);
   const opacity = options.opacity ?? 1.0;
   const width = options.width;
   const height = options.height;

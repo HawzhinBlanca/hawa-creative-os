@@ -96,7 +96,7 @@ export const STYLE_SPEC_SCHEMA = {
     },
     accentFirstTitleLine: {
       type: 'boolean',
-      description: "True when the first line of the title is set in gold above a light title (for example 'MEET KAAE AT' over the event's name).",
+      description: "True when the first line of the title uses the brand's accent colour above a light title (for example an edition label above the event's name).",
     },
     cta: {
       type: 'string',
@@ -180,7 +180,7 @@ export function applyStyleSpec(
   const title = layout.text.find((t) => t.role === 'title');
   const cta = layout.text.find((t) => t.role === 'cta');
   // The palette's warm accent (its colour nearest a gold). With no palette, a neutral light grey:
-  // never KAAE's own gold (ADR-038).
+  // never KAAE's own gold (ADR-127).
   const gold = palette.length ? nearest('#F7B500', palette) : '#D9D9D9';
   const ctaBefore = cta ? { x: cta.x, y: cta.y, width: cta.width, height: cta.height } : undefined;
   const fullBleed = (s: ShapeElement) => s.width >= 0.98 * W && s.height >= 0.98 * H;
@@ -377,9 +377,11 @@ export function applyStyleSpec(
       (s) => !(s.role === 'panel' && small(s) && (intersects(s, cta) || (ctaBefore && intersects(s, ctaBefore))))
     );
     layout.shapes.push(button);
-    // Contrast is checked on the button; navy on gold passes by a wide margin, but say so if not.
-    const on = calculateLuminanceContrastRatio(hexToLuminance(cta.color), hexToLuminance(gold));
-    if (on < 4.5) cta.color = hexToLuminance(gold) > 0.4 ? darkest : '#FFFFFF';
+    // Contrast is checked on the button, and checked again after the fallback: the client's darkest
+    // colour can be mid-tone (no longer KAAE's navy, ADR-127), and then only black or white is left.
+    const on = (colour: string) => calculateLuminanceContrastRatio(hexToLuminance(colour), hexToLuminance(gold));
+    if (on(cta.color) < 4.5) cta.color = hexToLuminance(gold) > 0.4 ? darkest : '#FFFFFF';
+    if (on(cta.color) < 4.5) cta.color = on('#000000') >= on('#FFFFFF') ? '#000000' : '#FFFFFF';
   }
 
   // Logo in the corner the client or the reference puts it.

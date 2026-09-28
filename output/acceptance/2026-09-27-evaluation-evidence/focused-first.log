@@ -1,0 +1,27 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_8213c0e7768c1566 and hawa_tpl_repair_8213c0e7768c1566 (22 ms)
+ ❯ packages/evals/test/evals.test.ts (7 tests | 1 failed) 52ms
+     × does not call an uncredentialed provider or qualify its failed tournament 33ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/evals/test/evals.test.ts > Evals: Tournament & Acceptance Benchmarks > does not call an uncredentialed provider or qualify its failed tournament
+TypeError: actual value must be number or bigint, received "object"
+ ❯ packages/evals/test/evals.test.ts:65:36
+     63|       expect(full.routing.failedCases).toBe(full.routing.totalCases);
+     64|       expect(full.routing.passRate).toBe(0);
+     65|       expect(full.overallPassRate).toBeLessThan(95);
+       |                                    ^
+     66|       expect(full.admissionEligible).toBe(false);
+     67|       expect(fetchSpy).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 7 passed (8)
+      Tests  1 failed | 54 passed (55)
+   Start at  14:42:00
+   Duration  7.77s (transform 2.12s, setup 389ms, import 3.45s, tests 6.49s, environment 440ms)
+

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import {
   ReconciliationService,
   RECONCILIATION_BASIS,
@@ -9,6 +9,15 @@ import {
 import { GooglePublisher } from '../src/google-publisher.js';
 
 describe('ReconciliationService (FR-049, FR-050)', () => {
+  it('flags an uncertain archive without claiming the Drive file is missing', () => {
+    const report = new ReconciliationService().audit([
+      { id: 'task-uncertain', status: 'ARCHIVE_RECONCILIATION', updatedAt: new Date().toISOString() },
+    ], [], []);
+    expect(report).toMatchObject({ status: 'divergent', inSyncCount: 0, driftCount: 1 });
+    expect(report.anomalies).toEqual([expect.objectContaining({ taskId: 'task-uncertain',
+      kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity: 'high' })]);
+    expect(report.anomalies[0].description).not.toMatch(/missing|absent/i);
+  });
   it('detects clean state when PostgreSQL, Drive, and Sheets are perfectly synced', () => {
     const service = new ReconciliationService();
     const tasks: TaskRecord[] = [
@@ -25,7 +34,8 @@ describe('ReconciliationService (FR-049, FR-050)', () => {
     const report = service.audit(tasks, drive, sheets);
     expect(report.status).toBe('clean');
     expect(report.driftCount).toBe(0);
-    expect(report.inSyncCount).toBe(2);
+    expect(report.inSyncCount).toBe(1);
+    expect(report.pendingTaskCount).toBe(1);
   });
 
   it('reports a missing Drive delivery and repairs nothing: no row is invented', () => {
@@ -79,20 +89,19 @@ describe('ReconciliationService (FR-049, FR-050)', () => {
     ]);
   });
 
-  it('has no latest audit until one runs, and never keeps a simulated audit as the latest', () => {
+  it('marks caller simulations and keeps each returned comparison independent', () => {
     const service = new ReconciliationService();
     // Formerly an invented clean report (12 tasks, 24 Drive files, all in sync) before any audit ran.
-    expect(service.getLastReport()).toBeNull();
 
     const tasks: TaskRecord[] = [{ id: 'task-1', status: 'COMPLETE', updatedAt: new Date().toISOString() }];
     const simulated = service.audit(tasks, [], [], { simulated: true });
     expect(simulated.simulated).toBe(true);
     expect(simulated.basis).toContain('Rows supplied or altered by the caller were included.');
-    expect(service.getLastReport()).toBeNull();
 
     const real = service.audit(tasks, [], []);
     expect(real.simulated).toBe(false);
-    expect(service.getLastReport()).toBe(real);
+    expect(simulated.simulated).toBe(true);
+    expect(real.auditId).not.toBe(simulated.auditId);
   });
 
   it('handles GooglePublisher reconciliation without throwing unhandled exceptions', async () => {
@@ -114,7 +123,7 @@ describe('ReconciliationService (FR-049, FR-050)', () => {
     }
 
     const verifyRes = await publisher.verify(ctx, nonExistentId);
-    expect(verifyRes.ok).toBe(true);
+    expect(verifyRes.ok).toBe(true); assert(verifyRes.ok);
     expect(verifyRes.value.consistent).toBe(false);
   });
 });

@@ -27,8 +27,11 @@ interface FakeTask {
   id: string;
   title: string;
   status: string;
+  requestId?: string;
   revision?: number;
+  revisionId?: string;
   approved?: boolean;
+  fontFamilyPass?: boolean | null;
 }
 
 const approvable = (id: string, title: string): FakeTask => ({ id, title, status: 'AWAITING_APPROVAL', revision: 1 });
@@ -37,6 +40,7 @@ const approvable = (id: string, title: string): FakeTask => ({ id, title, status
 function asTask(t: FakeTask) {
   return {
     id: t.id,
+    ...(t.requestId ? { requestId: t.requestId } : {}),
     title: t.title,
     status: t.status,
     clientName: 'KAAE',
@@ -44,9 +48,10 @@ function asTask(t: FakeTask) {
     updatedAt: `2026-09-24T10:00:0${t.revision ?? 0}.000Z`,
     ...(t.revision
       ? {
-          latestRevisionId: `r${t.revision}`,
-          latestRevision: { id: `r${t.revision}`, version: t.revision, sha256: 'ab'.repeat(32), format: 'png' },
-          qaReport: { passed: true, bidiIsolation: true, safeMargins: true, contrastCompliant: true, fontCoverage: true, errors: [] },
+          latestRevisionId: t.revisionId || `r${t.revision}`,
+          latestRevision: { id: t.revisionId || `r${t.revision}`, version: t.revision, sha256: 'ab'.repeat(32), format: 'png' },
+          qaReport: { passed: true, bidiIsolation: true, safeMargins: true, contrastCompliant: true, fontCoverage: true,
+            ...(t.fontFamilyPass !== undefined ? { fontFamilyPass: t.fontFamilyPass } : {}), errors: [] },
         }
       : {}),
     ...(t.approved ? { latestApproval: { decisionId: 'd1', role: 'art_director', decidedAt: '2026-09-24T10:05:00.000Z' } } : {}),
@@ -54,20 +59,42 @@ function asTask(t: FakeTask) {
 }
 
 /** Core as the Work screen reads it. `decision` holds a POST .../decisions until the test answers it. */
-function fakeCore(initial: FakeTask[], opts: { role?: string } = {}) {
+function fakeCore(initial: FakeTask[], opts: { role?: string; listIds?: string[] } = {}) {
   const tasks = [...initial];
   let answerDecision: ((res: Response) => void) | null = null;
   const calls = stubCore((c: FetchCall) => {
     if (c.path === '/v1/auth/session' && c.method === 'GET') {
       return json({ authenticated: true, user: { id: 'u1', role: opts.role ?? 'art_director', displayName: 'Art Director' } });
     }
-    if (isListRead(c)) return json({ items: tasks.map(asTask), total: tasks.length, limit: 50, nextCursor: null });
+    if (isListRead(c)) return json({ items: tasks.filter(t => !opts.listIds || opts.listIds.includes(t.id)).map(asTask), total: tasks.length, limit: 50, nextCursor: null });
     const detail = /^\/v1\/tasks\/([^/]+)$/.exec(c.path);
     if (detail && c.method === 'GET') {
       const t = tasks.find((x) => x.id === detail[1]);
       return t ? json(asTask(t)) : json({ title: 'Not Found' }, 404);
     }
     if (/^\/v1\/tasks\/[^/]+\/timeline$/.test(c.path)) return json({ events: [] });
+    const requesterSend = /^\/v1\/tasks\/([^/]+)\/requester-send-evidence$/.exec(c.path);
+    if (requesterSend && c.method === 'GET') {
+      const t = tasks.find((task) => task.id === requesterSend[1]);
+      if (t?.status !== 'REQUESTER_SEND_RECONCILIATION') return json({ title: 'No Uncertain Requester Send' }, 409);
+      return json({ taskId: t.id, requestId: t.requestId, requestRev: 5, publicationId: 'p1',
+        approvalId: 'd1', requesterChatId: '123456789', providerReceipt: 'not_available',
+        files: [{ artifactId: 'a1', filename: 'approved-export.pptx', sha256: 'ab'.repeat(32),
+          sendKey: 'send-file-a1', outcome: 'sent', attemptCount: 1, lastMarkAt: '2026-09-25T10:00:00.000Z', messageId: '87' }],
+        notice: { sendKey: 'send-notice', outcome: 'uncertain', attemptCount: 1, lastMarkAt: '2026-09-25T10:00:01.000Z', messageId: null } });
+    }
+    const sendConfirmation = /^\/v1\/tasks\/([^/]+)\/requester-send-confirmation$/.exec(c.path);
+    if (sendConfirmation && c.method === 'POST') {
+      const t = tasks.find((task) => task.id === sendConfirmation[1]);
+      if (!t || opts.role !== 'office_admin') return json({ title: 'Office Administrator Required' }, 403);
+      if (c.body?.requesterChatId !== '123456789' ||
+          c.body?.observed?.[0]?.messageId !== '87' || c.body?.observed?.[1]?.messageId !== '88') {
+        return json({ title: 'Evidence Mismatch' }, 409);
+      }
+      t.status = 'COMPLETE';
+      return json({ requestId: t.requestId, taskId: t.id, stage: 'delivered', requestRev: 6,
+        confirmationSource: 'staff_visible' });
+    }
     if (/^\/v1\/tasks\/[^/]+\/canva$/.test(c.path)) {
       return json({ artifacts: [{ id: 'a1', format: 'png', sha256: 'cd'.repeat(32), byte_size: 1000 }] });
     }
@@ -171,6 +198,20 @@ afterAll(() => {
 });
 
 describe('the Work queue follows the event stream', () => {
+  it.each([undefined, true, false, null])('keeps rendered glyphs unverified with legacy coverage=true and family result %s', async (fontFamilyPass) => {
+    fakeCore([{ ...approvable('t1', 'Font evidence'), fontFamilyPass }]);
+    const { view } = await renderWork(new FakeStream('connected'));
+    await click(byText(view.container, 'button', /QA Preflight/));
+    const panel = view.container.querySelector('[aria-label="Automated QA Preflight"]')!;
+    expect(panel.textContent).not.toContain('All glyphs covered');
+    expect(panel.textContent).not.toContain('Zero placeholder tofu boxes');
+    const rows = [...panel.querySelectorAll('.qa-item')];
+    const family = rows.find(row => row.textContent?.includes('Declared font families'));
+    const glyphs = rows.find(row => row.textContent?.includes('Rendered glyph coverage'));
+    expect(family?.classList.contains(fontFamilyPass === true ? 'passed' : fontFamilyPass === false ? 'failed' : 'pending')).toBe(true);
+    expect(glyphs?.classList.contains('pending')).toBe(true);
+  });
+
   it('shows a new draft within 2 s of its event', async () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
@@ -257,6 +298,92 @@ describe('the Work queue follows the event stream', () => {
 });
 
 describe('approve and request revision are mutations', () => {
+  it('holds an uncertain Telegram send for staff without offering Sheet or delivery retry', async () => {
+    const stream = new FakeStream('connected');
+    const core = fakeCore([{ id: 't1', title: 'Members evening poster', status: 'REQUESTER_SEND_RECONCILIATION',
+      requestId: '11111111-1111-4111-8111-111111111111', revision: 1, approved: true }]);
+    const { view } = await renderWork(stream);
+    expect(view.text()).toContain('Requester delivery did not complete or could not be confirmed');
+    expect(view.text()).toContain('Check Telegram Delivery');
+    expect(view.text()).toContain('approved-export.pptx');
+    expect(view.text()).toContain('Bot API message ID: 87');
+    expect(view.text()).toContain('May have arrived; requester receipt unknown');
+    expect(view.text()).toContain('Telegram requester receipt: unavailable');
+    expect(view.text()).not.toContain('Confirm visible in requester chat');
+    expect(view.text()).not.toContain('Retry Sheet Sync');
+    expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(true);
+    await click(view.container.querySelector('#btn-deliver-approved'));
+    expect(core.calls.filter((call) => call.method === 'POST' && call.path.endsWith('/publish'))).toHaveLength(0);
+  });
+
+  it('requires office administrator inspection of every send before recording confirmation', async () => {
+    const stream = new FakeStream('connected');
+    const core = fakeCore([{ id: 't1', title: 'Members evening poster', status: 'REQUESTER_SEND_RECONCILIATION',
+      requestId: '11111111-1111-4111-8111-111111111111', revision: 1, approved: true }], { role: 'office_admin' });
+    const { view } = await renderWork(stream);
+    const button = byText(view.container, 'button', 'Confirm visible in requester chat');
+    expect(button?.hasAttribute('disabled')).toBe(true);
+    const notice = view.container.querySelector('input[aria-label="Observed message ID for delivery notice"]') as HTMLInputElement;
+    await React.act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(notice, '88');
+      notice.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(button?.hasAttribute('disabled')).toBe(true);
+    const checkbox = view.container.querySelector('.requester-send-confirmation input[type="checkbox"]') as HTMLInputElement;
+    await click(checkbox);
+    expect(button?.hasAttribute('disabled')).toBe(false);
+    await click(button);
+    await advance(100);
+    expect(core.calls.find((call) => call.method === 'POST' &&
+      call.path.endsWith('/requester-send-confirmation'))?.body).toMatchObject({
+      expectedRev: 5, publicationId: 'p1', approvalId: 'd1', requesterChatId: '123456789',
+      attested: true, observed: [{ sendKey: 'send-file-a1', messageId: '87' },
+        { sendKey: 'send-notice', messageId: '88' }],
+    });
+  });
+
+  it('offers a request-owned Sheet retry only when Core reports the reconciliation status', async () => {
+    const stream = new FakeStream('connected');
+    fakeCore([{ id: 't1', title: 'Members evening poster', status: 'PUBLISH_RECONCILIATION',
+      requestId: '11111111-1111-4111-8111-111111111111', revision: 1, approved: true }]);
+    const { view } = await renderWork(stream);
+    expect(view.text()).toContain('Sheets row is not confirmed');
+    expect(view.text()).toContain('Retry Sheet Sync');
+    expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('shows uncertain Drive archive in Needs Action with a safe recheck action', async () => {
+    const stream = new FakeStream('connected');
+    fakeCore([{ id: 't1', title: 'Members evening poster', status: 'ARCHIVE_RECONCILIATION',
+      requestId: '11111111-1111-4111-8111-111111111111', revision: 1, approved: true }]);
+    const { view } = await renderWork(stream);
+    expect(view.text()).toContain('Drive may already have the approved files');
+    expect(view.text()).toContain('Recheck Drive Archive');
+    expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('shows a request-owned approval as recorded while delivery remains unavailable', async () => {
+    const stream = new FakeStream('connected');
+    const core = fakeCore([{ ...approvable('t1', 'Members evening poster'),
+      requestId: '11111111-1111-4111-8111-111111111111' }]);
+    const { view } = await renderWork(stream);
+    await click(view.container.querySelector('#btn-approve-captured'));
+    await advance(100);
+    expect(view.text()).toContain('Approve Captured Files');
+    expect(view.text()).not.toContain('Authorize Release & Approve');
+    await click(byText(view.container, 'button', 'Confirm Approval'));
+    await advance(100);
+    const t1 = core.tasks[0];
+    t1.status = 'APPROVED';
+    t1.approved = true;
+    core.answerDecision(json({ decisionId: 'd1' }, 201));
+    await advance(500);
+    expect(view.text()).toContain('Delivery will need a separate workflow action.');
+    expect(view.text()).toContain('Approval is recorded. Delivery starts separately');
+    expect(view.container.querySelector('#btn-deliver-approved')?.hasAttribute('disabled')).toBe(false);
+    expect(core.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/publish'))).toHaveLength(0);
+  });
+
   it('approve shows pending, leaves the status Core reported until Core answers, then reads the task and the list again', async () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
@@ -266,7 +393,7 @@ describe('approve and request revision are mutations', () => {
 
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
-    await click(byText(view.container, 'button', 'Confirm Approval & Release'));
+    await click(byText(view.container, 'button', 'Confirm Approval'));
     await advance(100);
 
     // Sent, and Core has not answered.
@@ -298,7 +425,7 @@ describe('approve and request revision are mutations', () => {
     const { view } = await renderWork(stream);
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
-    await click(byText(view.container, 'button', 'Confirm Approval & Release'));
+    await click(byText(view.container, 'button', 'Confirm Approval'));
     await advance(100);
     const lists = core.listReads();
     core.answerDecision(json({ title: 'Conflict', detail: 'The revision changed since it was captured' }, 409));
@@ -306,7 +433,7 @@ describe('approve and request revision are mutations', () => {
     expect(view.container.querySelector('[data-testid="task-status"]')?.textContent).toBe('NEEDS APPROVAL');
     expect(view.text()).toContain('Approval failed: The revision changed since it was captured');
     expect(core.listReads()).toBe(lists);
-    expect(byText(view.container, 'button', 'Confirm Approval & Release')?.hasAttribute('disabled')).toBe(false);
+    expect(byText(view.container, 'button', 'Confirm Approval')?.hasAttribute('disabled')).toBe(false);
   });
 
   it('an approval Core recorded is reported as recorded even when reading the task again fails', async () => {
@@ -315,7 +442,7 @@ describe('approve and request revision are mutations', () => {
     const { view } = await renderWork(stream);
     await click(view.container.querySelector('#btn-approve-captured'));
     await advance(100);
-    await click(byText(view.container, 'button', 'Confirm Approval & Release'));
+    await click(byText(view.container, 'button', 'Confirm Approval'));
     await advance(100);
     // Core goes away right after recording the approval.
     const answered = core.answerDecision.bind(core);
@@ -343,12 +470,26 @@ describe('approve and request revision are mutations', () => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(notes, 'Make the Kurdish headline larger');
       notes.dispatchEvent(new Event('input', { bubbles: true }));
     });
+    for (const [id, value] of [['revision-scope', 'typography'],
+      ['revision-category', 'aesthetic_preference'], ['revision-priority', 'high']]) {
+      const select = view.container.querySelector(`#${id}`) as HTMLSelectElement;
+      await React.act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, value);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+    const targets = view.container.querySelector('#revision-targets') as HTMLInputElement;
+    await React.act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(targets, 'headline');
+      targets.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     await click(byText(view.container, 'button', 'Submit Revision Request'));
     await advance(100);
 
     expect(core.calls.find((c) => c.method === 'POST' && c.path.endsWith('/decisions'))?.body).toMatchObject({
       action: 'revision_requested',
-      revisionRequest: { comment: 'Make the Kurdish headline larger' },
+      revisionRequest: { scope: 'typography', category: 'aesthetic_preference', targetNodes: ['headline'],
+        priority: 'high', isReusableFeedback: false, comment: 'Make the Kurdish headline larger' },
     });
     expect(byText(view.container, 'button', 'Sending request…')?.hasAttribute('disabled')).toBe(true);
     expect(status()).toBe('NEEDS APPROVAL');
@@ -465,5 +606,73 @@ describe('an expired session reaches sign-in from any screen, once', () => {
     expect(signInForms(view.container)).toBe(0);
     expect(stream.connects).toBeGreaterThanOrEqual(2);
     expect(view.text()).toContain('No tasks currently pending in the work queue.');
+  });
+});
+
+describe('chat review navigation (ADR-065)', () => {
+  const taskId = 'aa000000-0000-4000-8000-000000000001';
+  const revisionId = 'aa000000-0000-4000-8000-000000000002';
+  const oldRevision = 'aa000000-0000-4000-8000-000000000003';
+  async function openLink(hash: string) {
+    window.location.hash = hash;
+    const runtime = createDeskRuntime({ stream: new FakeStream('connected'), doc: { hidden: false } });
+    const view = await mount(h(DeskProviders, { runtime, children: h(App) }));
+    mounted.push({ view, runtime });
+    await advance(3_000);
+    return { view, runtime };
+  }
+
+  for (const hash of [`#/work?task=${taskId}&revision=${revisionId}`, `#task-${taskId}`]) {
+    it(`opens the linked task, not the first queue item: ${hash}`, async () => {
+      fakeCore([approvable('first', 'Unrelated first task'), { ...approvable(taskId, 'Linked review'), revisionId }], { listIds: ['first'] });
+      const { view } = await openLink(hash);
+      const detail = view.container.querySelector('[aria-label="Task Detail View"]')!;
+      expect(detail.textContent).toContain('Linked review');
+      expect(detail.textContent).not.toContain('Unrelated first task');
+      expect(detail.classList.contains('mobile-hidden')).toBe(false);
+    });
+  }
+
+  it('does not substitute a queue task when the linked task is unavailable', async () => {
+    fakeCore([approvable('first', 'Unrelated first task')]);
+    const { view } = await openLink(`#/work?task=${taskId}&revision=${revisionId}`);
+    const detail = view.container.querySelector('[aria-label="Task Detail View"]')!;
+    expect(detail.textContent).toContain('Linked task unavailable');
+    expect(detail.textContent).not.toContain('Unrelated first task');
+  });
+
+  it('requires an explicit review of the current revision after opening an old notification', async () => {
+    const core = fakeCore([{ ...approvable(taskId, 'Linked review'), revisionId }]);
+    const { view, runtime } = await openLink(`#/work?task=${taskId}&revision=${oldRevision}`);
+    expect(view.text()).toContain('This notification names an older revision');
+    expect((byText(view.container, 'button', 'Approve Captured Files') as HTMLButtonElement).disabled).toBe(true);
+    expect((byText(view.container, 'button', 'Request Revision') as HTMLButtonElement).disabled).toBe(true);
+    await click(byText(view.container, 'button', 'Review current revision'));
+    expect((byText(view.container, 'button', 'Approve Captured Files') as HTMLButtonElement).disabled).toBe(false);
+    expect(core.calls.filter(c => c.method === 'POST')).toHaveLength(0);
+    core.tasks[0] = { ...core.tasks[0], revisionId: 'aa000000-0000-4000-8000-000000000004', revision: 2 };
+    await live(() => { void runtime.queryClient.invalidateQueries({ queryKey: queryKeys.taskDetail(taskId) }); });
+    await advance(500);
+    expect((byText(view.container, 'button', 'Approve Captured Files') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('follows another task link in an already open Desk tab', async () => {
+    fakeCore([approvable('first', 'Unrelated first task'), { ...approvable(taskId, 'Linked review'), revisionId }]);
+    const { view } = await openLink('#/work');
+    await live(() => {
+      window.location.hash = `#/work?task=${taskId}&revision=${revisionId}`;
+      window.dispatchEvent(new Event('hashchange'));
+    });
+    await advance(500);
+    expect(view.container.querySelector('.detail-title')?.textContent).toBe('Linked review');
+  });
+
+  it('carries only the parsed task and revision into Google sign-in', async () => {
+    clearAuthToken();
+    stubCore(c => c.path === '/v1/auth/providers' ? json({ googleWorkspace: true })
+      : c.path === '/v1/health' ? json({ status: 'ok' }) : json({ title: 'Sign in' }, 401));
+    const { view } = await openLink(`#/work?task=${taskId}&revision=${revisionId}`);
+    const signIn = byText(view.container, 'a', 'Sign in with Google Workspace');
+    expect(signIn?.getAttribute('href')).toBe(`/v1/auth/google/start?task=${taskId}&revision=${revisionId}`);
   });
 });

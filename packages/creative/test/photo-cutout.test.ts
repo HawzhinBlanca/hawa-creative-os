@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, expect, it } from 'vitest';
 import { PNG } from 'pngjs';
 import { unzipSync, strFromU8 } from 'fflate';
@@ -17,7 +18,7 @@ import { inlineSvgFiles } from '../src/studio/svg-files.js';
  * (ADR-035), and these assertions read the markup as the one document it used to be.
  */
 const inlinedSvgOf = (...args: Parameters<typeof renderLayoutV2ToSvg>) => {
-  const r = renderLayoutV2ToSvg(...args);
+  const r = renderLayoutV2ToSvg(args[0], { logoDataUri: KAAE_TEST_LOGO, ...(args[1] ?? {}) });
   return { ...r, svg: inlineSvgFiles(r.svg, r.files), noTextSvg: inlineSvgFiles(r.noTextSvg, r.files) };
 };
 
@@ -230,7 +231,7 @@ describe('the preview draws a cut-out person', () => {
     const { person } = cutoutPlacement(box, asset);
     // 100x150 into 440x600: scale 4, 400x600, centred at x 106.
     expect(person).toEqual({ x: 106, y: 420, width: 400, height: 600 });
-    const render = await renderLayoutV2Async(cutoutLayout(), { copyText, photoCutouts: [asset] });
+    const render = await renderLayoutV2Async(cutoutLayout(), { logoDataUri: KAAE_TEST_LOGO, copyText, photoCutouts: [asset] });
     const png = PNG.sync.read(render.png);
     const at = (x: number, y: number) => Array.from(png.data.subarray((png.width * y + x) * 4, (png.width * y + x) * 4 + 4));
     // Left half of the person: transparent, so the design's own background.

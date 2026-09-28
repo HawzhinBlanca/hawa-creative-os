@@ -1,21 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { extractPaletteFromFile, type ExtractedPalette } from '../services/paletteExtractor.js';
 import { apiClient } from '../api/client.js';
+import { DocumentInspectionPanel } from '../components/DocumentInspectionPanel.js';
 import { read, reasonOf } from '../services/statusReport.js';
 
-export interface ClientSummary {
-  clientId: string;
-  name: string;
-  code: string;
-  version: number;
-  status: 'active' | 'archived' | 'draft';
-  defaultLocale: string;
-  defaultDirection?: 'rtl' | 'ltr';
-  colorsCount: number;
-  rulesCount: number;
-  snapshotsCount?: number;
-  updatedAt?: string;
-}
+import { readClientDirectory, type ClientSummary } from '../services/clientDirectory.js';
+export type { ClientSummary } from '../services/clientDirectory.js';
 
 export interface BrandColor {
   name: string;
@@ -190,7 +180,32 @@ const NOT_READ_YET: Record<DnaSection, string> = {
 
 export const DnaScreen: React.FC = () => {
   const [clients, setClients] = useState<ClientSummary[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState<string>('c1000000-0000-4000-8000-000000000002');
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [directoryNotice, setDirectoryNotice] = useState<string | null>('not read yet');
+  const directoryRead = useRef(0);
+  const loadClientDirectory = async () => {
+    const generation = ++directoryRead.current;
+    try {
+      const list = await readClientDirectory();
+      if (generation !== directoryRead.current) return;
+      setClients(list);
+      setDirectoryNotice(null);
+      setSelectedClientId(current => list.some(client => client.clientId === current) ? current : list[0]?.clientId || '');
+    } catch (err) {
+      if (generation !== directoryRead.current) return;
+      setDirectoryNotice(reasonOf(err));
+    }
+  };
+  useEffect(() => { void loadClientDirectory(); return () => { directoryRead.current++; }; }, []);
+  return <DnaClientScreen key={selectedClientId} clients={clients} selectedClientId={selectedClientId}
+    setSelectedClientId={setSelectedClientId} directoryNotice={directoryNotice} loadClientDirectory={loadClientDirectory} />;
+};
+
+/** One editor lifetime per client. Late reads and writes cannot update the next client's editor. */
+const DnaClientScreen: React.FC<{
+  clients: ClientSummary[]; selectedClientId: string; setSelectedClientId: (id: string) => void;
+  directoryNotice: string | null; loadClientDirectory: () => Promise<void>;
+}> = ({ clients, selectedClientId, setSelectedClientId, directoryNotice, loadClientDirectory }) => {
   const [currentDna, setCurrentDna] = useState<ClientDNA | null>(null);
   const [snapshots, setSnapshots] = useState<ClientDnaSnapshot[]>([]);
   const [activeTab, setActiveTab] = useState<'brand' | 'identity' | 'language' | 'rules'>('brand');
@@ -240,19 +255,6 @@ export const DnaScreen: React.FC = () => {
   const [snapshotAuthor, setSnapshotAuthor] = useState('art_director');
   const [isCommittingSnapshot, setIsCommittingSnapshot] = useState(false);
 
-  // Fetch client directory
-  const loadClientDirectory = async () => {
-    try {
-      const data = await apiClient.clients.list();
-      const list: ClientSummary[] = Array.isArray(data) ? data : [];
-      setClients(list.filter((c) => c.clientId === 'c1000000-0000-4000-8000-000000000002' || c.code === 'KAAE'));
-      markRead('clients');
-    } catch (err) {
-      setClients([]);
-      markRead('clients', reasonOf(err));
-    }
-  };
-
   // Fetch specific client DNA & snapshots
   const loadClientData = async (clientId: string) => {
     setLoading(true);
@@ -266,8 +268,9 @@ export const DnaScreen: React.FC = () => {
     ]);
 
     // A DNA Core did not return is not replaced by a local copy: saving that copy would overwrite the live one.
-    setCurrentDna(dnaRes.state === 'known' ? dnaRes.value : null);
-    markRead('dna', dnaRes.state === 'unknown' ? dnaRes.reason : undefined);
+    const matchingDna = dnaRes.state === 'known' && dnaRes.value?.clientId === clientId;
+    setCurrentDna(matchingDna ? dnaRes.value : null);
+    markRead('dna', dnaRes.state === 'unknown' ? dnaRes.reason : matchingDna ? undefined : 'Core returned DNA for a different client');
 
     setSnapshots(snapRes.state === 'known' && Array.isArray(snapRes.value) ? snapRes.value : []);
     markRead('snapshots', snapRes.state === 'unknown' ? snapRes.reason : undefined);
@@ -278,10 +281,6 @@ export const DnaScreen: React.FC = () => {
 
     setLoading(false);
   };
-
-  useEffect(() => {
-    loadClientDirectory();
-  }, []);
 
   useEffect(() => {
     if (selectedClientId) {
@@ -628,7 +627,7 @@ export const DnaScreen: React.FC = () => {
         <div className="panel">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h2 style={{ margin: 0, fontSize: 16 }}>Clients & Tenants</h2>
-            <span className="pill ok">{unread.clients ? '—' : clients.length} Registered</span>
+            <span className="pill ok">{directoryNotice ? '—' : clients.length} Registered</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -649,6 +648,8 @@ export const DnaScreen: React.FC = () => {
                     background: isSelected ? 'var(--soft)' : 'transparent',
                     transition: 'all 0.15s ease',
                   }}
+                  role="button" tabIndex={0} aria-pressed={isSelected}
+                  onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedClientId(c.clientId); } }}
                   onClick={() => setSelectedClientId(c.clientId)}
                 >
                   <div style={{ minWidth: 0 }}>
@@ -673,8 +674,8 @@ export const DnaScreen: React.FC = () => {
             })}
           </div>
 
-          {unread.clients && (
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>Client list unknown: {unread.clients}</div>
+          {directoryNotice && (
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>Client list unknown: {directoryNotice} <button className="btn" onClick={() => void loadClientDirectory()}>Retry client list</button></div>
           )}
 
           <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: '16px 0' }} />
@@ -700,6 +701,7 @@ export const DnaScreen: React.FC = () => {
 
         {/* Center Column: Live DNA Workspace */}
         <div className="panel" style={{ minWidth: 0 }}>
+          <DocumentInspectionPanel clientId={selectedClientId} />
           <div className="tabs" style={{ marginBottom: 16 }}>
             <button className={activeTab === 'brand' ? 'on' : ''} onClick={() => setActiveTab('brand')}>
               🎨 Brand & Palette
@@ -1097,7 +1099,7 @@ export const DnaScreen: React.FC = () => {
             <div>
               <h3>Kurdish Typography Registry (Invariant #8)</h3>
               <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 0 }}>
-                Kurdish Sorani and Arabic RTL text rendering with guaranteed Unicode UAX #9 Directional Isolation.
+                Set the client's language and typography rules. Verify Arabic and Sorani reading order in final exports.
               </p>
 
               {/* Kurdish WebFont Ingestion & Diacritic Coverage Inspector (Google Fonts & Font Bakery Grade) */}

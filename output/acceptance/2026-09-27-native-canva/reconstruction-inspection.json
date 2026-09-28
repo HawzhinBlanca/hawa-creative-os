@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "sourceDesignId": "DAHWWmZ3P3g",
+  "reconstructedDesignId": "DAHWWrLK0so",
+  "pages": [
+    {
+      "page_id": "PBpchDvFryHXKNXr",
+      "page_number": 1,
+      "dimension": {
+        "width": 1024,
+        "height": 768
+      },
+      "is_responsive": false,
+      "is_empty": false,
+      "is_editable": true
+    }
+  ],
+  "richtexts": [
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "HAWA EDITABLE IMPORT TEST"
+        }
+      ],
+      "containerElement": {
+        "type": "TEXT",
+        "position": {
+          "top": 210.27499999999998,
+          "left": 73.74599999999998
+        },
+        "dimension": {
+          "width": 878.846,
+          "height": 89.619
+        }
+      },
+      "element_id": "PBpchDvFryHXKNXr-LBv9FM4JHSxHbXhg"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "Exact copy: Mr. / Ms. / Dr. [EDITABLE TEST]"
+        }
+      ],
+      "containerElement": {
+        "type": "TEXT",
+        "position": {
+          "top": 323.531,
+          "left": 73.74599999999998
+        },
+        "dimension": {
+          "width": 878.846,
+          "height": 39
+        }
+      },
+      "element_id": "PBpchDvFryHXKNXr-LB4nZTdn7QNQfWYG"
+    },
+    {
+      "page_index": 1,
+      "regions": [
+        {
+          "type": "character",
+          "text": "13 September 2026 | 2:30 PM"
+        }
+      ],
+      "containerElement": {
+        "type": "TEXT",
+        "position": {
+          "top": 419.75,
+          "left": 73.74599999999998
+        },
+        "dimension": {
+          "width": 878.846,
+          "height": 88.619
+        }
+      },
+      "element_id": "PBpchDvFryHXKNXr-LBLvTT4bFnxM6ynx"
+    }
+  ],
+  "comparison": [
+    {
+      "index": 0,
+      "beforeNativeId": "PBH9pgJtKzJc0XjK-LBzmrQScgsWtm22K",
+      "afterNativeId": "PBpchDvFryHXKNXr-LBv9FM4JHSxHbXhg",
+      "exactTextPreserved": true,
+      "delta": {
+        "x": 0,
+        "y": -3,
+        "width": 0,
+        "height": 3
+      }
+    },
+    {
+      "index": 1,
+      "beforeNativeId": "PBH9pgJtKzJc0XjK-LBGdMR2RSVkQttS7",
+      "afterNativeId": "PBpchDvFryHXKNXr-LB4nZTdn7QNQfWYG",
+      "exactTextPreserved": true,
+      "delta": {
+        "x": 0,
+        "y": -2,
+        "width": 0,
+        "height": 2
+      }
+    },
+    {
+      "index": 2,
+      "beforeNativeId": "PBH9pgJtKzJc0XjK-LB4h3dvX42c6S4R3",
+      "afterNativeId": "PBpchDvFryHXKNXr-LBLvTT4bFnxM6ynx",
+      "exactTextPreserved": true,
+      "delta": {
+        "x": 0,
+        "y": -2,
+        "width": 0,
+        "height": 2
+      }
+    }
+  ],
+  "inspectionTransaction": "cancelled without edits",
+  "result": {
+    "exactText": "preserved for all 3 English blocks",
+    "nativeText": "three independently addressable native TEXT elements",
+    "nativeIdentity": "regenerated",
+    "geometry": "partially preserved; 2-3 px upward shift and 2-3 px taller boxes",
+    "lossless": false
+  },
+  "limits": [
+    "Same account, online reconstruction; not account-loss or offline restore.",
+    "No logo, photo, group, vector or multilingual restoration admitted."
+  ]
+}

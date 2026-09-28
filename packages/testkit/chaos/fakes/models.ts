@@ -34,6 +34,8 @@ export interface LedgerEntry {
   model: string;
   fingerprint: string;
   status: number;
+  /** Hashes of attached data-url image bytes, never the image contents. */
+  imageSha256?: string[];
   at: string;
 }
 
@@ -46,7 +48,7 @@ export function loadModelFixtures(dir: string): ModelFixture[] {
   return out;
 }
 
-type Content = string | Array<{ type: string; text?: string }>;
+type Content = string | Array<{ type: string; text?: string; image_url?: { url?: string } }>;
 const textOf = (content: Content | undefined): string =>
   typeof content === 'string' ? content : Array.isArray(content) ? content.filter((p) => p.type === 'text').map((p) => p.text || '').join('\n') : '';
 
@@ -135,8 +137,10 @@ export class FakeModels {
     return out;
   }
 
-  private note(provider: LedgerEntry['provider'], route: string, model: string, fingerprint: string, status: number): void {
-    this.ledger.push({ seq: ++this.seq, provider, route, model, fingerprint, status, at: new Date().toISOString() });
+  private note(provider: LedgerEntry['provider'], route: string, model: string, fingerprint: string, status: number,
+    imageSha256: string[] = []): void {
+    this.ledger.push({ seq: ++this.seq, provider, route, model, fingerprint, status,
+      ...(imageSha256.length ? { imageSha256 } : {}), at: new Date().toISOString() });
   }
 
   private chatAnswer(body: any): { route: string; content: string } | null {
@@ -144,10 +148,9 @@ export class FakeModels {
     const user = textOf(messages.find((m) => m.role === 'user')?.content);
     const schema = body.response_format?.json_schema?.name;
     if (schema === 'canva_design_plan') {
-      // The planner sends the request as JSON: alone, or as the first text part of a vision message; a
-      // revision or a redesign sends it on the line after "Design Brief:" (canva-design-planner.ts).
-      const trimmed = user.trim();
-      const first = trimmed.startsWith('{') ? trimmed.split('\n')[0] : /^Design Brief:\n/.test(trimmed) ? trimmed.split('\n')[1] ?? '' : '';
+      // The planner sends the request as JSON: alone, or as the first text part of a vision message.
+      const first = user.trim().startsWith('{') ? user.trim().split('\n')[0]
+        : /^Design Brief:\s*\n([^\n]+)/.exec(user.trim())?.[1] || '';
       let request: any = null;
       try { request = JSON.parse(first || user); } catch { request = null; }
       return request ? { route: 'canva_design_plan', content: JSON.stringify(plannerLayout(request)) } : null;
@@ -168,6 +171,12 @@ export class FakeModels {
     const system = textOf(messages.find((m) => m.role === 'system')?.content ?? body.system ?? body.systemInstruction?.parts?.[0]?.text);
     const firstUser = textOf(messages.find((m) => m.role === 'user')?.content);
     const fingerprint = sha256(`${model}\n${system}\n${firstUser || JSON.stringify(body.contents ?? body.input ?? '')}`);
+    const imageSha256 = messages.flatMap((message) => Array.isArray(message.content)
+      ? message.content.flatMap((part) => {
+          const data = part.type === 'image_url' && typeof part.image_url?.url === 'string'
+            ? /^data:image\/[a-z0-9.+-]+;base64,([A-Za-z0-9+/=]+)$/i.exec(part.image_url.url)?.[1] : null;
+          return data ? [sha256(Buffer.from(data, 'base64'))] : [];
+        }) : []);
 
     const schema: string | null = body.response_format?.json_schema?.name ?? null;
     this.arrivals.push({ schema, at: new Date().toISOString() });
@@ -179,10 +188,10 @@ export class FakeModels {
     if (host === 'api.openai.com' && path === '/v1/chat/completions') {
       const answer = this.chatAnswer(body);
       if (!answer) {
-        this.note('openai', 'unmatched', model, fingerprint, 500);
+        this.note('openai', 'unmatched', model, fingerprint, 500, imageSha256);
         return sendJson(res, 500, { error: { message: 'chaos fakes: no fixture answers this request', type: 'server_error' } });
       }
-      this.note('openai', answer.route, model, fingerprint, 200);
+      this.note('openai', answer.route, model, fingerprint, 200, imageSha256);
       const promptTokens = Math.ceil((system.length + firstUser.length) / 4);
       return sendJson(res, 200, {
         id: `chatcmpl-chaos-${this.seq}`,
@@ -196,7 +205,7 @@ export class FakeModels {
     // Other endpoints (OpenAI images and responses, Gemini, Anthropic) serve the studio, which these
     // fixtures do not cover: refused, and visible in the ledger.
     const provider: LedgerEntry['provider'] = host.includes('anthropic') ? 'anthropic' : host.includes('googleapis') ? 'gemini' : 'openai';
-    this.note(provider, `unmatched:${path}`, model, fingerprint, 500);
+    this.note(provider, `unmatched:${path}`, model, fingerprint, 500, imageSha256);
     sendJson(res, 500, { error: { message: `chaos fakes: ${host}${path} has no fixtures`, type: 'server_error' } });
   }
 }

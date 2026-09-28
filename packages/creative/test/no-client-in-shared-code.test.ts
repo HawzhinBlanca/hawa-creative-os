@@ -14,9 +14,9 @@ import {
 } from '../src/index.js';
 
 /**
- * ADR-038: shared design code names no client. Who a client is lives in its pack's profile; its
- * colours come from its own reference pack. These fail if KAAE's identity or palette returns to code
- * every client's designs pass through.
+ * Shared design code names no client (ADR-127, ported from studio-v2's 27e9e4f1). Who a client is
+ * lives in its pack's profile; its colours come from its own reference. These fail if KAAE's
+ * identity or palette returns to code every client's designs pass through.
  */
 const KAAE_IDENTITY = /KAAE|Kurdistan Accredit|academic gravitas|statutory authority/i;
 const KAAE_COLOURS = /#0A1628|#1E3A5F|#4770A3|#F7B500|#FDF8F3|#C5A059|#162B48/i;
@@ -47,7 +47,7 @@ describe('the prompts every client shares', () => {
   });
 
   it('keep KAAE itself in its own pack', () => {
-    expect(findClientPack('kaae')!.profile).toMatch(/Kurdistan Accrediting Agency for Education/);
+    expect(findClientPack('kaae')!.profile).toMatch(/Kurdistan Accrediting Association for Education/);
     for (const code of ['zar-podcast', 'halwest-news', 'kawa-ba-hawlery', 'erbil-edition']) {
       expect(findClientPack(code)!.profile).toContain('not set yet');
     }
@@ -55,14 +55,20 @@ describe('the prompts every client shares', () => {
 
   it('have no KAAE identity or palette in the judge, critique, layout or art code', () => {
     for (const file of ['pairwise-judge-v3.ts', 'box-critique-v3.ts', 'layout-generator-v3.ts', 'art-generator-v3.ts', 'gemini-image-provider.ts', 'motifs.ts', 'hard-qa.ts']) {
-      const code = codeOf(file);
-      expect(code, file).not.toMatch(KAAE_IDENTITY);
+      expect(codeOf(file), file).not.toMatch(KAAE_IDENTITY);
     }
     // KAAE's colours may appear only as points to find the nearest client colour to, never drawn.
     for (const file of ['layout-generator-v3.ts', 'art-generator-v3.ts', 'gemini-image-provider.ts', 'hard-qa.ts']) {
       expect(codeOf(file), file).not.toMatch(KAAE_COLOURS);
     }
     expect(codeOf('pairwise-judge-v3.ts')).toContain('${options.clientProfile');
+  });
+
+  // Review finding (2026-09-28): the cached stable prefix of the cost architecture still carried
+  // KAAE's identity and palette, exported from the shared package, and this guard did not cover it.
+  it('have no KAAE identity or palette in the stable system prompt prefix', () => {
+    expect(codeOf('cost-architecture-v3.ts')).not.toMatch(KAAE_IDENTITY);
+    expect(codeOf('cost-architecture-v3.ts')).not.toMatch(KAAE_COLOURS);
   });
 });
 
@@ -79,8 +85,8 @@ describe('colours come from the client', () => {
     expect([repair.darkest, repair.lightest, repair.deepAlternative, repair.accentOnDark(0.005, 3)].join(' ')).not.toMatch(KAAE_COLOURS);
   });
 
-  it('asks for art in the layout\'s colours, and in neutral tones with none', () => {
-    expect(composeArtPrompt('abstract', { palette: [] })).not.toMatch(KAAE_COLOURS);
+  it("asks for art in the layout's colours, and refuses art with no client palette (stricter here than studio-v2)", () => {
+    expect(() => composeArtPrompt('abstract', { palette: [] })).toThrow(/PALETTE_REQUIRED/);
     const layout = { width: 1280, height: 720, background: { color: '#111111' }, shapes: [{ color: '#E10600' }], text: [], art: { source: 'generated', box: { x: 0, y: 0, width: 1280, height: 720 }, calmRegion: { x: 100, y: 100, width: 400, height: 200 } } } as unknown as StudioLayoutV2;
     const prompt = deriveConditionedArtPrompt(layout);
     expect(prompt).toContain('#111111, #E10600');

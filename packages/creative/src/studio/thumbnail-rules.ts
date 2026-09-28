@@ -1,7 +1,7 @@
 import type { StudioLayoutV2, Box } from './layout-v2.js';
 
 /**
- * The video-thumbnail playbook (ADR-038): the rules a thumbnail client's designs follow on top of the
+ * The video-thumbnail playbook (ADR-127, ported from studio-v2): the rules a thumbnail client's designs follow on top of the
  * house rules. A thumbnail is judged small, in a list, next to other thumbnails, with the platform's
  * own badges drawn over it. Only what the layout can change is enforced here: the requester's copy
  * is exact, so its length is guidance for the design stages, never a defect.

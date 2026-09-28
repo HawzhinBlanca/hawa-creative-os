@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
+import { assert, describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +7,8 @@ import * as fontkit from 'fontkit';
 import {
   scaleNormalizedLayoutToV2,
   type NormalizedLayoutCandidate,
+  type NormalizedTextElement,
+  type NormalizedShapeElement,
 } from '../src/studio/layout-generator-v3.js';
 import { renderLayoutV2ToSvg } from '../src/studio/render-layout-v2.js';
 import type { StudioLayoutV2 } from '../src/studio/layout-v2.js';
@@ -26,7 +29,7 @@ function resolveTestFont(filename: string): string {
   return path.join(FONTS_DIR, 'Inter-Regular.ttf');
 }
 
-function textBlock(over: Partial<any> = {}) {
+function textBlock(over: Partial<NormalizedTextElement> = {}): NormalizedTextElement {
   return {
     copyIndex: 0,
     role: 'title' as const,
@@ -60,10 +63,10 @@ function candidate(over: Partial<NormalizedLayoutCandidate> = {}): NormalizedLay
     shapes: [],
     text: [textBlock()],
     ...over,
-  } as NormalizedLayoutCandidate;
+  };
 }
 
-function rule(over: Partial<any> = {}) {
+function rule(over: Partial<NormalizedShapeElement> = {}): NormalizedShapeElement {
   return {
     x: 0.1,
     y: 0.3,
@@ -212,10 +215,11 @@ describe('ink centring in the renderer', () => {
     const layout = singleBlockLayout();
     const t: any = layout.text[0];
     const copy = 'Quality Standards';
-    const { svg } = renderLayoutV2ToSvg(layout, { copyText: { 0: copy } });
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: copy } });
     const baseline = baselineOf(svg);
 
     const font = fk.openSync(resolveTestFont('Verdana.ttf'));
+    assert('unitsPerEm' in font, 'The fixture must resolve to a single font');
     const scale = t.fontSize / font.unitsPerEm;
     const bbox = (font as any).layout(copy).bbox;
     const inkAbove = bbox.maxY * scale;
@@ -233,10 +237,11 @@ describe('ink centring in the renderer', () => {
   it('pushes the baseline below the old metric-ascent position for a tall box', () => {
     const layout = singleBlockLayout();
     const t: any = layout.text[0];
-    const { svg } = renderLayoutV2ToSvg(layout, { copyText: { 0: 'Quality Standards' } });
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: 'Quality Standards' } });
     const baseline = baselineOf(svg);
 
     const font = fk.openSync(resolveTestFont('Verdana.ttf'));
+    assert('unitsPerEm' in font, 'The fixture must resolve to a single font');
     const metricAscent = (font.ascent || 800) * (t.fontSize / font.unitsPerEm);
     expect(baseline).toBeGreaterThan(t.y + metricAscent);
   });
@@ -245,13 +250,14 @@ describe('ink centring in the renderer', () => {
     // A box far too short for the copy must still start at its top edge and spill downward,
     // rather than being centred up past the canvas edge.
     const layout = singleBlockLayout({ height: 10, y: 0 });
-    const { svg } = renderLayoutV2ToSvg(layout, {
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO,
       copyText: { 0: 'Quality Standards Under Institutional Law' },
     });
     const baseline = baselineOf(svg);
     expect(baseline).toBeGreaterThan(0);
 
     const font = fk.openSync(resolveTestFont('Verdana.ttf'));
+    assert('unitsPerEm' in font, 'The fixture must resolve to a single font');
     const t: any = layout.text[0];
     const bbox = (font as any).layout('Quality').bbox;
     const inkAbove = bbox.maxY * (t.fontSize / font.unitsPerEm);

@@ -1,0 +1,3 @@
+$ tsc -b
+packages/integrations/src/google-publication-inspector.ts(97,31): error TS2339: Property 'every' does not exist on type '{}'.
+[ELIFECYCLE] Command failed with exit code 2.

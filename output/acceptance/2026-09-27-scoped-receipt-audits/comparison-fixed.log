@@ -1,0 +1,35 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_81895134343cebfe and hawa_tpl_repair_81895134343cebfe (23 ms)
+{"level":"error","time":"2026-09-27T15:21:25.966Z","service":"core","requestId":"85003535-d129-4d96-8bd0-9fe7c2d73643","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"error","message":"RECEIPT_AUDIT_INVALID","stack":"error: RECEIPT_AUDIT_INVALID\n    at /Users/hawzhin/Hawdesign/node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at PostgresConnection.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28\n    at SingleConnectionProvider.#run (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16)\n    at DefaultQueryExecutor.executeQuery (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/receipt-audits.ts:90:20\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:71:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)","length":143,"name":"error","severity":"ERROR","code":"P0001","where":"PL/pgSQL function protect_receipt_audit() line 28 at RAISE","file":"pl_exec.c","line":"3897","routine":"exec_stmt_raise"},"msg":"[core:reconciliation] Could not read or record the scoped audit:"}
+ ❯ apps/core/test/scoped-receipt-audits.test.ts (12 tests | 1 failed) 1247ms
+   × canonicalizes accepted UUID casing before the database binds the immutable action 27ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > canonicalizes accepted UUID casing before the database binds the immutable action
+AssertionError: expected 503 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 503
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:62:83
+     60| it('canonicalizes accepted UUID casing before the database binds the i…
+     61|  const f=await fixture(),app=createApp({db}),id=randomUUID();
+     62|  const response=await run(app,f.a.token,id.toUpperCase());expect(respo…
+       |                                                                                   ^
+     63|  expect((await response.json()).auditId).toBe(id);
+     64|  const service=new ReceiptAuditService(db),s=actor(f),next=await actio…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 30 passed (31)
+   Start at  18:21:24
+   Duration  2.88s (transform 1.30s, setup 234ms, import 1.69s, tests 1.34s, environment 456ms)
+

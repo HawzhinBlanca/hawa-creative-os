@@ -1,0 +1,108 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_c3bf33c83bd68d08 and hawa_tpl_repair_c3bf33c83bd68d08 (26 ms)
+ ❯ packages/integrations/test/google-sheet-identity.test.ts (4 tests | 4 failed) 11ms
+     × publishes to the configured nonzero tab and leaves the first tab unchanged 7ms
+     × refuses duplicate task IDs instead of overwriting the first match 2ms
+     × detects a changed Drive link even when the package-hash cell still matches 1ms
+     × binds the tab ID to a cached publication key 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/integrations/test/google-sheet-identity.test.ts > FR-049 stable Google Sheet identity > publishes to the configured nonzero tab and leaves the first tab unchanged
+AssertionError: expected [ [ 'task', 'client', …(5) ], …(1) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+@@ -6,6 +6,15 @@
+      "time",
+      "status",
+      "link",
+      "hash",
+    ],
++   [
++     "task-a",
++     "client-a",
++     "folder-a",
++     "2026-09-27T16:25:54.574Z",
++     "COMPLETE",
++     "https://drive.google.com/file/d/drive-1/view",
++     "bc4a71180870f7945155fbb02f4b0a2e3faa2a62d6d31b7039013055ed19869a",
++   ],
+  ]
+
+ ❯ packages/integrations/test/google-sheet-identity.test.ts:28:32
+     26|     const result = await publisher().publish(ctx, request());
+     27|     expect(result.ok && result.value.sheet.synced).toBe(true);
+     28|     expect(sheets.tabs.get(0)).toEqual(initial);
+       |                                ^
+     29|     expect(sheets.tabs.get(7)?.[1]?.[0]).toBe('task-a');
+     30|     expect(sheets.metadata.size).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  packages/integrations/test/google-sheet-identity.test.ts > FR-049 stable Google Sheet identity > refuses duplicate task IDs instead of overwriting the first match
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ packages/integrations/test/google-sheet-identity.test.ts:37:52
+     35|     sheets.tabs.set(0, [['header'], [...row], [...row]]);
+     36|     const result = await publisher().publish(ctx, request(0));
+     37|     expect(result.ok && result.value.sheet.synced).toBe(false);
+       |                                                    ^
+     38|     expect(sheets.calls.filter(c => c.path.endsWith(':append') || c.me…
+     39|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  packages/integrations/test/google-sheet-identity.test.ts > FR-049 stable Google Sheet identity > detects a changed Drive link even when the package-hash cell still matches
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ packages/integrations/test/google-sheet-identity.test.ts:46:54
+     44|     sheets.tabs.get(0)![1][5] = 'https://wrong.example/file';
+     45|     const checked = await p.reconcile(ctx, first.value.publicationId);
+     46|     expect(checked.ok && checked.value.sheet.synced).toBe(false);
+       |                                                      ^
+     47|   });
+     48|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  packages/integrations/test/google-sheet-identity.test.ts > FR-049 stable Google Sheet identity > binds the tab ID to a cached publication key
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ packages/integrations/test/google-sheet-identity.test.ts:52:24
+     50|     setup(); const p = publisher(); await p.publish(ctx, request(0));
+     51|     const changed = await p.publish(ctx, request(7));
+     52|     expect(changed.ok).toBe(false);
+       |                        ^
+     53|     if (!changed.ok) expect(changed.error.code).toBe('IDEMPOTENCY_CONF…
+     54|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  19:25:54
+   Duration  221ms (transform 44ms, setup 43ms, import 28ms, tests 11ms, environment 0ms)
+

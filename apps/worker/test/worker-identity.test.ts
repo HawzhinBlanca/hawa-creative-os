@@ -86,7 +86,7 @@ describe.skipIf(!url)('the worker acts as System Automation', () => {
       await sql`INSERT INTO hawa.tenants (id, name, slug) VALUES (${lateTenant}::uuid, 'Late tenant', ${`late-${lateTenant.slice(0, 8)}`})`.execute(owner);
       expect(await automationMembershipGaps(db, [tenantId, lateTenant])).toEqual([lateTenant]);
     } finally {
-      await sql`DELETE FROM hawa.tenants WHERE id = ${lateTenant}::uuid`.execute(owner);
+      // The per-file database clone owns cleanup. Tenant policy audit history is retained.
       await owner.destroy();
     }
   });

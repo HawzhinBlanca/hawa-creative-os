@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { createApp } from '../src/app.js';
 import { createDb, withRlsContext } from '@hawa/db';
+import { memoryExportStore } from './pinned-exports-fixture.js';
 
 describe('Milestone A / Step 7: Durable Revisions & Approvals Integration', () => {
   const connectionString = process.env.TEST_DATABASE_URL!;
   const db = createDb(connectionString);
-  const app = createApp({ testAuth: { roleHeader: true },  db });
+  const exports = memoryExportStore();
+  const app = createApp({ testAuth: { roleHeader: true }, db, deliverableStore: exports.store });
 
   const tenantId = '00000000-0000-4000-a000-000000000001';
   const operatorUserId = '00000000-0000-4000-b000-000000000001';
@@ -175,6 +177,7 @@ describe('Milestone A / Step 7: Durable Revisions & Approvals Integration', () =
         decision: 'approved',
         userId: 'spoofed_user_trying_to_impersonate',
         reason: 'Approved for production export',
+        pinnedExportIds: [exports.add(taskA.id)],
       }),
     });
     expect(approveRes.status).toBe(201);

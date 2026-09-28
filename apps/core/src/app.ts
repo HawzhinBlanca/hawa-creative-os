@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { getCookie } from 'hono/cookie';
 import { SYSTEM_AUTOMATION_USER_ID, PRIMARY_OPERATOR_USER_ID, TASK_TRANSITIONED_EVENT, taskTransitioned } from '@hawa/contracts';
 import { type ClientDNA, type DesignBrief, resolveModel, resolveImageSettings, activeModelTier } from '@hawa/domain';
 import {
@@ -40,7 +41,6 @@ import { CreativeDirectorRunner, resolveOrnamentSettings } from '@hawa/creative'
 import { DeterministicQAEngine } from '@hawa/qa';
 import {
   GooglePublisher,
-  ReconciliationService,
   KurdishVoiceTranscriber,
   ResilientModelGateway,
   TelegramBridgeDaemon,
@@ -53,10 +53,12 @@ import {
   type TelegramUpdate,
 } from '@hawa/integrations';
 import { PostgresIngressPersistenceAdapter } from './ingress-persistence-adapter.js';
-import { EvaluationRunner } from '@hawa/evals';
-import { SyntheticTrafficDaemon } from '@hawa/testkit';
+import { DurableEvaluationService } from './services/durable-evaluations.js';
 import { registerCanvaRoutes } from './routes/canva.routes.js';
 import { registerDesignStudioRoutes } from './routes/design-studio.routes.js';
+import { registerStudioRecoveryRoutes } from './routes/studio-recovery.routes.js';
+import { registerSpendingPolicyRoutes } from './routes/spending-policy.routes.js';
+import { registerCallCostRoutes } from './routes/call-cost.routes.js';
 import { CanvaConnectService } from './services/canva-connect-service.js';
 import { canvaDeliverableStore, EMPTY_DELIVERABLE_STORE, type DeliverableStore } from './services/pinned-deliverables.js';
 import { registerSystemRoutes } from './routes/system.routes.js';
@@ -74,6 +76,7 @@ import { registerSystemStatusRoutes } from './routes/system-status.routes.js';
 import { registerClientLearningRoutes } from './routes/client-learning.routes.js';
 import { registerRevisionsRoutes } from './routes/revisions.routes.js';
 import { registerDecisionsRoutes } from './routes/decisions.routes.js';
+import { registerOfficeReviewAdminRoutes } from './routes/office-review-admin.routes.js';
 import { registerCanvaOutcomeRoutes } from './routes/canva-outcome.routes.js';
 import { registerDeliveryRoutes } from './routes/delivery.routes.js';
 import { registerDeliveryInternalRoutes } from './routes/delivery-internal.routes.js';
@@ -85,13 +88,15 @@ import { registerSearchRoutes } from './routes/search.routes.js';
 import { registerWhatsappRoutes } from './routes/whatsapp.routes.js';
 import { createChannelKillSwitchStore } from './services/channel-kill-switches.js';
 import { registerTelegramWebhookRoutes } from './routes/telegram-webhook.routes.js';
-import { isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
-import { registerLifecycleProjectionRoutes } from './routes/lifecycle-projection.routes.js';
+import { acceptedServiceTokensOf, isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
 import { telegramPollerOf } from './services/telegram-poller-owner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
+import { PaidModelProbeService } from './services/paid-model-probe.js';
+import { evaluatePaidModelHealth, paidModelConfigFingerprint, readLatestPaidModelObservation, type PaidModelHealth } from './services/paid-model-health.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
 import { remindUnansweredDrafts } from './services/draft-reminders.js';
 import { createStreamTicketStore } from './services/stream-tickets.js';
+import { googleOidcSettings } from './services/google-oidc.js';
 import {
   canonicalJson,
   computeDnaHash,
@@ -111,6 +116,10 @@ import { createTaskReader } from './services/task-reader.js';
 import { createClientDnaResolver } from './services/client-dna-resolver.js';
 import { noDatabaseStore } from './services/no-database-store.js';
 import { createOmnichannelDelivery } from './services/omnichannel-delivery.js';
+import { PostgresDriveUploadIdentityStore } from './services/drive-upload-reservation.js';
+import { PostgresSheetExpectationStore } from './services/publication-expectations.js';
+import { PublicationInspectionService, startPublicationInspectionSchedule } from './services/publication-inspections.js';
+import { registerPublicationInspectionRoutes } from './routes/publication-inspections.routes.js';
 
 // What app.ts exported before its helpers moved to core-helpers.ts; tests and scripts import them from here.
 export { canonicalJson, computeDnaHash, isValidUuid, inlineTemplateCopyMissing, qaReportSha256, secretsEqual, probeDatabase, evaluateCanvaExportQc };
@@ -123,6 +132,9 @@ const globalCanvaCircuitBreaker = new CircuitBreaker({ name: 'canva-api', failur
 
 export function createApp(options?: CreateAppOptions) {
   const app = new Hono();
+  // The Node adapter sees an HTTP upstream socket behind the HTTPS reverse proxy. Compare browser
+  // Origin with the configured public OAuth callback origin, never that internal request scheme.
+  const officeBrowserOrigin = googleOidcSettings()?.redirectUri;
   const currentEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
   const isProduction = currentEnv === 'production';
   const db = options?.db || (process.env.DATABASE_URL ? createDb(process.env.DATABASE_URL) : null);
@@ -200,19 +212,21 @@ export function createApp(options?: CreateAppOptions) {
       title,
       status,
       detail: detail || title,
-      instance: c.req.url,
+      // OAuth callback URLs carry one-time codes and state. Problem responses must not echo
+      // query strings into the browser, proxy logs, or any captured support bundle.
+      instance: new URL(c.req.url).pathname,
     }, status);
   }
 
   // Domain singletons
   const creativeDirector = new CreativeDirectorRunner();
   const qaEngine: QAEngine = options?.qaEngine || new DeterministicQAEngine();
-  const publisher = options?.publisher || new GooglePublisher();
+  const publisher = options?.publisher || new GooglePublisher({
+    uploadIdentityStore: db ? new PostgresDriveUploadIdentityStore(db) : undefined,
+    sheetExpectationStore: db ? new PostgresSheetExpectationStore(db) : undefined,
+  });
   const modelGateway = new ResilientModelGateway();
-  const evalRunner = new EvaluationRunner(modelGateway);
-  // Zero seed probes: every SLO data point must come from a probe that actually ran.
-  const sloDaemon = new SyntheticTrafficDaemon(0, { publisher });
-  const reconciliationService = new ReconciliationService();
+  const evaluationService = db ? new DurableEvaluationService(db, options?.evaluationGateway || modelGateway) : null;
   const voiceTranscriber = new KurdishVoiceTranscriber();
   const telegramActionTokenService =
     options?.telegramActionTokenService || new TelegramActionTokenService(process.env.HAWA_ACTION_HMAC_SECRET);
@@ -263,7 +277,6 @@ export function createApp(options?: CreateAppOptions) {
   const clientDnas = new Map<string, ClientDNA>();
   const resolveClientDna = createClientDnaResolver({ db, clientDnas });
   // Evaluation runs have no table yet; SPLIT_PLAN.md section 7 leaves them to the owner.
-  const evalRuns = new Map<string, any>();
 
   const defaultTenantId = DEFAULT_TENANT_ID;
   const operatorUserId = OPERATOR_USER_ID;
@@ -325,6 +338,7 @@ export function createApp(options?: CreateAppOptions) {
     actorId: string;
     role: string;
     displayName: string;
+    authMethod?: 'shared_key' | 'google_oidc' | 'telegram_miniapp';
     expiresAt?: number;
     /** Last time PostgreSQL confirmed this session (revocation from another instance is honoured within a minute). */
     checkedAt?: number;
@@ -339,8 +353,8 @@ export function createApp(options?: CreateAppOptions) {
   async function persistSession(token: string, session: IssuedSession): Promise<boolean> {
     if (!db) return false;
     try {
-      await withRlsContext(db, sessionRls, (trx) => sql`INSERT INTO hawa.desk_sessions(token_hash,tenant_id,user_id,actor_id,role,display_name,expires_at)
-        VALUES (${sessionHash(token)},${session.tenantId}::uuid,${session.userId}::uuid,${session.actorId},${session.role},${session.displayName},${new Date(session.expiresAt || Date.now() + 86400000)})`.execute(trx));
+      await withRlsContext(db, sessionRls, (trx) => sql`INSERT INTO hawa.desk_sessions(token_hash,tenant_id,user_id,actor_id,role,display_name,expires_at,auth_method)
+        VALUES (${sessionHash(token)},${session.tenantId}::uuid,${session.userId}::uuid,${session.actorId},${session.role},${session.displayName},${new Date(session.expiresAt || Date.now() + 86400000)},${session.authMethod || 'shared_key'})`.execute(trx));
       return true;
     } catch (err) {
       log.error('[core:sessions] could not persist session; it will not survive a restart:', err);
@@ -366,7 +380,7 @@ export function createApp(options?: CreateAppOptions) {
     const cached = issuedSessions.get(token);
     if (cached && cached.checkedAt && Date.now() - cached.checkedAt < SESSION_RECHECK_MS) return;
     try {
-      const row = await withRlsContext(db, sessionRls, async (trx) => (await sql<any>`SELECT tenant_id,user_id,actor_id,role,display_name,expires_at,revoked_at
+      const row = await withRlsContext(db, sessionRls, async (trx) => (await sql<any>`SELECT tenant_id,user_id,actor_id,role,display_name,expires_at,revoked_at,auth_method
         FROM hawa.desk_sessions WHERE token_hash=${sessionHash(token)}`.execute(trx)).rows[0]);
       if (!row || row.revoked_at || new Date(row.expires_at).getTime() <= Date.now()) {
         if (cached && row && (row.revoked_at || new Date(row.expires_at).getTime() <= Date.now())) issuedSessions.delete(token);
@@ -375,7 +389,8 @@ export function createApp(options?: CreateAppOptions) {
       }
       issuedSessions.set(token, {
         authenticated: true, tenantId: row.tenant_id, userId: row.user_id, actorId: row.actor_id, role: row.role,
-        displayName: row.display_name, expiresAt: new Date(row.expires_at).getTime(), checkedAt: Date.now(),
+        displayName: row.display_name, authMethod: row.auth_method,
+        expiresAt: new Date(row.expires_at).getTime(), checkedAt: Date.now(),
       });
     } catch (err) {
       // Database trouble must not log everyone out: keep whatever the cache already knows.
@@ -385,7 +400,8 @@ export function createApp(options?: CreateAppOptions) {
   const bearerTokenOf = (c: any): string | undefined => {
     const header = c.req.header('Authorization');
     if (header && header.startsWith('Bearer ')) return header.slice(7).trim();
-    return undefined;
+    const cookie = getCookie(c, 'hawa_session');
+    return cookie?.startsWith('hawa_sess_') ? cookie : undefined;
   };
 
   function saveSession(token: string, session: IssuedSession) {
@@ -406,35 +422,30 @@ export function createApp(options?: CreateAppOptions) {
    * `ticketCredential` is the bearer token a redeemed stream ticket stood for (routes/system.routes.ts);
    * it is checked exactly as that header would be. Nothing else passes it.
    */
-  function verifyRequestAuth(c: any, ticketCredential?: string): { authenticated: boolean; tenantId: string; userId: string; actorId: string; role: string; displayName?: string } {
+  function verifyRequestAuth(c: any, ticketCredential?: string): { authenticated: boolean; tenantId: string; userId: string; actorId: string; role: string; displayName?: string; authMethod?: string } {
     // The worker's own credential (architecture programme Phase 2.1): HAWA_WORKER_TOKEN is a
     // `service` principal on /v1/internal/* and nothing anywhere else, and those routes take no other
     // credential: not the operator's or administrator's keys, a session, a stream ticket, the webhook
     // secret, a test principal or a role header. The worker used to call Core with the operator's key.
-    const workerToken = serviceTokenOf();
+    // During a rotation the previous value is accepted too: a colour still draining keeps it (ADR-129).
+    const workerTokens = acceptedServiceTokensOf();
     if (isInternalPath(String(c.req.path || ''))) {
       const presented = ticketCredential ? '' : String(c.req.header('Authorization') || '').replace(/^Bearer\s*/, '').trim();
-      if (workerToken && presented && secretsEqual(presented, workerToken)) {
+      if (presented && workerTokens.some((token) => secretsEqual(presented, token))) {
         return { authenticated: true, tenantId: defaultTenantId, userId: SYSTEM_AUTOMATION_USER_ID, actorId: 'hawa_worker', role: 'service', displayName: 'Hawa worker' };
       }
       return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
     }
     let authHeader = ticketCredential ? `Bearer ${ticketCredential}` : c.req.header('Authorization');
-    // Browser <img> elements cannot set request headers: media and preview endpoints may carry the
-    // session token as an `access_token` query parameter (validated against issued sessions). The
-    // event stream no longer does: it takes a one-use ticket instead (ADR-037).
-    let isQueryToken = false;
-    if (
-      !authHeader &&
-      (String(c.req.path || '').includes('/studio/') ||
-        String(c.req.path || '').match(/\.(png|jpg|jpeg|webp|svg|pdf)$/i))
-    ) {
-      const queryToken = c.req.query('access_token');
-      if (queryToken) {
-        authHeader = `Bearer ${queryToken}`;
-        isQueryToken = true;
-      }
+    if (!authHeader) {
+      const rawCookie = getCookie(c, 'hawa_session');
+      const cookieSession = rawCookie?.startsWith('hawa_sess_') ? rawCookie : undefined;
+      if (cookieSession) authHeader = `Bearer ${cookieSession}`;
     }
+    // No credential is read from the query string (ADR-128). Media and preview endpoints used to take
+    // the session token as `?access_token=`: it reached nginx's error log whenever a stored file was
+    // missing. The Desk fetches pictures with the header (AuthorizedImage), and an <img> sends the
+    // session cookie read above; the event stream takes a one-use ticket (ADR-037).
     const botSecret = c.req.header('x-telegram-bot-api-secret-token');
 
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -470,13 +481,8 @@ export function createApp(options?: CreateAppOptions) {
           return session;
         }
 
-        if (isQueryToken) {
-          // Task R04: Static long-lived bearer credentials must never be passed in URL query parameters
-          return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
-        }
-
-        // The worker's token opens /v1/internal/* only (above).
-        if (workerToken && secretsEqual(token, workerToken)) {
+        // The worker's token (and its previous value during a rotation) opens /v1/internal/* only (above).
+        if (workerTokens.some((workerToken) => secretsEqual(token, workerToken))) {
           return { authenticated: false, tenantId: '', userId: '', actorId: 'anonymous', role: 'anonymous' };
         }
 
@@ -541,79 +547,26 @@ export function createApp(options?: CreateAppOptions) {
   // Honest Health & Readiness Probes (CV-20, FR-064, FR-073, R1/F10) - Zero hardcoded health!
   let lastVerifiedProgressAt = new Date().toISOString();
 
-  // Active, scheduled paid billing probe (R1/F10)
-  // Executes a minimal paid completion call (gpt-4o-mini, max_tokens: 1) every 3 minutes.
-  // Real billing exhaustion (429 credit_balance_exhausted / insufficient_quota) and auth errors (401/403)
-  // flip health to billing_exhausted / unauthorized and trigger operator alerts.
+  // The scheduled call records its result in Postgres. Health never turns a configured key or a
+  // result from another key/model into proof that the current model can take paid traffic.
   interface PaidProbeState {
-    at: number;
-    status: string;
-    detail?: any;
     lastAlertSentAt?: number;
     lastAlertMessageId?: string;
   }
-  let lastPaidProbe: PaidProbeState = { at: 0, status: 'unverified' };
+  let lastPaidProbe: PaidProbeState = {};
 
-  const executePaidModelProbe = async (): Promise<{ status: string; detail?: any }> => {
+  const paidProbeScope = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' };
+  const paidProbeService = db ? new PaidModelProbeService(db) : null;
+  const executePaidModelProbe = async () => {
     const key = process.env.OPENAI_API_KEY;
     if (!key) return { status: 'unconfigured' };
-    if (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule) {
-      return { status: lastPaidProbe.status !== 'unverified' ? lastPaidProbe.status : 'connected' };
-    }
-
-    try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${key}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || resolveModel('text'),
-          messages: [{ role: 'user', content: 'ping' }],
-          // One token proves the key and the credit. A reasoning model stops at the limit, which the
-          // handler below counts as connected.
-          max_completion_tokens: 1,
-        }),
-        signal: AbortSignal.timeout(7000),
-      });
-
-      if (res.status === 401 || res.status === 403) {
-        const errJson: any = await res.json().catch(() => ({}));
-        return { status: 'unauthorized', detail: errJson?.error || { message: `HTTP ${res.status}` } };
-      } else if (res.status === 429) {
-        const errJson: any = await res.json().catch(() => ({}));
-        const code = errJson?.error?.code;
-        const type = errJson?.error?.type;
-        const isBilling = code === 'credit_balance_exhausted' || type === 'insufficient_quota';
-        return {
-          status: isBilling ? 'billing_exhausted' : 'rate_limited',
-          detail: errJson?.error || { message: 'Rate limit or billing exhaustion' },
-        };
-      } else if (res.ok) {
-        return { status: 'connected' };
-      } else {
-        const errJson: any = await res.json().catch(() => ({}));
-        if (errJson?.error?.message?.includes('max_tokens or model output limit was reached')) {
-          return { status: 'connected' };
-        }
-        return { status: `http_${res.status}`, detail: errJson?.error || { message: `HTTP ${res.status}` } };
-      }
-    } catch (err: any) {
-      return { status: 'unreachable', detail: { message: err?.message || 'Network error' } };
-    }
+    if (!paidProbeService || (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule)) return { status: 'unverified' };
+    const result = await paidProbeService.execute(paidProbeScope, key, process.env.OPENAI_MODEL || resolveModel('text'), billingProbeMs);
+    if (result.dispatched) lastVerifiedProgressAt = new Date().toISOString();
+    return result;
   };
 
-  const checkAndAlertBilling = async (probeResult: { status: string; detail?: any }) => {
-    lastPaidProbe = {
-      at: Date.now(),
-      status: probeResult.status,
-      detail: probeResult.detail,
-      lastAlertSentAt: lastPaidProbe.lastAlertSentAt,
-      lastAlertMessageId: lastPaidProbe.lastAlertMessageId,
-    };
-    lastVerifiedProgressAt = new Date().toISOString();
-
+  const checkAndAlertBilling = async (probeResult: { status: string }) => {
     if (probeResult.status === 'billing_exhausted' || probeResult.status === 'unauthorized') {
       const now = Date.now();
       const cooldownMs = 15 * 60 * 1000;
@@ -629,7 +582,7 @@ export function createApp(options?: CreateAppOptions) {
               text: alertText,
               parse_mode: 'HTML',
             });
-            lastPaidProbe.lastAlertMessageId = outRes?.messageId ? String(outRes.messageId) : (outRes?.message_id ? String(outRes.message_id) : `alert_${now}`);
+            lastPaidProbe.lastAlertMessageId = outRes?.messageId ? String(outRes.messageId) : (outRes?.message_id ? String(outRes.message_id) : undefined);
           } catch (err) {
             log.error('[HealthProbe] Watchdog alert delivery failed:', err);
           }
@@ -638,25 +591,31 @@ export function createApp(options?: CreateAppOptions) {
     }
   };
 
-  const probeModelProvider = async (): Promise<string> => {
+  const paidModelHealth = async (): Promise<PaidModelHealth> => {
     const key = process.env.OPENAI_API_KEY;
-    if (!key) return 'unconfigured';
-    if (options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule) {
-      return lastPaidProbe.status !== 'unverified' ? lastPaidProbe.status : 'connected';
+    const configSha256 = key ? paidModelConfigFingerprint(key, process.env.OPENAI_MODEL || resolveModel('text')) : null;
+    const enabled = !(options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule);
+    if (!configSha256 || !enabled || !db) return evaluatePaidModelHealth(null, configSha256, enabled, 2 * billingProbeMs);
+    try {
+      const observation = await readLatestPaidModelObservation(db, DEFAULT_TENANT_ID, SYSTEM_AUTOMATION_USER_ID);
+      const health = evaluatePaidModelHealth(observation, configSha256, enabled, 2 * billingProbeMs);
+      const spending = await paidProbeService!.admissionHealth(paidProbeScope, key!, process.env.OPENAI_MODEL || resolveModel('text'));
+      return { ...health, ...spending, status: spending.spendingStatus === 'ready' ? health.status :
+        spending.spendingStatus === 'reconciliation_required' ? 'reconciliation_required' : 'budget_held' };
+    } catch (err) {
+      log.error('[HealthProbe] Paid observation read failed:', err);
+      return { status: 'unknown', observedStatus: null, at: null, schemaVersion: null };
     }
-
-    // Health reports the scheduled probe's last result and never pays for one itself: Docker checks
-    // /health every 10 s, and an inline probe on a stale result made the 3-minute schedule a floor.
-    return lastPaidProbe.status;
   };
+  const probeModelProvider = async (): Promise<string> => (await paidModelHealth()).status;
 
   // The paid billing probe runs on a schedule only: HAWA_BILLING_PROBE_MINUTES, default 30, never
   // under 5. It ran every 3 minutes with up to 100 output tokens on gpt-6-astra from 2026-09-16:
   // 480 paid calls a day, up to ~$2.40, recorded nowhere. A design that hits exhausted credit
   // already fails with INSUFFICIENT_QUOTA and tells the requester; this only warns the owner early.
-  const billingProbeMs = Math.max(5, Number(process.env.HAWA_BILLING_PROBE_MINUTES) || 30) * 60_000;
-  if (options?.enableBillingProbeSchedule) {
-    setTimeout(async () => {
+  const billingProbeMs = Math.round(Math.min(1440, Math.max(5, Number(process.env.HAWA_BILLING_PROBE_MINUTES) || 30)) * 60_000);
+  if (options?.enableBillingProbeSchedule && !options?.skipPaidModelProbe) {
+    const initialProbeTimer = setTimeout(async () => {
       try {
         const res = await executePaidModelProbe();
         await checkAndAlertBilling(res);
@@ -664,7 +623,8 @@ export function createApp(options?: CreateAppOptions) {
         log.error('[HealthProbe] Initial probe failed:', err);
       }
     }, 2000);
-    setInterval(async () => {
+    initialProbeTimer.unref();
+    const recurringProbeTimer = setInterval(async () => {
       try {
         const res = await executePaidModelProbe();
         await checkAndAlertBilling(res);
@@ -672,6 +632,7 @@ export function createApp(options?: CreateAppOptions) {
         log.error('[HealthProbe] Scheduled probe failed:', err);
       }
     }, billingProbeMs);
+    recurringProbeTimer.unref();
   }
 
   // The bot credential is probed with getMe at most every five minutes: a revoked or stale token
@@ -697,12 +658,12 @@ export function createApp(options?: CreateAppOptions) {
     const dbStatus = await probeDatabase(db);
 
     const canvaBreakerState = globalCanvaCircuitBreaker.getSnapshot();
-    let canvaStatus = canvaBreakerState.state === 'OPEN' ? 'outage' : (canvaBreakerState.state === 'HALF_OPEN' ? 'degraded' : 'connected');
+    let canvaStatus = canvaBreakerState.state === 'OPEN' ? 'outage' : (canvaBreakerState.state === 'HALF_OPEN' ? 'degraded' : 'unverified');
     // The breaker only counts failed calls. An expired authorization fails every design at the Canva
     // transfer while the breaker stays closed: from 2026-09-17 to 2026-09-18 health said "connected"
     // while the connection needed reconnecting. Designs transfer as the Primary Operator, so that is
     // the connection that counts.
-    if (canvaStatus === 'connected' && db) {
+    if (canvaStatus === 'unverified' && db) {
       try {
         const connection = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: PRIMARY_OPERATOR_USER_ID, role: 'operator' }, async (trx) =>
           (await sql<{ status: string }>`SELECT status FROM hawa.canva_connections
@@ -729,7 +690,8 @@ export function createApp(options?: CreateAppOptions) {
       diskStatus = 'read_only';
     }
 
-    const modelProviderStatus = await probeModelProvider();
+    const modelHealth = await paidModelHealth();
+    const modelProviderStatus = modelHealth.status;
     const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
     // Degraded rather than unhealthy: the worker waits for a healthy core before it starts, and
     // Restate can only register the worker once it is running.
@@ -745,7 +707,8 @@ export function createApp(options?: CreateAppOptions) {
         funnelMetrics = await checkProductionFunnelHealth(db, { windowHours: 48 });
         funnelStatus = funnelMetrics.status;
       } catch {
-        // DB error already reported under postgres dependency probe
+        // A failed funnel read is unknown even when the simple database ping succeeded.
+        funnelStatus = 'unknown';
       }
     }
 
@@ -768,11 +731,14 @@ export function createApp(options?: CreateAppOptions) {
     // told; the watchdog alerts on 'unreachable' so the office knows before a request needs one.
     const cutoutStatus = await healthCutouts.health();
     const isUnhealthy = dbStatus === 'disconnected' || (isProduction && dbStatus !== 'connected') || diskStatus === 'read_only';
-    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
-      || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable' || modelProviderStatus === 'billing_exhausted'
+    const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || (isProduction && canvaStatus === 'unverified') || channelKillSwitches.telegram || channelKillSwitches.waha
+      || (isProduction && modelProviderStatus !== 'connected')
+      || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable'
+      || modelProviderStatus === 'billing_exhausted' || modelProviderStatus === 'rate_limited'
+      || modelProviderStatus === 'http_error' || modelProviderStatus === 'budget_held' || modelProviderStatus === 'reconciliation_required'
       || telegramApiStatus === 'unauthorized' || telegramApiStatus === 'unreachable' || telegramStatus === 'degraded'
       || restateStatus === 'unregistered' || restateStatus === 'unreachable'
-      || funnelStatus === 'stalled'
+      || funnelStatus === 'stalled' || (Boolean(db) && funnelStatus === 'unknown')
       || parkedUpdates > 0
       || (restateWork.paused ?? 0) > 0;
     const status = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
@@ -785,11 +751,17 @@ export function createApp(options?: CreateAppOptions) {
         DESIGN_PIPELINE_V3: process.env.DESIGN_PIPELINE_V3 || 'off',
         DESIGN_STUDIO_V2: process.env.DESIGN_STUDIO_V2 || 'off',
       },
+      // Who is meant to ask Telegram for updates: the watchdog then requires a polling worker colour
+      // when this says worker (ADR-129).
+      telegramPoller: telegramPollerOf(process.env),
       lastVerifiedProgressAt,
       lastPaidProbe: {
-        at: lastPaidProbe.at ? new Date(lastPaidProbe.at).toISOString() : null,
-        status: lastPaidProbe.status,
-        detail: lastPaidProbe.detail || null,
+        at: modelHealth.at,
+        status: modelHealth.status,
+        observedStatus: modelHealth.observedStatus,
+        schemaVersion: modelHealth.schemaVersion,
+        detail: modelHealth.spendingStatus || null,
+        callId: modelHealth.callId || null,
         lastAlertMessageId: lastPaidProbe.lastAlertMessageId || null,
         everyMinutes: billingProbeMs / 60_000,
       },
@@ -862,6 +834,9 @@ export function createApp(options?: CreateAppOptions) {
 
   const PUBLIC_READ_PATHS = new Set([
     '/auth/session',
+    '/auth/providers',
+    '/auth/google/start',
+    '/auth/google/callback',
     '/health',
     '/ready',
     '/system/studio-status',
@@ -879,13 +854,27 @@ export function createApp(options?: CreateAppOptions) {
 
   // Routes that authenticate the request themselves, with more than the bearer header: the event
   // stream also takes a one-use ticket, since EventSource cannot send a header (ADR-037).
-  const SELF_AUTHENTICATED_READS = new Set(['/events/stream']);
+  const SELF_AUTHENTICATED_READS = new Set(['/events/stream', '/monitoring/availability/probe']);
+  const SELF_AUTHENTICATED_WRITES = new Set(['/monitoring/availability/observations']);
 
   const registerRoute = (method: 'get' | 'post' | 'put' | 'delete', path: string, handler: any) => {
-    const isPublic = method === 'get' ? isPublicRead(path) || SELF_AUTHENTICATED_READS.has(path) : isPublicMutation(path);
+    const isPublic = method === 'get' ? isPublicRead(path) || SELF_AUTHENTICATED_READS.has(path) :
+      isPublicMutation(path) || method === 'post' && SELF_AUTHENTICATED_WRITES.has(path);
     const guarded = isPublic
       ? handler
-      : async (c: any, next: any) => {
+        : async (c: any, next: any) => {
+          if (method !== 'get' && !c.req.header('Authorization')) {
+            const cookieSession = getCookie(c, 'hawa_session');
+            if (cookieSession) {
+              const presented = c.req.header('x-hawa-csrf') || '';
+              const expected = crypto.createHash('sha256').update(`${cookieSession}:csrf`).digest('hex');
+              const origin = c.req.header('Origin');
+              const requestOrigin = new URL(officeBrowserOrigin || c.req.url).origin;
+              if (!secretsEqual(presented, expected) || (origin && origin !== requestOrigin)) {
+                return problem(c, 403, 'CSRF Check Failed', 'The office session requires a same-origin request and CSRF proof');
+              }
+            }
+          }
           await ensureSessionLoaded(bearerTokenOf(c));
           const auth = verifyRequestAuth(c);
           if (!auth.authenticated) return problem(c, 401, 'Authentication Required', 'Sign in to Hawa first');
@@ -929,9 +918,7 @@ export function createApp(options?: CreateAppOptions) {
     unifiedIngress,
     telegramBridge,
     telegramActionTokenService,
-    sloDaemon,
-    evaluationRunner: evalRunner,
-    reconciliationService,
+    evaluationService,
     canvaConnectService,
     deliverableStore,
     qaEngine,
@@ -946,7 +933,6 @@ export function createApp(options?: CreateAppOptions) {
     briefs,
     clientDnas,
     clientSnapshots,
-    evalRuns,
     uploadedAssets,
     historicalMigrator: globalHistoricalMigrator,
     globalCanvaNativeAdapter,
@@ -965,6 +951,7 @@ export function createApp(options?: CreateAppOptions) {
       requesterChatOf, deliveryExecutorOfTask, startWorkflowDelivery, prepareWorkflowDelivery, finishWorkflowDelivery,
     },
     probeModelProvider,
+    paidModelHealth,
     honestHealthHandler,
     handleDecommissionedFigmaRoute,
     ensureSessionLoaded,
@@ -976,8 +963,12 @@ export function createApp(options?: CreateAppOptions) {
   };
 
   registerSystemRoutes(routeContext);
+  registerPublicationInspectionRoutes(routeContext,Boolean(db && options?.enablePublicationInspections));
   registerCanvaRoutes(routeContext, options?.canvaOptions);
   registerDesignStudioRoutes(routeContext, options?.designStudioOptions, options?.designStudioService);
+  registerStudioRecoveryRoutes(routeContext);
+  registerCallCostRoutes(routeContext);
+  registerSpendingPolicyRoutes(routeContext);
   registerAuthRoutes(routeContext);
   registerClientsRoutes(routeContext);
   registerEvalsRoutes(routeContext);
@@ -998,6 +989,7 @@ export function createApp(options?: CreateAppOptions) {
   registerClientLearningRoutes(routeContext);
   registerRevisionsRoutes(routeContext);
   registerDecisionsRoutes(routeContext);
+  registerOfficeReviewAdminRoutes(routeContext);
   registerCanvaOutcomeRoutes(routeContext);
   registerDeliveryRoutes(routeContext);
   registerDeliveryInternalRoutes(routeContext);
@@ -1008,6 +1000,11 @@ export function createApp(options?: CreateAppOptions) {
   registerSearchRoutes(routeContext);
   registerWhatsappRoutes(routeContext);
   registerTelegramWebhookRoutes(routeContext);
+
+  if (db && options?.enablePublicationInspections) {
+    const inspections = new PublicationInspectionService(db,options.publicationInspector || new GooglePublisher());
+    startPublicationInspectionSchedule(inspections,defaultTenantId,() => log.warn('[publication-inspections] Pass not confirmed; durable claims retain their state.'));
+  }
 
   // Reminders about drafts a requester has not answered: a pass every 15 minutes writes what is due to
   // the outbox, keyed by task and day, so a restart or a second process never sends one twice.
@@ -1023,7 +1020,7 @@ export function createApp(options?: CreateAppOptions) {
 
   // Canva operations nobody follows any more (an import still settling when the studio stopped
   // polling, an export the worker ran out of polls for, a call cut off by a restart) are settled
-  // every five minutes, so none blocks its task for good. Nothing ran the sweeper before 2026-09-24.
+  // every five minutes. Unknown creations retain their reconciliation hold (ADR-108).
   // A check export it retrieves is recorded as the draft's QC run, as a Desk capture is.
   if (db && canvaConnectService && options?.enableCanvaSweeper) {
     const sweepDb = db;
@@ -1061,7 +1058,7 @@ export function createApp(options?: CreateAppOptions) {
       )
     : Promise.resolve(0);
 
-  // Every client pack has its hawa.clients row (ADR-038): a request routed to a client added since
+  // Every client pack has its hawa.clients row (ADR-127): a request routed to a client added since
   // this database was built could not otherwise be saved. Missing rows only; nothing is changed.
   if (db) {
     ensureClientPackRows(db, DEFAULT_TENANT_ID, clientPacks())
@@ -1071,9 +1068,6 @@ export function createApp(options?: CreateAppOptions) {
   // The worker's calls into Core (Phase 2.1): ChatInbox hands each polled update to intake here, and
   // dead-letters one intake keeps failing. Only HAWA_WORKER_TOKEN opens them (verifyRequestAuth).
   registerLifecycleInternalRoutes(routeContext);
-  // RequestLifecycle's projection into Postgres (Phase 2.3): the only writer of a lifecycle-owned
-  // request's rows, with an expected revision and an idempotency key per projection.
-  registerLifecycleProjectionRoutes(routeContext);
   if (telegramPollerOf(process.env) === 'worker' && !serviceTokenOf()) {
     log.error('[core:internal] HAWA_TELEGRAM_POLLER=worker but HAWA_WORKER_TOKEN is not usable here: the worker cannot hand updates to intake, and Core does not poll. Set HAWA_WORKER_TOKEN in .env.production (infra/docker/README.md).');
   }

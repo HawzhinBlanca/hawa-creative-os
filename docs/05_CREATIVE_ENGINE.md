@@ -33,6 +33,10 @@ Rules:
 - their pixels never enter final output;
 - generated text is ignored except as optional non-factual copy inspiration;
 - facts, names, prices, dates, contact information, legal text, and logos may come only from locked brief/Client DNA;
+- a logo-bearing Studio render requires the task's explicit, decoded client logo bytes; an absent or invalid logo fails the render rather than borrowing a packaged brand asset (ADR-047);
+- text-free art prompts and procedural fallbacks take their colors and visual concept from the admitted client layout; a generic art path must not impose one house client's navy, gold, or institutional style;
+- procedural motif generation refuses an absent or invalid client palette, including in provider-failure fallbacks;
+- the production image-art provider checks the palette before any model call and does not substitute house colors or a house visual style in its prompt;
 - the reference model is encouraged to be visually ambitious rather than safe and generic;
 - every reference prompt and output hash is retained in the design replay.
 
@@ -210,4 +214,3 @@ flowchart TD
 3. **Contrast Scrims**: Backgrounds automatically receive dynamic scrims evaluated by `composite-contrast.ts` ensuring all text boxes meet WCAG 2.2 contrast requirements against the composite bitmap.
 4. **Position Bias Cancellation**: The vision judge evaluates candidates in pairwise matches where presentation order (Left vs Right) is systematically swapped; contradictory verdicts result in a tie rather than false confidence.
 5. **Adversarial Canary**: Every winning candidate must beat a deliberately degraded twin (40% font shrinkage or logo overlap). If the vision judge fails this check, `judgeStatus` becomes `UNRELIABLE` and selection falls back to objective layout metrics.
-

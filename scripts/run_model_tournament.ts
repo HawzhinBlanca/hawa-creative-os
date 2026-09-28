@@ -26,6 +26,8 @@ function wilsonScoreInterval(successes: number, total: number, z: number = 1.959
   };
 }
 
+const formatRate = (value: number | null) => value === null ? 'unreported' : value.toFixed(2);
+
 async function main() {
   console.log('================================================================================');
   console.log('⚡ HAWA CREATIVE OS: NORMATIVE MODEL TOURNAMENT & QUALIFICATION (Task R10)');
@@ -47,7 +49,7 @@ async function main() {
   const routingCi = wilsonScoreInterval(routingRes.passedCases, routingRes.totalCases);
   console.log(`   ✓ Total cases:      ${routingRes.totalCases}`);
   console.log(`   ✓ Passed cases:     ${routingRes.passedCases}`);
-  console.log(`   ✓ Pass rate:        ${routingRes.passRate.toFixed(2)}%`);
+  console.log(`   ✓ Pass rate:        ${formatRate(routingRes.passRate)}%`);
   console.log(`   ✓ 95% Wilson CI:    [${(routingCi.ciLower95 * 100).toFixed(2)}%, ${(routingCi.ciUpper95 * 100).toFixed(2)}%]`);
   console.log(`   ✓ Critical escapes: ${routingRes.criticalViolations}`);
 
@@ -57,19 +59,19 @@ async function main() {
   const retrievalCi = wilsonScoreInterval(retrievalRes.passedCases, retrievalRes.totalCases);
   console.log(`   ✓ Total cases:      ${retrievalRes.totalCases}`);
   console.log(`   ✓ Passed cases:     ${retrievalRes.passedCases}`);
-  console.log(`   ✓ Pass rate:        ${retrievalRes.passRate.toFixed(2)}%`);
+  console.log(`   ✓ Pass rate:        ${formatRate(retrievalRes.passRate)}%`);
   console.log(`   ✓ 95% Wilson CI:    [${(retrievalCi.ciLower95 * 100).toFixed(2)}%, ${(retrievalCi.ciUpper95 * 100).toFixed(2)}%]`);
   console.log(`   ✓ Foreign leakages: ${retrievalRes.criticalViolations} (Strict Invariant: 0)`);
 
   // 3. Copy Guard & Token Integrity Benchmark
   console.log('\n>>> 3. Executing Factual Copy Guard Evaluation...');
   const copyGuardRes = await runner.runCopyGuardEvaluation();
-  console.log(`   ✓ Passed cases:     ${copyGuardRes.passedCases}/${copyGuardRes.totalCases} (${copyGuardRes.passRate.toFixed(2)}%)`);
+  console.log(`   ✓ Passed cases:     ${copyGuardRes.passedCases}/${copyGuardRes.totalCases} (${formatRate(copyGuardRes.passRate)}%)`);
 
   // 4. Visual Quality Rubric Evaluation
   console.log('\n>>> 4. Executing Visual Quality Rubric Evaluation...');
   const visualJudgeRes = await runner.runVisualJudgeEvaluation();
-  console.log(`   ✓ Passed cases:     ${visualJudgeRes.passedCases}/${visualJudgeRes.totalCases} (${visualJudgeRes.passRate.toFixed(2)}%)`);
+  console.log(`   ✓ Passed cases:     ${visualJudgeRes.passedCases}/${visualJudgeRes.totalCases} (${formatRate(visualJudgeRes.passRate)}%)`);
 
   // 5. Design Studio v2 Golden Briefs & Order-Swap Canary Consistency
   console.log('\n>>> 5. Executing 24 Golden Briefs Studio Tournament & Canary Validation...');
@@ -116,7 +118,7 @@ async function main() {
       passRate: routingRes.passRate,
       confidenceInterval95: routingCi,
       criticalViolations: routingRes.criticalViolations,
-      status: routingRes.passRate >= 98.0 && routingRes.criticalViolations === 0 ? 'PASSED' : 'FAILED',
+      status: (routingRes.passRate !== null && routingRes.passRate >= 98.0) && routingRes.criticalViolations === 0 ? 'PASSED' : 'FAILED',
     },
     retrievalQualification: {
       dataset: 'evals/retrieval_eval.jsonl',
@@ -171,7 +173,7 @@ async function main() {
     admissions: {
       intake_router: {
         status: isLive
-          ? (routingRes.passRate >= 98.0 && routingRes.criticalViolations === 0 ? 'ADMITTED' : 'REJECTED')
+          ? ((routingRes.passRate !== null && routingRes.passRate >= 98.0) && routingRes.criticalViolations === 0 ? 'ADMITTED' : 'REJECTED')
           : 'SIMULATED_NOT_ADMITTED',
         scope: 'Enforced routing, client scoping, and mandatory abstention',
       },
@@ -198,7 +200,7 @@ async function main() {
       },
     },
     overallVerdict: isLive
-      ? ((routingRes.passRate >= 98.0 && routingRes.criticalViolations === 0 &&
+      ? (((routingRes.passRate !== null && routingRes.passRate >= 98.0) && routingRes.criticalViolations === 0 &&
           retrievalRes.passRate === 100.0 && retrievalRes.criticalViolations === 0 &&
           copyGuardRes.passRate === 100.0 && visualJudgeRes.passRate === 100.0 &&
           studioReport.hardQaEscapeCount === 0 && studioReport.tournamentSwapConsistencyRate >= 0.9 &&

@@ -1,10 +1,12 @@
+import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, sql, withRlsContext, PublicationRepository, type Kysely, type Database } from '@hawa/db';
+import { createDb, sql, withRlsContext, OutboxRepository, PublicationRepository, type Kysely, type Database } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
 import { OutboxConsumer } from '../../worker/src/outbox-consumer.js';
+import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 describe('E2E Canva-to-Delivery Closed Loop', () => {
   let db: Kysely<Database>;
@@ -40,7 +42,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     };
 
     const canvaService = new CanvaConnectService(db);
-    const deliverableStore = canvaDeliverableStore(canvaService);
+    const deliverableStore = syntheticUnchangedCanvaVersion(canvaDeliverableStore(canvaService));
 
     const app = createAppWithClientFixtures({ testAuth: { roleHeader: true }, 
       db,
@@ -80,7 +82,8 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     const designId = `canva_test_design_${randomUUID().slice(0, 8)}`;
     const opId = randomUUID();
     const exportId = randomUUID();
-    const exportContent = Buffer.from('PNG_CANVA_TEST_EXPORT_BINARY_IMAGE_BYTES_12345');
+    const checked = await checkedCanvaExportFixture('We are pleased to announce full institutional accreditation.');
+    const exportContent = checked.bytes;
     const exportSha256 = createHash('sha256').update(exportContent).digest('hex');
 
     await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => {
@@ -96,7 +99,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
         INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
         VALUES (${opId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${operatorUserId},
                 ${'req_' + randomUUID().slice(0, 8)}, 'hash_req', 'export', 'retrieved', ${designId}, 1,
-                ${JSON.stringify({ format: 'pptx' })}::jsonb, now(), now())
+                ${JSON.stringify({ format: 'pptx', designUpdatedAt: 200 })}::jsonb, now(), now())
       `.execute(trx);
 
       // Stored export bytes
@@ -104,7 +107,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
         INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
         VALUES (${exportId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${opId}::uuid,
                 'pptx', ${exportSha256}, ${exportContent},
-                ${JSON.stringify({ copyPass: true, fontPass: true, rtlPass: true, status: 'passed' })}::jsonb, now())
+                ${JSON.stringify(checked.contentCheck)}::jsonb, now())
       `.execute(trx);
     });
 
@@ -160,6 +163,8 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(taskDetail.latestRevisionId).toBe(revId);
     expect(taskDetail.qaReport).toBeDefined();
     expect(taskDetail.qaReport.passed).toBe(true);
+    expect(taskDetail.qaReport.exportArtifactId).toBe(exportId);
+    expect(taskDetail.qaReport.captureVersion).toBe('200');
     expect(taskDetail.latestRevision).toBeDefined();
     expect(taskDetail.latestRevision.id).toBe(revId);
     expect(taskDetail.latestRevision.sha256).toBe(exportSha256);
@@ -180,13 +185,14 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(taskInList.canvaBinding.designId).toBe(designId);
 
     // -------------------------------------------------------------------------
-    // 5. DESK APPROVAL: Approve the revision (auto-pinning retrieved exports)
+    // 5. DESK APPROVAL: Explicitly select the retrieved export for this revision.
     // -------------------------------------------------------------------------
     const approveRes = await app.request(`/tasks/${taskId}/revisions/${revId}/decisions`, {
       method: 'POST',
       headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' },
       body: JSON.stringify({
         decision: 'approved',
+        pinnedExportIds: [exportId],
         role: 'art_director',
         reason: 'Visual balance, exact copy, and KAAE brand compliance verified',
       }),
@@ -214,6 +220,56 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     // -------------------------------------------------------------------------
     // 6. DESK DELIVERY: Trigger publication to Google Drive and Google Sheets
     // -------------------------------------------------------------------------
+    // A provider can accept the upload while Core's receipt transaction fails. That first
+    // attempt must leave no complete task or requester command; the next press reconciles it.
+    const originalRecord = PublicationRepository.prototype.recordDriveRef;
+    const recordRef = vi.spyOn(PublicationRepository.prototype, 'recordDriveRef')
+      .mockImplementationOnce(async () => { throw new Error('injected receipt write failure'); })
+      .mockImplementation(originalRecord);
+    let failedDeliver: Response;
+    try {
+      failedDeliver = await app.request(`/tasks/${taskId}/publish`, {
+        method: 'POST', headers, body: JSON.stringify({ policy: 'current_task' }),
+      });
+    } finally {
+      recordRef.mockRestore();
+    }
+    expect(failedDeliver.status).toBe(503);
+    expect((await failedDeliver.json()).detail).toMatch(/receipts could not be recorded/i);
+    const held = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => ({
+      taskState: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${taskId}::uuid`.execute(trx)).rows[0].state,
+      publication: (await sql<{ state: string; error_class: string }>`SELECT state, error_class FROM hawa.publications WHERE task_id = ${taskId}::uuid`.execute(trx)).rows[0],
+      driveRefs: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.drive_refs WHERE publication_id IN
+        (SELECT id FROM hawa.publications WHERE task_id = ${taskId}::uuid)`.execute(trx)).rows[0].n,
+      requesterCommands: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands
+        WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n,
+    }));
+    expect(held).toEqual({ taskState: 'publishing', publication: { state: 'pending', error_class: 'ARCHIVE_UNCONFIRMED' }, driveRefs: 0, requesterCommands: 0 });
+    expect((await (await app.request(`/tasks/${taskId}`, { headers })).json()).status).toBe('ARCHIVE_RECONCILIATION');
+
+    const originalEnqueue = OutboxRepository.prototype.enqueue;
+    const enqueue = vi.spyOn(OutboxRepository.prototype, 'enqueue')
+      .mockImplementationOnce(async () => { throw new Error('injected outbox commit failure'); })
+      .mockImplementation(originalEnqueue);
+    let failedNotificationCommit: Response;
+    try {
+      failedNotificationCommit = await app.request(`/tasks/${taskId}/publish`, {
+        method: 'POST', headers, body: JSON.stringify({ policy: 'current_task' }),
+      });
+    } finally {
+      enqueue.mockRestore();
+    }
+    expect(failedNotificationCommit.status).toBe(503);
+    const rolledBack = await withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, async (trx) => ({
+      taskState: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${taskId}::uuid`.execute(trx)).rows[0].state,
+      publication: (await sql<{ state: string; error_class: string }>`SELECT state, error_class FROM hawa.publications WHERE task_id = ${taskId}::uuid`.execute(trx)).rows[0],
+      driveRefs: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.drive_refs WHERE publication_id IN
+        (SELECT id FROM hawa.publications WHERE task_id = ${taskId}::uuid)`.execute(trx)).rows[0].n,
+      requesterCommands: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands
+        WHERE aggregate_id = ${taskId}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n,
+    }));
+    expect(rolledBack).toEqual(held);
+
     const deliverRes = await app.request(`/tasks/${taskId}/publish`, {
       method: 'POST',
       headers,
@@ -307,17 +363,24 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     // after a failed first attempt always died on the key and the ledger row could never be closed.
     const repo = new PublicationRepository(db);
     const rowKey = `retry-${randomUUID()}`;
+    const asOperator = <T>(fn: (trx: any) => Promise<T>) => withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, fn);
+    // Exercise historical receipts separately; the real delivery above has immutable Sheet
+    // expectations and correctly refuses a fabricated destination/hash for that publication.
+    const receiptFixturePublication = await asOperator(async trx => (await sql<{ id: string }>`
+      INSERT INTO hawa.publications(tenant_id,task_id,design_revision_id,approval_id,publication_key,package_manifest,package_sha256,state,input_protocol)
+      SELECT tenant_id,task_id,design_revision_id,approval_id,${`receipt-fixture-${randomUUID()}`},package_manifest,package_sha256,'drive_complete',0
+      FROM hawa.publications WHERE id=${dbPub.id}::uuid RETURNING id`.execute(trx)).rows[0].id);
     const base = {
-      tenantId, publicationId: dbPub.id, spreadsheetId: 'sheet_retry_fixture', sheetId: 0, taskId, rowKey,
+      tenantId, publicationId: receiptFixturePublication, spreadsheetId: 'sheet_retry_fixture', sheetId: 0, taskId, rowKey,
       expectedHash: 'a'.repeat(64),
     };
-    const asOperator = <T>(fn: (trx: any) => Promise<T>) => withRlsContext(db, { tenantId, userId: operatorUserId, role: 'operator' }, fn);
 
     const first = await asOperator((trx) => repo.recordSheetSync({ ...base, status: 'pending', lastError: 'Sheets 503' }, trx));
     expect(first.status).toBe('pending');
     expect(first.attempts).toBe(1);
 
-    const retried = await asOperator((trx) => repo.recordSheetSync({ ...base, status: 'synced', rowNumber: 42, observedHash: 'a'.repeat(64) }, trx));
+    const rowEvidence = { metadataId: 123, expectedValues: ['task', 'client', 'folder', 'time', 'COMPLETE', 'link', 'hash'], expectedRowHash: 'b'.repeat(64), observedRowHash: 'b'.repeat(64) };
+    const retried = await asOperator((trx) => repo.recordSheetSync({ ...base, ...rowEvidence, status: 'synced', rowNumber: 42, observedHash: 'a'.repeat(64) }, trx));
     expect(retried.id).toBe(first.id);
     expect(retried.status).toBe('synced');
     expect(retried.attempts).toBe(2);
@@ -330,6 +393,10 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(late.status).toBe('synced');
     expect(Number(late.row_number)).toBe(42);
     expect(late.attempts).toBe(3);
+    expect(late.metadata_id).toBe(rowEvidence.metadataId);
+    expect(late.expected_values).toEqual(rowEvidence.expectedValues);
+    expect(late.expected_row_hash).toBe(rowEvidence.expectedRowHash);
+    expect(late.observed_row_hash).toBe(rowEvidence.observedRowHash);
 
     const rows = await asOperator(async (trx) => (await sql<any>`SELECT count(*)::int AS n FROM hawa.sheet_syncs WHERE row_key = ${rowKey}`.execute(trx)).rows[0].n);
     expect(rows).toBe(1);
@@ -343,11 +410,22 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     const untouched = await asOperator(async (trx) => (await sql<any>`SELECT task_id, status FROM hawa.sheet_syncs WHERE row_key = ${rowKey}`.execute(trx)).rows[0]);
     expect(untouched.task_id).toBe(taskId);
     expect(untouched.status).toBe('synced');
+
+    // A new failed observation must be visible, even for the same package.
+    const stale = await asOperator((trx) => repo.recordSheetSync({ ...base, ...rowEvidence, status: 'stale', observedRowHash: 'c'.repeat(64), lastError: 'Link changed' }, trx));
+    expect(stale.status).toBe('stale');
+    expect(stale.synced_at).toBeNull();
+    // A different package cannot inherit the previous package's readback evidence.
+    const next = await asOperator((trx) => repo.recordSheetSync({ ...base, expectedHash: 'd'.repeat(64), status: 'pending' }, trx));
+    expect(next.status).toBe('pending');
+    expect(next.observed_hash).toBeNull();
+    expect(next.observed_row_hash).toBeNull();
+    expect(next.synced_at).toBeNull();
   });
 
   it('fails closed when exported copy is corrupted: records failed QC run and refuses approval (HTTP 412)', async () => {
     const canvaService = new CanvaConnectService(db);
-    const deliverableStore = canvaDeliverableStore(canvaService);
+    const deliverableStore = syntheticUnchangedCanvaVersion(canvaDeliverableStore(canvaService));
     const app = createAppWithClientFixtures({ testAuth: { roleHeader: true }, 
       db,
       deliverableStore,
@@ -366,7 +444,8 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     const designId = `canva_corrupt_${randomUUID().slice(0, 8)}`;
     const opId = randomUUID();
     const exportId = randomUUID();
-    const exportContent = Buffer.from('PNG_CORRUPTED_EXPORT_CONTENT_LONGER_THAN_32_BYTES_12345');
+    const checked = await checkedCanvaExportFixture('Corrupted hallucinated slogan');
+    const exportContent = checked.bytes;
     const exportSha256 = createHash('sha256').update(exportContent).digest('hex');
 
     // Store export bytes with corrupted copy check failure
@@ -381,7 +460,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
         INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
         VALUES (${opId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaaeClientId}::uuid, ${operatorUserId},
                 ${'req_' + randomUUID().slice(0, 8)}, 'hash_req', 'export', 'retrieved', ${designId}, 1,
-                ${JSON.stringify({ format: 'pptx' })}::jsonb, now(), now())
+                ${JSON.stringify({ format: 'pptx', designUpdatedAt: 200 })}::jsonb, now(), now())
       `.execute(trx);
 
       await sql`
@@ -392,6 +471,8 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
                   copyPass: false,
                   fontPass: true,
                   status: 'failed',
+                  expectedCopy: ['We are pleased to announce full institutional accreditation.'],
+                  requiredFont: 'Verdana',
                   offendingObjects: [{ text: 'Corrupted hallucinated slogan', reason: 'Mismatch with source copy' }],
                 })}::jsonb, now())
       `.execute(trx);
@@ -423,7 +504,7 @@ describe('E2E Canva-to-Delivery Closed Loop', () => {
     expect(dbQc.critical_pass).toBe(false);
     expect(dbQc.status).toBe('failed');
     expect(dbQc.report?.errors?.length).toBeGreaterThan(0);
-    expect(dbQc.report.errors[0]).toContain('Copy mismatch');
+    expect(dbQc.report.errors[0]).toMatch(/copy.*match/i);
 
     // Desk API: verify task details show changes requested / failed QC
     const taskGetRes = await app.request(`/tasks/${taskId}`, { headers });

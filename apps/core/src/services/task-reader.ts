@@ -3,8 +3,8 @@
  * (services/no-database-store.ts). Moved from app.ts (architecture programme 1.3, SPLIT_PLAN.md F3),
  * where it was shared by eight route groups.
  */
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
-import { withRlsContext, toApiTaskStatus, sql, type TaskRepository } from '@hawa/db';
+import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus } from '@hawa/contracts';
+import { withRlsContext, sql, type TaskRepository } from '@hawa/db';
 import { isValidUuid, TaskStoreUnavailableError } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, type CoreContext } from '../core-context.js';
 import { log } from '../logging.js';
@@ -25,6 +25,8 @@ export interface TaskRecord {
   approval?: { id: string; design_revision_id: string; decision_payload: unknown; created_at: Date | string; invalidated: boolean } | null;
   /** How many times a reviewer sent the task back for changes. */
   revisionRequests?: number;
+  /** The latest request-owned publication problem, if it needs a staffed follow-up. */
+  deliveryErrorClass?: string | null;
 }
 
 /**
@@ -42,7 +44,9 @@ export function taskFromRows(row: TaskRow, record: TaskRecord = {}) {
   const pick = (field: string) => text(payload[field]) ?? text(body[field]);
   return {
     id: row.id, tenantId: row.tenant_id, clientId: row.client_id, projectId: row.project_id,
-    status: toApiTaskStatus(row.state || 'received'), state: row.state, priority: row.priority,
+    requestId: row.request_id || null,
+    status: publicationAwareTaskStatus(row.state, { errorClass: record.deliveryErrorClass }),
+    state: row.state, priority: row.priority,
     title: row.title, description: row.description, version: Number(row.version), // bigint: pg returns a string, and version checks compare with ===
     latestRevisionId: row.current_design_revision_id || undefined,
     headlineEn: pick('headlineEn'), headlineCkb: pick('headlineCkb'), copyEn: pick('copyEn'), copyCkb: pick('copyCkb'),
@@ -92,7 +96,8 @@ export function createTaskReader({ db, taskRepo, tasks }: Pick<CoreContext, 'db'
         if (!row) return undefined;
         // hawa.approvals is append-only: a later revision records the approval's invalidation as an
         // approval.invalidated event (revision.repository.ts).
-        const more = (await sql<{ created: unknown; approval: NonNullable<TaskRecord['approval']> | null; revision_requests: number }>`
+        const more = (await sql<{ created: unknown; approval: NonNullable<TaskRecord['approval']> | null;
+          revision_requests: number; delivery_error_class: string | null }>`
           SELECT
             (SELECT e.data FROM hawa.task_events e
               WHERE e.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND e.task_id = ${taskId}::uuid AND e.event_type = 'task.created'
@@ -106,9 +111,13 @@ export function createTaskReader({ db, taskRepo, tasks }: Pick<CoreContext, 'db'
               WHERE a.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND a.task_id = ${taskId}::uuid AND a.decision = 'approved'
               ORDER BY a.created_at DESC LIMIT 1) AS approval,
             (SELECT count(*)::int FROM hawa.approvals r
-              WHERE r.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND r.task_id = ${taskId}::uuid AND r.decision = 'revision_requested') AS revision_requests
+              WHERE r.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND r.task_id = ${taskId}::uuid AND r.decision = 'revision_requested') AS revision_requests,
+            (SELECT p.error_class FROM hawa.publications p
+              WHERE p.tenant_id = ${DEFAULT_TENANT_ID}::uuid AND p.task_id = ${taskId}::uuid
+              ORDER BY p.created_at DESC LIMIT 1) AS delivery_error_class
         `.execute(trx)).rows[0];
-        return { row, record: { created: more?.created, approval: more?.approval, revisionRequests: Number(more?.revision_requests ?? 0) } };
+        return { row, record: { created: more?.created, approval: more?.approval,
+          revisionRequests: Number(more?.revision_requests ?? 0), deliveryErrorClass: more?.delivery_error_class } };
       });
       return found ? taskFromRows(found.row, found.record) : undefined;
     } catch (err) {

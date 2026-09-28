@@ -23,6 +23,7 @@
  * its one background write failed.
  */
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import crypto from 'node:crypto';
 import { sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
@@ -30,7 +31,28 @@ import { log } from '../logging.js';
 export type KillSwitchChannel = 'telegram' | 'waha';
 export type ChannelKillSwitches = Record<KillSwitchChannel, boolean>;
 
+export class KillSwitchRevisionConflict extends Error {
+  constructor() { super('The channel switch changed after this action read it'); }
+}
+
 export const KILL_SWITCH_CHANNELS: readonly KillSwitchChannel[] = ['telegram', 'waha'];
+
+/**
+ * Who may throw or release each switch, on every route that changes one (ADR-128). WhatsApp is the
+ * administrator's, as POST /waha/kill-switch always was: an art director or operator used to release
+ * it through the ingress toggle or /operations/kill-switch. Telegram is the office's: the Desk, and the
+ * nightly Restate backup (infra/backup/restate_nightly.py, ADR-054), which pauses it with the art
+ * director's key, or the bearer key, and releases it with the pause's changeTag.
+ */
+const KILL_SWITCH_ROLES: Record<KillSwitchChannel, readonly string[]> = {
+  telegram: ['operator', 'administrator', 'art_director'],
+  waha: ['administrator'],
+};
+
+export function mayChangeKillSwitch(channel: KillSwitchChannel, role: string | undefined): boolean {
+  return KILL_SWITCH_ROLES[channel].includes(role ?? '');
+}
+
 /** The `hawa.integrations` name of each channel's switch row. */
 export const KILL_SWITCH_ROW_NAME = 'office-kill-switch';
 /** How old this process's copy may be before a read asks Postgres again. */
@@ -53,8 +75,9 @@ export interface ChannelKillSwitchStore {
   /** Resolves once Postgres has been read (at once without a database). It never rejects. */
   readonly loaded: Promise<void>;
   isLoaded(): boolean;
+  isUnsaved(channel: KillSwitchChannel): boolean;
   /** Throws (`active`) or releases a switch: Postgres first, then this process. Rejects if Postgres refused it. */
-  set(channel: KillSwitchChannel, active: boolean, actorId?: string): Promise<void>;
+  set(channel: KillSwitchChannel, active: boolean, actorId?: string): Promise<string | undefined>;
   /** Reads Postgres again now (after every write this process has started). */
   refresh(): Promise<void>;
 }
@@ -76,10 +99,41 @@ export function killSwitchStoreOf(switches: object): ChannelKillSwitchStore | un
  * Throws or releases a channel's switch through its store when it has one, answering once Postgres
  * has it; a plain object (a hand-built context) is just assigned.
  */
-export async function setKillSwitch(switches: ChannelKillSwitches, channel: KillSwitchChannel, active: boolean, actorId?: string): Promise<void> {
+export async function setKillSwitch(switches: ChannelKillSwitches, channel: KillSwitchChannel, active: boolean, actorId?: string): Promise<string | undefined> {
   const store = killSwitchStoreOf(switches);
-  if (store) await store.set(channel, active, actorId);
-  else switches[channel] = active;
+  if (store) return store.set(channel, active, actorId);
+  switches[channel] = active;
+  return undefined;
+}
+
+/** Conditional release under the same PostgreSQL row lock used by ordinary switch writes. */
+export async function compareAndSetKillSwitch(
+  db: Kysely<Database>, switches: ChannelKillSwitches, channel: KillSwitchChannel,
+  active: boolean, expectedChangeTag: string, actorId: string,
+  scope: { tenantId: string; userId: string } = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID },
+): Promise<string> {
+  const changeTag = crypto.randomUUID();
+  const detail = JSON.stringify({ killSwitch: { active, changedAt: new Date().toISOString(), changedBy: actorId, changeTag } });
+  const write = processWrites.then(() => {
+    if (killSwitchStoreOf(switches)?.isUnsaved(channel)) {
+      throw new Error('The channel switch has an unsaved local operator decision');
+    }
+    return withRlsContext(db, { ...scope, role: 'operator' }, async (trx) =>
+    (await sql<{ integration_id: string }>`UPDATE hawa.integration_health h
+      SET state = ${active ? 'disabled' : 'unknown'}::hawa.integration_health_state,
+          detail = h.detail || ${detail}::jsonb, last_checked_at = now(), updated_at = now()
+      FROM hawa.integrations i
+      WHERE h.integration_id = i.id AND i.tenant_id = ${scope.tenantId}::uuid
+        AND i.kind = ${channel} AND i.name = ${KILL_SWITCH_ROW_NAME}
+        AND h.detail #>> '{killSwitch,changeTag}' = ${expectedChangeTag}
+      RETURNING h.integration_id`.execute(trx)).rows);
+  });
+  processWrites = write.catch(() => undefined);
+  const rows = await write;
+  if (rows.length !== 1) throw new KillSwitchRevisionConflict();
+  await refreshKillSwitches(switches);
+  await refreshKillSwitches(switches); // the first refresh may have begun before the conditional write
+  return changeTag;
 }
 
 const within = <T>(work: Promise<T>, ms: number, what: string): Promise<T> =>
@@ -151,8 +205,9 @@ export function createChannelKillSwitchStore(
     return found;
   }
 
-  async function writeRow(channel: KillSwitchChannel, actorId?: string): Promise<void> {
+  async function writeRow(channel: KillSwitchChannel, actorId?: string): Promise<string> {
     const active = wanted[channel];
+    const changeTag = crypto.randomUUID();
     await run(async (trx) => {
       await sql`INSERT INTO hawa.integrations (tenant_id, kind, name, config_public)
         VALUES (${scope.tenantId}::uuid, ${channel}, ${KILL_SWITCH_ROW_NAME}, ${JSON.stringify({ purpose: 'office intake kill switch' })}::jsonb)
@@ -160,12 +215,13 @@ export function createChannelKillSwitchStore(
       const row = (await sql<{ id: string }>`SELECT id FROM hawa.integrations
         WHERE tenant_id = ${scope.tenantId}::uuid AND kind = ${channel} AND name = ${KILL_SWITCH_ROW_NAME}`.execute(trx)).rows[0];
       if (!row) throw new Error(`The ${channel} kill switch row could not be created`);
-      const detail = JSON.stringify({ killSwitch: { active, changedAt: new Date().toISOString(), changedBy: actorId ?? scope.userId } });
+      const detail = JSON.stringify({ killSwitch: { active, changedAt: new Date().toISOString(), changedBy: actorId ?? scope.userId, changeTag } });
       await sql`INSERT INTO hawa.integration_health (integration_id, tenant_id, state, detail, last_checked_at)
         VALUES (${row.id}::uuid, ${scope.tenantId}::uuid, ${active ? 'disabled' : 'unknown'}::hawa.integration_health_state, ${detail}::jsonb, now())
         ON CONFLICT (integration_id) DO UPDATE SET state = EXCLUDED.state,
           detail = hawa.integration_health.detail || EXCLUDED.detail, last_checked_at = now(), updated_at = now()`.execute(trx);
     });
+    return changeTag;
   }
 
   function refresh(): Promise<void> {
@@ -190,7 +246,7 @@ export function createChannelKillSwitchStore(
     refresh().catch((err) => logRepeated('reread', 'warn', '[core:kill_switch] could not re-read the kill switches; keeping this process\'s copy:', err));
   }
 
-  function enqueueWrite(channel: KillSwitchChannel, actorId?: string): Promise<void> {
+  function enqueueWrite(channel: KillSwitchChannel, actorId?: string): Promise<string> {
     const write = processWrites.then(() => writeRow(channel, actorId));
     processWrites = write.catch(() => undefined);
     return write;
@@ -255,13 +311,15 @@ export function createChannelKillSwitchStore(
     switches,
     loaded: firstLoad,
     isLoaded: () => loaded,
+    isUnsaved: (channel) => unsaved[channel],
     async set(channel, active, actorId) {
       const mine = ++version[channel];
+      let changeTag: string | undefined;
       if (db) {
         const before = wanted[channel];
         wanted[channel] = active;
         try {
-          await enqueueWrite(channel, actorId);
+          changeTag = await enqueueWrite(channel, actorId);
         } catch (err) {
           // Unchanged: what this process wanted before still stands (and is still being saved if it
           // was unsaved), unless the channel was assigned again meanwhile.
@@ -269,11 +327,12 @@ export function createChannelKillSwitchStore(
           throw err;
         }
         // Assigned again while this write ran: that newer assignment stands and is saved by its own loop.
-        if (version[channel] !== mine) return;
+        if (version[channel] !== mine) return changeTag;
         unsaved[channel] = false;
       }
       version[channel] += 1;
       copy[channel] = active;
+      return changeTag;
     },
     refresh,
   };

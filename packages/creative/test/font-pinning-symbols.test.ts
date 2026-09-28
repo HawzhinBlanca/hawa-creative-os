@@ -93,14 +93,14 @@ describe('pinned fonts cover the symbols the copy gate admits', () => {
     expect(drawable).toBeGreaterThanOrEqual(1036 - 1);
   });
 
-  it('keeps the symbol faces to symbols, so they never draw Latin or Kurdish text though every family falls back to them first', () => {
+  it('keeps the symbol faces to symbols and their spaces, without Latin or Kurdish letters', () => {
     for (const file of ['HawaSymbols-Regular.ttf', 'HawaSymbols-Bold.ttf']) {
       const font = fk.openSync(path.join(FONTS, file));
       expect(font.familyName, file).toBe('Hawa Symbols');
       // fontkit lists U+FFFF from the format-4 cmap's closing segment, which every such cmap has.
       const points: number[] = font.characterSet.filter((cp: number) => cp !== 0xffff);
       const outside = points.filter((cp) => !GATE_SYMBOL_RANGES.some(([a, b]) => cp >= a && cp <= b));
-      expect(outside.map((cp) => cp.toString(16)), file).toEqual([]);
+      expect(outside.map((cp) => cp.toString(16)).sort(), file).toEqual(['20','a0']);
     }
     expect(fs.readFileSync(path.join(FONTS, 'LICENSE-DejaVu.txt'), 'utf8')).toMatch(/Bitstream Vera/);
   });

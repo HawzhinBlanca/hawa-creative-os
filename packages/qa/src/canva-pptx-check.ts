@@ -24,7 +24,19 @@ export interface OffendingFontObject {
   reason: string;
 }
 
+/** Addressable live text observed in the retained PPTX; not a native Canva layer map. */
+export interface PptxTextObject {
+  id: string;
+  type: 'text';
+  text: string;
+  source: { format: 'pptx'; part: string; shapeId: string };
+}
+
 export interface PptxCheckOptions {
+  /** Explicit block directions frozen from the imported plan. null means unspecified. */
+  directionsByIndex?: Array<'ltr' | 'rtl' | null>;
+  /** Manual designs: explicit active Client DNA families, with no inferred block roles. */
+  allowedFontsByScript?: { latin: string[]; arabic: string[] };
   /** Typeface expected on Arabic-script (Sorani) text objects; Latin objects must use requiredFont. */
   scriptFonts?: { arabic?: string };
   /** Intake classification: 'formal_document' (letters, certificates, agendas) or 'design_piece' (invitations, posters) */
@@ -59,6 +71,11 @@ export function checkCanvaPptx(
   } else {
     requiredFont = requiredFontOrOptions || 'Verdana';
     options = maybeOptions;
+  }
+  if (options.directionsByIndex !== undefined && (!Array.isArray(options.directionsByIndex) ||
+      options.directionsByIndex.length !== expectedCopy.length ||
+      Array.from(options.directionsByIndex).some(direction => direction !== null && direction !== 'ltr' && direction !== 'rtl'))) {
+    throw new Error('Invalid captured paragraph direction policy');
   }
 
   if (bytes.length > 25 * 1024 * 1024) throw new Error('PPTX exceeds import limit');
@@ -135,11 +152,23 @@ export function checkCanvaPptx(
   find(doc, 'p:sp', shapes);
 
   const texts: string[] = [];
+  const sourceTextObjects: PptxTextObject[] = [];
+  const identities: Array<{ ':@'?: Record<string, unknown> }> = [];
+  findOwners(doc, 'p:cNvPr', identities);
+  const identityCounts = new Map<string, number>();
+  for (const owner of identities) {
+    const id = String(owner?.[':@']?.['@_id'] ?? '');
+    identityCounts.set(id, (identityCounts.get(id) || 0) + 1);
+  }
+  let unaddressableText = false;
   const fonts: string[] = [];
   const fontExpectations: string[] = [];
   const offendingObjects: OffendingFontObject[] = [];
   let unresolvedFont = false;
   let arabicObjects = 0, rtlObjects = 0;
+  const paragraphDirections: Array<{ textObjectIndex: number; paragraphIndex: number;
+    observed: 'ltr' | 'rtl' | 'absent' | 'invalid'; expected: 'ltr' | 'rtl' | null;
+    expectationSource: 'imported_plan' | 'arabic_only' | 'unspecified' }> = [];
 
   const admitted = (options.admittedFonts || DEFAULT_ADMITTED_FONTS).map((f) => f.toLowerCase());
   const formalBodyLatin = (options.formalBodyFonts?.latin || 'Verdana').toLowerCase();
@@ -150,7 +179,9 @@ export function checkCanvaPptx(
     const paragraphs: any[] = [];
     find(shape, 'a:p', paragraphs);
     let text = '';
+    const paragraphTexts: string[] = [];
     for (const paragraph of paragraphs) {
+      const start = text.length;
       const nodes: any[] = [];
       find(paragraph, 'a:t', nodes);
       for (const n of nodes) {
@@ -158,18 +189,49 @@ export function checkCanvaPptx(
         else if (n && typeof n === 'object') text += String(n['#text'] ?? '');
         else if (typeof n === 'string') text += n;
       }
+      paragraphTexts.push(text.slice(start));
       text += '\n';
     }
     if (!text.trim()) continue;
     const textIdx = texts.length;
     texts.push(text.trim());
+    const owners: Array<{ ':@'?: Record<string, unknown> }> = [];
+    findOwners(shape, 'p:cNvPr', owners);
+    const shapeId = String(owners[0]?.[':@']?.['@_id'] ?? '');
+    if (owners.length !== 1 || !/^(0|[1-9][0-9]*)$/.test(shapeId) || identityCounts.get(shapeId) !== 1) {
+      unaddressableText = true;
+    } else {
+      sourceTextObjects.push({ id: `${names[0]}#${shapeId}`, type: 'text',
+        // Drop only the final separator we inserted; retain the source's whitespace and Unicode.
+        text: text.slice(0, -1), source: { format: 'pptx', part: names[0], shapeId } });
+    }
 
     const isArabic = ARABIC_SCRIPT.test(text);
     if (isArabic) {
       arabicObjects++;
       const owners: any[] = [];
       findOwners(shape, 'a:pPr', owners);
-      if (owners.some((o) => String(o?.[':@']?.['@_rtl'] ?? '') === '1')) rtlObjects++;
+      if (owners.some((o) => ['1', 'true'].includes(String(o?.[':@']?.['@_rtl'] ?? '').trim()))) rtlObjects++;
+    }
+    for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
+      const value = paragraphTexts[paragraphIndex];
+      if (!value.trim()) continue;
+      const explicit = options.directionsByIndex?.[textIdx] ?? null;
+      if (!ARABIC_SCRIPT.test(value) && explicit === null) continue;
+      const owners: Array<{ ':@'?: Record<string, unknown> }> = [];
+      findOwners(paragraph, 'a:pPr', owners);
+      const attributes = owners.map(owner => owner[':@']?.['@_rtl']).filter(attribute => attribute !== undefined);
+      const attribute = attributes.length === 1 ? String(attributes[0]).trim() : null;
+      const observed = attributes.length === 0 ? 'absent'
+        : attributes.length !== 1 ? 'invalid'
+        : attribute === 'true' || attribute === '1' ? 'rtl'
+        : attribute === 'false' || attribute === '0' ? 'ltr' : 'invalid';
+      // Mixed script has no inferred direction. Digits alone are not strong Arabic letters.
+      const arabicOnly = !/\p{Script=Latin}/u.test(value) &&
+        [...value].some(character => /\p{Letter}/u.test(character) && ARABIC_SCRIPT.test(character));
+      paragraphDirections.push({ textObjectIndex: textIdx, paragraphIndex, observed,
+        expected: explicit ?? (arabicOnly ? 'rtl' : null),
+        expectationSource: explicit !== null ? 'imported_plan' : arabicOnly ? 'arabic_only' : 'unspecified' });
     }
 
     const runs: any[] = [];
@@ -188,12 +250,16 @@ export function checkCanvaPptx(
       const properties: any[] = [];
       find(run, 'a:rPr', properties);
       const runFaces: string[] = [];
+      const facesByTag: Record<string, string[]> = {};
       const inspectChild = (child: any) => {
         if (!child || typeof child !== 'object') return;
         for (const tag of ['a:latin', 'a:cs', 'a:ea']) {
           if (child[tag]) {
             const tf = child[':@']?.['@_typeface'] || (child[tag] as any)?.['@_typeface'];
-            if (tf && typeof tf === 'string' && tf.trim()) runFaces.push(tf.trim());
+            if (tf && typeof tf === 'string' && tf.trim()) {
+              runFaces.push(tf.trim());
+              (facesByTag[tag] ||= []).push(tf.trim());
+            }
           }
         }
       };
@@ -222,7 +288,24 @@ export function checkCanvaPptx(
         const role = options.roles?.[textIdx] || 'body';
         const isFormal = options.documentKind === 'formal_document';
 
-        if (options.fontsByIndex) {
+        if (options.allowedFontsByScript) {
+          const runTextNodes: any[] = [];
+          find(run, 'a:t', runTextNodes);
+          const runText = runTextNodes.flatMap(node => Array.isArray(node) ? node : [node])
+            .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join('');
+          const scripts: Array<'latin' | 'arabic'> = [];
+          if (ARABIC_SCRIPT.test(runText)) scripts.push('arabic');
+          if (/[A-Za-z\u00C0-\u024F]/u.test(runText) || !scripts.length) scripts.push('latin');
+          for (const script of scripts) {
+            const allowed = options.allowedFontsByScript[script] || [];
+            const declared = facesByTag[script === 'arabic' ? 'a:cs' : 'a:latin'] || [];
+            fontExpectations.push(...allowed);
+            if (!declared.length || !declared.every(face => allowed.some(font => face.toLowerCase() === font.toLowerCase()))) {
+              offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), observedFont: declared.join(', ') || 'unresolved',
+                reason: `The ${script} run must explicitly use an approved client font family` });
+            }
+          }
+        } else if (options.fontsByIndex) {
           const expectedFont = options.fontsByIndex[textIdx];
           fontExpectations.push(expectedFont || 'none sent');
           const sent = (expectedFont || '').toLowerCase();
@@ -294,19 +377,24 @@ export function checkCanvaPptx(
   const normalize = (s: string) => s.replace(/\u2060/g, '').replace(/\s+/g, ' ').trim();
   const copyPass = texts.length === expectedCopy.length && texts.every((t, i) => normalize(t) === normalize(expectedCopy[i]));
   const fontPass = !unresolvedFont && fonts.length > 0 && offendingObjects.length === 0;
-  // Canva's own export writes no rtl attribute on any paragraph, so for a Canva export with none at
-  // all the file cannot say which way the Kurdish reads, and the visual review decides (rtlNote).
-  // Failing it made the export's QC fail on every design with Kurdish copy, and Approve in Desk
-  // stayed disabled for all of them. A deck made here writes rtl="1" on every Kurdish paragraph,
-  // so there, and for a Canva export where only some carry it, it is still a check.
-  const rtlUnreadable = detectedSource === 'canva_exported_pptx' && arabicObjects > 0 && rtlObjects === 0;
-  const rtlPass = arabicObjects === 0 || rtlObjects === arabicObjects || rtlUnreadable;
-  const rtlNote = arabicObjects > 0 && rtlObjects === 0
-    ? 'Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.'
+  const hasDirectionMetadata = paragraphDirections.some(paragraph => paragraph.observed !== 'absent');
+  const directionViolations = paragraphDirections.filter(paragraph => paragraph.observed === 'invalid' ||
+    (paragraph.expected !== null && paragraph.observed !== 'absent' && paragraph.observed !== paragraph.expected) ||
+    (paragraph.expected === 'rtl' && paragraph.observed === 'absent' &&
+      (detectedSource === 'local_transfer_pptx' || hasDirectionMetadata)));
+  const rtlMetadataPass: boolean | null = directionViolations.length ? false
+    : paragraphDirections.some(paragraph => paragraph.expected === null || paragraph.observed === 'absent') ? null : true;
+  // Unknown metadata stays eligible only for the separate required visual review. Explicit
+  // conflicts never become an "absent metadata" exception, including rtl="false" and rtl="0".
+  const rtlPass = rtlMetadataPass !== false;
+  const rtlVisualReviewRequired = arabicObjects > 0;
+  const rtlNote = rtlVisualReviewRequired
+    ? `${hasDirectionMetadata ? 'Paragraph direction metadata is present' : 'Paragraph direction metadata is unavailable'}; rendered reading direction and isolation must be verified visually.`
     : null;
 
   return {
-    checkVersion: 3,
+    checkVersion: 6,
+    sourceTextObjects: unaddressableText ? null : sourceTextObjects,
     source: detectedSource,
     canvaDesignId,
     documentKind: options.documentKind || 'unspecified',
@@ -314,9 +402,15 @@ export function checkCanvaPptx(
     fontPass,
     rtlPass,
     rtlNote,
+    rtlMetadataPass,
+    rtlVisualReviewRequired,
+    paragraphDirections,
+    directionViolations,
+    directionsByIndex: options.directionsByIndex || null,
     requiredFont,
     scriptFonts: options.scriptFonts || null,
     fontsByIndex: options.fontsByIndex || null,
+    allowedFontsByScript: options.allowedFontsByScript || null,
     admittedFonts: options.admittedFonts || DEFAULT_ADMITTED_FONTS,
     arabicTextObjectCount: arabicObjects,
     rtlTextObjectCount: rtlObjects,

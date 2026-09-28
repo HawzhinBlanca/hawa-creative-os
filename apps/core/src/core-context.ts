@@ -23,13 +23,12 @@ import type {
   CircuitBreaker,
   CanvaNativeAdapter,
   HistoricalDesignMigrator,
-  ReconciliationService,
   TelegramActionTokenService,
   KurdishVoiceTranscriber,
 } from '@hawa/integrations';
 import type { CreativeDirectorRunner } from '@hawa/creative';
-import type { SyntheticTrafficDaemon } from '@hawa/testkit';
-import type { EvaluationRunner } from '@hawa/evals';
+import type { DurableEvaluationService } from './services/durable-evaluations.js';
+import type { PaidModelHealth } from './services/paid-model-health.js';
 import type { AuthContext, ClientDnaSnapshot } from './routes/types.js';
 import type { CreateAppOptions } from './core-helpers.js';
 import type { CanvaConnectService } from './services/canva-connect-service.js';
@@ -63,9 +62,7 @@ export interface CoreContext {
   unifiedIngress: UnifiedIngressService;
   telegramBridge?: TelegramBridgeDaemon;
   telegramActionTokenService?: TelegramActionTokenService;
-  sloDaemon: SyntheticTrafficDaemon;
-  evaluationRunner: EvaluationRunner;
-  reconciliationService: ReconciliationService;
+  evaluationService: DurableEvaluationService | null;
   canvaConnectService: CanvaConnectService | null;
   /** Where approved exports are read from (pinned-deliverables.ts). */
   deliverableStore: DeliverableStore;
@@ -89,8 +86,6 @@ export interface CoreContext {
   uploadedAssets: Map<string, any>;
   /** Client DNA as this process loaded it; Postgres answers first (services/client-dna-resolver.ts). */
   clientDnas: Map<string, ClientDNA>;
-  /** Evaluation runs: no table yet (SPLIT_PLAN.md section 7 leaves them to the owner). */
-  evalRuns: Map<string, any>;
 
   historicalMigrator: HistoricalDesignMigrator;
   globalCanvaNativeAdapter: CanvaNativeAdapter;
@@ -115,6 +110,7 @@ export interface CoreContext {
     | 'requesterChatOf' | 'deliveryExecutorOfTask' | 'startWorkflowDelivery' | 'prepareWorkflowDelivery' | 'finishWorkflowDelivery'>;
   /** The model provider's last known health, for the failed-task sweep (health probes stay in app.ts). */
   probeModelProvider: () => Promise<string>;
+  paidModelHealth: () => Promise<PaidModelHealth>;
   honestHealthHandler: (c: any) => Promise<Response>;
   handleDecommissionedFigmaRoute: (c: any) => Response;
   ensureSessionLoaded?: (token?: string) => Promise<void>;

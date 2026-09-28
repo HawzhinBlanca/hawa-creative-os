@@ -1,0 +1,191 @@
+{
+  "date": "2026-09-28",
+  "status": "LOCAL_PINNED_VISUAL_INPUTS_QUALIFIED_NOT_FULL_GOAL_OR_RELEASE",
+  "base_commit": "f32e899e",
+  "branch": "codex/research-grade-design-system",
+  "adr": "112",
+  "requirements": [
+    "NFR-014",
+    "FR-026",
+    "FR-040",
+    "FR-041",
+    "FR-079"
+  ],
+  "source_files": [
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "22021d6740973d310b2f438efc5f1830193859246da81ebf99080a419984dc4b"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/photo-cutouts.ts",
+      "sha256": "ed4d6169f99ff4b7efeb5003f5cdad4786b18f3279d11c06f0aaafe3357fd2dc"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/asset-inputs.ts",
+      "sha256": "f4a9295ffc60168abd08f025abcf217369383ece17989d56a8de35f958e8a5a7"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/types.ts",
+      "sha256": "e62d8fd8e5d2000395346407f613a27e5657f684a66410631ca79f57197d6929"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/visual-inputs.ts",
+      "sha256": "460a814e2480ed2e358dd7d9d4e57d174535dd5f4a4103285b1d9624586a85c7"
+    },
+    {
+      "path": "apps/core/test-support/studio-visual-input-fixture.ts",
+      "sha256": "0881957072c5666db66dfbb1ce293702104a7b506b1188fb44eee47e9401a4b0"
+    },
+    {
+      "path": "apps/core/test/change-request-honesty.test.ts",
+      "sha256": "c30f2612b5124d333fe1f13bbc663a6f0927dee65928118e42ac32f4ccaba76d"
+    },
+    {
+      "path": "apps/core/test/clarifying-questions.test.ts",
+      "sha256": "d5e2f021054c9fa31997e7d4a27ef5ce6d1317ee8e7b45e8bf0de50a2160df98"
+    },
+    {
+      "path": "apps/core/test/directed-revision.test.ts",
+      "sha256": "216c08c2d80c6036e337f5f84f738bbf396ab60ad8740c529f7e05ad95fbd3c1"
+    },
+    {
+      "path": "apps/core/test/edit-guards.test.ts",
+      "sha256": "950643e3f4ec8802c5846fd84051a1495bd8350134acc941c90e1dd63b26892d"
+    },
+    {
+      "path": "apps/core/test/edit-ops-review.test.ts",
+      "sha256": "af4ba103a63ac4c5e1790bc3a58957fab7f3197efee7c5d1b9b6b4ffb3938940"
+    },
+    {
+      "path": "apps/core/test/edit-ops.test.ts",
+      "sha256": "b517e66afe50435a63193d3312dfe5ea820510aeb83edeffcb6e797784a4267c"
+    },
+    {
+      "path": "apps/core/test/late-reference-rebrief.test.ts",
+      "sha256": "a00b43365b83d6fede360a1ccb78689473f5c796297b95e9c79c0b68d3bac5b3"
+    },
+    {
+      "path": "apps/core/test/other-sizes.test.ts",
+      "sha256": "f4867413dc64cdf8012c92ce53cc600e391119765448a6e05cf2f78a4f54be3a"
+    },
+    {
+      "path": "apps/core/test/photo-cutouts.test.ts",
+      "sha256": "4112e06f6ee592e9c7c7167cc0e924d8484127aefc106435b333d99aa6c7621d"
+    },
+    {
+      "path": "apps/core/test/photo-treatments-core.test.ts",
+      "sha256": "2f108841287baa83717f2666e75e70a7fc44841b1a9a94aa08293dcf71119ca9"
+    },
+    {
+      "path": "apps/core/test/studio-visual-inputs.test.ts",
+      "sha256": "9650248a6afb7b892d5bb5e8d71da886994e3e740be001fd446258dfa6b5d2af"
+    },
+    {
+      "path": "packages/db/migrations/062_studio_visual_inputs.sql",
+      "sha256": "2f46dd567b9b1c7c8bf1ebfe9af56f8c1766035d06f42a379e3a70598aa28ce6"
+    },
+    {
+      "path": "packages/db/src/index.ts",
+      "sha256": "6dff4831901b909dd70b3865834825b89c0dda5e07f01cf0d83711b74a1a7ad1"
+    },
+    {
+      "path": "packages/db/src/repositories/studio-visual-inputs.repository.ts",
+      "sha256": "4a96a62ff126aa218beb45889cee16751d9131cceadb1c81fb250ef5e5ed6c16"
+    },
+    {
+      "path": "packages/db/test/schema-upgrade.test.ts",
+      "sha256": "8a1ed6468317b8f5a4ec643cea58e0e7b06acc61c8bae8e91fa988763345b8ba"
+    },
+    {
+      "path": "packages/db/test/studio-visual-inputs.test.ts",
+      "sha256": "e3da11626c6490fa07101efd39a137488259d6746f77fa88c6b9d8df8e3a5cc9"
+    }
+  ],
+  "checks": [
+    {
+      "kind": "affected-acceptance",
+      "files": 19,
+      "passed": 180,
+      "failed": 0,
+      "skipped": 0,
+      "evidence": "output/acceptance/2026-09-28-visual-inputs/final.log"
+    },
+    {
+      "kind": "source-types",
+      "passed": true,
+      "evidence": "output/acceptance/2026-09-28-visual-inputs/source-types.log"
+    },
+    {
+      "kind": "script-types",
+      "passed": true,
+      "evidence": "output/acceptance/2026-09-28-visual-inputs/script-types.log"
+    },
+    {
+      "kind": "strict-test-types",
+      "roots": 520,
+      "passed": true,
+      "evidence": "output/acceptance/2026-09-28-visual-inputs/test-types.log"
+    },
+    {
+      "kind": "any-ratchet",
+      "count": 957,
+      "ceiling": 1053,
+      "passed": true,
+      "evidence": "output/acceptance/2026-09-28-visual-inputs/any.log"
+    },
+    {
+      "kind": "provider-egress",
+      "existing_exceptions": 9,
+      "passed": true,
+      "evidence": "output/acceptance/2026-09-28-visual-inputs/egress.log"
+    },
+    {
+      "kind": "security",
+      "secrets": 0,
+      "justified_exceptions": 53,
+      "evidence": "output/acceptance/2026-09-28-visual-inputs/security.log"
+    },
+    {
+      "kind": "blueprint-validation",
+      "passed": 1065,
+      "warnings": 0,
+      "failed": 0,
+      "evidence": "output/acceptance/2026-09-28-visual-inputs/pack.log"
+    },
+    {
+      "kind": "manifest-refresh",
+      "entries": 457,
+      "sha256sum_lines": 459,
+      "evidence": "output/acceptance/2026-09-28-visual-inputs/manifest.log"
+    }
+  ],
+  "qualified_behaviors": [
+    "One immutable manifest/assets transaction before layout/edit work; first committed bundle wins concurrent connections; late asset append is refused",
+    "Fresh application-role connection reuses selected photo/reference/cutout/thumbnail bytes at layout and later critique boundaries despite a newer cached cutout",
+    "Pinned reuse makes zero source-image rereads, exemplar retrievals, local cutout/focus requests and thumbnail regeneration in the exercised path",
+    "Negative cutout outcomes and focus data remain fixed; current task/client and design/exemplar policies are rechecked",
+    "Changed policy, missing policy files, missing/corrupt assets and historical post-layout runs with no visual evidence hold without model fallback",
+    "Failed asset persistence rolls back the whole manifest; tenant/client RLS, immutable rows, SHA-256 checks and GC roots qualify on PostgreSQL",
+    "Available cutout model/source/check-report identities survive JSONB round trips; tenant predicate is explicit on cached cutout lookup",
+    "V2 creates no unused V3 conditioning thumbnails; existing directed-edit, clarification and orchestrator tests pass",
+    "All 62 migrations verified under concurrent upgrade retries",
+    "A pinned visual basis also binds V2/V3 route selection; switching that route holds before use"
+  ],
+  "initial_failures": {
+    "notes": "Implementation-first qualification. Initial focused failures were an old exact outcome assertion after adding derivation provenance and a test repository without the service blob store; a later thumbnail-count assumption was corrected to the actual retrieved examples. Initial affected run had 51 failures in stage-only harnesses lacking the new repository; explicit in-memory fixtures were added. One historical late-reference expectation was changed to the intentionally safer hold. No claim of a red-before run against previous source.",
+    "evidence": [
+      "output/acceptance/2026-09-28-visual-inputs/initial-focused.log",
+      "output/acceptance/2026-09-28-visual-inputs/initial-affected.log",
+      "output/acceptance/2026-09-28-visual-inputs/updated-fixtures.log"
+    ]
+  },
+  "limits": [
+    "Source images and layout/critique boundaries are synthetic/intercepted in the production-wiring test; PostgreSQL, file storage and runtime role are real",
+    "No paid-provider/native-design quality, process-kill/backup restore, full release suite or deployment qualification",
+    "Historical active post-layout runs without pins require review/handoff before rollout; their old basis is not fabricated",
+    "Font binaries, renderer/cutout implementation identities, pre-layout stage pins and branch-aware substep recovery remain open",
+    "Concurrent preparation may do local work before one bundle wins; this is not parallel paid-call admission",
+    "Native revision preservation, multilingual retrieval, provider-region mapping, safe concurrency, human comparisons and integrated release/recovery remain open",
+    "Full six-package implementation goal remains active"
+  ]
+}

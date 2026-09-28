@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, expect, it } from 'vitest';
 import { PNG } from 'pngjs';
 import { unzipSync, strFromU8 } from 'fflate';
@@ -17,7 +18,7 @@ import { inlineSvgFiles } from '../src/studio/svg-files.js';
  * (ADR-035), and these assertions read the markup as the one document it used to be.
  */
 const inlinedSvgOf = (...args: Parameters<typeof renderLayoutV2ToSvg>) => {
-  const r = renderLayoutV2ToSvg(...args);
+  const r = renderLayoutV2ToSvg(args[0], { logoDataUri: KAAE_TEST_LOGO, ...(args[1] ?? {}) });
   return { ...r, svg: inlineSvgFiles(r.svg, r.files), noTextSvg: inlineSvgFiles(r.noTextSvg, r.files) };
 };
 
@@ -187,8 +188,8 @@ describe('the preview crops a framed photo around its focus', () => {
   it('draws the head at the top of the box, where the centred crop draws only the body', async () => {
     const uri = portraitUri();
     const at = (png: PNG, x: number, y: number) => Array.from(png.data.subarray((png.width * y + x) * 4, (png.width * y + x) * 4 + 4));
-    const withFocus = PNG.sync.read((await renderLayoutV2Async(focused(), { copyText, photoDataUris: [uri] })).png);
-    const centred = PNG.sync.read((await renderLayoutV2Async(unfocused(), { copyText, photoDataUris: [uri] })).png);
+    const withFocus = PNG.sync.read((await renderLayoutV2Async(focused(), { logoDataUri: KAAE_TEST_LOGO, copyText, photoDataUris: [uri] })).png);
+    const centred = PNG.sync.read((await renderLayoutV2Async(unfocused(), { logoDataUri: KAAE_TEST_LOGO, copyText, photoDataUris: [uri] })).png);
     // 60px into the box: source row 5 of the kept 0..40 (red), against row 25 of the centred 20..60 (blue).
     const head = at(withFocus, 306, 480);
     expect(head[0]).toBeGreaterThan(150);

@@ -1,3 +1,4 @@
+import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import type { StageContext, CandidateState, CreativeBrief, Concept } from '../src/services/design-studio/types.js';
@@ -158,6 +159,7 @@ function createMockContext(fetchFn: typeof fetch): StageContext {
     latinFont: 'Verdana',
     arabicFont: 'Noto Sans Arabic',
     logoAspect: 1.0,
+    logo: KAAE_TEST_CLIENT_LOGO,
     client,
     artProvider,
   };
@@ -318,6 +320,27 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     expect(candidates[0].currentLayout.width).toBe(1080);
   });
 
+  it('3a. layouts stage drops a second concept whose validated geometry repeats the first', async () => {
+    const layout = createMockLayout(1080, 1350);
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ id: 'same-layout', model: 'test', usage: { input_tokens: 1, output_tokens: 1 },
+        content: [{ type: 'text', text: JSON.stringify({ layout }) }] }),
+    } as any);
+    const ctx = createMockContext(mockFetch);
+    const concept: Concept = {
+      id: 'one', name: 'First', archetype: 'editorial-centered', artStrategy: 'none',
+      typographicScale: { ratio: 1.4, titleSize: 48, bodySize: 20 },
+      colourRoles: { background: '#0A1628', title: '#FFFFFF', body: '#FDF8F3', accent: '#F7B500', rule: '#4770A3' },
+      layoutIdea: 'Centered', whyDifferent: 'First',
+    };
+    const candidates = await runLayoutsStage(ctx,
+      { roles: [0, 1, 2, 3].map((i) => ({ copyIndex: i, role: 'body', importance: 3 })) } as any,
+      [concept, { ...concept, id: 'two', archetype: 'asymmetric-grid', whyDifferent: 'Different label' }]);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(candidates.map((candidate) => candidate.concept.id)).toEqual(['one']);
+  });
+
   it('4. art stage: renders procedural motif fallback and records provenance', async () => {
     const ctx = createMockContext(vi.fn());
     const layout = createMockLayout(1080, 1350);
@@ -353,6 +376,71 @@ describe('Design Studio v2 Stage Pipeline Pure Functions', () => {
     expect(updated[0].artPng).toBeInstanceOf(Buffer);
     expect(updated[0].artSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(updated[0].artProvenance?.source).toBe('procedural');
+  });
+
+  it('4a. art stage records the actual procedural fallback instead of a generated-art claim', async () => {
+    const ctx = createMockContext(vi.fn());
+    const bytes = Buffer.from('mock-art-bytes');
+    ctx.artProvider = { generateArt: vi.fn().mockResolvedValue({
+      imageBuffer: bytes,
+      receipt: {
+        provider: 'procedural', model: 'procedural-motif-gradient-wash', synthId: false,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+        artFallback: 'procedural', fallbackReason: 'vision_check_unavailable',
+      },
+    }) } as any;
+    const layout = createMockLayout();
+    layout.art = { source: 'generated', prompt: 'Abstract blue gradient',
+      box: { x: 0, y: 0, width: 1080, height: 1350 }, opacity: 0.2,
+      calmRegion: { x: 100, y: 200, width: 880, height: 900 } };
+    const candidate: CandidateState = {
+      id: randomUUID(), ordinal: 0, concept: { artStrategy: 'generated' } as any,
+      layouts: [layout], currentLayout: layout, critiques: [], status: 'draft',
+    };
+    const [result] = await runArtStage(ctx, [candidate]);
+    expect(result.artPng).toEqual(bytes);
+    expect(result.artProvenance).toMatchObject({
+      source: 'procedural', model: 'procedural-motif-gradient-wash',
+      fallbackReason: 'vision_check_unavailable',
+    });
+  });
+
+  it('4b. art stage refuses protected client identity in an image prompt before provider use', async () => {
+    const ctx = createMockContext(vi.fn());
+    ctx.referencePack.clientName = 'Northstar Museum';
+    const generateArt = vi.fn();
+    ctx.artProvider = { generateArt } as any;
+    for (const prompt of ['Northstar Museum blue gradient', 'KAAE blue abstraction', 'Blue ribbon marked 2026']) {
+      const layout = createMockLayout();
+      layout.art = { source: 'generated', prompt,
+        box: { x: 0, y: 0, width: 1080, height: 1350 }, opacity: 0.2,
+        calmRegion: { x: 100, y: 200, width: 880, height: 900 } };
+      const candidate: CandidateState = {
+        id: randomUUID(), ordinal: 0, concept: { artStrategy: 'generated' } as any,
+        layouts: [layout], currentLayout: layout, critiques: [], status: 'draft',
+      };
+      await expect(runArtStage(ctx, [candidate])).rejects.toThrow('ART_PROMPT_PROTECTED_CONTENT');
+    }
+    expect(generateArt).not.toHaveBeenCalled();
+  });
+
+  it('4c. art stage stops when image acceptance is unknown instead of shipping a procedural fallback', async () => {
+    const ctx = createMockContext(vi.fn());
+    const unknown = Object.assign(new Error('provider reply lost'), {
+      code: 'IMAGE_ACCEPTANCE_UNKNOWN', isUncertain: true,
+    });
+    ctx.artProvider = { generateArt: vi.fn().mockRejectedValue(unknown) } as any;
+    const layout = createMockLayout();
+    layout.art = { source: 'generated', prompt: 'Abstract blue gradient',
+      box: { x: 0, y: 0, width: 1080, height: 1350 }, opacity: 0.2,
+      calmRegion: { x: 100, y: 200, width: 880, height: 900 } };
+    const candidate: CandidateState = {
+      id: randomUUID(), ordinal: 0, concept: { artStrategy: 'generated' } as any,
+      layouts: [layout], currentLayout: layout, critiques: [], status: 'draft',
+    };
+    await expect(runArtStage(ctx, [candidate])).rejects.toBe(unknown);
+    expect(candidate.artPng).toBeUndefined();
+    expect(candidate.artProvenance).toBeUndefined();
   });
 
   it('5. render stage: local render produces preview PNG, composite PNG, and metrics', async () => {

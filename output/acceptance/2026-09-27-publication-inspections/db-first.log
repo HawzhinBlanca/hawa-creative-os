@@ -1,0 +1,61 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] hawa_tpl_build_test_40b46e13: applied db/schema.sql
+[test databases] hawa_tpl_build_test_40b46e13: applied db/rls.sql
+[test databases] hawa_tpl_build_test_40b46e13: applied db/seed.sql
+[test databases] hawa_tpl_build_test_40b46e13: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_test_40b46e13: versioned upgrades applied=60 verified=0
+[test databases] hawa_tpl_build_test_40b46e13: applied db/test-fixtures.sql
+[test databases] built template hawa_tpl_test_7cc7f808220741fc
+[test databases] hawa_tpl_build_repair_10cf4021: applied db/schema.sql
+[test databases] hawa_tpl_build_repair_10cf4021: applied db/rls.sql
+[test databases] hawa_tpl_build_repair_10cf4021: applied db/seed.sql
+[test databases] hawa_tpl_build_repair_10cf4021: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_repair_10cf4021: versioned upgrades applied=60 verified=0
+[test databases] built template hawa_tpl_repair_7cc7f808220741fc
+[test databases] per-file clones of hawa_tpl_test_7cc7f808220741fc and hawa_tpl_repair_7cc7f808220741fc (693 ms)
+xxx·xxx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/publication-inspections.test.ts > freezes a durable input and retains the independently unverified result across service instances
+ FAIL  apps/core/test/publication-inspections.test.ts > lets exactly one of two Core instances claim a publication without holding a network transaction
+ FAIL  apps/core/test/publication-inspections.test.ts > refuses changed snapshots, owner edits and removal of terminal evidence
+ FAIL  apps/core/test/publication-inspections.test.ts > applies current client membership to the endpoint and immutable history
+ FAIL  apps/core/test/publication-inspections.test.ts > records provider failure as uncertainty without retaining its raw error or modifying publication completion
+ FAIL  apps/core/test/publication-inspections.test.ts > flags historical publications without making provider calls or inventing original inputs
+error: PUBLICATION_INSPECTION_RESULT_CONFLICT
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ PostgresConnection.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28
+ ❯ SingleConnectionProvider.#run node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16
+ ❯ DefaultQueryExecutor.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16
+ ❯ apps/core/src/services/publication-inspections.ts:79:7
+     77|       // The database clock bounds the observation interval, including…
+     78|       const bounded = { ...observation, startedAt: new Date(claim.star…
+     79|       await sql`UPDATE hawa.publication_inspections SET state=${active…
+       |       ^
+     80|         observation=${JSON.stringify(bounded)}::jsonb,report=${JSON.st…
+     81|       return active;
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ PostgresConnection.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28
+ ❯ SingleConnectionProvider.#run node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16
+ ❯ DefaultQueryExecutor.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16
+ ❯ apps/core/src/services/publication-inspections.ts:79:7
+ ❯ runner packages/db/src/client.ts:67:12
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32
+ ❯ DefaultConnectionProvider.provideConnection node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20
+ ❯ withRlsContext packages/db/src/client.ts:73:10
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 passed (7)
+   Start at  20:22:03
+   Duration  3.89s (transform 1.13s, setup 137ms, import 1.51s, tests 1.43s, environment 0ms)
+

@@ -1,0 +1,107 @@
+{
+  "completed": true,
+  "checkedAt": "2026-09-27T12:33:30.688Z",
+  "buildCommit": "ec31d95e4cbc83b80c225c52a7c89271f3f4e2e7",
+  "checks": [
+    {
+      "name": "exact candidate is deployed",
+      "passed": true
+    },
+    {
+      "name": "migration055 is installed",
+      "passed": true
+    },
+    {
+      "name": "deployed code records a lost successful fake response",
+      "passed": true
+    },
+    {
+      "name": "one actual synthetic provider request was received",
+      "passed": true
+    },
+    {
+      "name": "second scheduler refuses dispatch",
+      "passed": true
+    },
+    {
+      "name": "uncertain probe cost is held and named correction is available",
+      "passed": true
+    },
+    {
+      "name": "shared administrator key cannot attest",
+      "passed": true
+    },
+    {
+      "name": "stale snapshot is refused",
+      "passed": true
+    },
+    {
+      "name": "cookie mutation still refuses a different browser port",
+      "passed": true
+    },
+    {
+      "name": "browser displays original uncertain outcome and unknown cost",
+      "passed": true
+    },
+    {
+      "name": "browser explains new-probe recovery boundary",
+      "passed": true
+    },
+    {
+      "name": "named browser mutation succeeds with cookie CSRF",
+      "passed": true
+    },
+    {
+      "name": "browser shows attributed cost history",
+      "passed": true
+    },
+    {
+      "name": "browser has no execution errors",
+      "passed": true
+    },
+    {
+      "name": "credentials stay out of localStorage",
+      "passed": true
+    },
+    {
+      "name": "browser reload preserves history",
+      "passed": true
+    },
+    {
+      "name": "browser closes call detail",
+      "passed": true
+    },
+    {
+      "name": "cost evidence releases the unused reservation",
+      "passed": true
+    },
+    {
+      "name": "original call remains byte-for-byte unchanged",
+      "passed": true
+    },
+    {
+      "name": "browser dispatched an identifiable saved action",
+      "passed": true
+    },
+    {
+      "name": "fresh scheduler still honors interval after terminal evidence",
+      "passed": true
+    },
+    {
+      "name": "same action replays after actual Core restart",
+      "passed": true
+    },
+    {
+      "name": "restart leaves one accounting revision",
+      "passed": true
+    },
+    {
+      "name": "accounting and replay send zero fake model requests",
+      "passed": true
+    }
+  ],
+  "revokedSyntheticAdministrator": true,
+  "scope": "Disposable hawa-chaos synthetic source/provider/staff only",
+  "realProviderCalls": false,
+  "productionChanged": false
+}

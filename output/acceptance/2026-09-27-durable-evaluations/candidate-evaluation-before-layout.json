@@ -1,0 +1,84 @@
+{
+  "sourceCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1",
+  "checkedAt": "2026-09-27T04:53:18.864Z",
+  "workflowInvariants": 36,
+  "checks": [
+    {
+      "name": "Missing action is refused before transport",
+      "ok": true
+    },
+    {
+      "name": "Candidate evaluation returns a saved stopped report",
+      "ok": true
+    },
+    {
+      "name": "Fixture report is not model admission",
+      "ok": true
+    },
+    {
+      "name": "One uncertain call is visible with unknown cost",
+      "ok": true
+    },
+    {
+      "name": "Provider fact comes from the observed failure",
+      "ok": true
+    },
+    {
+      "name": "Read endpoint omits saved model output",
+      "ok": true
+    },
+    {
+      "name": "Fresh candidate Core reads saved history",
+      "ok": true
+    },
+    {
+      "name": "Repeated action returns the identical saved report after restart",
+      "ok": true
+    },
+    {
+      "name": "A fresh action cannot bypass uncertainty",
+      "ok": true
+    },
+    {
+      "name": "Changed input with the old action conflicts",
+      "ok": true
+    },
+    {
+      "name": "Exactly one fake provider request across restarts and retries",
+      "ok": true
+    },
+    {
+      "name": "core image source matches",
+      "ok": true
+    },
+    {
+      "name": "desk image source matches",
+      "ok": true
+    },
+    {
+      "name": "worker-blue image source matches",
+      "ok": true
+    }
+  ],
+  "images": [
+    {
+      "service": "core",
+      "imageId": "sha256:35956b30640a828b8792fb6d94bc381fee444023c31d80e89edd6c60b3950135",
+      "buildCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1"
+    },
+    {
+      "service": "desk",
+      "imageId": "sha256:99ef96089472bd1cc12bdb8193e293ca17af3721f64734dc40f1c5197b08f63b",
+      "buildCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1"
+    },
+    {
+      "service": "worker-blue",
+      "imageId": "sha256:193c51ba58875fee7be28ee422c14cb3baa5a956dc4f5da5f93c9ef8f940d021",
+      "buildCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1"
+    }
+  ],
+  "callCount": 1,
+  "providerScope": "Docker internal fake provider; no real provider call",
+  "coreRestarts": 1,
+  "productionChanged": false
+}

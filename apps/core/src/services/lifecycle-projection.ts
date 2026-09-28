@@ -1,637 +1,901 @@
-/**
- * The request lifecycle's projection into Postgres (architecture programme Phase 2, slice 2.3;
- * PHASE2_DESIGN.md section 2.8, ADR-034). The RequestLifecycle object in Restate decides where a
- * request is; this writes what it decided to the rows the Desk and every legacy query read, and is
- * the only writer of a lifecycle-owned request's rows.
- *
- * One projection is one transaction, under a lock on the request:
- *   1. the request's row, read FOR UPDATE (none yet for the projection that opens it);
- *   2. a projection already recorded under this key is answered from its record ('replayed'), or
- *      refused (KEY_REUSED) when the key comes with other ops;
- *   3. the revision must be the one the object expects: Postgres ahead of the object is AHEAD (the
- *      object was restored and must take Postgres's revision), behind it is STALE_REVISION;
- *   4. the ops run in order, each task move with the state and version read under the same lock;
- *   5. the request takes the new revision and stage, and the projection is recorded with its answer.
- * Any op that fails rolls all of it back.
- *
- * The tenant comes from the object's state (the body), never from an event's payload, and the
- * transaction runs as the system automation identity under row-level security.
- *
- * Part A of slice 2.3 carries the ops that only write rows (open, rounds, task moves, questions
- * closed, sends recorded); part C the ops that need Core's composition (a design outcome, a
- * requester's button, a reminder: lifecycle-compose.ts), and the acknowledgements of a new request
- * and a round. Slice 2.4 the office's: a decision on a draft (an approvals row, as the decisions route
- * records one), a captured draft, a re-drive, the claim of a publication for the Delivery workflow and
- * its report.
- */
+import { officeReviewUrl } from './desk-review-link.js';
 import { createHash } from 'node:crypto';
-import { sql, RevisionRepository, TaskRepository, withRlsContext, type Database, type Kysely, type TaskState } from '@hawa/db';
-import {
-  SYSTEM_AUTOMATION_USER_ID,
-  canTransitionTaskStatus,
-  isOfficeActionId,
-  isLifecycleStage,
-  isTaskDbState,
-  toApiTaskStatus,
-  type DraftIntake,
-  type LifecycleRecord,
-  type LifecycleOrigin,
-  type LifecycleStage,
-  type ProjectionConflict,
-  type ProjectionOp,
-  type ProjectionOpResult,
-  type ProjectionRequest,
-  type ProjectionResponse,
-} from '@hawa/contracts';
-import { stageAfterOpen, stageAfterRound } from '@hawa/domain';
-import { isValidUuid } from '../core-helpers.js';
-import { persistChatIntakeIn } from './chat-intake.js';
-import { captureBoundDraftIn, closeAnsweredQuestion, transitionTaskForOutcome } from './canva-task-outcome.js';
-import { claimPublicationForWorkflowIn, recordWorkflowDeliveryIn } from './workflow-delivery-record.js';
-import { composeReminderIn, messageOf, recordOutcomeIn, recordRequesterActionIn, type ComposeRun } from './lifecycle-compose.js';
-import { composeRequestSavedAck } from './chat-campaign-intake.js';
-import { OTHER_SIZES, composeAnswerTaken, composeSizeStarted, type SizeAction } from './requester-actions.js';
+import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef, type LifecycleAlbumRef, type LifecycleSourceRef } from '@hawa/contracts';
+import { sourceCopyConfirmation } from '@hawa/domain';
+import { type BlobStore } from '@hawa/db';
+import { blobStoreFor } from './blob-store-context.js';
+import { verifyReviewedSource, SourceConflict } from './lifecycle-source-store.js';
+import { parseCompleteRevisionRequest, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
+import { IdempotencyConflictError, OUTBOX_SEND_MARK_SOURCE, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
-import { cutText, evaluateCanvaExportQc } from '../core-helpers.js';
+import { persistChatIntake, type ChatIntake } from './chat-intake.js';
+import { linkedLifecycleReplies, readNewBriefDecision, readRevisionPhotoDecision } from './lifecycle-chat-target.js';
+import { lifecyclePhotoInput } from './lifecycle-photo.js';
+import { verifyAlbumSnapshot } from './lifecycle-album.js';
+import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
+import { evaluateCanvaExportQc } from '../core-helpers.js';
+import { composeCanvaStatusMessage } from './canva-status-message.js';
+import { namedOfficeReviewMode } from './google-oidc.js';
+import { lockNamedReviewAuthority } from './named-review-authority.js';
+import { initialManualOrigin } from './lifecycle-native-scope.js';
 
-const OPS: ReadonlySet<string> = new Set([
-  'createRequest', 'createRound', 'recordOutcome', 'recordRequesterAction', 'recordDraftSent', 'recordQuestionSent',
-  'closeQuestion', 'composeReminder', 'recordApproval', 'bridgeCapturedRevision', 'prepareRedrive', 'transition', 'recordDelivery',
-]);
-const MAX_OPS = 10;
-/** An approval's recorded payload (the pinned exports and the QC evidence) is small; this bounds it. */
-const MAX_APPROVAL_PAYLOAD = 64_000;
-const DECISIONS: ReadonlySet<string> = new Set(['approved', 'revision_requested', 'rejected']);
-const DELIVERY_OUTCOMES: ReadonlySet<string> = new Set(['delivered', 'chat_only', 'uncertain', 'failed']);
-const ACTOR = 'request_lifecycle';
+/** First projection of a request; later transitions must advance the same revision ledger. */
+export interface OpenLifecycleProjection {
+  requestId: string;
+  tenantId: string;
+  expectedRev: 0;
+  rev: 1;
+  key: string;
+  draft: ChatIntake;
+}
 
-/** What the projection answers, before HTTP. */
-export type ProjectionAnswer =
-  | { ok: true; response: ProjectionResponse; createdTaskIds: string[]; moves: Array<{ taskId: string; from: string; to: string; version: number }> }
-  | { ok: false; status: 403 | 404 | 409 | 422 | 500 | 503; code: string; message: string; conflict?: ProjectionConflict };
+export interface OpenLifecycleResult {
+  requestId: string;
+  rev: 1;
+  taskId: string;
+  stage: 'designing' | 'manual';
+  autoGenerate: boolean;
+  autoGenerateDeclined?: string;
+  design?: {
+    clientId: string; rawText: string; sourcePlatform: string;
+    variant?: { width: number; height: number }; designStudio: boolean;
+    studioOptions?: ChatIntake['studioOptions'];
+  };
+}
 
-/** A refusal thrown inside the transaction, which rolls it back. */
-class Refusal extends Error {
-  constructor(readonly status: 403 | 404 | 409 | 422 | 500 | 503, readonly code: string, message: string, readonly conflict?: ProjectionConflict) {
+export class LifecycleProjectionConflict extends Error {
+  constructor(readonly code: 'STALE_REVISION' | 'IDEMPOTENCY_CONFLICT' | 'TASK_ALREADY_OWNED' | 'WRONG_STAGE' | 'UNVERIFIED_DESIGN' | 'NOT_CURRENT_DRAFT' | 'UNAUTHORIZED_ACTOR' | 'APPROVAL_EVIDENCE_CHANGED' | 'INVALID_CONFIRMATION' | 'WRONG_CHAT' | 'APPROVAL_CHANGED' | 'EVIDENCE_CHANGED' | 'INCOMPLETE_OBSERVATION' | 'EVIDENCE_MISMATCH' | 'PARENT_BRIEF_MISSING' | 'DAILY_CAP_REACHED', message: string) {
     super(message);
   }
 }
 
-const refuse = (code: string, message: string, status: 403 | 404 | 422 = 422): never => {
-  throw new Refusal(status, code, message);
-};
+export interface OfficeDecisionProjection {
+  requestId: string; tenantId: string; taskId: string; revisionId: string;
+  actionId: string; actor: { userId: string; role: string; authMethod?: 'google_oidc'; sessionHash?: string }; reason: string;
+  revisionRequest?: StructuredRevisionRequest;
+  decision?: 'revision_requested' | 'approved' | 'rejected';
+  rejectionCategory?: RejectionCategory;
+  approvalProof?: OfficeApprovalProof;
+  deskRequestFingerprint?: string;
+  /** expectedRev ≥ 2: first decision is at 2→3; subsequent rounds are at (2+2k)→(3+2k). */
+  expectedRev: number; rev: number; key: string;
+}
+
+export interface OfficeDecisionResult {
+  requestId: string; taskId: string; revisionId: string; actionId: string;
+  approvalId: string; taskState: string; rev: number; stage: 'manual' | 'approved' | 'rejected';
+}
+
+const OFFICE_REVISION_ROLES = new Set(['approver', 'art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
+const OFFICE_APPROVAL_ROLES = new Set(['approver', 'art_director', 'creative_director', 'office_admin', 'administrator']);
+
+/**
+ * Request-owned office decision (revision-request or proof-bound approval). Works across all
+ * revision rounds: first office decision is at expectedRev=2→rev=3; second is at (2+2k)→(3+2k).
+ * The route validates that expectedRev and rev match the request's current revision before
+ * calling here, so the projection only needs to confirm the advisory-lock read agrees.
+ */
+export async function projectLifecycleOfficeDecision(db: Kysely<Database>, input: OfficeDecisionProjection): Promise<OfficeDecisionResult> {
+  const { requestId, tenantId, taskId, revisionId, actionId, actor, reason, key } = input;
+  const { expectedRev, rev } = input;
+  if (!Number.isInteger(expectedRev) || expectedRev < 2 || !Number.isInteger(rev) || rev !== expectedRev + 1) {
+    throw new LifecycleProjectionConflict('STALE_REVISION', 'The office decision has an invalid revision pair');
+  }
+  const decision = input.decision || 'revision_requested';
+  const revisionRequest = input.revisionRequest === undefined ? undefined : parseCompleteRevisionRequest(input.revisionRequest);
+  if ((input.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== reason)) ||
+      (decision === 'approved' && (!input.approvalProof || !/^[a-f0-9]{64}$/.test(input.deskRequestFingerprint || '') || revisionRequest)) ||
+      (decision === 'revision_requested' && (input.approvalProof || input.rejectionCategory)) ||
+      (decision === 'rejected' && (!parseRejectionCategory(input.rejectionCategory) || input.approvalProof || revisionRequest)) ||
+      (decision === 'approved' && input.rejectionCategory)) {
+    throw new LifecycleProjectionConflict('WRONG_STAGE', 'Structured revision feedback is invalid or differs from the reason');
+  }
+  const hash = createHash('sha256').update(canonical(input)).digest('hex');
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
+    const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', rev).executeTakeFirst();
+    if (receipt) {
+      if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'This office revision has different content or action identity');
+      }
+      return receipt.result as unknown as OfficeDecisionResult;
+    }
+    const request = await trx.selectFrom('requests').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+    if (!request || Number(request.rev) !== expectedRev) {
+      throw new LifecycleProjectionConflict('STALE_REVISION', `The request is not at expected revision ${expectedRev}`);
+    }
+    if (request.owner !== 'restate' || request.stage !== 'in_review') {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'Only an in-review request may receive this decision');
+    }
+    if (request.current_task_id !== taskId) {
+      throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The office action names an older request task');
+    }
+    // ADR-126: a request opened without a run has no requester revision round. Its manual stage at a
+    // later revision would route the requester's reply into automatic generation, so it is refused.
+    if (decision === 'revision_requested' && await initialManualOrigin(trx, tenantId, requestId, taskId)) {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'A request opened for manual design can be approved or rejected, not returned for a requester revision');
+    }
+    const task = await trx.selectFrom('tasks').select(['request_id', 'current_design_revision_id', 'state', 'version', 'client_id', 'project_id'])
+      .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirst();
+    if (task?.request_id !== requestId || task.current_design_revision_id !== revisionId) {
+      throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The office action names a stale or unowned design revision');
+    }
+    if (task.state !== 'human_review') {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'The current draft is no longer awaiting office review');
+    }
+    const namedReviewerRequired = namedOfficeReviewMode() || actor.authMethod === 'google_oidc';
+    let namedAuthority: Awaited<ReturnType<typeof lockNamedReviewAuthority>> = null;
+    if (namedReviewerRequired) {
+      if (actor.authMethod !== 'google_oidc' || actor.role !== 'approver' ||
+          !actor.sessionHash || !task.client_id) {
+        throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR', 'A named, assigned reviewer is required');
+      }
+      namedAuthority = await lockNamedReviewAuthority(trx, {
+        tenantId, userId: actor.userId, sessionHash: actor.sessionHash,
+        clientId: task.client_id, projectId: task.project_id,
+      });
+      if (!namedAuthority) throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR',
+        'The reviewer session or client/project assignment was revoked before this decision');
+    }
+    if (!(decision === 'approved' || decision === 'rejected' ? OFFICE_APPROVAL_ROLES : OFFICE_REVISION_ROLES).has(actor.role)) {
+      throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR', 'An authorized office reviewer must request this revision');
+    }
+    let approval: Awaited<ReturnType<RevisionRepository['recordApproval']>>;
+    try {
+      approval = await new RevisionRepository(trx).recordApproval({
+      tenantId, taskId, revisionId, decision, decidedBy: actor.userId,
+      reason, nonce: `desk:${actionId}`, lifecycleRequestId: requestId,
+      expectedTaskVersion: Number(task.version),
+      decisionPayload: { lifecycleRequestId: requestId, approverRole: actor.role,
+        ...(namedAuthority ? { authMethod: 'google_oidc', reviewerAssignmentId: namedAuthority.assignmentId,
+          reviewerAssignmentVersion: namedAuthority.assignmentVersion,
+          reviewClientId: task.client_id, reviewProjectId: task.project_id } : {}),
+        actionId, requestFingerprint: hash, ...(revisionRequest ? { revisionRequest } : {}),
+        ...(input.rejectionCategory ? { rejectionCategory: input.rejectionCategory } : {}),
+        ...(input.approvalProof ? { officeApprovalProof: input.approvalProof,
+          deskRequestFingerprint: input.deskRequestFingerprint,
+          qcRunId: input.approvalProof.qcRunId, qcReportHash: input.approvalProof.qcReportHash,
+          pinnedExports: input.approvalProof.pinnedExports, captureEvidenceRequired: true,
+          ...(input.approvalProof.rtlVisualReview ? { rtlVisualReview: {
+            ...input.approvalProof.rtlVisualReview, reviewerId: actor.userId,
+            qcRunId: input.approvalProof.qcRunId, confirmedAt: new Date().toISOString(),
+          } } : {}) } : {}) },
+      ...(input.approvalProof ? { expectedQcRunId: input.approvalProof.qcRunId,
+        expectedQcReportHash: input.approvalProof.qcReportHash } : {}),
+      }, trx);
+    } catch (error) {
+      if (decision === 'approved' && error instanceof Error &&
+          /QA evidence changed|QA run|Canva approval|Canva QA|RTL visual review|Precondition failed/.test(error.message)) {
+        throw new LifecycleProjectionConflict('APPROVAL_EVIDENCE_CHANGED', error.message);
+      }
+      throw error;
+    }
+    const stage = decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 'manual';
+    const changed = await trx.updateTable('requests').set({ stage, rev, updated_at: new Date() })
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
+      .returning('request_id').executeTakeFirst();
+    if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'The request changed during office revision');
+    const taskState = (await trx.selectFrom('tasks').select('state')
+      .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirstOrThrow()).state;
+    const result: OfficeDecisionResult = { requestId, taskId, revisionId, actionId,
+      approvalId: approval.id, taskState, rev, stage };
+    await trx.insertInto('lifecycle_projections').values({
+      tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,
+      payload_sha256: hash, result: result as unknown as Record<string, unknown>,
+    }).execute();
+    return result;
+  });
+}
 
 function canonical(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined).sort(([a], [b]) => (a < b ? -1 : 1));
-  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
 }
 
-/** The hash a key is bound to: what the projection asks for, not how it was sent. */
-export function projectionHash(body: Pick<ProjectionRequest, 'expectedRev' | 'rev' | 'stage' | 'ops'>): string {
-  return createHash('sha256').update(canonical({ expectedRev: body.expectedRev, rev: body.rev, stage: body.stage, ops: body.ops })).digest('hex');
-}
-
-/** Checks the body's shape; the ops' own fields are checked where each op runs. */
-export function readProjectionRequest(requestId: string, raw: unknown): { ok: true; body: ProjectionRequest } | { ok: false; message: string } {
-  if (!isValidUuid(requestId)) return { ok: false, message: 'The request id is not a UUID' };
-  if (!raw || typeof raw !== 'object') return { ok: false, message: 'The body must be a projection' };
-  const b = raw as Partial<ProjectionRequest>;
-  if (b.v !== 1) return { ok: false, message: `This Core reads projection v1, not ${JSON.stringify(b.v)}` };
-  if (!Number.isSafeInteger(b.expectedRev) || (b.expectedRev as number) < 0) return { ok: false, message: 'expectedRev must be a revision (0 or more)' };
-  if (b.rev !== (b.expectedRev as number) + 1) return { ok: false, message: 'rev must be expectedRev + 1' };
-  if (typeof b.key !== 'string' || b.key.length > 300 || !b.key.startsWith(`${requestId}:${b.rev}:`) || b.key.length === `${requestId}:${b.rev}:`.length) {
-    return { ok: false, message: 'key must be <requestId>:<rev>:<event>, at most 300 characters' };
+async function checkAlbum(trx: Kysely<Database>, tenantId: string, chatId: string,
+  ref: LifecycleAlbumRef, sourceUpdate?: unknown): Promise<void> {
+  const snapshot = await verifyAlbumSnapshot(trx, tenantId, ref, sourceUpdate);
+  if (!snapshot || snapshot.chatId !== chatId)
+    throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The album differs from its confirmed source');
+  for (const image of ref.images) {
+    const blob = (await sql<{ size: string; media_type: string }>`SELECT size, media_type
+      FROM hawa.blobs WHERE sha256 = ${image.sha256}`.execute(trx)).rows[0];
+    if (!blob || Number(blob.size) !== image.size || blob.media_type !== image.mediaType)
+      throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'A confirmed album image is not stored');
   }
-  if (!isValidUuid(b.tenantId)) return { ok: false, message: 'tenantId must be the request\'s tenant' };
-  if (b.stage !== undefined && !isLifecycleStage(b.stage)) return { ok: false, message: `Unknown stage ${JSON.stringify(b.stage)}` };
-  if (!Array.isArray(b.ops) || b.ops.length === 0 || b.ops.length > MAX_OPS) return { ok: false, message: `ops must be 1 to ${MAX_OPS} operations` };
-  for (const op of b.ops) {
-    if (!op || typeof op !== 'object' || !OPS.has(String((op as { op?: unknown }).op))) return { ok: false, message: `Unknown op ${JSON.stringify((op as { op?: unknown })?.op)}` };
-  }
-  return { ok: true, body: b as ProjectionRequest };
 }
 
-interface RequestRow {
-  tenant_id: string;
-  rev: string;
-  stage: string;
-  owner: string;
-  current_task_id: string;
-  chat_id: string | null;
+async function attachAlbum(trx: Kysely<Database>, tenantId: string, taskId: string, ref: LifecycleAlbumRef) {
+  for (const image of ref.images) await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
+    VALUES (${tenantId}::uuid, ${taskId}::uuid, ${image.sha256}, 'reference_image') ON CONFLICT DO NOTHING`.execute(trx);
 }
 
-interface Run {
-  trx: Kysely<Database>;
-  tenantId: string;
-  requestId: string;
-  body: ProjectionRequest;
-  row: RequestRow | null;
-  currentTaskId: string | null;
-  derivedStage?: LifecycleStage;
-  results: ProjectionOpResult[];
-  createdTaskIds: string[];
-  moves: Array<{ taskId: string; from: string; to: string; version: number }>;
-}
-
-const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-
-/** A draft Core can save as it is: no image bytes, no photos until Core downloads them (part B). */
-function checkDraft(draft: unknown): DraftIntake {
-  if (!draft || typeof draft !== 'object') refuse('INVALID_DRAFT', 'createRequest carries the classified draft');
-  const d = draft as DraftIntake;
-  if (!text(d.title, 500) || !text(d.rawText, 20000)) refuse('INVALID_DRAFT', 'The draft needs a title and the original text');
-  if (d.clientId !== null && !isValidUuid(d.clientId)) refuse('INVALID_DRAFT', 'The draft\'s client must be an id or null');
-  if (!Array.isArray(d.exactCopy)) refuse('INVALID_DRAFT', 'exactCopy must be a list');
-  const options = d.studioOptions as Record<string, unknown> | undefined;
-  if (options && ('referenceImageBase64' in options || 'reference' in options)) refuse('INVALID_DRAFT', 'A draft carries no image bytes: photos travel as Telegram file ids');
-  if (Array.isArray(d.photoFileIds) && d.photoFileIds.length) refuse('PHOTOS_NOT_SUPPORTED_YET', 'Photos of a lifecycle request are fetched by Core from slice 2.3 part B on');
-  return d;
-}
-
-/** The task, if it is a round of this request (read under the projection's lock). */
-async function requestTask(run: Run, taskId: unknown): Promise<{ id: string; state: string; version: number; title: string; client_id: string | null }> {
-  if (!isValidUuid(taskId)) refuse('NOT_IN_REQUEST', 'The op names no task');
-  const task = (await sql<{ id: string; state: string; version: string; title: string; client_id: string | null }>`
-    SELECT id::text, state::text, version::text, title, client_id::text FROM hawa.tasks
-    WHERE tenant_id = ${run.tenantId}::uuid AND id = ${taskId as string}::uuid AND request_id = ${run.requestId}::uuid
-    FOR UPDATE`.execute(run.trx)).rows[0];
-  if (!task) refuse('NOT_IN_REQUEST', `Task ${String(taskId)} is not a round of request ${run.requestId}`);
-  return { ...task!, version: Number(task!.version) };
-}
-
-async function taskCreatedPayload(run: Run, taskId: string): Promise<Record<string, unknown>> {
-  const row = (await sql<{ payload: Record<string, unknown> }>`
-    SELECT payload FROM hawa.outbox_commands WHERE tenant_id = ${run.tenantId}::uuid AND aggregate_id = ${taskId}::uuid AND command_type = 'task.created'
-    ORDER BY created_at LIMIT 1`.execute(run.trx)).rows[0];
-  const payload = row?.payload;
-  return payload && typeof payload === 'object' ? (typeof payload === 'string' ? JSON.parse(payload) : payload) : {};
-}
-
-/**
- * Where a request came from, as it is written into the task's raw record: the Telegram update of the
- * chat it names, or a size of the parent request it names. Only the known fields are kept, so a
- * newer worker's added fields do not reach the row unread.
- */
-function checkOrigin(op: Extract<ProjectionOp, { op: 'createRequest' }>): LifecycleOrigin {
-  const o = op.origin as Partial<Record<string, unknown>> | undefined;
-  if (!o || typeof o !== 'object') return refuse('INVALID_OP', 'createRequest carries where the request came from');
-  if (o.kind === 'telegram') {
-    if (o.chatId !== op.chatId) refuse('INVALID_OP', 'The origin names another chat than the request');
-    if (!Number.isSafeInteger(o.updateId) || (o.updateId as number) < 0) refuse('INVALID_OP', 'A Telegram origin names its update');
-    return { kind: 'telegram', chatId: op.chatId as string, updateId: o.updateId as number };
-  }
-  if (o.kind === 'size') {
-    if (!op.parentRequestId || o.parentRequestId !== op.parentRequestId) refuse('INVALID_OP', 'A size origin names the parent request of the op');
-    if (typeof o.action !== 'string' || !/^[A-Za-z0-9_-]{1,40}$/.test(o.action)) refuse('INVALID_OP', 'A size origin names its size action');
-    return { kind: 'size', parentRequestId: op.parentRequestId as string, action: o.action as string };
-  }
-  return refuse('INVALID_OP', `Unknown origin ${JSON.stringify(o.kind)}`);
-}
-
-async function createRequest(run: Run, op: Extract<ProjectionOp, { op: 'createRequest' }>): Promise<ProjectionOpResult> {
-  if (op.requestId !== run.requestId) refuse('INVALID_OP', 'createRequest names another request');
-  if (run.row) refuse('INVALID_OP', 'The request is open already');
-  if (typeof op.chatId !== 'string' || !/^-?\d{1,20}$/.test(op.chatId)) refuse('INVALID_OP', 'A lifecycle request comes from a Telegram chat');
-  const origin = checkOrigin(op);
-  const draft = checkDraft(op.draft);
-  if (op.parentRequestId !== undefined) {
-    if (!isValidUuid(op.parentRequestId)) refuse('INVALID_OP', 'parentRequestId must be a request id');
-    const parent = (await sql`SELECT 1 FROM hawa.requests WHERE request_id = ${op.parentRequestId}::uuid`.execute(run.trx)).rows[0];
-    if (!parent) refuse('INVALID_OP', `Parent request ${op.parentRequestId} is not in this tenant`);
-  }
-  const persisted = await persistChatIntakeIn(run.trx, {
-    tenantId: run.tenantId,
-    userId: SYSTEM_AUTOMATION_USER_ID,
-    platform: 'telegram',
-    // One task per request (a Telegram update may open several), keyed by request and round.
-    sourceEventId: `lc-${run.requestId}-r0`,
-    sourceChannelId: op.chatId as string,
-    rawText: draft.rawText,
-    rawJson: { lifecycle: { requestId: run.requestId, round: 0, origin }, text: draft.rawText },
-    clientId: draft.clientId,
-    title: text(draft.title, 500),
-    headlineEn: draft.headlineEn, headlineCkb: draft.headlineCkb, copyEn: draft.copyEn, copyCkb: draft.copyCkb,
-    designInstructions: String(draft.designInstructions ?? ''),
-    exactCopy: draft.exactCopy,
-    // Only a scoped request with copy is designed automatically (ingestChatCampaignTask's rule): the
-    // saved flag counts against the sender's daily allowance, and a draft from an intake that did not
-    // apply the rule must not use it up for a request nobody designs.
-    autoGenerate: draft.autoGenerate === true && Boolean(draft.clientId) && draft.isInstructionOnly !== true,
-    ...(draft.isInstructionOnly === true ? { isInstructionOnly: true } : {}),
-    ...(draft.variant ? { variant: draft.variant } : {}),
-    ...(typeof draft.designStudio === 'boolean' ? { designStudio: draft.designStudio } : {}),
-    ...(draft.studioOptions ? { studioOptions: draft.studioOptions as never } : {}),
-  }, { requestId: run.requestId });
-  const taskId = String(persisted.task.id);
-  const stage = stageAfterOpen(persisted.autoGenerate, draft.clientId);
-  await sql`INSERT INTO hawa.requests (request_id, tenant_id, root_task_id, current_task_id, parent_request_id, owner, stage, rev, chat_id)
-    VALUES (${run.requestId}::uuid, ${run.tenantId}::uuid, ${taskId}::uuid, ${taskId}::uuid, ${op.parentRequestId ?? null}::uuid, 'restate', ${stage}, 0, ${op.chatId})`.execute(run.trx);
-  run.row = { tenant_id: run.tenantId, rev: '0', stage, owner: 'restate', current_task_id: taskId, chat_id: op.chatId };
-  run.currentTaskId = taskId;
-  run.derivedStage = stage;
-  if (persisted.created) run.createdTaskIds.push(taskId);
-  // The requester's acknowledgement, as intake sends it for a request it saves (the same words); a
-  // size of a design is told which size is being made.
-  const variant = draft.variant ?? { width: 1080, height: 1080 };
-  const size = origin.kind === 'size' && origin.action in OTHER_SIZES ? OTHER_SIZES[origin.action as SizeAction] : undefined;
-  const ack = size && !persisted.autoGenerateDeclined
-    ? composeSizeStarted(size.label, size.width, size.height, taskId)
-    : composeRequestSavedAck({
-        taskId, clientId: draft.clientId, savedClientId: draft.clientId, senderName: text(draft.senderName, 200) || 'Telegram Client', title: text(draft.title, 500), variant,
-        automaticDraft: Boolean(persisted.autoGenerate && draft.clientId), autoGenerateDeclined: persisted.autoGenerateDeclined,
-      });
-  return {
-    op: 'createRequest', taskId, autoGenerate: persisted.autoGenerate, stage,
-    ...(persisted.autoGenerateDeclined ? { autoGenerateDeclined: persisted.autoGenerateDeclined } : {}),
-    messages: [messageOf(`${run.requestId}:${run.body.rev}:ack`, op.chatId as string, ack, { tenantId: run.tenantId, taskId, class: 'courtesy' })],
-  };
-}
-
-async function createRound(run: Run, op: Extract<ProjectionOp, { op: 'createRound' }>): Promise<ProjectionOpResult> {
-  if (op.kind !== 'change' && op.kind !== 'answer') refuse('INVALID_OP', 'A round is a change or an answer');
-  if (!Number.isSafeInteger(op.round) || op.round < 1) refuse('INVALID_OP', 'A round after the first design is numbered from 1');
-  if (op.photoFileIds?.length || op.answer?.photoFileIds?.length) refuse('PHOTOS_NOT_SUPPORTED_YET', 'Photos of a lifecycle request are fetched by Core from slice 2.3 part B on');
-  const parent = await requestTask(run, op.parentTaskId);
-  const payload = await taskCreatedPayload(run, parent.id);
-  const options = (payload.studioOptions && typeof payload.studioOptions === 'object' ? payload.studioOptions : {}) as Record<string, unknown>;
-  const chat = run.row?.chat_id ?? String(payload.sourceChannelId ?? '');
-  if (!chat) refuse('INVALID_OP', 'The request has no chat to save the round under');
-  const directive = text(op.directive, 2000);
-  const base = {
-    tenantId: run.tenantId,
-    userId: SYSTEM_AUTOMATION_USER_ID,
-    platform: 'telegram' as const,
-    sourceEventId: `lc-${run.requestId}-r${op.round}`,
-    sourceChannelId: chat,
-    rawText: String(payload.rawRequestText || parent.title || 'Design'),
-    rawJson: { lifecycle: { requestId: run.requestId, round: op.round, kind: op.kind }, directive },
-    clientId: parent.client_id,
-    headlineEn: (payload.headlineEn as string) || undefined,
-    headlineCkb: (payload.headlineCkb as string) || undefined,
-    copyEn: (payload.copyEn as string) || undefined,
-    copyCkb: (payload.copyCkb as string) || undefined,
-    exactCopy: Array.isArray(payload.exactCopy) ? payload.exactCopy : [],
-    autoGenerate: true,
-    ...(payload.variant ? { variant: payload.variant as { width: number; height: number } } : {}),
-    ...(typeof payload.designStudio === 'boolean' ? { designStudio: payload.designStudio } : {}),
-  };
-  let persisted: Awaited<ReturnType<typeof persistChatIntakeIn>>;
-  if (op.kind === 'answer') {
-    // As the legacy answer does (telegram-intake/questions.ts answerQuestion): the waiting task's own
-    // request again, with the answer written into the change, never asked about again.
-    const question = text(op.question, 1000);
-    const answer = directive || 'the attached picture';
-    const asked = question ? `Asked "${question}", the client answered: ${answer}` : `The client answered: ${answer}`;
-    const prior = typeof options.revisionDirective === 'string' ? options.revisionDirective.trim() : '';
-    persisted = await persistChatIntakeIn(run.trx, {
-      ...base,
-      title: parent.title || 'Design (Revision)',
-      designInstructions: `${String(payload.designInstructions || '')}\n${question ? `Answer to "${question}"` : 'Answer'}: ${answer}`.trim(),
-      studioOptions: { ...options, revisionDirective: prior ? `${prior}\n\n${asked}` : asked, clarified: true, answers: op.answers ?? parent.id } as never,
-    }, { requestId: run.requestId });
-  } else {
-    // As the legacy change does (telegram-intake/changes.ts): the change made to the design replied to.
-    const cleanTitle = (parent.title || 'Design').replace(/ \(Revision.*\)/, '');
-    persisted = await persistChatIntakeIn(run.trx, {
-      ...base,
-      title: `${cleanTitle} (Revision)`,
-      designInstructions: `${String(payload.designInstructions || '')}\nOperator Revision Directive: ${directive}`.trim(),
-      variant: (payload.variant as { width: number; height: number }) || { width: 1080, height: 1350 },
-      studioOptions: { parentTaskId: parent.id, revisionRound: (Number(options.revisionRound) || 0) + 1, revisionDirective: directive } as never,
-    }, { requestId: run.requestId });
-  }
-  const taskId = String(persisted.task.id);
-  run.currentTaskId = taskId;
-  run.derivedStage = stageAfterRound(persisted.autoGenerate);
-  if (persisted.created) run.createdTaskIds.push(taskId);
-  // What the requester is told, in the legacy path's words (telegram-intake/changes.ts, questions.ts).
-  const said = cutText(op.kind === 'answer' ? (directive || 'the attached picture') : directive, op.kind === 'answer' ? 300 : 500);
-  const reply = persisted.autoGenerateDeclined
-    ? {
-        text: op.kind === 'answer'
-          ? `👍 <b>Got it:</b> ${escapeTelegramHtml(said)}\n\n⏳ <i>The daily limit for automatic drafts has been reached for this chat. Your change is saved and queued for the art director in Hawa Desk.</i>\n\n🆔 Task ID: <code>${escapeTelegramHtml(taskId)}</code>`
-          : `✏️ <b>Revision instruction received:</b> "${escapeTelegramHtml(said)}"\n\n⏳ <i>The daily limit for automatic drafts has been reached for this chat. Your revision is saved and queued for manual review in Hawa Desk.</i>`,
-        parse_mode: 'HTML' as const,
+/** One transaction makes the task, its recorded outbox row, ownership and replay receipt inseparable. */
+export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLifecycleProjection,
+  sourceStore: BlobStore | null = blobStoreFor(db)): Promise<OpenLifecycleResult> {
+  const { requestId, tenantId, draft, key } = input;
+  const hash = createHash('sha256').update(canonical({ ...input, draft: { ...draft, tenantId } })).digest('hex');
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    // Same request and same key serialize even when Core runs in several processes. This also
+    // protects against two first projections with different keys racing on one request.
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
+    const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', 1).executeTakeFirst();
+    if (receipt) {
+      if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The first projection has different content or key');
       }
-    : op.kind === 'answer'
-      ? composeAnswerTaken(said, taskId)
-      : {
-          text: `✏️ <b>Change received:</b> "${escapeTelegramHtml(said)}"\n\n🎨 <b>Making this change to the same design.</b>\n` +
-            `<i>The new draft and its editable Canva link come to this chat when ready. To change it again, reply to the new draft.</i>\n\n` +
-            `🆔 Task ID: <code>${escapeTelegramHtml(taskId)}</code>`,
-          parse_mode: 'HTML' as const,
-        };
-  return {
-    op: 'createRound', taskId, autoGenerate: persisted.autoGenerate,
-    ...(persisted.autoGenerateDeclined ? { autoGenerateDeclined: persisted.autoGenerateDeclined } : {}),
-    messages: [messageOf(`${run.requestId}:${run.body.rev}:round`, chat, reply, { tenantId: run.tenantId, taskId, class: 'courtesy' })],
-  };
-}
-
-async function transition(run: Run, op: Extract<ProjectionOp, { op: 'transition' }>): Promise<ProjectionOpResult> {
-  const task = await requestTask(run, op.taskId);
-  const unchanged: ProjectionOpResult = { op: 'transition', taskId: task.id, fromState: task.state, toState: task.state, changed: false, version: task.version, messages: [] };
-  if (op.toState === undefined || op.toState === task.state) return unchanged;
-  if (!isTaskDbState(op.toState)) return refuse('INVALID_OP', `Unknown task state ${JSON.stringify(op.toState)}`);
-  if (op.fallbackState !== undefined && !isTaskDbState(op.fallbackState)) return refuse('INVALID_OP', `Unknown task state ${JSON.stringify(op.fallbackState)}`);
-  // The one vocabulary's moves (packages/contracts task-status.ts) hold here as everywhere.
-  const legal = (to: string) => canTransitionTaskStatus(toApiTaskStatus(task.state), toApiTaskStatus(to));
-  const toState = legal(op.toState) ? op.toState : op.fallbackState && op.fallbackState !== task.state && legal(op.fallbackState) ? op.fallbackState : null;
-  if (!toState) {
-    if (op.ifIllegal === 'keep') return unchanged;
-    return refuse('ILLEGAL_TRANSITION', `A task cannot move from ${task.state} to ${op.toState}`);
-  }
-  const moved = await new TaskRepository(run.trx).transitionState({
-    taskId: task.id, tenantId: run.tenantId, expectedVersion: task.version, fromState: task.state as TaskState, toState,
-    actorType: 'workflow', actorId: ACTOR, reason: text(op.reason, 1000) || 'The request lifecycle moved the task',
-    data: { requestId: run.requestId, rev: run.body.rev },
-  }, run.trx);
-  run.moves.push({ taskId: task.id, from: task.state, to: toState, version: Number(moved.version) });
-  return { op: 'transition', taskId: task.id, fromState: task.state, toState, changed: true, version: Number(moved.version), messages: [] };
-}
-
-/**
- * A move that starts a run of the Delivery workflow (slice 2.4): the approval's publication is claimed
- * for that run in the same transaction, after the move (creating the publication bumps the task's
- * version, which the move checks).
- */
-async function transitionAndClaim(run: Run, op: Extract<ProjectionOp, { op: 'transition' }>): Promise<ProjectionOpResult> {
-  const delivery = op.delivery;
-  if (!delivery) return transition(run, op);
-  if (!isValidUuid(delivery.approvalId) || !Number.isSafeInteger(delivery.run) || delivery.run < 1 || !text(delivery.deliveryId, 300)) {
-    refuse('INVALID_OP', 'A delivery names its approval, its run (1 or more) and its workflow id');
-  }
-  const moved = await transition(run, op);
-  const task = await requestTask(run, op.taskId);
-  if (task.state !== 'publishing') refuse('NOT_PUBLISHING', `Task ${task.id} is ${task.state}, so it cannot be delivered`);
-  const claim = await claimPublicationForWorkflowIn(run.trx, { tenantId: run.tenantId, taskId: task.id, approvalId: delivery.approvalId, run: delivery.run });
-  if (!claim.ok) refuse(claim.code, claim.message);
-  return moved;
-}
-
-/**
- * The office's decision on a draft, recorded as the decisions route records it: an approvals row on the
- * revision (the nonce `lc:<actionId>`), the revision's status and the task's move with its event. The
- * payload is the route's (pinned exports, QC evidence), checked there before it was forwarded.
- */
-async function recordApproval(run: Run, op: Extract<ProjectionOp, { op: 'recordApproval' }>): Promise<ProjectionOpResult> {
-  const task = await requestTask(run, op.taskId);
-  if (!isValidUuid(op.revisionId)) refuse('INVALID_OP', 'recordApproval names the revision decided on');
-  if (!isOfficeActionId(op.actionId)) refuse('INVALID_OP', 'recordApproval carries the office action id');
-  const decision = op.decision ?? 'approved';
-  if (!DECISIONS.has(decision)) refuse('INVALID_OP', `Unknown decision ${JSON.stringify(decision)}`);
-  const nonce = `lc:${op.actionId}`;
-  // The same action recorded before (under another projection key): its row answers.
-  const earlier = (await sql<{ id: string }>`SELECT id::text FROM hawa.approvals
-    WHERE tenant_id = ${run.tenantId}::uuid AND task_id = ${task.id}::uuid AND nonce = ${nonce} LIMIT 1`.execute(run.trx)).rows[0];
-  if (earlier) return { op: 'recordApproval', approvalId: earlier.id };
-  const payload = op.approval && typeof op.approval === 'object' && !Array.isArray(op.approval) ? op.approval : {};
-  if (JSON.stringify(payload).length > MAX_APPROVAL_PAYLOAD) refuse('INVALID_OP', `The approval's payload is over ${MAX_APPROVAL_PAYLOAD} characters`);
-  const decidedBy = isValidUuid(op.actor?.userId) ? op.actor.userId : SYSTEM_AUTOMATION_USER_ID;
-  const reason = text(op.reason, 1000) || (decision === 'approved' ? 'Approved by operator' : decision === 'rejected' ? 'Rejected by operator' : 'Revision requested');
-  let approval: { id: string };
-  try {
-    approval = await new RevisionRepository(run.trx).recordApproval({
-      tenantId: run.tenantId, taskId: task.id, revisionId: op.revisionId, decision: decision as 'approved', decidedBy, reason, nonce,
-      decisionPayload: {
-        ...payload,
-        taskId: task.id, revisionId: op.revisionId, approverId: decidedBy, approverRole: text(op.actor?.role, 40) || 'operator',
-        ...(decision === 'approved' ? { approvedAt: new Date().toISOString() } : {}),
-        lifecycle: { requestId: run.requestId, rev: run.body.rev, actionId: op.actionId },
-      },
-    }, run.trx) as { id: string };
-  } catch (err) {
-    // A database error is the database's (503 or 500 below); the repository's own refusals (a stale
-    // revision, no passing QC run, approved already) say why the decision cannot be recorded.
-    if (err instanceof Refusal || pgCode(err)) throw err;
-    return refuse('DECISION_REFUSED', String((err as Error)?.message ?? err).slice(0, 300));
-  }
-  const after = (await sql<{ state: string; version: string }>`SELECT state::text, version::text FROM hawa.tasks
-    WHERE tenant_id = ${run.tenantId}::uuid AND id = ${task.id}::uuid`.execute(run.trx)).rows[0];
-  if (after && after.state !== task.state) run.moves.push({ taskId: task.id, from: task.state, to: after.state, version: Number(after.version) });
-  return { op: 'recordApproval', approvalId: String(approval.id) };
-}
-
-/**
- * A draft the office made or changed in Canva, captured (its exports made again by the route that
- * forwarded the decision) and recorded as the round's Desk revision in review: a first revision, the
- * new revision after a revision request, or the check of the current one.
- */
-async function bridgeCapturedRevision(run: Run, op: Extract<ProjectionOp, { op: 'bridgeCapturedRevision' }>): Promise<ProjectionOpResult> {
-  const task = await requestTask(run, op.taskId);
-  const binding = (await sql<{ canva_design_id: string; version: string; edit_url: string | null }>`SELECT canva_design_id, version::text, edit_url
-    FROM hawa.canva_bindings WHERE tenant_id = ${run.tenantId}::uuid AND task_id = ${task.id}::uuid AND status = 'bound'
-    ORDER BY created_at DESC LIMIT 1`.execute(run.trx)).rows[0];
-  if (!binding) return refuse('NO_CANVA_DESIGN', `Task ${task.id} has no Canva design to capture`);
-  const payload = await taskCreatedPayload(run, task.id);
-  const copy = Array.isArray(payload.exactCopy) && payload.exactCopy.every((c) => typeof c === 'string') ? payload.exactCopy as string[] : undefined;
-  const captured = await captureBoundDraftIn(run.trx, { revisionRepo: new RevisionRepository(run.trx), evaluateQc: evaluateCanvaExportQc }, {
-    tenantId: run.tenantId, taskId: task.id, actorId: SYSTEM_AUTOMATION_USER_ID, designId: binding.canva_design_id, bindingVersion: Number(binding.version),
-    ...(binding.edit_url ? { canvaUrl: binding.edit_url } : {}), ...(copy ? { fallbackCopy: copy } : {}), rework: true,
-  });
-  if (captured.transition?.changed) run.moves.push({ taskId: task.id, from: captured.transition.fromState, to: captured.transition.toState, version: captured.transition.version });
-  const now = (await sql<{ state: string; rev: string | null }>`SELECT state::text, current_design_revision_id::text AS rev FROM hawa.tasks
-    WHERE tenant_id = ${run.tenantId}::uuid AND id = ${task.id}::uuid`.execute(run.trx)).rows[0];
-  const revisionId = captured.revisionId ?? now?.rev ?? null;
-  if (!revisionId) return refuse('NOTHING_CAPTURED', `No checked export of Canva design ${binding.canva_design_id} is stored: capture it first`);
-  if (op.revisionId && op.revisionId !== revisionId) return refuse('NOT_CURRENT_DRAFT', `The captured revision is ${revisionId}, not ${op.revisionId}`);
-  // A round the office took over after a failed design goes back to review with its captured draft.
-  if (now && now.state !== 'human_review') {
-    const moved = await transitionTaskForOutcome(run.trx, {
-      tenantId: run.tenantId, taskId: task.id, toState: 'human_review', actorId: ACTOR,
-      reason: `The office captured Canva draft ${binding.canva_design_id}; awaiting visual review.`, data: { requestId: run.requestId, rev: run.body.rev },
-    });
-    if (!moved.changed) return refuse('NOT_REVIEWABLE', `Task ${task.id} is ${now.state}; a captured draft cannot put it in review`);
-    run.moves.push({ taskId: task.id, from: moved.fromState, to: moved.toState, version: moved.version });
-  }
-  return { op: 'bridgeCapturedRevision', revisionId, designId: binding.canva_design_id, messages: [] };
-}
-
-/**
- * Before a round is designed again: a studio run of the round nobody follows any more (its design run
- * reported, or was cut off) is abandoned, so the new run is not refused as one in progress, and the
- * requester hears that a new design was started (the words of the legacy re-drive).
- */
-async function prepareRedrive(run: Run, op: Extract<ProjectionOp, { op: 'prepareRedrive' }>): Promise<ProjectionOpResult> {
-  const task = await requestTask(run, op.taskId);
-  if (!Number.isSafeInteger(op.attempt) || op.attempt < 0) refuse('INVALID_OP', 'prepareRedrive names the attempt (0 or more)');
-  if (!task.client_id) refuse('CLIENT_REQUIRED', `Task ${task.id} has no client, so it cannot be designed automatically`);
-  await sql`UPDATE hawa.design_studio_runs
-    SET status = 'abandoned', diagnostic = ${`Abandoned by the request lifecycle: the office re-drove round task ${task.id} (attempt ${op.attempt})`}, updated_at = now()
-    WHERE tenant_id = ${run.tenantId}::uuid AND task_id = ${task.id}::uuid AND status NOT IN ('transferred', 'degraded', 'failed', 'abandoned')`.execute(run.trx);
-  run.derivedStage = 'designing';
-  const chat = run.row?.chat_id ?? null;
-  const words = `🔄 <b>A new automatic design has been started</b> for task <code>${escapeTelegramHtml(task.id)}</code>.\n<i>You will receive the Canva link here when it is ready, or an explanation if it cannot be made.</i>`;
-  return {
-    op: 'prepareRedrive',
-    messages: chat ? [messageOf(`${run.requestId}:${run.body.rev}:redrive`, chat, { text: words, parse_mode: 'HTML' }, { tenantId: run.tenantId, taskId: task.id, class: 'courtesy' })] : [],
-  };
-}
-
-/** The Delivery workflow's report, recorded as Core's delivery-finished endpoint records it. */
-async function recordDelivery(run: Run, op: Extract<ProjectionOp, { op: 'recordDelivery' }>): Promise<ProjectionOpResult> {
-  const task = await requestTask(run, op.taskId);
-  const deliveryRun = op.run ?? 1;
-  if (!isValidUuid(op.approvalId) || !Number.isSafeInteger(deliveryRun) || deliveryRun < 1 || !DELIVERY_OUTCOMES.has(String(op.outcome)) || !text(op.deliveryId, 300)) {
-    refuse('INVALID_OP', 'A delivery report names its approval, its run, its workflow id and an outcome');
-  }
-  const recorded = await recordWorkflowDeliveryIn(run.trx, {
-    tenantId: run.tenantId, taskId: task.id, approvalId: op.approvalId, deliveryId: op.deliveryId, run: deliveryRun,
-    outcome: {
-      outcome: op.outcome, sheetsConfirmed: op.sheetsConfirmed === true, archived: typeof op.archived === 'boolean' ? op.archived : op.sheetsConfirmed === true,
-      ...(op.reason ? { reason: text(op.reason, 500) } : {}),
-    },
-  });
-  if (!recorded.ok) return refuse(recorded.code, recorded.message);
-  if (recorded.status === 'applied' && recorded.taskState !== recorded.fromState) {
-    const v = (await sql<{ version: string }>`SELECT version::text FROM hawa.tasks WHERE tenant_id = ${run.tenantId}::uuid AND id = ${task.id}::uuid`.execute(run.trx)).rows[0];
-    run.moves.push({ taskId: task.id, from: recorded.fromState, to: recorded.taskState, version: Number(v?.version ?? 0) });
-  }
-  return { op: 'recordDelivery', messages: [] };
-}
-
-async function closeQuestion(run: Run, op: Extract<ProjectionOp, { op: 'closeQuestion' }>): Promise<ProjectionOpResult> {
-  const task = await requestTask(run, op.taskId);
-  const round = [...run.results].reverse().find((r): r is Extract<ProjectionOpResult, { op: 'createRound' }> => r.op === 'createRound');
-  if (!round) refuse('INVALID_OP', 'closeQuestion follows the round that answers the question, in the same projection');
-  const closed = await closeAnsweredQuestion(run.trx, { tenantId: run.tenantId, taskId: task.id, revisionTaskId: round!.taskId, actorId: ACTOR });
-  if (closed.changed) run.moves.push({ taskId: task.id, from: closed.fromState, to: closed.toState, version: closed.version });
-  return { op: 'closeQuestion', changed: closed.changed };
-}
-
-/**
- * A send the lifecycle confirmed, recorded as the legacy queries read a sent message: a delivered
- * notify.telegram row of the task (draftsToRemind, questionsToRemind, replyDesign and others read
- * these rows as "the draft was sent", finding 1.2.1), dated when Telegram took it.
- */
-async function recordSent(run: Run, op: Extract<ProjectionOp, { op: 'recordDraftSent' | 'recordQuestionSent' }>): Promise<ProjectionOpResult> {
-  const task = await requestTask(run, op.taskId);
-  if (!Number.isFinite(op.at) || op.at <= 0) refuse('INVALID_OP', 'A send is recorded with the time Telegram took it');
-  const key = text(op.key, 250);
-  if (!key) refuse('INVALID_OP', 'A send is recorded with its message key');
-  const draft = op.op === 'recordDraftSent';
-  const status = draft ? 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW' : 'CANVA_NEEDS_CLARIFICATION';
-  const at = new Date(op.at);
-  const payload = {
-    chatId: run.row?.chat_id ?? null, taskId: task.id, status, lifecycleOwner: 'restate', requestId: run.requestId, messageKey: key,
-    ...(op.messageId ? { messageId: String(op.messageId).slice(0, 40) } : {}),
-    ...(op.op === 'recordQuestionSent' ? { questionId: text(op.questionId, 200) } : {}),
-  };
-  await sql`INSERT INTO hawa.outbox_commands (tenant_id, aggregate_type, aggregate_id, command_type, idempotency_key, payload, state, delivered_at, created_at, available_at, last_error)
-    VALUES (${run.tenantId}::uuid, 'task', ${task.id}::uuid, 'notify.telegram', ${`notify.telegram:${task.id}:${status}:lc:${key}`}, ${JSON.stringify(payload)}::jsonb,
-      'delivered', ${at}, ${at}, ${at}, 'SENT_BY_LIFECYCLE')
-    ON CONFLICT (tenant_id, idempotency_key) DO NOTHING`.execute(run.trx);
-  if (draft) await sql`UPDATE hawa.requests SET draft_sent_at = ${at} WHERE request_id = ${run.requestId}::uuid`.execute(run.trx);
-  else await sql`UPDATE hawa.requests SET question_asked_at = ${at} WHERE request_id = ${run.requestId}::uuid`.execute(run.trx);
-  return draft ? { op: 'recordDraftSent' } : { op: 'recordQuestionSent' };
-}
-
-/** What the composing ops (lifecycle-compose.ts) read of this projection. */
-function composeRun(run: Run): ComposeRun {
-  return {
-    trx: run.trx, tenantId: run.tenantId, requestId: run.requestId, rev: run.body.rev, chatId: run.row?.chat_id ?? null,
-    stage: run.row?.stage ?? '', currentTaskId: run.currentTaskId, moves: run.moves,
-  };
-}
-
-async function runOp(run: Run, op: ProjectionOp): Promise<ProjectionOpResult> {
-  if (op.op !== 'createRequest' && !run.row) refuse('REQUEST_NOT_FOUND', `Request ${run.requestId} is not open in this tenant`, 404);
-  switch (op.op) {
-    case 'createRequest': return createRequest(run, op);
-    case 'createRound': return createRound(run, op);
-    case 'transition': return transitionAndClaim(run, op);
-    case 'closeQuestion': return closeQuestion(run, op);
-    case 'recordDraftSent':
-    case 'recordQuestionSent': return recordSent(run, op);
-    case 'recordOutcome': {
-      const task = await requestTask(run, op.taskId);
-      const { derivedStage, ...result } = await recordOutcomeIn(composeRun(run), task, op);
-      run.derivedStage = derivedStage;
-      return result;
+      return receipt.result as unknown as OpenLifecycleResult;
     }
-    case 'recordRequesterAction': return recordRequesterActionIn(composeRun(run), await requestTask(run, op.taskId), op);
-    case 'composeReminder': return composeReminderIn(composeRun(run), await requestTask(run, op.taskId), op);
-    case 'recordApproval': return recordApproval(run, op);
-    case 'bridgeCapturedRevision': return bridgeCapturedRevision(run, op);
-    case 'prepareRedrive': return prepareRedrive(run, op);
-    case 'recordDelivery': return recordDelivery(run, op);
-    default: return refuse('INVALID_OP', `Unknown op ${(op as { op: string }).op}`);
-  }
-}
+    const otherKey = await trx.selectFrom('lifecycle_projections').select(['request_id'])
+      .where('tenant_id', '=', tenantId).where('idempotency_key', '=', key).executeTakeFirst();
+    if (otherKey) throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'Projection key belongs to another request');
+    const prior = await trx.selectFrom('requests').select(['rev'])
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+    if (prior) throw new LifecycleProjectionConflict('STALE_REVISION', `Request already has revision ${prior.rev}`);
 
-const pgCode = (err: unknown): string => String((err as { code?: unknown })?.code ?? '');
-const unavailable = (err: unknown): boolean =>
-  ['57P01', '57P02', '57P03', '08000', '08003', '08006', '53300'].includes(pgCode(err)) ||
-  /ECONNREFUSED|ECONNRESET|ETIMEDOUT|Connection terminated|timeout exceeded when trying to connect/i.test(String((err as Error)?.message ?? err));
-
-/** Applies one projection. */
-export async function applyProjection(db: Kysely<Database>, requestId: string, body: ProjectionRequest): Promise<ProjectionAnswer> {
-  const hash = projectionHash(body);
-  try {
-    return await withRlsContext(db, { tenantId: body.tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-      // One projection of a request at a time, including the one that opens it (no row to lock yet).
-      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
-      const row = (await sql<RequestRow>`SELECT tenant_id::text, rev::text, stage, owner, current_task_id::text, chat_id FROM hawa.requests
-        WHERE request_id = ${requestId}::uuid FOR UPDATE`.execute(trx)).rows[0] ?? null;
-      const pgRev = row ? Number(row.rev) : 0;
-
-      const recorded = (await sql<{ request_hash: string; result: ProjectionResponse }>`SELECT request_hash, result FROM hawa.lifecycle_projections
-        WHERE tenant_id = ${body.tenantId}::uuid AND idempotency_key = ${body.key}`.execute(trx)).rows[0];
-      if (recorded) {
-        if (recorded.request_hash !== hash) throw new Refusal(409, 'KEY_REUSED', 'This key was projected before with other ops', { code: 'KEY_REUSED', pgRev, expectedRev: body.expectedRev, rev: body.rev });
-        const stored = typeof recorded.result === 'string' ? (JSON.parse(recorded.result) as ProjectionResponse) : recorded.result;
-        return { ok: true as const, response: { ...stored, status: 'replayed' as const }, createdTaskIds: [], moves: [] };
+    let admittedSource: unknown;
+    const sourceDecision = (await sql<{ payload: { draft: ChatIntake } }>`SELECT payload FROM hawa.inbox_events
+      WHERE tenant_id=${tenantId}::uuid AND source_account_id='lifecycle_chat_open'
+        AND payload->>'requestId'=${requestId} AND payload->'draft'->'lifecycleSource' IS NOT NULL LIMIT 1`.execute(trx)).rows[0];
+    if (sourceDecision && canonical(sourceDecision.payload.draft) !== canonical(draft))
+      throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The worker changed or omitted the reviewed source');
+    let reviewed: Awaited<ReturnType<typeof verifyReviewedSource>> | undefined;
+    if (draft.lifecycleSource) {
+      const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleSource.confirmationUpdateId);
+      if (!decision || !draft.clientId || decision.requestId !== requestId || decision.chatId !== draft.sourceChannelId ||
+          canonical(decision.draft) !== canonical(draft) || draft.lifecycleImage || draft.lifecycleAlbum)
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The source is not bound to this new brief');
+      try { reviewed = await verifyReviewedSource(trx, sourceStore, { tenantId, requestId, clientId: draft.clientId,
+        chatId: draft.sourceChannelId, ref: draft.lifecycleSource, copy: draft.rawText }); }
+      catch (error) {
+        if (error instanceof SourceConflict) throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', error.message);
+        throw error;
       }
-      if (pgRev !== body.expectedRev) {
-        const code = pgRev > body.expectedRev ? 'AHEAD' : 'STALE_REVISION';
-        throw new Refusal(409, code, `Postgres holds request ${requestId} at revision ${pgRev}, not ${body.expectedRev}`, { code, pgRev, expectedRev: body.expectedRev, rev: body.rev });
+      if (reviewed.upload.target) throw new LifecycleProjectionConflict('WRONG_STAGE', 'A revision source cannot open a new request');
+      admittedSource = decision.sourceUpdate;
+    }
+    if (draft.lifecycleAlbum) {
+      const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleAlbum.updateId);
+      if (draft.lifecycleImage || !decision || decision.requestId !== requestId ||
+          decision.chatId !== draft.sourceChannelId || canonical(decision.draft) !== canonical(draft))
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The album is not bound to this new brief');
+      await checkAlbum(trx, tenantId, draft.sourceChannelId, draft.lifecycleAlbum);
+      admittedSource = decision.sourceUpdate;
+    }
+
+    if (draft.lifecycleImage) {
+      const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleImage.updateId);
+      if (!decision || decision.requestId !== requestId ||
+          decision.chatId !== draft.sourceChannelId || canonical(decision.draft) !== canonical(draft)) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The image is not bound to this Telegram decision');
       }
-      if (row && row.owner !== 'restate') refuse('NOT_LIFECYCLE_OWNED', `Request ${requestId} is Core's`);
+      const blob = (await sql<{ size: string; media_type: string }>`SELECT size, media_type
+        FROM hawa.blobs WHERE sha256 = ${draft.lifecycleImage.sha256}`.execute(trx)).rows[0];
+      if (!blob || Number(blob.size) !== draft.lifecycleImage.size ||
+          blob.media_type !== draft.lifecycleImage.mediaType) {
+        throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The admitted image is not stored');
+      }
+      admittedSource = decision.sourceUpdate;
+    }
 
-      const run: Run = { trx, tenantId: body.tenantId, requestId, body, row, currentTaskId: row?.current_task_id ?? null, results: [], createdTaskIds: [], moves: [] };
-      for (const op of body.ops) run.results.push(await runOp(run, op));
-      if (!run.row) refuse('REQUEST_NOT_FOUND', `Request ${requestId} is not open in this tenant`, 404);
-
-      const stage = (body.stage ?? run.derivedStage ?? run.row!.stage) as LifecycleStage;
-      await sql`UPDATE hawa.requests SET rev = ${body.rev}, stage = ${stage}, current_task_id = ${run.currentTaskId}::uuid
-        WHERE request_id = ${requestId}::uuid`.execute(trx);
-      const response: ProjectionResponse = { v: 1, status: 'applied', rev: body.rev, stage, results: run.results };
-      await sql`INSERT INTO hawa.lifecycle_projections (tenant_id, request_id, rev, idempotency_key, request_hash, result)
-        VALUES (${body.tenantId}::uuid, ${requestId}::uuid, ${body.rev}, ${body.key}, ${hash}, ${JSON.stringify(response)}::jsonb)`.execute(trx);
-      return { ok: true as const, response, createdTaskIds: run.createdTaskIds, moves: run.moves };
-    });
-  } catch (err) {
-    if (err instanceof Refusal) return { ok: false, status: err.status, code: err.code, message: err.message, ...(err.conflict ? { conflict: err.conflict } : {}) };
-    const code = pgCode(err);
-    // A request id another tenant holds (invisible here), or a key written by a projection at once.
-    if (code === '23505') return { ok: false, status: 409, code: 'REQUEST_ID_TAKEN', message: 'A row this projection writes exists already where this tenant cannot see it' };
-    if (code === '42501') return { ok: false, status: 403, code: 'FORBIDDEN_BY_POLICY', message: 'Row-level security refused this projection for the tenant' };
-    if (code === '23503' || code === '23514' || code === '22P02') return { ok: false, status: 422, code: 'INVALID_OP', message: String((err as Error).message).slice(0, 300) };
-    if (unavailable(err)) return { ok: false, status: 503, code: 'DATABASE_UNAVAILABLE', message: String((err as Error).message).slice(0, 300) };
-    return { ok: false, status: 500, code: 'PROJECTION_FAILED', message: String((err as Error)?.message ?? err).slice(0, 300) };
-  }
-}
-
-/** GET /v1/internal/lifecycle/:requestId: the request as Postgres has it. */
-export async function readLifecycleRecord(db: Kysely<Database>, requestId: string, tenantId: string): Promise<LifecycleRecord | null> {
-  return withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
-    const r = (await sql<{ tenant_id: string; owner: string; stage: string; rev: string; root_task_id: string; current_task_id: string; parent_request_id: string | null; chat_id: string | null; draft_sent_at: Date | null; question_asked_at: Date | null }>`
-      SELECT tenant_id::text, owner, stage, rev::text, root_task_id::text, current_task_id::text, parent_request_id::text, chat_id, draft_sent_at, question_asked_at
-      FROM hawa.requests WHERE request_id = ${requestId}::uuid`.execute(trx)).rows[0];
-    if (!r) return null;
-    const tasks = (await sql<{ id: string; state: string; version: string }>`SELECT id::text, state::text, version::text FROM hawa.tasks
-      WHERE tenant_id = ${tenantId}::uuid AND request_id = ${requestId}::uuid ORDER BY created_at, id`.execute(trx)).rows;
-    const last = (await sql<{ rev: string; idempotency_key: string; applied_at: Date }>`SELECT rev::text, idempotency_key, applied_at FROM hawa.lifecycle_projections
-      WHERE tenant_id = ${tenantId}::uuid AND request_id = ${requestId}::uuid ORDER BY rev DESC LIMIT 1`.execute(trx)).rows[0];
-    const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
-    return {
-      v: 1, requestId, tenantId: r.tenant_id, owner: r.owner as LifecycleRecord['owner'], stage: r.stage as LifecycleStage, rev: Number(r.rev),
-      rootTaskId: r.root_task_id, currentTaskId: r.current_task_id, parentRequestId: r.parent_request_id, chatId: r.chat_id,
-      draftSentAt: iso(r.draft_sent_at), questionAskedAt: iso(r.question_asked_at),
-      tasks: tasks.map((t) => ({ id: t.id, state: t.state, version: Number(t.version) })),
-      lastProjection: last ? { rev: Number(last.rev), key: last.idempotency_key, appliedAt: iso(last.applied_at)! } : null,
+    let persisted: Awaited<ReturnType<typeof persistChatIntake>>;
+    try {
+      persisted = await persistChatIntake(trx, { ...draft, tenantId,
+        ...(reviewed ? { reviewedSource: reviewed.evidence,
+          ...(reviewed.upload.variant ? { variant: reviewed.upload.variant } : {}),
+          copyEn: /[\u0600-\u06ff]/.test(draft.rawText) ? '' : draft.rawText,
+          copyCkb: /[\u0600-\u06ff]/.test(draft.rawText) ? draft.rawText : '' } : {}),
+        ...(admittedSource !== undefined ? { rawJson: admittedSource } : {}) }, { outboxState: 'recorded' });
+    } catch (error) {
+      if (error instanceof IdempotencyConflictError) {
+        throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The source event already belongs to a different executor');
+      }
+      throw error;
+    }
+    const taskId = String(persisted.task.id);
+    const creation = await trx.selectFrom('outbox_commands').select(['state', 'payload'])
+      .where('tenant_id', '=', tenantId).where('aggregate_id', '=', taskId)
+      .where('command_type', '=', 'task.created').executeTakeFirst();
+    if (creation?.state !== 'delivered' || creation.payload.lifecycleOwner !== 'restate' || persisted.task.request_id) {
+      throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The task is not exclusively owned by this lifecycle');
+    }
+    const autoGenerate = creation.payload.autoGenerate === true && Boolean(persisted.task.client_id);
+    const stage = autoGenerate ? 'designing' : 'manual';
+    await trx.insertInto('requests').values({
+      request_id: requestId, tenant_id: tenantId, root_task_id: taskId, current_task_id: taskId,
+      parent_request_id: null, owner: 'restate', stage, rev: 1, chat_id: draft.sourceChannelId,
+      draft_sent_at: null, question_asked_at: null,
+    }).execute();
+    const claimed = await trx.updateTable('tasks').set({ request_id: requestId })
+      .where('tenant_id', '=', tenantId).where('id', '=', taskId).where('request_id', 'is', null)
+      .returning('id').executeTakeFirst();
+    if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The task acquired another request owner');
+    if (draft.lifecycleAlbum) await attachAlbum(trx, tenantId, taskId, draft.lifecycleAlbum);
+    if (reviewed) await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
+      VALUES (${tenantId}::uuid,${taskId}::uuid,${reviewed.evidence.sourceSha256},'source_document') ON CONFLICT DO NOTHING`.execute(trx);
+    if (draft.lifecycleImage) {
+      await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
+        VALUES (${tenantId}::uuid, ${taskId}::uuid, ${draft.lifecycleImage.sha256}, 'reference_image')`.execute(trx);
+    }
+    const result: OpenLifecycleResult = {
+      requestId, rev: 1, taskId, stage, autoGenerate,
+      ...(persisted.autoGenerateDeclined ? { autoGenerateDeclined: persisted.autoGenerateDeclined } : {}),
+      ...(autoGenerate ? { design: {
+        clientId: String(persisted.task.client_id),
+        rawText: String(creation.payload.rawRequestText || ''),
+        sourcePlatform: String(creation.payload.sourcePlatform || 'telegram'),
+        ...(creation.payload.variant && typeof creation.payload.variant === 'object'
+          ? { variant: creation.payload.variant as { width: number; height: number } } : {}),
+        designStudio: creation.payload.designStudio === true,
+        ...(creation.payload.studioOptions && typeof creation.payload.studioOptions === 'object'
+          ? { studioOptions: creation.payload.studioOptions as ChatIntake['studioOptions'] } : {}),
+      } } : {}),
     };
+    await trx.insertInto('lifecycle_projections').values({
+      tenant_id: tenantId, request_id: requestId, rev: 1, idempotency_key: key,
+      payload_sha256: hash, result: result as unknown as Record<string, unknown>,
+    }).execute();
+    return result;
+  });
+}
+
+export interface DesignOutcomeProjection {
+  requestId: string; tenantId: string; taskId: string; runId: string;
+  /** expectedRev ≥ 1: first run is 1→2; revision runs are (1+2k)→(2+2k). */
+  expectedRev: number; rev: number; key: string;
+  report: { status: string; designId?: string; code?: string; detail?: string; runId?: string; notifyRequester?: boolean };
+}
+
+export interface DesignOutcomeResult {
+  requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer';
+  status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
+  question?: { id: string; text: string; options: string[] };
+  officeAlert?: { chatId: string; text: string };
+}
+
+/**
+ * A terminal design outcome and its Desk revision share the request's revision transaction.
+ * Works across all rounds: first design is at expectedRev=1→rev=2; revision rounds are at
+ * (1+2k)→(2+2k). The route validates the rev pair before calling here.
+ */
+export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input: DesignOutcomeProjection): Promise<DesignOutcomeResult> {
+  const { requestId, tenantId, taskId, key, report } = input;
+  const { expectedRev, rev } = input;
+  if (!Number.isInteger(expectedRev) || expectedRev < 1 || !Number.isInteger(rev) || rev !== expectedRev + 1) {
+    throw new LifecycleProjectionConflict('STALE_REVISION', 'The design outcome has an invalid revision pair');
+  }
+  const hash = createHash('sha256').update(canonical(input)).digest('hex');
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
+    const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', rev).executeTakeFirst();
+    if (receipt) {
+      if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The design projection has different content or key');
+      }
+      return receipt.result as unknown as DesignOutcomeResult;
+    }
+    const request = await trx.selectFrom('requests').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+    if (!request || Number(request.rev) !== expectedRev) {
+      throw new LifecycleProjectionConflict('STALE_REVISION', `Request is not at expected revision ${expectedRev}`);
+    }
+    if (request.owner !== 'restate' || request.stage !== 'designing' || request.current_task_id !== taskId) {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'This request is not designing the named task');
+    }
+    const task = await trx.selectFrom('tasks').select(['id', 'request_id', 'client_id', 'title', 'current_design_revision_id'])
+      .where('tenant_id', '=', tenantId).where('id', '=', taskId).executeTakeFirst();
+    if (!task || task.request_id !== requestId) {
+      throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The task is not owned by this request');
+    }
+    const status = report.status;
+    const hasDraft = outcomeHasDraft(status, report.designId);
+    let question: DesignOutcomeResult['question'];
+    if (!hasDraft && status === 'DESIGN_FAILED' && report.code === 'NEEDS_CLARIFICATION' &&
+        report.runId && /^[0-9a-f-]{36}$/i.test(report.runId)) {
+      const row = (await sql<{ question: string | null; options: unknown }>`SELECT
+          r.stages->'directed'->'clarify'->>'question' AS question,
+          r.stages->'directed'->'clarify'->'options' AS options
+        FROM hawa.design_studio_runs r
+        WHERE r.tenant_id = ${tenantId}::uuid AND r.task_id = ${taskId}::uuid
+          AND r.id = ${report.runId}::uuid AND r.status = 'failed'
+          AND r.stages->'directed'->>'refused' = 'NEEDS_CLARIFICATION'
+        LIMIT 1`.execute(trx)).rows[0];
+      const options = Array.isArray(row?.options) ? row.options.filter((value): value is string =>
+        typeof value === 'string' && value.trim().length > 0 && value.length <= 100) : [];
+      if (row?.question?.trim() && row.question.length <= 500 && options.length >= 2 && options.length <= 3) {
+        question = { id: report.runId, text: row.question.trim(), options };
+      }
+    }
+    if (hasDraft) {
+      if (!report.designId) throw new LifecycleProjectionConflict('WRONG_STAGE', 'A draft outcome needs its verified Canva design ID');
+      const binding = await trx.selectFrom('canva_bindings').select(['client_id', 'status'])
+        .where('tenant_id', '=', tenantId).where('task_id', '=', taskId)
+        .where('canva_design_id', '=', report.designId).executeTakeFirst();
+      if (!binding || binding.status !== 'bound' || binding.client_id !== task.client_id) {
+        throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The reported Canva design is not bound to this task and client');
+      }
+    }
+    const reason = hasDraft
+      ? `Canva draft ${report.designId || ''} awaits visual review.`
+      : question ? 'The design is waiting for the requester to answer a clarification question.'
+      : `Automatic design ended ${status}${report.code ? ` (${report.code})` : ''}; an operator must follow up.`;
+    let revisionId: string | undefined;
+    if (hasDraft) {
+      const creation = await trx.selectFrom('outbox_commands').select('payload')
+        .where('tenant_id', '=', tenantId).where('aggregate_id', '=', taskId)
+        .where('command_type', '=', 'task.created').executeTakeFirst();
+      const bridged = await bridgeCanvaDraftRevision(trx, {
+        revisionRepo: new RevisionRepository(trx), evaluateQc: evaluateCanvaExportQc,
+      }, {
+        tenantId, taskId, actorId: CHANNEL_INGRESS_USER_ID, status, designId: report.designId,
+        canvaUrl: report.designId ? `https://www.canva.com/design/${report.designId}/edit` : undefined,
+        fallbackCopy: Array.isArray(creation?.payload.exactCopy) ? creation.payload.exactCopy : undefined,
+        reason,
+      });
+      revisionId = bridged.created ? bridged.revisionId : task.current_design_revision_id || undefined;
+    } else {
+      await transitionTaskForOutcome(trx, { tenantId, taskId, toState: question ? 'paused' : 'failed_operator',
+        actorId: CHANNEL_INGRESS_USER_ID, reason,
+        data: { outcome: status, ...(report.code ? { code: report.code } : {}) },
+      });
+    }
+    const stage = hasDraft ? 'in_review' : question ? 'awaiting_answer' : 'manual';
+    const changed = await trx.updateTable('requests').set({ stage, rev,
+      ...(question ? { question_asked_at: null } : {}), updated_at: new Date() })
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
+      .returning('request_id').executeTakeFirst();
+    if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during outcome projection');
+    const reviewUrl = officeReviewUrl({ taskId, ...(revisionId ? { revisionId } : {}) });
+    const composed = question || report.notifyRequester === false ? undefined : composeCanvaStatusMessage({
+      taskId, title: task.title, status, code: report.code,
+      reviewUrl,
+      canvaUrl: report.designId ? `https://www.canva.com/design/${report.designId}/edit` : undefined,
+    });
+    const officeChat = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
+    const officeAlert = officeChat && officeChat !== request.chat_id
+      ? { chatId: officeChat, text: (hasDraft
+          ? `A design is ready for office review in Hawa Desk. Task ${taskId}.`
+          : `Automatic design needs an operator in Hawa Desk. Task ${taskId}: ${status}${report.code ? ` (${report.code})` : ''}.`) +
+          (reviewUrl ? `\nOpen review (office sign-in required): ${reviewUrl}` : '') }
+      : undefined;
+    const questionText = question
+      ? `I need one detail before I can finish your requested change.\n\n<b>${escapeTelegramHtml(question.text)}</b>\n\n${question.options.map((option, index) => `${index + 1}. ${escapeTelegramHtml(option)}`).join('\n')}\n\nReply to this message with your answer. No new design has started yet.`
+      : undefined;
+    const messageText = questionText || (composed?.text && !officeChat
+      ? composed.text.replace('The office has been alerted and will follow up with you here.',
+          'A person needs to review it in Hawa Desk and follow up with you here.')
+      : composed?.text);
+    const result: DesignOutcomeResult = { requestId, taskId, rev, stage, status,
+      ...(revisionId ? { revisionId } : {}),
+      ...(question ? { question } : {}),
+      ...(messageText ? { message: { text: messageText, parseMode: 'HTML' as const } } : {}),
+      ...(officeAlert ? { officeAlert } : {}),
+    };
+    await trx.insertInto('lifecycle_projections').values({
+      tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,
+      payload_sha256: hash, result: result as unknown as Record<string, unknown>,
+    }).execute();
+    return result;
+  });
+}
+
+export interface LifecycleQuestionSentInput {
+  requestId: string; tenantId: string; expectedRev: number; taskId: string;
+  questionId: string; messageKey: string; messageId: string;
+}
+
+/** Confirm a question from the sender's committed Telegram mark, without advancing request rev. */
+export async function confirmLifecycleQuestionSent(db: Kysely<Database>, input: LifecycleQuestionSentInput): Promise<
+  { skipped: true } | { requestId: string; rev: number; taskId: string; questionId: string;
+    messageId: string; sentAtMs: number }
+> {
+  const { requestId, tenantId, expectedRev, taskId, questionId, messageKey, messageId } = input;
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
+    const request = await trx.selectFrom('requests').select(['owner', 'stage', 'rev',
+      'current_task_id', 'question_asked_at'])
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+    if (!request) throw new LifecycleProjectionConflict('WRONG_STAGE', 'Question request does not exist');
+    if (request.owner !== 'restate' || request.stage !== 'awaiting_answer' ||
+        Number(request.rev) !== expectedRev || request.current_task_id !== taskId) return { skipped: true };
+    const receipt = await trx.selectFrom('lifecycle_projections').select('result')
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
+      .where('rev', '=', expectedRev).executeTakeFirst();
+    const result = receipt?.result as Partial<DesignOutcomeResult> | undefined;
+    if (result?.stage !== 'awaiting_answer' || result.taskId !== taskId ||
+        result.question?.id !== questionId) {
+      throw new LifecycleProjectionConflict('EVIDENCE_MISMATCH', 'The current projection does not contain this question');
+    }
+    const mark = (await sql<{ received_at: Date; message_id: string | null }>`SELECT received_at,
+        payload->>'messageId' AS message_id FROM hawa.inbox_events
+      WHERE tenant_id = ${tenantId}::uuid AND source_account_id = ${OUTBOX_SEND_MARK_SOURCE}
+        AND source_event_id = ${`lc:${messageKey}:send`}
+        AND event_kind = 'telegram_message_sent'
+      ORDER BY received_at ASC, id ASC LIMIT 1`.execute(trx)).rows[0];
+    if (!mark) throw new Error('The question notice has no confirmed Telegram send mark yet');
+    if (mark.message_id !== messageId) {
+      throw new LifecycleProjectionConflict('EVIDENCE_MISMATCH', 'The question message ID differs from its confirmed send mark');
+    }
+    const sentAtMs = new Date(mark.received_at).getTime();
+    if (!Number.isFinite(sentAtMs) || sentAtMs <= 0) throw new Error('The confirmed send mark has an invalid timestamp');
+    if (!request.question_asked_at) {
+      await trx.updateTable('requests').set({ question_asked_at: new Date(sentAtMs), updated_at: new Date() })
+        .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
+        .where('rev', '=', expectedRev).where('question_asked_at', 'is', null).execute();
+    }
+    return { requestId, rev: expectedRev, taskId, questionId, messageId,
+      sentAtMs: request.question_asked_at ? new Date(request.question_asked_at).getTime() : sentAtMs };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Revision-round projection: requester submits their directive; manual → designing
+// ---------------------------------------------------------------------------
+
+export interface RequesterRevisionProjection {
+  requestId: string; tenantId: string;
+  /** The task whose revision the office requested: validated as current_task_id. */
+  priorTaskId: string;
+  /**
+   * New design-round task that was intake-persisted with sourceEventId `lc-<requestId>-r<round>` and
+   * lifecycleOwner 'restate'. Sent by the worker after it calls Core /internal/telegram/intake.
+   */
+  newTaskId: string;
+  /** Round index ≥ 1 (first revision = 1). */
+  round: number;
+  directive: string;
+  /** expectedRev is the request's current rev (manual stage, post-office-revise). rev = expectedRev + 1. */
+  expectedRev: number; rev: number; key: string;
+}
+
+export interface RequesterRevisionResult {
+  requestId: string; priorTaskId: string; newTaskId: string; round: number;
+  rev: number; stage: 'designing'; runId: string;
+}
+
+/**
+ * Moves a manual-stage request back to `designing` when the requester sends their revision
+ * directive. Creates the new round's task ownership, then advances the request row.
+ * expectedRev ≥ 3 (always after at least one office revise); rev = expectedRev + 1.
+ */
+export async function projectLifecycleRequesterRevision(
+  db: Kysely<Database>,
+  input: RequesterRevisionProjection,
+): Promise<RequesterRevisionResult> {
+  const { requestId, tenantId, priorTaskId, newTaskId, round, directive, key } = input;
+  const { expectedRev, rev } = input;
+  if (!Number.isInteger(expectedRev) || expectedRev < 3 || !Number.isInteger(rev) || rev !== expectedRev + 1 ||
+      !Number.isInteger(round) || round < 1 || typeof directive !== 'string' || !directive.trim()) {
+    throw new LifecycleProjectionConflict('STALE_REVISION', 'The requester revision has an invalid revision pair or round');
+  }
+  const hash = createHash('sha256').update(canonical(input)).digest('hex');
+  const runId = `dr-${newTaskId}`;
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
+    const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', rev).executeTakeFirst();
+    if (receipt) {
+      if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'This requester revision has different content or key');
+      }
+      return receipt.result as unknown as RequesterRevisionResult;
+    }
+    const request = await trx.selectFrom('requests').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+    if (!request || Number(request.rev) !== expectedRev) {
+      throw new LifecycleProjectionConflict('STALE_REVISION', `Request is not at expected revision ${expectedRev}`);
+    }
+    if (request.owner !== 'restate' || request.stage !== 'manual') {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'Only a manual-stage request may accept a requester revision directive');
+    }
+    if (request.current_task_id !== priorTaskId) {
+      throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The directive names an older request task');
+    }
+    // The new task must have been created by intake with the lifecycle source key and restate owner.
+    const newTask = await trx.selectFrom('tasks').select(['id', 'request_id'])
+      .where('tenant_id', '=', tenantId).where('id', '=', newTaskId).executeTakeFirst();
+    if (!newTask) throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The new round task does not exist');
+    const creation = await trx.selectFrom('outbox_commands').select(['state', 'payload'])
+      .where('tenant_id', '=', tenantId).where('aggregate_id', '=', newTaskId)
+      .where('command_type', '=', 'task.created').executeTakeFirst();
+    if (creation?.state !== 'delivered' || creation.payload.lifecycleOwner !== 'restate' || newTask.request_id !== null) {
+      throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The new round task is not exclusively available for this lifecycle');
+    }
+    // Claim the new task and advance the request to designing.
+    const claimed = await trx.updateTable('tasks').set({ request_id: requestId })
+      .where('tenant_id', '=', tenantId).where('id', '=', newTaskId).where('request_id', 'is', null)
+      .returning('id').executeTakeFirst();
+    if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The new round task acquired another request owner');
+    const changed = await trx.updateTable('requests')
+      .set({ stage: 'designing', rev, current_task_id: newTaskId, updated_at: new Date() })
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
+      .returning('request_id').executeTakeFirst();
+    if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during requester revision');
+    const result: RequesterRevisionResult = { requestId, priorTaskId, newTaskId, round, rev, stage: 'designing', runId };
+    await trx.insertInto('lifecycle_projections').values({
+      tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,
+      payload_sha256: hash, result: result as unknown as Record<string, unknown>,
+    }).execute();
+    return result;
+  });
+}
+
+/** Input for the combined lifecycle intake + requester-revision projection (Q/A loop). */
+export interface RequesterRevisionWithIntakeProjection {
+  requestId: string;
+  tenantId: string;
+  /** The task the request is currently on (must match request.current_task_id). */
+  priorTaskId: string;
+  /** Revision round ≥ 1 (same increment the Restate worker uses). */
+  round: number;
+  /** Source event key from the Telegram update that carried the directive. */
+  directive: string;
+  /** Source event id for the new task (must be unique, e.g. "lc-<requestId>-r<round>-u<updateId>"). */
+  sourceEventId: string;
+  /** The Telegram chat the update came from; must match request.chat_id. */
+  sourceChannelId: string;
+  /** Raw text of the directive (the requester's message). */
+  rawText: string;
+  /** Present only for an answer to the current clarification question. */
+  questionId?: string;
+  /** Hash of the complete source update, including its Telegram reply target. */
+  sourceUpdateHash: string;
+  /** The verified ingress update saved with the child task for source audit and replay. */
+  sourceUpdate: unknown;
+  /** Core-stored image for this exact update and selected request, if present. */
+  lifecycleImage?: BlobRef;
+  lifecycleAlbum?: LifecycleAlbumRef;
+  lifecycleSource?: LifecycleSourceRef;
+  /** The client the prior task belongs to (carried forward to the new task). */
+  clientId: string | null;
+  /** Current request revision (manual stage). rev = expectedRev + 1. */
+  expectedRev: number;
+  rev: number;
+  key: string;
+}
+
+export interface RequesterRevisionWithIntakeResult extends RequesterRevisionResult {
+  /** The directive text as trimmed. */
+  directive: string;
+  sourceUpdateHash: string;
+  questionId?: string;
+}
+
+/**
+ * Lifecycle Q/A loop: persists the requester's revision task from an incoming Telegram update,
+ * then advances the request from manual → designing in one transaction. Used by the lifecycle
+ * intake mode so Core can fully handle the update without a separate Restate VO round-trip.
+ */
+export async function projectLifecycleRequesterRevisionWithIntake(
+  db: Kysely<Database>,
+  input: RequesterRevisionWithIntakeProjection,
+  sourceStore: BlobStore | null = blobStoreFor(db),
+): Promise<RequesterRevisionWithIntakeResult> {
+  const { requestId, tenantId, priorTaskId, round, directive, sourceEventId, sourceChannelId, rawText, clientId, key } = input;
+  const { expectedRev, rev } = input;
+  if (!Number.isInteger(expectedRev) || expectedRev < (input.questionId ? 2 : 3) ||
+      !Number.isInteger(rev) || rev !== expectedRev + 1 ||
+      !Number.isInteger(round) || round < 1 || typeof directive !== 'string' || !directive.trim()) {
+    throw new LifecycleProjectionConflict('STALE_REVISION', 'Invalid revision pair or round for lifecycle requester revision with intake');
+  }
+  if (!/^[a-f0-9]{64}$/.test(input.sourceUpdateHash)) {
+    throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The Telegram source update hash is invalid');
+  }
+  if (createHash('sha256').update(JSON.stringify(input.sourceUpdate)).digest('hex') !== input.sourceUpdateHash) {
+    throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The Telegram update differs from its source hash');
+  }
+  const source = input.sourceUpdate && typeof input.sourceUpdate === 'object'
+    ? input.sourceUpdate as Record<string, unknown> : null;
+  const sourceMessage = source?.message && typeof source.message === 'object'
+    ? source.message as Record<string, unknown> : null;
+  const sourceImage = sourceMessage?.photo ?? sourceMessage?.document;
+  const photoInput = lifecyclePhotoInput(input.sourceUpdate);
+  const sourceConfirmation = sourceCopyConfirmation(input.sourceUpdate);
+  if (Boolean(sourceConfirmation) !== Boolean(input.lifecycleSource) ||
+      (input.lifecycleSource && (input.lifecycleImage || input.lifecycleAlbum || !sourceConfirmation ||
+        sourceConfirmation.copy !== rawText || sourceConfirmation.copy.trim() !== directive)))
+    throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The source confirmation does not match this exact copy');
+  if (input.lifecycleAlbum && (input.lifecycleImage || sourceImage ||
+      sourceMessage?.text !== directive || input.lifecycleAlbum.updateId !== source?.update_id)) {
+    throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The album source does not match this directive');
+  }
+  if (Boolean(sourceImage) !== Boolean(input.lifecycleImage)) {
+    throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'A requester photo requires its stored image decision');
+  }
+  if (input.lifecycleImage && (!parseBlobRef(input.lifecycleImage) ||
+      !photoInput || photoInput.directive !== directive.trim() ||
+      !Number.isSafeInteger(source?.update_id) || Number(source?.update_id) <= 0)) {
+    throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The requester image does not match an admitted Telegram photo');
+  }
+  if (input.questionId !== undefined && !/^[0-9a-f-]{36}$/i.test(input.questionId)) {
+    throw new LifecycleProjectionConflict('WRONG_STAGE', 'The answer has no valid question identity');
+  }
+  const hash = createHash('sha256').update(canonical(input)).digest('hex');
+  return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`lifecycle:${requestId}`}, 0))`.execute(trx);
+    // Idempotent receipt: if Core already ran this projection, return the cached result.
+    const receipt = await trx.selectFrom('lifecycle_projections').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', rev).executeTakeFirst();
+    if (receipt) {
+      if (receipt.idempotency_key !== key || receipt.payload_sha256 !== hash) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'This requester revision has different content or key');
+      }
+      return receipt.result as unknown as RequesterRevisionWithIntakeResult;
+    }
+    // Validate the request is in the expected state.
+    const request = await trx.selectFrom('requests').selectAll()
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+    if (!request || Number(request.rev) !== expectedRev) {
+      throw new LifecycleProjectionConflict('STALE_REVISION', `Request is not at expected revision ${expectedRev}`);
+    }
+    const answering = input.questionId !== undefined;
+    if (request.owner !== 'restate' || request.stage !== (answering ? 'awaiting_answer' : 'manual')) {
+      throw new LifecycleProjectionConflict('WRONG_STAGE', 'The request is not waiting for this kind of requester reply');
+    }
+    if (request.current_task_id !== priorTaskId) {
+      throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The directive names an older request task');
+    }
+    if (request.chat_id !== sourceChannelId) {
+      throw new LifecycleProjectionConflict('WRONG_CHAT', 'The update chat does not match the request');
+    }
+    let reviewed: Awaited<ReturnType<typeof verifyReviewedSource>> | undefined;
+    if (input.lifecycleSource) {
+      if (!clientId) throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'Source client is missing');
+      try { reviewed = await verifyReviewedSource(trx, sourceStore, { tenantId, requestId, clientId,
+        chatId: sourceChannelId, ref: input.lifecycleSource, copy: rawText }); }
+      catch (error) {
+        if (error instanceof SourceConflict) throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', error.message);
+        throw error;
+      }
+      if (reviewed.upload.target?.requestId !== requestId || reviewed.upload.target.taskId !== priorTaskId ||
+          reviewed.upload.target.rev !== expectedRev || reviewed.confirmation.payloadHash !== input.sourceUpdateHash)
+        throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'Source review is bound to a different request revision');
+    }
+    if (input.lifecycleAlbum) {
+      await checkAlbum(trx, tenantId, sourceChannelId, input.lifecycleAlbum, input.sourceUpdate);
+      const reply = sourceMessage?.reply_to_message as { message_id?: unknown } | undefined;
+      if (reply) {
+        const links = await linkedLifecycleReplies(trx, tenantId, sourceChannelId, String(reply.message_id));
+        if (links.length !== 1 || links[0].requestId !== requestId || links[0].rev !== expectedRev)
+          throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT', 'The album reply no longer names the current request');
+      }
+    }
+    if (input.lifecycleImage) {
+      if (photoInput?.captionless) {
+        const replies = await linkedLifecycleReplies(trx, tenantId, sourceChannelId, photoInput.replyMessageId!);
+        if (replies.length !== 1 || replies[0].requestId !== requestId || replies[0].rev !== expectedRev) {
+          throw new LifecycleProjectionConflict('NOT_CURRENT_DRAFT',
+            'A captionless image must reply to the current request notice');
+        }
+      }
+      const decision = await readRevisionPhotoDecision(trx, tenantId, Number(source!.update_id));
+      if (!decision || decision.requestId !== requestId || decision.chatId !== sourceChannelId ||
+          decision.payloadHash !== input.sourceUpdateHash ||
+          canonical(decision.image) !== canonical(input.lifecycleImage)) {
+        throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The image is not bound to this requester revision');
+      }
+      const blob = (await sql<{ size: string; media_type: string }>`SELECT size, media_type
+        FROM hawa.blobs WHERE sha256 = ${input.lifecycleImage.sha256}`.execute(trx)).rows[0];
+      if (!blob || Number(blob.size) !== input.lifecycleImage.size ||
+          blob.media_type !== input.lifecycleImage.mediaType) {
+        throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The requester image is not stored');
+      }
+    }
+    // A revision edits the prior design. Keep its factual copy, format and studio policy;
+    // the new Telegram text supplies only the change directive.
+    const parent = await trx.selectFrom('outbox_commands').select('payload')
+      .where('tenant_id', '=', tenantId).where('aggregate_id', '=', priorTaskId)
+      .where('command_type', '=', 'task.created').executeTakeFirst();
+    const parentPayload = parent?.payload as Record<string, unknown> | undefined;
+    if (!parentPayload || !Array.isArray(parentPayload.exactCopy) ||
+        typeof parentPayload.designInstructions !== 'string') {
+      throw new LifecycleProjectionConflict('PARENT_BRIEF_MISSING',
+        'The current task has no complete source brief to revise');
+    }
+    const parentOptions = parentPayload.studioOptions && typeof parentPayload.studioOptions === 'object'
+      ? parentPayload.studioOptions as Record<string, unknown> : {};
+    let question: DesignOutcomeResult['question'];
+    if (answering) {
+      const last = await trx.selectFrom('lifecycle_projections').select('result')
+        .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
+        .where('rev', '=', expectedRev).executeTakeFirst();
+      question = (last?.result as unknown as DesignOutcomeResult | undefined)?.question;
+      if (!question || question.id !== input.questionId ||
+          typeof parentOptions.parentTaskId !== 'string' ||
+          typeof parentOptions.revisionDirective !== 'string' || !parentOptions.revisionDirective.trim()) {
+        throw new LifecycleProjectionConflict('WRONG_STAGE', 'The current question or its parent design is missing');
+      }
+    }
+    const inheritedOptions = Object.fromEntries(['tier', 'imagery', 'previews', 'holdForSelection']
+      .filter((name) => parentOptions[name] !== undefined).map((name) => [name, parentOptions[name]]));
+    const answerText = answering ? directive.trim().replace(/\s+/g, ' ').slice(0, 500) : '';
+    const revisionDirective = question
+      ? `${parentOptions.revisionDirective}\nAsked "${question.text}", the requester answered: ${answerText}`
+      : directive.trim();
+    // Persist the new task via chat-intake with lifecycleOwner: 'restate'.
+    const draft: ChatIntake = {
+      platform: 'telegram', sourceEventId, sourceChannelId,
+      rawText, rawJson: input.sourceUpdate, title: directive.trim().slice(0, 200),
+      ...(input.lifecycleAlbum ? { lifecycleAlbum: input.lifecycleAlbum } : {}),
+      designInstructions: `${parentPayload.designInstructions}\n${question
+        ? `Answer to "${question.text}": ${answerText}` : `Revision: ${directive.trim()}`}`,
+      exactCopy: parentPayload.exactCopy,
+      clientId, autoGenerate: true,
+      ...(typeof parentPayload.headlineEn === 'string' ? { headlineEn: parentPayload.headlineEn } : {}),
+      ...(typeof parentPayload.headlineCkb === 'string' ? { headlineCkb: parentPayload.headlineCkb } : {}),
+      ...(typeof parentPayload.copyEn === 'string' ? { copyEn: parentPayload.copyEn } : {}),
+      ...(typeof parentPayload.copyCkb === 'string' ? { copyCkb: parentPayload.copyCkb } : {}),
+      ...(parentPayload.variant && typeof parentPayload.variant === 'object'
+        ? { variant: parentPayload.variant as { width: number; height: number } } : {}),
+      ...(typeof parentPayload.designStudio === 'boolean' ? { designStudio: parentPayload.designStudio } : {}),
+      studioOptions: { ...inheritedOptions,
+        parentTaskId: question ? parentOptions.parentTaskId as string : priorTaskId,
+        revisionRound: round, revisionDirective,
+        ...(question ? { clarified: true, answers: priorTaskId } : {}) } as ChatIntake['studioOptions'],
+    };
+    let persisted: Awaited<ReturnType<typeof persistChatIntake>>;
+    try {
+      persisted = await persistChatIntake(trx, { ...draft, tenantId,
+        ...(reviewed ? { reviewedSource: reviewed.evidence,
+          rawJson: { original: reviewed.upload.sourceUpdate, confirmation: reviewed.confirmation.sourceUpdate },
+          ...(reviewed.upload.variant ? { variant: reviewed.upload.variant } : {}),
+          exactCopy: [{ id: 'reviewed_source_copy', text: rawText, role: 'body', approved: true,
+            language: /[\u0600-\u06ff]/.test(rawText) ? 'ckb' : 'en', direction: /[\u0600-\u06ff]/.test(rawText) ? 'rtl' : 'ltr' }],
+          headlineEn: '', headlineCkb: '',
+          copyEn: /[\u0600-\u06ff]/.test(rawText) ? '' : rawText, copyCkb: /[\u0600-\u06ff]/.test(rawText) ? rawText : '',
+          designInstructions: `${String(parentPayload.designInstructions)}\n${reviewed.upload.instructions}`,
+          studioOptions: { ...draft.studioOptions,
+            revisionDirective: 'Replace the design copy with exactly the confirmed source copy. Preserve the other design requirements.' } } : {}),
+      }, { outboxState: 'recorded' });
+    } catch (error) {
+      if (error instanceof IdempotencyConflictError) {
+        throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The source event already belongs to a different executor');
+      }
+      throw error;
+    }
+    if (persisted.autoGenerateDeclined) {
+      throw new LifecycleProjectionConflict('DAILY_CAP_REACHED',
+        'This revision would exceed the automatic design limit');
+    }
+    const newTaskId = String(persisted.task.id);
+    const runId = `dr-${newTaskId}`;
+    // Claim the new task and advance the request.
+    const claimed = await trx.updateTable('tasks').set({ request_id: requestId })
+      .where('tenant_id', '=', tenantId).where('id', '=', newTaskId).where('request_id', 'is', null)
+      .returning('id').executeTakeFirst();
+    if (!claimed) throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The new task acquired another request owner');
+    if (input.lifecycleAlbum) await attachAlbum(trx, tenantId, newTaskId, input.lifecycleAlbum);
+    if (reviewed) await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
+      VALUES (${tenantId}::uuid,${newTaskId}::uuid,${reviewed.evidence.sourceSha256},'source_document') ON CONFLICT DO NOTHING`.execute(trx);
+    if (input.lifecycleImage) {
+      await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
+        VALUES (${tenantId}::uuid, ${newTaskId}::uuid, ${input.lifecycleImage.sha256}, 'reference_image')`.execute(trx);
+    }
+    if (question) {
+      const closed = await closeAnsweredQuestion(trx, { tenantId, taskId: priorTaskId,
+        revisionTaskId: newTaskId, actorId: CHANNEL_INGRESS_USER_ID });
+      if (!closed.changed) throw new LifecycleProjectionConflict('WRONG_STAGE', 'The question task is no longer paused');
+    }
+    const changed = await trx.updateTable('requests')
+      .set({ stage: 'designing', rev, current_task_id: newTaskId,
+        ...(question ? { question_asked_at: null } : {}), updated_at: new Date() })
+      .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).where('rev', '=', expectedRev)
+      .returning('request_id').executeTakeFirst();
+    if (!changed) throw new LifecycleProjectionConflict('STALE_REVISION', 'Request changed during requester revision with intake');
+    const result: RequesterRevisionWithIntakeResult = {
+      requestId, priorTaskId, newTaskId, round, rev, stage: 'designing', runId,
+      directive: directive.trim(), sourceUpdateHash: input.sourceUpdateHash,
+      ...(question ? { questionId: question.id } : {}),
+    };
+    await trx.insertInto('lifecycle_projections').values({
+      tenant_id: tenantId, request_id: requestId, rev, idempotency_key: key,
+      payload_sha256: hash, result: result as unknown as Record<string, unknown>,
+    }).execute();
+    return result;
   });
 }

@@ -1,0 +1,13 @@
+PASS=1011 WARN=0 FAIL=12
+FAIL: manifest hash matches api/openapi.yaml
+FAIL: manifest size matches api/openapi.yaml
+FAIL: manifest hash matches docs/10_WORKFLOW_RELIABILITY.md
+FAIL: manifest size matches docs/10_WORKFLOW_RELIABILITY.md
+FAIL: manifest hash matches docs/17_UI_UX.md
+FAIL: manifest size matches docs/17_UI_UX.md
+FAIL: SHA256SUMS covers every package file except itself
+FAIL: SHA256SUMS hash matches runbooks/AVAILABILITY_MONITORING.md
+FAIL: SHA256SUMS hash matches docs/17_UI_UX.md
+FAIL: SHA256SUMS hash matches docs/10_WORKFLOW_RELIABILITY.md
+FAIL: SHA256SUMS hash matches api/openapi.yaml
+FAIL: SHA256SUMS hash matches adrs/104_independent_availability_observations.md

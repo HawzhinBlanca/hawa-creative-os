@@ -12,9 +12,33 @@ import { log } from '../../logging.js';
  * checks is kept too, with why, so it is not retried on every stage and the requester can be told.
  */
 
+const reportDigest = (report: unknown): string => createHash('sha256').update(JSON.stringify(report ?? {}, (_key, value) =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value)).digest('hex');
+
+/**
+ * The service runtime that made a cut-out or a focus point (ADR-123): its code, Python and package
+ * versions and face detector, as the service reports it. Absent for answers from a service that did
+ * not report one (hawa-cutout/1) and for rows made by it: unknown facts are not invented.
+ */
+function runtimeFacts(runtime: unknown): { runtimeSha256?: string; faceModelSha256?: string } {
+  if (!runtime || typeof runtime !== 'object' || Array.isArray(runtime)) return {};
+  const face = (runtime as { faceModelSha256?: unknown }).faceModelSha256;
+  return { runtimeSha256: reportDigest(runtime), ...(typeof face === 'string' && /^[a-f0-9]{64}$/.test(face) ? { faceModelSha256: face } : {}) };
+}
+
+/** Which service run made a cut-out, and which bytes it made. Pixels are pinned separately (ADR-112). */
+export interface CutoutDerivation {
+  sourceSha256: string; model?: string; modelSha256?: string; reportSha256: string;
+  /** The cut-out bytes this derivation produced; recovery checks the pinned pixels against it. */
+  pngSha256?: string; runtimeSha256?: string; faceModelSha256?: string;
+}
+
 /** What became of one photo's cut-out. */
 export interface CutoutOutcome {
   photoIndex: number;
+  /** Selected derivation identity; unknown legacy facts remain absent. Pixels are pinned separately. */
+  derivation?: CutoutDerivation;
   passed: boolean;
   /** Plain words for the requester when it did not pass. */
   reason?: string;
@@ -48,10 +72,14 @@ interface ServiceReply {
   timings?: Record<string, number>;
   model: string;
   modelSha256: string;
+  /** hawa-cutout/2 and later (ADR-123). */
+  runtime?: Record<string, unknown>;
   error?: string;
 }
 
 interface StoredRow {
+  model?: string;
+  model_sha256?: string;
   passed: boolean;
   /** Null once the strip has moved it to the file store (png_sha256 names it then). */
   png: Buffer | null;
@@ -61,7 +89,7 @@ interface StoredRow {
   height: number;
   shadow_png: Buffer | null;
   shadow: { width: number; height: number; x: number; y: number } | null;
-  report: { failed?: string[]; people?: number; faceHeight?: number } | null;
+  report: { failed?: string[]; people?: number; faceHeight?: number; runtime?: unknown } | null;
 }
 
 /** The requester's words for each check a cut-out can fail. */
@@ -137,7 +165,7 @@ export class PhotoCutouts {
     for (let photoIndex = 0; photoIndex < photos.length; photoIndex++) {
       const photo = photos[photoIndex];
       const sourceSha256 = createHash('sha256').update(photo.bytes).digest('hex');
-      let row = await this.withStoredPngs(await this.stored(tx, sourceSha256));
+      let row = await this.withStoredPngs(await this.stored(tx, sourceSha256, tenantId));
       // Why the service would not cut this one photo (it could not read it, or failed on it).
       let refused: string | undefined;
       if (!row && options.compute && !unavailable) {
@@ -166,6 +194,9 @@ export class PhotoCutouts {
       outcomes.push({
         photoIndex,
         passed: row.passed,
+        derivation: { sourceSha256, ...(row.model ? { model: row.model } : {}), ...(row.model_sha256 ? { modelSha256: row.model_sha256 } : {}),
+          reportSha256: reportDigest(row.report), ...(row.png ? { pngSha256: createHash('sha256').update(row.png).digest('hex') } : {}),
+          ...runtimeFacts(row.report?.runtime) },
         ...(row.passed ? {} : { reason: reasonFor(failed), failed }),
         ...(typeof row.report?.people === 'number' ? { people: row.report.people } : {}),
         ...(typeof row.report?.faceHeight === 'number' ? { faceHeight: row.report.faceHeight } : {}),
@@ -209,6 +240,7 @@ export class PhotoCutouts {
           height?: unknown;
           faces?: Array<{ height?: unknown }>;
           focus?: { x?: unknown; y?: unknown };
+          runtime?: unknown;
         };
         const x = Number(body.focus?.x);
         const y = Number(body.focus?.y);
@@ -222,7 +254,8 @@ export class PhotoCutouts {
         // The tallest face as a share of the photo's height: what matching heads across photos needs.
         const tallest = Math.max(0, ...(Array.isArray(body.faces) ? body.faces : []).map((f) => Number(f?.height) || 0));
         const faceShare = Number(body.height) > 0 && tallest > 0 ? Math.min(1, tallest / Number(body.height)) : undefined;
-        out.push({ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)), ...(faceShare ? { faceShare: Math.round(faceShare * 10000) / 10000 } : {}) });
+        out.push({ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)), ...(faceShare ? { faceShare: Math.round(faceShare * 10000) / 10000 } : {}),
+          derivation: { sourceSha256: createHash('sha256').update(photo.bytes).digest('hex'), ...runtimeFacts(body.runtime) } });
       } catch {
         out.push(undefined);
       }
@@ -230,11 +263,11 @@ export class PhotoCutouts {
     return out;
   }
 
-  private async stored(tx: Tx, sourceSha256: string): Promise<StoredRow | undefined> {
+  private async stored(tx: Tx, sourceSha256: string, tenantId: string): Promise<StoredRow | undefined> {
     return tx(async (db) =>
       (
-        await sql<StoredRow>`SELECT passed, png, png_sha256, width, height, shadow_png, shadow_sha256, shadow, report FROM hawa.photo_cutouts
-          WHERE source_sha256 = ${sourceSha256} ORDER BY created_at DESC LIMIT 1`.execute(db)
+        await sql<StoredRow>`SELECT model, model_sha256, passed, png, png_sha256, width, height, shadow_png, shadow_sha256, shadow, report FROM hawa.photo_cutouts
+          WHERE tenant_id = ${tenantId}::uuid AND source_sha256 = ${sourceSha256} ORDER BY created_at DESC LIMIT 1`.execute(db)
       ).rows[0]
     );
   }
@@ -290,6 +323,7 @@ export class PhotoCutouts {
     const inside = (reply.faces || []).filter((f) => (f.alpha ?? 1) >= 0.5).map((f) => ({ ...f, x: f.x - x0, y: f.y - y0 }));
     const faceHeight = inside.length ? Math.max(...inside.map((f) => f.height)) : undefined;
     const report = {
+      ...(reply.runtime && typeof reply.runtime === 'object' && !Array.isArray(reply.runtime) ? { runtime: reply.runtime } : {}),
       failed,
       people: typeof reply.stats?.people === 'number' ? reply.stats.people : inside.length,
       ...(faceHeight ? { faceHeight } : {}),
@@ -300,6 +334,7 @@ export class PhotoCutouts {
       bbox: reply.bbox,
     };
     const row: StoredRow = {
+      model: reply.model, model_sha256: reply.modelSha256,
       passed: Boolean(reply.passed),
       png: Buffer.from(reply.png, 'base64'),
       width: reply.width,
@@ -420,6 +455,8 @@ export interface PhotoFaces {
   x: number;
   y: number;
   faceShare?: number;
+  /** The photo and the detector run that found this point (ADR-123); pinned with the visual inputs. */
+  derivation?: { sourceSha256: string; runtimeSha256?: string; faceModelSha256?: string };
 }
 
 /** Heads of photos set side by side match within this, as a designer would see it. */

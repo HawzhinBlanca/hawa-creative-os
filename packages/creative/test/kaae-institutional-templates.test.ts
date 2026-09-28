@@ -18,9 +18,7 @@ describe('KAAE institutional routing and graphics knowledge', () => {
       variants: [{ id: 'v1', name: 'feed', width: 1080, height: 1350, aspectRatio: '4:5', role: 'custom' }],
       exactCopy: [{ id: 'c1', role: 'headline', text: 'CUE Eligibility Status Granted', language: 'en', direction: 'ltr', approved: true, protectedTokens: [] }],
       missingFacts: [],
-      readyForFigma: true,
-      qualityScore: 1.0,
-      validationWarnings: [],
+      primaryLanguage: 'en', direction: 'ltr', requiredAssetRoles: ['logo_primary'], createdAt: '2026-09-27T00:00:00Z',
     };
 
     const resolution1 = router.resolveRoute(eligibilityBrief, []);

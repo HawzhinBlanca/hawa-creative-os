@@ -68,6 +68,8 @@ export type TaskState = TaskDbState;
 export interface TasksTable {
   id: Generated<string>;
   tenant_id: string;
+  request_id: Generated<string | null>;
+  delivery_executor_pin: Generated<'core' | 'restate'>;
   client_id: string | null;
   project_id: string | null;
   source_message_id: string | null;
@@ -91,8 +93,6 @@ export interface TasksTable {
   updated_at: Generated<Date>;
   completed_at: Date | null;
   deleted_at: Date | null;
-  /** The request this task is a round of (migration 023); NULL for a request Core owns. */
-  request_id: Generated<string | null>;
 }
 
 export interface TaskEventsTable {
@@ -234,7 +234,6 @@ export interface OutboxCommandsTable {
   delivered_at: Date | null;
 }
 
-/** A request the RequestLifecycle object owns (migration 023, ADR-034). */
 export interface RequestsTable {
   request_id: string;
   tenant_id: string;
@@ -242,9 +241,8 @@ export interface RequestsTable {
   current_task_id: string;
   parent_request_id: string | null;
   owner: 'core' | 'restate';
-  stage: string;
-  /** bigint: node-postgres returns it as a string. */
-  rev: Generated<string>;
+  stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'delivering' | 'delivered' | 'expired' | 'cancelled' | 'rejected';
+  rev: number;
   chat_id: string | null;
   draft_sent_at: Date | null;
   question_asked_at: Date | null;
@@ -252,14 +250,13 @@ export interface RequestsTable {
   updated_at: Generated<Date>;
 }
 
-/** One projection of a request, recorded under its idempotency key (migration 023). */
 export interface LifecycleProjectionsTable {
   tenant_id: string;
   request_id: string;
-  rev: string;
+  rev: number;
   idempotency_key: string;
-  request_hash: string;
-  result: unknown;
+  payload_sha256: string;
+  result: Record<string, unknown>;
   applied_at: Generated<Date>;
 }
 
@@ -270,6 +267,7 @@ export interface PublicationsTable {
   design_revision_id: string;
   approval_id: string;
   publication_key: string;
+  input_protocol: Generated<number>;
   state: 'pending' | 'staging' | 'drive_pending' | 'drive_complete' | 'sheet_pending' | 'complete' | 'failed' | 'cancelled';
   package_manifest: Record<string, unknown>;
   package_sha256: string;
@@ -291,6 +289,7 @@ export interface DriveRefsTable {
   tenant_id: string;
   publication_id: string;
   artifact_id: string | null;
+  publication_artifact_id: string | null;
   shared_drive_id: string;
   folder_id: string;
   file_id: string;
@@ -301,6 +300,21 @@ export interface DriveRefsTable {
   permission_digest: string | null;
   verified_at: Date | null;
   status: 'uploaded' | 'verified' | 'missing' | 'mismatch' | 'deleted';
+  created_at: Generated<Date>;
+}
+
+export interface DriveUploadReservationsTable {
+  id: Generated<string>;
+  tenant_id: string;
+  publication_id: string;
+  artifact_id: string;
+  task_id: string;
+  package_sha256: string;
+  folder_id: string;
+  file_name: string;
+  mime_type: string;
+  expected_sha256: string;
+  drive_file_id: string;
   created_at: Generated<Date>;
 }
 
@@ -315,6 +329,10 @@ export interface SheetSyncsTable {
   row_number: number | null;
   expected_hash: string;
   observed_hash: string | null;
+  metadata_id: number | null;
+  expected_values: string[] | null;
+  expected_row_hash: string | null;
+  observed_row_hash: string | null;
   status: 'pending' | 'synced' | 'stale' | 'missing' | 'failed';
   attempts: Generated<number>;
   last_error: string | null;
@@ -445,7 +463,7 @@ export interface ReviewRequestsTable {
   tenant_id: string;
   task_id: string;
   design_revision_id: string;
-  qc_run_id: string;
+  qc_run_id: string | null;
   stage: string;
   assigned_user_id: string | null;
   assigned_role: string | null;
@@ -460,7 +478,7 @@ export interface ApprovalsTable {
   task_id: string;
   review_request_id: string;
   design_revision_id: string;
-  qc_run_id: string;
+  qc_run_id: string | null;
   decision: 'approved' | 'revision_requested' | 'rejected' | 'escalated';
   decided_by: string;
   reason: string | null;
@@ -594,7 +612,28 @@ export interface DesignStudioCallsTable {
   provider: string;
   model: string;
   requested_model: string;
+  /** Null only for pre-ADR-049 calls and content-keyed parity calls. */
+  call_ordinal: number | null;
+  /** SHA-256 of the logical call identity; null only on historical rows. */
+  logical_call_sha256: string | null;
+  /** ADR-122 semantic substep and attempt; null on rows admitted before migration 065. */
+  substep_key: string | null;
+  substep_attempt: number | null;
+  /** Canonical binding text (input/identity/asset digests only) and its SHA-256. */
+  binding_text: string | null;
+  binding_sha256: string | null;
+  reservation: import('@hawa/domain').StudioCallReservation | null;
+  spending_policy_version: Generated<number | null>;
+  budget_role: Generated<'creative_director' | 'visual_judge' | 'asset_photoreal' | null>;
+  cost_basis: import('@hawa/domain').StudioCostBasis | null;
   response_id: string | null;
+  /** Provider-reported model and request metadata; historical rows remain null. */
+  served_model: string | null;
+  provider_request_id: string | null;
+  /** Digest only: no prompt, response text, or image bytes in the call ledger. */
+  response_sha256: string | null;
+  latency_ms: number | null;
+  attempts: number | null;
   input_tokens: Generated<number>;
   cached_input_tokens: Generated<number>;
   output_tokens: Generated<number>;
@@ -604,6 +643,18 @@ export interface DesignStudioCallsTable {
   error_code: string | null;
   started_at: Generated<Date>;
   finished_at: Date | null;
+}
+
+export interface DesignStudioCallResultsTable {
+  tenant_id: string;
+  call_id: string;
+  kind: 'structured' | 'image';
+  payload_text: string;
+  payload_sha256: string;
+  image_sha256: string | null;
+  image_blob_sha256: string | null;
+  image_bytes: Buffer | null;
+  created_at: Generated<Date>;
 }
 
 export type DesignFeedbackSource = 'desk' | 'telegram' | 'import';
@@ -692,6 +743,7 @@ export interface Database {
   outbox_commands: OutboxCommandsTable;
   outbox: OutboxCommandsTable;
   publications: PublicationsTable;
+  drive_upload_reservations: DriveUploadReservationsTable;
   drive_refs: DriveRefsTable;
   sheet_syncs: SheetSyncsTable;
   feedback_events: FeedbackEventsTable;
@@ -710,7 +762,6 @@ export interface Database {
   design_studio_candidates: DesignStudioCandidatesTable;
   design_studio_judgments: DesignStudioJudgmentsTable;
   design_studio_calls: DesignStudioCallsTable;
+  design_studio_call_results: DesignStudioCallResultsTable;
   design_feedback: DesignFeedbackTable;
 }
-
-

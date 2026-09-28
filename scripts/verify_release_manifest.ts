@@ -4,8 +4,32 @@ import crypto from 'node:crypto';
 import { execSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { validateReleaseManifest, type ReleaseManifest } from '../packages/contracts/src/release-manifest.js';
+import { PRODUCTION_MODELS } from '../packages/domain/src/provider-policy.js';
+import { PROMPT_VERSION } from '../apps/core/src/services/design-studio/prompts.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * The manifest certifies the tree of its build commit. HEAD may be that commit or any descendant
+ * whose only changes since are the manifest files themselves: the "record manifest" commit, or a
+ * merge commit that brought both in. Until studio-v2 c2bf4943 (2026-09-27) this required the build
+ * commit to be HEAD, HEAD~1 or HEAD~2, which every merge commit failed and a code commit two back
+ * passed.
+ */
+const MANIFEST_FILES = new Set(['MANIFEST.json', 'RELEASE_MANIFEST.json', 'SHA256SUMS.txt']);
+export function buildCommitErrors(commit: string, cwd: string): string[] {
+  const git = (args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+  try {
+    git(['merge-base', '--is-ancestor', commit, 'HEAD']);
+  } catch {
+    return [`Manifest build commit (${commit}) is not an ancestor of HEAD`];
+  }
+  const changed = git(['diff', '--name-only', commit, 'HEAD']).split('\n').filter(Boolean);
+  const drift = changed.filter((file) => !MANIFEST_FILES.has(file));
+  return drift.length > 0
+    ? [`${drift.length} file(s) changed since the manifest build commit (${commit}), e.g. ${drift.slice(0, 5).join(', ')}; record a new manifest`]
+    : [];
+}
 
 export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; errors: string[] } {
   const filePath = manifestPath || path.join(root, 'RELEASE_MANIFEST.json');
@@ -90,24 +114,8 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
 
     if (!commitExists) {
       errors.push(`Manifest build commit (${manifest.build.commit}) does not exist in git repository`);
-    }
-    // The manifest certifies the tree of its build commit. HEAD may be that commit or any descendant
-    // whose only changes since are the manifest files themselves: the "record manifest" commit, or a
-    // merge commit that brought both in. (Until 2026-09-27 this required the build commit to be
-    // HEAD, HEAD~1 or HEAD~2, which every merge commit failed and a code commit two back passed.)
-    else {
-      const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-      try {
-        git(['merge-base', '--is-ancestor', manifest.build.commit, 'HEAD']);
-        const changed = git(['diff', '--name-only', manifest.build.commit, 'HEAD']).split('\n').filter(Boolean);
-        const manifestFiles = new Set(['MANIFEST.json', 'RELEASE_MANIFEST.json', 'SHA256SUMS.txt']);
-        const drift = changed.filter((file) => !manifestFiles.has(file));
-        if (drift.length > 0) {
-          errors.push(`${drift.length} file(s) changed since the manifest build commit (${manifest.build.commit}), e.g. ${drift.slice(0, 5).join(', ')}; record a new manifest`);
-        }
-      } catch {
-        errors.push(`Manifest build commit (${manifest.build.commit}) is not an ancestor of HEAD`);
-      }
+    } else {
+      errors.push(...buildCommitErrors(manifest.build.commit, root));
     }
   }
 
@@ -136,9 +144,8 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
         errors.push(`Manifest missing required component: ${req}`);
       } else {
         const comp = components[req];
-        const validImagePattern = /^([a-z0-9_.-]+\/)?hawa-(core|desk|worker)(:[a-zA-Z0-9_.-]+)?$/;
-        if (!comp.image || typeof comp.image !== 'string' || !comp.image.includes(':') || !validImagePattern.test(comp.image)) {
-          errors.push(`Component ${req} missing valid or approved image reference: ${comp.image}`);
+        if (comp.imageStatus !== 'unbuilt' || 'image' in comp || 'digest' in comp) {
+          errors.push(`Component ${req} falsely claims an image identity in a source candidate`);
         }
         const fileHashes = comp.sourceFileHashes || {};
         const sourcePaths = Object.keys(fileHashes);
@@ -156,27 +163,50 @@ export function verifyReleaseManifest(manifestPath?: string): { ok: boolean; err
   }
 
   // 8. Model coverage check
-  const expectedRoles = ['intake_router', 'brief_builder', 'creative_director', 'visual_judge'];
-  const allowedProviders = new Set(['google', 'anthropic', 'openai', 'local']);
-  if (!manifest.models || !manifest.models.pinnedModels || Object.keys(manifest.models.pinnedModels).length === 0) {
-    errors.push('Manifest models coverage cannot be empty; requires pinnedModels');
+  if (!manifest.models || !manifest.models.productionDefaults || Object.keys(manifest.models.productionDefaults).length === 0) {
+    errors.push('Manifest models coverage cannot be empty; requires productionDefaults');
   } else {
-    for (const role of expectedRoles) {
-      const pin = manifest.models.pinnedModels[role];
-      if (!pin) {
-        errors.push(`Manifest missing pinned model for required role: ${role}`);
-      } else {
-        if (!allowedProviders.has(pin.provider)) {
-          errors.push(`Model role ${role} uses unapproved provider: ${pin.provider}`);
-        }
-        if (!pin.model || typeof pin.model !== 'string' || pin.model.includes('invented')) {
-          errors.push(`Model role ${role} uses invalid or invented model: ${pin.model}`);
-        }
+    for (const [role, model] of Object.entries(PRODUCTION_MODELS)) {
+      if (manifest.models.productionDefaults[role as keyof typeof PRODUCTION_MODELS] !== model) {
+        errors.push(`Source model default for ${role} differs from provider policy`);
       }
     }
+    if (manifest.models.runtimeOverrides !== 'unobserved') {
+      errors.push('Runtime model overrides cannot be declared by a source candidate');
+    }
   }
-  if (manifest.models?.registryVersion !== '2026-09-18.1') {
-    errors.push(`Manifest models registryVersion is invalid: ${manifest.models?.registryVersion}`);
+  const policySource = 'packages/domain/src/provider-policy.ts';
+  if (manifest.models?.policySourceSha256 !== crypto.createHash('sha256').update(fs.readFileSync(path.join(root, policySource))).digest('hex')) {
+    errors.push('Model policy source hash mismatch');
+  }
+  if (manifest.models?.promptVersion !== PROMPT_VERSION) {
+    errors.push('Prompt version differs from source');
+  }
+  const requiredPromptSources = [
+    'apps/core/src/services/design-studio/prompts.ts',
+    'apps/core/src/services/canva-design-planner.ts',
+    'packages/creative/src/studio/layout-generator-v3.ts',
+    'packages/creative/src/studio/pairwise-judge-v3.ts',
+    'packages/creative/src/studio/box-critique-v3.ts',
+  ];
+  for (const source of requiredPromptSources) {
+    const declared = manifest.models?.promptSourcesSha256?.[source];
+    const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, source))).digest('hex');
+    if (!declared || declared !== actual) errors.push(`Prompt source hash mismatch for ${source}`);
+  }
+
+  if (manifest.qa?.versionStatus !== 'unobserved') errors.push('QA runtime version cannot be declared by a source candidate');
+  for (const source of [
+    'packages/qa/src/engine.ts',
+    'packages/qa/src/vision-rubric.ts',
+    'packages/qa/src/canva-pptx-check.ts',
+    'packages/qa/src/rtl-validator.ts',
+    'packages/qa/src/contrast.ts',
+    'packages/qa/src/copy-validator.ts',
+  ]) {
+    const declared = manifest.qa?.sourceHashes?.[source];
+    const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, source))).digest('hex');
+    if (!declared || declared !== actual) errors.push(`QA source hash mismatch for ${source}`);
   }
 
   return { ok: errors.length === 0, errors };

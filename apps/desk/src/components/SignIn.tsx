@@ -1,5 +1,6 @@
+import { deskReviewTarget, deskReviewPath } from '@hawa/contracts/desk-navigation';
 import React, { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiClient } from '../api/client.js';
 import { useDesk } from '../DeskProviders.js';
 
@@ -9,7 +10,10 @@ import { useDesk } from '../DeskProviders.js';
  */
 export const SignIn: React.FC<{ reason: string | null }> = ({ reason }) => {
   const { session } = useDesk();
+  const reviewTarget = deskReviewTarget(window.location.hash);
+  const googleStart = '/v1/auth/google/start' + (reviewTarget ? '?' + deskReviewPath(reviewTarget).split('?')[1] : '');
   const [key, setKey] = useState('');
+  const providers = useQuery({ queryKey: ['auth-providers'], queryFn: () => apiClient.auth.providers() });
   const login = useMutation({
     mutationFn: (accessKey: string) => apiClient.auth.login({ key: accessKey }),
     onSuccess: () => {
@@ -23,6 +27,11 @@ export const SignIn: React.FC<{ reason: string | null }> = ({ reason }) => {
       <span style={{ fontSize: 24 }}>🔒</span>
       <h4>Authentication Required</h4>
       <p>{reason || 'Sign in with a valid reviewer or operator key to access the Desk.'}</p>
+      {providers.data?.googleWorkspace && (
+        <a className="btn primary" href={googleStart}>
+          Sign in with Google Workspace
+        </a>
+      )}
       <form
         className="auth-inline-form"
         onSubmit={(event) => {

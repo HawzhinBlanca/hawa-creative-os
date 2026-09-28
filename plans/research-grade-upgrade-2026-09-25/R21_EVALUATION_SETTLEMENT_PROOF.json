@@ -1,0 +1,269 @@
+{
+  "date": "2026-09-27",
+  "status": "qualified_local_candidate_live_gates_open",
+  "requirements": [
+    "FR-059",
+    "FR-060",
+    "FR-065",
+    "FR-079",
+    "NFR-001"
+  ],
+  "decision": "ADR-085",
+  "sourceHashes": {
+    "adrs/085_evaluation_settlement.md": "5bbe82e583cf8256b803dd0a81c4120c982834a720ec61b3f9fda9db3e83bdef",
+    "packages/db/migrations/048_evaluation_settlement.sql": "e5d84fb8f29f6943b5c8122151b7bc3de064d7419dea7f756db077132c333fe1",
+    "packages/domain/src/evaluation-settlement.ts": "64f460f07b0ad06bdf9a7db39b7d72fd81c678ba2ca0a5f79a38b25034cf8aef",
+    "apps/core/src/services/durable-evaluations.ts": "40a39d0e253ec016acb63ac7e3349b5ca42072f554babb9cfe3ef9e027aceeb1",
+    "apps/core/src/routes/evals.routes.ts": "89c58c56fe5b186aacc25574f2e097ca6b7103240d6fa8ac42dff5aa24a18be4",
+    "apps/desk/src/components/EvaluationSettlementPanel.tsx": "22aeb07bf1fedcc02fdc895452220458cc030fee8ad9335994648cb7de129b38",
+    "apps/desk/src/screens/EvalScreen.tsx": "b328b0ebb1e96e2280857ece02ad02fe23966a198126c4268292fdcc8f45a79e",
+    "apps/desk/src/api/client.ts": "fe88cb4e0c747cfe68a99a5d518dc5d5e3364070a85b05a11e3d1664663834ae",
+    "apps/core/test/evaluation-settlement.test.ts": "e34f2d940d84478e921fa8655431511326e42dc5e14ecb5a2253e04fabf6fa01",
+    "apps/core/test/evaluation-kill-recovery.test.ts": "89cbd6b9e174861d6f63124ddedb85c0303880f41462de9c3a7d71355151774e",
+    "apps/desk/test/evaluation-settlement.test.ts": "c001782123864a5d2cab0e8d667e2e7241e5380d452a548ee1ad6381be6f2e32",
+    "packages/testkit/chaos/driver/evaluation-settlement.ts": "e3b981bd2cd9ef6947baa2e51f5936251c35f01f5226f587ea06a062ee9abc6e",
+    "packages/testkit/chaos/driver/candidate-sources.ts": "83474c72973d8a1eb354e05111394d81b0c02c14682f1a35daf1d70d29956954",
+    "api/openapi.yaml": "22fa63198cbc301cf604aec6f12df93b1d69709a5af7dd334016be81a766103c",
+    "db/schema.sql": "41dfb1fb72299b38e58338424626d834cdbad0b4b147299802f371c46e8a371d",
+    "db/rls.sql": "f48ce13c2f2937a91ce1900d458f1f6422319d548e7a4db299cffc16663d7e0f",
+    "runbooks/EVALUATION_RECOVERY.md": "026c75dda0f86d33dcdcae18dc288062afa03c4b2b64b0e71cc56c66bc80c254",
+    "apps/core/test/fixtures/route-inventory.txt": "85f98fc45bec92c64ad13ccc22b73316d00bfd0f99bf424dad87440f8701a864"
+  },
+  "evidence": {
+    "redBefore": "4 tests failed because no settlement method existed",
+    "focused": "7 files / 33 tests passed, including schema and browser action retention",
+    "recovery": "5 files / 20 tests passed including actual SIGKILL and named HTTP/CSRF/revocation/isolation",
+    "initialHttpFailure": "Synthetic session tenant was outside the configured single-office tenant; fixture corrected, failure retained",
+    "firstFullSuite": {
+      "passed": 3753,
+      "failed": 1,
+      "skipped": 59,
+      "failure": "Route inventory omitted four prefixed aliases for the new POST endpoint; fixture corrected, runtime unchanged."
+    },
+    "firstPassingFullSuite": {
+      "passed": 3754,
+      "failed": 0,
+      "skipped": 59,
+      "files": 472,
+      "sourceCommit": "4acbc1f",
+      "scope": "Runtime candidate plus corrected route inventory; precedes final Desk busy/auth retry guard."
+    },
+    "busyRetryCorrection": "Two red-before Desk tests reproduced lost action identity on busy/auth responses; preserve it until a definite unadmitted input/snapshot/coverage refusal."
+  },
+  "qualification": {
+    "fullSuite": {
+      "passed": 3756,
+      "failed": 0,
+      "skipped": 59,
+      "files": 472,
+      "sourceCommit": "571b5221d8f6476358de2dfaa1ef3345690fbb88",
+      "receipt": "output/acceptance/2026-09-27-evaluation-settlement/full-tests-qualified.json"
+    },
+    "priorCandidate": {
+      "checks": 50,
+      "allPassed": true,
+      "workflowChecks": 36,
+      "settlementChecks": 14,
+      "coreRestartAfterSettlement": true,
+      "modelCallsDuringSettlementAndReplay": 0,
+      "totalEvaluationProviderRequests": 2,
+      "scope": "One original held evaluation and one explicitly requested new evaluation; internal fake provider and synthetic named administrator; production unchanged",
+      "receipt": "output/acceptance/2026-09-27-evaluation-settlement/candidate-rehearsal.json"
+    },
+    "candidate": {
+      "checks": 50,
+      "allPassed": true,
+      "workflowChecks": 36,
+      "settlementChecks": 14,
+      "coreRestartAfterSettlement": true,
+      "modelCallsDuringSettlementAndReplay": 0,
+      "totalEvaluationProviderRequests": 2,
+      "scope": "One original held evaluation and one explicitly requested new evaluation; internal fake provider and synthetic named administrator; production unchanged",
+      "receipt": "output/acceptance/2026-09-27-evaluation-settlement/candidate-rehearsal.json",
+      "sourceCommit": "571b5221d8f6476358de2dfaa1ef3345690fbb88"
+    },
+    "controls": {
+      "focusedAfterFinalRetryCorrection": "3 files / 34 tests passed",
+      "sourceBuild": "passed",
+      "testTypes": "passed",
+      "scriptTypes": "passed",
+      "harnessTypes": "passed",
+      "deskBuild": "passed",
+      "anyRatchet": "1007 <= 1053; passed",
+      "providerEgress": "passed; 9 existing exceptions",
+      "releaseManifest": "verified",
+      "blueprint": "931 passed / 0 warnings / 0 failures"
+    }
+  },
+  "limits": [
+    "Administrator attestation is not automatic provider lookup or invoice verification.",
+    "Only fixture evaluations are closed; no general Studio response replay.",
+    "Original uncertain cost and first outcome remain unchanged; closure never claims a pass.",
+    "No live provider, human approval or production deployment.",
+    "Named pilot, independent recovery and human/model quality gates remain open."
+  ],
+  "sourceCommit": "69039f94cb1ef4d771d634a20ff9c13a548206e1",
+  "candidateCommit": "571b5221d8f6476358de2dfaa1ef3345690fbb88",
+  "artifacts": {
+    "output/acceptance/2026-09-27-evaluation-settlement/build-final.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/build.log": {
+      "sha256": "12312c883bb78c6e3377ad818e49fc1378b82ab6d9b650e81aa4b6b20253ec5c",
+      "bytes": 1092
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/busy-red-before.log": {
+      "sha256": "3585f30b442e6a47f4b303b223bbccbc69303f4042655ee43f9be2d4ff558906",
+      "bytes": 1769
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/candidate-final.log": {
+      "sha256": "796b9e3dadf1e01c0f3239746c29670d8b0b422daaec703670e69839444cc1bd",
+      "bytes": 389
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/candidate-rehearsal-before-retry.json": {
+      "sha256": "fadbcf85b9786dc06b046e53f2f79791f3d5e5f2349718585427c6dbfcfdec97",
+      "bytes": 14729
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/candidate-rehearsal.json": {
+      "sha256": "fb54e92f9ea9ac96c58538293e84f6b22fc4ea029b808aff576d2f5d7911c249",
+      "bytes": 14730
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/candidate.log": {
+      "sha256": "17e64737c4d2973a9f123bcb7770e1c34fd054426e191b708f15ce170b4f38a7",
+      "bytes": 389
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/core-tests.log": {
+      "sha256": "6274f99b93badb01720b4fd78dcaaa3d7e90ea215d86416e1e800cb9f15e5473",
+      "bytes": 1292
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/desk-build-final.log": {
+      "sha256": "f4673d549bae29d22eae112382a895fec057459b913e64aa2db0c2475aa39a2b",
+      "bytes": 745
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/desk-build.log": {
+      "sha256": "3d9e60cce024a00a287341f20d833c47aafab7ffc847ce25af14bea8cfe4ec44",
+      "bytes": 745
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/egress.log": {
+      "sha256": "b6e716bda86ecb080e1fd6c96efaf64b06b2bbb78001c634eaf7a1137a63edf8",
+      "bytes": 133
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/final-guard-refresh.log": {
+      "sha256": "cf61f52ceb18306a6955f7e4b69a3da0b3ad464933e5149600ed66ce160ee477",
+      "bytes": 54
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/final-release-generate.log": {
+      "sha256": "ee4e677978957e41dfc4154726fcca23f44e56a09f03e4095a73a6f3cd0315fb",
+      "bytes": 314
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/final-release-refresh.log": {
+      "sha256": "cf61f52ceb18306a6955f7e4b69a3da0b3ad464933e5149600ed66ce160ee477",
+      "bytes": 54
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/final-release-verify.log": {
+      "sha256": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6",
+      "bytes": 121
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/final-retry-desk-build.log": {
+      "sha256": "22812cd8fb62bc6030ba8f6d9445f83c89834ac019b6b33d875d91b716eb6769",
+      "bytes": 745
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/final-retry-test-types.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/final-retry-tests.log": {
+      "sha256": "3a16a1f385e7d16bc90f08367ed4182685f22cc1c52e1cd6df33d9abccf6732a",
+      "bytes": 639
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/focused-tests.log": {
+      "sha256": "098149ea0877c0697621b480315b6176682d4671849f78ccbef4d5dd99f5ae5f",
+      "bytes": 328
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/full-tests-final.json": {
+      "sha256": "f8fa3e28f310c7eb76c18dffbe33fd947ff026067081123047638d6e9685c172",
+      "bytes": 1565509
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/full-tests-final.log": {
+      "sha256": "194391f63b5509c05ed299f7768d7cf6d8e30e10edb892673bbedd7b9d6b8cdb",
+      "bytes": 131260
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/full-tests-qualified.json": {
+      "sha256": "810f7112d5e23a0057b2d4084a300903e227b61720a61f7d5e2e99523231ba60",
+      "bytes": 1566259
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/full-tests-qualified.log": {
+      "sha256": "b347b81a7973331b86d7bd2f5afc37f88bc9b66bf1e0dce86d7dc3de0e1bc0bf",
+      "bytes": 131657
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/full-tests.json": {
+      "sha256": "4b266f8ee97609af87d6b535169afa7a453c4a8772ecea701193e98ca98ec96d",
+      "bytes": 1566632
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/full-tests.log": {
+      "sha256": "5b09ef9bdecb509f5ab8f8211ceaf8e69d77aac02de1907c9e734bf3a37a9a10",
+      "bytes": 133851
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/harness-types.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/manifest-refresh.log": {
+      "sha256": "cf61f52ceb18306a6955f7e4b69a3da0b3ad464933e5149600ed66ce160ee477",
+      "bytes": 54
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/manifest-seal-refresh.log": {
+      "sha256": "cf61f52ceb18306a6955f7e4b69a3da0b3ad464933e5149600ed66ce160ee477",
+      "bytes": 54
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/pack.log": {
+      "sha256": "18eb671431a99b9f85731162c7ded49e6b69eb6c78154ad167da3ef9f6a6f99e",
+      "bytes": 69
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/ratchet.log": {
+      "sha256": "eff2183b6d7ed79f58c558c1a47902b0cc446d6bf207d6bd0a98608fcfcc1778",
+      "bytes": 153
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/recovery-tests-final.log": {
+      "sha256": "2e7ad1b29b0f810c4cbd223782fb51d7ced2baa0a91183ebf9b16b80d655dd51",
+      "bytes": 328
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/recovery-tests.log": {
+      "sha256": "e94f720c65e0a7ba880bc726d0e93357616e18b0ac11d9fd9a8f95a41b25213f",
+      "bytes": 2672
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/red-before.log": {
+      "sha256": "3df45329e9c10a388e2f1e333ee158b95b1d389f4a5d3d3ee10d73127965e3ec",
+      "bytes": 3823
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/release-generate.log": {
+      "sha256": "86029b5bb7ff1b570beae5a4858d2d0fd0d2ecf6afc831ddbef5da4f5082047e",
+      "bytes": 314
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/release-verify.log": {
+      "sha256": "4852420685f2b45236053521df0405016b3cc68f58b592bcad4e098df8f1e3a6",
+      "bytes": 121
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/script-types.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/sealed-build.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/sealed-test-types.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/test-types-final.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    },
+    "output/acceptance/2026-09-27-evaluation-settlement/test-types.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    }
+  }
+}

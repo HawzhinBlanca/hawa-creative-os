@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { escapeTelegramHtml } from '@hawa/integrations';
+import { escapeTelegramHtml, evaluateIngressIntent } from '@hawa/integrations';
 import { cutText, secretsEqual } from '../core-helpers.js';
 import { log, bindLogContext } from '../logging.js';
 import { splitBilingualRequest } from '../services/chat-intake.js';
@@ -13,13 +13,6 @@ import { createTelegramCallbacksAndCommands } from '../services/telegram-intake/
 import { createTelegramMedia } from '../services/telegram-intake/media.js';
 import { createTelegramReplies, type PendingClarifications } from '../services/telegram-intake/replies.js';
 import { createTelegramChanges } from '../services/telegram-intake/changes.js';
-import {
-  answerDecision, courtesyText, decideSession, lifecycleMode, lifecycleTargetUnrouted, runWithDecideSession, type IntakeDecideSession,
-} from '../services/telegram-intake/decide-mode.js';
-import { routeForCaller } from '../services/telegram-intake/lifecycle-forward.js';
-import { parkedUpdateChat, type PolledUpdate } from '../services/polled-update-dispatch.js';
-import type { RoutableUpdate } from '@hawa/domain';
-import { DEFAULT_TENANT_ID } from '../core-context.js';
 import type { RouteContext } from './types.js';
 
 /**
@@ -37,33 +30,16 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
   const acknowledgedAlbums = new Set<string>();
   // A message the bot asked about ("revise the last design, or a new one?"), kept until answered.
   const pendingClarifications: PendingClarifications = new Map();
-  const { telegramUpdateHandled } = createTelegramUpdateState(ctx);
+  const { telegramUpdateHandled, markTelegramUpdateHandled } = createTelegramUpdateState(ctx);
   const { handleRequesterAction } = createTelegramRequesterActions(ctx);
   const { handleCallbackQuery, handleCommand } = createTelegramCallbacksAndCommands(ctx);
   const { readMedia } = createTelegramMedia(ctx, acknowledgedAlbums);
   const { readReply } = createTelegramReplies(ctx, pendingClarifications);
   const { makeChange } = createTelegramChanges(ctx);
-  const { ingestChatCampaignTask, draftChatRequest } = createChatCampaignIntake(ctx);
+  const { ingestChatCampaignTask } = createChatCampaignIntake(ctx);
 
   // Webhooks
   registerRoute('post', '/webhooks/telegram', async (c: Context) => {
-    // Inside ChatInbox's intake call (routes/lifecycle-internal.routes.ts): its session decides.
-    if (decideSession()) return readTelegramUpdate(c);
-    // Core's own poller or a real webhook: intake runs in a legacy session too, so an update aimed at
-    // a request the lifecycle owns is decided, never acted on here, and Core routes that decision
-    // itself through Restate's ingress with the keys ChatInbox would use (review of 2.3C: it was
-    // refused 409, final for the poller, and the requester heard nothing).
-    const session: IntakeDecideSession = { mode: 'legacy', chat: {} };
-    const res = await runWithDecideSession(session, () => readTelegramUpdate(c));
-    if (!session.decision || !session.update) return res;
-    const decision = session.decision;
-    const routed = await routeForCaller(telegramBridge, parkedUpdateChat(session.update as PolledUpdate) ?? '', session.update, decision);
-    if (routed.outcome === 'routed') return c.json({ ok: true, routed: decision.kind, updateId: session.update.update_id }, 200);
-    if (routed.outcome === 'retry') return problem(c, 503, 'Lifecycle Unreachable', 'Restate did not take the update for the request lifecycle; it is asked again');
-    return lifecycleTargetUnrouted(c, decision);
-  });
-
-  async function readTelegramUpdate(c: Context): Promise<Response> {
     const secret = c.req.header('x-telegram-bot-api-secret-token');
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (!secretsEqual(secret, expectedSecret)) {
@@ -88,9 +64,6 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
 
     const sourceEventId = String(json.update_id ?? json.eventId ?? '');
     if (json.update_id == null && !json.eventId) return problem(c, 400, 'Missing event ID', 'Telegram must supply a stable update ID');
-    // What a decision made below is routed with, when Core routes it itself.
-    const decideIn = decideSession();
-    if (decideIn && Number.isSafeInteger(json.update_id)) decideIn.update = json as RoutableUpdate;
     // Every line written while this update is handled names its chat (logging.ts).
     bindLogContext({ chatId: String(json.message?.chat?.id ?? json.callback_query?.message?.chat?.id ?? json.channel_post?.chat?.id ?? json.edited_message?.chat?.id ?? json.sourceChannelId ?? '') });
     const verifiedSender = String(json.callback_query?.from?.id || json.message?.from?.id || json.edited_message?.from?.id || '');
@@ -166,23 +139,46 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
         return c.json({ ok: true, duplicate: true, updateId: sourceEventId, ...(handledBefore.taskId ? { task: saved || { id: handledBefore.taskId } } : {}) }, 200);
       }
     }
+    // Group conversation is imported as an inbox event, not a task. Check before downloading media
+    // or asking a model. An explicit command/prefix or a reply naming an existing task may proceed.
+    const groupChat = ['group', 'supergroup'].includes(String(msg.chat?.type || ''));
+    const groupText = String(msg.text || msg.caption || json.text || '').trim();
+    const normalizedGroupText = groupText.replace(/^\/(task|brief|design|campaign|new)@\w+(?=\s|$)/i, '/$1');
+    const ingressIntent = evaluateIngressIntent({ text: normalizedGroupText, channel: 'telegram' });
+    const explicitTaskPromotion = ingressIntent.action === 'promote';
+    const replyContext = String(msg.reply_to_message?.caption || msg.reply_to_message?.text || '') +
+      ' ' + JSON.stringify(msg.reply_to_message?.reply_markup || '');
+    const replyNamesTask = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(replyContext);
+    const namesTaskForChange = /^(?:please\s+)?(?:revise|change|fix|update|remove|add|replace|make|adjust|correct)\b/i.test(groupText) &&
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(groupText);
+    const messageOnly = async () => {
+      try {
+        await markTelegramUpdateHandled(updateChat, sourceEventId, 'telegram_message_only', json, true);
+      } catch {
+        return problem(c, 503, 'Inbox not committed', 'The passive message was not saved and will be retried');
+      }
+      return c.json({ ok: true, status: 'MESSAGE_ONLY', updateId: sourceEventId }, 200);
+    };
+    if (groupChat && !explicitTaskPromotion && !replyNamesTask && !namesTaskForChange && !groupText.startsWith('/')) {
+      return messageOnly();
+    }
     const media = await readMedia(c, { json, msg, sourceEventId, verifiedSender });
     if (media instanceof Response) return media;
-    // A message with a picture is read on Core's own path even in a lifecycle chat: the lifecycle's
-    // rounds do not take pictures yet (Core would fetch them by file id), and a picture joins the
-    // requests and albums Core keeps. Buttons, replies and changes aimed at a lifecycle request are
-    // still routed to it below.
-    const session = decideSession();
-    if (session?.mode === 'lifecycle' && media.referenceImageBase64) {
-      session.mode = 'legacy';
-      session.legacyBecause = 'PICTURE';
-    }
 
     const commandAnswer = await handleCommand(c, media);
     if (commandAnswer) return commandAnswer;
 
-    const reply = await readReply(c, media);
+    if (explicitTaskPromotion) {
+      media.rawText = media.rawText.trim().replace(/^\/(?:task|brief|design|campaign|new)(?:@\w+)?\s*/i, '')
+        .replace(/^(?:task|brief|design|campaign|داواکاری|دیزاین|کەمپین)\s*:\s*/iu, '').trim();
+      if (!media.rawText) return problem(c, 422, 'Brief required', 'Add the task title or exact copy after the command');
+    }
+
+    const reply = await readReply(c, media, explicitTaskPromotion);
     if (reply instanceof Response) return reply;
+    // A UUID in quoted group text is only a hint. If it resolved to no task in this chat, it must
+    // not become a fresh paid brief through the classifier's fallback.
+    if (groupChat && !explicitTaskPromotion && !reply.feedbackTargetTask) return messageOnly();
     const changeAnswer = await makeChange(c, reply);
     if (changeAnswer) return changeAnswer;
 
@@ -200,24 +196,14 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
 
     // Refuse auto-generation when the message contains ONLY instructions or styling feedback without any copy/brief
     if (!feedbackTargetTask && classification?.isInstructionOnly) {
-      const instructionNotice =
-        `📝 <b>Design instruction received:</b> "${escapeTelegramHtml(cutText(rawText, 500))}"\n\n` +
-        `⚠️ <i>No copy or event details were found in your message. Automatic drafting requires the exact text or announcement details to place on the design.</i>\n\n` +
-        `<i>Please send the event title, date, venue, or body copy, and the art director will combine it with your styling preferences.</i>`;
-      // In a lifecycle chat it is a new request like any other, opened by RequestLifecycle for the art
-      // director (never designed automatically); the notice goes out through TelegramSender, before
-      // the request's own acknowledgement, as it did here.
-      if (lifecycleMode()) {
-        const draft = await draftChatRequest({
-          platform: 'telegram', sourceEventId, sourceChannelId, senderName, rawText, explicitClientId: json.clientId, autoGenerate: false, isInstructionOnly: true,
-        });
-        return answerDecision(c, {
-          kind: 'new_request', tenantId: DEFAULT_TENANT_ID, requests: [{ index: 0, draft }],
-          messages: [courtesyText(sourceChannelId, `instruction:${sourceChannelId}:${sourceEventId}`, instructionNotice, 'HTML')],
-        });
-      }
       if (sourceChannelId && sourceChannelId !== 'tg_default') {
-        await telegramBridge.dispatchOutboundMessage(sourceChannelId, { text: instructionNotice, parse_mode: 'HTML' });
+        await telegramBridge.dispatchOutboundMessage(sourceChannelId, {
+          text:
+            `📝 <b>Design instruction received:</b> "${escapeTelegramHtml(cutText(rawText, 500))}"\n\n` +
+            `⚠️ <i>No copy or event details were found in your message. Automatic drafting requires the exact text or announcement details to place on the design.</i>\n\n` +
+            `<i>Please send the event title, date, venue, or body copy, and the art director will combine it with your styling preferences.</i>`,
+          parse_mode: 'HTML',
+        });
       }
       const hostHeader = c.req.header('x-forwarded-host') || c.req.header('host');
       const incomingDeskBase = hostHeader ? `https://${hostHeader}` : undefined;
@@ -239,22 +225,6 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
     }
 
     const shouldGenerate = c.req.query('generate') === 'true' || json.autoGenerate === true || process.env.AUTO_GENERATE_CHAT_DESIGNS === 'true';
-
-    // In a lifecycle chat a new request is opened by RequestLifecycle, not saved here (PHASE2_DESIGN.md
-    // 2.3): intake answers what it read, one draft per graphic, and ChatInbox opens a request for each.
-    if (lifecycleMode()) {
-      const bilingual = splitBilingualRequest(rawText);
-      const parts = bilingual ? [bilingual.en, bilingual.ckb] : [rawText];
-      const requests = [];
-      for (const [index, text] of parts.entries()) {
-        const draft = await draftChatRequest({
-          platform: 'telegram', sourceEventId, sourceChannelId, senderName, rawText: text, explicitClientId: json.clientId, autoGenerate: shouldGenerate,
-        });
-        requests.push({ index, draft });
-      }
-      return answerDecision(c, { kind: 'new_request', tenantId: DEFAULT_TENANT_ID, requests });
-    }
-
     const hostHeader = c.req.header('x-forwarded-host') || c.req.header('host');
     const incomingDeskBase = hostHeader ? `https://${hostHeader}` : undefined;
 
@@ -304,5 +274,5 @@ export function registerTelegramWebhookRoutes(ctx: RouteContext): void {
       log.error('[chat-intake] Durable Telegram intake failed:', error);
       return problem(c, 503, 'Intake not committed', 'The request was not acknowledged. Retry with the same source event ID.');
     }
-  }
+  });
 }

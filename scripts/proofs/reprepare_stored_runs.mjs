@@ -73,9 +73,11 @@ export function readStyleFixtures(dir = FIXTURES_DIR) {
 export function productionModes(creative, styleFixtures = readStyleFixtures()) {
   const ornament = creative.resolveOrnamentSettings({});
   return [
-    { name: 'plain', options: {} },
-    { name: 'ornament', options: { ornament } },
-    ...styleFixtures.map(({ name, spec }) => ({ name: `style:${name}`, options: { ornament, style: spec } })),
+    // These historical corpus modes allow imagery. The no-imagery route has its own Studio
+    // admission regression; name this input explicitly instead of relying on the default.
+    { name: 'plain', options: { allowArt: true } },
+    { name: 'ornament', options: { ornament, allowArt: true } },
+    ...styleFixtures.map(({ name, spec }) => ({ name: `style:${name}`, options: { ornament, style: spec, allowArt: true } })),
   ];
 }
 

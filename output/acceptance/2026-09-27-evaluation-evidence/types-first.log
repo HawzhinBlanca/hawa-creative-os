@@ -1,0 +1,9 @@
+$ tsc -b && tsc -p tsconfig.scripts.json && tsx scripts/typecheck_tests.ts
+scripts/run_model_tournament.ts(50,41): error TS18047: 'routingRes.passRate' is possibly 'null'.
+scripts/run_model_tournament.ts(60,41): error TS18047: 'retrievalRes.passRate' is possibly 'null'.
+scripts/run_model_tournament.ts(67,97): error TS18047: 'copyGuardRes.passRate' is possibly 'null'.
+scripts/run_model_tournament.ts(72,101): error TS18047: 'visualJudgeRes.passRate' is possibly 'null'.
+scripts/run_model_tournament.ts(119,15): error TS18047: 'routingRes.passRate' is possibly 'null'.
+scripts/run_model_tournament.ts(174,14): error TS18047: 'routingRes.passRate' is possibly 'null'.
+scripts/run_model_tournament.ts(201,11): error TS18047: 'routingRes.passRate' is possibly 'null'.
+[ELIFECYCLE] Command failed with exit code 2.

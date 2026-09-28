@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, sql } from '@hawa/db';
+import { createDb, sql, withRlsContext, type Database, type Kysely } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { persistChatIntake } from '../src/services/chat-intake.js';
 import { CanvaFlowError } from '../src/services/canva-connect-service.js';
@@ -28,6 +28,15 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
 
   const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02]);
   const fakeSha = createHash('sha256').update(fakePng).digest('hex');
+
+  // This suite intentionally has an incomplete historical budget. Importing old receipt
+  // fixtures is an owner-only setup operation, not authorization for new provider dispatch.
+  const historicalReceipt = (insert: (tx: Kysely<Database>) => Promise<unknown>) =>
+    withRlsContext(db, { tenantId, userId: actorId }, async tx => {
+      await sql`ALTER TABLE hawa.design_studio_calls DISABLE TRIGGER enforce_studio_scope_budget`.execute(tx);
+      await insert(tx);
+      await sql`ALTER TABLE hawa.design_studio_calls ENABLE TRIGGER enforce_studio_scope_budget`.execute(tx);
+    });
 
   beforeAll(async () => {
     runId = randomUUID();
@@ -116,7 +125,19 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
 
   // 1. Authentication & Authorization Negative Controls
   describe('Authentication and Authorization', () => {
-    it("starts a run for an API-key caller under the operator's uuid, not its label", async () => {
+    it('finds the saved run for a task without admitting a new one', async () => {
+    const res = await createApp({ db }).request(`/v1/tasks/${taskId}/canva/studio`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ runId, status: 'briefing' });
+    const missing = await createApp({ db }).request(`/v1/tasks/${randomUUID()}/canva/studio`, {
+      headers: { Authorization: `Bearer ${process.env.HAWA_BEARER_TOKEN}` },
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  it("starts a run for an API-key caller under the operator's uuid, not its label", async () => {
       // 81f4390 passed auth.actorId ('operator_1') as the actor; every studio start then failed in
       // Postgres with "invalid input syntax for type uuid" (task 8fb76534, 2026-09-19).
       const res = await app.request(`/v1/tasks/${taskId}/canva/studio`, {
@@ -285,6 +306,9 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       expect(data.run).toBeDefined();
       expect(data.run.id).toBe(runId);
       expect(data.run.taskId).toBe(taskId);
+      // The fixture's old spend has no matching ledger: it must remain visible and block admission.
+      expect(data.run.budgetUsage).toMatchObject({ accountedUsd: 0.25, admittedCalls: 0,
+        blocker: 'STUDIO_BUDGET_HISTORY_INCOMPLETE' });
       expect(data.candidates).toBeInstanceOf(Array);
       expect(data.candidates.length).toBe(1);
 
@@ -293,6 +317,44 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
       // The address names the picture's hash, so it is immutable (ADR-035).
       expect(firstCandidate.previewUrl).toContain(`/candidates/${firstCandidate.id}/preview/${fakeSha}.png`);
       expect(data.totalUsdEstimate).toBeGreaterThanOrEqual(0);
+    });
+
+    it('reports unknown model spend without presenting it as zero dollars', async () => {
+      await historicalReceipt(tx => sql`INSERT INTO hawa.design_studio_calls
+        (id, run_id, tenant_id, stage, provider, model, requested_model, status, error_code, reservation)
+        VALUES (${randomUUID()}::uuid, ${runId}::uuid, ${tenantId}::uuid,
+          'laying_out', 'openai', 'gpt-6-astra', 'gpt-6-astra', 'uncertain', 'UNCERTAIN_ACCEPTANCE',
+          ${JSON.stringify({ version: 1, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.1, inputTokens: 100, outputTokens: 100 })}::jsonb)`.execute(tx));
+      const res = await app.request(`/v1/tasks/${taskId}/canva/studio/${runId}`, { headers });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.uncertainCallsCount).toBe(1);
+      expect(data.totalUsdEstimate).toBeNull();
+      expect(data.calls.find((call: any) => call.status === 'uncertain')).toMatchObject({
+        usdEstimate: null, callOrdinal: null, logicalCallSha256: null,
+        provider: 'openai', errorCode: 'UNCERTAIN_ACCEPTANCE',
+      });
+    });
+
+    it('shows provider receipt metadata separately from the requested model without response content', async () => {
+      const digest = 'a'.repeat(64);
+      await historicalReceipt(tx => sql`INSERT INTO hawa.design_studio_calls
+        (id, run_id, tenant_id, stage, provider, model, requested_model, status,
+          response_id, served_model, provider_request_id, response_sha256, latency_ms, attempts, reservation)
+        VALUES (${randomUUID()}::uuid, ${runId}::uuid, ${tenantId}::uuid,
+          'briefing', 'openai', 'gpt-6-astra', 'gpt-6-astra', 'ok',
+          'resp_route', 'gpt-6-astra-snapshot', 'req_route', ${digest}, 42, 1,
+          ${JSON.stringify({ version: 1, policy: 'synthetic-test', requestSha256: 'a'.repeat(64), usd: 0.1, inputTokens: 100, outputTokens: 100 })}::jsonb)`.execute(tx));
+      const res = await app.request(`/v1/tasks/${taskId}/canva/studio/${runId}`, { headers });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      const call = data.calls.find((item: any) => item.responseId === 'resp_route');
+      expect(call).toMatchObject({
+        model: 'gpt-6-astra', servedModel: 'gpt-6-astra-snapshot',
+        providerRequestId: 'req_route', responseSha256: digest,
+        latencyMs: 42, attempts: 1,
+      });
+      expect(JSON.stringify(call)).not.toContain('EXACT TITLE');
     });
 
     it('GET /v1/tasks/:taskId/canva/studio/:runId returns 404 for unknown run', async () => {
@@ -438,4 +500,3 @@ describe.skipIf(!url)('Design Studio HTTP Routes (T12)', () => {
     });
   });
 });
-

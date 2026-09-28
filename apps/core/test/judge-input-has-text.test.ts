@@ -1,3 +1,4 @@
+import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { OpenAiStudioClient, type StudioLayoutV2 } from '@hawa/creative';
@@ -151,6 +152,7 @@ function createMockContext(client: OpenAiStudioClient): StageContext {
     latinFont: 'Verdana',
     arabicFont: 'Noto Sans Arabic',
     logoAspect: 1.0,
+    logo: KAAE_TEST_CLIENT_LOGO,
     client,
   } as unknown as StageContext;
 }
@@ -212,7 +214,7 @@ describe('P07 judges the render that carries the copy', () => {
 
   it('refuses to judge if a no-text composite is ever handed over directly', () => {
     const candidate = createCandidate(0, { compositePng: noTextBytes(0) });
-    expect(() => assertJudgeSeesText([{ renderedPng: candidate.compositePng, candidate }])).toThrow(/no-text composite/i);
+    expect(() => assertJudgeSeesText([{ renderedPng: candidate.compositePng ?? undefined, candidate }])).toThrow(/no-text composite/i);
   });
 
   it('still judges a candidate that carries no render at all, from its layout', async () => {

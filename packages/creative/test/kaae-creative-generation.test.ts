@@ -1,3 +1,4 @@
+import type { StudioOperation } from '@hawa/contracts';
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -86,7 +87,7 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
   describe('Part 4: Creative Director Runner Routing & Dispatch', () => {
     const kaaeClientId = 'c1000000-0000-4000-8000-000000000002';
 
-    it("draws KAAE with no KAAE styling of its own: its v1 templates and overrides are retired (ADR-038)", () => {
+    it("draws KAAE with no KAAE styling of its own: its v1 templates and overrides are retired (ADR-127)", () => {
       const briefRes = briefBuilder.build({
         taskId: 'task-kaae-001',
         clientId: kaaeClientId,
@@ -101,10 +102,12 @@ describe('KAAE Pro Brand DNA & Creative Generation Suite', () => {
         const ops = director.generateStudioOperations(briefRes.value, plan, KAAE_PRIMARY_LOGO_SHA256);
         expect(ops.length).toBeGreaterThan(0);
         // The generic legacy draft, the same for every client: KAAE's designs come from the studio.
-        expect(ops.find((o) => o.nodeId === 'node_bg')?.source).not.toContain('#0A1628');
-        expect(ops.find((o) => o.nodeId === 'node_logo')?.width).toBe(240);
+        const bg = ops.find((o): o is Extract<StudioOperation, { op: 'addVector' }> => o.op === 'addVector' && o.nodeId === 'node_bg');
+        const logo = ops.find((o): o is Extract<StudioOperation, { op: 'addImage' }> => o.op === 'addImage' && o.nodeId === 'node_logo');
+        expect(bg?.source).not.toContain('#0A1628');
+        expect(logo?.width).toBe(240);
         // It draws the logo it is handed, and no other.
-        expect(ops.find((o) => o.nodeId === 'node_logo')?.asset?.sha256).toBe(KAAE_PRIMARY_LOGO_SHA256);
+        expect(logo?.asset.sha256).toBe(KAAE_PRIMARY_LOGO_SHA256);
       }
     });
 

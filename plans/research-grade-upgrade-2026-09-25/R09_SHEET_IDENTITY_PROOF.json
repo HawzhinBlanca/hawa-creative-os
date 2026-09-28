@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-27",
+  "status": "locally_verified_partial_not_release_qualified",
+  "requirements": [
+    "FR-049",
+    "FR-050"
+  ],
+  "baseCommit": "b69a809a51ea7daf37ab1b0e3bbf3446f07481aa",
+  "sourceHashes": {
+    "apps/core/src/services/omnichannel-delivery.ts": "3a7b25001516c301e7aba106bbc6af1516dcc24905ae4a7a33f6d82baa47a239",
+    "apps/core/src/services/publication-receipt-validation.ts": "958945b75a2801243ac220026db029f2f6161fd18c19659f2af37a811be3fff5",
+    "apps/core/test/publish-sheets-unconfirmed.test.ts": "d6df74d956bd9a9a2a12f8aa11ab77b4e22bdcef68de5bb0cbba0b58d7bc7936",
+    "apps/core/test/r06-publication-safety.test.ts": "0765ed1d8eab15c86ff8e4265acf112284bac4f1f0586e1ef5f3c607d331c6ba",
+    "apps/core/test/verified-delivery-drive-sheets.test.ts": "39e76855c6ea803ab809d0a2ac9ea5428d6f1b792ac69729c280684132d5ec7d",
+    "contracts/publisher.ts": "a54bd196d0d3b76a3ec53223590e3fe678e17aa0fb5f40ff8fffddee087090c1",
+    "packages/contracts/src/publisher.ts": "af7cfd45a4d115344be22d0b3f3b0fdb9d87db75614f65e948335f8820e91642",
+    "packages/integrations/src/google-publisher.ts": "cf5450e7602db416ee7649a4b72f3087eea4db7289c6011c0548cde0a33669ee",
+    "packages/integrations/src/google-sheet-row.ts": "7694a95523f87495f0b808ed00c886b975dbd7962fb47fdd20d9e540ad5fbb3e",
+    "packages/integrations/test/fake-drive-server.ts": "4f85892b155926c41bf3d6d65ca45c5d1ec36f30229c09aba3613c6bdcb218ec",
+    "packages/integrations/test/fake-sheets.ts": "1d683fb090f9a1a26131b7abe474b85930d042f67d97a556428ca45fe224d394",
+    "packages/integrations/test/google-publisher-bytes.test.ts": "777217e06aa067c3c27e0e559e5e52effee8da74622da27cd72e57d68a106124",
+    "packages/integrations/test/google-sheet-identity.test.ts": "0a3beac7c8f761e4dde686a89ff50100697b3a727f94d298704ef69960a8780a",
+    "packages/integrations/test/google-sheet-process-recovery.test.ts": "715a3acde5e3414755758e17332c95bdcb77d574bb7e5fe4fa2082b39aec359a",
+    "packages/integrations/test/no-publisher-emulator.test.ts": "b81bb8a0d3504b8c1b18fdceeaf488032211782b4dc266768def0b6566a2f3e2",
+    "packages/integrations/test/real-google-operations.test.ts": "d8a1e0004211d6db0712e87db13726e2345e7f29018bcc49fd647a60a255a66e",
+    "packages/testkit/chaos/docker-compose.chaos.yml": "29e4e4a965aa8db76acf92122a75721e88d64ad387b27c98a2239538064ac768"
+  },
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-sheet-row-identity/STATUS.md": "4b73422956b3bb94776ae9549d1c17b73c352dc8628db6a7a3b6bb25a57413f4",
+    "output/acceptance/2026-09-27-sheet-row-identity/affected-final.log": "3c89b9e4afe4c65bbe14d117fe516add304e2a27918e8e4ab6ed0e57f1389e8a",
+    "output/acceptance/2026-09-27-sheet-row-identity/build-final.log": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+    "output/acceptance/2026-09-27-sheet-row-identity/core-tab-red-before.log": "4f2f4a0e8d1da7fedd384909c2c904e273a416264ff6ef362738c3a35283f24d",
+    "output/acceptance/2026-09-27-sheet-row-identity/initial-compatibility.log": "7aaf763412033647d3f1e749d3adfe3abb8ddf1462d2e68aaaa522783a62016b",
+    "output/acceptance/2026-09-27-sheet-row-identity/lint.log": "c7bbcb3d6b6a9f75c788ff1251663c8ed35494fad2d6111d094fc06fe6dc7e65",
+    "output/acceptance/2026-09-27-sheet-row-identity/readback-fixture-correction.log": "a2a34d2bc8785dab4b96ce3d997d331a599139aaf896acf693a6c9f3284022cf",
+    "output/acceptance/2026-09-27-sheet-row-identity/red-before.log": "f10e2d39ba7af5e1a4345ba80384048cd95c4cafba443b8dfe6bcaaac3578b80",
+    "output/acceptance/2026-09-27-sheet-row-identity/sandbox-first.log": "ed41dc28d4e23eb4933debd19a07049f7ba8c9b95bc77d1754e4861aba90478d",
+    "output/acceptance/2026-09-27-sheet-row-identity/security-selftest.log": "9e87e5fafdb0e9c0cc7955f610fc02e389240455c20f5b0011aab9bb712ad09f",
+    "output/acceptance/2026-09-27-sheet-row-identity/security.log": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d",
+    "output/acceptance/2026-09-27-sheet-row-identity/strict-tests-final.log": "dd6d4ad9db20d2a36b2befdb17fec4caecebc5567699bdb8c40a76328d791da0",
+    "output/acceptance/2026-09-27-sheet-row-identity/type-failure.log": "85a224500a562afa38b259afcefd531953ec01cd4377b3519caa5a271572a55b",
+    "output/acceptance/2026-09-27-sheet-row-identity/blueprint.log": "90c0d6b6d9df5e0e89ab3e8a038d0af7858a2a3ea0fee443e0ead9e07387e330"
+  },
+  "verification": {
+    "affectedTests": {
+      "passed": 440,
+      "failed": 0,
+      "files": 39,
+      "durationSeconds": 8.25
+    },
+    "strictTestRoots": 509,
+    "actualProcessKillRecovery": true,
+    "fullSuiteRunForThisSource": false,
+    "deployedForThisSource": false,
+    "liveGoogleQualification": false
+  },
+  "open": [
+    "immutable PostgreSQL expectations and metadata receipts",
+    "scheduled Drive/Sheets inspections",
+    "staffed conflict and legacy-row migration",
+    "full reporting columns",
+    "live Google and release qualification"
+  ]
+}

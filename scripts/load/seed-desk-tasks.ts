@@ -32,12 +32,25 @@ export interface SeedOptions {
  */
 export async function seedDeskTasks(ownerUrl: string, options: SeedOptions = {}): Promise<{ created: number; total: number; ms: number }> {
   assertChaosDatabaseUrl(ownerUrl);
+  const owner = createDb(ownerUrl, { max: 1 });
+  try {
+    return await seedDeskTasksWith(owner, options);
+  } finally {
+    await owner.destroy();
+  }
+}
+
+/**
+ * The seeding itself, on a connection the caller owns and has already checked. Only seedDeskTasks
+ * (the chaos database) and scripts/load/test/seed-desk-tasks.test.ts (a per-file test clone, which
+ * checks these rows against the current schema) call it.
+ */
+export async function seedDeskTasksWith(owner: ReturnType<typeof createDb>, options: SeedOptions = {}): Promise<{ created: number; total: number; ms: number }> {
   const target = options.tasks ?? 5000;
   const photoEvery = Math.max(0, Math.floor(options.photoEvery ?? 20));
   const photoHexChars = Math.max(32, Math.floor((options.photoKb ?? 100) * 1024 * 2));
   const started = Date.now();
-  const owner = createDb(ownerUrl, { max: 1 });
-  try {
+  {
     const result = await owner.transaction().execute(async (trx) => {
       const q = (text: string, params: readonly unknown[] = []) => trx.executeQuery<Record<string, unknown>>(CompiledQuery.raw(text, [...params]));
       await q('SET LOCAL search_path = hawa, public');
@@ -176,7 +189,5 @@ export async function seedDeskTasks(ownerUrl: string, options: SeedOptions = {})
       }
     }
     return { ...result, ms: Date.now() - started };
-  } finally {
-    await owner.destroy();
   }
 }

@@ -1,8 +1,10 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
-import { createDb, sql, withRlsContext } from '@hawa/db';
+import { randomUUID, createHash } from 'node:crypto';
+import { createDb, sql, withRlsContext, withSessionAdvisoryLock } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
+import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
+import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 if (url && !/^\/hawa_(repair|tr_)/.test(new URL(url).pathname)) throw new Error('Disposable hawa_repair database required');
@@ -22,13 +24,18 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
   const artDirector = { tenantId, actorId: '00000000-0000-4000-b000-000000000002' };
   const kaae = 'c1000000-0000-4000-8000-000000000002';
   let designId = '';
-  let pptx = Buffer.alloc(0);
+  let pptx: Buffer = Buffer.alloc(0);
+  let providerUpdatedAt = 200;
+  let providerReadUnavailable = false;
   const remote = vi.fn(async (input: any, init: any = {}) => {
     const u = String(input);
     if (u.endsWith('/oauth/token')) return Response.json({ access_token: 'token-' + randomUUID(), refresh_token: 'refresh-' + randomUUID(), expires_in: 3600 });
     if (u.endsWith('/imports') && init.method === 'POST') return Response.json({ job: { id: 'import_' + designId, status: 'in_progress' } });
     if (u.includes('/imports/')) return Response.json({ job: { id: 'import_' + designId, status: 'success', result: { designs: [{ id: designId, urls: { edit_url: 'https://www.canva.com/d/x', view_url: 'https://www.canva.com/d/y' } }] } } });
-    if (u.includes('/designs/')) return Response.json({ design: { id: designId, created_at: 100, updated_at: 200, page_count: 1, urls: { edit_url: 'https://www.canva.com/api/design/x/edit', view_url: 'https://www.canva.com/d/y' } } });
+    if (u.includes('/designs/')) {
+      if (providerReadUnavailable) throw new Error('Canva design read unavailable');
+      return Response.json({ design: { id: designId, created_at: 100, updated_at: providerUpdatedAt, page_count: 1, urls: { edit_url: 'https://www.canva.com/api/design/x/edit', view_url: 'https://www.canva.com/d/y' } } });
+    }
     if (u.endsWith('/exports') && init.method === 'POST') return Response.json({ job: { id: 'export_' + designId, status: 'in_progress' } });
     if (u.includes('/exports/')) return Response.json({ job: { id: 'export_' + designId, status: 'success', urls: ['https://export-download.canva.com/check.pptx'] } });
     if (u.startsWith('https://export-download.canva.com/')) return new Response(new Uint8Array(pptx));
@@ -51,6 +58,8 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
   const draftWithTimedOutCheck = async () => {
     const taskId = randomUUID();
     designId = 'DA' + randomUUID().replaceAll('-', '');
+    providerUpdatedAt = 200;
+    providerReadUnavailable = false;
     await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, (trx) =>
       sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
         VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'Desk check capture', 'x', 'received', 3, 1, now(), now())`.execute(trx));
@@ -84,10 +93,10 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
     expect({ http: started.status, status: startedBody.status }).toEqual({ http: 202, status: 'submitted' });
     return (await app.request(`/tasks/${taskId}/canva/exports/${startedBody.operationId}/resume`, { method: 'POST', headers: deskHeaders })).json();
   };
-  const decide = (app: any, taskId: string, revisionId: string, decision: string) =>
+  const decide = (app: any, taskId: string, revisionId: string, decision: string, pinnedExportIds?: string[]) =>
     app.request(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
       method: 'POST', headers: deskHeaders,
-      body: JSON.stringify({ decision, ...(decision === 'revision_requested' ? { revisionRequest: { comment: 'Make the title larger' } } : {}) }),
+      body: JSON.stringify({ decision, ...(pinnedExportIds ? { pinnedExportIds } : {}), ...(decision === 'revision_requested' ? { revisionRequest: { comment: 'Make the title larger' } } : {}) }),
     });
 
   it('exports the worker-made source, and the retrieved check becomes the revision\'s latest QC run', async () => {
@@ -95,6 +104,8 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
     const resumed = await deskCheck(app, taskId);
     expect(resumed.status).toBe('retrieved');
     expect(resumed.artifact.content_check).toMatchObject({ copyPass: true, fontPass: true });
+    const captureState = await (await app.request(`/tasks/${taskId}/canva`, { headers: deskHeaders })).json();
+    expect(captureState.artifacts.find((item: any) => item.id === resumed.artifact.id)?.capture_version).toBe('200');
 
     const runs = await qcRuns(taskId);
     expect(runs.map((r: any) => ({ attempt: r.attempt, status: r.status, fromCapture: r.export_sha === resumed.artifact.sha256 })))
@@ -116,8 +127,214 @@ describe.skipIf(!url)('the Desk check of a studio design the worker imported', (
 
     // The changed revision is still refused; the new one is approved.
     expect((await decide(app, taskId, first, 'approved')).status).toBe(409);
-    const approved = await decide(app, taskId, detail.latestRevisionId, 'approved');
+    const approved = await decide(app, taskId, detail.latestRevisionId, 'approved', [resumed.artifact.id]);
     expect(approved.status).toBe(201);
+  });
+
+  it('refuses an older capture when approving the newly checked revision', async () => {
+    const { taskId, app } = await draftWithTimedOutCheck();
+    const older = await deskCheck(app, taskId);
+    const firstRevision = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect((await decide(app, taskId, firstRevision, 'revision_requested')).status).toBe(201);
+    const newer = await deskCheck(app, taskId);
+    const currentRevision = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect(currentRevision).not.toBe(firstRevision);
+    expect(older.artifact.id).not.toBe(newer.artifact.id);
+
+    const refused = await decide(app, taskId, currentRevision, 'approved', [older.artifact.id]);
+    expect(refused.status).toBe(422);
+    expect((await refused.json()).detail).toMatch(/capture|revision|QA/i);
+    expect((await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).status).toBe('AWAITING_APPROVAL');
+  });
+
+  it('refuses an image from a different Canva design version even with the checked deck selected', async () => {
+    const { taskId, app } = await draftWithTimedOutCheck();
+    const checked = await deskCheck(app, taskId);
+    const revisionId = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    const olderImageId = randomUUID();
+    const operationId = randomUUID();
+    const image = Buffer.from('older image capture from another Canva design version');
+    await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, async (trx) => {
+      await sql`INSERT INTO hawa.canva_remote_operations
+        (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata)
+        VALUES (${operationId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${worker.actorId}, ${'old-image-' + randomUUID()},
+          'older-image', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format: 'png', designUpdatedAt: 199 })}::jsonb)`.execute(trx);
+      await sql`INSERT INTO hawa.canva_export_bytes
+        (id, tenant_id, task_id, client_id, operation_id, format, sha256, content)
+        VALUES (${olderImageId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operationId}::uuid,
+          'png', ${createHash('sha256').update(image).digest('hex')}, ${image})`.execute(trx);
+    });
+
+    const refused = await decide(app, taskId, revisionId, 'approved', [checked.artifact.id, olderImageId]);
+    expect(refused.status).toBe(422);
+    expect((await refused.json()).detail).toMatch(/another capture/);
+  });
+
+  it('a new checked Canva capture after approval invalidates that approval before delivery', async () => {
+    const { taskId, app } = await draftWithTimedOutCheck();
+    const firstCapture = await deskCheck(app, taskId);
+    expect(firstCapture.status).toBe('retrieved');
+    const firstRevision = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect((await decide(app, taskId, firstRevision, 'approved', [firstCapture.artifact.id])).status).toBe(201);
+
+    // A later check can observe edits Canva made after the reviewer approved the earlier bytes.
+    // Even identical bytes are a new capture event and must be reviewed again.
+    const secondCapture = await deskCheck(app, taskId);
+    expect(secondCapture.status).toBe('retrieved');
+    const detail = await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json();
+    expect(detail.latestRevisionId).not.toBe(firstRevision);
+    expect(detail.status).toBe('AWAITING_APPROVAL');
+    const timeline = (await (await app.request(`/tasks/${taskId}/timeline`, { headers: deskHeaders })).json()).events;
+    expect(timeline.some((event: any) => event.eventType === 'approval.invalidated' && event.data.priorRevisionId === firstRevision)).toBe(true);
+    const publish = await app.request(`/tasks/${taskId}/publish`, {
+      method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'current_task' }),
+    });
+    expect(publish.status).toBe(409);
+  });
+
+  it('refuses delivery if a new export was stored after approval but its QC callback did not finish', async () => {
+    const { taskId, app } = await draftWithTimedOutCheck();
+    const checked = await deskCheck(app, taskId);
+    const revisionId = (await (await app.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect((await decide(app, taskId, revisionId, 'approved', [checked.artifact.id])).status).toBe(201);
+
+    // Simulate the crash window after the export bytes commit and before the route can record QC.
+    const bytes = Buffer.from('new captured image bytes after approval, before QC callback');
+    const operationId = randomUUID();
+    await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, async (trx) => {
+      await sql`INSERT INTO hawa.canva_remote_operations
+        (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
+        VALUES (${operationId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${worker.actorId}, ${'later-' + randomUUID()},
+          'later-capture', 'export', 'retrieved', ${designId}, 1, '{"format":"png"}'::jsonb, clock_timestamp(), clock_timestamp())`.execute(trx);
+      await sql`INSERT INTO hawa.canva_export_bytes
+        (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, created_at)
+        VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operationId}::uuid,
+          'png', ${createHash('sha256').update(bytes).digest('hex')}, ${bytes}, clock_timestamp())`.execute(trx);
+    });
+
+    // The stored-approval policy is an administrator's, with a reason (audit 2026-09-27 #2, ADR-127):
+    // an operator is refused first, and an administrator still meets the same missing-QC refusal.
+    const adminHeaders = { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' };
+    const refusedOperator = await app.request(`/tasks/${taskId}/publish`, {
+      method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'deliver_approved_stored', reason: 'Client confirmed by phone' }),
+    });
+    expect(refusedOperator.status).toBe(403);
+    for (const [policy, headers] of [['current_task', operatorHeaders], ['deliver_approved_stored', adminHeaders]] as const) {
+      const response = await app.request(`/tasks/${taskId}/publish`, {
+        method: 'POST', headers, body: JSON.stringify({ policy, reason: 'Client confirmed by phone' }),
+      });
+      expect(response.status).toBe(422);
+      expect((await response.json()).title).toBe('Nothing Approved To Deliver');
+    }
+  });
+
+  it('rechecks approval under the publication lock when capture commits after the first lookup', async () => {
+    const { taskId } = await draftWithTimedOutCheck();
+    const setupApp = createApp({ db, canvaOptions } as any);
+    const checked = await deskCheck(setupApp, taskId);
+    const revisionId = (await (await setupApp.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect((await decide(setupApp, taskId, revisionId, 'approved', [checked.artifact.id])).status).toBe(201);
+
+    const stored = canvaDeliverableStore(new CanvaConnectService(db, canvaOptions));
+    const publisher = { publish: vi.fn(async () => ({ ok: false as const,
+      error: { code: 'TEST_PUBLISH_CALLED', message: 'The stale approval reached the publisher' } })) };
+    let inserted = false;
+    const app = createAppWithClientFixtures({
+      db, canvaOptions, publisher,
+      deliverableStore: {
+        ...stored,
+        read: async (...args: Parameters<typeof stored.read>) => {
+          const bytes = await stored.read(...args);
+          if (!inserted) {
+            inserted = true;
+            const operationId = randomUUID();
+            const image = Buffer.from('capture committed after approval lookup, before the publication lock');
+            await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, async (trx) => {
+              await sql`INSERT INTO hawa.canva_remote_operations
+                (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
+                VALUES (${operationId}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${worker.actorId}, ${'race-' + randomUUID()},
+                  'race-capture', 'export', 'retrieved', ${designId}, 1, '{"format":"png"}'::jsonb, clock_timestamp(), clock_timestamp())`.execute(trx);
+              await sql`INSERT INTO hawa.canva_export_bytes
+                (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, created_at)
+                VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operationId}::uuid,
+                  'png', ${createHash('sha256').update(image).digest('hex')}, ${image}, clock_timestamp())`.execute(trx);
+            });
+          }
+          return bytes;
+        },
+      },
+      telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) },
+    } as any);
+    const response = await app.request(`/tasks/${taskId}/publish`, {
+      method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'current_task' }),
+    });
+    expect(inserted).toBe(true);
+    expect(response.status).toBe(422);
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
+
+  it('keeps a completed export retriable while publication owns the task lock', async () => {
+    const { taskId, app } = await draftWithTimedOutCheck();
+    const started = await app.request(`/tasks/${taskId}/canva/exports`, {
+      method: 'POST', headers: { ...deskHeaders, 'Idempotency-Key': 'locked-capture-' + randomUUID().slice(0, 8) },
+      body: JSON.stringify({ format: 'pptx', expectedVersion: 1 }),
+    });
+    expect(started.status).toBe(202);
+    const operationId = (await started.json()).operationId;
+    const held = await withSessionAdvisoryLock(db, `publish:${taskId}`, async () => {
+      const response = await app.request(`/tasks/${taskId}/canva/exports/${operationId}/resume`, { method: 'POST', headers: deskHeaders });
+      const count = await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, async (trx) =>
+        (await sql<{ count: string }>`SELECT count(*)::text AS count FROM hawa.canva_export_bytes WHERE tenant_id=${tenantId}::uuid AND operation_id=${operationId}::uuid`.execute(trx)).rows[0].count);
+      return { status: response.status, body: await response.json(), count };
+    });
+    expect(held.acquired).toBe(true);
+    if (!held.acquired) return;
+    expect(held.value.status).toBe(503);
+    expect(held.value.body.title).toBe('PUBLICATION_IN_PROGRESS');
+    expect(held.value.count).toBe('0');
+    const resumed = await app.request(`/tasks/${taskId}/canva/exports/${operationId}/resume`, { method: 'POST', headers: deskHeaders });
+    expect(resumed.status).toBe(200);
+    expect((await resumed.json()).status).toBe('retrieved');
+  });
+
+  it('refuses an uncaptured Canva edit observed after approval before any publisher effect', async () => {
+    const { taskId, app: setupApp } = await draftWithTimedOutCheck();
+    const checked = await deskCheck(setupApp, taskId);
+    const revisionId = (await (await setupApp.request(`/tasks/${taskId}`, { headers: deskHeaders })).json()).latestRevisionId;
+    expect((await decide(setupApp, taskId, revisionId, 'approved', [checked.artifact.id])).status).toBe(201);
+    const proof = await withRlsContext(db, { tenantId, userId: worker.actorId, role: 'operator' }, async trx =>
+      (await sql<any>`SELECT a.id, a.decision_payload, a.qc_run_id, q.report FROM hawa.approvals a
+        LEFT JOIN hawa.qc_runs q ON q.id = a.qc_run_id AND q.tenant_id = a.tenant_id
+        WHERE a.tenant_id = ${tenantId}::uuid AND a.task_id = ${taskId}::uuid AND a.decision = 'approved'`.execute(trx)).rows[0]);
+    expect(proof.report).toMatchObject({ exportArtifactId: checked.artifact.id, captureVersion: '200' });
+    expect(proof.decision_payload).toMatchObject({ canvaBindingId: expect.any(String), canvaBindingVersion: 1 });
+    expect(await new CanvaConnectService(db, canvaOptions).verifyApprovedDesignVersion({
+      tenantId, taskId, approvalId: proof.id, artifactIds: [checked.artifact.id],
+    })).toMatchObject({ ok: true, capturedVersion: '200', observedVersion: '200' });
+
+    providerUpdatedAt = 201;
+    const publisher = { publish: vi.fn(async () => ({ ok: false as const,
+      error: { code: 'TEST_PUBLISH_CALLED', message: 'The stale Canva design reached the publisher' } })) };
+    const app = createAppWithClientFixtures({ db, canvaOptions, publisher,
+      telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) },
+    } as any);
+    const response = await app.request(`/tasks/${taskId}/publish`, {
+      method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'current_task' }),
+    });
+    expect(publisher.publish).not.toHaveBeenCalled();
+    const body = await response.json();
+    expect(body).toMatchObject({ status: 409, title: 'Conflict' });
+    expect(body.detail).toMatch(/design changed after its approved capture/i);
+    expect(response.status).toBe(409);
+
+    providerUpdatedAt = 200;
+    providerReadUnavailable = true;
+    const unavailable = await app.request(`/tasks/${taskId}/publish`, {
+      method: 'POST', headers: operatorHeaders, body: JSON.stringify({ policy: 'current_task' }),
+    });
+    expect(unavailable.status).toBe(503);
+    expect((await unavailable.json()).detail).toMatch(/could not confirm the approved design version/i);
+    expect(publisher.publish).not.toHaveBeenCalled();
   });
 
   it('after "Request Revision", a capture whose check fails is recorded as the new revision but cannot be approved', async () => {

@@ -1,0 +1,205 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "7b8de71ed015616c5a315cf67da07af31c77019a",
+  "branch": "worktree-wf_d0161674-b76-6 (from codex/research-grade-design-system)",
+  "status": "PHASE4_FINDINGS_22_13_19_LOCALLY_QUALIFIED_NOT_DEPLOYED",
+  "adr": "130",
+  "migration": "none (073 reserved, not needed: existing hawa.inbox_events uniqueness)",
+  "requirements": [
+    "FR-004",
+    "FR-051",
+    "FR-060",
+    "NFR-001",
+    "NFR-020",
+    "NFR-024"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/130_refused_sends_late_requester_words.md",
+      "sha256": "4d2db6e8396e4d8423f103b62d5b62b93c30fa076cef5606d7dff68ff96e4d0f"
+    },
+    {
+      "path": "apps/worker/src/lifecycle/telegram-sender.ts",
+      "sha256": "2b251796893b185afc0a2ac6012cd791b05c62850f3d290f4cf417963f323a62"
+    },
+    {
+      "path": "apps/worker/test/lifecycle-telegram-sender.test.ts",
+      "sha256": "803633bd39c343f87f475f926474cd9b56b74cb4c3819908940f8ced1ada2aae"
+    },
+    {
+      "path": "apps/worker/src/lifecycle/chat-inbox.ts",
+      "sha256": "5947114c0b5c8c1ab5fc28408901b743f4d23d9ead2e64bb4619997d48957457"
+    },
+    {
+      "path": "apps/worker/src/lifecycle/core-client.ts",
+      "sha256": "2f6c359d522baa854b5c543af430290af7ce0b138e4174c6b62953b9b616488d"
+    },
+    {
+      "path": "apps/worker/test/chat-inbox.test.ts",
+      "sha256": "08547d54bb74bbf999f6e583ca4a8bf009b2bff38aa1860533cd0ec370fee337"
+    },
+    {
+      "path": "apps/core/src/services/lifecycle-chat-target.ts",
+      "sha256": "c5630e13fff955193c3d30d74fb3426348f62a1d6eab5c8c785f36394b8cd0ee"
+    },
+    {
+      "path": "apps/core/src/routes/lifecycle-internal.routes.ts",
+      "sha256": "e4d422be5e0cf1549bcca29f41672ec1851c686bb4eafe83458c9e188814673b"
+    },
+    {
+      "path": "apps/core/src/routes/delivery.routes.ts",
+      "sha256": "c6d89bade4ee1f35e8905eb9cc5478c53ad0e611ed3f543c4b826a3758beba8e"
+    },
+    {
+      "path": "apps/core/test/lifecycle-internal-intake.test.ts",
+      "sha256": "ecfeeb05a6248432f49d604d12ace79f3528cba2bc65fee3bcde2e68e5906fb3"
+    },
+    {
+      "path": "apps/core/test/lifecycle-office-desk-bridge.test.ts",
+      "sha256": "f1074bb691ca67c8cea6d5aa78e6ca35b505a925caf5b4fa431b3eb7e0fe6e18"
+    },
+    {
+      "path": "apps/desk/src/screens/WorkScreen.tsx",
+      "sha256": "d9144b339f292077e3406eb46306d86fe79e44f80aa580c999c0425c9ac2a6b0"
+    },
+    {
+      "path": "apps/desk/src/api/client.ts",
+      "sha256": "fae1f0c312308e92a727d235f43e7523d1e20e351fd017c932a1d6161f7c208b"
+    },
+    {
+      "path": "apps/desk/test/work-screen-truth.test.ts",
+      "sha256": "7bba2da671635ec200a1434528062771fddf407860f92641c80173e1910d68ae"
+    },
+    {
+      "path": "docs/09_MESSAGING_AND_OFFICE_INBOX.md",
+      "sha256": "3e2a6f6bb488640fef211bef189542cd726f579a16fa994192418ce663d1b66e"
+    },
+    {
+      "path": "docs/10_WORKFLOW_RELIABILITY.md",
+      "sha256": "30e6640bdc68338bec7daa5a15bc783a704c819267c1337ab01221875728af4d"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "527737aaf03d4153275046d9322d8b87b6153320ad5a4ae29872e8716b1d64c1"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-sender-red.json",
+      "sha256": "ef878310382f0638f13e9e02242894fc67ceb2acc32c479ea12903324de5d621"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-sender-red.log",
+      "sha256": "a1ad6be8dbc6d2a18707e8595bfc4a4eb588cf27403130c21e8006ddfd73ce6b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-deliver-key-red.json",
+      "sha256": "abfd3bc01b488339207909a78cfa136ca0e0b8dfc072fefbec83a1cf4af11ccc"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-late-change-red.json",
+      "sha256": "1ed766c9a8d9dd99aab61eb940c6d7ba884e0755431aa34155afade4d8824ae9"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-late-change-red.log",
+      "sha256": "20fb336db77ddf8114ce20039263f8b0834a72413ebff7ba8a5eba77ea2fb067"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-desk-late-red.json",
+      "sha256": "8912aa4c929b536a1443feb4595dacbf2ae8918a2b14fea30d76c8889432917b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-focused.json",
+      "sha256": "f503ac14a5253ed3fc1fe3ab201c734d7bd37c2cadeb099798020aa57e5d16df"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-full-suite.json",
+      "sha256": "492d1f77e349d68691011ee35332c0638566a6898aee73b28c9e3139c0c793d2"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-full-suite.log",
+      "sha256": "fa29070b6eb72b92d456ddb2a463eb70202bbb248323aacaf5379c91c82a76f0"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-base-failures.json",
+      "sha256": "d59e731d5b579e0160ed7109feb4eb8360d425d3edd969aeae3805b031c0f3a4"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-final.json",
+      "sha256": "b6aee2cbf5eca917618fe5823b58cdb41b2059c3ed09e90c2eab802d281874dd"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-final.log",
+      "sha256": "43388cc7fa1cd696ce9f5505489e1d64d2b1d16c4052c6b302774cc4ad652a6f"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-typecheck.log",
+      "sha256": "982b4f9a1ae6c843a07dcb1aad48b09368348a488ecdeefc9e64a436430cffd6"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-lint.log",
+      "sha256": "58f0e5ef018f0075e06683b72868b12482eeb04c8c0983c1ee802519324eb488"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-lifecycle-desk-fixes-security.log",
+      "sha256": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d"
+    }
+  ],
+  "acceptance": {
+    "files": 13,
+    "passed": 222,
+    "failed": 0,
+    "skipped": 0,
+    "environment": "Isolated PostgreSQL per file (55432 template clones); hawa_app runtime connections in Core tests; fake Restate journal context; synthetic Telegram bridge and gateway",
+    "findings": {
+      "22": "confirmed and fixed: a definite refusal whose failed mark could not be written is journaled as not_sent, a retried step corrects the mark, then the sender waits and resends or answers refused",
+      "13": "confirmed and fixed for replies to request-keyed lifecycle messages: words stored before answering, keyed office alert, honest requester notice, Deliver held until acknowledged",
+      "19": "confirmed and fixed in the Desk: Deliver reservation key includes task version; late-change refusal releases its key"
+    },
+    "prior_attempts": [
+      "Sender red: 8 failed/30 passed; the verified repro (429 then outage) answered uncertain and never resent; the 5xx guard passed already",
+      "Desk Deliver key red: 1 failed; a press after the task version moved reused the spent action id",
+      "Late words red (Core intake, Core delivery, ChatInbox): 10 failed/98 passed; the designing-stays-stale guard passed already",
+      "Desk late-change prompt red: 2 failed; the refusal was shown as Delivery failed and the id was kept",
+      "First typecheck failed on an unknown-typed office alert in core-client; corrected",
+      "First focused run: hawa-work-desk-cv17 failed because the Desk bundle was not built, and passed after the build (479 kB entry chunk); route-inventory fails before and after this change",
+      "Captioned photo reply case added after the fix; passed on its first run"
+    ]
+  },
+  "checks": {
+    "source_types": "passed",
+    "script_types": "passed",
+    "strict_test_roots": 533,
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "security": "0 secrets; 53 justified allowlist hits",
+    "full_suite": "532 files, 4471 passed, 8 failed, 60 skipped; run before the photo case and documentation edits",
+    "full_suite_failures_on_base": "the same 8 failures in 7 files reproduce on 7b8de71e without this change: canva-planner-accounting, route-inventory, startup-schema-check, studio-ledger (2), blob-gc, schema-upgrade, r11-release-gate"
+  },
+  "proof_scope": [
+    "crash before and after every recorded journal entry for a 429 during a PostgreSQL outage",
+    "429, pre-connection and unknown refusals resent once the failed mark is written",
+    "4xx refusal during an outage answered refused and marked failed",
+    "5xx during an outage stays uncertain, never resent, office alerted once",
+    "lost answer to the first send stays uncertain and alerted",
+    "late words stored per stage (in_review, approved, delivering, delivered), replayed by update, changed content refused, no task",
+    "no office chat: words kept, no alert claimed",
+    "Deliver held until acknowledged; unknown acknowledgement refused; acknowledging actor and action recorded; a newer change holds again",
+    "Desk prompt, fresh key after acknowledgement, released key after refusal, fresh key after task version moved"
+  ],
+  "not_executed": [
+    "Restate server journal or process-kill drill",
+    "live Telegram send or reply",
+    "browser run of the Desk confirm dialog",
+    "words sent without a reply, and replies to delivery files or notices (not covered by the decision)",
+    "sent-mark write failure after a successful send (still answers uncertain, unchanged)",
+    "route inventory fixture refresh (pre-existing drift, not this change)",
+    "deployment and production migration"
+  ],
+  "next": [
+    "lead merges the ledger entry into EXECUTION.md",
+    "decide whether unlinked messages after approval should also be kept as late words",
+    "refresh the stale route inventory, migration-list and release-manifest fixtures in their own change"
+  ]
+}

@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import { unzipSync, strFromU8 } from 'fflate';
 import {
@@ -44,7 +45,7 @@ describe('named accent words', () => {
   it('draws exactly those words in the accent colour', () => {
     const l = layout();
     Object.assign(l.text[0], { accentColor: GOLD, accentText: 'MEET KAAE AT' });
-    const { svg } = renderLayoutV2ToSvg(l, { copyText: COPY });
+    const { svg } = renderLayoutV2ToSvg(l, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY });
     const gold = [...svg.matchAll(new RegExp(`<tspan[^>]*fill="${GOLD}"[^>]*>([^<]*)</tspan>`, 'g'))].map((m) => m[1]).join(' ');
     expect(gold.replace(/ /g, ' ').trim()).toBe('MEET KAAE AT');
     expect(svg).toContain('SAGACON');

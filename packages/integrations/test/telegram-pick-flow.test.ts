@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { assert, describe, it, expect, beforeEach } from 'vitest';
 import {
   TelegramPickFlowService,
   type PickCandidate,
@@ -222,7 +222,7 @@ describe('P08 — Telegram Pick Flow (Approve, Edit, Reject, Non-Blocking Timeou
       useButton.callback_data,
       'user_lead'
     );
-    expect(replayAttempt.verificationResult.ok).toBe(false);
+    expect(replayAttempt.verificationResult.ok).toBe(false); assert(!replayAttempt.verificationResult.ok);
     expect(replayAttempt.verificationResult.code).toBe('REPLAY_DETECTED');
     expect(replayAttempt.outboundMessage?.text).toContain('This one-time token has already been consumed');
   });

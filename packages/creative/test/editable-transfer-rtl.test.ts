@@ -14,13 +14,13 @@ const plan = {
 
 describe('editable transfer: Sorani Kurdish blocks', () => {
   it('writes a right-to-left, right-aligned Kurdish run in the admitted script typeface', async () => {
-    const out = await encodeEditableTransfer(plan, copy, undefined, { extraFonts: ['Noto Sans Arabic'] });
+    const out = await encodeEditableTransfer(plan, copy, undefined, { extraFonts: ['Noto Sans Arabic'], copyLocales: ['en', 'ckb'] });
     const files = unzipSync(out.bytes, { filter: (f) => f.name === 'ppt/slides/slide1.xml' });
     const xml = strFromU8(files['ppt/slides/slide1.xml']);
     const kurdish = xml.slice(xml.indexOf('وۆرکشۆپی') - 900, xml.indexOf('وۆرکشۆپی'));
     expect(kurdish).toContain('rtl="1"');
     expect(kurdish).toContain('algn="r"');
-    expect(kurdish).toContain('lang="ku"');
+    expect(kurdish).toContain('lang="ckb"');
     expect(kurdish).toContain('<a:cs typeface="Noto Sans Arabic"');
     const english = xml.slice(xml.indexOf('Quality Assurance') - 900, xml.indexOf('Quality Assurance'));
     expect(english).not.toContain('rtl="1"');

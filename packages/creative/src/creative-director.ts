@@ -382,7 +382,7 @@ export class CreativeDirectorRunner {
     const isRtl = brief.direction === 'rtl' || brief.primaryLanguage === 'ckb' || brief.primaryLanguage === 'ar';
 
     // 1. Add background vector/shape
-    // KAAE's own styling left this generic generator with its v1 templates (ADR-038): KAAE's designs
+    // KAAE's own styling left this generic generator with its v1 templates (ADR-127): KAAE's designs
     // come from the design studio.
     const bgFill = '<rect width="100%" height="100%" fill="#0B0F19"/>';
 
@@ -552,7 +552,7 @@ export class CreativeDirectorRunner {
       });
     } else {
       // Any other brand used to fall through to KAAE's v1 templates, drawing another client's design
-      // in KAAE's identity. Those templates are retired (ADR-038); other clients are designed in the studio.
+      // in KAAE's identity. Those templates are retired (ADR-127); other clients are designed in the studio.
       throw new Error(`No legacy template for brand "${brandId}"; its designs are made in the design studio.`);
     }
   }

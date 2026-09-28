@@ -1,3 +1,4 @@
+import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { describe, it, expect, afterAll } from 'vitest';
 import { createDb } from '@hawa/db';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
@@ -23,6 +24,21 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.status).toBe('healthy');
+  });
+
+  it('does not call an unrun paid model probe connected', async () => {
+    const previous = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = 'configured-but-unverified-test-key';
+    try {
+      const res = await app.request('/health');
+      const json = await res.json();
+      expect(json.dependencies.modelProvider).toBe('unverified');
+      expect(json.lastPaidProbe.status).toBe('unverified');
+      expect(json.lastPaidProbe.at).toBeNull();
+    } finally {
+      if (previous === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previous;
+    }
   });
 
   it('rejects unauthenticated telegram webhook', async () => {
@@ -112,7 +128,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
   it('deduplicates identical incoming event', async () => {
     const payload = JSON.stringify({
       update_id: 102,
-      message: { text: 'Duplicate test', chat: { id: 777 } },
+      message: { text: 'Please create a new KAAE poster\n---\nDUPLICATE TEST', chat: { id: 777 } },
     });
     const res1 = await app.request('/api/webhooks/telegram', {
       method: 'POST',
@@ -135,6 +151,80 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(res2.status).toBe(200);
     const json = await res2.json();
     expect(json.duplicate).toBe(true);
+  });
+
+  it('keeps passive chat text out of the production task pipeline', async () => {
+    const res = await app.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: {
+        'x-telegram-bot-api-secret-token': 'expected_office_secret',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        update_id: 103,
+        message: { text: 'Duplicate test', chat: { id: 777 } },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.ok).toBe(true);
+    expect(json.task).toBeUndefined();
+  });
+
+  it('keeps even a complete passive group brief in the inbox until explicitly promoted', async () => {
+    const message = 'KAAE Accreditation Ceremony\n---\nOctober 28, 2026\nErbil Hotel';
+    const passive = await app.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ update_id: 104, message: { text: message, chat: { id: -777, type: 'supergroup' } } }),
+    });
+    expect(passive.status).toBe(200);
+    expect(await passive.json()).toMatchObject({ ok: true, status: 'MESSAGE_ONLY' });
+
+    const promoted = await app.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ update_id: 105, message: { text: `/task ${message}`, chat: { id: -777, type: 'supergroup' } } }),
+    });
+    expect(promoted.status).toBe(201);
+    const json = await promoted.json();
+    expect(json.task).toBeDefined();
+    expect(json.task.title).toContain('KAAE');
+  });
+
+  it('records passive group updates durably so a webhook replay cannot promote them', async () => {
+    const payload = JSON.stringify({
+      update_id: 106,
+      message: { text: 'KAAE Ceremony\n---\nOctober 28, 2026\nErbil Hotel', chat: { id: -778, type: 'group' } },
+    });
+    const request = () => dbApp.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    const first = await request();
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ ok: true, status: 'MESSAGE_ONLY' });
+    const replay = await request();
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ ok: true, duplicate: true, updateId: '106' });
+  });
+
+  it('does not treat a group reply quoting an unknown task ID as a new brief', async () => {
+    const res = await app.request('/api/webhooks/telegram', {
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        update_id: 107,
+        message: {
+          text: 'KAAE Accreditation Ceremony\n---\nOctober 28, 2026\nErbil Hotel',
+          chat: { id: -779, type: 'group' },
+          reply_to_message: { text: 'Unknown task 11111111-1111-4111-8111-111111111111' },
+        },
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, status: 'MESSAGE_ONLY' });
   });
 
   it('creates task via Desk API with Idempotency-Key', async () => {
@@ -259,7 +349,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
 
   it('enforces repair budget of max 2 cycles on revision requests', async () => {
     const app = dbApp;
-    // A client the legacy generator still drafts: KAAE's designs are made only in the studio (ADR-038).
+    // A client the legacy generator still drafts: KAAE's designs are made only in the studio (ADR-127).
     const createRes = await app.request('/v1/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -276,7 +366,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
 
     const revCheck = await app.request(`/v1/tasks/${taskId}`);
-    const { latestRevisionId } = await revCheck.json();
+    let { latestRevisionId } = await revCheck.json();
 
     // Revision 1
     const rev1 = await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
@@ -290,6 +380,15 @@ describe('Core API: Ingress & Task Lifecycle', () => {
 
     // Transition back to AWAITING_APPROVAL
     await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
+    const nextRevision = await (await app.request(`/v1/tasks/${taskId}`)).json();
+    expect(nextRevision.status).toBe('AWAITING_APPROVAL');
+    expect(nextRevision.latestRevisionId).not.toBe(latestRevisionId);
+    const stale = await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outcome: 'revision_requested', revisionRequest: { comment: 'Stale request must not count' } }),
+    });
+    expect(stale.status).toBe(409);
+    latestRevisionId = nextRevision.latestRevisionId;
 
     // Revision 2
     const rev2 = await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
@@ -303,6 +402,10 @@ describe('Core API: Ingress & Task Lifecycle', () => {
 
     // Transition back to AWAITING_APPROVAL
     await app.request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
+    const finalRevision = await (await app.request(`/v1/tasks/${taskId}`)).json();
+    expect(finalRevision.status).toBe('AWAITING_APPROVAL');
+    expect(finalRevision.latestRevisionId).not.toBe(latestRevisionId);
+    latestRevisionId = finalRevision.latestRevisionId;
 
     // Revision 3 (exceeds budget -> OPERATOR_REQUIRED)
     const rev3 = await app.request(`/v1/tasks/${taskId}/revisions/${latestRevisionId}/decisions`, {
@@ -326,12 +429,40 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const healthRes = await app.request('/v1/integrations/health');
     expect(healthRes.status).toBe(200);
     const health = await healthRes.json();
-    expect(health.items.length).toBe(6);
+    expect(health.items.length).toBe(7);
+    for (const item of health.items) {
+      expect(item.state).not.toBe('healthy');
+      expect(item.reachability).toBe('unknown');
+      expect(item.paidVerification).toBe('not_run');
+      expect(item.lastVerifiedAt).toBeNull();
+      expect(item.nextAction).toBeTruthy();
+    }
 
     // Operations Failures are the failed tasks Postgres holds
     const failRes = await dbApp.request('/v1/operations/failures');
     expect(failRes.status).toBe(200);
     expect((await app.request('/v1/operations/failures')).status).toBe(503);
+  });
+
+  it('reports a configured Drive adapter without claiming it is reachable or paid-verified', async () => {
+    const previous = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    process.env.GOOGLE_DRIVE_FOLDER_ID = 'fixture-folder';
+    try {
+      const response = await app.request('/v1/integrations/health');
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      const drive = body.items.find((item: any) => item.integrationId === 'int_google_drive');
+      expect(drive).toMatchObject({
+        configured: true,
+        state: 'configured',
+        reachability: 'unknown',
+        paidVerification: 'not_run',
+        lastVerifiedAt: null,
+      });
+    } finally {
+      if (previous === undefined) delete process.env.GOOGLE_DRIVE_FOLDER_ID;
+      else process.env.GOOGLE_DRIVE_FOLDER_ID = previous;
+    }
   });
 
   it('streams real-time Server-Sent Events (SSE) and broadcasts task mutations', async () => {
@@ -377,28 +508,11 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     await reader!.cancel();
   });
 
-  it('GET /v1/operations/slo & POST /v1/operations/slo/run tracks synthetic latency & percentiles', async () => {
-    // 1. Get initial SLO summary
+  it('reports office availability as unmeasured and refuses synthetic operational execution', async () => {
     const getRes = await app.request('/v1/operations/slo');
     expect(getRes.status).toBe(200);
-    const slo = await getRes.json();
-    // No seeded probes: the daemon starts empty and every data point comes from a probe that ran.
-    expect(slo.summary.totalProbes).toBe(0);
-    expect(slo.summary.circuitBreakers.length).toBe(4);
-
-    // 2. Trigger on-demand synthetic campaign benchmark
-    const runRes = await app.request('/v1/operations/slo/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenario: 'nawroz_spring' }),
-    });
-    expect(runRes.status).toBe(201);
-    const runBody = await runRes.json();
-    expect(runBody.result.success).toBe(true);
-    expect(runBody.result.invariantsVerified.deterministicQaPassed).toBe(true);
-    expect(runBody.summary.totalProbes).toBe(slo.summary.totalProbes + 1);
-    expect(runBody.summary.successRate).toBe(100);
-    expect(runBody.summary.p99DurationMs).toBeGreaterThan(0);
+    expect(await getRes.json()).toMatchObject({evidenceKind:'unmeasured',availability:{observedPercent:null,sloCompliant:null},latency:{p99Ms:null}});
+    expect((await app.request('/v1/operations/slo/run',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status).toBe(410);
   });
 
   it('GET /v1/operations/reconciliation & POST /v1/operations/reconciliation/run audit drift and refuse auto-repair (FR-049, FR-050)', async () => {
@@ -407,7 +521,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     // 1. Before any audit there is no report, not an invented clean one
     const getRes = await dbApp.request('/v1/operations/reconciliation');
     expect(getRes.status).toBe(200);
-    expect(await getRes.json()).toBeNull();
+    expect((await getRes.json()).latest).toBeNull();
 
     // 2. Auto-repair is refused: Core cannot upload to Drive or write Sheets from here
     const repairRes = await dbApp.request('/v1/operations/reconciliation/run', {
@@ -419,11 +533,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect((await repairRes.json()).title).toBe('Auto-Repair Not Available');
 
     // 3. The audit runs and says what it compared
-    const runRes = await dbApp.request('/v1/operations/reconciliation/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
+    const runRes = await runReceiptAudit(dbApp);
     expect(runRes.status).toBe(201);
     const runReport = await runRes.json();
     expect(runReport.auditId).toBeDefined();
@@ -434,7 +544,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(runReport.totalTasksAudited).toBeGreaterThanOrEqual(1);
 
     const latest = await (await dbApp.request('/v1/operations/reconciliation')).json();
-    expect(latest.auditId).toBe(runReport.auditId);
+    expect(latest.latest.auditId).toBe(runReport.auditId);
   });
 
   it('GET /v1/clients lists seeded client tenants with color & rule metrics', async () => {
@@ -648,21 +758,14 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(fontData.hasZwnj).toBe(true);
     expect(fontData.diacriticClearanceRatio).toBe(1.52);
 
-    // 2. Budget Inspection and Allocation
+    // Legacy fixture budgets cannot represent office paid-call accounting (ADR-102).
     const budgetRes = await app.request('/v1/clients/client-drustee/budget');
-    expect(budgetRes.status).toBe(200);
-    const budgetData = await budgetRes.json();
-    expect(budgetData.capUsd).toBe(10.0);
-    expect(budgetData.status).toBe('HEALTHY');
-
+    expect(budgetRes.status).toBe(410);
+    expect((await budgetRes.json()).detail).toContain('/spending/policy');
     const allocRes = await app.request('/v1/clients/client-drustee/budget/allocate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ capUsd: 15.0 }),
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({capUsd:15})
     });
-    expect(allocRes.status).toBe(200);
-    const allocData = await allocRes.json();
-    expect(allocData.capUsd).toBe(15.0);
+    expect(allocRes.status).toBe(410);
 
     // 3. Governed Learning & Feedback Mining
     const mineRes = await app.request('/v1/feedback/mine', {
@@ -912,7 +1015,10 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const path = await import('node:path');
     const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer test_admin_key' };
     const candidates = ['infra/docker/.env.production', '.env.production', '.env.local', '../../infra/docker/.env.production'].map((p) => path.resolve(process.cwd(), p));
-    const before = candidates.map((p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null));
+    // Hashes, not contents: a failure here must not print a real configuration file into the test log.
+    const { createHash } = await import('node:crypto');
+    const digest = (p: string) => (fs.existsSync(p) ? createHash('sha256').update(fs.readFileSync(p)).digest('hex') : null);
+    const before = candidates.map(digest);
     const res = await app.request('/v1/system/providers', {
       method: 'POST',
       headers,
@@ -922,7 +1028,7 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     const data = await res.json();
     expect(data.persisted).toBe(false);
     expect(data.activated).toEqual(['ANTHROPIC_API_KEY', 'WAHA_ENDPOINT']);
-    const after = candidates.map((p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null));
+    const after = candidates.map(digest);
     expect(after).toEqual(before);
   });
 
@@ -1040,5 +1146,3 @@ describe('Core API: Ingress & Task Lifecycle', () => {
     expect(dna.fonts[0].family).toContain('Cinzel');
   });
 });
-
-

@@ -1,0 +1,149 @@
+{
+  "checkVersion": 5,
+  "sourceTextObjects": [
+    {
+      "id": "ppt/slides/slide1.xml#13",
+      "type": "text",
+      "text": "ڕووداو [10 September]",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "13"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#16",
+      "type": "text",
+      "text": "⁧NOVA ONE⁩ — بەرهەمی نوێ",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "16"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#19",
+      "type": "text",
+      "text": "⁦careers.rona.example/jobs⁩ داواکاری",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "19"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#22",
+      "type": "text",
+      "text": "د. لینا ڕەحمان",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "22"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#25",
+      "type": "text",
+      "text": "د. لينا رحمن",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "25"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#28",
+      "type": "text",
+      "text": "ئەڵقەی ٢١: «شارەکان چۆن بیر دەکەنەوە؟»",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "28"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#31",
+      "type": "text",
+      "text": "الحلقة 21: «كيف تتذكر المدن؟»",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "31"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#34",
+      "type": "text",
+      "text": "٢٩٬٥٠٠ IQD — سەبەتەی خێزان",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "34"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#37",
+      "type": "text",
+      "text": "29,500 IQD — سلة العائلة",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "37"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#40",
+      "type": "text",
+      "text": "ئیمەیڵ: team@example.com",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "40"
+      }
+    }
+  ],
+  "source": "canva_exported_pptx",
+  "canvaDesignId": "DAHWWwCxPqk",
+  "documentKind": "unspecified",
+  "copyPass": true,
+  "fontPass": true,
+  "rtlPass": true,
+  "rtlNote": "Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.",
+  "requiredFont": "Verdana",
+  "scriptFonts": null,
+  "fontsByIndex": null,
+  "allowedFontsByScript": {
+    "latin": [
+      "Noto Sans Arabic"
+    ],
+    "arabic": [
+      "Noto Sans Arabic"
+    ]
+  },
+  "admittedFonts": [
+    "Cinzel",
+    "Playfair Display",
+    "Montserrat",
+    "Lora",
+    "Bodoni Moda",
+    "Cairo",
+    "Plus Jakarta Sans",
+    "Vazirmatn",
+    "Inter",
+    "Verdana",
+    "Noto Sans Arabic"
+  ],
+  "arabicTextObjectCount": 10,
+  "rtlTextObjectCount": 0,
+  "observedFonts": [
+    "Noto Sans Arabic"
+  ],
+  "textObjectCount": 10,
+  "expectedTextObjectCount": 10,
+  "offendingObjects": [],
+  "comparisonPolicy": "exact words and punctuation; layout whitespace folded",
+  "fullReleasePass": false,
+  "logoVerification": "not_qualified",
+  "layoutVerification": "visual_review_required",
+  "printQualified": false
+}

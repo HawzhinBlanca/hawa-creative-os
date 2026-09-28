@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import {
   getContrastRatio,
   evaluateContrastCompliance,
@@ -172,12 +172,14 @@ describe('QA: Contrast, Layout Bounds & Safe Zone Validation', () => {
       const ctx: RequestContext = {
         tenantId: 't1',
         actor: { type: 'system', id: 'sys' },
-        correlationId: 'c1',
+        correlationId: 'c1', deadline: new Date(Date.now() + 60000).toISOString(), idempotencyKey: 'qa-contrast-fixture',
       };
 
       const request: QARequest = {
         taskId: 'task-contrast-1',
         designRevisionId: 'rev-1',
+        document: { documentId: 'doc-contrast-1', sourceRevision: 1, sourceSha256: '1'.repeat(64), studio: 'canva', studioVersion: '1', schemaVersion: '1' },
+        sourceHash: '1'.repeat(64), renders: [], profile: { name: 'strict', version: '1', rules: {} },
         brief: {
           variants: [{ width: 1080, height: 1080 }],
           exactCopy: [{ text: 'پیرۆزە' }],
@@ -186,7 +188,8 @@ describe('QA: Contrast, Layout Bounds & Safe Zone Validation', () => {
           assets: [{ sha256: 'logo_sha_123', role: 'logo_primary' }],
         },
         manifest: {
-          pages: [{ id: 'p1', name: 'Square', width: 1080, height: 1080 }],
+          fonts: [], assets: [], warnings: [],
+          pages: [{ id: 'p1', name: 'Square', width: 1080, height: 1080, unit: 'px' }],
           nodes: [
             {
               id: 'n1',
@@ -205,7 +208,7 @@ describe('QA: Contrast, Layout Bounds & Safe Zone Validation', () => {
       };
 
       const res = await engine.run(ctx, request);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (!res.ok) return;
 
       const checkIds = res.value.checks.map((c) => c.id);

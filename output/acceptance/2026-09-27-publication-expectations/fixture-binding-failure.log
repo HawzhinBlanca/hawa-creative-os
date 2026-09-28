@@ -1,0 +1,53 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] hawa_tpl_build_test_7fff8342: applied db/schema.sql
+[test databases] hawa_tpl_build_test_7fff8342: applied db/rls.sql
+[test databases] hawa_tpl_build_test_7fff8342: applied db/seed.sql
+[test databases] hawa_tpl_build_test_7fff8342: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_test_7fff8342: versioned upgrades applied=59 verified=0
+[test databases] hawa_tpl_build_test_7fff8342: applied db/test-fixtures.sql
+[test databases] built template hawa_tpl_test_848a773878c0a97a
+[test databases] hawa_tpl_build_repair_fd0dc2fa: applied db/schema.sql
+[test databases] hawa_tpl_build_repair_fd0dc2fa: applied db/rls.sql
+[test databases] hawa_tpl_build_repair_fd0dc2fa: applied db/seed.sql
+[test databases] hawa_tpl_build_repair_fd0dc2fa: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_repair_fd0dc2fa: versioned upgrades applied=59 verified=0
+[test databases] built template hawa_tpl_repair_848a773878c0a97a
+[test databases] per-file clones of hawa_tpl_test_848a773878c0a97a and hawa_tpl_repair_848a773878c0a97a (670 ms)
+····························{"level":"error","time":"2026-09-27T16:58:31.262Z","service":"core","requestId":"52be6911-c5fd-4753-9bcc-51ff885a44a6","taskId":"0c1c7ac0-346f-4747-9d04-7ee393f42e97","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"injected receipt write failure","stack":"Error: injected receipt write failure\n    at PublicationRepository.<anonymous> (/Users/hawzhin/Hawdesign/apps/core/test/e2e-canva-to-delivery-chain.test.ts:227:51)\n    at PublicationRepository.recordDriveRef (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:968:35\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:18)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at doPublish (/Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:966:9)\n    at /Users/hawzhin/Hawdesign/packages/db/src/session-lock.ts:30:39"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+{"level":"error","time":"2026-09-27T16:58:31.387Z","service":"core","requestId":"d17f7d4c-7d46-430d-89be-7133c114149d","taskId":"0c1c7ac0-346f-4747-9d04-7ee393f42e97","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"injected outbox commit failure","stack":"Error: injected outbox commit failure\n    at OutboxRepository.<anonymous> (/Users/hawzhin/Hawdesign/apps/core/test/e2e-canva-to-delivery-chain.test.ts:252:51)\n    at OutboxRepository.enqueue (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:1022:30\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at doPublish (/Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:966:9)\n    at /Users/hawzhin/Hawdesign/packages/db/src/session-lock.ts:30:39"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+·x·····{"level":"error","time":"2026-09-27T16:58:32.861Z","service":"core","requestId":"993d75a0-56c7-4fb6-8794-d8ec7f75097c","taskId":"574262da-9bb2-4538-9fd7-07c4a287a25c","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Synthetic stop before expectation insert","stack":"Error: Synthetic stop before expectation insert\n    at /Users/hawzhin/Hawdesign/apps/core/test/publish-sheets-unconfirmed.test.ts:251:94\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20"},"msg":"[core:publication-expectation:freeze] Durable input freeze failed"}
+···
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/e2e-canva-to-delivery-chain.test.ts > E2E Canva-to-Delivery Closed Loop > completes the entire chain from intake to Canva draft, PostgreSQL revision & QC, Desk approval, delivery, and outbox notification
+error: SHEET_RECEIPT_EXPECTATION_CONFLICT
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ PostgresConnection.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:90:49
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28
+ ❯ SingleConnectionProvider.#run node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16
+ ❯ DefaultQueryExecutor.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16
+ ❯ InsertQueryBuilder.execute node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24
+ ❯ InsertQueryBuilder.executeTakeFirst node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26
+ ❯ runner packages/db/src/repositories/publication.repository.ts:271:25
+ ❯ PublicationRepository.recordSheetSync packages/db/src/repositories/publication.repository.ts:329:14
+ ❯ PostgresConnection.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/dialect/postgres/postgres-driver.js:102:41
+ ❯ node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:35:28
+ ❯ SingleConnectionProvider.#run node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/single-connection-provider.js:24:16
+ ❯ DefaultQueryExecutor.executeQuery node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-executor/query-executor-base.js:34:16
+ ❯ InsertQueryBuilder.execute node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1106:24
+ ❯ InsertQueryBuilder.executeTakeFirst node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/query-builder/insert-query-builder.js:1122:26
+ ❯ runner packages/db/src/repositories/publication.repository.ts:271:25
+ ❯ PublicationRepository.recordSheetSync packages/db/src/repositories/publication.repository.ts:329:14
+ ❯ runner packages/db/src/client.ts:67:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 37 passed (38)
+   Start at  19:58:28
+   Duration  4.84s (transform 2.10s, setup 324ms, import 2.95s, tests 3.30s, environment 0ms)
+

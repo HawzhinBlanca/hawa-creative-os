@@ -174,6 +174,25 @@ describe('Design Studio v2: Layout Validation Engine (validateLayoutV2)', () => 
   });
 
   describe('Adversarial Hard-Fail Cases (14 Codes)', () => {
+    it('rejects a layout that meets house logo rules but violates this client\'s stricter logo policy', () => {
+      const layout = createPassingLayout();
+      expect(validateLayoutV2(layout, BASE_CONTEXT).ok).toBe(true);
+
+      const tooSmall = validateLayoutV2(layout, {
+        ...BASE_CONTEXT,
+        reference: { ...BASE_CONTEXT.reference, logoMinimumWidthPx: 160 },
+      });
+      expect(tooSmall.ok).toBe(false);
+      if (!tooSmall.ok) expect(tooSmall.code).toBe('LOGO');
+
+      const tooClose = validateLayoutV2(layout, {
+        ...BASE_CONTEXT,
+        reference: { ...BASE_CONTEXT.reference, logoClearSpacePx: 80 },
+      });
+      expect(tooClose.ok).toBe(false);
+      if (!tooClose.ok) expect(tooClose.code).toBe('LOGO');
+    });
+
     it('code DIMENSIONS_CHANGED: rejects when width or height differ from request', () => {
       const layout = createPassingLayout();
       layout.width = 1200;
@@ -196,6 +215,37 @@ describe('Design Studio v2: Layout Validation Engine (validateLayoutV2)', () => 
       const res = validateLayoutV2(layout, BASE_CONTEXT);
       expect(res.ok).toBe(false);
       if (!res.ok) expect(res.code).toBe('FONT_NOT_ADMITTED');
+    });
+
+    it('rejects a globally known display font outside this client\'s admitted set', () => {
+      const layout = createPassingLayout();
+      layout.text[0].fontFamily = 'Cinzel';
+      expect(validateLayoutV2(layout, BASE_CONTEXT).ok).toBe(true);
+
+      const scoped = validateLayoutV2(layout, {
+        ...BASE_CONTEXT,
+        reference: { ...BASE_CONTEXT.reference, rules: {
+          ...BASE_CONTEXT.reference.rules,
+          admittedDisplayFonts: { latin: ['Inter'], arabic: [] },
+        } },
+      });
+      expect(scoped.ok).toBe(false);
+      if (!scoped.ok) expect(scoped.code).toBe('FONT_NOT_ADMITTED');
+    });
+
+    it('refuses to silently substitute another Arabic display face for a client', () => {
+      const layout = createPassingLayout(1080, 1350, [2, 3]);
+      layout.text[2].fontFamily = 'Amiri';
+      const scoped = validateLayoutV2(layout, {
+        ...BASE_CONTEXT,
+        copyScripts: ['latin', 'latin', 'arabic', 'arabic'],
+        reference: { ...BASE_CONTEXT.reference, rules: {
+          ...BASE_CONTEXT.reference.rules,
+          admittedDisplayFonts: { latin: [], arabic: [] },
+        } },
+      });
+      expect(scoped.ok).toBe(false);
+      if (!scoped.ok) expect(scoped.code).toBe('FONT_NOT_ADMITTED');
     });
 
     it('code PALETTE: rejects non-brand hex color in shapes or text', () => {

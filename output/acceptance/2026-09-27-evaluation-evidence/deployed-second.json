@@ -1,0 +1,58 @@
+{
+  "checkedAt": "2026-09-27T11:53:36.610Z",
+  "buildCommit": "f21c4e024c36534d41c37d13c16809e5dc1eb281",
+  "completed": false,
+  "checks": [
+    {
+      "name": "exact candidate is running",
+      "passed": true
+    },
+    {
+      "name": "candidate includes saved stopped evaluation",
+      "passed": true
+    },
+    {
+      "name": "saved case evidence matches the served corpus",
+      "passed": true
+    },
+    {
+      "name": "saved case evidence covers every routing definition",
+      "passed": true
+    },
+    {
+      "name": "stopped routing case evidence separates attempted failure from unexecuted",
+      "passed": true
+    },
+    {
+      "name": "first case displays its saved failure",
+      "passed": true
+    },
+    {
+      "name": "second case displays not executed",
+      "passed": true
+    },
+    {
+      "name": "stopped report has no aggregate pass rate",
+      "passed": true
+    },
+    {
+      "name": "suite breakdown uses saved counts",
+      "passed": true
+    },
+    {
+      "name": "suite breakdown has no sample latency or contrast",
+      "passed": true
+    },
+    {
+      "name": "candidate ranking remains unreported",
+      "passed": true
+    },
+    {
+      "name": "candidate evidence displays recorded calls",
+      "passed": true
+    }
+  ],
+  "realProviderCalls": false,
+  "productionChanged": false,
+  "scope": "Disposable candidate with synthetic provider outcomes"
+}

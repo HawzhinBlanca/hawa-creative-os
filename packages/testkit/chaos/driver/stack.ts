@@ -7,7 +7,7 @@
  * the office's hawa-production or hawa-test projects.
  */
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,14 +19,15 @@ export const REPO_ROOT = resolve(CHAOS_DIR, '..', '..', '..');
 const COMPOSE_FILE = join(CHAOS_DIR, 'docker-compose.chaos.yml');
 const RUN_DIR = join(CHAOS_DIR, '.run');
 const ENV_FILE = join(RUN_DIR, 'chaos.env');
+export const RECOVERY_OVERRIDE = join(RUN_DIR, 'recovery.compose.json');
 
 export const PORTS = { postgres: 56432, restateAdmin: 56070, restateIngress: 56080, fakes: 56090 } as const;
 export const FAKES_URL = `http://127.0.0.1:${PORTS.fakes}`;
 export const RESTATE_ADMIN_URL = `http://127.0.0.1:${PORTS.restateAdmin}`;
 export const RESTATE_INGRESS_URL = `http://127.0.0.1:${PORTS.restateIngress}`;
 
-export type Service = 'postgres' | 'restate' | 'core' | 'worker-blue' | 'worker-green' | 'fakes';
-const SERVICES: readonly Service[] = ['postgres', 'restate', 'core', 'worker-blue', 'worker-green', 'fakes'];
+export type Service = 'postgres' | 'restate' | 'core' | 'worker-blue' | 'worker-green' | 'fakes' | 'docling' | 'desk' | 'nginx';
+const SERVICES: readonly Service[] = ['postgres', 'restate', 'core', 'worker-blue', 'worker-green', 'fakes', 'docling', 'desk', 'nginx'];
 
 export interface ChaosSecrets {
   CHAOS_OWNER_PASSWORD: string;
@@ -41,6 +42,7 @@ export interface ChaosSecrets {
   CHAOS_CANVA_KEY: string;
   /** HAWA_WORKER_TOKEN (Phase 2.1): the worker's credential for Core's /v1/internal/*. */
   CHAOS_WORKER_TOKEN: string;
+  CHAOS_AVAILABILITY_SECRET: string;
 }
 
 /**
@@ -63,6 +65,7 @@ export function secrets(): ChaosSecrets {
     CHAOS_CANVA_SECRET: hex(16),
     CHAOS_CANVA_KEY: hex(32),
     CHAOS_WORKER_TOKEN: hex(24),
+    CHAOS_AVAILABILITY_SECRET: hex(32),
   };
   if (existsSync(ENV_FILE)) {
     const out: Record<string, string> = {};
@@ -94,7 +97,8 @@ function run(cmd: string, args: string[], options: { allowFail?: boolean; timeou
 
 export function compose(args: string[], options: { allowFail?: boolean; timeoutMs?: number } = {}) {
   secrets();
-  return run('docker', ['compose', '-p', PROJECT, '-f', COMPOSE_FILE, '--env-file', ENV_FILE, ...args], options);
+  return run('docker', ['compose', '-p', PROJECT, '-f', COMPOSE_FILE,
+    ...(existsSync(RECOVERY_OVERRIDE) ? ['-f', RECOVERY_OVERRIDE] : []), '--env-file', ENV_FILE, ...args], options);
 }
 
 function containerOf(service: Service): string {
@@ -124,7 +128,22 @@ export function up(options: { build?: boolean; services?: Service[] } = {}): voi
  * The results of the last run (.run/last-run.json) stay.
  */
 export function down(options: { volumes?: boolean } = {}): void {
-  compose(['--profile', 'green', 'down', '--remove-orphans', ...(options.volumes ? ['-v'] : [])], { allowFail: true });
+  // Compose knows inactive-profile containers, so --remove-orphans does not remove them.
+  // Include every profile: otherwise candidate nginx keeps the blob volume alive across resets.
+  compose(['--profile', 'green', '--profile', 'candidate', 'down', '--remove-orphans', ...(options.volumes ? ['-v'] : [])]);
+  if (existsSync(RECOVERY_OVERRIDE) && options.volumes) {
+    rmSync(RECOVERY_OVERRIDE);
+    // The original stores stay untouched during recovery; remove them only with explicit teardown.
+    compose(['--profile', 'green', '--profile', 'candidate', 'down', '--remove-orphans', '-v']);
+  }
+  if (options.volumes) {
+    const old = run('docker', ['volume', 'ls', '-q', '--filter', 'label=com.docker.compose.project=hawa-chaos',
+      '--filter', 'label=hawa.recovery-drill']).stdout.trim().split('\n').filter(Boolean);
+    for (const volume of old) {
+      if (!/^hawa-recovery-[0-9a-f]{16}-(postgres|restate|blobs)$/.test(volume)) throw new Error('Unexpected recovery volume identity');
+      run('docker', ['volume', 'rm', volume]);
+    }
+  }
   if (options.volumes) rmSync(ENV_FILE, { force: true });
 }
 
@@ -156,6 +175,20 @@ export async function waitHealthy(service: Service, timeoutMs = 120_000): Promis
 
 export function logs(service: Service, tail = 200): string {
   return run('docker', ['logs', '--tail', String(tail), containerOf(service)], { allowFail: true }).stdout + run('docker', ['logs', '--tail', String(tail), containerOf(service)], { allowFail: true }).stderr;
+}
+
+/**
+ * Each chaos container's state (running, exit code, OOM kill, when it finished): recorded when a
+ * scenario loses the stack, so a run that stops answering says which container went and how.
+ */
+export function stackState(): string {
+  const res = run('docker', ['ps', '-a', '--filter', `label=com.docker.compose.project=${PROJECT}`, '--format', '{{.Names}}'], { allowFail: true });
+  const names = res.stdout.split('\n').map((n) => n.trim()).filter((n) => n.startsWith(`${PROJECT}-`));
+  if (!names.length) return 'no hawa-chaos containers exist';
+  return names.map((name) => {
+    const state = run('docker', ['inspect', '-f', '{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}', name], { allowFail: true });
+    return `${name}: ${state.stdout.trim() || state.stderr.trim()}`;
+  }).join('; ');
 }
 
 /** Memory in use per chaos container, in MiB, from one `docker stats` sample. */
@@ -218,10 +251,13 @@ export const fakes = {
   file: (file: Record<string, unknown>) => call('/__fakes/telegram/files', { body: file }),
   sent: () => call('/__fakes/telegram/sent').then((r) => r.json.sent as any[]),
   polls: () => call('/__fakes/telegram/polls').then((r) => r.json),
+  /** Bot API calls as they arrived (before any delay or fault answered them); getUpdates left out. */
+  telegramCalls: () => call('/__fakes/telegram/calls').then((r) => r.json.calls as Array<{ method: string; at: string; chat?: string | null }>),
   canvaFault: (fault: Record<string, unknown>) => call('/__fakes/canva/faults', { body: fault }),
   driveFiles: () => call('/__fakes/drive/files').then((r) => r.json.files as any[]),
   googleDelay: (delay: { path: string; delayMs: number; n?: number }) => call('/__fakes/google/faults', { body: delay }),
   canvaLedger: () => call('/__fakes/canva/ledger').then((r) => r.json.ledger as any[]),
+  canvaManualEdit: (body: {designId:string;contentBase64:string}) => call('/__fakes/canva/manual-edit', {body}),
   modelLedger: () => call('/__fakes/models/ledger').then((r) => r.json),
   modelDelay: (delay: { schema: string; delayMs: number; n?: number }) => call('/__fakes/models/delays', { body: delay }),
   hold: (point: string, match: Record<string, string> = {}, n = 1) => call('/__chaos/hold', { body: { point, match, n } }),
@@ -232,3 +268,26 @@ export const fakes = {
   core: (path: string, token: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) =>
     call(`/__core${path}`, { ...init, headers: { authorization: `Bearer ${token}`, ...init.headers } }),
 };
+
+/** Sanitized identity receipt: image IDs and network names, never container environment/secrets. */
+export function deploymentReceipt() {
+  const commit = run('git', ['-C', REPO_ROOT, 'rev-parse', 'HEAD']).stdout.trim();
+  const changed = [...new Set([
+    ...run('git', ['-C', REPO_ROOT, 'diff', 'HEAD', '--name-only']).stdout.trim().split('\n'),
+    ...run('git', ['-C', REPO_ROOT, 'ls-files', '--others', '--exclude-standard']).stdout.trim().split('\n'),
+  ])].filter(p => /^(apps|packages|infra|services)\//.test(p));
+  const sourceChanges = Object.fromEntries(changed.map(p => [p, existsSync(join(REPO_ROOT, p))
+    ? createHash('sha256').update(readFileSync(join(REPO_ROOT, p))).digest('hex') : 'deleted']));
+  const containers = Object.fromEntries(SERVICES.flatMap(service => {
+    const result = run('docker', ['inspect', '--format',
+      '{{.Image}}|{{index .Config.Labels "org.opencontainers.image.revision"}}|{{range $name, $net := .NetworkSettings.Networks}}{{$name}} {{end}}|{{.Created}}',
+      containerOf(service)], { allowFail: true });
+    if (result.status !== 0) return [];
+    const [imageId, buildCommit, networks, createdAt] = result.stdout.trim().split('|');
+    return [[service, { imageId, buildCommit, networks: networks.trim().split(/\s+/), createdAt }]];
+  }));
+  const networks = run('docker', ['network', 'inspect', `${PROJECT}_chaos`, `${PROJECT}_parser`,
+    '--format', '{{.Name}}|{{.Internal}}'], { allowFail: true }).stdout.trim().split('\n');
+  return { commit, sourceChanges, containers, networks, externalAdapters: 'synthetic fakes',
+    parser: 'real pinned offline Docling', productionChanged: false };
+}

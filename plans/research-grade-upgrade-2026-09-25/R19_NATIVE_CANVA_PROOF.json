@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-09-27",
+  "sourceCommit": "751556fb1feebe221a89129ed3ddabde44fe4d16",
+  "workItem": "R19",
+  "status": "in_progress",
+  "requirements": [
+    "FR-028",
+    "FR-031",
+    "NFR-010"
+  ],
+  "designs": {
+    "historicalSource": "DAHVE6fjdhk",
+    "disposableCopy": "DAHWWmZ3P3g",
+    "reconstructed": "DAHWWrLK0so"
+  },
+  "passed": {
+    "hawaOAuthRefreshAndRealProviderRead": true,
+    "realExports": [
+      "png",
+      "pdf",
+      "pptx"
+    ],
+    "pngPixels": [
+      1024,
+      768
+    ],
+    "exactEnglishBlocks": 3,
+    "nativeTextElementsBefore": 3,
+    "nativeTextElementsAfterReimport": 3,
+    "draftOneFieldEditPreservesOtherTextAndGeometry": true,
+    "uncommittedEditNotInSavedExports": true,
+    "currentQaCopyAndFixtureFontCheck": true,
+    "wrongCopyAndWrongFontRefused": true,
+    "originalTextUnchanged": true
+  },
+  "partial": {
+    "reconstructionText": "Three exact blocks and independent native text elements preserved; IDs regenerated.",
+    "reconstructionGeometry": "Boxes move up 2-3 px and grow 2-3 px; not lossless.",
+    "render": {
+      "sameDimensions": true,
+      "pixels": [
+        1024,
+        768
+      ],
+      "pixelIdentical": false,
+      "changedPixels": 17657,
+      "totalPixels": 786432,
+      "changedFraction": 0.022452036539713543,
+      "maxChannelDelta": 225,
+      "meanAbsoluteChannelDelta": 2.644057379828559,
+      "scope": "Exact decoded PNG comparison; not a human visual-quality rating."
+    }
+  },
+  "notRun": [
+    "Committed one-field edit/save/reopen: explicit Canva tool approval pending; draft cancelled.",
+    "Current full Hawa Desk/task/binding/capture/review workflow with real providers.",
+    "Sorani/Arabic/mixed-script native review and 40 synthetic/20 real Sorani gate.",
+    "Logo/photo/vector/group reconstruction; account-loss/offline reconstruction.",
+    "Human approval, publication, delivery and design-quality study."
+  ],
+  "operationalEffects": {
+    "productionServicesRestarted": false,
+    "productionFlagsChanged": false,
+    "existingOAuthConnectionRotatedNormally": true,
+    "newCanvaDesigns": 2,
+    "exportJobs": 4,
+    "importJobs": 1,
+    "modelCalls": 0,
+    "messagesSent": 0,
+    "humanApprovalRecorded": false,
+    "nativeTransactionsLeftOpen": 0
+  },
+  "verificationSetupFailures": [
+    "PyMuPDF unavailable in system and bundled Python; used installed pypdf for actual PDF text/geometry inspection.",
+    "tsx CLI IPC was denied by sandbox; node --import tsx used without IPC.",
+    "First QA harness relative import went one directory too high; corrected before passing positive and negative checks."
+  ],
+  "artifacts": {
+    "output/acceptance/2026-09-27-native-canva/README.md": {
+      "sha256": "96812b2da6334e436ef3d5d72f927492ae0f3fd66fc4907eee0b3a564ffb8d79",
+      "bytes": 3556
+    },
+    "output/acceptance/2026-09-27-native-canva/artifact-inspection.json": {
+      "sha256": "d22edf46a1627178d7d35650e792563b39052e10b2a0e5d4ed23a5db81500d7c",
+      "bytes": 1093
+    },
+    "output/acceptance/2026-09-27-native-canva/baseline-capture.json": {
+      "sha256": "2a876ebe7b7516ba9b99581dce856796f6c6b588fee61a4ed1cb880131718679",
+      "bytes": 2145
+    },
+    "output/acceptance/2026-09-27-native-canva/baseline.pdf": {
+      "sha256": "b33eb17abd3dd613abb2db899ee332ccfa81a4c2e0a6806e42045ee4e99bbb88",
+      "bytes": 33400
+    },
+    "output/acceptance/2026-09-27-native-canva/baseline.png": {
+      "sha256": "89f25b2dd9057202674c6005750eef3bd5f628d4ab1d984b4967a61b5aaf895f",
+      "bytes": 26524
+    },
+    "output/acceptance/2026-09-27-native-canva/baseline.pptx": {
+      "sha256": "73361fc1810373a274537715e819cb9a3795c4d2603c7e0d209aa1b2c1a363b6",
+      "bytes": 572257
+    },
+    "output/acceptance/2026-09-27-native-canva/capture_exports.mts": {
+      "sha256": "f19db8ce625cf00ab6c93caff2d7e9c2181cdfb1f67c336afc328b4287207f26",
+      "bytes": 5278
+    },
+    "output/acceptance/2026-09-27-native-canva/check_captured_pptx.mts": {
+      "sha256": "06c94426f73fe1c9e9ba6d2296ded9a3f2e29b5a533555e8bc1ea094977d2293",
+      "bytes": 1798
+    },
+    "output/acceptance/2026-09-27-native-canva/current-qa-check.json": {
+      "sha256": "2b2b4ccd40be3e3c1d6331e201dc8712b4baff8c071c3009b09e7462c53785b3",
+      "bytes": 2146
+    },
+    "output/acceptance/2026-09-27-native-canva/hawa-connection-check.json": {
+      "sha256": "0f8a0e4ea2f7034125639c5d98aff54f10a95f03c3e8e9085a9c6ed4605c2112",
+      "bytes": 798
+    },
+    "output/acceptance/2026-09-27-native-canva/inspect_artifacts.py": {
+      "sha256": "06a6492a6fd171eeb2851c2474488c8c9aef5fb0025b2b56c0baff3cca0e1c91",
+      "bytes": 2506
+    },
+    "output/acceptance/2026-09-27-native-canva/native-inspection.json": {
+      "sha256": "8d01bd5b15e28e23b6704e810b7dbdb386abc48088386de1df1d3a98202173d9",
+      "bytes": 5319
+    },
+    "output/acceptance/2026-09-27-native-canva/reconstructed-capture.json": {
+      "sha256": "878606a8c20ef6c1cede42bf012d325aa50b5bc0e18dcc3511809049b213079e",
+      "bytes": 1500
+    },
+    "output/acceptance/2026-09-27-native-canva/reconstructed.png": {
+      "sha256": "a425ecf264bfab1d8fc745cfa15ab9b7ad960a9277b284961618ee3e4d7041fd",
+      "bytes": 26732
+    },
+    "output/acceptance/2026-09-27-native-canva/reconstruction-inspection.json": {
+      "sha256": "27ddad123454f1623b751a5a6a040071855e3ebc6624e29a76f45622d6a1d946",
+      "bytes": 3172
+    },
+    "output/acceptance/2026-09-27-native-canva/reconstruction-render-comparison.json": {
+      "sha256": "6188edac85e8fea744038ee5856341da1ab53242fea35ad267afc704e2d739fc",
+      "bytes": 341
+    },
+    "output/acceptance/2026-09-27-native-canva/reimport.json": {
+      "sha256": "afc507d1d089f9e9b1718cd5da6688c76e45f57b0bf1c495aa136be776d69059",
+      "bytes": 547
+    },
+    "output/acceptance/2026-09-27-native-canva/reimport_capture.mts": {
+      "sha256": "e5a040e0efcb8c26923944e8ed4d15d87dd37a144e41116fef5b41e57aa08595",
+      "bytes": 3286
+    }
+  },
+  "limits": [
+    "One English historical import fixture; neither full app nor creative quality admitted.",
+    "Same-account online reimport is not account-loss or vendor-independent recovery.",
+    "Equal provider timestamps before/after export are not an atomic revision lock.",
+    "Source QA expressly retains fullReleasePass=false; fixture Arial permission is not a production client policy change."
+  ],
+  "sourceHashes": {
+    "apps/core/src/services/canva-connect-service.ts": "1d20812e9290ec73ccf9d0c27fb85d90930f7a07e06ed020fe4903e71804aab4",
+    "packages/integrations/src/canva-connect-client.ts": "3fe7ec3e9b0883213c0f1b8e941178454c155a87a46512be35c3db8676e6e8ac",
+    "packages/qa/src/canva-pptx-check.ts": "a5f429abd38974584a4111938108def252c3427284a68064d29a711929300e9e"
+  },
+  "offlineVerification": {
+    "artifactInspection": "passed",
+    "currentSourceQa": "passed, including wrong-copy and wrong-font negative controls",
+    "artifactHashesMatched": 18,
+    "runtimeSourceHashesMatched": 3,
+    "blueprint": {
+      "passed": 903,
+      "warnings": 0,
+      "failures": 0
+    },
+    "fullAppRegression": "not rerun; runtime sources unchanged"
+  }
+}

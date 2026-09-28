@@ -1,3 +1,11 @@
+import type { ReceiptAuditAction, ReceiptAuditState, ReceiptAuditResult } from '@hawa/contracts';
+import type { CanvaAmendmentObservation } from '@hawa/contracts';
+import type { NativeRecoveryScope, NativeReviewReply } from '@hawa/domain';
+export type NativeReviewBody = {requestId:string;expectedRev:number;expectedTaskVersion:number;artifactId:string;confirmationEventId:string};
+const nativeRecoveryHeaders = (scope?:NativeRecoveryScope):Record<string,string> => scope
+  ? {'X-Hawa-Manual-Request-Id':scope.requestId,'X-Hawa-Manual-Request-Rev':String(scope.rev)} : {};
+import type { OperationsReliabilityReport } from '@hawa/contracts';
+import type { SpendingPolicyDetail, SpendingPolicyChange, SpendingPolicyResult } from '@hawa/contracts';
 /**
  * Hawa Desk Typed API Client
  *
@@ -5,7 +13,20 @@
  * using authenticated sessions. No hardcoded development bearer fallbacks.
  */
 
-import { getAuthToken, setAuthToken, clearAuthToken } from '../services/auth.js';
+import { getAuthToken, setAuthToken, clearAuthToken, getCsrfToken, getAuthHeaders } from '../services/auth.js';
+import type { CallCostDetail, CallCostKind, CallCostPage } from '@hawa/contracts';
+export interface SettlementBody {
+  expectedSnapshot:string; reason:string;
+  calls:Array<{callId:string;conclusion:'provider_not_accepted'|'provider_finished';reportedCostUsd:number;evidenceReference:string;evidenceSha256:string}>;
+}
+export interface StudioRecoveryDetail {
+  runId:string; taskId:string; status:string; snapshotHash:string; canSettle:boolean; requiresStop:boolean; unresolvedCalls:number;
+  calls:Array<{id:string;ordinal:number|null;stage:string;provider:string;model:string;status:string;
+    providerRequestId:string|null;responseId:string|null;estimatedCostUsd:number|null;
+    settlement:(SettlementBody['calls'][number]&{actorUserId:string;recordedAt:string})|null}>;
+  settlements:Array<{id:string;actionId:string;actorUserId:string;reason:string;recordedAt:string;calls:SettlementBody['calls']}>;
+}
+
 
 export interface ApiSessionUser {
   id: string;
@@ -26,6 +47,18 @@ export interface ApiProblemDetails {
   status: number;
   detail?: string;
   instance?: string;
+  /** A machine-readable reason some routes add, e.g. LATE_REQUESTER_CHANGE. */
+  code?: string;
+  /** With LATE_REQUESTER_CHANGE: the requester's words that nobody has acknowledged yet. */
+  lateChanges?: LateRequesterChangeView[];
+}
+
+/** Words a requester sent after the design reached the office, as Core holds a delivery for them. */
+export interface LateRequesterChangeView {
+  updateId: string;
+  text: string;
+  stage: string;
+  receivedAt: string;
 }
 
 export class ApiError extends Error {
@@ -66,14 +99,20 @@ export interface TaskListResponse<T = any> {
 export interface DecisionPayload {
   action: 'approve' | 'revision_requested' | 'reject' | 'escalate';
   reason?: string;
+  rejectionCategory?: 'concept' | 'content' | 'brand_direction' | 'task';
   expectedTaskVersion?: number;
   capturedArtifactSetHash?: string;
   qcReportHash?: string;
   /** Stored Canva export ids this approval pins; delivery sends exactly these files. */
   pinnedExportIds?: string[];
+  /** Reviewer inspected the selected final PNG where Canva's PPTX has no readable RTL flag. */
+  rtlVisualReview?: { confirmed: true; exportSha256: string };
   revisionRequest?: {
-    scope?: string;
-    category?: string;
+    scope?: 'full_design' | 'typography' | 'layout' | 'color' | 'assets' | 'copy';
+    category?: 'factual_error' | 'brand_violation' | 'aesthetic_preference' | 'legal_compliance' | 'technical_defect';
+    targetNodes?: string[];
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+    isReusableFeedback?: boolean;
     comment?: string;
   };
 }
@@ -91,11 +130,94 @@ export interface TaskTimelineEvent {
   occurredAt?: string;
 }
 
+export interface RequesterSendStep {
+  sendKey: string;
+  outcome: 'not_attempted' | 'attempted' | 'sent' | 'uncertain' | 'failed' | 'released';
+  attemptCount: number;
+  lastMarkAt: string | null;
+  messageId: string | null;
+}
+
+export interface RequesterSendEvidence {
+  taskId: string;
+  requestId: string;
+  requestRev: number;
+  publicationId: string;
+  approvalId: string;
+  requesterChatId: string | null;
+  providerReceipt: 'not_available';
+  files: Array<RequesterSendStep & { artifactId: string; filename: string; sha256: string }>;
+  notice: RequesterSendStep;
+}
+
 /** A one-use ticket that opens the event stream (Core: POST /auth/stream-ticket, ADR-037). */
 export interface StreamTicket {
   ticket: string;
   /** Epoch milliseconds. */
   expiresAt: number;
+}
+
+export interface ReviewAssignment {
+  id: string; clientId: string; projectId: string | null; userId: string;
+  active: boolean; version: number;
+}
+
+export interface ReviewDirectory {
+  reviewers: Array<{ userId: string; displayName: string; clientId: string; clientName: string }>;
+  projects: Array<{ id: string; clientId: string; name: string }>;
+}
+
+export interface ReviewAssignmentChange {
+  clientId: string; projectId: string | null; userId: string;
+  active: boolean; expectedVersion: number; reason: string;
+}
+
+export interface DocumentInspection {
+  clientId: string; sourceSaved: false; approved: false;
+  document: {
+    sourceSha256: string;
+    chunks: Array<{ chunkId: string; pageNumber: number | null; text: string }>;
+    extraction: { version: string; pageCount: number | null; limitations: string[] };
+  };
+}
+
+export interface DocumentReceipt {
+  id: string; clientId: string; sourceSha256: string; extractionSha256: string;
+  extractorVersion: string; createdAt: string; contentUrl: string;
+}
+export interface RetainedSourceFile {
+  kind: 'pdf' | 'voice'; clientId: string; updateId: number; sourceSha256: string; createdAt: string; documentId: string | null;
+  stage: 'retained' | 'ready' | 'copy_confirmed' | 'extraction_stopped'; message: string | null;
+}
+export interface RetainedVoiceReview {
+  clientId: string; updateId: number; sourceSha256: string;
+  state: 'manual' | 'received' | 'rejected' | 'uncertain'; message: string; transcript: string | null;
+  estimatedUsd: number | null; actualUsd: null; attemptKey?: string;
+  audio: { durationSeconds: number; channels: number } | null;
+}
+export interface SavedDocumentInspection extends Omit<DocumentInspection, 'sourceSaved'> {
+  sourceSaved: true; receipt: DocumentReceipt;
+}
+export interface KnowledgeEvent {
+  actionId: string; version: number; approved: boolean; actorUserId: string; actorDisplayName: string; reason: string; createdAt: string;
+}
+export interface DocumentKnowledgeState {
+  state: { version: number; approved: boolean }; events: KnowledgeEvent[]; canManage: boolean;
+  replayed?: boolean; action?: KnowledgeEvent;
+}
+export interface DocumentKnowledgeChange {
+  approved: boolean; expectedVersion: number; reviewed: boolean; reason: string;
+  sourceSha256: string; extractionSha256: string;
+}
+export interface KnowledgeSearch {
+  clientId: string; mode: 'postgres_lexical_v1'; vectorStatus: 'not_run'; rerankerStatus: 'not_run';
+  items: Array<{ text: string; truncated: boolean; score: number; citation: {
+    documentId: string; chunkId: string; pageNumber: number | null; chunkSha256: string;
+    sourceSha256: string; extractionSha256: string; extractorVersion: string;
+    approvalVersion: number; approvalActionId: string;
+    coordinates?: { x: number; y: number; width: number; height: number } | null;
+    coordinateSystem?: string | null;
+  } }>;
 }
 
 class HawaApiClient {
@@ -120,12 +242,18 @@ class HawaApiClient {
   ): Promise<T> {
     const url = `${this.basePrefix}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     const headers = this.getHeaders(options.headers as Record<string, string>);
+    if (!getAuthToken() && !['GET', 'HEAD'].includes((options.method || 'GET').toUpperCase())) {
+      const csrf = getCsrfToken();
+      if (csrf) headers['x-hawa-csrf'] = csrf;
+    }
 
     let response: Response;
     try {
       response = await fetch(url, {
         ...options,
         headers,
+        credentials: 'same-origin',
+        cache: 'no-store',
       });
     } catch (networkErr: any) {
       throw new ApiError(0, `Network error: ${networkErr.message || 'Unable to connect to server'}`);
@@ -180,6 +308,8 @@ class HawaApiClient {
   }
 
   public readonly auth = {
+    providers: async (): Promise<{ googleWorkspace: boolean }> =>
+      this.request('/auth/providers', { method: 'GET' }),
     getSession: async (): Promise<ApiSessionResponse> => {
       return this.request<ApiSessionResponse>('/auth/session', { method: 'GET' });
     },
@@ -207,9 +337,9 @@ class HawaApiClient {
      */
     logout: async (): Promise<void> => {
       const token = getAuthToken();
+      await this.request('/auth/session', { method: 'DELETE',
+        ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}) });
       clearAuthToken();
-      if (!token) return;
-      await this.request('/auth/session', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
     },
 
     /**
@@ -250,6 +380,36 @@ class HawaApiClient {
   // Core restart discards what is written here.
   public readonly clients = {
     list: () => this.request<any[]>('/clients'),
+    inspectDocument: (clientId: string, file: File, signal?: AbortSignal) =>
+      this.request<DocumentInspection>(`/clients/${encodeURIComponent(clientId)}/documents/inspect`,
+        { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file, signal }),
+    saveDocument: (clientId: string, file: File, signal?: AbortSignal) =>
+      this.request<SavedDocumentInspection>(`/clients/${encodeURIComponent(clientId)}/documents`,
+        { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file, signal }),
+    documents: (clientId: string) => this.request<{ items: DocumentReceipt[] }>(`/clients/${encodeURIComponent(clientId)}/documents`),
+    sourceFiles: (clientId: string, signal?: AbortSignal) =>
+      this.request<{ clientId: string; items: RetainedSourceFile[] }>(`/clients/${encodeURIComponent(clientId)}/source-files`, { signal }),
+    sourceVoiceReview: (clientId: string, updateId: number, signal?: AbortSignal) =>
+      this.request<RetainedVoiceReview>(`/clients/${encodeURIComponent(clientId)}/source-files/${updateId}/review`, { signal }),
+    sourceFileContent: async (clientId: string, updateId: number, signal?: AbortSignal): Promise<Blob> => {
+      const response = await fetch(`/v1/clients/${encodeURIComponent(clientId)}/source-files/${updateId}/content`, { headers: getAuthHeaders(), signal });
+      if (!response.ok) throw new ApiError(response.status, 'The retained original could not be downloaded.');
+      return response.blob();
+    },
+    document: (clientId: string, id: string, signal?: AbortSignal) =>
+      this.request<SavedDocumentInspection>(`/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}`, { signal }),
+    documentKnowledge: (clientId: string, id: string) =>
+      this.request<DocumentKnowledgeState>(`/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}/knowledge`),
+    changeDocumentKnowledge: (clientId: string, id: string, actionId: string, body: string) =>
+      this.request<DocumentKnowledgeState>(`/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}/knowledge`,
+        { method: 'PUT', headers: { 'Idempotency-Key': actionId }, body }),
+    searchKnowledge: (clientId: string, query: string, signal?: AbortSignal) =>
+      this.request<KnowledgeSearch>(`/clients/${encodeURIComponent(clientId)}/knowledge/search?q=${encodeURIComponent(query)}`, { signal }),
+    documentContent: async (clientId: string, id: string): Promise<Blob> => {
+      const response = await fetch(`/v1/clients/${encodeURIComponent(clientId)}/documents/${encodeURIComponent(id)}/content`, { headers: getAuthHeaders() });
+      if (!response.ok) throw new ApiError(response.status, 'The original PDF could not be downloaded.');
+      return response.blob();
+    },
     dna: (clientId: string) => this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`),
     saveDna: (clientId: string, dna: unknown) =>
       this.request<any>(`/clients/${encodeURIComponent(clientId)}/dna`, { method: 'POST', body: JSON.stringify(dna) }),
@@ -268,30 +428,40 @@ class HawaApiClient {
         `/clients/${encodeURIComponent(clientId)}/candidate-rules/${encodeURIComponent(ruleId)}/dismiss`,
         { method: 'POST', body: JSON.stringify({ reason }) }
       ),
-    budgets: () => this.request<any>('/clients/budgets'),
-    // Core reads `capUsd`; under any other name the cap silently becomes its USD 10 default.
-    allocateBudget: (clientId: string, capUsd: number) =>
-      this.request<any>(`/clients/${encodeURIComponent(clientId)}/budget/allocate`, {
-        method: 'POST',
-        body: JSON.stringify({ capUsd }),
-      }),
   };
 
   public readonly operations = {
+    publicationInspections: (after?:string) => this.request<unknown>('/operations/publication-inspections'+(after ? '?after='+encodeURIComponent(after) : '')),
     integrationsHealth: () => this.request<any>('/integrations/health'),
+    funnelHealth: () => this.request<any>('/system/funnel/health'),
     failures: () => this.request<any>('/operations/failures'),
-    slo: () => this.request<any>('/operations/slo'),
-    reconciliation: () => this.request<any>('/operations/reconciliation'),
+    slo: (month?: string) => this.request<OperationsReliabilityReport>('/operations/slo' + (month ? '?month=' + encodeURIComponent(month) : '')),
+    reconciliation: (beforeRevision?:number) => this.request<ReceiptAuditState>('/operations/reconciliation'+(beforeRevision===undefined?'':`?beforeRevision=${beforeRevision}`)),
     // Audit only. Core refuses auto-repair (422): it cannot upload to Drive or write Sheets.
-    auditReconciliation: () =>
-      this.request<any>('/operations/reconciliation/run', { method: 'POST', body: JSON.stringify({ autoRepair: false }) }),
+    auditReconciliation: (action:ReceiptAuditAction) =>
+      this.request<ReceiptAuditResult>('/operations/reconciliation/run', { method: 'POST', headers: {'Idempotency-Key':action.actionId}, body: JSON.stringify(action) }),
   };
 
   public readonly evaluations = {
     datasets: () => this.request<any[]>('/evaluations/datasets'),
     runs: () => this.request<any[]>('/evaluations/runs'),
+    get: (runId: string) => this.request<any>(`/evaluations/runs/${encodeURIComponent(runId)}`),
+    settle: (runId: string, actionId:string, body:SettlementBody) => this.request<unknown>(`/evaluations/runs/${encodeURIComponent(runId)}/settlement`, {method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
     cases: (datasetId: string) => this.request<any>(`/evaluations/datasets/${encodeURIComponent(datasetId)}/cases`),
-    run: (name: string) => this.request<any>('/evaluations/runs', { method: 'POST', body: JSON.stringify({ name }) }),
+    run: (name: string, actionId: string) => this.request<any>('/evaluations/runs', { method: 'POST', headers: { 'Idempotency-Key': actionId }, body: JSON.stringify({ name }) }),
+  };
+
+  public readonly spendingPolicy = {
+    get: (beforeVersion?:number|null) => this.request<SpendingPolicyDetail>(`/spending/policy${beforeVersion?`?beforeVersion=${beforeVersion}`:''}`),
+    record: (actionId:string,body:SpendingPolicyChange) => this.request<SpendingPolicyResult>('/spending/policy',
+      {method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
+  };
+
+  public readonly callCosts = {
+    list: (cursor?:string|null) => this.request<CallCostPage>(`/spending/calls${cursor?`?cursor=${encodeURIComponent(cursor)}`:''}`),
+    get: (kind:CallCostKind,id:string) => this.request<CallCostDetail>(`/spending/calls/${kind}/${encodeURIComponent(id)}`),
+    record: (kind:CallCostKind,id:string,actionId:string,body:SettlementBody) => this.request<unknown>(
+      `/spending/calls/${kind}/${encodeURIComponent(id)}/evidence`,{method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
   };
 
   // The blinded comparison with the office designer (Core: routes/comparison.routes.ts). The judges'
@@ -346,14 +516,21 @@ class HawaApiClient {
     disconnect: () => this.request<any>('/integrations/canva/disconnect',{method:'POST'}),
     authorize: () => this.request<{authorizationUrl:string}>('/integrations/canva/authorize',{method:'POST'}),
     taskState: (id:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva`),
+    confirmRevisionCopy: (id:string,key:string,body:{expectedTaskVersion:number;basisSha256:string;copy:string[];reviewedCurrentDesign:boolean}&({preservedUnrequestedChanges:boolean}|{separateRequestDesign:boolean}),scope?:NativeRecoveryScope) =>
+      this.request<{confirmationEventId:string;replayed:boolean}>(`/tasks/${encodeURIComponent(id)}/canva/revision-copy`,
+        {method:'POST',headers:{'Idempotency-Key':key,...nativeRecoveryHeaders(scope)},body:JSON.stringify(body)}),
+    submitNativeReview: (id:string,key:string,body:NativeReviewBody)=>this.request<NativeReviewReply>(`/tasks/${encodeURIComponent(id)}/native-review`,
+      {method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify(body)}),
     plans: (id:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans`),
     generate: (id:string,width:number,height:number,key:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/generate`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({width,height})}),
+    abandonPlan: (id:string,planId:string,reason:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans/${encodeURIComponent(planId)}/abandon`,{method:'POST',body:JSON.stringify({reason})}),
     resumePlan: (id:string,planId:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/plans/${encodeURIComponent(planId)}/resume`,{method:'POST'}),
     resumeImport: (id:string,operationId:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/imports/${encodeURIComponent(operationId)}/resume`,{method:'POST'}),
     editor: (id:string) => this.request<{url:string}>(`/tasks/${encodeURIComponent(id)}/canva/editor`),
+    amendmentObservation: (id:string) => this.request<CanvaAmendmentObservation>(`/tasks/${encodeURIComponent(id)}/canva/amendment-observation`),
     create: (id:string,width:number,height:number,key:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/design`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({width,height})}),
-    export: (id:string,format:'png'|'pdf'|'pptx',expectedVersion:number,key:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/exports`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify({format,expectedVersion})}),
-    resume: (id:string,operationId:string) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/exports/${encodeURIComponent(operationId)}/resume`,{method:'POST'}),
+    export: (id:string,format:'png'|'pdf'|'pptx',expectedVersion:number,key:string,scope?:NativeRecoveryScope) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/exports`,{method:'POST',headers:{'Idempotency-Key':key,...nativeRecoveryHeaders(scope)},body:JSON.stringify({format,expectedVersion})}),
+    resume: (id:string,operationId:string,scope?:NativeRecoveryScope) => this.request<any>(`/tasks/${encodeURIComponent(id)}/canva/exports/${encodeURIComponent(operationId)}/resume`,{method:'POST',headers:nativeRecoveryHeaders(scope)}),
     download: async (id:string,artifactId:string):Promise<Blob> => {
       const response=await fetch(`/v1/tasks/${encodeURIComponent(id)}/canva/artifacts/${encodeURIComponent(artifactId)}`,{headers:this.getHeaders()});
       if(!response.ok) throw new ApiError(response.status,'Export download failed');
@@ -362,6 +539,11 @@ class HawaApiClient {
   };
 
   public readonly studio = {
+    recovery: (taskId:string,runId:string) => this.request<StudioRecoveryDetail>(`/tasks/${encodeURIComponent(taskId)}/studio-recovery/${encodeURIComponent(runId)}`),
+    settle: (taskId:string,runId:string,actionId:string,body:SettlementBody) => this.request<unknown>(`/tasks/${encodeURIComponent(taskId)}/studio-recovery/${encodeURIComponent(runId)}/settlement`,
+      {method:'POST',headers:{'Idempotency-Key':actionId},body:JSON.stringify(body)}),
+    latest: (taskId: string) => this.request<{ runId: string | null; status: string | null }>(
+      `/tasks/${encodeURIComponent(taskId)}/canva/studio`),
     start: (
       taskId: string,
       input: {
@@ -425,14 +607,29 @@ class HawaApiClient {
       }),
   };
 
+  public readonly reviewAssignments = {
+    directory: () => this.request<ReviewDirectory>('/office/review-directory'),
+    list: () => this.request<ReviewAssignment[]>('/office/review-assignments'),
+    events: (assignmentId: string) => this.request<Array<{ id: string; action: string;
+      assignment_version: number | string; reason: string; occurred_at: string }>>(
+      `/office/review-assignments/${encodeURIComponent(assignmentId)}/events`),
+    save: (assignmentId: string, actionId: string, body: ReviewAssignmentChange) =>
+      this.request<{ id: string; version: number; replayed: boolean; created: boolean }>(
+        `/office/review-assignments/${encodeURIComponent(assignmentId)}`, {
+          method: 'PUT', headers: { 'Idempotency-Key': actionId }, body: JSON.stringify(body),
+        }),
+  };
+
   public readonly tasks = {
+    control: (taskId: string, action: 'pause' | 'resume' | 'cancel', input: { reason: string; expectedVersion: number }, key: string) =>
+      this.request<{ commandId: string; status: string; version: number; replayed: boolean }>(`/tasks/${encodeURIComponent(taskId)}/${action}`, {
+        method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify(input),
+      }),
     getEditorUrl: (taskId: string) => this.request<{ url: string }>(`/tasks/${encodeURIComponent(taskId)}/canva/editor`),
-    bindCanva: (taskId: string, editUrl: string) => this.request(`/tasks/${encodeURIComponent(taskId)}/canva-binding`, {
-      method: 'POST', body: JSON.stringify({ editUrl }),
+    bindCanva: (taskId: string, editUrl: string,scope?:NativeRecoveryScope) => this.request(`/tasks/${encodeURIComponent(taskId)}/canva-binding`, {
+      method: 'POST', headers:nativeRecoveryHeaders(scope), body: JSON.stringify({ editUrl }),
     }),
-    /** `actionId`: the press's id (services/officeActions.ts), sent as Idempotency-Key. */
-    redrive: (taskId: string, actionId?: string) =>
-      this.request<any>(`/tasks/${encodeURIComponent(taskId)}/redrive`, { method: 'POST', ...(actionId ? { headers: { 'Idempotency-Key': actionId } } : {}) }),
+    redrive: (taskId: string) => this.request<any>(`/tasks/${encodeURIComponent(taskId)}/redrive`, { method: 'POST' }),
     /** What the requester asked of this design, round by round (Core: GET /tasks/:taskId/asks). */
     asks: (taskId: string) => this.request<{ taskId: string; rounds: import('../components/AskLedger.js').LedgerRound[] }>(`/tasks/${encodeURIComponent(taskId)}/asks`),
     sweepFailed: () => this.request<any>('/tasks/sweep-failed', { method: 'POST' }),
@@ -459,6 +656,17 @@ class HawaApiClient {
     timeline: (taskId: string) =>
       this.request<{ events: TaskTimelineEvent[] }>(`/tasks/${encodeURIComponent(taskId)}/timeline`),
 
+    requesterSendEvidence: (taskId: string) =>
+      this.request<RequesterSendEvidence>(`/tasks/${encodeURIComponent(taskId)}/requester-send-evidence`),
+
+    confirmRequesterSend: (taskId: string, body: { actionId: string; expectedRev: number;
+      publicationId: string; approvalId: string; requesterChatId: string;
+      observed: Array<{ sendKey: string; messageId: string }>; attested: true }) =>
+      this.request<{ requestId: string; taskId: string; requestRev: number;
+        confirmationSource: 'staff_visible'; stage: 'delivered' }>(
+        `/tasks/${encodeURIComponent(taskId)}/requester-send-confirmation`,
+        { method: 'POST', body: JSON.stringify(body) }),
+
     create: async <T = any>(body: any): Promise<T> => {
       return this.request<T>('/tasks', {
         method: 'POST',
@@ -479,10 +687,6 @@ class HawaApiClient {
       });
     },
 
-    /**
-     * `actionId`: the press's id (services/officeActions.ts), sent as Idempotency-Key. Core forwards a
-     * decision on a lifecycle request under it, so a double click or a retry is applied once (slice 2.4).
-     */
     recordDecision: async <T = any>(
       taskId: string,
       revisionId: string,
@@ -491,16 +695,16 @@ class HawaApiClient {
     ): Promise<T> => {
       return this.request<T>(`/tasks/${taskId}/revisions/${revisionId}/decisions`, {
         method: 'POST',
-        body: JSON.stringify(payload),
         ...(actionId ? { headers: { 'Idempotency-Key': actionId } } : {}),
+        body: JSON.stringify(payload),
       });
     },
 
-    publish: async <T = any>(taskId: string, body?: { destination?: string; policy?: string }, actionId?: string): Promise<T> => {
+    publish: async <T = any>(taskId: string, body?: { destination?: string; policy?: string; approvalId?: string; acknowledgeLateChanges?: string[] }, actionId?: string): Promise<T> => {
       return this.request<T>(`/tasks/${taskId}/publish`, {
         method: 'POST',
-        body: JSON.stringify(body || {}),
         ...(actionId ? { headers: { 'Idempotency-Key': actionId } } : {}),
+        body: JSON.stringify(body || {}),
       });
     },
   };

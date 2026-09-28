@@ -9,7 +9,7 @@ import {
   type StudioLayoutV2,
 } from '../src/index.js';
 
-/** ADR-038: the video-thumbnail playbook, enforced where the layout can change it. */
+/** The video-thumbnail playbook (ADR-127, ported from studio-v2's 1d07664b), enforced where the layout can change it. */
 const YT = { width: 1280, height: 720 };
 const REEL = { width: 1080, height: 1920 };
 

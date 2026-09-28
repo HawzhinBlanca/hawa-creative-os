@@ -4,8 +4,8 @@ import { validateLayoutV2, type LayoutValidationContext } from './validate-layou
 import { computeLayoutMetrics, overlappingPairs, type LayoutMetrics } from './layout-metrics.js';
 import { findAsymmetricSeparators } from './layout-generator-v3.js';
 import { declaredBackgroundColour, declaredTextContrast } from './composite-contrast.js';
-import { measureWrappedLines, measureMaxLineWidths } from './render-layout-v2.js';
-import { requiredContrast } from './house-rules.js';
+import { measureTextGeometry, type TextMeasurement, type RenderLayoutOptions } from './render-layout-v2.js';
+import { requiredContrast, COPY_WIDTH_TOLERANCE_PX } from './house-rules.js';
 import { maxStrokeWidth, STROKE_PAINT_TOLERANCE_PX } from './studio-normalize.js';
 
 /**
@@ -21,17 +21,22 @@ export interface HardQaContext {
   copyScripts: Array<'latin' | 'arabic'>;
   latinFont: string;
   arabicFont: string;
+  admittedDisplayFonts?: { latin: string[]; arabic: string[] };
   palette: string[];
   logoAspect: number;
-  /** The copy of each block, by copyIndex. With it, a block whose copy wraps taller than its box fails. */
+  logoMinimumWidthPx?: number;
+  logoClearSpacePx?: number;
+  /** Required for successful QA. Missing content produces COPY_UNMEASURED, never guessed geometry. */
   copyText?: Record<number, string>;
+  /** Use the same explicit font directory as the renderer, when supplied. */
+  textMeasurementOptions?: Pick<RenderLayoutOptions, 'fontsDir'>;
   /**
    * The client photographs the request carries. Without it QA read every request as having none
    * and refused every design that placed the client's photos (2026-09-22, run b7fc5555).
    */
   photoCount?: number;
   /**
-   * The client's playbook (ADR-038). A video thumbnail also answers to the thumbnail rules: nothing
+   * The client's playbook (ADR-127). A video thumbnail also answers to the thumbnail rules: nothing
    * under the platform's badge or buttons, and a hook legible at listing size.
    */
   playbook?: 'institutional-announcement' | 'video-thumbnail';
@@ -45,6 +50,7 @@ export interface HardQaOutcome {
   metrics: LayoutMetrics;
   /** The layout as validated — validation may normalise it, e.g. a script font. */
   layout: StudioLayoutV2;
+  textMeasurements: TextMeasurement[];
 }
 
 export function evaluateHardQa(
@@ -68,8 +74,11 @@ export function evaluateHardQa(
         scriptFonts: {
           arabic: ctx.arabicFont,
         },
+        admittedDisplayFonts: ctx.admittedDisplayFonts,
       },
       logoAspect: ctx.logoAspect || 1.0,
+      logoMinimumWidthPx: ctx.logoMinimumWidthPx,
+      logoClearSpacePx: ctx.logoClearSpacePx,
     },
     draftFont: ctx.latinFont || 'Verdana',
     photoCount: ctx.photoCount ?? 0,
@@ -181,25 +190,29 @@ export function evaluateHardQa(
   // A block's copy must fit its box at its own leading. The renderer centres the lines in the box,
   // so copy taller than its box spills onto the blocks above and below. Preparation grows boxes,
   // but not when no arrangement has room: T5 brief_17 kept a 210px title in a 130px box.
-  if (ctx.copyText) {
-    const lines = measureWrappedLines(layout, ctx.copyText);
-    const lineWidths = measureMaxLineWidths(layout, ctx.copyText);
-    for (const t of layout.text) {
-      const count = lines[t.copyIndex] ?? 1;
-      const needed = Math.ceil(count * t.fontSize * t.lineHeight);
-      if (needed > t.height + 1) {
-        if (!defectCodes.includes('COPY_OVERFLOW')) defectCodes.push('COPY_OVERFLOW');
-        messages.push(
-          `COPY_OVERFLOW: block ${t.copyIndex} (${t.role}) wraps to ${count} line(s) needing ${needed}px; its box is ${t.height}px tall`
-        );
-      }
-      const actualWidth = lineWidths[t.copyIndex] ?? 0;
-      if (actualWidth > t.width + 4) {
-        if (!defectCodes.includes('COPY_OVERFLOW')) defectCodes.push('COPY_OVERFLOW');
-        messages.push(
-          `COPY_OVERFLOW: block ${t.copyIndex} (${t.role}) text exceeds box width (${actualWidth}px > ${t.width}px); word or line runs past box boundary`
-        );
-      }
+  const textMeasurements = measureTextGeometry(layout, ctx.copyText, ctx.textMeasurementOptions);
+  for (const [index, measurement] of textMeasurements.entries()) {
+    const t = layout.text[index];
+    if (measurement.status === 'unmeasured') {
+      if (!defectCodes.includes('COPY_UNMEASURED')) defectCodes.push('COPY_UNMEASURED');
+      messages.push(`COPY_UNMEASURED: block ${t.copyIndex} (${t.role}) ${measurement.reason}` +
+        (measurement.missingCodePoints ? `: ${measurement.missingCodePoints.join(', ')}` : ''));
+      continue;
+    }
+    const count = measurement.lineCount;
+    const needed = measurement.requiredHeightPx;
+    if (needed > t.height + 1) {
+      if (!defectCodes.includes('COPY_OVERFLOW')) defectCodes.push('COPY_OVERFLOW');
+      messages.push(
+        `COPY_OVERFLOW: block ${t.copyIndex} (${t.role}) wraps to ${count} line(s) needing ${needed}px; its box is ${t.height}px tall`
+      );
+    }
+    const actualWidth = measurement.maxLineWidthPx;
+    if (actualWidth > t.width + COPY_WIDTH_TOLERANCE_PX) {
+      if (!defectCodes.includes('COPY_OVERFLOW')) defectCodes.push('COPY_OVERFLOW');
+      messages.push(
+        `COPY_OVERFLOW: block ${t.copyIndex} (${t.role}) text exceeds box width (${actualWidth}px > ${t.width}px); word or line runs past box boundary`
+      );
     }
   }
 
@@ -257,7 +270,7 @@ export function evaluateHardQa(
     messages.push(...thumbnail.messages);
   }
 
-  return { passed: defectCodes.length === 0, defectCodes, messages, metrics, layout };
+  return { passed: defectCodes.length === 0, defectCodes, messages, metrics, layout, textMeasurements };
 }
 
 /**
@@ -293,7 +306,7 @@ export interface StudioReferenceRules {
  */
 export function studioReferenceFromRaw(rawRef: any): StudioReferenceRules {
   // A reference pack names its client's palette. One that does not is refused: this used to fill in
-  // KAAE's palette, so any other client's design would have been made in KAAE's colours (ADR-038).
+  // KAAE's palette, so any other client's design would have been made in KAAE's colours (ADR-127).
   if (!Array.isArray(rawRef?.rules?.palette) || rawRef.rules.palette.length === 0) {
     throw new Error('The client reference pack names no palette (rules.palette); a design cannot be made in borrowed colours.');
   }

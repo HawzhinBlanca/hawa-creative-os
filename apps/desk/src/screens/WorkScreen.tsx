@@ -1,17 +1,20 @@
+import { TaskControls } from '../components/TaskControls.js';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CanvaTaskPanel } from '../components/CanvaTaskPanel.js';
 import { StudioPanel } from '../components/StudioPanel.js';
 import { AskLedgerPanel } from '../components/AskLedger.js';
+import { RequesterSendEvidencePanel } from '../components/RequesterSendEvidencePanel.js';
 import { VectorInspector } from '../components/VectorInspector.js';
+import { OriginalDocument } from '../components/DocumentRequestForm.js';
 import { SubmittedCopy } from '../components/SubmittedCopy.js';
-import { apiClient, ApiError, type TaskListParams, type TaskListResponse, type TaskTimelineEvent } from '../api/client.js';
+import { apiClient, ApiError, type DecisionPayload, type LateRequesterChangeView, type TaskListParams, type TaskListResponse, type TaskTimelineEvent } from '../api/client.js';
 import { captureForReview } from '../services/canvaCapture.js';
 import { read, reasonOf, type Reading } from '../services/statusReport.js';
 import { approvalBlocker, defaultPins, describeExport, togglePin, type StoredExport } from '../services/approvalPins.js';
+import { reserveDecisionAction, completeDecisionAction, type ReservedDecisionAction } from '../services/decisionActionId.js';
 import { queueEntryChanged, readTaskDetail } from '../services/taskDetail.js';
 import { approvalRoleBlocker, describeApproval, describeDelivery, roleLabel } from '../services/actionOutcome.js';
-import { officeActionIds } from '../services/officeActions.js';
 import { approveButtonState, inQueueFilter, queueFilterStatuses, taskStatusView, type QueueFilter } from '../services/taskStatus.js';
 import { queryKeys, readingOf, type TaskPageView } from '../services/queryClient.js';
 import { useDesk, usePollInterval, useSessionUser } from '../DeskProviders.js';
@@ -22,7 +25,9 @@ const QUEUE_PAGE_SIZE = 50;
 const SEARCH_PAUSE_MS = 300;
 
 export interface LiveTask {
+  sourceDocument?: { id: string; clientId: string; sourceSha256: string } | null;
   id: string;
+  requestId?: string | null;
   clientId?: string;
   clientName?: string;
   title: string;
@@ -54,11 +59,6 @@ export interface LiveTask {
     title?: string;
     lastSyncedAt?: string;
   };
-  /**
-   * The request the task belongs to, when the request lifecycle runs it (GET /tasks/:id, slice 2.4):
-   * its decisions are the lifecycle's, answered through the same routes. Null for a task Core owns.
-   */
-  lifecycle?: { requestId: string; rev: number; stage: string; owner: 'core' | 'restate' } | null;
   latestApproval?: {
     decisionId: string;
     role: string;
@@ -76,11 +76,17 @@ export interface LiveTask {
   copyCkb?: string;
   qaReport?: {
     passed: boolean;
-    bidiIsolation: boolean;
+    bidiIsolation: boolean | null;
+    rtlVisualReviewRequired?: boolean;
     /** null = not measured by the check that produced this report; rendered as pending, never as a pass. */
     safeMargins: boolean | null;
     contrastCompliant: boolean | null;
-    fontCoverage: boolean;
+    fontFamilyPass?: boolean | null;
+    /** Legacy field: a family-name check cannot establish rendered glyph coverage. */
+    fontCoverage?: boolean | null;
+    exportArtifactId?: string | null;
+    exportSha256?: string | null;
+    captureVersion?: string | null;
     errors?: string[];
   };
 }
@@ -100,6 +106,7 @@ export function readQueuePage(
 
 interface WorkScreenProps {
   initialTaskId?: string;
+  reviewRevisionId?: string;
   onNavigateToClients?: (clientId?: string) => void;
   onNavigateToSettings?: () => void;
   onNewTask?: () => void;
@@ -107,6 +114,7 @@ interface WorkScreenProps {
 
 export const WorkScreen: React.FC<WorkScreenProps> = ({
   initialTaskId,
+  reviewRevisionId,
   onNavigateToClients: _onNavigateToClients,
   onNavigateToSettings: _onNavigateToSettings,
   onNewTask,
@@ -118,27 +126,41 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const pollInterval = usePollInterval();
 
   const [selectedTaskId, setSelectedTaskId] = useState<string>(initialTaskId || '');
-  useEffect(() => { if (initialTaskId) setSelectedTaskId(initialTaskId); }, [initialTaskId]);
+  const [confirmedReviewRevision, setConfirmedReviewRevision] = useState<string | undefined>();
+  useEffect(() => {
+    setConfirmedReviewRevision(undefined);
+    if (initialTaskId) { setSelectedTaskId(initialTaskId); setMobilePane('detail'); }
+  }, [initialTaskId, reviewRevisionId]);
   const [canvaLinkInput, setCanvaLinkInput] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'brief' | 'brand' | 'qa' | 'history'>('brief');
-  const [mobilePane, setMobilePane] = useState<'queue' | 'detail'>('queue');
+  const [mobilePane, setMobilePane] = useState<'queue' | 'detail'>(initialTaskId ? 'detail' : 'queue');
   const [previewZoom, setPreviewZoom] = useState(false);
 
   // Modals & In-Flight State
   const [isRevisionModalOpen, setIsRevisionModalOpen] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState('');
+  const [revisionScope, setRevisionScope] = useState<NonNullable<DecisionPayload['revisionRequest']>['scope'] | ''>('');
+  const [revisionCategory, setRevisionCategory] = useState<NonNullable<DecisionPayload['revisionRequest']>['category'] | ''>('');
+  const [revisionTargets, setRevisionTargets] = useState('');
+  const [revisionPriority, setRevisionPriority] = useState<NonNullable<DecisionPayload['revisionRequest']>['priority'] | ''>('');
+  const [revisionReusable, setRevisionReusable] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
+  const [rejectionCategory, setRejectionCategory] = useState<DecisionPayload['rejectionCategory']>();
+  const [rejectionReason, setRejectionReason] = useState('');
   // The stored exports the reviewer can pin to the approval; delivery sends exactly the pinned files.
   const [approvalExports, setApprovalExports] = useState<Reading<StoredExport[]>>({ state: 'loading' });
   const [pinnedExportIds, setPinnedExportIds] = useState<string[]>([]);
+  const [rtlReviewed, setRtlReviewed] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Show temporary toast. Each toast owns the timer: an older toast's timer cleared a newer one
   // after a fraction of its time, so a failure shown right after a success vanished unread.
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const decisionStarting = useRef(false);
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'info', durationMs = 3500) => {
     setToastMessage({ text, type });
     clearTimeout(toastTimer.current);
@@ -190,6 +212,14 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     enabled: Boolean(selectedTaskId),
   });
   const detail = detailQuery.data?.id === selectedTaskId ? detailQuery.data : undefined;
+
+  useEffect(() => {
+    setIsApprovalModalOpen(false);
+    setIsRevisionModalOpen(false);
+    setIsRejectionModalOpen(false);
+  }, [selectedTaskId, reviewRevisionId]);
+  const reviewBlocked = Boolean(initialTaskId && reviewRevisionId && selectedTaskId === initialTaskId &&
+    (!detail?.latestRevisionId || (detail.latestRevisionId !== reviewRevisionId && confirmedReviewRevision !== detail.latestRevisionId)));
 
   // The page, and the task opened from a link or a notification when it is not on this page.
   const tasks = useMemo<LiveTask[]>(() => {
@@ -259,10 +289,14 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     [stream]
   );
 
-  // Ends the session on the server too; the tab is signed out whether or not Core answers.
-  const handleSignOut = () => {
-    void apiClient.auth.logout();
-    session.signOut();
+  // A failed revoke cannot be called sign-out: the HttpOnly cookie or bearer session may still work.
+  const handleSignOut = async () => {
+    try {
+      await apiClient.auth.logout();
+      session.signOut();
+    } catch {
+      showToast('Could not sign out. Check the connection and try again.', 'error');
+    }
   };
 
   // Filtered tasks. Core filters and searches the page (folding the Arabic-keyboard letters into
@@ -276,7 +310,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const selectedTask = useMemo(() => {
     const entry = tasks.find((t) => t.id === selectedTaskId);
     if (entry && detail) return { ...entry, ...detail };
-    return entry || filteredTasks[0] || tasks[0];
+    return selectedTaskId ? entry : filteredTasks[0] || tasks[0];
   }, [tasks, selectedTaskId, filteredTasks, detail]);
 
   // History & Audit reads the task's recorded events (GET /tasks/:id/timeline). It read `history`
@@ -355,15 +389,19 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     } finally { setActionLoading(false); }
   };
 
-  // Primary Action 2: Capture for review (FR-078). Core exports the linked Canva design as PNG, then
-  // validates, hashes and stores it. No QA runs and no revision is created, so the task's status and
-  // QA result are whatever Core reports afterwards; nothing is set locally.
+  // Core records preview, checked source and the review receipt. Keep the action identity after
+  // a lost response; the browser never manufactures a revision or successful QA report.
   const handleCaptureForReview = async () => {
     if (!selectedTask) return;
     const taskId = selectedTask.id;
     setActionLoading(true);
     try {
-      const outcome = await captureForReview(apiClient.canva, taskId, { key: crypto.randomUUID() });
+      const state = await apiClient.canva.taskState(taskId);
+      const actionKey = JSON.stringify([sessionUser?.id,taskId,state.binding?.designId,state.binding?.version,'capture']);
+      const reservation = await reserveDecisionAction(actionKey);
+      const outcome = await captureForReview(apiClient.canva, taskId,
+        { key:reservation.actionId,expectedBinding:state.binding || undefined });
+      if (outcome.completed) completeDecisionAction(actionKey,reservation);
       showToast(outcome.text, outcome.tone);
       await readTaskAgain(taskId);
     } catch (err) {
@@ -379,16 +417,20 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   // not record, and the notes stay until Core has them. A mutation (ADR-037): the button shows it is
   // pending, and the task's status on screen is Core's, read again after Core answered.
   const requestRevision = useMutation({
-    // One action id per press, sent again on a retry after no answer (services/officeActions.ts).
-    mutationFn: (input: { taskId: string; revisionId: string; comment: string }) =>
-      officeActionIds.run(`revise:${input.taskId}:${input.revisionId}`, (actionId) =>
-        apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
-          action: 'revision_requested',
-          revisionRequest: { comment: input.comment },
-        }, actionId)),
+    mutationFn: (input: { taskId: string; revisionId: string; feedback: NonNullable<DecisionPayload['revisionRequest']>; actionKey: string; reservation: ReservedDecisionAction }) =>
+      apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
+        action: 'revision_requested',
+        revisionRequest: input.feedback,
+      }, input.reservation.actionId),
     onSuccess: async (decisionRes, input) => {
+      completeDecisionAction(input.actionKey, input.reservation);
       setIsRevisionModalOpen(false);
       setRevisionNotes('');
+      setRevisionTargets('');
+      setRevisionScope('');
+      setRevisionCategory('');
+      setRevisionPriority('');
+      setRevisionReusable(false);
       // Core recorded the request; a failed read after it is not a failed request.
       const refreshedTask = await readTaskAgain(input.taskId);
       showToast(
@@ -401,84 +443,202 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     onError: (err: Error) => showToast(`Revision request failed: ${err.message || 'Server error'}. Your notes are kept.`, 'error'),
   });
 
-  const handleSendRevisionRequest = () => {
-    if (!selectedTask || !revisionNotes.trim()) return;
+  const handleSendRevisionRequest = async () => {
+    if (reviewBlocked || !selectedTask || !revisionNotes.trim() || decisionStarting.current) return;
     const revisionId = selectedTask.latestRevisionId;
     if (!revisionId) {
       showToast('Nothing sent: this task has no design revision to request changes on. Your notes are kept.', 'error');
       return;
     }
-    requestRevision.mutate({ taskId: selectedTask.id, revisionId, comment: revisionNotes.trim() });
+    if (!revisionScope || !revisionCategory || !revisionPriority) {
+      showToast('Choose the scope, category and priority before sending this revision request.', 'error');
+      return;
+    }
+    const targetNodes = revisionTargets.split(',').map((node) => node.trim()).filter(Boolean);
+    if ((revisionScope !== 'full_design' && targetNodes.length === 0) || targetNodes.length > 32 ||
+        targetNodes.some((node) => node.length > 128) || new Set(targetNodes).size !== targetNodes.length) {
+      showToast('Name each target once (up to 32); a focused revision needs at least one target.', 'error');
+      return;
+    }
+    const feedback = { scope: revisionScope, category: revisionCategory, targetNodes,
+      priority: revisionPriority, isReusableFeedback: revisionReusable, comment: revisionNotes.trim() };
+    const actionKey = JSON.stringify([sessionUser?.id, selectedTask.id, revisionId, 'revision_requested', feedback]);
+    decisionStarting.current = true;
+    try {
+      const reservation = await reserveDecisionAction(actionKey);
+      requestRevision.mutate({ taskId: selectedTask.id, revisionId, feedback, actionKey, reservation });
+    } catch (err) { showToast(`Revision request could not start: ${reasonOf(err)}`, 'error'); }
+    finally { decisionStarting.current = false; }
+  };
+
+  const reject = useMutation({
+    mutationFn: (input: { taskId: string; revisionId: string; category: NonNullable<DecisionPayload['rejectionCategory']>;
+      reason: string; actionKey: string; reservation: ReservedDecisionAction }) =>
+      apiClient.tasks.recordDecision(input.taskId, input.revisionId, {
+        action: 'reject', rejectionCategory: input.category, reason: input.reason,
+      }, input.reservation.actionId),
+    onSuccess: async (_result, input) => {
+      completeDecisionAction(input.actionKey, input.reservation);
+      setIsRejectionModalOpen(false);
+      setRejectionCategory(undefined);
+      setRejectionReason('');
+      const refreshed = await readTaskAgain(input.taskId);
+      showToast(refreshed ? `Rejection recorded. Core reports ${taskStatusView(refreshed.status).pill}.`
+        : 'Rejection recorded. Refresh the task to see its final state.', 'success');
+    },
+    onError: (err: Error) => showToast(`Rejection could not be confirmed: ${err.message}. Keep this dialog open and retry.`, 'error'),
+  });
+
+  const handleReject = async () => {
+    if (reviewBlocked || decisionStarting.current || reject.isPending || !selectedTask?.latestRevisionId || !rejectionCategory || !rejectionReason.trim()) return;
+    if (selectedTask.status !== 'AWAITING_APPROVAL' || approvalRoleBlocker(sessionUser?.role)) {
+      showToast('This draft is no longer available for this reviewer. Refresh the task.', 'error');
+      return;
+    }
+    const actionKey = JSON.stringify([sessionUser?.id, selectedTask.id, selectedTask.latestRevisionId,
+      'reject', rejectionCategory, rejectionReason.trim()]);
+    decisionStarting.current = true;
+    try {
+      const reservation = await reserveDecisionAction(actionKey);
+      reject.mutate({ taskId: selectedTask.id, revisionId: selectedTask.latestRevisionId,
+        category: rejectionCategory, reason: rejectionReason.trim(), actionKey, reservation });
+    } catch (err) { showToast(`Rejection could not start: ${reasonOf(err)}`, 'error'); }
+    finally { decisionStarting.current = false; }
   };
 
   // Primary Action 4: Approve captured files (FR-078, CV-15, H02, H03). The modal lists the exports
   // Core has stored for the task; the ones the reviewer keeps selected are pinned to the approval.
   const openApprovalModal = async () => {
-    if (!selectedTask) return;
+    if (reviewBlocked || !selectedTask) return;
     const taskId = selectedTask.id;
     setIsApprovalModalOpen(true);
     setApprovalExports({ state: 'loading' });
     setPinnedExportIds([]);
+    setRtlReviewed(false);
     const reading = await read(async () => {
       const state = await apiClient.canva.taskState(taskId);
       return Array.isArray(state?.artifacts) ? (state.artifacts as StoredExport[]) : [];
     });
     setApprovalExports(reading);
-    if (reading.state === 'known') setPinnedExportIds(defaultPins(reading.value));
+    if (reading.state === 'known') setPinnedExportIds(defaultPins(reading.value, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion : undefined));
   };
 
   // A mutation (ADR-037): pending until Core answers and the task is read again. The cached status is
-  // never set to approved beforehand: Core can refuse (a stale revision, a role, a pin), and approval
-  // starts delivery on the server.
+  // never set to approved beforehand: Core can refuse a stale revision, role or selected export.
   const approve = useMutation({
-    mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[] }) =>
-      officeActionIds.run(`approve:${input.taskId}:${input.revisionId}`, (actionId) =>
-        apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
-          action: 'approve',
-          reason: 'Brand, hierarchy, and exact-copy verified',
-          pinnedExportIds: input.pinnedExportIds,
-        }, actionId)),
+    mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[]; requestOwned: boolean; rtlVisualReview?: { confirmed: true; exportSha256: string }; actionKey: string; reservation: ReservedDecisionAction }) =>
+      apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
+        action: 'approve',
+        reason: 'Approved by art director',
+        pinnedExportIds: input.pinnedExportIds,
+        ...(input.rtlVisualReview ? { rtlVisualReview: input.rtlVisualReview } : {}),
+      }, input.reservation.actionId),
     onSuccess: async (decisionRes, input) => {
+      completeDecisionAction(input.actionKey, input.reservation);
       // Core recorded the approval; a failed read after it is not a failed approval.
       const refreshedTask = await readTaskAgain(input.taskId);
       setIsApprovalModalOpen(false);
       const notice = describeApproval(input.revisionId, decisionRes?.decisionId, Boolean(refreshedTask));
-      showToast(notice.text, notice.tone, notice.durationMs);
+      showToast(input.requestOwned ? `${notice.text} Delivery will need a separate workflow action.` : notice.text,
+        notice.tone, notice.durationMs);
     },
     onError: (err: Error) => showToast(`Approval failed: ${err.message || 'Server error'}`, 'error'),
   });
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
+    if (reviewBlocked || decisionStarting.current) return;
     if (!selectedTask || !selectedTask.latestRevisionId) {
       showToast('No active design revision to approve.', 'error');
       return;
     }
+    if (!detail || detail.id !== selectedTask.id) {
+      showToast('Wait for the current task details before approving.', 'info');
+      return;
+    }
     const exportsForApproval = approvalExports.state === 'known' ? approvalExports.value : [];
-    const blocker = approvalRoleBlocker(sessionUser?.role) || approvalBlocker(approvalExports.state, exportsForApproval, pinnedExportIds);
+    const blocker = approvalRoleBlocker(sessionUser?.role) || approvalBlocker(approvalExports.state, exportsForApproval, pinnedExportIds, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId ?? null : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion ?? null : undefined);
     if (blocker) {
       showToast(blocker, 'error');
       return;
     }
-    approve.mutate({ taskId: selectedTask.id, revisionId: selectedTask.latestRevisionId, pinnedExportIds });
+    const rtlRequired = selectedTask.qaReport?.rtlVisualReviewRequired === true;
+    const checkedHash = selectedTask.qaReport?.exportSha256;
+    if (rtlRequired && (!rtlReviewed || !checkedHash || !exportsForApproval.some((item) =>
+      item.format === 'png' && pinnedExportIds.includes(item.id)))) {
+      showToast('Inspect and select the final PNG, then confirm Kurdish/Arabic visual review.', 'error');
+      return;
+    }
+    const actionKey = JSON.stringify([sessionUser?.id, selectedTask.id, selectedTask.latestRevisionId, 'approve',
+      [...pinnedExportIds].sort(), rtlRequired ? checkedHash : null]);
+    decisionStarting.current = true;
+    try {
+      const reservation = await reserveDecisionAction(actionKey);
+      approve.mutate({ taskId: selectedTask.id, revisionId: selectedTask.latestRevisionId, pinnedExportIds,
+        requestOwned: Boolean(detail.requestId),
+        actionKey, reservation,
+        ...(rtlRequired ? { rtlVisualReview: { confirmed: true, exportSha256: checkedHash! } } : {}) });
+    } catch (err) { showToast(`Approval could not start: ${reasonOf(err)}`, 'error'); }
+    finally { decisionStarting.current = false; }
   };
 
   // Every action button waits while one runs.
-  const busy = actionLoading || approve.isPending || requestRevision.isPending;
+  const busy = actionLoading || approve.isPending || reject.isPending || requestRevision.isPending;
+
+  // Words the requester sent after the design reached the office, shown before a delivery (finding 13).
+  const confirmLateChanges = (changes: LateRequesterChangeView[]) => window.confirm([
+    changes.length === 1
+      ? 'The requester sent this after the design reached the office:'
+      : `The requester sent ${changes.length} messages after the design reached the office:`,
+    ...changes.map((change) => `\n"${change.text}"`),
+    '\nThese words were not applied to the design. Deliver the approved design anyway?',
+  ].join('\n'));
 
   // Primary Action 5: Deliver approved files (FR-078, CV-16, H02)
   const handleDeliver = async () => {
-    if (!selectedTask) return;
+    const approval = detail?.latestApproval;
+    if (!selectedTask || !detail || !approval) return;
     const taskId = selectedTask.id;
+    const requestOwned = Boolean(detail.requestId || selectedTask.requestId);
     setActionLoading(true);
     let delivery: unknown;
-    try {
-      delivery = await officeActionIds.run(`deliver:${taskId}`, (actionId) => apiClient.tasks.publish(taskId, {
-        destination: 'google_drive',
-      }, actionId));
-    } catch (err: any) {
-      showToast(`Delivery failed: ${err.message || 'Server error'}`, 'error');
-      setActionLoading(false);
-      return;
+    let acknowledged: string[] = [];
+    for (;;) {
+      let reservation: ReservedDecisionAction | null = null;
+      let actionKey = '';
+      try {
+        if (requestOwned) {
+          // The task version is part of the key: a press whose answer was lost is retried with the same
+          // id, but once that delivery moved the task on (started, then failed back to APPROVED) the next
+          // press is a new action. A kept id would be answered from the spent press (finding 19).
+          actionKey = JSON.stringify([sessionUser?.id, taskId, approval.decisionId, selectedTask.version ?? null, 'deliver',
+            ...(acknowledged.length ? [[...acknowledged].sort()] : [])]);
+          reservation = await reserveDecisionAction(actionKey);
+        }
+        delivery = await apiClient.tasks.publish(taskId,
+          { destination: 'google_drive', ...(requestOwned ? { approvalId: approval.decisionId } : {}),
+            ...(acknowledged.length ? { acknowledgeLateChanges: acknowledged } : {}) },
+          reservation?.actionId);
+        if (reservation) completeDecisionAction(actionKey, reservation);
+        break;
+      } catch (err: any) {
+        const late: LateRequesterChangeView[] | null = err?.problem?.code === 'LATE_REQUESTER_CHANGE' &&
+          Array.isArray(err.problem.lateChanges) ? err.problem.lateChanges : null;
+        if (late && reservation) {
+          // Core refused before asking for any delivery, so this action id was never used.
+          completeDecisionAction(actionKey, reservation);
+          const unseen = late.filter((change) => !acknowledged.includes(change.updateId));
+          if (unseen.length && confirmLateChanges(late)) {
+            acknowledged = [...new Set([...acknowledged, ...late.map((change) => change.updateId)])];
+            continue;
+          }
+          showToast('Not delivered. The requester sent words after this design reached the office; read them before delivering.', 'error');
+          setActionLoading(false);
+          return;
+        }
+        showToast(`Delivery failed: ${err.message || 'Server error'}`, 'error');
+        setActionLoading(false);
+        return;
+      }
     }
     // Core accepted the delivery (202 DELIVERED_TO_CHAT_ONLY included: the requester has the file);
     // a failed refresh after it is not a failed delivery.
@@ -495,7 +655,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const nextAction = selectedTask ? getNextActionPrompt(selectedTask) : null;
   // Hidden for a status the Desk does not know, which could be approved until 2026-09-24.
   const approveState = selectedTask
-    ? approveButtonState(selectedTask.status, { hasRevision: Boolean(selectedTask.latestRevisionId), qaPassed: selectedTask.qaReport?.passed === true, busy })
+    ? approveButtonState(selectedTask.status, { hasRevision: Boolean(selectedTask.latestRevisionId), qaPassed: selectedTask.qaReport?.passed === true, busy: busy || !detail || reviewBlocked })
     : 'hidden';
 
   return (
@@ -808,6 +968,21 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 </button>
               </div>
 
+              {reviewBlocked && detail && (
+                <div role="alert" className="next-action-banner">
+                  <div>
+                    <strong>This notification names an older revision.</strong>
+                    <p>Decisions are paused. Inspect the current design and its evidence before continuing.</p>
+                    {detail.latestRevisionId && <button className="btn primary" onClick={() => {
+                      setIsApprovalModalOpen(false);
+                      setIsRevisionModalOpen(false);
+                      setIsRejectionModalOpen(false);
+                      setConfirmedReviewRevision(detail.latestRevisionId);
+                    }}>Review current revision</button>}
+                  </div>
+                </div>
+              )}
+
               {/* Task Header Summary */}
               <div className="detail-header-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
@@ -846,8 +1021,10 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   </div>
                 )}
 
-                <details className="canva-binding-form">
-                  <summary>Link this task’s Canva design</summary>
+                {!detail?.requestId && !selectedTask.requestId && <details className="canva-binding-form">
+                  <summary>{selectedTask.canvaBinding ? 'Linked Canva design' : 'Link this task’s Canva design'}</summary>
+                  {selectedTask.canvaBinding && <p>Design {selectedTask.canvaBinding.designId}</p>}
+                  {!selectedTask.canvaBinding && <>
                   <p>Use a separate Canva copy for this task. Linking does not capture or approve its contents.</p>
                   <form onSubmit={async event => {
                     event.preventDefault();
@@ -864,10 +1041,14 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                       onChange={event => setCanvaLinkInput(event.target.value)} placeholder="https://www.canva.com/design/…/edit" />
                     <button className="btn" type="submit" disabled={actionLoading || !canvaLinkInput.trim()}>Save Canva link</button>
                   </form>
-                </details>
+                  </>}
+                </details>}
                 <AskLedgerPanel key={`asks-${selectedTask.id}`} taskId={selectedTask.id} />
-                <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} />
-                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} revision={detailQuery.dataUpdatedAt} />
+                {!detail?.requestId && !selectedTask.requestId && <TaskControls key={`controls-${selectedTask.id}`}
+                  taskId={selectedTask.id} status={selectedTask.status} version={selectedTask.version} role={sessionUser?.role}
+                  refresh={() => readTaskAgain(selectedTask.id)} />}
+                <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} taskStatus={selectedTask.status} hasCanvaBinding={Boolean(selectedTask.canvaBinding)} />
+                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} taskStatus={selectedTask.status} revision={detailQuery.dataUpdatedAt} />
                 <p className="capture-availability" role="status">Retrieved exports require QA and human approval before delivery.</p>
                 {/* =================================================================== */}
                 {/* PRIMARY ACTION BAR (FR-078)                                         */}
@@ -890,8 +1071,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     id="btn-capture-for-review"
                     className="action-btn capture-btn"
                     onClick={handleCaptureForReview}
-                    disabled={busy}
-                    title="Export the linked Canva design as PNG and store it, hashed, as review evidence. QA and approval are separate (FR-078)"
+                    disabled={busy || ['COMPLETE','CANCELLED','REJECTED'].includes(selectedTask.status)}
+                    title="Capture the PNG preview and checked source for a server-recorded review. Human approval is still required."
                   >
                     <span className="btn-icon" aria-hidden="true">📸</span>
                     <span>Capture for Review</span>
@@ -902,7 +1083,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     id="btn-request-revision"
                     className="action-btn revision-btn"
                     onClick={() => setIsRevisionModalOpen(true)}
-                    disabled={busy || !selectedTask.latestRevisionId}
+                    disabled={busy || !detail || reviewBlocked || !selectedTask.latestRevisionId}
                     title={
                       selectedTask.latestRevisionId
                         ? 'Request revision and log structured operator instructions (FR-078)'
@@ -927,18 +1108,43 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     </button>
                   )}
 
+                  {selectedTask.status === 'AWAITING_APPROVAL' && selectedTask.latestRevisionId && (
+                    <button id="btn-reject-design" className="action-btn revision-btn"
+                      onClick={() => setIsRejectionModalOpen(true)} disabled={busy || !detail || reviewBlocked || Boolean(approvalRoleBlocker(sessionUser?.role))}
+                      title="Stop this request and record why the current design is rejected">
+                      <span className="btn-icon" aria-hidden="true">⛔</span>
+                      <span>{reject.isPending ? 'Rejecting…' : 'Reject Design'}</span>
+                    </button>
+                  )}
+
                   {/* Action 5: Deliver approved files */}
                   <button
                     id="btn-deliver-approved"
                     className="action-btn deliver-btn"
                     onClick={handleDeliver}
-                    disabled={busy || !selectedTask.latestApproval || nextAction?.primaryButton !== 'deliver'}
-                    title="Publish approved files to Google Drive and Google Sheets (FR-046, FR-078)"
+                    disabled={busy || !detail?.latestApproval || nextAction?.primaryButton !== 'deliver'}
+                    title={selectedTask.status === 'REQUESTER_SEND_RECONCILIATION'
+                      ? 'Requester send is uncertain. An operator must check Telegram and delivery records before any retry.'
+                      : selectedTask.status === 'PUBLISH_RECONCILIATION'
+                      ? 'Retry the unconfirmed Sheets row using the recorded publication'
+                      : selectedTask.status === 'ARCHIVE_RECONCILIATION'
+                        ? 'Recheck the recorded Drive file identity before requester delivery'
+                        : 'Start the approved delivery to Drive, Sheets and the requester (FR-046, FR-078)'}
                   >
                     <span className="btn-icon" aria-hidden="true">🚀</span>
-                    <span>Deliver Approved Files</span>
+                    <span>{selectedTask.status === 'REQUESTER_SEND_RECONCILIATION' ? 'Check Telegram Delivery'
+                      : selectedTask.status === 'PUBLISH_RECONCILIATION' ? 'Retry Sheet Sync'
+                      : selectedTask.status === 'ARCHIVE_RECONCILIATION' ? 'Recheck Drive Archive' : 'Deliver Approved Files'}</span>
                   </button>
+                  {(detail?.requestId || selectedTask.requestId) && selectedTask.status === 'APPROVED' && (
+                    <p className="capture-availability" role="note">
+                      Approval is recorded. Delivery starts separately and remains pending until the archive and requester send are confirmed.
+                    </p>
+                  )}
                 </div>
+                {selectedTask.status === 'REQUESTER_SEND_RECONCILIATION' &&
+                  <RequesterSendEvidencePanel key={`requester-send-${selectedTask.id}`} taskId={selectedTask.id}
+                    canConfirm={sessionUser?.role === 'office_admin' || sessionUser?.role === 'administrator'} />}
                 {!selectedTask.latestRevisionId && (
                   <p className="capture-availability" role="note">
                     Request Revision and approval need a recorded design revision; this task has none yet.
@@ -1072,6 +1278,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   {activeTab === 'brief' && (
                     <div className="tab-pane-content" role="tabpanel" aria-label="Brief and Copy">
                   {selectedTask.designInstructions && <div className="rule"><h4>Design instructions</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedTask.designInstructions}</p></div>}
+                  {selectedTask.sourceDocument && <div className="rule"><h4>Original request PDF</h4><OriginalDocument receipt={selectedTask.sourceDocument} /></div>}
                   {selectedTask.referenceAssets && <div className="rule"><h4>Reference notes</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedTask.referenceAssets}</p></div>}
                       <div className="exact-copy-notice">
                         <b>Exact Copy Invariant (#1):</b> Compare this content with the captured design. The server must validate exact copy before approval.
@@ -1110,20 +1317,22 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                           const bidiPass = qa ? qa.bidiIsolation : null;
                           const marginPass = qa ? qa.safeMargins : null;
                           const contrastPass = qa ? qa.contrastCompliant : null;
-                          const fontPass = qa ? qa.fontCoverage : null;
+                          const fontPass = qa?.fontFamilyPass ?? null;
 
                           return (
                             <>
                               <div className={`qa-item ${bidiPass === true ? 'passed' : bidiPass === false ? 'failed' : 'pending'}`}>
                                 <span className="qa-status-icon">{bidiPass === true ? '✓' : bidiPass === false ? '✗' : '○'}</span>
                                 <div style={{ flex: 1 }}>
-                                  <strong>Kurdish Sorani Bidi Isolation (UAX #9)</strong>
+                                  <strong>Arabic/Sorani reading direction</strong>
                                   <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
                                     {bidiPass === true
-                                      ? 'Unicode directional isolates present around mixed LTR numbers and Kurdish text.'
+                                      ? 'No Arabic/Sorani direction issue was identified in the checked source.'
                                       : bidiPass === false
-                                      ? 'Bidi directional isolation missing or corrupted for RTL Arabic script segments.'
-                                      : 'Automated check pending review of vector layout.'}
+                                      ? 'The checked source conflicts with the required text direction.'
+                                      : qa?.rtlVisualReviewRequired
+                                      ? 'Paragraph flags cannot prove rendered reading order. Inspect the final PNG before approval.'
+                                      : 'Automated direction check has not been measured.'}
                                   </p>
                                 </div>
                               </div>
@@ -1159,13 +1368,23 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                               <div className={`qa-item ${fontPass === true ? 'passed' : fontPass === false ? 'failed' : 'pending'}`}>
                                 <span className="qa-status-icon">{fontPass === true ? '✓' : fontPass === false ? '✗' : '○'}</span>
                                 <div style={{ flex: 1 }}>
-                                  <strong>Font License & Glyph Coverage</strong>
+                                  <strong>Declared font families</strong>
                                   <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
                                     {fontPass === true
-                                      ? 'All glyphs covered by OFL fonts (Vazirmatn/Cairo/Rabar). Zero placeholder tofu boxes.'
+                                      ? 'Text runs declare font families allowed by the saved policy.'
                                       : fontPass === false
-                                      ? 'Missing Kurdish Sorani glyph shapes or unsupported font weights detected.'
-                                      : 'Font coverage inspection pending.'}
+                                      ? 'Declared font families do not match the saved policy.'
+                                      : 'Font-family inspection has not been measured.'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="qa-item pending">
+                                <span className="qa-status-icon">○</span>
+                                <div style={{ flex: 1 }}>
+                                  <strong>Rendered glyph coverage</strong>
+                                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                                    Not verified by this check. Inspect the final export for missing glyphs and unexpected font changes; verify licenses against approved font records.
                                   </p>
                                 </div>
                               </div>
@@ -1236,7 +1455,11 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
           ) : (
             <div className="detail-empty-state">
               <h3>No Task Selected</h3>
-              <p>Select a task from the queue to inspect details and perform creative actions.</p>
+              {selectedTaskId && selectedTaskId === initialTaskId
+                ? <p role={detailQuery.isError ? 'alert' : 'status'}>{detailQuery.isError
+                  ? 'Linked task unavailable. It may have been removed or your account may not have access. Select a task from the queue or contact your office administrator.'
+                  : 'Loading the linked task…'}</p>
+                : <p>Select a task from the queue to inspect details and perform creative actions.</p>}
             </div>
           )}
         </section>
@@ -1257,13 +1480,44 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               the changes is recorded.
             </p>
 
+            <label className="hawa-revision-label" htmlFor="revision-scope">Scope</label>
+            <select id="revision-scope" className="hawa-select" value={revisionScope} onChange={(e) => setRevisionScope(e.target.value as typeof revisionScope)} autoFocus>
+              <option value="">Choose scope</option>
+              <option value="full_design">Full design</option><option value="typography">Typography</option>
+              <option value="layout">Layout</option><option value="color">Color</option>
+              <option value="assets">Assets</option><option value="copy">Copy</option>
+            </select>
+            <label className="hawa-revision-label" htmlFor="revision-category">Category</label>
+            <select id="revision-category" className="hawa-select" value={revisionCategory} onChange={(e) => setRevisionCategory(e.target.value as typeof revisionCategory)}>
+              <option value="">Choose category</option>
+              <option value="aesthetic_preference">Aesthetic preference</option>
+              <option value="factual_error">Factual error</option><option value="brand_violation">Brand violation</option>
+              <option value="legal_compliance">Legal or compliance</option><option value="technical_defect">Technical defect</option>
+            </select>
+            <label className="hawa-revision-label" htmlFor="revision-targets">Target node IDs (comma separated; leave empty for full design)</label>
+            <input id="revision-targets" className="hawa-select" value={revisionTargets} maxLength={4096}
+              onChange={(e) => setRevisionTargets(e.target.value)} placeholder="headline, logo" />
+            <label className="hawa-revision-label" htmlFor="revision-priority">Priority</label>
+            <select id="revision-priority" className="hawa-select" value={revisionPriority} onChange={(e) => setRevisionPriority(e.target.value as typeof revisionPriority)}>
+              <option value="">Choose priority</option>
+              <option value="low">Low</option><option value="medium">Medium</option>
+              <option value="high">High</option><option value="critical">Critical</option>
+            </select>
+            <label className="hawa-revision-reuse" htmlFor="revision-reusable">
+              <input id="revision-reusable" type="checkbox" checked={revisionReusable}
+                onChange={(e) => setRevisionReusable(e.target.checked)} />
+              Suggest this feedback for future work (requires separate human rule approval)
+            </label>
+
+            <label className="hawa-revision-label" htmlFor="revision-comment">Requested change</label>
             <textarea
+              id="revision-comment"
               className="hawa-textarea"
               rows={4}
+              maxLength={2000}
               placeholder="e.g. Increase Kurdish headline size by 4px and verify the logo top-right RTL clearance..."
               value={revisionNotes}
               onChange={(e) => setRevisionNotes(e.target.value)}
-              autoFocus
             />
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
@@ -1273,7 +1527,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
               <button
                 className="btn primary"
                 onClick={handleSendRevisionRequest}
-                disabled={!revisionNotes.trim() || busy}
+                disabled={!revisionNotes.trim() || !revisionScope || !revisionCategory || !revisionPriority || busy}
               >
                 {requestRevision.isPending ? 'Sending request…' : 'Submit Revision Request'}
               </button>
@@ -1288,7 +1542,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       {isApprovalModalOpen && selectedTask && selectedTask.latestRevision && (
         <div className="hawa-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-app-title">
           <div className="hawa-modal-box">
-            <h3 id="modal-app-title" style={{ marginTop: 0 }}>Authorize Release & Approve</h3>
+            <h3 id="modal-app-title" style={{ marginTop: 0 }}>Approve Captured Files</h3>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 12 }}>
               You are recording binding human approval for <b>Revision v{selectedTask.latestRevision.version}</b>.
             </p>
@@ -1303,7 +1557,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
             <fieldset style={{ border: 0, padding: 0, margin: '0 0 14px' }}>
               <legend style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Files to deliver</legend>
               <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 6px' }}>
-                Delivery sends exactly the selected exports, byte for byte, and nothing else.
+                Delivery sends exactly the selected exports, byte for byte. The PPTX checked by QA must stay selected for a Canva design.
               </p>
               {approvalExports.state === 'known' &&
                 approvalExports.value.map((e) => (
@@ -1316,20 +1570,34 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     <span style={{ fontFamily: 'monospace' }}>{describeExport(e)}</span>
                   </label>
                 ))}
-              {approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds) && (
+              {approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId ?? null : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion ?? null : undefined) && (
                 <p role="status" style={{ fontSize: 12, color: '#b91c1c', margin: '4px 0 0' }}>
-                  {approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds)}
+                  {approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId ?? null : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion ?? null : undefined)}
                   {approvalExports.state === 'unknown' ? ` (${approvalExports.reason})` : ''}
                 </p>
               )}
             </fieldset>
+
+            {selectedTask.qaReport?.rtlVisualReviewRequired === true && (
+              <fieldset style={{ margin: '0 0 14px', padding: 12 }}>
+                <legend style={{ fontSize: 12, fontWeight: 600 }}>Kurdish/Arabic visual review required</legend>
+                <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 0 }}>
+                  Inspect the selected final PNG for letter shape,
+                  reading order, mixed numbers and clipping. Select that PNG above before approving.
+                </p>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'start', fontSize: 12 }}>
+                  <input type="checkbox" checked={rtlReviewed} onChange={(event) => setRtlReviewed(event.target.checked)} />
+                  <span>I inspected the selected final PNG and confirmed the Kurdish/Arabic text reads correctly.</span>
+                </label>
+              </fieldset>
+            )}
 
             {/* Core records the approval under the signed-in session's role; nothing chosen here is sent. */}
             <div style={{ marginBottom: 16, fontSize: 12 }}>
               <span style={{ fontWeight: 600 }}>Signing off as: </span>
               <span>{sessionUser ? `${sessionUser.displayName || 'Signed-in user'} (${roleLabel(sessionUser.role || 'unknown role')})` : 'the signed-in session'}</span>
               {approvalRoleBlocker(sessionUser?.role) && (
-                <p role="status" style={{ color: '#b91c1c', margin: '4px 0 0' }}>
+                <p role="status" style={{ color: 'var(--warn-text)', margin: '4px 0 0' }}>
                   {approvalRoleBlocker(sessionUser?.role)}
                 </p>
               )}
@@ -1340,16 +1608,48 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                 Cancel
               </button>
               <button
-                className="btn primary"
+                className="btn primary approval-confirm"
                 style={{ background: '#166534', borderColor: '#166534' }}
                 onClick={handleApprove}
                 disabled={
                   busy ||
                   Boolean(approvalRoleBlocker(sessionUser?.role)) ||
-                  Boolean(approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds))
+                  (selectedTask.qaReport?.rtlVisualReviewRequired === true &&
+                    (!rtlReviewed || !selectedTask.qaReport.exportSha256 ||
+                      !(approvalExports.state === 'known' && approvalExports.value.some((item) =>
+                        item.format === 'png' && pinnedExportIds.includes(item.id))))) ||
+                  Boolean(approvalBlocker(approvalExports.state, approvalExports.state === 'known' ? approvalExports.value : [], pinnedExportIds, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId ?? null : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion ?? null : undefined))
                 }
               >
-                {approve.isPending ? 'Approving…' : 'Confirm Approval & Release'}
+                {approve.isPending ? 'Approving…' : 'Confirm Approval'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isRejectionModalOpen && selectedTask?.latestRevisionId && (
+        <div className="hawa-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-reject-title">
+          <div className="hawa-modal-box">
+            <h3 id="modal-reject-title">Reject this design</h3>
+            <p>This stops production for this request. Record which part is rejected and why.</p>
+            <label className="hawa-revision-label" htmlFor="rejection-category">What is rejected?</label>
+            <select id="rejection-category" className="hawa-input" value={rejectionCategory || ''}
+              onChange={(event) => setRejectionCategory(event.target.value as DecisionPayload['rejectionCategory'])}>
+              <option value="">Select a category</option>
+              <option value="concept">Concept</option>
+              <option value="content">Content</option>
+              <option value="brand_direction">Brand direction</option>
+              <option value="task">The whole task</option>
+            </select>
+            <label className="hawa-revision-label" htmlFor="rejection-reason">Reason</label>
+            <textarea id="rejection-reason" className="hawa-textarea" rows={4} maxLength={2000}
+              value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button className="btn" onClick={() => setIsRejectionModalOpen(false)}>Cancel</button>
+              <button className="btn primary" onClick={handleReject}
+                disabled={busy || !rejectionCategory || !rejectionReason.trim()}>
+                {reject.isPending ? 'Recording…' : 'Confirm Rejection'}
               </button>
             </div>
           </div>

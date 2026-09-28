@@ -1,0 +1,16 @@
+node:internal/modules/run_main:122
+    triggerUncaughtException(
+    ^
+
+locator.innerText: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('#eval').locator('tbody tr').first().locator('td').nth(4)[22m
+
+    at <anonymous> (/Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-evaluation-evidence/check-deployed.mts:43:114) {
+  log: [
+    "  - waiting for locator('#eval').locator('tbody tr').first().locator('td').nth(4)"
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v22.13.1

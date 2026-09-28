@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SyntheticTrafficDaemon, SYNTHETIC_SCENARIOS } from '../src/index.js';
 
 describe('SyntheticTrafficDaemon & SLO Heartbeat Engine', () => {
@@ -61,6 +61,7 @@ describe('SyntheticTrafficDaemon & SLO Heartbeat Engine', () => {
     expect(summary.successRate).toBe(100);
     expect(summary.errorBudgetRemaining).toBe(100);
 
+    if (summary.p50DurationMs === null || summary.p95DurationMs === null || summary.p99DurationMs === null) throw new Error('Measured fixture latencies missing');
     // Percentile ordering invariant: P50 <= P95 <= P99
     expect(summary.p50DurationMs).toBeGreaterThan(0);
     expect(summary.p95DurationMs).toBeGreaterThanOrEqual(summary.p50DurationMs);
@@ -91,4 +92,18 @@ describe('SyntheticTrafficDaemon & SLO Heartbeat Engine', () => {
     expect(recent.length).toBe(5);
     expect(recent[0].scenario).toBe('nawroz_spring');
   });
+});
+
+it('does not manufacture latency, success or compliance without synthetic samples',()=>{
+ const summary=new SyntheticTrafficDaemon(0).getSummary();
+ expect(summary).toMatchObject({totalProbes:0,successRate:null,errorBudgetRemaining:null,p50DurationMs:null,p95DurationMs:null,p99DurationMs:null,sloCompliant:null});
+});
+
+it('exhausts its fixture error budget at one failure in one hundred observations',async()=>{
+ const daemon=new SyntheticTrafficDaemon(99);
+ const failure=vi.spyOn(daemon.modelGateway,'resolve').mockRejectedValue(new Error('Synthetic failure'));
+ try {
+  expect((await daemon.runProbe()).success).toBe(false);
+  expect(daemon.getSummary()).toMatchObject({totalProbes:100,successRate:99,errorBudgetRemaining:0});
+ } finally { failure.mockRestore(); }
 });

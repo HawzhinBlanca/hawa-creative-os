@@ -1,3 +1,4 @@
+import type { OperationsReliabilityReport } from '@hawa/contracts';
 import type { RouteContext } from './types.js';
 import { OutboxRepository, sql, withRlsContext, dbStatesForApiStatuses, toApiTaskStatus } from '@hawa/db';
 import { streamSSE } from 'hono/streaming';
@@ -5,12 +6,13 @@ import type { Context } from 'hono';
 import { checkProductionFunnelHealth } from '../services/funnel-monitor.js';
 // A function declaration, read only when a request arrives, so the import cycle with app.ts is harmless.
 import { probeDatabase } from '../core-helpers.js';
-import { readDeliveredRecords } from '../services/publication-receipt.js';
+import { ReceiptAuditService, ReceiptAuditError } from '../services/receipt-audits.js';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
-import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus } from '@hawa/contracts';
 import { log } from '../logging.js';
+import { mayChangeKillSwitch, setKillSwitch, type KillSwitchChannel } from '../services/channel-kill-switches.js';
 import { telegramPollerOf } from '../services/telegram-poller-owner.js';
-import { setKillSwitch } from '../services/channel-kill-switches.js';
+import { registerAvailabilityRoutes, availabilityConfig, AvailabilityError, readAvailabilityReport } from './availability.routes.js';
 
 /**
  * A dead letter whose send may have reached its recipient: the outbox consumer's "uncertain" errors
@@ -19,6 +21,7 @@ import { setKillSwitch } from '../services/channel-kill-switches.js';
 const OUTBOX_UNCERTAIN_SEND = 'DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID|TIMEOUT_AFTER_SEND|KILL_AFTER_SEND|SOCKET_HANGUP_AFTER_WRITE';
 
 export function registerSystemRoutes(ctx: RouteContext) {
+  registerAvailabilityRoutes(ctx);
   const {
     app,
     db,
@@ -29,14 +32,13 @@ export function registerSystemRoutes(ctx: RouteContext) {
     broadcastEvent,
     verifyRequestAuth,
     problem,
-    sloDaemon,
-    reconciliationService,
     channelKillSwitches,
     globalCanvaCircuitBreaker,
     handleDecommissionedFigmaRoute,
     ensureSessionLoaded,
     bearerTokenOf,
     streamTickets,
+    paidModelHealth,
   } = ctx;
 
   const maskKey = (key?: string) => {
@@ -64,15 +66,16 @@ export function registerSystemRoutes(ctx: RouteContext) {
 
   // Production Funnel Health & Stall Detection (Step 5 of Engineering Rank Audit)
   registerRoute('get', '/system/funnel/health', async (c: any) => {
-    const windowHours = Number(c.req.query('windowHours')) || 48;
+    const requestedWindow = Number(c.req.query('windowHours'));
+    const windowHours = Number.isInteger(requestedWindow) && requestedWindow >= 1 && requestedWindow <= 168 ? requestedWindow : 48;
     const auth = verifyRequestAuth(c);
     const metrics = await checkProductionFunnelHealth(db, {
       tenantId: auth.tenantId,
       windowHours,
-      telegramBridge,
-      opsChannelId: process.env.TELEGRAM_OPS_CHANNEL_ID,
     });
-    return c.json({ ok: true, ...metrics }, metrics.status === 'stalled' ? 424 : 200);
+    // A stalled funnel is a successfully read operational fact. Keep this GET readable by the
+    // Desk; the status field, not an HTTP error, carries the alert. Unknown still fails closed.
+    return c.json({ ok: metrics.status !== 'unknown', ...metrics }, metrics.status === 'unknown' ? 503 : 200);
   });
 
   const requireAdministrator = (c: any): Response | null => {
@@ -374,7 +377,7 @@ export function registerSystemRoutes(ctx: RouteContext) {
   });
 
   // Integrations Health
-  registerRoute('get', '/integrations/health', (c: any) => {
+  registerRoute('get', '/integrations/health', async (c: any) => {
     const hasTelegram = Boolean(process.env.TELEGRAM_BOT_TOKEN);
     const hasWaha = Boolean(process.env.WAHA_API_KEY || process.env.WAHA_BASE_URL);
     const hasDrive = Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_DRIVE_FOLDER_ID);
@@ -382,161 +385,157 @@ export function registerSystemRoutes(ctx: RouteContext) {
     const hasPhoenix = Boolean(process.env.PHOENIX_COLLECTOR_URL);
 
     const canvaBreaker = globalCanvaCircuitBreaker?.getSnapshot();
-    const canvaState = canvaBreaker?.state === 'OPEN' ? 'degraded' : 'unverified';
-    const telegramState = channelKillSwitches?.telegram ? 'kill_switch_active' : (hasTelegram ? 'healthy' : 'unconfigured');
-    const wahaState = channelKillSwitches?.waha ? 'quarantined' : (hasWaha ? 'healthy' : 'unconfigured');
+    const observedAt = new Date().toISOString();
+    // Other adapters have only local configuration/switch evidence. The model item uses a stored
+    // paid observation; reading this endpoint never makes a provider call.
+    const reported = (integrationId: string, kind: string, configured: boolean | null, blocked?: string) => ({
+      integrationId,
+      kind,
+      state: blocked || (configured === null ? 'unknown' : configured ? 'configured' : 'unconfigured'),
+      configured,
+      reachability: 'unknown',
+      paidVerification: 'not_run',
+      lastVerifiedAt: null,
+      checkedAt: observedAt,
+      nextAction: blocked
+        ? 'Review the local switch or failure before using this adapter.'
+        : configured === false
+          ? 'Complete server setup before using this adapter.'
+          : 'Verify this adapter with a scoped real operation before relying on it.',
+    });
+
+    const model = await paidModelHealth();
+    const configuredModel = Boolean(process.env.OPENAI_API_KEY);
+    const reachedModel = ['connected', 'unauthorized', 'billing_exhausted', 'rate_limited', 'http_error'].includes(model.status);
+    const modelItem = {
+      integrationId: 'int_openai_model', kind: 'model_provider',
+      state: model.status === 'connected' ? 'paid_verified' : model.status === 'unverified' ? 'configured' : model.status,
+      configured: configuredModel,
+      reachability: reachedModel ? 'reachable' : model.status === 'unreachable' ? 'unreachable' : 'unknown',
+      paidVerification: model.status === 'connected' ? 'paid_verified' : model.status === 'stale' ? 'stale'
+        : ['unknown','budget_held','reconciliation_required'].includes(model.status) ? 'unknown'
+        : model.status === 'unverified' || model.status === 'unconfigured' ? 'not_run' : 'failed',
+      lastVerifiedAt: model.status === 'connected' ? model.at : null,
+      lastObservedAt: model.at,
+      checkedAt: observedAt,
+      callId: model.callId || null,
+      spendingStatus: model.spendingStatus || null,
+      nextAction: model.status === 'reconciliation_required' ? 'Review the held health probe in Operations call cost accounting. Record terminal provider evidence before another scheduled probe.'
+        : model.status === 'budget_held' ? 'Review the shared spending policy, price policy or incomplete cost history in Operations. No probe was sent.'
+        : model.status === 'connected' ? 'Monitor the next scheduled paid probe.'
+        : model.status === 'unconfigured' ? 'Configure the model provider before using it.'
+          : model.status === 'unverified' ? 'Enable and run the paid probe before relying on model health.'
+            : model.status === 'stale' ? 'Check why the scheduled paid probe stopped running.'
+              : 'Inspect the provider failure and retry a scoped paid probe.',
+    };
 
     return c.json({
       items: [
-        { integrationId: 'int_canva_studio', kind: 'canva_native_studio', state: canvaState, checkedAt: new Date().toISOString() },
-        { integrationId: 'int_telegram', kind: 'telegram', state: telegramState, checkedAt: new Date().toISOString() },
-        { integrationId: 'int_waha', kind: 'waha', state: wahaState, checkedAt: new Date().toISOString() },
-        { integrationId: 'int_google_drive', kind: 'google_drive', state: hasDrive ? 'healthy' : 'unconfigured', checkedAt: new Date().toISOString() },
-        { integrationId: 'int_google_sheets', kind: 'google_sheets', state: hasSheets ? 'healthy' : 'unconfigured', checkedAt: new Date().toISOString() },
-        { integrationId: 'int_phoenix', kind: 'phoenix', state: hasPhoenix ? 'healthy' : 'unconfigured', checkedAt: new Date().toISOString() },
+        modelItem,
+        reported('int_canva_studio', 'canva_native_studio', null, canvaBreaker?.state === 'OPEN' ? 'degraded' : undefined),
+        reported('int_telegram', 'telegram', hasTelegram, channelKillSwitches?.telegram ? 'kill_switch_active' : undefined),
+        reported('int_waha', 'waha', hasWaha, channelKillSwitches?.waha ? 'quarantined' : undefined),
+        reported('int_google_drive', 'google_drive', hasDrive),
+        reported('int_google_sheets', 'google_sheets', hasSheets),
+        reported('int_phoenix', 'phoenix', hasPhoenix),
       ],
     });
   });
 
-  // SLO Performance & Synthetic Heartbeat Telemetry
-  registerRoute('get', '/operations/slo', (c: any) => {
-    const summary = sloDaemon.getSummary();
-    const recent = sloDaemon.getRecentProbes(10);
-    return c.json({
-      summary,
-      recentProbes: recent,
-    });
-  });
-
-  registerRoute('post', '/operations/slo/run', async (c: any) => {
-    const body = await c.req.json().catch(() => ({}));
-    const scenarioKey = body.scenario || 'nawroz_spring';
-    const result = await sloDaemon.runProbe(scenarioKey);
-    const summary = sloDaemon.getSummary();
-
-    broadcastEvent('slo:probe_completed', {
-      probeId: result.probeId,
-      scenario: result.scenario,
-      totalDurationMs: result.totalDurationMs,
-      success: result.success,
-      p99DurationMs: summary.p99DurationMs,
-      successRate: summary.successRate,
-    });
-
-    return c.json({
-      result,
-      summary,
-    }, 201);
-  });
-
-  // Operations Reconciliation & Drift Audit (FR-049, FR-050). Audit only: see ReconciliationService.
-  registerRoute('get', '/operations/reconciliation', (c: any) => {
-    // null until an audit of Core's own state has run; no report is invented in its place.
-    return c.json(reconciliationService.getLastReport());
-  });
-
-  registerRoute('post', '/operations/reconciliation/run', async (c: any) => {
-    const body = await c.req.json().catch(() => ({}));
-    if (body.autoRepair === true) {
-      return problem(
-        c,
-        422,
-        'Auto-Repair Not Available',
-        'Core cannot upload to Google Drive or write Google Sheets from reconciliation, so it repairs nothing. Run the audit without autoRepair and republish the tasks it reports.'
-      );
+  // Fixture timings cannot establish monthly office availability (ADR-102).
+  registerRoute('get', '/operations/slo', async (c: Context) => {
+    c.header('Cache-Control', 'no-store');
+    const config = availabilityConfig();
+    if (!config && ['HAWA_AVAILABILITY_MONITOR_ID','HAWA_AVAILABILITY_TARGET_ORIGIN','HAWA_AVAILABILITY_MONITOR_SECRET'].some(key => process.env[key]))
+      return problem(c, 503, 'Availability Monitor Misconfigured', 'Correct the monitor identity, origin and distinct credential before reading its observations.');
+    if (config) {
+      if (!db) return problem(c, 503, 'Availability Evidence Unavailable', 'Stored observations require PostgreSQL.');
+      const auth = verifyRequestAuth(c);
+      if (!auth.authenticated || !auth.tenantId || !auth.userId || !auth.role)
+        return problem(c, 403, 'Office Identity Required', 'Active office membership is required.');
+      try { return c.json(await readAvailabilityReport(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, config, c.req.query('month'))); }
+      catch (error) {
+        if (error instanceof AvailabilityError) return problem(c, error.status, 'Availability Evidence Refused', error.message);
+        return problem(c, 503, 'Availability Evidence Unavailable', 'Stored observations could not be read.');
+      }
     }
+    const report: OperationsReliabilityReport = {
+      schemaVersion: 1, evidenceKind: 'unmeasured', checkedAt: new Date().toISOString(),
+      availability: { targetPercent: 99.5, window: 'calendar_month', timeZone: 'Asia/Baghdad',
+        observedPercent: null, sloCompliant: null, observationCount: 0 },
+      latency: { p50Ms: null, p95Ms: null, p99Ms: null, observationCount: 0 },
+      nextAction: 'Collect independent availability observations for office intake and review before evaluating the monthly target.',
+    };
+    return c.json(report);
+  });
+  registerRoute('post', '/operations/slo/run', (c: any) => problem(c, 410,
+    'Synthetic Operational Probe Retired',
+    'Synthetic benchmarks remain in testkit. They cannot establish office availability or publish work through Operations.'));
 
-    // The tasks, and the Drive files and Sheets rows each delivery confirmed, as Postgres holds them
-    // (services/publication-receipt.ts). They were the tasks this process held in memory and the
-    // receipts it kept, so an audit after a restart found no task, or every delivered task
-    // undelivered. Without a database there is nothing to compare.
-    if (!db) return problem(c, 503, 'Database Unavailable', 'The audit compares the tasks and delivery records PostgreSQL holds');
+  // Stored receipt snapshots only; source reads and append are one authorized transaction.
+  const auditService = db ? new ReceiptAuditService(db) : null;
+  const auditRequest = async (c: any, record: boolean) => {
+    c.header('Cache-Control', 'no-store');
+    if (!auditService) return problem(c, 503, 'Database Unavailable', 'Stored receipt audits require PostgreSQL.');
     const auth = verifyRequestAuth(c);
-    const scope = { tenantId: auth.tenantId || DEFAULT_TENANT_ID, userId: auth.userId || SYSTEM_AUTOMATION_USER_ID, role: auth.role || 'operator' };
-    const stored = await Promise.all([
-      withRlsContext(db, scope, (trx) =>
-        trx.selectFrom('tasks').select(['id', 'state', 'client_id', 'current_design_revision_id', 'updated_at'])
-          .where('tenant_id', '=', scope.tenantId).execute()),
-      readDeliveredRecords(db, scope),
-    ]).catch((err: unknown) => {
-      log.error('[core:reconciliation] Could not read the tasks or their delivery records:', err);
-      return null;
-    });
-    if (!stored) return problem(c, 503, 'Database Unavailable', 'The tasks and their delivery records could not be read; try again');
-    const [taskRows, delivered] = stored;
-    const allTasks = taskRows.map((t) => ({
-      id: t.id,
-      status: toApiTaskStatus(t.state),
-      clientId: t.client_id || undefined,
-      latestRevisionId: t.current_design_revision_id || undefined,
-      updatedAt: t.updated_at instanceof Date ? t.updated_at.toISOString() : String(t.updated_at),
-    }));
-    const driveFiles: Array<{ taskId: string; fileId: string; folderId: string; sha256: string; byteSize: number }> = [...delivered.driveFiles];
-    const sheetRows: Array<{ taskId: string; rowNumber: number; status: string; packageHash: string; syncedAt: string }> = [...delivered.sheetRows];
-
-    // Rows supplied or altered by the caller make the report a simulation, which is returned but
-    // never kept as the latest audit the Desk shows.
-    const simulated = Boolean(body.simulateDrift) || Array.isArray(body.driveFiles) || Array.isArray(body.sheetRows);
-    if (Array.isArray(body.driveFiles)) driveFiles.push(...body.driveFiles);
-    if (Array.isArray(body.sheetRows)) sheetRows.push(...body.sheetRows);
-
-    if (body.simulateDrift) {
-      if (body.simulateDrift.missingDriveTaskId) {
-        const targetId = body.simulateDrift.missingDriveTaskId;
-        const remaining = driveFiles.filter((d) => d.taskId !== targetId);
-        driveFiles.length = 0;
-        driveFiles.push(...remaining);
-      }
-      if (body.simulateDrift.missingSheetTaskId) {
-        const targetId = body.simulateDrift.missingSheetTaskId;
-        const remaining = sheetRows.filter((s) => s.taskId !== targetId);
-        sheetRows.length = 0;
-        sheetRows.push(...remaining);
-      }
-      if (body.simulateDrift.divergentTaskId) {
-        const row = sheetRows.find((s) => s.taskId === body.simulateDrift.divergentTaskId);
-        if (row) {
-          row.status = body.simulateDrift.divergentStatus || 'IN_PROGRESS';
-        }
-      }
+    if (!auth.authenticated || !auth.tenantId || !auth.userId || !auth.role)
+      return problem(c, 403, 'RECEIPT_AUDIT_FORBIDDEN', 'An authorized office identity is required.');
+    const actor = {tenantId:auth.tenantId,userId:auth.userId,role:auth.role};
+    try {
+      if (!record) return c.json(await auditService.get(actor,c.req.query('beforeRevision')));
+      const body = await c.req.json().catch(() => null);
+      if (body && typeof body === 'object' && body.autoRepair === true)
+        return problem(c,422,'Auto-Repair Not Available','This audit compares stored receipts and repairs nothing.');
+      if (body && typeof body === 'object' && ('simulateDrift' in body || 'driveFiles' in body || 'sheetRows' in body))
+        return problem(c,422,'Receipt Simulation Retired','Production audits use PostgreSQL records only. Fixture comparisons belong in testkit.');
+      if (!body || c.req.header('Idempotency-Key') !== body.actionId)
+        return problem(c,400,'RECEIPT_AUDIT_INVALID','Idempotency-Key must match the saved audit action ID.');
+      const result = await auditService.record(actor,body);
+      return c.json(result,result.replayed ? 200 : 201);
+    } catch (error) {
+      if (error instanceof ReceiptAuditError) return problem(c,error.status,error.code,error.message);
+      log.error('[core:reconciliation] Could not read or record the scoped audit:',error);
+      return problem(c,503,'RECEIPT_AUDIT_UNAVAILABLE','The audit result is not available. Retry the exact saved action after access is restored.');
     }
-
-    const report = reconciliationService.audit(allTasks, driveFiles, sheetRows, { simulated });
-
-    broadcastEvent('reconciliation:completed', {
-      auditId: report.auditId,
-      status: report.status,
-      driftCount: report.driftCount,
-      inSyncCount: report.inSyncCount,
-      simulated: report.simulated,
-    });
-
-    return c.json(report, 201);
-  });
+  };
+  registerRoute('get','/operations/reconciliation',(c: any)=>auditRequest(c,false));
+  registerRoute('post','/operations/reconciliation/run',(c: any)=>auditRequest(c,true));
 
   // Operational Security & Outage Simulation (CV-20, FR-065, FR-071)
   // An administrator's switch, as POST /waha/kill-switch is: any signed-in role could release a switch
   // an administrator threw, and the answer came before Postgres had it, so a failed save was forgotten
-  // by the next restart (audit 2026-09-27 #17).
+  // by the next restart (audit 2026-09-27 #17, ported under ADR-127). The save is the same revisioned
+  // write the intake toggle makes (ADR-054), and its changeTag is returned.
   registerRoute('post', '/operations/kill-switch', async (c: any) => {
     const denied = requireAdministrator(c);
     if (denied) return denied;
     const auth = verifyRequestAuth(c);
     const body = await c.req.json().catch(() => ({}));
     const { channel, active } = body;
-    if (channel === 'telegram' || channel === 'waha') {
-      const ch = channel as 'telegram' | 'waha';
-      try {
-        await setKillSwitch(channelKillSwitches, ch, Boolean(active), auth.actorId);
-      } catch (err: unknown) {
-        log.error(`[core:kill_switch] the ${ch} kill switch could not be saved:`, err instanceof Error ? err.message : err);
-        return problem(c, 503, 'Kill switch not saved', `The ${ch} kill switch could not be saved to the database; it is unchanged. Try again.`);
-      }
-      if (ch === 'waha') process.env.WAHA_KILL_SWITCH = active ? 'true' : 'false';
-      broadcastEvent('operations:kill_switch_toggled', { channel: ch, active: channelKillSwitches[ch] });
-      return c.json({ channel: ch, active: channelKillSwitches[ch] }, 200);
+    if (channel !== 'telegram' && channel !== 'waha') {
+      return c.json({ error: 'Invalid channel (must be telegram or waha)' }, 400);
     }
-    return c.json({ error: 'Invalid channel (must be telegram or waha)' }, 400);
+    const ch = channel as KillSwitchChannel;
+    // The same rule as the ingress toggle and POST /waha/kill-switch (ADR-128): this route used to
+    // take any signed-in caller and let an art director release the administrator's WhatsApp switch.
+    if (!mayChangeKillSwitch(ch, auth.role)) {
+      return problem(c, 403, 'Forbidden', ch === 'waha'
+        ? 'Administrator role required for the WhatsApp switch'
+        : 'Only office operators may change the intake switch');
+    }
+    // Answered once PostgreSQL has it, like the toggle: the assignment it made before answered at
+    // once and saved in the background.
+    let changeTag: string | undefined;
+    try {
+      changeTag = await setKillSwitch(channelKillSwitches, ch, Boolean(active), auth.actorId);
+    } catch (err: unknown) {
+      log.error(`[core:kill_switch] the ${ch} kill switch could not be saved:`, err instanceof Error ? err.message : err);
+      return problem(c, 503, 'Switch State Unconfirmed', `The ${ch} switch write or readback did not complete; inspect its persisted state before retrying.`);
+    }
+    // The webhook and /waha/health also read the environment's WhatsApp switch (as the toggle does).
+    if (ch === 'waha') process.env.WAHA_KILL_SWITCH = active ? 'true' : 'false';
+    broadcastEvent('operations:kill_switch_toggled', { channel: ch, active: channelKillSwitches[ch] });
+    return c.json({ channel: ch, active: channelKillSwitches[ch], changeTag }, 200);
   });
 
   registerRoute('post', '/operations/canva/simulate-outage', async (c: any) => {

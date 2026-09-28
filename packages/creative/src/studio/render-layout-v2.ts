@@ -1,3 +1,4 @@
+import { measurePangoText, measurementRuntimeIdentity, type PangoMeasurement, type MeasurementRuntimeIdentity } from './pango-measurement.js';
 import { lineGeometry } from './line-geometry.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,7 +23,9 @@ import {
 } from './photo-treatments.js';
 import { escapeXml } from '../operations-to-svg.js';
 import { SvgFiles, checkInlineDataUris } from './svg-files.js';
-import { pinnedFontconfigFile, rasteriserEnv } from './font-environment.js';
+import { pinnedFontconfigFile, rasteriserEnv, fontFileInventory, pinnedSystemFontFiles, type FontFileIdentity } from './font-environment.js';
+import { resolveRsvgConvert, rendererRuntimeIdentity, type RendererRuntimeIdentity } from './renderer-identity.js';
+import { layoutPlacements, type LayoutPlacements } from './placement-map.js';
 
 export { PNG };
 
@@ -87,10 +90,26 @@ export interface RenderLayoutV2Result {
   files: Record<string, Buffer>;
   wrappedLines: Record<number, number>;
   fontFidelity: Record<string, 'exact' | 'stand-in'>;
+  /** Where the art's calm region and each photo's crop land in the bytes drawn (ADR-123). */
+  placements: LayoutPlacements;
+}
+
+/** The bytes the renderer draws for the art and each photo, read from the same options it reads. */
+function placementsFor(layout: StudioLayoutV2, options: RenderLayoutOptions): LayoutPlacements {
+  const art = options.artImagePath
+    ? options.artImagePath.startsWith('data:') ? dataUriBytes(options.artImagePath)
+      : fs.existsSync(options.artImagePath) ? fs.readFileSync(options.artImagePath) : undefined
+    : undefined;
+  const photos = (layout.photos ?? []).reduce<Array<Buffer | undefined>>((all, p) => {
+    const uri = options.photoDataUris?.[p.photoIndex];
+    all[p.photoIndex] = options.photoFiles?.[p.photoIndex]?.bytes ?? (uri ? dataUriBytes(uri) : undefined);
+    return all;
+  }, []);
+  return layoutPlacements(layout, { art, photos, cutouts: options.photoCutouts });
 }
 
 // In-memory cache for loaded fontkit Font objects
-const fontCache = new Map<string, any>();
+const fontCache = new Map<string, { fingerprint: string; sha256: string; font: any }>();
 
 /** Families whose script joins cursively, where letter-spacing is always wrong. */
 export const ARABIC_SCRIPT_FAMILIES = new Set([
@@ -222,21 +241,6 @@ export function assertFontResolves(fontFamily: string, fontconfigFile: string): 
     }
     console.warn(`[render-layout-v2] Warning: fc-match check failed (${err.message}). Proceeding with fontkit loading.`);
   }
-}
-
-function resolveRsvgConvert(options?: RenderLayoutOptions): string {
-  if (options?.rsvgConvertPath && fs.existsSync(options.rsvgConvertPath)) {
-    return options.rsvgConvertPath;
-  }
-  const candidates = [
-    '/opt/homebrew/bin/rsvg-convert',
-    '/usr/bin/rsvg-convert',
-    '/usr/local/bin/rsvg-convert',
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return 'rsvg-convert';
 }
 
 export const ADMITTED_FONT_FAMILIES = [
@@ -802,19 +806,94 @@ export function fontFileFor(fontFamily: string, bold?: boolean, italic?: boolean
 /**
  * Loads font binary via fontkit and returns Font instance.
  */
-function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): any {
+function loadFontEntry(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string) {
   const fontPath = fontFileFor(fontFamily, bold, italic, fontsDir);
-  if (fontCache.has(fontPath)) {
-    return fontCache.get(fontPath);
-  }
+  const fingerprint = () => {
+    const st = fs.statSync(fontPath, { bigint: true });
+    return `${st.dev}:${st.ino}:${st.size}:${st.mtimeNs}:${st.ctimeNs}`;
+  };
+  const before = fingerprint(); // Missing files must never reuse an old object.
+  const cached = fontCache.get(fontPath);
+  if (cached?.fingerprint === before) return cached;
+  const bytes = fs.readFileSync(fontPath);
+  if (fingerprint() !== before) throw new Error(`Font changed while loading: ${fontPath}`);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  const font = cached?.sha256 === sha256 ? cached.font : fk.create(bytes);
+  if (fontCache.size >= 128 && !fontCache.has(fontPath)) fontCache.delete(fontCache.keys().next().value!);
+  const entry = { fingerprint: before, sha256, font };
+  fontCache.set(fontPath, entry);
+  return entry;
+}
 
-  if (!fs.existsSync(fontPath)) {
-    throw new Error(`Font file not found: ${fontPath}`);
-  }
+function loadFont(fontFamily: string, bold?: boolean, italic?: boolean, fontsDir?: string): any {
+  return loadFontEntry(fontFamily, bold, italic, fontsDir).font;
+}
 
-  const font = fk.openSync(fontPath);
-  fontCache.set(fontPath, font);
-  return font;
+export type TextMeasurementFailure = 'MISSING_COPY' | 'EMPTY_COPY' | 'INVALID_GEOMETRY' |
+  'FONT_UNAVAILABLE' | 'MISSING_GLYPHS' | 'SHAPING_FAILED';
+
+export type TextMeasurement = { copyIndex: number; fontFamily: string } & (
+  { status: 'measured'; method: 'fontkit-wrap-v1' | 'pango-wrap-v1'; shaping?: PangoMeasurement; copySha256: string; fontSha256: string;
+    inputSha256: string; lineCount: number; maxLineWidthPx: number; requiredHeightPx: number } |
+  { status: 'unmeasured'; reason: TextMeasurementFailure; copySha256?: string; missingCodePoints?: string[] }
+);
+
+/** Mandatory fit evidence. Optional metric helpers below are deliberately best-effort instead. */
+export function measureTextGeometry(
+  layout: StudioLayoutV2,
+  copyText: Record<number, string> | undefined,
+  options: Pick<RenderLayoutOptions, 'fontsDir'> = {}
+): TextMeasurement[] {
+  return layout.text.map((t): TextMeasurement => {
+    const identity = { copyIndex: t.copyIndex, fontFamily: t.fontFamily };
+    const copy = copyText && Object.hasOwn(copyText, t.copyIndex) ? copyText[t.copyIndex] : undefined;
+    const copySha256 = typeof copy === 'string' ? createHash('sha256').update(copy).digest('hex') : undefined;
+    const failed = (reason: TextMeasurementFailure, missingCodePoints?: string[]): TextMeasurement =>
+      ({ ...identity, status: 'unmeasured', reason, ...(copySha256 ? { copySha256 } : {}),
+        ...(missingCodePoints ? { missingCodePoints } : {}) });
+    if (typeof copy !== 'string') return failed('MISSING_COPY');
+    // Default-ignorable controls are preserved in the content hash but cannot make an empty block visible.
+    if (!copy.replace(/[\s\p{Default_Ignorable_Code_Point}]/gu, '')) return failed('EMPTY_COPY');
+    const letterSpacing = effectiveLetterSpacingEm(t);
+    if (![t.width, t.height, t.fontSize, t.lineHeight].every((n) => Number.isFinite(n) && n > 0) ||
+        !Number.isFinite(letterSpacing) || !Number.isFinite(t.letterSpacing ?? 0)) return failed('INVALID_GEOMETRY');
+    let entry: ReturnType<typeof loadFontEntry>;
+    try {
+      // An explicitly unavailable font directory must not turn into the default directory here.
+      if (options.fontsDir && !fs.statSync(options.fontsDir).isDirectory()) return failed('FONT_UNAVAILABLE');
+      entry = loadFontEntry(t.fontFamily, t.bold, t.italic, resolveFontsDir(options));
+    } catch {
+      return failed('FONT_UNAVAILABLE');
+    }
+    try {
+      const { font, sha256: fontSha256 } = entry;
+      if (!Number.isFinite(font.unitsPerEm) || font.unitsPerEm <= 0) return failed('SHAPING_FAILED');
+      const visible = [...new Set(Array.from(copy).filter((ch) => !/[\s\p{Default_Ignorable_Code_Point}]/u.test(ch)))];
+      const missing = visible.filter((ch) => font.glyphForCodePoint(ch.codePointAt(0)).id === 0)
+        .map((ch) => `U+${ch.codePointAt(0)!.toString(16).toUpperCase()}`);
+      const shaping = missing.length ? fallbackMeasurement(t, copy, resolveFontsDir(options)) : undefined;
+      if (missing.length && (!shaping || shaping.lines.some(line => line.unknownGlyphs > 0))) {
+        const actual = shaping ? [...new Set(shaping.lines.flatMap(line => line.missingCodePoints))].map(cp => `U+${cp.toString(16).toUpperCase()}`) : missing;
+        return failed('MISSING_GLYPHS', actual.length ? actual : missing);
+      }
+      const lines = shaping ? shaping.lines.map(line => line.text) : wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing);
+      const widths = shaping ? shaping.lines.map(line => Math.max(line.width, line.ink.x + line.ink.width) - Math.min(0, line.ink.x)) : lines.map((line) => measureTextWidth(line, font, t.fontSize, letterSpacing));
+      const maxLineWidthPx = Math.ceil(Math.max(...widths));
+      const inkHeight = shaping ? (lines.length - 1) * t.fontSize * t.lineHeight +
+        Math.max(0, ...shaping.lines.map(line => -line.ink.y)) + Math.max(0, ...shaping.lines.map(line => line.ink.y + line.ink.height)) : 0;
+      const requiredHeightPx = Math.ceil(Math.max(lines.length * t.fontSize * t.lineHeight, inkHeight));
+      if (!lines.length || widths.some((n) => !Number.isFinite(n) || n < 0) ||
+          !Number.isFinite(requiredHeightPx) || requiredHeightPx <= 0) return failed('SHAPING_FAILED');
+      const method = shaping ? 'pango-wrap-v1' as const : 'fontkit-wrap-v1' as const;
+      const inputSha256 = createHash('sha256').update(JSON.stringify({ method, ...(shaping ? { shapingSha256: shaping.inputSha256 } : {}), copySha256,
+        fontSha256, width: t.width, height: t.height, fontSize: t.fontSize, lineHeight: t.lineHeight,
+        letterSpacing, rtl: t.rtl ?? null, bold: t.bold ?? false, italic: t.italic ?? false })).digest('hex');
+      return { ...identity, status: 'measured', method, ...(shaping ? { shaping } : {}), copySha256: copySha256!, fontSha256,
+        inputSha256, lineCount: lines.length, maxLineWidthPx, requiredHeightPx };
+    } catch {
+      return failed('SHAPING_FAILED');
+    }
+  });
 }
 
 /**
@@ -849,7 +928,7 @@ export function measureWrappedLines(
     try {
       const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
       const letterSpacing = effectiveLetterSpacingEm(t);
-      out[t.copyIndex] = wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing).length;
+      out[t.copyIndex] = sharedTextLines(t, copy, font, fontsDir, t.fontSize, letterSpacing).length;
     } catch {
       // unmeasurable family here; the metric falls back to the box for this block
     }
@@ -885,8 +964,12 @@ export function balancedBoxWidths(
     try {
       const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
       const ls = effectiveLetterSpacingEm(t);
-      const wrap = (w: number) => wrapTextWithFontkit(copy, w, font, t.fontSize, ls);
-      const widthOf = (line: string) => measureTextWidth(line, font, t.fontSize, ls);
+      const wrap = (w: number) => sharedTextLines({...t, width: w}, copy, font, fontsDir, t.fontSize, ls);
+      const widthOf = (line: string) => {
+        const fallback = fallbackMeasurement({...t, width: 1000000}, line, fontsDir);
+        if (fallback?.lines.some(l => l.unknownGlyphs)) throw new Error('PANGO_MISSING_GLYPHS');
+        return fallback ? Math.max(...fallback.lines.map(l => l.width)) : measureTextWidth(line, font, t.fontSize, ls);
+      };
       const lines = wrap(t.width);
       if (lines.length < 2) continue;
       const last = lines[lines.length - 1];
@@ -949,6 +1032,12 @@ export function measureMaxLineWidths(
     try {
       const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
       const letterSpacing = effectiveLetterSpacingEm(t);
+      const fallback = fallbackMeasurement(t, copy, fontsDir);
+      if (fallback) {
+        if (fallback.lines.some(line => line.unknownGlyphs)) throw new Error('PANGO_MISSING_GLYPHS');
+        out[t.copyIndex] = Math.ceil(Math.max(...fallback.lines.map(line => line.width)));
+        continue;
+      }
       const lines = wrapTextWithFontkit(copy, t.width, font, t.fontSize, letterSpacing);
       let maxW = 0;
       for (const line of lines) {
@@ -1058,7 +1147,7 @@ export interface AdmittedFontFace {
   license: string;
 }
 
-const renderFontRegistryCache = new Map<string, RenderFontRegistry>();
+const renderFontRegistryCache = new Map<string, { sha256: string; registry: RenderFontRegistry }>();
 const admittedFaceCache = new Map<string, AdmittedFontFace[]>();
 
 /**
@@ -1088,10 +1177,13 @@ function resolveRenderFontsPath(registryPath?: string): string {
 /** The declared families, the aliases, and the characters each script's faces have to draw. */
 export function loadRenderFontRegistry(options: { registryPath?: string } = {}): RenderFontRegistry {
   const file = resolveRenderFontsPath(options.registryPath);
+  const bytes = fs.readFileSync(file);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
   const cached = renderFontRegistryCache.get(file);
-  if (cached) return cached;
-  const registry = JSON.parse(fs.readFileSync(file, 'utf8')) as RenderFontRegistry;
-  renderFontRegistryCache.set(file, registry);
+  if (cached?.sha256 === sha256) return cached.registry;
+  const registry = JSON.parse(bytes.toString('utf8')) as RenderFontRegistry;
+  admittedFaceCache.clear();
+  renderFontRegistryCache.set(file, { sha256, registry });
   return registry;
 }
 
@@ -1338,10 +1430,36 @@ export function accentWordRange(copyText: string, accentText: string | undefined
   return undefined;
 }
 
+/** Actual family emitted into SVG; shared with fallback measurement. */
+function drawingFontFamily(t: TextElement, copy: string, fontsDir: string): string {
+  const script: FontProbeScript = t.rtl || /[\u0600-\u06FF]/.test(copy) ? 'arabic' : 'latin';
+  if (probeFontSubstitution(t.fontFamily, {fontsDir}, script) === 'stand-in') {
+    const fallback = t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily) ? 'Noto Sans Arabic' : 'Verdana';
+    if (probeFontSubstitution(fallback, {fontsDir}, script) === 'exact') return fallback;
+  }
+  return t.fontFamily;
+}
+
+function fallbackMeasurement(t: TextElement, copy: string, fontsDir: string, size=t.fontSize, spacing=effectiveLetterSpacingEm(t)): PangoMeasurement | undefined {
+  const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
+  const missing = Array.from(copy).some(ch => !/[\s\p{Default_Ignorable_Code_Point}]/u.test(ch) && font.glyphForCodePoint(ch.codePointAt(0)).id === 0);
+  if (!missing) return undefined;
+  const axes = fontFaceSupports(t.fontFamily, t.bold, t.italic, fontsDir);
+  return measurePangoText({text: copy, family: drawingFontFamily(t, copy, fontsDir), size, width: t.width,
+    spacingPx: Number((spacing * size).toFixed(2)), rtl: t.rtl ?? false, bold: axes.bold, italic: axes.italic, fontsDir});
+}
+
+function sharedTextLines(t: TextElement, copy: string, font: ReturnType<typeof loadFont>, fontsDir: string, size=t.fontSize, spacing=effectiveLetterSpacingEm(t)): string[] {
+  const fallback = fallbackMeasurement(t, copy, fontsDir, size, spacing);
+  if (!fallback) return wrapTextWithFontkit(copy, t.width, font, size, spacing);
+  if (fallback.lines.some(line => line.unknownGlyphs)) throw new Error('PANGO_MISSING_GLYPHS');
+  return fallback.lines.map(line => line.text);
+}
+
 /** The lines one text element wraps to, as the renderer draws them. */
 export function wrappedLinesOf(t: TextElement, copy: string, options: RenderLayoutOptions = {}): string[] {
   const font = loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options));
-  return wrapTextWithFontkit(copy, t.width, font, t.fontSize, effectiveLetterSpacingEm(t));
+  return sharedTextLines(t, copy, font, resolveFontsDir(options));
 }
 
 /**
@@ -1354,16 +1472,16 @@ export function wrappedLinesOf(t: TextElement, copy: string, options: RenderLayo
  * too (fittedTextOf): it wrote the layout's own, so Canva wrapped a shrunk eyebrow onto a second
  * line the approved preview did not have (2026-09-24).
  */
-function fitText(t: TextElement, copyText: string, font: ReturnType<typeof loadFont>): { fontSize: number; letterSpacingEm: number; lines: string[] } {
+function fitText(t: TextElement, copyText: string, font: ReturnType<typeof loadFont>, fontsDir: string): { fontSize: number; letterSpacingEm: number; lines: string[] } {
   let letterSpacingEm = effectiveLetterSpacingEm(t);
   let fontSize = t.fontSize;
-  let lines = wrapTextWithFontkit(copyText, t.width, font, fontSize, letterSpacingEm);
+  let lines = sharedTextLines(t, copyText, font, fontsDir, fontSize, letterSpacingEm);
   if (t.role === 'eyebrow' && lines.length > 1) {
     letterSpacingEm = effectiveLetterSpacingEm(t, { eyebrowShrunkToFit: true });
-    lines = wrapTextWithFontkit(copyText, t.width, font, fontSize, 0);
+    lines = sharedTextLines(t, copyText, font, fontsDir, fontSize, 0);
     while (lines.length > 1 && fontSize > 10) {
       fontSize -= 1;
-      lines = wrapTextWithFontkit(copyText, t.width, font, fontSize, 0);
+      lines = sharedTextLines(t, copyText, font, fontsDir, fontSize, 0);
     }
   }
   return { fontSize, letterSpacingEm, lines };
@@ -1371,7 +1489,7 @@ function fitText(t: TextElement, copyText: string, font: ReturnType<typeof loadF
 
 /** The size (px) and tracking (em) the renderer draws one text element at, for the transfer. */
 export function fittedTextOf(t: TextElement, copy: string, options: RenderLayoutOptions = {}): { fontSize: number; letterSpacingEm: number } {
-  const { fontSize, letterSpacingEm } = fitText(t, copy, loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options)));
+  const { fontSize, letterSpacingEm } = fitText(t, copy, loadFont(t.fontFamily, t.bold, t.italic, resolveFontsDir(options)), resolveFontsDir(options));
   return { fontSize, letterSpacingEm };
 }
 
@@ -1382,7 +1500,7 @@ function renderTextElementToSvg(
 ): { svgSnippet: string; lineCount: number } {
   const font = loadFont(t.fontFamily, t.bold, t.italic, fontsDir);
   // The size and tracking the text is actually measured and drawn at (fitText).
-  const { fontSize: renderFontSize, letterSpacingEm: letterSpacingVal, lines } = fitText(t, copyText, font);
+  const { fontSize: renderFontSize, letterSpacingEm: letterSpacingVal, lines } = fitText(t, copyText, font, fontsDir);
 
   if (lines.length === 0) {
     return { svgSnippet: '', lineCount: 0 };
@@ -1419,7 +1537,12 @@ function renderTextElementToSvg(
   // box gives the real ink extent, so the glyphs can be centred on the box's optical centre.
   let inkAbove = 0;
   let inkBelow = 0;
-  for (const line of lines) {
+  const shaped = fallbackMeasurement(t, copyText, fontsDir, renderFontSize, letterSpacingVal);
+  if (shaped) {
+    inkAbove = Math.max(0, ...shaped.lines.map(line => -line.ink.y));
+    inkBelow = Math.max(0, ...shaped.lines.map(line => line.ink.y + line.ink.height));
+  }
+  for (const line of shaped ? [] : lines) {
     if (!line) continue;
     try {
       const bbox = font.layout(line).bbox;
@@ -1443,7 +1566,7 @@ function renderTextElementToSvg(
   const paragraphs = copyText.split('\n').filter((p) => p.trim());
   const accented = Boolean(t.accentColor) && paragraphs.length > 1;
   const accentFirst = t.accentParagraph === 'first';
-  const wrapped = (p: string) => wrapTextWithFontkit(p, t.width, font, renderFontSize, letterSpacingVal).length;
+  const wrapped = (p: string) => sharedTextLines(t, p, font, fontsDir, renderFontSize, letterSpacingVal).length;
   const accentFrom = accented && !accentFirst ? lines.length - wrapped(paragraphs[paragraphs.length - 1]) : lines.length;
   const accentUntil = accented && accentFirst ? wrapped(paragraphs[0]) : 0;
   // Named words take precedence: the lines wrap on words, so a running word count says which of
@@ -1479,15 +1602,7 @@ function renderTextElementToSvg(
   // family was not used. The family is judged for the script this block is set in: Vazirmatn used to
   // be replaced here because its Latin probe matched the fallback's, while its Kurdish, which is what
   // a Vazirmatn block carries, was drawn from its own file (it *is* the image's fallback face).
-  const blockScript: FontProbeScript = t.rtl || /[\u0600-\u06FF]/.test(copyText) ? 'arabic' : 'latin';
-  let drawFamily = t.fontFamily;
-  if (probeFontSubstitution(t.fontFamily, { fontsDir }, blockScript) === 'stand-in') {
-    const fallback =
-      t.rtl || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily) ? 'Noto Sans Arabic' : 'Verdana';
-    if (probeFontSubstitution(fallback, { fontsDir }, blockScript) === 'exact') {
-      drawFamily = fallback;
-    }
-  }
+  const drawFamily = drawingFontFamily(t, copyText, fontsDir);
 
   // Ask the rasteriser for exactly the face fontkit measured with — see fontFaceSupports.
   const faceAxes = fontFaceSupports(t.fontFamily, t.bold, t.italic, fontsDir);
@@ -1535,18 +1650,23 @@ function focusedPhotoSvg(
   return `<g clip-path="url(#${clipId})">${croppedPhotoSvg(id, href, box, pixels, crop)}</g>`;
 }
 
-/**
- * The logo a render draws: the caller's data URI or file, typed from its bytes, or none. There is no
- * default: this used to fall back to KAAE's logo, so a render that was not handed one (the judge's
- * previews, the canary, any client other than KAAE) carried KAAE's emblem (ADR-038). A layout with a
- * logo box and no logo given draws the box empty; the studio always passes the client's logo.
- */
+/** A logo-bearing layout must receive the current client's actual image bytes. */
 function resolveLogoHref(options: RenderLayoutOptions): string {
-  if (options.logoDataUri) return relabelDataUri(options.logoDataUri);
-  if (options.logoPath && fs.existsSync(options.logoPath)) {
-    return imageDataUri(fs.readFileSync(options.logoPath), `logo ${options.logoPath}`);
+  if (options.logoDataUri) {
+    const bytes = dataUriBytes(options.logoDataUri);
+    if (!bytes) throw new Error('CLIENT_LOGO_INVALID: logoDataUri must contain base64 image bytes');
+    return imageDataUri(bytes, 'client logo');
   }
-  return '';
+  if (options.logoPath) {
+    if (!fs.existsSync(options.logoPath)) throw new Error('CLIENT_LOGO_UNAVAILABLE: the supplied client logo file is missing');
+    return imageDataUri(fs.readFileSync(options.logoPath), `client logo ${options.logoPath}`);
+  }
+  throw new Error('CLIENT_LOGO_REQUIRED: a logo-bearing layout needs an explicit client logo');
+}
+
+/** Check identity-critical render input before a caller starts paid or external work. */
+export function assertClientLogoForLayout(layout: StudioLayoutV2, options: RenderLayoutOptions = {}): void {
+  if (layout.logo) resolveLogoHref(options);
 }
 
 /**
@@ -1842,9 +1962,8 @@ export function renderLayoutV2ToSvg(
 
 
   // Logo Layer
-  const logoHref = resolveLogoHref(options);
-
   if (layout.logo) {
+    const logoHref = resolveLogoHref(options);
     const prescaled = logoHref ? prescaledLogoHref(logoHref, layout.logo, options) : undefined;
     if (prescaled) {
       // Already fitted into exactly this box ("meet" applied when it was scaled), so drawn 1:1.
@@ -1854,12 +1973,6 @@ export function renderLayoutV2ToSvg(
     } else if (logoHref) {
       bodyPartsNoText.push(
         `<image id="logo" xlink:href="${svgFiles.hrefFor(logoHref, 'logo')}" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" preserveAspectRatio="xMidYMid meet"/>`
-      );
-    } else {
-      // No logo was given: a neutral box marks where it goes. It was KAAE gold (#F7B500), which put
-      // KAAE's colour on any other client's preview (ADR-038).
-      bodyPartsNoText.push(
-        `<rect id="logo-placeholder" x="${layout.logo.x}" y="${layout.logo.y}" width="${layout.logo.width}" height="${layout.logo.height}" fill="#9CA3AF" opacity="0.35" rx="8"/>`
       );
     }
   }
@@ -1970,6 +2083,7 @@ export function renderLayoutV2(
     files,
     wrappedLines,
     fontFidelity,
+    placements: placementsFor(layout, options),
   };
 }
 
@@ -2030,7 +2144,7 @@ export async function renderLayoutV2Async(layout: StudioLayoutV2, options: Rende
     svgToPngAsync(svg, layout.width, layout.height, options, files),
     svgToPngAsync(noTextSvg, layout.width, layout.height, options, files),
   ]);
-  return { svg, png, noTextSvg, noTextPng, files, wrappedLines, fontFidelity };
+  return { svg, png, noTextSvg, noTextPng, files, wrappedLines, fontFidelity, placements: placementsFor(layout, options) };
 }
 
 export interface ElementBoxAnnotation {
@@ -2137,3 +2251,40 @@ export function renderAnnotatedLayoutV2(
   };
 }
 
+
+export interface RenderFontInputs {
+  /** 2 since ADR-123 added the renderer; version 1 named fonts and the measurement helper only. */
+  version: 2;
+  sha256: string;
+  registrySha256: string;
+  measurement?: MeasurementRuntimeIdentity | { unavailable: true };
+  /** The rasteriser and operating system that draw (ADR-123); unavailable is recorded, not guessed. */
+  renderer: RendererRuntimeIdentity | { unavailable: true };
+  files: FontFileIdentity[];
+}
+let lastFontBasis: string | undefined;
+
+/**
+ * Recovery evidence for the fonts, the measurement helper and the rasteriser/OS release that draw
+ * them (ADR-116/118/123). Version strings and executable hashes, not every shared-library byte, and
+ * not native Canva fidelity.
+ */
+export function captureRenderFontInputs(options: {
+  fontsDir?: string; registryPath?: string; systemFiles?: string[]; rsvgConvertPath?: string; osIdentityFiles?: string[];
+} = {}): RenderFontInputs {
+  const registrySha256 = createHash('sha256').update(fs.readFileSync(resolveRenderFontsPath(options.registryPath))).digest('hex');
+  const files = fontFileInventory(options.fontsDir ?? resolveFontsDir(), options.systemFiles ?? pinnedSystemFontFiles());
+  let measurement: RenderFontInputs['measurement'];
+  try { measurement = measurementRuntimeIdentity(); } catch { measurement = { unavailable: true }; }
+  let renderer: RenderFontInputs['renderer'];
+  try { renderer = rendererRuntimeIdentity({ rsvgConvertPath: options.rsvgConvertPath, osIdentityFiles: options.osIdentityFiles }); }
+  catch { renderer = { unavailable: true }; }
+  const basis = { version: 2 as const, registrySha256, files, measurement, renderer };
+  const sha256 = createHash('sha256').update(JSON.stringify(basis)).digest('hex');
+  if (lastFontBasis !== undefined && lastFontBasis !== sha256) {
+    fontCache.clear(); inkCheckCache.clear(); sentinelHashCache.clear();
+    admittedFaceCache.clear(); substitutionWarned.clear();
+  }
+  lastFontBasis = sha256;
+  return { ...basis, sha256 };
+}

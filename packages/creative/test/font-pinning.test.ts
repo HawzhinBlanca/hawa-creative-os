@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -45,7 +46,7 @@ function tempDir(prefix: string): string {
 
 function layoutWith(text: Partial<TextElement>[]): StudioLayoutV2 {
   return {
-    version: 2,
+    version: 2, logo: { x: 40, y: 40, width: 60, height: 40 },
     width: 1000,
     height: 600,
     grid: { margin: 40, columns: 6, gutter: 20, baseline: 8 },
@@ -151,8 +152,8 @@ describe('the rasteriser sees only the pinned font files', () => {
     );
     const layout = layoutWith([{ fontFamily: 'Verdana' }]);
     const copyText = { 0: 'Handgloves' };
-    renderLayoutV2(layout, { copyText, rsvgConvertPath: fake });
-    await renderLayoutV2Async(layout, { copyText, rsvgConvertPath: fake });
+    renderLayoutV2(layout, { logoDataUri: KAAE_TEST_LOGO, copyText, rsvgConvertPath: fake });
+    await renderLayoutV2Async(layout, { logoDataUri: KAAE_TEST_LOGO, copyText, rsvgConvertPath: fake });
     await svgToPngAsync('<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>', 4, 4, { rsvgConvertPath: fake });
     probeFontInkWidth('Amiri', { rsvgConvertPath: fake, sizePx: 33 });
     // The operation previews call rsvg-convert by name, so it is found on PATH.
@@ -291,7 +292,7 @@ describe('font fidelity per script', () => {
 
   it('draws a Kurdish Vazirmatn block in Vazirmatn instead of replacing it with Noto Sans Arabic', () => {
     const layout = layoutWith([{ fontFamily: 'Vazirmatn', rtl: true, align: 'right' }]);
-    const { svg } = renderLayoutV2ToSvg(layout, { copyText: { 0: 'کوردستان ڕێکخراوی ئەندازیاران' } });
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: { 0: 'کوردستان ڕێکخراوی ئەندازیاران' } });
     expect(svg).toContain('font-family="Vazirmatn"');
     expect(fontFileFor('Vazirmatn')).toBe(path.join(FONTS, 'Vazirmatn-Regular.ttf'));
   });

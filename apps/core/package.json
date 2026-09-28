@@ -13,17 +13,18 @@
   },
   "dependencies": {
     "@hawa/contracts": "workspace:*",
-    "@hawa/domain": "workspace:*",
-    "@hawa/db": "workspace:*",
-    "@hawa/integrations": "workspace:*",
-    "@hawa/retrieval": "workspace:*",
     "@hawa/creative": "workspace:*",
-    "@hawa/qa": "workspace:*",
-    "@hawa/observability": "workspace:*",
+    "@hawa/db": "workspace:*",
+    "@hawa/domain": "workspace:*",
     "@hawa/evals": "workspace:*",
+    "@hawa/integrations": "workspace:*",
+    "@hawa/observability": "workspace:*",
+    "@hawa/qa": "workspace:*",
+    "@hawa/retrieval": "workspace:*",
     "@hawa/testkit": "workspace:*",
     "@hono/node-server": "^1.13.8",
     "hono": "^4.7.2",
+    "openid-client": "6.7.0",
     "zod": "^3.24.2"
   }
 }

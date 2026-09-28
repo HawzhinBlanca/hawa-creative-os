@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { StageContext, CandidateState } from '../types.js';
 import { renderLayoutV2Async, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
 import { log } from '../../../logging.js';
+import { candidateRenderOptions } from './asset-inputs.js';
 
 export async function runRenderStage(
   ctx: StageContext,
@@ -12,21 +13,10 @@ export async function runRenderStage(
     copyMap[i] = ctx.copyBlocks[i].text;
   }
 
-  const logoDataUri = ctx.logo
-    ? `data:${ctx.logo.mimeType};base64,${ctx.logo.bytes.toString('base64')}`
-    : undefined;
-
   for (const cand of candidates) {
-    const artDataUri = cand.artPng
-      ? `data:image/png;base64,${cand.artPng.toString('base64')}`
-      : undefined;
-
     const renderResult = await renderLayoutV2Async(cand.currentLayout, {
+      ...candidateRenderOptions(ctx, cand),
       copyText: copyMap,
-      artImagePath: artDataUri,
-      logoDataUri,
-      photoFiles: ctx.photos?.map((p) => ({ bytes: p.bytes, mediaType: p.mimeType })),
-      photoCutouts: ctx.photoCutouts,
     });
 
     cand.previewPng = renderResult.png;

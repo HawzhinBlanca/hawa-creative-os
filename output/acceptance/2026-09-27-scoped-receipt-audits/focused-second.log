@@ -1,0 +1,56 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_57e63f0d746cf1c6 and hawa_tpl_repair_57e63f0d746cf1c6 (79 ms)
+ ❯ apps/desk/test/desk-auth.test.ts (29 tests | 2 failed) 32ms
+     × 'Ops: reconciliation audit (never auto…' 3ms
+     × synthetic operational execution is absent and tenant onboarding stays disabled 12ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/desk/test/desk-auth.test.ts > the DNA, Ops and Eval screens send the operator token > 'Ops: reconciliation audit (never auto…'
+AssertionError: expected { …(4) } to deeply equal { autoRepair: false }
+
+- Expected
++ Received
+
+  {
+-   "autoRepair": false,
++   "actionId": "00000000-0000-4000-a000-000000000010",
++   "expectedLatestAuditId": null,
++   "expectedScopeSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++   "reason": "Review stored receipts",
+  }
+
+ ❯ apps/desk/test/desk-auth.test.ts:151:47
+    149|     expect(sent.method).toBe(method);
+    150|     expect(sent.headers.get('Authorization')).toBe(`Bearer ${TOKEN}`);
+    151|     if (body !== undefined) expect(sent.body).toEqual(body);
+       |                                               ^
+    152|   });
+    153|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/desk/test/desk-auth.test.ts > actions the owner did not enable make no request > synthetic operational execution is absent and tenant onboarding stays disabled
+AssertionError: expected '<section id="ops" class="screen activ…' to contain 'External Drive and Sheets state is no…'
+
+Expected: "External Drive and Sheets state is not checked, and nothing is repaired."
+Received: "<section id="ops" class="screen active"><section class="card" aria-label="Daily spending policy" style="padding:16px;margin-bottom:16px"><h2>Daily spending policy</h2><p>Shared limits for Studio, Canva planning, fixture evaluation, retained voice and scheduled health probes. Unresolved costs keep their allocation reserved.</p><button class="btn" aria-expanded="false">Review budget policy</button></section><section class="card" aria-label="Call cost accounting" style="margin-bottom:16px;padding:16px"><h2>Call cost accounting</h2><p>Review Studio, Canva planning, evaluation, voice and scheduled health probe charges. Calls without complete billing evidence keep their remaining allocation reserved.</p><button class="btn" aria-expanded="false">Review call costs</button></section><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px"><div style="font-size:13px;color:var(--muted)">Telemetry not read yet</div><div style="display:flex;gap:8px"><button class="btn">Refresh telemetry</button></div></div><h1 class="sr-only">Operations &amp; Telemetry Overview</h1><div class="grid4"><div class="stat"><b>—</b><span>critical incidents</span></div><div class="stat"><b>—</b><span>recoverable failures</span></div><div class="stat"><b>—</b><span>adapters not verified</span></div><div class="stat"><b>—</b><span>last backup age (not reported to the Desk)</span></div></div><div class="panel" style="padding:16px;margin-top:16px"><h2>Design request progress</h2><p>Design progress unknown. No result has been read yet.</p></div><section class="panel" aria-label="Office reliability" style="padding:16px;margin-top:16px"><h2>Office availability and latency</h2><p>Reliability evidence unavailable. No report has been read yet.</p></section><section class="panel" aria-label="Stored publication receipt audit" style="padding:16px;margin-top:16px"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;align-items:center"><h2 style="margin:0">Stored publication receipt audit</h2><button class="btn">Reload receipt audits</button></div><p>Compares one PostgreSQL snapshot for your current authorized clients. Google Drive and Sheets are not read; nothing is repaired.</p><p>Reading audit scope…</p><p><span class="pill ">No audit read</span></p><div class="ops-audit-stats"><div class="stat"><b>—</b><span>Tasks audited</span></div><div class="stat"><b>—</b><span>Drive receipts</span></div><div class="stat"><b>—</b><span>Sheet receipts</span></div><div class="stat"><b>—</b><span>Deliveries consistent</span></div><div class="stat"><b>—</b><span>Not yet due</span></div><div class="stat"><b>—</b><span>Anomalies found</span></div></div></section><div class="ops" style="margin-top:16px"><div class="panel" style="padding:16px"><h2>Actionable operations</h2><table class="table"><thead><tr><th>Component / Task</th><th>State</th><th>Evidence</th><th>Safe action</th></tr></thead><tbody></tbody></table></div><div class="panel" style="padding:16px"><h2>Component health</h2><div class="rule"><b>Not read yet</b></div></div></div></section>"
+
+ ❯ apps/desk/test/desk-auth.test.ts:222:17
+    220|     const ops = renderToStaticMarkup(React.createElement(OpsScreen));
+    221|     expect(ops).not.toContain('Run Synthetic Benchmark');
+    222|     expect(ops).toContain('External Drive and Sheets state is not chec…
+       |                 ^
+    223|
+    224|     const dna = renderToStaticMarkup(React.createElement(DnaScreen));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 5 passed (6)
+      Tests  2 failed | 52 passed (54)
+   Start at  17:57:02
+   Duration  2.61s (transform 1.50s, setup 287ms, import 2.03s, tests 975ms, environment 1.00s)
+

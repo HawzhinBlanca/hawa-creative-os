@@ -1,3 +1,4 @@
+import { officeReviewUrl } from '../services/desk-review-link.js';
 import crypto from 'node:crypto';
 import { CanvaBindingRepository, sql, withRlsContext } from '@hawa/db';
 import { CanvaDesignStudioAdapter, validateCanvaDesignUrl } from '@hawa/integrations';
@@ -9,6 +10,9 @@ import { composeCanvaStatusMessage, composeChangeNeedsDesignerAlert } from '../s
 import { composeDesignerHandoff, type AskRecord } from '../services/requester-actions.js';
 import { createOfficeAlerts } from '../services/office-alerts.js';
 import { createAskHistory } from '../services/ask-history.js';
+import { rejectUnownedLifecycleDesignWrite, nativeRecoveryHeaders } from './lifecycle-design-proof.js';
+import { lockNativeRecovery } from '../services/lifecycle-native-scope.js';
+import { CanvaFlowError } from '../services/canva-flow-error.js';
 
 /**
  * The Canva outcome routes (architecture programme 1.3, SPLIT_PLAN.md G4), moved unchanged from
@@ -44,6 +48,8 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
       return problem(c, 403, 'Canva Binding Forbidden');
     }
     if (!db || !taskRepo) return problem(c, 503, 'Database Required', 'Canva bindings require durable storage');
+    const lifecycleRefusal = await rejectUnownedLifecycleDesignWrite(ctx, c, auth);
+    if (lifecycleRefusal) return lifecycleRefusal;
     const body = await c.req.json().catch(() => null);
     let designId: string;
     try { designId = validateCanvaDesignUrl(body?.editUrl); }
@@ -51,6 +57,8 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
     const taskId = c.req.param('taskId');
     try {
       const binding = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx => {
+        const nativeRecovery = nativeRecoveryHeaders(c);
+        if (nativeRecovery) await lockNativeRecovery(trx,{tenantId:auth.tenantId!,actorId:auth.userId!,role:auth.role,nativeRecovery},taskId);
         const task = await taskRepo.findById(taskId, auth.tenantId!, trx);
         if (!task?.client_id) return null;
         return new CanvaBindingRepository(trx).createBinding({ tenantId: auth.tenantId!, taskId,
@@ -60,6 +68,7 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
       return c.json({ taskId, designId: binding.canva_design_id, designUrl: binding.edit_url,
         version: binding.version, verification: 'handoff_only', captured: false }, 201);
     } catch (err) {
+      if (err instanceof CanvaFlowError) return problem(c,err.status,err.code,err.message);
       if ((err as { code?: string }).code === '23505' || /binding conflict/i.test(String(err))) {
         return problem(c, 409, 'Canva Binding Conflict', 'This design or task already has a binding. Use a separate task copy');
       }
@@ -93,15 +102,10 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
     const task = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, trx =>
       taskRepo.findById(taskId, auth.tenantId!, trx));
     if (!task) return problem(c, 404, 'Task Not Found');
-    // A request RequestLifecycle owns takes its design outcome through the lifecycle's projection
-    // (PHASE2_DESIGN.md 2.3). Recording it here as well would move the task and message the
-    // requester behind the lifecycle's back. 4xx is terminal for the worker, so this is not retried.
-    if (task.request_id) {
-      return c.json({
-        type: 'https://hawa.design/errors/409', title: 'Lifecycle Owned', status: 409, code: 'LIFECYCLE_OWNED', requestId: task.request_id,
-        detail: 'This task belongs to a request the lifecycle owns; its design outcome goes to RequestLifecycle.designFinished', instance: c.req.url,
-      }, 409);
-    }
+    // A Restate-owned request projects its outcome through the versioned lifecycle ledger. The
+    // legacy route sends messages and changes task state independently, so allowing it here would
+    // give one task two owners after a replay or redrive.
+    if (task.request_id) return problem(c, 409, 'LIFECYCLE_OWNED', 'Report this design through RequestLifecycle');
 
     const created = await withRlsContext(db, { tenantId: auth.tenantId, userId: auth.userId, role: auth.role }, async trx =>
       (await sql<any>`SELECT data FROM hawa.task_events
@@ -198,13 +202,19 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
       : waitingForAnswer
         ? `A question was sent to the requester before the change is made: ${question!.question}`
         : `Automatic draft ended ${status}${code ? ` (${code})` : ''}${detail ? `: ${detail}` : ''}. An operator has to follow up.`;
+    let reviewRevisionId: string | undefined;
     if (hasDraft && revisionRepo) {
       try {
-        const bridged = await withRlsContext(db, outcomeScope, (trx) =>
-          bridgeCanvaDraftRevision(trx, { revisionRepo, evaluateQc: evaluateCanvaExportQc }, {
+        const bridged = await withRlsContext(db, outcomeScope, async (trx) => {
+          const result = await bridgeCanvaDraftRevision(trx, { revisionRepo, evaluateQc: evaluateCanvaExportQc }, {
             tenantId: auth.tenantId!, taskId, actorId: auth.userId || null, status, designId, canvaUrl,
             fallbackCopy: source?.exactCopy, reason: outcomeReason,
-          }));
+          });
+          reviewRevisionId = result.created ? result.revisionId :
+            (await trx.selectFrom('tasks').select('current_design_revision_id')
+              .where('tenant_id', '=', auth.tenantId!).where('id', '=', taskId).executeTakeFirst())?.current_design_revision_id ?? undefined;
+          return result;
+        });
         // The bridge moves the task to review itself, so the transition below finds nothing to change
         // and told no one: the Desk kept the task as RECEIVED, Approve disabled, until a reload (review
         // of 2026-09-24).
@@ -250,7 +260,8 @@ export function registerCanvaOutcomeRoutes(ctx: RouteContext): void {
     let notificationError: string | undefined;
     let notificationCommandId: string | undefined;
     if (sourceChannelId && notifyRequester) {
-      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes, notPossible, question });
+      const message = composeCanvaStatusMessage({ taskId, title: task.title, status, code, canvaUrl, notes, notPossible, question,
+        reviewUrl: officeReviewUrl({ taskId, ...(reviewRevisionId ? { revisionId: reviewRevisionId } : {}) }) });
       const scope = { tenantId: auth.tenantId, userId: auth.userId, role: auth.role };
       // The worker's finish() swallows its own notification errors so a failed message cannot fail
       // a design (canva-draft-workflow.ts), and this was a single fire-and-forget send: a Telegram

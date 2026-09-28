@@ -4,7 +4,9 @@
 #   - librsvg2-bin (rsvg-convert) + webp-pixbuf-loader: every SVG -> PNG render, WebP photos included;
 #   - ttf-mscorefonts-installer: Verdana, the client's Latin body face (render-fonts.json systemPaths).
 #     It is licensed, so it is never committed; without it ~115 tests fail with FONT_UNRESOLVED;
-#   - imagemagick: one test writes a PNG the way ImageMagick does by default.
+#   - imagemagick: one test writes a PNG the way ImageMagick does by default;
+#   - build-essential, pkg-config, libpango1.0-dev: `pnpm build:native` compiles the shared Pango
+#     text-measurement helper (ADR-118), as Dockerfile.core does in its build stage.
 # On macOS none of this is needed: Verdana ships with the system and rsvg comes from Homebrew.
 set -euo pipefail
 
@@ -18,6 +20,7 @@ $SUDO apt-get update -qq
 for attempt in 1 2 3; do
   if DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq --no-install-recommends \
       librsvg2-bin webp-pixbuf-loader imagemagick fontconfig cabextract ttf-mscorefonts-installer \
+      build-essential pkg-config libpango1.0-dev \
     && [ -f /usr/share/fonts/truetype/msttcorefonts/Verdana.ttf ]; then
     break
   fi

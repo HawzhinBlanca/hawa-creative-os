@@ -1,0 +1,53 @@
+canva_planner call · gpt-6-astra
+
+Call ID: 23f094f0-a108-41af-a2af-c8139831299a
+Original outcome: completed
+Provider reference: Not reported
+
+Original recorded cost
+Unknown
+Original allocation
+$0.517520
+Prior run settlement
+None recorded
+Highest administrator-attested cost
+$0.004000
+Cost counted toward limits
+$0.004000
+Accounting history (1)
+Revision 1 · $0.004000
+
+Provider finished · synthetic-loopback-unbilled
+
+Synthetic provider accounting evidence; no real billing
+
+Attested by 69a22f22-ff52-456a-a941-f496a0c9bde1 at 9/27/2026, 4:19:59 PM
+
+Evidence SHA-256: 112f52b78cdbda5cb4c0f606485145d647e15ef3893a5de0652f67ac256c2052
+
+Terminal cost evidence preserves the original call. Resume the saved plan to recover a retained layout without another model call. If no layout was saved, retire the plan before explicitly requesting a new one.
+
+Record final call cost
+
+Use a final provider receipt or support confirmation for every unresolved call. A timeout or request ID alone is insufficient. Unknown costs must remain held.
+
+Record the provider’s final charge for this exact call. This releases unused reserved funds while retaining the highest known or attested cost. The original result and any workflow hold remain. Corrections append to the history.
+
+Call 1
+
+Saved call: 23f094f0-a108-41af-a2af-c8139831299a · openai / gpt-6-astra
+
+Provider conclusion
+Provider confirms processing finished
+Provider confirms request was not accepted
+Reported final cost (USD)
+Provider or support reference
+Evidence SHA-256
+Or select the evidence file to calculate its hash
+
+The file stays on this device. Keep it in the office’s evidence archive.
+
+Reason
+Record cost evidence
+Reload selected call
+Close call

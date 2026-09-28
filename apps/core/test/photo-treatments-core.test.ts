@@ -1,3 +1,5 @@
+import { useMemoryVisualInputs } from '../test-support/studio-visual-input-fixture.js';
+import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { NEUTRAL_STYLE_SPEC, PNG, type StudioLayoutV2 } from '@hawa/creative';
@@ -124,6 +126,7 @@ describe('a change that asks for a treatment', () => {
     };
     const updated: any[] = [];
     const repo = {
+      getCallsForRun: async () => [],
       getRunById: async () => run,
       updateRunStatus: async (_i: string, _t: string, status: string, extra: any = {}) => { run.status = status; if (extra.stages) run.stages = JSON.stringify(extra.stages); return run; },
       insertCandidate: async (c: any) => c,
@@ -135,13 +138,16 @@ describe('a change that asks for a treatment', () => {
       params.schemaName === 'EditTargets' ? { data: { targets: ['photos'], asks: [ask], frustrated: false }, receipt: {} } : { data: { layout: structuredClone(answer), changes: [] }, receipt: {} }
     );
     const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+    useMemoryVisualInputs(service);
+    // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+    vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
     Object.assign(service as any, {
       repo, attachedImage: async () => undefined, imagesForRun: async () => [photo.dataUrl], activeRunsOfTask: async () => 0, earlierAsks: async () => [],
       parentWinner: async () => ({ runId: 'p', candidateId: 'pc', layout: structuredClone(parent), concept: { id: 'c', archetype: 'split-band' } }),
       createStageContext: (_s: any, r: any) => ({
         runId: r.id, tenantId: r.tenant_id, taskId: r.task_id, clientId: r.client_id, actorId: 'a', width: 1080, height: 1350, tier: 'standard', instructions: 'x',
         copyBlocks: r.request.copyBlocks, referencePack: { palette: ['#0A2A6B', '#F7B500', '#FFFFFF'] }, promotedRules: 'None',
-        latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 1, client: { completeJson }, pipelineV3: true, photos: [photo],
+        latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 1, client: { completeJson }, logo: KAAE_TEST_CLIENT_LOGO, pipelineV3: true, photos: [photo],
       }),
     });
     await service.resume({ tenantId: run.tenant_id, actorId: 'a' } as any, run.task_id, run.id);

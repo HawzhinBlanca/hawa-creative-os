@@ -1,0 +1,95 @@
+{
+  "date": "2026-09-26",
+  "requirements": [
+    "FR-001",
+    "FR-002",
+    "FR-004",
+    "FR-006",
+    "FR-011",
+    "FR-018",
+    "FR-019",
+    "NFR-006",
+    "NFR-014"
+  ],
+  "adr": "071",
+  "focused": {
+    "files": 9,
+    "passed": 103,
+    "skipped": 0
+  },
+  "verification": {
+    "source_and_test_typecheck": "passed",
+    "lint": "passed",
+    "desk_build": "passed",
+    "secret_scan": "passed",
+    "blueprint": {
+      "passed": 839,
+      "warnings": 0,
+      "failures": 0
+    }
+  },
+  "environment": "Isolated real PostgreSQL runtime RLS, filesystem blob store, Core app instances, mocked extraction and React/jsdom; no live production calls",
+  "limitations": [
+    "No production activation",
+    "No new real PDF extraction proof in this turn; see ADR-070",
+    "New app instances are not a process SIGKILL or backup restore drill",
+    "No Telegram PDF/voice or governed indexing admission",
+    "No independent native-language creative quality admission"
+  ],
+  "sha256": {
+    "adrs/071_document_request_handoff.md": "c9e8438ff2a740cbff3fb8f70b76f67af8cf5dba90e5b72c9c5b025b6db36b0a",
+    "packages/db/migrations/041_client_documents.sql": "222d881f59892d10dd662b5e4a63ba06498c88e349b88d274be352bc0d93ade9",
+    "apps/core/src/routes/documents.routes.ts": "bf91ebf4d5a1f01f1b70df3ae144929c04a2ac3a14c1217aa9a884877eef421a",
+    "apps/core/src/routes/tasks.routes.ts": "2cf5dea36ce92e0bd259698a10b9d2718c422f5774f840159d92dcdc816bda49",
+    "apps/core/src/services/client-documents.ts": "8ec8904ac5f8833b718567bf44f707f2fb57007b0d59f71febfee7e5d6a9ce33",
+    "apps/core/src/services/canva-design-planner.ts": "f1c6493c0203ce5f7cf51ddaa5c8f3823ca3ab1a5f92c4f435a1851989660f12",
+    "apps/desk/src/components/DocumentInspectionPanel.tsx": "af4a9b70a00f3a0b0b51e92b25da8d0b55d570ecacb7b94a2c52a3a621d51b83",
+    "apps/desk/src/components/DocumentRequestForm.tsx": "0d038601c4e52602065df023c3ae0ab4f1a7fa3c25ef42dee570b7a2e9b443d3",
+    "apps/desk/src/services/manualTaskIntake.ts": "8f6acc2dc07b41fe3e975c52c6abd11892b8116dd32b61992ecdf70408de9873",
+    "apps/core/test/document-intake.test.ts": "33c75bf66df12aef6bab28f6e15bc3f1ffd0d7cffc831314327f3f8492333c7c",
+    "apps/desk/test/document-request.test.ts": "25427769f755ac82623c67389296f69e812222dd4dfa7d3b3b0e5a4e6a9908a1"
+  },
+  "migration_checks": {
+    "files": 2,
+    "passed": 11,
+    "skipped": 0
+  },
+  "first_sealed_regression": {
+    "sourceCommit": "6e66c50",
+    "sealCommit": "932a330",
+    "passedFiles": 439,
+    "failedFiles": 1,
+    "skippedFiles": 4,
+    "passedTests": 3423,
+    "failedTests": 1,
+    "skippedTests": 56,
+    "failure": "client_documents_write violated ADR-033 per-row membership policy guard",
+    "correction": "Unreleased migration 041 uses once-per-statement role/membership sets; designer scope acceptance test added"
+  },
+  "policy_correction_checks": {
+    "files": 6,
+    "passed": 37,
+    "skipped": 0
+  },
+  "designer_boundary_probe": {
+    "initialPassed": 25,
+    "initialFailed": 1,
+    "reason": "Existing operator-only durable outbox returned 503 to a client-only designer",
+    "correction": "Explicit 403 explains operator handoff; retained source is confirmed by an operator without widening outbox permissions"
+  },
+  "sealed_regression": {
+    "sourceCommit": "96f1f5ece12c65fd62a5907bb3afd9cdeda33439",
+    "testedSealCommit": "a28e9d300e1f517a770688fff31dae4fcef3445c",
+    "passedFiles": 440,
+    "skippedFiles": 4,
+    "passedTests": 3426,
+    "skippedTests": 56,
+    "releaseManifest": "verified",
+    "blueprint": {
+      "passed": 839,
+      "warnings": 0,
+      "failures": 0
+    },
+    "subsequentChange": "Evidence and generated pack hashes only; no implementation changes after this run"
+  }
+}

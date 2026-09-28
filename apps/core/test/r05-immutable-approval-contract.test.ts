@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { createDb } from '@hawa/db';
+import { createDb, sql, withRlsContext } from '@hawa/db';
 import crypto from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
@@ -67,6 +67,7 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
       body: JSON.stringify({
         action: 'approve',
         reason: 'Passed QA inspection',
+        pinnedExportIds: [exports.add(task.id)],
       }),
     });
     expect(approveRes.status).toBe(201);
@@ -330,9 +331,17 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
     const taskRes = await app.request('/v1/tasks', {
       method: 'POST',
       headers: { ...operatorHeaders, 'Idempotency-Key': `r05-canva-stale-${Date.now()}` },
-      body: JSON.stringify({ title: 'Canva Stale Task' }),
+      body: JSON.stringify({ title: 'Canva Stale Task', clientId: KAAE }),
     });
     const task = await taskRes.json();
+
+    await withRlsContext(testDb, { tenantId: defaultTenantId,
+      userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, trx =>
+      sql`INSERT INTO hawa.canva_bindings
+        (id, tenant_id, task_id, client_id, canva_design_id, edit_url, status, version)
+        VALUES (${crypto.randomUUID()}::uuid, ${defaultTenantId}::uuid, ${task.id}::uuid,
+          ${KAAE}::uuid, ${'DA' + crypto.randomUUID().replaceAll('-', '')},
+          'https://www.canva.com/design/revoked/edit', 'revoked', 1)`.execute(trx));
 
     const revRes = await app.request(`/v1/tasks/${task.id}/revisions`, {
       method: 'POST',
@@ -351,7 +360,7 @@ describe('R05: Immutable Approval Contract & QC Binding (FR-015, FR-041, FR-043-
       headers: reviewerHeaders,
       body: JSON.stringify({
         action: 'approve',
-        canvaBindingStatus: 'revoked',
+        canvaBindingStatus: 'bound',
       }),
     });
 

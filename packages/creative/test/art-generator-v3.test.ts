@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { PNG } from 'pngjs';
 import {
   deriveConditionedArtPrompt,
@@ -32,9 +35,36 @@ describe('P04 — Art Layer Conditioned on Layout (gpt-image-2.5-sunburst & Calm
     const prompt = deriveConditionedArtPrompt(layoutWithArt);
     expect(prompt).toContain('1:1 square');
     expect(prompt).toContain('#0C2340');
-    expect(prompt).toContain('calmRegion' in layoutWithArt.art! ? 'calm, dark' : '');
+    expect(prompt).toContain('calm with low visual detail');
     expect(prompt).toContain('No text of any kind');
     expect(prompt).toContain('no people, no faces');
+  });
+
+  it('uses each client layout’s own art direction and colors in prompt and procedural fallback', async () => {
+    const forColor = (background: string): StudioLayoutV2 => ({
+      ...layoutWithArt,
+      background: { color: background },
+      shapes: [],
+      text: layoutWithArt.text.map((block) => ({ ...block, color: '#FFFFFF', accentColor: undefined })),
+      art: { ...layoutWithArt.art!, prompt: 'Soft organic botanical shapes', motif: 'thin-rules', scrim: { color: background, opacityStart: 0.7, opacityEnd: 0.9, direction: 'vertical' } },
+    });
+    const green = forColor('#123828');
+    const purple = forColor('#30204A');
+    const prompt = deriveConditionedArtPrompt(green);
+    expect(prompt).toContain('Soft organic botanical shapes');
+    expect(prompt).toContain('#123828');
+    expect(prompt).not.toMatch(/academic|institutional|deep dark navy|#0A1628|#C5A059/i);
+
+    const fetchFn = vi.fn(async () => ({ ok: false, status: 503, text: async () => 'unavailable' })) as unknown as typeof fetch;
+    const clientLogo = new PNG({ width: 8, height: 8 });
+    clientLogo.data.fill(255);
+    const logoDataUri = `data:image/png;base64,${PNG.sync.write(clientLogo).toString('base64')}`;
+    const options = { openaiApiKey: 'test-key', fetchFn, renderOptions: { logoDataUri } };
+    const greenResult = await generateConditionedArtLayer(green, options);
+    const purpleResult = await generateConditionedArtLayer(purple, options);
+    expect(greenResult.status).toBe('degraded_procedural_motif');
+    expect(purpleResult.status).toBe('degraded_procedural_motif');
+    expect(greenResult.artBuffer).not.toEqual(purpleResult.artBuffer);
   });
 
   it('measures luminance and variance accurately over synthetic calm and bright outer regions', () => {
@@ -83,6 +113,15 @@ describe('P04 — Art Layer Conditioned on Layout (gpt-image-2.5-sunburst & Calm
     );
   });
 
+  it('refuses missing client logo before an image-provider call', async () => {
+    const fetchFn = vi.fn();
+    await expect(generateConditionedArtLayer(layoutWithArt, {
+      openaiApiKey: 'test-key',
+      fetchFn: fetchFn as unknown as typeof fetch,
+    })).rejects.toThrow(/CLIENT_LOGO_REQUIRED/);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
   it('degrades to procedural motif when image provider returns error', async () => {
     // Mock fetcher that fails HTTP 500
     const mockFailingFetch = (async () => {
@@ -96,6 +135,7 @@ describe('P04 — Art Layer Conditioned on Layout (gpt-image-2.5-sunburst & Calm
     const result = await generateConditionedArtLayer(layoutWithArt, {
       openaiApiKey: 'test-key',
       fetchFn: mockFailingFetch,
+      renderOptions: { logoDataUri: KAAE_TEST_LOGO },
     });
 
     expect(result.status).toBe('degraded_procedural_motif');
@@ -103,5 +143,31 @@ describe('P04 — Art Layer Conditioned on Layout (gpt-image-2.5-sunburst & Calm
     expect(result.receipt.imageTokens).toBe(0);
     expect(result.compositeContrast.passed).toBe(true);
     expect(result.occlusionMetric.passed).toBe(true);
+  });
+
+  it('writes the art it hands the renderer only to a private temp directory, never into the checkout', async () => {
+    // Ported from studio-v2 1a160953: the temp file went into output/proofs under the working
+    // directory, which CI's "the suite left the tree clean" step refuses.
+    const written: string[] = [];
+    const real = fs.writeFileSync;
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation(((file: fs.PathOrFileDescriptor, ...rest: unknown[]) => {
+      if (typeof file === 'string') written.push(path.resolve(file));
+      return (real as (...args: unknown[]) => void)(file, ...rest);
+    }) as typeof fs.writeFileSync);
+    try {
+      const result = await generateConditionedArtLayer(layoutWithArt, {
+        openaiApiKey: 'test-key',
+        fetchFn: (async () => ({ ok: false, status: 500, text: async () => 'Provider Internal Error' })) as unknown as typeof fetch,
+        renderOptions: { logoDataUri: KAAE_TEST_LOGO },
+      });
+      expect(result.status).toBe('degraded_procedural_motif');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(written.length).toBeGreaterThan(0);
+    for (const file of written) {
+      expect(file.startsWith(path.resolve(process.cwd()) + path.sep), file).toBe(false);
+      expect(fs.existsSync(file), `${file} was left behind`).toBe(false);
+    }
   });
 });

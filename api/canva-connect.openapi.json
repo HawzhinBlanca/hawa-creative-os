@@ -202,7 +202,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Operation result; no QA approval implied"
+            "description": "Current scoped bindings, operations and artifacts; optional revisionHandoff describes required native revision action, availability, basisSha256, taskVersion, exact copy and current confirmedEventId. A cross-client or missing parent never exposes its native link. No QA approval implied. ADR-126: for an initial manual request opened without a design run, revisionHandoff has kind initial, no parent fields, and nativeRecovery only while the request is at manual revision 1."
           },
           "401": {
             "description": "Authentication required"
@@ -390,11 +390,38 @@
               "type": "string",
               "pattern": "^[A-Za-z0-9_-]{8,128}$"
             }
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "For current lifecycle manual preparation (an initial manual request or a linked revision); required together with the expected request revision."
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Rev",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Exact current request revision: 1 for an initial manual request (ADR-126), 2 or later for a linked revision (ADR-114). Rechecked under the owner projection lock before preparation writes."
           }
         ],
         "responses": {
           "200": {
-            "description": "Operation result; no QA approval implied"
+            "description": "Operation result; no QA approval implied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvaExportResult"
+                }
+              }
+            }
           },
           "401": {
             "description": "Authentication required"
@@ -415,7 +442,14 @@
             "description": "Database or configuration required"
           },
           "202": {
-            "description": "Pending or uncertain operation; inspect status before retrying"
+            "description": "Export operation result, possibly already retrieved; inspect status and the optional server review receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvaExportResult"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -450,7 +484,8 @@
           {
             "officeBearer": []
           }
-        ]
+        ],
+        "description": "Retains export evidence. A retrieved checked PPTX can record a manual review when a PNG from the same Canva version is retained. Inspect the optional review receipt; missing or blocked review must not be presented as ready. No approval is created. Replay the same operation after an uncertain response. Checked PPTX admission freezes the matching imported source policy, or exact manual Desk copy with active human-authored Client DNA font families. Replay retains that original policy. Superseded manual policy cannot qualify new review, approval or publication; capture again using current Client DNA. For confirmed native revision handoffs, all formats freeze the current copy confirmation and Client DNA. Both PNG and PPTX must carry the latest confirmation identity before the pair can record review, even if their Canva update timestamps match older captures."
       }
     },
     "/v1/tasks/{taskId}/canva/exports/{operationId}/resume": {
@@ -477,11 +512,38 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "For current lifecycle manual preparation (an initial manual request or a linked revision); required together with the expected request revision."
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Rev",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Exact current request revision: 1 for an initial manual request (ADR-126), 2 or later for a linked revision (ADR-114). Rechecked under the owner projection lock before preparation writes."
           }
         ],
         "responses": {
           "200": {
-            "description": "Operation result; no QA approval implied"
+            "description": "Operation result; no QA approval implied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvaExportResult"
+                }
+              }
+            }
           },
           "401": {
             "description": "Authentication required"
@@ -506,7 +568,8 @@
           {
             "officeBearer": []
           }
-        ]
+        ],
+        "description": "Retains export evidence. A retrieved checked PPTX can record a manual review when a PNG from the same Canva version is retained. Inspect the optional review receipt; missing or blocked review must not be presented as ready. No approval is created. Replay the same operation after an uncertain response. Checked PPTX admission freezes the matching imported source policy, or exact manual Desk copy with active human-authored Client DNA font families. Replay retains that original policy. Superseded manual policy cannot qualify new review, approval or publication; capture again using current Client DNA."
       }
     },
     "/v1/tasks/{taskId}/canva/artifacts/{artifactId}": {
@@ -796,6 +859,553 @@
         ],
         "summary": "Resume the existing imports checkpoint without repeating a model charge or document creation"
       }
+    },
+    "/v1/tasks/{taskId}/canva/revision-copy": {
+      "post": {
+        "operationId": "canvaConfirmRevisionCopy",
+        "tags": [
+          "Integrations"
+        ],
+        "description": "An office human confirms exact copy in a separately linked native revision design. Requires the current task version and parent/child binding basis from taskState.revisionHandoff. Stores an immutable keyed human assertion, not approval or automated preservation proof. Current lifecycle manual revisions may prepare a separate copy with explicit manual request headers; the request owner alone can submit it for review. A new confirmation invalidates previous captures for review, approval and publication. ADR-126: an initial manual request opened without a design run instead links its own separate design and asserts separateRequestDesign; its confirmation has no parent basis.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,128}$"
+            }
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "For current lifecycle manual preparation (an initial manual request or a linked revision); required together with the expected request revision."
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Rev",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Exact current request revision: 1 for an initial manual request (ADR-126), 2 or later for a linked revision (ADR-114). Rechecked under the owner projection lock before preparation writes."
+          }
+        ],
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "expectedTaskVersion",
+                      "basisSha256",
+                      "copy",
+                      "reviewedCurrentDesign",
+                      "preservedUnrequestedChanges"
+                    ],
+                    "properties": {
+                      "expectedTaskVersion": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "basisSha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "copy": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 128,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "description": "Exact final text blocks; nonblank, no NUL, combined newline-joined length at most 16000 characters. No normalization is applied."
+                      },
+                      "reviewedCurrentDesign": {
+                        "const": true
+                      },
+                      "preservedUnrequestedChanges": {
+                        "const": true
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "expectedTaskVersion",
+                      "basisSha256",
+                      "copy",
+                      "reviewedCurrentDesign",
+                      "separateRequestDesign"
+                    ],
+                    "properties": {
+                      "expectedTaskVersion": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "basisSha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "copy": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 128,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "description": "Exact final text blocks; nonblank, no NUL, combined newline-joined length at most 16000 characters. No normalization is applied."
+                      },
+                      "reviewedCurrentDesign": {
+                        "const": true
+                      },
+                      "separateRequestDesign": {
+                        "const": true,
+                        "description": "The office human checked that the linked design is this request’s own separate native design."
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Copy confirmation retained, or identical actor/key/body replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "confirmationEventId",
+                    "replayed"
+                  ],
+                  "properties": {
+                    "confirmationEventId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Human office role required"
+          },
+          "409": {
+            "description": "Stale basis, missing separate native copy, key conflict, closed task or lifecycle ownership"
+          },
+          "422": {
+            "description": "Invalid copy, key, basis or missing explicit review confirmations"
+          },
+          "502": {
+            "description": "Storage operation failed"
+          },
+          "503": {
+            "description": "Durable storage unavailable"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{taskId}/native-review": {
+      "post": {
+        "operationId": "submitNativeRevisionReview",
+        "tags": [
+          "Integrations"
+        ],
+        "description": "Submit retained native revision captures through signed RequestLifecycle ownership. Records revision and QA and advances the current manual request atomically. Does not approve. Retries must keep the same actor, action ID and exact body, including after an uncertain response. expectedRev is 1 for an initial manual request (ADR-126) and 2 or later for a linked revision.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "requestId",
+                  "artifactId",
+                  "confirmationEventId",
+                  "expectedRev",
+                  "expectedTaskVersion"
+                ],
+                "properties": {
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "artifactId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "confirmationEventId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedRev": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "expectedTaskVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Original or newly committed owner review receipt, with requestId, taskId, actionId, revisionId, rev, stage=in_review and qaPassed."
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Human identity required"
+          },
+          "409": {
+            "description": "Stale request, task, confirmation, capture or conflicting action identity"
+          },
+          "422": {
+            "description": "Invalid typed submission or office role"
+          },
+          "503": {
+            "description": "Unavailable or uncertain; retry identical action"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{taskId}/canva-binding": {
+      "post": {
+        "operationId": "bindTaskCanvaDesign",
+        "tags": [
+          "Integrations"
+        ],
+        "description": "Link a separate native design to this task and its fixed client. Current lifecycle manual revisions require both manual request headers. Linking does not capture or approve content.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "For current lifecycle manual preparation (an initial manual request or a linked revision); required together with the expected request revision."
+          },
+          {
+            "name": "X-Hawa-Manual-Request-Rev",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Exact current request revision: 1 for an initial manual request (ADR-126), 2 or later for a linked revision (ADR-114). Rechecked under the owner projection lock before preparation writes."
+          }
+        ],
+        "security": [
+          {
+            "officeBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "editUrl"
+                ],
+                "properties": {
+                  "editUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Scoped handoff binding saved"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Office role required"
+          },
+          "404": {
+            "description": "Scoped task unavailable"
+          },
+          "409": {
+            "description": "Binding conflict or stale/unsupported lifecycle scope"
+          },
+          "422": {
+            "description": "Invalid Canva design URL"
+          },
+          "503": {
+            "description": "Database unavailable"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{taskId}/canva/amendment-observation": {
+      "get": {
+        "operationId": "canvaAmendmentObservation",
+        "tags": [
+          "Integrations"
+        ],
+        "description": "Read-only observation on the authenticated app connection. Rejects changed task/binding/native metadata. Never authorizes an amendment. Capability reads require profile:read; missing access remains unknown. Invoked explicitly, not by polling.",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observed capabilities and named field types, or independent unknown/unavailable/forbidden observations. nativeAmendmentQualified is always false.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "observedAt",
+                    "nativeAmendmentQualified",
+                    "basis",
+                    "capabilities",
+                    "dataset",
+                    "limitation"
+                  ],
+                  "properties": {
+                    "observedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "nativeAmendmentQualified": {
+                      "const": false
+                    },
+                    "basis": {
+                      "type": "object",
+                      "required": [
+                        "taskId",
+                        "clientId",
+                        "taskVersion",
+                        "bindingId",
+                        "bindingVersion",
+                        "designId",
+                        "nativeUpdatedAt",
+                        "pageCount"
+                      ],
+                      "properties": {
+                        "taskId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "clientId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "taskVersion": {
+                          "type": "integer"
+                        },
+                        "bindingId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "bindingVersion": {
+                          "type": "integer"
+                        },
+                        "designId": {
+                          "type": "string"
+                        },
+                        "nativeUpdatedAt": {
+                          "type": "integer"
+                        },
+                        "pageCount": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "capabilities": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "status",
+                            "data"
+                          ],
+                          "properties": {
+                            "status": {
+                              "const": "observed"
+                            },
+                            "data": {
+                              "type": "array",
+                              "maxItems": 100,
+                              "items": {
+                                "type": "string",
+                                "maxLength": 100
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "$ref": "#/components/schemas/CanvaObservationFailure"
+                        }
+                      ]
+                    },
+                    "dataset": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "status",
+                            "data"
+                          ],
+                          "properties": {
+                            "status": {
+                              "const": "observed"
+                            },
+                            "data": {
+                              "type": "object",
+                              "maxProperties": 512,
+                              "additionalProperties": {
+                                "type": "object",
+                                "required": [
+                                  "type"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "enum": [
+                                      "text",
+                                      "image",
+                                      "chart",
+                                      "sheet"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "$ref": "#/components/schemas/CanvaObservationFailure"
+                        }
+                      ]
+                    },
+                    "limitation": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Role forbidden"
+          },
+          "404": {
+            "description": "Task not found in scope"
+          },
+          "409": {
+            "description": "Binding missing, connection not ready, or observation became stale"
+          },
+          "422": {
+            "description": "Invalid identifier"
+          },
+          "502": {
+            "description": "Native metadata could not be verified"
+          },
+          "503": {
+            "description": "Storage or configuration unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -804,6 +1414,108 @@
         "type": "http",
         "scheme": "bearer",
         "description": "Existing server-authenticated Hawa office actor; credentials never passed to Canva APIs from the browser."
+      }
+    },
+    "schemas": {
+      "CaptureReview": {
+        "description": "Server-recorded review outcome after a checked export. A recorded text check is not native Canva verification or human approval.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "revisionId",
+              "qaPassed",
+              "checkedArtifactId"
+            ],
+            "properties": {
+              "status": {
+                "const": "recorded"
+              },
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "qaPassed": {
+                "type": "boolean"
+              },
+              "checkedArtifactId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "blocked",
+                  "not_applicable"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "retryable": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "CanvaExportResult": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "status"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "enum": [
+              "creating",
+              "submitted",
+              "uncertain",
+              "retrieved",
+              "stale",
+              "failed"
+            ]
+          },
+          "review": {
+            "$ref": "#/components/schemas/CaptureReview"
+          }
+        }
+      },
+      "CanvaObservationFailure": {
+        "type": "object",
+        "required": [
+          "status",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "unknown",
+              "unavailable",
+              "forbidden"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
       }
     }
   }

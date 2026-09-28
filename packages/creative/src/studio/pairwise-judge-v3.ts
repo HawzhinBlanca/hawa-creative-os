@@ -96,7 +96,7 @@ export interface TournamentResult {
 export interface JudgeOptions {
   /** The client's style reference: of two sound designs, the one closer to it wins. */
   reference?: ClientReference;
-  /** Who the client is (its client pack's profile, ADR-038): brand fit is judged against it. */
+  /** Who the client is (its client pack's profile, ADR-127): brand fit is judged against it. */
   clientProfile?: string;
   client?: OpenAiStudioClient;
   openaiApiKey?: string;

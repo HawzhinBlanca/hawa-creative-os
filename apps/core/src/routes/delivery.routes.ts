@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
-import { SYSTEM_AUTOMATION_USER_ID, deliveryWorkflowId, lifecycleOwnsChat } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, publicationAwareTaskStatus, isTaskDbState } from '@hawa/contracts';
 import { withRlsContext, toApiTaskStatus } from '@hawa/db';
-import { buildOutboundReviewDispatch } from '@hawa/integrations';
+import { buildOutboundReviewDispatch, signLifecycleOfficeEvent } from '@hawa/integrations';
 import type { Context } from 'hono';
 import type { AuthContext, RouteContext } from './types.js';
 import { DEFAULT_CLIENT_ID, DEFAULT_TENANT_ID } from '../core-context.js';
@@ -9,8 +9,12 @@ import { isValidUuid, COPY_REQUIRED_DETAIL } from '../core-helpers.js';
 import { log } from '../logging.js';
 import { pendingChangeWords } from '../services/pending-change.js';
 import { readPublicationReceipt } from '../services/publication-receipt.js';
+import { acknowledgeLateChange, acknowledgedLateChanges, pendingLateChanges } from '../services/lifecycle-chat-target.js';
+import { readRequesterSendEvidence } from '../services/requester-send-evidence.js';
+import { confirmRequesterSendVisible } from '../services/requester-send-resolution.js';
+import { LifecycleProjectionConflict } from '../services/lifecycle-projection.js';
 import { DELIVERY_OWNED_BY_CORE } from '../services/omnichannel-delivery.js';
-import { approvalToDeliver, decideForLifecycle, decisionProblem, officeActionIdOf, readTaskLifecycle } from '../services/office-decisions.js';
+import { workerSigningSecretOf } from '../services/worker-credential.js';
 
 /**
  * Delivery of an approved design and what it left behind (architecture programme 1.3, group G5,
@@ -84,6 +88,109 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const taskId = c.req.param('taskId');
     const task = await readCurrentTask(taskId);
     if (!task) return problem(c, 404, 'Task Not Found');
+    if (task.requestId) {
+      const actionId = c.req.header('Idempotency-Key');
+      if (!actionId || !isValidUuid(actionId)) return problem(c, 422, 'Action Key Required',
+        'Request-owned delivery needs a UUID Idempotency-Key for safe retry');
+      const officeRole = (auth.role || '').toLowerCase().trim();
+      if (!['art_director', 'creative_director', 'office_admin', 'administrator'].includes(officeRole)) {
+        return problem(c, 403, 'Forbidden', 'An authorized office reviewer must start request-owned delivery');
+      }
+      const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+      if (!body || Array.isArray(body) || Object.keys(body).some((key) => !['destination', 'approvalId', 'acknowledgeLateChanges'].includes(key)) ||
+          (body.destination !== undefined && body.destination !== 'google_drive') ||
+          (body.approvalId !== undefined && !isValidUuid(String(body.approvalId))) ||
+          (body.acknowledgeLateChanges !== undefined && (!Array.isArray(body.acknowledgeLateChanges) ||
+            body.acknowledgeLateChanges.length > 50 ||
+            (body.acknowledgeLateChanges as unknown[]).some((id: unknown) => typeof id !== 'string' || !/^[1-9][0-9]{0,18}$/.test(id))))) {
+        return problem(c, 422, 'Invalid Delivery Request', 'Deliver the current approval to Google Drive with one stable action key');
+      }
+      if (!db || !taskRepo || !publicationRepo) return problem(c, 503, 'Database Unavailable',
+        'Request-owned delivery requires the persistent request ledger');
+      const tenantId = auth.tenantId || DEFAULT_TENANT_ID;
+      const requestId = task.requestId;
+      const current = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role }, async (trx) => {
+        const request = await trx.selectFrom('requests').select(['rev', 'owner', 'stage', 'current_task_id'])
+          .where('tenant_id', '=', tenantId).where('request_id', '=', requestId).executeTakeFirst();
+        const approval = await trx.selectFrom('approvals').select(['id', 'design_revision_id'])
+          .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).where('decision', '=', 'approved')
+          .orderBy('created_at', 'desc').executeTakeFirst();
+        const receipts = await trx.selectFrom('lifecycle_projections').select(['rev', 'result'])
+          .where('tenant_id', '=', tenantId).where('request_id', '=', requestId)
+          .where('idempotency_key', 'like', `${requestId}:%:officeDecision:desk:${actionId}`)
+          .orderBy('rev', 'desc').executeTakeFirst();
+        return { request, approval, receipts };
+      });
+      if (!current.request || current.request.owner !== 'restate' || current.request.current_task_id !== taskId ||
+          !current.approval) {
+        return problem(c, 409, 'Lifecycle Owner Mismatch', 'This task has no current request-owned approval');
+      }
+      const approvalId = String(body.approvalId || current.approval.id);
+      if (approvalId !== current.approval.id) return problem(c, 409, 'Approval Changed', 'The requested approval is not current');
+      const expectedRev = current.receipts ? Number(current.receipts.rev) - 1 : Number(current.request.rev);
+      const ingress = (process.env.RESTATE_INGRESS_URL || '').trim().replace(/\/+$/, '');
+      const secret = workerSigningSecretOf() || '';
+      if (!ingress || !secret) return problem(c, 503, 'Lifecycle Delivery Unavailable',
+        'The signed delivery gateway is not configured; retry this action later');
+      // Words the requester sent after the design reached the office hold a new delivery until an
+      // office member has read them (finding 13). A replay of an action already recorded is not new.
+      if (!current.receipts) {
+        const acknowledged = (body.acknowledgeLateChanges as string[] | undefined) ?? [];
+        const system = { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
+        const late = await withRlsContext(db, system, async (trx) => ({
+          pending: await pendingLateChanges(trx, tenantId, requestId),
+          done: await acknowledgedLateChanges(trx, tenantId, requestId),
+        }));
+        const unknown = acknowledged.filter((id) => !late.pending.some((change) => change.updateId === id) &&
+          !late.done.includes(id));
+        if (unknown.length) return problem(c, 422, 'Unknown Requester Change',
+          'An acknowledged change does not belong to this request; refresh the task');
+        const unread = late.pending.filter((change) => !acknowledged.includes(change.updateId));
+        if (unread.length) {
+          return c.json({ type: 'https://hawa.design/errors/409', title: 'Requester Change Received', status: 409,
+            detail: 'The requester sent words after this design reached the office. Read them and acknowledge them before delivering.',
+            instance: new URL(c.req.url).pathname, code: 'LATE_REQUESTER_CHANGE', lateChanges: unread }, 409);
+        }
+        const reading = late.pending.filter((change) => acknowledged.includes(change.updateId));
+        if (reading.length) {
+          await withRlsContext(db, system, async (trx) => {
+            for (const change of reading) {
+              await acknowledgeLateChange(trx, tenantId, { requestId, updateId: change.updateId,
+                actorUserId: auth.userId, actorRole: officeRole, actionId });
+            }
+          });
+        }
+      }
+      const event = { v: 1 as const, kind: 'deliver' as const, eventId: `desk:${actionId}`,
+        requestId, taskId, revisionId: current.approval.design_revision_id, approvalId, actionId,
+        expectedRev, actor: { userId: auth.userId, role: officeRole }, reason: 'Deliver approved files' };
+      const signature = signLifecycleOfficeEvent(secret, event);
+      try {
+        const response = await fetch(`${ingress}/OfficeDecisionGateway/decide`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ v: 1, event, signature }), signal: AbortSignal.timeout(15_000),
+        });
+        const result = await response.json().catch(() => null) as Record<string, unknown> | null;
+        if (response.ok && result?.accepted === true && result.requestId === requestId &&
+            result.taskId === taskId && result.approvalId === approvalId && result.actionId === actionId &&
+            typeof result.deliveryId === 'string' && Number.isInteger(result.rev) && Number(result.rev) >= 4) {
+          const status = result.stage === 'delivered' ? 'COMPLETE'
+            : result.stage === 'approved' ? 'DELIVERY_RETRY_REQUIRED' : 'PUBLISHING';
+          return c.json({ taskId, requestId, deliveryId: result.deliveryId, workflowId: result.deliveryId,
+            executor: 'restate', status,
+            requestRev: result.rev, acceptedAt: new Date().toISOString() }, result.stage === 'delivering' ? 202 : 200);
+        }
+        if (response.ok && result?.accepted === false) return problem(c, 409, 'Stale Lifecycle Delivery',
+          'The request is no longer approved for this delivery; refresh the task');
+        if (response.status === 400 || response.status === 409) return problem(c, 409, 'Lifecycle Action Conflict',
+          'This action key, approval or request revision no longer matches; refresh the task');
+        log.warn(`[core:publish] Lifecycle gateway HTTP ${response.status} for request ${requestId}`);
+      } catch (error) {
+        log.warn(`[core:publish] Lifecycle gateway did not answer for request ${requestId}:`, error);
+      }
+      return problem(c, 503, 'Lifecycle Delivery Uncertain',
+        'Delivery may have started. Retry with the same action key; no second workflow will be created');
+    }
 
     const body = await c.req.json().catch(() => ({}));
     const storedRefused = storedPolicyRefusal(c, auth, body);
@@ -91,56 +198,6 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const policy = body.policy || 'current_task';
     const targetRevisionId = body.designRevisionId || task?.latestRevisionId;
     const requestedApprovalId = body.approvalId;
-
-    // Slice 2.4 (PHASE2_DESIGN.md section 3, ADR-034): a task of a request the lifecycle owns is
-    // delivered by RequestLifecycle, which checks the stage, the approval and any pending change, then
-    // claims the publication and starts the Delivery workflow. This route only reads.
-    if (db) {
-      const tenantId = task?.tenantId && isValidUuid(task.tenantId) ? task.tenantId : (auth.tenantId || DEFAULT_TENANT_ID);
-      let lifecycle: Awaited<ReturnType<typeof readTaskLifecycle>> = null;
-      try {
-        lifecycle = await readTaskLifecycle(db, tenantId, taskId);
-      } catch (err) {
-        log.error('[core:publish] Could not read whether the request lifecycle owns this task:', err);
-        return problem(c, 503, 'Database Unavailable', 'Who delivers this task could not be read; try again');
-      }
-      if (lifecycle?.owner === 'restate') {
-        let approval: Awaited<ReturnType<typeof approvalToDeliver>>;
-        try {
-          approval = await approvalToDeliver(db, tenantId, taskId, typeof requestedApprovalId === 'string' ? requestedApprovalId : undefined);
-        } catch (err) {
-          log.error('[core:publish] Could not read the approval to deliver:', err);
-          return problem(c, 503, 'Database Unavailable', 'The approval to deliver could not be read; try again');
-        }
-        if (!approval) return problem(c, 422, 'Nothing Approved To Deliver', `Task ${taskId} has no approval to deliver`);
-        if (approval.pins === 0) return problem(c, 422, 'Nothing Approved To Deliver', 'Nothing to deliver: the approval pins no exported file. Approve in the Desk with the captured export selected.');
-        const { actionId } = officeActionIdOf(c.req.header('Idempotency-Key'));
-        // A delivery that could not archive the files is run again for its archive, not delivered anew.
-        const kind = lifecycle.stage === 'delivered' ? 'retryArchive' : 'deliver';
-        const { answer, forwarded } = await decideForLifecycle(db, tenantId, lifecycle, {
-          actionId, actor: { userId: auth.userId || SYSTEM_AUTOMATION_USER_ID, role: auth.role || 'operator' }, kind, taskId, approvalId: approval.approvalId,
-        });
-        const accepted = forwarded.kind === 'answered' && forwarded.result.accepted ? forwarded.result : null;
-        const lifecycleNow = accepted ? { ...lifecycle, rev: accepted.rev, stage: accepted.stage } : lifecycle;
-        if (answer.status !== 200) return decisionProblem(c, answer, { actionId, lifecycle: lifecycleNow });
-        // The run the projection claimed names the workflow (read back, not written).
-        const claimed = await approvalToDeliver(db, tenantId, taskId, approval.approvalId).catch(() => null);
-        const run = claimed?.run || 1;
-        // The move to PUBLISHING was broadcast by the projection that made it (lifecycle-projection.routes.ts).
-        return c.json({
-          commandId: crypto.randomUUID(),
-          taskId,
-          actionId,
-          workflowId: deliveryWorkflowId(lifecycle.requestId, approval.approvalId, run),
-          deliveryId: deliveryWorkflowId(lifecycle.requestId, approval.approvalId, run),
-          approvalId: approval.approvalId,
-          executor: 'restate',
-          status: 'PUBLISHING',
-          lifecycle: lifecycleNow,
-          acceptedAt: new Date().toISOString(),
-        }, 202);
-      }
-    }
 
     // Invariant: B cannot ship using A's approval (CV-15)
     if (body.designRevisionId && task?.latestApproval) {
@@ -156,29 +213,29 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       return problem(c, 409, 'Conflict', `Approval ID mismatch: requested approval '${requestedApprovalId}' does not match active approval.`);
     }
 
-    // Slice 2.2 (PHASE2_DESIGN.md section 3, ADR-034): a task whose chat is on HAWA_LIFECYCLE_CHATS
-    // when Deliver is pressed is delivered by the Restate Delivery workflow, and so is every later
-    // press for a publication the workflow already owns, even once its chat is taken off the list.
-    // A delivery Core's own path started stays Core's: it may have sent the files already. With the
-    // list empty nothing here changes: a publication the workflow owns is still refused by Core's own
-    // delivery, under its lock, if the read below could not tell.
+    // ADR-052: the executor was pinned at task creation. A later chat-flag change cannot switch an
+    // approved legacy task. A delivery already started keeps its recorded publication/effect owner.
     const executor = await deliveryExecutorOfTask(task, taskId).catch((err: unknown) => {
       log.warn('[core:publish] Could not read who delivers this task; Core\'s own delivery checks again under its lock:', err);
       return undefined;
     });
-    const requesterChat = executor === 'restate' || (executor === null && process.env.HAWA_LIFECYCLE_CHATS) ? await requesterChatOf(task, taskId) : null;
-    const byWorkflow = executor === 'restate' || (executor === null && lifecycleOwnsChat(requesterChat));
+    const requesterChat = executor === 'restate' ? await requesterChatOf(task, taskId) : null;
+    const byWorkflow = executor === 'restate';
     let started: Awaited<ReturnType<typeof startWorkflowDelivery>> | null = null;
     if (byWorkflow) {
       const change = await changeBlockingDelivery(task, taskId);
       if (change === null) return problem(c, 503, 'Database Unavailable', 'Whether the client asked for a change could not be checked; try again');
       if (change) return problem(c, 409, 'Changed At The Client\'s Request', `${pendingChangeWords(change)} The approved version was not delivered.`);
       const status = (task?.status || '').toLowerCase();
+      if (status === 'requester_send_reconciliation') {
+        return problem(c, 409, 'Requester Delivery Needs Review',
+          'A previous Telegram send may have reached the requester. An operator must inspect the send evidence before any new delivery action');
+      }
       if (status === 'complete') {
         const stored = await storedCompletePublication(task, taskId);
         if (stored) return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: stored.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
       }
-      if (policy !== 'deliver_approved_stored' && !['approved', 'publishing', 'publish_reconciliation'].includes(status)) {
+      if (policy !== 'deliver_approved_stored' && !['approved', 'publishing', 'archive_reconciliation', 'publish_reconciliation'].includes(status)) {
         return problem(c, status === 'awaiting_approval' ? 409 : 422, 'Cannot Publish Unapproved Task', `Task ${taskId} is in status '${status}', not 'approved'`);
       }
       started = await startWorkflowDelivery(taskId, {
@@ -217,8 +274,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const change = await changeBlockingDelivery(task, taskId);
     if (change === null) return problem(c, 503, 'Database Unavailable', 'Whether the client asked for a change could not be checked; try again');
     if (change) return problem(c, 409, 'Changed At The Client\'s Request', `${pendingChangeWords(change)} The approved version was not delivered.`);
-    const retryingSheetRow = currentStatus === 'publish_reconciliation';
-    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && !retryingSheetRow) {
+    const retryingPublication = ['archive_reconciliation', 'publish_reconciliation'].includes(currentStatus);
+    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && !retryingPublication) {
       const stored = currentStatus === 'complete' ? await storedCompletePublication(task, taskId) : null;
       if (stored) return c.json({ commandId: crypto.randomUUID(), taskId, workflowId: `wf_${taskId}`, publicationId: stored.publicationId, status: 'COMPLETE', receipt: stored, acceptedAt: new Date().toISOString() }, 200);
       return problem(c, currentStatus === 'awaiting_approval' ? 409 : 422, 'Cannot Publish Unapproved Task', `Task ${taskId} is in status '${currentStatus}', not 'approved'`);
@@ -262,7 +319,6 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
       publicationId: receipt?.publicationId || `pub_${taskId}`,
       status: finalStatus,
       ...(sheetsConfirmed ? {} : { sheetProblem: receipt?.detail?.sheetProblem ?? result.sheetProblem ?? null }),
-      ...(result.notificationProblem ? { notificationProblem: result.notificationProblem } : {}),
       receipt,
       acceptedAt: new Date().toISOString(),
     }, sheetsConfirmed && result.alreadyCompleted ? 200 : 202);
@@ -282,6 +338,7 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     let sheetSyncs: any[] = [];
     let outboxCmds: any[] = [];
     let storedState: string | null = null;
+    let completionEvidence: { source: 'staff_visible'; actorId: string | null; recordedAt: string } | null = null;
 
     if (isValidUuid(taskId)) {
       try {
@@ -301,6 +358,16 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
               outboxCmds = await outboxRepo.findByAggregateId(auth.tenantId, 'task', taskId, trx);
             }
             if (taskRepo) storedState = (await taskRepo.findById(taskId, auth.tenantId, trx))?.state ?? null;
+            if (storedState === 'complete') {
+              const lastChange = await trx.selectFrom('task_events').select(['actor_id', 'data', 'occurred_at'])
+                .where('tenant_id', '=', auth.tenantId).where('task_id', '=', taskId)
+                .where('event_type', '=', 'task.state_changed')
+                .orderBy('aggregate_version', 'desc').limit(1).executeTakeFirst();
+              if (lastChange?.data?.confirmationSource === 'staff_visible') {
+                completionEvidence = { source: 'staff_visible', actorId: lastChange.actor_id,
+                  recordedAt: lastChange.occurred_at.toISOString() };
+              }
+            }
           }
         );
       } catch (err) {
@@ -312,8 +379,9 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const task = tasks.get(taskId);
     // The task's own status: the in-memory one, else the stored one (every task after a restart). It
     // used to fall back to 'PENDING', a word no layer knows; with neither, there is no status to report.
-    const taskStatus = task?.status
-      ?? (storedState ? toApiTaskStatus(storedState) : null)
+    const taskStatus = storedState && isTaskDbState(storedState)
+      ? publicationAwareTaskStatus(storedState, { errorClass: pubRecord?.error_class })
+      : task?.status
       ?? (pubRecord?.state === 'complete' ? 'COMPLETE' : (pubRecord?.state === 'drive_complete' ? 'PUBLISH_RECONCILIATION' : null));
 
     // What the delivery recorded in Postgres; a copy this process kept is no longer consulted.
@@ -327,9 +395,17 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const notificationStatus = notificationCmd ? notificationCmd.state : 'not_enqueued';
 
     let actionableRecovery = 'Publication, sheet sync, and notification completed successfully.';
-    let state: 'unstarted' | 'drive_complete' | 'publish_reconciliation' | 'complete' | 'failed' = 'complete';
+    let state: 'unstarted' | 'drive_complete' | 'archive_reconciliation' | 'publish_reconciliation' | 'requester_send_reconciliation' | 'complete' | 'failed' = 'complete';
 
-    if (!hasDriveFiles) {
+    if (pubRecord?.error_class === 'ARCHIVE_UNCONFIRMED') {
+      state = 'archive_reconciliation';
+      actionableRecovery = storedState === 'cancelled'
+        ? 'This task was cancelled while the Drive outcome was unresolved. Do not retry requester delivery. An operator must inspect the reserved Drive file identity and apply the office retention policy.'
+        : 'Drive may already contain the approved files, but the archive is not verified. Restore Google access if needed, then use Recheck Drive Archive. The same reserved file ID is checked before requester delivery; a continuing conflict needs an operator to inspect Drive.';
+    } else if (pubRecord?.executor === 'restate' && pubRecord.error_class === 'REQUESTER_SEND_UNCONFIRMED') {
+      state = 'requester_send_reconciliation';
+      actionableRecovery = 'Requester delivery did not complete or could not be confirmed. An operator must inspect the Telegram chat and send records before resolving it; do not retry delivery or Sheet sync.';
+    } else if (!hasDriveFiles) {
       state = 'unstarted';
       actionableRecovery = 'No publication has been initiated. Trigger POST /tasks/:taskId/publish to deliver assets.';
     } else if (!sheetSynced) {
@@ -341,6 +417,11 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     } else if (notificationStatus === 'pending') {
       state = 'complete';
       actionableRecovery = 'Task and publication are complete. Notification is queued for delivery by the outbox worker.';
+    } else if (pubRecord?.executor === 'restate' && pubRecord.state === 'complete') {
+      state = 'complete';
+      actionableRecovery = completionEvidence
+        ? 'Archive and Sheet are confirmed. Office staff recorded every approved item visible in the requester chat. A requester read receipt is unavailable.'
+        : 'Archive and Sheet are confirmed. The request-owned workflow reported requester sends complete; a requester read receipt is unavailable.';
     }
 
     return c.json({
@@ -362,8 +443,68 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         attempts: notificationCmd?.attempts || 0,
         errorMessage: notificationCmd?.error_message || null,
       },
+      completionEvidence,
       actionableRecovery,
     });
+  });
+
+  // R09: show the stored Telegram attempt marks for one unresolved request-owned publication.
+  // A mark is local evidence of a sender attempt, never a requester-read receipt.
+  registerRoute('get', '/tasks/:taskId/requester-send-evidence', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.tenantId || !auth.userId) return problem(c, 401, 'Authentication Required');
+    if (!['operator', 'administrator', 'art_director', 'creative_director', 'office_admin'].includes(auth.role)) {
+      return problem(c, 403, 'Office Role Required', 'Only authorized office staff may inspect requester send evidence');
+    }
+    const taskId = c.req.param('taskId');
+    if (!isValidUuid(taskId)) return problem(c, 404, 'Task Not Found');
+    if (!db) return problem(c, 503, 'Database Unavailable', 'Requester send evidence is held in the database');
+    try {
+      const result = await readRequesterSendEvidence(db, { tenantId: auth.tenantId,
+        userId: auth.userId, role: auth.role, taskId });
+      if (result.kind === 'not_found') return problem(c, 404, 'Task Not Found');
+      if (result.kind === 'wrong_state') return problem(c, 409, 'No Uncertain Requester Send',
+        'This task has no current unresolved request-owned Telegram delivery');
+      return c.json(result.evidence);
+    } catch (err) {
+      log.error('[core:requester-send-evidence] Could not read send marks:', err);
+      return problem(c, 503, 'Send Evidence Unavailable', 'The Telegram send records could not be read safely');
+    }
+  });
+
+  // A staff attestation of exact messages visible in the requester chat. This never sends or
+  // releases a Telegram message; inconclusive cases stay in reconciliation.
+  registerRoute('post', '/tasks/:taskId/requester-send-confirmation', async (c: any) => {
+    const auth = verifyRequestAuth(c);
+    if (!auth.authenticated || !auth.tenantId || !auth.userId) return problem(c, 401, 'Authentication Required');
+    if (!['office_admin', 'administrator'].includes(auth.role)) {
+      return problem(c, 403, 'Office Administrator Required');
+    }
+    const taskId = c.req.param('taskId');
+    if (!isValidUuid(taskId)) return problem(c, 404, 'Task Not Found');
+    if (!db) return problem(c, 503, 'Database Unavailable');
+    const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body || Array.isArray(body) || Object.keys(body).some((key) =>
+      !['actionId', 'expectedRev', 'publicationId', 'approvalId', 'requesterChatId', 'observed', 'attested'].includes(key))) {
+      return problem(c, 422, 'Invalid Confirmation', 'Use the current request revision and exact message IDs');
+    }
+    try {
+      const result = await confirmRequesterSendVisible(db, { tenantId: auth.tenantId, taskId,
+        actor: { userId: auth.userId, role: auth.role },
+        actionId: body.actionId as string, expectedRev: body.expectedRev as number,
+        publicationId: body.publicationId as string, approvalId: body.approvalId as string,
+        requesterChatId: body.requesterChatId as string,
+        observed: body.observed as Array<{ sendKey: string; messageId: string }>,
+        attested: body.attested as true });
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        const status = error.code === 'INVALID_CONFIRMATION' ? 422 : error.code === 'UNAUTHORIZED_ACTOR' ? 403 : 409;
+        return problem(c, status, 'Requester Send Confirmation Refused', error.message);
+      }
+      log.error('[core:requester-send-confirmation] Could not confirm send:', error);
+      return problem(c, 503, 'Confirmation Unavailable', 'The delivery remains unresolved; retry with the same action key');
+    }
   });
 
   // --- Two-Way Outbound Review Dispatch (FR-014, FR-081) ---
@@ -413,6 +554,10 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
   // --- 4-in-1 Omnichannel Production Outbox Dispatch to Google Drive & Sheets (FR-012, FR-082, CV-15) ---
   registerRoute('post', '/tasks/:taskId/publish-omnichannel', async (c: any) => {
     const taskId = c.req.param('taskId');
+    const task = await readCurrentTask(taskId);
+    if (!task) return problem(c, 404, 'Task Not Found');
+    if (task.requestId) return problem(c, 409, 'LIFECYCLE_OWNED',
+      'Deliver this request through RequestLifecycle; the legacy publisher cannot send it');
     const auth = verifyRequestAuth(c);
     const body = await c.req.json().catch(() => ({}));
     const storedRefused = storedPolicyRefusal(c, auth, body);
@@ -420,9 +565,6 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
     const policy = body.policy || 'current_task';
     const targetRevisionId = body.designRevisionId;
     const requestedApprovalId = body.approvalId;
-
-    const task = await readCurrentTask(taskId);
-    if (!task) return problem(c, 404, 'Task Not Found');
 
     // Invariant: B cannot ship using A's approval (CV-15)
     if (targetRevisionId && task.latestApproval) {
@@ -473,7 +615,8 @@ export function registerDeliveryRoutes(ctx: RouteContext): void {
         publishedAt: existingReceipt.completedAt || existingReceipt.sheetRow?.syncedAt || new Date().toISOString(),
       }, 200);
     }
-    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' && currentStatus !== 'publish_reconciliation') {
+    if (policy !== 'deliver_approved_stored' && currentStatus !== 'approved' &&
+        currentStatus !== 'archive_reconciliation' && currentStatus !== 'publish_reconciliation') {
       return problem(c, 409, 'Conflict', `Task ${taskId} is in status '${task.status}', not 'approved'`);
     }
 

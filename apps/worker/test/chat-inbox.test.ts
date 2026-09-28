@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleUpdate, INTAKE_ATTEMPTS, chatInbox, type InboxContext } from '../src/lifecycle/chat-inbox.js';
+import { handleUpdate, INTAKE_ATTEMPTS, chatInbox, type ChatInboxCore, type InboxContext } from '../src/lifecycle/chat-inbox.js';
 import { createCoreClient } from '../src/lifecycle/core-client.js';
 
 /**
@@ -18,11 +18,25 @@ class FakeContext implements InboxContext {
   sleeps: number[] = [];
   state = new Map<string, unknown>();
   runs: string[] = [];
+  stateReads: string[] = [];
+  inRun = false;
+  lifecycleDecisions: Array<{ requestId: string; event: unknown }> = [];
+  lifecycleOpens: Array<{ requestId: string; event: unknown }> = [];
+  notices: unknown[] = [];
+  failDecisionOnce = false;
+  failOpenOnce = false;
   constructor(readonly key = '555') {}
+  async get<T>(name: string): Promise<T | null> {
+    if (this.inRun) throw new Error('Restate state access must not be nested in a run action');
+    this.stateReads.push(name);
+    return (this.state.get(name) as T) ?? null;
+  }
   async run<T>(name: string, action: () => Promise<T>): Promise<T> {
     if (this.journal.has(name)) return this.journal.get(name) as T;
     this.runs.push(name);
-    const value = await action();
+    this.inRun = true;
+    let value: T;
+    try { value = await action(); } finally { this.inRun = false; }
     this.journal.set(name, value);
     return value;
   }
@@ -35,10 +49,26 @@ class FakeContext implements InboxContext {
     this.state.set(name, value);
   }
   async now() { return 1_790_000_000_000; }
+  async sendLifecycleDecision(requestId: string, event: unknown) {
+    if (this.failDecisionOnce) {
+      this.failDecisionOnce = false;
+      throw new Error('decision dispatch interrupted');
+    }
+    this.lifecycleDecisions.push({ requestId, event });
+  }
+  async sendLifecycleOpen(requestId: string, event: any) {
+    if (this.failOpenOnce) {
+      this.failOpenOnce = false;
+      throw new Error('open dispatch interrupted');
+    }
+    this.lifecycleOpens.push({ requestId, event });
+  }
+  sendNotice(message: unknown) { this.notices.push(message); }
 }
 
 const update = { update_id: 4242, message: { message_id: 1, date: 1, chat: { id: 555, type: 'private' }, from: { id: 9, is_bot: false, first_name: 'R' }, text: 'a brief' } };
 const input = { v: 1 as const, update };
+
 
 /** Retries a handler the way Restate does: a thrown attempt is run again on the same journal. */
 async function untilSettled(ctx: FakeContext, run: () => Promise<unknown>, attempts = 20) {
@@ -50,21 +80,38 @@ async function untilSettled(ctx: FakeContext, run: () => Promise<unknown>, attem
 }
 
 function core(answers: Array<() => Promise<any>>) {
-  const intake = vi.fn(async () => (answers.shift() ?? (async () => ({ kind: 'done', intakeStatus: 201 })))());
-  const park = vi.fn(async () => {});
+  const intake = vi.fn<ChatInboxCore['intake']>(async () => (answers.shift() ?? (async () => ({ kind: 'done', intakeStatus: 201 })))());
+  const park = vi.fn<ChatInboxCore['park']>(async () => {});
   return { intake, park };
 }
 
 describe('ChatInbox.handleUpdate', () => {
+  it('dispatches a prepared first brief under a stable open key and recovers after send interruption', async () => {
+    const ctx = new FakeContext();
+    ctx.failOpenOnce = true;
+    const requestId = '43d3fca4-7ce2-5afe-9ae4-b9530874d618';
+    const draft = { platform: 'telegram', sourceEventId: `lc-${requestId}-r0`,
+      sourceChannelId: '555', rawText: 'KAAE event', title: 'KAAE event',
+      designInstructions: '', exactCopy: [{ text: 'KAAE event' }],
+      clientId: 'c1000000-0000-4000-8000-000000000002', autoGenerate: true };
+    const c = core([async () => ({ kind: 'done', intakeStatus: 200,
+      lifecycleAction: 'open-request', requestId, chatId: '555', draft })]);
+    expect(await untilSettled(ctx, () => handleUpdate(ctx, input, c))).toMatchObject({ outcome: 'handled' });
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(ctx.lifecycleOpens).toMatchObject([{ requestId, event: {
+      eventId: `open:${requestId}`, requestId, chatId: '555', draft } }]);
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId });
+  });
+
   it('hands the update to intake once and is done', async () => {
     const ctx = new FakeContext();
     const c = core([async () => ({ kind: 'done', intakeStatus: 201 })]);
     expect(await handleUpdate(ctx, input, c)).toMatchObject({ outcome: 'handled', intakeStatus: 201 });
     expect(c.intake).toHaveBeenCalledTimes(1);
-    expect(c.intake.mock.calls[0]).toEqual([update, 'legacy']);
+    expect(c.intake.mock.calls[0]).toEqual([update, 'legacy', undefined]);
     expect(c.park).not.toHaveBeenCalled();
-    // The one read of the mode is journaled, so a replay on another colour agrees with it.
-    expect(ctx.journal.get('mode')).toBe('legacy');
+    expect(ctx.stateReads).toEqual(['inbox']);
+    expect(ctx.runs).toEqual(['intake-0']);
   });
 
   it('a deliberate refusal (4xx) is final: no retry, no dead letter', async () => {
@@ -121,6 +168,18 @@ describe('ChatInbox.handleUpdate', () => {
     expect(ctx.runs.filter((r) => r === 'park')).toHaveLength(3);
   });
 
+  it('parks a flagged media hold before advancing the chat and does not park twice on replay', async () => {
+    const ctx = new FakeContext();
+    ctx.crashOnSet = 1;
+    const c = core([async () => ({ kind: 'done', intakeStatus: 422,
+      lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED',
+      reason: 'A lifecycle chat media update needs operator review; no task was started' })]);
+    expect(await untilSettled(ctx, () => handleUpdate(ctx, input, c))).toMatchObject({ outcome: 'parked', attempts: 1 });
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(c.park).toHaveBeenCalledTimes(1);
+    expect(ctx.state.get('inbox')).toMatchObject({ lastOutcome: 'parked', lastUpdateId: update.update_id });
+  });
+
   it('is bound as a Virtual Object named ChatInbox, whose handleUpdate keeps idempotency keys for 7 days', () => {
     expect(chatInbox.name).toBe('ChatInbox');
     const options = (chatInbox as any).handlers?.handleUpdate ?? (chatInbox as any).object?.handleUpdate;
@@ -140,7 +199,7 @@ describe('the Core client ChatInbox uses', () => {
     expect(calls[0].url).toBe('http://core:3001/v1/internal/telegram/intake');
     expect(calls[0].init.headers.Authorization).toBe(`Bearer ${token}`);
     expect(calls[0].init.headers['x-request-id']).toBe('tg-4242');
-    expect(JSON.parse(calls[0].init.body)).toEqual({ v: 1, update, mode: 'legacy', routesDecisions: true });
+    expect(JSON.parse(calls[0].init.body)).toEqual({ v: 1, update, mode: 'legacy' });
   });
 
   it('classifies intake\'s answers: final, retryable, and waits', async () => {
@@ -157,6 +216,47 @@ describe('the Core client ChatInbox uses', () => {
     // A refusal of the worker itself (token, route missing from an older Core) is never the update's
     // fault: it waits for a fix instead of dead-lettering a client's message.
     for (const s of [400, 401, 403, 404]) await expect(answer({ title: 'no' }, s)).rejects.toThrow(String(s));
+  });
+
+  it('passes Core’s request-choice action through to the fenced chat notice', async () => {
+    const c = client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 409,
+      lifecycleAction: 'request-choice-required', code: 'AMBIGUOUS_REQUEST', chatId: '555' }));
+    expect(await c.intake(update, 'lifecycle', 'old-pointer')).toMatchObject({
+      kind: 'done', lifecycleAction: 'request-choice-required', code: 'AMBIGUOUS_REQUEST', chatId: '555' });
+  });
+
+  it('passes a blocked revision through as an actionable final refusal', async () => {
+    const c = client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 409,
+      lifecycleAction: 'revision-blocked', code: 'PARENT_BRIEF_MISSING', chatId: '555' }));
+    expect(await c.intake(update, 'lifecycle')).toMatchObject({
+      kind: 'done', lifecycleAction: 'revision-blocked', code: 'PARENT_BRIEF_MISSING', chatId: '555' });
+  });
+
+  it('passes a flagged media hold to ChatInbox for durable parking', async () => {
+    const c = client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 422,
+      lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED', chatId: '555',
+      reason: 'A lifecycle chat media update needs operator review; no task was started' }));
+    expect(await c.intake(update, 'legacy')).toMatchObject({ kind: 'done',
+      lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED' });
+    const invalid = client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 422,
+      lifecycleAction: 'park-update', code: 'LIFECYCLE_MEDIA_NOT_ADMITTED', chatId: '555' }));
+    await expect(invalid.intake(update, 'legacy')).rejects.toThrow('invalid media hold');
+  });
+
+  it('passes a verified clarification answer to the same request', async () => {
+    const c = client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 200,
+      lifecycleAction: 'requester-answer', requestId: 'req-x', newTaskId: 'task-new',
+      priorTaskId: 'task-old', round: 2, directive: 'Yes', questionId: 'question-x', chatId: '555' }));
+    expect(await c.intake(update, 'lifecycle')).toMatchObject({ kind: 'done',
+      lifecycleAction: 'requester-answer', questionId: 'question-x' });
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+      mode: 'lifecycle', requestId: 'old-pointer' } satisfies ChatInboxView);
+    await handleUpdate(ctx, input, c);
+    expect(ctx.lifecycleDecisions).toMatchObject([{ requestId: 'req-x',
+      event: { questionId: 'question-x', round: 2, newTaskId: 'task-new' } }]);
+    expect(ctx.notices).toMatchObject([{ key: `chatinbox:answer-accepted:${update.update_id}`,
+      chatId: '555', class: 'critical', text: expect.stringContaining('same design') }]);
   });
 
   it('a Core that does not answer at all waits; one that answers too slowly is a retryable answer', async () => {
@@ -176,128 +276,195 @@ describe('the Core client ChatInbox uses', () => {
   });
 });
 
-/**
- * Slice 2.3 part C (PHASE2_DESIGN.md 2.2): the per-chat flag is read once, in the journaled `mode`
- * step; a lifecycle chat's state goes to intake with the update and comes back changed; a decision is
- * routed by one-way sends only, each keyed by the update, so replaying the invocation routes nothing
- * that Restate would not deduplicate.
- */
-describe('ChatInbox routes intake\'s decisions (slice 2.3)', () => {
-  class RoutingContext extends FakeContext {
-    routed: Array<{ to: string; key: string; body: any }> = [];
-    routes = {
-      open: (requestId: string, event: any, key: string) => { this.routed.push({ to: `RequestLifecycle/${requestId}/open`, key, body: event }); },
-      answer: (requestId: string, event: any, key: string) => { this.routed.push({ to: `RequestLifecycle/${requestId}/answer`, key, body: event }); },
-      requesterDecision: (requestId: string, event: any, key: string) => { this.routed.push({ to: `RequestLifecycle/${requestId}/requesterDecision`, key, body: event }); },
-      send: (m: any) => { this.routed.push({ to: `TelegramSender/${m.chatId}/send`, key: m.key, body: m }); },
+// ─── setMode and per-chat mode cutover ───────────────────────────────────────
+import { setMode, type SetModeContext, type ChatInboxView } from '../src/lifecycle/chat-inbox.js';
+
+describe('ChatInbox.setMode', () => {
+  function fakeCtx(initial?: ChatInboxView): SetModeContext & { stored: ChatInboxView | null } {
+    let stored: ChatInboxView | null = initial ?? null;
+    return {
+      get stored() { return stored; },
+      async get<T>(name: string): Promise<T | null> { return name === 'inbox' ? stored as unknown as T : null; },
+      set(_name: string, value: unknown) { stored = value as ChatInboxView; },
     };
-    async get<T>(name: string): Promise<T | null> { return (this.state.get(name) as T) ?? null; }
   }
-  const flagged = { lifecycleChat: (chat: string) => chat === '555' };
-  const unflagged = { lifecycleChat: () => false };
-  const draft = { title: 'KAAE: evening', rawText: 'KAAE evening', clientId: 'c1000000-0000-4000-8000-000000000002', designInstructions: '', exactCopy: [], autoGenerate: true };
-  const decided = (decision: any, chat?: any) => async () => ({ kind: 'done', intakeStatus: 200, decision, ...(chat ? { chat } : {}) });
 
-  it('reads the flag once, journaled: a flagged chat runs intake in mode lifecycle with its state', async () => {
-    const ctx = new RoutingContext();
-    ctx.state.set('chat', { v: 1, pendingClarification: { rawText: 'make it gold', askedAt: 1_790_000_000_000 - 1000, updateId: 1 } });
-    const c = core([decided({ kind: 'new_request', tenantId: '00000000-0000-4000-a000-000000000001', requests: [{ index: 0, draft }] }, {})]);
-    expect(await handleUpdate(ctx, input, c, flagged)).toMatchObject({ outcome: 'routed', decision: 'new_request' });
-    expect(ctx.journal.get('mode')).toBe('lifecycle');
-    expect(c.intake.mock.calls[0]).toEqual([update, 'lifecycle', { pendingClarification: { rawText: 'make it gold', askedAt: 1_790_000_000_000 - 1000, updateId: 1 } }]);
-    // The state intake sent back (the question answered, so cleared) is kept.
-    expect(ctx.state.get('chat')).toEqual({ v: 1 });
-    // An unflagged chat stays legacy, and intake is not sent its state.
-    const legacy = new RoutingContext();
-    const c2 = core([async () => ({ kind: 'done', intakeStatus: 201 })]);
-    await handleUpdate(legacy, input, c2, unflagged);
-    expect(legacy.journal.get('mode')).toBe('legacy');
-    expect(c2.intake.mock.calls[0]).toEqual([update, 'legacy']);
+  it('sets mode to lifecycle on a fresh chat with no prior inbox', async () => {
+    const ctx = fakeCtx();
+    const result = await setMode(ctx, 'req-1');
+    expect(result).toEqual({ mode: 'lifecycle', requestId: 'req-1' });
+    expect(ctx.stored).toMatchObject({ mode: 'lifecycle', v: 1 });
   });
 
-  it('a new request opens RequestLifecycle at the request id of (chat, update, index), keyed open:<id>; two graphics, two requests', async () => {
-    const ctx = new RoutingContext();
-    const c = core([decided({ kind: 'new_request', tenantId: '00000000-0000-4000-a000-000000000001', requests: [{ index: 0, draft }, { index: 1, draft: { ...draft, title: 'ckb' } }] }, {})]);
-    await handleUpdate(ctx, input, c, flagged);
-    const { requestIdFor } = await import('@hawa/domain');
-    const ids = [requestIdFor('555', 4242, 0), requestIdFor('555', 4242, 1)];
-    expect(ctx.routed.map((r) => [r.to, r.key])).toEqual(ids.map((id) => [`RequestLifecycle/${id}/open`, `open:${id}`]));
-    expect(ctx.routed[0].body).toMatchObject({ v: 1, eventId: `open:${ids[0]}`, requestId: ids[0], chatId: '555', origin: { kind: 'telegram', chatId: '555', updateId: 4242 }, draft });
+  it('is idempotent: calling it twice returns lifecycle and does not change the stored view', async () => {
+    const ctx = fakeCtx({ v: 1, lastUpdateId: 42, lastOutcome: 'handled', at: 100, mode: 'lifecycle' });
+    const result = await setMode(ctx, 'req-2');
+    expect(result).toEqual({ mode: 'lifecycle', requestId: 'req-2' });
+    // stored view is unchanged (the early-return path skips set)
+    expect(ctx.stored).toMatchObject({ lastUpdateId: 42, at: 100 });
   });
 
-  it('answers, buttons and changes go to their request, keyed by the update, in either mode', async () => {
-    const cases = [
-      [{ kind: 'answer', requestId: 'r-1', questionId: 'q:t-1', answer: { option: 2 }, callbackQueryId: 'cb-9' }, 'answer', { questionId: 'q:t-1', answer: { option: 2 }, callbackQueryId: 'cb-9', actorId: '9' }],
-      [{ kind: 'requester', requestId: 'r-1', taskId: 't-1', action: 'ok', callbackQueryId: 'cb-9', actorId: '9' }, 'requesterDecision', { taskId: 't-1', kind: 'ok', callbackQueryId: 'cb-9' }],
-      [{ kind: 'requester', requestId: 'r-1', taskId: 't-1', action: 'ssq', actorId: '9' }, 'requesterDecision', { taskId: 't-1', kind: 'size', sizeAction: 'ssq' }],
-      [{ kind: 'change', requestId: 'r-1', replyToTaskId: 't-1', directive: 'make the logo bigger' }, 'requesterDecision', { taskId: 't-1', kind: 'change', directive: 'make the logo bigger', actorId: '9' }],
-    ] as const;
-    for (const options of [flagged, unflagged]) {
-      for (const [decision, handler, body] of cases) {
-        const ctx = new RoutingContext();
-        await handleUpdate(ctx, input, core([decided(decision)]), options);
-        expect(ctx.routed).toHaveLength(1);
-        expect(ctx.routed[0]).toMatchObject({ to: `RequestLifecycle/r-1/${handler}`, key: 'tg:555:4242', body: { v: 1, eventId: 'tg:555:4242', ...body } });
-      }
-    }
+  it('preserves prior inbox fields when upgrading a legacy chat', async () => {
+    const ctx = fakeCtx({ v: 1, lastUpdateId: 7, lastOutcome: 'handled', lastIntakeStatus: 201, at: 999 });
+    await setMode(ctx, 'req-3');
+    expect(ctx.stored).toMatchObject({ v: 1, lastUpdateId: 7, lastIntakeStatus: 201, at: 999, mode: 'lifecycle' });
   });
 
-  it('a clarify decision keeps the question in the chat\'s state and sends its message; albums older than 15 minutes are forgotten', async () => {
-    const ctx = new RoutingContext();
-    const now = 1_790_000_000_000;
-    ctx.state.set('chat', { v: 1, albumsAcked: { old: now - 16 * 60_000, fresh: now - 60_000 } });
-    const remember = { rawText: 'make it gold', askedAt: now, updateId: 4242 };
-    const message = { v: 1, key: 'clarify:555:4242', chatId: '555', kind: 'text', text: 'Clarification needed', class: 'courtesy' };
-    const c = core([decided({ kind: 'clarify', remember, messages: [message] }, { pendingClarification: remember, albumsAcked: { old: now - 16 * 60_000, fresh: now - 60_000 } })]);
-    await handleUpdate(ctx, input, c, flagged);
-    // Intake was sent the state without the stale album.
-    expect(c.intake.mock.calls[0][2]).toEqual({ albumsAcked: { fresh: now - 60_000 } });
-    expect(ctx.state.get('chat')).toEqual({ v: 1, pendingClarification: remember, albumsAcked: { fresh: now - 60_000 } });
-    expect(ctx.routed).toEqual([{ to: 'TelegramSender/555/send', key: 'clarify:555:4242', body: message }]);
+  it('handleUpdate reads lifecycle mode from stored ChatInboxView on a new invocation', async () => {
+    const ctx = new FakeContext();
+    // Simulate: a prior setMode stored 'lifecycle' in the inbox state
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0, mode: 'lifecycle', requestId: 'req-x' } satisfies ChatInboxView);
+    const c = core([async () => ({ kind: 'done', intakeStatus: 201 })]);
+    await handleUpdate(ctx, input, c);
+    // Restate journals the direct state read without nesting it in a run action.
+    expect(ctx.stateReads).toEqual(['inbox']);
+    expect(ctx.runs).toEqual(['intake-0']);
+    // Core's intake should have been called with mode='lifecycle'
+    expect(c.intake.mock.calls[0][1]).toBe('lifecycle');
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x' });
   });
 
-  it('every answer other than clarify clears the waiting question (PHASE2_DESIGN.md 2.2 step 3), whatever state intake sent back', async () => {
-    const now = 1_790_000_000_000;
-    const waiting = { rawText: 'make it gold', askedAt: now - 1000, updateId: 1 };
-    const cases = [
-      { kind: 'requester', requestId: 'r-1', taskId: 't-1', action: 'ok', callbackQueryId: 'cb-9', actorId: '9' },
-      { kind: 'answer', requestId: 'r-1', questionId: 'q:t-1', answer: { option: 1 }, callbackQueryId: 'cb-9' },
-      { kind: 'handled', messages: [] },
-      null,
-    ];
-    for (const decision of cases) {
-      const ctx = new RoutingContext();
-      ctx.state.set('chat', { v: 1, pendingClarification: waiting, albumsAcked: { a: now - 1000 } });
-      // An intake that left the question in the state it sent back (an older Core, a command).
-      const answer = decision
-        ? decided(decision, { pendingClarification: waiting, albumsAcked: { a: now - 1000 } })
-        : async () => ({ kind: 'done', intakeStatus: 200, chat: { pendingClarification: waiting, albumsAcked: { a: now - 1000 } } });
-      await handleUpdate(ctx, input, core([answer]), flagged);
-      expect(ctx.state.get('chat'), String(decision?.kind ?? 'no decision')).toEqual({ v: 1, albumsAcked: { a: now - 1000 } });
-    }
-  });
-
-  it('a worker killed after intake decided routes the same sends with the same keys (Restate keeps the first)', async () => {
-    const ctx = new RoutingContext();
-    const c = core([decided({ kind: 'change', requestId: 'r-1', replyToTaskId: 't-1', directive: 'bigger' })]);
-    ctx.crashOnSet = 1;
-    await untilSettled(ctx, () => handleUpdate(ctx, input, c, flagged));
+  it('keeps lifecycle routing across updates and retries a decision send from the journaled intake answer', async () => {
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+      mode: 'lifecycle', requestId: 'req-x' } satisfies ChatInboxView);
+    const answer = { kind: 'done' as const, intakeStatus: 200, lifecycleAction: 'requester-revision' as const,
+      requestId: 'req-x', newTaskId: 'task-new', round: 1, directive: 'Move the venue',
+      priorTaskId: 'task-old' };
+    const c = core([async () => answer, async () => ({ kind: 'done', intakeStatus: 200 })]);
+    ctx.failDecisionOnce = true;
+    await expect(handleUpdate(ctx, input, c)).rejects.toThrow('decision dispatch interrupted');
     expect(c.intake).toHaveBeenCalledTimes(1);
-    expect(new Set(ctx.routed.map((r) => `${r.to}|${r.key}`)).size).toBe(1);
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x', lastUpdateId: 0 });
+    await handleUpdate(ctx, input, c);
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    expect(ctx.lifecycleDecisions).toMatchObject([{ requestId: 'req-x',
+      event: { eventId: `chatinbox:revision:${update.update_id}`, newTaskId: 'task-new' } }]);
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x', lastUpdateId: update.update_id });
+
+    // A new Restate invocation gets a fresh journal but the same persisted chat state.
+    ctx.journal.clear();
+    const next = { v: 1 as const, update: { ...update, update_id: update.update_id + 1 } };
+    await handleUpdate(ctx, next, c);
+    expect(c.intake.mock.calls[1]).toEqual([next.update, 'lifecycle', 'req-x']);
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x', lastUpdateId: next.update.update_id });
   });
 
-  it('the Core client passes the chat state in lifecycle mode and reads a decision back', async () => {
-    const token = ['worker', 'fixture', 'token'].join('_');
-    const calls: any[] = [];
-    const decision = { kind: 'answer', requestId: 'r', questionId: 'q:t', answer: { text: 'blue' } };
-    const c = createCoreClient({ baseUrl: 'http://core:3001', token, timeoutMs: 1000, fetch: (async (_url: string, init: any) => {
-      calls.push(JSON.parse(init.body));
-      return Response.json({ v: 1, kind: 'decision', intakeStatus: 200, decision, chat: { albumsAcked: { a: 1 } } });
-    }) as any });
-    expect(await c.intake(update, 'lifecycle', { albumsAcked: { a: 1 } })).toEqual({ kind: 'done', intakeStatus: 200, decision, chat: { albumsAcked: { a: 1 } } });
-    // It says it routes decisions: Core routes them itself only for a ChatInbox built before 2.3C.
-    expect(calls[0]).toEqual({ v: 1, update, mode: 'lifecycle', chat: { albumsAcked: { a: 1 } }, routesDecisions: true });
-    await c.intake(update, 'legacy');
-    expect(calls[1]).toEqual({ v: 1, update, mode: 'legacy', routesDecisions: true });
+  it('keeps lifecycle mode when an update is parked', async () => {
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+      mode: 'lifecycle', requestId: 'req-x' } satisfies ChatInboxView);
+    const c = core(Array.from({ length: INTAKE_ATTEMPTS }, () => async () => ({ kind: 'retry', reason: 'Core busy' })));
+    expect(await handleUpdate(ctx, input, c)).toMatchObject({ outcome: 'parked' });
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: 'req-x', lastOutcome: 'parked' });
+  });
+
+  it('asks for a specific reply when more than one request is waiting', async () => {
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+      mode: 'lifecycle', requestId: 'old-pointer' } satisfies ChatInboxView);
+    const c = core([async () => ({ kind: 'done', intakeStatus: 409,
+      lifecycleAction: 'request-choice-required', chatId: '555', code: 'AMBIGUOUS_REQUEST' })]);
+    await handleUpdate(ctx, input, c);
+    expect(ctx.lifecycleDecisions).toHaveLength(0);
+    expect(ctx.notices).toMatchObject([{ key: `chatinbox:request-choice:${update.update_id}`,
+      chatId: '555', class: 'critical', text: expect.stringContaining('reply directly') }]);
+  });
+
+  it('tells the sender when a revision cannot start under the daily limit', async () => {
+    const ctx = new FakeContext();
+    ctx.state.set('inbox', { v: 1, lastUpdateId: 0, lastOutcome: 'handled', at: 0,
+      mode: 'lifecycle', requestId: 'req-x' } satisfies ChatInboxView);
+    const c = core([async () => ({ kind: 'done', intakeStatus: 409,
+      lifecycleAction: 'revision-blocked', chatId: '555', code: 'DAILY_CAP_REACHED' })]);
+    await handleUpdate(ctx, input, c);
+    expect(ctx.lifecycleDecisions).toHaveLength(0);
+    expect(ctx.notices).toMatchObject([{ key: `chatinbox:revision-blocked:${update.update_id}`,
+      chatId: '555', class: 'critical', text: expect.stringContaining('No revision started') }]);
+  });
+});
+
+
+describe('album collection notices', () => {
+  it('journals one collection response and replays a stable notice without starting a lifecycle request', async () => {
+    const transport=vi.fn(async()=>Response.json({intakeStatus:202,lifecycleAction:'album-message',
+      chatId:'555',albumMessage:'Photos saved. Reply with /use_album when finished.',albumNoticeKey:'album-received:abc123'}));
+    const client=createCoreClient({baseUrl:'http://core',token:'fixture-token',fetch:transport});
+    const ctx=new FakeContext();
+    ctx.crashOnSet=1;
+    await untilSettled(ctx,()=>handleUpdate(ctx,input,client));
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(ctx.lifecycleOpens).toHaveLength(0);
+    expect(ctx.lifecycleDecisions).toHaveLength(0);
+    expect(ctx.notices).toHaveLength(2);
+    expect(ctx.notices[0]).toEqual(ctx.notices[1]);
+    expect(ctx.notices[0]).toMatchObject({key:'chatinbox:album-received:abc123',chatId:'555'});
+  });
+});
+
+describe('a requester change after the design reached the office (finding 13 of the Phase 4 review)', () => {
+  const requestId = '3f1c2b7a-1d2e-4f5a-8b6c-7d8e9f0a1b2c';
+  const words = 'The phone number is wrong: it must be 0750 123 4567';
+  const lateAnswer = (extra: Record<string, unknown> = {}) => ({ v: 1, kind: 'handled', intakeStatus: 409,
+    code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change', chatId: '555', requestId,
+    requestStage: 'approved', officeAlert: { chatId: '9000', text: `A requester sent words after approval.\n\n${words}` }, ...extra });
+
+  it('alerts the office with the words and tells the requester plainly, once per update, after a crash', async () => {
+    const transport = vi.fn(async () => Response.json(lateAnswer()));
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: transport });
+    const ctx = new FakeContext(); ctx.crashOnSet = 1;
+    await untilSettled(ctx, () => handleUpdate(ctx, input, client));
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(ctx.lifecycleDecisions).toHaveLength(0);
+    // The fake context does not deduplicate; Restate does, by each message's key.
+    const keys = [...new Set(ctx.notices.map((n: any) => n.key))];
+    expect(keys).toEqual([`notify.office:late-change:${requestId}:${update.update_id}`, `chatinbox:late-change:${update.update_id}`]);
+    const [office, requester] = ctx.notices as any[];
+    expect(office).toMatchObject({ chatId: '9000', kind: 'text', class: 'critical', text: expect.stringContaining(words) });
+    expect(office.parseMode).toBeUndefined();
+    expect(requester).toMatchObject({ chatId: '555', kind: 'text', class: 'critical' });
+    expect(requester.text).toMatch(/office has been told/i);
+    expect(requester.text).not.toMatch(/revision notice|will follow up/i);
+  });
+
+  it('does not claim the office was told when Core had no office chat to alert', async () => {
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token',
+      fetch: async () => Response.json(lateAnswer({ officeAlert: undefined })) });
+    const ctx = new FakeContext();
+    await handleUpdate(ctx, input, client);
+    expect(ctx.notices).toHaveLength(1);
+    expect((ctx.notices[0] as any).text).not.toMatch(/office has been told/i);
+    expect((ctx.notices[0] as any).text).toMatch(/saved/i);
+  });
+
+  it('refuses a malformed late-change answer from Core', async () => {
+    for (const extra of [{ requestId: 'not-a-request' }, { requestStage: 'designing' },
+      { officeAlert: { chatId: '9000', text: 'x'.repeat(4001) } }, { officeAlert: { chatId: '', text: words } }]) {
+      const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token',
+        fetch: async () => Response.json(lateAnswer(extra)) });
+      await expect(client.intake(update, 'lifecycle')).rejects.toThrow('invalid late change');
+    }
+  });
+});
+
+describe('source review notices', () => {
+  it('replays one stable copy-review notice after a journal crash without starting design', async () => {
+    const transport = vi.fn(async () => Response.json({ intakeStatus: 200, lifecycleAction: 'source-message',
+      chatId: '555', sourceMessage: 'PDF saved. Reply to the source with /use_source and corrected copy.', sourceNoticeKey: 'source-review:123' }));
+    const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: transport });
+    const ctx = new FakeContext(); ctx.crashOnSet = 1;
+    await untilSettled(ctx, () => handleUpdate(ctx, input, client));
+    expect(transport).toHaveBeenCalledTimes(1); expect(ctx.lifecycleOpens).toHaveLength(0);
+    expect(ctx.lifecycleDecisions).toHaveLength(0); expect(ctx.notices).toHaveLength(2);
+    expect(ctx.notices[0]).toEqual(ctx.notices[1]);
+    expect(ctx.notices[0]).toMatchObject({ key: 'chatinbox:source-review:123', chatId: '555' });
+  });
+  it('refuses an unbounded or malformed source notice from Core', async () => {
+    for (const fields of [{ sourceMessage: 'x'.repeat(3001), sourceNoticeKey: 'source-review:123' },
+      { sourceMessage: 'Review this source', sourceNoticeKey: 'arbitrary-key' }]) {
+      const client = createCoreClient({ baseUrl: 'http://core', token: 'fixture-token', fetch: async () =>
+        Response.json({ intakeStatus: 200, lifecycleAction: 'source-message', chatId: '555', ...fields }) });
+      await expect(client.intake(update, 'legacy')).rejects.toThrow('invalid source notice');
+    }
   });
 });

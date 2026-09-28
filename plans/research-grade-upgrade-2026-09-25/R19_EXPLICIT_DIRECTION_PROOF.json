@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "requirements": [
+    "FR-034",
+    "FR-035",
+    "FR-036",
+    "FR-070",
+    "NFR-003",
+    "NFR-006",
+    "NFR-020",
+    "NFR-013",
+    "NFR-024"
+  ],
+  "adr": "adrs/082_paragraph_direction_evidence.md",
+  "status": "EXPLICIT_DIRECTION_OVERRIDE_REPAIRED_NATIVE_VISUAL_ADMISSION_OPEN",
+  "captureBaseCommit": "8e79320253f14053148c85947f3457141acfc8f8",
+  "captureSourceTreeClean": false,
+  "sourceHashes": {
+    "packages/creative/src/editable-transfer.ts": "f3ee3f99e6a48a89c4aebc683f3923b532cf5d712ca224f2236d3ebe17c4efc6",
+    "packages/creative/src/studio/transfer-v2.ts": "075a3dc7aed971502040edd5132e8d9bde1d9e5d9d27a0526b8adf6c7c310ad9",
+    "packages/qa/src/canva-pptx-check.ts": "739e6d00d19cb4bc2eceb7853810d13bc8bb7f47d060ba8c5d7827e0ff492c99",
+    "packages/integrations/src/canva-connect-client.ts": "3fe7ec3e9b0883213c0f1b8e941178454c155a87a46512be35c3db8676e6e8ac",
+    "apps/core/src/services/canva-connect-service.ts": "9f08396c07b9b6abe8fcaf28203253b5415b8bea077ec7ae6c0fcfd928e61d6c",
+    "packages/db/test/blob-prebackfill.test.ts": "2ec96314e2dc512e1797b9df68da696350ac3fdefd79fdbdeae7cf476e455abf",
+    "infra/backup/nightly_backup.sh": "6a2b01c7bf9c7ef4693ea3936ad80dd41f34e0fe9a25f64ba718eacff32d3457",
+    "infra/backup/restore_drill.sh": "6c08b9e5fbcab383549229502998b4383a15eaa8e96eef0d49386363edc4288c",
+    "infra/backup/blob_archive.py": "338bfcdb1b40e315d1271b2d5261b01a65fc4acf8b683652e02e5490ef785ed4"
+  },
+  "nativeEvidence": {
+    "imports": 1,
+    "exports": 3,
+    "designId": "DAHWXIJunxg",
+    "exactPptxStrings": 6,
+    "colorRunsPreserved": true,
+    "unchangedControlBoxes": 3,
+    "unchangedControlPixels": 565800,
+    "changedMixedBoxPixels": 9247,
+    "ltrParagraphsWithoutRtlAttribute": 8,
+    "rtlParagraphsWithTrueAttribute": 4,
+    "humanVisualReview": "not_run",
+    "mixedTimeTokenIsolation": "unqualified"
+  },
+  "verification": {
+    "baselineRegression": "3 failed/3 passed; preceding sandbox run executed zero tests",
+    "focused": "8 files/67 passed/zero skipped",
+    "types": "project, script and test passed after two test-fixture type omissions were repaired",
+    "lint": "any ratchet and provider egress passed",
+    "fullRegression": {
+      "sourceBaseCommit": "8dd04ccb13e8e24ad8e409529452f25254c73246",
+      "testOnlyCorrection": "packages/db/test/blob-prebackfill.test.ts",
+      "passed": 3687,
+      "failed": 0,
+      "skipped": 59,
+      "suites": 464,
+      "receipt": "output/acceptance/2026-09-27-explicit-direction/full-tests-final.json"
+    },
+    "candidateDeployment": {
+      "sourceCommit": "8dd04ccb13e8e24ad8e409529452f25254c73246",
+      "workflowInvariants": 36,
+      "failedInvariants": 0,
+      "selectedScenarios": 1,
+      "unselectedScenarios": 43,
+      "fontQaReads": 4,
+      "compiledNativeCases": 2,
+      "compiledEncoderDirections": [
+        "rtl",
+        "rtl",
+        "ltr",
+        "ltr",
+        "ltr",
+        "ltr"
+      ],
+      "realExternalProviders": false,
+      "productionChanged": false
+    },
+    "firstFullRegression": {
+      "passed": 3685,
+      "failed": 2,
+      "skipped": 59,
+      "cause": "Two prebackfill tests retained pre-ADR-081 expectations: late corruption detection and successful incomplete gs:// backup. Recovery runtime already correctly refused both; only test expectations changed."
+    },
+    "probeCorrection": "The first compiled native probe read nonexistent report instead of qaReport; corrected the probe, then all compiled checks passed.",
+    "finalTestTypecheck": "passed",
+    "releaseSourceCommit": "34eac23c28e937a047df4139a348edd5b17134e3",
+    "runtimeUnchangedFromDeployedCandidate": true
+  },
+  "effects": {
+    "productionMutation": false,
+    "paidModelCalls": 0,
+    "realApproval": false,
+    "messageSent": false,
+    "editingTransactions": 0
+  },
+  "limits": [
+    "Canva rewrites language tags; retain original language provenance outside its exports.",
+    "Read-only native text tool concatenates internal paragraphs and gives no element IDs or style spans.",
+    "Explicit LTR no longer becomes RTL; absent Canva LTR flags remain unknown metadata, requiring visual review. Mixed time-token isolation remains visually unqualified.",
+    "Human native-language review, committed edit/save/reopen, full office corpus and deployed-image qualification are not run.",
+    "Font-family/resource names do not establish actual font-file glyph coverage or licenses.",
+    "Equal provider timestamps are not an atomic revision lock."
+  ],
+  "artifacts": {
+    "output/acceptance/2026-09-27-explicit-direction/README.md": {
+      "bytes": 3163,
+      "sha256": "80654630da9443e3dc39f86eab88957e9946d3dbbc868e2f466f12a283a96b57"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/analyze.py": {
+      "bytes": 6854,
+      "sha256": "98e77788ab5eb8efe9920fedc0a551eadd21e894cffdebbe57acb5c070bbf1b4"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/backup-regression.json": {
+      "bytes": 2739,
+      "sha256": "cde43eb3b7a036e3fc44a2a26e4a70d43fcddd2874f111e57795c5dec3d3fe67"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/backup-regression.log": {
+      "bytes": 231,
+      "sha256": "7c105d7fdeb58a510ba3a38afc8bf12d0c3bb684b5cf1bf85227ef12e9eed83f"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/build_fixtures.mts": {
+      "bytes": 3533,
+      "sha256": "b0495d35da5e846c5a6b6d571f8be772fa64714f82c80012c42e11df5b27664f"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/candidate-font-qa.json": {
+      "bytes": 2655,
+      "sha256": "7f311c0563b360cddd2fb9724df5d8b4a463d338f0cfed16c1293128107edb36"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/candidate-native-direction.json": {
+      "bytes": 5461,
+      "sha256": "32684c827a21c131147202d1e9f7d74614212a1fdd0165d45ffd351572c9e199"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/candidate-rehearsal.json": {
+      "bytes": 11969,
+      "sha256": "738759ad76a6c80a6470a971f2768c3c98e52808eb5896a383a8c415ee5bfb27"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/candidate-rehearsal.log": {
+      "bytes": 389,
+      "sha256": "57cd55a18b165e076112d150c0a18bf33ff9f3e25a581d7d88a4cf7bb524567d"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/capture_live.mts": {
+      "bytes": 10213,
+      "sha256": "a77b3aab46904478f1a63fb0a74820ed92fb299f6186c609cfa10d1f4278b004"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/check-candidate.mts": {
+      "bytes": 3711,
+      "sha256": "d57c1af77163e7476446620a640ede017196d555908ad2957fe12890c54885aa"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/check-deployed-native.mts": {
+      "bytes": 5590,
+      "sha256": "04ecb926b0e59f9001ee8d875b6a3801f9c8e6ac0d91029e898c8ea1f1e3f551"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/direction-v2-canva.pdf": {
+      "bytes": 39510,
+      "sha256": "28bda2541338ddd7e861bd57c2ed0aa449112baaf9c76a95b898bcce32c1b15e"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/direction-v2-canva.png": {
+      "bytes": 60911,
+      "sha256": "892f3625fe670d45e869cad2b49212d0427a82a4c8da8b015ac7a4eba7569bda"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/direction-v2-canva.pptx": {
+      "bytes": 336678,
+      "sha256": "d8f87c4388f60ec56b7d800e549dae24bd03c02df587ec6945451dd5a11f2e2b"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/direction-v2-input.pptx": {
+      "bytes": 53733,
+      "sha256": "1d12d63cbba018eb7fcde07f4cd9a22bdb14a6e4ed4108cdc21f6df3190c1da6"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/direction-v2-native.json": {
+      "bytes": 496,
+      "sha256": "c273f605a8e841c98141719c9baca72997633eba5673f977f176bb08f51eacee"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/direction-v2-qa.json": {
+      "bytes": 5012,
+      "sha256": "4bbf40c4e8154858ee59c1fe60c1bc9c584debfa9b01d3ac5fb3428cce4fd263"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/final-tests.json": {
+      "bytes": 26942,
+      "sha256": "67f4cd581a0f3b0294c94c12b534766c1d66d9e61d375987c7ed0a47de520cc4"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/final-tests.log": {
+      "bytes": 225,
+      "sha256": "b0ba4a2aeb7c69d9c4eae2fdbda99e1be431f926d98821c1b55f0c5ea1ec0106"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/fixtures.json": {
+      "bytes": 10152,
+      "sha256": "0969d97d451fee047c1080c5d0d4a256df51408efe1a2625792db411721083b0"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/focused-authorized.json": {
+      "bytes": 16840,
+      "sha256": "6f118ada4e46ded1c420af0d395f097bec96df2a963ac1d96f49e54b1fce73be"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/focused-authorized.log": {
+      "bytes": 232,
+      "sha256": "f3b4232587215b2c8e303078a169000cf1ae6fe8ade3fa367cda02390a8613bd"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/focused.json": {
+      "bytes": 483,
+      "sha256": "28b7e808c85be439b6d92fb7638dc0fee28a966a2b3e0fc2f3aa4d475c61f2a1"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/focused.log": {
+      "bytes": 616,
+      "sha256": "f278197a44ab07e88827cead359f8cfb08eb356c63e69f3ec9ac119716cbb738"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/full-tests-final.json": {
+      "bytes": 1541677,
+      "sha256": "d77a62d2d2ac1ce6a55d314921b344f93597a55d7b3b5f32d527156c212cb03e"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/full-tests-final.log": {
+      "bytes": 131823,
+      "sha256": "a8a52a0c0541321e7e5d30204a570d3ccb8e2d1d4a835a37d3f238a7d2c02bd5"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/full-tests.json": {
+      "bytes": 1542469,
+      "sha256": "dc5a26d4936a402ba12cb92c88eebcc3c9f91a7668984920b6218bb086acf820"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/full-tests.log": {
+      "bytes": 133147,
+      "sha256": "6ba592361e3af33776d234497ffc33dd6b4a8a305a9dd038200ab055122d17b9"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/human-review.csv": {
+      "bytes": 797,
+      "sha256": "5172b5b5b073da4ac13c3656c7ec71c37fe867da9f222f0292fb43a2808f6ed1"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/live-capture.json": {
+      "bytes": 4526,
+      "sha256": "e12e953153fcc064ac837a33c62407619df2d3cabefa9e10ba25ef612fe3dcef"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/local-qa.json": {
+      "bytes": 4966,
+      "sha256": "ebb60e2b5eac9b521a4fa13b299f967776abbbf20315d1c46a78452b57c01ca1"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/offline-analysis.json": {
+      "bytes": 10776,
+      "sha256": "7e9a83e9a8c9bede37fb3845b37638a3af6f9e0c41232f0197159805e63f5a4e"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/red-authorized.json": {
+      "bytes": 6517,
+      "sha256": "7045383228b78b41c8f62ff6bdcf025e5d0f7cf7ed61eaac76f87c6aa1836ffe"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/red-authorized.log": {
+      "bytes": 228,
+      "sha256": "3651688eeb405152035c2d35421b625a3a7a66a196c63ddfacd76d434283bce2"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/red.json": {
+      "bytes": 483,
+      "sha256": "0f18ed15c79f6a6250b671d2e92faa38565f173e76867184a4237ebaaaab0e44"
+    },
+    "output/acceptance/2026-09-27-explicit-direction/red.log": {
+      "bytes": 612,
+      "sha256": "48eacbff63d62fb33bb2467d1f4b7bd4738c2564956ca8edf4b9e969bd57a950"
+    }
+  }
+}

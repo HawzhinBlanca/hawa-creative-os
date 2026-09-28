@@ -1,0 +1,23 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] hawa_tpl_build_test_5f27cd4c: applied db/schema.sql
+[test databases] hawa_tpl_build_test_5f27cd4c: applied db/rls.sql
+[test databases] hawa_tpl_build_test_5f27cd4c: applied db/seed.sql
+[test databases] hawa_tpl_build_test_5f27cd4c: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_test_5f27cd4c: versioned upgrades applied=55 verified=0
+[test databases] hawa_tpl_build_test_5f27cd4c: applied db/test-fixtures.sql
+[test databases] built template hawa_tpl_test_0d621095a48373e2
+[test databases] hawa_tpl_build_repair_60c6777a: applied db/schema.sql
+[test databases] hawa_tpl_build_repair_60c6777a: applied db/rls.sql
+[test databases] hawa_tpl_build_repair_60c6777a: applied db/seed.sql
+[test databases] hawa_tpl_build_repair_60c6777a: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_repair_60c6777a: versioned upgrades applied=55 verified=0
+[test databases] built template hawa_tpl_repair_0d621095a48373e2
+[test databases] per-file clones of hawa_tpl_test_0d621095a48373e2 and hawa_tpl_repair_0d621095a48373e2 (587 ms)
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  15:15:28
+   Duration  4.40s (transform 952ms, setup 111ms, import 1.29s, tests 2.28s, environment 0ms)
+

@@ -1,0 +1,118 @@
+{
+  "completed": true,
+  "checkedAt": "2026-09-27T14:10:44.406Z",
+  "buildCommit": "d5a5e7d82e51fe5093ddf02a4a309944ab1529f6",
+  "checks": [
+    {
+      "name": "exact candidate is deployed",
+      "passed": true
+    },
+    {
+      "name": "unmeasured availability and latency are explicit",
+      "passed": true
+    },
+    {
+      "name": "retired endpoint refuses /operations/slo/run",
+      "passed": true
+    },
+    {
+      "name": "retired endpoint refuses /clients/budgets",
+      "passed": true
+    },
+    {
+      "name": "retired endpoint refuses /clients/client-drustee/budget",
+      "passed": true
+    },
+    {
+      "name": "retired endpoint refuses /clients/client-drustee/budget/allocate",
+      "passed": true
+    },
+    {
+      "name": "named daily policy still reads authoritative data",
+      "passed": true
+    },
+    {
+      "name": "active worker purges legacy authenticated API cache",
+      "passed": true
+    },
+    {
+      "name": "Chrome shows the monthly target without a compliance claim",
+      "passed": true
+    },
+    {
+      "name": "no fixture budget or benchmark controls remain",
+      "passed": true
+    },
+    {
+      "name": "Chrome policy controls use current PostgreSQL limits",
+      "passed": true
+    },
+    {
+      "name": "reading Operations and policy sends only reads and the authenticated stream ticket",
+      "passed": true
+    },
+    {
+      "name": "audit presents its actual PostgreSQL receipt basis",
+      "passed": true
+    },
+    {
+      "name": "audit anomalies are never called repaired",
+      "passed": true
+    },
+    {
+      "name": "failed refresh removes earlier successful audit",
+      "passed": true
+    },
+    {
+      "name": "successful refresh restores real receipt evidence",
+      "passed": true
+    },
+    {
+      "name": "offline refresh cannot replay warm private health or audit responses",
+      "passed": true
+    },
+    {
+      "name": "private API responses never enter Cache Storage",
+      "passed": true
+    },
+    {
+      "name": "Desk never calls retired monthly budget endpoints",
+      "passed": true
+    },
+    {
+      "name": "browser credentials stay out of localStorage",
+      "passed": true
+    },
+    {
+      "name": "mobile Operations fits the viewport",
+      "passed": true
+    },
+    {
+      "name": "mobile metrics, both Operations panels and every failure field fit without hidden clipping",
+      "passed": true
+    },
+    {
+      "name": "synthetic candidate includes an inspectable failure",
+      "passed": true
+    },
+    {
+      "name": "mobile failure inspection fits on screen",
+      "passed": true
+    },
+    {
+      "name": "mobile failure inspection closes without replaying the task",
+      "passed": true
+    },
+    {
+      "name": "Chrome has no execution errors",
+      "passed": true
+    },
+    {
+      "name": "Operations checks send no model requests",
+      "passed": true
+    }
+  ],
+  "revokedSyntheticAdministrator": true,
+  "productionChanged": false,
+  "realProviderCalls": false
+}

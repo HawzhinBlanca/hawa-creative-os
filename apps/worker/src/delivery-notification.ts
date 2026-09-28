@@ -18,11 +18,7 @@ export interface TelegramSendResult {
 
 /** The part of the Telegram bridge the outbox handlers use; a test supplies its own. */
 export interface TelegramSender {
-  dispatchOutboundMessage(chatId: string | number, message: { text: string; parse_mode?: string; reply_markup?: unknown }): Promise<TelegramSendResult>;
-  /** The answer to a tapped button (TelegramSender, slice 2.3). */
-  answerCallbackQuery?(callbackQueryId: string, text?: string, showAlert?: boolean): Promise<boolean>;
-  /** A picture with a caption: the draft the requester replies to (TelegramSender, slice 2.3). */
-  dispatchOutboundPhoto?(chatId: string | number, photo: Buffer, caption?: string, replyMarkup?: unknown): Promise<TelegramSendResult>;
+  dispatchOutboundMessage(chatId: string | number, message: { text: string; parse_mode?: string }): Promise<TelegramSendResult>;
   dispatchOutboundDocument(
     chatId: string | number,
     fileBytes: Uint8Array,
@@ -87,6 +83,8 @@ export type PriorSend = 'sent' | 'uncertain';
 
 export const TELEGRAM_DELIVERY_SOURCE = OUTBOX_SEND_MARK_SOURCE;
 const MARK_KIND = /^telegram_(document|notice|message)_(attempted|sent|uncertain|failed|released)$/;
+export const validTelegramMessageId = (value: unknown): value is string =>
+  typeof value === 'string' && /^[1-9][0-9]*$/.test(value) && Number.isSafeInteger(Number(value));
 
 /** Every step's latest mark for one command, with the kind of send it was. Read under the command's tenant. */
 export async function readSendMarks(
@@ -117,13 +115,15 @@ export async function readSendMark(
   tenantId: string,
   commandId: string,
   step: string
-): Promise<{ kind: SendStepKind; outcome: SendMarkOutcome } | undefined> {
-  const rows = (await sql<{ event_kind: string }>`SELECT event_kind FROM hawa.inbox_events
+): Promise<{ kind: SendStepKind; outcome: SendMarkOutcome; messageId?: string } | undefined> {
+  const rows = (await sql<{ event_kind: string; payload: Record<string, unknown> }>`SELECT event_kind, payload FROM hawa.inbox_events
     WHERE tenant_id = ${tenantId}::uuid AND source_account_id = ${TELEGRAM_DELIVERY_SOURCE}
       AND source_event_id = ${`${commandId}:${step}`}
     ORDER BY received_at DESC, id DESC LIMIT 1`.execute(db)).rows;
   const m = rows[0] ? MARK_KIND.exec(rows[0].event_kind) : null;
-  return m ? { kind: m[1] as SendStepKind, outcome: m[2] as SendMarkOutcome } : undefined;
+  return m ? { kind: m[1] as SendStepKind, outcome: m[2] as SendMarkOutcome,
+    ...(m[2] === 'sent' && validTelegramMessageId(rows[0].payload?.messageId)
+      ? { messageId: rows[0].payload.messageId } : {}) } : undefined;
 }
 
 /** What a step's latest mark means for a new attempt. */
@@ -143,12 +143,17 @@ export async function writeSendMark(
   commandId: string,
   step: string,
   kind: SendStepKind,
-  outcome: SendMarkOutcome
+  outcome: SendMarkOutcome,
+  messageId?: string,
 ): Promise<void> {
+  if (messageId !== undefined && (outcome !== 'sent' || !validTelegramMessageId(messageId))) {
+    throw new Error('A Telegram message ID must be positive and belong to a sent mark');
+  }
   const key = `${commandId}:${step}`;
   await sql`INSERT INTO hawa.inbox_events (tenant_id, source_account_id, source_event_id, event_kind, payload, payload_hash, verified, received_at)
     VALUES (${tenantId}::uuid, ${TELEGRAM_DELIVERY_SOURCE}, ${key}, ${`telegram_${kind}_${outcome}`},
-      ${JSON.stringify({ commandId, step, outcome })}::jsonb, ${`${key}:${outcome}`}, true, clock_timestamp())`.execute(db);
+      ${JSON.stringify({ commandId, step, outcome, ...(messageId ? { messageId } : {}) })}::jsonb,
+      ${`${key}:${outcome}`}, true, clock_timestamp())`.execute(db);
 }
 
 /**

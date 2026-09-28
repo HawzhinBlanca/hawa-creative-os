@@ -1,0 +1,74 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_55b1bf5b8a38dfaf and hawa_tpl_repair_55b1bf5b8a38dfaf (27 ms)
+ ❯ apps/core/test/scoped-receipt-audits.test.ts (3 tests | 3 failed) 117ms
+   × never returns another user or tenant audit through the shared Core process 64ms
+   × keeps a completed audit when a fresh Core instance reads PostgreSQL 18ms
+   × hides an old audit immediately when the actor loses one of its recorded clients 15ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > never returns another user or tenant audit through the shared Core process
+AssertionError: expected 401 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 401
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:32:52
+     30| it('never returns another user or tenant audit through the shared Core…
+     31|  const f=await fixture(),g=await fixture(),app=createApp({db});
+     32|  const r=await run(app,f.a.token);expect(r.status).toBe(201);const rep…
+       |                                                    ^
+     33|  expect(report.anomalies.some((a:any)=>a.taskId===f.a.taskId)).toBe(tr…
+     34|  expect(JSON.stringify(report)).not.toContain(f.b.taskId);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > keeps a completed audit when a fresh Core instance reads PostgreSQL
+AssertionError: expected 401 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 401
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:39:82
+     37| });
+     38| it('keeps a completed audit when a fresh Core instance reads PostgreSQ…
+     39|  const f=await fixture(),r=await run(createApp({db}),f.a.token);expect…
+       |                                                                                  ^
+     40|  const read=await get(createApp({db}),f.a.token);expect(read.status).t…
+     41| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  apps/core/test/scoped-receipt-audits.test.ts > hides an old audit immediately when the actor loses one of its recorded clients
+AssertionError: expected 401 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 401
+
+ ❯ apps/core/test/scoped-receipt-audits.test.ts:43:88
+     41| });
+     42| it('hides an old audit immediately when the actor loses one of its rec…
+     43|  const f=await fixture(),app=createApp({db});expect((await run(app,f.a…
+       |                                                                                        ^
+     44|  await sql`UPDATE hawa.client_memberships SET active=false WHERE tenan…
+     45|  const r=await get(app,f.a.token);expect(r.status).toBe(200);expect(la…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  17:19:52
+   Duration  1.81s (transform 1.04s, setup 145ms, import 1.40s, tests 117ms, environment 0ms)
+

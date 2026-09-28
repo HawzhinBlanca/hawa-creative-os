@@ -18,6 +18,7 @@ export interface RecordDriveRefParams {
   tenantId: string;
   publicationId: string;
   artifactId?: string | null;
+  publicationArtifactId?: string | null;
   sharedDriveId: string;
   folderId: string;
   fileId: string;
@@ -40,6 +41,10 @@ export interface RecordSheetSyncParams {
   rowNumber?: number | null;
   expectedHash: string;
   observedHash?: string | null;
+  metadataId?: number | null;
+  expectedValues?: string[] | null;
+  expectedRowHash?: string | null;
+  observedRowHash?: string | null;
   status: 'pending' | 'synced' | 'stale' | 'missing' | 'failed';
   lastError?: string | null;
 }
@@ -83,6 +88,33 @@ export class PublicationRepository {
       query = query.where('tenant_id', '=', tenantId);
     }
     return await query.executeTakeFirst();
+  }
+
+  /** Record an archive outcome that cannot yet be proved either present or absent. */
+  async markArchiveUnconfirmed(params: { tenantId: string; publicationId: string; taskId: string; code: string }, trx?: Kysely<Database>) {
+    const runner = async (dbClient: Kysely<Database>) => {
+      const pub = await dbClient.selectFrom('publications').select(['state', 'error_class', 'error_detail'])
+        .where('tenant_id', '=', params.tenantId).where('id', '=', params.publicationId).where('task_id', '=', params.taskId)
+        .forUpdate().executeTakeFirst();
+      if (!pub || pub.state === 'complete') return false;
+      const detail = params.code.slice(0, 100);
+      if (pub.error_class === 'ARCHIVE_UNCONFIRMED' && pub.error_detail === detail) return true;
+      const task = await dbClient.selectFrom('tasks').select('version')
+        .where('tenant_id', '=', params.tenantId).where('id', '=', params.taskId).forUpdate().executeTakeFirstOrThrow();
+      const version = Number(task.version) + 1;
+      await dbClient.updateTable('publications').set({ error_class: 'ARCHIVE_UNCONFIRMED', error_detail: detail, updated_at: new Date() })
+        .where('tenant_id', '=', params.tenantId).where('id', '=', params.publicationId).executeTakeFirstOrThrow();
+      await dbClient.updateTable('tasks').set({ version, updated_at: new Date() })
+        .where('tenant_id', '=', params.tenantId).where('id', '=', params.taskId).executeTakeFirstOrThrow();
+      await dbClient.insertInto('task_events').values({
+        tenant_id: params.tenantId, task_id: params.taskId, event_type: 'publication.archive_unconfirmed',
+        aggregate_version: version, actor_type: 'workflow', actor_id: 'publisher',
+        correlation_id: crypto.randomUUID(), trace_id: currentTraceId(),
+        data: { publicationId: params.publicationId, code: detail },
+      }).executeTakeFirstOrThrow();
+      return true;
+    };
+    return trx ? runner(trx) : this.db.transaction().execute(runner);
   }
 
   async createPublication(params: CreatePublicationParams, trx?: Kysely<Database>) {
@@ -177,6 +209,7 @@ export class PublicationRepository {
           tenant_id: params.tenantId,
           publication_id: params.publicationId,
           artifact_id: params.artifactId || null,
+          publication_artifact_id: params.publicationArtifactId || null,
           shared_drive_id: params.sharedDriveId,
           folder_id: params.folderId,
           file_id: params.fileId,
@@ -188,8 +221,23 @@ export class PublicationRepository {
           verified_at: params.verifiedAt || (params.status === 'verified' ? new Date() : null),
           status: params.status,
         })
+        // Core may repeat the prepare step after its answer is lost. Adopt the same verified file
+        // without creating a second receipt; a reused Drive id with different bytes or destination
+        // is a conflict, never evidence that the approved package was archived.
+        .onConflict((oc) => oc.columns(['publication_id', 'file_id']).doUpdateSet({
+          status: sql`CASE WHEN drive_refs.status = 'verified' THEN 'verified' ELSE excluded.status END`,
+          verified_at: sql`COALESCE(drive_refs.verified_at, excluded.verified_at)`,
+        } as any).where(sql<boolean>`drive_refs.tenant_id = excluded.tenant_id
+          AND drive_refs.shared_drive_id = excluded.shared_drive_id
+          AND drive_refs.folder_id = excluded.folder_id
+          AND drive_refs.publication_artifact_id IS NOT DISTINCT FROM excluded.publication_artifact_id
+          AND drive_refs.file_name = excluded.file_name
+          AND drive_refs.mime_type = excluded.mime_type
+          AND drive_refs.expected_sha256 IS NOT DISTINCT FROM excluded.expected_sha256
+          AND drive_refs.observed_size IS NOT DISTINCT FROM excluded.observed_size`))
         .returningAll()
-        .executeTakeFirstOrThrow();
+        .executeTakeFirst();
+      if (!driveRef) throw new Error(`Drive file ${params.fileId} conflicts with its stored publication receipt`);
 
       // Update publication state to drive_complete if not already complete
       await dbClient
@@ -200,6 +248,7 @@ export class PublicationRepository {
         })
         .where('id', '=', params.publicationId)
         .where('tenant_id', '=', params.tenantId)
+        .where('state', '!=', 'complete')
         .execute();
 
       return driveRef;
@@ -213,6 +262,12 @@ export class PublicationRepository {
 
   async recordSheetSync(params: RecordSheetSyncParams, trx?: Kysely<Database>) {
     const runner = async (dbClient: Kysely<Database>) => {
+      // Only a delayed pending answer for this exact publication can retain confirmed evidence.
+      // A failed observation or another publication must expose its own uncertainty.
+      const keepConfirmed = sql<boolean>`sheet_syncs.status = 'synced' AND excluded.status = 'pending'
+        AND sheet_syncs.publication_id = excluded.publication_id
+        AND sheet_syncs.expected_hash = excluded.expected_hash
+        AND (excluded.expected_row_hash IS NULL OR sheet_syncs.expected_row_hash = excluded.expected_row_hash)`;
       const sheetSync = await dbClient
         .insertInto('sheet_syncs')
         .values({
@@ -225,6 +280,10 @@ export class PublicationRepository {
           row_number: params.rowNumber || null,
           expected_hash: params.expectedHash,
           observed_hash: params.observedHash || null,
+          metadata_id: params.metadataId ?? null,
+          expected_values: params.expectedValues ? sql`${JSON.stringify(params.expectedValues)}::jsonb` : null,
+          expected_row_hash: params.expectedRowHash ?? null,
+          observed_row_hash: params.observedRowHash ?? null,
           status: params.status,
           attempts: 1,
           last_error: params.lastError || null,
@@ -241,13 +300,17 @@ export class PublicationRepository {
             .columns(['spreadsheet_id', 'sheet_id', 'row_key'])
             .doUpdateSet({
               publication_id: sql`excluded.publication_id`,
-              row_number: sql`COALESCE(excluded.row_number, sheet_syncs.row_number)`,
+              row_number: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.row_number ELSE excluded.row_number END`,
               expected_hash: sql`excluded.expected_hash`,
-              observed_hash: sql`COALESCE(excluded.observed_hash, sheet_syncs.observed_hash)`,
-              status: sql`CASE WHEN sheet_syncs.status = 'synced' AND sheet_syncs.expected_hash = excluded.expected_hash THEN 'synced' ELSE excluded.status END`,
+              observed_hash: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.observed_hash ELSE excluded.observed_hash END`,
+              metadata_id: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.metadata_id ELSE excluded.metadata_id END`,
+              expected_values: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.expected_values ELSE excluded.expected_values END`,
+              expected_row_hash: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.expected_row_hash ELSE excluded.expected_row_hash END`,
+              observed_row_hash: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.observed_row_hash ELSE excluded.observed_row_hash END`,
+              status: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.status ELSE excluded.status END`,
               attempts: sql`sheet_syncs.attempts + 1`,
-              last_error: sql`excluded.last_error`,
-              synced_at: sql`CASE WHEN excluded.status = 'synced' THEN now() ELSE sheet_syncs.synced_at END`,
+              last_error: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.last_error ELSE excluded.last_error END`,
+              synced_at: sql`CASE WHEN ${keepConfirmed} THEN sheet_syncs.synced_at ELSE excluded.synced_at END`,
             } as any)
             .where(sql<boolean>`sheet_syncs.tenant_id = excluded.tenant_id AND sheet_syncs.task_id = excluded.task_id`)
         )
@@ -278,40 +341,67 @@ export class PublicationRepository {
   ) {
     const runner = async (dbClient: Kysely<Database>) => {
       const now = new Date();
+      // The publication lock is acquired before the task lock in all delivery paths. Refuse a
+      // mismatched task or a late completion after cancellation instead of rewriting task truth.
+      const existing = await dbClient
+        .selectFrom('publications')
+        .selectAll()
+        .where('id', '=', params.publicationId)
+        .where('tenant_id', '=', params.tenantId)
+        .where('task_id', '=', params.taskId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      const task = await dbClient
+        .selectFrom('tasks')
+        .select(['version', 'state', 'completed_at'])
+        .where('id', '=', params.taskId)
+        .where('tenant_id', '=', params.tenantId)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      if (existing.state === 'complete') {
+        if (task.state !== 'complete') throw new Error(`Publication ${params.publicationId} is complete but task ${params.taskId} is ${task.state}`);
+        return existing;
+      }
+      // Workflow finish already changed the task to complete in this transaction. Core's own
+      // delivery reaches here while publishing. Any other state means a concurrent decision won.
+      if (task.state !== 'publishing' && task.state !== 'complete') {
+        throw new Error(`Task ${params.taskId} is ${task.state}; publication completion requires publishing or complete`);
+      }
 
-      // 1. Update publication
+      const updatedTask = await dbClient
+        .updateTable('tasks')
+        .set({
+          state: 'complete',
+          version: Number(task.version) + 1,
+          completed_at: task.completed_at || now,
+          updated_at: now,
+        })
+        .where('id', '=', params.taskId)
+        .where('tenant_id', '=', params.tenantId)
+        .where('state', '=', task.state)
+        .where('version', '=', task.version)
+        .returning('id')
+        .executeTakeFirst();
+      if (!updatedTask) throw new Error(`Task ${params.taskId} changed while its publication was completing`);
+
       const pub = await dbClient
         .updateTable('publications')
         .set({
           state: 'complete',
+          error_class: null,
+          error_detail: null,
           completed_at: now,
           updated_at: now,
         })
         .where('id', '=', params.publicationId)
         .where('tenant_id', '=', params.tenantId)
+        .where('task_id', '=', params.taskId)
+        .where('state', '=', existing.state)
         .returningAll()
-        .executeTakeFirstOrThrow();
+        .executeTakeFirst();
+      if (!pub) throw new Error(`Publication ${params.publicationId} changed while completing`);
 
-      // 2. Update task state
-      const task = await dbClient
-        .selectFrom('tasks')
-        .select(['version', 'state'])
-        .where('id', '=', params.taskId)
-        .where('tenant_id', '=', params.tenantId)
-        .executeTakeFirstOrThrow();
-
-      await dbClient
-        .updateTable('tasks')
-        .set({
-          state: 'complete',
-          version: Number(task.version) + 1,
-          updated_at: now,
-        })
-        .where('id', '=', params.taskId)
-        .where('tenant_id', '=', params.tenantId)
-        .execute();
-
-      // 3. Append task_events
+      // Append a versioned publication event in the same transaction.
       await dbClient
         .insertInto('task_events')
         .values({

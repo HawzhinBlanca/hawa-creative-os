@@ -1,0 +1,103 @@
+{
+  "date": "2026-09-28",
+  "status": "LOCAL_COMPUTE_ELIGIBILITY_SLICE_QUALIFIED_NOT_FULL_GOAL_OR_RELEASE",
+  "base_commit": "28168e88",
+  "branch": "codex/research-grade-design-system",
+  "adr": "110",
+  "requirements": [
+    "FR-040",
+    "FR-079"
+  ],
+  "source_files": [
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "d331784e8a02f11b91794c4d64182b29815dbfb37e33033c119305b97b47c023"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/art.stage.ts",
+      "sha256": "495938d26917d2f72d7bbbb2288d5c5c0ed01cb6536d8455e313aa965c3bf382"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/v3.stage.ts",
+      "sha256": "9f5207ad558db65fc72a619e474f7e04cf43348b0f39d14f47283b0f6f69b9fa"
+    },
+    {
+      "path": "apps/core/test/studio-compute-gates.test.ts",
+      "sha256": "9f2fd37b50cf82e1c5bc0203760a725c7ee4c2311e3dc4ac62225a7003c7af45"
+    },
+    {
+      "path": "packages/creative/src/studio/pipeline-v3.ts",
+      "sha256": "dc3eac7b5c88e9840212381b4cc100d92a3de4571d239fbf870d96d61574696b"
+    },
+    {
+      "path": "packages/creative/test/pipeline-v3.test.ts",
+      "sha256": "c6946c603e2183ca9e72792820bf2542017618c9004647a456c3345a17a02e87"
+    }
+  ],
+  "checks": [
+    {
+      "kind": "initial-red",
+      "failed": 4,
+      "skipped_by_name_filter": 50,
+      "evidence": "output/acceptance/2026-09-28-compute-eligibility/red.log",
+      "interpretation": "Three selection-admission failures and one pre-art status failure. The initial artwork fixture stubbed generate instead of generateArt; corrected provider-boundary replay follows."
+    },
+    {
+      "kind": "art-baseline-red",
+      "source_art_stage": "28168e88",
+      "failed": 1,
+      "passed": 2,
+      "skipped_by_name_filter": 4,
+      "evidence": "output/acceptance/2026-09-28-compute-eligibility/art-baseline-red.log",
+      "interpretation": "Correct generateArt mock proves the previous committed stage buys artwork for overflowing copy. Current art source restored byte-identically after this local test."
+    },
+    {
+      "kind": "affected-acceptance",
+      "files": 9,
+      "passed": 138,
+      "failed": 0,
+      "skipped": 0,
+      "evidence": "output/acceptance/2026-09-28-compute-eligibility/final.log"
+    },
+    {
+      "kind": "source-scripts-strict-tests",
+      "result": "passed",
+      "test_roots": 516,
+      "commands": [
+        "pnpm exec tsc -b",
+        "pnpm exec tsc -p tsconfig.scripts.json",
+        "node --import tsx scripts/typecheck_tests.ts"
+      ],
+      "evidence": "output/acceptance/2026-09-28-compute-eligibility/types.log"
+    },
+    {
+      "kind": "architecture",
+      "result": "passed",
+      "any_count": 957,
+      "any_ceiling": 1053,
+      "existing_egress_exceptions": 9,
+      "evidence": "output/acceptance/2026-09-28-compute-eligibility/architecture.log"
+    },
+    {
+      "kind": "security",
+      "result": "passed",
+      "secrets": 0,
+      "evidence": "output/acceptance/2026-09-28-compute-eligibility/security.log"
+    }
+  ],
+  "confirmed": [
+    "Optional artwork is gated by existing free geometry/copy/font QA; proven invalid candidates do not call generateArt.",
+    "Contrast on unfinished imagery is deferred; valid and contrast-only candidates still reach the admitted provider boundary.",
+    "Pre-art failures retain source layouts and defect codes; no survivors yields explicit failed state before rendering.",
+    "Only explicit hard-QA passes can enter comparative judging. One eligible candidate makes zero comparison/canary calls; zero eligible candidates fail before calls.",
+    "Provider-error fallback cannot choose a failed/unknown winner or runner-up; rejected candidates are eliminated and exclusion reasons recorded."
+  ],
+  "evidence_scope": "Fake providers and service repository spies, real hard-QA/font calculations and local rendering. Standard isolated PostgreSQL harness runs, but new service persistence tests assert repository calls rather than crash/restart durability.",
+  "limits": [
+    "No human-quality or rejection-rate experiment, paid calls, full release suite, live runtime deployment or independent recovery.",
+    "Existing judge-protocol fixtures use explicit synthetic passing QA to isolate protocol behavior; Core eligibility tests calculate actual QA.",
+    "Pre-art rejection may increase manual finishing/refusal; this must be evaluated jointly with savings.",
+    "Remaining package 3: durable typed paid results, derivation pins, image-provider reserved-region mapping and safe concurrency. Other five packages remain scoped by EXECUTION.md.",
+    "Intermediate seven failures were six legacy judge fixtures with absent QA plus a no-imagery fixture exposed by the initial too-broad preflight. Both corrected. One strict fixture type error corrected before final pass."
+  ]
+}

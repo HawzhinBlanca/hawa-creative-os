@@ -1,0 +1,332 @@
+{
+  "date": "2026-09-28",
+  "status": "LOCAL_UNICODE_LEXICAL_BASELINE_QUALIFIED_NOT_HYBRID_OR_FULL_GOAL",
+  "base_commit": "4dab7ea2",
+  "branch": "codex/research-grade-design-system",
+  "adr": "115",
+  "requirements": [
+    "FR-011",
+    "FR-020",
+    "FR-021",
+    "NFR-009",
+    "NFR-011",
+    "NFR-024"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/115_unicode_exemplar_retrieval.md",
+      "sha256": "530092b614fd8cd5cc38298cbbf63d4ed26a18335f7f94847cf29cde27caf87f"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "edb89298bf8cb4ce44d7d2f5a5097caa229397c97363876e0e9e5f1ebd85270b"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/types.ts",
+      "sha256": "a3eb288c81cc0da50cb89537224a25e6bfed86d9a0ab5781cb6d7679b7900aec"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/visual-inputs.ts",
+      "sha256": "369947fc8a688e29f64c462288ce0223839fe07f8bc3639aeedcefa5638ff86b"
+    },
+    {
+      "path": "apps/core/test/studio-visual-inputs.test.ts",
+      "sha256": "b445ea9c61d4cdedddf62eb9b617b0114451507323f60a41a757d04ecb0814f4"
+    },
+    {
+      "path": "docs/08_MEMORY_RAG_CLIENT_DNA.md",
+      "sha256": "bfb1142e17b2462d936e4084f649b5ae6deadb4aec3dbd7e86df1acce4edecf4"
+    },
+    {
+      "path": "packages/creative/src/studio/exemplar-retrieval.ts",
+      "sha256": "02e9f204fe3d6eff330fbc36939ff8fed402094451dae506a9bdc06b9934a35c"
+    },
+    {
+      "path": "packages/creative/src/studio/pipeline-v3.ts",
+      "sha256": "d866bce51aafc544a10dae305f26392411ff4356731bd5690b0e5766301732dc"
+    },
+    {
+      "path": "packages/creative/src/studio/reference-manager.ts",
+      "sha256": "7c560f472e3120fbd6a0a2f1142430b8767b9865e0f4d64f3cbd49b2987fabee"
+    },
+    {
+      "path": "packages/creative/test/exemplar-unicode.test.ts",
+      "sha256": "303aca09c5c1817cb5108c697cb66b822523e16fdf2822a9d80680bdaae3bb29"
+    },
+    {
+      "path": "packages/creative/test/reference-manager.test.ts",
+      "sha256": "240faf72eb48b821d54db37fcf500cf9d706fc6a059b4acee53b248edc9f2b5d"
+    }
+  ],
+  "evidence_files": [
+    {
+      "path": "output/acceptance/2026-09-28-unicode-retrieval-affected.log",
+      "sha256": "5c0f31a888f71314b281ae6f2a2073c3a2ae4a58fabf9feb22035e333210972b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-unicode-retrieval-before.json",
+      "sha256": "c9480b14cbc8c4167ab538ec9cda337d487116cd211bc28a4a3698276db2b553"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-unicode-retrieval-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-unicode-retrieval-focused.log",
+      "sha256": "1ba058fc333845ac2c0c882e05b25d093796d0abfb45cc72efc4b2e8b699580b"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-unicode-retrieval-probe.json",
+      "sha256": "1e7d1b91e1fc0a1b472c9fc3a0ebe3bd436566be458a68d3086ef32422513920"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-unicode-retrieval-qualified.log",
+      "sha256": "c148c44475f1583603fd43ff29ef1d4c55f7f0b27ac51caaaa256cce9ea97ce0"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-unicode-retrieval-security.log",
+      "sha256": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-unicode-retrieval-types-final.log",
+      "sha256": "1c64b11b6aaeb769bcba4ad398fcdb7b54b53840d495866df0a8304cc0612861"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-unicode-retrieval-types.log",
+      "sha256": "1c64b11b6aaeb769bcba4ad398fcdb7b54b53840d495866df0a8304cc0612861"
+    }
+  ],
+  "acceptance": {
+    "files": 9,
+    "passed": 74,
+    "failed": 0,
+    "skipped": 0,
+    "strict_test_roots": 526,
+    "source_and_scripts_types": "passed",
+    "strict_test_types": "passed",
+    "any_count": 953,
+    "any_ceiling": 1053,
+    "egress": "passed with nine existing exceptions",
+    "security": "passed; zero secrets; 53 justified allowlist hits"
+  },
+  "commands": [
+    "pnpm exec tsc -b && pnpm exec tsc -p tsconfig.scripts.json && node --import tsx scripts/typecheck_tests.ts",
+    "pnpm exec vitest run packages/creative/test/exemplar-unicode.test.ts packages/creative/test/exemplar-retrieval.test.ts packages/creative/test/reference-manager.test.ts packages/creative/test/full-pipeline-qualification.test.ts apps/core/test/studio-visual-inputs.test.ts apps/core/test/studio-creative-handoff.test.ts apps/core/test/design-studio-orchestrator.test.ts apps/core/test/studio-retained-replay.test.ts apps/core/test/studio-run-guards.test.ts",
+    "node --import tsx scripts/ratchet_any.ts",
+    "node --import tsx scripts/lint_provider_egress.ts",
+    "python3 infra/security/security_scan.py"
+  ],
+  "findings": [
+    "Before-code probe: Sorani and Arabic samples each yield zero English-vocabulary components; English control yields two.",
+    "Three of six curated images missing from package and recorded archive; remaining three match approved SHA-256.",
+    "Replaced disk cache could previously outlive metadata changes; current instances reread and hash full manifest.",
+    "Former reference-manager test never queried its changed manifest; now verifies actual same-instance ranking after confirmation."
+  ],
+  "proved": [
+    "Multilingual synthetic metadata supports Sorani/Arabic/English lexical ranking and numeral/spelling variants without changing approved text.",
+    "Pending/dropped/unknown entries excluded before ranking; changed file metadata/approval observed by existing index; explicit snapshot remains fixed.",
+    "Core verifies availability and image hash before document-frequency calculation and ranking; no lexical overlap reports fallback without invented semantic scores.",
+    "Actual pinned selection evidence survives fresh runtime-role connection and critique resume with no new retrieval; mismatched bytes and forced retrieval errors retain explicit diagnostics.",
+    "Existing real-database non-KAAE client journey still excludes KAAE context."
+  ],
+  "local_probe": {
+    "date": "2026-09-28",
+    "baseCommit": "4dab7ea2",
+    "inventory": [
+      {
+        "id": "post1_accreditation_mandate",
+        "verified": true
+      },
+      {
+        "id": "post2_standards_higher_ed",
+        "verified": true
+      },
+      {
+        "id": "post3_strategic_roadmap",
+        "verified": true
+      },
+      {
+        "id": "AUK002_kurdi_jpg",
+        "verified": false
+      },
+      {
+        "id": "CC002_kurdi_jpg",
+        "verified": false
+      },
+      {
+        "id": "CUE002_kurdi_jpg",
+        "verified": false
+      }
+    ],
+    "results": [
+      {
+        "query": "ڕێنمایی زانکۆی کوردستان",
+        "ids": [
+          "post2_standards_higher_ed",
+          "post1_accreditation_mandate",
+          "post3_strategic_roadmap"
+        ],
+        "evidence": {
+          "algorithm": "unicode-bm25-v1",
+          "manifestSha256": "dc83b3c729ebc0f99a06da22d654f20b13e2f154d548ae2f1a4f986c23165ea6",
+          "mode": "format_fallback",
+          "queryTokenCount": 3,
+          "matchedTokenCount": 0,
+          "eligibleCount": 3,
+          "matches": [
+            {
+              "id": "post2_standards_higher_ed",
+              "lexicalScore": 0,
+              "matchedTokens": [],
+              "formatMatch": true
+            },
+            {
+              "id": "post1_accreditation_mandate",
+              "lexicalScore": 0,
+              "matchedTokens": [],
+              "formatMatch": false
+            },
+            {
+              "id": "post3_strategic_roadmap",
+              "lexicalScore": 0,
+              "matchedTokens": [],
+              "formatMatch": false
+            }
+          ],
+          "warnings": [
+            "NO_LEXICAL_MATCH: selected by available format and curator order; cross-language semantic retrieval was not run."
+          ]
+        }
+      },
+      {
+        "query": "معايير الجامعة الجديدة",
+        "ids": [
+          "post2_standards_higher_ed",
+          "post1_accreditation_mandate",
+          "post3_strategic_roadmap"
+        ],
+        "evidence": {
+          "algorithm": "unicode-bm25-v1",
+          "manifestSha256": "dc83b3c729ebc0f99a06da22d654f20b13e2f154d548ae2f1a4f986c23165ea6",
+          "mode": "format_fallback",
+          "queryTokenCount": 3,
+          "matchedTokenCount": 0,
+          "eligibleCount": 3,
+          "matches": [
+            {
+              "id": "post2_standards_higher_ed",
+              "lexicalScore": 0,
+              "matchedTokens": [],
+              "formatMatch": true
+            },
+            {
+              "id": "post1_accreditation_mandate",
+              "lexicalScore": 0,
+              "matchedTokens": [],
+              "formatMatch": false
+            },
+            {
+              "id": "post3_strategic_roadmap",
+              "lexicalScore": 0,
+              "matchedTokens": [],
+              "formatMatch": false
+            }
+          ],
+          "warnings": [
+            "NO_LEXICAL_MATCH: selected by available format and curator order; cross-language semantic retrieval was not run."
+          ]
+        }
+      },
+      {
+        "query": "academic standards",
+        "ids": [
+          "post1_accreditation_mandate",
+          "post2_standards_higher_ed",
+          "post3_strategic_roadmap"
+        ],
+        "evidence": {
+          "algorithm": "unicode-bm25-v1",
+          "manifestSha256": "dc83b3c729ebc0f99a06da22d654f20b13e2f154d548ae2f1a4f986c23165ea6",
+          "mode": "lexical",
+          "queryTokenCount": 2,
+          "matchedTokenCount": 2,
+          "eligibleCount": 3,
+          "matches": [
+            {
+              "id": "post1_accreditation_mandate",
+              "lexicalScore": 1.1248789946773883,
+              "matchedTokens": [
+                "academic",
+                "standards"
+              ],
+              "formatMatch": false
+            },
+            {
+              "id": "post2_standards_higher_ed",
+              "lexicalScore": 0.18479362386930692,
+              "matchedTokens": [
+                "standards"
+              ],
+              "formatMatch": true
+            },
+            {
+              "id": "post3_strategic_roadmap",
+              "lexicalScore": 0.13108002590627535,
+              "matchedTokens": [
+                "standards"
+              ],
+              "formatMatch": false
+            }
+          ],
+          "warnings": []
+        }
+      },
+      {
+        "query": "strategic roadmap",
+        "ids": [
+          "post3_strategic_roadmap"
+        ],
+        "evidence": {
+          "algorithm": "unicode-bm25-v1",
+          "manifestSha256": "dc83b3c729ebc0f99a06da22d654f20b13e2f154d548ae2f1a4f986c23165ea6",
+          "mode": "lexical",
+          "queryTokenCount": 2,
+          "matchedTokenCount": 2,
+          "eligibleCount": 3,
+          "matches": [
+            {
+              "id": "post3_strategic_roadmap",
+              "lexicalScore": 2.6630413428033477,
+              "matchedTokens": [
+                "strategic",
+                "roadmap"
+              ],
+              "formatMatch": false
+            }
+          ],
+          "warnings": []
+        }
+      }
+    ],
+    "localTiming": {
+      "samples": 400,
+      "p50Ms": 0.01362499999999045,
+      "p95Ms": 0.01779200000000003,
+      "maxMs": 0.210125000000005
+    },
+    "limits": [
+      "Timing is this local three-available-image corpus with an in-memory manifest snapshot, not end-to-end design latency.",
+      "Sorani/Arabic query tokens survive; English-only available metadata yields explicit format fallback, not cross-language understanding.",
+      "No provider calls, paid costs, human usefulness labels, or multilingual embedding/reranker qualification."
+    ]
+  },
+  "limits": [
+    "This is Unicode lexical ranking, not cross-language semantic understanding or full hybrid retrieval admission.",
+    "The packaged available metadata is English-only: sampled Sorani/Arabic requests explicitly use format fallback. Missing files remain missing.",
+    "Human usefulness, actual native quality, equal-budget design comparison, full release and independent recovery remain open.",
+    "Transport is synthetic; actual isolated PostgreSQL and fixture files are used. No paid calls, deployment, migrations, new service or dependency.",
+    "Local tiny-corpus timing is not end-to-end latency, a comparative speedup or a production SLA.",
+    "No full suite or new browser/build deployment qualification occurred.",
+    "All six implementation packages remain partial or open."
+  ]
+}

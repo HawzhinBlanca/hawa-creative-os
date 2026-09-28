@@ -9,24 +9,27 @@ const SHA = 'c0ffee'.repeat(10) + 'abcd';
 const retrieved = { operationId: OP, status: 'retrieved', artifact: { id: 'a1', format: 'png', sha256: SHA, byte_size: 482113 }, qaStatus: 'not_run' };
 
 function fakeApi(overrides: Partial<Record<keyof CaptureApi, any>> = {}) {
+  let format='png';
   return {
     taskState: vi.fn(async () => ({ binding: { designId: 'DAG1', version: 3, status: 'bound' }, artifacts: [], operations: [] })),
-    export: vi.fn(async () => ({ operationId: OP, status: 'submitted', qaStatus: 'not_run' })),
-    resume: vi.fn(async () => retrieved),
+    export: vi.fn(async (_task:string,requested:string) => { format=requested;return { operationId: OP, status: 'submitted', qaStatus: 'not_run' }; }),
+    resume: vi.fn(async () => ({...retrieved,artifact:{...retrieved.artifact,format},
+      ...(format==='pptx'?{review:{status:'recorded',revisionId:'r1',checkedArtifactId:'a1',qaPassed:true}}:{})})),
     ...overrides,
   };
 }
 const noSleep = vi.fn(async () => {});
 
 describe('Capture for Review takes a real Canva export through Core', () => {
-  it('exports PNG against the current binding version, waits for retrieval, and reports only what Core stored', async () => {
+  it('captures preview and checked source against one binding with stable format keys, then reports the server review receipt', async () => {
     const api = fakeApi();
     const outcome = await captureForReview(api, TASK, { key: 'capture-key-0001', sleep: noSleep });
-    expect(api.export).toHaveBeenCalledWith(TASK, 'png', 3, 'capture-key-0001');
-    expect(api.resume).toHaveBeenCalledWith(TASK, OP);
+    expect(api.export.mock.calls).toEqual([[TASK,'png',3,'capture-key-0001-png',undefined],[TASK,'pptx',3,'capture-key-0001-pptx',undefined]]);
+    expect(api.resume).toHaveBeenCalledWith(TASK, OP,undefined);
     expect(outcome).toEqual({
       tone: 'success',
-      text: `Captured a PNG of the Canva design and stored it: ${(482113).toLocaleString()} bytes, SHA-256 ${SHA.slice(0, 12)}…. QA has not run; copy, logo, layout and human approval are still required.`,
+      completed:true,
+      text:'Preview and checked source recorded for human review. Copy and font checks passed; inspect the design before approving.',
     });
   });
 
@@ -53,11 +56,35 @@ describe('Capture for Review takes a real Canva export through Core', () => {
 
   it('reports every non-retrieved outcome as nothing captured', () => {
     expect(describeCapture({ operationId: OP, status: 'stale' }).text).toMatch(/^Nothing captured: the design changed in Canva/);
-    expect(describeCapture({ operationId: OP, status: 'failed' })).toEqual({ tone: 'error', text: 'Nothing captured: Canva reported the export failed (operation 9a8b7c6d).' });
+    expect(describeCapture({ operationId: OP, status: 'failed' })).toEqual({ tone: 'error', text: 'Nothing captured: Canva reported the export failed (operation 9a8b7c6d).',completed:true });
     expect(describeCapture({ operationId: OP, status: 'uncertain', message: 'Export submission could not be confirmed.' }).text)
       .toBe('Nothing captured: Export submission could not be confirmed. Resolve it in the Canva panel before capturing again.');
     expect(describeCapture({ operationId: OP, status: 'retrieved', artifact: null }).tone).toBe('error');
     expect(describeCapture(undefined)).toEqual({ tone: 'error', text: 'Nothing captured: Core returned an unexpected export status (none).' });
+  });
+
+  it('a stored PNG alone never claims review readiness',async()=>{
+    const api=fakeApi({resume:vi.fn(async()=>retrieved)});
+    const result=await captureForReview(api,TASK,{key:'capture-missing-review',sleep:noSleep});
+    expect(result.tone).toBe('error');expect(result.completed).not.toBe(true);
+    expect(result.text).toContain('checked PPTX source');
+  });
+  it('preserves a failed server QA result instead of calling the revision ready for approval',async()=>{
+    const api=fakeApi();
+    api.resume.mockResolvedValueOnce(retrieved).mockResolvedValueOnce({...retrieved,artifact:{...retrieved.artifact,format:'pptx'},
+      review:{status:'recorded',revisionId:'r1',checkedArtifactId:'a1',qaPassed:false}});
+    expect(await captureForReview(api,TASK,{key:'capture-failed-qc',sleep:noSleep})).toMatchObject({tone:'info',completed:true,text:expect.stringContaining('approval remains blocked')});
+  });
+  it('uses the same export keys after a lost checked-source response without pretending it succeeded',async()=>{
+    const api=fakeApi();api.resume.mockResolvedValueOnce(retrieved).mockRejectedValueOnce(new Error('response lost'));
+    await expect(captureForReview(api,TASK,{key:'same-capture',sleep:noSleep})).rejects.toThrow('response lost');
+    expect((await captureForReview(api,TASK,{key:'same-capture',sleep:noSleep})).completed).toBe(true);
+    expect(api.export.mock.calls.map((call: unknown[])=>call[3])).toEqual(['same-capture-png','same-capture-pptx','same-capture-png','same-capture-pptx']);
+  });
+  it('refuses a binding changed after the action was reserved without starting an export',async()=>{
+    const api=fakeApi();
+    expect(await captureForReview(api,TASK,{key:'changed-binding',expectedBinding:{designId:'old',version:2}})).toMatchObject({tone:'error',completed:true});
+    expect(api.export).not.toHaveBeenCalled();
   });
 
   it('WorkScreen builds no revision, hash or QA result of its own', () => {

@@ -1,5 +1,12 @@
 # Wave 7 evidence (2026-09-25): Phase 2.3 RequestLifecycle, 2.4 office decisions, the load test and the runbook
 
+> **History only (2026-09-28, ADR-127).** This records studio-v2. On the owner's decision of
+> 2026-09-28, `codex/research-grade-design-system` is the mainline, and studio-v2's RequestLifecycle
+> (steps 2.3A to 2.4 below: 8b0d140, d5a884c, 5fb37d2, 736b0e9, 3904fe0, 6269ef4 and its migration 023)
+> was superseded by that branch's own implementation (ADR-034, ADR-052, ADR-059 onward) and was not
+> ported. The load test and the runbook (5e64ae3) were ported and adapted; the chaos runs listed here
+> were not repeated on the mainline.
+
 Merged into `claude/reliability`: `worktree-wf_e8db9031-310-1` (the chain, 7 commits, 8b0d140…6269ef4) and `worktree-wf_e8db9031-310-2` (5e64ae3). Each step was implemented, reviewed by a separate agent that re-ran the suite and the chaos scenarios, and fixed where the review found a blocking defect. Production is unchanged until `HAWA_LIFECYCLE_CHATS` names a chat (default empty).
 
 ## The chain

@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, expect, it } from 'vitest';
 import { PNG } from 'pngjs';
 import { unzipSync, strFromU8 } from 'fflate';
@@ -25,7 +26,7 @@ import { inlineSvgFiles } from '../src/studio/svg-files.js';
  * (ADR-035), and these assertions read the markup as the one document it used to be.
  */
 const inlinedSvgOf = (...args: Parameters<typeof renderLayoutV2ToSvg>) => {
-  const r = renderLayoutV2ToSvg(...args);
+  const r = renderLayoutV2ToSvg(args[0], { logoDataUri: KAAE_TEST_LOGO, ...(args[1] ?? {}) });
   return { ...r, svg: inlineSvgFiles(r.svg, r.files), noTextSvg: inlineSvgFiles(r.noTextSvg, r.files) };
 };
 
@@ -106,7 +107,7 @@ const cutout = (extra: Partial<PhotoElement> = {}): PhotoElement => ({ photoInde
 const BODY = { left: 240, right: 440, top: 520, bottom: 1040 };
 
 async function preview(layout: StudioLayoutV2, photos: Buffer[], cutouts?: Array<PhotoCutoutAsset | undefined>) {
-  const result = await renderLayoutV2Async(layout, { copyText, photoDataUris: photos.map(uriOf), ...(cutouts ? { photoCutouts: cutouts } : {}) });
+  const result = await renderLayoutV2Async(layout, { logoDataUri: KAAE_TEST_LOGO, copyText, photoDataUris: photos.map(uriOf), ...(cutouts ? { photoCutouts: cutouts } : {}) });
   return { png: PNG.sync.read(result.png), noText: PNG.sync.read(result.noTextPng), svg: inlineSvgFiles(result.svg, result.files) };
 }
 

@@ -1,485 +1,980 @@
 /**
- * RequestLifecycle: one Restate Virtual Object per request (architecture programme Phase 2, slice 2.3;
- * PHASE2_DESIGN.md sections 2.3, 2.7 and 4, ADR-034). A request is the chain of rounds of one design,
- * from the brief to its delivery; its key is the request id.
- *
- * This is the shell around the pure state machine in packages/domain/src/request-lifecycle.ts. Every
- * handler does the same, in the same order, so every invocation's journal has the same shape:
- *   1. read the state (`lc`), the journaled clock, and the settings (one `config` step);
- *   2. plan: an event seen before, or one the stage does not take, changes nothing and answers;
- *   3. project: Core writes what the event decided to Postgres, in one transaction, with the
- *      revision the object expects and the key `<requestId>:<rev>:<event>` (step `project:<rev>`);
- *   4. apply Core's answer: the next state, set in one `ctx.set`, and the effects;
- *   5. emit the effects, in order, as one-way sends only: messages to the chat's TelegramSender,
- *      design runs and deliveries started, reminders and the expiry sent to itself with a delay.
- *
- * No handler waits for a person, and none awaits another object or a workflow: that would keep the
- * invocation, and the object, pinned to a deployment until the other side answered (section 4). Each
- * handler runs for seconds; waiting is a stage. A delayed reminder or expiry carries the stage epoch
- * it was scheduled in, and one from an older stage does nothing.
- *
- * When Core cannot take a projection:
- * - a design outcome waits 30 minutes, then is kept (`outcomeDeferred`), the requester and the office
- *   are told, and it is offered again every 10 minutes (retryProjection);
- * - any other event waits for Core without a limit of its own (the service's retry policy pauses it
- *   after many hours, which /health reports);
- * - 409 AHEAD (Postgres holds projections this state does not know, after a Restate restore): the
- *   object takes Postgres's revision, tells the office, and projects the event again;
- * - 409 STALE_REVISION (Postgres behind the object: a second writer, or a Postgres restore): the
- *   office is told and the invocation pauses until a person has looked; resumed, it asks again;
- * - a refusal of the event itself (KEY_REUSED, an op Core finds invalid): the office is told and the
- *   event ends with a terminal error.
+ * RequestLifecycle's versioned request owner (ADR-034, Phase 2.3): open, terminal design outcome,
+ * office review, a delivery claim, and its final outcome.
+ * ChatInbox cutover remains controlled by the request lifecycle flag.
+ * Once bound, the service name stays in every worker build for blue/green drain compatibility.
  */
+import { createHash } from 'node:crypto';
 import * as restate from '@restatedev/restate-sdk';
-import {
-  type AnswerEvent,
-  type CancelEvent,
-  type DeliveryFinishedEvent,
-  type DeliveryInput,
-  type DesignFinishedEvent,
-  type ExpireEvent,
-  type LifecycleEvent,
-  type LifecycleEventType,
-  type LifecycleMessage,
-  type LifecycleStateV1,
-  type LifecycleView,
-  type MessageSentEvent,
-  type OfficeDecisionEvent,
-  type OpenEvent,
-  type OutboundMessage,
-  type ProjectionRequest,
-  type RemindEvent,
-  type RequesterDecisionEvent,
-  type RetryProjectionEvent,
-} from '@hawa/contracts';
-import {
-  apply,
-  plan,
-  projectionRequestFor,
-  reconcileAhead,
-  recordRunInvocation,
-  upgrade,
-  viewOf,
-  LifecycleEventUnreadableError,
-  type LifecycleEffect,
-  type ProjectionOutcome,
-  type RequesterNotice,
-  type RequesterNoticeWhy,
-} from '@hawa/domain';
-import { chaosPoint } from '@hawa/observability';
-import { composeOutcomeUnrecordedAlert, composeOutcomeUnrecordedMessage } from '../delivery-notification.js';
-import { log, withInvocationLogContext } from '../logging.js';
-import type { DeliveryHandlers } from './delivery.js';
-import type { DesignRunHandlers, DesignRunInput } from './design-run.js';
-import { projectionCoreFromEnv, type ProjectionAnswer, type ProjectionCore } from './projection-client.js';
+import type { BlobRef, DeliveryInput, DeliveryOutcome, OutboundMessage } from '@hawa/contracts';
+import { nextOfficeMoment, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory, type OfficeApprovalProof, type RejectionCategory, type StructuredRevisionRequest } from '@hawa/domain';
+import { withInvocationLogContext } from '../logging.js';
+import { coreInternalFromEnv, DeliveryApi, type CoreInternal } from './delivery.js';
 import { TelegramSenderApi } from './telegram-sender.js';
+import { DesignRunApi, type DesignRunInput } from './design-run.js';
+import { chatInbox } from './chat-inbox.js';
+import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
 
-/** The state key: one key, versioned (section 4 rule 4). */
-export const STATE_KEY = 'lc';
+const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PROJECT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30_000, maxRetryDuration: 30 * 60_000 };
+// A DesignRun has already ended when it sends this event. Keep its sole outcome pending through a
+// Core outage; a bounded step here could abandon the only report of paid work.
+const OUTCOME_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30_000 };
 
-/**
- * A design outcome waits this long for Core before it is kept and offered again later. Other events
- * wait without a limit of their own.
- */
-export const PROJECT_RETRY = { initialRetryInterval: 1000, retryIntervalFactor: 2, maxRetryInterval: 30_000, maxRetryDuration: 30 * 60 * 1000 };
-/** AHEAD answered this often in one invocation means something keeps writing: it is held like a stale revision. */
-const MAX_RECONCILIATIONS = 2;
-
-// ---------------------------------------------------------------------------------------------
-// Settings, read once per invocation inside a journaled step, so a replay on another colour agrees.
-
-export interface LifecycleConfig {
-  /** HAWA_LIFECYCLE_REMINDER_SCALE: multiplies reminder and expiry delays (tests: 0.0001). */
-  reminderScale: number;
-  /** The office chat that hears about what a person must look at. */
-  officeChatId: string | null;
-}
-
-/** HAWA_LIFECYCLE_REMINDER_SCALE: a number in (0, 1]; anything else is 1 (real days). */
-export function reminderScaleFrom(raw: string | undefined): number {
-  if (raw === undefined || raw.trim() === '') return 1;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 && n <= 1 ? n : 1;
-}
-
-export function lifecycleConfigFromEnv(env: Record<string, string | undefined> = process.env): LifecycleConfig {
-  const raw = env.HAWA_LIFECYCLE_REMINDER_SCALE;
-  const reminderScale = reminderScaleFrom(raw);
-  if (raw && raw.trim() && reminderScale === 1 && Number(raw) !== 1) log.warn(`[RequestLifecycle] HAWA_LIFECYCLE_REMINDER_SCALE=${raw} is not a number in (0, 1]; real days are used`);
-  return {
-    reminderScale,
-    officeChatId: (env.TELEGRAM_ALLOWED_USERS || '').split(',').map((s) => s.trim()).find(Boolean) || null,
+export interface OpenManualEvent {
+  v: 1;
+  eventId: string;
+  requestId: string;
+  tenantId: string;
+  chatId: string;
+  draft: {
+    platform: 'telegram';
+    sourceEventId: string;
+    sourceChannelId: string;
+    rawText: string;
+    title: string;
+    designInstructions: string;
+    exactCopy: unknown[];
+    clientId: string | null;
+    autoGenerate: false;
+    isInstructionOnly?: boolean;
+    lifecycleImage?: BlobRef & { updateId: number };
+    lifecycleAlbum?: import('@hawa/contracts').LifecycleAlbumRef;
+    lifecycleSource?: import('@hawa/contracts').LifecycleSourceRef;
   };
 }
 
-// ---------------------------------------------------------------------------------------------
-// Handlers and their payloads
-
-/** Every exclusive handler, by the event type it takes (the payload is the event without `type`). */
-export const LIFECYCLE_EVENT_HANDLERS = [
-  'open', 'designFinished', 'answer', 'requesterDecision', 'officeDecision', 'deliveryFinished',
-  'messageSent', 'remind', 'expire', 'cancel', 'retryProjection',
-] as const satisfies readonly LifecycleEventType[];
-
-type Payloads = {
-  open: OpenEvent;
-  designFinished: DesignFinishedEvent;
-  answer: AnswerEvent;
-  requesterDecision: RequesterDecisionEvent;
-  officeDecision: OfficeDecisionEvent;
-  deliveryFinished: DeliveryFinishedEvent;
-  messageSent: MessageSentEvent;
-  remind: RemindEvent;
-  expire: ExpireEvent;
-  cancel: CancelEvent;
-  retryProjection: RetryProjectionEvent;
-};
-
-export type RequestLifecycleHandlers = {
-  [K in keyof Payloads]: (ctx: restate.ObjectContext, payload: Payloads[K]) => Promise<unknown>;
-} & { get: (ctx: restate.ObjectSharedContext) => Promise<LifecycleView | null> };
-
-/** How other services name it (objectSendClient). */
-export const RequestLifecycleApi: restate.VirtualObjectDefinition<'RequestLifecycle', RequestLifecycleHandlers> = { name: 'RequestLifecycle' };
-const DesignRunApi: restate.WorkflowDefinition<'DesignRun', DesignRunHandlers> = { name: 'DesignRun' };
-const DeliveryApi: restate.WorkflowDefinition<'Delivery', DeliveryHandlers> = { name: 'Delivery' };
-
-/**
- * A handler's payload as the event the state machine reads. The payload's own version is checked by
- * plan(); a payload that is not an object at all is refused here.
- */
-export function eventOf(type: LifecycleEventType, payload: unknown): LifecycleEvent {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new LifecycleEventUnreadableError(`${type} was sent ${Array.isArray(payload) ? 'a list' : typeof payload}, not an event`);
-  }
-  const eventId = (payload as { eventId?: unknown }).eventId;
-  if (typeof eventId !== 'string' || !eventId) throw new LifecycleEventUnreadableError(`${type} carries no event id`);
-  return { ...(payload as object), type } as LifecycleEvent;
+export interface ManualLifecycleState {
+  v: 1;
+  requestId: string;
+  tenantId: string;
+  chatId: string;
+  owner: 'restate';
+  stage: 'manual';
+  rev: 1;
+  taskId: string;
+  openEventId: string;
+  openSha256: string;
 }
 
-// ---------------------------------------------------------------------------------------------
-// The shell
+export interface OpenManualResult { accepted: true; taskId: string; stage: 'manual'; rev: 1 }
 
-export interface LifecycleDeps {
-  /** Core's projection endpoint; null while the worker has no HAWA_WORKER_TOKEN (every event waits). */
-  core(): ProjectionCore | null;
-  config(): LifecycleConfig;
-}
-
-export function lifecycleDepsFromEnv(): LifecycleDeps {
-  let core: ProjectionCore | null | undefined;
-  return {
-    core: () => (core === undefined ? (core = projectionCoreFromEnv()) : core),
-    config: () => lifecycleConfigFromEnv(),
+export interface OpenAutomaticEvent extends Omit<OpenManualEvent, 'draft'> {
+  draft: Omit<OpenManualEvent['draft'], 'autoGenerate'> & {
+    autoGenerate: true;
+    variant?: { width: number; height: number };
+    designStudio?: boolean;
+    studioOptions?: DesignRunInput['studioOptions'];
   };
 }
 
-const isGaveUp = (err: unknown): boolean => {
-  const name = String((err as { name?: unknown })?.name ?? '');
-  return err instanceof restate.TerminalError || name.includes('Terminal');
-};
-
-/** A plain-text office alert, keyed so that it is sent once however often it is asked for. */
-function officeAlert(config: LifecycleConfig, key: string, lines: string[], s: { tenantId?: string; taskId?: string | null }): OutboundMessage | null {
-  if (!config.officeChatId) {
-    log.error(`[RequestLifecycle] no office chat is configured to hear: ${lines[0]}`);
-    return null;
-  }
-  return {
-    v: 1, key, chatId: config.officeChatId, kind: 'text', text: lines.join('\n'), class: 'critical',
-    ...(s.tenantId ? { tenantId: s.tenantId } : {}),
-    ...(s.taskId ? { taskId: s.taskId } : {}),
-  };
-}
-
-/** What the requester is told when an answer, button or change of theirs changed nothing (review of 2.3C). */
-const NOTICE_WORDS: Record<RequesterNoticeWhy, { toast: string; text: string }> = {
-  not_waiting: {
-    toast: 'This question was already answered.',
-    text: 'ℹ️ This design is not waiting for an answer any more. To change it, reply to the newest draft with what to change.',
-  },
-  still_designing: {
-    toast: 'Your design is still being made.',
-    text: '⏳ Your design is still being made. Reply to the draft with your change once it arrives.',
-  },
-  answer_first: {
-    toast: 'Please answer the question about this design first.',
-    text: '❓ Please answer the question about this design first: tap one of its options or reply to it.',
-  },
-  with_office: {
-    toast: 'The art director is working on this design.',
-    text: '🧑‍🎨 The art director is working on this design and will send it to you here.',
-  },
-  approved: {
-    toast: 'This design is already approved.',
-    text: '✅ This design is already approved. Send a new message for a new request.',
-  },
-  delivered: {
-    toast: 'This design was already delivered.',
-    text: '✅ This design was already delivered. Send a new message for a new request.',
-  },
-  cancelled: {
-    toast: 'This request was cancelled.',
-    text: 'This request was cancelled. Send a new message for a new request.',
-  },
-  size_asked: {
-    toast: 'That size was already asked for.',
-    text: 'That size was already asked for; it will arrive in this chat.',
-  },
-};
-
-/** The notice as a message: a tapped button is answered (its toast), a typed message is replied to. */
-export function requesterNoticeMessage(n: RequesterNotice): OutboundMessage {
-  const words = NOTICE_WORDS[n.why] ?? NOTICE_WORDS.still_designing;
-  return n.callbackQueryId
-    ? { v: 1, key: `cb:${n.callbackQueryId}`, chatId: n.chatId, kind: 'callback_answer', callbackQueryId: n.callbackQueryId, text: words.toast, class: 'courtesy', tenantId: n.tenantId }
-    : { v: 1, key: `ignored:${n.eventId}`, chatId: n.chatId, kind: 'text', text: words.text, class: 'courtesy', tenantId: n.tenantId };
-}
-
-function sendMessage(ctx: restate.ObjectContext, m: OutboundMessage | LifecycleMessage | null): void {
-  if (!m || !m.chatId || !m.key) return;
-  ctx.objectSendClient(TelegramSenderApi, String(m.chatId)).send({ ...m, v: 1 } as OutboundMessage, restate.rpc.sendOpts({ idempotencyKey: m.key }));
-}
-
-/** One projection, as the step `project:<rev>` (or `project:<rev>:held`) journals it. */
-async function projectStep(
-  ctx: restate.ObjectContext,
-  core: ProjectionCore,
-  requestId: string,
-  body: ProjectionRequest,
-  deferrable: boolean,
-  held = false
-): Promise<ProjectionAnswer | { kind: 'unavailable' }> {
-  const step = `project:${body.rev}${held ? ':held' : ''}`;
-  const action = async (): Promise<ProjectionAnswer> => {
-    const answer = await core.project(requestId, body);
-    // Held after a revision Postgres does not agree with: pause again (not journaled) until it does;
-    // resumed, ask again.
-    if (held && answer.kind === 'conflict' && answer.conflict.code !== 'KEY_REUSED') {
-      throw new restate.PauseError(`${answer.conflict.code}: Postgres holds revision ${answer.conflict.pgRev} of request ${requestId}, where this object expected ${body.expectedRev}; a person must look`);
-    }
-    // The chaos suite kills the worker here: Core has the projection, the journal does not.
-    await chaosPoint('worker.rl.after-project', { requestId, key: body.key, rev: body.rev });
-    return answer;
-  };
-  try {
-    // Without options a step is retried under the service's retry policy, which pauses the invocation
-    // after many hours instead of retrying for ever.
-    return deferrable && !held ? await ctx.run(step, action, PROJECT_RETRY) : await ctx.run(step, action);
-  } catch (err) {
-    // Only the design outcome's step gives up; the state machine keeps the outcome for later.
-    if (deferrable && !held && isGaveUp(err)) {
-      log.warn(`[RequestLifecycle] Core did not take projection ${body.key} within ${PROJECT_RETRY.maxRetryDuration / 60000} minutes; the outcome is kept and offered again`);
-      return { kind: 'unavailable' };
-    }
-    throw err;
-  }
+export interface AutomaticLifecycleState extends Omit<ManualLifecycleState, 'stage' | 'rev'> {
+  nativeReview?: { eventId: string; sha256: string; reply: Extract<NativeReviewReply,{accepted:true}> };
+  stage: 'designing' | 'awaiting_answer' | 'in_review' | 'manual' | 'approved' | 'rejected' | 'delivering' | 'delivered';
+  rev: number;
+  runId: string;
+  /** Current design round (0 = original, 1+ = revision rounds). */
+  round?: number;
+  designInput: DesignRunInput;
+  outcome?: { eventId: string; sha256: string; status: string; revisionId?: string;
+    message?: { text: string; parseMode: 'HTML' }; officeAlert?: { chatId: string; text: string } };
+  question?: { id: string; text: string; options: string[]; taskId: string; rev: number;
+    /** Derived from the confirmed Telegram send mark, never from outcome projection time. */
+    sentAtMs?: number; messageId?: string };
+  officeRevision?: { eventId: string; sha256: string; actionId: string; revisionId: string; approvalId: string;
+    kind?: 'revise' | 'approve' | 'reject' };
+  /** Filled when the requester submits a revision directive after the office marks "revise". */
+  revisionRound?: { eventId: string; sha256: string; round: number; newTaskId: string; runId: string };
+  delivery?: { startEventId: string; startSha256: string; actionId: string; input: DeliveryInput;
+    finishEventId?: string; finishSha256?: string; finishResult?: DeliveryFinishedReply };
 }
 
 /**
- * The body of every exclusive handler. Exported for the handler tests, which pass a fake context
- * (packages/testkit/src/fake-restate-context.ts) that can crash after any journal entry and replay.
+ * ADR-126: an initial manual request after its owner-controlled native review. It has no design
+ * run, never starts one, and has no requester revision round: the office approves or rejects it.
  */
-export async function handleLifecycleEvent(ctx: restate.ObjectContext, type: LifecycleEventType, payload: unknown, deps: LifecycleDeps): Promise<unknown> {
-  try {
-    return await handle(ctx, type, payload, deps);
-  } catch (err) {
-    // A malformed event is final: retrying it cannot help. A state from a newer build (retried until
-    // that build is live again) and anything else are retried.
-    if (err instanceof LifecycleEventUnreadableError) throw new restate.TerminalError(err.message, { errorCode: 400 });
-    throw err;
-  }
+export interface ManualOriginLifecycleState extends Omit<AutomaticLifecycleState,
+  'stage' | 'runId' | 'round' | 'designInput' | 'question' | 'revisionRound'> {
+  origin: 'manual';
+  stage: 'in_review' | 'approved' | 'rejected' | 'delivering' | 'delivered';
 }
 
-async function handle(ctx: restate.ObjectContext, type: LifecycleEventType, payload: unknown, deps: LifecycleDeps): Promise<unknown> {
-  const ev = eventOf(type, payload);
-  const requestId = ctx.key;
-  let s = upgrade(await ctx.get<unknown>(STATE_KEY));
-  const now = await ctx.date.now();
-  const config = await ctx.run('config', async () => deps.config());
+export type LifecycleState = ManualLifecycleState | AutomaticLifecycleState | ManualOriginLifecycleState;
+/** States that own a reviewed draft: an automatic request, or a manual one after native review. */
+type ReviewOwnedState = AutomaticLifecycleState | ManualOriginLifecycleState;
+const reviewOwned = (state: LifecycleState): state is ReviewOwnedState =>
+  'runId' in state || ('origin' in state && state.origin === 'manual');
 
-  const first = plan(s, ev, now);
-  if (first.ignored) {
-    log.info(`[RequestLifecycle] ${requestId} ${type} ${ev.eventId} changes nothing: ${first.reason}`);
-    // The requester is told (a tapped button answered, a typed message replied to), keyed by the
-    // event, so a replayed invocation sends nothing twice. The state is not touched.
-    if (first.notice) sendMessage(ctx, requesterNoticeMessage(first.notice));
-    return first.reply ?? null;
-  }
-  if (type === 'open' && (ev as OpenEvent).requestId !== requestId) {
-    throw new restate.TerminalError(`open names request ${(ev as OpenEvent).requestId}, but this object is ${requestId}`, { errorCode: 400 });
-  }
-  const core = deps.core();
-  if (!core) throw new Error('RequestLifecycle has no Core client: HAWA_WORKER_TOKEN is not set in this worker; the event waits');
-
-  const deferrable = type === 'designFinished' || type === 'retryProjection';
-  let outcome: ProjectionOutcome | null = null;
-  let reconciled = 0;
-  let current = first;
-  while (!outcome) {
-    const body = projectionRequestFor(s, ev, current);
-    let answer = await projectStep(ctx, core, requestId, body, deferrable);
-    const taskOf = { tenantId: s?.tenantId, taskId: s?.rounds.find((r) => r.round === s?.round)?.taskId ?? null };
-
-    if (answer.kind === 'conflict' && answer.conflict.code === 'AHEAD' && s && reconciled < MAX_RECONCILIATIONS) {
-      reconciled++;
-      const pgRev = answer.conflict.pgRev;
-      s = reconcileAhead(s, pgRev);
-      ctx.set(STATE_KEY, s);
-      sendMessage(ctx, officeAlert(config, `lc-ahead:${requestId}:${pgRev}`, [
-        'Hawa alert: a request\'s record in Postgres is ahead of what the request lifecycle remembers (Restate was restored, or something else wrote to it).',
-        `Request: ${requestId}`,
-        `Postgres revision: ${pgRev}; the lifecycle had ${body.expectedRev}`,
-        `The lifecycle took Postgres's revision and went on with ${type}. Nothing already sent is sent again. Check the request in the Desk.`,
-      ], taskOf));
-      const again = plan(s, ev, now);
-      if (again.ignored) {
-        if (again.notice) sendMessage(ctx, requesterNoticeMessage(again.notice));
-        return again.reply ?? null;
-      }
-      current = again;
-      continue;
-    }
-
-    // Stale, or ahead again and again: only a person can say which record is right. (Ahead with no state
-    // at all is a request this object never opened: refused below.)
-    if (answer.kind === 'conflict' && (answer.conflict.code === 'STALE_REVISION' || (answer.conflict.code === 'AHEAD' && s))) {
-      sendMessage(ctx, officeAlert(config, `lc-stale:${body.key}`, [
-        'Hawa alert: a request\'s record in Postgres does not match the request lifecycle, and the lifecycle has stopped for it.',
-        `Request: ${requestId}`,
-        `Postgres revision: ${answer.conflict.pgRev}; the lifecycle expected ${body.expectedRev} (${answer.conflict.code})`,
-        `Event waiting: ${type}. Only a second writer or a restored database explains this. Resume the paused invocation once the record is right.`,
-      ], taskOf));
-      answer = await projectStep(ctx, core, requestId, body, deferrable, true);
-    }
-
-    if (answer.kind === 'unavailable') {
-      outcome = { status: 'unavailable' };
-    } else if (answer.kind === 'projected') {
-      outcome = answer.response;
-    } else {
-      const why = answer.kind === 'conflict' ? `${answer.conflict.code} (Postgres revision ${answer.conflict.pgRev})` : `${answer.code}: ${answer.message}`;
-      sendMessage(ctx, officeAlert(config, `lc-refused:${body.key}`, [
-        'Hawa alert: Core refused to record a step of a request, so the request lifecycle dropped it.',
-        `Request: ${requestId}`,
-        `Event: ${type} (${ev.eventId})`,
-        `Answer: ${why.slice(0, 500)}`,
-        'Check the request in the Desk and finish this step by hand.',
-      ], taskOf));
-      throw new restate.TerminalError(`projection ${body.key} refused: ${why}`, { errorCode: 422 });
-    }
-  }
-
-  const applied = apply(s, ev, outcome, now, { reminderScale: config.reminderScale });
-  if (applied.ignored) {
-    log.info(`[RequestLifecycle] ${requestId} ${type} ${ev.eventId} changes nothing: ${applied.reason}`);
-    return applied.reply ?? null;
-  }
-  ctx.set(STATE_KEY, applied.next);
-  let state = applied.next;
-  for (const effect of applied.effects) state = await emit(ctx, effect, state, config);
-  if (state !== applied.next) ctx.set(STATE_KEY, state);
-  return applied.reply ?? null;
+export interface OfficeRevisionEvent {
+  v: 1; eventId: string; requestId: string; taskId: string; revisionId: string;
+  actionId: string;
+  /** expectedRev ≥ 2: first decision is at 2; subsequent revision rounds use 2+2k. */
+  expectedRev: number; kind: 'revise' | 'approve' | 'reject';
+  actor: { userId: string; role: string; authMethod?: 'google_oidc'; sessionHash?: string }; reason: string;
+  rejectionCategory?: RejectionCategory;
+  /** Optional only for signed decisions already in flight before the structured-feedback rollout. */
+  revisionRequest?: StructuredRevisionRequest;
+  approvalProof?: OfficeApprovalProof;
+  deskRequestFingerprint?: string;
 }
 
-/** One effect, as a one-way send. Returns the state, with a started run's invocation id kept. */
-async function emit(ctx: restate.ObjectContext, effect: LifecycleEffect, state: LifecycleStateV1, config: LifecycleConfig): Promise<LifecycleStateV1> {
-  switch (effect.type) {
-    case 'send':
-      sendMessage(ctx, { ...effect.message, tenantId: effect.message.tenantId ?? state.tenantId });
-      return state;
-    case 'answerCallback':
-      if (!effect.chatId) return state;
-      sendMessage(ctx, { v: 1, key: `cb:${effect.callbackQueryId}`, chatId: effect.chatId, kind: 'callback_answer', callbackQueryId: effect.callbackQueryId, class: 'courtesy', tenantId: state.tenantId });
-      return state;
-    case 'startDesignRun': {
-      const input: DesignRunInput = {
-        v: 1, taskId: effect.taskId, tenantId: effect.tenantId,
-        lifecycle: { requestId: effect.requestId, round: effect.round, runId: effect.runId },
-        ...(effect.attempt > 0 ? { redriveAttempt: effect.attempt } : {}),
-      };
-      // The workflow key is the run id: a second start of the same run is refused by Restate.
-      const handle = ctx.workflowSendClient(DesignRunApi, effect.runId).run(input);
-      const invocationId = await handle.invocationId;
-      return recordRunInvocation(state, effect.runId, String(invocationId));
-    }
-    case 'startDelivery': {
-      const input: DeliveryInput = {
-        v: 1, requestId: effect.requestId, deliveryId: effect.deliveryId, tenantId: effect.tenantId, taskId: effect.taskId,
-        approvalId: effect.approvalId, revisionId: effect.revisionId, chatId: effect.chatId, officeChatId: config.officeChatId,
-        reportTo: 'lifecycle', run: effect.run,
-      };
-      ctx.workflowSendClient(DeliveryApi, effect.deliveryId).run(input);
-      return state;
-    }
-    case 'schedule': {
-      const client = ctx.objectSendClient(RequestLifecycleApi, state.requestId);
-      const opts = { delay: effect.delayMs, idempotencyKey: effect.idempotencyKey };
-      if (effect.handler === 'remind') client.remind(effect.event, restate.rpc.sendOpts<RemindEvent>(opts));
-      else if (effect.handler === 'expire') client.expire(effect.event, restate.rpc.sendOpts<ExpireEvent>(opts));
-      else client.retryProjection(effect.event, restate.rpc.sendOpts<RetryProjectionEvent>(opts));
-      return state;
-    }
-    case 'openChild':
-      ctx.objectSendClient(RequestLifecycleApi, effect.requestId).open(effect.event, restate.rpc.sendOpts({ idempotencyKey: effect.event.eventId }));
-      return state;
-    case 'cancelRun':
-      if (effect.invocationId) ctx.cancel(effect.invocationId as restate.InvocationId);
-      else log.warn(`[RequestLifecycle] ${state.requestId}: design run ${effect.runId} has no invocation id on record, so it was not cancelled; its report will be ignored`);
-      return state;
-    case 'outcomeUnrecorded': {
-      const office = config.officeChatId;
-      const requesterTold = Boolean(effect.chatId && effect.chatId !== office);
-      if (effect.chatId && requesterTold) {
-        sendMessage(ctx, {
-          v: 1, key: `${effect.requestId}:outcome-unrecorded:${effect.runId}`, chatId: effect.chatId, kind: 'text', class: 'critical',
-          text: composeOutcomeUnrecordedMessage({ taskId: effect.taskId, draftMade: /READY/.test(effect.status), officeAlerted: Boolean(office) }),
-          tenantId: state.tenantId, taskId: effect.taskId,
-        });
-      }
-      sendMessage(ctx, officeAlert(config, `notify.office:outcome-unrecorded:${effect.runId}`, [
-        composeOutcomeUnrecordedAlert({ taskId: effect.taskId, status: effect.status, requesterChat: effect.chatId, requesterTold }),
-      ], { tenantId: state.tenantId, taskId: effect.taskId }));
-      return state;
-    }
-    default:
-      log.error(`[RequestLifecycle] ${state.requestId}: an effect this build does not know was dropped: ${JSON.stringify(effect).slice(0, 200)}`);
-      return state;
-  }
+export type OfficeRevisionReply =
+  | { accepted: true; requestId: string; taskId: string; revisionId: string; actionId: string;
+      approvalId: string; stage: 'manual' | 'approved' | 'rejected'; rev: number }
+  | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
+
+export interface OfficeDeliveryStartEvent {
+  v: 1; kind: 'deliver'; eventId: string; requestId: string; taskId: string;
+  revisionId: string; approvalId: string; actionId: string; expectedRev: number;
+  actor: { userId: string; role: string }; reason: string;
 }
 
-// ---------------------------------------------------------------------------------------------
-// The Virtual Object
+export type OfficeDeliveryStartReply =
+  | { accepted: true; requestId: string; taskId: string; approvalId: string; actionId: string;
+      deliveryId: string; stage: 'delivering' | 'delivered' | 'approved'; rev: number }
+  | { accepted: false; code: 'WRONG_STAGE' | 'NOT_CURRENT_DRAFT' };
 
-export function createRequestLifecycle(deps: LifecycleDeps = lifecycleDepsFromEnv()) {
-  const exclusive = <K extends keyof Payloads>(type: K) =>
-    restate.handlers.object.exclusive(async (ctx: restate.ObjectContext, payload: Payloads[K]): Promise<unknown> =>
-      withInvocationLogContext(ctx, { requestId: ctx.key }, () => handleLifecycleEvent(ctx, type, payload, deps)));
+/** The requester submits their revision directive after the office marks the draft "revise". */
+export interface RequesterDecisionEvent {
+  v: 1;
+  /** Unique event ID stable across retries. */
+  eventId: string;
+  requestId: string;
+  /** Revision round ≥ 1 (incremented by the worker each time the office marks "revise"). */
+  round: number;
+  directive: string;
+  /** The prior task id that is in revision_requested state. */
+  priorTaskId: string;
+  /** Formatted Telegram chat message text (the requester’s raw reply to the office note). */
+  rawText?: string;
+  /** Present only when answering the current verified Studio clarification question. */
+  questionId?: string;
+}
+
+export type RequesterDecisionReply =
+  | { accepted: true; requestId: string; newTaskId: string; runId: string; round: number; rev: number; stage: 'designing' }
+  | { accepted: false; code: 'WRONG_STAGE' };
+
+export interface DeliveryFinishedEvent {
+  v: 1; eventId: string; requestId: string; taskId: string; approvalId: string;
+  deliveryId: string; run: number; expectedRev: number; outcome: DeliveryOutcome;
+}
+
+export interface DeliveryFinishedReply {
+  accepted: true; requestId: string; taskId: string; approvalId: string;
+  deliveryId: string; stage: 'approved' | 'delivering' | 'delivered'; taskState: string; rev: number;
+}
+
+/** Delayed self-message to remind the requester if they haven't submitted a directive. */
+export interface ReminderTickEvent {
+  v: 1;
+  requestId: string;
+  /** Rev at the time the reminder was scheduled; stale if the request has advanced. */
+  expectedRev: number;
+  kind?: 'revision' | 'question';
+  questionId?: string;
+  day?: 1 | 5;
+}
+
+export interface QuestionSentEvent {
+  v: 1; requestId: string; expectedRev: number; taskId: string; questionId: string;
+  messageKey: string; messageId: string;
+}
+
+const REVISION_REMINDER_DELAY_MS = 24 * 60 * 60_000;
+const QUESTION_SECOND_REMINDER_DELAY_MS = 5 * 24 * 60 * 60_000;
+
+export interface AutomaticOpenContext {
+  key: string;
+  get(name: string): Promise<LifecycleState | null>;
+  run<T>(name: string, action: () => Promise<T>): Promise<T>;
+  set(name: string, value: LifecycleState): void;
+  send(message: OutboundMessage): void;
+  startDesign(input: DesignRunInput): void;
+  startDelivery?(input: DeliveryInput): void;
+  /** Fire-and-forget: upgrade a Telegram chat to lifecycle mode (exclusive, idempotent). */
+  setChatMode?(chatId: string, requestId: string): void;
+  /** Schedule a delayed self-call to send a requester reminder if still waiting. */
+  scheduleReminder?(requestId: string, rev: number, delayMs: number): void;
+  scheduleQuestionReminder?(requestId: string, rev: number, questionId: string,
+    day: 1 | 5, delayMs: number): void;
+}
+
+export interface QuestionSentContext extends Pick<AutomaticOpenContext,
+  'key' | 'get' | 'run' | 'set' | 'scheduleQuestionReminder'> {
+  now(): Promise<number>;
+}
+
+export interface DesignFinishedEvent {
+  v: 1; eventId: string; requestId: string; runId: string;
+  /** 0 for the initial design; ≥ 1 for revision rounds. */
+  round: number; taskId: string;
+  report: { status: string; designId?: string; code?: string; runId?: string;
+    parity?: string; parityError?: string; detail?: string; notifyRequester?: boolean };
+}
+
+export interface OpenContext {
+  key: string;
+  get(name: string): Promise<ManualLifecycleState | null>;
+  run<T>(name: string, action: () => Promise<T>): Promise<T>;
+  set(name: string, value: ManualLifecycleState): void;
+  send(message: OutboundMessage): void;
+  /** Fire-and-forget: upgrade a Telegram chat to lifecycle mode (exclusive, idempotent). */
+  setChatMode?(chatId: string, requestId: string): void;
+}
+
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
+}
+
+const hashOf = (event: unknown) => createHash('sha256').update(canonical(event)).digest('hex');
+const invalid = (reason: string) => new restate.TerminalError(`LIFECYCLE_OPEN_REFUSED: ${reason}`, { errorCode: 409 });
+
+function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>,
+  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId'>): void {
+  ctx.send({
+    v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
+    text: 'Request received. An art director will review it.', class: 'critical',
+    tenantId: state.tenantId, taskId: state.taskId,
+  });
+}
+
+/** A replay after `set` still emits the same fenced message key, so a crash cannot lose the ack. */
+export async function openManualRequest(ctx: OpenContext, core: CoreInternal, event: OpenManualEvent): Promise<OpenManualResult> {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      event.eventId !== `open:${event.requestId}` || event.tenantId !== DEFAULT_TENANT_ID ||
+      !/^-?\d{1,20}$/.test(event.chatId) || event.draft?.platform !== 'telegram' ||
+      event.draft?.sourceEventId !== `lc-${event.requestId}-r0` ||
+      event.draft?.sourceChannelId !== event.chatId || event.draft?.autoGenerate !== false) {
+    throw invalid('this handler accepts only a versioned manual round-zero request under its own key');
+  }
+  const fingerprint = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (prior) {
+    if (prior.requestId !== event.requestId || prior.openEventId !== event.eventId || prior.openSha256 !== fingerprint) {
+      throw invalid('this request was opened with different content');
+    }
+    sendAcknowledgement(ctx, prior);
+    return { accepted: true, taskId: prior.taskId, stage: 'manual', rev: 1 };
+  }
+  const projected = await ctx.run('project:1', () => core.post<{ v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean }>(
+    `/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
+    { v: 1, expectedRev: 0, rev: 1, key: `${event.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: event.draft }] },
+  ));
+  if (projected?.v !== 1 || !UUID.test(projected.taskId) || projected.stage !== 'manual' || projected.rev !== 1 || projected.autoGenerate !== false) {
+    throw new Error('Core did not return a manual request projection; do not acknowledge it');
+  }
+  const state: ManualLifecycleState = {
+    v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
+    owner: 'restate', stage: 'manual', rev: 1, taskId: projected.taskId,
+    openEventId: event.eventId, openSha256: fingerprint,
+  };
+  ctx.set('lc', state);
+  ctx.setChatMode?.(event.chatId, event.requestId);
+  sendAcknowledgement(ctx, state);
+  return { accepted: true, taskId: state.taskId, stage: 'manual', rev: 1 };
+}
+
+function sendAutomaticAcknowledgement(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
+  ctx.send({ v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
+    text: 'Request received. I am preparing a draft for art director review.', class: 'critical',
+    tenantId: state.tenantId, taskId: state.taskId });
+}
+
+/** The persisted Core projection, not the untrusted open event, supplies the run's execution policy. */
+export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: CoreInternal, event: OpenAutomaticEvent) {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      event.eventId !== `open:${event.requestId}` || event.tenantId !== DEFAULT_TENANT_ID ||
+      !/^-?\d{1,20}$/.test(event.chatId) || event.draft?.platform !== 'telegram' ||
+      event.draft?.sourceEventId !== `lc-${event.requestId}-r0` ||
+      event.draft?.sourceChannelId !== event.chatId || event.draft?.autoGenerate !== true ||
+      !event.draft.clientId || !UUID.test(event.draft.clientId)) {
+    throw invalid('automatic round-zero request has an invalid owner, source or client');
+  }
+  const fingerprint = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (prior) {
+    if (prior.requestId !== event.requestId || prior.openEventId !== event.eventId ||
+        prior.openSha256 !== fingerprint) {
+      throw invalid('this request was opened with different content');
+    }
+    if (!('runId' in prior)) {
+      sendAcknowledgement(ctx, prior);
+      return { accepted: true as const, taskId: prior.taskId, stage: 'manual' as const, rev: 1 as const };
+    }
+    sendAutomaticAcknowledgement(ctx, prior);
+    if (prior.rev === 1) ctx.startDesign(prior.designInput);
+    return { accepted: true as const, taskId: prior.taskId, stage: prior.stage, rev: prior.rev };
+  }
+  const projected = await ctx.run('project:1', () => core.post<{
+    v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean;
+    design?: { clientId: string; rawText: string; sourcePlatform: string;
+      variant?: { width: number; height: number }; designStudio: boolean; studioOptions?: DesignRunInput['studioOptions'] };
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
+    { v: 1, expectedRev: 0, rev: 1, key: `${event.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: event.draft }] }));
+  if (projected?.v !== 1 || !UUID.test(projected.taskId) || projected.rev !== 1) {
+    throw new Error('Core did not return an automatic design projection; do not start the run');
+  }
+  if (projected.stage === 'manual' && projected.autoGenerate === false) {
+    const manual: ManualLifecycleState = {
+      v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
+      owner: 'restate', stage: 'manual', rev: 1, taskId: projected.taskId,
+      openEventId: event.eventId, openSha256: fingerprint,
+    };
+    ctx.set('lc', manual);
+    ctx.setChatMode?.(event.chatId, event.requestId);
+    sendAcknowledgement(ctx, manual);
+    return { accepted: true as const, taskId: manual.taskId, stage: 'manual' as const, rev: 1 as const };
+  }
+  if (projected.stage !== 'designing' || projected.autoGenerate !== true ||
+      !projected.design || projected.design.clientId !== event.draft.clientId) {
+    throw new Error('Core returned an inconsistent automatic design projection; do not start the run');
+  }
+  const runId = `dr-${projected.taskId}`;
+  const designInput: DesignRunInput = {
+    v: 1, lifecycle: { requestId: event.requestId, round: 0, runId },
+    taskId: projected.taskId, tenantId: event.tenantId, clientId: projected.design.clientId,
+    rawText: projected.design.rawText, sourcePlatform: projected.design.sourcePlatform,
+    idempotencyKey: `lifecycle:${event.requestId}:${projected.taskId}`, canvaAutoGenerate: true,
+    ...(projected.design.variant ? { canvaVariant: projected.design.variant } : {}),
+    designStudio: projected.design.designStudio,
+    ...(projected.design.studioOptions ? { studioOptions: projected.design.studioOptions } : {}),
+  };
+  const state: AutomaticLifecycleState = {
+    v: 1, requestId: event.requestId, tenantId: event.tenantId, chatId: event.chatId,
+    owner: 'restate', stage: 'designing', rev: 1, taskId: projected.taskId,
+    openEventId: event.eventId, openSha256: fingerprint, runId, designInput,
+  };
+  ctx.set('lc', state);
+  ctx.setChatMode?.(event.chatId, event.requestId);
+  sendAutomaticAcknowledgement(ctx, state);
+  ctx.startDesign(designInput);
+  return { accepted: true as const, taskId: state.taskId, stage: state.stage, rev: state.rev };
+}
+
+export async function recordDesignFinished(ctx: AutomaticOpenContext, core: CoreInternal, event: DesignFinishedEvent) {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      !UUID.test(event.taskId) || event.runId !== `dr-${event.taskId}` ||
+      event.eventId !== `dr-finished:${event.runId}` ||
+      typeof event.round !== 'number' || !Number.isInteger(event.round) || event.round < 0 ||
+      !event.report || typeof event.report.status !== 'string') throw invalid('invalid design finish identity');
+  const prior = await ctx.get('lc');
+  if (!prior || !('runId' in prior) || prior.requestId !== event.requestId ||
+      prior.taskId !== event.taskId || prior.runId !== event.runId) return { ignored: true as const };
+  const fingerprint = hashOf(event);
+  const nextRev = prior.rev + 1;
+  // Replay detection: if the outcome for this event was already stored (crash after set, before send),
+  // replay the fenced messages rather than projecting again. Works across all revision rounds.
+  if (prior.outcome?.eventId === event.eventId) {
+    if (prior.outcome.sha256 !== fingerprint) {
+      throw invalid('the design outcome was already recorded with different content');
+    }
+    sendDesignOutcome(ctx, prior);
+    return { ignored: false as const, stage: prior.stage, rev: prior.rev };
+  }
+
+  if (prior.stage !== 'designing') throw invalid('request is not designing');
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+    v: 1; requestId: string; taskId: string; rev: number; stage: 'in_review' | 'manual' | 'awaiting_answer';
+    status: string; revisionId?: string; message?: { text: string; parseMode: 'HTML' };
+    question?: { id: string; text: string; options: string[] };
+    officeAlert?: { chatId: string; text: string };
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/design-outcome`, {
+    v: 1, expectedRev: prior.rev, rev: nextRev,
+    key: `${event.requestId}:${nextRev}:designFinished:${event.runId}`,
+    ops: [{ kind: 'recordOutcome', taskId: event.taskId, runId: event.runId, report: event.report }],
+  }));
+  if (projected?.v !== 1 || projected.requestId !== event.requestId ||
+      projected.taskId !== event.taskId || projected.rev !== nextRev ||
+      !['in_review', 'manual', 'awaiting_answer'].includes(projected.stage) ||
+      (projected.stage === 'awaiting_answer' &&
+        (!projected.question || !UUID.test(projected.question.id) ||
+         typeof projected.question.text !== 'string' || !Array.isArray(projected.question.options)))) {
+    throw new Error('Core did not return a valid design outcome projection');
+  }
+  const next: AutomaticLifecycleState = { ...prior, stage: projected.stage, rev: nextRev,
+    question: projected.question ? { ...projected.question, taskId: event.taskId, rev: nextRev } : undefined,
+    outcome: { eventId: event.eventId, sha256: fingerprint, status: projected.status,
+      ...(projected.revisionId ? { revisionId: projected.revisionId } : {}),
+      ...(projected.message ? { message: projected.message } : {}),
+      ...(projected.officeAlert ? { officeAlert: projected.officeAlert } : {}),
+    },
+  };
+  ctx.set('lc', next);
+  sendDesignOutcome(ctx, next);
+  return { ignored: false as const, stage: next.stage, rev: next.rev };
+}
+
+/** A confirmed Telegram send starts the question's office-hour reminder clock. */
+export async function recordQuestionSent(ctx: QuestionSentContext, core: CoreInternal,
+  event: QuestionSentEvent): Promise<{ skipped: true } | { recorded: true; sentAtMs: number }> {
+  if (event?.v !== 1 || ctx.key !== event.requestId ||
+      ![event.requestId, event.taskId, event.questionId].every((id) => UUID.test(id)) ||
+      !Number.isInteger(event.expectedRev) || event.expectedRev < 2 ||
+      event.messageKey !== `${event.requestId}:${event.expectedRev}:design-outcome` ||
+      !/^[1-9][0-9]*$/.test(event.messageId) || !Number.isSafeInteger(Number(event.messageId))) {
+    throw invalid('invalid confirmed question notice identity');
+  }
+  const prior = await ctx.get('lc');
+  if (!prior || !('runId' in prior) || prior.stage !== 'awaiting_answer' ||
+      prior.rev !== event.expectedRev || prior.taskId !== event.taskId ||
+      prior.question?.id !== event.questionId || prior.question.taskId !== event.taskId) {
+    return { skipped: true };
+  }
+  if (prior.question.messageId && prior.question.messageId !== event.messageId) {
+    throw invalid('question notice was confirmed with a different Telegram message ID');
+  }
+  let sentAtMs = prior.question.sentAtMs;
+  if (sentAtMs === undefined) {
+    const result = await ctx.run(`question-sent:${prior.rev}`, () => core.post<{
+      v: 1; requestId: string; rev: number; taskId: string; questionId: string;
+      messageId: string; sentAtMs: number;
+    } | { v: 1; skipped: true }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/question-sent`, event));
+    if (result?.v !== 1) throw new Error('Core did not answer the question send confirmation');
+    if ('skipped' in result) {
+      if (result.skipped) return { skipped: true };
+      throw new Error('Core returned an invalid question send confirmation');
+    }
+    if (result?.v !== 1 || result.requestId !== event.requestId ||
+        result.rev !== event.expectedRev || result.taskId !== event.taskId ||
+        result.questionId !== event.questionId || result.messageId !== event.messageId ||
+        !Number.isFinite(result.sentAtMs) || result.sentAtMs <= 0) {
+      throw new Error('Core did not confirm the question send mark');
+    }
+    sentAtMs = result.sentAtMs;
+    ctx.set('lc', { ...prior, question: { ...prior.question, sentAtMs,
+      messageId: event.messageId } });
+  }
+  if (sentAtMs === undefined) throw new Error('Confirmed question has no send timestamp');
+  const now = await ctx.now();
+  if (!Number.isFinite(now) || now <= 0) throw invalid('invalid reminder clock');
+  for (const day of [1, 5] as const) {
+    const due = nextOfficeMoment(Math.max(sentAtMs + day * REVISION_REMINDER_DELAY_MS, now));
+    ctx.scheduleQuestionReminder?.(event.requestId, event.expectedRev, event.questionId,
+      day, Math.max(0, due - now));
+  }
+  return { recorded: true, sentAtMs };
+}
+
+const OFFICE_ROLES = new Set(['approver', 'art_director', 'creative_director', 'account_lead', 'office_admin', 'administrator']);
+const APPROVAL_ROLES = new Set(['approver', 'art_director', 'creative_director', 'office_admin', 'administrator']);
+
+export async function recordNativeReview(ctx: AutomaticOpenContext, core: CoreInternal, raw: NativeReviewSubmission): Promise<NativeReviewReply> {
+  const event=parseNativeReviewSubmission(raw);
+  if (!event || ctx.key !== event.requestId) throw invalid('invalid native review submission');
+  const prior=await ctx.get('lc'),fingerprint=hashOf(event);
+  if (!prior || prior.requestId !== event.requestId) return {accepted:false,code:'WRONG_STAGE'};
+  if ('nativeReview' in prior && prior.nativeReview?.eventId === event.eventId) {
+    if (prior.nativeReview.sha256 !== fingerprint) throw invalid('native review action has different content');
+    return prior.nativeReview.reply;
+  }
+  // An automatic revision (ADR-114) or the initial manual request itself at revision 1 (ADR-126).
+  const initial=!reviewOwned(prior);
+  if (prior.stage !== 'manual' || prior.rev !== event.expectedRev || prior.taskId !== event.taskId || (initial && prior.rev !== 1))
+    return {accepted:false,code:'WRONG_STAGE'};
+  const reply=await ctx.run(`native-review:${event.actionId}`,()=>core.post<NativeReviewReply>(
+    `/internal/lifecycle/${encodeURIComponent(event.requestId)}/native-review`,event));
+  if (!reply || reply.accepted !== true || reply.requestId !== event.requestId || reply.taskId !== event.taskId ||
+      reply.actionId !== event.actionId || reply.rev !== event.expectedRev+1 || reply.stage !== 'in_review' ||
+      !UUID.test(reply.revisionId) || typeof reply.qaPassed !== 'boolean') throw new Error('Core did not return a valid native review projection');
+  const reviewed={eventId:event.eventId,sha256:fingerprint,status:'NEEDS_REVIEW',revisionId:reply.revisionId};
+  ctx.set('lc',initial
+    ? {...prior,origin:'manual',stage:'in_review',rev:reply.rev,outcome:reviewed,nativeReview:{eventId:event.eventId,sha256:fingerprint,reply}}
+    : {...prior,stage:'in_review',rev:reply.rev,question:undefined,officeRevision:undefined,outcome:reviewed,
+      nativeReview:{eventId:event.eventId,sha256:fingerprint,reply}});
+  return reply;
+}
+
+/** A request-owned office action (revision-request or proof-bound approval) at any revision round. */
+export async function recordOfficeRevision(ctx: AutomaticOpenContext, core: CoreInternal, event: OfficeRevisionEvent): Promise<OfficeRevisionReply> {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      !UUID.test(event.taskId) || !UUID.test(event.revisionId) || !UUID.test(event.actionId) ||
+      event.eventId !== `desk:${event.actionId}` || !['revise', 'approve', 'reject'].includes(event.kind) ||
+      !Number.isInteger(event.expectedRev) || event.expectedRev < 2 ||
+      !event.actor || !UUID.test(event.actor.userId) ||
+      !(event.kind === 'approve' || event.kind === 'reject' ? APPROVAL_ROLES : OFFICE_ROLES).has(event.actor.role) || typeof event.reason !== 'string' ||
+      !event.reason.trim() || event.reason.length > 2000 ||
+      (event.revisionRequest !== undefined &&
+        (!parseCompleteRevisionRequest(event.revisionRequest) ||
+          event.revisionRequest.comment.trim() !== event.reason.trim())) ||
+      (event.kind === 'approve' && (!parseOfficeApprovalProof(event.approvalProof) ||
+        !/^[a-f0-9]{64}$/.test(event.deskRequestFingerprint || '') || event.revisionRequest !== undefined)) ||
+      (event.kind === 'revise' && (event.approvalProof !== undefined || event.deskRequestFingerprint !== undefined || event.rejectionCategory !== undefined)) ||
+      (event.kind === 'reject' && (!parseRejectionCategory(event.rejectionCategory) ||
+        event.approvalProof !== undefined || event.deskRequestFingerprint !== undefined || event.revisionRequest !== undefined)) ||
+      (event.kind === 'approve' && event.rejectionCategory !== undefined)) {
+    throw invalid('invalid office revision identity, reviewer or audit reason');
+  }
+  const fingerprint = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (!prior || !reviewOwned(prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  const expectedRev = event.expectedRev;
+  const nextRev = expectedRev + 1;
+  if (prior.rev === nextRev) {
+    if (prior.officeRevision?.eventId !== event.eventId || prior.officeRevision.sha256 !== fingerprint) {
+      throw invalid('this office decision was already recorded with different content');
+    }
+    // A worker can stop after saving state and before sending either message. Reissue the same
+    // stable keys on replay; TelegramSender fences the critical send in Postgres.
+    if (event.kind === 'revise') sendOfficeRevisionNotice(ctx, prior, event);
+    return { accepted: true, requestId: prior.requestId, taskId: prior.taskId,
+      revisionId: prior.officeRevision.revisionId, actionId: prior.officeRevision.actionId,
+      approvalId: prior.officeRevision.approvalId, stage: prior.stage as 'manual' | 'approved' | 'rejected', rev: nextRev };
+  }
+  if (prior.rev !== expectedRev || prior.stage !== 'in_review') return { accepted: false, code: 'WRONG_STAGE' };
+  // ADR-126: a manual stage after revise would route the requester's reply into a new design run.
+  if (event.kind === 'revise' && !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.taskId !== event.taskId || prior.outcome?.revisionId !== event.revisionId) {
+    return { accepted: false, code: 'NOT_CURRENT_DRAFT' };
+  }
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+    v: 1; requestId: string; taskId: string; revisionId: string; actionId: string;
+    approvalId: string; taskState: string; rev: number; stage: 'manual' | 'approved' | 'rejected';
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/office-decision`, {
+    v: 1, expectedRev, rev: nextRev,
+    key: `${event.requestId}:${nextRev}:officeDecision:${event.eventId}`,
+    ops: [{ kind: event.kind === 'approve' ? 'recordOfficeApproval' : event.kind === 'reject' ? 'recordOfficeRejection' : 'recordOfficeRevision', taskId: event.taskId, revisionId: event.revisionId,
+      actionId: event.actionId, actor: event.actor, reason: event.reason.trim(),
+      ...(event.rejectionCategory ? { rejectionCategory: event.rejectionCategory } : {}),
+      ...(event.revisionRequest ? { revisionRequest: parseCompleteRevisionRequest(event.revisionRequest) } : {}),
+      ...(event.approvalProof ? { approvalProof: parseOfficeApprovalProof(event.approvalProof),
+        deskRequestFingerprint: event.deskRequestFingerprint } : {}) }],
+  }));
+  const expectedStage = event.kind === 'approve' ? 'approved' : event.kind === 'reject' ? 'rejected' : 'manual';
+  const expectedTaskState = event.kind === 'approve' ? 'approved' : event.kind === 'reject' ? 'rejected' : 'revision_requested';
+  if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
+      projected.revisionId !== event.revisionId || projected.actionId !== event.actionId ||
+      !UUID.test(projected.approvalId) || projected.taskState !== expectedTaskState ||
+      projected.rev !== nextRev || projected.stage !== expectedStage) {
+    throw new Error('Core did not return a valid office revision projection');
+  }
+  const officeRevision = { eventId: event.eventId, sha256: fingerprint,
+    actionId: event.actionId, revisionId: event.revisionId, approvalId: projected.approvalId, kind: event.kind };
+  const next: ReviewOwnedState = 'runId' in prior ? { ...prior, stage: expectedStage, rev: nextRev, officeRevision }
+    : { ...prior, stage: expectedStage as 'approved' | 'rejected', rev: nextRev, officeRevision };
+  ctx.set('lc', next);
+  if (event.kind === 'revise') sendOfficeRevisionNotice(ctx, next, event);
+  return { accepted: true, requestId: event.requestId, taskId: event.taskId, revisionId: event.revisionId,
+    actionId: event.actionId, approvalId: projected.approvalId, stage: expectedStage, rev: nextRev };
+}
+
+function sendOfficeRevisionNotice(ctx: AutomaticOpenContext,
+  state: Pick<ReviewOwnedState, 'requestId' | 'rev' | 'chatId' | 'tenantId' | 'taskId'>, event: OfficeRevisionEvent): void {
+  const comment = event.revisionRequest?.comment?.trim() || event.reason.trim();
+  const round = Math.floor((state.rev - 1) / 2);
+  ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:office-revision-notify`,
+    chatId: state.chatId, kind: 'text',
+    text: `Your design needs adjustments (revision ${round}).\n\n${comment}\n\nPlease reply with your updated direction or the changes you want.`,
+    class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+  ctx.scheduleReminder?.(state.requestId, state.rev, REVISION_REMINDER_DELAY_MS);
+}
+
+/** A delayed tick only has an effect while this exact revision still awaits the requester. */
+export async function recordReminderTick(ctx: Pick<AutomaticOpenContext, 'key' | 'get' | 'send'>,
+  event: ReminderTickEvent): Promise<{ skipped: true } | { reminded: true }> {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      !Number.isInteger(event.expectedRev) || event.expectedRev < (event.kind === 'question' ? 2 : 3) ||
+      (event.kind !== undefined && event.kind !== 'revision' && event.kind !== 'question') ||
+      (event.kind === 'question' && (!UUID.test(event.questionId || '') ||
+        (event.day !== 1 && event.day !== 5))) ||
+      (event.kind !== 'question' && (event.questionId !== undefined || event.day !== undefined))) {
+    throw invalid('invalid revision reminder identity');
+  }
+  const state = await ctx.get('lc');
+  if (event.kind === 'question') {
+    if (!state || !('runId' in state) || state.rev !== event.expectedRev ||
+        state.stage !== 'awaiting_answer' || !state.question ||
+        state.question.id !== event.questionId) {
+      return { skipped: true };
+    }
+    ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:question-reminder-${event.day}`,
+      chatId: state.chatId, kind: 'text',
+      text: `Reminder: This design is waiting for your answer.\n\n${state.question.text}\n\nPlease reply to this message when you are ready.`,
+      class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+    return { reminded: true };
+  }
+  if (!state || !('runId' in state) || state.rev !== event.expectedRev || state.stage !== 'manual') {
+    return { skipped: true };
+  }
+  ctx.send({ v: 1, key: `${state.requestId}:${event.expectedRev}:revision-reminder`,
+    chatId: state.chatId, kind: 'text',
+    text: 'Reminder: Your design is waiting for your revision direction. Please reply when you are ready.',
+    class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+  return { reminded: true };
+}
+
+/** A signed office action claims a publication in Core before the workflow can prepare any effect. */
+export async function recordOfficeDeliveryStart(ctx: AutomaticOpenContext, core: CoreInternal,
+  event: OfficeDeliveryStartEvent): Promise<OfficeDeliveryStartReply> {
+  if (event?.v !== 1 || event.kind !== 'deliver' || ctx.key !== event.requestId ||
+      !UUID.test(event.requestId) || !UUID.test(event.taskId) || !UUID.test(event.revisionId) ||
+      !UUID.test(event.approvalId) || !UUID.test(event.actionId) ||
+      event.eventId !== `desk:${event.actionId}` || !Number.isInteger(event.expectedRev) ||
+      event.expectedRev < 3 || !UUID.test(event.actor?.userId || '') ||
+      !['art_director', 'creative_director', 'office_admin', 'administrator'].includes(event.actor?.role) ||
+      typeof event.reason !== 'string' || !event.reason.trim() || event.reason.length > 2000) {
+    throw invalid('invalid signed delivery action');
+  }
+  const sha256 = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (!prior || !reviewOwned(prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.delivery?.startEventId === event.eventId) {
+    if (prior.delivery.startSha256 !== sha256) throw invalid('this delivery action was recorded with different content');
+    if (!prior.delivery.finishResult) ctx.startDelivery?.(prior.delivery.input);
+    return { accepted: true, requestId: prior.requestId, taskId: prior.taskId,
+      approvalId: prior.delivery.input.approvalId, actionId: prior.delivery.actionId,
+      deliveryId: prior.delivery.input.deliveryId,
+      stage: prior.stage as 'approved' | 'delivering' | 'delivered', rev: prior.rev };
+  }
+  if (prior.rev !== event.expectedRev || !['approved', 'delivering'].includes(prior.stage)) {
+    return { accepted: false, code: 'WRONG_STAGE' };
+  }
+  if (prior.taskId !== event.taskId || prior.officeRevision?.revisionId !== event.revisionId ||
+      prior.officeRevision.approvalId !== event.approvalId || prior.officeRevision.kind !== 'approve') {
+    return { accepted: false, code: 'NOT_CURRENT_DRAFT' };
+  }
+  if (!ctx.startDelivery) throw new Error('RequestLifecycle has no Delivery workflow client');
+  const nextRev = prior.rev + 1;
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+    v: 1; requestId: string; taskId: string; approvalId: string; actionId: string;
+    stage: 'delivering'; rev: number; delivery: DeliveryInput;
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/delivery-start`, {
+    v: 1, expectedRev: prior.rev, rev: nextRev,
+    key: `${event.requestId}:${nextRev}:officeDecision:${event.eventId}`,
+    ops: [{ kind: 'startDelivery', taskId: event.taskId, revisionId: event.revisionId,
+      approvalId: event.approvalId, actionId: event.actionId, actor: event.actor,
+      reason: event.reason.trim() }],
+  }));
+  if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
+      projected.approvalId !== event.approvalId || projected.actionId !== event.actionId ||
+      projected.stage !== 'delivering' || projected.rev !== nextRev ||
+      projected.delivery?.requestId !== event.requestId || projected.delivery.taskId !== event.taskId ||
+      projected.delivery.approvalId !== event.approvalId || projected.delivery.revisionId !== event.revisionId ||
+      projected.delivery.reportTo !== 'lifecycle' || projected.delivery.requestRev !== nextRev) {
+    throw new Error('Core did not return a valid request-owned delivery claim');
+  }
+  const next: ReviewOwnedState = { ...prior, stage: 'delivering', rev: nextRev,
+    delivery: { startEventId: event.eventId, startSha256: sha256, actionId: event.actionId,
+      input: projected.delivery } };
+  ctx.set('lc', next);
+  ctx.startDelivery(projected.delivery);
+  return { accepted: true, requestId: event.requestId, taskId: event.taskId,
+    approvalId: event.approvalId, actionId: event.actionId,
+    deliveryId: projected.delivery.deliveryId, stage: 'delivering', rev: nextRev };
+}
+
+/** The workflow reports only to its private request owner; Core applies a versioned final projection. */
+export async function recordDeliveryFinished(ctx: AutomaticOpenContext, core: CoreInternal,
+  event: DeliveryFinishedEvent): Promise<DeliveryFinishedReply> {
+  if (event?.v !== 1 || ctx.key !== event.requestId || !UUID.test(event.requestId) ||
+      !UUID.test(event.taskId) || !UUID.test(event.approvalId) ||
+      event.eventId !== `delivery:${event.deliveryId}` || !Number.isInteger(event.run) || event.run < 1 ||
+      !Number.isInteger(event.expectedRev) || event.expectedRev < 4 ||
+      !['delivered', 'chat_only', 'uncertain', 'failed'].includes(event.outcome?.outcome) ||
+      !Array.isArray(event.outcome.uncertain)) {
+    throw invalid('invalid delivery-finished event');
+  }
+  const sha256 = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (!prior || !reviewOwned(prior) || !prior.delivery) throw invalid('this request has no delivery to finish');
+  if (prior.delivery.finishEventId === event.eventId) {
+    if (prior.delivery.finishSha256 !== sha256 || !prior.delivery.finishResult) {
+      throw invalid('the delivery result was recorded with different content');
+    }
+    return prior.delivery.finishResult;
+  }
+  if (prior.stage !== 'delivering' || prior.rev !== event.expectedRev ||
+      prior.taskId !== event.taskId || prior.delivery.input.deliveryId !== event.deliveryId ||
+      prior.delivery.input.approvalId !== event.approvalId || prior.delivery.input.run !== event.run) {
+    throw invalid('the current request is not delivering this workflow run');
+  }
+  const nextRev = prior.rev + 1;
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+    v: 1; requestId: string; taskId: string; approvalId: string; deliveryId: string;
+    stage: 'approved' | 'delivering' | 'delivered'; taskState: string; rev: number;
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/delivery-finished`, {
+    v: 1, expectedRev: prior.rev, rev: nextRev,
+    key: `${event.requestId}:${nextRev}:deliveryFinished:${event.deliveryId}`,
+    ops: [{ kind: 'finishDelivery', taskId: event.taskId, approvalId: event.approvalId,
+      deliveryId: event.deliveryId, run: event.run, outcome: event.outcome }],
+  }));
+  if (projected?.v !== 1 || projected.requestId !== event.requestId || projected.taskId !== event.taskId ||
+      projected.approvalId !== event.approvalId || projected.deliveryId !== event.deliveryId ||
+      projected.rev !== nextRev || !['approved', 'delivering', 'delivered'].includes(projected.stage)) {
+    throw new Error('Core did not return a valid request-owned delivery result');
+  }
+  const reply: DeliveryFinishedReply = { accepted: true, requestId: event.requestId, taskId: event.taskId,
+    approvalId: event.approvalId, deliveryId: event.deliveryId,
+    stage: projected.stage, taskState: projected.taskState, rev: nextRev };
+  const next: ReviewOwnedState = { ...prior, stage: projected.stage, rev: nextRev,
+    delivery: { ...prior.delivery, finishEventId: event.eventId, finishSha256: sha256,
+      finishResult: reply } };
+  ctx.set('lc', next);
+  return reply;
+}
+
+function sendDesignOutcome(ctx: AutomaticOpenContext, state: AutomaticLifecycleState): void {
+  const message = state.outcome?.message;
+  // Key is scoped to rev so a retried send after a revision round uses the correct idempotency key.
+  if (message) ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:design-outcome`, chatId: state.chatId,
+    kind: 'text', text: message.text, parseMode: message.parseMode, class: 'critical',
+    tenantId: state.tenantId, taskId: state.taskId,
+    ...(state.stage === 'awaiting_answer' && state.question ? { onSent: {
+      kind: 'question' as const, requestId: state.requestId, requestRev: state.rev,
+      taskId: state.taskId, questionId: state.question.id,
+    } } : {}),
+  });
+  const alert = state.outcome?.officeAlert;
+  if (alert) ctx.send({ v: 1, key: `${state.requestId}:${state.rev}:office-alert`, chatId: alert.chatId,
+    kind: 'text', text: alert.text, class: 'critical', tenantId: state.tenantId, taskId: state.taskId });
+}
+
+/**
+ * Records the requester's revision directive and starts the next design round.
+ * The worker must have already intake-persisted the new task via Core with source event
+ * `lc-<requestId>-r<round>` and lifecycleOwner 'restate', then pass its id here.
+ * Rev path: manual (rev N) → designing (rev N+1) with the new task.
+ */
+export async function recordRequesterDecision(
+  ctx: AutomaticOpenContext,
+  core: CoreInternal,
+  event: RequesterDecisionEvent,
+): Promise<RequesterDecisionReply> {
+  if (event?.v !== 1 || !UUID.test(event.requestId) || ctx.key !== event.requestId ||
+      !Number.isInteger(event.round) || event.round < 1 ||
+      !UUID.test(event.priorTaskId) ||
+      typeof event.directive !== 'string' || !event.directive.trim() || event.directive.length > 5000 ||
+      typeof event.eventId !== 'string' || !event.eventId) {
+    throw invalid('invalid requester decision event');
+  }
+  const fingerprint = hashOf(event);
+  const prior = await ctx.get('lc');
+  if (!prior || !('runId' in prior)) return { accepted: false, code: 'WRONG_STAGE' };
+  // Idempotent replay: already in designing for this round.
+  if (prior.revisionRound?.eventId === event.eventId) {
+    if (prior.revisionRound.sha256 !== fingerprint) throw invalid('requester decision replayed with different content');
+    if (prior.stage === 'designing') ctx.startDesign({
+      ...prior.designInput,
+      lifecycle: { requestId: prior.requestId, round: prior.revisionRound.round, runId: prior.revisionRound.runId },
+      taskId: prior.revisionRound.newTaskId,
+    });
+    return { accepted: true, requestId: prior.requestId, newTaskId: prior.revisionRound.newTaskId,
+      runId: prior.revisionRound.runId, round: prior.revisionRound.round, rev: prior.rev, stage: 'designing' };
+  }
+  if (prior.stage !== (event.questionId ? 'awaiting_answer' : 'manual')) {
+    return { accepted: false, code: 'WRONG_STAGE' };
+  }
+  if (event.questionId && (!UUID.test(event.questionId) ||
+      prior.question?.id !== event.questionId || prior.question.taskId !== event.priorTaskId ||
+      prior.question.rev !== prior.rev)) return { accepted: false, code: 'WRONG_STAGE' };
+  if (prior.taskId !== event.priorTaskId) return { accepted: false, code: 'WRONG_STAGE' };
+  // The worker must pass a newTaskId it obtained by intaking via /internal/telegram/intake.
+  // We inline the Core call here to get the new task's id back from the route.
+  // The worker sends the new task id as part of the event, pre-fetched before calling this handler.
+  // Validate the new task: it must be a UUID distinct from the prior task.
+  if (!('newTaskId' in event) || !UUID.test((event as unknown as { newTaskId: string }).newTaskId) ||
+      (event as unknown as { newTaskId: string }).newTaskId === event.priorTaskId) {
+    throw invalid('requester decision must carry a new task id that is distinct from the prior task');
+  }
+  const newTaskId = (event as unknown as { newTaskId: string }).newTaskId;
+  const expectedRev = prior.rev;
+  const nextRev = expectedRev + 1;
+  const updateMatch = /^chatinbox:revision:([1-9][0-9]*)$/.exec(event.eventId);
+  if (event.eventId.startsWith('chatinbox:revision:') &&
+      (!updateMatch || !Number.isSafeInteger(Number(updateMatch[1])))) {
+    throw invalid('requester decision has an invalid Telegram update identity');
+  }
+  if (event.questionId && !updateMatch) {
+    throw invalid('clarification answers require the persisted Telegram update identity');
+  }
+  const projected = await ctx.run(`project:${nextRev}`, () => core.post<{
+    v: 1; requestId: string; priorTaskId: string; newTaskId: string;
+    round: number; rev: number; stage: 'designing'; runId: string; directive?: string;
+    questionId?: string;
+  }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/${updateMatch
+    ? 'requester-revision-intake' : 'requester-revision'}`, updateMatch
+    ? { v: 1, updateId: Number(updateMatch[1]), expectedRev,
+        priorTaskId: event.priorTaskId, newTaskId, round: event.round,
+        directive: event.directive.trim(),
+        ...(event.questionId ? { questionId: event.questionId } : {}) }
+    : { v: 1, expectedRev, rev: nextRev,
+        key: `${event.requestId}:${nextRev}:requesterRevision:r${event.round}`,
+        ops: [{ kind: 'requesterRevision', priorTaskId: event.priorTaskId, newTaskId,
+          round: event.round, directive: event.directive.trim() }] }));
+  if (projected?.v !== 1 || projected.requestId !== event.requestId ||
+      projected.priorTaskId !== event.priorTaskId || projected.newTaskId !== newTaskId ||
+      projected.round !== event.round || projected.rev !== nextRev || projected.stage !== 'designing' ||
+      projected.runId !== `dr-${newTaskId}` ||
+      projected.questionId !== event.questionId ||
+      (updateMatch && projected.directive !== event.directive.trim())) {
+    throw new Error('Core did not return a valid requester revision projection');
+  }
+  const newRunId = projected.runId;
+  const newDesignInput: DesignRunInput = {
+    ...prior.designInput,
+    rawText: event.directive.trim(),
+    lifecycle: { requestId: prior.requestId, round: event.round, runId: newRunId },
+    taskId: newTaskId,
+    idempotencyKey: `lifecycle:${prior.requestId}:${newTaskId}`,
+  };
+  const next: AutomaticLifecycleState = { ...prior, stage: 'designing', rev: nextRev,
+    taskId: newTaskId, runId: newRunId, round: event.round, designInput: newDesignInput,
+    revisionRound: { eventId: event.eventId, sha256: fingerprint, round: event.round,
+      newTaskId, runId: newRunId },
+    // Clear prior-round transient fields so the next design-outcome projects cleanly.
+    outcome: undefined, officeRevision: undefined, question: undefined,
+  };
+  ctx.set('lc', next);
+  ctx.startDesign(newDesignInput);
+  return { accepted: true, requestId: prior.requestId, newTaskId, runId: newRunId,
+    round: event.round, rev: nextRev, stage: 'designing' };
+}
+
+export function createRequestLifecycle(core: CoreInternal = coreInternalFromEnv()) {
   return restate.object({
     name: 'RequestLifecycle',
     handlers: {
-      open: exclusive('open'),
-      designFinished: exclusive('designFinished'),
-      answer: exclusive('answer'),
-      requesterDecision: exclusive('requesterDecision'),
-      officeDecision: exclusive('officeDecision'),
-      deliveryFinished: exclusive('deliveryFinished'),
-      messageSent: exclusive('messageSent'),
-      remind: exclusive('remind'),
-      expire: exclusive('expire'),
-      cancel: exclusive('cancel'),
-      retryProjection: exclusive('retryProjection'),
-      get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<LifecycleView | null> => {
-        const s = upgrade(await ctx.get<unknown>(STATE_KEY));
-        return s ? viewOf(s) : null;
-      }),
+      open: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: OpenManualEvent | OpenAutomaticEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId, tenantId: event?.tenantId }, () =>
+            event?.draft?.autoGenerate === true ? openAutomaticRequest({
+              key: ctx.key,
+              get: (name) => ctx.get<LifecycleState>(name),
+              run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
+              set: (name, value) => ctx.set(name, value),
+              send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+                .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+              startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
+              setChatMode: (chatId, requestId) => ctx.objectSendClient(chatInbox, chatId)
+                .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })),
+            }, core, event as OpenAutomaticEvent) : openManualRequest({
+              key: ctx.key,
+              get: (name) => ctx.get<ManualLifecycleState>(name),
+              run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
+              set: (name, value) => ctx.set(name, value),
+              send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+                .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+              setChatMode: (chatId, requestId) => ctx.objectSendClient(chatInbox, chatId)
+                .setMode(requestId, restate.rpc.sendOpts({ idempotencyKey: `chatinbox:setMode:${requestId}` })),
+            }, core, event as OpenManualEvent)),
+      ),
+      designFinished: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: DesignFinishedEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordDesignFinished({
+            key: ctx.key,
+            get: (name) => ctx.get<LifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+              .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+            startDesign: () => { throw new Error('designFinished cannot start a new run'); },
+          }, core, event)),
+      ),
+      questionSent: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: QuestionSentEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordQuestionSent({
+            key: ctx.key,
+            get: (name) => ctx.get<LifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            now: () => ctx.date.now(),
+            scheduleQuestionReminder: (requestId, rev, questionId, day, delayMs) =>
+              ctx.objectSendClient(RequestLifecycleApi, requestId)
+                .reminderTick({ v: 1, requestId, expectedRev: rev, kind: 'question', questionId, day },
+                  restate.rpc.sendOpts({
+                    idempotencyKey: `lifecycle:question-reminder:${requestId}:${rev}:${day}`,
+                    delay: delayMs,
+                  })),
+          }, core, event)),
+      ),
+      nativeReview: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext,event: NativeReviewSubmission)=>withInvocationLogContext(ctx,{requestId:event?.requestId},()=>recordNativeReview({
+          key:ctx.key,get:name=>ctx.get<LifecycleState>(name),
+          run:(name,action)=>ctx.run(name,action,PROJECT_RETRY),set:(name,value)=>ctx.set(name,value),
+          send:()=>{throw new Error('nativeReview does not send unverified notices');},
+          startDesign:()=>{throw new Error('nativeReview cannot start generation');},
+        },core,event)),
+      ),
+      officeDecision: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: OfficeRevisionEvent | OfficeDeliveryStartEvent) =>
+          withInvocationLogContext<OfficeDeliveryStartReply | OfficeRevisionReply>(ctx, { requestId: event?.requestId }, () => {
+            const handlers: AutomaticOpenContext = {
+            key: ctx.key,
+            get: (name) => ctx.get<LifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+              .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+            startDesign: () => { throw new Error('officeDecision cannot start a run from this transition'); },
+            startDelivery: (input) => ctx.workflowSendClient(DeliveryApi, input.deliveryId).run(input),
+            scheduleReminder: (requestId, rev, delayMs) =>
+              ctx.objectSendClient(RequestLifecycleApi, requestId)
+                .reminderTick({ v: 1, requestId, expectedRev: rev },
+                  restate.rpc.sendOpts({
+                    idempotencyKey: `lifecycle:reminder:${requestId}:${rev}`,
+                    delay: delayMs,
+                  })),
+            };
+            return event?.kind === 'deliver'
+              ? recordOfficeDeliveryStart(handlers, core, event)
+              : recordOfficeRevision(handlers, core, event as OfficeRevisionEvent);
+          }),
+      ),
+      requesterDecision: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: RequesterDecisionEvent & { newTaskId: string }) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordRequesterDecision({
+            key: ctx.key,
+            get: (name) => ctx.get<LifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, PROJECT_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+              .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+            startDesign: (input) => ctx.workflowSendClient(DesignRunApi, input.lifecycle.runId).run(input),
+          }, core, event)),
+      ),
+      deliveryFinished: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 7 }, journalRetention: { days: 7 } },
+        async (ctx: restate.ObjectContext, event: DeliveryFinishedEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, () => recordDeliveryFinished({
+            key: ctx.key,
+            get: (name) => ctx.get<LifecycleState>(name),
+            run: (name, action) => ctx.run(name, action, OUTCOME_RETRY),
+            set: (name, value) => ctx.set(name, value),
+            send: () => { throw new Error('deliveryFinished cannot send from this transition'); },
+            startDesign: () => { throw new Error('deliveryFinished cannot start a design run'); },
+          }, core, event)),
+      ),
+      get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<LifecycleState | null> =>
+        (await ctx.get<LifecycleState>('lc')) ?? null),
+      /** Fires after a delay when the requester has not submitted a revision directive. */
+      reminderTick: restate.handlers.object.exclusive(
+        { idempotencyRetention: { days: 2 }, journalRetention: { days: 2 } },
+        async (ctx: restate.ObjectContext, event: ReminderTickEvent) =>
+          withInvocationLogContext(ctx, { requestId: event?.requestId }, async () => {
+            return recordReminderTick({ key: ctx.key,
+              get: (name) => ctx.get<LifecycleState>(name),
+              send: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+                .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
+            }, event);
+          }),
+      ),
     },
     options: {
-      journalRetention: { days: 7 },
-      idempotencyRetention: { days: 7 },
-      inactivityTimeout: { minutes: 1 },
-      abortTimeout: { minutes: 5 },
+      ingressPrivate: true,
+      inactivityTimeout: { minutes: 1 }, abortTimeout: { minutes: 5 },
       retryPolicy: { initialInterval: 1000, exponentiationFactor: 2, maxInterval: 60_000, maxAttempts: 300, onMaxAttempts: 'pause' },
     },
   });
 }
+
+/** Stable client definition shared by DesignRun and the worker endpoint. */
+export const RequestLifecycleApi = createRequestLifecycle();

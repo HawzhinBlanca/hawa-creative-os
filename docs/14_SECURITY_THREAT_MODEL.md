@@ -16,7 +16,7 @@
 |---|---|---|
 | User browser | authenticated but potentially compromised | Hawa Desk |
 | Core services | highest controlled trust | API, Restate workers, PostgreSQL |
-| Editable studio | trusted only through scoped adapter | HyCanvas |
+| Editable studio | trusted only through scoped adapter | Canva (active; ADR-025) |
 | GPU/Comfy worker | untrusted compute sandbox | custom nodes/models |
 | Messaging adapters | untrusted external edge | Telegram, WAHA |
 | AI providers | external processors | frontier/image APIs |
@@ -137,7 +137,7 @@ No user gains access solely because a chat platform says they sent a message.
 - routine rotation and revocation;
 - never write secrets to traces, model prompts, source packages, or errors;
 - secret scanning in CI;
-- ComfyUI/HyCanvas receive only scoped credentials they need.
+- Active Canva integration and optional cut-out compute receive only the scoped credentials they need.
 
 ## 7. Network
 
@@ -186,3 +186,37 @@ Per client/project define:
 - ComfyUI/WAHA network isolation verified;
 - source hashes and approval invalidation verified;
 - least-privilege Drive/Sheets access proven.
+
+### Release identity (ADR-038, 2026-09-25)
+
+A committed source manifest describes a candidate, not a deployed image. The deployment must reject a build stamp different from the clean checkout and inspect the built Core, Desk and Worker image IDs and OCI revision labels before traffic switches. An observed deployment receipt records those immutable IDs, the applied database migration name/hash, and effective non-secret runtime flags/models. A mutable image tag, local source checksum, or source-default model list cannot stand in for this receipt. The receipt proves those observations only; exact task/export provenance and the full release gate are still required for admission.
+
+
+### Reviewed dependency repair, 2026-09-27 (ADR-095)
+
+The source candidate pins pptxgenjs 4.0.1's image-size dependency to 2.0.4.
+GHSA-w3rx-r6r6-pgpr and GHSA-5p2g-fcmc-qvqq are no longer audit exclusions; their
+patch is available. Source transfer/Canva-package compatibility and an unfiltered
+production dependency audit are recorded in R21_GATEWAY_SCHEMA_PROOF.json. This
+is a candidate dependency change; backup/canary/rollback deployment gates remain
+required before runtime rollout.
+
+
+### Named daily budget administration (ADR-098, 2026-09-27)
+
+Desk Operations exposes the existing shared office/client/role spending policy,
+consistent current-day ledger usage and paginated revision history. Only a current
+named administrator can append a policy after reviewing old and proposed limits
+and supplying a reason. SQL checks session, tenant, actor, version and limits hash
+under the same short lock as paid admissions. Runtime direct table writes remain
+denied. The database records human identity separately from its connection identity;
+historical owner revisions do not acquire fabricated human attribution.
+
+Limits use nonnegative whole micro-dollars, including an explicit zero stop.
+Removing a client or role override restores the displayed default. Lowering a cap
+retains existing obligations; raising one never clears uncertain execution or
+missing history. The fixed Asia/Baghdad day and current ledger accounting remain.
+Desk retains an exact action scoped to the office and user before POST and retries
+it after an uncertain answer or remount. Replay rechecks authority and returns the
+original receipt before checking whether newer policy revisions exist. See
+runbooks/SPENDING_POLICY.md. Other paid paths and live admission remain open.

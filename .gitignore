@@ -18,6 +18,7 @@ __pycache__
 output/*
 !output/audits/
 output/audits/*
+!output/audits/2026-09-25-architecture-design-reality/
 !output/audits/2026-09-10-deep-audit/
 !output/audits/2026-09-12-canva-reality-check/
 !output/audits/2026-09-12-followup-bug-hunt/
@@ -61,5 +62,7 @@ exports/
 scratch/
 *staged-exports/
 infra/backup/snapshots/
+infra/backup/release-receipts/
 packages/creative/assets/fonts/private/
 data/
+packages/creative/bin/

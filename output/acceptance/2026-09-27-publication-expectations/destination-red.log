@@ -1,0 +1,35 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_c3bf33c83bd68d08 and hawa_tpl_repair_c3bf33c83bd68d08 (23 ms)
+{"level":"error","time":"2026-09-27T16:43:53.818Z","service":"core","requestId":"cd9a732c-0935-4d1f-a7da-037da211ebc4","taskId":"db5c8a59-9911-44b7-962a-a35e89d00c2e","tenantId":"00000000-0000-4000-a000-000000000001","err":{"type":"Error","message":"Drive file drive_file_a1f6eca1-bb1f-48a9-8df2-89ddbfe5c98b conflicts with its stored publication receipt","stack":"Error: Drive file drive_file_a1f6eca1-bb1f-48a9-8df2-89ddbfe5c98b conflicts with its stored publication receipt\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:232:28)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at PublicationRepository.recordDriveRef (/Users/hawzhin/Hawdesign/packages/db/src/repositories/publication.repository.ts:250:14)\n    at /Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:956:13\n    at runner (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:67:12)\n    at file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/kysely.js:572:32\n    at DefaultConnectionProvider.provideConnection (file:///Users/hawzhin/Hawdesign/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/driver/default-connection-provider.js:10:20)\n    at withRlsContext (/Users/hawzhin/Hawdesign/packages/db/src/client.ts:73:10)\n    at doPublish (/Users/hawzhin/Hawdesign/apps/core/src/services/omnichannel-delivery.ts:954:9)\n    at /Users/hawzhin/Hawdesign/packages/db/src/session-lock.ts:30:39"},"msg":"[core:omnichannel:receipts] Error committing drive/sheet receipts and delivery decision:"}
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts (5 tests | 1 failed) 1316ms
+     × keeps the original destination, filenames and timestamp after DNA changes and Core restart 232ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/core/test/publish-sheets-unconfirmed.test.ts > durable publication expectation > keeps the original destination, filenames and timestamp after DNA changes and Core restart
+AssertionError: expected 503 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 503
+
+ ❯ apps/core/test/publish-sheets-unconfirmed.test.ts:186:27
+    184|     const restarted = createAppWithClientFixtures({ db: testDb, testAu…
+    185|     const second = await restarted.request(`/tasks/${taskId}/publish-o…
+    186|     expect(second.status).toBe(200);
+       |                           ^
+    187|     const retried = secondCall.mock.calls[0][1];
+    188|     expect(retried.destination).toEqual(original.destination);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  19:43:50
+   Duration  2.96s (transform 1.02s, setup 139ms, import 1.37s, tests 1.32s, environment 0ms)
+

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { WORKER_SERVICES } from '../../../scripts/restate-bluegreen.js';
 import { WORKER_SERVICE_NAMES } from '../../../apps/worker/src/services.js';
 import { chatInbox } from '../../../apps/worker/src/lifecycle/chat-inbox.js';
+import { createRequestLifecycle } from '../../../apps/worker/src/lifecycle/request-lifecycle.js';
+import { DesignRunApi } from '../../../apps/worker/src/lifecycle/design-run.js';
 
 /**
  * A service is never removed from the worker build (ADR-034; PHASE2_DESIGN.md section 4 rule 3): the
@@ -17,5 +19,15 @@ describe('the services a worker build hosts', () => {
   it('include ChatInbox (Phase 2.1), under that name', () => {
     expect(WORKER_SERVICE_NAMES).toContain('ChatInbox');
     expect(chatInbox.name).toBe('ChatInbox');
+  });
+
+  it('keeps RequestLifecycle in every future worker deployment', () => {
+    expect(WORKER_SERVICE_NAMES).toContain('RequestLifecycle');
+    expect(createRequestLifecycle({ post: async () => ({}) } as any).name).toBe('RequestLifecycle');
+  });
+
+  it('keeps DesignRun in every future worker deployment', () => {
+    expect(WORKER_SERVICE_NAMES).toContain('DesignRun');
+    expect(DesignRunApi.name).toBe('DesignRun');
   });
 });

@@ -1,0 +1,50 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_7cc7f808220741fc and hawa_tpl_repair_7cc7f808220741fc (29 ms)
+···············································stdout | packages/testkit/test/pilot-exit-drill.test.ts > Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation Drill (Pilot Exit, NFR-001, NFR-005, Invariants #1–#15) > executes 100 concurrent end-to-end production tasks with >=95% completion, 0 flattened raster layers, and 0 cross-tenant leaks
+
+======================================================
+PILOT EXIT 100-TASK SIMULATION DRILL SCORECARD
+======================================================
+Total Tasks Simulated:          100
+Completed Tasks:                96/100 (96%)
+Failed Tasks:                   4
+First Failed Task Error:        expected 'drive_complete' to be 'complete' // Object.is equality
+Flattened Raster Layers:        0 (Target: 0)
+Cross-Tenant Contamination:     0 (Target: 0)
+Deterministic QA 100% Pass:     false
+Total Wall-Clock Time:          398 ms
+Average Latency per Task:       3.98 ms
+======================================================
+
+
+x
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/testkit/test/pilot-exit-drill.test.ts > Pilot Exit Acceptance Gate: 100-Production Task Lifecycle Simulation Drill (Pilot Exit, NFR-001, NFR-005, Invariants #1–#15) > executes 100 concurrent end-to-end production tasks with >=95% completion, 0 flattened raster layers, and 0 cross-tenant leaks
+AssertionError: expected 96 to be 100 // Object.is equality
+
+- Expected
++ Received
+
+- 100
++ 96
+
+ ❯ packages/testkit/test/pilot-exit-drill.test.ts:537:35
+    535|
+    536|     // Gate Assertions
+    537|     expect(completedTasks.length).toBe(TOTAL_TASKS);
+       |                                   ^
+    538|     expect(completionRate).toBeGreaterThanOrEqual(95); // NFR-001 thre…
+    539|     expect(totalFlattenedRasterLayers).toBe(0); // Invariant #1: All d…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 47 passed (48)
+   Start at  22:31:35
+   Duration  1.44s (transform 736ms, setup 166ms, import 977ms, tests 495ms, environment 0ms)
+

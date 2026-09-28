@@ -1,0 +1,150 @@
+{
+  "date": "2026-09-27",
+  "status": "qualified_local_candidate_live_gates_open",
+  "requirements": [
+    "FR-060",
+    "FR-065",
+    "FR-067",
+    "FR-079",
+    "NFR-001"
+  ],
+  "decision": "ADR-087",
+  "checks": {
+    "initialBuild": "Unused React import failed source typecheck; removed before final build.",
+    "initialFocused": "2 files/10 tests passed",
+    "connected": "8 files/53 tests passed",
+    "recovery": "6 files/57 tests passed including actual process-kill settlement and route inventory",
+    "finalFocused": "4 files/19 tests passed including lost-response history cleanup",
+    "sourceBuild": "passed",
+    "testTypes": "passed",
+    "scriptTypes": "passed",
+    "harnessTypes": "passed",
+    "deskBuild": "passed",
+    "anyRatchet": "1008 <= 1053; passed",
+    "providerEgress": "passed;9 existing exceptions",
+    "receiptLabels": "2 files/9 Desk tests passed; exact call IDs are visible when matching provider evidence, including parity calls without an ordinal.",
+    "firstFullSuite": {
+      "passed": 3774,
+      "failed": 1,
+      "skipped": 59,
+      "reason": "Startup-schema fixture still expected migration048; changed its literal expected version to049. Runtime unchanged; first failure retained."
+    }
+  },
+  "limits": [
+    "Administrator attestation is not automated provider lookup or invoice verification.",
+    "Only stopped runs can settle; the operation changes no task, run, workflow ownership or approval.",
+    "Original calls and budgets stay unchanged; no missing model response is replayed.",
+    "No production deployment, live provider receipt or real human approval.",
+    "Native pilot, human quality, independent restore and held-out cost/model/retrieval qualification remain open."
+  ],
+  "sourceHashes": {
+    "adrs/087_studio_call_settlement.md": "7d9cf87c54f449a45997bf77902fcd73955df0757e3f8967d4f53c8ed6b48860",
+    "packages/db/migrations/049_studio_call_settlement.sql": "a51b854a87ec25bf5fe22c9accc0606d159bdf35ffe1ea6586428d115ba44fe1",
+    "db/schema.sql": "fced7ef468b62a48b8b9586de225b9b32f903b5c298e7284515a7a75528465de",
+    "db/rls.sql": "6955e8eb7ddebbbce690fc1186a9edaa2fc5c1ed68ee164c4e3484f02c8577d5",
+    "apps/core/src/services/studio-call-settlement.ts": "ed326037149f48e805f2cea1351eb4c0279fb728b15520976defc3ad64aff8b8",
+    "apps/core/src/routes/studio-recovery.routes.ts": "807f6ba2e25feca5478d7ade5e0d00e86b84e2c07a0ab175e150a57badc187d4",
+    "apps/core/src/app.ts": "07db4e831462ea63c38e7a3bbc0a0aede98dbff48f4bc1d254703ac5f50d4a09",
+    "packages/db/src/repositories/design-studio.repository.ts": "895dc273b53b27cea9747524cc76b575d2293ab30a7e1283c1949890abc8cb3d",
+    "apps/desk/src/api/client.ts": "c15165d7b6c31bfd9de1f132e646bf1c4eeba16661e59fe0ccc3d3cd35b6c479",
+    "apps/desk/src/components/EvaluationSettlementPanel.tsx": "8cb5282bdc0a6a67d129c1ab353634a62f60a48866b7ad62034db9b977405d6f",
+    "apps/desk/src/components/StudioRecoveryPanel.tsx": "3596ccf17d4f67544327fd3675213a9b357a216f9fe372e03ba4269aac9dff66",
+    "apps/desk/src/components/StudioPanel.tsx": "6ef86e1af83f74c6d0ac0f0c94184f7f674e038b52292a7169570a4e28497560",
+    "apps/core/test/studio-call-settlement.test.ts": "b5db27a8035d12fd4741ed206856e26f21ee1184ab0e6264cc7049b538830847",
+    "apps/core/test/studio-model-kill-recovery.test.ts": "7790fd1b7e10c00ff51919ef3c39ec58771cd8d4ca3e577c98d6b28dbbe04fb3",
+    "apps/desk/test/studio-recovery.test.ts": "8973738643f1993a742f95efc201530bfffc1a8b9042c95d3b96068d988f083a",
+    "packages/testkit/chaos/driver/studio-settlement.ts": "839c0c7e1a8a0c314d0b78138f810f3dcfe36557b11378a04c44697c0976ea44",
+    "packages/testkit/chaos/driver/candidate-sources.ts": "3ae975c2ca11cca663c63639a2c0013027a1d5de878abe1b7dfdf72dd9c0397b",
+    "api/openapi.yaml": "ebc9ea7426d1f7343512c5a999d28dee59154d561dcb461b58b9b5ad0902a0ff",
+    "apps/core/test/fixtures/route-inventory.txt": "7c6b22049e805b9d811a4222af41c3525e219c478c9c7a5927d0754dcd72f7dc",
+    "runbooks/STUDIO_RECOVERY.md": "f460515c288ea739626595535f24ab113f216f66c1a9b49cab0988c2c78cfa7a",
+    "apps/core/test/startup-schema-check.test.ts": "9c507a1927d6d62cd4f5486087d48e3dace680676f3a549e2b1af4b1670fde9d"
+  },
+  "artifacts": {
+    "output/acceptance/2026-09-27-studio-settlement/build.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-studio-settlement/candidate-rehearsal.json": {
+      "sha256": "838d108469754a3262be529ed4d03d9067fdc09e2d93fe87b2194ee688b16a64",
+      "bytes": 17468
+    },
+    "output/acceptance/2026-09-27-studio-settlement/candidate.log": {
+      "sha256": "8a2366365abaaabc82e42185bd3103023967a6f091dda46e04a6c584624bb1df",
+      "bytes": 389
+    },
+    "output/acceptance/2026-09-27-studio-settlement/desk-build.log": {
+      "sha256": "0021762d5d04cfc5aac4e87506905a1bbf7e283c72e45f72b3fe6379693fb632",
+      "bytes": 745
+    },
+    "output/acceptance/2026-09-27-studio-settlement/final-focused.log": {
+      "sha256": "1167cb5448e61c875fe3562e7776a6137942957e1d46a7a1615aec88c70b6404",
+      "bytes": 327
+    },
+    "output/acceptance/2026-09-27-studio-settlement/focused.log": {
+      "sha256": "ef860a3b575bcfd393ca7d278f6fcf8b455b0158323408b685b8c01a18e495a9",
+      "bytes": 1294
+    },
+    "output/acceptance/2026-09-27-studio-settlement/full-tests-first.json": {
+      "sha256": "8f359c68686217ef53c6972214bdc498d63319164984c123bfdb539714824010",
+      "bytes": 1573873
+    },
+    "output/acceptance/2026-09-27-studio-settlement/full-tests-first.log": {
+      "sha256": "3fa3dda8af5101c76ace24cb2d71b9db28d5f38945b513521b3d501c7341cee7",
+      "bytes": 498360
+    },
+    "output/acceptance/2026-09-27-studio-settlement/full-tests.json": {
+      "sha256": "d207c1722ec6121dc4c8017127ea25cdba641ab53837aa22de5bfce71aad0c6c",
+      "bytes": 1572482
+    },
+    "output/acceptance/2026-09-27-studio-settlement/full-tests.log": {
+      "sha256": "bdee3b27a67dbbc639df145f205f51891c828640f33f0e4e78e5e594c7ffed00",
+      "bytes": 484695
+    },
+    "output/acceptance/2026-09-27-studio-settlement/harness-types.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "output/acceptance/2026-09-27-studio-settlement/qualified.log": {
+      "sha256": "e21debc0b85bb44c4198c2af865b74c0c3b21ce56b7a392bebb603755b2918da",
+      "bytes": 327
+    },
+    "output/acceptance/2026-09-27-studio-settlement/receipt-labels.log": {
+      "sha256": "93625eacb77887789323472f8b923a592473450b687f0beba6dd2a688f0ff7f8",
+      "bytes": 324
+    },
+    "output/acceptance/2026-09-27-studio-settlement/recovery.log": {
+      "sha256": "ef87697864f8c5bec5a43f64aadd9c90c083bb6b905af01bf0c2c5b3ac87a7a6",
+      "bytes": 639
+    },
+    "output/acceptance/2026-09-27-studio-settlement/types.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    }
+  },
+  "implementationCommit": "9a7c973b865637c1bb66f3af37994857cac3ceb1",
+  "sourceCommit": "f14c7ccd9bf467206a31acb4779bc0b817e9ca35",
+  "candidateCommit": "b641928af8e3b64f3b32e0b153e79ff6943ce9f7",
+  "qualification": {
+    "fullSuite": {
+      "passed": 3775,
+      "failed": 0,
+      "skipped": 59,
+      "files": 474,
+      "runtimeCommit": "b641928af8e3b64f3b32e0b153e79ff6943ce9f7",
+      "scope": "Sealed runtime plus corrected startup migration fixture"
+    },
+    "candidate": {
+      "checks": 63,
+      "allPassed": true,
+      "priorWorkflowAndEvaluationChecks": 50,
+      "studioSettlementChecks": 13,
+      "coreRestartAfterStudioSettlement": true,
+      "modelRequestsDuringStudioProof": 0,
+      "originalStudioCallWasSyntheticDatabaseAdmission": true,
+      "scope": "Deployed local candidate; synthetic Studio ledger and named administrator, external adapters fake; independent actual process kills are in source tests."
+    },
+    "releaseManifest": "verified",
+    "sourceChangesInCandidate": 0
+  }
+}

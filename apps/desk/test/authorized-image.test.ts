@@ -96,7 +96,7 @@ describe('the Desk shows signed-in pictures through the authorised hook', () => 
   });
 });
 
-describe('the service worker keeps pictures out of Cache Storage', () => {
+describe('the service worker keeps private API responses out of Cache Storage', () => {
   /** sw.js run in a sandbox with a fake worker scope, returning its fetch handler and caches. */
   function loadWorker() {
     const handlers: Record<string, (event: any) => void> = {};
@@ -111,27 +111,33 @@ describe('the service worker keeps pictures out of Cache Storage', () => {
       console,
     };
     vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '../public/sw.js'), 'utf8'), sandbox);
-    return { onFetch: handlers.fetch, puts, sandbox };
+    return { onFetch: handlers.fetch, onActivate: handlers.activate, puts, sandbox };
   }
 
-  it('answers export content, reference files and PNGs from the network only; JSON reads are still cached', async () => {
+  it('bypasses Cache Storage for private pictures, task JSON, budgets and operational evidence', async () => {
     const { onFetch, puts, sandbox } = loadWorker();
     for (const p of [
       PREVIEW,
       '/v1/tasks/00000000-0000-4000-8000-000000000001/files/' + 'a'.repeat(64),
       '/v1/tasks/t/canva/studio/r/candidates/c/preview/' + 'b'.repeat(64) + '.png',
       '/v1/comparisons/s/pairs/p/hawa.png',
+      '/v1/tasks/t', '/v1/operations/slo', '/v1/spending/policy', '/v1/auth/session', '/api/v1/tasks/t',
     ]) {
       const respondWith = vi.fn();
       onFetch({ request: new Request(`https://desk.test${p}`), respondWith });
       expect(respondWith, p).not.toHaveBeenCalled();
-      expect(sandbox.isBinaryApiPath(p), p).toBe(true);
     }
-    const respondWith = vi.fn(async (r: Promise<Response>) => r);
-    onFetch({ request: new Request('https://desk.test/v1/tasks/t'), respondWith });
-    expect(respondWith).toHaveBeenCalledTimes(1);
-    await respondWith.mock.results[0].value;
-    await new Promise((r) => setTimeout(r, 0));
-    expect(puts).toEqual(['/v1/tasks/t']);
+    expect(puts).toEqual([]);
   });
+});
+
+// Exercise activation independently of page code: an old cached response must not survive upgrade.
+it('purges every legacy private API cache when the new worker activates',async()=>{
+ const handlers:Record<string,(event:{waitUntil:(work:Promise<unknown>)=>void})=>void>={};
+ const deleted:string[]=[];
+ const sandbox={self:{addEventListener:(type:string,handler:typeof handlers[string])=>{handlers[type]=handler;},location:{origin:'https://desk.test'},clients:{claim:vi.fn()}},
+  caches:{keys:async()=>['hawa-api-cache-v3','hawa-api-cache-v4','hawa-shell-v4','hawa-fonts-v4','another-app'],delete:async(name:string)=>{deleted.push(name);return true;}},URL,Response,console};
+ vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../public/sw.js'),'utf8'),sandbox);
+ let work:Promise<unknown>|undefined;handlers.activate({waitUntil:p=>{work=p;}});await work;
+ expect(deleted).toEqual(['hawa-api-cache-v3','hawa-api-cache-v4']);expect(sandbox.self.clients.claim).toHaveBeenCalledOnce();
 });

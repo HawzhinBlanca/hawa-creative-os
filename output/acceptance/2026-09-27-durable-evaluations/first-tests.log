@@ -1,0 +1,15 @@
+[test databases] hawa_tpl_build_test_67d602a7: applied db/schema.sql
+[test databases] hawa_tpl_build_test_67d602a7: applied db/rls.sql
+[test databases] hawa_tpl_build_test_67d602a7: applied db/seed.sql
+[test databases] hawa_tpl_build_test_67d602a7: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_test_67d602a7: versioned upgrades applied=47 verified=0
+[test databases] hawa_tpl_build_test_67d602a7: applied db/test-fixtures.sql
+[test databases] built template hawa_tpl_test_841a49a835477199
+[test databases] hawa_tpl_build_repair_c0d3bf1d: applied db/schema.sql
+[test databases] hawa_tpl_build_repair_c0d3bf1d: applied db/rls.sql
+[test databases] hawa_tpl_build_repair_c0d3bf1d: applied db/seed.sql
+[test databases] hawa_tpl_build_repair_c0d3bf1d: granted runtime privileges to hawa_app
+[test databases] hawa_tpl_build_repair_c0d3bf1d: versioned upgrades applied=47 verified=0
+[test databases] built template hawa_tpl_repair_841a49a835477199
+[test databases] per-file clones of hawa_tpl_test_841a49a835477199 and hawa_tpl_repair_841a49a835477199 (581 ms)
+JSON report written to /Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-durable-evaluations/first-tests.json

@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_c3bf33c83bd68d08 and hawa_tpl_repair_c3bf33c83bd68d08 (23 ms)
+
+ Test Files  9 passed (9)
+      Tests  53 passed (53)
+   Start at  19:00:07
+   Duration  3.27s (transform 2.04s, setup 720ms, import 3.22s, tests 4.84s, environment 845ms)
+

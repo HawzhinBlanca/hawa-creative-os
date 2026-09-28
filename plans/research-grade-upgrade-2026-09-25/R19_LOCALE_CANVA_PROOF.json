@@ -1,0 +1,274 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "requirements": [
+    "FR-034",
+    "FR-035",
+    "FR-036",
+    "FR-041",
+    "FR-043",
+    "NFR-020"
+  ],
+  "adr": "adrs/082_paragraph_direction_evidence.md",
+  "status": "PARTIAL_NATIVE_EVIDENCE_AND_SOURCE_FIX",
+  "captureSourceCommit": "aefeabca7e38c782148503ce8defc8fb2e68e8fd",
+  "sourceHashes": {
+    "packages/qa/src/canva-pptx-check.ts": "739e6d00d19cb4bc2eceb7853810d13bc8bb7f47d060ba8c5d7827e0ff492c99",
+    "apps/core/src/core-helpers.ts": "96c6fcccc8ed3d4860d639bc5cd7a5f458017fce954f241cc6413ced4ef47abe",
+    "apps/core/src/services/canva-connect-service.ts": "9f08396c07b9b6abe8fcaf28203253b5415b8bea077ec7ae6c0fcfd928e61d6c",
+    "apps/desk/src/screens/WorkScreen.tsx": "a81dd5572151abe6c08b3e0adeffe4d99489dc1a498026d0b8780db902989c21",
+    "apps/desk/src/screens/DnaScreen.tsx": "5f9872fdbee47210435ab55337c7db0cd05d16e7830b9d8e2721e1184d217caf"
+  },
+  "nativeEvidence": {
+    "imports": 2,
+    "exports": 6,
+    "exactPptxStrings": 14,
+    "allPerCharacterColorsPreserved": true,
+    "baselineChangedPixels": 0,
+    "baselinePixelsCompared": 2400000,
+    "declaredFamilies": [
+      "Noto Sans Arabic",
+      "Cairo",
+      "Verdana"
+    ],
+    "languageTagsPreserved": false,
+    "nativeManualEdit": "not_run",
+    "humanLanguageReview": "not_run"
+  },
+  "corrections": [
+    "Read true/false as well as 1/0 XML booleans; inspect each paragraph.",
+    "Freeze uniquely indexed explicit source direction with the existing export policy and reuse it for QC.",
+    "Keep mixed direction unspecified without source authority and require human visual review for every otherwise eligible Arabic-script export.",
+    "Remove the Core exception that could waive explicit false/invalid metadata when zero RTL flags remained.",
+    "Read canonical task copy blocks and manifest strings without altering text or letting a passing receipt override wrong/malformed task copy.",
+    "Desk and Client DNA no longer claim absent flags or guaranteed rendered isolation."
+  ],
+  "testRuns": [
+    {
+      "artifact": "output/acceptance/2026-09-27-canva-locale/red-direction.json",
+      "files": 2,
+      "passed": 16,
+      "failed": 10,
+      "skipped": 0
+    },
+    {
+      "artifact": "output/acceptance/2026-09-27-canva-locale/direction-focused.json",
+      "files": 7,
+      "passed": 121,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": "output/acceptance/2026-09-27-canva-locale/direction-gate.json",
+      "files": 3,
+      "passed": 25,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "artifact": "output/acceptance/2026-09-27-canva-locale/native-gate.json",
+      "files": 1,
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "artifact": "output/acceptance/2026-09-27-canva-locale/verified-gate.json",
+      "files": 3,
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": "output/acceptance/2026-09-27-canva-locale/final-tests.json",
+      "files": 8,
+      "passed": 128,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "testAccount": "Initial red: 10 failed/16 passed. First full focused group 121 passed. Native approval fixture initially failed because canonical task copy blocks reached a string-only checker. Corrected that production boundary, then final 8 files/128 tests passed with zero skips. An intermediate fixture font-policy correction was retained, but did not resolve the copy-shape defect.",
+  "verification": {
+    "projectScriptAndTestTypeScript": "passed",
+    "lint": "passed",
+    "deskProductionBuild": "passed",
+    "fullRegression": "not_run",
+    "deployment": "not_run",
+    "realTaskHumanApprovalAndDelivery": "not_run"
+  },
+  "latestRecheck": "output/acceptance/2026-09-27-canva-locale/rechecked-853557b08a85.json",
+  "remainingDefects": [
+    {
+      "id": "EXPLICIT_LTR_OVERRIDDEN",
+      "source": "packages/creative/src/studio/transfer-v2.ts",
+      "finding": "The Arabic font fallback overrides rtl:false in plan conversion and output. The STYLE-MIXED block is wrong before Canva import. Current checker detects its mismatch against requested direction.",
+      "nextAction": "Respect explicit false in the transfer while preserving renderer parity, then repeat the retained native control."
+    }
+  ],
+  "limits": [
+    "Canva rewrites language tags; retain original language provenance outside its exports.",
+    "Read-only native text tool concatenates internal paragraphs and gives no element IDs or style spans.",
+    "Explicit false RTL on the mixed Studio block was overridden by the font-family fallback before import; requested direction is not met.",
+    "Human native-language review, committed edit/save/reopen, full office corpus and deployed-image qualification are not run.",
+    "Font-family/resource names do not establish actual font-file glyph coverage or licenses.",
+    "Equal provider timestamps are not an atomic revision lock."
+  ],
+  "sources": [
+    {
+      "url": "https://www.w3.org/TR/xmlschema-2/#boolean",
+      "retrieved": "2026-09-27",
+      "supports": "XML boolean lexical forms true/false/1/0."
+    }
+  ],
+  "effects": {
+    "productionRestart": false,
+    "productionMigration": false,
+    "realApproval": false,
+    "messageSent": false,
+    "paidModelCalls": 0,
+    "existingOAuthRefresh": "normal service authorization",
+    "canvaTestDesignsRetained": [
+      "DAHWW0iRrsI",
+      "DAHWW7M4nIw"
+    ],
+    "editingTransactionsOpened": 0
+  },
+  "artifacts": {
+    "output/acceptance/2026-09-27-canva-locale/analyze.py": {
+      "sha256": "38c3021b7e1827fd3f0be81c5ec522f51fa098ab7b749acf53fe240cc326e0a2",
+      "bytes": 6534
+    },
+    "output/acceptance/2026-09-27-canva-locale/build_fixtures.mts": {
+      "sha256": "70f6f3af8db6aefd62f4fd74e38fb20fac21712f9024d887adc1ab3da1dd02be",
+      "bytes": 4226
+    },
+    "output/acceptance/2026-09-27-canva-locale/capture_live.mts": {
+      "sha256": "0a785330946b32919b2f29f6a5b462f4c5a14deb8aa3d4a50bd3b19afc038df8",
+      "bytes": 10039
+    },
+    "output/acceptance/2026-09-27-canva-locale/direction-focused.json": {
+      "sha256": "f2480149ce957e94411cbbd706eb12076c2cd5d7de116e4fe43106801e670483",
+      "bytes": 48810
+    },
+    "output/acceptance/2026-09-27-canva-locale/direction-focused.log": {
+      "sha256": "a8c368503fb7cd4f9522a83a32f8582d87b35667a0c4fbdc6561462a82507dcb",
+      "bytes": 6932
+    },
+    "output/acceptance/2026-09-27-canva-locale/direction-gate.json": {
+      "sha256": "f0eee141e97f3d2a73a4c5632090639ee61b0588c9069acd5ab14cc8fdecc4fd",
+      "bytes": 12023
+    },
+    "output/acceptance/2026-09-27-canva-locale/direction-gate.log": {
+      "sha256": "13fd7b4d8e66948acb1f4b5b7bb869348a7a08cc75fb892117df413f0d141a0b",
+      "bytes": 222
+    },
+    "output/acceptance/2026-09-27-canva-locale/final-tests.json": {
+      "sha256": "201009bbf1f275a6450b858fd1fd674a55ddd9d0ea87ecc8edd9f4cc06804ff6",
+      "bytes": 51745
+    },
+    "output/acceptance/2026-09-27-canva-locale/final-tests.log": {
+      "sha256": "7243281412e6f118e549db01eea7dfb5fc12a408e88dee611373b0d5af7b7a1b",
+      "bytes": 6926
+    },
+    "output/acceptance/2026-09-27-canva-locale/fixtures.json": {
+      "sha256": "a8ee5a1c250515102b17a29d2207e1170bc8e0233a1061bb7c176a8eb85e2dec",
+      "bytes": 20164
+    },
+    "output/acceptance/2026-09-27-canva-locale/human-review.csv": {
+      "sha256": "0734d7ce0223ff5c6be89add8b8cbfe40aca5012c17c9e2b62dc34a5078db56d",
+      "bytes": 1460
+    },
+    "output/acceptance/2026-09-27-canva-locale/live-capture.json": {
+      "sha256": "4ca183a2bbea88f5d39caea7394f3603eeae5e07dda1076c650ddf780f4d927e",
+      "bytes": 6964
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v1-canva.pdf": {
+      "sha256": "182e753c80aaf20429c88d91b59165c5ccf3e689908a242a9ebc2e8c57f5ce40",
+      "bytes": 23197
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v1-canva.png": {
+      "sha256": "2b355db9bb4ef2208a153548b2ba2bfa7f52c155ce8b8171aa6351bf2ad1a58e",
+      "bytes": 66894
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v1-canva.pptx": {
+      "sha256": "7c9a9ae422ee0192a13a53c3c0086706088f3ef2b6d5cafc1eb0ea4247b60e34",
+      "bytes": 113741
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v1-input.pptx": {
+      "sha256": "b00ba2785401ce2597727b15d4807aa9f4125d06ef7160c9568c938bf0f21dfe",
+      "bytes": 57085
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v1-native.json": {
+      "sha256": "8bcce3a26d271b169508818ca10eb95a854be95237eb71a061bdb8f359fba98a",
+      "bytes": 587
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v1-qa.json": {
+      "sha256": "eae42eec38b35eee2bd29f8ec19986b4ac81bc1e7e6b9849de220f58439200bc",
+      "bytes": 3639
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v2-canva.pdf": {
+      "sha256": "ae6fd7f682ac28917e08c8174e2c921667439a642467e3e81b69076278e9c75d",
+      "bytes": 36846
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v2-canva.png": {
+      "sha256": "4b0953eb4e39c72c08c7f5e1daf7be8a7ab7b997443e8bf161ce74e7f2257c61",
+      "bytes": 42633
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v2-canva.pptx": {
+      "sha256": "a2caa800b2ee63934ea97989e05dd6680abf6a7b92fcd81b69ad6cc258a47c17",
+      "bytes": 336559
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v2-input.pptx": {
+      "sha256": "e79365cac642e4b8842891beeaada84a9f0ca4366f27e0ea301a716a24a6d39b",
+      "bytes": 50920
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v2-native.json": {
+      "sha256": "76d98e8a4eada01da6d859252316c368fcaecda0bb0c893c4dcd868a3fff07bb",
+      "bytes": 566
+    },
+    "output/acceptance/2026-09-27-canva-locale/locale-v2-qa.json": {
+      "sha256": "0ec6931074b9f4a8d63ed9169aa26460958e2635670b0bd12c8f02b6c3628e4f",
+      "bytes": 2330
+    },
+    "output/acceptance/2026-09-27-canva-locale/native-gate.json": {
+      "sha256": "1964c23a4d4dea6bfbc06be0338221543502d4203b800fab85f0a736eb4a4004",
+      "bytes": 3536
+    },
+    "output/acceptance/2026-09-27-canva-locale/native-gate.log": {
+      "sha256": "7dfe388e6368228b601a3b889902a5c046d993491460cef8d36179c080a260c1",
+      "bytes": 219
+    },
+    "output/acceptance/2026-09-27-canva-locale/offline-analysis.json": {
+      "sha256": "ba3817adec840e3ad747f13a4e6e450d6f9d5746ce37007010427106802a8f63",
+      "bytes": 18480
+    },
+    "output/acceptance/2026-09-27-canva-locale/recheck_qa.mts": {
+      "sha256": "b175cf4b1b0d8f9295eafbd6f33f0e3551d65ee487e1498cb84bbc1e33c162dd",
+      "bytes": 1902
+    },
+    "output/acceptance/2026-09-27-canva-locale/rechecked-853557b08a85.json": {
+      "sha256": "dcb9890b119eea1bcbec2cc1c95fee4b2e4302308785c060fd01c4e9bfe4e0b2",
+      "bytes": 23718
+    },
+    "output/acceptance/2026-09-27-canva-locale/rechecked-af58e9106510.json": {
+      "sha256": "15450795a1c85f042c08d78210946ecd057028d9c7d2fe321a71714eb8c52cbf",
+      "bytes": 23718
+    },
+    "output/acceptance/2026-09-27-canva-locale/red-direction.json": {
+      "sha256": "30c5766b735b4d2883dc5c4a884307a9511977d7bb52c2dba834cf1b6b1f665f",
+      "bytes": 24653
+    },
+    "output/acceptance/2026-09-27-canva-locale/red-direction.log": {
+      "sha256": "034b8aa30e3adad5bafdaad60e3b57503b3dbace50790a214726bbbb9794c780",
+      "bytes": 221
+    },
+    "output/acceptance/2026-09-27-canva-locale/verified-gate.json": {
+      "sha256": "470859ca4e6ae4ac35c03ae536e6b96cb3567755e4b78657e6263a324eb1b996",
+      "bytes": 11587
+    },
+    "output/acceptance/2026-09-27-canva-locale/verified-gate.log": {
+      "sha256": "7913a81b21b26f29735e99bf82836e7e610fc11bdf7d58bdec5272cd6edb2193",
+      "bytes": 221
+    }
+  }
+}

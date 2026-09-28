@@ -18,6 +18,7 @@ import {
   type PhotoFragment,
 } from './photo-treatments.js';
 import type { EditableTransferPlan, TransferLogo, TransferOptions } from '../editable-transfer.js';
+import { resolveTransferLocales } from '../editable-transfer.js';
 
 /**
  * Joins a hyphenated or slashed compound — "K-12", "2025/2026" — with invisible word joiners
@@ -197,14 +198,13 @@ export function effectiveBold(t: { fontFamily: string; bold?: boolean; italic?: 
   return Boolean(t.bold);
 }
 
-export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTransferPlan {
-  // The layout's own rtl flag decides direction, with the cursive-script families as a safety net.
-  // The previous test — an Arabic-ish family name OR right alignment — got this wrong both ways:
-  // it missed Amiri entirely, so a centre-aligned Kurdish Amiri title reached Canva without
-  // rtlMode (9 of the 18 T5 layouts), and it marked an English right-aligned footer as Kurdish.
-  const isRtlBlock = (t: { rtl?: boolean; fontFamily: string }) =>
-    t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
+function effectiveRtl(t: { rtl?: boolean; fontFamily: string }): boolean {
+  // An explicit LTR paragraph can legitimately contain Arabic-script text. Keep the family
+  // fallback only for older layouts that did not record a direction.
+  return t.rtl ?? ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
+}
 
+export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTransferPlan {
   return {
     width: layout.width,
     height: layout.height,
@@ -242,7 +242,7 @@ export function studioLayoutV2ToTransferPlan(layout: StudioLayoutV2): EditableTr
       // value the renderer never used describes a design nobody ever saw.
       letterSpacing: effectiveLetterSpacingEm(t),
       lineHeight: t.lineHeight,
-      rtl: isRtlBlock(t),
+      rtl: effectiveRtl(t),
     })),
     logo: layout.logo
       ? {
@@ -278,6 +278,7 @@ export async function encodeStudioTransferV2(
   if (!copy.length || copy.length > 40 || copy.some((t) => !t || t.length > 10000)) {
     throw new Error('Missing or excessive factual copy');
   }
+  const copyLocales = resolveTransferLocales(copy, options.copyLocales);
   if (
     layout.text.length !== copy.length ||
     new Set(layout.text.map((t) => t.copyIndex)).size !== copy.length ||
@@ -559,6 +560,7 @@ export async function encodeStudioTransferV2(
   const sortedText = [...layout.text].sort((a, b) => a.copyIndex - b.copyIndex);
   for (const t of sortedText) {
     const isArabic = t.rtl === true || ARABIC_SCRIPT_FAMILIES.has(t.fontFamily);
+    const isRtl = effectiveRtl(t);
     // The layout's tracking is em; pptxgenjs charSpacing is points, written as
     // spc="round(charSpacing * 100)" (hundredths of a point) on the run properties. Passing the em
     // value raw sent a 0.06em title to Canva as 0.06pt, about 0.08px where the preview drew 2.88px.
@@ -578,6 +580,7 @@ export async function encodeStudioTransferV2(
           options: {
             breakLine: r.breakLine,
             align: t.align,
+            lang: copyLocales[t.copyIndex],
             ...(r.accent ? { color: hex(t.accentColor!) } : {}),
           },
         }))
@@ -589,7 +592,8 @@ export async function encodeStudioTransferV2(
             options: {
               breakLine: i < paragraphs.length - 1,
               align: t.align,
-              ...(isArabic ? { rtlMode: true, lang: 'ku' } : {}),
+              lang: copyLocales[t.copyIndex],
+              ...(isRtl ? { rtlMode: true } : {}),
               ...(i === (t.accentParagraph === 'first' ? 0 : paragraphs.length - 1) ? { color: hex(t.accentColor!) } : {}),
             },
           }))
@@ -616,7 +620,8 @@ export async function encodeStudioTransferV2(
       vertAnchor: 'middle',
       paraSpaceAfterPt: 0,
       fit: 'resize',
-      ...(isArabic ? { rtlMode: true, lang: 'ku' } : {}),
+      lang: copyLocales[t.copyIndex],
+      ...(isRtl ? { rtlMode: true } : {}),
     });
   }
 
@@ -644,6 +649,7 @@ export async function encodeStudioTransferV2(
       width: layout.width,
       height: layout.height,
       copy,
+      copyLocales,
       copySha256: createHash('sha256').update(JSON.stringify(copy)).digest('hex'),
       logoSha256: logo?.sha256 || null,
       artSha256: options.artBuffer ? createHash('sha256').update(options.artBuffer).digest('hex') : null,

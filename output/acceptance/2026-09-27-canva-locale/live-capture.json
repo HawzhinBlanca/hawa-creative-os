@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "aefeabca7e38c782148503ce8defc8fb2e68e8fd",
+  "corpusSha256": "903601e57d2570a58545ef93b0dda45c2b6d01d7be01880a7df803990eee1148",
+  "startedAt": "2026-09-27T03:46:56.837Z",
+  "groups": {
+    "locale-v1": {
+      "caseIds": [
+        "RTL-001",
+        "RTL-002",
+        "RTL-003",
+        "RTL-004",
+        "RTL-005",
+        "RTL-006",
+        "RTL-007",
+        "RTL-008",
+        "RTL-009",
+        "RTL-010"
+      ],
+      "sourceSha256": "b00ba2785401ce2597727b15d4807aa9f4125d06ef7160c9568c938bf0f21dfe",
+      "exports": {
+        "png": {
+          "status": "captured",
+          "operationKey": "locale-20260927-locale-v1-png",
+          "at": "2026-09-27T03:47:02.894Z",
+          "jobId": "7e9c00a3-4d34-4314-bb0e-9b61789b0599",
+          "file": "locale-v1-canva.png",
+          "bytes": 66894,
+          "sha256": "2b355db9bb4ef2208a153548b2ba2bfa7f52c155ce8b8171aa6351bf2ad1a58e",
+          "capturedAt": "2026-09-27T03:47:06.401Z",
+          "pixels": [
+            1200,
+            2000
+          ]
+        },
+        "pdf": {
+          "status": "captured",
+          "operationKey": "locale-20260927-locale-v1-pdf",
+          "at": "2026-09-27T03:47:09.913Z",
+          "jobId": "4848ac2d-732f-421b-baf9-b15e6347e580",
+          "file": "locale-v1-canva.pdf",
+          "bytes": 23197,
+          "sha256": "182e753c80aaf20429c88d91b59165c5ccf3e689908a242a9ebc2e8c57f5ce40",
+          "capturedAt": "2026-09-27T03:47:13.463Z"
+        },
+        "pptx": {
+          "status": "captured",
+          "operationKey": "locale-20260927-locale-v1-pptx",
+          "at": "2026-09-27T03:47:16.974Z",
+          "jobId": "530ed5e6-1214-4fd1-932e-d92350d7df4f",
+          "file": "locale-v1-canva.pptx",
+          "bytes": 113741,
+          "sha256": "7c9a9ae422ee0192a13a53c3c0086706088f3ef2b6d5cafc1eb0ea4247b60e34",
+          "capturedAt": "2026-09-27T03:47:19.198Z",
+          "qa": {
+            "file": "locale-v1-qa.json",
+            "sha256": "eae42eec38b35eee2bd29f8ec19986b4ac81bc1e7e6b9849de220f58439200bc",
+            "copyPass": true,
+            "fontPass": true,
+            "rtlPass": true,
+            "rtlNote": "Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.",
+            "textObjectCount": 10,
+            "observedFonts": [
+              "Noto Sans Arabic"
+            ],
+            "fullReleasePass": false
+          }
+        }
+      },
+      "import": {
+        "status": "completed",
+        "operationKey": "locale-20260927-locale-v1-import",
+        "at": "2026-09-27T03:46:56.870Z",
+        "jobId": "3976d481-e7ec-4ab1-ad5e-da728ff8d1e3"
+      },
+      "design": {
+        "id": "DAHWW0iRrsI",
+        "title": "[TEST] Hawa locale 2026-09-27 locale-v1",
+        "pageCount": 1,
+        "createdAt": 1790480818,
+        "updatedAt": 1790480818
+      },
+      "metadataSamples": [
+        {
+          "updatedAt": 1790480819,
+          "observedAt": "2026-09-27T03:46:59.619Z"
+        },
+        {
+          "updatedAt": 1790480819,
+          "observedAt": "2026-09-27T03:47:02.883Z"
+        }
+      ],
+      "captureBefore": {
+        "id": "DAHWW0iRrsI",
+        "updatedAt": 1790480819,
+        "pageCount": 1
+      },
+      "captureAfter": {
+        "id": "DAHWW0iRrsI",
+        "updatedAt": 1790480819,
+        "pageCount": 1
+      },
+      "captureMetadataUnchanged": true,
+      "status": "captured"
+    },
+    "locale-v2": {
+      "caseIds": [
+        "STYLE-AR",
+        "STYLE-CKB",
+        "STYLE-EN",
+        "STYLE-MIXED"
+      ],
+      "sourceSha256": "e79365cac642e4b8842891beeaada84a9f0ca4366f27e0ea301a716a24a6d39b",
+      "exports": {
+        "png": {
+          "status": "captured",
+          "operationKey": "locale-20260927-locale-v2-png",
+          "at": "2026-09-27T03:47:31.901Z",
+          "jobId": "93d8e0f0-8c79-4ad1-bf21-2ac7c0420161",
+          "file": "locale-v2-canva.png",
+          "bytes": 42633,
+          "sha256": "4b0953eb4e39c72c08c7f5e1daf7be8a7ab7b997443e8bf161ce74e7f2257c61",
+          "capturedAt": "2026-09-27T03:47:35.472Z",
+          "pixels": [
+            1080,
+            1200
+          ]
+        },
+        "pdf": {
+          "status": "captured",
+          "operationKey": "locale-20260927-locale-v2-pdf",
+          "at": "2026-09-27T03:47:38.983Z",
+          "jobId": "8f6bfe8c-ed3b-4772-953b-32f0ee68d89a",
+          "file": "locale-v2-canva.pdf",
+          "bytes": 36846,
+          "sha256": "ae6fd7f682ac28917e08c8174e2c921667439a642467e3e81b69076278e9c75d",
+          "capturedAt": "2026-09-27T03:47:42.409Z"
+        },
+        "pptx": {
+          "status": "captured",
+          "operationKey": "locale-20260927-locale-v2-pptx",
+          "at": "2026-09-27T03:47:45.920Z",
+          "jobId": "7ebd52de-fa5e-4a50-9c37-f7df41d42edc",
+          "file": "locale-v2-canva.pptx",
+          "bytes": 336559,
+          "sha256": "a2caa800b2ee63934ea97989e05dd6680abf6a7b92fcd81b69ad6cc258a47c17",
+          "capturedAt": "2026-09-27T03:47:48.251Z",
+          "qa": {
+            "file": "locale-v2-qa.json",
+            "sha256": "0ec6931074b9f4a8d63ed9169aa26460958e2635670b0bd12c8f02b6c3628e4f",
+            "copyPass": true,
+            "fontPass": true,
+            "rtlPass": true,
+            "rtlNote": "Paragraph rtl attribute absent: Canva exports omit it, so reading direction is verified visually, not here.",
+            "textObjectCount": 4,
+            "observedFonts": [
+              "Noto Sans Arabic",
+              "Cairo",
+              "Verdana"
+            ],
+            "fullReleasePass": false
+          }
+        }
+      },
+      "import": {
+        "status": "completed",
+        "operationKey": "locale-20260927-locale-v2-import",
+        "at": "2026-09-27T03:47:22.947Z",
+        "jobId": "0d708204-ced8-47c1-9e51-f67d6d2b0ebe"
+      },
+      "design": {
+        "id": "DAHWW7M4nIw",
+        "title": "[TEST] Hawa locale 2026-09-27 locale-v2",
+        "pageCount": 1,
+        "createdAt": 1790480843,
+        "updatedAt": 1790480843
+      },
+      "metadataSamples": [
+        {
+          "updatedAt": 1790480845,
+          "observedAt": "2026-09-27T03:47:25.398Z"
+        },
+        {
+          "updatedAt": 1790480846,
+          "observedAt": "2026-09-27T03:47:28.665Z"
+        },
+        {
+          "updatedAt": 1790480846,
+          "observedAt": "2026-09-27T03:47:31.890Z"
+        }
+      ],
+      "captureBefore": {
+        "id": "DAHWW7M4nIw",
+        "updatedAt": 1790480846,
+        "pageCount": 1
+      },
+      "captureAfter": {
+        "id": "DAHWW7M4nIw",
+        "updatedAt": 1790480846,
+        "pageCount": 1
+      },
+      "captureMetadataUnchanged": true,
+      "status": "captured"
+    }
+  },
+  "scope": "Two synthetic one-page sheets; real Hawa typed provider client, no full task/approval/delivery workflow.",
+  "status": "captured",
+  "completedAt": "2026-09-27T03:47:51.996Z",
+  "fullMultilingualAdmission": false
+}

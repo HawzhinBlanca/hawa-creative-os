@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
+import { describe, it, expect, vi } from 'vitest';
 import {
   admittedFontFor,
   sanitizeFontsV3,
@@ -6,6 +7,8 @@ import {
   rankCandidatesV3,
   selectWinnerV3,
   refineCandidateV3,
+  prepareGeneratedLayoutV3,
+  computeLayoutMetrics,
   createDegradedCanaryLayout,
   renderLayoutV2,
   renderAnnotatedLayoutV2,
@@ -206,6 +209,32 @@ describe('pipeline v3 — fonts', () => {
 });
 
 describe('pipeline v3 — ranking', () => {
+  it('selects the sole hard-QA eligible candidate without a comparison or canary call', async () => {
+    const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }, { sourceIndex: 1, layout: asymmetric() }], COPY);
+    ranked[0].hardQa = { textMeasurements: [], passed: false, defectCodes: ['COPY_OVERFLOW'], messages: ['Too long'], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
+    ranked[1].hardQa = { textMeasurements: [], passed: true, defectCodes: [], messages: [], layout: ranked[1].layout, metrics: computeLayoutMetrics(ranked[1].layout) };
+    const createStructuredCompletion = vi.fn().mockRejectedValue(new Error('unexpected paid comparison'));
+    const result = await selectWinnerV3(ranked, COPY, { client: { createStructuredCompletion } as unknown as OpenAiStudioClient });
+    expect(result.winner).toBe(ranked[1]);
+    expect(result.decidedBy).toBe('single_candidate');
+    expect(result.canary).toBeNull();
+    expect(createStructuredCompletion).not.toHaveBeenCalled();
+  });
+
+  it.each([false, undefined])('refuses a sole candidate when hard-QA pass is %s', async (passed) => {
+    const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }], COPY);
+    if (passed === false) ranked[0].hardQa = { textMeasurements: [], passed, defectCodes: ['COPY_OVERFLOW'], messages: [], layout: ranked[0].layout, metrics: computeLayoutMetrics(ranked[0].layout) };
+    const createStructuredCompletion = vi.fn().mockRejectedValue(new Error('unexpected paid comparison'));
+    await expect(selectWinnerV3(ranked, COPY, { client: { createStructuredCompletion } as unknown as OpenAiStudioClient })).rejects.toThrow('NO_ELIGIBLE_CANDIDATE');
+    expect(createStructuredCompletion).not.toHaveBeenCalled();
+  });
+  it('cannot restore prohibited artwork through preparation or brand ornament', () => {
+    const prepared = prepareGeneratedLayoutV3(centred(), COPY, {
+      width: W, height: H, allowArt: false, palette: ['#0A1628', '#FFFFFF', '#F7B500'],
+      ornament: { texture: 'sun-rays', textureOpacity: 0.1, dividers: true, balance: true },
+    });
+    expect(prepared.art).toBeUndefined();
+  });
   it('puts passing candidates first, then orders by composite', () => {
     const ranked = rankCandidatesV3(
       [
@@ -222,15 +251,50 @@ describe('pipeline v3 — ranking', () => {
 });
 
 // Render-heavy: each rsvg render takes 0.2-0.5s, so the 5s default is too tight under load.
+// These isolate judge protocol/rendering, using explicit synthetic QA evidence. Production
+// and the qualification script compute hard QA from the actual client context.
+function admitForJudgeFixture(candidate: ReturnType<typeof rankCandidatesV3>[number]): void {
+  candidate.hardQa = { textMeasurements: [], passed: true, defectCodes: [], messages: [], layout: candidate.layout, metrics: computeLayoutMetrics(candidate.layout) };
+}
+
 describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
+  it('renders each candidate and both sides of its canary with that candidate’s actual assets', async () => {
+    const layouts = [centred(), asymmetric()];
+    layouts.forEach((layout, i) => {
+      layout.art = { source: 'generated', box: { x: 100, y: 100, width: 700, height: 700 },
+        calmRegion: { x: 100, y: 100, width: 700, height: 700 }, opacity: i ? 0.3 : 0.15 };
+    });
+    const options = { logoDataUri: KAAE_TEST_LOGO, artImagePath: KAAE_TEST_LOGO, copyText: COPY.text };
+    const names: Record<string, string> = {};
+    layouts.forEach((layout, i) => {
+      names[b64(renderLayoutV2(layout, options).png)] = `actual-${i}`;
+      names[b64(renderLayoutV2(createDegradedCanaryLayout(layout), options).png)] = 'degraded';
+    });
+    const ranked = rankCandidatesV3(layouts.map((layout, sourceIndex) => ({ sourceIndex, layout })), COPY);
+    ranked.forEach(admitForJudgeFixture);
+    const preferred = `actual-${ranked[1].sourceIndex}`;
+    const seen: string[] = [];
+    const { client } = mockClient({ names, prefer: (a, b) => {
+      seen.push(a, b);
+      return a === 'degraded' || b === preferred ? 'B' : 'A';
+    } });
+    const result = await selectWinnerV3(ranked, COPY, {
+      client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, renderOptionsForCandidate: () => options,
+    });
+    expect(result.winner.sourceIndex).toBe(ranked[1].sourceIndex);
+    expect(result.canary?.passed).toBe(true);
+    expect(seen).toHaveLength(8);
+    expect(seen.every((name) => ['actual-0', 'actual-1', 'degraded'].includes(name))).toBe(true);
+  });
+
   const named = () => {
     const a = centred();
     const b = asymmetric();
     const names: Record<string, string> = {
-      [b64(renderLayoutV2(a, { copyText: COPY.text }).png)]: 'centred',
-      [b64(renderLayoutV2(b, { copyText: COPY.text }).png)]: 'asymmetric',
-      [b64(renderLayoutV2(createDegradedCanaryLayout(a), { copyText: COPY.text }).png)]: 'degraded',
-      [b64(renderLayoutV2(createDegradedCanaryLayout(b), { copyText: COPY.text }).png)]: 'degraded',
+      [b64(renderLayoutV2(a, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png)]: 'centred',
+      [b64(renderLayoutV2(b, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png)]: 'asymmetric',
+      [b64(renderLayoutV2(createDegradedCanaryLayout(a), { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png)]: 'degraded',
+      [b64(renderLayoutV2(createDegradedCanaryLayout(b), { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png)]: 'degraded',
     };
     const ranked = rankCandidatesV3(
       [
@@ -239,6 +303,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
       ],
       COPY
     );
+    ranked.forEach(admitForJudgeFixture);
     return { names, ranked };
   };
 
@@ -255,7 +320,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
       },
     });
 
-    const result = await selectWinnerV3(ranked, COPY, { client });
+    const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.decidedBy).toBe('judge');
     expect(result.winner.sourceIndex).toBe(second.sourceIndex);
     expect(result.judgeReliable).toBe(true);
@@ -267,7 +332,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
     const { names, ranked } = named();
     const { client } = mockClient({ names, prefer: () => 'A' });
 
-    const result = await selectWinnerV3(ranked, COPY, { client });
+    const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.match?.winnerId).toBe('TIE_DISCARDED');
     expect(result.decidedBy).toBe('composite_after_tie');
     expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
@@ -287,7 +352,7 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
       },
     });
 
-    const result = await selectWinnerV3(ranked, COPY, { client });
+    const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.decidedBy).toBe('composite_judge_unreliable');
     expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
     expect(result.judgeReliable).toBe(false);
@@ -296,9 +361,9 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
   it('shows the judge the real copy, never placeholder text', async () => {
     const { names, ranked } = named();
     const { client, calls } = mockClient({ names, prefer: () => 'A' });
-    await selectWinnerV3(ranked, COPY, { client });
+    await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
 
-    const placeholder = b64(renderLayoutV2(ranked[0].layout).png);
+    const placeholder = b64(renderLayoutV2(ranked[0].layout, { logoDataUri: KAAE_TEST_LOGO }).png);
     const seen = calls.flatMap((c) => c.images);
     expect(seen.length).toBe(8);
     expect(seen).not.toContain(placeholder);
@@ -308,7 +373,8 @@ describe('pipeline v3 — winner selection', { timeout: 30000 }, () => {
   it('spends nothing when only one candidate is left', async () => {
     const { client, calls } = mockClient({});
     const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }], COPY);
-    const result = await selectWinnerV3(ranked, COPY, { client });
+    ranked.forEach(admitForJudgeFixture);
+    const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(result.decidedBy).toBe('single_candidate');
     expect(calls).toHaveLength(0);
   });
@@ -319,7 +385,7 @@ describe('pipeline v3 — refinement', { timeout: 30000 }, () => {
   it('spends nothing on a candidate that already passes the gate', async () => {
     const { client, calls } = mockClient({});
     const [top] = rankCandidatesV3([{ sourceIndex: 0, layout: centred() }], COPY);
-    const outcome = await refineCandidateV3(top, COPY, { client });
+    const outcome = await refineCandidateV3(top, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(outcome.reason).toBe('gate_passed');
     expect(outcome.adopted).toBe(false);
     expect(calls).toHaveLength(0);
@@ -331,7 +397,7 @@ describe('pipeline v3 — refinement', { timeout: 30000 }, () => {
     const [top] = rankCandidatesV3([{ sourceIndex: 3, layout: failing }], COPY);
     expect(top.metrics.passed).toBe(false);
 
-    const outcome = await refineCandidateV3(top, COPY, { client });
+    const outcome = await refineCandidateV3(top, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(outcome.adopted).toBe(true);
     expect(outcome.reason).toBe('adopted_now_passes');
     expect(outcome.metrics.passed).toBe(true);
@@ -339,7 +405,7 @@ describe('pipeline v3 — refinement', { timeout: 30000 }, () => {
 
     // The critic was shown the design with its copy, not "Sample copy block N".
     const critiqueCall = calls.find((c) => c.schema === 'DesignCritiqueReport');
-    expect(critiqueCall?.images[0]).toBe(b64(renderAnnotatedLayoutV2(failing, { copyText: COPY.text }).png));
+    expect(critiqueCall?.images[0]).toBe(b64(renderAnnotatedLayoutV2(failing, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png));
 
     // Each round records its two calls separately, with the tokens a ledger needs.
     const round = outcome.result.rounds[0];
@@ -643,7 +709,7 @@ describe('refinement is told what production QA rejects', { timeout: 30000 }, ()
         return (client as any).createStructuredCompletion(params);
       },
     } as unknown as OpenAiStudioClient;
-    const outcome = await refineCandidateV3(top, COPY, { client: spying, qa, canvas });
+    const outcome = await refineCandidateV3(top, COPY, { client: spying, qa, canvas, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
     expect(prompts.length).toBeGreaterThan(0);
     expect(prompts[0]).toContain('HARD QA DEFECTS');
     expect(prompts[0]).toContain('COPY_PLACEMENT');
@@ -772,7 +838,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
     const layout = prepareGeneratedLayoutV3(raw, copy, { width: raw.width, height: raw.height, logoAspect: 1, palette: KAAE_PALETTE });
     const qa = evaluateHardQa(layout, {
       width: raw.width, height: raw.height, copyScripts: Object.values(copy.scripts!), latinFont: 'Verdana',
-      arabicFont: 'Noto Sans Arabic', palette: KAAE_PALETTE, logoAspect: 1,
+      arabicFont: 'Noto Sans Arabic', palette: KAAE_PALETTE, logoAspect: 1, copyText: copy.text,
     });
     return { layout, qa };
   };
@@ -803,7 +869,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ]),
       SUMMIT
     );
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages, qa.messages.join('\n')).toEqual([]);
     expect(layout.grid.margin).toBe(115);
     // The footer band stayed; the blocks above it closed up, never tighter than 12px.
     expect(layout.shapes.find((s) => s.role === 'panel')!.y).toBe(886);
@@ -834,7 +900,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
         'هۆڵی کۆبوونەوەکانی KAAE • هەولێر • پەخشی ڕاستەوخۆ',
       ])
     );
-    expect(qa.messages).toEqual([]);
+    // Geometry and the original mixed-font footer now have measured local evidence.
+    expect(qa.passed, qa.messages.join('; ')).toBe(true);
+    expect(qa.defectCodes).toEqual([]);
+    expect(qa.textMeasurements.find((m) => m.copyIndex === 4)).toMatchObject({status: 'measured', method: 'pango-wrap-v1'});
     expect(layout.grid.margin).toBe(64);
     expect(layout.logo!.y).toBe(64);
     const band = layout.shapes.find((s) => s.role === 'panel')!;
@@ -865,7 +934,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
         'هۆڵی سەعد عەبدوڵڵا، هەولێر • ٢٨ی تشرینی یەکەمی ٢٠٢٦',
       ])
     );
-    expect(qa.messages).toEqual([]);
+    // Geometry and the original mixed-font footer now have measured local evidence.
+    expect(qa.passed, qa.messages.join('; ')).toBe(true);
+    expect(qa.defectCodes).toEqual([]);
+    expect(qa.textMeasurements.find((m) => m.copyIndex === 4)).toMatchObject({status: 'measured', method: 'pango-wrap-v1'});
     expect(bottom(byRole(layout, 'eyebrow'))).toBeLessThanOrEqual(byRole(layout, 'title').y);
   });
 
@@ -894,7 +966,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ])
     );
     const { logoClearZone } = await import('../src/index.js');
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages, qa.messages.join('\n')).toEqual([]);
     expect(layout.logo!.y).toBe(123);
     expect(byRole(layout, 'eyebrow').y).toBeGreaterThanOrEqual(bottom(logoClearZone(layout.logo!)));
     expect(layout.art!.prompt).toBe('subtle sun-ray gradient in navy');
@@ -923,7 +995,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ])
     );
     const { logoClearZone } = await import('../src/index.js');
-    expect(qa.messages).toEqual([]);
+    // Geometry and the original mixed-font footer now have measured local evidence.
+    expect(qa.passed, qa.messages.join('; ')).toBe(true);
+    expect(qa.defectCodes).toEqual([]);
+    expect(qa.textMeasurements.find((m) => m.copyIndex === 4)).toMatchObject({status: 'measured', method: 'pango-wrap-v1'});
     const eyebrow = byRole(layout, 'eyebrow');
     const title = byRole(layout, 'title');
     const card = layout.shapes.find((s) => s.role === 'panel')!;
@@ -950,7 +1025,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ], '#FDF8F3'),
       SUMMIT
     );
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages, qa.messages.join('\n')).toEqual([]);
     expect(measureDesignV3(layout, SUMMIT).metrics.semanticLayout.passed).toBe(true);
     expect(byRole(layout, 'title').y - byRole(layout, 'body').y).toBe(227 - 216);
   });
@@ -974,7 +1049,10 @@ describe('settling a crowded design — stored designs production QA rejected', 
         'هەولێر • تشرینی دووەمی ٢٠٢٦ • kaae.gov.krd',
       ])
     );
-    expect(qa.messages).toEqual([]);
+    // Geometry and the original mixed-font footer now have measured local evidence.
+    expect(qa.passed, qa.messages.join('; ')).toBe(true);
+    expect(qa.defectCodes).toEqual([]);
+    expect(qa.textMeasurements.find((m) => m.copyIndex === 4)).toMatchObject({status: 'measured', method: 'pango-wrap-v1'});
     expect(layout.grid.margin).toBe(96);
     expect(byRole(layout, 'eyebrow').y).toBeLessThan(648);
   });
@@ -993,7 +1071,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
       ], []),
       SUMMIT
     );
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages, qa.messages.join('\n')).toEqual([]);
     expect(layout.logo!.y).toBe(230);
     expect(byRole(layout, 'title').y).toBeGreaterThanOrEqual(bottom(byRole(layout, 'eyebrow')));
   });
@@ -1004,7 +1082,7 @@ describe('settling a crowded design — stored designs production QA rejected', 
     crowded.text[2].y = 500;
     crowded.text[4].y = H - MARGIN - crowded.text[4].height;
     const { qa } = await prepare(crowded, { ...COPY, scripts: { 0: 'latin', 1: 'latin', 2: 'latin', 3: 'latin', 4: 'latin' } });
-    expect(qa.messages).toEqual([]);
+    expect(qa.messages, qa.messages.join('\n')).toEqual([]);
   });
 
   it('leaves a block above the logo that reaches into its clear space for refinement, named', async () => {
@@ -1102,7 +1180,7 @@ describe('text reads against the surface behind it', { timeout: 30000 }, () => {
   it('recolours unreadable text in the brand colour the design already uses for text', async () => {
     const { conformToHouseRules, declaredTextContrast, requiredContrast } = await import('../src/index.js');
     const layout = conformToHouseRules(navyOnNavy(), COPY, KAAE_PALETTE);
-    for (const t of layout.text) expect(declaredTextContrast(layout, t)).toBeGreaterThanOrEqual(requiredContrast(t.fontSize, t.bold));
+    for (const t of layout.text) expect(declaredTextContrast(layout, t)).toBeGreaterThanOrEqual(requiredContrast(t.fontSize, t.bold === true));
     expect(layout.text[3].color).toBe('#FDF8F3');
   });
 });
@@ -1132,5 +1210,129 @@ describe('copy fits its box', { timeout: 30000 }, () => {
     const { rankCandidatesV3 } = await import('../src/index.js');
     const [ranked] = rankCandidatesV3([{ sourceIndex: 0, layout: overflowing() }], COPY, qaContext);
     expect(ranked.hardQa?.defectCodes).toContain('COPY_OVERFLOW');
+  });
+});
+
+describe('pipeline v3 — brief-bound challenger behind its flag (ADR-124)', { timeout: 30000 }, () => {
+  const BRIEF = {
+    instructions: 'Formal notice for university leadership; the deadline must be unmistakable.',
+    audience: 'university leadership',
+    copy: Object.entries(COPY.text).map(([i, text]) => ({ copyIndex: Number(i), text })),
+  };
+  const pair = () => {
+    const a = centred();
+    const b = asymmetric();
+    const render = (layout: StudioLayoutV2) => b64(renderLayoutV2(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png);
+    const names: Record<string, string> = {
+      [render(a)]: 'centred', [render(b)]: 'asymmetric',
+      [render(createDegradedCanaryLayout(a))]: 'degraded', [render(createDegradedCanaryLayout(b))]: 'degraded',
+    };
+    const ranked = rankCandidatesV3([{ sourceIndex: 0, layout: a }, { sourceIndex: 1, layout: b }], COPY);
+    ranked.forEach(admitForJudgeFixture);
+    return { names, ranked };
+  };
+  const dims = (c: string, m: string, a: string) => ({
+    correctness: { choice: c, reason: 'r' }, communication: { choice: m, reason: 'r' }, aesthetic: { choice: a, reason: 'r' },
+  });
+  /** Answers the challenger schema only; any incumbent call fails the test. */
+  function challengerClient(names: Record<string, string>, answer: (left: string, right: string) => ReturnType<typeof dims>) {
+    const calls: Array<{ schema: string; left: string; right: string; user: string; detail: string[] }> = [];
+    const client = {
+      async createStructuredCompletion(params: any) {
+        const content = params.messages[1].content as any[];
+        const images = content.filter((c) => c.type === 'image_url').map((c) => c.image_url);
+        const [left, right] = images.map((i: any) => names[i.url] ?? 'unknown');
+        calls.push({ schema: params.jsonSchema.name, left, right, user: content.filter((c) => c.type === 'text').map((c) => c.text).join('\n'),
+          detail: images.map((i: any) => i.detail) });
+        if (params.jsonSchema.name !== 'BriefBoundDimensionVerdict') throw new Error(`unexpected schema ${params.jsonSchema.name}`);
+        const data = { dimensions: answer(left, right), findings: [] };
+        return { data, rawText: JSON.stringify(data), receipt: { id: 'r', responseId: `resp_${calls.length}`, xRequestId: null,
+          model: params.model, inputTokens: 1000, outputTokens: 100, reasoningTokens: 0, cacheCreationTokens: 0,
+          cacheReadTokens: 0, costUsd: 0.002, sha256: '', latencyMs: 5, attempts: 1 } };
+      },
+    };
+    return { client: client as any, calls };
+  }
+
+  it('keeps the incumbent judge unless the challenger is selected', async () => {
+    const { names, ranked } = pair();
+    const { client, calls } = mockClient({ names, prefer: () => 'A' });
+    const result = await selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO } });
+    expect(result.protocol).toBe('incumbent');
+    expect(calls.every((c) => c.schema === 'PairwiseDimensionVerdict')).toBe(true);
+  });
+
+  it('adopts a stable brief-bound pick that also beats the degraded canary', async () => {
+    const { names, ranked } = pair();
+    const secondName = ranked[1].sourceIndex === 0 ? 'centred' : 'asymmetric';
+    const { client, calls } = challengerClient(names, (left, right) => {
+      if (left === 'degraded') return dims('B', 'B', 'B');
+      if (right === 'degraded') return dims('A', 'A', 'A');
+      return left === secondName ? dims('tie', 'A', 'tie') : dims('tie', 'B', 'tie');
+    });
+    const result = await selectWinnerV3(ranked, COPY, {
+      client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, judgeProtocol: 'brief_bound_v1', judgeBrief: BRIEF,
+    });
+    expect(result).toMatchObject({ protocol: 'brief_bound_v1', decidedBy: 'judge', judgeReliable: true, humanChoiceRecommended: false });
+    expect(result.winner.sourceIndex).toBe(ranked[1].sourceIndex);
+    expect(result.match).toBeNull();
+    expect(result.briefBound?.match.decision.decidedBy).toBe('communication');
+    expect(result.briefBound?.canaryPassed).toBe(true);
+    expect(calls).toHaveLength(4);
+    expect(calls.every((c) => c.user.includes(COPY.text[3]) && c.detail.every((d) => d === 'high'))).toBe(true);
+  });
+
+  it('keeps the higher composite and asks for a human choice when the challenger is uncertain', async () => {
+    const { names, ranked } = pair();
+    const { client } = challengerClient(names, (left, right) =>
+      left === 'degraded' ? dims('B', 'B', 'B') : right === 'degraded' ? dims('A', 'A', 'A') : dims('tie', 'tie', 'tie'));
+    const result = await selectWinnerV3(ranked, COPY, {
+      client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, judgeProtocol: 'brief_bound_v1', judgeBrief: BRIEF,
+    });
+    expect(result).toMatchObject({ decidedBy: 'composite_judge_uncertain', humanChoiceRecommended: true, judgeReliable: true });
+    expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
+  });
+
+  it('overrules a challenger that cannot prefer its pick over a degraded copy', async () => {
+    const { names, ranked } = pair();
+    const secondName = ranked[1].sourceIndex === 0 ? 'centred' : 'asymmetric';
+    const { client } = challengerClient(names, (left, right) =>
+      left === 'degraded' || right === 'degraded' ? dims('tie', 'tie', 'tie') : left === secondName ? dims('A', 'A', 'A') : dims('B', 'B', 'B'));
+    const result = await selectWinnerV3(ranked, COPY, {
+      client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, judgeProtocol: 'brief_bound_v1', judgeBrief: BRIEF,
+    });
+    expect(result).toMatchObject({ decidedBy: 'composite_judge_unreliable', judgeReliable: false, humanChoiceRecommended: true });
+    expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
+  });
+
+  it('does not trust a pick it could not test, and spends nothing, when the degraded canary renders identically', async () => {
+    // createDegradedCanaryLayout degrades only title and body roles; without them the canary is the same image.
+    const { names, ranked } = pair();
+    for (const r of ranked) r.layout = { ...r.layout, text: r.layout.text.map((t) => ({ ...t, role: 'other' as const })) };
+    const renderOf = (layout: StudioLayoutV2) => renderLayoutV2(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: COPY.text }).png;
+    expect(renderOf(createDegradedCanaryLayout(ranked[0].layout)).equals(renderOf(ranked[0].layout))).toBe(true);
+    for (const r of ranked) {
+      const name = r.sourceIndex === ranked[1].sourceIndex ? 'second' : 'first';
+      names[b64(renderOf(r.layout))] = name;
+      if (r.renderedPng) names[b64(r.renderedPng)] = name;
+    }
+    const { client, calls } = challengerClient(names, (left) => (left === 'second' ? dims('A', 'A', 'A') : dims('B', 'B', 'B')));
+    const result = await selectWinnerV3(ranked, COPY, {
+      client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, judgeProtocol: 'brief_bound_v1', judgeBrief: BRIEF,
+    });
+    expect(calls).toHaveLength(2);
+    expect(result).toMatchObject({ protocol: 'brief_bound_v1', decidedBy: 'composite_judge_uncertain', judgeReliable: null,
+      humanChoiceRecommended: true });
+    expect(result.winner.sourceIndex).toBe(ranked[0].sourceIndex);
+    expect(result.briefBound).toMatchObject({ canaryPassed: null, canaryMatch: null, canaryUnavailable: 'degraded_canary_identical_bytes' });
+    expect(result.briefBound?.match.decision.winner).toBe('second');
+  });
+
+  it('refuses the challenger without the actual brief, before any call', async () => {
+    const { names, ranked } = pair();
+    const { client, calls } = challengerClient(names, () => dims('tie', 'tie', 'tie'));
+    await expect(selectWinnerV3(ranked, COPY, { client, renderOptions: { logoDataUri: KAAE_TEST_LOGO }, judgeProtocol: 'brief_bound_v1' }))
+      .rejects.toThrow(/brief/);
+    expect(calls).toHaveLength(0);
   });
 });

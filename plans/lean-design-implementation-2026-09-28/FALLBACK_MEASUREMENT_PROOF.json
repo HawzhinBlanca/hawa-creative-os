@@ -1,0 +1,384 @@
+{
+  "date": "2026-09-28",
+  "adr": "ADR-118",
+  "status": "locally-qualified; native Canva, complete runtime pinning, human quality and six-package completion remain open",
+  "sourceBaseCommit": "1bee749c2f21d94ae32b2f287350b25d5a1fff60",
+  "requirements": [
+    "FR-015",
+    "FR-037",
+    "FR-038",
+    "FR-039"
+  ],
+  "sourceFiles": [
+    {
+      "path": ".dockerignore",
+      "sha256": "2ea0c7e0c16053d2dc580bf87b4f3b9a69762b82aa83f78c558a5b2f4362cf53"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "74424de2908151f0bc992784d68fed24f6d9de277c10d97eb67806c07f27a794"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "0c05f65921291277101bc60b0500e64bf117fc49b7ef474d392821b3ebc6cf0a"
+    },
+    {
+      "path": "adrs/118_shared_fallback_text_measurement.md",
+      "sha256": "de59a6a891b735323ca43dc409a0e1640a4a6c6f2d1ce49df8661702dabfc779"
+    },
+    {
+      "path": "apps/core/test/design-studio-orchestrator.test.ts",
+      "sha256": "82ad7be7452c33f45d3053890bb9e8e0732b5c85bb86c21238abb0803d77c9d5"
+    },
+    {
+      "path": "docs/11_QA_RTL_MULTILINGUAL.md",
+      "sha256": "b251b334492203eb97fc561e9f6a6adee6d200f1fcf8ffbd9a75d5168c65b1ae"
+    },
+    {
+      "path": "infra/docker/Dockerfile.core",
+      "sha256": "7a7a20e6f369df3cfd7df51c00f25f16ce89883a5f65bf46f79949952d1844ca"
+    },
+    {
+      "path": "package.json",
+      "sha256": "ae36a4f0beeeab8a70055c5f0e8cf67a1d8876ac4d4e6b59c119545b8d6e6643"
+    },
+    {
+      "path": "packages/creative/assets/fonts/HawaSymbols-Bold.ttf",
+      "sha256": "1dc566e8b82122f70b1c880f4e4a816891bcc8b063dd49c7a228ca8e92d94665"
+    },
+    {
+      "path": "packages/creative/assets/fonts/HawaSymbols-Regular.ttf",
+      "sha256": "0ebe724c802409485b413a7a79d436460ddd3a2e9e19f23c30bb4f86c39506a2"
+    },
+    {
+      "path": "packages/creative/native/README.md",
+      "sha256": "ca08e6ffee66ef2bee8129337ec07a395f684be9027b5f4e8778066f0bafa6fa"
+    },
+    {
+      "path": "packages/creative/native/build.mjs",
+      "sha256": "c288cb0269e5448de6532e4b4946113b394ed4ec22199e91563b47ec19897887"
+    },
+    {
+      "path": "packages/creative/native/text-measure.c",
+      "sha256": "d2fae098682a55ba67426492e0fc2d8b16850469f07fa46a9a5b564752928d52"
+    },
+    {
+      "path": "packages/creative/package.json",
+      "sha256": "254a157e80122568e0f04c4d32705498e9a6de75c4c5633381f00882049d1089"
+    },
+    {
+      "path": "packages/creative/src/studio/font-environment.ts",
+      "sha256": "d26ce252a1904f61a3be964be7bd6d1bfb14a0fdabd01d8a3820ed920b2504aa"
+    },
+    {
+      "path": "packages/creative/src/studio/pango-measurement.ts",
+      "sha256": "600e5a719c5fc3f49ed4fdbf3ad6ce73115a3d8ef6a8e4255c1b410de5f6c39f"
+    },
+    {
+      "path": "packages/creative/src/studio/render-layout-v2.ts",
+      "sha256": "4dc6b6e5ffd04ac4160f375f0ed9c86d4aeb388b5eefc49275ea82a416f1fef7"
+    },
+    {
+      "path": "packages/creative/test/fallback-text-measurement.test.ts",
+      "sha256": "1bf442a4629307d39adb1664f4d03e5b90e9e7c410e84479a81ebe83a389c5be"
+    },
+    {
+      "path": "packages/creative/test/font-pinning-symbols.test.ts",
+      "sha256": "09e21ba8b762fe982c21832315837f7814f617352eef82fb2087e79b615a4f5e"
+    },
+    {
+      "path": "packages/creative/test/pipeline-v3.test.ts",
+      "sha256": "ede2d6df60111e487d22756c367fdcba9f8a6a84ce4c24c7a93216d784318b3c"
+    },
+    {
+      "path": "packages/creative/test/stroke-width-slab.test.ts",
+      "sha256": "8b10d6f0cb2d09b5e2eaefe2aaac5865a0b3283462b26b73e97ab9edff372052"
+    },
+    {
+      "path": "packages/creative/test/style-spec.test.ts",
+      "sha256": "5c7d73c2b404f08bbfa5ab3c831c70d19a82189c6365be87e494506fddf1f656"
+    },
+    {
+      "path": "packages/creative/test/title-color.test.ts",
+      "sha256": "5164e6bf2c803f6a8360464ae2a4e235dbac7568463f614340b027858004f375"
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
+      "sha256": "72b6b14f466ca944a72a361c0d6d929e9ba5d6688101afa94d4467d75b9557d6"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "387577725d6970840bf302cb1bb36bccc326861b1005b9593187d7ac6f2cf8f3"
+    },
+    {
+      "path": "scripts/generate_symbol_fallback_faces.py",
+      "sha256": "cd6748f85d9545e74de62189e7658081f478000cd568c7f9200e53724cfac242"
+    }
+  ],
+  "tests": {
+    "red": {
+      "path": "output/acceptance/2026-09-28-fallback-red.json",
+      "sha256": "2ca6e79981c22095f4a42d81670a5afcb50ae209cc4799f66e81502340e74211",
+      "files": 1,
+      "passed": 0,
+      "failed": 1,
+      "pendingOrDeselected": 0
+    },
+    "space-red": {
+      "path": "output/acceptance/2026-09-28-fallback-space-red.json",
+      "sha256": "54b729003d281e54b9827160c2601c601709ece998dcc1684eca4e5271c35b8e",
+      "files": 1,
+      "passed": 0,
+      "failed": 1,
+      "pendingOrDeselected": 8
+    },
+    "focused": {
+      "path": "output/acceptance/2026-09-28-fallback-focused.json",
+      "sha256": "39ddcc874df4b60c5dc4d0b27dba2f17f40fc280bd137e2a1ad3bf77836cb73d",
+      "files": 3,
+      "passed": 23,
+      "failed": 0,
+      "pendingOrDeselected": 0
+    },
+    "pixels": {
+      "path": "output/acceptance/2026-09-28-fallback-pixels.json",
+      "sha256": "d02273bc43413e6c026d29e2a939e576294afb6c6aafb1527cae549bfc77b9f3",
+      "files": 1,
+      "passed": 7,
+      "failed": 0,
+      "pendingOrDeselected": 0
+    },
+    "connected": {
+      "path": "output/acceptance/2026-09-28-fallback-connected.json",
+      "sha256": "7932438b83e81100cc1aa2ea8a1d0716391b6c0e2fb52c2b1eddfc2e0f380293",
+      "files": 14,
+      "passed": 178,
+      "failed": 0,
+      "pendingOrDeselected": 0
+    },
+    "adjacent": {
+      "path": "output/acceptance/2026-09-28-fallback-adjacent.json",
+      "sha256": "1cd378667056d0aa4e37c60e986e49170fa8f9b380e385c980eaeffa05779f16",
+      "files": 11,
+      "passed": 108,
+      "failed": 1,
+      "pendingOrDeselected": 0
+    },
+    "symbols": {
+      "path": "output/acceptance/2026-09-28-fallback-symbols.json",
+      "sha256": "4f9fae69d3a472d15f61ffb7f2890d2fc64c90ca1afadb67e5322b26a1214e15",
+      "files": 1,
+      "passed": 9,
+      "failed": 0,
+      "pendingOrDeselected": 0
+    },
+    "qualified": {
+      "path": "output/acceptance/2026-09-28-fallback-qualified.json",
+      "sha256": "6b67b693300a1aadeda004d9beff3b4e6ddf1c04c4952ecdf99613eeff00bea7",
+      "files": 24,
+      "passed": 279,
+      "failed": 2,
+      "pendingOrDeselected": 0
+    },
+    "final": {
+      "path": "output/acceptance/2026-09-28-fallback-final.json",
+      "sha256": "7b7996e25e586c6035ed9e34b2c18b2c039718814679f9da38e7147e3569cf96",
+      "files": 24,
+      "passed": 281,
+      "failed": 0,
+      "pendingOrDeselected": 0
+    }
+  },
+  "verification": {
+    "nativeBuild": "C11 -O2 -Wall -Wextra -Werror; macOS Pango 1.58.2 and Debian Pango 1.50.12",
+    "pixelCases": "actual librsvg ink bounds within 2px: macOS explicit RTL/LTR Sorani+Latin and italic/tracked Latin symbols; Linux RTL Sorani+Latin and italic/tracked symbols",
+    "fontRegeneration": "fonttools 4.60.1; hash-pinned DejaVu 2.37; both subset --check outputs identical",
+    "types": "package/source/scripts and all 529 strict test roots pass",
+    "anyRatchet": "954 within 1053",
+    "providerEgress": "9 existing exceptions; no new direct egress",
+    "security": "zero secrets; commit hook repeats scan",
+    "performance": {
+      "scope": "one local synthetic text block; no native/provider/job latency claim",
+      "coldMs": 139.83075,
+      "warmSamples": 30,
+      "warmMedianMs": 9.355334000000084,
+      "warmP95Ms": 10.59412500000002
+    },
+    "database": "isolated Vitest clones only; mock provider transport; no paid/native provider calls"
+  },
+  "intermediateFailures": [
+    "Initial native compilation collided with the system MAX_INPUT macro; renamed with HAWA prefix.",
+    "Strict test typecheck found an omitted required logo fixture; supplied an explicit synthetic white logo.",
+    "Real symbol-space test exposed three unknown U+0020 glyphs; regenerated symbol subsets with ordinary/nonbreaking spaces, preserving letter/digit exclusion and fallback order.",
+    "An intermediate connected run had a stale subset assertion plus an unmeasured Core reason while compilation overlapped testing. Updated the subset contract and completed builds before the final clean connected run."
+  ],
+  "limits": [
+    "No full release suite, deployment, production database write, actual native Canva export/reopen, or human language approval.",
+    "Primary-only text retains fontkit; nominal pre-fit eyebrow measurement is conservative.",
+    "Helper binary and runtime version identity do not pin every OS/shared-library byte.",
+    "Local pixel tolerance is tested-case evidence, not universal bidi/font/renderer equivalence.",
+    "Native exact edit preservation and all six package exit gates remain active."
+  ],
+  "artifacts": [
+    {
+      "path": "output/acceptance/2026-09-28-fallback-adjacent.json",
+      "sha256": "1cd378667056d0aa4e37c60e986e49170fa8f9b380e385c980eaeffa05779f16"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-adjacent.log",
+      "sha256": "a590459ef35ecde7544e2d13c609be5d2f7951f7e9144aa88943b291d20f8ffa"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-any.log",
+      "sha256": "6fb44bfeee165198da579f53dd494bdadf3fc876cb0d00996c1f2bc5ee52dc07"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-build-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-build-sealed.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-build2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-connected.json",
+      "sha256": "7932438b83e81100cc1aa2ea8a1d0716391b6c0e2fb52c2b1eddfc2e0f380293"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-connected.log",
+      "sha256": "01332fbb27feb5ee2f115ce062445a56b25205dee0a1bff205fb2dc1e1cea540"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-egress.log",
+      "sha256": "b6e716bda86ecb080e1fd6c96efaf64b06b2bbb78001c634eaf7a1137a63edf8"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-final.json",
+      "sha256": "7b7996e25e586c6035ed9e34b2c18b2c039718814679f9da38e7147e3569cf96"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-final.log",
+      "sha256": "4d88186e3642e3d0bfa68ec999f6756c6e66030b87acf7ef1feef92e9619a4bd"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-focused.json",
+      "sha256": "39ddcc874df4b60c5dc4d0b27dba2f17f40fc280bd137e2a1ad3bf77836cb73d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-focused.log",
+      "sha256": "accc79e2639e46081084217fbf55ac2651a4561f4bb75ad29e9ab3da35420cfd"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-font-generation.log",
+      "sha256": "7b4c54dcb8133e8b25f0e9cb3a709924160260f1308cacb1cab9bdc5c21108d4"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-linux-final.log",
+      "sha256": "637a49cc5857ebdd961f55ebb35bd1106dad972b39ce5e83c27cf970011a281d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-linux-image.txt",
+      "sha256": "fda299eec2e75f9e493146c97a615be678a64fe1c55bd880144a95aba91b4366"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-linux.log",
+      "sha256": "16d9ed5aa4c9ccc8f078c6cd47c55ecce86464793b792a40df8fa8fe297d0a2f"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-package-build.log",
+      "sha256": "c4d30a7afda6049bdfa2d9ff47582a2c5117b0880426c856e9994b9df0409586"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-pixels.json",
+      "sha256": "d02273bc43413e6c026d29e2a939e576294afb6c6aafb1527cae549bfc77b9f3"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-pixels.log",
+      "sha256": "fb5511e3b99cda9d318370b9aaf8caf8e816a45a108e6cda6517a76851ff7728"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-qualified.json",
+      "sha256": "6b67b693300a1aadeda004d9beff3b4e6ddf1c04c4952ecdf99613eeff00bea7"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-qualified.log",
+      "sha256": "4e993ae17cd6e81b5645e910effbb799d2f39704ed45d66b8c1bf346d6250095"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-red.json",
+      "sha256": "2ca6e79981c22095f4a42d81670a5afcb50ae209cc4799f66e81502340e74211"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-red.log",
+      "sha256": "3888219109fda0dbf7204d38f2cfb36dafa7bb90a2afe41bdc4baeff4b10f448"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-script-types-sealed.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-script-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-security.log",
+      "sha256": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-space-red.json",
+      "sha256": "54b729003d281e54b9827160c2601c601709ece998dcc1684eca4e5271c35b8e"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-space-red.log",
+      "sha256": "0c80402d9ae132bea5c144898a66c77981c141e4c45141a621a2296f74a627a3"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-symbols.json",
+      "sha256": "4f9fae69d3a472d15f61ffb7f2890d2fc64c90ca1afadb67e5322b26a1214e15"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-symbols.log",
+      "sha256": "bcd4cecb8b52254372423ea89fb75281b6fe31c908d9a8f782242606365164a1"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-test-types-final.log",
+      "sha256": "fd367287e8118d76960951078d0a4f2660557e72351f8a71f01f3d4fd6f84816"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-test-types-sealed.log",
+      "sha256": "fd367287e8118d76960951078d0a4f2660557e72351f8a71f01f3d4fd6f84816"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-test-types.log",
+      "sha256": "3e64bc445821bcb34dd01d82c960ca12762ab8062121e09396fb460bdc5cd991"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-timing.json",
+      "sha256": "5ed78f533730519ac1f45c026acb07fba29206c42855892355da4781ca1b8b92"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-linux-context/Dockerfile",
+      "sha256": "2604d3842aca9dd4f0739913a6eb2a5f7847bc02ced8ae85f977c8e85218ab9f"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-linux-context/fonts.conf",
+      "sha256": "06b1001bfa44e065c5c87c8eefcdb62afaeff82ad061b56ea7f2faece9b4c38a"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-linux-context/probe.mjs",
+      "sha256": "afede2e54fc8e277a04a72922c78fe4de9ffecfe599f60173c6b6e10fe556591"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-fallback-linux-context/text-measure.c",
+      "sha256": "d2fae098682a55ba67426492e0fc2d8b16850469f07fa46a9a5b564752928d52"
+    }
+  ]
+}

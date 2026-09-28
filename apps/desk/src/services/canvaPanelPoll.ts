@@ -27,3 +27,32 @@ export function canvaPanelPollMs(view: {
     || Object.values(view.results ?? {}).some((r) => RUNNING_OPERATIONS.has(String(r?.status)));
   return running ? CANVA_PANEL_ACTIVE_POLL_MS : CANVA_PANEL_IDLE_POLL_MS;
 }
+
+/**
+ * Reads the panel again as soon as the office comes back to the tab: when it is shown again or its
+ * window regains focus. Some panel state changes with no task event (Canva connected in Settings or
+ * in Canva's own window, an export that finished while the tab was hidden, when poll ticks are
+ * skipped), and at the idle pace it would otherwise wait up to a minute. A tab switch fires both
+ * events; one read within a second of another is not repeated. Returns the unsubscribe function.
+ */
+export function onCanvaPanelWake(
+  refresh: () => void,
+  doc: EventTarget & { hidden: boolean },
+  win: EventTarget,
+  now: () => number = Date.now,
+): () => void {
+  let last = -Infinity;
+  const wake = () => {
+    if (doc.hidden) return;
+    const at = now();
+    if (at - last < 1_000) return;
+    last = at;
+    refresh();
+  };
+  doc.addEventListener('visibilitychange', wake);
+  win.addEventListener('focus', wake);
+  return () => {
+    doc.removeEventListener('visibilitychange', wake);
+    win.removeEventListener('focus', wake);
+  };
+}

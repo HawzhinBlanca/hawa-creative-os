@@ -1,7 +1,8 @@
 {
-  "manifestVersion": "1.0.0",
-  "generatedAt": "2026-09-28T13:46:59.249Z",
-  "environment": "production",
+  "manifestVersion": "2.0.0",
+  "evidenceKind": "source_candidate",
+  "generatedAt": "2026-09-28T17:31:25+03:00",
+  "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
     "description": "Canonical production multi-service container topology (Core, Desk UI, Worker, PostgreSQL, Nginx)",
@@ -19,15 +20,15 @@
     ]
   },
   "build": {
-    "commit": "2607c4c08c396236b52ce2f3a8d6eedef9f9c2ca",
+    "commit": "a73500092c91f9a3bb5a934b5de998d575c97f50",
     "treeClean": true,
-    "commitTimestamp": "2026-09-28T16:46:27+03:00",
-    "branch": "claude/elated-payne-b6085b"
+    "commitTimestamp": "2026-09-28T17:31:25+03:00",
+    "branch": "claude/mainline"
   },
   "migrations": {
-    "targetVersion": "023_request_lifecycle",
-    "latestMigrationFile": "023_request_lifecycle.sql",
-    "totalMigrations": 23
+    "targetVersion": "066_initial_native_policy",
+    "latestMigrationFile": "066_initial_native_policy.sql",
+    "totalMigrations": 66
   },
   "flags": {
     "DESIGN_PIPELINE_V3": "off",
@@ -36,60 +37,58 @@
   "components": {
     "core": {
       "service": "core",
-      "image": "hawa-core:latest",
+      "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/core/src/app.ts": "dae8bccb53b497c2e63f8e4a7fbdfcefc341adde35e28b72f586cca1c0c647c3",
+        "apps/core/src/app.ts": "f9a88fd1497d704495cf90332fbfeb87f34dc6f4dabe06d9ebe37dfe14b7fee1",
         "apps/core/src/index.ts": "6950c3318ab08ddfd7e455bd09c460262572a82e7767dd2afd8e39448635a2e5",
-        "packages/integrations/src/google-publisher.ts": "b82e7ea5c04ab4c609b332b2d80753cc4be8366fdeb1e1fdd5dd46c6f574cdb1"
+        "packages/integrations/src/google-publisher.ts": "5f908e24efaebfa80f1b3559af34a5298d7079935162fd72bd63e913139ceea3"
       }
     },
     "desk": {
       "service": "desk",
-      "image": "hawa-desk:latest",
+      "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/desk/src/App.tsx": "5c46787943bb301f6819770a5592c5a90f90e3575aade7ff812ad7d0f77f7c88",
+        "apps/desk/src/App.tsx": "49d95897183c30b34a43877aa6f281002eb5b0e6487f626aedf5769a0f67c5d1",
         "apps/desk/src/main.tsx": "ee234aa0846b3baa9aed56ba633e50ff95f0d039343d052a8a7d7860feffa8c8"
       }
     },
     "worker": {
       "service": "worker",
-      "image": "hawa-worker:latest",
+      "imageStatus": "unbuilt",
       "sourceFileHashes": {
-        "apps/worker/src/index.ts": "57d5385a63c7cec0e4d6f423075c1063418896d1af82651759701cd9b369904f"
+        "apps/worker/src/index.ts": "eace626b6c33e7da47c3657e21ca4b9944908836e349728483b3c0cfbb1105bc"
       }
     }
   },
   "models": {
-    "registryVersion": "2026-09-18.1",
-    "pinnedModels": {
-      "intake_router": {
-        "provider": "google",
-        "model": "gemini-3.8-flash"
-      },
-      "brief_builder": {
-        "provider": "google",
-        "model": "gemini-3.8-flash"
-      },
-      "creative_director": {
-        "provider": "anthropic",
-        "model": "claude-3-5-sonnet"
-      },
-      "visual_judge": {
-        "provider": "openai",
-        "model": "gpt-6-astra"
-      }
+    "policySourceSha256": "8fa49cfb9fcea11703b9435b6cbfa17429e6b108acaaff7d6d7ed60a30f41f27",
+    "productionDefaults": {
+      "layout": "gpt-6-astra",
+      "critique": "gpt-6-astra",
+      "judge": "gpt-4.1-mini",
+      "text": "gpt-6-astra",
+      "image": "gpt-image-2.5-sunburst"
     },
-    "promptVersions": {
-      "intake_router": "1.0",
-      "brief_builder": "1.0",
-      "creative_director": "2.0",
-      "visual_judge": "2.0"
+    "runtimeOverrides": "unobserved",
+    "promptVersion": "2026-09-25.2",
+    "promptSourcesSha256": {
+      "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
+      "apps/core/src/services/canva-design-planner.ts": "db5b1932ae95c461840864039aefbeaab847b55bb8042ea90671ce0c330c3e6a",
+      "packages/creative/src/studio/layout-generator-v3.ts": "81813207c7ae2327115e743254db2cf05242cc6cc4f1e85dd5672ee44908bccb",
+      "packages/creative/src/studio/pairwise-judge-v3.ts": "5ecf25768a864e8e7c1b243bfb6d9aa1c06c2cb8f544cc255d5e78fa9de4fddd",
+      "packages/creative/src/studio/box-critique-v3.ts": "8584e3f9ced35d200c821c29250329e830b11760bec615b344e059d69dac76ec"
     }
   },
   "qa": {
-    "engineVersion": "2.0.0",
-    "rulesVersion": "kaae-ka-2026-09",
-    "rubricVersion": "visual-rubric-v2"
+    "versionStatus": "unobserved",
+    "sourceHashes": {
+      "packages/qa/src/engine.ts": "e9cb28d14f14396b6696fc2862f3fb9d2607396e55d38479ae408d24c7eea7f7",
+      "packages/qa/src/vision-rubric.ts": "f625a23ca531f5e800fa0ef9a216b2ff9ba16382f75bbd5ab4e0eee3934e0276",
+      "packages/qa/src/canva-pptx-check.ts": "739e6d00d19cb4bc2eceb7853810d13bc8bb7f47d060ba8c5d7827e0ff492c99",
+      "packages/qa/src/rtl-validator.ts": "9ee174c4d0b028a19e0de618b87de2115ac6b81d04ebac194e8b03b220724562",
+      "packages/qa/src/contrast.ts": "2e8ba1d08f63474f920732ad1335082e7980dcde3f0f3fec8bdce9b40f679f71",
+      "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
+    }
   },
-  "sha256": "78398375468c147e3d5c74462613abd26ef2afeb1940f436c47eb0bdeeb18168"
+  "sha256": "41da232381fc7c18705996871d5d3739aa21b36d03b3361290e1f72a8e3af43d"
 }

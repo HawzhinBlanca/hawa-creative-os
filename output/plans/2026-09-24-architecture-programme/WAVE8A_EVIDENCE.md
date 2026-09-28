@@ -1,5 +1,13 @@
 # Wave 8a evidence (2026-09-25): file-store rehearsal and the nightly Restate backup
 
+> **History only (2026-09-28, ADR-127).** This records studio-v2. On the owner's decision of
+> 2026-09-28, `codex/research-grade-design-system` is the mainline; studio-v2's RequestLifecycle
+> (wave 7) was superseded there by that branch's own implementation. Of this wave, the file-store
+> backfill fixes and staged keys were ported with their tests (the rehearsal was not repeated). The
+> Restate backup script and restore drill were not ported: the mainline has its own (ADR-053 to
+> ADR-057, ADR-081); only the watchdog's recovery of a backup killed outright was carried over, in
+> that design (ADR-127).
+
 Branches merged into `claude/reliability`: `worktree-wf_8f9499c9-d1e-1` (REH: 4e2e6e5, 7515302), `worktree-wf_8f9499c9-d1e-2` (RSB: 088ce5e). Each was implemented, then reviewed by a separate agent that re-ran the tests; REH needed one fix round, RSB passed review.
 
 ## Phase 3.1 rehearsal (REH)

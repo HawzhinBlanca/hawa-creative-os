@@ -1,8 +1,8 @@
-import { creativeAssetPath, findClientPack, loadClientExemplars, loadClientPacks, matchClientPack, type ClientExemplars, type ClientMatch, type ClientPack } from '@hawa/creative';
+import { clientExemplarManifestPath, findClientPack, loadClientPacks, matchClientPack, type ClientMatch, type ClientPack } from '@hawa/creative';
 import { log } from '../logging.js';
 
 /**
- * Core's view of the client packs (ADR-038). A pack set that fails to load is logged once and read
+ * Core's view of the client packs (ADR-127). A pack set that fails to load is logged once and read
  * as empty, so intake falls back to its legacy client detection instead of refusing every message;
  * the packs are validated by packages/creative/test/client-packs.test.ts before they ship.
  */
@@ -32,38 +32,46 @@ export function matchRequestClient(input: { chatId?: string | null; rawText: str
 
 /**
  * Whether a request for this client may start an automatic draft. A client still being set up has
- * no verified reference pack, so the studio would refuse it: the request is saved for the art
- * director instead of spending the requester's daily allowance on a refusal.
+ * no active Client DNA to design with, so the studio would refuse it: the request is saved for the
+ * art director instead of spending the requester's daily allowance on a refusal.
  */
 export function autoDraftAllowedFor(clientId: string | null | undefined): boolean {
   return clientPackOf(clientId)?.status !== 'onboarding';
 }
 
 /**
- * Where a client's verified reference pack and official logo are, or why it has none. The studio and
- * the planner used to read KAAE's for every task and refuse any other client; each client now reads
- * its own, and a client still being set up is refused with what it is missing.
+ * The client's own confirmed exemplar manifest, as its pack names it, or undefined (ADR-127). Every
+ * client used to be conditioned on KAAE's; callers still read it only for a client whose references
+ * are admitted for exemplar conditioning (ADR-115: KAAE's packaged reference).
  */
-export function clientReferenceOf(clientId: string | null | undefined):
-  | { referencePath: string; logoPath: string; code: string }
-  | { refusal: string } {
+export function clientExemplarManifestOf(clientId: string | null | undefined): string | undefined {
   const pack = clientPackOf(clientId);
-  if (!pack?.reference) {
-    return {
-      refusal: pack
-        ? `${pack.displayName} is still being set up and has no verified reference pack yet (missing: ${pack.onboarding.missing.join(', ')}). Design it by hand until then.`
-        : 'This client needs its own verified reference pack. Another client\'s references cannot be used for it.',
-    };
-  }
-  return { referencePath: creativeAssetPath(pack.reference.pack), logoPath: creativeAssetPath(pack.reference.logo), code: pack.code };
+  return pack ? clientExemplarManifestPath(pack) : undefined;
+}
+
+export class ClientExemplarsUnavailableError extends Error {
+  readonly code = 'CLIENT_EXEMPLARS_UNAVAILABLE';
 }
 
 /**
- * The client's own confirmed exemplars, or undefined when it has none yet (ADR-038). Every client's
- * designs used to be conditioned on KAAE's; a client without its own set is conditioned on none.
- * Throws when the pack names a set recorded for another client.
+ * The exemplar manifest a packaged-reference run (ADR-115: KAAE) is conditioned on. Unlike
+ * clientExemplarManifestOf it never answers "none": a pack set that did not load, or a pack that names
+ * no set, would otherwise design a new run on no exemplars without a word (before ADR-127 a missing
+ * manifest threw). Throws ClientExemplarsUnavailableError.
  */
-export function clientExemplarsOf(clientId: string | null | undefined): ClientExemplars | undefined {
+export function packagedReferenceExemplarManifest(clientId: string, packs: ClientPack[] = clientPacks()): string {
+  const pack = findClientPack(clientId, packs);
+  if (!pack) {
+    throw new ClientExemplarsUnavailableError(`No client pack was loaded for ${clientId}; its confirmed exemplars cannot be read.`);
+  }
+  const path = clientExemplarManifestPath(pack);
+  if (!path) throw new ClientExemplarsUnavailableError(`The ${pack.code} pack names no confirmed exemplar set.`);
+  return path;
+}
+
+/** What an onboarding client still lacks, in words, for a refusal; undefined for any other client. */
+export function onboardingGapOf(clientId: string | null | undefined): string | undefined {
   const pack = clientPackOf(clientId);
-  return pack ? loadClientExemplars(pack) : undefined;
+  if (pack?.status !== 'onboarding') return undefined;
+  return `${pack.displayName} is still being set up (missing: ${pack.onboarding.missing.join(', ')}).`;
 }

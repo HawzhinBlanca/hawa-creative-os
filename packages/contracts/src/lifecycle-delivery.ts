@@ -9,10 +9,11 @@
  */
 
 /**
- * Whether a chat's requests are delivered by the Delivery workflow, from HAWA_LIFECYCLE_CHATS: a
+ * Whether a newly created Telegram task should pin delivery to the Delivery workflow, from HAWA_LIFECYCLE_CHATS: a
  * comma-separated list of Telegram chat ids, or `*` for every chat. Unset or empty enrols nobody, so
  * nothing changes until the owner sets it. Parsed like DESIGN_PIPELINE_V3_CHATS (isV3PilotChat in
  * apps/core/src/services/chat-intake.ts). A task with no chat (made in the Desk) is never enrolled.
+ * Existing tasks use their stored pin, never this live setting, when an operator presses Deliver.
  */
 export function lifecycleOwnsChat(chatId: string | number | null | undefined, env: Record<string, string | undefined> = process.env): boolean {
   const raw = env.HAWA_LIFECYCLE_CHATS;
@@ -37,18 +38,8 @@ export interface OutboundMessage {
   /** Deterministic: the same logical message always has the same key (PHASE2_DESIGN.md 2.9). */
   key: string;
   chatId: string;
-  /**
-   * 'callback_answer' (slice 2.3): the answer to a tapped button, `text` shown as its toast. Always
-   * courtesy: Telegram refuses a late answer, which is harmless.
-   * 'photo' (slice 2.3): a stored PNG export (exportRef) shown as a picture, `caption` under it: the
-   * draft the requester replies to. Core also puts the caption in `text`: a sender built before
-   * 'photo' sends every kind but a document as `text` (so, without it, an empty message Telegram
-   * refuses), and with it sends the caption's words instead of the picture.
-   */
-  kind: 'text' | 'document' | 'callback_answer' | 'photo';
+  kind: 'text' | 'document';
   text?: string;
-  /** For 'callback_answer': the tapped button's callback query. */
-  callbackQueryId?: string;
   parseMode?: 'HTML';
   exportRef?: ExportRef;
   filename?: string;
@@ -63,6 +54,9 @@ export interface OutboundMessage {
   tenantId?: string;
   /** The task the message is about, named in the office's alert when it may not have arrived. */
   taskId?: string;
+  /** Optional durable callback after a verified critical send mark, for request waitpoints. */
+  onSent?: { kind: 'question'; requestId: string; requestRev: number;
+    taskId: string; questionId: string };
 }
 
 export type SendResult =
@@ -73,7 +67,7 @@ export type SendResult =
 /** The Delivery workflow's input. Its key is `deliveryId`. */
 export interface DeliveryInput {
   v: 1;
-  /** The request the delivery belongs to. Until RequestLifecycle exists (slice 2.3) it is the task id. */
+  /** The request owner; legacy runs use the task id. */
   requestId: string;
   deliveryId: string;
   tenantId: string;
@@ -82,8 +76,12 @@ export interface DeliveryInput {
   revisionId: string;
   chatId: string | null;
   officeChatId: string | null;
-  /** 'core' in slice 2.2: the outcome is posted to Core's delivery-finished endpoint. */
+  /** 'core' posts to Core; 'lifecycle' reports through the private request owner. */
   reportTo: 'lifecycle' | 'core';
+  /** Request revision that claimed a lifecycle-owned publication; absent for legacy runs. */
+  requestRev?: number;
+  /** Core's domain-separated signature over the complete lifecycle-owned workflow claim. */
+  claimSignature?: string;
   /** Which run of this publication's delivery this is (1 for the first; later ones retry the archive). */
   run?: number;
   /** The Desk's delivery policy ('deliver_approved_stored' delivers an approval a later edit invalidated). */

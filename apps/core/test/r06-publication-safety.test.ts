@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createDb } from '@hawa/db';
+import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
+import { assert, describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { createDb, PublicationRepository, TaskRepository, sql, withRlsContext } from '@hawa/db';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,6 +9,7 @@ import { createApp } from '../src/app.js';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { GooglePublisher } from '@hawa/integrations';
 import { startFakeDriveServer, type FakeDriveServer } from '../../../packages/integrations/test/fake-drive-server.js';
+import { startFakeDrive } from '../../../packages/integrations/test/fake-drive.js';
 import { memoryExportStore } from './pinned-exports-fixture.js';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
 
@@ -137,6 +139,205 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     expect(againBody.publicationReceipt.driveFiles.map((f: { fileId: string }) => f.fileId))
       .toEqual(fresh.body.publicationReceipt.driveFiles.map((f: { fileId: string }) => f.fileId));
     for (const other of delivered) expect(other.body.publicationReceipt.publicationId).toBe(fresh.body.publicationReceipt.publicationId);
+
+    // A repeated repository completion is also idempotent, including its task event/version.
+    await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, async (trx) => {
+      const publicationId = String(fresh.body.publicationReceipt.publicationId);
+      const before = (await sql<{ version: number }>`SELECT version FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].version;
+      await new PublicationRepository(testDb).markComplete({ tenantId: task.tenantId, taskId: task.id, publicationId }, trx);
+      const after = (await sql<{ version: number }>`SELECT version FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].version;
+      expect(after).toBe(before);
+      await expect(new PublicationRepository(testDb).markComplete({ tenantId: task.tenantId,
+        taskId: crypto.randomUUID(), publicationId }, trx)).rejects.toThrow();
+    });
+  });
+
+  it('does not complete a task cancelled after the Drive upload but before receipt commit', async () => {
+    const exports = memoryExportStore();
+    const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true }, deliverableStore: exports.store });
+    const { task, rev, approval } = await createApprovedTaskWithExport(app, exports);
+    const original = PublicationRepository.prototype.recordDriveRef;
+    const record = vi.spyOn(PublicationRepository.prototype, 'recordDriveRef').mockImplementationOnce(async (params, trx) => {
+      await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, (cancelTrx) =>
+        new TaskRepository(testDb).transitionState({ taskId: task.id, tenantId: task.tenantId,
+          fromState: 'publishing', toState: 'cancelled', actorType: 'user', actorId: '00000000-0000-4000-b000-000000000001',
+          reason: 'Requester cancelled while Drive was finishing' }, cancelTrx));
+      return original.call(new PublicationRepository(testDb), params, trx);
+    });
+    try {
+      const response = await app.request(`/v1/tasks/${task.id}/publish-omnichannel`, {
+        method: 'POST', headers: operatorHeaders,
+        body: JSON.stringify({ designRevisionId: rev.id, approvalId: approval.decisionId }),
+      });
+      expect(response.status).toBe(503);
+      const state = await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, async (trx) => ({
+        task: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].state,
+        publication: (await sql<{ state: string; error_class: string }>`SELECT state, error_class FROM hawa.publications WHERE task_id = ${task.id}::uuid`.execute(trx)).rows[0],
+        driveRefs: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.drive_refs WHERE publication_id IN
+          (SELECT id FROM hawa.publications WHERE task_id = ${task.id}::uuid)`.execute(trx)).rows[0].n,
+        notifications: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands
+          WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n,
+      }));
+      expect(state).toEqual({ task: 'cancelled', publication: { state: 'pending', error_class: 'ARCHIVE_UNCONFIRMED' }, driveRefs: 0, notifications: 0 });
+      const publicationState = await (await app.request(`/v1/tasks/${task.id}/publication-state`, { headers: operatorHeaders })).json();
+      expect(publicationState).toMatchObject({ status: 'CANCELLED', state: 'archive_reconciliation',
+        notification: { status: 'not_enqueued' } });
+      expect(publicationState.actionableRecovery).toMatch(/do not retry requester delivery/i);
+      const audit = await (await runReceiptAudit(app,operatorHeaders)).json();
+      expect(audit.anomalies).toEqual(expect.arrayContaining([expect.objectContaining({
+        taskId: task.id, kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity: 'high',
+      })]));
+      const repeated = await app.request(`/v1/tasks/${task.id}/publish-omnichannel`, {
+        method: 'POST', headers: operatorHeaders,
+        body: JSON.stringify({ designRevisionId: rev.id, approvalId: approval.decisionId }),
+      });
+      expect(repeated.status).toBe(409);
+    } finally {
+      record.mockRestore();
+    }
+  });
+
+  it.each([
+    ['empty Drive receipt', (receipt: any) => { receipt.driveFiles = []; }],
+    ['changed Drive checksum', (receipt: any) => { receipt.driveFiles[0].expectedSha256 = '0'.repeat(64); }],
+    ['extra Drive receipt', (receipt: any) => { receipt.driveFiles.push({ ...receipt.driveFiles[0], artifactId: crypto.randomUUID() }); }],
+    ['wrong Sheet tab', (receipt: any) => { receipt.sheet.sheetId = 456; }],
+    ['wrong Sheet task identity', (receipt: any) => { receipt.sheet.rowKey = crypto.randomUUID(); }],
+    ['Sheet without row identity', (receipt: any) => { delete receipt.sheet.rowNumber; }],
+    ['non-boolean Sheet sync', (receipt: any) => { receipt.sheet.synced = 'true'; }],
+    ['emulated success', (receipt: any) => { receipt.emulated = true; }],
+  ])('refuses a publisher claiming completion with %s', async (_case, alter) => {
+    const exports = memoryExportStore();
+    const publisher = { publish: vi.fn(async (_ctx: unknown, request: any) => {
+      const receipt: any = {
+        publicationId: crypto.randomUUID(), publicationKey: request.publicationKey,
+        driveFolderId: request.destination.productionRootFolderId, state: 'complete',
+        driveFiles: request.files.map((file: any) => ({ artifactId: file.artifactId,
+          fileId: `fake_${file.artifactId}`, folderId: request.destination.productionRootFolderId,
+          name: file.filename, mimeType: file.mimeType, expectedSha256: file.sha256,
+          observedSize: file.byteSize, verified: true })),
+        sheet: { spreadsheetId: request.destination.spreadsheetId, sheetId: 0, rowKey: request.taskId,
+          rowNumber: 7, expectedHash: request.packageHash, observedHash: request.packageHash, synced: true },
+        detail: { verified: true, filesUploaded: request.files.length },
+      };
+      alter(receipt);
+      return { ok: true, value: receipt };
+    }) };
+    const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true },
+      deliverableStore: exports.store, publisher: publisher as any });
+    const { task, rev, approval } = await createApprovedTaskWithExport(app, exports);
+    const response = await app.request(`/v1/tasks/${task.id}/publish-omnichannel`, {
+      method: 'POST', headers: operatorHeaders,
+      body: JSON.stringify({ designRevisionId: rev.id, approvalId: approval.decisionId }),
+    });
+    expect(response.status).toBe(409);
+    const stored = await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' }, async (trx) => ({
+      task: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].state,
+      pub: (await sql<{ state: string; error_class: string }>`SELECT state, error_class FROM hawa.publications WHERE task_id = ${task.id}::uuid`.execute(trx)).rows[0],
+      refs: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.drive_refs WHERE publication_id IN
+        (SELECT id FROM hawa.publications WHERE task_id = ${task.id}::uuid)`.execute(trx)).rows[0].n,
+      notifications: (await sql<{ n: number }>`SELECT count(*)::int AS n FROM hawa.outbox_commands
+        WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].n,
+    }));
+    expect(stored).toEqual({ task: 'publishing', pub: { state: 'pending', error_class: 'ARCHIVE_UNCONFIRMED' }, refs: 0, notifications: 0 });
+  });
+
+  it('holds requester delivery after a lost Drive reply, then reconciles the same reserved file', async () => {
+    const drive = await startFakeDrive();
+    const previous = {
+      api: process.env.GOOGLE_DRIVE_API_BASE_URL,
+      upload: process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL,
+      sheets: process.env.GOOGLE_SHEETS_API_BASE_URL,
+      oauth: process.env.GOOGLE_OAUTH_TOKEN,
+      serviceKey: process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
+      gcpKey: process.env.GCP_PRIVATE_KEY,
+      keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    };
+    try {
+      process.env.GOOGLE_DRIVE_API_BASE_URL = drive.base;
+      process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL = drive.base;
+      process.env.GOOGLE_SHEETS_API_BASE_URL = drive.base;
+      const exports = memoryExportStore();
+      const app = createAppWithClientFixtures({ db: testDb, testAuth: { principal: { role: 'operator' }, roleHeader: true }, deliverableStore: exports.store });
+      const { task, rev, approval } = await createApprovedTaskWithExport(app, exports);
+      const payload = JSON.stringify({ designRevisionId: rev.id, approvalId: approval.decisionId });
+      const deliver = () => app.request(`/v1/tasks/${task.id}/publish-omnichannel`,
+        { method: 'POST', headers: operatorHeaders, body: payload });
+
+      drive.fault.dropUploadReply = 1;
+      const uncertain = await deliver();
+      expect(uncertain.status).toBe(503);
+      expect(await uncertain.json()).toMatchObject({ title: 'Publish Error' });
+      expect(drive.files).toHaveLength(1);
+
+      const before = await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' },
+        async (trx) => ({
+          state: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].state,
+          notifications: (await sql<{ count: number }>`SELECT count(*)::int AS count FROM hawa.outbox_commands WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].count,
+        }));
+      expect(before).toEqual({ state: 'publishing', notifications: 0 });
+      const unresolved = await (await app.request(`/v1/tasks/${task.id}/publication-state`, { headers: operatorHeaders })).json();
+      expect(unresolved).toMatchObject({ status: 'ARCHIVE_RECONCILIATION', state: 'archive_reconciliation',
+        driveFiles: { verified: false, count: 0 }, notification: { status: 'not_enqueued' } });
+      const archiveQueue = await (await app.request('/v1/tasks?statuses=ARCHIVE_RECONCILIATION', { headers: operatorHeaders })).json();
+      expect(archiveQueue.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: task.id, status: 'ARCHIVE_RECONCILIATION' })]));
+      expect((await (await app.request('/v1/tasks?statuses=PUBLISHING', { headers: operatorHeaders })).json()).items)
+        .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: task.id })]));
+      const audit = await (await runReceiptAudit(app,operatorHeaders)).json();
+      expect(audit.totalTasksAudited).toBeGreaterThan(0);
+      expect(audit.anomalies).toEqual(expect.arrayContaining([expect.objectContaining({
+        taskId: task.id, kind: 'ARCHIVE_OUTCOME_UNCONFIRMED', severity: 'high',
+      })]));
+
+      // The first upload may have committed. Losing the office credential before the next press
+      // must not turn that unresolved archive into a claim that Drive has no file.
+      delete process.env.GOOGLE_OAUTH_TOKEN;
+      delete process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+      delete process.env.GCP_PRIVATE_KEY;
+      delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      const disconnected = await deliver();
+      expect(disconnected.status).toBe(503);
+      expect((await disconnected.json()).detail).toMatch(/archive may already exist/i);
+      const afterDisconnect = await withRlsContext(testDb, { tenantId: task.tenantId, userId: '00000000-0000-4000-b000-000000000001', role: 'operator' },
+        async (trx) => ({
+          state: (await sql<{ state: string }>`SELECT state FROM hawa.tasks WHERE id = ${task.id}::uuid`.execute(trx)).rows[0].state,
+          notifications: (await sql<{ count: number }>`SELECT count(*)::int AS count FROM hawa.outbox_commands WHERE aggregate_id = ${task.id}::uuid AND command_type = 'notify.published'`.execute(trx)).rows[0].count,
+        }));
+      expect(afterDisconnect).toEqual({ state: 'publishing', notifications: 0 });
+      expect((await (await app.request(`/v1/tasks/${task.id}`, { headers: operatorHeaders })).json()).status)
+        .toBe('ARCHIVE_RECONCILIATION');
+      if (previous.oauth === undefined) delete process.env.GOOGLE_OAUTH_TOKEN;
+      else process.env.GOOGLE_OAUTH_TOKEN = previous.oauth;
+
+      drive.fault.hideSearches = 1;
+      const retried = await deliver();
+      expect(retried.status).toBe(202);
+      const body = await retried.json();
+      expect(body.status).toBe('PUBLISH_RECONCILIATION'); // fake Drive cannot confirm a Sheet row
+      expect(body.publicationReceipt.driveFiles[0]).toMatchObject({ fileId: drive.files[0].id, verified: true });
+      expect(drive.generatedIdsIssued).toBe(1);
+      expect(drive.files).toHaveLength(1);
+      expect((await (await app.request(`/v1/tasks/${task.id}`, { headers: operatorHeaders })).json()).status)
+        .toBe('PUBLISH_RECONCILIATION');
+      expect((await (await app.request('/v1/tasks?statuses=ARCHIVE_RECONCILIATION', { headers: operatorHeaders })).json()).items)
+        .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: task.id })]));
+    } finally {
+      if (previous.api === undefined) delete process.env.GOOGLE_DRIVE_API_BASE_URL;
+      else process.env.GOOGLE_DRIVE_API_BASE_URL = previous.api;
+      if (previous.upload === undefined) delete process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL;
+      else process.env.GOOGLE_DRIVE_UPLOAD_BASE_URL = previous.upload;
+      if (previous.sheets === undefined) delete process.env.GOOGLE_SHEETS_API_BASE_URL;
+      else process.env.GOOGLE_SHEETS_API_BASE_URL = previous.sheets;
+      if (previous.oauth === undefined) delete process.env.GOOGLE_OAUTH_TOKEN;
+      else process.env.GOOGLE_OAUTH_TOKEN = previous.oauth;
+      if (previous.serviceKey === undefined) delete process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+      else process.env.GOOGLE_SERVICE_ACCOUNT_KEY = previous.serviceKey;
+      if (previous.gcpKey === undefined) delete process.env.GCP_PRIVATE_KEY;
+      else process.env.GCP_PRIVATE_KEY = previous.gcpKey;
+      if (previous.keyFile === undefined) delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      else process.env.GOOGLE_APPLICATION_CREDENTIALS = previous.keyFile;
+      await drive.close();
+    }
   });
 
   it('2. Both API routes (/publish and /publish-omnichannel) use unified publication ledger', async () => {
@@ -166,7 +367,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     });
     expect(omniRes.status).toBe(200);
     const omniData = await omniRes.json();
-    expect(omniData.ok).toBe(true);
+    expect(omniData.ok).toBe(true); assert(omniData.ok);
     expect(omniData.status).toBe('COMPLETE');
   });
 
@@ -179,7 +380,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     const ctx: RequestContext = {
       tenantId: 'tenant-default',
       taskId: 'task-a',
-      actor: { type: 'workflow', id: 'test' },
+      actor: { type: 'workflow', id: 'test' }, idempotencyKey: crypto.randomUUID(),
       correlationId: crypto.randomUUID(),
       deadline: new Date(Date.now() + 60000).toISOString(),
     };
@@ -193,21 +394,21 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       publicationKey: 'pub_a',
       packageHash: 'hash-a',
       files: [{
-        artifactId: 'art-a',
+        artifactId: 'art-a', relativePath: 'a.png', storageKey: testFilePng,
         filename: 'a.png',
         mimeType: 'image/png',
         byteSize: testFileBytes.length,
         sha256: testFileSha256,
         content: testFileBytes,
       }],
-      destination: {
+      sheetRow: {}, destination: { relativeFolderParts: [], sheetId: 0,
         sharedDriveId: 'drive-1',
         productionRootFolderId: 'folder-1',
         spreadsheetId,
       },
     };
     const resA = await publisher.publish(ctx, reqA);
-    expect(resA.ok).toBe(true);
+    expect(resA.ok).toBe(true); assert(resA.ok);
     if (!resA.ok) return;
     expect(resA.value.sheet.rowNumber).toBe(2);
 
@@ -219,9 +420,10 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       packageHash: 'hash-b',
     };
     const resB = await publisher.publish(ctx, reqB);
-    expect(resB.ok).toBe(true);
+    expect(resB.ok).toBe(true); assert(resB.ok);
     if (!resB.ok) return;
-    expect(resB.value.sheet.rowNumber).toBe(3);
+    expect(resB.value.sheet.rowNumber).toBe(2);
+    fakeServer.moveSheetRow(spreadsheetId, 2, 1);
 
     // Inspect sheet: row 2 is Task A, row 3 is Task B
     let sheetRows = fakeServer.getSheetRows(spreadsheetId);
@@ -231,12 +433,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
 
     // 3. Simulate an external user inserting an unrelated task or shifting rows in the Sheet!
     // Row 2 is now an unrelated task! Task A was shifted down to row 3, Task B to row 4!
-    fakeServer.setSheetRows(spreadsheetId, [
-      ['Task ID', 'Client ID', 'Folder ID', 'Date', 'Status', 'Link', 'Hash'],
-      ['task-unrelated-external', 'client-x', 'folder-x', 'date', 'COMPLETE', 'link', 'hash-x'],
-      sheetRows[1], // task-a moved to row 3
-      sheetRows[2], // task-b moved to row 4
-    ]);
+    fakeServer.insertSheetRow(spreadsheetId, 1, ['task-unrelated-external', 'client-x', 'folder-x', 'date', 'COMPLETE', 'link', 'hash-x']);
 
     // 4. Update/re-publish Task A with a new package hash
     const reqA2: PublishRequest = {
@@ -245,7 +442,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       publicationKey: 'pub_a_updated',
     };
     const resA2 = await publisher.publish(ctx, reqA2);
-    expect(resA2.ok).toBe(true);
+    expect(resA2.ok).toBe(true); assert(resA2.ok);
     if (!resA2.ok) return;
 
     // Verify: Task A was updated at its actual row (row 3) by immutable task identity!
@@ -256,6 +453,19 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     expect(sheetRows[2][0]).toBe('task-a');
     expect(sheetRows[2][6]).toBe('hash-a-updated'); // Task A updated!
     expect(sheetRows[3][0]).toBe('task-b'); // Task B untouched!
+
+    // The cached Task A row can become blank after a user inserts or clears a row. Blank is
+    // not proof of task identity: find Task A again instead of overwriting the blank row.
+    fakeServer.insertSheetRow(spreadsheetId, 2, ['', '', '', '', '', '', '']);
+    const resA3 = await publisher.publish(ctx, { ...reqA, packageHash: 'hash-a-third', publicationKey: 'pub_a_third' });
+    expect(resA3.ok).toBe(true); assert(resA3.ok);
+    if (!resA3.ok) return;
+    expect(resA3.value.sheet.rowNumber).toBe(4);
+    sheetRows = fakeServer.getSheetRows(spreadsheetId);
+    expect(sheetRows[2][0]).toBe('');
+    expect(sheetRows[3][0]).toBe('task-a');
+    expect(sheetRows[3][6]).toBe('hash-a-third');
+    expect(sheetRows[4][0]).toBe('task-b');
   });
 
   it('4. Deliverable checksum mismatch strictly halts publication with PUBLICATION_VERIFICATION_FAILED', async () => {
@@ -263,7 +473,7 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
     const ctx: RequestContext = {
       tenantId: 'tenant-default',
       taskId: 'task-tampered',
-      actor: { type: 'workflow', id: 'test' },
+      actor: { type: 'workflow', id: 'test' }, idempotencyKey: crypto.randomUUID(),
       correlationId: crypto.randomUUID(),
       deadline: new Date(Date.now() + 60000).toISOString(),
     };
@@ -276,14 +486,14 @@ describe('R06: Publication Restart-Safety, Concurrency & Row Safety (FR-045–05
       publicationKey: 'pub_tampered',
       packageHash: 'package-hash',
       files: [{
-        artifactId: 'art-1',
+        artifactId: 'art-1', relativePath: 'banner.png', storageKey: testFilePng,
         filename: 'banner.png',
         mimeType: 'image/png',
         byteSize: testFileBytes.length,
         sha256: '0000000000000000000000000000000000000000000000000000000000000000', // Forged hash
         content: testFileBytes,
       }],
-      destination: {
+      sheetRow: {}, destination: { sheetId: 0, relativeFolderParts: [],
         sharedDriveId: 'drive-1',
         productionRootFolderId: 'folder-1',
         spreadsheetId: 'sheet-1',

@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { assert, describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { GooglePublisher } from '../src/google-publisher.js';
 import type { PublishRequest, RequestContext } from '@hawa/contracts';
+import { FakeSheets } from './fake-sheets.js';
 
-describe('Real External Operations: Google Drive & Google Sheets Qualification', () => {
+describe('Fake Google APIs over real HTTP: publication and verification', () => {
   let mockServer: http.Server;
   let serverPort: number;
   let serverUrl: string;
@@ -27,7 +28,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
   // The mock behaves like Google: it remembers what was uploaded and appended, and reads it back.
   const uploadedFiles = new Map<string, { name: string; mimeType: string; size: string; sha256Checksum: string }>();
   const purgedFiles = new Set<string>();
-  const sheetRows = new Map<number, string[]>();
+  const sheets = new FakeSheets();
 
   beforeAll(async () => {
     mockServer = http.createServer((req, res) => {
@@ -80,50 +81,16 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         return;
       }
 
-      // 3. Google Sheets Append
-      if (req.method === 'POST' && url.includes('/values/') && url.includes(':append')) {
+      if (url.includes('/v4/spreadsheets/')) {
         let body = '';
-        req.on('data', (chunk) => { body += chunk; });
-        req.on('end', () => {
-          const parsed = JSON.parse(body);
-          receivedSheetAppends.push({
-            authHeader: req.headers.authorization,
-            values: parsed.values,
-          });
-          const rowNumber = 42 + sheetRows.size;
-          sheetRows.set(rowNumber, parsed.values[0]);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            spreadsheetId: 'sheet_prod_tracker',
-            updates: {
-              updatedRange: `Sheet1!A${rowNumber}:G${rowNumber}`,
-              updatedRows: 1,
-              updatedColumns: 7,
-            },
-          }));
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', async () => {
+          const parsed = body ? JSON.parse(body) : {};
+          if (url.endsWith(':batchUpdate')) receivedSheetAppends.push({ authHeader: req.headers.authorization, values: [parsed.requests[1].updateCells.rows[0].values.map((v: any) => v.userEnteredValue.stringValue)] });
+          if (url.endsWith('/values:batchGetByDataFilter')) receivedSheetReadbacks.push(url);
+          const response = await sheets.fetch(`http://localhost${url}`, { method: req.method, ...(body ? { body } : {}) });
+          res.writeHead(response.status, { 'Content-Type': 'application/json' }); res.end(await response.text());
         });
-        return;
-      }
-
-      // 4. Google Sheets Independent Readback: the row that was appended there, if any
-      if (req.method === 'GET' && url.includes('/values/A:A')) {
-        const values: string[][] = [];
-        const maxRow = Math.max(0, ...Array.from(sheetRows.keys()));
-        for (let r = 1; r <= maxRow; r++) {
-          const row = sheetRows.get(r);
-          values.push(row ? [row[0]] : []);
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ range: 'Sheet1!A:A', values }));
-        return;
-      }
-      const rangeMatch = req.method === 'GET' ? url.match(/\/values\/A(\d+):G\1/) : null;
-      if (rangeMatch) {
-        receivedSheetReadbacks.push(url);
-        const rowNumber = Number(rangeMatch[1]);
-        const row = sheetRows.get(rowNumber);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ range: `Sheet1!A${rowNumber}:G${rowNumber}`, ...(row ? { values: [row] } : {}) }));
         return;
       }
 
@@ -176,7 +143,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
           byteSize: 12,
           sha256: testFileSha256,
         }],
-        destination: {
+        sheetRow: {}, destination: { sheetId: 0, sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
           productionRootFolderId: 'folder_root_123',
           spreadsheetId: 'sheet_prod_tracker',
         },
@@ -217,7 +184,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         byteSize: 12,
         sha256: 'sha256_absent',
       }],
-      destination: {
+      sheetRow: {}, destination: { sheetId: 0, sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
         productionRootFolderId: 'folder_root_123',
         spreadsheetId: 'sheet_prod_tracker',
       },
@@ -255,7 +222,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         byteSize: 12,
         sha256: testFileSha256,
       }],
-      destination: {
+      sheetRow: {}, destination: { sheetId: 0, sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
         productionRootFolderId: 'audit-invented-nonexistent-folder',
         spreadsheetId: 'sheet_prod_tracker',
       },
@@ -268,7 +235,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
     }
   });
 
-  it('4. Real Operation: performs real Google Drive multipart upload, independent readback, Google Sheets append and readback', async () => {
+  it('4. Real Operation: performs real Google Drive multipart upload, independent readback, Google Sheets atomic row creation and readback', async () => {
     const liveCredential = ['google', 'workspace', 'live', 'token', 'entropy', '8842'].join('_');
     const publisher = new GooglePublisher({
       oauthToken: liveCredential,
@@ -293,7 +260,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         byteSize: 12,
         sha256: testFileSha256,
       }],
-      destination: {
+      sheetRow: {}, destination: { sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
         productionRootFolderId: 'folder_prod_root_2026',
         spreadsheetId: 'sheet_prod_tracker',
         sheetId: 0,
@@ -301,7 +268,7 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
     };
 
     const res = await publisher.publish(dummyCtx, req);
-    expect(res.ok).toBe(true);
+    expect(res.ok).toBe(true); assert(res.ok);
     if (res.ok) {
       const receipt = res.value;
       expect(receipt.state).toBe('complete');
@@ -316,7 +283,9 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
 
       // Verify Google Sheets row receipt
       expect(receipt.sheet.spreadsheetId).toBe('sheet_prod_tracker');
-      expect(receipt.sheet.rowNumber).toBe(42);
+      expect(receipt.sheet.rowNumber).toBe(2);
+      expect(receipt.sheet.metadataId).toBeGreaterThan(0);
+      expect(receipt.sheet.observedRowHash).toBe(receipt.sheet.expectedRowHash);
       expect(receipt.sheet.synced).toBe(true);
     }
 
@@ -331,8 +300,8 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
     expect(receivedSheetAppends).toHaveLength(1);
     expect(receivedSheetAppends[0].values[0][0]).toBe('task_real_qual_1');
 
-    expect(receivedSheetReadbacks).toHaveLength(1);
-    expect(receivedSheetReadbacks[0]).toContain('/values/A42:G42');
+    expect(receivedSheetReadbacks).toHaveLength(2);
+    expect(receivedSheetReadbacks[0]).toContain('/values:batchGetByDataFilter');
   });
 
   it('5. Re-reconciliation: independently verifies publication and identifies missing assets if purged', async () => {
@@ -360,39 +329,63 @@ describe('Real External Operations: Google Drive & Google Sheets Qualification',
         byteSize: 12,
         sha256: testFileSha256,
       }],
-      destination: {
+      sheetRow: {}, destination: { sheetId: 0, sharedDriveId: 'fixture-shared-drive', relativeFolderParts: [],
         productionRootFolderId: 'folder_prod_root_2026',
         spreadsheetId: 'sheet_prod_tracker',
       },
     };
 
     const pubRes = await publisher.publish(dummyCtx, req);
-    expect(pubRes.ok).toBe(true);
+    expect(pubRes.ok).toBe(true); assert(pubRes.ok);
     if (!pubRes.ok) return;
 
     const receipt = pubRes.value;
     const recRes = await publisher.reconcile(dummyCtx, receipt.publicationId);
-    expect(recRes.ok).toBe(true);
+    expect(recRes.ok).toBe(true); assert(recRes.ok);
 
     // Verify reads Drive and Sheets back: everything matches the receipt.
     const verifyRes = await publisher.verify(dummyCtx, receipt.publicationId);
-    expect(verifyRes.ok).toBe(true);
+    expect(verifyRes.ok).toBe(true); assert(verifyRes.ok);
     if (verifyRes.ok) {
       expect(verifyRes.value).toEqual({ consistent: true, differences: [] });
     }
 
+    const row = sheets.tabs.get(0)![receipt.sheet.rowNumber! - 1];
+    row[6] = 'changed-package-hash';
+    const diverged = await publisher.reconcile(dummyCtx, receipt.publicationId);
+    expect(diverged.ok).toBe(true); assert(diverged.ok);
+    if (diverged.ok) {
+      expect(diverged.value.state).toBe('drive_complete');
+      expect(diverged.value.sheet).toMatchObject({ synced: false, observedHash: 'changed-package-hash' });
+      expect(diverged.value.completedAt).toBeUndefined();
+    }
+    row[6] = receipt.sheet.expectedHash;
+    const restored = await publisher.reconcile(dummyCtx, receipt.publicationId);
+    expect(restored.ok && restored.value.state).toBe('complete');
+    const tokenUnavailable = vi.spyOn(publisher as any, 'getAccessToken').mockResolvedValue(null);
+    try {
+      const unknown = await publisher.reconcile(dummyCtx, receipt.publicationId);
+      expect(unknown.ok).toBe(true); assert(unknown.ok);
+      if (unknown.ok) {
+        expect(unknown.value.state).toBe('drive_complete');
+        expect(unknown.value.sheet).toMatchObject({ synced: false });
+        expect(unknown.value.sheet.observedHash).toBeUndefined();
+      }
+    } finally {
+      tokenUnavailable.mockRestore();
+    }
+
     // The row is edited in the sheet and the file is purged from Drive: verify reports both.
     const fileId = receipt.driveFiles[0].fileId;
-    const row = sheetRows.get(receipt.sheet.rowNumber!)!;
     row[4] = 'IN_PROGRESS';
     purgedFiles.add(fileId);
     const afterPurge = await publisher.verify(dummyCtx, receipt.publicationId);
-    expect(afterPurge.ok).toBe(true);
+    expect(afterPurge.ok).toBe(true); assert(afterPurge.ok);
     if (afterPurge.ok) {
       expect(afterPurge.value.consistent).toBe(false);
       expect(afterPurge.value.differences).toEqual([
         { check: 'drive', fileId, detail: 'The file is no longer in Google Drive' },
-        { check: 'sheets', row: receipt.sheet.rowNumber, field: 'status', expected: 'COMPLETE', observed: 'IN_PROGRESS' },
+        { check: 'sheets', row: 2, detail: 'SHEETS_ROW_VALUES_DIFFER' },
       ]);
     }
   });

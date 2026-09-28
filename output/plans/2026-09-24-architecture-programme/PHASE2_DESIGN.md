@@ -288,6 +288,7 @@ export const DesignRun = restate.workflow({
 - `runKey` is still `taskId` or `taskId-redrive-n` (pass `redriveAttempt`), so Core's studio and Canva idempotency keys are identical to today's.
 - On cancellation (`TerminalError` with code 409 at the next await), catch it, run `abandonUnsettledRun`, then `finish('CANCELLED')`. RL ignores that report.
 - **`TaskWorkflow` stays registered for good.** It serves legacy requests until 2.5, then becomes a shim (section 4). The gate and `WORKER_SERVICES` go on using it.
+- A direct legacy `TaskWorkflow` or `TaskService` invocation must read Core's persisted nullable `requestId` in its existing task-scope step and refuse a request-owned task before any design or legacy outcome. `DesignRun` may use that task only after checking the same owner against its lifecycle request ID and routing its terminal report to `RequestLifecycle`; a caller-supplied flag alone is not ownership proof.
 
 ### 2.5 Delivery (Workflow, key = `dl-<requestId>-<approvalId>[:archive:<n>]`)
 
@@ -436,9 +437,9 @@ CREATE TABLE hawa.lifecycle_projections (
 
 **The flag.** `HAWA_LIFECYCLE_CHATS`, a comma list or `*`, parsed like `isV3PilotChat` (`chat-intake.ts:71`). It is read in exactly two places:
 - `ChatInbox` step `mode`, when an update might open a request.
-- Core's publish route in slice 2.2 only.
+- Core's chat intake at task creation for the legacy slice-2.2 delivery pin (ADR-052). The publish route reads that stored pin, not the live flag.
 
-After a request is open, **only `requests.owner` (or `tasks.request_id IS NOT NULL`) decides**. The owner is written once, by the `createRequest` op. Sizes inherit it. Rounds are the same request. Tasks made in the Desk stay `core` during Phase 2.
+After a request is open, **only `requests.owner` (or `tasks.request_id IS NOT NULL`) decides** lifecycle ownership. The owner is written once, by the `createRequest` op. For legacy requests, `tasks.delivery_executor_pin` selects the slice-2.2 delivery executor and revisions, answers, references and sizes inherit it from their predecessor. Tasks made in the Desk stay `core` during Phase 2. ChatInbox routing for a legacy request across an enrolment change still needs an end-to-end cutover drill (R10).
 
 ### 2.1 Poller to the worker; ChatInbox (4 d)
 
@@ -466,12 +467,12 @@ After a request is open, **only `requests.owner` (or `tasks.request_id IS NOT NU
 
 ### 2.2 Delivery workflow and TelegramSender (4 d)
 
-- **Replaces, for tasks whose chat is flagged at the moment of Deliver:**
+- **Replaces, for legacy tasks pinned to Restate at creation (ADR-052):**
   - `executeOmnichannelPublish` / `deliveriesInFlight` (`app.ts:2968-2984`).
   - The `notify.published` enqueue (`3352-3392`, and the chat-only variant at `3159-3180`).
   - `reopenInterruptedDelivery` (`4088`).
   - The worker's `notify.published` handler (`outbox-consumer.ts:475-581`) for those tasks.
-- **Publish route** (`7308`), when flagged: validate as today, then POST `${ingress}/Delivery/dl-<taskId>-<approvalId>/run/send` with `DeliveryInput{reportTo:'core'}`. A 409 from Restate means "already delivering" and is answered 202 with the delivery id. The route writes `publications.executor='restate'`, a new column, before starting.
+- **Publish route** (`7308`), when pinned to Restate: validate as today, then POST `${ingress}/Delivery/dl-<taskId>-<approvalId>/run/send` with `DeliveryInput{reportTo:'core'}`. A 409 from Restate means "already delivering" and is answered 202 with the delivery id. The route writes `publications.executor='restate'` before starting. An already-started publication or queued Core send retains its recorded owner ahead of the migrated task default.
 - **Old path refuses:**
   - `reopenInterruptedDelivery` returns `'no'` when `executor='restate'`.
   - `deliverOmnichannel` refuses such tasks with 409 `DELIVERY_OWNED_BY_WORKFLOW`.

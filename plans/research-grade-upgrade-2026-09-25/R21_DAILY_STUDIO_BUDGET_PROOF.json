@@ -1,0 +1,123 @@
+{
+  "date": "2026-09-27",
+  "status": "LOCALLY_QUALIFIED_STUDIO_DAILY_SCOPE_BUDGETS",
+  "requirements": [
+    "FR-059",
+    "FR-060",
+    "FR-062",
+    "FR-065",
+    "FR-079",
+    "NFR-001"
+  ],
+  "adr": "adrs/092_studio_daily_scope_budgets.md",
+  "migration": "051_studio_scope_budgets.sql",
+  "scope": "Studio text/image/vision/parity across runs, clients, model roles and Asia/Baghdad office days",
+  "sourceHashes": {
+    "adrs/092_studio_daily_scope_budgets.md": "bfa90995fd7bcc21b30ec935a5a37f7fdd3d1ef0984a7602809498b39a833744",
+    "packages/db/migrations/051_studio_scope_budgets.sql": "bdfefcfdba2a8d897012c59ed34a8c234e39d152ec125470c94f1fdbfe9ed22c",
+    "packages/db/src/repositories/design-studio.repository.ts": "d70a5e5fffd8b3e25cb7cb5a452094a9097366b7527ae09493ba3fb0fcb9ce7c",
+    "packages/db/src/types.ts": "4561a64d7c184e6847f2a10890ce577df69b6c12316379e608c70ee0eea7ff79",
+    "packages/domain/src/studio-budget.ts": "f9e17bf09172da2eb0012639ba3a86d7b52c223e4d616b0e0707a66d0d4fadc5",
+    "apps/desk/src/components/StudioBudgetSummary.tsx": "47e2fdf871dd7a7058fd0a0bf634faf1965f1572e3428bda9dee1310d2e114e7",
+    "packages/db/test/studio-scope-budget.test.ts": "a72f5ce573333c6993645fbb4b6d29d19a184a190eb231d1e2fdcc73937f04a8",
+    "packages/db/test/studio-budget.test.ts": "f444ab3d0170845fbd0e2e7e66f43f34055d4dcffaa8b6d22c469d47bb6c1358",
+    "apps/core/test/studio-art-ledger.test.ts": "2cb61b8071cd5e981a113b0b6247e1f07ac4a4792c1f0a627ca77fd25ca7d562",
+    "apps/core/test/studio-call-settlement.test.ts": "8f64adb7e42325993a9ff5aab5029ae4cc139640fa9edbb901d52ace3ba62c94",
+    "apps/core/test/design-studio-routes.test.ts": "936b0a6e9b0a2b006b2449cda07f92a618aa89e909ac16377871b7a6c39bd931",
+    "apps/desk/test/studio-budget.test.ts": "4e653a90e7296725cbc889343d386ac0d5609ac101958ba3056308609335bdb1",
+    "apps/core/test/startup-schema-check.test.ts": "3b414f307af3cf5a0d86d15972e33edee4c093507145037e8853863572f58c2c",
+    "packages/db/test/schema-upgrade.test.ts": "04cf577fb973e1f88f45e30f264c130d42033ee0e6203117f7ae7cd7568428f9",
+    "apps/worker/test/worker-identity.test.ts": "25a61c6f331a58c3a67488e46b0598d88b4a5e7e0a7e6924cc6f2f13aa73c6e8",
+    "docs/10_WORKFLOW_RELIABILITY.md": "c18b1a40e071eeb470a3411b1644909b914d026a948638373dcf1abf8ddf86b4",
+    "docs/17_UI_UX.md": "c5853b28fe8ebd02e803b7ae11a09e8139871544dd7416681aa3684f8dfbae6a",
+    "runbooks/STUDIO_DAILY_BUDGETS.md": "31e2550db665f437484b5a84a29ab4258f1f959b0541b741ddf9172e86029b1e"
+  },
+  "evidenceDirectory": "output/acceptance/2026-09-27-studio-daily-budget",
+  "focused": {
+    "files": 10,
+    "passed": 91,
+    "failed": 0,
+    "finalAdditionalTestPending": false,
+    "finalAdditionalTestVerifiedIn": "fullRegression"
+  },
+  "diagnosticFull": {
+    "passed": 3869,
+    "failed": 6,
+    "skipped": 59,
+    "frozenSource": false
+  },
+  "strictTestRoots": 482,
+  "runtimeChanged": false,
+  "productionChanged": false,
+  "realProviderCalls": false,
+  "notQualified": [
+    "App-wide evaluation/voice/other gateway limits",
+    "Named Desk budget allocation",
+    "Historical accounting repair tooling",
+    "Typed completed-stage result recovery",
+    "Fresh image/browser integration",
+    "Real provider invoice ceilings",
+    "Live office pilot and human quality admission",
+    "Independent-host restore",
+    "Production rollout"
+  ],
+  "sourceCommit": "2ad54b1b260573b9dca92f87c4f4971e9d537492",
+  "testedCommit": "32e31b4641f9bfdef61bc3230db1be4ce44f616e",
+  "fullRegression": {
+    "passed": 3879,
+    "failed": 0,
+    "skipped": 59,
+    "filesPassed": 474,
+    "filesSkipped": 7,
+    "filesTotal": 481,
+    "durationSeconds": 115.23,
+    "log": "output/acceptance/2026-09-27-studio-daily-budget/full-sealed.log"
+  },
+  "checks": {
+    "sourceAndScriptsTypes": "passed",
+    "strictTestRoots": 482,
+    "lint": {
+      "any": 991,
+      "ceiling": 1053,
+      "existingEgressExceptions": 9
+    },
+    "deskBuild": "passed",
+    "securityScanFindings": 0,
+    "blueprint": {
+      "passed": 965,
+      "warned": 0,
+      "failed": 0
+    },
+    "sourceManifest": "verified"
+  },
+  "failedFirstEvidence": [
+    "Sandbox connection refusal before the first DB run; no tests executed.",
+    "First diagnostic full run: 3869 passed, six failures, 59 skipped. Corrected fixture scope/quotes, policy RLS hoisting, retained-history cleanup, schema expectation and generated manifest.",
+    "Follow-up focused run: 86 passed/two failed because deliberately incomplete historical route fixtures attempted fresh admission. Fixtures now import historical receipts under isolated owner setup; the actual admission hold remains tested.",
+    "pnpm typecheck wrapper hit sandbox tsx IPC; direct node commands passed source, scripts and all 482 test roots. Concurrent lint read stale declarations; ordered source build then lint passed.",
+    "A release manifest was generated before the source commit finished; the package-hash commit hook rejected it. Restored that generated file, committed source, then regenerated/sealed in order."
+  ],
+  "evidenceHashes": {
+    "output/acceptance/2026-09-27-studio-daily-budget/full-first.log": "339b65316835883b14950b33e148b0402650c23faca68b9ceb51ac1fed9207bd",
+    "output/acceptance/2026-09-27-studio-daily-budget/security.log": "3fff70b253d1ccfaee75f7340cee7db100467f2ba9a5889c22f87d48b4acdc61",
+    "output/acceptance/2026-09-27-studio-daily-budget/full-sealed.log": "03a6483913f27572da837ee6fdec6359870ab0010aeac1ae573c1d1693af31fa",
+    "output/acceptance/2026-09-27-studio-daily-budget/typecheck-final.log": "f123445d730513a91da5a887d4376f122df5f08eab3bc304ffdd24b3ec9852db",
+    "output/acceptance/2026-09-27-studio-daily-budget/blueprint-final.log": "c6b60cd0783b738a048250dd5b3bb26124951dc77beb1fe8a3b84cef09819de6",
+    "output/acceptance/2026-09-27-studio-daily-budget/lint.log": "9814c44a8ceb20a88e0692a9916deda2bda1204460a5b9d9aa6fd13053703c6d",
+    "output/acceptance/2026-09-27-studio-daily-budget/focused-final.log": "7712291d47c9ea0129701d6a41e4c04b93726b376702cb3e97bfd0b5d4a63292",
+    "output/acceptance/2026-09-27-studio-daily-budget/desk-build-final.log": "1b1567405cb3d6e6a78372b3e0e0148ccf8052ecbce62e52938ca56fb52953ae",
+    "output/acceptance/2026-09-27-studio-daily-budget/refresh-pack-final.log": "1f56126a5f40668e35242dd52e717acc6143f5876dc676566e5b06e3aa1d3b6d",
+    "output/acceptance/2026-09-27-studio-daily-budget/focused-corrected.log": "b210fd5db28a6b72a2ab29061e1e3084809e49dfb6e11375ea8c506468054f6b",
+    "output/acceptance/2026-09-27-studio-daily-budget/blueprint-precommit.log": "6125f5b9d0ac8b35758d22b82237d91bab92c700af39cb019718bf4969997543",
+    "output/acceptance/2026-09-27-studio-daily-budget/source-commit.log": "b6f02a92553a6fc72b04afda702dbff7de1dd79d01332fd2753a5e3f5f698694",
+    "output/acceptance/2026-09-27-studio-daily-budget/test-types.log": "fa6ad0b9a114014db888b2892f3a045c97e2b7ca23582948af5842acf032dc7c",
+    "output/acceptance/2026-09-27-studio-daily-budget/focused-first.log": "5f1fb32235317b8ddea542297a69686b89beeb7662bf6dbc94af88f233724cde",
+    "output/acceptance/2026-09-27-studio-daily-budget/desk-build.log": "4bc97cfd16364d8431aabbede429a3534719f5445415f0b388fbc9442317759e",
+    "output/acceptance/2026-09-27-studio-daily-budget/refresh-pack.log": "1f56126a5f40668e35242dd52e717acc6143f5876dc676566e5b06e3aa1d3b6d",
+    "output/acceptance/2026-09-27-studio-daily-budget/focused-second.log": "d70cde67bea187973f8da9f1d2e699a7eab9afab98867eaa9955f2f3d07a09e8",
+    "output/acceptance/2026-09-27-studio-daily-budget/source-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "output/acceptance/2026-09-27-studio-daily-budget/candidate-seal.log": "a11838755ce7f8c5efd6bf9e37d0409cc1c8fc24361fe078b483b7a19cfe65f2",
+    "output/acceptance/2026-09-27-studio-daily-budget/source-commit-retry.log": "b943080c326112c88248613740197dec408a894a2e6778a400d8f76ebeb19ad3",
+    "output/acceptance/2026-09-27-studio-daily-budget/blueprint.log": "6e8ad37f9f55b0b103672356aa79186371ea95a0f138f463bf288a7e552c2d2b"
+  }
+}

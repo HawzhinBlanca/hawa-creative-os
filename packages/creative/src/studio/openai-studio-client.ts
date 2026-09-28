@@ -25,7 +25,7 @@ export interface OpenAiStudioClientOptions {
 
 export interface OpenAiMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'low' | 'high' | 'auto' } }>;
+  content: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'low' | 'high' | 'auto' | 'original' } }>;
 }
 
 export interface OpenAiStructuredResponse<T = any> {
@@ -42,6 +42,8 @@ export interface OpenAiStructuredResponse<T = any> {
     cacheCreationTokens: number;
     cacheReadTokens: number;
     costUsd: number;
+    costBasis?: 'usage' | 'estimate';
+    servedModel?: string | null;
     sha256: string;
     latencyMs: number;
     attempts: number;
@@ -79,7 +81,7 @@ export function resolveRatesForModel(
   if (models[model]) return models[model];
   let best: string | undefined;
   for (const known of Object.keys(models)) {
-    if (model.startsWith(known) && (!best || known.length > best.length)) best = known;
+    if (model.startsWith(known + '-') && /^\d{4}-\d{2}-\d{2}$/.test(model.slice(known.length + 1)) && (!best || known.length > best.length)) best = known;
   }
   return best ? models[best] : undefined;
 }
@@ -88,13 +90,16 @@ export class OpenAiModelHttpError extends StudioModelHttpError {
   readonly status: number;
   readonly body: string;
   readonly code: string;
+  readonly isUncertain: boolean;
 
   constructor(status: number, body: string) {
     super(status, body);
     this.name = 'OpenAiModelHttpError';
     this.status = status;
     this.body = body;
-    this.code = httpErrorCode(status, body);
+    // A gateway/server error can arrive after the upstream model accepted the request.
+    this.isUncertain = status >= 500;
+    this.code = this.isUncertain ? 'UNCERTAIN_HTTP' : httpErrorCode(status, body);
   }
 }
 
@@ -104,6 +109,18 @@ export class OpenAiModelTimeoutError extends StudioModelTimeoutError {
   constructor(ms: number) {
     super(`OpenAI model call timed out after ${ms}ms`);
     this.name = 'OpenAiModelTimeoutError';
+  }
+}
+
+/** A fetch rejection does not prove the provider never received the request. */
+export class OpenAiModelUnknownAcceptanceError extends StudioModelError {
+  readonly code = 'UNCERTAIN_ACCEPTANCE';
+  readonly isUncertain = true;
+  constructor(model: string, cause: unknown) {
+    const detail = describeFetchCause(cause);
+    super(`OpenAI ${model} request lost its connection${detail ? ` (${detail})` : ''}; acceptance and billing are unknown, so it was not retried`, 'UNCERTAIN_ACCEPTANCE');
+    this.name = 'OpenAiModelUnknownAcceptanceError';
+    this.cause = cause;
   }
 }
 
@@ -118,7 +135,8 @@ export class OpenAiModelParseError extends StudioModelError {
   readonly contentLength: number;
   readonly responseId?: string;
   readonly costUsd: number;
-  constructor(model: string, contentLength: number, billed: { responseId?: string; costUsd?: number } = {}) {
+  readonly costBasis: 'usage' | 'estimate';
+  constructor(model: string, contentLength: number, billed: { responseId?: string; costUsd?: number; costBasis?: 'usage' | 'estimate' } = {}) {
     super(
       `OpenAI ${model} replied with ${contentLength} characters that are not valid JSON; not retried, the call was billed`,
       'MODEL_OUTPUT_UNPARSEABLE'
@@ -128,6 +146,7 @@ export class OpenAiModelParseError extends StudioModelError {
     this.contentLength = contentLength;
     this.responseId = billed.responseId;
     this.costUsd = billed.costUsd ?? 0;
+    this.costBasis = billed.costBasis ?? 'estimate';
   }
 }
 
@@ -141,7 +160,8 @@ export class OpenAiModelTruncatedError extends StudioModelError {
   readonly maxTokens: number;
   readonly responseId?: string;
   readonly costUsd: number;
-  constructor(model: string, maxTokens: number, billed: { responseId?: string; costUsd?: number } = {}) {
+  readonly costBasis: 'usage' | 'estimate';
+  constructor(model: string, maxTokens: number, billed: { responseId?: string; costUsd?: number; costBasis?: 'usage' | 'estimate' } = {}) {
     super(
       `OpenAI ${model} stopped at its ${maxTokens}-token cap, so the reply is cut off; not retried, raise maxTokens`,
       'MODEL_OUTPUT_TRUNCATED'
@@ -151,6 +171,7 @@ export class OpenAiModelTruncatedError extends StudioModelError {
     this.maxTokens = maxTokens;
     this.responseId = billed.responseId;
     this.costUsd = billed.costUsd ?? 0;
+    this.costBasis = billed.costBasis ?? 'estimate';
   }
 }
 
@@ -164,7 +185,8 @@ export class OpenAiModelRefusalError extends StudioModelError {
   readonly model: string;
   readonly responseId?: string;
   readonly costUsd: number;
-  constructor(model: string, refused: boolean, billed: { responseId?: string; costUsd?: number } = {}) {
+  readonly costBasis: 'usage' | 'estimate';
+  constructor(model: string, refused: boolean, billed: { responseId?: string; costUsd?: number; costBasis?: 'usage' | 'estimate' } = {}) {
     super(
       refused
         ? `OpenAI ${model} refused to answer; not retried, the call was billed`
@@ -175,6 +197,7 @@ export class OpenAiModelRefusalError extends StudioModelError {
     this.model = model;
     this.responseId = billed.responseId;
     this.costUsd = billed.costUsd ?? 0;
+    this.costBasis = billed.costBasis ?? 'estimate';
   }
 }
 
@@ -254,9 +277,8 @@ function computeRetryDelayMs(attempt: number): number {
 }
 
 /**
- * Attempts per model call, HAWA_MODEL_MAX_ATTEMPTS or 3. Only a request that never got an answer
- * (and 429/5xx) is retried, so each attempt past the first is one that was not billed; six were
- * allowed while unreadable replies were retried too, which multiplied a bad reply's cost.
+ * Attempts per model call, HAWA_MODEL_MAX_ATTEMPTS or 3. Only an explicit 429 rate-limit
+ * rejection is retried. A lost connection or HTTP 5xx has unknown provider acceptance.
  */
 function modelMaxAttempts(): number {
   const configured = Number(process.env.HAWA_MODEL_MAX_ATTEMPTS || 3);
@@ -296,6 +318,14 @@ export function describeFetchCause(err: any): string {
   const code = cause.code || cause.name || '';
   const message = typeof cause.message === 'string' ? cause.message : '';
   return [code, message && message !== code ? message : ''].filter(Boolean).join(': ').slice(0, 200);
+}
+
+function validTextUsage(usage: any): boolean {
+  const count = (n: unknown) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
+  return count(usage.prompt_tokens ?? usage.input_tokens) && count(usage.completion_tokens ?? usage.output_tokens) &&
+    count(usage.cache_read_input_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0) &&
+    count(usage.cache_creation_input_tokens ?? 0) &&
+    (usage.cache_read_input_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0) <= (usage.prompt_tokens ?? usage.input_tokens);
 }
 
 export class OpenAiStudioClient {
@@ -382,10 +412,13 @@ export class OpenAiStudioClient {
     const cacheWriteTokens = usage.cache_creation_input_tokens ?? 0;
     const regularInputTokens = Math.max(0, inTok - cacheReadTokens);
 
-    const inCost = (regularInputTokens / 1_000_000) * rates.inputPerMillion;
-    const outCost = (outTok / 1_000_000) * rates.outputPerMillion;
-    const cacheReadCost = rates.cacheReadPerMillion ? (cacheReadTokens / 1_000_000) * rates.cacheReadPerMillion : 0;
-    const cacheWriteCost = rates.cacheWritePerMillion ? (cacheWriteTokens / 1_000_000) * rates.cacheWritePerMillion : 0;
+    // Astra prices the entire request at long-context rates above 272K input tokens.
+    const longContext = /^gpt-6-astra(?:-\d{4}-\d{2}-\d{2})?$/.test(model) && inTok > 272000;
+    const inputMultiplier = longContext ? 2 : 1, outputMultiplier = longContext ? 1.5 : 1;
+    const inCost = (regularInputTokens / 1_000_000) * rates.inputPerMillion * inputMultiplier;
+    const outCost = (outTok / 1_000_000) * rates.outputPerMillion * outputMultiplier;
+    const cacheReadCost = rates.cacheReadPerMillion ? (cacheReadTokens / 1_000_000) * rates.cacheReadPerMillion * inputMultiplier : 0;
+    const cacheWriteCost = rates.cacheWritePerMillion ? (cacheWriteTokens / 1_000_000) * rates.cacheWritePerMillion * inputMultiplier : 0;
 
     return Number((inCost + outCost + cacheReadCost + cacheWriteCost).toFixed(6));
   }
@@ -397,6 +430,7 @@ export class OpenAiStudioClient {
     timeoutMs?: number;
     temperature?: number;
     maxTokens?: number;
+    beforeDispatch?: (body: string) => Promise<void>;
     reasoningEffort?: 'low' | 'medium' | 'high';
   }): Promise<OpenAiStructuredResponse<T>> {
     const model = options.model || resolveModel('text');
@@ -422,7 +456,8 @@ export class OpenAiStudioClient {
           strict: options.jsonSchema.strict ?? true,
         },
       },
-      max_completion_tokens: options.maxTokens || 4000,
+      max_completion_tokens: options.maxTokens ?? 4000,
+      service_tier: 'default',
     };
 
     // Only reasoning models accept reasoning_effort; the others reject the whole request with a
@@ -438,14 +473,17 @@ export class OpenAiStudioClient {
       payload.temperature = options.temperature;
     }
 
+    if (!Number.isSafeInteger(payload.max_completion_tokens) || payload.max_completion_tokens < 1) {
+      throw new TypeError('maxTokens must be a positive safe integer.');
+    }
+    const body = JSON.stringify(payload);
+    await options.beforeDispatch?.(body);
     const startTime = Date.now();
     const timeout = options.timeoutMs || this.timeoutMs;
 
     let attempt = 0;
-    // T9: VPN/tunnel egress intermittently drops long-lived TLS mid-request (UND_ERR_SOCKET), so a
-    // request that got no answer is asked again. Nothing that got an answer is (2026-09-23): a reply
-    // that is cut off or not JSON, or a body that broke after the headers, was retried like a dropped
-    // socket, each attempt a new billed call for the same question.
+    // Only a definite provider rejection can be retried. A fetch rejection after dispatch may mean
+    // that the provider accepted and billed the work even though no response reached this process.
     const maxAttempts = modelMaxAttempts();
 
     while (attempt < maxAttempts) {
@@ -460,7 +498,7 @@ export class OpenAiStudioClient {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${this.apiKey}`,
           },
-          body: JSON.stringify(payload),
+          body,
           signal: controller.signal,
         });
       } catch (err: unknown) {
@@ -469,26 +507,14 @@ export class OpenAiStudioClient {
           this.breaker.recordFailure();
           throw new OpenAiModelTimeoutError(timeout);
         }
-        // No answer arrived, so nothing was billed: the one failure that is safe to ask again.
-        // Node's fetch reports every network failure as "fetch failed" and keeps the reason in
-        // err.cause (ECONNRESET, UND_ERR_HEADERS_TIMEOUT, ENOTFOUND, ...). A studio run on
-        // 2026-09-22 failed at layout with only "fetch failed" on record and nothing in the logs.
-        const cause = describeFetchCause(err);
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[openai] ${model} attempt ${attempt}/${maxAttempts} failed: ${message}${cause ? ` (${cause})` : ''}`);
-        if (attempt >= maxAttempts) {
-          this.breaker.recordFailure();
-          if (cause && err instanceof Error && !err.message.includes(cause)) err.message = `${err.message} (${cause}) after ${attempt} attempts`;
-          throw err;
-        }
-        await sleep(computeRetryDelayMs(attempt));
-        continue;
+        this.breaker.recordFailure();
+        throw new OpenAiModelUnknownAcceptanceError(model, err);
       }
 
       try {
         if (!res.ok) {
           const errBody = await res.text().catch(() => '');
-          if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
+          if (res.status === 429 && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
             await sleep(computeRetryDelayMs(attempt));
             continue;
           }
@@ -506,12 +532,13 @@ export class OpenAiStudioClient {
 
         const latencyMs = Date.now() - startTime;
         const usage = data.usage || {};
-        const costUsd = this.calculateCost(model, usage);
-        const responseId = data.id || xRequestId || `openai_${Date.now()}`;
+        const costUsd = validTextUsage(usage) ? this.calculateCost(data.model || model, usage) : 0;
+        const responseId = typeof data.id === 'string' ? data.id : '';
+        const costBasis = validTextUsage(usage) && !!resolveRatesForModel(this.pricing.models, data.model || model) ? 'usage' as const : 'estimate' as const;
 
         const finishReason = data.choices?.[0]?.finish_reason ?? data.stop_reason;
         if (finishReason === 'length' || finishReason === 'max_tokens') {
-          throw new OpenAiModelTruncatedError(model, payload.max_completion_tokens, { responseId, costUsd });
+          throw new OpenAiModelTruncatedError(model, payload.max_completion_tokens, { responseId, costUsd, costBasis });
         }
 
         const toolUsePart = Array.isArray(data.content)
@@ -522,7 +549,7 @@ export class OpenAiStudioClient {
         // A refusal, or a message with neither content nor a tool call, is no answer (see OpenAiModelRefusalError).
         const message = data.choices?.[0]?.message;
         if (message && (message.refusal || (message.content == null && !toolCallArg))) {
-          throw new OpenAiModelRefusalError(model, Boolean(message.refusal), { responseId, costUsd });
+          throw new OpenAiModelRefusalError(model, Boolean(message.refusal), { responseId, costUsd, costBasis });
         }
 
         const rawContent = message?.content ??
@@ -531,24 +558,28 @@ export class OpenAiStudioClient {
             : (typeof data.content === 'string' ? data.content : '{}'));
         const cleanContent = rawContent.replace(/```(?:json)?\s*([\s\S]*?)\s*```/i, '$1').trim();
 
+        // The accepted answer may arrive as a tool payload while message.content is null. The
+        // receipt hash must name the answer actually parsed, not the empty-content fallback.
+        const answerText = toolUsePart && typeof toolUsePart === 'object'
+          ? JSON.stringify(toolUsePart)
+          : toolCallArg ? String(toolCallArg) : cleanContent;
         let parsed: any;
         if (toolUsePart && typeof toolUsePart === 'object') {
           parsed = toolUsePart;
         } else {
           // A reply that is not JSON used to become {} (no braces at all) or a retry (braces that
           // did not parse). Neither is an answer: it is reported, once.
-          const replyText = toolCallArg ? String(toolCallArg) : cleanContent;
-          parsed = parseJsonReply(replyText);
+          parsed = parseJsonReply(answerText);
           if (parsed === undefined) {
-            throw new OpenAiModelParseError(model, replyText.length, { responseId, costUsd });
+            throw new OpenAiModelParseError(model, answerText.length, { responseId, costUsd, costBasis });
           }
         }
 
-        const sha256 = createHash('sha256').update(cleanContent).digest('hex');
+        const sha256 = createHash('sha256').update(answerText).digest('hex');
 
         return {
           data: parsed,
-          rawText: cleanContent,
+          rawText: answerText,
           receipt: {
             id: responseId,
             responseId,
@@ -560,6 +591,8 @@ export class OpenAiStudioClient {
             cacheCreationTokens: usage.cache_creation_input_tokens || 0,
             cacheReadTokens: usage.cache_read_input_tokens || usage.prompt_tokens_details?.cached_tokens || 0,
             costUsd,
+            costBasis,
+            servedModel: typeof data.model === 'string' ? data.model : null,
             sha256,
             latencyMs,
             attempts: attempt,
@@ -596,6 +629,7 @@ export class OpenAiStudioClient {
     timeoutMs?: number;
     temperature?: number;
     maxTokens?: number;
+    beforeDispatch?: (body: string) => Promise<void>;
   }): Promise<{ data: T; rawText: string; receipt: any }> {
     const model = params.model || this.primaryModel;
     assertModelAllowed(model);
@@ -637,6 +671,7 @@ export class OpenAiStudioClient {
       timeoutMs: params.timeoutMs,
       temperature: params.temperature,
       maxTokens: params.maxTokens,
+      beforeDispatch: params.beforeDispatch,
     });
   }
 
@@ -663,9 +698,7 @@ export class OpenAiStudioClient {
     const startTime = Date.now();
     const timeout = options.timeoutMs || this.timeoutMs;
 
-    // T9: the image lane made a single attempt with no retry, so one dropped connection lost
-    // the call outright. Same handling as the text path: only a request that got no answer, and
-    // 429/5xx, is asked again; an image that was generated is never paid for twice.
+    // A dropped image request may have been accepted. Keep it uncertain rather than paying again.
     const maxAttempts = modelMaxAttempts();
     let attempt = 0;
 
@@ -690,18 +723,14 @@ export class OpenAiStudioClient {
           this.breaker.recordFailure();
           throw new OpenAiModelTimeoutError(timeout);
         }
-        if (attempt >= maxAttempts) {
-          this.breaker.recordFailure();
-          throw err;
-        }
-        await sleep(computeRetryDelayMs(attempt));
-        continue;
+        this.breaker.recordFailure();
+        throw new OpenAiModelUnknownAcceptanceError(model, err);
       }
 
       try {
         if (!res.ok) {
           const errBody = await res.text().catch(() => '');
-          if ((res.status === 429 || res.status >= 500) && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
+          if (res.status === 429 && attempt < maxAttempts && !isQuotaExhausted(res.status, errBody)) {
             await sleep(computeRetryDelayMs(attempt));
             continue;
           }

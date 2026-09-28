@@ -1,9 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { assert, describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   ResilientModelGateway,
   CircuitBreaker,
 } from '../src/index.js';
 import type { RequestContext, StructuredModelRequest } from '@hawa/contracts';
+
+function request(text: string, role: StructuredModelRequest['role'] = 'intake_router'): StructuredModelRequest {
+  return { role, inputs: [{ kind: 'text', text }], systemPromptVersion: 'fixture-v1',
+    responseSchema: { type: 'object' }, cachePolicy: 'disabled',
+    budget: { maxCostUsd: 1, maxLatencyMs: 60000, maxAttempts: 4 },
+    egressPolicy: { mode: 'approved_providers', allowedProviders: ['google', 'anthropic', 'openai', 'local'] } };
+}
 
 describe('ResilientModelGateway & CircuitBreaker', () => {
   const ctx: RequestContext = {
@@ -18,14 +25,32 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
   let gateway: ResilientModelGateway;
 
   beforeEach(() => {
-    delete process.env.GEMINI_API_KEY;
-    delete process.env.GOOGLE_AI_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    delete process.env.OPENAI_API_KEY;
+    process.env.GEMINI_API_KEY = ['fixture', 'gemini', 'key'].join('-');
+    process.env.ANTHROPIC_API_KEY = ['fixture', 'anthropic', 'key'].join('-');
+    process.env.OPENAI_API_KEY = ['fixture', 'openai', 'key'].join('-');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      const value = JSON.stringify({ status: 'ok' });
+      if (url.includes('generativelanguage.googleapis.com')) return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: value }] } }],
+        modelVersion:'gemini-3.8-flash', usageMetadata: { promptTokenCount: 520, candidatesTokenCount: 140, totalTokenCount:660 },
+      }), { status: 200 });
+      if (url.includes('api.anthropic.com')) return new Response(JSON.stringify({
+        model: 'claude-sonnet-5', content: [{ type: 'text', text: value }],
+        usage: { input_tokens: 520, output_tokens: 140 },
+      }), { status: 200 });
+      if (url.includes('api.openai.com')) return new Response(JSON.stringify({
+        model: 'gpt-4o', choices: [{ message: { content: value } }],
+        usage: { prompt_tokens: 520, completion_tokens: 140 },
+      }), { status: 200 });
+      throw new Error(`Unexpected test egress: ${url}`);
+    });
     gateway = new ResilientModelGateway();
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
+    for (const key of ['GEMINI_API_KEY', 'GOOGLE_AI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']) delete process.env[key];
     Object.assign(process.env, originalEnv);
   });
 
@@ -95,21 +120,20 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
   describe('ResilientModelGateway Structured Generation & Pricing', () => {
     it('executes normal request on primary provider and computes cost correctly', async () => {
       const req: StructuredModelRequest = {
-        role: 'intake_router',
-        prompt: 'Analyze marketing brief',
+        ...request('Analyze marketing brief'),
         temperature: 0.1,
       };
 
       const res = await gateway.generateStructured(ctx, req);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (res.ok) {
         expect(res.value.deployment.provider).toBe('google');
         expect(res.value.deployment.exactModelId).toBe('gemini-3.8-flash');
         expect(res.value.attempts).toBe(1);
         expect(res.value.usage.inputTokens).toBe(520);
         expect(res.value.usage.outputTokens).toBe(140);
-        // Google pricing: (520 * 0.10 + 140 * 0.40) / 1,000,000 = (52 + 56) / 1,000,000 = $0.000108
-        expect(res.value.usage.estimatedCostUsd).toBe(0.000108);
+        // Exact Gemini 3.8 Flash standard rates: (520 * .75 + 140 * 3.75) / 1M.
+        expect(res.value.usage.estimatedCostUsd).toBe(0.000915);
         expect(res.value.traceId).toBeDefined();
       }
     });
@@ -119,19 +143,18 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
       gateway.setSimulatedFailure('google', 1);
 
       const req: StructuredModelRequest = {
-        role: 'intake_router',
-        prompt: 'Analyze marketing brief',
+        ...request('Analyze marketing brief'),
       };
 
       const res = await gateway.generateStructured(ctx, req);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (res.ok) {
         // Fallback cascade for intake_router: google -> anthropic (claude-3-5-sonnet)
         expect(res.value.deployment.provider).toBe('anthropic');
         expect(res.value.deployment.exactModelId).toBe('claude-sonnet-5');
         expect(res.value.attempts).toBe(2);
-        // Anthropic pricing: (520 * 3.00 + 140 * 15.00) / 1,000,000 = (1560 + 2100) / 1,000,000 = $0.00366
-        expect(res.value.usage.estimatedCostUsd).toBe(0.00366);
+        // Exact Sonnet 5 standard rates: (520 * 2 + 140 * 10) / 1M.
+        expect(res.value.usage.estimatedCostUsd).toBe(0.00244);
       }
     });
 
@@ -140,12 +163,11 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
       gateway.setSimulatedFailure('anthropic', 1);
 
       const req: StructuredModelRequest = {
-        role: 'intake_router',
-        prompt: 'Analyze marketing brief',
+        ...request('Analyze marketing brief'),
       };
 
       const res = await gateway.generateStructured(ctx, req);
-      expect(res.ok).toBe(true);
+      expect(res.ok).toBe(true); assert(res.ok);
       if (res.ok) {
         // Third candidate in cascade is openai (gpt-4o)
         expect(res.value.deployment.provider).toBe('openai');
@@ -157,16 +179,16 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
     it('fast-fails over OPEN circuits and skips to available candidate without attempting tripped provider', async () => {
       // Trip Google circuit breaker with 3 failures
       gateway.setSimulatedFailure('google', 3);
-      await gateway.generateStructured(ctx, { role: 'intake_router', prompt: 'test 1' });
-      await gateway.generateStructured(ctx, { role: 'intake_router', prompt: 'test 2' });
-      await gateway.generateStructured(ctx, { role: 'intake_router', prompt: 'test 3' });
+      await gateway.generateStructured(ctx, { ...request('test 1') });
+      await gateway.generateStructured(ctx, { ...request('test 2') });
+      await gateway.generateStructured(ctx, { ...request('test 3') });
 
       const googleSnap = gateway.getCircuitBreakerSnapshot('google');
       expect(googleSnap?.state).toBe('OPEN');
 
       // Next request should automatically skip Google without consuming an attempt on it
-      const res = await gateway.generateStructured(ctx, { role: 'intake_router', prompt: 'test 4' });
-      expect(res.ok).toBe(true);
+      const res = await gateway.generateStructured(ctx, { ...request('test 4') });
+      expect(res.ok).toBe(true); assert(res.ok);
       if (res.ok) {
         expect(res.value.deployment.provider).toBe('anthropic');
         // Because google circuit is OPEN, it was skipped before attempting, so attempts is 1
@@ -181,7 +203,7 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
       gateway.setSimulatedFailure('openai', 1);
       gateway.setSimulatedFailure('local', 1);
 
-      const res = await gateway.generateStructured(ctx, { role: 'intake_router', prompt: 'exhaust test' });
+      const res = await gateway.generateStructured(ctx, { ...request('exhaust test') });
       expect(res.ok).toBe(false);
       if (!res.ok) {
         expect(res.error.code).toBe('MODEL_CASCADE_EXHAUSTED');
@@ -223,14 +245,15 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
       try {
         const dummyBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
         const res = await gateway.generateStructured(ctx, {
-          role: 'visual_judge',
-          prompt: 'Evaluate layout quality',
+          ...request('Evaluate layout quality', 'visual_judge'),
+          egressPolicy: { mode: 'approved_providers', allowedProviders: ['google'] },
           inputs: [
+            { kind: 'text', text: 'Evaluate layout quality' },
             { kind: 'image', mimeType: 'image/png', data: dummyBase64 },
           ],
         });
 
-        expect(res.ok).toBe(true);
+        expect(res.ok).toBe(true); assert(res.ok);
         expect(capturedUrl).toBeDefined();
         // Proof 1: No secret key in query string
         expect(capturedUrl).not.toContain(testKey);
@@ -250,37 +273,30 @@ describe('ResilientModelGateway & CircuitBreaker', () => {
   });
 
   describe('Multimodal Embeddings & Reranking', () => {
-    it('generates deterministic embeddings with local provider', async () => {
+    it('reports an unavailable local embedding adapter instead of fixed vectors', async () => {
       const res = await gateway.embed(ctx, {
         role: 'embedding_multimodal',
         items: [{ id: 'item-1', text: 'Brand logo' }],
-        dimensions: 1024,
+        dimensions: 1024, normalize: true, egressPolicy: { mode: 'local_only', allowedProviders: [] },
       });
 
-      expect(res.ok).toBe(true);
-      if (res.ok) {
-        expect(res.value.dimensions).toBe(1024);
-        expect(res.value.vectors.length).toBe(1);
-        expect(res.value.vectors[0].vector.length).toBe(1024);
-      }
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.error.code).toBe('LOCAL_MODEL_UNAVAILABLE');
     });
 
-    it('ranks multimodal candidates by semantic relevance score', async () => {
+    it('reports an unavailable local reranker instead of fabricated relevance scores', async () => {
       const res = await gateway.rerank(ctx, {
         role: 'reranker_multimodal',
-        query: 'Kurdish typography banner',
+        query: [{ kind: 'text', text: 'Kurdish typography banner' }],
+        topK: 2, egressPolicy: { mode: 'local_only', allowedProviders: [] },
         candidates: [
-          { id: 'c1', text: 'Vazirmatn headline banner' },
-          { id: 'c2', text: 'Generic English poster' },
+          { id: 'c1', parts: [{ kind: 'text', text: 'Vazirmatn headline banner' }] },
+          { id: 'c2', parts: [{ kind: 'text', text: 'Generic English poster' }] },
         ],
       });
 
-      expect(res.ok).toBe(true);
-      if (res.ok) {
-        expect(res.value.ranked.length).toBe(2);
-        expect(res.value.ranked[0].id).toBe('c1');
-        expect(res.value.ranked[0].score).toBeGreaterThan(res.value.ranked[1].score);
-      }
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.error.code).toBe('LOCAL_MODEL_UNAVAILABLE');
     });
   });
 });

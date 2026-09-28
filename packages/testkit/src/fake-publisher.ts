@@ -41,7 +41,7 @@ export class FakePublisher implements Publisher {
     }
 
     const publicationId = crypto.randomUUID();
-    const driveFolderId = `drive_folder_${request.destination.productionRootFolderId}`;
+    const driveFolderId = request.destination.productionRootFolderId;
 
     const driveFiles: DriveFileReceipt[] = request.files.map((f) => ({
       artifactId: f.artifactId,

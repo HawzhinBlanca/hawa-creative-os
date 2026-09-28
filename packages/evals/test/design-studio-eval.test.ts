@@ -201,8 +201,7 @@ pair-03,compare-03,B,5,8,`);
   });
 
   it('packages blind pairs and generates a sealed pair key', () => {
-    const tmpDir = path.resolve('/tmp/hawa-eval-blind-test');
-    fs.mkdirSync(tmpDir, { recursive: true });
+    const tmpDir = fs.mkdtempSync(path.resolve('/tmp/hawa-eval-blind-test-'));
 
     // Create dummy pngs
     const dummyV1 = path.join(tmpDir, 'v1.png');
@@ -229,8 +228,28 @@ pair-03,compare-03,B,5,8,`);
     expect(keyContent.pairs[0].leftIs).toBeDefined();
     expect(keyContent.pairs[0].rightIs).toBeDefined();
 
+    expect(() => packageBlindPairs({
+      outputDir: tmpDir,
+      pairs: [{ briefId: 'compare-01', v1PngPath: dummyV1, v2PngPath: dummyV2 }],
+    })).toThrow(/already exists/);
+
     // Clean up
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('refuses a missing blind image before writing any pair', () => {
+    const tmpDir = fs.mkdtempSync(path.resolve('/tmp/hawa-eval-missing-'));
+    try {
+      const valid = path.join(tmpDir, 'valid.png');
+      fs.writeFileSync(valid, Buffer.from('image fixture'));
+      expect(() => packageBlindPairs({
+        outputDir: tmpDir,
+        pairs: [{ briefId: 'case-1', v1PngPath: valid, v2PngPath: path.join(tmpDir, 'absent.png') }],
+      })).toThrow(/both exported images must exist/);
+      expect(fs.existsSync(path.join(tmpDir, 'blind-pairs'))).toBe(false);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   it('runs all 24 briefs through the offline runner and generates report', async () => {
@@ -249,4 +268,3 @@ pair-03,compare-03,B,5,8,`);
     expect(report.results).toHaveLength(24);
   });
 });
-

@@ -1,0 +1,79 @@
+[
+  {
+    "label": "1critical incidents",
+    "left": 28,
+    "right": 189,
+    "width": 161,
+    "viewport": 390
+  },
+  {
+    "label": "1recoverable failures",
+    "left": 201,
+    "right": 362,
+    "width": 161,
+    "viewport": 390
+  },
+  {
+    "label": "7adapters not verified",
+    "left": 28,
+    "right": 189,
+    "width": 161,
+    "viewport": 390
+  },
+  {
+    "label": "—last backup age (not reported to the Desk)",
+    "left": 201,
+    "right": 362,
+    "width": 161,
+    "viewport": 390
+  },
+  {
+    "label": "Actionable operationsComponent / TaskStateEvidenceSafe actionSynthetic Studio re",
+    "left": 28,
+    "right": 362,
+    "width": 334,
+    "viewport": 390
+  },
+  {
+    "label": "Synthetic Studio recovery",
+    "left": 46,
+    "right": 344,
+    "width": 298,
+    "viewport": 390
+  },
+  {
+    "label": "OPERATOR_REQUIRED",
+    "left": 46,
+    "right": 344,
+    "width": 298,
+    "viewport": 390
+  },
+  {
+    "label": "Client: c1000000-0000-4000-8000-000000000002 · Invariant #7 check",
+    "left": 46,
+    "right": 344,
+    "width": 298,
+    "viewport": 390
+  },
+  {
+    "label": "Inspect",
+    "left": 46,
+    "right": 344,
+    "width": 298,
+    "viewport": 390
+  },
+  {
+    "label": "Inspect",
+    "left": 58,
+    "right": 123.5,
+    "width": 65.5,
+    "viewport": 390
+  },
+  {
+    "label": "Component healthMODEL PROVIDER (int_openai_model)Setup: configured · Reachabilit",
+    "left": 28,
+    "right": 362,
+    "width": 334,
+    "viewport": 390
+  }
+]

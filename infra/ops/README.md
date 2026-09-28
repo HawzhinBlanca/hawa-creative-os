@@ -36,6 +36,10 @@ container into `~/.hawa/logs/containers/<YYYY-MM-DD>/<service>.ndjson` (UTC days
 the containers, so a deploy loses nothing. `disk_cleanup.sh` deletes days older than 30, nightly,
 and then the oldest days until the rest fit in `HAWA_LOG_MAX_MB` (2048; Docker's own driver capped
 each container at 250 MB, Vector caps nothing). Today's day is never deleted.
+`vector.yaml` is a single-file bind mount and Vector runs without `--watch-config`, so a plain
+`compose up` never applies a changed file. `deploy.sh` checks the file with `vector validate` in a
+one-off container before it starts anything, and restarts `vector` when the running container sees a
+different file (ADR-129), as it does for `nginx.conf`.
 
 ```bash
 npx tsx scripts/request_logs.ts <requestId>               # one request: nginx, Core, worker, in time order
@@ -213,3 +217,10 @@ Then recreate core and the worker (step 4 above, which picks up a changed `.env.
 a real request in the Desk, and check the file in the Drive folder. `GET /v1/integrations/health`
 reports `google_drive: healthy` as soon as the variable is set; it does not test the key, so only a
 real delivery proves it.
+
+## Availability evidence
+
+The watchdog's latest alert state does not measure monthly uptime. ADR-104 provides
+an independent read-only readiness collector with a durable upload spool; deployment,
+credentials, recovery and interpretation are in `runbooks/AVAILABILITY_MONITORING.md`.
+Run that collector on a separate host before making monthly availability claims.

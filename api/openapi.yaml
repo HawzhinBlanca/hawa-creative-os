@@ -16,6 +16,280 @@ tags:
   - name: Evaluations
   - name: Integrations
 paths:
+  /v1/operations/publication-inspections:
+    get:
+      tags: [Operations]
+      operationId: readPublicationInspections
+      summary: Read the latest independent Google observations for current publications
+      description: Current tenant and client membership filters immutable inspection evidence. Returns at most 50 current publications ordered by publication UUID. A read never dispatches provider work. Hourly checks use frozen original inputs; missing permission policy remains unverified. Results older than two hours cannot certify consistency. Cache-Control is no-store.
+      parameters:
+        - name: after
+          in: query
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Latest scoped observations and scheduler configuration
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PublicationInspectionState'}
+        '400': {description: Invalid publication cursor}
+        '401': {description: Authentication required}
+        '403': {description: Active office membership required}
+        '503': {description: Stored evidence unavailable}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operations/reconciliation:
+    get:
+      tags: [Operations]
+      operationId: readScopedReceiptAudits
+      summary: Read durable receipt audits for the current identity and client scope
+      description: Reads one authorized PostgreSQL snapshot. Scope is recalculated from active office membership and current client access. Earlier reports are hidden when that scope changes. The latest report is independent of the history cursor. Responses use Cache-Control no-store.
+      parameters:
+        - name: beforeRevision
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 2147483647}
+      responses:
+        '200':
+          description: Current scope, latest immutable report and up to 20 history entries
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReceiptAuditState'}
+        '400': {description: Invalid history cursor}
+        '401': {description: Authentication required}
+        '403': {description: Active named office membership required}
+        '503': {description: Durable evidence unavailable; no cached report is returned}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operations/reconciliation/run:
+    post:
+      tags: [Operations]
+      operationId: recordScopedReceiptAudit
+      summary: Record a named immutable audit of stored publication receipts
+      description: The action, current scope and expected predecessor are checked in one serializable transaction with source reads and the append. Idempotency-Key must equal actionId. An exact retry returns the original result, including after a restart or later audit. Current-revision manifests are compared with verified Drive receipts and observed Sheet row hashes. Pending tasks are not counted as consistent deliveries. No external service is read, no provider is called and nothing is repaired. Responses use Cache-Control no-store.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReceiptAuditAction'}
+      responses:
+        '201':
+          description: New audit recorded; replayed is false
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReceiptAuditResult'}
+        '200':
+          description: Exact stored result recovered; replayed is true
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReceiptAuditResult'}
+        '400': {description: Invalid action or header does not match actionId}
+        '401': {description: Authentication required}
+        '403': {description: Current named office membership and CSRF protection required}
+        '409': {description: Scope or predecessor changed, action identity conflict, or concurrent audit; retry only the original saved action}
+        '422': {description: Caller-supplied receipt rows, drift simulation and automatic repair are refused}
+        '503': {description: Outcome unconfirmed; retain the exact saved action for recovery}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/operations/slo:
+    get:
+      tags: [Operations]
+      operationId: readOfficeReliabilityEvidence
+      summary: Read the monthly availability target and current measurement status
+      description: Reads scoped immutable sampled-readiness observations. No configured collector returns explicit unmeasured v1; a configured collector returns v2 with coverage and uncertainty bounds. Compliance requires a completed fully observed month. Probe latency is not complete user-journey latency. Cache-Control is no-store.
+      parameters:
+        - in: query
+          name: month
+          required: false
+          schema: {type: string, pattern: '^20[0-9]{2}-(0[1-9]|1[0-2])$'}
+          description: Asia/Baghdad month; defaults to current month. Future months are refused.
+      responses:
+        '200':
+          description: Unmeasured status or independently recorded sampled readiness
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OperationsReliabilityReport'}
+        '401': {description: Authentication required}
+  /v1/monitoring/availability/probe:
+    get:
+      tags: [Operations]
+      operationId: probeOfficeReadiness
+      security: [{availabilityMonitor: []}]
+      summary: Read scoped storage and worker readiness without creating office work
+      description: Dedicated monitor credential only. Storage witness always rolls back. No provider calls or client content. Replies bind the fresh nonce and use Cache-Control no-store.
+      parameters:
+        - in: header
+          name: X-Hawa-Probe-Nonce
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Storage, workflow registration and an active worker are ready
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AvailabilityReadiness'}
+        '400': {description: Missing or invalid nonce}
+        '401': {description: Distinct monitor authentication required; office cookies and credentials are refused}
+        '503':
+          description: One or more required checks failed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AvailabilityReadiness'}
+  /v1/monitoring/availability/observations:
+    post:
+      tags: [Operations]
+      operationId: appendAvailabilityObservation
+      security: [{availabilityMonitor: []}]
+      summary: Append or replay one immutable independent observation
+      description: Original collector UUID, minute and configured target must match. Body maximum 8192 bytes. Exact replay returns the original receipt. Changed content or a competing identity for one slot conflicts. No office actions or provider calls. Retain the original spool record on any unconfirmed outcome.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, format: uuid}
+          description: Must match observationId exactly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AvailabilityObservation'}
+      responses:
+        '201':
+          description: Observation appended
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AvailabilityObservationReceipt'}
+        '200':
+          description: Original immutable observation replayed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AvailabilityObservationReceipt'}
+        '400': {description: Invalid observation, identity, clock or retention window}
+        '401': {description: Dedicated configured monitor credential required}
+        '409': {description: Conflicting observation, slot or configured monitor scope}
+        '413': {description: Body exceeds 8192 bytes}
+        '503': {description: Outcome unconfirmed; retain and retry the exact saved observation}
+  /v1/operations/slo/run:
+    post:
+      tags: [Operations]
+      operationId: retiredSyntheticOperationalProbe
+      deprecated: true
+      summary: Retired synthetic operational execution
+      responses:
+        '410': {description: Synthetic benchmarks remain in testkit and cannot execute through Operations}
+        '401': {description: Authentication required}
+  /v1/clients/budgets:
+    get:
+      tags: [Operations]
+      operationId: retiredMonthlyBudgets
+      deprecated: true
+      responses:
+        '410': {description: Use /v1/spending/policy and /v1/spending/calls; seeded monthly balances are not billing records}
+        '401': {description: Authentication required}
+  /v1/clients/{clientId}/budget:
+    get:
+      tags: [Operations]
+      operationId: retiredMonthlyClientBudget
+      deprecated: true
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '410': {description: Use /v1/spending/policy for authoritative daily limits}
+        '401': {description: Authentication required}
+  /v1/clients/{clientId}/budget/allocate:
+    post:
+      tags: [Operations]
+      operationId: retiredMonthlyBudgetAllocation
+      deprecated: true
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '410': {description: No local governor mutation; use the named audited /v1/spending/policy action}
+        '401': {description: Authentication required}
+  /v1/tasks/{taskId}/canva/studio:
+    get:
+      tags: [Designs]
+      operationId: latestStudioRun
+      summary: Find the latest saved Studio run without starting generation
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      responses:
+        '200':
+          description: Current task-scoped run identity, or null when none exists
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runId, status]
+                properties:
+                  runId: {type: [string, 'null'], format: uuid}
+                  status: {type: [string, 'null']}
+        '404': {description: Task unavailable in the caller's scope}
+  /v1/tasks/{taskId}/canva/studio/{runId}:
+    get:
+      tags: [Designs]
+      operationId: readStudioRunEvidence
+      summary: Read saved Studio evidence and cumulative budget accounting
+      description: Budget admission counts all run calls, including parity after transfer, and reserves conservative request estimates before transport. Shared daily limits aggregate Studio, evaluation and retained-voice calls. Original snapshots and settlement evidence remain distinct. These are operating estimates, not guaranteed invoice ceilings.
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - name: runId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Run, candidates, judgments and sanitized call receipts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run, candidates, judgments, calls]
+                properties:
+                  run:
+                    type: object
+                    required: [id, taskId, status, budget, budgetUsage]
+                    properties:
+                      id: {type: string, format: uuid}
+                      taskId: {type: string, format: uuid}
+                      status: {type: string}
+                      budget: {type: object, description: Original saved budget snapshot}
+                      budgetUsage:
+                        type: [object, 'null']
+                        properties:
+                          maxUsd: {type: [number, 'null']}
+                          maxCalls: {type: [integer, 'null']}
+                          admittedCalls: {type: integer, minimum: 0}
+                          knownUsdEstimate: {type: number, minimum: 0}
+                          attestedAdditionalUsd: {type: number, minimum: 0}
+                          accountedUsd: {type: [number, 'null'], description: Amount used for admission; incomplete while unresolved calls remain}
+                          reservedAdditionalUsd: {type: number, minimum: 0}
+                          committedUsd: {type: [number, 'null']}
+                          remainingUsd: {type: [number, 'null']}
+                          daily:
+                            oneOf:
+                              - {$ref: '#/components/schemas/SharedDailySpending'}
+                              - {type: 'null'}
+                          unresolvedCalls: {type: integer, minimum: 0}
+                          blocker: {type: [string, 'null'], enum: [STUDIO_BUDGET_INVALID, STUDIO_BUDGET_HISTORY_INCOMPLETE, STUDIO_BUDGET_RESERVATION_EXCEEDED, BUDGET_EXHAUSTED, null]}
+                  candidates: {type: array, items: {type: object}}
+                  judgments: {type: array, items: {type: object}}
+                  calls: {type: array, items: {type: object}}
+        '404': {description: Run unavailable in the caller's task and tenant scope}
+  /v1/tasks/{taskId}/pause:
+    $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1pause'
+  /v1/tasks/{taskId}/resume:
+    $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1resume'
+  /v1/tasks/{taskId}/cancel:
+    $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1cancel'
+  /v1/tasks/{taskId}/retry:
+    $ref: './task-controls.openapi.json#/paths/~1v1~1tasks~1{taskId}~1retry'
   /v1/tasks/{taskId}/canva/generate:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1generate'
   /v1/tasks/{taskId}/canva/plans:
@@ -34,8 +308,16 @@ paths:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1integrations~1canva~1disconnect'
   /v1/tasks/{taskId}/canva:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva'
+  /v1/tasks/{taskId}/canva/amendment-observation:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1amendment-observation'
   /v1/tasks/{taskId}/canva/editor:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1editor'
+  /v1/tasks/{taskId}/canva-binding:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva-binding'
+  /v1/tasks/{taskId}/native-review:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1native-review'
+  /v1/tasks/{taskId}/canva/revision-copy:
+    $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1revision-copy'
   /v1/tasks/{taskId}/canva/design:
     $ref: './canva-connect.openapi.json#/paths/~1v1~1tasks~1{taskId}~1canva~1design'
   /v1/tasks/{taskId}/canva/exports:
@@ -111,8 +393,24 @@ paths:
                 language: {type: [string, 'null']}
                 direction: {enum: [ltr, rtl, auto]}
                 dueAt: {type: [string, 'null'], format: date-time}
-                priority: {type: integer, minimum: 1, maximum: 5}
+                priority: {oneOf: [{type: integer, minimum: 1, maximum: 5}, {enum: [routine, rush, urgent]}]}
                 attachmentIds: {type: array, items: {type: string, format: uuid}}
+                workflow: {type: string, enum: [canva_manual]}
+                copyEn: {type: string, maxLength: 20000}
+                copyCkb: {type: string, maxLength: 20000}
+                designInstructions: {type: string, maxLength: 4000}
+                referenceAssets: {type: string}
+                source: {type: object}
+                sourceDocument: {$ref: '#/components/schemas/DocumentConfirmation'}
+              allOf:
+                - if: {required: [sourceDocument]}
+                  then:
+                    required: [workflow, clientId, copyEn, copyCkb, designInstructions]
+                    properties:
+                      workflow: {const: canva_manual}
+                      title: {type: string, minLength: 1, maxLength: 200}
+                    description: Requires an authenticated office operator/administrator, explicit Idempotency-Key and nonblank exact copy in at least one language. Checks retained PDF bytes and receipt hashes atomically with task/event/outbox. Exact retries reuse the first task; changed payload with the same key conflicts.
+
       responses:
         '201':
           description: Task created
@@ -218,59 +516,7 @@ paths:
                 maxCostUsd: {type: number, minimum: 0}
       responses:
         '202': {description: Durable generation started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
-        '410': {description: "LEGACY_TEMPLATES_RETIRED: the client (KAAE) is designed only in the design studio (ADR-038)", content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}
-        default: {$ref: '#/components/responses/Problem'}
-  /v1/tasks/{taskId}/pause:
-    post:
-      tags: [Operations]
-      operationId: pauseTask
-      summary: Pause a task
-      description: One explicit path per control (architecture programme 1.3; there is no `{control}` catch-all). Core reads no request body. The task moves to PLANNING.
-      parameters:
-        - {$ref: '#/components/parameters/TaskId'}
-      responses:
-        '202': {description: Control command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
-        '404': {$ref: '#/components/responses/Problem'}
-        '409': {$ref: '#/components/responses/Problem'}
-        default: {$ref: '#/components/responses/Problem'}
-  /v1/tasks/{taskId}/resume:
-    post:
-      tags: [Operations]
-      operationId: resumeTask
-      summary: Resume a task
-      description: One explicit path per control (architecture programme 1.3; there is no `{control}` catch-all). Core reads no request body. The task moves to PLANNING.
-      parameters:
-        - {$ref: '#/components/parameters/TaskId'}
-      responses:
-        '202': {description: Control command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
-        '404': {$ref: '#/components/responses/Problem'}
-        '409': {$ref: '#/components/responses/Problem'}
-        default: {$ref: '#/components/responses/Problem'}
-  /v1/tasks/{taskId}/cancel:
-    post:
-      tags: [Operations]
-      operationId: cancelTask
-      summary: Hand a task to the operator
-      description: One explicit path per control (architecture programme 1.3; there is no `{control}` catch-all). Core reads no request body. The task moves to OPERATOR_REQUIRED.
-      parameters:
-        - {$ref: '#/components/parameters/TaskId'}
-      responses:
-        '202': {description: Control command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
-        '404': {$ref: '#/components/responses/Problem'}
-        '409': {$ref: '#/components/responses/Problem'}
-        default: {$ref: '#/components/responses/Problem'}
-  /v1/tasks/{taskId}/retry:
-    post:
-      tags: [Operations]
-      operationId: retryTask
-      summary: Retry a task
-      description: One explicit path per control (architecture programme 1.3; there is no `{control}` catch-all). Core reads no request body. The task moves to PLANNING.
-      parameters:
-        - {$ref: '#/components/parameters/TaskId'}
-      responses:
-        '202': {description: Control command accepted, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
-        '404': {$ref: '#/components/responses/Problem'}
-        '409': {$ref: '#/components/responses/Problem'}
+        '410': {description: "LEGACY_TEMPLATES_RETIRED: the client (KAAE) is designed only in the design studio (ADR-127)", content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}
         default: {$ref: '#/components/responses/Problem'}
   /v1/designs/{designId}/revisions:
     get:
@@ -321,11 +567,36 @@ paths:
     post:
       tags: [Tasks]
       operationId: publishTask
+      description: Request-owned tasks require an authorized office reviewer, a UUID Idempotency-Key, and the current approvalId. The action starts a versioned delivery; completion is reported only after archive, Sheet row, and requester send are confirmed.
       parameters:
         - {$ref: '#/components/parameters/TaskId'}
         - {$ref: '#/components/parameters/IdempotencyKey'}
       responses:
+        '200': {description: A retried request-owned action has completed or requires an explicit new delivery action after archive failure}
         '202': {description: Publication started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/requester-send-evidence:
+    get:
+      tags: [Tasks]
+      operationId: getRequesterSendEvidence
+      description: Office-only local TelegramSender marks for the current unresolved request-owned publication. A Bot API message ID is not a requester read receipt.
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      responses:
+        '200':
+          description: Approved file and notice marks, exact send keys and local provider message IDs.
+          content: {application/json: {schema: {$ref: '#/components/schemas/RequesterSendEvidence'}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/requester-send-confirmation:
+    post:
+      tags: [Tasks]
+      operationId: confirmRequesterSendVisible
+      description: Office administrator attests that every approved file and notice is visible in the exact requester chat. This does not send, replay or prove a requester read receipt.
+      parameters: [{$ref: '#/components/parameters/TaskId'}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/RequesterSendConfirmation'}}}
+      responses:
+        '200': {description: Staff-visible confirmation committed with one request revision}
         default: {$ref: '#/components/responses/Problem'}
   /v1/tasks/{taskId}/feedback:
     post:
@@ -363,6 +634,205 @@ paths:
         content: {application/json: {schema: {$ref: '../schemas/ClientDNA.schema.json'}}}
       responses:
         '201': {description: Draft DNA version created, content: {application/json: {schema: {$ref: '../schemas/ClientDNA.schema.json'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/source-files:
+    get:
+      tags: [Clients]
+      operationId: listRetainedTelegramSources
+      summary: Inspect the latest 20 retained Telegram PDF and voice originals, including stopped extraction
+      description: Requires an office session and current client access. Returns source identities and review state without raw messages, sender identities or extracted copy. Copy review is not design or knowledge approval.
+      parameters: [{$ref: '#/components/parameters/ClientId'}]
+      responses:
+        '200':
+          description: Retained originals in this client
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clientId, items]
+                properties:
+                  clientId: {type: string, format: uuid}
+                  items:
+                    type: array
+                    maxItems: 20
+                    items:
+                      type: object
+                      required: [kind, clientId, updateId, sourceSha256, createdAt, documentId, stage, message]
+                      properties:
+                        kind: {type: string, enum: [pdf, voice]}
+                        clientId: {type: string, format: uuid}
+                        updateId: {type: integer, minimum: 1}
+                        sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+                        createdAt: {type: string, format: date-time}
+                        documentId: {type: [string, 'null'], format: uuid}
+                        stage: {type: string, enum: [retained, ready, copy_confirmed, extraction_stopped]}
+                        message: {type: [string, 'null']}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/source-files/{updateId}/content:
+    get:
+      tags: [Clients]
+      operationId: downloadRetainedTelegramSource
+      summary: Download the hash-verified PDF or voice original even if extraction stopped
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: updateId, in: path, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: Original attachment with private no-store caching, content: {application/pdf: {schema: {type: string, format: binary}}, audio/ogg: {schema: {type: string, format: binary}}}}
+        '404': {description: Source or client unavailable to the current session}
+        '503': {description: Original bytes unavailable or corrupt}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/source-files/{updateId}/review:
+    get:
+      tags: [Clients]
+      operationId: inspectRetainedVoiceSource
+      summary: Inspect unreviewed transcription and durable paid-call state
+      description: Requires current client access. Does not dispatch a model or approve copy. Missing or uncertain outcomes never cause a retry. Actual billed cost remains unknown.
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: updateId, in: path, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '200':
+          description: Client-scoped retained voice evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clientId, updateId, sourceSha256, state, message, transcript, estimatedUsd, actualUsd, audio]
+                properties:
+                  clientId: {type: string, format: uuid}
+                  updateId: {type: integer, minimum: 1}
+                  sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+                  state: {type: string, enum: [manual, received, rejected, uncertain]}
+                  message: {type: string}
+                  transcript: {type: [string, 'null'], maxLength: 100000}
+                  estimatedUsd: {type: [number, 'null'], minimum: 0}
+                  actualUsd: {type: 'null'}
+                  attemptKey: {type: string, pattern: '^[0-9a-f]{64}$'}
+                  providerRequestId: {type: [string, 'null'], pattern: '^req_[A-Za-z0-9_-]{1,180}$'}
+                  audio:
+                    type: [object, 'null']
+                    properties:
+                      durationSeconds: {type: number, exclusiveMinimum: 0, maximum: 600}
+                      channels: {type: integer, enum: [1, 2]}
+        '404': {description: Voice source or client unavailable to the current session}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/documents:
+    post:
+      tags: [Clients]
+      operationId: saveClientPdf
+      summary: Retain an original PDF and its native extraction for an explicit Desk request
+      description: Active writable client required. Source bytes are content-addressed; client/source hash/extractor version replays reuse an immutable receipt. Never indexes knowledge, creates a task or approves a design. Requires local blob storage and, for new sources, the isolated PDF parser. Limits match inspection.
+      parameters: [{$ref: '#/components/parameters/ClientId'}]
+      requestBody:
+        required: true
+        content: {application/pdf: {schema: {type: string, format: binary}}}
+      responses:
+        '201': {description: Original bytes and extraction retained, content: {application/json: {schema: {$ref: '#/components/schemas/SavedClientDocument'}}}}
+        '200': {description: Existing retained receipt reused, content: {application/json: {schema: {$ref: '#/components/schemas/SavedClientDocument'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+    get:
+      tags: [Clients]
+      operationId: listClientPdfs
+      summary: List the latest 20 saved PDF receipts in authorized client scope
+      parameters: [{$ref: '#/components/parameters/ClientId'}]
+      responses:
+        '200': {description: Recent receipts without extraction bodies, content: {application/json: {schema: {type: object, properties: {items: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/ClientDocumentReceipt'}}}}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/documents/{documentId}:
+    get:
+      tags: [Clients]
+      operationId: getClientPdf
+      summary: Reopen retained extraction and capability limits
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: documentId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Saved source receipt and extraction, content: {application/json: {schema: {$ref: '#/components/schemas/SavedClientDocument'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/documents/{documentId}/content:
+    get:
+      tags: [Clients]
+      operationId: downloadClientPdf
+      summary: Download hash-verified original bytes after client authorization
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: documentId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Original attachment with private no-store caching, content: {application/pdf: {schema: {type: string, format: binary}}, audio/ogg: {schema: {type: string, format: binary}}}}
+        '404': {description: Receipt outside authorized client scope or unavailable}
+        '503': {description: File store unavailable or original bytes missing or corrupt}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/documents/{documentId}/knowledge:
+    get:
+      tags: [Clients]
+      operationId: getDocumentKnowledgeApproval
+      summary: Read current reference-search approval and latest 20 audit events
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: documentId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Current version and current named-manager capability, content: {application/json: {schema: {$ref: '#/components/schemas/DocumentKnowledgeState'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+    put:
+      tags: [Clients]
+      operationId: changeDocumentKnowledgeApproval
+      summary: Approve or revoke this exact PDF for client reference search
+      description: Requires live named Google office administrator or scoped client DNA manager authority. New approval verifies original bytes and derives immutable chunks from the saved extraction. Expected version and UUID action identity serialize concurrent decisions. Replay requires current authority and returns the original action plus current state; it never restores an old approval. Revocation and replay do not require source bytes. No DNA rule, final copy, model input or design approval is created. Upload limit 8 KiB and 5 seconds.
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: documentId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/DocumentKnowledgeChange'}}}
+      responses:
+        '201': {description: Immutable action and index transaction committed, content: {application/json: {schema: {$ref: '#/components/schemas/DocumentKnowledgeState'}}}}
+        '200': {description: Original action replayed with current state, content: {application/json: {schema: {$ref: '#/components/schemas/DocumentKnowledgeState'}}}}
+        '409': {description: Stale version, changed source hashes, inactive client or reused action identity}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/knowledge/search:
+    get:
+      tags: [Clients]
+      operationId: searchApprovedClientDocuments
+      summary: Search approved retained PDF passages in an active authorized client
+      description: PostgreSQL normalized exact substring, simple full-text and trigram search. Tenant, client and latest approval are filtered in a materialized relation before ranking. Up to 10 passages, 2000 original characters each, with immutable source, chunk, page and approval citations. No vector, reranker or automatic model context. Private no-store; results represent the query snapshot. Queries have a 3-second database timeout.
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+        - {name: q, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 500}, description: At most 50 whitespace-separated words; at least one letter or numeral.}
+      responses:
+        '200': {description: Scoped lexical results with original text and citations, content: {application/json: {schema: {$ref: '#/components/schemas/DocumentKnowledgeSearch'}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/clients/{clientId}/documents/inspect:
+    post:
+      tags: [Clients]
+      operationId: inspectClientPdf
+      summary: Preview native PDF text locally without saving or approving it
+      description: Requires active client access before and after extraction. Limits are 20 MiB and 40 pages. OCR, semantic reading order, tables and images are not extracted. Partial or textless-page results are refused.
+      parameters:
+        - {$ref: '#/components/parameters/ClientId'}
+      requestBody:
+        required: true
+        content:
+          application/pdf:
+            schema: {type: string, format: binary}
+      responses:
+        '200':
+          description: Unsaved, unapproved text preview with original source hash and measured page coordinates
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clientId, sourceSaved, approved, document]
+                properties:
+                  clientId: {type: string, format: uuid}
+                  sourceSaved: {type: boolean, const: false}
+                  approved: {type: boolean, const: false}
+                  document: {type: object, description: 'Source SHA-256, stable chunks with text/page/coordinates, and extractor version/capability limitations.'}
+        '404': {description: Client unavailable or unauthorized}
+        '408': {description: Upload deadline exceeded}
+        '413': {description: Input size limit exceeded}
+        '422': {description: Unsupported, partial, textless or invalid PDF extraction}
+        '503': {description: Local parser or authorization store unavailable}
         default: {$ref: '#/components/responses/Problem'}
   /v1/operations/failures:
     get:
@@ -404,11 +874,52 @@ paths:
                         checkedAt: {type: string, format: date-time}
                         detail: {type: object}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/evaluations/datasets:
+    get:
+      tags: [Evaluations]
+      operationId: listFixtureDatasets
+      description: Allowlisted corpus definitions with measured counts and SHA-256 of the exact file bytes. Availability does not indicate passing tests. Unreadable datasets have null count and source.
+      responses:
+        '200': {description: Dataset metadata; no-store, content: {application/json: {schema: {type: array, items: {type: object}}}}}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/evaluations/datasets/{datasetId}/cases:
+    get:
+      tags: [Evaluations]
+      operationId: readFixtureCases
+      parameters:
+        - {name: datasetId, in: path, required: true, schema: {type: string, enum: [brief, rtl, retrieval]}}
+      responses:
+        '200':
+          description: Case definitions and source identity; these are not execution outcomes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [datasetId, total, source, cases]
+                properties:
+                  datasetId: {type: string}
+                  total: {type: integer, minimum: 0}
+                  source: {$ref: '#/components/schemas/EvaluationDatasetSource'}
+                  cases: {type: array, items: {type: object}}
+        '404': {description: Unknown dataset identity}
+        '503': {description: Corpus unavailable or invalid; internal filesystem details excluded}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/evaluations/runs:
+    get:
+      tags: [Evaluations]
+      operationId: listEvaluationRuns
+      responses:
+        '200': {description: Tenant-scoped durable fixture runs, content: {application/json: {schema: {type: array, items: {type: object}}}}}
+        default: {$ref: '#/components/responses/Problem'}
     post:
       tags: [Evaluations]
       operationId: startEvaluation
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      description: Run or resume the same fixture evaluation using a stable action UUID. Results are diagnostics, not model admission evidence.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
       requestBody:
         required: true
         content:
@@ -416,13 +927,13 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [datasetId, candidate]
+              required: [name]
               properties:
-                datasetId: {type: string, format: uuid}
-                candidate: {type: object}
-                blindReview: {type: boolean, default: true}
+                name: {type: string, minLength: 1, maxLength: 160}
       responses:
-        '202': {description: Evaluation started, content: {application/json: {schema: {$ref: '#/components/schemas/CommandReceipt'}}}}
+        '200': {description: Saved completed or stopped evaluation result, content: {application/json: {schema: {type: object}}}}
+        '409': {description: Running, unsettled, version mismatch or changed action inputs}
+        '503': {description: Durable storage or outcome unavailable; retry only the same action}
         default: {$ref: '#/components/responses/Problem'}
   /v1/evaluations/runs/{runId}:
     get:
@@ -435,20 +946,247 @@ paths:
           schema: {type: string, format: uuid}
       responses:
         '200':
-          description: Evaluation run
+          description: Saved tenant-scoped evaluation run
           content:
             application/json:
               schema:
                 type: object
-                required: [id, status, candidate, summary]
+                required: [runId, actionId, status, name, report, resumable]
                 properties:
-                  id: {type: string, format: uuid}
-                  status: {enum: [queued, running, completed, failed, cancelled]}
-                  candidate: {type: object}
-                  summary: {type: object}
+                  runId: {type: string, format: uuid}
+                  actionId: {type: string, format: uuid}
+                  name: {type: string}
+                  status: {enum: [running, completed, failed, closed]}
+                  report: {anyOf: [{$ref: '#/components/schemas/FixtureEvaluationReport'}, {type: 'null'}]}
+                  resumable: {type: boolean}
+                  snapshotHash: {type: string, pattern: '^[a-f0-9]{64}$'}
+                  canSettle: {type: boolean}
+                  daily: {$ref: '#/components/schemas/SharedDailySpending'}
+                  calls:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        allocatedUsd: {type: [number, 'null'], description: Original daily allocation; distinct from the gateway request bound and actual usage}
+                        spendingPolicyVersion: {type: [integer, 'null']}
+                  settlement: {type: [object, 'null'], description: Administrator-attested terminal provider evidence; never an automated invoice verification}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/evaluations/runs/{runId}/settlement:
+    post:
+      tags: [Evaluations]
+      operationId: settleHeldEvaluation
+      description: A current named Google office administrator closes a held fixture evaluation using terminal provider evidence and known reported costs. Preserves the original report and call outcomes. Sends no model request. Repeating the same action returns its saved settlement.
+      parameters:
+        - {name: runId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedSnapshot, reason, calls]
+              properties:
+                expectedSnapshot: {type: string, pattern: '^[a-f0-9]{64}$'}
+                reason: {type: string, minLength: 1, maxLength: 500}
+                calls:
+                  type: array
+                  maxItems: 1000
+                  description: Every pending or uncertain call exactly once. Empty only for an interrupted run with no unresolved calls.
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [callId, conclusion, reportedCostUsd, evidenceReference, evidenceSha256]
+                    properties:
+                      callId: {type: string, format: uuid}
+                      conclusion: {enum: [provider_not_accepted, provider_finished]}
+                      reportedCostUsd: {type: number, minimum: 0, maximum: 1000000, description: Administrator-reported final USD cost; zero required for provider_not_accepted; unknown refused}
+                      evidenceReference: {type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,199}$'}
+                      evidenceSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+      responses:
+        '200': {description: Immutable settlement and replay indicator}
+        '400': {description: Invalid or unknown evidence/cost}
+        '403': {description: Current named administrator session required}
+        '409': {description: Active execution, changed snapshot/action, prior settlement or incomplete evidence}
+        '503': {description: Outcome unavailable; retry the same settlement action}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/studio-recovery/{runId}:
+    get:
+      tags: [Studio]
+      operationId: readStudioRecoveryEvidence
+      description: Scoped original call receipts, separate administrator attestations, snapshot and current named settlement authority.
+      parameters:
+        - {name: taskId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: runId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Original call outcomes and separate settlement history; no provider transport}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/tasks/{taskId}/studio-recovery/{runId}/settlement:
+    post:
+      tags: [Studio]
+      operationId: settleStoppedStudioCalls
+      description: Records named administrator-attested terminal provider evidence for all unresolved calls in a stopped Studio run. Preserves task ownership, run state, original call outcomes and budgets. Sends no model request. Evidence applies to exact calls, never later parity calls. Repeating the same action returns its saved settlement.
+      parameters:
+        - {name: taskId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: runId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedSnapshot, reason, calls]
+              properties:
+                expectedSnapshot: {type: string, pattern: '^[a-f0-9]{64}$'}
+                reason: {type: string, minLength: 1, maxLength: 500}
+                calls:
+                  type: array
+                  minItems: 1
+                  maxItems: 1000
+                  description: Every currently unsettled uncertain call exactly once.
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [callId, conclusion, reportedCostUsd, evidenceReference, evidenceSha256]
+                    properties:
+                      callId: {type: string, format: uuid}
+                      conclusion: {enum: [provider_not_accepted, provider_finished]}
+                      reportedCostUsd: {type: number, minimum: 0, maximum: 1000000, description: Administrator-reported final USD cost; zero required for provider_not_accepted; unknown refused}
+                      evidenceReference: {type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,199}$'}
+                      evidenceSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+      responses:
+        '200': {description: Immutable settlement and replay indicator}
+        '400': {description: Invalid or unknown evidence/cost}
+        '403': {description: Current named administrator session required}
+        '409': {description: Run not stopped, changed snapshot/action or incomplete evidence}
+        '503': {description: Outcome unavailable; retry the same settlement action}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/spending/policy:
+    get:
+      tags: [Operations]
+      operationId: readSpendingPolicy
+      description: Office administrator, operator or auditor reads the current immutable policy, daily ledger usage, office clients and up to 20 history revisions. Named authority determines canEdit. Asia/Baghdad day is fixed. No provider call occurs.
+      parameters:
+        - {name: beforeVersion, in: query, schema: {type: integer, minimum: 1, maximum: 2147483647}}
+      responses:
+        '200': {description: Current policy with limits/hash/version/provenance, consistent daily usage, history, nextBeforeVersion, client choices and canEdit}
+        '403': {description: Authorized office role required}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      tags: [Operations]
+      operationId: recordSpendingPolicy
+      description: Current named administrator appends an immutable office/client/role policy revision. SQL verifies authority and expected version/hash under the existing spending admission lock. Zero stops new spending; existing charges, reservations, history and execution holds remain. Exact action replay precedes the current-version check and rechecks authority. Shared administrator keys cannot write.
+      parameters:
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedVersion, expectedLimitsSha256, reason, limits]
+              properties:
+                expectedVersion: {type: integer, minimum: 1, maximum: 2147483646}
+                expectedLimitsSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+                reason: {type: string, minLength: 1, maxLength: 500}
+                limits:
+                  type: object
+                  additionalProperties: false
+                  required: [officeUsd, clientUsd, roleUsd, clients, roles]
+                  properties:
+                    officeUsd: {type: number, minimum: 0, maximum: 1000000, multipleOf: 0.000001}
+                    clientUsd: {type: number, minimum: 0, maximum: 1000000, multipleOf: 0.000001}
+                    roleUsd: {type: number, minimum: 0, maximum: 1000000, multipleOf: 0.000001}
+                    clients:
+                      type: object
+                      maxProperties: 1000
+                      propertyNames: {pattern: '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'}
+                      additionalProperties: {type: number, minimum: 0, maximum: 1000000, multipleOf: 0.000001}
+                    roles:
+                      type: object
+                      propertyNames: {enum: [creative_director, visual_judge, asset_photoreal, intake_router, brief_builder, feedback_classifier, rule_miner, embedding_multimodal, reranker_multimodal, voice_transcriber, health_probe]}
+                      additionalProperties: {type: number, minimum: 0, maximum: 1000000, multipleOf: 0.000001}
+      responses:
+        '200': {description: Saved attributed policy receipt and replayed flag}
+        '400': {description: Invalid limits, unknown role or client outside this office}
+        '403': {description: Current named administrator required}
+        '409': {description: Policy changed or action reused for a different proposal}
+        '503': {description: Outcome unavailable; retry the same saved action}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/spending/calls:
+    get:
+      tags: [Operations]
+      operationId: listCallCostEvidence
+      description: Office administrator, operator or auditor reads sanitized Studio, evaluation and voice call costs. At most 50 newest records per page; opaque keyset cursor retains timestamp precision. No provider call or raw answer is exposed.
+      parameters:
+        - {name: cursor, in: query, schema: {type: string, maxLength: 500}}
+      responses:
+        '200': {description: Call cost evidence items and nextCursor; original unknown costs remain null}
+        '403': {description: Authorized office role required}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/spending/calls/{kind}/{callId}:
+    get:
+      tags: [Operations]
+      operationId: readCallCostEvidence
+      parameters:
+        - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice, health_probe, canva_planner]}}
+        - {name: callId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Exact snapshotHash, original cost and outcome, reserved USD, conservative accounted USD, attributed revision history, conflicts and current canRecord authority}
+        '404': {description: Call absent from this office}
+        default: {$ref: '#/components/responses/Problem'}
+  /v1/spending/calls/{kind}/{callId}/evidence:
+    post:
+      tags: [Operations]
+      operationId: recordCallCostEvidence
+      description: Appends a named administrator cost attestation for one exact call. Snapshot and authority are checked again in SQL. The highest original, settled or attested charge remains counted. Terminal evidence releases unused reserves; this changes no outcome, score, workflow state or execution hold and dispatches no provider request. Corrections append revisions. Same-action retries return the saved receipt.
+      parameters:
+        - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice, health_probe, canva_planner]}}
+        - {name: callId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: Idempotency-Key, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedSnapshot, reason, calls]
+              properties:
+                expectedSnapshot: {type: string, pattern: '^[a-f0-9]{64}$'}
+                reason: {type: string, minLength: 1, maxLength: 500}
+                calls:
+                  type: array
+                  minItems: 1
+                  maxItems: 1
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [callId, conclusion, reportedCostUsd, evidenceReference, evidenceSha256]
+                    properties:
+                      callId: {type: string, format: uuid, description: Must equal the path callId}
+                      conclusion: {enum: [provider_not_accepted, provider_finished]}
+                      reportedCostUsd: {type: number, minimum: 0, maximum: 1000000, description: Known administrator-attested final charge; not_accepted requires zero and no contrary original evidence}
+                      evidenceReference: {type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,199}$'}
+                      evidenceSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+      responses:
+        '200': {description: Immutable receipt identity/revision/actor/time and replay indicator}
+        '400': {description: Invalid or unknown cost evidence}
+        '403': {description: Current named administrator and CSRF protection required}
+        '404': {description: Call absent from this office}
+        '409': {description: Changed snapshot/action or contradictory non-acceptance evidence}
+        '503': {description: Outcome unconfirmed; retry the same saved action}
         default: {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
+    availabilityMonitor:
+      type: http
+      scheme: bearer
+      description: Dedicated independent collector secret. Opens only the two availability monitoring routes; grants no office or worker authority.
     officeBearer:
       $ref: './canva-connect.openapi.json#/components/securitySchemes/officeBearer'
     oidc:
@@ -500,6 +1238,452 @@ components:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
   schemas:
+    PublicationInspectionState:
+      type: object
+      required: [schemaVersion, tenantId, userId, checkedAt, schedule, items, nextAfter]
+      properties:
+        schemaVersion: {type: integer, const: 1}
+        tenantId: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        checkedAt: {type: string, format: date-time}
+        nextAfter: {type: [string, 'null'], format: uuid}
+        schedule:
+          type: object
+          required: [enabled, intervalMinutes]
+          properties:
+            enabled: {type: boolean}
+            intervalMinutes: {type: integer, const: 60}
+        items:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            required: [publicationId, taskId, clientId, inspectionId, state, status, stale, startedAt, finishedAt, inputsSha256, resultSha256, checkedFiles, findings]
+            properties:
+              publicationId: {type: string, format: uuid}
+              taskId: {type: string, format: uuid}
+              clientId: {type: string, format: uuid}
+              inspectionId: {type: [string, 'null'], format: uuid}
+              state: {type: string, enum: [uninspected, running, finished, interrupted, superseded]}
+              status: {type: string, enum: [consistent, divergent, unverified]}
+              stale: {type: boolean}
+              startedAt: {type: [string, 'null'], format: date-time}
+              finishedAt: {type: [string, 'null'], format: date-time}
+              inputsSha256: {type: [string, 'null'], pattern: '^[a-f0-9]{64}$'}
+              resultSha256: {type: [string, 'null'], pattern: '^[a-f0-9]{64}$'}
+              checkedFiles: {type: integer, minimum: 0, maximum: 100}
+              findings:
+                type: array
+                maxItems: 2000
+                items:
+                  type: object
+                  required: [code, resource, resourceId, status]
+                  properties:
+                    code: {type: string, enum: [ORIGINAL_INPUT_UNAVAILABLE, DRIVE_ID_UNRESERVED, DRIVE_READ_UNAVAILABLE, DRIVE_METADATA_CHANGED, DRIVE_CHECKSUM_UNAVAILABLE, DRIVE_CHECKSUM_CHANGED, DRIVE_DUPLICATES_FOUND, DRIVE_DUPLICATES_UNVERIFIED, PERMISSIONS_BASELINE_UNAVAILABLE, PERMISSIONS_READ_UNAVAILABLE, PERMISSIONS_CHANGED, SHEET_EXPECTATION_UNAVAILABLE, SHEET_READ_UNAVAILABLE, SHEET_ROW_CHANGED]}
+                    resource: {type: string, enum: [publication, folder, file, sheet]}
+                    resourceId: {type: [string, 'null'], maxLength: 2000}
+                    status: {type: string, enum: [divergent, unverified]}
+    ReceiptAuditAction:
+      type: object
+      additionalProperties: false
+      required: [actionId, expectedScopeSha256, expectedLatestAuditId, reason]
+      properties:
+        actionId: {type: string, format: uuid, description: Stable browser-saved identity; equals Idempotency-Key}
+        expectedScopeSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        expectedLatestAuditId: {type: [string, 'null'], format: uuid}
+        reason: {type: string, minLength: 1, maxLength: 500, description: Trimmed nonempty explanation retained with the audit}
+    ReceiptAuditScope:
+      type: object
+      additionalProperties: false
+      required: [sha256, clientIds, includesUnassigned]
+      properties:
+        sha256: {type: string, pattern: '^[a-f0-9]{64}$', description: Database hash binds tenant, actor, protocol and exact authorized client IDs}
+        clientIds:
+          type: array
+          uniqueItems: true
+          items: {type: string, format: uuid}
+        includesUnassigned: {type: boolean, const: true}
+    ReceiptAuditAnomaly:
+      type: object
+      additionalProperties: false
+      required: [taskId, kind, severity, description, detectedAt]
+      properties:
+        taskId: {type: string, format: uuid}
+        kind: {enum: [ARCHIVE_OUTCOME_UNCONFIRMED, INCOMPLETE_PUBLICATION_EVIDENCE, RECEIPT_HASH_UNCONFIRMED, MISSING_DRIVE_ASSET, MISSING_SHEET_ROW, CHECKSUM_MISMATCH, STATUS_DIVERGENCE]}
+        severity: {enum: [high, medium]}
+        description: {type: string, minLength: 1}
+        detectedAt: {type: string, format: date-time, description: Equals the audit snapshot timestamp}
+    StoredReceiptAudit:
+      type: object
+      required: [auditId, timestamp, basis, simulated, revision, actorUserId, reason, scopeSha256, inputsSha256, reportSha256, totalTasksAudited, totalDriveDeliverablesChecked, totalSheetRowsAudited, inSyncCount, pendingTaskCount, driftCount, anomalies, status]
+      properties:
+        auditId: {type: string, format: uuid}
+        timestamp: {type: string, format: date-time, description: Database transaction time truncated to milliseconds}
+        basis: {type: string, minLength: 1, description: Stored PostgreSQL receipt comparison; external Drive and Sheets were not read}
+        simulated: {type: boolean, const: false}
+        revision: {type: integer, minimum: 1}
+        actorUserId: {type: string, format: uuid}
+        reason: {type: string, minLength: 1, maxLength: 500}
+        scopeSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        inputsSha256: {type: string, pattern: '^[a-f0-9]{64}$', description: SHA-256 of PostgreSQL JSONB input text}
+        reportSha256: {type: string, pattern: '^[a-f0-9]{64}$', description: SHA-256 of PostgreSQL JSONB report text before transport metadata}
+        totalTasksAudited: {type: integer, minimum: 0}
+        totalDriveDeliverablesChecked: {type: integer, minimum: 0}
+        totalSheetRowsAudited: {type: integer, minimum: 0}
+        inSyncCount: {type: integer, minimum: 0, description: Completed deliveries with consistent current-publication receipts}
+        pendingTaskCount: {type: integer, minimum: 0, description: Tasks whose delivery is not yet due}
+        driftCount: {type: integer, minimum: 0, description: Number of anomalies; multiple anomalies may belong to one task}
+        anomalies:
+          type: array
+          items: {$ref: '#/components/schemas/ReceiptAuditAnomaly'}
+        status: {enum: [clean, divergent], description: Clean means zero detected stored-receipt anomalies; it does not verify external delivery}
+    ReceiptAuditResult:
+      allOf:
+        - {$ref: '#/components/schemas/StoredReceiptAudit'}
+        - type: object
+          required: [replayed]
+          properties:
+            replayed: {type: boolean}
+    ReceiptAuditState:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, tenantId, userId, scope, latest, history, nextBeforeRevision]
+      properties:
+        schemaVersion: {type: integer, const: 1}
+        tenantId: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        scope: {$ref: '#/components/schemas/ReceiptAuditScope'}
+        latest:
+          anyOf:
+            - {$ref: '#/components/schemas/StoredReceiptAudit'}
+            - {type: 'null'}
+        history:
+          type: array
+          maxItems: 20
+          description: Descending revisions for the current actor and exact current scope
+          items: {$ref: '#/components/schemas/StoredReceiptAudit'}
+        nextBeforeRevision: {type: [integer, 'null'], minimum: 1, description: Pass as beforeRevision for the next page; null when exhausted}
+    OperationsReliabilityReport:
+      oneOf:
+        - {$ref: '#/components/schemas/UnmeasuredOperationsReliabilityReport'}
+        - {$ref: '#/components/schemas/ObservedOperationsReliabilityReport'}
+    UnmeasuredOperationsReliabilityReport:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, evidenceKind, checkedAt, availability, latency, nextAction]
+      properties:
+        schemaVersion: {type: integer, const: 1}
+        evidenceKind: {type: string, const: unmeasured}
+        checkedAt: {type: string, format: date-time, description: Status read time; not a successful operation timestamp}
+        availability:
+          type: object
+          additionalProperties: false
+          required: [targetPercent, window, timeZone, observedPercent, sloCompliant, observationCount]
+          properties:
+            targetPercent: {type: number, const: 99.5}
+            window: {type: string, const: calendar_month}
+            timeZone: {type: string, const: Asia/Baghdad}
+            observedPercent: {type: 'null'}
+            sloCompliant: {type: 'null'}
+            observationCount: {type: integer, const: 0}
+        latency:
+          type: object
+          additionalProperties: false
+          required: [p50Ms, p95Ms, p99Ms, observationCount]
+          properties:
+            p50Ms: {type: 'null'}
+            p95Ms: {type: 'null'}
+            p99Ms: {type: 'null'}
+            observationCount: {type: integer, const: 0}
+        nextAction: {type: string, minLength: 1}
+    AvailabilityProbeResult:
+      type: object
+      additionalProperties: false
+      required: [outcome, error, httpStatus, durationMs]
+      properties:
+        outcome: {type: string, enum: [available, unavailable, unknown]}
+        error: {type: string, enum: [none, http_error, network_error, invalid_response, unauthorized, interrupted]}
+        httpStatus: {type: [integer, 'null'], minimum: 100, maximum: 599}
+        durationMs: {type: [integer, 'null'], minimum: 0, maximum: 60000}
+    AvailabilityProbes:
+      type: object
+      additionalProperties: false
+      required: [desk, office]
+      properties:
+        desk: {$ref: '#/components/schemas/AvailabilityProbeResult'}
+        office: {$ref: '#/components/schemas/AvailabilityProbeResult'}
+    AvailabilityObservation:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, observationId, monitorId, targetOrigin, slotStart, observedAt, completedAt, durationMs, probes, buildCommit]
+      properties:
+        schemaVersion: {type: integer, const: 1}
+        observationId: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        targetOrigin: {type: string, format: uri, maxLength: 300, description: Exact configured HTTPS origin; loopback HTTP only for local qualification}
+        slotStart: {type: string, format: date-time, description: Canonical UTC ISO timestamp at an exact minute}
+        observedAt: {type: string, format: date-time, description: Actual start within the claimed minute}
+        completedAt: {type: [string, 'null'], format: date-time, description: Null for interrupted observations}
+        durationMs: {type: [integer, 'null'], minimum: 0, maximum: 60000}
+        probes: {$ref: '#/components/schemas/AvailabilityProbes'}
+        buildCommit: {type: [string, 'null'], pattern: '^[a-f0-9]{40}$'}
+    AvailabilityObservationReceipt:
+      type: object
+      required: [observationId, monitorId, slotStart, payloadSha256, observationSha256, recordedAt, replayed]
+      properties:
+        observationId: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        slotStart: {type: string, format: date-time}
+        payloadSha256: {type: string, pattern: '^[a-f0-9]{64}$', description: SQL hash of stored JSONB text}
+        observationSha256: {type: string, pattern: '^[a-f0-9]{64}$', description: SHA-256 of UTF-8 recursively key-sorted compact JSON for cross-language receipt verification}
+        recordedAt: {type: string, format: date-time}
+        replayed: {type: boolean}
+    AvailabilityReadiness:
+      type: object
+      required: [schemaVersion, nonce, monitorId, targetOrigin, checkedAt, ready, intakeStorage, reviewStorage, workflowRegistration, activeWorker, buildCommit]
+      properties:
+        schemaVersion: {type: integer, const: 1}
+        nonce: {type: string, format: uuid}
+        monitorId: {type: string, format: uuid}
+        targetOrigin: {type: string, format: uri}
+        checkedAt: {type: string, format: date-time}
+        ready: {type: boolean}
+        intakeStorage: {type: boolean}
+        reviewStorage: {type: boolean}
+        workflowRegistration: {type: boolean}
+        activeWorker: {type: boolean}
+        buildCommit: {type: [string, 'null'], pattern: '^[a-f0-9]{40}$'}
+    ObservedOperationsReliabilityReport:
+      type: object
+      required: [schemaVersion, evidenceKind, checkedAt, basis, period, monitor, availability, latency, recentFailures, nextAction]
+      properties:
+        schemaVersion: {type: integer, const: 2}
+        evidenceKind: {type: string, const: independent_probe}
+        checkedAt: {type: string, format: date-time}
+        basis: {type: string, const: sampled_office_readiness}
+        period:
+          type: object
+          required: [month, startAt, endAt, throughAt, complete]
+          properties:
+            month: {type: string, pattern: '^20[0-9]{2}-(0[1-9]|1[0-2])$'}
+            startAt: {type: string, format: date-time}
+            endAt: {type: string, format: date-time}
+            throughAt: {type: string, format: date-time, description: Only closed minute slots contribute}
+            complete: {type: boolean}
+        monitor:
+          type: object
+          required: [id, targetOrigin, scopeSha256, intervalSeconds, status, lastObservedAt, lastReceivedAt]
+          properties:
+            id: {type: string, format: uuid}
+            targetOrigin: {type: string, format: uri}
+            scopeSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+            intervalSeconds: {type: integer, const: 60}
+            status: {type: string, enum: [awaiting_observations, fresh, stale]}
+            lastObservedAt: {type: [string, 'null'], format: date-time}
+            lastReceivedAt: {type: [string, 'null'], format: date-time}
+        availability:
+          type: object
+          required: [targetPercent, window, timeZone, elapsedSlots, observationCount, availableSlots, unavailableSlots, unknownSlots, missingSlots, coveragePercent, observedPercent, minimumPercent, maximumPercent, sloCompliant]
+          properties:
+            targetPercent: {type: number, const: 99.5}
+            window: {type: string, const: calendar_month}
+            timeZone: {type: string, const: Asia/Baghdad}
+            elapsedSlots: {type: integer, minimum: 0}
+            observationCount: {type: integer, minimum: 0}
+            availableSlots: {type: integer, minimum: 0}
+            unavailableSlots: {type: integer, minimum: 0}
+            unknownSlots: {type: integer, minimum: 0, description: Explicitly unknown plus missing slots}
+            missingSlots: {type: integer, minimum: 0}
+            coveragePercent: {type: [number, 'null'], minimum: 0, maximum: 100}
+            observedPercent: {type: [number, 'null'], minimum: 0, maximum: 100}
+            minimumPercent: {type: [number, 'null'], minimum: 0, maximum: 100}
+            maximumPercent: {type: [number, 'null'], minimum: 0, maximum: 100}
+            sloCompliant: {type: [boolean, 'null'], description: Null until the month is complete and all slots have known outcomes}
+        latency:
+          type: object
+          required: [scope, p50Ms, p95Ms, p99Ms, observationCount]
+          properties:
+            scope: {type: string, const: successful_readiness_probe_round_trip}
+            p50Ms: {type: [integer, 'null'], minimum: 0, maximum: 60000}
+            p95Ms: {type: [integer, 'null'], minimum: 0, maximum: 60000}
+            p99Ms: {type: [integer, 'null'], minimum: 0, maximum: 60000}
+            observationCount: {type: integer, minimum: 0}
+        recentFailures:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            required: [slotStart, probes]
+            properties:
+              slotStart: {type: string, format: date-time}
+              probes: {$ref: '#/components/schemas/AvailabilityProbes'}
+        nextAction: {type: string, minLength: 1}
+    EvaluationDatasetSource:
+      type: object
+      required: [file, sha256]
+      properties:
+        file: {type: string, description: Allowlisted corpus path or builtin fixture identity}
+        sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+    FixtureEvaluationSummary:
+      type: object
+      description: Synthetic diagnostics. Legacy reports may omit source, caseResults and execution details; missing fields stay unknown.
+      properties:
+        dataset: {type: string}
+        admissionEligible: {type: boolean}
+        source: {$ref: '#/components/schemas/EvaluationDatasetSource'}
+        totalCases: {type: integer, minimum: 0}
+        passedCases: {type: integer, minimum: 0}
+        failedCases: {type: integer, minimum: 0}
+        unreportedCases: {type: integer, minimum: 0}
+        passRate: {type: [number, 'null'], minimum: 0, maximum: 100, description: Null when case execution or required scoring evidence is incomplete}
+        criticalViolations: {type: integer, minimum: 0}
+        execution:
+          type: object
+          properties:
+            status: {enum: [complete, stopped]}
+            attemptedCases: {type: integer, minimum: 0}
+            unexecutedCases: {type: integer, minimum: 0}
+            stopReason: {type: object}
+        caseResults:
+          type: array
+          items:
+            type: object
+            required: [caseId, status, criticalViolations]
+            properties:
+              caseId: {type: string}
+              status: {enum: [passed, failed, not_executed, unreported]}
+              criticalViolations: {type: integer, minimum: 0}
+    FixtureEvaluationReport:
+      type: object
+      description: Fixed synthetic tournament. RTL corpus browsing, model promotion and native editor admission are outside its execution scope.
+      properties:
+        routing: {$ref: '#/components/schemas/FixtureEvaluationSummary'}
+        retrieval: {$ref: '#/components/schemas/FixtureEvaluationSummary'}
+        copyGuard: {$ref: '#/components/schemas/FixtureEvaluationSummary'}
+        visualJudge: {$ref: '#/components/schemas/FixtureEvaluationSummary'}
+        adversarialSafety: {$ref: '#/components/schemas/FixtureEvaluationSummary'}
+        overallPassRate: {type: [number, 'null'], minimum: 0, maximum: 100}
+        executionStatus: {enum: [complete, stopped]}
+        admissionEligible: {const: false}
+    SharedDailySpending:
+      type: object
+      required: [day, timezone, policyVersion, scopes]
+      properties:
+        day: {type: string, format: date}
+        timezone: {const: Asia/Baghdad}
+        policyVersion: {type: integer, minimum: 1}
+        scopes:
+          type: array
+          items:
+            type: object
+            required: [scope, subject, maxUsd, spentUsd, heldUsd, remainingUsd, historyIncomplete]
+            properties:
+              scope: {enum: [office, client, role]}
+              subject: {type: string, description: Scope label or role; never another client identifier}
+              maxUsd: {type: number, minimum: 0}
+              spentUsd: {type: number, minimum: 0}
+              heldUsd: {type: number, minimum: 0}
+              remainingUsd: {type: number, minimum: 0}
+              historyIncomplete: {type: boolean}
+    DocumentConfirmation:
+      type: object
+      required: [id, sourceSha256, extractionSha256, confirmed]
+      properties:
+        id: {type: string, format: uuid}
+        sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        extractionSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        confirmed: {const: true, description: Human reviewed the chosen exact request copy against the original. This is not design or knowledge approval.}
+    ClientDocumentReceipt:
+      type: object
+      required: [id, clientId, sourceSha256, extractionSha256, extractorVersion, createdAt, contentUrl]
+      properties:
+        id: {type: string, format: uuid}
+        clientId: {type: string, format: uuid}
+        sourceSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        extractionSha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+        extractorVersion: {type: string}
+        createdAt: {type: string, format: date-time}
+        contentUrl: {type: string}
+    SavedClientDocument:
+      type: object
+      required: [clientId, sourceSaved, approved, receipt, document]
+      properties:
+        clientId: {type: string, format: uuid}
+        sourceSaved: {const: true}
+        approved: {const: false, description: Retention itself grants no approval. Read the separate knowledge endpoint for current reference approval.}
+        receipt: {$ref: '#/components/schemas/ClientDocumentReceipt'}
+        document: {type: object, description: Immutable source-byte SHA-256, chunks with measured page provenance and extractor capability limits.}
+    DocumentKnowledgeChange:
+      type: object
+      required: [approved, expectedVersion, sourceSha256, extractionSha256, reviewed, reason]
+      properties:
+        approved: {type: boolean}
+        expectedVersion: {type: integer, minimum: 0, maximum: 2147483646}
+        sourceSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        extractionSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        reviewed: {type: boolean, description: Must be true for approval; revocation does not require source review.}
+        reason: {type: string, minLength: 1, maxLength: 1000}
+    DocumentKnowledgeEvent:
+      type: object
+      required: [actionId, version, approved, actorUserId, actorDisplayName, reason, createdAt]
+      properties:
+        actionId: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        approved: {type: boolean}
+        actorUserId: {type: string, format: uuid}
+        actorDisplayName: {type: string}
+        reason: {type: string}
+        createdAt: {type: string, format: date-time}
+    DocumentKnowledgeState:
+      type: object
+      required: [state, events, canManage]
+      properties:
+        state: {type: object, required: [version, approved], properties: {version: {type: integer, minimum: 0}, approved: {type: boolean}}}
+        events: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/DocumentKnowledgeEvent'}}
+        canManage: {type: boolean}
+        replayed: {type: boolean}
+        action: {$ref: '#/components/schemas/DocumentKnowledgeEvent'}
+    DocumentKnowledgeSearch:
+      type: object
+      required: [clientId, mode, vectorStatus, rerankerStatus, items]
+      properties:
+        clientId: {type: string, format: uuid}
+        mode: {const: postgres_lexical_v1}
+        vectorStatus: {const: not_run}
+        rerankerStatus: {const: not_run}
+        items:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            required: [text, truncated, score, citation]
+            properties:
+              text: {type: string, maxLength: 2000}
+              truncated: {type: boolean}
+              score: {type: number, description: Lexical heuristic; not a calibrated relevance probability.}
+              citation:
+                type: object
+                required: [documentId, chunkId, pageNumber, chunkSha256, sourceSha256, extractionSha256, extractorVersion, approvalVersion, approvalActionId]
+                properties:
+                  documentId: {type: string, format: uuid}
+                  chunkId: {type: string, format: uuid}
+                  pageNumber: {type: [integer, 'null']}
+                  chunkSha256: {type: string}
+                  sourceSha256: {type: string}
+                  extractionSha256: {type: string}
+                  extractorVersion: {type: string}
+                  approvalVersion: {type: integer, minimum: 1}
+                  approvalActionId: {type: string, format: uuid}
+                  coordinates:
+                    type: [object, 'null']
+                    description: Measured top-left page box in points, preserved from the PDF parser.
+                    required: [x, y, width, height]
+                    properties:
+                      x: {type: number, minimum: 0}
+                      y: {type: number, minimum: 0}
+                      width: {type: number, exclusiveMinimum: 0}
+                      height: {type: number, exclusiveMinimum: 0}
+                  coordinateSystem: {type: [string, 'null']}
     Problem:
       type: object
       required: [type, title, status, code, detail, safe_action]
@@ -564,6 +1748,54 @@ components:
         attempts: {type: integer, minimum: 0}
         traceId: {type: [string, 'null']}
         updatedAt: {type: string, format: date-time}
+    RequesterSendStep:
+      type: object
+      required: [sendKey, outcome, attemptCount, lastMarkAt, messageId]
+      properties:
+        sendKey: {type: string}
+        outcome: {enum: [not_attempted, attempted, sent, uncertain, failed, released]}
+        attemptCount: {type: integer, minimum: 0}
+        lastMarkAt: {type: [string, 'null'], format: date-time}
+        messageId: {type: [string, 'null'], pattern: '^[1-9][0-9]*$'}
+    RequesterSendEvidence:
+      type: object
+      required: [taskId, requestId, requestRev, publicationId, approvalId, requesterChatId, providerReceipt, files, notice]
+      properties:
+        taskId: {type: string, format: uuid}
+        requestId: {type: string, format: uuid}
+        requestRev: {type: integer, minimum: 1}
+        publicationId: {type: string, format: uuid}
+        approvalId: {type: string, format: uuid}
+        requesterChatId: {type: [string, 'null']}
+        providerReceipt: {const: not_available}
+        files:
+          type: array
+          items:
+            allOf:
+              - {$ref: '#/components/schemas/RequesterSendStep'}
+              - {type: object, required: [artifactId, filename, sha256], properties: {artifactId: {type: string, format: uuid}, filename: {type: string}, sha256: {type: string, pattern: '^[a-f0-9]{64}$'}}}
+        notice: {$ref: '#/components/schemas/RequesterSendStep'}
+    RequesterSendConfirmation:
+      type: object
+      required: [actionId, expectedRev, publicationId, approvalId, requesterChatId, observed, attested]
+      additionalProperties: false
+      properties:
+        actionId: {type: string, format: uuid}
+        expectedRev: {type: integer, minimum: 5}
+        publicationId: {type: string, format: uuid}
+        approvalId: {type: string, format: uuid}
+        requesterChatId: {type: string, minLength: 1}
+        observed:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            required: [sendKey, messageId]
+            additionalProperties: false
+            properties:
+              sendKey: {type: string}
+              messageId: {type: string, pattern: '^[1-9][0-9]*$'}
+        attested: {const: true}
     # BEGIN GENERATED task status: scripts/generate_task_status_contract.ts from packages/contracts/src/task-status.ts. Do not edit.
     TaskState:
       description: A task's database state (task_state in db/schema.sql).
@@ -572,7 +1804,7 @@ components:
     TaskStatus:
       description: A task's API status, as the Desk shows it. Each database state has exactly one.
       type: string
-      enum: [RECEIVED, PROMOTION_PENDING, ROUTING, ROUTING_REVIEW, BRIEFING, BRIEF_REVIEW, PLANNING, ASSET_GENERATION, COMPOSING, QA, REPAIRING, AWAITING_APPROVAL, REVISION_REQUESTED, APPROVED, PUBLISHING, PUBLISH_RECONCILIATION, COMPLETE, PAUSED, OPERATOR_REQUIRED, REJECTED, CANCELLED]
+      enum: [RECEIVED, PROMOTION_PENDING, ROUTING, ROUTING_REVIEW, BRIEFING, BRIEF_REVIEW, PLANNING, ASSET_GENERATION, COMPOSING, QA, REPAIRING, AWAITING_APPROVAL, REVISION_REQUESTED, APPROVED, PUBLISHING, ARCHIVE_RECONCILIATION, PUBLISH_RECONCILIATION, REQUESTER_SEND_RECONCILIATION, COMPLETE, PAUSED, OPERATOR_REQUIRED, REJECTED, CANCELLED]
     TaskTransitionedEvent:
       description: The payload of the live stream's task:transitioned event (the stream adds tenantId).
       type: object

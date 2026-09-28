@@ -628,6 +628,58 @@ input, select, textarea {
   gap: 14px;
 }
 
+/* Bound the cards themselves: a clipped outer screen can conceal grid overflow. */
+#ops {
+  overflow-wrap: anywhere;
+}
+
+#ops > .grid4, .ops-audit-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 12px;
+}
+
+#ops .ops {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  align-items: start;
+}
+
+#ops .ops > .panel {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  #ops .table, #ops .table tbody, #ops .table tr, #ops .table td {
+    display: block;
+  }
+
+  #ops .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  #ops .table tr {
+    margin-top: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+  }
+
+  #ops .table td:last-child {
+    border-bottom: 0;
+  }
+
+  #ops .table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -2166,8 +2218,13 @@ input, select, textarea {
   padding: 24px;
   max-width: 500px;
   width: 100%;
+  max-height: min(90vh, 800px);
+  overflow-y: auto;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
+
+.hawa-revision-label { display: block; margin: 10px 0 5px; font-size: 13px; font-weight: 600; }
+.hawa-revision-reuse { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0; font-size: 13px; }
 
 .hawa-textarea {
   width: 100%;
@@ -2421,3 +2478,10 @@ input, select, textarea {
 .canva-binding-form p, .capture-availability { color: var(--muted); font-size: 13px; line-height: 1.5; }
 .canva-binding-form form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .canva-binding-form input { flex: 1 1 250px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+
+.btn.approval-confirm:disabled {
+  background: var(--soft) !important;
+  border-color: var(--line) !important;
+  color: var(--muted);
+  cursor: not-allowed;
+}

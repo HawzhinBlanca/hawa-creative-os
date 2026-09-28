@@ -34,6 +34,7 @@ import {
   type SendStepKind,
   type TelegramSender,
   type TelegramSendResult,
+  validTelegramMessageId,
 } from './delivery-notification.js';
 
 export interface OutboxCommandRecord {
@@ -122,7 +123,7 @@ export type OutboxCommandHandler = (
 ) => Promise<void>;
 
 /** A Telegram answer that may follow a send that arrived: the send is never repeated automatically. */
-const UNCERTAIN_SEND = /DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID/;
+const UNCERTAIN_SEND = /DELIVERY_UNCERTAIN|TELEGRAM_RECEIPT_INVALID|TELEGRAM_(?:DOCUMENT_)?REJECTED_5\d\d/;
 
 export interface OutboxConsumerOptions {
   tenantId?: string;
@@ -141,6 +142,8 @@ export interface OutboxConsumerOptions {
   telegramSender?: (botToken: string) => TelegramSender;
   /** Reads a delivered export's stored bytes. Defaults to hawa.canva_export_bytes. */
   readExportBytes?: ExportBytesReader;
+  /** Waits between attempts to persist a confirmed Telegram message ID after the provider answered. */
+  markRetryDelaysMs?: number[];
   /** The office chat alerted about dead-lettered requests. Undefined reads the first TELEGRAM_ALLOWED_USERS entry. */
   officeAlertChatId?: string | null;
   /** Transport to Core for `task.outcome`. Defaults to fetch. */
@@ -313,8 +316,7 @@ export class OutboxConsumer {
   /** Who hears about a command that ended without being delivered. None of it changes the outcome. */
   private async reportEnded(cmd: OutboxCommandRecord, attempts: number, error: string, uncertain: boolean) {
     // An uncertain dispatch may have started the workflow, so only a definite failure is announced.
-    // A lifecycle-owned request was refused here only because its lifecycle designs it: nobody is told.
-    if (cmd.command_type === 'task.created' && !uncertain && !error.includes('OWNED_BY_LIFECYCLE')) {
+    if (cmd.command_type === 'task.created' && !uncertain) {
       await this.tellRequesterIntakeFailed(cmd, attempts, error);
     }
     if (cmd.command_type === 'notify.published') {
@@ -378,7 +380,8 @@ export class OutboxConsumer {
     const before = prior.get(step);
     if (before === 'sent') return 'skipped';
     if (before === 'uncertain') return 'uncertain';
-    const mark = (outcome: SendMarkOutcome) => scope.inTenant((trx) => writeSendMark(trx, cmd.tenant_id, cmd.id, step, kind, outcome));
+    const mark = (outcome: SendMarkOutcome, messageId?: string) => scope.inTenant((trx) =>
+      writeSendMark(trx, cmd.tenant_id, cmd.id, step, kind, outcome, messageId));
     const unrecorded = (outcome: SendMarkOutcome) => (err: unknown) =>
       log.warn(
         `[OutboxConsumer] Could not record the ${kind} ${step} of command ${cmd.id} as ${outcome}; a later attempt will treat it as uncertain and not send it again:`,
@@ -397,11 +400,25 @@ export class OutboxConsumer {
     }
     // The chaos suite kills the worker here: sent, and only 'attempted' on record.
     await chaosPoint('worker.sender.after-telegram', { commandId: cmd.id, commandType: cmd.command_type, step, kind });
-    if (res.success) {
-      await mark('sent').catch(unrecorded('sent'));
-      return 'sent';
+    if (res.success && validTelegramMessageId(res.messageId)) {
+      // Telegram may have accepted the send even if Postgres briefly disappears. Retry only the
+      // local receipt write; if it stays unavailable, the earlier attempted mark prevents a replay.
+      const delays = this.options.markRetryDelaysMs ?? [500, 1000, 2000, 4000, 8000];
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await mark('sent', res.messageId);
+          return 'sent';
+        } catch (err) {
+          if (attempt >= delays.length) {
+            unrecorded('sent')(err);
+            return 'uncertain';
+          }
+          await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+        }
+      }
     }
-    const error = res.error || (kind === 'document' ? 'TELEGRAM_DOCUMENT_FAILED' : 'TELEGRAM_SEND_FAILED');
+    const error = res.success ? 'TELEGRAM_RECEIPT_INVALID' :
+      res.error || (kind === 'document' ? 'TELEGRAM_DOCUMENT_FAILED' : 'TELEGRAM_SEND_FAILED');
     if (UNCERTAIN_SEND.test(error)) {
       await mark('uncertain').catch(unrecorded('uncertain'));
       return 'uncertain';
@@ -410,26 +427,31 @@ export class OutboxConsumer {
     throw new Error(error);
   }
 
+  /** A redriven command cannot start the legacy workflow for a Restate-owned task. */
+  private async lifecycleOwnsTask(cmd: OutboxCommandRecord, scope: OutboxHandlerScope): Promise<boolean> {
+    const row = await scope.inTenant(async (trx) =>
+      (await sql<{ request_id: string | null }>`SELECT request_id FROM hawa.tasks
+        WHERE tenant_id = ${cmd.tenant_id}::uuid AND id = ${cmd.aggregate_id}::uuid`.execute(trx)).rows[0]);
+    const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
+    if (row?.request_id) {
+      log.warn(`[OutboxConsumer] Command ${cmd.id} is owned by RequestLifecycle ${row.request_id}; legacy dispatch skipped.`);
+      return true;
+    }
+    if (payload?.lifecycleOwner === 'restate') {
+      throw new OutboxDeliveryError(
+        `LIFECYCLE_OWNERSHIP_INCONSISTENT: command ${cmd.id} claims Restate but its task has no request owner`,
+        'permanent', 'LIFECYCLE_OWNERSHIP_INCONSISTENT',
+      );
+    }
+    return false;
+  }
+
   private registerDefaultHandlers() {
-    /**
-     * A request the Restate lifecycle owns (slice 2.3) is designed by its DesignRun, never by
-     * TaskWorkflow: its `task.created` row is recorded, not pending, so this should never fire. If
-     * one is pending all the same, it is refused for good rather than designed twice.
-     */
-    const refuseLifecycleOwned = (cmd: OutboxCommandRecord) => {
-      if (cmd.payload?.lifecycleOwner === 'restate') {
-        throw new OutboxDeliveryError(
-          `OWNED_BY_LIFECYCLE: task ${cmd.aggregate_id} belongs to the request lifecycle, which starts its design runs; ${cmd.command_type} was not dispatched`,
-          'permanent',
-          'OWNED_BY_LIFECYCLE'
-        );
-      }
-    };
     // A Restate workflow runs once per key (workflow-dispatcher.ts), so a dispatch repeated after a
     // consumer stopped mid-command answers 409 and starts nothing twice.
     if (!this.handlers.has('task.created')) {
-      this.handlers.set('task.created', async (cmd) => {
-        refuseLifecycleOwned(cmd);
+      this.handlers.set('task.created', async (cmd, _db, scope) => {
+        if (await this.lifecycleOwnsTask(cmd, scope)) return;
         // Confirmed submission to durable workflow engine (Restate or embedded runner)
         const receipt = await this.dispatcher.dispatch(cmd);
         if (!receipt || !receipt.workflowId) {
@@ -441,8 +463,8 @@ export class OutboxConsumer {
     }
 
     if (!this.handlers.has('task.dispatch')) {
-      this.handlers.set('task.dispatch', async (cmd) => {
-        refuseLifecycleOwned(cmd);
+      this.handlers.set('task.dispatch', async (cmd, _db, scope) => {
+        if (await this.lifecycleOwnsTask(cmd, scope)) return;
         // Confirmed submission to durable workflow engine
         const receipt = await this.dispatcher.dispatch(cmd);
         if (!receipt || !receipt.workflowId) {

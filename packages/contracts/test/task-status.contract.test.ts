@@ -15,7 +15,9 @@ import {
   TERMINAL_TASK_STATUSES,
   UnknownTaskStatusError,
   parseTaskTransitioned,
+  publicationAwareTaskStatus,
   taskTransitioned,
+  taskGenerationBlocker,
   toApiTaskStatus,
   toDbTaskState,
   type TaskApiStatus,
@@ -67,17 +69,25 @@ describe('the database', () => {
 });
 
 describe('the mapping between database states and API statuses', () => {
+  it('separates an unconfirmed requester send from a Sheet retry', () => {
+    expect(publicationAwareTaskStatus('publishing', { errorClass: 'REQUESTER_SEND_UNCONFIRMED' }))
+      .toBe('REQUESTER_SEND_RECONCILIATION');
+    expect(publicationAwareTaskStatus('publishing', { errorClass: 'SHEET_UNCONFIRMED' }))
+      .toBe('PUBLISH_RECONCILIATION');
+  });
   it('gives every state one status and every status one state', () => {
     expect(Object.keys(API_STATUS_OF_DB_STATE).sort()).toEqual([...TASK_DB_STATES].sort());
     expect(Object.keys(DB_STATE_OF_API_STATUS).sort()).toEqual([...TASK_API_STATUSES].sort());
-    expect(new Set(Object.values(API_STATUS_OF_DB_STATE))).toEqual(new Set(TASK_API_STATUSES.filter((s) => s !== 'PUBLISH_RECONCILIATION')));
+    expect(new Set(Object.values(API_STATUS_OF_DB_STATE))).toEqual(new Set(TASK_API_STATUSES.filter((s) =>
+      s !== 'ARCHIVE_RECONCILIATION' && s !== 'PUBLISH_RECONCILIATION' && s !== 'REQUESTER_SEND_RECONCILIATION')));
   });
 
-  it('round-trips every word except the three listed pairs that share a word', () => {
+  it('round-trips every word except the four listed aliases that share a database state', () => {
     const lossy: string[] = [];
     for (const state of TASK_DB_STATES) if (toDbTaskState(toApiTaskStatus(state)) !== state) lossy.push(state);
     for (const status of TASK_API_STATUSES) if (toApiTaskStatus(toDbTaskState(status)) !== status) lossy.push(status);
-    expect(lossy.sort()).toEqual(['PUBLISH_RECONCILIATION', 'context_ready', 'failed_retryable']);
+    expect(lossy.sort()).toEqual(['ARCHIVE_RECONCILIATION', 'PUBLISH_RECONCILIATION',
+      'REQUESTER_SEND_RECONCILIATION', 'context_ready', 'failed_retryable']);
   });
 });
 
@@ -106,17 +116,21 @@ describe('Task.schema.json and OpenAPI', () => {
     const schema = JSON.parse(read('schemas/Task.schema.json'));
     expect(schema.properties.state.enum).toEqual([...TASK_DB_STATES]);
     expect(schema.properties.status.enum).toEqual([...TASK_API_STATUSES]);
+    expect(schema.properties.requestId.oneOf).toEqual([
+      { type: 'string', format: 'uuid' },
+      { type: 'null' },
+    ]);
   });
 
   it('every task-status enum in openapi.yaml is the module\'s, and the check fails when one gains a word', () => {
     const openapi = read('api/openapi.yaml');
     expect(openapi).toContain(openApiBlock());
-    // Revision and job enums share words such as approved and cancelled; an enum naming a task's
-    // first or review state is a task-status enum, and must be one of the module's two lists.
+    // Voice, revision and job outcomes share received/approved/cancelled. Task-specific review
+    // states identify these lists; the generated block above also verifies both complete declarations.
     let taskEnums = 0;
     for (const m of openapi.matchAll(/enum: \[([^\]]*)\]/g)) {
       const words = m[1].split(',').map((w) => w.trim());
-      if (!words.some((w) => ['received', 'human_review', 'RECEIVED', 'AWAITING_APPROVAL'].includes(w))) continue;
+      if (!words.some((w) => ['human_review', 'AWAITING_APPROVAL'].includes(w))) continue;
       taskEnums += 1;
       expect([[...TASK_DB_STATES], [...TASK_API_STATUSES]], m[0]).toContainEqual(words);
     }
@@ -232,5 +246,18 @@ describe('task:transitioned', () => {
     ]) {
       expect(parseTaskTransitioned(old), JSON.stringify(old)).toBeNull();
     }
+  });
+});
+
+
+describe('task generation authority', () => {
+  const blocked = ['COMPLETE','CANCELLED','REJECTED','PAUSED','APPROVED','PUBLISHING',
+    'ARCHIVE_RECONCILIATION','PUBLISH_RECONCILIATION','REQUESTER_SEND_RECONCILIATION'];
+  it.each(TASK_API_STATUSES)('uses the same decision for API and database state %s', status => {
+    expect(Boolean(taskGenerationBlocker(status))).toBe(blocked.includes(status));
+    expect(taskGenerationBlocker(toDbTaskState(status))).toBe(taskGenerationBlocker(status));
+  });
+  it.each([undefined, null, '', 'unexpected'])('refuses unknown task state %s', state => {
+    expect(taskGenerationBlocker(state)).toContain('unavailable');
   });
 });

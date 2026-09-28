@@ -78,16 +78,6 @@ describe.skipIf(!url)('review of 2026-09-24: the requester loop', () => {
       sql`INSERT INTO hawa.design_studio_runs (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request, tier, status)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operator.userId}, ${'hunt_' + randomUUID()}, 'h', '{}'::jsonb, 'standard', ${status})`.execute(trx));
 
-  /** The classifier's model, answered in-process: every message reads as `kind`. */
-  const modelSays = (kind: 'feedback' | 'new_brief') => {
-    process.env.OPENAI_API_KEY = ['in', 'process', 'fixture'].join('_');
-    vi.stubGlobal('fetch', vi.fn(async (input: any) => {
-      if (!String(input).includes('api.openai.com/v1/chat/completions')) throw new Error(`HUNT: unexpected network call ${String(input)}`);
-      const content = JSON.stringify({ kind, confidence: 0.95, reason: 'hunt', isInstructionOnly: false, documentKind: 'design_piece', directive: '', standingRule: '' });
-      return new Response(JSON.stringify({ id: 'hunt', choices: [{ message: { content } }] }), { status: 200, headers: { 'content-type': 'application/json' } });
-    }));
-  };
-
   it('a reply to a draft that a newer version replaced changes the newest version, not the old one', async () => {
     const { chat, send, draftOf } = setup();
     const brief = await send({ text: 'KAAE members evening\n---\nDecember 4, 2026\nErbil' });
@@ -128,7 +118,6 @@ describe.skipIf(!url)('review of 2026-09-24: the requester loop', () => {
     const brief = await send({ text: 'KAAE ethics seminar\n---\nFebruary 2, 2027\nErbil' });
     const a = String(brief.body.task.id);
     await startRun(a, 'transferred');
-    modelSays('feedback');
     const album = `hunt-album-${randomUUID().slice(0, 8)}`;
     const photo = (n: number) => [{ file_id: `f${n}`, file_unique_id: `u${n}`, width: 1200, height: 800 }];
     await send({ photo: photo(1), media_group_id: album, reply_to_message: draftOf(a) });

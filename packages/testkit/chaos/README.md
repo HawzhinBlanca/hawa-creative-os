@@ -3,9 +3,121 @@
 The acceptance test of every Phase 2 slice (architecture programme `PLAN.md` Phase 2, design in
 `PHASE2_DESIGN.md` section 6): scripted requests through the whole stack, with Core, the worker,
 Postgres and Restate killed at named points, and the invariants of section 6.3 checked after each
-request. Today it drives the **legacy path** (Core intake → outbox → `TaskWorkflow` in the blue
-worker → Canva → outcome → Desk approval → delivery). The same scenarios are meant to run against
-the Restate lifecycle once its slices land.
+request. It covers the legacy path (Core intake → outbox → `TaskWorkflow` → Canva →
+outcome → Desk approval → delivery) and the admitted Restate lifecycle slices.
+The dated run histories below preserve their original scope and limitations.
+
+## Isolated full-app candidate rehearsal (2026-09-27)
+
+### Coordinated recovery mode (ADR-080)
+
+```sh
+pnpm exec tsx packages/testkit/chaos/run.ts --candidate --recovery --only R1.S3.SOURCES --poller worker --keep
+```
+
+This mode uses `fsync=on` and `full_page_writes=on`. It stops all candidate writers,
+Restate and PostgreSQL at two delivery boundaries: after the Drive effect and after
+Telegram accepts a file but before its receipt. Authenticated encrypted copies of
+PostgreSQL, Restate and blobs are restored into new named volumes with exact image
+IDs. Data, RLS, file hashes and pending invocation identity are checked before app
+writers restart. The external fakes survive both restores; their ledgers detect
+duplicate effects. Reports are `.run/recovery-drive.json`,
+`.run/recovery-telegram.json` and `.run/last-run.json`.
+
+Original store volumes remain untouched until explicit candidate teardown. The
+private Compose override points at recovered volumes and is also used by `--down`;
+teardown removes original and recovered candidate stores. A failed restore leaves
+writers stopped and private recovery artifacts in `.run/recovery-private-*` for
+diagnosis. Do not resume the original stores after external effects have advanced.
+This proves coherent same-host recovery only, not independent-host/off-host recovery,
+arbitrary database-PITR/Restate capture-gap repair or real provider acceptance.
+
+```sh
+pnpm exec tsx packages/testkit/chaos/run.ts --candidate --only R1.S3.SOURCES --poller worker --keep
+```
+
+This opt-in scenario builds Core, worker, Desk and the real pinned offline Docling
+parser from the checkout. Production nginx serves Desk and Core at
+`http://127.0.0.1:56081`. It checks durable Desk sign-in, both pages of a real PDF,
+byte-identical source downloads, exact-copy confirmation, duplicate intake, a
+Restate/worker restart at review, a manually reviewed voice revision, QA and
+simulated delivery. A second bilingual Desk request exercises the explicit Canva
+generation action, unchanged intake/generation retries and the saved copy/source
+hash. Image labels, immutable image IDs, changed source hashes and internal
+networks are recorded in `.run/last-run.json` without credentials. Use a clean
+source commit for qualification; a dirty build is only a development observation.
+Private `.run` files and backup snapshots are excluded from the Docker context;
+the candidate checks that both Core and worker images omit the private run directory.
+
+Provider/model/Telegram/Canva replies and office identity are synthetic. The parser
+and app processes are real. The voice fixture is silence: this proves manual
+fallback and duration handling, not speech quality. This does not admit native
+Canva editability, human approval identity, real delivery or creative quality.
+Ordinary chaos runs use PostgreSQL's `fsync=off`; recovery mode enables `fsync` and
+`full_page_writes`. Neither mode is a power-loss, WAL/PITR or clean-host proof.
+The source content route uses direct Core bytes;
+production X-Accel delivery requires its separate gate. Memory values are sparse
+samples, not continuous resource peaks.
+
+The command replaces only the disposable `hawa-chaos` volumes/data. `--keep` leaves
+the candidate for browser inspection; `--down` removes it afterwards. For an
+in-place Core/Desk development rebuild, refresh nginx after recreating upstream
+containers so its cached addresses do not point at the old containers. Normal
+production deployment already reloads/restarts nginx for this boundary.
+
+Reset explicitly includes both the `green` and `candidate` profiles and propagates
+teardown failure before deleting temporary credentials. Inactive profiles are
+known to Compose and are not removed by `--remove-orphans` alone. The candidate
+asserts that all eight service containers were created after the rehearsal began;
+their creation times are included in the receipt.
+
+## PDF source review transport (2026-09-27)
+
+`pnpm exec tsx packages/testkit/chaos/run.ts --only R1.S3.MEDIA --poller worker`
+now checks that a PDF without explicit client selection gets one durable source
+review prompt, one admission refusal, no legacy task and no failure parking/office
+alert. A second Restate idempotency key must still produce one requester prompt.
+ADR-073 replaces the old blanket PDF hold; the dated results below retain the old
+contract and their original counts. The separate `lifecycle-source-recovery.test.ts`
+drill proves actual PDF extraction, copy confirmation and five Core crash boundaries.
+
+## Revision photos are held for the native handoff (2026-09-28)
+
+Since ADR-113 (7765a9e3) a revision linked to an earlier design does not regenerate from the local
+recipe, and ADR-114 routes it through the office's native revision recovery. The five
+`R1.S3.*PHOTO*`/`*ALBUM*`/`*DOCUMENT*` revision scenarios therefore still prove the photo intake
+across a Core SIGKILL (one child, photos bound once by hash, one download each, both ChatInbox keys
+completed), and then check that the child ends `DESIGN_REJECTED` (`NATIVE_REVISION_HANDOFF_REQUIRED`)
+with the request at `manual`, rev 5, no plan, no Canva effect and no unmatched model call. The dated
+sections below describe the earlier contract, when the child was redrawn by the planner, approved and
+delivered; the native recovery route itself is not driven by this suite.
+
+## Confirmed album recovery (2026-09-26)
+
+For original image files, run:
+
+```sh
+pnpm exec tsx packages/testkit/chaos/run.ts --only R1.S3.IMAGE_DOCUMENT,R1.S3.DOCUMENT_ALBUM,R1.S3.MEDIA --poller worker
+```
+
+This batch covers a captionless file reply, a confirmed image-file album, and an
+unsupported PDF. The original document file must be used, never its thumbnail.
+The final three-scenario batch passed 25 invariants, including Core SIGKILL and
+simulated delivery for both image cases. Its source-bound report is
+`plans/research-grade-upgrade-2026-09-25/R07_IMAGE_DOCUMENT_DRILL.json`.
+The generic idle check allows scheduled `RequestLifecycle.reminderTick` timers;
+all other unfinished invocations, ready outbox work and recent Telegram activity
+still prevent quiescence.
+
+`pnpm exec tsx packages/testkit/chaos/run.ts --only R1.S3.ALBUM --poller worker`
+sends two photos as a reply to a recorded office revision notice, confirms the
+album, kills Core after freezing it and replays the confirmation after restart.
+It verifies no task before confirmation, one child/projection, both child-owned
+photos, one download per photo, both hashes in one revision planner call,
+completed intakes and simulated approval/delivery. The run's ten invariants passed;
+the source-bound report is in
+`plans/research-grade-upgrade-2026-09-25/R07_ALBUM_DRILL.json`. Fakes establish
+workflow recovery and image handoff; independent visual quality remains unproved.
 
 ## Run it
 
@@ -16,7 +128,6 @@ npx tsx packages/testkit/chaos/run.ts --only R1.0,R4   # some scenarios
 npx tsx packages/testkit/chaos/run.ts --keep           # leave hawa-chaos running to inspect it
 npx tsx packages/testkit/chaos/run.ts --down           # take a kept project down, with its volumes
 npx tsx packages/testkit/chaos/run.ts --poller worker  # the worker polls Telegram (Phase 2.1); default core
-npx tsx packages/testkit/chaos/run.ts --restore-drill  # the Restate backup and restore drill, RD1 alone (2.6)
 ```
 
 `run.ts` sets `HAWA_CHAOS=1` (and `HAWA_CHAOS_KEEP`, `HAWA_CHAOS_ONLY`) and runs `chaos.test.ts` with
@@ -37,10 +148,10 @@ Typecheck this directory with `npx tsc -p packages/testkit/chaos/tsconfig.json`.
   names `hawa-production` or `hawa-test`; `driver/stack.ts` refuses to kill a container whose name
   does not start with `hawa-chaos-`.
 - Host ports, all on 127.0.0.1: Postgres 56432 (database `hawa_chaos`), Restate admin 56070 and
-  ingress 56080, fakes 56090. Core has no host port; the driver reaches it through the fakes
-  (`/__core/...`).
-- **No paid or real provider call can happen.** Core and the workers are on the `chaos` network only,
-  which is `internal: true`: no route to the internet. The provider hosts written into the code
+  ingress 56080, fakes 56090; the optional candidate nginx is 56081. Core has no host port;
+  the driver normally reaches it through the fakes (`/__core/...`).
+- **No paid or real provider call can happen.** Core and the workers use only the internal
+  `chaos` network, plus Core's internal `parser` network: no route to the internet. The provider hosts written into the code
   (`api.telegram.org`, `api.openai.com`, `generativelanguage.googleapis.com`, `api.anthropic.com`,
   `api.canva.com`, `export-download.canva.com`, `oauth2.googleapis.com`, `www.googleapis.com`,
   `sheets.googleapis.com`) are network aliases of the fakes container there, and the fakes' own CA
@@ -57,7 +168,7 @@ Typecheck this directory with `npx tsc -p packages/testkit/chaos/tsconfig.json`.
 
 | Service | Image | Notes |
 |---|---|---|
-| `postgres` | `pgvector/pgvector:pg17` | Init scripts as production (`00-init-roles.sql`, schema, RLS, `03-grants.sql`, seed); `fsync=off` (process kills only). The driver then runs the versioned upgrades through deploy.sh's runner (`packages/db/src/upgrade.ts`), with no grants of its own, stores the operator's Canva connection (sealed with the chaos key) and KAAE's client DNA with a Drive folder and sheet. |
+| `postgres` | `pgvector/pgvector:pg17` | Init scripts as production (`00-init-roles.sql`, schema, RLS, `03-grants.sql`, seed); `fsync=off` normally, with `fsync` and `full_page_writes` enabled for `--recovery`. The driver then runs the versioned upgrades through deploy.sh's runner (`packages/db/src/upgrade.ts`), with no grants of its own, stores the operator's Canva connection (sealed with the chaos key) and KAAE's client DNA with a Drive folder and sheet. |
 | `restate` | `ghcr.io/restatedev/restate:1.7.10` | The blue worker is registered by `scripts/restate-bluegreen.ts register blue --admin http://127.0.0.1:56070`, the deploy's own code. |
 | `core` | `infra/docker/Dockerfile.core` | `NODE_ENV=production`, polls the fake Telegram, `DESIGN_PIPELINE_V3=off` (planner path), `CANVA_BASE_URL` and `GOOGLE_*_BASE_URL` at the fakes, `GOOGLE_APPLICATION_CREDENTIALS` a throwaway key the fakes write. |
 | `worker-blue`, `worker-green` | `infra/docker/Dockerfile.worker` | `HAWA_WORKER_SELF_URI` per colour; the outbox runs in the live colour only. |
@@ -73,7 +184,9 @@ Typecheck this directory with `npx tsc -p packages/testkit/chaos/tsconfig.json`.
   answer is lost: the "uncertain" case), `delay`; `skip` lets the first N matching calls through.
 - **Models** (`models.ts`): OpenAI chat completions answered from `fixtures/models/*.json` by the
   caller's JSON schema name, and the Canva planner's layout built from the request it carries (each
-  copy block once, the logo at the requested aspect: what Core validates). A **paid-call ledger**
+  copy block once, the logo at the requested aspect: what Core validates). The planner fake accepts
+  both initial briefs and tagged revision briefs; attached data URL images are recorded as SHA-256
+  hashes, without logging their bytes. A **paid-call ledger**
   keyed by a fingerprint of model, system prompt and first user message. Any call no fixture answers
   (OpenAI images or responses, Gemini, Anthropic) is refused with HTTP 500 and ledgered as
   `unmatched`, so a stage the fixtures do not cover shows up in the results.
@@ -101,7 +214,7 @@ Sheets row in the fake Drive, `notify.published` with the approved file and the 
 
 Not covered (a scenario that reaches them shows `unmatched` model calls): the design studio
 (`DESIGN_PIPELINE_V3` / `designStudio`: layout, imagery, critique, judge, parity models), voice
-transcription, brand-guidelines PDF reading, feedback revisions and clarifying questions, person
+transcription, brand-guidelines PDF reading, feedback revisions outside the Canva planner and clarifying questions, person
 cut-outs (no cut-out service in the project), WhatsApp.
 
 ## Chaos points
@@ -125,11 +238,9 @@ Placed today, in the worker only:
 | `worker.sender.after-telegram` (`detail.commandType` = `lifecycle`, `kind`, `key`) | `lifecycle/telegram-sender.ts` `sendAttempt`, after the Telegram send, before its mark | the same, for the TelegramSender object (slice 2.2) |
 | `worker.delivery.between-files` | `lifecycle/delivery.ts`, before the second and later files | some files sent, the rest not yet |
 | `core.delivery.after-drive` (`detail.mode`) | `services/omnichannel-delivery.ts`, after the Drive upload, before anything of it is recorded | Drive holds the files; a retry must adopt them, not upload again |
-| `core.project.after-commit` (`detail.requestId`, `rev`, `key`) | `routes/lifecycle-projection.routes.ts`, after a projection committed, before the answer | the worker asks again under the same key; Core answers from its record and writes nothing twice |
-| `core.office.after-forward` (`detail.requestId`, `taskId`, `kind`, `actionId`, `answer`) | `services/office-decisions.ts`, after `RequestLifecycle.officeDecision` answered a Desk press, before Core answers the Desk (slice 2.4) | the Desk hears nothing and presses again with the same action id: Restate answers from the key, nothing is decided twice |
-| `worker.rl.after-project` (`detail.requestId`, `key`, `rev`) | `lifecycle/request-lifecycle.ts`, inside the `project:<rev>` step, after Core answered, before it is journalled | the step runs again; Core replays the projection |
 
-**Follow-ups.** The design also names `core.outcome.after-bridge`, which belongs to the Core side of slice 2.3. Until then Core, Postgres and Restate are killed time-based:
+**Follow-ups.** The design also names `core.project.after-commit`, `core.outcome.after-bridge`,
+`core.delivery.after-drive` and `worker.rl.after-project`, which belong to later Phase 2 slices. Until then Core, Postgres and Restate are killed time-based:
 while a worker point is held (`killWhileHeld`), or a fixed time into a request.
 
 ## Scenarios (`chaos.test.ts`)
@@ -142,12 +253,14 @@ due, the fake Telegram quiet for 5 s) and then checks the invariants that apply 
 - each message, photo and file reaches the requester once (a 429 or 5xx answer was not shown); an
   uncertain send has exactly one office alert;
 - no paid model call twice (classifier allowance configurable); one Canva import per task;
-- one `TaskWorkflow` invocation, completed; nothing paused; no `RT0016`.
+- one design run, completed (`TaskWorkflow` for a legacy task, `DesignRun` for a task RequestLifecycle
+  owns); nothing paused; no `RT0016`. The office's "ready for office review in Hawa Desk" notice of a
+  lifecycle draft (ADR-065) is not counted as an alert.
 
 | Name | What |
 |---|---|
 | R1.0 | happy path, no faults |
-| R1.K0 | Core killed while the intake classifier (a paid call, slowed to 4 s) is answering; classifier allowance 2 |
+| R1.K0 | Core killed while intake acknowledges the brief (the `sendMessage` slowed to 4 s), after the task was committed and before the offset was stored; the update is polled again. Until 2026-09-28 this killed Core during the intake classifier's paid call, which intake no longer makes for an unscoped text (82b28988: local classification without a client egress decision) |
 | R1.K1 | worker killed at `worker.outbox.after-claim` (task.created) |
 | R1.K2 | worker killed at `worker.dispatch.after-submit` |
 | R1.K3 | worker killed after `canva-create-draft` (planner and import done) |
@@ -162,7 +275,7 @@ due, the fake Telegram quiet for 5 s) and then checks the invariants that apply 
 | R1.K12 | worker killed at `worker.sender.after-telegram` for the approved file (one uncertain send expected) |
 | R1.K13 | Telegram takes the approved file and the answer is lost (one uncertain send expected) |
 | R1.K14 | Core killed in the middle of a Deliver request (the fake Drive upload slowed to 8 s); Deliver pressed again once |
-| R1.K15 | Postgres killed while the worker is held at `worker.sender.after-telegram` for the approved file |
+| R1.K15 | Postgres killed while the worker is held at `worker.sender.after-telegram` for the approved file; since 6407deb6 (ADR-045) the sender retries its `sent` mark for about 15 s, so the send ends `sent`, with no uncertain send and no office alert |
 | R1.D1 | deploy mid-request: the design is held on blue, green is started and registered (`restate-bluegreen.ts register green`), the design finishes, `finish-drains` must delete blue; the invocation must stay pinned to blue |
 | R4 | two chats: a 19.9 MB picture whose download takes 30 s in chat A; chat B's text must be answered in under 5 s |
 
@@ -179,14 +292,19 @@ invocation of the chat completed; the stored offset past the update; nothing dea
 | R1.S1.K3 | Postgres killed while the poller is held at `worker.poller.after-enqueue` (the offset cannot be stored, so the update is sent again with the same key) |
 | R1.S2.K4 | Core killed at `core.intake.after-decision` |
 | R1.S2.K5 | worker killed while Core is held at `core.intake.after-decision` |
-| R1.S2.K5b | worker killed while the intake classifier (slowed to 4 s) answers; classifier allowance 2 |
+| R1.S2.K5b | worker killed while Core's intake acknowledges the update (the `sendMessage` slowed to 4 s); until 2026-09-28 during the classifier's paid call, which no longer happens (see R1.K0) |
 | R1.DUP | the same update handed to `ChatInbox` again, with the poller's key and then with another: one task, nothing new in the chat |
 
 Not yet: R1 kill points that need later Phase 2 code (`RequestLifecycle`: R1 S3 onwards); the design's
-**Slice 2.2 (the Delivery workflow and TelegramSender).** These use chats 9300001 to 9300012, which
+**Slice 2.2 (the Delivery workflow and TelegramSender).** These use chats from 9300001 to 9300024, which
 `docker-compose.chaos.yml` lists in `HAWA_LIFECYCLE_CHATS`, so Deliver hands the task to the Restate
 `Delivery` workflow instead of Core's own delivery. Each request pins the PNG and the PPTX (two files),
-and Deliver is pressed once. On top of the checks above: both files archived once each and shown to the
+and Deliver is pressed once. They run only with `--poller worker`: since ADR-059 (99eb6b04) a task
+claims the Restate executor only when RequestLifecycle opens it, which only ChatInbox reaches; with Core
+polling (production mode) a flagged chat's brief is a Core-pinned legacy task (ADR-052) that Core
+delivers itself. The driver therefore waits for the request to be `in_review` (the lifecycle draft
+notice has no requester buttons) and `approved` before Deliver, and sends each Desk action with its
+UUID `Idempotency-Key`, as request-owned delivery requires. On top of the checks above: both files archived once each and shown to the
 requester once each, the publication `executor = 'restate'` with every started run reported back, no
 `notify.published` command, every `Delivery` invocation completed.
 
@@ -198,7 +316,7 @@ requester once each, the publication `executor = 'restate'` with every started r
 | L2.K16 | worker killed at `worker.delivery.between-files` |
 | L2.K17 | Postgres killed while the sender is held at `worker.sender.after-telegram` (first file sent, its mark not written) |
 | L2.K18 | Restate killed while the delivery is held between the files |
-| L2.K12 | worker killed at `worker.sender.after-telegram` for the first file (one uncertain send, one office alert) |
+| L2.K12 | worker killed at `worker.sender.after-telegram` for the first file (one uncertain send, one office alert). A request-owned delivery then waits in `requester_send_reconciliation` (ADR-043, ADR-045); a synthetic administrator confirms the sends the fake chat shows (ADR-046, `staffConfirmVisible`), which completes it without a new send |
 | L2.429 | Telegram answers 429 with `retry_after` 3 to the second file; it must be sent again no sooner than 3 s later |
 
 First run (2026-09-24, `--only R1.0,L2.0,L2.K14,L2.K15,L2.K16,L2.K17,L2.K18,L2.K12,L2.429`, 235 s with a
@@ -208,112 +326,10 @@ legacy R1.K14 stays in `publishing`); L2.K15 19 s; L2.K16 17 s; L2.K17 20 s (the
 once Postgres is back, so nothing is uncertain and the office hears nothing); L2.K18 17 s; L2.K12 17 s
 (one office alert naming the task, the file shown once); L2.429 16 s (the second file 3,032 ms after the 429).
 
-**Slice 2.3 part B (the worker side: `RequestLifecycle` and `DesignRun`).** These open a request on
-`RequestLifecycle` through Restate's ingress, as ChatInbox sends it, and follow it until its draft is in
-the chat and recorded as sent (since part C, Core projects the outcome). Checks: one `hawa.requests` row
-owned by `restate`, in review at revision 3 (open, outcome, draft sent); one task for it, whose
-`task.created` row is recorded (`OWNED_BY_LIFECYCLE`) and never dispatched; the three projections; no
-`TaskWorkflow`; one `DesignRun`, completed; one Canva import; one `open` invocation, completed; the outcome
-sent to the lifecycle once; the acknowledgement, the draft and its picture in the chat, each once;
-nothing paused; no RT0016.
-
-| Name | What |
-|---|---|
-| L3.0 | the request opened, designed once, its draft in the chat; no faults |
-| L3.K7b | worker killed at `worker.rl.after-project` (Core committed the open projection, the journal has not got the answer) |
-| L3.K6 | Core killed at `core.project.after-commit` (the projection committed, the answer never sent) |
-| L3.K8 | worker killed inside the `DesignRun` after `canva-create-draft` ran, before it was journalled |
-
-First run of part B (2026-09-25, before part C): every invariant held, with the `designFinished`
-invocation waiting on Core's 422 `OP_NOT_AVAILABLE` and killed by the driver.
-
-**Slice 2.3 part C (routing: intake's decide mode, ChatInbox, Core's outcome, requester and reminder
-projections).** `run.ts --poller worker`. The chats 9400001 to 9400040 are on the *workers'*
-`HAWA_LIFECYCLE_CHATS` (`CHAOS_WORKER_LIFECYCLE_CHATS`, set by the driver; Core's own list stays slice
-2.2's), so a brief there is decided by intake, not saved, and opened by ChatInbox on `RequestLifecycle`.
-`driver/lifecycle.ts` holds the script and `checkLifecycle`: the request rows (owned by `restate`, the
-expected stage, the same stage and revision in `RequestLifecycle.get`), the rounds, one design revision per
-drafted round, one completed `DesignRun` per designed round, at most one Canva import per round, no
-`TaskWorkflow`, no pending outbox row of a round, each message once (a picture is its bytes and its
-caption), an uncertain send with exactly one office alert, no paid call twice, the chat's ChatInbox
-invocations completed with the offset past them and nothing dead-lettered, nothing paused, no RT0016.
-Quiescence now leaves out `scheduled` invocations (a reminder or expiry days ahead is not work in flight).
-
-| Name | What |
-|---|---|
-| L3.R1.0 | brief, ack, draft and picture, `rq:ok` (sign-off to the requester, one office alert); no faults |
-| L3.R1.S1K1 | worker killed at `worker.poller.after-enqueue` |
-| L3.R1.S2K4 | Core killed at `core.intake.after-decision` (the decision is on record: the retry is answered from it, classifier once) |
-| L3.R1.S2K5 | worker killed while Core is held at `core.intake.after-decision` |
-| L3.R1.S3K6 | Core killed at `core.project.after-commit` for the open |
-| L3.R1.S3K7b | worker killed at `worker.rl.after-project` for the open |
-| L3.R1.S4K8 | worker killed inside the `DesignRun` after `canva-create-draft` |
-| L3.R1.S5K7b | worker killed at `worker.rl.after-project` for the design outcome |
-| L3.R1.S5K11 | Core killed at `core.outcome.after-bridge` (the draft revision bridged, nothing committed) |
-| L3.R1.S5K12 | worker killed at `worker.sender.after-telegram` for the draft message (one uncertain send, one office alert) |
-| L3.R1.S5K13 | Telegram 429 (`retry_after` 3) on the draft message |
-| L3.R1.S6K5 | worker killed while Core is held at `core.intake.after-decision` for `rq:ok` |
-| L3.R5 | a flagged and an unflagged chat send at once (each its own path); the flagged chat is then taken off the workers' list (worker restarted): a reply to its lifecycle draft is still routed to its request, and its next brief is a legacy task run by `TaskWorkflow` |
-| L3.R6 | rollback to Core's poller (`HAWA_TELEGRAM_POLLER=core`, Core and the worker recreated) with a lifecycle draft in the chat: `rq:ok` is read by Core's poller and routed by Core itself through Restate's ingress under the key ChatInbox uses (`tg:<chat>:<update>`); the sign-off reaches the requester once; the poller goes back to the worker |
-| L3.R2.D1 | silent requester, reminder scale 0.0001 (worker restarted with it): Restate killed after the day-1 reminder was scheduled, the worker after it fired, Core before day 5; one reminder per day, then `expired` |
-| L3.R3.K1 | change, question, answer (`rq:a1`); worker killed at `worker.rl.after-project` for the answer |
-| L3.R3.K2 | the same; Core killed at `core.project.after-commit` for the answer round's outcome |
-| L3.R3.D | the same, with a deploy to green between the question and the answer; blue drains and is deleted |
-| L3.R2.D2 | reminders at scale 0.0001 across a deploy (back to blue): the day-1 reminder runs on the new colour, one per day, the old colour drains |
-
-Run (2026-09-25, `--poller worker --only` the part B and C scenarios plus R1.W0, R1.DUP and R4: 25
-scenarios in 825 s after the build, peak 788 MiB; no `unmatched` model call): every invariant held.
-L3.0 10 s; L3.K7b 14 s; L3.K6 14 s; L3.K8 14 s; L3.R1.0 12 s; S1K1 21 s; S2K4 20 s; S2K5 18 s; S3K6 15 s;
-S3K7b 15 s; S4K8 18 s; S5K7b 19 s; S5K11 19 s; S5K12 19 s; S5K13 15 s; S6K5 20 s; L3.R5 33 s; L3.R2.D1
-139 s; L3.R3.K1 29 s; L3.R3.K2 29 s; L3.R3.D 37 s; L3.R2.D2 139 s; R1.W0 15 s; R1.DUP 11 s; R4 37 s (chat B
-answered after 612 ms while chat A's 30 s download ran). Two earlier runs found what this one shows fixed:
-the fake planner did not answer a change round's prompt (every change and answer round ended
-`failed_operator`), and the "each message once" check took two rounds' draft pictures (the fake Canva's
-same bytes, different captions) for one message sent twice.
-
-Run after the review fixes of part C (2026-09-25, `--poller worker --only` the 19 L3.R* scenarios, 713 s
-after the build, peak 729 MiB; no `unmatched` model call): every invariant held. L3.R1.0 14 s; S1K1 14 s;
-S2K4 19 s; S2K5 18 s; S3K6 15 s; S3K7b 15 s; S4K8 17 s; S5K7b 18 s; S5K11 19 s; S5K12 18 s; S5K13 15 s;
-S6K5 20 s; L3.R5 35 s; L3.R6 19 s; L3.R2.D1 141 s; L3.R3.K1 29 s; L3.R3.K2 29 s; L3.R3.D 37 s; L3.R2.D2 140 s.
-
-R3's question is simulated, because the fixtures cover no studio stage: the driver records the change
-round's `NEEDS_CLARIFICATION` studio run (what the edit stage writes) and hands `RequestLifecycle` the run's
-report with the `DesignRun`'s own event id and idempotency key, while that run is held after its Canva
-step; its own report, later, meets Restate's key and the lifecycle's seen list. Core's outcome projection,
-the question message, its send, its record and the answer are real. The fake planner now answers the
-revision prompt (`Design Brief:` then the request), so change and answer rounds are designed.
-
-Not yet: the design's K9 with a *patched* worker build (R1.D1, L3.R3.D and L3.R2.D2 deploy the same
-build, so they prove the drain and the pinning but cannot show replay on changed code); a studio-made
-question (no studio fixtures).
-
-**Slice 2.4 (office decisions; design R1 S7-S8 on a lifecycle chat).** `run.ts --poller worker`. The
-Desk's approve and Deliver reach Core with the press's action id (`idempotency-key`); Core checks without
-writing and asks `RequestLifecycle.officeDecision` synchronously under `desk:<actionId>`; the lifecycle's
-projection records the approval, claims the publication for the `Delivery` workflow and starts it, and
-the workflow reports back to the lifecycle. `checkOfficeDecisions` (driver/lifecycle.ts), with
-`checkLifecycle`: each press reached `RequestLifecycle` once (one invocation per `desk:` key, completed),
-one approval (nonce `lc:<actionId>`), the lifecycle's stage, nothing for Core's own delivery or dispatch;
-delivered: one publication, complete, the workflow's, every run reported; each `Delivery` run completed and
-reported once; both approved files in Drive and in the chat once each; the task complete.
-
-| Name | What |
-|---|---|
-| L4.S7.0 | brief, draft, the Desk's approval with its press id; answered 200 with the approval the lifecycle recorded |
-| L4.S7.DBL | a double click: two approvals at once with one press id; both 200, one approval, one invocation |
-| L4.S7.K14 | Core killed at `core.office.after-forward` (the lifecycle accepted; the Desk heard nothing); the Desk retries with the same id: 200, the same approval, one row, one invocation |
-| L4.S7.OLD | the requester's change is being made (its `DesignRun` held after its Canva step) and the office approves the old draft: 409 `CHANGE_PENDING` naming the change round, no approval; the change's draft then reaches review |
-| L4.S8.0 | approval (PNG and PPTX pinned), Deliver with its press id (202, executor `restate`); both files and the notice sent once, the request delivered |
-| L4.S8.K15 | Core killed at `core.delivery.after-drive` |
-| L4.S8.K16 | worker killed at `worker.delivery.between-files` |
-| L4.S8.K17 | Postgres killed while the sender is held at `worker.sender.after-telegram` for the first file (no uncertain send) |
-| L4.S8.K18 | Restate killed while the delivery is held between the files |
-
-Run (2026-09-25, `--poller worker --only` the nine L4 scenarios, 426 s): eight held every invariant
-(L4.S7.0 12 s; DBL 10 s; K14 15 s; S8.0 13 s; K15 17 s; K16 15 s; K17 21 s; K18 17 s; peak 575 MiB);
-L4.S7.OLD failed on the script (its change was worded "Make the logo bigger", which the intake fixture
-does not read as a change, so no change round was made). Fixed to the fixture's wording and to wait for the
-change round first, it held every invariant alone (20 s, 22 checks).
+Not yet: R1 kill points that need Phase 2 code (poller, `ChatInbox`, `RequestLifecycle`); the design's
+K9 with a *patched* worker build (R1.D1 deploys the same build, so it proves the drain and the pinning
+but cannot show replay on changed code); R2 (reminders), R3 (question and answer; no fixtures for
+feedback revisions yet), R5 (rollback of the per-chat flag, which does not exist yet).
 
 Faults a scenario arms and does not use up are dropped when it ends (`/__fakes/faults/clear`), so they
 never reach the next scenario.
@@ -362,36 +378,8 @@ three messages and one task.
 `run.ts --poller core --only R1.0,R4` (the default, unchanged): R1.0 holds; R4 fails as before, chat B
 answered after 31.0 s.
 
-
-## Restore drill (architecture programme 2.6, `run.ts --restore-drill`)
-
-RD1 runs only in this mode, with the worker's poller, and alone unless `--only` names more: it
-restores Restate from an archive, which rolls back every scenario's Restate state. It uses the office's
-own scripts, pointed at this project: `infra/backup/restate-nightly.sh` (`HAWA_RESTATE_PROJECT=hawa-chaos`)
-and `infra/backup/restate-restore.sh` (`driver/restore-drill.ts`; the archive, its throwaway passphrase
-and the log stay in `.run/restore-drill`, and no alert can be sent). Steps and checks:
-
-1. a request in a flagged chat, delivered (ChatInbox, TaskWorkflow, the Delivery workflow);
-2. the nightly Restate backup; a brief sent to a second flagged chat while its kill switch is thrown
-   must get no answer until the release and must not be refused or parked; that request is then
-   delivered (Postgres, the chat and Drive move past the archive);
-3. the archive restored into this project's Restate: Restate must know the first request's runs and
-   not the second's, and nothing may be sent again once it has settled;
-4. R1 on the restored copy, with every invariant above, plus the Postgres, Drive and chat checks of
-   both earlier requests.
-
-`CHAOS_RESTATE_NODE_NAME` runs Restate under another node name, to restore an archive of another
-node (production's is `hawa-restate-prod-1`; Restate starts empty under a name it has no data for).
-
-`docker-compose.chaos.yml` on `studio-v2` at 1c1316d declared `HAWA_WORKER_TOKEN` twice in
-`x-app-environment` (slices 2.1 and 2.2 each added it); Docker Compose 5.5 refuses the file
-("mapping key already defined"), so no scenario could start. The second line is removed.
-
-First run (2026-09-25, `run.ts --restore-drill`, 116 s with a cached build, peak 976 MiB): RD1 held
-every invariant (55). Backup 16.6 s (drain clean at once, Restate down 6 s, volume 683,316 bytes,
-encrypted archive 727,072 bytes); the brief sent while the switch was thrown was first answered 17.1 s
-after it was sent, 1.1 s after the release, and delivered; restore 2.9 s (Restate down 1 s); after it
-Restate held the first request's 2 runs and none of the second's, nothing was sent again, and R1 on
-the restored copy was delivered in 10.1 s. AHEAD reconciliations: 0 (no `RequestLifecycle` yet).
-Second run the same day, after renaming `HAWA_RESTATE_CORE_AUTH_VAR`: 55 of 55 again; backup 16.8 s
-(Restate down 6 s, volume 684,228 bytes, archive 727,072), restore 2.9 s, R1 9.1 s.
+The restored uncertain send must remain in requester-send reconciliation. The
+rehearsal records no automatic completion: it checks operator refusal, then uses
+an explicit synthetic administrator observation of the original fake-chat message
+IDs to settle the request. The observation and its replay must cause no new send.
+This exercises the existing ADR-046 contract and does not qualify real staff review.

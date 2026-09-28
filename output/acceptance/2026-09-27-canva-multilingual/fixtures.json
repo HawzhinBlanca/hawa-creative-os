@@ -1,0 +1,1779 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "2d4c4de1f8dafa8d3761ebd44b4d74e57c6fc78c",
+  "corpus": {
+    "path": "evals/rtl_golden_cases.jsonl",
+    "sha256": "903601e57d2570a58545ef93b0dda45c2b6d01d7be01880a7df803990eee1148",
+    "caseCount": 40
+  },
+  "sourceHashes": {
+    "packages/creative/src/editable-transfer.ts": "6e09a42f31087809897cf3c1ee51e07c2ffed36820ddd4e0832408d628e327d1",
+    "packages/qa/src/canva-pptx-check.ts": "a5f429abd38974584a4111938108def252c3427284a68064d29a711929300e9e",
+    "packages/integrations/src/canva-connect-client.ts": "3fe7ec3e9b0883213c0f1b8e941178454c155a87a46512be35c3db8676e6e8ac",
+    "apps/core/src/services/canva-connect-service.ts": "1d20812e9290ec73ccf9d0c27fb85d90930f7a07e06ed020fe4903e71804aab4"
+  },
+  "groups": [
+    {
+      "id": "group-1",
+      "file": "group-1-input.pptx",
+      "sha256": "7f6aa0d3a57973664b3a4ef37d2b1e1ab06bcf9e63e0648a97b57859499cfa62",
+      "bytes": 57051,
+      "cases": [
+        {
+          "id": "RTL-001",
+          "language": "ckb",
+          "text": "سڵاو جیهان",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "glyphs",
+            "joining",
+            "right_alignment",
+            "roundtrip"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-002",
+          "language": "ar",
+          "text": "مرحبا بالعالم",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "glyphs",
+            "joining",
+            "right_alignment",
+            "roundtrip"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-003",
+          "language": "en",
+          "text": "Hello world",
+          "declared_direction": "auto",
+          "expected_base_direction": "ltr",
+          "critical": true,
+          "checks": [
+            "left_alignment",
+            "roundtrip"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-004",
+          "language": "ckb",
+          "text": "نرخی تایبەت: ٢٥٬٠٠٠ دینار",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "digits",
+            "thousands_separator",
+            "colon",
+            "joining",
+            "wrap"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-005",
+          "language": "ar",
+          "text": "السعر الخاص: ٢٥٬٠٠٠ دينار",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "digits",
+            "thousands_separator",
+            "colon",
+            "joining",
+            "wrap"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-006",
+          "language": "mixed",
+          "text": "NOVA ONE — بۆ هەنگاوی داهاتوو",
+          "declared_direction": "auto",
+          "expected_base_direction": "ltr",
+          "critical": true,
+          "checks": [
+            "latin_product",
+            "rtl_phrase",
+            "dash",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-007",
+          "language": "mixed",
+          "text": "بۆ هەنگاوی داهاتوو — NOVA ONE",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "rtl_phrase",
+            "latin_product",
+            "dash",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-008",
+          "language": "mixed",
+          "text": "کاتژمێر 8:30 PM",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "latin_digits",
+            "colon",
+            "latin_suffix",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-009",
+          "language": "mixed",
+          "text": "الساعة 8:30 PM",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "latin_digits",
+            "colon",
+            "latin_suffix",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-010",
+          "language": "ckb",
+          "text": "ژمارە: ٠٧٥٠ ١٢٣ ٤٥٦٧",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "phone_digits",
+            "spaces",
+            "selection"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        }
+      ],
+      "manifest": {
+        "width": 1200,
+        "height": 2000,
+        "copy": [
+          "سڵاو جیهان",
+          "مرحبا بالعالم",
+          "Hello world",
+          "نرخی تایبەت: ٢٥٬٠٠٠ دینار",
+          "السعر الخاص: ٢٥٬٠٠٠ دينار",
+          "NOVA ONE — بۆ هەنگاوی داهاتوو",
+          "بۆ هەنگاوی داهاتوو — NOVA ONE",
+          "کاتژمێر 8:30 PM",
+          "الساعة 8:30 PM",
+          "ژمارە: ٠٧٥٠ ١٢٣ ٤٥٦٧"
+        ],
+        "copySha256": "de80fe3fc648aee26557e65e47ed22ee01a9b7cb443d4dce34097a406b51e6fc",
+        "logoSha256": null,
+        "plan": {
+          "width": 1200,
+          "height": 2000,
+          "background": "#F6F8FC",
+          "text": [
+            {
+              "copyIndex": 0,
+              "x": 80,
+              "y": 60,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 1,
+              "x": 80,
+              "y": 250,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 2,
+              "x": 80,
+              "y": 440,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "rtl": false,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 3,
+              "x": 80,
+              "y": 630,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 4,
+              "x": 80,
+              "y": 820,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 5,
+              "x": 80,
+              "y": 1010,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "rtl": false,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 6,
+              "x": 80,
+              "y": 1200,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 7,
+              "x": 80,
+              "y": 1390,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 8,
+              "x": 80,
+              "y": 1580,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 9,
+              "x": 80,
+              "y": 1770,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            }
+          ],
+          "shapes": [
+            {
+              "x": 80,
+              "y": 242,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 432,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 622,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 812,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1002,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1192,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1382,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1572,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1762,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            }
+          ]
+        },
+        "rtlBlocks": [
+          0,
+          1,
+          3,
+          4,
+          6,
+          7,
+          8,
+          9
+        ],
+        "nativeVerification": "required",
+        "qaStatus": "not_run"
+      },
+      "covered": "Exact supplied strings through the current encoder, real Canva import and final exports with explicit expected base direction.",
+      "notCovered": [
+        "Automatic direction inference",
+        "Native speaker glyph/joining/order review",
+        "Manual typing/edit/save",
+        "Multiple approved fonts",
+        "Narrow layouts"
+      ]
+    },
+    {
+      "id": "group-2",
+      "file": "group-2-input.pptx",
+      "sha256": "d775ec16c6ac05534b574e173ae8ea30478cf622bb88c4824a65811143485caa",
+      "bytes": 57088,
+      "cases": [
+        {
+          "id": "RTL-011",
+          "language": "mixed",
+          "text": "رقم الهاتف: +964 750 123 4567",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "plus",
+            "latin_digits",
+            "spaces",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-012",
+          "language": "mixed",
+          "text": "careers.rona.example/jobs — داواکاری بنێرە",
+          "declared_direction": "auto",
+          "expected_base_direction": "ltr",
+          "critical": true,
+          "checks": [
+            "url",
+            "slash",
+            "rtl_suffix",
+            "selection"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-013",
+          "language": "mixed",
+          "text": "داواکاری بنێرە: careers.rona.example/jobs",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "url",
+            "colon",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-014",
+          "language": "mixed",
+          "text": "@Rona #تەندروستی",
+          "declared_direction": "auto",
+          "expected_base_direction": "ltr",
+          "critical": true,
+          "checks": [
+            "handle",
+            "hashtag",
+            "rtl_word"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-015",
+          "language": "mixed",
+          "text": "#الصحة @Rona",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "hashtag",
+            "handle",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-016",
+          "language": "ckb",
+          "text": "«ڕوونی، هێزی داهێنانە»",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "guillemets",
+            "comma",
+            "joining"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-017",
+          "language": "ar",
+          "text": "“الوضوح ميزة إبداعية”",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "smart_quotes",
+            "joining"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-018",
+          "language": "mixed",
+          "text": "(NOVA ONE) بەرهەمی نوێ",
+          "declared_direction": "auto",
+          "expected_base_direction": "ltr",
+          "critical": true,
+          "checks": [
+            "paired_brackets",
+            "rtl_suffix"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-019",
+          "language": "mixed",
+          "text": "بەرهەمی نوێ (NOVA ONE)",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "paired_brackets",
+            "latin_run"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-020",
+          "language": "ckb",
+          "text": "[١٠ی ئەیلوول] ڕووداو",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "paired_brackets",
+            "digits",
+            "date"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        }
+      ],
+      "manifest": {
+        "width": 1200,
+        "height": 2000,
+        "copy": [
+          "رقم الهاتف: +964 750 123 4567",
+          "careers.rona.example/jobs — داواکاری بنێرە",
+          "داواکاری بنێرە: careers.rona.example/jobs",
+          "@Rona #تەندروستی",
+          "#الصحة @Rona",
+          "«ڕوونی، هێزی داهێنانە»",
+          "“الوضوح ميزة إبداعية”",
+          "(NOVA ONE) بەرهەمی نوێ",
+          "بەرهەمی نوێ (NOVA ONE)",
+          "[١٠ی ئەیلوول] ڕووداو"
+        ],
+        "copySha256": "b4c2506b23b58a4000ecb4aad8320256509ae6bbc76d38b74c46b21dd4a2967f",
+        "logoSha256": null,
+        "plan": {
+          "width": 1200,
+          "height": 2000,
+          "background": "#F6F8FC",
+          "text": [
+            {
+              "copyIndex": 0,
+              "x": 80,
+              "y": 60,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 1,
+              "x": 80,
+              "y": 250,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "rtl": false,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 2,
+              "x": 80,
+              "y": 440,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 3,
+              "x": 80,
+              "y": 630,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "rtl": false,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 4,
+              "x": 80,
+              "y": 820,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 5,
+              "x": 80,
+              "y": 1010,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 6,
+              "x": 80,
+              "y": 1200,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 7,
+              "x": 80,
+              "y": 1390,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "rtl": false,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 8,
+              "x": 80,
+              "y": 1580,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 9,
+              "x": 80,
+              "y": 1770,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            }
+          ],
+          "shapes": [
+            {
+              "x": 80,
+              "y": 242,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 432,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 622,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 812,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1002,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1192,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1382,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1572,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1762,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            }
+          ]
+        },
+        "rtlBlocks": [
+          0,
+          2,
+          4,
+          5,
+          6,
+          8,
+          9
+        ],
+        "nativeVerification": "required",
+        "qaStatus": "not_run"
+      },
+      "covered": "Exact supplied strings through the current encoder, real Canva import and final exports with explicit expected base direction.",
+      "notCovered": [
+        "Automatic direction inference",
+        "Native speaker glyph/joining/order review",
+        "Manual typing/edit/save",
+        "Multiple approved fonts",
+        "Narrow layouts"
+      ]
+    },
+    {
+      "id": "group-3",
+      "file": "group-3-input.pptx",
+      "sha256": "e0a6731d0c628f66ed50e96061044d4631c09e98cc7debad2c838f81dcad0cd5",
+      "bytes": 57145,
+      "cases": [
+        {
+          "id": "RTL-021",
+          "language": "mixed",
+          "text": "ڕووداو [10 September]",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "paired_brackets",
+            "latin_date"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-022",
+          "language": "mixed",
+          "text": "⁧NOVA ONE⁩ — بەرهەمی نوێ",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "unicode_isolate",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-023",
+          "language": "mixed",
+          "text": "⁦careers.rona.example/jobs⁩ داواکاری",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "unicode_isolate",
+            "url"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-024",
+          "language": "ckb",
+          "text": "د. لینا ڕەحمان",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "abbreviation_dot",
+            "spaces",
+            "joining"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-025",
+          "language": "ar",
+          "text": "د. لينا رحمن",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "abbreviation_dot",
+            "spaces",
+            "joining"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-026",
+          "language": "ckb",
+          "text": "ئەڵقەی ٢١: «شارەکان چۆن بیر دەکەنەوە؟»",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "digits",
+            "colon",
+            "question_mark",
+            "quotes",
+            "wrap"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-027",
+          "language": "ar",
+          "text": "الحلقة 21: «كيف تتذكر المدن؟»",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "latin_digits",
+            "colon",
+            "question_mark",
+            "quotes",
+            "wrap"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-028",
+          "language": "mixed",
+          "text": "٢٩٬٥٠٠ IQD — سەبەتەی خێزان",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "digits",
+            "latin_currency",
+            "dash",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-029",
+          "language": "mixed",
+          "text": "29,500 IQD — سلة العائلة",
+          "declared_direction": "auto",
+          "expected_base_direction": "ltr",
+          "critical": true,
+          "checks": [
+            "latin_price",
+            "rtl_suffix",
+            "dash"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-030",
+          "language": "mixed",
+          "text": "ئیمەیڵ: team@example.com",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "email",
+            "colon",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        }
+      ],
+      "manifest": {
+        "width": 1200,
+        "height": 2000,
+        "copy": [
+          "ڕووداو [10 September]",
+          "⁧NOVA ONE⁩ — بەرهەمی نوێ",
+          "⁦careers.rona.example/jobs⁩ داواکاری",
+          "د. لینا ڕەحمان",
+          "د. لينا رحمن",
+          "ئەڵقەی ٢١: «شارەکان چۆن بیر دەکەنەوە؟»",
+          "الحلقة 21: «كيف تتذكر المدن؟»",
+          "٢٩٬٥٠٠ IQD — سەبەتەی خێزان",
+          "29,500 IQD — سلة العائلة",
+          "ئیمەیڵ: team@example.com"
+        ],
+        "copySha256": "8f9c64bae460e5a4c0c9ceee37d04825407e5c88f22e7d60251fd34a2e07f6b5",
+        "logoSha256": null,
+        "plan": {
+          "width": 1200,
+          "height": 2000,
+          "background": "#F6F8FC",
+          "text": [
+            {
+              "copyIndex": 0,
+              "x": 80,
+              "y": 60,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 1,
+              "x": 80,
+              "y": 250,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 2,
+              "x": 80,
+              "y": 440,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 3,
+              "x": 80,
+              "y": 630,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 4,
+              "x": 80,
+              "y": 820,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 5,
+              "x": 80,
+              "y": 1010,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 6,
+              "x": 80,
+              "y": 1200,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 7,
+              "x": 80,
+              "y": 1390,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 8,
+              "x": 80,
+              "y": 1580,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "left",
+              "rtl": false,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 9,
+              "x": 80,
+              "y": 1770,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            }
+          ],
+          "shapes": [
+            {
+              "x": 80,
+              "y": 242,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 432,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 622,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 812,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1002,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1192,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1382,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1572,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1762,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            }
+          ]
+        },
+        "rtlBlocks": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          9
+        ],
+        "nativeVerification": "required",
+        "qaStatus": "not_run"
+      },
+      "covered": "Exact supplied strings through the current encoder, real Canva import and final exports with explicit expected base direction.",
+      "notCovered": [
+        "Automatic direction inference",
+        "Native speaker glyph/joining/order review",
+        "Manual typing/edit/save",
+        "Multiple approved fonts",
+        "Narrow layouts"
+      ]
+    },
+    {
+      "id": "group-4",
+      "file": "group-4-input.pptx",
+      "sha256": "ac61eb164265de2b44b0b1824567e51f45fb0d428ef19c449ba5d37a407b6c1e",
+      "bytes": 59104,
+      "cases": [
+        {
+          "id": "RTL-031",
+          "language": "mixed",
+          "text": "البريد: team@example.com",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "email",
+            "colon",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-032",
+          "language": "mixed",
+          "text": "هەڵبژاردەی A/B بۆ ٢٠٢٦",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "slash",
+            "latin_letters",
+            "digits"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-033",
+          "language": "mixed",
+          "text": "الخيار A/B لعام ٢٠٢٦",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "slash",
+            "latin_letters",
+            "digits"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-034",
+          "language": "ckb",
+          "text": "٥٠٪ داشکاندن",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "percent_sign",
+            "digits",
+            "joining"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-035",
+          "language": "mixed",
+          "text": "خصم 50%",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "latin_digits",
+            "percent_sign",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-036",
+          "language": "ckb",
+          "text": "ڕۆژی یەکشەممە\n٦ی ئەیلوولی ٢٠٢٦\nکاتژمێر ٦:٣٠",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "multiline",
+            "line_breaks",
+            "right_alignment",
+            "vertical_metrics"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-037",
+          "language": "ar",
+          "text": "الأحد\n6 سبتمبر 2026\n6:30 مساءً",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "multiline",
+            "mixed_digits",
+            "right_alignment",
+            "vertical_metrics"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-038",
+          "language": "mixed",
+          "text": "سڵاو **NOVA** جیهان",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "styled_runs",
+            "bold_boundary",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-039",
+          "language": "mixed",
+          "text": "مرحبا **NOVA** بالعالم",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "styled_runs",
+            "bold_boundary",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        },
+        {
+          "id": "RTL-040",
+          "language": "mixed",
+          "text": "کوردی 😀 English 2026",
+          "declared_direction": "auto",
+          "expected_base_direction": "rtl",
+          "critical": true,
+          "checks": [
+            "emoji",
+            "latin",
+            "digits",
+            "run_order"
+          ],
+          "font_groups": [
+            "office_sorani_arabic_primary",
+            "office_fallback"
+          ]
+        }
+      ],
+      "manifest": {
+        "width": 1200,
+        "height": 2000,
+        "copy": [
+          "البريد: team@example.com",
+          "هەڵبژاردەی A/B بۆ ٢٠٢٦",
+          "الخيار A/B لعام ٢٠٢٦",
+          "٥٠٪ داشکاندن",
+          "خصم 50%",
+          "ڕۆژی یەکشەممە\n٦ی ئەیلوولی ٢٠٢٦\nکاتژمێر ٦:٣٠",
+          "الأحد\n6 سبتمبر 2026\n6:30 مساءً",
+          "سڵاو **NOVA** جیهان",
+          "مرحبا **NOVA** بالعالم",
+          "کوردی 😀 English 2026"
+        ],
+        "copySha256": "de228a042f7f7a13bb187dfbe0f9ba26c0c5273c97559a15b0d665f6df3a9517",
+        "logoSha256": null,
+        "plan": {
+          "width": 1200,
+          "height": 2000,
+          "background": "#F6F8FC",
+          "text": [
+            {
+              "copyIndex": 0,
+              "x": 80,
+              "y": 60,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 1,
+              "x": 80,
+              "y": 250,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 2,
+              "x": 80,
+              "y": 440,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 3,
+              "x": 80,
+              "y": 630,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 4,
+              "x": 80,
+              "y": 820,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 5,
+              "x": 80,
+              "y": 1010,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 6,
+              "x": 80,
+              "y": 1200,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 7,
+              "x": 80,
+              "y": 1390,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 8,
+              "x": 80,
+              "y": 1580,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            },
+            {
+              "copyIndex": 9,
+              "x": 80,
+              "y": 1770,
+              "width": 1040,
+              "height": 174,
+              "fontSize": 32,
+              "fontFamily": "Noto Sans Arabic",
+              "color": "#14253D",
+              "align": "right",
+              "rtl": true,
+              "lineHeight": 1.35
+            }
+          ],
+          "shapes": [
+            {
+              "x": 80,
+              "y": 242,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 432,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 622,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 812,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1002,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1192,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1382,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1572,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            },
+            {
+              "x": 80,
+              "y": 1762,
+              "width": 1040,
+              "height": 1,
+              "color": "#C6CDDA",
+              "kind": "line",
+              "strokeWidth": 1
+            }
+          ]
+        },
+        "rtlBlocks": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "nativeVerification": "required",
+        "qaStatus": "not_run"
+      },
+      "covered": "Exact supplied strings through the current encoder, real Canva import and final exports with explicit expected base direction.",
+      "notCovered": [
+        "Automatic direction inference",
+        "Native speaker glyph/joining/order review",
+        "Manual typing/edit/save",
+        "Multiple approved fonts",
+        "Narrow layouts",
+        "Styled-run markup is literal exact input; actual style-boundary behavior is not tested."
+      ]
+    }
+  ],
+  "fullMultilingualAdmission": false,
+  "reason": "Forty synthetic strings grouped into four one-page sheets; native-language and real office cases remain required."
+}

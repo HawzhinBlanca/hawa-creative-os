@@ -1,8 +1,15 @@
-import { clientExemplarsOf, clientPackOf, clientReferenceOf } from '../client-packs.js';
-import { thumbnailPlaybookPrompt } from '@hawa/creative';
+import { StudioVisualInputsRepository, StudioVisualInputsError } from '@hawa/db';
+import { authorityPolicySha256, captureVisualInputs, restoreVisualInputs } from './visual-inputs.js';
+import { captureRenderFontInputs, reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } from '@hawa/creative';
+import { StudioSubstepReplay, studioBindingText, studioSubstepKey, studioUsdMicros, type RecordedStudioAttempt, type StudioCallReservation } from '@hawa/domain';
+import { currentStudioSubstep, inStudioSubstep, substepBindsAuthority, substepBindsRenderer } from './substeps.js';
+import { TaskGenerationBlockedError } from '@hawa/db';
+import { assertTaskGenerationAllowed, assertStudioCallsResolved } from '../task-generation-guard.js';
+import { assertNativeRevisionAdmission } from '../native-revision-handoff.js';
+import { orderedAlbumImages } from '../lifecycle-album.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   sql,
   withRlsContext,
@@ -16,22 +23,35 @@ import {
   type DesignStudioTier,
   type DesignStudioJudgeStatus,
   type DesignStudioCandidateStatus,
+  type RecordCallStartParams,
 } from '@hawa/db';
 import {
   OpenAiStudioClient,
   OpenAiImageProvider,
+  requestStudioArtImage,
+  StudioArtAccountingError,
+  NoEligibleCandidateError,
+  eligibleCandidatesV3,
   type StudioLayoutV2,
+  ExemplarRetrievalIndex, EXEMPLAR_RETRIEVAL_VERSION,
   studioReferenceFromRaw,
   creativeAssetPath,
+  fontCoversText,
+  fontFamilyScript,
+  probeFontScripts,
 } from '@hawa/creative';
 import { checkCanvaPptx } from '@hawa/qa';
-import { resolveModel, resolveImageSettings } from '@hawa/domain';
-import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, type OrnamentSettings } from '@hawa/creative';
+import { resolveModel, resolveImageSettings, newStudioBudget, parseStudioBudget, StudioBudgetEvidenceError } from '@hawa/domain';
+import { resolveOrnamentSettings, imagePixelSize, settlePhotos, uprightPhotoDataUrl, negativeSpacePolicyIdentity, thumbnailPlaybookPrompt, type OrnamentSettings } from '@hawa/creative';
 import { requestedBackgroundFor } from './stages/brief.stage.js';
+import { buildRunBriefContract, StudioBriefContractError, StudioRunStatusChangedError } from './brief-contract.js';
+import { blockingBriefConflicts, briefContractIdentitySha256, verifyBriefContractIntegrity, type BriefProposalInput, type ExecutableBriefContract } from '@hawa/domain';
 import { runDirectedEditStage, isModelTransportError, DirectedEditRefusal } from './stages/edit.stage.js';
 import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type PhotoFaces } from './photo-cutouts.js';
 import { log } from '../../logging.js';
 import { blobStoreFor, putToStore, readPreferringStore } from '../blob-store-context.js';
+import { assertCurrentClientDesignReference, resolveClientDesignReference } from '../client-design-reference.js';
+import { ClientExemplarsUnavailableError, clientPackOf, packagedReferenceExemplarManifest } from '../client-packs.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -66,13 +86,20 @@ export function contentPhotoFromDataUrl(dataUrl: string): ContentPhoto {
 
 /** A run's stage record, whether the driver returned JSON or text. */
 const runStages = (run: { stages?: unknown }): Record<string, any> => {
-  if (typeof run.stages !== 'string') return (run.stages as Record<string, any>) || {};
-  try { return JSON.parse(run.stages); } catch { return {}; }
+  let stages = run.stages;
+  if (typeof stages === 'string') {
+    try { stages = JSON.parse(stages); } catch { return {}; }
+  }
+  // Migration 013 used [] for a new run. Named stage properties on that array vanish
+  // in JSON.stringify, including a recovered paid brief. Preserve empty legacy runs as objects.
+  if (Array.isArray(stages) && stages.length === 0) return {};
+  return (stages as Record<string, any>) || {};
 };
 import { CanvaConnectService, CanvaFlowError } from '../canva-connect-service.js';
 import { CanvaDesignPlanner, savedDesignCopy, classifyCopyScript } from '../canva-design-planner.js';
+import { savedDesignCopyLocales } from '../saved-design-copy.js';
 import { runsPipelineV3, PICTURE_ONLY_DIRECTIVE } from '../chat-intake.js';
-import { StudioBudgetExhaustedError, type StageContext, type CandidateState, type CreativeBrief, type Concept, type ReferencePack, type CopyBlock, type ParityResult, type ContentPhoto } from './types.js';
+import { StudioBudgetExhaustedError, isModelCallHoldError, type StageContext, type CandidateState, type CreativeBrief, type Concept, type ReferencePack, type CopyBlock, type ParityResult, type ContentPhoto } from './types.js';
 import {
   runBriefStage,
   runConceptsStage,
@@ -89,14 +116,83 @@ import {
   runCritiqueStageV3,
   runReviseStageV3,
   runJudgeStageV3,
+  judgeBriefForStageV3,
   rankStudioCandidatesV3,
   V3_CANDIDATE_SLOTS,
   pendingV3Concept,
 } from './stages/index.js';
+import { resolveStudioJudgeProtocol, type StudioJudgeProtocol } from '@hawa/creative';
 
 export type Scope = { tenantId: string; actorId: string; role?: string; clientId?: string };
 
+class RequestOwnedImageUnavailable extends Error {}
+
+const optionalImages = (error: unknown): string[] => {
+  if (error instanceof RequestOwnedImageUnavailable) throw error;
+  return [];
+};
+
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+
+/** The retained art and its provenance, which final QA checks the final layout against (ADR-123). */
+const candidateArt = (row: { art_png?: Buffer | Uint8Array | null; art_provenance?: unknown }): Pick<CandidateState, 'artPng' | 'artProvenance'> => ({
+  ...(row.art_png ? { artPng: Buffer.from(row.art_png) } : {}),
+  ...(row.art_provenance ? { artProvenance: (typeof row.art_provenance === 'string' ? JSON.parse(row.art_provenance) : row.art_provenance) as Record<string, unknown> } : {}),
+});
+
+type StudioReplayCall = Pick<Awaited<ReturnType<DesignStudioRepository['getCallsForRun']>>[number],
+  'id' | 'stage' | 'provider' | 'model' | 'status' | 'reservation' | 'call_ordinal' | 'has_retained_result'> &
+  Partial<Pick<Awaited<ReturnType<DesignStudioRepository['getCallsForRun']>>[number],
+    'substep_key' | 'substep_attempt' | 'binding_sha256' | 'cost_basis' | 'usd_estimate' | 'error_code'>>;
+class RetainedStudioReply {
+  constructor(readonly value: unknown) {}
+}
+
+const recordedStudioAttempt = (call: StudioReplayCall): RecordedStudioAttempt => ({
+  callId: call.id, substep: call.substep_key ?? null, attempt: call.substep_attempt ?? null, ordinal: call.call_ordinal,
+  stage: call.stage, provider: call.provider, model: call.model, status: call.status, retained: call.has_retained_result,
+  costBasis: call.cost_basis ?? null, usd: Number(call.usd_estimate ?? 0), errorCode: call.error_code ?? null,
+  requestSha256: call.reservation?.requestSha256 ?? null, bindingSha256: call.binding_sha256 ?? null,
+});
+
+/** Stable object-key order for the digest only; provider requests keep their original shape. */
+const canonicalCallJson = (value: unknown): string => {
+  const serialized = JSON.stringify(value, (_key, child) =>
+    child && typeof child === 'object' && !Array.isArray(child)
+      ? Object.fromEntries(Object.keys(child).sort().map((key) => [key, child[key]]))
+      : child);
+  if (!serialized) throw new TypeError('Studio model call input cannot be serialized.');
+  return serialized;
+};
+
+type StudioFontProfile = { latin: string[]; arabic: string[] };
+
+/** Reject a versioned brand font that the renderer would substitute or cannot draw for this copy. */
+function qualifiedStudioFonts(reference: Record<string, any>, copyBlocks: CopyBlock[]): StudioFontProfile | undefined {
+  if (reference.status !== 'active_client_dna') return undefined;
+  const body = reference.rules.typography.formalBody as { latin: string; arabic: string };
+  const display = reference.rules.typography.display.admitted as string[];
+  const textFor = (script: CopyBlock['script']) => copyBlocks.filter((block) => block.script === script).map((block) => block.text).join('\n');
+  const qualify = (family: string, text: string) => {
+    const script = fontFamilyScript(family);
+    let exact = false;
+    try { exact = probeFontScripts(family)[script].verdict === 'exact' && fontCoversText(family, text).covers; }
+    catch { /* A missing renderer or unreadable font cannot qualify a client brand. */ }
+    if (!exact) {
+      throw new CanvaFlowError(422, 'CLIENT_FONT_UNAVAILABLE',
+        `The client font "${family}" cannot render the required text faithfully in Studio. Install and qualify that font before generating this design.`);
+    }
+  };
+  if (textFor('latin')) qualify(body.latin, textFor('latin'));
+  if (textFor('arabic')) qualify(body.arabic, textFor('arabic'));
+  const profile: StudioFontProfile = { latin: [], arabic: [] };
+  for (const family of display) {
+    const script = fontFamilyScript(family);
+    qualify(family, textFor(script));
+    profile[script].push(family);
+  }
+  return profile;
+}
 
 /**
  * The official KAAE logo's path. Resolved inside @hawa/creative, from that package's own location,
@@ -159,6 +255,7 @@ export interface StudioResumeResult {
 
 export class DesignStudioService {
   private repo: DesignStudioRepository;
+  private visualInputRepo: StudioVisualInputsRepository;
   private inFlightResumes = new Map<string, Promise<StudioResumeResult>>();
   /** People cut out of client photos (ADR-032); unconfigured without CUTOUT_URL, and then photos stay framed. */
   private cutouts: PhotoCutouts;
@@ -170,6 +267,7 @@ export class DesignStudioService {
   ) {
     this.blobs = blobStoreFor(db, options.blobStore);
     this.repo = new DesignStudioRepository(db, this.blobs);
+    this.visualInputRepo = new StudioVisualInputsRepository(db, this.blobs);
     this.cutouts = new PhotoCutouts({ blobStore: this.blobs });
   }
 
@@ -195,7 +293,7 @@ export class DesignStudioService {
     const valid = (url: unknown): url is string => typeof url === 'string' && /^data:image\/(png|jpe?g|webp);base64,/.test(url);
     const source = await this.tx(s, async (db) =>
       (
-        await sql<{ data: any; created_at: string }>`SELECT e.data, t.created_at FROM hawa.task_events e
+        await sql<{ data: any; created_at: string; request_id: string | null }>`SELECT e.data, t.created_at, t.request_id FROM hawa.task_events e
         JOIN hawa.tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id
         WHERE e.tenant_id=${s.tenantId}::uuid AND e.task_id=${taskId}::uuid AND e.event_type='task.created'
         ORDER BY e.aggregate_version LIMIT 1`.execute(db)
@@ -207,6 +305,29 @@ export class DesignStudioService {
 
     const own = payload.studioOptions?.referenceImageBase64 || payload.referenceImageBase64;
     if (valid(own)) found.push({ at: myTime, url: own });
+
+    // RequestLifecycle fixes scope when it creates the task. Nearby unbound photos have no
+    // verified request identity, so only images attached to this task may enter its design.
+    if (source?.request_id) {
+      const refs = await this.tx(s, async (db) =>
+        (await sql<{ sha256: string; media_type: string; size: string }>`SELECT f.sha256, b.media_type, b.size
+          FROM hawa.task_files f JOIN hawa.blobs b ON b.sha256 = f.sha256
+          WHERE f.tenant_id = ${s.tenantId}::uuid AND f.task_id = ${taskId}::uuid
+            AND f.role = 'reference_image'
+          ORDER BY f.created_at, f.sha256`.execute(db)).rows);
+      if (refs.length && !this.blobs) throw new RequestOwnedImageUnavailable('A request-owned image needs its durable blob store');
+      if (payload.lifecycleAlbum) found.length = 0;
+      for (const ref of orderedAlbumImages(payload.lifecycleAlbum, refs)) {
+        if (!['image/png', 'image/jpeg', 'image/webp'].includes(ref.media_type)) {
+          throw new Error('A request-owned image has an unsupported stored media type');
+        }
+        let bytes: Buffer;
+        try { bytes = await this.blobs!.read(ref.sha256, { verify: true }); }
+        catch { throw new RequestOwnedImageUnavailable('A request-owned image is missing or corrupt'); }
+        found.push({ at: myTime, url: `data:${ref.media_type};base64,${bytes.toString('base64')}` });
+      }
+      return [...new Set(found.map((item) => item.url))];
+    }
 
     const channel = payload.sourceChannelId;
     // An hour back, not a day: a day's window let pictures from the day's earlier attempts, failed
@@ -361,22 +482,7 @@ export class DesignStudioService {
       throw new CanvaFlowError(422, 'CLIENT_REQUIRED', 'Select the client before retrieving brand references.');
     }
 
-    // The task's own client pack names its reference pack and logo (ADR-038).
-    const clientReference = clientReferenceOf(task.client_id);
-    if ('refusal' in clientReference) {
-      throw new CanvaFlowError(422, 'CLIENT_REFERENCE_REQUIRED', clientReference.refusal);
-    }
-    const reference: ReferencePack & { clientId: string; logoSha256: string } = JSON.parse(
-      await readFile(clientReference.referencePath, 'utf8')
-    );
-
-    if (task.client_id !== reference.clientId) {
-      throw new CanvaFlowError(
-        422,
-        'CLIENT_REFERENCE_REQUIRED',
-        'This client needs its own verified reference pack. Another client\'s references cannot be used for it.'
-      );
-    }
+    const { reference, logo } = await resolveClientDesignReference(this.db, s, task.client_id);
 
     const content = savedDesignCopy(task.source, task.description || '');
     if (!content.copy.length || content.copy.join('').length > 16000) {
@@ -392,15 +498,14 @@ export class DesignStudioService {
       );
     }
 
-    const logo = await readFile(clientReference.logoPath);
-    if (hash(logo) !== reference.logoSha256) {
-      throw new CanvaFlowError(409, 'LOGO_CHANGED', 'The official logo checksum changed; review the reference pack.');
-    }
-
+    const copyLocales = savedDesignCopyLocales(task.source, content.copy);
     const copyBlocks: CopyBlock[] = content.copy.map((text, idx) => ({
       text,
       script: copyScripts[idx] === 'arabic' ? 'arabic' : 'latin',
+      locale: copyLocales[idx],
+      localeCopySha256: createHash('sha256').update(text).digest('hex'),
     }));
+    qualifiedStudioFonts(reference, copyBlocks);
 
     return {
       task,
@@ -437,12 +542,17 @@ export class DesignStudioService {
       (process.env.DESIGN_STUDIO_IMAGERY_DEFAULT as any) ||
       'auto';
 
+    await this.tx(s, db => assertNativeRevisionAdmission(db, s.tenantId, taskId));
     const taskCtx = await this.getTaskContext(s, taskId, params.width, params.height);
 
     // Which pipeline a run uses is decided once, here, from the chat the task came from, and
     // recorded on the run so every later stage and every resume agrees. The key is omitted rather
     // than written false so a non-v3 run's request hash is unchanged from before it existed.
     const pipelineV3 = runsPipelineV3(taskCtx.task.source?.sourceChannelId);
+    if (pipelineV3 && taskCtx.reference.status !== 'reference_for_draft_not_release_approval') {
+      throw new CanvaFlowError(422, 'CLIENT_V3_PROFILE_REQUIRED',
+        'This client has no admitted Studio v3 font and exemplar profile. Use the standard Studio path until its profile is qualified.');
+    }
     // A change the client asked for on a design they received: the run edits that design.
     const sourceOptions = (taskCtx.task.source?.payload || taskCtx.task.source || {})?.studioOptions || {};
     const directed =
@@ -470,6 +580,7 @@ export class DesignStudioService {
       instructions: taskCtx.content.instructions,
       clientId: taskCtx.task.client_id,
       referenceHash: hash(JSON.stringify(taskCtx.reference)),
+      ...(taskCtx.reference.dnaVersion ? { dnaVersion: taskCtx.reference.dnaVersion } : {}),
       logoSha256: hash(taskCtx.logo),
       logoAspect: taskCtx.logoAspect,
       ...(pipelineV3 ? { pipelineV3: true } : {}),
@@ -484,12 +595,13 @@ export class DesignStudioService {
 
       // 2. Lock task row FOR UPDATE to verify client scope immutability
       const lockedTask = (
-        await sql<any>`SELECT client_id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)
+        await sql<any>`SELECT client_id,state FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)
       ).rows[0];
 
       if (!lockedTask || lockedTask.client_id !== taskCtx.task.client_id) {
         throw new CanvaFlowError(409, 'CLIENT_CHANGED', 'Client changed while references were retrieved.');
       }
+      await assertCurrentClientDesignReference(db, s, taskCtx.reference);
 
       // 3. Check for existing run by request_key OR in-flight active run for this task.
       // A task keeps at most one unfinished run (unique index design_studio_one_active_run): it is
@@ -511,6 +623,9 @@ export class DesignStudioService {
           return { run: prior, created: false };
         }
 
+        assertTaskGenerationAllowed(lockedTask.state);
+        await assertStudioCallsResolved(db, s.tenantId, taskId);
+
         // Different key, but an active run is in flight
         if (!prior.stale) {
           throw new CanvaFlowError(
@@ -527,6 +642,9 @@ export class DesignStudioService {
           diagnostic: `Abandoned by ${s.actorId}: no progress at '${prior.status}' for ${staleMinutes} minutes; a new run was requested`,
         }, db);
       }
+
+      assertTaskGenerationAllowed(lockedTask.state);
+      await assertStudioCallsResolved(db, s.tenantId, taskId);
 
       // 4. Verify task is not already bound to Canva
       const bound = (
@@ -563,19 +681,14 @@ export class DesignStudioService {
       const runId = randomUUID();
       // A finished design costs $0.33-0.78 in at most 10 calls (2026-09-23), so a cap of $6 and 40
       // calls let a run that was going wrong spend eight designs' worth before it stopped.
-      const maxUsd =
-        this.options.maxUsd ||
-        (process.env.DESIGN_STUDIO_MAX_USD ? parseFloat(process.env.DESIGN_STUDIO_MAX_USD) : 2.0);
-      const maxCalls =
-        this.options.maxCalls ||
-        (process.env.DESIGN_STUDIO_MAX_CALLS ? parseInt(process.env.DESIGN_STUDIO_MAX_CALLS, 10) : 24);
-
-      const budget = {
-        maxUsd,
-        maxCalls,
-        spentUsd: 0.0,
-        calls: 0,
-      };
+      let budget;
+      try {
+        budget = newStudioBudget(this.options.maxUsd ?? process.env.DESIGN_STUDIO_MAX_USD,
+          this.options.maxCalls ?? process.env.DESIGN_STUDIO_MAX_CALLS);
+      } catch (error) {
+        if (error instanceof StudioBudgetEvidenceError) throw new CanvaFlowError(503, error.code, error.message);
+        throw error;
+      }
 
       const [run] = await db
         .insertInto('design_studio_runs')
@@ -613,10 +726,10 @@ export class DesignStudioService {
     const own = await this.requestImages(s, run.task_id);
     const parentTaskId = request?.pipelineV3 ? request?.directed?.parentTaskId : undefined;
     if (!parentTaskId) return own;
-    const parent = await this.revisionChainImages(s, parentTaskId).catch(() => [] as string[]);
+    const parent = await this.revisionChainImages(s, parentTaskId).catch(optionalImages);
     // A change that answers a question carries the photos the question's task was sent with (an
     // album sent with the change was filed under that task, which is not in the chain).
-    const answered = request?.directed?.answers ? await this.requestImages(s, request.directed.answers).catch(() => [] as string[]) : [];
+    const answered = request?.directed?.answers ? await this.requestImages(s, request.directed.answers).catch(optionalImages) : [];
     const before = [...parent, ...answered.filter((url) => !parent.includes(url))];
     return [...before, ...own.filter((url) => !before.includes(url))];
   }
@@ -635,8 +748,8 @@ export class DesignStudioService {
     // or size of that version lost them and its layout pointed at a photo that was not there (review
     // of 2026-09-24).
     const answersTask = depth < 10 ? await this.answersOf(s, taskId).catch(() => undefined) : undefined;
-    const answered = answersTask ? await this.requestImages(s, answersTask).catch(() => [] as string[]) : [];
-    const parent = parentTaskId && parentTaskId !== taskId ? await this.revisionChainImages(s, parentTaskId, depth + 1).catch(() => [] as string[]) : [];
+    const answered = answersTask ? await this.requestImages(s, answersTask).catch(optionalImages) : [];
+    const parent = parentTaskId && parentTaskId !== taskId ? await this.revisionChainImages(s, parentTaskId, depth + 1).catch(optionalImages) : [];
     const before = [...parent, ...answered.filter((url) => !parent.includes(url))];
     return [...before, ...own.filter((url) => !before.includes(url))];
   }
@@ -823,13 +936,16 @@ export class DesignStudioService {
   /**
    * Builds the StageContext with wrapped clients that enforce ledger-insert-before-dispatch and budget caps.
    */
-  private createStageContext(
+  private async createStageContext(
     s: Scope,
     run: any,
     currentStageName: string,
     currentBudget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
-    onSpendUpdate: (cost: number) => Promise<void>
-  ): StageContext {
+    onSpendUpdate: (cost: number) => Promise<void>,
+    replayCalls: StudioReplayCall[] = [],
+    skipExemplarRetrieval = false,
+    runHistory: StudioReplayCall[] = replayCalls,
+  ): Promise<StageContext> {
     const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
     const fetchFn = this.options.fetcher || fetch;
     const apiKey = this.options.apiKey || process.env.OPENAI_API_KEY || 'mock-key';
@@ -842,301 +958,321 @@ export class DesignStudioService {
 
     const baseArtProvider = new OpenAiImageProvider(apiKey, fetchFn);
 
-    // Instrument client with ledger hooks and budget checks
-    const ledgerClient: any = {
-      calculateCost: baseClient.calculateCost.bind(baseClient),
-      circuitBreaker: baseClient.circuitBreaker,
-      primaryModel: baseClient.primaryModel,
-      fallbackModel: baseClient.fallbackModel,
-      completeJson: async <T>(params: any): Promise<any> => {
-        // Check budget before dispatch
-        if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
-          throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
-        }
+    // A failed local receipt/snapshot write cannot authorize provider retry or a clean fallback.
+    const account = async <T>(write: () => Promise<T>): Promise<T> => {
+      try { return await write(); }
+      catch (error) {
+        if (isModelCallHoldError(error) || error instanceof StudioBudgetExhaustedError) throw error;
+        throw new StudioArtAccountingError(error);
+      }
+    };
+    const finalizeCall = (params: Parameters<DesignStudioRepository['finalizeCall']>[0]) =>
+      account(() => this.repo.finalizeCall({ ...params, actorId: s.actorId }));
+    const recordSpend = (cost: number) => account(() => onSpendUpdate(cost));
+    // ADR-122: retained results are consumed by semantic substep and attempt. A persisted branch
+    // or an interleaved failure no longer shifts every later result; a changed binding still holds.
+    const replayLedger = new StudioSubstepReplay(replayCalls.map(recordedStudioAttempt), runHistory.map(recordedStudioAttempt));
+    let boundContext: StageContext | undefined;
+    let rendererIdentity: string | undefined;
+    const renderer = () => {
+      if (rendererIdentity) return rendererIdentity;
+      try { rendererIdentity = captureRenderFontInputs().sha256; }
+      catch { throw new StudioVisualInputsError('The current font and renderer basis cannot be verified. Restore it before continuing.'); }
+      return rendererIdentity;
+    };
+    const replay = async (kind: 'structured' | 'image', stage: string, provider: string, model: string,
+      reservation: StudioCallReservation, schema?: string): Promise<NonNullable<RecordCallStartParams['substep']>> => {
+      const requestSha256 = reservation.requestSha256;
+      // Parity is content-keyed (ADR-049): each distinct export check is its own substep.
+      const substep = currentStageName === 'parity' && stage === 'parity'
+        ? studioSubstepKey('parity', `request-${requestSha256.slice(0, 16)}`) : currentStudioSubstep(stage);
+      const identities: Record<string, string> = { stage, provider, model, kind, capability: reservation.policy };
+      if (schema) identities.schema = schema;
+      if (substepBindsAuthority(substep, stage)) {
+        if (!boundContext) throw new TypeError('A Studio model call ran before its stage context was built.');
+        identities.authority = authorityPolicySha256(boundContext);
+      }
+      if (substepBindsRenderer(substep, stage)) identities.renderer = renderer();
+      const bindingText = studioBindingText({ version: 1, substep, inputs: { request: requestSha256 }, identities, assets: [] });
+      const bindingSha256 = hash(bindingText);
+      const decision = replayLedger.next({ substep, stage, provider, model, kind, requestSha256, bindingSha256 });
+      // Every ledger hold keeps the pipeline's hold code; resume reports unknown calls before this.
+      if (decision.action === 'hold') {
+        throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', `${decision.detail} Reconcile its saved results before continuing.`);
+      }
+      // A definite image refusal is reproduced as the same outcome, without transport or charge.
+      if (decision.action === 'replay_refusal') throw new RetainedStudioReply(null);
+      if (decision.action === 'reuse') {
+        const retained = await account(() => this.repo.getRetainedCallResult(decision.callId, s.tenantId, s.actorId));
+        if (!retained || retained.kind !== kind) throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', 'The interrupted stage has no matching retained result.');
+        throw new RetainedStudioReply(kind === 'image' ? { ...(retained.payload as object), imageBuffer: retained.image } : retained.payload);
+      }
+      return { key: substep, attempt: decision.attempt, bindingText, bindingSha256 };
+    };
 
-        const callId = randomUUID();
-        const model = params.model || baseClient.primaryModel || resolveModel('text');
-
-        // Ledger insert-before-dispatch
+    // PostgreSQL admits one logical call identity before transport. The ordinal fences two Core
+    // processes that read the same run budget; parity is content-keyed because a transferred run's
+    // budget is immutable and a changed Canva export must remain independently checkable.
+    const admitCall = async (call: {
+      id: string; stage: string; provider: string; model: string; input: unknown; reservation: StudioCallReservation;
+      substep: NonNullable<RecordCallStartParams['substep']>;
+    }) => {
+      const callOrdinal = currentStageName === 'parity' ? null : currentBudget.calls + 1;
+      const logicalCallSha256 = hash(canonicalCallJson({
+        version: 1, runId: run.id, stage: call.stage, provider: call.provider,
+        model: call.model, callOrdinal, input: call.input,
+      }));
+      try {
         await this.repo.recordCallStart({
-          id: callId,
+          id: call.id,
           runId: run.id,
           tenantId: s.tenantId,
-          stage: currentStageName,
-          provider: 'openai',
-          model,
-          requestedModel: model,
+          actorId: s.actorId,
+          stage: call.stage,
+          provider: call.provider,
+          model: call.model,
+          requestedModel: call.model,
+          callOrdinal,
+          logicalCallSha256,
+          reservation: call.reservation,
+          substep: call.substep,
         });
-        currentBudget.calls++;
-
-        try {
-          const result = await baseClient.completeJson<T>(params);
-          const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
-            input_tokens: result.receipt.inputTokens,
-            output_tokens: result.receipt.outputTokens,
-          });
-
-          await this.repo.finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            responseId: result.receipt.id,
-            inputTokens: result.receipt.inputTokens,
-            cachedInputTokens: result.receipt.cacheReadTokens || 0,
-            outputTokens: result.receipt.outputTokens,
-            usdEstimate: cost,
-            status: 'ok',
-          });
-
-          await onSpendUpdate(cost);
-          return result;
-        } catch (err: any) {
-          // A reply cut off at the token cap or not JSON was answered and billed: the error carries
-          // what it cost. Recorded at $0 and left out of the budget until 2026-09-24.
-          const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
-          await this.repo.finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            responseId: err?.responseId,
-            inputTokens: 0,
-            outputTokens: 0,
-            usdEstimate: billedUsd,
-            status: 'error',
-            errorCode: err.message || 'CALL_FAILED',
-          });
-          if (billedUsd > 0) await onSpendUpdate(billedUsd);
-          throw err;
+      } catch (error) {
+        if (error instanceof TaskGenerationBlockedError || error instanceof StudioBudgetEvidenceError) {
+          throw new CanvaFlowError(409, error.code, error.message);
         }
-      },
-      createStructuredCompletion: async <T>(params: any): Promise<any> => {
-        if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
-          throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
-        }
+        if (isModelCallHoldError(error) || error instanceof StudioBudgetExhaustedError) throw error;
+        throw new StudioArtAccountingError(error);
+      }
+      currentBudget.calls++;
+    };
 
-        const callId = randomUUID();
-        const model = params.model || baseClient.primaryModel || resolveModel('text');
-
-        await this.repo.recordCallStart({
-          id: callId,
-          runId: run.id,
-          tenantId: s.tenantId,
-          stage: currentStageName,
-          provider: 'openai',
-          model,
-          requestedModel: model,
+    const checkReservation = (cost: number, reservation: StudioCallReservation) => {
+      if (studioUsdMicros(cost) > studioUsdMicros(reservation.usd)) {
+        throw new StudioBudgetEvidenceError('STUDIO_BUDGET_RESERVATION_EXCEEDED',
+          'The provider cost exceeded its reservation. The receipt is saved; review pricing before continuing.');
+      }
+    };
+    const complete = async <T>(invoke: (beforeDispatch: (body: string) => Promise<void>) => Promise<OpenAiStructuredResponse<T>>) => {
+      const callId = randomUUID();
+      let reservation: StudioCallReservation | undefined;
+      let result: OpenAiStructuredResponse<T>;
+      try {
+        result = await invoke(async body => {
+          const quoted = reserveStudioText(body);
+          const parsed = JSON.parse(body) as { model: string; response_format?: { json_schema?: { name?: unknown } } };
+          const schema = typeof parsed.response_format?.json_schema?.name === 'string' ? parsed.response_format.json_schema.name : undefined;
+          const substep = await replay('structured', currentStageName, 'openai', parsed.model, quoted, schema);
+          if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) throw new StudioBudgetExhaustedError();
+          await admitCall({ id: callId, stage: currentStageName, provider: 'openai', model: parsed.model,
+            input: { requestSha256: quoted.requestSha256 }, reservation: quoted, substep });
+          reservation = quoted;
         });
-        currentBudget.calls++;
+      } catch (err: any) {
+        if (err instanceof RetainedStudioReply) return err.value as OpenAiStructuredResponse<T>;
+        // A refused quote/admission has no ledger row and must never be finalized as a paid call.
+        if (!reservation) throw err;
+        const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
+        const uncertain = err?.isUncertain === true;
+        const notAccepted = typeof err?.status === 'number' && err.status >= 400 && err.status < 500;
+        await finalizeCall({ id: callId, tenantId: s.tenantId, responseId: err?.responseId,
+          inputTokens: 0, outputTokens: 0, usdEstimate: billedUsd,
+          costBasis: notAccepted ? 'not_accepted' : uncertain ? 'unavailable' : err?.costBasis ?? 'estimate',
+          status: uncertain ? 'uncertain' : 'error',
+          errorCode: uncertain ? (err.code || 'ACCEPTANCE_UNKNOWN') : (err.code || 'CALL_FAILED') });
+        if (billedUsd > 0) await recordSpend(billedUsd);
+        checkReservation(billedUsd, reservation);
+        throw err;
+      }
+      const cost = result.receipt.costUsd;
+      await finalizeCall({ id: callId, tenantId: s.tenantId, responseId: result.receipt.responseId,
+        servedModel: result.receipt.servedModel, providerRequestId: result.receipt.xRequestId,
+        responseSha256: result.receipt.sha256, latencyMs: result.receipt.latencyMs,
+        attempts: result.receipt.attempts, inputTokens: result.receipt.inputTokens,
+        cachedInputTokens: result.receipt.cacheReadTokens || 0, outputTokens: result.receipt.outputTokens,
+        usdEstimate: cost, costBasis: result.receipt.costBasis ?? 'estimate', status: 'ok',
+        retainedResult: { kind: 'structured', payload: result } });
+      await recordSpend(cost);
+      checkReservation(cost, reservation!);
+      return result;
+    };
+    const ledgerClient = {
+      calculateCost: baseClient.calculateCost.bind(baseClient), circuitBreaker: baseClient.circuitBreaker,
+      primaryModel: baseClient.primaryModel, fallbackModel: baseClient.fallbackModel,
+      completeJson: <T>(params: Parameters<OpenAiStudioClient['completeJson']>[0]) =>
+        complete<T>(beforeDispatch => baseClient.completeJson<T>({ ...params, beforeDispatch })),
+      createStructuredCompletion: <T>(params: Parameters<OpenAiStudioClient['createStructuredCompletion']>[0]) =>
+        complete<T>(beforeDispatch => baseClient.createStructuredCompletion<T>({ ...params, beforeDispatch })),
+    };
 
-        try {
-          const result = await baseClient.createStructuredCompletion<T>(params);
-          const cost = result.receipt.costUsd || baseClient.calculateCost(result.receipt.model, {
-            input_tokens: result.receipt.inputTokens,
-            output_tokens: result.receipt.outputTokens,
-          });
-
-          await this.repo.finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            responseId: result.receipt.id || result.receipt.responseId,
-            inputTokens: result.receipt.inputTokens,
-            cachedInputTokens: result.receipt.cacheReadTokens || 0,
-            outputTokens: result.receipt.outputTokens,
-            usdEstimate: cost,
-            status: 'ok',
-          });
-
-          await onSpendUpdate(cost);
-          return result;
-        } catch (err: any) {
-          // Billed failures carry their cost, as in completeJson above.
-          const billedUsd = Number(err?.costUsd) > 0 ? Number(err.costUsd) : 0;
-          await this.repo.finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            responseId: err?.responseId,
-            inputTokens: 0,
-            outputTokens: 0,
-            usdEstimate: billedUsd,
-            status: 'error',
-            errorCode: err.message || 'CALL_FAILED',
-          });
-          if (billedUsd > 0) await onSpendUpdate(billedUsd);
-          throw err;
-        }
+    const ledgerArtProvider: Pick<OpenAiImageProvider, 'generateArt'> = {
+      generateArt: async params => {
+        // One image per admission. The verifier uses the same ledger-backed text client;
+        // the bounded art controller cannot hide its second attempt inside the first receipt.
+        // The art stage describes its reserved region in the frame these settings request (ADR-123).
+        const settings = params.settings ?? resolveImageSettings();
+        return baseArtProvider.generateArt({ ...params, settings, visionClient: ledgerClient,
+          requestImage: async (selected, prompt) => {
+            const callId = randomUUID();
+            let reservation: StudioCallReservation | undefined;
+            const started = Date.now();
+            let result: Awaited<ReturnType<typeof requestStudioArtImage>>;
+            try {
+              result = await requestStudioArtImage(selected, prompt,
+                selected.provider === 'google' ? params.geminiApiKey || process.env.GEMINI_API_KEY || '' : apiKey,
+                fetchFn, async body => {
+                  const quoted = reserveStudioImage(selected.provider, body);
+                  const substep = await replay('image', 'art', selected.provider, selected.model, quoted);
+                  if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
+                  await admitCall({ id: callId, stage: 'art', provider: selected.provider, model: selected.model,
+                    input: { requestSha256: quoted.requestSha256 }, reservation: quoted, substep });
+                  reservation = quoted;
+                });
+            } catch (error) {
+              if (error instanceof RetainedStudioReply) return error.value as Awaited<ReturnType<typeof requestStudioArtImage>>;
+              if (!reservation) throw error;
+              const uncertain = !!error && typeof error === 'object' && 'isUncertain' in error && error.isUncertain === true;
+              await finalizeCall({ id: callId, tenantId: s.tenantId, inputTokens: 0, outputTokens: 0,
+                usdEstimate: 0, status: uncertain ? 'uncertain' : 'error',
+                errorCode: uncertain ? 'ACCEPTANCE_UNKNOWN' : 'ART_FAILED', latencyMs: Date.now() - started, attempts: 1 });
+              throw error;
+            }
+            const cost = result?.costUsd ?? 0;
+            await finalizeCall({ id: callId, tenantId: s.tenantId,
+              responseId: result?.responseId, servedModel: result?.servedModel,
+              providerRequestId: result?.xRequestId,
+              responseSha256: result ? hash(result.imageBuffer) : null,
+              inputTokens: result?.inputTokens ?? 0, outputTokens: result?.outputTokens ?? 0,
+              images: result ? 1 : 0, usdEstimate: cost, status: result ? 'ok' : 'error',
+              costBasis: !result ? 'not_accepted' : result.costSource === 'usage' ? 'usage' : 'estimate',
+              errorCode: result ? null : 'IMAGE_REQUEST_REJECTED', latencyMs: Date.now() - started, attempts: 1,
+              ...(result ? { retainedResult: { kind: 'image' as const,
+                payload: { ...result, imageBuffer: undefined }, image: result.imageBuffer } } : {}) });
+            await recordSpend(cost);
+            checkReservation(cost, reservation!);
+            return result;
+          },
+        });
       },
     };
 
-    const ledgerArtProvider: any = {
-      generateArt: async (params: any): Promise<any> => {
-        if (currentBudget.spentUsd >= currentBudget.maxUsd || currentBudget.calls >= currentBudget.maxCalls) {
-          throw new StudioBudgetExhaustedError('BUDGET_EXHAUSTED');
-        }
-
-        // The configured provider and model (HAWA_IMAGE_*), resolved once so the ledger and the
-        // request agree. An invalid setting throws here, and the art stage falls back to a motif.
-        const settings = resolveImageSettings();
-        const callId = randomUUID();
-        await this.repo.recordCallStart({
-          id: callId,
-          runId: run.id,
-          tenantId: s.tenantId,
-          stage: 'art',
-          provider: settings.provider,
-          model: settings.model,
-          requestedModel: settings.model,
-        });
-        currentBudget.calls++;
-
-        try {
-          const result = await baseArtProvider.generateArt({ ...params, settings });
-          // What the provider billed, across every attempt; never a made-up figure.
-          const cost = Number(result.receipt?.costUsd ?? 0);
-
-          await this.repo.finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            responseId: result.receipt?.responseId || `${result.receipt?.provider || settings.provider}_art`,
-            inputTokens: 0,
-            outputTokens: 0,
-            images: 1,
-            usdEstimate: cost,
-            status: 'ok',
-          });
-
-          await onSpendUpdate(cost);
-          return result;
-        } catch (err: any) {
-          await this.repo.finalizeCall({
-            id: callId,
-            tenantId: s.tenantId,
-            inputTokens: 0,
-            outputTokens: 0,
-            usdEstimate: 0,
-            status: 'error',
-            errorCode: err.message || 'ART_FAILED',
-          });
-          throw err;
-        }
-      },
-    };
-
-    // Filled from the client's own reference pack below; a run whose pack cannot be read stops, so
-    // these are never designed with. They were KAAE's palette (ADR-038).
-    let referencePack: ReferencePack = {
-      palette: [],
-      referenceFonts: {
-        latin: 'Verdana',
-        arabic: 'Noto Sans Arabic',
-      },
-    };
+    const { reference, logo: logoBytes } = await resolveClientDesignReference(this.db, s, run.client_id, request.dnaVersion);
+    if (request.clientId !== run.client_id || reference.clientId !== run.client_id ||
+        hash(JSON.stringify(reference)) !== request.referenceHash ||
+        hash(logoBytes) !== request.logoSha256) {
+      throw new CanvaFlowError(409, 'CLIENT_REFERENCE_CHANGED',
+        'The client reference changed after this Studio run was created. Abandon it and plan again.');
+    }
+    if (currentStageName !== 'parity') await assertCurrentClientDesignReference(this.db, s, reference);
+    const packagedKaae = reference.status === 'reference_for_draft_not_release_approval';
+    if (isPipelineV3Run(run) && !packagedKaae) {
+      throw new CanvaFlowError(422, 'CLIENT_V3_PROFILE_REQUIRED',
+        'This client has no admitted Studio v3 font and exemplar profile.');
+    }
+    let referencePack: ReferencePack;
     let promotedRules: string;
     let latinFont: string;
     let arabicFont: string;
-    let referenceDrift = false;
+    let exemplarPolicySha256: string | undefined;
+    let exemplarManifest: unknown;
+    let exemplarRetrieval: StageContext['exemplarRetrieval'];
 
-    try {
-      const stageReference = clientReferenceOf(run.client_id);
-      if ('refusal' in stageReference) throw new Error(stageReference.refusal);
-      const rawRef = JSON.parse(readFileSync(stageReference.referencePath, 'utf8'));
-      referenceDrift = Boolean(request?.referenceHash) && hash(JSON.stringify(rawRef)) !== request.referenceHash;
+    if (packagedKaae) {
       // Read the way the qualification reads it (shared), so both design with the same rules.
-      const rules = studioReferenceFromRaw(rawRef);
-      referencePack.palette = rules.palette;
+      const rules = studioReferenceFromRaw(reference);
+      referencePack = { palette: rules.palette, referenceFonts: { latin: rules.latinFont, arabic: rules.arabicFont },
+        clientId: reference.clientId, referenceHash: request.referenceHash };
       latinFont = rules.latinFont;
       arabicFont = rules.arabicFont;
       promotedRules = rules.promotedRules;
-      if (rawRef.rules?.fontFamily) {
-        referencePack.referenceFonts = { latin: rules.latinFont, arabic: rules.arabicFont };
+      // The client's own confirmed set, as its pack names it (ADR-127): the same KAAE manifest file,
+      // so its policy hash is unchanged. No pack, or a pack naming no set, is refused rather than
+      // designed on no exemplars (as a missing manifest was refused before the packs).
+      let exemplarManifestPath: string;
+      try {
+        exemplarManifestPath = packagedReferenceExemplarManifest(run.client_id);
+      } catch (err) {
+        if (err instanceof ClientExemplarsUnavailableError) throw new CanvaFlowError(503, err.code, err.message);
+        throw err;
       }
-    } catch (err: any) {
-      // This used to fall back to a placeholder rule inside an "if (refPath)" with no else, and the
-      // only warning sat in a catch that never ran. Both candidate paths missed in the image, so
-      // 24 hours of production logs held no occurrence of it while every brief went out with
-      // "Keep title clear and centered..." instead of the client's colour rules. A run that cannot
-      // read the client's pack must stop rather than design to defaults nobody approved.
-      const detail = err?.message || String(err);
-      log.error(`[design-studio] Reference pack could not be read; this run is stopping. ${detail}`);
-      throw new CanvaFlowError(
-        500,
-        'REFERENCE_PACK_UNREADABLE',
-        `The client's brand reference pack could not be read, so this design cannot be briefed. ${detail}`
-      );
-    }
-
-    // The client's scope is fixed once the run has retrieved its references (AGENTS.md): the pack was
-    // re-read on every stage, and a pack changed mid-run gave later stages other brand rules than the
-    // brief was written with (audit 2026-09-27 #16). The run stops rather than mixing the two.
-    if (referenceDrift) {
-      log.error(`[design-studio] The client's reference pack changed after run ${run.id} started; this run is stopping.`);
-      throw new CanvaFlowError(
-        409,
-        'CLIENT_SCOPE_CHANGED',
-        "The client's brand reference pack changed after this design was started. Start the design again to use the new one."
-      );
+      exemplarManifest = JSON.parse(readFileSync(exemplarManifestPath, 'utf8'));
+      exemplarPolicySha256 = hash(canonicalCallJson(exemplarManifest));
+    } else {
+      latinFont = reference.rules.typography.formalBody.latin;
+      arabicFont = reference.rules.typography.formalBody.arabic;
+      const admittedDisplayFonts = qualifiedStudioFonts(reference, request.copyBlocks as CopyBlock[]);
+      referencePack = { palette: reference.rules.palette,
+        referenceFonts: { latin: latinFont, arabic: arabicFont }, clientId: reference.clientId,
+        admittedDisplayFonts,
+        clientName: reference.clientName, dnaVersion: reference.dnaVersion,
+        dnaContentHash: reference.dnaContentHash, logoAssetId: reference.logoAssetId,
+        logoSha256: reference.logoSha256, logoConstraints: reference.rules.logoConstraints };
+      promotedRules = JSON.stringify(reference.rules.layoutRules || []);
     }
 
     const exemplars: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }> = [];
-    // The client's own exemplars only (ADR-038): every client used to be conditioned on KAAE's.
-    let clientExemplars: ReturnType<typeof clientExemplarsOf>;
-    try {
-      clientExemplars = clientExemplarsOf(run.client_id);
+    if (packagedKaae && !skipExemplarRetrieval) try {
+      const retrievalIndex = new ExemplarRetrievalIndex({ manifest: exemplarManifest });
       const briefQuery = {
-        text: (s as any).instructions || (s as any).title || (run as any).title || '',
-        format: (s as any).format,
-        category: (s as any).topic,
+        text: [request.instructions, ...request.copyBlocks.map((b: CopyBlock) => b.text)].join('\n'),
+        format: request.width === request.height ? '1:1' : request.width / request.height === 0.8 ? '4:5' : undefined,
       };
-      const retrieval = clientExemplars?.index.retrieveTopExemplars(briefQuery, 3);
-      for (const item of retrieval?.retrievedExemplars ?? []) {
-        const imgPath = clientExemplars!.imageOf(item);
-        if (imgPath) {
-          exemplars.push({
-            path: imgPath,
-            label: item.filename || item.descriptor || 'Client exemplar',
-            bytes: readFileSync(imgPath),
-            mimeType: /\.jpe?g$/i.test(imgPath) ? 'image/jpeg' : 'image/png',
-          });
+      const available = new Map<string, { path: string; bytes: Buffer; sha256: string }>();
+      const unavailableIds: string[] = [], availabilityWarnings: string[] = [];
+      for (const item of retrievalIndex.getConfirmedExemplars()) {
+        const archived = resolve(process.cwd(), item.path);
+        const imgPath = creativeAssetPath(`exemplars/${item.filename}`, { optional: true }) ??
+          (existsSync(archived) ? archived : undefined);
+        let bytes: Buffer | undefined;
+        if (imgPath) try { bytes = readFileSync(imgPath); } catch { /* Recorded below; never condition on unreadable bytes. */ }
+        if (!bytes || !item.sha256 || hash(bytes) !== item.sha256) {
+          unavailableIds.push(item.id);
+          availabilityWarnings.push(`${bytes ? 'EXEMPLAR_BYTES_UNVERIFIED' : 'EXEMPLAR_FILE_MISSING'}:${item.id}`);
+          continue;
         }
+        available.set(item.id, { path: imgPath!, bytes, sha256: item.sha256 });
+      }
+      const retrieval = retrievalIndex.retrieveTopExemplars(briefQuery, 3, [...available.keys()]);
+      exemplarRetrieval = { ...retrieval.evidence, loadedIds: retrieval.retrievedIds, unavailableIds,
+        warnings: [...retrieval.evidence.warnings, ...availabilityWarnings] };
+      for (const item of retrieval.retrievedExemplars) {
+        const verified = available.get(item.id)!;
+        exemplars.push({ ...verified, label: `${item.filename}: ${item.descriptor}` });
       }
     } catch (err: any) {
-      clientExemplars = undefined;
+      exemplarRetrieval = { algorithm: EXEMPLAR_RETRIEVAL_VERSION, manifestSha256: hash(JSON.stringify(exemplarManifest)),
+        mode: 'empty', queryTokenCount: 0, matchedTokenCount: 0, eligibleCount: 0, matches: [], loadedIds: [], unavailableIds: [],
+        warnings: ['EXEMPLAR_RETRIEVAL_FAILED: no verified selection was available.'] };
       log.error(
         `[design-studio] Exemplar images could not be loaded (${err?.message || err}); ` +
           `this design is being generated without exemplar conditioning.`
       );
     }
-    if (!exemplars.length) {
+    if (packagedKaae && !skipExemplarRetrieval && !exemplars.length) {
       // In production this was silent: the layout model was conditioned on nothing and no one
       // could tell from the logs that the run had seen no exemplar at all.
       log.error(
-        clientExemplars
-          ? `[design-studio] No exemplar image of client ${clientExemplars.code} resolved; run ${run.id} is being conditioned on no exemplar.`
-          : `[design-studio] Client ${run.client_id} has no confirmed exemplars yet; run ${run.id} is being conditioned on none rather than another client's.`
+        `[design-studio] No exemplar image resolved under ${creativeAssetPath('exemplars', { optional: true }) || 'packages/creative/assets/exemplars'}; ` +
+          `run ${run.id} is being conditioned on no exemplar.`
       );
     }
 
-    // A KAAE design without the KAAE logo is not deliverable, so a missing or changed logo stops the
-    // run. It used to pass silently: the only path tried did not exist in the image, and the design
-    // went to Canva with the logo box empty.
-    const runReference = clientReferenceOf(run.client_id);
-    const logoBytes = readFileSync('refusal' in runReference ? officialLogoPath() : runReference.logoPath);
-    const logoSha256 = createHash('sha256').update(logoBytes).digest('hex');
-    if (request.logoSha256 && logoSha256 !== request.logoSha256) {
-      throw new CanvaFlowError(409, 'LOGO_CHANGED', 'The official logo changed after this run started; review the reference pack.');
-    }
-    const logo = { bytes: logoBytes, sha256: logoSha256, mimeType: 'image/png' as const };
+    const logo = { bytes: logoBytes, sha256: reference.logoSha256, mimeType: 'image/png' as const };
 
-    // The client, as every stage is told it (ADR-038): shared prompts name no client, so its profile
-    // follows its own colour rules in the rules every stage reads, and goes to the layout generator
-    // and the judge by name. A thumbnail client's stages are also told the thumbnail rules, and its
-    // hard QA checks them.
+    // The client's playbook (ADR-127). A thumbnail client's stages are all told the thumbnail rules
+    // through the rules every stage reads, and its hard QA checks them. An announcement client's
+    // rules, and so its pinned visual policy, are unchanged.
+    // Who the client is goes to the v3 layout generator and the judge by name (its pack's profile):
+    // their shared prompts no longer name KAAE. It is not added to the rules every stage reads, so a
+    // client's pinned visual policy (ADR-112) does not change with it.
     const pack = clientPackOf(run.client_id);
     const playbook = pack?.playbook;
     const clientProfile = pack?.profile;
-    if (clientProfile) promotedRules = `${promotedRules}\n\nCLIENT: ${clientProfile}`;
     if (playbook === 'video-thumbnail') {
       promotedRules = `${promotedRules}\n\n${thumbnailPlaybookPrompt({ width: request.width, height: request.height })}`;
     }
 
-    return {
+    const ctx: StageContext = {
       runId: run.id,
       tenantId: s.tenantId,
       taskId: run.task_id,
@@ -1150,22 +1286,25 @@ export class DesignStudioService {
       referencePack,
       promotedRules,
       ...(clientProfile ? { clientProfile } : {}),
-      ...(playbook ? { playbook } : {}),
+      ...(playbook === 'video-thumbnail' ? { playbook } : {}),
       latinFont,
       arabicFont,
       logoAspect: request.logoAspect || 1.0,
       logo,
       exemplars,
-      ...(clientExemplars ? { exemplarIndex: clientExemplars.index } : {}),
+      exemplarPolicySha256,
+      exemplarRetrieval,
       client: ledgerClient as any,
       artProvider: ledgerArtProvider as any,
       pipelineV3: isPipelineV3Run(run),
+      imageryStrategy: (runStages(run).brief as CreativeBrief | undefined)?.imageryStrategy,
       requestedBackground: requestedBackgroundFor(runStages(run).brief, referencePack.palette),
-      // The brand ornament (texture and dividers) is the announcement house style; a video thumbnail
-      // has none (ADR-038).
-      ornament: playbook === 'video-thumbnail' ? { ...ornamentSettings(), texture: 'none', dividers: false } : ornamentSettings(),
+      ornament: packagedKaae ? ornamentSettings() : undefined,
       style: (runStages(run).brief as CreativeBrief | undefined)?.styleSpec,
+      unconsumedRetainedCalls: () => replayLedger.unconsumed(),
     };
+    boundContext = ctx;
+    return ctx;
   }
 
   /**
@@ -1173,8 +1312,17 @@ export class DesignStudioService {
    * Interrupted runs resume from the current stage without duplicating prior stage calls.
    * Concurrent requests for the same run share the in-flight promise to prevent race conditions.
    */
+  private async assertTaskCanGenerate(s: Scope, taskId: string, historicalParent?: unknown): Promise<void> {
+    await this.tx(s, async db => {
+      const task = (await sql<{state:string}>`SELECT state FROM hawa.tasks
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      assertTaskGenerationAllowed(task?.state);
+      await assertNativeRevisionAdmission(db, s.tenantId, taskId, historicalParent);
+    });
+  }
+
   public async resume(s: Scope, taskId: string, runId: string): Promise<StudioResumeResult> {
-    const lockKey = `${s.tenantId}:${runId}`;
+    const lockKey = `${s.tenantId}:${taskId}:${runId}:${s.actorId}:${s.role || ""}`;
     const existing = this.inFlightResumes.get(lockKey);
     if (existing) {
       return await existing;
@@ -1211,7 +1359,10 @@ export class DesignStudioService {
       };
     }
 
+    const nativeParent = (typeof run.request === 'string' ? JSON.parse(run.request) : run.request)?.directed?.parentTaskId;
+    await this.assertTaskCanGenerate(s, taskId, nativeParent);
     if (run.status === 'awaiting_selection') {
+      await this.assertTaskCanGenerate(s, taskId);
       return {
         runId,
         status: 'awaiting_selection',
@@ -1219,23 +1370,58 @@ export class DesignStudioService {
       };
     }
 
-    const stages: Record<string, any> =
-      typeof run.stages === 'string' ? JSON.parse(run.stages || '{}') : run.stages || {};
+    // A previous worker may have died after the provider accepted a call but before it saved the
+    // answer. Its pre-dispatch row survives the restart. Never pay for that logical stage again
+    // until an operator reconciles the unknown provider outcome.
+    const priorCalls = await this.repo.getCallsForRun(runId, s.tenantId, undefined, s.actorId);
+    const unresolvedCall = priorCalls.find((call) => call.status === 'uncertain');
+    if (unresolvedCall) {
+      throw new CanvaFlowError(409, 'MODEL_CALL_UNCERTAIN',
+        `The ${unresolvedCall.stage} model call has an unknown outcome. Reconcile its provider result before resuming this run.`);
+    }
+    const stageCalls = priorCalls.filter((call) => call.stage === run.status || (run.status === 'laying_out' && call.stage === 'art'));
+    // Legacy successes and billed errors without validated reusable output still require review.
+    const alreadyPaid = stageCalls.find((call) =>
+      (call.status === 'ok' && !call.has_retained_result) || (call.status === 'error' && Number(call.usd_estimate) > 0));
+    if (alreadyPaid) {
+      throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE',
+        `The ${run.status} stage has a recorded paid model call but no saved stage result. Review that call before starting a new run.`);
+    }
+
+    await this.assertTaskCanGenerate(s, taskId);
+
+    const stages = runStages(run);
     const budget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number } =
       typeof run.budget === 'string' ? JSON.parse(run.budget) : run.budget;
+    // The whole stage is the replay pool; it replays only when it holds a retained result.
+    if (stageCalls.some((call) => call.has_retained_result)) {
+      const usage = await this.repo.getBudgetUsage(runId, s.tenantId, s.actorId);
+      if (!usage || usage.accountedUsd === null || (usage.blocker && usage.blocker !== 'BUDGET_EXHAUSTED')) throw new CanvaFlowError(409, 'MODEL_STAGE_REPLAY_UNSAFE', 'The saved result budget history is incomplete.');
+      budget.spentUsd = usage.accountedUsd;
+      budget.calls = usage.admittedCalls;
+    }
 
     const onSpendUpdate = async (cost: number) => {
       budget.spentUsd += cost;
       await this.repo.updateRunStatus(runId, s.tenantId, run.status, { budget });
     };
 
+    const pinnedVisualInputs = await this.visualInputRepo.get(s, runId).catch(() => {
+      throw new CanvaFlowError(409, 'STUDIO_VISUAL_INPUTS_UNSAFE', 'The saved visual basis cannot be read and verified. Restore its original storage before continuing.');
+    });
+    if (!pinnedVisualInputs && !['briefing', 'conceiving', 'laying_out'].includes(run.status)) {
+      throw new CanvaFlowError(409, 'STUDIO_VISUAL_INPUTS_UNSAFE', 'This historical run has no pinned visual basis. Review its existing result before requesting a new revision.');
+    }
+
     // Building the context reads the client's reference pack, and a missing pack now throws rather
     // than designing with defaults. Outside the try below that left the run in 'briefing' for the
     // worker to retry for ever, so it is marked failed here with the reason.
     let ctx: StageContext;
     try {
-      ctx = await this.withClientRules(s, this.createStageContext(s, run, run.status, budget, onSpendUpdate), run.created_at);
+      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate, stageCalls, Boolean(pinnedVisualInputs), priorCalls), run.created_at);
     } catch (err: any) {
+      if (pinnedVisualInputs) throw new CanvaFlowError(409, 'STUDIO_VISUAL_INPUTS_UNSAFE',
+        'The pinned design policy cannot currently be verified. Restore its original authorized inputs before continuing.');
       const diagnostic = `Stage context could not be built: ${err?.message || err}`;
       await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
       throw err;
@@ -1244,94 +1430,110 @@ export class DesignStudioService {
     // exception from them (the image re-brief's model call, a picture that would not decode) used
     // to leave the run at its stage for the worker to poll until it gave up on it as stuck.
     try {
-      // An image the requester attached reaches the brief, which says what it is; a style reference
-      // then reaches the layout generator, the critique and the judge. It was saved with every
-      // Telegram task but only the legacy planner ever read it.
-      // What each image is, the model decides by looking at it: the brief classifies every image the
-      // request carries (photo to place, design to follow, logo). "I attached the panelists pictures
-      // and a reference for the graphic" with three images is two photos and one reference; until
-      // 2026-09-22 every image was a reference, and then a keyword turned every image into a photo.
-      let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
-      if (run.status === 'briefing') await this.settleAlbum(s, run.task_id);
-      // Turned upright once, here, so the brief, the face detector, the cut-out, the preview and the deck
-      // all see a phone photo the right way up (the renderer ignores a JPEG's orientation tag).
-      const images = await Promise.all(
-        (await this.imagesForRun(s, run).catch(() => [] as string[])).map((url) => uprightPhotoDataUrl(url).catch(() => url))
-      );
-      const roles = briefSoFar?.imageRoles;
-      let classified = false;
-      if (
-        roles && roles.length > 0 && images.length > roles.length && run.status === 'conceiving' &&
-        !(briefSoFar as { imagesRebrief?: boolean } | undefined)?.imagesRebrief
-      ) {
-        // A picture joined the request after its brief was written and before any layout (the
-        // reference sent a few seconds after the album): the brief is written again, once, looking at
-        // every picture, so each is classified instead of guessed from the request's words.
-        ctx.requestImages = images;
-        ctx.attachedImage = undefined;
-        const reread = await runBriefStage(ctx);
-        const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
-        stages.brief = { ...reread, photosSent, imagesRebrief: true };
-        await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
-        briefSoFar = stages.brief as LateReferenceBrief;
-        ctx.requestImages = undefined;
-      }
-      const rolesNow = briefSoFar?.imageRoles;
-      if (rolesNow && images.length > 0 && rolesNow.length === images.length) {
-        classified = true;
-        ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => contentPhotoFromDataUrl(images[r.index]));
-        const ref = rolesNow.find((r) => r.role === 'style_reference');
-        ctx.attachedImage = ref ? images[ref.index] : undefined;
-        if (ref) ctx.reference = { dataUrl: images[ref.index], notes: ref.notes || briefSoFar?.referenceNotes || '' };
-      } else if (images.length > 1 && run.status === 'briefing') {
-        // The brief below looks at all of them.
-        ctx.requestImages = images;
-        ctx.attachedImage = undefined;
-      } else if (images.length > 1) {
-        // A brief written before images were classified, or images that arrived after it: the request's
-        // own words decide, as before.
-        if (asksForPictures(ctx.instructions)) ctx.photos = images.map((dataUrl) => contentPhotoFromDataUrl(dataUrl));
-        else ctx.attachedImage = images[images.length - 1];
-      } else {
-        // Upright and renderable like the run's other images: this one image went to the brief sideways.
-        const own = await this.attachedImage(s, run.task_id);
-        ctx.attachedImage = own ? await uprightPhotoDataUrl(own).catch(() => own) : undefined;
-      }
-      // A photo that arrived after the brief ran came without a caption, right after the request, so
-      // it was sent to be followed. Taken here because the re-read below sets referenceSeen true.
-      const joinedLate = briefSoFar?.referenceSeen === false || Boolean(briefSoFar?.referenceRebrief);
-      // At 'briefing' the brief has not been written yet and the stage below reads the image itself.
-      if (!classified && ctx.attachedImage && run.status !== 'briefing' && briefSoFar?.referenceSeen === false && !briefSoFar.referenceRebrief) {
-        briefSoFar = await this.rereadBriefWithLateReference(s, run, ctx, stages, budget, briefSoFar);
-      }
-      // Only the brief calling the photo the client's own logo stops the run from following it.
-      if (!classified && ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
-        ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
+      if (pinnedVisualInputs) restoreVisualInputs(ctx, stages, pinnedVisualInputs);
+      else {
+        // An image the requester attached reaches the brief, which says what it is; a style reference
+        // then reaches the layout generator, the critique and the judge. It was saved with every
+        // Telegram task but only the legacy planner ever read it.
+        // What each image is, the model decides by looking at it: the brief classifies every image the
+        // request carries (photo to place, design to follow, logo). "I attached the panelists pictures
+        // and a reference for the graphic" with three images is two photos and one reference; until
+        // 2026-09-22 every image was a reference, and then a keyword turned every image into a photo.
+        let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
+        if (run.status === 'briefing') await this.settleAlbum(s, run.task_id);
+        // Turned upright once, here, so the brief, the face detector, the cut-out, the preview and the deck
+        // all see a phone photo the right way up (the renderer ignores a JPEG's orientation tag).
+        const images = await Promise.all(
+          (await this.imagesForRun(s, run).catch(optionalImages)).map((url) => uprightPhotoDataUrl(url).catch(() => url))
+        );
+        const roles = briefSoFar?.imageRoles;
+        let classified = false;
+        if (
+          roles && roles.length > 0 && images.length > roles.length && run.status === 'conceiving' &&
+          !(briefSoFar as { imagesRebrief?: boolean } | undefined)?.imagesRebrief
+        ) {
+          // A picture joined the request after its brief was written and before any layout (the
+          // reference sent a few seconds after the album): the brief is written again, once, looking at
+          // every picture, so each is classified instead of guessed from the request's words.
+          ctx.requestImages = images;
+          ctx.attachedImage = undefined;
+          const reread = await inStudioSubstep('brief/images-rebrief', () => runBriefStage(ctx));
+          const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
+          stages.brief = { ...reread, photosSent, imagesRebrief: true };
+          await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
+          stages.brief = await this.briefAsStored(s, runId, stages.brief);
+          briefSoFar = stages.brief as LateReferenceBrief;
+          ctx.requestImages = undefined;
+        }
+        const rolesNow = briefSoFar?.imageRoles;
+        if (rolesNow && images.length > 0 && rolesNow.length === images.length) {
+          classified = true;
+          ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => ({ ...contentPhotoFromDataUrl(images[r.index]), notes: r.notes }));
+          const ref = rolesNow.find((r) => r.role === 'style_reference');
+          ctx.attachedImage = ref ? images[ref.index] : undefined;
+          if (ref) ctx.reference = { dataUrl: images[ref.index], notes: ref.notes || briefSoFar?.referenceNotes || '' };
+        } else if (images.length > 1 && run.status === 'briefing') {
+          // The brief below looks at all of them.
+          ctx.requestImages = images;
+          ctx.attachedImage = undefined;
+        } else if (images.length > 1) {
+          // A brief written before images were classified, or images that arrived after it: the request's
+          // own words decide, as before.
+          if (asksForPictures(ctx.instructions)) ctx.photos = images.map((dataUrl) => contentPhotoFromDataUrl(dataUrl));
+          else ctx.attachedImage = images[images.length - 1];
+        } else {
+          // Upright and renderable like the run's other images: this one image went to the brief sideways.
+          const own = await this.attachedImage(s, run.task_id);
+          ctx.attachedImage = own ? await uprightPhotoDataUrl(own).catch(() => own) : undefined;
+        }
+        // A photo that arrived after the brief ran came without a caption, right after the request, so
+        // it was sent to be followed. Taken here because the re-read below sets referenceSeen true.
+        const joinedLate = briefSoFar?.referenceSeen === false || Boolean(briefSoFar?.referenceRebrief);
+        // At 'briefing' the brief has not been written yet and the stage below reads the image itself.
+        if (!classified && ctx.attachedImage && run.status !== 'briefing' && briefSoFar?.referenceSeen === false && !briefSoFar.referenceRebrief) {
+          briefSoFar = await this.rereadBriefWithLateReference(s, run, ctx, stages, budget, briefSoFar);
+        }
+        // Only the brief calling the photo the client's own logo stops the run from following it.
+        if (!classified && ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
+          ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
+        }
+
+        // People cut out of their photos (ADR-032), when the request, the brief's reading of the
+        // reference, or the design being changed calls for them. They are made once, at the layout
+        // stage, and read back from the store at every stage after it, so the design a run shows never
+        // changes under it. A photo whose cut-out failed its checks stays framed, and the note says why.
+        if (ctx.photos?.length && this.cutouts.configured && run.status !== 'briefing') {
+          if (stages.cutoutsWanted === undefined) stages.cutoutsWanted = await this.cutoutsWanted(s, run, ctx, stages);
+          if (stages.cutoutsWanted) {
+            const loaded = await this.cutouts.forPhotos((fn) => this.tx(s, fn), s.tenantId, ctx.photos, { compute: run.status === 'laying_out' });
+            ctx.photoCutouts = loaded.assets;
+            ctx.cutoutOutcomes = loaded.outcomes;
+            if (run.status === 'laying_out') stages.cutouts = loaded.outcomes;
+          }
+          // Where the people are in each photo, so a framed photo is cropped around faces rather than
+          // from its centre (a tall portrait in a square box lost the heads). Found once, at the layout.
+          if (run.status === 'laying_out' && !Array.isArray(stages.photoFocus)) {
+            stages.photoFocus = (await this.cutouts.focusFor(ctx.photos)).map((f) => f ?? null);
+          }
+          // Each photo's own pixel size, so the requester can be told when one is shown much larger than
+          // it is and will look soft (plan 4.4); nothing invents the missing detail on a person's photo.
+          if (run.status === 'laying_out' && !Array.isArray(stages.photoSizes)) {
+            stages.photoSizes = ctx.photos.map((p) => (p.width && p.height ? { width: p.width, height: p.height } : null));
+          }
+        }
+
+        if (run.status === 'laying_out') {
+          const proposed = await captureVisualInputs(ctx, stages);
+          let saved;
+          try { saved = await this.visualInputRepo.pin(s, runId, proposed); }
+          catch { throw new StudioVisualInputsError('Visual inputs could not be committed. No layout call is permitted until they are retained.'); }
+          restoreVisualInputs(ctx, stages, saved);
+        }
       }
 
-      // People cut out of their photos (ADR-032), when the request, the brief's reading of the
-      // reference, or the design being changed calls for them. They are made once, at the layout
-      // stage, and read back from the store at every stage after it, so the design a run shows never
-      // changes under it. A photo whose cut-out failed its checks stays framed, and the note says why.
-      if (ctx.photos?.length && this.cutouts.configured && run.status !== 'briefing') {
-        if (stages.cutoutsWanted === undefined) stages.cutoutsWanted = await this.cutoutsWanted(s, run, ctx, stages);
-        if (stages.cutoutsWanted) {
-          const loaded = await this.cutouts.forPhotos((fn) => this.tx(s, fn), s.tenantId, ctx.photos, { compute: run.status === 'laying_out' });
-          ctx.photoCutouts = loaded.assets;
-          ctx.cutoutOutcomes = loaded.outcomes;
-          if (run.status === 'laying_out') stages.cutouts = loaded.outcomes;
-        }
-        // Where the people are in each photo, so a framed photo is cropped around faces rather than
-        // from its centre (a tall portrait in a square box lost the heads). Found once, at the layout.
-        if (run.status === 'laying_out' && !Array.isArray(stages.photoFocus)) {
-          stages.photoFocus = (await this.cutouts.focusFor(ctx.photos)).map((f) => f ?? null);
-        }
-        // Each photo's own pixel size, so the requester can be told when one is shown much larger than
-        // it is and will look soft (plan 4.4); nothing invents the missing detail on a person's photo.
-        if (run.status === 'laying_out' && !Array.isArray(stages.photoSizes)) {
-          stages.photoSizes = ctx.photos.map((p) => (p.width && p.height ? { width: p.width, height: p.height } : null));
-        }
-      }
+      // Included in the run's normal stage snapshot for operator diagnostics; the
+      // immutable visual bundle remains the authority after layout preparation.
+      if (ctx.exemplarRetrieval) stages.exemplarRetrieval = ctx.exemplarRetrieval;
 
       // The copy as this run changed it (a change of wording, or one an earlier round made): every
       // stage after the edit renders, checks and transfers these words, not the request's.
@@ -1355,7 +1557,7 @@ export class DesignStudioService {
             (typeof run.request === 'string' ? JSON.parse(run.request) : run.request) as { directed?: { parentTaskId?: unknown } } | undefined
           )?.directed?.parentTaskId;
           if (ctx.pipelineV3 && typeof directedParent === 'string') await this.refuseWhileParentRuns(s, directedParent);
-          const brief = await runBriefStage(ctx);
+          const brief = await inStudioSubstep('brief/request', () => runBriefStage(ctx));
           // Recorded on the run so the requester's note can say what became of their photos.
           const photosSent = (brief.imageRoles || []).filter((r) => r.role === 'content_photo').length || (ctx.photos?.length ?? 0);
           stages.brief = { ...brief, photosSent };
@@ -1383,7 +1585,7 @@ export class DesignStudioService {
           // A v3 run's layout call invents its own three archetypes and never reads these
           // concepts, so it spends nothing here: it reserves a row per layout the generator
           // returns, and each row's concept is filled from what the generator produced.
-          const concepts = ctx.pipelineV3 ? [] : await runConceptsStage(ctx, brief);
+          const concepts = ctx.pipelineV3 ? [] : await inStudioSubstep('concepts/board', () => runConceptsStage(ctx, brief));
           stages.concepts = concepts;
           const slots = ctx.pipelineV3 ? V3_CANDIDATE_SLOTS : concepts.length;
 
@@ -1406,6 +1608,10 @@ export class DesignStudioService {
         case 'laying_out': {
           const brief: CreativeBrief = stages.brief;
           const concepts: Concept[] = stages.concepts;
+          // Every run records the negative-space policy its layouts are asked for and scored by, a
+          // directed revision included (ADR-125); an afresh run's contract carries it as well.
+          stages.policies = [negativeSpacePolicyIdentity()];
+          let inherited: CopyBlock[] | undefined;
           if (stages.directed && !stages.directedFailed) {
             const parent = await this.parentWinner(s, undefined, stages.directed.parentCandidateId);
             try {
@@ -1416,7 +1622,7 @@ export class DesignStudioService {
               // revision's task carries the first request's copy, and would put the old words back.
               const parentRun = await this.repo.getRunById(parent.runId, s.tenantId).catch(() => undefined);
               const parentStages = parentRun ? (typeof parentRun.stages === 'string' ? JSON.parse(parentRun.stages) : parentRun.stages) : undefined;
-              const inherited = Array.isArray(parentStages?.effectiveCopy) && parentStages.effectiveCopy.length === ctx.copyBlocks.length ? parentStages.effectiveCopy : undefined;
+              inherited = Array.isArray(parentStages?.effectiveCopy) && parentStages.effectiveCopy.length === ctx.copyBlocks.length ? parentStages.effectiveCopy : undefined;
               if (inherited) ctx.copyBlocks = inherited;
               const edited = await runDirectedEditStage(ctx, parent, stages.directed.directive, earlier, {
                 mayAsk: directedRequest?.clarified !== true,
@@ -1451,6 +1657,7 @@ export class DesignStudioService {
               return { runId, status: 'qa', stage: 'edit', winnerCandidateId: stages.directed.candidateId, spentUsd: budget.spentUsd };
             } catch (caught) {
               const err = caught as Error;
+              if (isModelCallHoldError(caught)) throw caught;
               if (caught instanceof StudioBudgetExhaustedError) throw caught;
               if (caught instanceof DirectedEditRefusal) {
                 // Nothing asked for is within the edit's means, or the design's photos are missing: a
@@ -1486,11 +1693,23 @@ export class DesignStudioService {
               // afresh with the change in its instructions, which is how every revision used to run.
               log.warn(`[studio] run ${run.id}: directed edit failed (${err?.message || err}); designing the revision afresh.`);
               stages.directedFailed = err?.message || String(err);
+              // The afresh design lays out the copy the client received, so every later stage (and
+              // the brief contract) must read that copy as this run's, not the request's.
+              if (inherited) stages.effectiveCopy = inherited;
+              // A resumed stage replays the failed edit and reaches here again: the slots are
+              // reserved once (run_id, ordinal is unique).
+              const reserved = new Set((await this.repo.getCandidatesForRun(run.id, s.tenantId)).map((r) => r.ordinal));
               for (let i = 1; i < V3_CANDIDATE_SLOTS; i++) {
+                if (reserved.has(i)) continue;
                 await this.repo.insertCandidate({ id: randomUUID(), runId: run.id, tenantId: s.tenantId, ordinal: i, concept: pendingV3Concept(i) as unknown as Record<string, unknown>, status: 'draft' });
               }
             }
           }
+          // The executable brief contract is recorded before the paid layout call; a conflict no
+          // layout can satisfy stops the run here with its explanation (ADR-125).
+          const requestCopy = ((typeof run.request === 'string' ? JSON.parse(run.request) : run.request)?.copyBlocks ?? []) as CopyBlock[];
+          const contractStop = await this.admitBriefContract(s, runId, ctx, brief, stages, budget, requestCopy);
+          if (contractStop) return contractStop;
           const candidateRows = await this.repo.getCandidatesForRun(run.id, s.tenantId);
 
           const candidateStates = await runLayoutsStage(
@@ -1528,27 +1747,7 @@ export class DesignStudioService {
           for (const cand of candidateStates) alignFramedHeads(cand.currentLayout, focus, sizes);
           const artCandidates = await runArtStage(ctx, candidateStates);
 
-          for (const row of candidateRows) {
-            const cand = artCandidates.find((c) => c.ordinal === row.ordinal);
-            if (cand) {
-              await this.repo.updateCandidate(row.id, s.tenantId, {
-                layouts: [cand.currentLayout] as any,
-                status: 'draft',
-                artPng: cand.artPng,
-                artSha256: cand.artSha256,
-                artProvenance: cand.artProvenance as any,
-                ...(ctx.pipelineV3 ? { concept: cand.concept as any } : {}),
-              });
-            } else {
-              await this.repo.updateCandidate(row.id, s.tenantId, {
-                status: 'eliminated',
-              });
-            }
-          }
-
-          stages.layouts = { count: artCandidates.length };
-          await this.repo.updateRunStatus(runId, s.tenantId, 'rendering', { stages, budget });
-          return { runId, status: 'rendering', stage: 'layouts', spentUsd: budget.spentUsd };
+          return await this.finishLayoutsStage(s, runId, stages, budget, candidateRows, artCandidates, Boolean(ctx.pipelineV3));
         }
 
         case 'rendering': {
@@ -1608,6 +1807,8 @@ export class DesignStudioService {
               concept: typeof row.concept === 'string' ? JSON.parse(row.concept) : row.concept,
               layouts,
               currentLayout: layouts[layouts.length - 1],
+              artPng: row.art_png ? Buffer.from(row.art_png) : undefined,
+              artSha256: row.art_sha256,
               metrics: typeof row.metrics === 'string' ? JSON.parse(row.metrics) : row.metrics,
               previewPng: row.preview_png ? Buffer.from(row.preview_png) : undefined,
               compositePng: row.composite_png ? Buffer.from(row.composite_png) : undefined,
@@ -1638,6 +1839,7 @@ export class DesignStudioService {
               }
               stages.critique = { completed: true, pipeline: 'v3', candidateId: candidate.id };
             } catch (err) {
+              if (isModelCallHoldError(err)) throw err;
               if (err instanceof StudioBudgetExhaustedError) throw err;
               // The critique informs the Desk; refinement critiques for itself. A missing one is
               // recorded, not fatal.
@@ -1658,6 +1860,7 @@ export class DesignStudioService {
           try {
             critiquedCandidates = await runCritiqueStage(ctx, brief, candidateStates);
           } catch (err) {
+            if (isModelCallHoldError(err)) throw err;
             // Rung 3: Critic unavailable -> skip critique, note judge unavailable
             await this.repo.updateRunStatus(runId, s.tenantId, 'revising', {
               judgeStatus: 'SKIPPED',
@@ -1707,6 +1910,8 @@ export class DesignStudioService {
               concept: typeof row.concept === 'string' ? JSON.parse(row.concept) : row.concept,
               layouts,
               currentLayout: layouts[layouts.length - 1],
+              artPng: row.art_png ? Buffer.from(row.art_png) : undefined,
+              artSha256: row.art_sha256,
               metrics: typeof row.metrics === 'string' ? JSON.parse(row.metrics) : row.metrics,
               previewPng: row.preview_png ? Buffer.from(row.preview_png) : undefined,
               compositePng: row.composite_png ? Buffer.from(row.composite_png) : undefined,
@@ -1757,6 +1962,7 @@ export class DesignStudioService {
                 });
               }
             } catch (err) {
+              if (isModelCallHoldError(err)) throw err;
               if (err instanceof StudioBudgetExhaustedError) throw err;
               // The unrefined candidate still stands; the run records why it was not refined.
               stages.revise = { completed: false, pipeline: 'v3', error: err instanceof Error ? err.message : String(err) };
@@ -1804,6 +2010,8 @@ export class DesignStudioService {
               concept: typeof row.concept === 'string' ? JSON.parse(row.concept) : row.concept,
               layouts,
               currentLayout: layouts[layouts.length - 1],
+              artPng: row.art_png ? Buffer.from(row.art_png) : undefined,
+              artSha256: row.art_sha256,
               metrics: typeof row.metrics === 'string' ? JSON.parse(row.metrics) : row.metrics,
               previewPng: row.preview_png ? Buffer.from(row.preview_png) : undefined,
               compositePng: row.composite_png ? Buffer.from(row.composite_png) : undefined,
@@ -1822,6 +2030,7 @@ export class DesignStudioService {
           try {
             tournamentResult = await runTournamentStage(ctx, brief, candidateStates);
           } catch (err) {
+            if (isModelCallHoldError(err)) throw err;
             // Rung 3: Judge unavailable -> rank by deterministic metrics
             const sorted = [...candidateStates].sort(
               (a, b) => (b.metrics?.alignmentScore || 0) - (a.metrics?.alignmentScore || 0)
@@ -1874,6 +2083,7 @@ export class DesignStudioService {
               verdict: canaryResult as any,
             });
           } catch (err) {
+            if (isModelCallHoldError(err)) throw err;
             canaryPassed = false;
           }
 
@@ -1919,12 +2129,14 @@ export class DesignStudioService {
             metrics: typeof winnerRow.metrics === 'string' ? JSON.parse(winnerRow.metrics) : winnerRow.metrics,
             previewPng: winnerRow.preview_png ? Buffer.from(winnerRow.preview_png) : undefined,
             compositePng: winnerRow.composite_png ? Buffer.from(winnerRow.composite_png) : undefined,
+            ...candidateArt(winnerRow),
             critiques: [],
             status: 'winner',
           };
 
           const qaResult = await runQAStage(ctx, winnerState);
-          stages.qa = qaResult;
+          stages.qa = { ...qaResult, candidateId: winnerRow.id };
+          const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
 
           if (!qaResult.passed) {
             // Attempt to find any other candidate that passes QA
@@ -1938,17 +2150,21 @@ export class DesignStudioService {
                 concept: typeof otherRow.concept === 'string' ? JSON.parse(otherRow.concept) : otherRow.concept,
                 layouts: otherLayouts,
                 currentLayout: otherLayouts[otherLayouts.length - 1],
+                ...candidateArt(otherRow),
                 critiques: [],
                 status: 'runner_up',
               };
               const otherQA = await runQAStage(ctx, otherState);
               if (otherQA.passed) {
-                await this.repo.updateRunStatus(runId, s.tenantId, 'transferring', {
+                stages.qa = { ...otherQA, candidateId: otherRow.id };
+                stages.qaReplacedWinner = { ...qaResult, candidateId: winnerRow.id };
+                const nextStatus = request.holdForSelection ? 'awaiting_selection' : 'transferring';
+                await this.repo.updateRunStatus(runId, s.tenantId, nextStatus, {
                   winnerCandidateId: otherRow.id,
                   stages,
                   budget,
                 });
-                return { runId, status: 'transferring', stage: 'qa', winnerCandidateId: otherRow.id };
+                return { runId, status: nextStatus, stage: 'qa', winnerCandidateId: otherRow.id };
               }
             }
 
@@ -1957,7 +2173,6 @@ export class DesignStudioService {
           }
 
           // Check if operator requested holdForSelection
-          const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
           if (request.holdForSelection) {
             await this.repo.updateRunStatus(runId, s.tenantId, 'awaiting_selection', { stages, budget });
             return { runId, status: 'awaiting_selection', stage: 'qa', spentUsd: budget.spentUsd };
@@ -2050,11 +2265,11 @@ export class DesignStudioService {
                   AND request_key LIKE 'studio-%' AND request_key <> ${planKey}`.execute(db);
               await sql`INSERT INTO hawa.canva_design_plans(
                 id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, request,
-                status, result, source_content, source_sha256
+                status, result, source_content, source_sha256, paid_protocol, studio_run_id
               ) VALUES(
                 ${planId}::uuid, ${s.tenantId}::uuid, ${run.task_id}::uuid, ${run.client_id}::uuid, ${s.actorId},
                 ${planKey}, ${run.request_hash}, ${JSON.stringify(transferResult.plan)}::jsonb,
-                'planned', ${JSON.stringify(evidence)}::jsonb, ${transferResult.pptxBytes}, ${transferResult.sha256}
+                'planned', ${JSON.stringify(evidence)}::jsonb, ${transferResult.pptxBytes}, ${transferResult.sha256}, 'studio-transfer-v1', ${run.id}::uuid
               )`.execute(db);
             });
             source = { bytes: transferResult.pptxBytes, sha256: transferResult.sha256, manifest: transferResult.manifest };
@@ -2122,13 +2337,25 @@ export class DesignStudioService {
           return { runId, status: run.status };
       }
     } catch (err: any) {
+      if (['TASK_GENERATION_BLOCKED', 'STUDIO_BUDGET_INVALID', 'STUDIO_BUDGET_HISTORY_INCOMPLETE',
+        'STUDIO_BUDGET_UNQUOTABLE', 'STUDIO_BUDGET_RESERVATION_EXCEEDED'].includes(err?.code)) {
+        throw new CanvaFlowError(409, err.code, err.message);
+      }
+      if (isModelCallHoldError(err)) {
+        if (['STUDIO_VISUAL_INPUTS_UNSAFE', 'BRIEF_CONTRACT_CHANGED', 'STUDIO_RUN_STATUS_CHANGED'].includes(err.code)) throw new CanvaFlowError(409, err.code, err.message);
+        if (err instanceof CanvaFlowError && err.code === 'MODEL_STAGE_REPLAY_UNSAFE') throw err;
+        const code = ['MODEL_CALL_ADMISSION_CONFLICT', 'MODEL_CALL_FINALIZATION_CONFLICT', 'MODEL_CALL_ACCOUNTING_FAILED'].includes(err?.code)
+          ? err.code : 'MODEL_CALL_UNCERTAIN';
+        throw new CanvaFlowError(409, code,
+          'A Studio model call may have been accepted or another process already recorded its outcome. Reconcile the call before continuing this run.');
+      }
       // Not a failure: the run waits at its stage for the design it revises, and a later resume
       // makes the edit. So does a transfer Canva refused with its rate limit (nothing was created):
       // the worker waits the time named and resumes, and the import is sent again under the run's key.
       if (err instanceof CanvaFlowError && (err.code === 'PARENT_STILL_RUNNING' || err.code === 'CANVA_RATE_LIMITED')) throw err;
       if (err instanceof StudioBudgetExhaustedError) {
         // Budget exhausted: gracefully handle by selecting best candidate so far
-        return this.handleBudgetExhaustion(s, run, ctx, budget);
+        return this.handleBudgetExhaustion(s, run, ctx, budget, err.message);
       }
 
       if (ctx.pipelineV3) {
@@ -2147,6 +2374,15 @@ export class DesignStudioService {
 
       // If failure happened during generation stages, execute Rung 4 fallback
       return this.executeRung4Fallback(s, run, err.message || 'Studio stage failed');
+    } finally {
+      // ADR-122: saved paid work this resume bypassed stays visible to the operator. A result
+      // already applied in the stored stage (a persisted rebrief) is listed too; the operator
+      // compares it with the stage before settling or discarding it.
+      const unread = ctx.unconsumedRetainedCalls?.() ?? [];
+      if (unread.length) {
+        log.warn(`[studio] run ${runId}: the ${run.status} resume did not read ${unread.length} saved result(s): ` +
+          unread.map((call) => `${call.callId} (${call.substep ?? 'ordered prefix'} attempt ${call.attempt ?? '-'})`).join(', ') + '.');
+      }
     }
   }
 
@@ -2194,8 +2430,9 @@ export class DesignStudioService {
 
     let reread: CreativeBrief;
     try {
-      reread = await runBriefStage(ctx, { lateReference: true });
+      reread = await inStudioSubstep('brief/late-reference', () => runBriefStage(ctx, { lateReference: true }));
     } catch (err: any) {
+      if (isModelCallHoldError(err)) throw err;
       // The stored brief still designs the request, so an extra call that failed must not fail the
       // run. Nothing is recorded, which leaves one more attempt at the next stage before layouts.
       log.error(
@@ -2214,7 +2451,19 @@ export class DesignStudioService {
     log.warn(
       `[studio] run ${run.id}: brief re-read at '${run.status}' with the reference image that arrived after it (referenceRole ${brief.referenceRole}).`
     );
-    return brief;
+    stages.brief = await this.briefAsStored(s, run.id, brief);
+    return stages.brief as LateReferenceBrief;
+  }
+
+  /**
+   * ADR-122: a brief persisted inside a stage continues in its stored form, exactly as a resume
+   * reads it back. PostgreSQL jsonb reorders keys and later prompts embed the brief's JSON text,
+   * so the in-memory form would make the same work unreplayable. Only the form is adopted:
+   * stored content that differs from what was just written is never substituted.
+   */
+  private async briefAsStored<T>(s: Scope, runId: string, written: T): Promise<T> {
+    const stored = runStages((await this.repo.getRunById(runId, s.tenantId)) ?? {}).brief;
+    return stored !== undefined && canonicalCallJson(stored) === canonicalCallJson(written) ? stored as T : written;
   }
 
   /**
@@ -2224,7 +2473,8 @@ export class DesignStudioService {
     s: Scope,
     run: any,
     ctx: StageContext,
-    budget?: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number }
+    budget?: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
+    reason?: string
   ): Promise<StudioResumeResult> {
     // The cap and what reached it, in the run's own record: with the caps lowered to a few designs'
     // worth, the operator needs to see which one a run hit.
@@ -2259,7 +2509,7 @@ export class DesignStudioService {
     if (bestCandidate) {
       await this.repo.updateRunStatus(run.id, s.tenantId, 'transferring', {
         winnerCandidateId: bestCandidate.id,
-        diagnostic: `BUDGET_EXHAUSTED${cap}: proceeded with best candidate passing hard QA.`,
+        diagnostic: `BUDGET_EXHAUSTED${cap}${reason ? `: ${reason}` : ''}: proceeded with best candidate passing hard QA.`,
       });
       return {
         runId: run.id,
@@ -2270,7 +2520,7 @@ export class DesignStudioService {
     }
 
     await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', {
-      diagnostic: `BUDGET_EXHAUSTED${cap}: no candidates passed hard QA before budget cap was reached.`,
+      diagnostic: `BUDGET_EXHAUSTED${cap}${reason ? `: ${reason}` : ''}: no candidates passed hard QA before budget cap was reached.`,
     });
     return {
       runId: run.id,
@@ -2278,6 +2528,100 @@ export class DesignStudioService {
       diagnostic: 'BUDGET_EXHAUSTED',
       message: 'Budget exhausted without a valid candidate passing hard QA.',
     };
+  }
+
+  /** Persist the pre-art gate, including refused source layouts, before advancing the run. */
+  private async finishLayoutsStage(
+    s: Scope, runId: string, stages: Record<string, unknown>,
+    budget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
+    candidateRows: Array<{ id: string; ordinal: number }>, artCandidates: CandidateState[], pipelineV3: boolean,
+  ): Promise<StudioResumeResult> {
+    for (const row of candidateRows) {
+      const cand = artCandidates.find((c) => c.ordinal === row.ordinal);
+      if (cand) {
+        await this.repo.updateCandidate(row.id, s.tenantId, {
+          layouts: [cand.currentLayout] as any,
+          status: cand.status === 'eliminated' ? 'eliminated' : 'draft',
+          artPng: cand.artPng,
+          artSha256: cand.artSha256,
+          artProvenance: cand.artProvenance as any,
+          ...(pipelineV3 ? { concept: cand.concept as any } : {}),
+        });
+      } else {
+        await this.repo.updateCandidate(row.id, s.tenantId, {
+          status: 'eliminated',
+        });
+      }
+    }
+
+    const survivors = artCandidates.filter((candidate) => candidate.status !== 'eliminated');
+    stages.layouts = { count: survivors.length, preArtRejected: artCandidates
+      .filter((candidate) => candidate.status === 'eliminated')
+      .map((candidate) => ({ candidateId: candidate.id, ordinal: candidate.ordinal, defectCodes: candidate.diagnostics ?? [] })) };
+    if (!survivors.length) {
+      const diagnostic = 'NO_FEASIBLE_CANDIDATE: geometry/copy preflight rejected every candidate before artwork; review the recorded defects.';
+      await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
+      return { runId, status: 'failed', stage: 'layouts', diagnostic, spentUsd: budget.spentUsd };
+    }
+    await this.repo.updateRunStatus(runId, s.tenantId, 'rendering', { stages, budget });
+    return { runId, status: 'rendering', stage: 'layouts', spentUsd: budget.spentUsd };
+  }
+
+  /**
+   * Records the run's executable brief contract once, before the first layout call, and reuses
+   * that record on resume. A blocking conflict stops the run with the contract's explanation and
+   * authorized choices, before any provider call and without shrinking, omitting or rewording the
+   * copy (ADR-125).
+   *
+   * On resume the recorded contract must be intact. If its authorities (identity digest) differ
+   * from the run's, the run holds (BRIEF_CONTRACT_CHANGED). If only environment evidence changed
+   * (policy versions, font measurement), the contract is re-admitted under the current environment
+   * and the change is recorded, so a deploy does not hold every in-flight run for good.
+   *
+   * The write is the stage's only mid-stage snapshot. It leaves out directedFailed: a resumed stage
+   * must replay the failed directed edit its retained calls begin with, lay out the same copy and
+   * rebuild the same contract. It is conditional on the run still laying out.
+   */
+  private async admitBriefContract(
+    s: Scope, runId: string, ctx: StageContext, brief: CreativeBrief, stages: Record<string, any>,
+    budget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number }, requestCopy: CopyBlock[],
+  ): Promise<StudioResumeResult | undefined> {
+    // The authority is what the run lays out: the copy this run recorded as its own, else the request's.
+    const sameCopy = (a: unknown, b: CopyBlock[]) => Array.isArray(a) && a.length === b.length &&
+      a.every((x: CopyBlock, i) => x?.text === b[i].text && x?.script === b[i].script);
+    const authority = sameCopy(stages.effectiveCopy, ctx.copyBlocks) ? 'run_effective_copy'
+      : sameCopy(requestCopy, ctx.copyBlocks) ? 'source_copy' : undefined;
+    if (!authority) {
+      throw new StudioBriefContractError('The copy this run would lay out is neither the request copy nor copy the run recorded as its own. Review the run before any layout call.');
+    }
+    const built = buildRunBriefContract(ctx, (brief ?? {}) as unknown as BriefProposalInput, authority);
+    const recorded = stages.briefContract as ExecutableBriefContract | undefined;
+    if (recorded !== undefined && (!verifyBriefContractIntegrity(recorded) || briefContractIdentitySha256(recorded) !== briefContractIdentitySha256(built))) {
+      throw new StudioBriefContractError('The recorded brief contract does not match this run: its copy, assets, brief or relations changed. Review the run before any layout call.');
+    }
+    if (recorded?.sha256 === built.sha256) {
+      ctx.briefContract = recorded;
+    } else {
+      if (recorded) {
+        log.warn(`[studio] run ${runId}: brief contract re-admitted; policy or measurement evidence changed (${recorded.sha256.slice(0, 12)} -> ${built.sha256.slice(0, 12)}).`);
+        stages.briefContractReadmissions = [...(Array.isArray(stages.briefContractReadmissions) ? stages.briefContractReadmissions : []), {
+          previousSha256: recorded.sha256, sha256: built.sha256, identitySha256: briefContractIdentitySha256(built),
+          previousPolicies: recorded.policies, policies: built.policies, reason: 'environment_evidence_changed' }];
+      }
+      stages.briefContract = built;
+      ctx.briefContract = built;
+      const { directedFailed: _inMemoryUntilStageSnapshot, ...snapshot } = stages;
+      const written = await this.repo.updateRunStatus(runId, s.tenantId, 'laying_out', { stages: snapshot, expectedStatus: 'laying_out' });
+      if (!written) {
+        throw new StudioRunStatusChangedError('The run left laying_out while its brief contract was being recorded. Nothing was written and no layout call was made.');
+      }
+    }
+    const blocking = blockingBriefConflicts(ctx.briefContract);
+    if (!blocking.length) return undefined;
+    const diagnostic = `BRIEF_CONTRACT_CONFLICT: ${blocking
+      .map((c) => `${c.explanation} Authorized choices: ${c.authorizedChoices.join(' or ')}.`).join(' ')}`;
+    await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
+    return { runId, status: 'failed', stage: 'brief_contract', diagnostic, message: diagnostic, code: 'BRIEF_CONTRACT_CONFLICT', spentUsd: budget.spentUsd };
   }
 
   /**
@@ -2294,16 +2638,42 @@ export class DesignStudioService {
     candidateStates: CandidateState[]
   ): Promise<StudioResumeResult> {
     let outcome: Awaited<ReturnType<typeof runJudgeStageV3>>;
+    const stopWithoutEligible = async (error: NoEligibleCandidateError): Promise<StudioResumeResult> => {
+      stages.tournament = { pipeline: 'v3', decidedBy: 'no_eligible_candidate', candidates: error.candidates };
+      for (const candidate of candidateStates) await this.repo.updateCandidate(candidate.id, s.tenantId, { status: 'eliminated', rank: null });
+      await this.repo.updateRunStatus(run.id, s.tenantId, 'failed', { stages, budget, diagnostic: error.message, judgeStatus: 'SKIPPED', winnerCandidateId: null });
+      return { runId: run.id, status: 'failed', stage: 'judging', diagnostic: error.message, judgeStatus: 'SKIPPED', spentUsd: budget.spentUsd };
+    };
+    const excludedEvidence = (ranked: ReturnType<typeof rankStudioCandidatesV3>) => ranked
+      .filter((r) => r.hardQa?.passed !== true)
+      .map((r) => ({ candidateId: r.candidate.id, sourceIndex: r.sourceIndex, qa: r.hardQa ? 'failed' : 'unknown', defectCodes: r.hardQa?.defectCodes ?? [] }));
+    // ADR-124: the flag is read when the judge stage runs and recorded with its outcome. An unknown
+    // value is refused below as an unavailable judge, visibly, with no model call.
+    let judgeProtocol: StudioJudgeProtocol = 'incumbent';
+    let judgeProtocolResolved = false;
     try {
-      outcome = await runJudgeStageV3(ctx, candidateStates);
+      judgeProtocol = resolveStudioJudgeProtocol(process.env.HAWA_STUDIO_JUDGE_PROTOCOL);
+      judgeProtocolResolved = true;
+      outcome = await runJudgeStageV3(ctx, candidateStates, judgeProtocol === 'incumbent' ? {} : {
+        protocol: judgeProtocol,
+        brief: judgeBriefForStageV3(ctx, (stages.brief || {}) as Partial<CreativeBrief>),
+      });
     } catch (err) {
+      if (isModelCallHoldError(err)) throw err;
       if (err instanceof StudioBudgetExhaustedError) throw err;
-      // Judge unavailable: the higher composite stands, and the run says so.
+      if (err instanceof NoEligibleCandidateError) return stopWithoutEligible(err);
+      // Judge unavailable: only an explicitly eligible candidate may stand on its metrics.
       const message = err instanceof Error ? err.message : String(err);
-      const ranked = rankStudioCandidatesV3(ctx, candidateStates).map((r) => r.candidate);
+      const allRanked = rankStudioCandidatesV3(ctx, candidateStates);
+      if (!allRanked.some((r) => r.hardQa?.passed === true)) return stopWithoutEligible(new NoEligibleCandidateError(allRanked));
+      const ranked = eligibleCandidatesV3(allRanked).map((r) => r.candidate);
       const winner = ranked[0];
-      await this.recordV3Ranking(s, ranked, winner);
-      stages.tournament = { pipeline: 'v3', winnerId: winner.id, decidedBy: 'composite_judge_unavailable', error: message };
+      await this.recordV3Ranking(s, ranked, winner, allRanked.filter((r) => r.hardQa?.passed !== true).map((r) => r.candidate));
+      // ADR-124: the refusal's code is recorded so an inapplicable request class can be counted, and
+      // with no automated preference a person should choose.
+      const errorCode = typeof (err as { code?: unknown })?.code === 'string' ? (err as { code: string }).code : null;
+      stages.tournament = { pipeline: 'v3', winnerId: winner.id, decidedBy: 'composite_judge_unavailable', error: message, errorCode,
+        ...(judgeProtocolResolved ? { judgeProtocol } : {}), humanChoiceRecommended: true, excludedCandidates: excludedEvidence(allRanked) };
       await this.repo.updateRunStatus(run.id, s.tenantId, 'qa', {
         stages,
         budget,
@@ -2345,6 +2715,55 @@ export class DesignStudioService {
         });
       }
     }
+    if (selection.briefBound) {
+      // ADR-124 challenger: each order keeps its exact packet identity, the validated verdict with
+      // its three separate dimensions and localized findings, and the receipt.
+      const { match: pair, canaryMatch, canaryPassed, canaryUnavailable, subject: canarySubject } = selection.briefBound;
+      const orderRecord = (order: typeof pair.orderAB) => ({
+        pipeline: 'v3',
+        protocol: order.promptVersion,
+        packetSha256: order.packetSha256,
+        imageASha256: order.imageASha256,
+        imageBSha256: order.imageBSha256,
+        verdict: order.verdict,
+        receipt: order.receipt,
+      });
+      for (const [order, swapped] of [[pair.orderAB, false], [pair.orderBA, true]] as const) {
+        await this.repo.insertJudgment({
+          id: randomUUID(),
+          runId: run.id,
+          tenantId: s.tenantId,
+          kind: 'pairwise',
+          candidateA: idFor(order.candidateAId),
+          candidateB: idFor(order.candidateBId),
+          orderSwapped: swapped,
+          verdict: { ...orderRecord(order), decision: pair.decision,
+            winnerCandidateId: pair.winnerId === 'UNCERTAIN' ? null : idFor(pair.winnerId) } as any,
+        });
+      }
+      const subject = ranked.find((x) => x.sourceIndex === canarySubject.sourceIndex)!.candidate;
+      await this.repo.insertJudgment({
+        id: randomUUID(),
+        runId: run.id,
+        tenantId: s.tenantId,
+        kind: 'canary',
+        candidateA: subject.id,
+        verdict: (canaryMatch ? {
+          pipeline: 'v3',
+          protocol: canaryMatch.orderAB.promptVersion,
+          passed: canaryPassed,
+          decision: canaryMatch.decision,
+          orderAB: orderRecord(canaryMatch.orderAB),
+          orderBA: orderRecord(canaryMatch.orderBA),
+        } : {
+          // No canary call was made: the degraded copy was the same image, so the pick went untested.
+          pipeline: 'v3',
+          protocol: pair.orderAB.promptVersion,
+          passed: null,
+          unavailable: canaryUnavailable,
+        }) as any,
+      });
+    }
     if (selection.canary) {
       const subject = ranked.find((x) => x.sourceIndex === selection.canary!.subject.sourceIndex)!.candidate;
       const m = selection.canary.match;
@@ -2364,7 +2783,8 @@ export class DesignStudioService {
       });
     }
 
-    await this.recordV3Ranking(s, [winner, ...ranked.map((r) => r.candidate).filter((c) => c.id !== winner.id)], winner);
+    await this.recordV3Ranking(s, [winner, ...eligibleCandidatesV3(ranked).map((r) => r.candidate).filter((c) => c.id !== winner.id)], winner,
+      ranked.filter((r) => r.hardQa?.passed !== true).map((r) => r.candidate));
 
     const judgeStatus: DesignStudioJudgeStatus =
       selection.judgeReliable === null ? 'SKIPPED' : selection.judgeReliable ? 'RELIABLE' : 'UNRELIABLE';
@@ -2372,10 +2792,16 @@ export class DesignStudioService {
       pipeline: 'v3',
       winnerId: winner.id,
       decidedBy: selection.decidedBy,
-      judgeWinner: selection.match ? idFor(selection.match.winnerId) ?? selection.match.winnerId : null,
-      consistent: selection.match?.isConsistent ?? null,
+      judgeWinner: selection.match ? idFor(selection.match.winnerId) ?? selection.match.winnerId
+        : selection.briefBound && selection.briefBound.match.winnerId !== 'UNCERTAIN'
+          ? idFor(selection.briefBound.match.winnerId) ?? null : null,
+      consistent: selection.match?.isConsistent ?? (selection.briefBound ? !selection.briefBound.match.decision.uncertain : null),
+      judgeProtocol: selection.protocol,
+      humanChoiceRecommended: selection.humanChoiceRecommended,
+      excludedCandidates: excludedEvidence(ranked),
     };
-    stages.canary = { passed: selection.canary?.passed ?? null };
+    stages.canary = { passed: selection.canary?.passed ?? selection.briefBound?.canaryPassed ?? null,
+      ...(selection.briefBound?.canaryUnavailable ? { unavailable: selection.briefBound.canaryUnavailable } : {}) };
 
     await this.repo.updateRunStatus(run.id, s.tenantId, 'qa', {
       stages,
@@ -2391,7 +2817,8 @@ export class DesignStudioService {
   }
 
   /** Winner first, then the rest in the order given; every candidate keeps a rank. */
-  private async recordV3Ranking(s: Scope, ordered: CandidateState[], winner: CandidateState): Promise<void> {
+  private async recordV3Ranking(s: Scope, ordered: CandidateState[], winner: CandidateState, excluded: CandidateState[] = []): Promise<void> {
+    for (const candidate of excluded) await this.repo.updateCandidate(candidate.id, s.tenantId, { status: 'eliminated', rank: null });
     for (let i = 0; i < ordered.length; i++) {
       await this.repo.updateCandidate(ordered[i].id, s.tenantId, {
         status: ordered[i].id === winner.id ? 'winner' : 'runner_up',
@@ -2522,13 +2949,19 @@ export class DesignStudioService {
     const candidate = candidates.find((c) => c.id === candidateId);
     if (!candidate) throw new CanvaFlowError(404, 'CANDIDATE_NOT_FOUND', 'Candidate not found for this run.');
 
-    await this.repo.updateRunStatus(runId, s.tenantId, 'transferring', {
-      winnerCandidateId: candidateId,
+    await this.tx(s, async db => {
+      const task = (await sql<{state:string}>`SELECT state FROM hawa.tasks
+        WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db)).rows[0];
+      assertTaskGenerationAllowed(task?.state);
+      await assertNativeRevisionAdmission(db, s.tenantId, taskId,
+        (typeof run.request === 'string' ? JSON.parse(run.request) : run.request)?.directed?.parentTaskId);
+      await this.repo.updateRunStatus(runId, s.tenantId, 'transferring', { winnerCandidateId: candidateId }, db);
     });
 
     try {
       return await this.resume(s, taskId, runId);
-    } catch {
+    } catch (err) {
+      if (err instanceof CanvaFlowError && err.code === 'TASK_GENERATION_BLOCKED') throw err;
       return {
         runId,
         status: 'transferring',
@@ -2539,7 +2972,7 @@ export class DesignStudioService {
   }
 
   /**
-   * Abandons an active studio run so another generation can be requested.
+   * Stops future admission; unresolved provider calls remain held at task scope.
    */
   public async abandon(s: Scope, taskId: string, runId: string, reason: string): Promise<StudioResumeResult> {
     const why = String(reason || '').trim();
@@ -2547,8 +2980,9 @@ export class DesignStudioService {
       throw new CanvaFlowError(422, 'REASON_REQUIRED', 'Give a short reason (3-500 chars) for abandoning this studio run.');
     }
 
-    return this.tx(s, async () => {
-      const run = await this.repo.getRunById(runId, s.tenantId);
+    return this.tx(s, async (db) => {
+      await sql`SELECT id FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(db);
+      const run = await this.repo.getRunById(runId, s.tenantId, db);
       if (!run) throw new CanvaFlowError(404, 'RUN_NOT_FOUND', 'Studio run not found.');
       if (run.task_id && taskId && run.task_id !== taskId) {
         throw new CanvaFlowError(403, 'TASK_SCOPE_MISMATCH', 'The studio run belongs to a different task.');
@@ -2556,18 +2990,18 @@ export class DesignStudioService {
       if (run.actor_id && s.actorId && run.actor_id !== s.actorId && s.role !== 'administrator' && s.role !== 'art_director') {
         throw new CanvaFlowError(403, 'ACTOR_SCOPE_MISMATCH', 'Studio run can only be abandoned by the initiating actor or an administrator/art director.');
       }
-      if (['transferred', 'abandoned'].includes(run.status)) {
+      if (['transferred', 'abandoned', 'failed', 'degraded'].includes(run.status)) {
         throw new CanvaFlowError(409, 'CANNOT_ABANDON', `Cannot abandon run in status '${run.status}'.`);
       }
 
       await this.repo.updateRunStatus(runId, s.tenantId, 'abandoned', {
         diagnostic: `Abandoned by ${s.actorId}: ${why}`,
-      });
+      }, db);
 
       return {
         runId,
         status: 'abandoned',
-        message: 'Studio run abandoned. A new generation may now be started.',
+        message: 'Studio run abandoned. Unresolved model calls still require reconciliation before new paid work.',
       };
     });
   }
@@ -2612,14 +3046,14 @@ export class DesignStudioService {
         ORDER BY created_at DESC LIMIT 1`.execute(db)).rows[0]?.content_check
     );
 
-    const budget = typeof run.budget === 'string' ? JSON.parse(run.budget) : (run.budget || { maxUsd: 5.0, maxCalls: 30, spentUsd: 0, calls: 0 });
+    const budget = parseStudioBudget(run.budget);
     // The parity call's cost reaches the run's stored budget, as every stage's does (doResume's
     // onSpendUpdate). It was added to this in-memory copy only until 2026-09-24, and counted as a
     // second call on top of the ledger wrapper's own count. The budget alone is written: the run's
     // status and liveness (updated_at) are not the parity check's to change. A completed run is
     // immutable (trigger immutable_design_studio_run), so a transferred run's parity cost stays on the
     // calls ledger (design_studio_calls), which the Desk's total adds up.
-    const stageCtx = this.createStageContext(s, run, 'parity', budget, async (cost) => {
+    const stageCtx = await this.createStageContext(s, run, 'parity', budget, async (cost) => {
       budget.spentUsd += cost;
       await this.tx(s, (db) =>
         sql`UPDATE hawa.design_studio_runs SET budget = ${JSON.stringify(budget)}::jsonb
@@ -2655,4 +3089,3 @@ export class DesignStudioService {
     return parityResult;
   }
 }
-

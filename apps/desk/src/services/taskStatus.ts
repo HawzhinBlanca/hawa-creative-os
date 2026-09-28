@@ -134,10 +134,22 @@ export const STATUS_VIEWS: Readonly<Record<TaskApiStatus, View>> = {
     primaryButton: 'none',
     group: 'delivering',
   },
+  ARCHIVE_RECONCILIATION: {
+    pillClass: 'pill-action',
+    message: 'Drive may already have the approved files, but the archive is not verified. Restore Google access if needed, then recheck the same publication. The requester is waiting for a verified outcome.',
+    primaryButton: 'deliver',
+    group: 'needs_action',
+  },
   PUBLISH_RECONCILIATION: {
     pillClass: 'pill-action',
     message: 'The approved files are in Google Drive, but the Sheets row is not confirmed. Deliver again to retry only the row.',
     primaryButton: 'deliver',
+    group: 'needs_action',
+  },
+  REQUESTER_SEND_RECONCILIATION: {
+    pillClass: 'pill-action',
+    message: 'Requester delivery did not complete or could not be confirmed. Check the Telegram chat and send records with an operator before resolving it. Do not retry delivery.',
+    primaryButton: 'none',
     group: 'needs_action',
   },
   COMPLETE: {
@@ -148,13 +160,13 @@ export const STATUS_VIEWS: Readonly<Record<TaskApiStatus, View>> = {
   },
   PAUSED: {
     pillClass: 'pill-waiting',
-    message: 'Waiting for the requester to answer a question about their request. Nothing is designed until they answer.',
+    message: 'This task is paused. Review its history, then resume an operator pause or resolve the requester’s pending question.',
     primaryButton: 'none',
     group: 'waiting',
   },
   OPERATOR_REQUIRED: {
-    pillClass: 'pill-failed',
-    message: 'The automatic draft failed or stopped, so a designer must take this over. The panels below show what exists and why it stopped.',
+    pillClass: 'pill-action',
+    message: 'A designer needs to continue this task. Review the saved copy and evidence below, finish the design in Canva, then capture it for review.',
     primaryButton: 'edit',
     group: 'needs_action',
   },
@@ -166,7 +178,7 @@ export const STATUS_VIEWS: Readonly<Record<TaskApiStatus, View>> = {
   },
   CANCELLED: {
     pillClass: 'pill-complete',
-    message: 'Cancelled. Nothing more happens on this task.',
+    message: 'Cancelled. New design work is blocked. Work already admitted may still finish; its results and history remain available.',
     primaryButton: 'none',
     group: 'closed',
   },

@@ -4,7 +4,7 @@ import type { ClientPack } from '@hawa/creative';
 import { log } from '../logging.js';
 
 /**
- * Every client pack names a hawa.clients row (ADR-038): tasks, DNA and publications point at it, so
+ * Every client pack names a hawa.clients row (ADR-127): tasks, DNA and publications point at it, so
  * a request routed to a new client needs the row before it can be saved. This inserts the rows that
  * are missing and changes nothing that exists: names, aliases and status are the office's to edit.
  * A row whose code is taken by another id is reported, not overwritten.

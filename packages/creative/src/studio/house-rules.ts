@@ -46,6 +46,9 @@ export const HOUSE_RULES = {
   },
 } as const;
 
+/** Pixels a measured line may exceed its box before hard QA reports COPY_OVERFLOW for width. */
+export const COPY_WIDTH_TOLERANCE_PX = 4;
+
 export function isStoryFormat(width: number, height: number): boolean {
   return height / width >= 1.7;
 }
@@ -105,7 +108,7 @@ export function minLogoWidth(canvasWidth: number): number {
 }
 
 /** The box around the logo that must hold no text and no rule. */
-export function logoClearZone(logo: { x: number; y: number; width: number; height: number }) {
-  const cs = HOUSE_RULES.logo.clearSpaceShareOfHeight * logo.height;
+export function logoClearZone(logo: { x: number; y: number; width: number; height: number }, clientMinimumPx = 0) {
+  const cs = Math.max(HOUSE_RULES.logo.clearSpaceShareOfHeight * logo.height, clientMinimumPx);
   return { x: logo.x - cs, y: logo.y - cs, width: logo.width + 2 * cs, height: logo.height + 2 * cs };
 }

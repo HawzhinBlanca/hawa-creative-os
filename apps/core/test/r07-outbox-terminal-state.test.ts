@@ -78,7 +78,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
     const intake = await app.request('/api/webhooks/telegram', {
       method: 'POST',
       headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ update_id: 7_000_000 + Math.floor(Math.random() * 1e6), message: { text: 'Terminal Workflow Task', chat: { id: 7007 } } }),
+      body: JSON.stringify({ update_id: 7_000_000 + Math.floor(Math.random() * 1e6), message: { text: 'Please create a new poster\n---\nTerminal Workflow Task', chat: { id: 7007 } } }),
     });
     const created = await intake.json();
     const task = { id: (created.id || created.task?.id) as string };
@@ -123,21 +123,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
 
   it('1. Atomically commits terminal task completion and enrolls notify.published outbox command', async () => {
     const exports = memoryExportStore();
-    const publisher = new GooglePublisher({
-      driveUploadFn: async () => ({
-        fileId: 'drv_r07_file1',
-        name: 'story.png',
-        mimeType: 'image/png',
-        sha256: testFileSha256,
-        size: testFileBytes.length,
-        folderId: 'fld_prod_1',
-      }),
-      sheetAppendFn: async () => ({
-        spreadsheetId: 'sheet_r07_123',
-        rowNumber: 22,
-        hash: 'pkg_hash_r07',
-      }),
-    });
+    const publisher = new GooglePublisher(); // Uses the isolated fake Drive/Sheets HTTP server from test setup.
 
     const app = r07App(publisher, exports);
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
@@ -175,21 +161,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
 
   it('2. Preserves COMPLETE publication and task state if outbox notification fails (FR-051 decoupling)', async () => {
     const exports = memoryExportStore();
-    const publisher = new GooglePublisher({
-      driveUploadFn: async () => ({
-        fileId: 'drv_r07_file2',
-        name: 'story.png',
-        mimeType: 'image/png',
-        sha256: testFileSha256,
-        size: testFileBytes.length,
-        folderId: 'fld_prod_1',
-      }),
-      sheetAppendFn: async () => ({
-        spreadsheetId: 'sheet_r07_123',
-        rowNumber: 23,
-        hash: 'pkg_hash_r07',
-      }),
-    });
+    const publisher = new GooglePublisher(); // Uses the isolated fake Drive/Sheets HTTP server from test setup.
 
     const app = r07App(publisher, exports);
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
@@ -313,21 +285,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
 
   it('4. Outbox discovery endpoint surfaces actionable recovery instructions for all failure types', async () => {
     const exports = memoryExportStore();
-    const publisher = new GooglePublisher({
-      driveUploadFn: async () => ({
-        fileId: 'drv_r07_file3',
-        name: 'story.png',
-        mimeType: 'image/png',
-        sha256: testFileSha256,
-        size: testFileBytes.length,
-        folderId: 'fld_prod_1',
-      }),
-      sheetAppendFn: async () => ({
-        spreadsheetId: 'sheet_r07_123',
-        rowNumber: 24,
-        hash: 'pkg_hash_r07',
-      }),
-    });
+    const publisher = new GooglePublisher(); // Uses the isolated fake Drive/Sheets HTTP server from test setup.
 
     const app = r07App(publisher, exports);
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
@@ -360,21 +318,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
 
   it('5. Enforces safety gate on redrive: rejects uncertain replays without explicit confirmation and blocks non-operators', async () => {
     const exports = memoryExportStore();
-    const publisher = new GooglePublisher({
-      driveUploadFn: async () => ({
-        fileId: 'drv_r07_file4',
-        name: 'story.png',
-        mimeType: 'image/png',
-        sha256: testFileSha256,
-        size: testFileBytes.length,
-        folderId: 'fld_prod_1',
-      }),
-      sheetAppendFn: async () => ({
-        spreadsheetId: 'sheet_r07_123',
-        rowNumber: 25,
-        hash: 'pkg_hash_r07',
-      }),
-    });
+    const publisher = new GooglePublisher(); // Uses the isolated fake Drive/Sheets HTTP server from test setup.
 
     const app = r07App(publisher, exports);
     const { task, approval } = await createApprovedTaskWithExport(app, exports);
@@ -432,21 +376,7 @@ describe('R07: Close Durable Workflow Through Terminal State & Notification (FR-
 
   it('6. Publication state endpoint reports accurate sync status and reconciliation guidance', async () => {
     const exports = memoryExportStore();
-    const publisher = new GooglePublisher({
-      driveUploadFn: async () => ({
-        fileId: 'drv_r07_file5',
-        name: 'story.png',
-        mimeType: 'image/png',
-        sha256: testFileSha256,
-        size: testFileBytes.length,
-        folderId: 'fld_prod_1',
-      }),
-      sheetAppendFn: async () => ({
-        spreadsheetId: 'sheet_r07_123',
-        rowNumber: 26,
-        hash: 'pkg_hash_r07',
-      }),
-    });
+    const publisher = new GooglePublisher(); // Uses the isolated fake Drive/Sheets HTTP server from test setup.
 
     const app = r07App(publisher, exports);
     const { task, approval } = await createApprovedTaskWithExport(app, exports);

@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { layoutConditioningImage } from '../src/studio/visual-conditioning.js';
+import { svgToPngAsync } from '../src/studio/render-layout-v2.js';
+import { imagePixelSize } from '../src/studio/photo-crop.js';
 import {
   computeCapacitySlot,
   verifySlotCapacity,
@@ -7,11 +11,97 @@ import {
   LAYOUT_V3_JSON_SCHEMA,
   type NormalizedLayoutCandidate,
   type CopyBlockSlotInput,
+  generateLayoutCandidatesV3,
+  buildLayoutV3UserPrompt,
 } from '../src/studio/layout-generator-v3.js';
 import { studioLayoutV2Schema, type StudioLayoutV2 } from '../src/studio/layout-v2.js';
 import { checkCandidateSetDegeneracy, evaluateDesignMetrics } from '../src/studio/design-metrics.js';
 
+describe('complete layout conditioning', () => {
+  it('bounds conditioning image dimensions while retaining the original asset identity', async () => {
+    const source = await svgToPngAsync('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#984423"/></svg>', 1200, 800);
+    const image = await layoutConditioningImage(source);
+    expect(image.sourceSha256).toBe(createHash('sha256').update(source).digest('hex'));
+    expect(imagePixelSize(Buffer.from(image.dataUrl.split(',')[1], 'base64'))).toEqual({ width: 768, height: 512 });
+  });
+  it('keeps long copy tails and exact punctuation with noncontiguous copy identities', () => {
+    const text = `${'Full approved copy '.repeat(12)} — \"کۆتایی\"\nTail 2030`;
+    const prompt = buildLayoutV3UserPrompt({ brief: 'Brief', copyBlocks: [{ index: 9, text, role: 'body', script: 'arabic' }],
+      palette: ['#000000'], canvasWidth: 1080, canvasHeight: 1350 });
+    expect(prompt).toContain(JSON.stringify(text));
+    expect(prompt).toContain('Block 9');
+  });
+
+  it('sends actual approved examples and photos while leaving the client reference last', async () => {
+    const createStructuredCompletion = vi.fn().mockRejectedValue(new Error('intercepted'));
+    await expect(generateLayoutCandidatesV3({
+      client: { createStructuredCompletion } as unknown as Parameters<typeof generateLayoutCandidatesV3>[0]['client'],
+      brief: 'Brief', copyBlocks: [], palette: ['#000000'],
+      visualInputs: [
+        { kind: 'approved_example', label: 'Approved', sourceSha256: 'a', dataUrl: 'data:image/png;base64,YQ==' },
+        { kind: 'content_photo', label: 'Photo 0', notes: 'Speaker faces left', sourceSha256: 'b', dataUrl: 'data:image/png;base64,Yg==' },
+      ], reference: { dataUrl: 'data:image/png;base64,Yw==', notes: 'Client direction' },
+    })).rejects.toThrow('intercepted');
+    const content = createStructuredCompletion.mock.calls[0][0].messages[1].content;
+    expect(content.filter((part: { type: string }) => part.type === 'image_url').map((part: { image_url: { url: string } }) => part.image_url.url))
+      .toEqual(['data:image/png;base64,YQ==', 'data:image/png;base64,Yg==', 'data:image/png;base64,Yw==']);
+    expect(JSON.stringify(content)).toContain('Speaker faces left');
+    expect(JSON.stringify(content)).toContain('untrusted');
+  });
+});
+
 describe('P03 — Layout-First Candidate Generation (PosterLLaVa & PosterMELD)', () => {
+  it('drops same-geometry candidates even when the model gives them different archetype names', async () => {
+    const base: NormalizedLayoutCandidate = {
+      id: 'one', conceptTitle: 'First', compositionArchetype: 'monolith_centered',
+      typeScale: { base: 14, ratio: 1.25 },
+      grid: { margin: 0.07, columns: 6, gutter: 0.02, baseline: 0.01 },
+      background: { color: '#0A1628' },
+      logo: { x: 0.4, y: 0.06, width: 0.2, height: 0.08 },
+      art: null, shapes: [],
+      text: [{ copyIndex: 0, role: 'title', x: 0.1, y: 0.3, width: 0.8, height: 0.12,
+        fontSize: 0.04, lineHeight: 1.2, letterSpacing: null, fontFamily: 'Verdana',
+        color: '#FFFFFF', align: 'center', bold: true, italic: false, rtl: false }],
+    };
+    const twin = { ...base, id: 'two', conceptTitle: 'Second', compositionArchetype: 'minimal_framed' as const,
+      background: { color: '#FFFFFF' } };
+    const different = { ...base, id: 'three', conceptTitle: 'Third', compositionArchetype: 'asymmetric_editorial' as const,
+      logo: { ...base.logo, x: 0.08 }, text: [{ ...base.text[0], x: 0.25, width: 0.65 }] };
+    const createStructuredCompletion = vi.fn().mockResolvedValue({
+      data: { layouts: [base, twin, different] },
+      receipt: { responseId: 'r13', xRequestId: null, inputTokens: 1, outputTokens: 1,
+        cacheReadTokens: 0, costUsd: 0, latencyMs: 1 },
+    });
+    const result = await generateLayoutCandidatesV3({
+      client: { createStructuredCompletion } as any,
+      brief: 'One approved title', copyBlocks: [{ index: 0, text: 'Approved title', role: 'title', script: 'latin' }],
+      palette: ['#0A1628', '#FFFFFF'], canvasWidth: 1080, canvasHeight: 1350,
+    });
+    expect(createStructuredCompletion).toHaveBeenCalledTimes(1);
+    expect(result.rawCandidates.map((candidate) => candidate.id)).toEqual(['one', 'three']);
+    expect(result.layouts).toHaveLength(2);
+    expect(result.degeneracyCheck.isDegenerate).toBe(false);
+  });
+
+  it('refuses a candidate set that collapses to one composition', async () => {
+    const first: NormalizedLayoutCandidate = {
+      id: 'one', conceptTitle: 'One', compositionArchetype: 'monolith_centered',
+      typeScale: { base: 14, ratio: 1.25 },
+      grid: { margin: 0.07, columns: 6, gutter: 0.02, baseline: 0.01 },
+      background: { color: '#0A1628' }, logo: { x: 0.4, y: 0.06, width: 0.2, height: 0.08 },
+      art: null, shapes: [], text: [{ copyIndex: 0, role: 'title', x: 0.1, y: 0.3, width: 0.8, height: 0.12,
+        fontSize: 0.04, lineHeight: 1.2, letterSpacing: null, fontFamily: 'Verdana', color: '#FFFFFF',
+        align: 'center', bold: true, italic: false, rtl: false }],
+    };
+    const client = { createStructuredCompletion: vi.fn().mockResolvedValue({
+      data: { layouts: [first, { ...first, id: 'two' }, { ...first, id: 'three' }] }, receipt: {},
+    }) } as any;
+    await expect(generateLayoutCandidatesV3({ client, brief: 'Title',
+      copyBlocks: [{ index: 0, text: 'Title', role: 'title', script: 'latin' }],
+      palette: ['#0A1628', '#FFFFFF'], canvasWidth: 1080, canvasHeight: 1350,
+    })).rejects.toThrow('at least 2 are required');
+  });
+
   const sampleCopyBlocks: CopyBlockSlotInput[] = [
     {
       index: 0,

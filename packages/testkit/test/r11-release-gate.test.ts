@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { verifyReleaseManifest } from '../../../scripts/verify_release_manifest.js';
 
 describe('Task R11: Master Release Gate Reproducibility & Refusal Controls (FR-074, NFR-012, NFR-013, NFR-024, NFR-025)', () => {
@@ -57,6 +58,28 @@ describe('Task R11: Master Release Gate Reproducibility & Refusal Controls (FR-0
     }
   });
 
+  it('rejects a self-consistent source manifest that invents an image or model choice', () => {
+    const tempManifest = path.join(root, 'RELEASE_MANIFEST.synthetic-claim.json');
+    const original = JSON.parse(fs.readFileSync(path.join(root, 'RELEASE_MANIFEST.json'), 'utf8'));
+    try {
+      for (const mutate of [
+        (m: any) => { m.components.core.image = 'hawa-core:latest'; },
+        (m: any) => { m.models.productionDefaults.layout = 'invented-model'; },
+        (m: any) => { m.qa.versionStatus = 'qualified'; },
+      ]) {
+        const synthetic = structuredClone(original);
+        mutate(synthetic);
+        delete synthetic.sha256;
+        synthetic.sha256 = crypto.createHash('sha256').update(JSON.stringify(synthetic, null, 2)).digest('hex');
+        fs.writeFileSync(tempManifest, JSON.stringify(synthetic, null, 2));
+        const result = verifyReleaseManifest(tempManifest);
+        expect(result.ok).toBe(false);
+      }
+    } finally {
+      if (fs.existsSync(tempManifest)) fs.unlinkSync(tempManifest);
+    }
+  });
+
   it('4. Production Isolation Guard: Proves test environment cannot touch production database', () => {
     const testDb = process.env.TEST_DATABASE_URL || '';
     expect(testDb).not.toContain(':54332'); // Must never target live production port
@@ -69,6 +92,6 @@ describe('Task R11: Master Release Gate Reproducibility & Refusal Controls (FR-0
       encoding: 'utf8',
     });
     expect(output).toContain('[REFUSAL DRILL PASSED]');
-    expect(output).toContain('non-bypassable admission proven');
+    expect(output).toContain('source-manifest flag violation rejected');
   });
 });

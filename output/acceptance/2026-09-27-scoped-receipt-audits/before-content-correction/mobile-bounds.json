@@ -1,0 +1,79 @@
+[
+  {
+    "label": "Reload receipt audits",
+    "left": 45,
+    "right": 203.078125,
+    "width": 158.078125,
+    "viewport": 390
+  },
+  {
+    "label": "",
+    "left": 45,
+    "right": 345,
+    "width": 300,
+    "viewport": 390
+  },
+  {
+    "label": "Run receipt audit",
+    "left": 45,
+    "right": 177.40625,
+    "width": 132.40625,
+    "viewport": 390
+  },
+  {
+    "label": "View audit 2",
+    "left": 45,
+    "right": 148.453125,
+    "width": 103.453125,
+    "viewport": 390
+  },
+  {
+    "label": "View audit 1",
+    "left": 45,
+    "right": 145.859375,
+    "width": 100.859375,
+    "viewport": 390
+  },
+  {
+    "label": "7Tasks audited",
+    "left": 45,
+    "right": 189,
+    "width": 144,
+    "viewport": 390
+  },
+  {
+    "label": "5Drive receipts",
+    "left": 201,
+    "right": 345,
+    "width": 144,
+    "viewport": 390
+  },
+  {
+    "label": "3Sheet receipts",
+    "left": 45,
+    "right": 189,
+    "width": 144,
+    "viewport": 390
+  },
+  {
+    "label": "2Deliveries consistent",
+    "left": 201,
+    "right": 345,
+    "width": 144,
+    "viewport": 390
+  },
+  {
+    "label": "3Not yet due",
+    "left": 45,
+    "right": 189,
+    "width": 144,
+    "viewport": 390
+  },
+  {
+    "label": "4Anomalies found",
+    "left": 201,
+    "right": 345,
+    "width": 144,
+    "viewport": 390
+  }
+]

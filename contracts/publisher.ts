@@ -46,7 +46,11 @@ export interface PublicationReceipt {
   publicationKey: string;
   driveFolderId: string;
   driveFiles: DriveFileReceipt[];
-  sheet: { spreadsheetId: string; sheetId: number; rowKey: string; rowNumber?: number; expectedHash: SHA256; observedHash?: SHA256; synced: boolean };
+  sheet: {
+    spreadsheetId: string; sheetId: number; rowKey: string; rowNumber?: number;
+    expectedHash: SHA256; observedHash?: SHA256; synced: boolean;
+    metadataId?: number; expectedValues?: string[]; expectedRowHash?: SHA256; observedRowHash?: SHA256;
+  };
   completedAt?: ISODateTime;
   state: 'drive_complete' | 'complete' | 'failed';
   detail: JsonObject;

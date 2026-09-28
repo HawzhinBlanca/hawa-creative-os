@@ -1,7 +1,7 @@
 # Decision Summary
 
 **Decision date:** 2026-09-03  
-**Status:** Architecture approved; editable-studio admission conditional on Phase 0 proof
+**Status:** Historical architecture summary, reconciled with accepted ADR 025 on 2026-09-25. The active studio contract is [docs/30_CURRENT_STUDIO_CONTRACT.md](docs/30_CURRENT_STUDIO_CONTRACT.md); the confidence figures below describe the 2026-09-03 proposal, not today's qualification.
 
 ## Corrected decision
 
@@ -9,7 +9,7 @@ The system is not organized around a popular communication app or a popular AI f
 
 1. **Hawa Desk**, the canonical task and approval interface.
 2. **Client DNA**, the authoritative and versioned memory of every client.
-3. **The editable creative document**, normally `.hyc`, containing real text and independently editable nodes.
+3. **The editable creative design**, currently a native Canva design with independently editable supported elements and Hawa-held source/export evidence.
 4. **The durable workflow journal**, which makes every step recoverable and replayable.
 
 
@@ -35,11 +35,9 @@ flowchart LR
 
     CD --> AL[Asset Lab\nComfyUI + direct model adapters]
     AL --> ST[Editable Studio Adapter]
-    ST --> HY[HyCanvas v0.3.9 candidate\ncanonical .hyc document]
-    ST -. fallback .-> PN[Penpot / Shotluma-derived editor\nChromium HTML-SVG fallback]
+    ST --> CV[Canva native design\nID + captured export]
 
-    HY --> QC[Hard QA + independent visual judge]
-    PN --> QC
+    CV --> QC[Hard QA + independent visual judge]
     QC --> RV[Human review in Hawa Desk]
     RV -->|revise| RS
     RV -->|approve| PUB[Idempotent publisher]
@@ -73,9 +71,9 @@ flowchart LR
 | Durable execution | **Restate 1.7.x**, self-hosted, TypeScript SDK | Journals external calls and timers, survives restarts, supports manual pause/resume/restart and fine-grained flow control without a separate queue stack. |
 | Operational database | **PostgreSQL 18 + pgvector 0.8.6** | One ACID boundary for tasks, rules, audit, full-text search, vectors, outbox, permissions, and point-in-time recovery. |
 | SQL access | **Kysely + versioned SQL migrations** | Type-safe SQL while preserving visible database design, RLS, constraints, and hand-auditable migrations. |
-| Editable studio | **HyCanvas v0.3.9**, pinned, behind `DesignStudioAdapter` | Open `.hyc` JSON, real editable nodes, exports, brand kits, APIs/MCP, a Go backend, Postgres, and a single self-hostable binary. It must pass the proof sprint before live use. |
+| Editable studio | **Canva only** under ADR 025 | Native editable working master with a captured final export and Hawa-owned source/recovery package. |
 | Design method | **Editable-Design reconstruction method**, adapted—not embedded as the platform | Its “visual prior, pixels never ship, semantic reconstruction, deterministic verification” method is stronger than flat generation. |
-| Studio fallback | **Penpot**, then a Shotluma-derived focused editor; Chromium HTML/SVG renderer for exact RTL | Prevents HyCanvas from becoming a single point of architectural lock-in. |
+| Studio outage | **Pause and preserve Hawa state** | Retired editor providers are not an automatic fallback; recovery limits must be measured. |
 | Asset graph | **ComfyUI**, pinned workflows and allowlisted nodes only | Lets the office combine local and hosted image generation/editing in reproducible JSON graphs. It is an asset worker, not the workflow engine. |
 | Model access | **Direct provider adapters** plus local workers | Avoids gateway lock-in and preserves full provider features, snapshots, safety settings, images, caching, and error semantics. |
 | Fast reasoning | **Gemini 3.8 Flash** provisional | Newly GA, multimodal, long context, structured outputs and tool calling; final selection depends on office evaluation. |
@@ -96,7 +94,7 @@ flowchart LR
 
 The system may enter office pilot only after all of these are true:
 
-- HyCanvas or its selected fallback passes every critical test in `docs/21_HYCANVAS_PROOF_SPRINT.md`.
+- The native Canva design, captured final export, editable elements and recovery package pass the current studio contract and acceptance gates.
 - No cross-client retrieval is observed in automated adversarial tests.
 - Duplicate webhooks and process restarts produce one task and one publication.
 - All 40 supplied RTL cases and at least 20 real Sorani designs pass native-speaker review.
@@ -108,6 +106,6 @@ The system may enter office pilot only after all of these are true:
 
 - **Architecture:** 93%
 - **Restate/PostgreSQL operational core:** 91%
-- **HyCanvas as the final studio before proof sprint:** 78%
+- **Historical HyCanvas proposal before proof sprint (superseded by ADR 025):** 78%
 - **Provisional model choices before company benchmark:** 65%
 - **Ability to replace any failed model or editor without redesigning the core:** 94%

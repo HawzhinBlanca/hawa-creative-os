@@ -1,6 +1,7 @@
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { resolveModel } from '@hawa/domain';
 import { isStandingRule } from './standing-rules-chat.js';
+import { PICTURE_ONLY_DIRECTIVE } from './chat-intake.js';
 import { log } from '../logging.js';
 
 export type DocumentKind = 'formal_document' | 'design_piece';
@@ -38,6 +39,13 @@ export interface ClassifierOptions {
   fetcher?: typeof fetch;
   timeoutMs?: number;
   useHeuristics?: boolean;
+  /** Supplied by a trusted caller after resolving the locked client's external text policy. */
+  egressDecision?: {
+    clientId: string;
+    dataClass: 'client_message';
+    mode: 'local_only' | 'approved_providers' | 'evaluated_external_allowed';
+    allowedProviders: string[];
+  };
 }
 
 const REVISION_KEYWORDS = [
@@ -205,13 +213,14 @@ export function classifyWithHeuristics(
 
   // Detect whether the incoming message is a full structured brief with event body copy
   const hasMultipleParagraphs = trimmed.split(/\n\s*\n/).filter(Boolean).length >= 2;
-  const hasEventIndicators = /\b(date|time|venue|location|hall|auditorium|hotel|rsvp|cordially|invitation|accreditation|ceremony|honour|honor|presidents?|ministers?)\b/i.test(trimmed) || /(ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس)/u.test(trimmed);
+  const hasEventIndicators = /\b(date|time|venue|location|hall|auditorium|hotel|rsvp|cordially|invitation|accreditation|ceremony|honour|honor|presidents?|ministers?|week)\b/i.test(trimmed) || /(ڕۆژ|کات|شوێن|هۆڵ|بانگهێشت|سیمینار|کۆنفرانس)/u.test(trimmed);
+  const namesClient = /\b(kaae|fastpay|drustee|aster|nova|rona)\b/i.test(trimmed) || /(کەی ئەی|باوەڕپێدان|فاستپەی|ئاستەر|ئاستێر|دروستی|نۆڤا|ڕۆنا)/u.test(trimmed);
   const hasDivider = /\n\s*([_\-=\*]{3,})\s*\n/.test(trimmed);
   const hasSectionHeader = /\n\s*(?:content|copy|text|invitation|details|دەق|ناوەڕۆک)\s*:\s*\n?/i.test(trimmed);
   const isFullStructuredBrief = hasDivider || hasSectionHeader || (hasMultipleParagraphs && (hasEventIndicators || trimmed.length > 200));
 
   // Explicit revision triggers
-  const explicitRevisionPattern = /^(?:can\s+you\s+)?(?:make\s+(?:it|the)\b|change\b|adjust\b|fix\b|update\b|redo\b|redesign\b|retry\b|start\s+over\b|try\s+another\b|thats?\s+the\s+same\b|looks?\s+(?:too|really|quite|very)?\s*(?:basic|cheap|bad|plain|simple|boxy)|different\s+(?:font|color|layout)|move\s+the|resize\s+the|swap\s+the|remove\s+the|add\s+a|تکایە\s+بگۆڕە|بگۆڕە|دەستکاری|چاککردنەوە|دیزاینێکی\s+تر|ئەوەی\s+پێشتر|هەمان\s+دیزاین)/i;
+  const explicitRevisionPattern = /^(?:please\s+)?(?:can\s+you\s+)?(?:make\s+(?:it|the)\b|change\b|adjust\b|fix\b|update\b|redo\b|redesign\b|retry\b|start\s+over\b|try\s+another\b|thats?\s+the\s+same\b|looks?\s+(?:too|really|quite|very)?\s*(?:basic|cheap|bad|plain|simple|boxy)|different\s+(?:font|color|layout)|move\s+the|resize\s+the|swap\s+the|remove\s+the|add\s+a|تکایە\s+بگۆڕە|بگۆڕە|دەستکاری|چاککردنەوە|دیزاینێکی\s+تر|ئەوەی\s+پێشتر|هەمان\s+دیزاین)/i;
   const isExplicitRevision = explicitRevisionPattern.test(trimmed);
 
   // Directions about how a design should look, rather than copy to set on it.
@@ -322,6 +331,19 @@ export function classifyWithHeuristics(
     };
   }
 
+  // A couple of unstructured words are not enough evidence to spend money or create client work.
+  // Decide this before a model call too: the model can otherwise promote the same chatter on one
+  // delivery and ignore it on another. Explicit design words and structured copy still pass.
+  if (!hasReplyTo && wordCount <= 3 && !hasDesignKeyword && !hasEventIndicators && !namesClient &&
+      !hasDivider && !hasSectionHeader && !hasMultipleParagraphs &&
+      !matchesInstructionPattern && !hasRevisionKeyword) {
+    return {
+      kind: 'other', intent: 'question_or_other', confidence: 0.9,
+      isInstructionOnly: false, reason: 'Short message without design or event details', documentKind,
+      needsClarification: false,
+    };
+  }
+
   // 5. Revision directives on recent active task
   if (hasRecentTask && !hasNewBriefIndicator && (isExplicitRevision || (hasRevisionAction && looksLikeDirective) || (hasRevisionKeyword && matchesInstructionPattern))) {
     return {
@@ -389,12 +411,44 @@ export async function classifyInboundTelegramMessage(
   const apiKey = options.apiKey || process.env.OPENAI_API_KEY;
   const fetcher = options.fetcher || fetch;
   const timeoutMs = options.timeoutMs || 20000;
+  const decision = options.egressDecision;
+  const externalAllowed = Boolean(decision &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decision.clientId) &&
+    decision.dataClass === 'client_message' &&
+    (decision.mode === 'approved_providers' || decision.mode === 'evaluated_external_allowed') &&
+    Array.isArray(decision.allowedProviders) && decision.allowedProviders.includes('openai'));
 
-  if (!apiKey || options.useHeuristics) {
-    return classifyWithHeuristics(messageText, Boolean(recentTask), hasReplyTo);
+  // A captionless picture replying to a known draft is a change to that draft. Telegram inserts
+  // this internal directive in place of an empty caption; it is never user copy for a fresh task.
+  if (input.hasReferenceImage && hasReplyTo && messageText.trim() === PICTURE_ONLY_DIRECTIVE) {
+    return { kind: 'feedback', intent: 'revision_feedback', confidence: 1,
+      isInstructionOnly: true, directive: messageText, reason: 'Picture-only reply to an existing draft' };
+  }
+  if (!apiKey || options.useHeuristics || !externalAllowed) {
+    const local = classifyWithHeuristics(messageText, Boolean(recentTask), Boolean(hasReplyTo));
+    // With an active design, a short unstructured title may be a new request or a note about the
+    // current draft. Asking preserves the message and avoids starting the wrong paid task.
+    if (recentTask && !hasReplyTo && local.kind === 'new_brief' &&
+        local.reason === 'Standard new design brief text' &&
+        messageText.trim().split(/\s+/).length <= 4 &&
+        !/\b(new|another|create|design|poster|flyer|banner)\b/i.test(messageText)) {
+      return { ...local, kind: 'other', intent: 'question_or_other', confidence: 0.5,
+        needsClarification: true, clarifyingQuestion: isSoraniText(messageText)
+          ? 'ئایا ئەمە داواکارییەکی نوێیە یان دەستکاریی دیزاینی پێشوو؟ بە «نوێ» یان «دەستکاری» وەڵام بدە.'
+          : 'Is this a new design or a change to the previous one? Reply “new” or “revise”.',
+        reason: 'Short message with active design needs a new-or-revise answer' };
+    }
+    return local;
   }
   // Thanks and OKs are answered without a paid model call.
   if (isAcknowledgement(messageText)) return acknowledgement(detectDocumentKind(messageText.trim()));
+  const sparseReading = classifyWithHeuristics(messageText, Boolean(recentTask), Boolean(hasReplyTo));
+  if (sparseReading.reason === 'Short message without design or event details') return sparseReading;
+  // A sender with no earlier design who opens an explicit copy section is starting a task. The
+  // section can be empty: intake will ask for the missing copy. A model call used to occasionally
+  // label the same message "instruction only" and erase that task's empty-copy fields.
+  const explicitCopySection = /\n\s*(?:content|copy|text|invitation|details|دەق|ناوەڕۆک)\s*:\s*\n?/i.test(messageText);
+  if (!recentTask && !hasReplyTo && explicitCopySection && sparseReading.kind === 'new_brief') return sparseReading;
 
   try {
     const previewImg = recentTask?.previewImageUrl || recentTask?.previewImageBase64;

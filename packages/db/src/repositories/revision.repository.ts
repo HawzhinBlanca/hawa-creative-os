@@ -1,7 +1,8 @@
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import crypto from 'node:crypto';
 import type { Database } from '../types.js';
 import { currentTraceId } from '../trace-context.js';
+import { FeedbackRepository } from './feedback.repository.js';
 
 export interface CreateRevisionParams {
   id?: string;
@@ -32,7 +33,13 @@ export interface RecordApprovalParams {
   nonce?: string;
   correlationId?: string;
   expectedTaskVersion?: number;
-  qaReport?: Record<string, unknown>;
+  /** An approval from a signed lifecycle action must use the QA the reviewer actually saw. */
+  expectedQcRunId?: string;
+  expectedQcReportHash?: string;
+  /** Internal RequestLifecycle projection only; ordinary Desk decisions must leave this unset. */
+  lifecycleRequestId?: string;
+  /** Optional caller-supplied authority check executed under the task lock before a new decision. */
+  authorizeDecision?: (trx: Kysely<Database>, scope: { clientId: string | null; projectId: string | null }) => Promise<Record<string, unknown>>;
 }
 
 /** Why a task in this state cannot be approved, or undefined when it can (received, human_review, …). */
@@ -285,6 +292,42 @@ export class RevisionRepository {
       if (!task) {
         throw new Error(`Task ${params.taskId} not found`);
       }
+      // RequestLifecycle owns this task's decisions. Check under the task lock so a direct
+      // repository caller cannot append a legacy approval or replay one after ownership is pinned.
+      if (task.request_id && task.request_id !== params.lifecycleRequestId) {
+        throw new Error('LIFECYCLE_OWNED: Review this task through RequestLifecycle');
+      }
+      if (!task.request_id && params.lifecycleRequestId) {
+        throw new Error('LIFECYCLE_OWNER_MISMATCH: This task has no matching request owner');
+      }
+
+      // A retry may arrive after the first decision committed but before the Desk got its answer.
+      // Check under the task lock: concurrent attempts with the same action key then serialize here.
+      if (params.nonce) {
+        const fingerprint = params.decisionPayload?.requestFingerprint;
+        if (typeof fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(fingerprint)) {
+          throw new Error('A keyed approval requires a request fingerprint');
+        }
+        const prior = await dbClient.selectFrom('approvals').selectAll()
+          .where('tenant_id', '=', params.tenantId)
+          .where('task_id', '=', params.taskId)
+          .where('nonce', '=', params.nonce)
+          .executeTakeFirst();
+        if (prior) {
+          const priorFingerprint = (prior.decision_payload as Record<string, unknown>)?.requestFingerprint;
+          if (prior.design_revision_id !== params.revisionId || prior.decision !== params.decision
+            || prior.decided_by !== params.decidedBy || priorFingerprint !== fingerprint) {
+            throw new Error('Idempotency key was already used for a different decision');
+          }
+          return { ...prior, replayed: true as const };
+        }
+      }
+
+      // Scope can change after the HTTP handler looked at the task. A named reviewer's current
+      // session and assignment must be checked on the locked task row in this transaction.
+      const authorityPayload = params.authorizeDecision
+        ? await params.authorizeDecision(dbClient, { clientId: task.client_id, projectId: task.project_id })
+        : {};
 
       // Optimistic concurrency fencing (CV-15, R05)
       if (params.expectedTaskVersion !== undefined && Number(task.version) !== Number(params.expectedTaskVersion)) {
@@ -313,7 +356,7 @@ export class RevisionRepository {
         if (refusal) throw new Error(refusal);
       }
 
-      // 2. Ensure verified passing QC run exists (NEVER manufacture fake QA rows)
+      // 2. Approval requires a real passing QA run; other decisions may honestly have no run.
       // Earlier PASS then later FAIL cannot qualify: order by created_at desc to inspect the latest run
       let qcRun = await dbClient
         .selectFrom('qc_runs')
@@ -323,12 +366,81 @@ export class RevisionRepository {
         .where('tenant_id', '=', params.tenantId)
         .orderBy('started_at', 'desc')
         .executeTakeFirst();
+      let approvedCanvaBinding: { id: string; canva_design_id: string; version: number } | null = null;
 
       if (params.decision === 'approved') {
         if (!qcRun || qcRun.status !== 'passed' || !qcRun.critical_pass) {
           throw new Error(
             `Precondition failed: Revision ${params.revisionId} cannot be approved without a verified, passing critical QA run`
           );
+        }
+        if (params.lifecycleRequestId && (!params.expectedQcRunId || !params.expectedQcReportHash)) {
+          throw new Error('Request-owned approval requires the exact QA run and report hash');
+        }
+        if ((params.expectedQcRunId && qcRun.id !== params.expectedQcRunId) ||
+            (params.expectedQcReportHash && qcRun.report_sha256 !== params.expectedQcReportHash)) {
+          throw new Error('QA evidence changed after the reviewer inspected this revision');
+        }
+        const report = qcRun.report as Record<string, unknown> | null;
+        if (report?.rtlVisualReviewRequired === true) {
+          const visual = params.decisionPayload?.rtlVisualReview as Record<string, unknown> | undefined;
+          const pins = params.decisionPayload?.pinnedExports;
+          if (visual?.confirmed !== true || visual.qcRunId !== qcRun.id ||
+              visual.exportSha256 !== report.exportSha256 ||
+              !Array.isArray(pins) || !pins.some((pin) =>
+                pin && typeof pin === 'object' && pin.format === 'png')) {
+            throw new Error('RTL visual review of the checked export is required before approval');
+          }
+        }
+        if (revision.studio === 'canva' && (report?.exportArtifactId || params.decisionPayload?.captureEvidenceRequired === true)) {
+          // The approval and its evidence are checked while the task row is locked. A pin from an
+          // older export of this same design and binding is not evidence for the latest QC run.
+          const checkedId = report?.exportArtifactId;
+          const checkedHash = report?.exportSha256;
+          const captureVersion = report?.captureVersion;
+          const pins = params.decisionPayload?.pinnedExports;
+          if (typeof checkedId !== 'string' || typeof checkedHash !== 'string'
+            || (typeof captureVersion !== 'string' && typeof captureVersion !== 'number')
+            || String(captureVersion).trim() === ''
+            || !Array.isArray(pins) || pins.length === 0) {
+            throw new Error('Canva approval requires a QC-linked capture and explicit stored exports');
+          }
+          const pinned = pins as Array<{ artifactId?: unknown; sha256?: unknown; byteSize?: unknown }>;
+          const ids = pinned.map((pin) => pin.artifactId);
+          if (ids.some((id) => typeof id !== 'string') || !ids.includes(checkedId)) {
+            throw new Error('Canva approval pins must include the export checked by the latest QA run');
+          }
+          const rows = (await sql<{
+            id: string; sha256: string; byte_size: number; format: string;
+            design_id: string; binding_version: number; capture_version: string | null;
+          }>`SELECT b.id, b.sha256, octet_length(b.content) AS byte_size, b.format,
+                o.design_id, o.binding_version, o.metadata->>'designUpdatedAt' AS capture_version
+              FROM hawa.canva_export_bytes b
+              JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
+              WHERE b.tenant_id = ${params.tenantId}::uuid AND b.task_id = ${params.taskId}::uuid
+                AND b.id = ANY(${ids}::uuid[])`.execute(dbClient)).rows;
+          const byId = new Map(rows.map((row) => [row.id, row]));
+          const checked = byId.get(checkedId);
+          if (!checked || checked.format !== 'pptx' || checked.sha256 !== checkedHash
+            || checked.capture_version !== String(captureVersion)
+            || (revision.source_sha256 && revision.source_sha256 !== checkedHash && Number(qcRun.attempt) === 1)) {
+            throw new Error('Canva QA evidence does not match the checked export of this revision');
+          }
+          const binding = (await sql<{ id: string; canva_design_id: string; version: number }>`SELECT id, canva_design_id, version FROM hawa.canva_bindings
+            WHERE tenant_id = ${params.tenantId}::uuid AND task_id = ${params.taskId}::uuid AND status = 'bound'`.execute(dbClient)).rows[0];
+          if (!binding || pinned.some((pin) => {
+            const row = byId.get(String(pin.artifactId));
+            return !row || row.sha256 !== pin.sha256 || Number(row.byte_size) !== Number(pin.byteSize)
+              || row.design_id !== binding.canva_design_id || Number(row.binding_version) !== Number(binding.version)
+              || row.capture_version !== String(captureVersion);
+          })) {
+            throw new Error('Canva approval pins contain an export from another capture or revision');
+          }
+          const policyCurrent=(await sql<{current:boolean}>`SELECT bool_and(hawa.canva_export_policy_current(o.tenant_id,o.client_id,COALESCE(o.metadata,'{}'::jsonb) || jsonb_build_object('taskId',o.task_id))) AS current
+            FROM hawa.canva_remote_operations o JOIN hawa.canva_export_bytes b ON b.operation_id=o.id AND b.tenant_id=o.tenant_id
+            WHERE b.id=ANY(${ids}::uuid[]) AND b.tenant_id=${params.tenantId}::uuid`.execute(dbClient)).rows[0];
+          if (!policyCurrent?.current) throw new Error('Precondition failed: Revision basis or client font policy changed; capture and review the design again before approval');
+          approvedCanvaBinding = binding;
         }
       }
 
@@ -342,40 +454,13 @@ export class RevisionRepository {
         .executeTakeFirst();
 
       if (!reviewReq) {
-        // If qcRun is missing on non-approval decisions, find or assign default profile
-        let qcRunId = qcRun?.id;
-        if (!qcRunId) {
-          const profile = await dbClient
-            .selectFrom('qc_profiles')
-            .select('id')
-            .limit(1)
-            .executeTakeFirst();
-          const profileId = profile?.id || 'de3a6551-acfc-4bcc-a40b-65aaf2674a12';
-          const nonPassQa = await dbClient
-            .insertInto('qc_runs')
-            .values({
-              tenant_id: params.tenantId,
-              task_id: params.taskId,
-              design_revision_id: params.revisionId,
-              qc_profile_id: profileId,
-              status: 'failed',
-              critical_pass: false,
-              report: params.qaReport || {},
-              report_sha256: this.computeSha256(JSON.stringify(params.qaReport || {})),
-            })
-            .returningAll()
-            .executeTakeFirstOrThrow();
-          qcRunId = nonPassQa.id;
-          qcRun = nonPassQa;
-        }
-
         reviewReq = await dbClient
           .insertInto('review_requests')
           .values({
             tenant_id: params.tenantId,
             task_id: params.taskId,
             design_revision_id: params.revisionId,
-            qc_run_id: qcRunId,
+            qc_run_id: qcRun?.id ?? null,
             stage: 'human_review',
             assigned_user_id: params.decidedBy,
             assigned_role: 'operator',
@@ -394,11 +479,21 @@ export class RevisionRepository {
           task_id: params.taskId,
           review_request_id: reviewReq.id,
           design_revision_id: params.revisionId,
-          qc_run_id: qcRun!.id,
+          qc_run_id: qcRun?.id ?? null,
           decision: params.decision,
           decided_by: params.decidedBy,
           reason: params.reason || null,
-          decision_payload: params.decisionPayload || {},
+          // The task-locked repository is the final authority for capture identity. Both Desk and
+          // request-owned lifecycle approvals receive the same immutable server binding proof.
+          decision_payload: {
+            ...(params.decisionPayload || {}),
+            ...authorityPayload,
+            ...(approvedCanvaBinding ? {
+              canvaBindingId: approvedCanvaBinding.id,
+              canvaBindingVersion: approvedCanvaBinding.version,
+              canvaDesignId: approvedCanvaBinding.canva_design_id,
+            } : {}),
+          },
           nonce,
         })
         .returningAll()
@@ -414,11 +509,21 @@ export class RevisionRepository {
         .execute();
 
       // 6. Update task state
+      // Count the newly recorded request while the task row is locked. The third repair request
+      // needs an operator, and this transition belongs in the same transaction as the approval.
+      const revisionRequestCount = params.decision === 'revision_requested'
+        ? Number((await dbClient.selectFrom('approvals')
+            .select((eb) => eb.fn.countAll<string>().as('count'))
+            .where('tenant_id', '=', params.tenantId)
+            .where('task_id', '=', params.taskId)
+            .where('decision', '=', 'revision_requested')
+            .executeTakeFirstOrThrow()).count)
+        : 0;
       const nextTaskState = params.decision === 'approved'
         ? 'approved'
         : params.decision === 'rejected'
         ? 'rejected'
-        : 'revision_requested';
+        : revisionRequestCount > 2 ? 'failed_operator' : 'revision_requested';
       const nextTaskVersion = Number(task.version) + 1;
       await dbClient
         .updateTable('tasks')
@@ -461,7 +566,37 @@ export class RevisionRepository {
         })
         .execute();
 
-      return approval;
+      // Feedback is part of the decision commit, not a later best-effort projection. A keyed
+      // retry returns above before this insert, so one decision produces one feedback signal.
+      if (!task.client_id && params.lifecycleRequestId) {
+        throw new Error('Request-owned review cannot record feedback without a resolved client');
+      }
+      if (task.client_id) {
+        const detail = params.decisionPayload?.revisionRequest;
+        const structured = detail && typeof detail === 'object' && !Array.isArray(detail)
+          ? detail as Record<string, unknown> : null;
+        const priority = structured?.priority;
+        const rejectionCategory = params.decisionPayload?.rejectionCategory;
+        const target: Record<string, unknown> = {
+          approvalId: approval.id, decision: params.decision, revisionId: params.revisionId,
+          ...(typeof rejectionCategory === 'string' ? { rejectionCategory } : {}),
+          ...(structured ? { revisionRequest: structured } : {}),
+        };
+        await new FeedbackRepository(dbClient).recordFeedback({
+          tenantId: params.tenantId, clientId: task.client_id,
+          projectId: task.project_id, taskId: params.taskId,
+          beforeRevisionId: params.revisionId,
+          category: params.decision === 'rejected' && typeof rejectionCategory === 'string'
+            ? `rejection.${rejectionCategory}` : `decision.${params.decision}`,
+          severity: priority === 'low' || priority === 'medium' || priority === 'high' || priority === 'critical'
+            ? priority : 'medium',
+          scope: 'one_time',
+          explicitness: params.decision === 'approved' ? 'approval_signal' : 'direct_instruction',
+          target, comment: params.reason, actorId: params.decidedBy,
+        }, dbClient);
+      }
+
+      return { ...approval, replayed: false as const };
     };
 
     if (trx) {

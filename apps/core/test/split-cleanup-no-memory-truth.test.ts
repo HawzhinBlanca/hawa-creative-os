@@ -1,3 +1,4 @@
+import {runReceiptAudit} from './fixtures/run-receipt-audit.js';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDb, TaskRepository, withRlsContext } from '@hawa/db';
 import { kaaeClientDNA } from '@hawa/domain';
@@ -47,7 +48,7 @@ describe('with a database, tasks are read from Postgres only', () => {
 
   it('audits the tasks Postgres holds, not only those this Core touched', async () => {
     await newTask(core(), { title: 'Cleanup: audited elsewhere', clientId: KAAE });
-    const res = await core().request('/v1/operations/reconciliation/run', { method: 'POST', headers: json, body: '{}' });
+    const res = await runReceiptAudit(core(),json);
     expect(res.status).toBe(201);
     expect((await res.json()).totalTasksAudited).toBeGreaterThanOrEqual(1);
   });
@@ -56,7 +57,7 @@ describe('with a database, tasks are read from Postgres only', () => {
     const taskId = await newTask(core(), { title: 'Cleanup: KAAE copy', clientId: KAAE, headlineCkb: 'بەخێربێن بۆ کەی ئەی ئەی ئی' });
     // A KAAE request without a headline is refused COPY_REQUIRED. The creating Core kept the headline
     // in memory; any other Core read the task without it and answered COPY_REQUIRED. Read now, the
-    // copy passes, and the legacy generator refuses KAAE itself: it is designed in the studio (ADR-038).
+    // copy passes, and the legacy generator refuses KAAE itself: it is designed in the studio (ADR-127).
     const res = await core().request(`/v1/tasks/${taskId}/generate`, { method: 'POST' });
     expect(res.status).toBe(410);
     expect((await res.json()).title).toBe('LEGACY_TEMPLATES_RETIRED');

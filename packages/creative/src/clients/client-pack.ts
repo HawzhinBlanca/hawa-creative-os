@@ -1,15 +1,17 @@
-import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { creativeAssetPath } from '../studio/asset-paths.js';
-import { ExemplarRetrievalIndex } from '../studio/exemplar-retrieval.js';
 
 /**
- * Client packs (ADR-038): one JSON file per client in packages/creative/assets/clients, saying who
- * the client is, which chats and words name it, which formats it orders, and where its verified
- * reference pack and logo are. Adding a client is a pack file, not a code change. Brand DNA
- * (palette, type, rules) is not here: it stays in the versioned Client DNA the office edits.
+ * Client packs (ADR-127, from studio-v2's client packs): one JSON file per client in
+ * packages/creative/assets/clients, saying who the client is, which chats and words name it, which
+ * formats it orders, and whether it is live or still being set up. Adding a client is a pack file,
+ * not a code change.
+ *
+ * A pack carries no brand authority. The palette, type, logo and rules a design is made with come
+ * from the client's active, versioned Client DNA (apps/core/src/services/client-design-reference.ts),
+ * which refuses a client without one; KAAE's packaged transitional reference stays KAAE-only there.
+ * A pack decides routing, the default canvas and whether an automatic draft may start.
  */
 
 /** Named canvas sizes a client orders. The studio accepts 640..2400 px on each side. */
@@ -29,7 +31,7 @@ const onboardingItem = z.enum([
   'logo',
   'palette',
   'fonts',
-  'reference-pack',
+  'client-dna',
   'exemplars',
   'telegram-chats',
   'language',
@@ -53,8 +55,8 @@ export const clientPackSchema = z
     /** What the requester is shown, and the row's name. */
     displayName: z.string().min(2),
     /**
-     * Who the client is, as every design stage is told it: what it is, what it orders, its voice.
-     * Shared prompts name no client (ADR-038); this is the only place a client's identity lives.
+     * Who the client is, as the v3 layout generator and the judge are told it: what it is, what it orders, its voice.
+     * Shared prompts name no client (ADR-127); this is the only place a client's identity lives.
      * Only what the office has said: a client being set up says its tone is not set yet.
      */
     profile: z.string().min(40),
@@ -74,36 +76,31 @@ export const clientPackSchema = z
     formats: z.array(formatPresetName).min(1),
     defaultFormat: formatPresetName,
     playbook: z.enum(['institutional-announcement', 'video-thumbnail']),
-    /** Asset paths under packages/creative/assets, or null until the office supplies them. */
-    reference: z.object({ pack: z.string().min(1), logo: z.string().min(1) }).nullable(),
     /**
-     * The client's own owner-confirmed exemplars: an exemplar manifest under
-     * packages/creative/assets, or null until the office has confirmed some. The studio conditions
-     * this client's designs on these and on no other client's.
+     * The client's own confirmed exemplar manifest, an asset path, or null until the office has
+     * confirmed some. Core reads it only where the client's references are admitted for exemplar
+     * conditioning (today KAAE's packaged reference, ADR-115); another client never reads it.
      */
-    exemplars: z.string().min(1).nullable(),
+    exemplars: z.string().regex(/^[a-z0-9][a-z0-9/._-]*\.json$/).nullable(),
     onboarding: z.object({ missing: z.array(onboardingItem) }),
   })
+  .strict()
   .superRefine((pack, ctx) => {
     if (!pack.formats.includes(pack.defaultFormat)) {
       ctx.addIssue({ code: 'custom', path: ['defaultFormat'], message: `defaultFormat ${pack.defaultFormat} is not one of the pack's formats` });
     }
-    if (pack.status === 'live' && (!pack.reference || pack.onboarding.missing.length > 0)) {
-      ctx.addIssue({ code: 'custom', path: ['status'], message: 'a live client needs a reference pack and logo, and nothing missing' });
+    if (pack.status === 'live' && pack.onboarding.missing.length > 0) {
+      ctx.addIssue({ code: 'custom', path: ['status'], message: 'a live client lists nothing missing' });
     }
     if (pack.status === 'onboarding' && pack.onboarding.missing.length === 0) {
       ctx.addIssue({ code: 'custom', path: ['onboarding'], message: 'an onboarding client lists what it still needs' });
     }
+    if (pack.exemplars && pack.status !== 'live') {
+      ctx.addIssue({ code: 'custom', path: ['exemplars'], message: 'only a live client has confirmed exemplars' });
+    }
   });
 
 export type ClientPack = z.infer<typeof clientPackSchema>;
-
-/** A pack's reference pack as stored: the fields the loader checks, plus whatever the studio reads. */
-export interface ClientReferencePack {
-  clientId: string;
-  logoSha256: string;
-  [key: string]: unknown;
-}
 
 export class ClientPackError extends Error {}
 
@@ -119,6 +116,7 @@ export function assertPacksConsistent(packs: ClientPack[]): void {
   for (const pack of packs) {
     claim('id', pack.id, pack.code);
     claim('code', pack.code, pack.code);
+    if (pack.exemplars) claim('exemplar manifest', pack.exemplars, pack.code);
     for (const chat of pack.routing.telegramChatIds) claim('telegram chat', chat, pack.code);
     for (const alias of [...pack.routing.latinAliases, ...pack.routing.scriptAliases, ...pack.routing.phrases]) {
       claim('alias', alias.toLowerCase(), pack.code);
@@ -126,68 +124,7 @@ export function assertPacksConsistent(packs: ClientPack[]): void {
   }
 }
 
-/** Reads, validates and cross-checks a pack's reference pack and logo. */
-export function loadClientReference(pack: ClientPack): { reference: ClientReferencePack; logo: Buffer; logoPath: string } {
-  if (!pack.reference) {
-    throw new ClientPackError(`${pack.code} has no verified reference pack yet (missing: ${pack.onboarding.missing.join(', ') || 'reference-pack'})`);
-  }
-  const reference = JSON.parse(readFileSync(creativeAssetPath(pack.reference.pack), 'utf8')) as ClientReferencePack;
-  if (reference.clientId !== pack.id) {
-    throw new ClientPackError(`${pack.reference.pack} belongs to client ${reference.clientId}, not ${pack.code} (${pack.id})`);
-  }
-  const logoPath = creativeAssetPath(pack.reference.logo);
-  const logo = readFileSync(logoPath);
-  const sha = createHash('sha256').update(logo).digest('hex');
-  if (sha !== reference.logoSha256) {
-    throw new ClientPackError(`${pack.reference.logo} does not match the checksum ${pack.reference.pack} records for ${pack.code}`);
-  }
-  return { reference, logo, logoPath };
-}
-
-/** A client's own exemplar set, ready to retrieve from (ADR-038). */
-export interface ClientExemplars {
-  clientId: string;
-  code: string;
-  index: ExemplarRetrievalIndex;
-  /** The image of a retrieved exemplar, or undefined when it is not on disk. */
-  imageOf(item: { filename: string; path: string }): string | undefined;
-}
-
-/** A pack's exemplar manifest, checked to be the pack's own. Undefined when it names none. */
-function clientExemplarManifest(pack: ClientPack): { manifestPath: string; imageDir: string } | undefined {
-  if (!pack.exemplars) return undefined;
-  const manifestPath = creativeAssetPath(pack.exemplars);
-  const raw = JSON.parse(readFileSync(manifestPath, 'utf8'));
-  if (raw.clientId !== pack.id) {
-    throw new ClientPackError(`${pack.exemplars} belongs to client ${raw.clientId ?? '(none named)'}, not ${pack.code} (${pack.id})`);
-  }
-  return { manifestPath, imageDir: typeof raw.imageDir === 'string' ? raw.imageDir : `exemplars/${pack.code}` };
-}
-
-/**
- * The client's own confirmed exemplars, or undefined when it has none yet. A design is conditioned
- * on these only: every client used to be given KAAE's. A set recorded for another client is refused.
- */
-export function loadClientExemplars(pack: ClientPack): ClientExemplars | undefined {
-  const manifest = clientExemplarManifest(pack);
-  if (!manifest) return undefined;
-  const index = new ExemplarRetrievalIndex(undefined, manifest.manifestPath);
-  return {
-    clientId: pack.id,
-    code: pack.code,
-    index,
-    imageOf: (item) => {
-      // The copy under the package's assets is the one that ships in the image. KAAE's manifest
-      // also records the archive each exemplar was curated from, which exists only in a checkout.
-      const shipped = creativeAssetPath(`${manifest.imageDir}/${item.filename}`, { optional: true });
-      if (shipped) return shipped;
-      const archived = item.path ? resolve(process.cwd(), item.path) : '';
-      return archived && existsSync(archived) ? archived : undefined;
-    },
-  };
-}
-
-/** Parses and cross-checks a set of pack documents. A live pack's reference is verified too. */
+/** Parses and cross-checks a set of pack documents. */
 export function parseClientPacks(documents: Array<{ source: string; json: unknown }>): ClientPack[] {
   const packs = documents.map(({ source, json }) => {
     const parsed = clientPackSchema.safeParse(json);
@@ -200,10 +137,6 @@ export function parseClientPacks(documents: Array<{ source: string; json: unknow
     return parsed.data;
   });
   assertPacksConsistent(packs);
-  for (const pack of packs) {
-    if (pack.status === 'live') loadClientReference(pack);
-    clientExemplarManifest(pack);
-  }
   return packs.sort((a, b) => a.code.localeCompare(b.code));
 }
 
@@ -215,12 +148,12 @@ export function loadClientPacks(): ClientPack[] {
   const dir = creativeAssetPath('clients');
   const documents = readdirSync(dir)
     .filter((file) => file.endsWith('.json'))
-    .map((file) => ({ source: `clients/${file}`, json: JSON.parse(readFileSync(`${dir}/${file}`, 'utf8')) }));
+    .map((file) => ({ source: `clients/${file}`, json: JSON.parse(readFileSync(`${dir}/${file}`, 'utf8')) as unknown }));
   cached = parseClientPacks(documents);
   return cached;
 }
 
-/** The pack for a client id or code, or undefined. */
+/** The pack for a client id or code (or the legacy `client-<code>` form), or undefined. */
 export function findClientPack(idOrCode: string | null | undefined, packs: ClientPack[] = loadClientPacks()): ClientPack | undefined {
   if (!idOrCode) return undefined;
   const key = idOrCode.toLowerCase();
@@ -276,6 +209,14 @@ export function matchClientPack(
   if (named.length === 1) return { kind: 'named', pack: named[0] };
   if (named.length > 1) return { kind: 'ambiguous', packs: named };
   return { kind: 'none' };
+}
+
+/**
+ * The absolute path of a pack's confirmed exemplar manifest, or undefined when it names none. Throws
+ * when the named file is not in the package: a design is never conditioned on a guessed set.
+ */
+export function clientExemplarManifestPath(pack: ClientPack): string | undefined {
+  return pack.exemplars ? creativeAssetPath(pack.exemplars) : undefined;
 }
 
 /** The canvas a client's request gets when it names no size. */

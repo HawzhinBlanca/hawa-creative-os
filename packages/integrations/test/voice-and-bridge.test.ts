@@ -1,8 +1,37 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { KurdishVoiceTranscriber, normalizeKurdishSpokenText } from '../src/voice-transcriber.js';
 import { TelegramBridgeDaemon, type TelegramUpdate } from '../src/telegram-bridge.js';
 
 describe('KurdishVoiceTranscriber (FR-013, FR-014)', () => {
+  it('does not send unresolved or local-only client audio to an external transcription provider', async () => {
+    const previous = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = ['fixture', 'voice', 'key'].join('-');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { throw new Error('Unexpected external request in local-only voice test'); });
+    try {
+      const transcriber = new KurdishVoiceTranscriber();
+      for (const egressDecision of [undefined, {
+        clientId: '00000000-0000-4000-a000-000000000001',
+        dataClass: 'client_voice' as const,
+        mode: 'local_only' as const,
+        allowedProviders: ['local'],
+      }]) {
+        const result = await transcriber.transcribe({
+          audioBuffer: Buffer.from('private-audio'),
+          egressDecision,
+        }, 'Caption supplied by sender');
+        expect(result.audioStatus).toBe('policy_blocked');
+        expect(result.transcript).toBe('');
+        expect(result.suppliedText).toBe('Caption supplied by sender');
+        expect(result.normalizedText).toBe('');
+      }
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+      if (previous === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previous;
+    }
+  });
+
   it('normalizes spoken Kurdish Sorani numbers, percentages, and currencies into exact protected tokens', () => {
     const spoken = 'پۆستێکمان بۆ بکە، داشکاندنی لەسەدا بیست و پێنج، نرخەکەشی دوازدە هەزار دینار';
     const normalized = normalizeKurdishSpokenText(spoken);
@@ -11,29 +40,28 @@ describe('KurdishVoiceTranscriber (FR-013, FR-014)', () => {
     expect(normalized).toContain('١٢٬٠٠٠ دینار');
   });
 
-  it('transcribes Sorani voice note into structured brief and extracts protected tokens without hallucination', async () => {
+  it('preserves supplied Sorani text without rewriting prices or claiming transcription', async () => {
     const transcriber = new KurdishVoiceTranscriber();
     const result = await transcriber.transcribe(
       { durationSeconds: 10, languageHint: 'ckb' },
       'داشکاندنی بیست و پێنج لە سەد بۆ ڕۆژی نەورۆز بە نرخی دە دۆلار'
     );
 
-    expect(result.detectedLanguage).toBe('ckb');
-    expect(result.objective).toBe('Nawroz Holiday Campaign');
-    expect(result.normalizedText).toContain('٪٢٥');
-    expect(result.normalizedText).toContain('$10');
-    expect(result.protectedTokens.length).toBeGreaterThanOrEqual(1);
-    expect(result.missingFacts).toHaveLength(0);
+    expect(result.detectedLanguage).toBeNull();
+    expect(result.transcript).toBe('');
+    expect(result.audioStatus).toBe('not_provided');
+    expect(result.normalizedText).toBe('داشکاندنی بیست و پێنج لە سەد بۆ ڕۆژی نەورۆز بە نرخی دە دۆلار');
+    expect(result.missingFacts).toEqual(['copy_review']);
   });
 
-  it('flags missing facts when no price or discount is mentioned in voice note (Invariant 5)', async () => {
+  it('requires copy review without inventing a requirement for a price or discount', async () => {
     const transcriber = new KurdishVoiceTranscriber();
     const result = await transcriber.transcribe(
       { durationSeconds: 6, languageHint: 'ckb' },
       'سڵاو کاکە، وێنەیەکمان بۆ چاپ بکەن'
     );
 
-    expect(result.missingFacts).toContain('exact_price_or_discount');
+    expect(result.missingFacts).toEqual(['copy_review']);
   });
 
   it('proves OpenAI Whisper REST call passes API key via Authorization header and does not leak it in URL query parameter', async () => {
@@ -58,6 +86,7 @@ describe('KurdishVoiceTranscriber (FR-013, FR-014)', () => {
       const res = await transcriber.transcribe({
         audioBuffer: Buffer.from('fake-audio-bytes'),
         audioMimeType: 'audio/ogg',
+        egressDecision: { clientId: '00000000-0000-4000-a000-000000000001', dataClass: 'client_voice', mode: 'approved_providers', allowedProviders: ['openai'] },
       });
 
       expect(res.transcript).toBe('داشکاندنی بەهارە');
@@ -87,7 +116,7 @@ describe('audio file names', () => {
 });
 
 describe('a voice note with a caption', () => {
-  it('is transcribed as well, with no Kurdish language code Whisper refuses, and the caption kept', async () => {
+  it('keeps the provider transcript and supplied caption separate', async () => {
     const originalKey = process.env.OPENAI_API_KEY;
     const originalFetch = globalThis.fetch;
     process.env.OPENAI_API_KEY = ['voice', 'fixture', 'key'].join('-');
@@ -98,13 +127,15 @@ describe('a voice note with a caption', () => {
     }) as any;
     try {
       const res = await new KurdishVoiceTranscriber().transcribe(
-        { audioBuffer: Buffer.from('fake-audio-bytes'), audioMimeType: 'audio/ogg', languageHint: 'ckb' },
+        { audioBuffer: Buffer.from('fake-audio-bytes'), audioMimeType: 'audio/ogg', languageHint: 'ckb',
+          egressDecision: { clientId: '00000000-0000-4000-a000-000000000001', dataClass: 'client_voice', mode: 'approved_providers', allowedProviders: ['openai'] } },
         'KAAE'
       );
       expect(form).toBeDefined();
       expect(form!.get('language')).toBeNull();
       expect(String(form!.get('prompt'))).toMatch(/سۆرانی/);
-      expect(res.normalizedText).toBe('KAAE\n\nبانگهێشتنامەیەک بۆ کۆنفرانسی ساگاکۆن');
+      expect(res.normalizedText).toBe('بانگهێشتنامەیەک بۆ کۆنفرانسی ساگاکۆن');
+      expect(res.suppliedText).toBe('KAAE');
     } finally {
       process.env.OPENAI_API_KEY = originalKey;
       globalThis.fetch = originalFetch;

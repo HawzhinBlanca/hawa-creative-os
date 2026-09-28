@@ -12,8 +12,15 @@ import {
   type PairwiseMatchResult,
 } from './pairwise-judge-v3.js';
 import type { OpenAiStudioClient } from './openai-studio-client.js';
+import {
+  BriefBoundJudgeInputError,
+  compareBriefBoundWithOrderSwap,
+  type BriefBoundJudgeBrief,
+  type BriefBoundPairMatch,
+  type StudioJudgeProtocol,
+} from './brief-bound-judge.js';
 import { normalizeStudioLayout, fitLogoToAspect } from './studio-normalize.js';
-import type { ExemplarRetrievalIndex, ExemplarRetrievalMatch } from './exemplar-retrieval.js';
+import { ExemplarRetrievalIndex, type ExemplarRetrievalMatch } from './exemplar-retrieval.js';
 import { evaluateHardQa, type HardQaContext, type HardQaOutcome } from './hard-qa.js';
 import { computeLayoutMetrics } from './layout-metrics.js';
 import type { ClientReference } from './client-reference.js';
@@ -56,19 +63,38 @@ export interface RankedCandidateV3 {
   hardQa?: HardQaOutcome;
 }
 
+export class NoEligibleCandidateError extends Error {
+  readonly code = 'NO_ELIGIBLE_CANDIDATE';
+  readonly candidates: Array<{ sourceIndex: number; qa: 'failed' | 'unknown'; defectCodes: string[] }>;
+  constructor(ranked: RankedCandidateV3[]) {
+    super('NO_ELIGIBLE_CANDIDATE: no candidate has explicit passing hard QA; review or repair the recorded defects.');
+    this.name = 'NoEligibleCandidateError';
+    this.candidates = ranked.map((c) => ({ sourceIndex: c.sourceIndex, qa: c.hardQa ? 'failed' : 'unknown', defectCodes: c.hardQa?.defectCodes ?? [] }));
+  }
+}
+
+/** Missing QA never grants spending or winner authority. Keep the caller's established rank. */
+export function eligibleCandidatesV3<T extends RankedCandidateV3>(ranked: T[]): T[] {
+  const eligible = ranked.filter((candidate) => candidate.hardQa?.passed === true);
+  if (!eligible.length) throw new NoEligibleCandidateError(ranked);
+  return eligible;
+}
+
 export interface PipelineV3CallOptions {
   client?: OpenAiStudioClient;
   /** Overrides the active tier's model for this role. */
   model?: string;
   /** The client's style reference, shown to the critique and the judge. */
   reference?: ClientReference;
-  /**
-   * The client's logo and photos, drawn into every render the critique and the judge see. Without
-   * them the renderer drew KAAE's logo and no photos, so the judge scored a design that never ships
-   * and, for any other client, one with the wrong logo on it (audit N-CRE-1, ADR-038).
-   */
-  render?: Pick<RenderLayoutOptions, 'logoDataUri' | 'logoPath' | 'photoFiles' | 'photoCutouts'>;
-  /** Who the client is (its client pack's profile): the judge scores brand fit against it. */
+  /** Exact client logo for fallback and canary renders. */
+  renderOptions?: RenderLayoutOptions;
+  /** Candidate-specific assets, also used for its degraded canary. */
+  renderOptionsForCandidate?: (candidate: RankedCandidateV3) => RenderLayoutOptions;
+  /** ADR-124: which judge selects. Absent keeps the incumbent P07 judge. */
+  judgeProtocol?: StudioJudgeProtocol;
+  /** The actual brief and exact copy; required by the brief-bound challenger. */
+  judgeBrief?: BriefBoundJudgeBrief;
+  /** Who the client is (its client pack's profile, ADR-127): the judge scores brand fit against it. */
   clientProfile?: string;
 }
 
@@ -77,6 +103,9 @@ const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
 function scriptOf(copy: PipelineV3Copy, copyIndex: number): CopyScriptV3 {
   return copy.scripts?.[copyIndex] ?? (ARABIC_SCRIPT.test(copy.text[copyIndex] ?? '') ? 'arabic' : 'latin');
 }
+
+/** The script the pipeline measures a block in: the declared one, else detected from its text. */
+export const copyScriptV3 = scriptOf;
 
 /**
  * Maps a family the model chose onto the admitted set, by the role, script and weight of its block.
@@ -157,20 +186,15 @@ export function formatKeyV3(width: number, height: number): string {
   return r < 1 ? 'portrait' : 'landscape';
 }
 
-/**
- * P02: the top owner-confirmed exemplars for a brief, by local embedding. Free.
- *
- * Only from the index given, which is the client's own set (loadClientExemplars, ADR-038). With none
- * there are no exemplars: this used to fall back to KAAE's set for every client. The query's
- * category is the set's own standing subject; it was "standards", KAAE's, for everyone.
- */
+let sharedRetrievalIndex: ExemplarRetrievalIndex | null = null;
+
+/** P02: owner-confirmed exemplars selected by Unicode lexical evidence or explicit fallback. Free. */
 export function retrieveExemplarsV3(
-  query: { text: string; width: number; height: number; category?: string },
-  index: ExemplarRetrievalIndex | undefined
+  query: { text: string; width: number; height: number },
+  index?: ExemplarRetrievalIndex
 ): ExemplarRetrievalMatch[] {
-  if (!index) return [];
-  const retrieval = index.retrieveTopExemplars(
-    { text: query.text, format: formatKeyV3(query.width, query.height), category: query.category },
+  const retrieval = (index || (sharedRetrievalIndex ??= new ExemplarRetrievalIndex())).retrieveTopExemplars(
+    { text: query.text, format: formatKeyV3(query.width, query.height) },
     3
   );
   return retrieval.retrievedExemplars;
@@ -747,6 +771,8 @@ export function prepareGeneratedLayoutV3(
     background?: string;
     /** Brand ornament added when the generator left it out: a texture and gold dividers. */
     ornament?: OrnamentSettings;
+    /** False enforces a brief's no-imagery decision even after style/ornament preparation. */
+    allowArt?: boolean;
     /** What the client's reference and instructions decide; enforced over the generator's choices. */
     style?: StyleSpec;
   }
@@ -764,7 +790,11 @@ export function prepareGeneratedLayoutV3(
     : conformToHouseRules(fonted, copy, canvas.palette);
   const balance = canvas.ornament?.balance ?? true;
   const spread = canvas.style?.composition === 'spread';
-  const finish = (l: StudioLayoutV2) => settlePhotos(balanceLineBreaks(compose(l), copy));
+  const finish = (l: StudioLayoutV2) => {
+    const finished = settlePhotos(balanceLineBreaks(compose(l), copy));
+    if (canvas.allowArt === false) delete finished.art;
+    return finished;
+  };
   const compose = (l: StudioLayoutV2) => {
     if (!spread) return balance ? balanceVertically(l, copy) : l;
     // The reference's composition, kept unless it adds a real defect. The measure here is the hard
@@ -1187,7 +1217,7 @@ export function addBrandOrnament(
       t.height = wanted;
     }
   }
-  // The palette's warm accent; a neutral grey with no palette, never KAAE's gold (ADR-038).
+  // The palette's warm accent; a neutral grey with no palette, never KAAE's gold (ADR-127).
   const gold = palette.length ? nearestPaletteColour('#F7B500', palette) : '#D9D9D9';
   const sameColumn = (a: Rect, b: Rect) => a.x < b.x + b.width && a.x + a.width > b.x;
   const below = (b: Rect) =>
@@ -1246,10 +1276,8 @@ function compareCandidatesV3(
 }
 
 /**
- * Ranks candidates for the judge. With a QA context, production's hard QA is a filter, not an
- * afterthought: a candidate that QA would reject cannot outrank one it would accept. Without it,
- * the ranking would crown a design production then refuses, and the run would fail while a
- * passing candidate sat unused.
+ * Ranks candidates for repair and selection. Selection separately excludes failed/unknown QA;
+ * retaining failed candidates here lets the bounded refinement stage inspect their defects.
  */
 export function rankCandidatesV3(
   candidates: Array<{ sourceIndex: number; layout: StudioLayoutV2; renderedPng?: Buffer }>,
@@ -1276,7 +1304,7 @@ export async function critiqueCandidateV3(
     client: options.client,
     model: options.model || resolveModel('critique'),
     deterministicMetrics: candidate.metrics,
-    renderOptions: { ...options.render, copyText: copy.text },
+    renderOptions: { ...options.renderOptions, copyText: copy.text },
   });
 }
 
@@ -1322,7 +1350,7 @@ export interface RefineV3Options extends PipelineV3CallOptions {
    * a freshly generated layout — logo at its real aspect, margins, collision clean-up — before it
    * is measured, so adoption is decided on the layout that will actually be stored.
    */
-  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[]; background?: string; ornament?: OrnamentSettings; style?: StyleSpec };
+  canvas?: { width: number; height: number; logoAspect?: number; palette?: string[]; background?: string; ornament?: OrnamentSettings; style?: StyleSpec; allowArt?: boolean };
   /** Production's hard-QA context. A candidate QA rejects is refined even if its metrics pass. */
   qa?: HardQaContext;
 }
@@ -1334,12 +1362,13 @@ export async function refineCandidateV3(
 ): Promise<RefinementOutcomeV3> {
   const failsQa = candidate.hardQa ? !candidate.hardQa.passed : false;
   const result = await refineCandidate(candidate.sourceIndex, candidate.layout, {
+    reference: options.reference,
     client: options.client,
     model: options.model || resolveModel('layout'),
     maxRounds: 2,
     minDelta: 0.01,
     copyText: copy.text,
-    render: options.render,
+    renderOptions: options.renderOptions,
     force: failsQa,
     // What production's QA would say once the layout is prepared the way it will be stored.
     ...(options.qa
@@ -1395,13 +1424,31 @@ export interface WinnerSelectionV3 {
    * composite_after_tie — the judge's two orderings disagreed, so the higher composite stands.
    * composite_judge_unreliable — the judge picked, then failed to beat a degraded copy of its own
    *   pick; a judge that cannot see that is not trusted, and the higher composite stands.
+   * composite_judge_uncertain — (brief-bound challenger) ties, abstention, a position flip or a
+   *   self-contradicted pick left the pair undecided, or the degraded canary rendered identically
+   *   so the pick could not be tested; the higher composite stands and a human choice is recommended.
    */
-  decidedBy: 'single_candidate' | 'judge' | 'composite_after_tie' | 'composite_judge_unreliable';
+  decidedBy: 'single_candidate' | 'judge' | 'composite_after_tie' | 'composite_judge_unreliable' | 'composite_judge_uncertain';
+  /** The incumbent's match. Null when the challenger judged or no judge ran. */
   match: PairwiseMatchResult | null;
-  /** The canary run on `subject` — the judge's pick, or the higher composite after a tie. */
+  /** The incumbent's canary run on `subject` — its pick, or the higher composite after a tie. */
   canary: { passed: boolean; match: PairwiseMatchResult; subject: RankedCandidateV3 } | null;
   /** Whether the judge beat the degraded canary in both orders. Null when no judge ran. */
   judgeReliable: boolean | null;
+  /** ADR-124: the judge protocol that made this selection. */
+  protocol: StudioJudgeProtocol;
+  /** True when automated preference is uncertain or untrusted and a person should choose. */
+  humanChoiceRecommended: boolean;
+  /** The challenger's pair and canary, when it judged. */
+  briefBound?: {
+    match: BriefBoundPairMatch;
+    /** Null when the canary could not be formed; see canaryUnavailable. */
+    canaryMatch: BriefBoundPairMatch | null;
+    /** Null when no canary ran: an untested pick is not trusted. */
+    canaryPassed: boolean | null;
+    canaryUnavailable?: 'degraded_canary_identical_bytes';
+    subject: RankedCandidateV3;
+  };
 }
 
 /**
@@ -1414,7 +1461,15 @@ export async function selectWinnerV3(
   copy: PipelineV3Copy,
   options: PipelineV3CallOptions = {}
 ): Promise<WinnerSelectionV3> {
-  if (ranked.length === 0) throw new Error('selectWinnerV3 needs at least one candidate');
+  const protocol: StudioJudgeProtocol = options.judgeProtocol ?? 'incumbent';
+  if (protocol !== 'incumbent' && protocol !== 'brief_bound_v1') {
+    throw new BriefBoundJudgeInputError(`Unknown judge protocol '${String(protocol)}'.`);
+  }
+  if (protocol === 'brief_bound_v1' && !options.judgeBrief) {
+    // Refused before any render or call: the challenger without the actual brief is not the challenger.
+    throw new BriefBoundJudgeInputError('The brief-bound judge needs the actual brief and exact copy.');
+  }
+  ranked = eligibleCandidatesV3(ranked);
   if (ranked.length === 1) {
     return {
       winner: ranked[0],
@@ -1423,21 +1478,27 @@ export async function selectWinnerV3(
       match: null,
       canary: null,
       judgeReliable: null,
+      protocol,
+      humanChoiceRecommended: false,
     };
   }
+  if (protocol === 'brief_bound_v1') return selectWinnerBriefBoundV3(ranked, copy, options, options.judgeBrief!);
 
   const judgeOptions = {
     reference: options.reference,
     clientProfile: options.clientProfile,
     client: options.client,
     model: options.model || resolveModel('judge'),
-    renderOptions: { ...options.render, copyText: copy.text },
+    renderOptions: { ...options.renderOptions, copyText: copy.text },
   };
+  const renderOptionsFor = (candidate: RankedCandidateV3): RenderLayoutOptions => ({
+    ...options.renderOptions, ...options.renderOptionsForCandidate?.(candidate), copyText: copy.text,
+  });
   const asJudgeInput = (c: RankedCandidateV3, id: string): CandidateJudgeInput => ({
     id,
     layout: c.layout,
     deterministicMetrics: c.metrics,
-    renderedPng: c.renderedPng || renderLayoutV2(c.layout, judgeOptions.renderOptions).png,
+    renderedPng: c.renderedPng || renderLayoutV2(c.layout, renderOptionsFor(c)).png,
   });
 
   const [first, second] = ranked;
@@ -1448,22 +1509,21 @@ export async function selectWinnerV3(
   const judgePick = match.winnerId === firstId ? first : match.winnerId === secondId ? second : null;
   const tentative = judgePick ?? first;
 
-  // Both sides of the canary are rendered the same way, from the layout alone. Handing the judge
-  // the chosen design's own render — which may carry art — against a plain render of the degraded
-  // copy would let the art, not the judge's eye for the defect, win the canary.
+  // Both sides use the tentative winner's identical asset bundle; only the layout is degraded.
+  const canaryRenderOptions = renderOptionsFor(tentative);
   const canaryLayout = createDegradedCanaryLayout(tentative.layout);
   const canaryMatch = await comparePairWithOrderSwap(
     {
       id: 'chosen',
       layout: tentative.layout,
       deterministicMetrics: tentative.metrics,
-      renderedPng: renderLayoutV2(tentative.layout, judgeOptions.renderOptions).png,
+      renderedPng: renderLayoutV2(tentative.layout, canaryRenderOptions).png,
     },
     {
       id: 'degraded_canary',
       layout: canaryLayout,
       deterministicMetrics: measureDesignV3(canaryLayout, copy),
-      renderedPng: renderLayoutV2(canaryLayout, judgeOptions.renderOptions).png,
+      renderedPng: renderLayoutV2(canaryLayout, canaryRenderOptions).png,
     },
     judgeOptions
   );
@@ -1471,10 +1531,12 @@ export async function selectWinnerV3(
   const canary = { passed: canaryPassed, match: canaryMatch, subject: tentative };
 
   if (!judgePick) {
-    return { winner: first, runnerUp: second, decidedBy: 'composite_after_tie', match, canary, judgeReliable: canaryPassed };
+    return { winner: first, runnerUp: second, decidedBy: 'composite_after_tie', match, canary, judgeReliable: canaryPassed,
+      protocol, humanChoiceRecommended: false };
   }
   if (!canaryPassed) {
-    return { winner: first, runnerUp: second, decidedBy: 'composite_judge_unreliable', match, canary, judgeReliable: false };
+    return { winner: first, runnerUp: second, decidedBy: 'composite_judge_unreliable', match, canary, judgeReliable: false,
+      protocol, humanChoiceRecommended: false };
   }
   return {
     winner: judgePick,
@@ -1483,5 +1545,68 @@ export async function selectWinnerV3(
     match,
     canary,
     judgeReliable: true,
+    protocol,
+    humanChoiceRecommended: false,
   };
+}
+
+/**
+ * ADR-124 challenger. Same eligible top two, same rendered bytes with each candidate's own assets,
+ * same two-order match and degraded-copy canary as the incumbent, so the experiment compares the
+ * judging protocol and nothing else. The brief-bound judge sees no layout, metric or rank.
+ */
+async function selectWinnerBriefBoundV3(
+  ranked: RankedCandidateV3[],
+  copy: PipelineV3Copy,
+  options: PipelineV3CallOptions,
+  brief: BriefBoundJudgeBrief
+): Promise<WinnerSelectionV3> {
+  const judgeOptions = {
+    brief,
+    reference: options.reference,
+    client: options.client,
+    model: options.model || resolveModel('judge'),
+  };
+  const renderOptionsFor = (candidate: RankedCandidateV3): RenderLayoutOptions => ({
+    ...options.renderOptions, ...options.renderOptionsForCandidate?.(candidate), copyText: copy.text,
+  });
+  const [first, second] = ranked;
+  const firstId = `candidate_${first.sourceIndex}`;
+  const secondId = `candidate_${second.sourceIndex}`;
+  const match = await compareBriefBoundWithOrderSwap(
+    { id: firstId, png: first.renderedPng || renderLayoutV2(first.layout, renderOptionsFor(first)).png },
+    { id: secondId, png: second.renderedPng || renderLayoutV2(second.layout, renderOptionsFor(second)).png },
+    judgeOptions
+  );
+  const judgePick = match.winnerId === firstId ? first : match.winnerId === secondId ? second : null;
+  const tentative = judgePick ?? first;
+  const canaryRenderOptions = renderOptionsFor(tentative);
+  const chosenPng = renderLayoutV2(tentative.layout, canaryRenderOptions).png;
+  const degradedPng = renderLayoutV2(createDegradedCanaryLayout(tentative.layout), canaryRenderOptions).png;
+  const common = { match: null, canary: null, protocol: 'brief_bound_v1' as const };
+  if (chosenPng.equals(degradedPng)) {
+    // The degradation touches only title and body roles; without them the canary is the same image
+    // and cannot test the judge. No call is spent on it, and an untested pick is not trusted.
+    const briefBound = { match, canaryMatch: null, canaryPassed: null, canaryUnavailable: 'degraded_canary_identical_bytes' as const,
+      subject: tentative };
+    return { ...common, briefBound, winner: first, runnerUp: second, decidedBy: 'composite_judge_uncertain',
+      judgeReliable: null, humanChoiceRecommended: true };
+  }
+  const canaryMatch = await compareBriefBoundWithOrderSwap(
+    { id: 'chosen', png: chosenPng },
+    { id: 'degraded_canary', png: degradedPng },
+    judgeOptions
+  );
+  const canaryPassed = canaryMatch.winnerId === 'chosen';
+  const briefBound = { match, canaryMatch, canaryPassed, subject: tentative };
+  if (!judgePick) {
+    return { ...common, briefBound, winner: first, runnerUp: second, decidedBy: 'composite_judge_uncertain',
+      judgeReliable: canaryPassed, humanChoiceRecommended: true };
+  }
+  if (!canaryPassed) {
+    return { ...common, briefBound, winner: first, runnerUp: second, decidedBy: 'composite_judge_unreliable',
+      judgeReliable: false, humanChoiceRecommended: true };
+  }
+  return { ...common, briefBound, winner: judgePick, runnerUp: judgePick === first ? second : first, decidedBy: 'judge',
+    judgeReliable: true, humanChoiceRecommended: false };
 }

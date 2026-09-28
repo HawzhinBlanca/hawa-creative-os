@@ -58,7 +58,7 @@ async function setup() {
   const created = await (await app.request('/api/webhooks/telegram', {
     method: 'POST',
     headers: { 'x-telegram-bot-api-secret-token': 'expected_office_secret', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ update_id: 5000 + Math.floor(Math.random() * 1e6), message: { text: 'Delivery <notice> & files', chat: { id: REQUESTER_CHAT } } }),
+    body: JSON.stringify({ update_id: 5000 + Math.floor(Math.random() * 1e6), message: { text: 'Please create a new poster\n---\nDelivery <notice> & files', chat: { id: REQUESTER_CHAT } } }),
   })).json();
   const taskId: string = created.id || created.task?.id;
   const routed = await app.request(`/tasks/${taskId}/route`, { method: 'POST', headers: auth, body: JSON.stringify({ clientId: NO_SHEET_CLIENT, reason: 'Client assigned' }) });
@@ -120,6 +120,10 @@ describe('the delivery notification', () => {
     expect(await notifications()).toHaveLength(1);
   });
 
+  // Ported from studio-v2 66e483e8 (audit 2026-09-27 #12). studio-v2 completed the files and left
+  // the task in PUBLISH_RECONCILIATION with a notificationProblem; this branch is stricter: the
+  // notice is enqueued in the same transaction as the Drive/Sheets receipts, so a failed write holds
+  // the whole delivery (503 RECEIPTS_NOT_RECORDED) and Deliver retries it.
   it('must be queued before the task is COMPLETE: a failed write leaves it for Deliver to retry (audit 2026-09-27 #12)', async () => {
     const { deliver, notifications, saveDna } = await setup();
     await saveDna('sheet-for-no-sheet-notify-client');
@@ -129,10 +133,12 @@ describe('the delivery notification', () => {
       return enqueue.call(this, command, trx);
     } as any);
     try {
-      const first = await (await deliver()).json();
-      // The files are in Drive and the row confirmed, but the requester would never hear: not COMPLETE.
-      expect(first.status).toBe('PUBLISH_RECONCILIATION');
-      expect(first.notificationProblem).toMatch(/could not be queued/);
+      const first = await deliver();
+      const body = await first.json();
+      // The files are in Drive, but the requester would never hear: nothing is recorded as delivered.
+      expect(first.status).toBe(503);
+      expect(JSON.stringify(body)).toMatch(/RECEIPTS_NOT_RECORDED|requester delivery remains held/);
+      expect(body.status).not.toBe('COMPLETE');
       expect(await notifications()).toHaveLength(0);
     } finally {
       spy.mockRestore();

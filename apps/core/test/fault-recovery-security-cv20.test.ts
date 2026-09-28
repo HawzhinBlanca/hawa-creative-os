@@ -45,7 +45,7 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     expect(healthJson.lastVerifiedProgressAt).toBeDefined();
     expect(healthJson.dependencies).toBeDefined();
     expect(healthJson.dependencies.postgres).toMatch(/^(connected|uninitialized)$/);
-    expect(healthJson.dependencies.canva).toMatch(/^(connected|degraded|outage|reconnect_required)$/);
+    expect(healthJson.dependencies.canva).toMatch(/^(unverified|degraded|outage|reconnect_required)$/);
     expect(healthJson.dependencies.disk).toBe('writable');
   });
 
@@ -103,11 +103,10 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     const recoveryJson = await recoveryRes.json();
     expect(recoveryJson.circuitBreaker.state).toBe('CLOSED');
 
-    // 5. Health restored: the breaker is closed, and with the Primary Operator's Canva authorization
-    // active, Canva is connected.
+    // 5. A closed breaker and active authorization do not establish Canva reachability or export quality.
     await withCanvaConnection('active', async () => {
       const restoredJson = await (await app.request('/v1/health')).json();
-      expect(restoredJson.dependencies.canva).toBe('connected');
+      expect(restoredJson.dependencies.canva).toBe('unverified');
       expect(restoredJson.dependencies.canvaCircuitBreaker).toBe('CLOSED');
     });
   });
@@ -212,4 +211,3 @@ describe('CV-20: Fault Recovery, Security, and Honest Health', () => {
     });
   });
 });
-

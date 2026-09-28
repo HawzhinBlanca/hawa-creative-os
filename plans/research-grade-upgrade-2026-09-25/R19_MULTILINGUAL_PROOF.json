@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "captureSourceCommit": "2d4c4de1f8dafa8d3761ebd44b4d74e57c6fc78c",
+  "requirements": [
+    "FR-034",
+    "FR-035",
+    "FR-038",
+    "FR-041",
+    "NFR-020"
+  ],
+  "status": "partial",
+  "fullMultilingualAdmission": false,
+  "deployed": false,
+  "analysis": "output/acceptance/2026-09-27-canva-multilingual/offline-analysis.json",
+  "results": {
+    "nativeExactStrings": 40,
+    "realCanvaImports": 4,
+    "realCanvaExports": 15,
+    "humanLanguageReview": "not_run",
+    "committedNativeEditSaveReopen": "not_run",
+    "fullHawaWorkflow": "not_run"
+  },
+  "fontTruthFix": {
+    "red": {
+      "failed": 12,
+      "passed": 52
+    },
+    "focused": {
+      "files": 9,
+      "passed": 122,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheck": "passed",
+    "lint": "passed",
+    "deskBuild": "passed",
+    "historicalQcHashes": "unchanged",
+    "fullSuite": "not_rerun",
+    "approvalPolicy": "unchanged"
+  },
+  "sourceHashes": {
+    "apps/core/src/core-helpers.ts": "3680e2a194ed73646fa322c657c422fca778ed16c11a0c33dce9e5ab8db7c199",
+    "apps/core/src/services/canva-font-evidence.ts": "bd46e8a35de56e803edeb6b6381922b9110f151b17317275d910741ac1e391fc",
+    "apps/core/src/routes/tasks.routes.ts": "a0e0310100af5b035fe00f516586f4a8755dd9206f97083129f4510b62dbb45c",
+    "apps/desk/src/screens/WorkScreen.tsx": "b7b9adf8e686def7c0164d5ac58c5d4eb3428841a43302cc0c7f17d769b8e4e5",
+    "packages/db/src/repositories/task.repository.ts": "75432773d682a313a6e7a3da92e4e2594a9cd59869b3fcc61803f14bfb27a1f4"
+  },
+  "artifacts": {
+    "output/acceptance/2026-09-27-canva-multilingual/README.md": {
+      "sha256": "62a2d68d5203230f4c9837aa4573e7457ba25e92db6fe366de4c0591ace1bbe1",
+      "bytes": 5013
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/analyze.py": {
+      "sha256": "d067ca18572d1a0451d5c1c181a0690962b8df71876cf9c11a6637427ebb2e63",
+      "bytes": 6592
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/build_fixtures.mts": {
+      "sha256": "a527dd227bdd0a802070cfc192f708bfe6e3eac4dc5ecc9f406ab67d8a748c8b",
+      "bytes": 3161
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/capture_live.mts": {
+      "sha256": "e22fac2d419ccc2b7321d419c626adad830ff3f91396ef41666db6151a900c4a",
+      "bytes": 9414
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/fixtures.json": {
+      "sha256": "9f332a9252bf2df4dba279383a1078471398d695363afc41eb8ab711710bb8ac",
+      "bytes": 49826
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/font-truth-desk-build.log": {
+      "sha256": "229e90f3e37e23512fdd8646d2c45066e465f90182fe62b38dab4e9d2abedfb6",
+      "bytes": 745
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/font-truth-green.log": {
+      "sha256": "6a6a1e85ee49bbad931f393763c1bc3deedb347b0f782b92abed77cc51959dca",
+      "bytes": 4120
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/font-truth-red.log": {
+      "sha256": "9e85f10c58f2a2d3d5a003b6c03020520eb610fc38a35403957f989d22c9dc9e",
+      "bytes": 11240
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/font-truth-typecheck.log": {
+      "sha256": "6de4460982ec49b887bd9f7eb0bab00c34b096150e2abd43af4aa0baf3e238ed",
+      "bytes": 145
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-1-canva.pdf": {
+      "sha256": "8f3df170c1d9578c0b09c49c774634793807b81a35bece32f103bbe83b9bcaba",
+      "bytes": 23182
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-1-canva.png": {
+      "sha256": "30c83ee6c720c01e63856e967fcecfd648dea37025ff202ba479f631413689e8",
+      "bytes": 66889
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-1-canva.pptx": {
+      "sha256": "5689cc5e9c6c1a1711cd23df2f60fe54eb4e62f545214781b76067b33c821541",
+      "bytes": 113741
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-1-input.pptx": {
+      "sha256": "7f6aa0d3a57973664b3a4ef37d2b1e1ab06bcf9e63e0648a97b57859499cfa62",
+      "bytes": 57051
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-1-native.json": {
+      "sha256": "5c7d3ce6dff781c757083a822744020cfebb68b2c8047da30ccaeb61093acb80",
+      "bytes": 4895
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-1-qa.json": {
+      "sha256": "786fbad1f97b075200fc85b0152eaa108f0ef224fd9806a99bd2c3417ff9cf05",
+      "bytes": 3592
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-1-round-2-canva.pdf": {
+      "sha256": "bf4a9d2a6260d041b0b881b025df3bbbbfb75615c603c9f719bda9756d430cc2",
+      "bytes": 23182
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-1-round-2-canva.png": {
+      "sha256": "9867c1f667f2925280bd1a4ea447973c3b6ef2f568cee89c0b967cfdf3ae560b",
+      "bytes": 66889
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-1-round-2-canva.pptx": {
+      "sha256": "5138c60337e629fd2fc6c04c3993ca9aa64b323d497420d936fb8bed6eae1512",
+      "bytes": 113741
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-1-round-2-qa.json": {
+      "sha256": "786fbad1f97b075200fc85b0152eaa108f0ef224fd9806a99bd2c3417ff9cf05",
+      "bytes": 3592
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-2-canva.pdf": {
+      "sha256": "60574bfc52ea63b0fdb26b10f6c9284af1ae4cd98d38cdb49c35f000c3290fc4",
+      "bytes": 24517
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-2-canva.png": {
+      "sha256": "af70dec6f74ff2d02350abfcd8fb0175576f2878292d047c44a8edf5cd93a1c7",
+      "bytes": 81673
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-2-canva.pptx": {
+      "sha256": "4f139e585e8eaf1142f818e6b690a76e4c0a281e5b04e5acb476aac3edd80757",
+      "bytes": 113824
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-2-input.pptx": {
+      "sha256": "d775ec16c6ac05534b574e173ae8ea30478cf622bb88c4824a65811143485caa",
+      "bytes": 57088
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-2-native.json": {
+      "sha256": "3ea4f769aa9ba481d79f67f5ae43fabd6310e53ff26342aab434ecaff275a3ae",
+      "bytes": 4951
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-2-qa.json": {
+      "sha256": "6498072088a07672392c053d9a2c47cdfff17fa800f69df2118959205b0c7ae5",
+      "bytes": 3649
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-3-canva.pdf": {
+      "sha256": "b8a89b2ecab562dc8b121c8b797d7a696e6a5c89d129fd9b3bc8e3ea452d0268",
+      "bytes": 24637
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-3-canva.png": {
+      "sha256": "a9c0e7fcf4c50d5b1249e72a88ad9d8b8095ff6be9db57fc0561136eca26f0ca",
+      "bytes": 78343
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-3-canva.pptx": {
+      "sha256": "5486d2cd427a5bd28b06fe090c6653b6fe408620cb70a5f874ecc8f628129ff2",
+      "bytes": 113869
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-3-input.pptx": {
+      "sha256": "e0a6731d0c628f66ed50e96061044d4631c09e98cc7debad2c838f81dcad0cd5",
+      "bytes": 57145
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-3-native.json": {
+      "sha256": "efad7d4158a20072e92c22a7c1f143fd11c80223281d1a54c8da69fd8eaa88a0",
+      "bytes": 4970
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-3-qa.json": {
+      "sha256": "2efad433ec219db0945390fc1c0e64307fc95d916dd921187d0d63176f7be3c9",
+      "bytes": 3668
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-4-canva.pdf": {
+      "sha256": "04e7bf986a173156a8cee6151c06c007c10bf08a5f062c516fffa5904f967f58",
+      "bytes": 30329
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-4-canva.png": {
+      "sha256": "8f2a8dd8ecfe2406d763ca76fd76766424f7eb7e5509c917996c0a87937bafc5",
+      "bytes": 80405
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-4-canva.pptx": {
+      "sha256": "ff92c95c150b6c1affa26808e8514abff7f1eaf3c43638f6cc9cdc60d9ef3c3c",
+      "bytes": 113870
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-4-input.pptx": {
+      "sha256": "ac61eb164265de2b44b0b1824567e51f45fb0d428ef19c449ba5d37a407b6c1e",
+      "bytes": 59104
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-4-native.json": {
+      "sha256": "af25a4d4813c9994b4f0e85b0070c145fb9a75a5439f0abd385a8f0ff94081b9",
+      "bytes": 4930
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/group-4-qa.json": {
+      "sha256": "02d439c1283438d16e4c313c35db6bcdb39ce30e94c6a33d0f014f9c154700a2",
+      "bytes": 3628
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/human-review.csv": {
+      "sha256": "08e07ea1a1621f1cb0520f25e4dc7388992ea9c19537a6ae8c1b6ce55d3613db",
+      "bytes": 6884
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/live-capture.json": {
+      "sha256": "e0894be21fefd62bea491a5013a964ce1f0d994ef7fd79d9ba851e2fd513a820",
+      "bytes": 17463
+    },
+    "output/acceptance/2026-09-27-canva-multilingual/offline-analysis.json": {
+      "sha256": "9b2e27591e655db68e13d07e44f6b49d40b4c6df5362c32bc03a1db26dd8a907",
+      "bytes": 8527
+    }
+  },
+  "limits": [
+    "Native read inspection establishes independent addressable text, not committed manual edit/save/reopen.",
+    "Direction is explicitly set from the golden oracle; automatic direction inference is not tested.",
+    "RTL-038 and RTL-039 keep literal ** markers; actual styled runs are not tested.",
+    "One declared family and one wide layout; approved multiple fonts and narrow layouts are not tested.",
+    "PDF font resources include NotoSans-Regular in addition to NotoSansArabic-Regular; group 4 also has unnamed Type3 resources.",
+    "PDF text extraction is not an authoritative logical-text oracle for these RTL exports.",
+    "Font names do not establish exact font-file coverage, fallback correctness or licensing.",
+    "Metadata samples are not an atomic Canva revision lock.",
+    "Native reader visual review, 20 real Sorani, 10 Arabic and 10 mixed office designs remain unexecuted.",
+    "No full Hawa task/review/approval/delivery or deployment was exercised."
+  ]
+}

@@ -132,9 +132,11 @@ describe.skipIf(!url)('around a question asked before a change (webhook, Postgre
   it('an old question cannot be answered once a newer change to the design exists', async () => {
     const { parent, waiting, press, childrenOf } = await setup();
     // A newer revision of the design, made after the question (the requester replied to the draft instead).
+    const parentClientId = await withRlsContext(db, operator, async (trx) =>
+      (await sql<{ client: string | null }>`SELECT client_id::text AS client FROM hawa.tasks WHERE id = ${parent}::uuid`.execute(trx)).rows[0].client);
     const newer = await persistChatIntake(db, {
       platform: 'telegram', sourceEventId: randomUUID(), sourceChannelId: String((await withRlsContext(db, operator, async (trx) => (await sql<{ c: string }>`SELECT payload->>'sourceChannelId' AS c FROM hawa.outbox_commands WHERE aggregate_id = ${parent}::uuid AND command_type='task.created'`.execute(trx)).rows[0].c))),
-      rawText: 'KAAE members evening', clientId: null, title: 'newer (Revision)', designInstructions: 'x', exactCopy: [], autoGenerate: false,
+      rawText: 'KAAE members evening', clientId: parentClientId, title: 'newer (Revision)', designInstructions: 'x', exactCopy: [], autoGenerate: false,
       studioOptions: { parentTaskId: parent, revisionDirective: 'make the title bigger', revisionRound: 1 },
     });
     await withRlsContext(db, operator, async (trx) => sql`UPDATE hawa.tasks SET state = 'human_review' WHERE id = ${newer.task.id}::uuid`.execute(trx));

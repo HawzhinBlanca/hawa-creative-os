@@ -1,6 +1,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
+import { FakeSheets } from './fake-sheets.ts';
 
 export interface StoredDriveFile {
   id: string;
@@ -23,11 +24,14 @@ export interface FakeDriveServer {
   getFileById: (id: string) => StoredDriveFile | undefined;
   getSheetRows: (spreadsheetId: string) => any[][];
   setSheetRows: (spreadsheetId: string, rows: any[][]) => void;
+  moveSheetRow: (spreadsheetId: string, from: number, to: number) => void;
+  insertSheetRow: (spreadsheetId: string, index: number, row: any[]) => void;
 }
 
 export async function startFakeDriveServer(): Promise<FakeDriveServer> {
   const files = new Map<string, StoredDriveFile>();
-  const sheets = new Map<string, any[][]>();
+  const sheets = new Map<string, FakeSheets>();
+  const sheetFor = (id: string) => { let value = sheets.get(id); if (!value) { value = new FakeSheets(); value.tabs.set(1, [['header']]); value.tabs.set(2, [['header']]); sheets.set(id, value); } return value; };
   let fileIdCounter = 1;
 
   const server = http.createServer(async (req, res) => {
@@ -48,6 +52,10 @@ export async function startFakeDriveServer(): Promise<FakeDriveServer> {
     };
 
     try {
+      if (method === 'GET' && pathname === '/drive/v3/files/generateIds') {
+        return sendJson(200, { ids: [`drive_file_${fileIdCounter++}_${Date.now()}`], space: 'drive' });
+      }
+
       // 1. Google Drive Multipart Upload: POST /drive/v3/files?uploadType=multipart
       if (method === 'POST' && pathname === '/drive/v3/files' && fullUrl.searchParams.get('uploadType') === 'multipart') {
         const bodyStr = bodyBuffer.toString('utf8');
@@ -92,7 +100,8 @@ export async function startFakeDriveServer(): Promise<FakeDriveServer> {
           }
         }
 
-        const fileId = `drive_file_${fileIdCounter++}_${Date.now()}`;
+        const fileId = metadata.id || `drive_file_${fileIdCounter++}_${Date.now()}`;
+        if (files.has(fileId)) return sendJson(409, { error: { code: 409 } });
         const sha256Checksum = crypto.createHash('sha256').update(fileContentBuffer).digest('hex');
         const stored: StoredDriveFile = {
           id: fileId,
@@ -138,8 +147,9 @@ export async function startFakeDriveServer(): Promise<FakeDriveServer> {
             size: file.size,
             mimeType: file.mimeType,
             webViewLink: file.webViewLink,
-            properties: file.properties,
-            sha256Checksum: file.sha256Checksum,
+          properties: file.properties,
+          parents: file.parents,
+          sha256Checksum: file.sha256Checksum,
           });
         }
         return sendJson(200, { files: matching });
@@ -158,6 +168,8 @@ export async function startFakeDriveServer(): Promise<FakeDriveServer> {
             mimeType: file.mimeType,
             webViewLink: file.webViewLink,
             sha256Checksum: file.sha256Checksum,
+            properties: file.properties,
+            parents: file.parents,
           });
         }
         // Could be folder verification
@@ -168,85 +180,14 @@ export async function startFakeDriveServer(): Promise<FakeDriveServer> {
         });
       }
 
-      // 4. Google Sheets: Spreadsheet metadata GET /v4/spreadsheets/:id
-      const sheetMetaMatch = pathname.match(/^\/v4\/spreadsheets\/([^/?:]+)$/);
-      if (method === 'GET' && sheetMetaMatch) {
-        const spreadsheetId = sheetMetaMatch[1];
-        return sendJson(200, {
-          spreadsheetId,
-          properties: { title: 'Fake Spreadsheet' },
+      // New row-identity protocol, exercised over actual HTTP.
+      const spreadsheetId = pathname.match(/^\/v4\/spreadsheets\/([^/:]+)/)?.[1];
+      if (spreadsheetId) {
+        const response = await sheetFor(decodeURIComponent(spreadsheetId)).fetch(fullUrl, {
+          method, ...(method === 'GET' ? {} : { body: bodyBuffer.toString('utf8') }),
         });
-      }
-
-      // 5. Google Sheets: Append Row POST /v4/spreadsheets/:id/values/A1:append or /values/A:G:append
-      const sheetAppendMatch = pathname.match(/^\/v4\/spreadsheets\/([^/]+)\/values\/[^:]+:append$/);
-      if (method === 'POST' && sheetAppendMatch) {
-        const spreadsheetId = sheetAppendMatch[1];
-        const body = JSON.parse(bodyBuffer.toString('utf8') || '{}');
-        let sheet = sheets.get(spreadsheetId);
-        if (!sheet) {
-          sheet = [];
-          sheets.set(spreadsheetId, sheet);
-        }
-        const newValues = body.values?.[0] || [];
-        sheet.push(newValues);
-        const rowNumber = sheet.length;
-        return sendJson(200, {
-          updates: {
-            updatedRange: `Sheet1!A${rowNumber}:G${rowNumber}`,
-            updatedRows: 1,
-          },
-        });
-      }
-
-      // 6. Google Sheets: Update Row PUT /v4/spreadsheets/:id/values/A{n}:G{n}
-      const sheetPutMatch = pathname.match(/^\/v4\/spreadsheets\/([^/]+)\/values\/A(\d+):[A-Za-z]+(\d+)$/);
-      if (method === 'PUT' && sheetPutMatch) {
-        const spreadsheetId = sheetPutMatch[1];
-        const rowNumber = parseInt(sheetPutMatch[2], 10);
-        const body = JSON.parse(bodyBuffer.toString('utf8') || '{}');
-        let sheet = sheets.get(spreadsheetId);
-        if (!sheet) {
-          sheet = [];
-          sheets.set(spreadsheetId, sheet);
-        }
-        while (sheet.length < rowNumber) {
-          sheet.push([]);
-        }
-        sheet[rowNumber - 1] = body.values?.[0] || [];
-        return sendJson(200, { updatedRows: 1 });
-      }
-
-      // 7. Google Sheets: Get Range GET /v4/spreadsheets/:id/values/:range
-      const sheetGetRangeMatch = pathname.match(/^\/v4\/spreadsheets\/([^/]+)\/values\/(.+)$/);
-      if (method === 'GET' && sheetGetRangeMatch) {
-        const spreadsheetId = sheetGetRangeMatch[1];
-        const range = decodeURIComponent(sheetGetRangeMatch[2]);
-        const sheet = sheets.get(spreadsheetId) || [];
-
-        // Single cell or column: A:A
-        if (range === 'A:A') {
-          const colA = sheet.map((row) => [row[0] || '']);
-          return sendJson(200, { values: colA });
-        }
-
-        // Specific cell: A{n}:A{n}
-        const cellMatch = range.match(/^A(\d+):A\1$/);
-        if (cellMatch) {
-          const rowIdx = parseInt(cellMatch[1], 10) - 1;
-          const val = sheet[rowIdx]?.[0] || '';
-          return sendJson(200, { values: [[val]] });
-        }
-
-        // Specific row range: A{n}:G{n}
-        const rowRangeMatch = range.match(/^A(\d+):[A-Za-z]+\1$/);
-        if (rowRangeMatch) {
-          const rowIdx = parseInt(rowRangeMatch[1], 10) - 1;
-          const row = sheet[rowIdx] || [];
-          return sendJson(200, { values: [row] });
-        }
-
-        return sendJson(200, { values: sheet });
+        res.writeHead(response.status, { 'Content-Type': 'application/json' });
+        res.end(await response.text()); return;
       }
 
       // Default fallback
@@ -275,9 +216,17 @@ export async function startFakeDriveServer(): Promise<FakeDriveServer> {
     },
     getUploadedFiles: () => Array.from(files.values()),
     getFileById: (id: string) => files.get(id),
-    getSheetRows: (spreadsheetId: string) => sheets.get(spreadsheetId) || [],
+    getSheetRows: (spreadsheetId: string) => sheetFor(spreadsheetId).tabs.get(0)!,
+    moveSheetRow: (spreadsheetId, from, to) => sheetFor(spreadsheetId).move(0, from, to),
+    insertSheetRow: (spreadsheetId, index, row) => {
+      const sheet = sheetFor(spreadsheetId); sheet.tabs.get(0)!.splice(index, 0, row);
+      for (const m of sheet.metadata.values()) {
+        const d = m.location.dimensionRange;
+        if (d.sheetId === 0 && d.startIndex >= index) { d.startIndex++; d.endIndex++; }
+      }
+    },
     setSheetRows: (spreadsheetId: string, rows: any[][]) => {
-      sheets.set(spreadsheetId, [...rows]);
+      sheetFor(spreadsheetId).tabs.set(0, [...rows]);
     },
   };
 }

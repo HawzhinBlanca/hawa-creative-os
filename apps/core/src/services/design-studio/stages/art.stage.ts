@@ -1,13 +1,51 @@
 import { createHash } from 'node:crypto';
-import type { StageContext, CandidateState } from '../types.js';
-import { renderMotifPng, type ProceduralMotifType } from '@hawa/creative';
+import { isModelCallHoldError, type StageContext, type CandidateState } from '../types.js';
+import { FORBIDDEN_ART_WORDS, renderMotifPng, evaluateHardQa, expectedArtFrame, planArtRegion, landArtRegion, imagePixelSize, type ProceduralMotifType } from '@hawa/creative';
+import { hardQaContextFor } from './v3.stage.js';
 import { log } from '../../../logging.js';
+import { resolveImageSettings, studioSubstepKey } from '@hawa/domain';
+import { inStudioSubstep } from '../substeps.js';
+
+function assertArtPromptSafe(prompt: string, ctx: StageContext): void {
+  const normalized = (value: string) => value.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+  const art = normalized(prompt);
+  const protectedPhrases = [ctx.referencePack.clientName, ...ctx.copyBlocks.map((block) => block.text)]
+    .filter((value): value is string => typeof value === 'string' && normalized(value).length >= 3);
+  const copyAcronyms = ctx.copyBlocks.flatMap((block) => [...block.text.matchAll(/\b[A-Z]{3,}\b/g)].map(([value]) => value));
+  const prohibitedMarks = new RegExp(`\\b(?:${[...FORBIDDEN_ART_WORDS, 'insignia', 'crest', 'wordmark', 'brandmark'].join('|')})\\b`, 'i');
+  if (prohibitedMarks.test(prompt) || /\p{N}/u.test(prompt) ||
+      protectedPhrases.some((value) => art.includes(normalized(value))) ||
+      copyAcronyms.some((value) => art.includes(normalized(value)))) {
+    throw new Error('ART_PROMPT_PROTECTED_CONTENT');
+  }
+}
 
 export async function runArtStage(
   ctx: StageContext,
   candidates: CandidateState[]
 ): Promise<CandidateState[]> {
   for (const cand of candidates) {
+    if (cand.currentLayout.art && ctx.imageryStrategy !== 'none') {
+      // Artwork cannot repair overflowing copy, illegal fonts or broken geometry. Contrast is
+      // evaluated again against completed imagery; this preflight is not a final QA certificate.
+      const qa = evaluateHardQa(cand.currentLayout, hardQaContextFor(ctx));
+      // Primary-font measurement is mandatory in both pipelines. V3 additionally applies its
+      // admitted composition profile here; that profile is not imposed on other clients.
+      const defects = qa.defectCodes.filter((code) => ctx.pipelineV3 ? code !== 'CONTRAST' : code === 'COPY_UNMEASURED');
+      if (defects.length) {
+        cand.status = 'eliminated';
+        cand.diagnostics = [...new Set([...(cand.diagnostics ?? []), ...defects])];
+        continue;
+      }
+    }
+    if (ctx.imageryStrategy === 'none') {
+      delete cand.currentLayout.art;
+      cand.artPng = null;
+      cand.artSha256 = null;
+      cand.artProvenance = null;
+      cand.concept.artStrategy = 'none';
+      continue;
+    }
     const artConfig = cand.currentLayout.art;
     if (!artConfig) continue;
 
@@ -23,6 +61,7 @@ export async function runArtStage(
 
     if (artConfig.source === 'generated' && ctx.artProvider) {
       const basePrompt = artConfig.prompt || cand.concept.artPrompt || 'Editorial still life composition';
+      assertArtPromptSafe(basePrompt, ctx);
       const rawCalm = artConfig.calmRegion || box;
       const calmBox = {
         x: rawCalm.x ?? box.x,
@@ -30,27 +69,47 @@ export async function runArtStage(
         width: rawCalm.width ?? box.width,
         height: rawCalm.height ?? box.height,
       };
-      const calmRegionDesc = `centered around (${Math.round(calmBox.x)}, ${Math.round(calmBox.y)}) measuring ${Math.round(calmBox.width)}x${Math.round(calmBox.height)}`;
 
       try {
-        const artResult = await ctx.artProvider.generateArt({
+        // ADR-123: the calm region is described in the frame the provider is asked for, after the
+        // renderer's cover crop. Until 2026-09-28 it went out in layout pixels ("centered around
+        // (0, 945) measuring 1080x405") to a 1024x1024 image, with an aspect the request did not use.
+        const settings = resolveImageSettings();
+        const regionPlan = planArtRegion({ box, calmRegion: calmBox }, expectedArtFrame(settings, box));
+        // The image, its refusals and its verifier are attempts of one substep (ADR-122).
+        const artProvider = ctx.artProvider;
+        const artResult = await inStudioSubstep(studioSubstepKey('art', `candidate-${cand.ordinal + 1}`), () => artProvider.generateArt({
           artPrompt: basePrompt,
           palette: ctx.referencePack.palette,
-          aspect: width >= height ? '16:9' : '9:16',
-          calmRegionDescription: calmRegionDesc,
+          aspect: regionPlan.aspect,
+          ...(regionPlan.description ? { calmRegionDescription: regionPlan.description } : {}),
           width,
           height,
-        });
+          settings,
+        }));
+
+        const actualSha256 = createHash('sha256').update(artResult.imageBuffer).digest('hex');
+        if (actualSha256 !== artResult.receipt.sha256) {
+          throw new Error('ART_RECEIPT_HASH_MISMATCH');
+        }
+        // What came back is checked against the region it was asked for, in its actual frame.
+        // A procedural motif the provider fell back to was never given the prompt.
+        const prompted = artResult.receipt.provider !== 'procedural';
+        const generated = landArtRegion({ box, calmRegion: calmBox }, imagePixelSize(artResult.imageBuffer), prompted ? regionPlan : undefined, artResult.imageBuffer);
 
         cand.artPng = artResult.imageBuffer;
-        cand.artSha256 = artResult.receipt.sha256;
+        cand.artSha256 = actualSha256;
         cand.artProvenance = {
-          source: 'generated',
+          source: artResult.receipt.provider === 'procedural' ? 'procedural' : 'generated',
           model: artResult.receipt.model,
           synthId: artResult.receipt.synthId,
           prompt: basePrompt,
+          ...(artResult.receipt.artFallback ? { artFallback: artResult.receipt.artFallback } : {}),
+          ...(artResult.receipt.fallbackReason ? { fallbackReason: artResult.receipt.fallbackReason } : {}),
+          region: { plan: regionPlan, generated },
         };
       } catch (err: any) {
+        if (isModelCallHoldError(err)) throw err;
         // Degradation ladder rung 2: fallback to procedural motif. Logged because the ladder is
         // otherwise invisible — a design quietly shipping a procedural motif instead of generated
         // art looks like a design decision rather than a failed image call.

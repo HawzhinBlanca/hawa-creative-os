@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { StudioBudgetExhaustedError, type StageContext, type CandidateState } from '../types.js';
+import { StudioBudgetExhaustedError, isModelCallHoldError, type StageContext, type CandidateState } from '../types.js';
 import type { StudioLayoutV2 } from '@hawa/creative';
 import { validateLayoutV2, type LayoutValidationContext, renderLayoutV2Async, computeLayoutMetrics, evaluateCompositeContrast } from '@hawa/creative';
 import { buildP0SystemPrompt, buildP5Prompt } from '../prompts.js';
@@ -42,9 +42,13 @@ export async function runReviseStage(
   const shortEdge = Math.min(ctx.width, ctx.height);
   const marginPx = Math.round(shortEdge * 0.06);
   const bodyMinPx = Math.max(12, Math.round(ctx.width * 0.016));
-  const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08));
+  const logoConstraints = ctx.referencePack.logoConstraints as { minimumWidthPx?: number; clearSpacePx?: number } | undefined;
+  const logoMinPx = Math.max(100, Math.round(ctx.width * 0.08), logoConstraints?.minimumWidthPx ?? 0);
 
-  const constraintsStr = `margin >= ${marginPx}px; body >= ${bodyMinPx}px; title >= 2.2 * body; logo width >= ${logoMinPx}px; palette = ${ctx.referencePack.palette.join(', ')}`;
+  const fontRule = ctx.referencePack.admittedDisplayFonts
+    ? `; Latin font ${ctx.latinFont} or [${ctx.referencePack.admittedDisplayFonts.latin.join(', ')}]; Sorani font ${ctx.arabicFont} or [${ctx.referencePack.admittedDisplayFonts.arabic.join(', ')}]; no other fonts`
+    : '';
+  const constraintsStr = `margin >= ${marginPx}px; body >= ${bodyMinPx}px; title >= 2.2 * body; logo width >= ${logoMinPx}px; logo clear space >= max(0.5 * logo height, ${logoConstraints?.clearSpacePx ?? 0}px); palette = ${ctx.referencePack.palette.join(', ')}${fontRule}`;
 
   const copyMap: Record<number, string> = {};
   for (let i = 0; i < ctx.copyBlocks.length; i++) {
@@ -68,8 +72,11 @@ export async function runReviseStage(
         scriptFonts: {
           arabic: ctx.arabicFont,
         },
+        admittedDisplayFonts: ctx.referencePack.admittedDisplayFonts,
       },
       logoAspect: ctx.logoAspect || 1.0,
+      logoMinimumWidthPx: logoConstraints?.minimumWidthPx,
+      logoClearSpacePx: logoConstraints?.clearSpacePx,
     },
     draftFont: ctx.latinFont || 'Inter',
   };
@@ -153,7 +160,7 @@ export async function runReviseStage(
         cand.diagnostics.push(`Revised layout failed validation: ${validation.message || validation.code}`);
       }
     } catch (err: any) {
-      if (err instanceof StudioBudgetExhaustedError) {
+      if (err instanceof StudioBudgetExhaustedError || isModelCallHoldError(err)) {
         throw err;
       }
       // If revision model call fails, keep current candidate layout intact and record diagnostic

@@ -18,7 +18,7 @@ export interface ActionNotice {
 export function approvalRoleBlocker(role: string | undefined | null): string | null {
   if (!role) return null;
   return role.toLowerCase().trim() === 'operator'
-    ? 'Approval needs an art director or administrator sign-in. You are signed in as an operator; sign out and sign in with an approver key to approve.'
+    ? 'Approval needs an assigned reviewer. You are signed in as an operator; sign out and use your Google Workspace account to review.'
     : null;
 }
 
@@ -61,6 +61,9 @@ export function describeDelivery(delivery: unknown, refreshedStatus: string | un
       tone: 'info',
       text: `Files delivered to Drive, but the Sheets row is not confirmed: ${String(d.sheetProblem || 'no reason reported')}. Deliver again to retry the row.${refreshNote}`,
     };
+  }
+  if (d.status === 'DELIVERY_RETRY_REQUIRED') {
+    return { tone: 'info', text: `The archive did not complete. Review the task and start a new delivery action.${refreshNote}` };
   }
   return { tone: 'info', text: `Publication requested. Check the task for verified delivery status.${refreshNote}` };
 }

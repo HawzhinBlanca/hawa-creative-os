@@ -18,7 +18,7 @@ describe('Canva token and download security',()=>{
     const f=vi.fn();await expect(downloadCanvaExport(u,f)).rejects.toThrow();expect(f).not.toHaveBeenCalled();
   });
   it('rejects an oversized stream and never adds bearer credentials or follows redirects',async()=>{
-    const f=vi.fn(async()=>new Response(new Uint8Array(26*1024*1024)));
+    const f=vi.fn<typeof fetch>(async()=>new Response(new Uint8Array(26*1024*1024)));
     await expect(downloadCanvaExport('https://export-download.canva.com/file',f)).rejects.toThrow('25 MB');
     expect(f.mock.calls[0][1]).toMatchObject({redirect:'error'});expect(f.mock.calls[0][1]).not.toHaveProperty('headers');
   });
@@ -28,7 +28,7 @@ describe.skipIf(!url)('Canva Connect service: real isolated PostgreSQL, mocked p
   const tenant='00000000-0000-4000-a000-000000000001',actor='00000000-0000-4000-b000-000000000001',clientId=randomUUID();
   const scope={tenantId:tenant,actorId:actor};
   let taskId:string,designId:string,updated:number,jobStatus:string,exportCalls:number,createCalls:number,refreshCalls:number,transportMode:string,bytes:Buffer,service:CanvaConnectService;
-  const remote=vi.fn(async (input:any,init:any={})=>{
+  const remote=vi.fn<typeof fetch>(async (input:any,init:any={})=>{
     const u=String(input);
     if(u.endsWith('/oauth/token')) {
       const body=new URLSearchParams(init.body);expect(init.headers.Authorization).toMatch(/^Basic /);expect(body.has('client_secret')).toBe(false);
@@ -70,6 +70,29 @@ describe.skipIf(!url)('Canva Connect service: real isolated PostgreSQL, mocked p
   });
   afterAll(()=>db.destroy());
   const bind=()=>tx(d=>new CanvaBindingRepository(d).createBinding({tenantId:tenant,taskId,clientId,canvaDesignId:designId,editUrl:`https://www.canva.com/design/${designId}/edit`}));
+  it.each(['complete','cancelled','rejected','paused','approved','publishing'])('refuses blank creation and new imports on a %s task',async state=>{
+    await sql`UPDATE hawa.tasks SET state=${state}::hawa.task_state WHERE id=${taskId}::uuid`.execute(db);
+    await expect(service.createDesign(scope,taskId,'closed-blank-key',1080,1080)).rejects.toMatchObject({code:'TASK_GENERATION_BLOCKED',status:409});
+    const sourceBytes=Buffer.from('Synthetic editable source bytes long enough for transport.');
+    const {createHash}=await import('node:crypto');
+    await expect(service.importEditableDesign(scope,taskId,'closed-import-key',{
+      bytes:sourceBytes,sha256:createHash('sha256').update(sourceBytes).digest('hex'),manifest:{copy:['Exact copy']},
+    })).rejects.toMatchObject({code:'TASK_GENERATION_BLOCKED',status:409});
+    expect(createCalls).toBe(0);
+    expect((await sql`SELECT id FROM hawa.canva_remote_operations WHERE task_id=${taskId}::uuid`.execute(db)).rows).toHaveLength(0);
+  });
+  it('reconciles an import admitted before cancellation without creating another design',async()=>{
+    const sourceBytes=Buffer.from('Synthetic editable source bytes long enough for transport.');
+    const {createHash}=await import('node:crypto');
+    const source={bytes:sourceBytes,sha256:createHash('sha256').update(sourceBytes).digest('hex'),manifest:{copy:['Exact copy']}};
+    const initial=await service.importEditableDesign(scope,taskId,'cancel-import-key',source);
+    await sql`UPDATE hawa.tasks SET state='cancelled' WHERE id=${taskId}::uuid`.execute(db);
+    jobStatus='success';
+    const replay=await new CanvaConnectService(db,options).importEditableDesign(scope,taskId,'cancel-import-key',source);
+    expect(replay).toMatchObject({operationId:initial.operationId,status:'retrieved'});
+    expect(createCalls).toBe(1);
+    expect((await sql<{state:string}>`SELECT state FROM hawa.tasks WHERE id=${taskId}::uuid`.execute(db)).rows[0].state).toBe('cancelled');
+  });
   it('imports stored source exactly once under races and binds after service replacement',async()=>{
     const sourceBytes=Buffer.from('Test-only editable source bytes long enough for the transport fixture.');
     const {createHash}=await import('node:crypto');
@@ -88,7 +111,7 @@ describe.skipIf(!url)('Canva Connect service: real isolated PostgreSQL, mocked p
     const source={bytes:sourceBytes,sha256:createHash('sha256').update(sourceBytes).digest('hex'),manifest:{copy:['test']}};
     transportMode='import_lost';expect((await service.importEditableDesign(scope,taskId,'import-key-01',source)).status).toBe('uncertain');
     expect((await new CanvaConnectService(db,options).importEditableDesign(scope,taskId,'import-key-01',source)).status).toBe('uncertain');
-    await expect(service.importEditableDesign(scope,taskId,'import-key-02',source)).rejects.toThrow('different creation');expect(createCalls).toBe(1);
+    await expect(service.importEditableDesign(scope,taskId,'import-key-02',source)).rejects.toMatchObject({code:'CANVA_CREATE_CONFLICT'});expect(createCalls).toBe(1);
   });
   it('stores native copy/font mismatch evidence without creating an approval',async()=>{
     const {encodeEditableTransfer}=await import('@hawa/creative');

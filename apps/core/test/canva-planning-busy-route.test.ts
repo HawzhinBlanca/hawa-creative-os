@@ -1,12 +1,20 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Hono } from 'hono';
-import { registerCanvaRoutes } from '../src/routes/canva.routes.js';
-import { CanvaDesignPlanner } from '../src/services/canva-design-planner.js';
-import { CanvaFlowError } from '../src/services/canva-connect-service.js';
+
+// The lifecycle ownership guard reads the task from Postgres; this test has none and is about the
+// refusal's header only, so the guard lets the request through.
+vi.mock('../src/routes/lifecycle-design-proof.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/routes/lifecycle-design-proof.js')>()),
+  rejectUnownedLifecycleDesignWrite: async () => null,
+}));
+
+const { registerCanvaRoutes } = await import('../src/routes/canva.routes.js');
+const { CanvaDesignPlanner } = await import('../src/services/canva-design-planner.js');
+const { CanvaFlowError } = await import('../src/services/canva-connect-service.js');
 
 /**
- * The worker waits the time Core names on a busy answer (Retry-After) instead of doubling its sleep,
- * so the generation route has to send the planner's wait as the header, in whole seconds.
+ * The worker waits the time Core names on a busy answer (Retry-After) instead of doubling its sleep
+ * (ADR-131), so the generation route has to send the planner's wait as the header, in whole seconds.
  */
 function app() {
   const hono = new Hono();
@@ -30,7 +38,7 @@ const generate = (hono: Hono) =>
 afterEach(() => vi.restoreAllMocks());
 
 describe('the generation route when every planning slot is taken', () => {
-  it('answers 429 PLANNING_BUSY with the planner\'s wait as Retry-After', async () => {
+  it("answers 429 PLANNING_BUSY with the planner's wait as Retry-After, rounded up to whole seconds", async () => {
     vi.spyOn(CanvaDesignPlanner.prototype, 'generate').mockRejectedValue(new CanvaFlowError(429, 'PLANNING_BUSY', 'All 5 planning slots are taken.', 7200));
     const res = await generate(app());
     expect(res.status).toBe(429);

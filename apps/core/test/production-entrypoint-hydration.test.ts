@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
+import { EventEmitter } from 'node:events';
 
 /**
  * index.ts started serving as soon as createApp returned, without waiting for client DNA to load
@@ -23,13 +24,13 @@ describe('the production entrypoint waits for client DNA before serving', () => 
     // index.ts reads a `.env` in the working directory; a test must not load one into its process.
     const existsSync = fs.existsSync;
     vi.spyOn(fs, 'existsSync').mockImplementation((p) => (p === '.env' ? false : existsSync(p)));
-    listenersBefore = new Map(PROCESS_EVENTS.map((e) => [e, process.listeners(e) as Function[]]));
+    listenersBefore = new Map(PROCESS_EVENTS.map((e) => [e, EventEmitter.prototype.listeners.call(process, e) as Function[]]));
   });
 
   afterEach(() => {
     // The entrypoint installs process-wide handlers that exit the process; remove the ones it added.
     for (const e of PROCESS_EVENTS) {
-      for (const l of process.listeners(e)) {
+      for (const l of EventEmitter.prototype.listeners.call(process, e)) {
         if (!listenersBefore.get(e)!.includes(l)) process.removeListener(e, l as (...args: unknown[]) => void);
       }
     }

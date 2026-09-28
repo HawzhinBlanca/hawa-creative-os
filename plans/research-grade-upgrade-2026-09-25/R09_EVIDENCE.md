@@ -1,0 +1,257 @@
+# R09 — delivery truth and reconciliation evidence
+
+## Final local qualification — 2026-09-27
+
+Tested and running isolated candidate **b38f60dd**: **4,237 passed, zero failed,
+60 skipped** (505 passing/7 skipped files). Final lint passes; source build and 513
+strict test roots passed before qualification. The selected deployed rehearsal passes
+63 invariants, with 43 scenarios unselected and external providers simulated. Two fake
+Gemini calls are outside the fixture coverage. This is not real-provider acceptance.
+
+The Operations browser check shows saved scheduled checks with timestamps and evidence
+hashes, and correctly labels incomplete Google/permission evidence as unverified.
+The 314px panel is readable; the final screenshot and browser record are retained.
+No manual run, repair, approval or delivery was performed through this panel.
+
+A consistent read-only production snapshot was streamed directly into a private test
+clone: all 38 pending migrations (023–060) applied, all 76 historical tables retained
+their original data, and replay verified 60 migrations without applying any again.
+The clone was removed. This is not an off-host restore or a retained rollback backup.
+Production app images/schema remain unchanged; the tested nginx configuration-only
+repair restored healthy HTTP 200 and Canva remains authorized.
+
+**Next is one supervised real-office job.** Google reviewer login is unconfigured;
+the office domain and reviewer email have been requested. Real login credentials and
+Google/Canva approval are not fabricated. Prepare a verified production recovery set
+before controlled cutover, then run a real brief, human review and authorized delivery.
+Historical adoption/reporting, approved permission policy and broader quality/recovery
+gates remain open. No whole-app 10/10 claim or new completion ETA is made.
+
+Earlier failures below remain retained; this section supersedes the earlier pending
+local-qualification status and the earlier claim that production was wholly unchanged.
+
+
+## 2026-09-27 — Scheduled external publication inspections (ADR-107)
+
+Implemented durable hourly original-input snapshots, bounded read-only Drive/Sheets
+observations, pure comparisons and current-client-scoped Operations findings. First
+DB run 6 failed/1 passed exposed timestamp precision loss; corrected PostgreSQL-only
+comparison. Final focused 72 passed/0 failed/1 opt-in skipped; separate real SIGKILL
+recovery 8 passed; 513 strict roots, build/lint/security pass. Full regression and
+matching deployed candidate/browser qualification follow. See
+R09_PUBLICATION_INSPECTIONS_PROOF.json and runbooks/GOOGLE_PUBLICATION_CHECKS.md.
+
+User priority correction: reach a usable supervised pilot; avoid open-ended hardening.
+Production remains unchanged. Reviewer Google login is unconfigured in both running
+apps; domain/reviewer input requested. Approved permission policy, historical migration,
+full reporting, remaining result recovery, real pilot/human quality and independent-host
+recovery/monitoring remain open. No new ETA or whole-app completion claim.
+
+
+## 2026-09-27 — Immutable publication expectations (ADR-106), local checkpoint
+
+Migration 059 freezes original publication inputs before provider effects and exact
+Sheet values/metadata before any Sheet call. Retries preserve destinations, filenames
+and timestamp after DNA changes or a new Core instance. Reserved Drive identity also
+binds discovered files and the first Sheet link. SQL validates receipts, retains
+whole-row evidence, enforces immutability/current client access, and refuses unfinished
+historical publications without original inputs. Delayed pending answers cannot erase
+confirmed evidence; failed observations cannot retain a synced claim.
+
+Final affected Core/integrations/database suites: **2390 passed, 0 failed, 15 skipped**
+(268 passing/5 skipped files). Source build, 509 strict test roots, lint and security
+pass. Initial regressions and compatibility failures are retained in
+`output/acceptance/2026-09-27-publication-expectations/STATUS.md` and the accompanying
+logs; `R09_PUBLICATION_EXPECTATIONS_PROOF.json` binds source and evidence hashes.
+No new full release seal, runtime image, production change or live-provider proof.
+
+Next: scheduled external Drive/Sheets observations and scoped staffed resolution;
+historical migration/full reporting columns, remaining result recovery and live,
+human, held-out and independent-host acceptance remain open. Whole-app goal active.
+
+**Date:** 2026-09-25. **Status:** in progress. **Sources:** `4ac0a4d`, `f58c67b`, `87b7328`, `0cce7a4`, and `apps/worker/drills/delivery-restate-harness.ts`. **Decision:** ADR-043.
+
+## First pass — require requester-send proof
+
+The legacy Restate Delivery report previously moved a task to `complete` whenever Drive and Sheets reported success, even if the Telegram file or notice was refused or uncertain. The worker could also call an archive-only result `delivered` when it had no requester chat or no approved files. The publication-state endpoint could then say complete based on Drive and Sheets even though the requester's send was unresolved.
+
+The worker now reports failure for missing requester chat or approved files. Core completes a workflow publication only when the outcome is `delivered`, no send is uncertain, and the confirmed file count equals the publication manifest's count. An archived package with an unresolved requester send stays `publishing` and records `REQUESTER_SEND_UNCONFIRMED` on the publication. The publication-state endpoint names the reconciliation need. A repeated prepare can adopt the same verified Drive receipt; a file ID with changed hash, size or destination is refused.
+
+The focused Delivery and Core integration tests passed **2 files / 23 tests**. They exercise confirmed sends, uncertain and refused Telegram files, archived and Sheet-confirmed failure, replay of preparation, a conflicting Drive receipt, and absent requester chat/files. The source suite excluding only the unsealed release gate passed **419 files / 3,130 tests**, with **4 files / 48 tests skipped**. TypeScript including tests and lint passed; blueprint validation reported **753 pass / 0 warning / 0 failure**. The exact-tree release manifest is verified after this evidence checkpoint.
+
+## Second pass — one request owner for delivery
+
+Source `f58c67b` connects an authenticated Desk Deliver action to a signed office gateway event and the private RequestLifecycle object. The object claims one publication under a PostgreSQL request/task lock, checks the current approval and pinned export bytes, advances the expected request revision, and starts a Delivery workflow with a signed, hash-bound claim. Owned prepare refuses a missing or mismatched request revision, delivery ID, run, task, approval, or package hash before Drive and Sheet effects. The workflow reports to the private request owner, which applies one versioned completion projection; only a confirmed archive, Sheet row, and exact requester file count can move the task, publication, and request to complete/delivered. Uncertain requester sends stay unresolved and block a second run. Missing archive returns to approved for a fresh office action; replay of the old action reports that a new action is needed. The Desk holds one reload-stable action UUID through an uncertain response and uses current task detail to identify request ownership.
+
+The local chain exercised a lost Desk answer after the delivery claim, a fresh Core retry with one publication/run, a tampered workflow input refused before preparation, emulated Drive and Sheet effects, two Telegram files plus notice, a versioned final projection, duplicate finish replay, changed-outcome conflict, uncertain-send refusal, changed pinned bytes, and a second run after an archive failure. The affected suite passed **5 files / 57 tests**; a focused worker rerun after the fixture-only secret change passed **1 file / 11 tests**. The full source suite excluding only the unsealed release gate passed **419 files / 3,133 tests**, with **4 files / 48 tests skipped**. TypeScript, lint, the Desk production build, and blueprint **755 pass / 0 warning / 0 failure** passed. The first full run failed solely because two new internal routes were missing from the route inventory; that contract was updated before the passing rerun.
+
+## Second-pass limits and next proof
+
+The request-owned code path is locally connected, but the test substitutes the Restate HTTP hop and uses synthetic exports, emulated Drive/Sheets and Telegram, and isolated PostgreSQL. It does not prove a killed-process replay for delivery, a real Drive byte read-back, a real Sheet row receipt, a requester receipt, or clean-host restore. An archived package with an unconfirmed Sheet row remains `delivering`; a staffed reconciliation action is not yet available in the Desk. Uncertain Telegram delivery also needs an explicit office resolution workflow. Uncaptured live Canva edits and a provider race remain open under R17. No publication flag or production deployment was changed. R09 remains **in progress**.
+
+## Third pass — make the recorded Sheet retry actionable
+
+Source `87b7328` maps a request-owned publication's latest `SHEET_UNCONFIRMED` result to `PUBLISH_RECONCILIATION` in both task detail and the paged Desk queue. The status filter and count now distinguish that task from an ordinary in-progress publication even though both use the same database `publishing` state. The Desk offers “Retry Sheet Sync”; the existing signed Deliver action claims the next request revision and publication run. The same publication and stable sender keys remain in use, so the workflow can retry the Sheet row without deliberately resending requester files. Migration 026 indexes the latest publication lookup, and both base schema and upgrade contract include it.
+
+An isolated PostgreSQL test records an archived, requester-confirmed but Sheet-unconfirmed result at revision 5, reads the actionable task/queue status, excludes it from the ordinary publishing filter, and verifies a second run advances revisions 6→7 to delivered. A rendered Desk test exposes the retry button only for the reconciliation status. The migration and affected suites passed **5 files / 46 tests**; the Desk wording rerun passed **1 file / 20 tests**. The full source suite excluding the unsealed release gate passed **419 files / 3,135 tests**, with **4 files / 48 tests skipped**. TypeScript, lint, Desk build and blueprint **755 pass / 0 warning / 0 failure** passed. The first broad run found two fixed migration inventory expectations; both passed before the green rerun.
+
+## Third-pass limits
+
+The Sheet retry is locally actionable but has no live Google row read-back or killed-process replay. The direct second-run test checks state and idempotency keys; it does not observe a real Telegram deduplication after a Sheet failure. Uncertain requester sends still need a separate, evidence-based office resolution path. The completion projection relies on the worker's reported archive/Sheet result rather than independently rechecking every stored Drive and Sheet receipt in its final transaction; that is the next integrity repair. R17's uncaptured Canva edit and provider race, clean-host restore, and production cutover remain open. Flags remain off; R09 is **in progress**.
+
+## Fourth pass — check stored receipts before final state
+
+Source `0cce7a4` makes the request-owned completion projection compare the claimed package's SHA-256 and byte-size multiset with the publication's verified PostgreSQL Drive references, then require a synced Sheet row for the same task and package hash. This check occurs in the final request/publication transaction. A missing or mismatched receipt returns a retryable failure before the request revision, task state, or finished-run number advances. The test proves that the same report can finish only after the missing evidence is corrected. Drive filenames are deliberately excluded from identity because Core's approved-package label and the configured client destination label differ; hashes and sizes bind the bytes.
+
+The same source blocks a fresh delivery run when a requester file was sent before an archive failure, even if the worker labels its outcome `chat_only`. A missing archive with zero requester files can still return to approved for an explicit new action. This closes a duplicate-send opening in the earlier local path. ADR-043 records the reason and revised transition rule.
+
+The focused PostgreSQL/Desk lifecycle suite passed **1 file / 9 tests**. It rejects missing and mismatched Drive receipts, missing and wrong-hash Sheet receipts, and a second run after partial requester send. The existing local path still completes when matching receipts are present. The full source suite excluding only the unsealed release gate passed **419 files / 3,137 tests**, with **4 files / 48 tests skipped**. TypeScript, lint and blueprint **755 pass / 0 warning / 0 failure** passed. An earlier test run exposed a synthetic publisher fixture with a fabricated Sheet hash and a different destination filename; the fixture now uses the package hash and the guard compares byte identity rather than labels. No live provider result was used in this pass.
+
+## Fourth-pass limits
+
+The final projection now cross-checks stored receipts, but those receipts are written from the publisher's locally reported, read-back-verified result. Real Drive byte read-back, real Sheet row read-back, requester delivery confirmation, a Restate/PostgreSQL kill-and-replay, and clean-host restore remain admission work. A permanently missing receipt leaves the same workflow report retrying and needs an operator resolution path; an uncertain requester send still cannot be resolved safely in Desk. R17's Canva edit race and the full creative-quality gates remain open. Flags stay off; R09 is **in progress**.
+
+## Fifth pass — kill the handler during delivery completion
+
+The production signed office gateway, private RequestLifecycle and Delivery handlers ran on a disposable Restate instance with synthetic Core, Drive, Sheet and Telegram effects. After one requester file and notice were acknowledged, the synthetic final Core projection persisted one hash-bound result and killed the handler before returning. On restart, Restate replayed the final call. The recovered request was delivered at revision 5, with one claim, one prepare, one file key, one notice key, two final Core calls and one logical final write. An exact signed action resend returned the same delivery ID without new sends. A changed action under the old signature returned HTTP 401; direct public ingress to the private finish method returned HTTP 400. The container and its volume were removed after the run. Exact setup, counters and scope are in [the delivery kill drill](R09_RESTATE_DELIVERY_KILL_DRILL.md).
+
+## Current limits
+
+This is real Restate journal replay at one narrow boundary, with synthetic storage and provider acknowledgements. It does not prove PostgreSQL crash recovery, provider effects that time out after acceptance, a clean-host Restate restore or real requester confirmation. A permanently missing stored receipt still leaves a report retrying and needs an operator resolution path; uncertain sends remain unresolved. The live Drive, Sheet, Canva and Telegram gates, later lifecycle rounds, and final design-quality gates remain open. R09 is **in progress** and both new pipeline flags remain off.
+
+## Sixth pass — stop ambiguous Drive retries before upload
+
+Source `ddcebbf` repairs the publisher's earlier Drive query, which took only one result page and selected the first matching SHA-256. A same-task/artifact file with missing or different SHA-256 could be ignored, allowing another upload under the same package. It could also miss an existing file on a later page. The lookup now requests pagination and incomplete-search indicators, scans every page up to a fixed ten-page bound, and refuses upload if it cannot complete the search. For the same task, artifact and package hash, a missing/different checksum or a second matching file is a non-retryable reconciliation conflict. A file without package identity is also held for inspection. A different package hash remains a valid later revision.
+
+The fake-Drive restart tests and fetch-level negative controls passed **2 files / 23 tests**. They cover changed bytes under the same package, two identical copies, missing/different checksum, absent package hash, an incomplete search, an unavailable second page, a match on the second page, and copies split across pages. The source suite excluding the unsealed release-gate test passed **419 files / 3,146 tests**, with **4 files / 48 tests skipped**. Seal `c92389d` passed the exact full suite: **420 files / 3,152 tests**, with **4 files / 48 tests skipped**, and release-manifest verification. Workspace TypeScript and lint passed after a pagination-token type correction; blueprint validation passed **757 / 0 / 0**. The change is linked to FR-047 and the divergence aspect of FR-050; it is not live Google evidence.
+
+The lookup remains a read-before-write check. It does not serialize two publisher processes that both see no file, and a provider search can lag behind a successful upload whose reply was lost. Real Drive/Sheet receipts, a per-artifact write fence or stronger provider-supported idempotency, a live provider race drill, and an office reconciliation action remain open. R09 remains **in progress**; no production flag was enabled.
+
+## Seventh pass — commit the upload identity before the provider call
+
+ADR-044 and migration 027 add one insert-only, tenant-scoped Drive file ID reservation per publication artifact. The default Core publisher asks Google for a binary-file ID outside its database transaction, commits the winning ID in PostgreSQL, and includes it in the multipart upload. A competing publisher uses the same ID; a 409 is reconciled by independent readback of the ID, task/artifact/package properties, parent folder, size, MIME type and SHA-256. A failed reservation or conflicting readback stops the attempt. The old paged search still catches legacy/divergent files. Core's delivery context now carries the actual task tenant UUID rather than the placeholder that the database test exposed.
+
+Two isolated PostgreSQL handles raced and retained one reservation; a changed content hash was refused. Fake Drive exercised two simultaneous publishers, a lost reply with hidden search results, a 409 with altered file identity, and reservation-store failure with zero uploads. The affected nine-file suite passed **73 tests**. The broad source run reached **418 passed files / 3,153 passed tests**, with **4 files / 48 tests skipped**; it found the new base RLS policy calling its membership helper per row and the expected unsealed release manifest mismatch. The RLS policy was corrected and its four focused tests passed. After two more negative tests were added, the focused reservation/integration/RLS suite passed **3 files / 27 tests**. TypeScript including tests passed. The exact-tree sealed full run is a separate gate and is not claimed by this source checkpoint.
+
+This is local PostgreSQL and fake Drive evidence. Direct publisher callers without the store retain only the paged lookup. No real Google Shared Drive permission/byte readback, live provider race, operator conflict repair, Sheet reconciliation or requester confirmation has been shown. R09 remains **in progress** and no production flag was enabled.
+
+## Eighth pass — preserve uncertainty across Core and Drive
+
+A lost upload response previously escaped the publisher as an exception. Other Drive errors returned a failed result that Core passed to its “before Drive” fallback, which could tell the office that no archive existed and queue a chat-only requester delivery even when Drive had already stored a file. An unverified readback could also be cached as a successful publisher result. The publisher now returns a typed uncertain result for a lost response, transient HTTP response, unreadable upload response, or unavailable readback; it returns a reconciliation error rather than caching an unverified file. Core holds all Drive-related failures in the pending publication and sends no requester notification until the archive has been independently verified. A retry uses the same committed file ID. Definite pre-upload failures retain the separate chat-only path.
+
+The local fake-Drive tests exercised a stored file whose upload reply was dropped, a readback outage after storage, and a false checksum on the first readback. In each case the next attempt verified the same file without creating a second one. The isolated Core/PostgreSQL test saw HTTP 503, a `publishing` task and zero `notify.published` commands after the lost reply; a second press with hidden search results adopted the reserved ID and returned `PUBLISH_RECONCILIATION` because the fake Sheet never confirms a row. The focused suite passed **2 files / 21 tests**. The source suite excluding the unsealed release-gate test passed **419 files / 3,154 tests**, with **4 files / 48 tests skipped**. Workspace TypeScript including tests and lint passed. Exact-tree seal verification is a separate gate.
+
+This is a local failure drill, not live Google or Telegram proof. A permanent Drive identity conflict still needs an operator repair action; real Shared Drive permissions and bytes, Sheet row readback, requester confirmation, and a clean-host recovery drill remain open. R09 remains **in progress** and both new pipeline flags remain off.
+
+## Ninth pass — a later pre-upload failure cannot erase an earlier archive
+
+The eighth pass held Drive failures, but a retry could fail before contacting Drive for a different reason. A local negative test first stored a Drive file and lost its upload reply, then removed the Google credential before the next press. Core returned HTTP 422 through the pre-upload chat-only path even though the file already existed. The repaired path reads the publication's earlier attempt under the task lock and, for workflow delivery, checks durable upload reservations and recorded Drive references. It holds an uncertain earlier archive with HTTP 503 and queues no new requester notification. If this history cannot be read, it also holds delivery. The first credential failure with no earlier upload evidence retains the chat-only path; a repeated pre-upload failure with an existing publication no longer asserts that Drive is empty.
+
+The red-before case returned **422**. The green local test returned **503**, kept the task `publishing` with zero notification commands, then restored the credential and adopted the same reserved ID from fake Drive with its search result hidden. An isolated workflow test seeded a durable upload reservation, then confirmed that a credential failure yielded `ARCHIVE_STATE_UNCERTAIN` rather than a chat-only preparation. The affected Core, workflow and first-attempt chat-only suites passed **3 files / 21 tests**. The source suite excluding the unsealed release-gate test passed **419 files / 3,155 tests**, with **4 files / 48 tests skipped**. TypeScript including tests and lint passed. Exact-tree sealing is a separate gate. These are local database and fake-provider controls; live-provider effects and staffed reconciliation remain open. R09 remains **in progress** with production flags off.
+
+## Tenth pass — make archive uncertainty durable and actionable
+
+The ninth-pass hold was invisible after a restart: the task's database state stayed `publishing`, so Desk could show a normal delivery in progress and omit it from Needs Action. A workflow's terminal prepare failure could then report `archived: false`, return the task to `approved`, and overwrite the archive warning even though Drive might have stored the file. This pass records `ARCHIVE_UNCONFIRMED` on the publication with a versioned task event. Core's task list, detail and publication-state endpoint derive a separate `ARCHIVE_RECONCILIATION` status; Desk shows it in Needs Action and offers “Recheck Drive Archive” on the same publication identity. The internal audit flags an unconfirmed archive without claiming the file is missing. Core and request-owned workflow reports preserve the marker after a failed prepare; a later request-owned run no longer clears it before Drive verification. Once a verified receipt is stored, the marker clears or becomes `SHEET_UNCONFIRMED`; both legacy and request-owned Sheet gaps are visible as Sheet reconciliation.
+
+Local checks cover the lost upload reply, removed and restored credential, filtered Desk queue, unconfirmed audit, zero requester commands, workflow failed report, repeat request-owned run, one reserved Drive file and the first-attempt chat-only control. The affected Core/lifecycle/Desk suites passed **5 files / 66 tests**, followed by the archive/Sheet/audit/status subset **4 files / 32 tests**. The first broad source run found five expectations of the old status (three Core Sheet assertions and two shared-contract assertions); the corrected tests passed. The green source suite excluding the unsealed release-gate test passed **419 files / 3,158 tests**, with **4 files / 48 tests skipped**. Workspace TypeScript including tests and lint passed. The repository's production flags remain off. This is local PostgreSQL and fake Drive evidence. There is still no live Shared Drive/Sheets/Telegram receipt or staffed operation to resolve a permanent file-identity conflict, and the internal audit does not query Google. R09 remains **in progress**; exact-tree sealing is a separate gate.
+
+## Eleventh pass — commit Core receipts before requester notification
+
+Core's legacy delivery previously queued `notify.published` and attempted task completion before its Drive/Sheet receipt transaction. A receipt write failure was logged but could still return a successful response after the requester command was visible. The path now commits Drive references, any Sheet receipt, publication/task completion, and the Core requester outbox command in one PostgreSQL transaction. It changes in-memory task status only after that commit. A failed receipt or outbox write returns HTTP 503 and records `ARCHIVE_UNCONFIRMED` in a new transaction where possible; the task remains publishing, with no requester command from the failed attempt. The next press reuses the same publication and reserved Drive identity. A later Telegram send remains a separate outbox effect, so its failure does not roll back an already committed publication. Request-owned workflow preparation continues to commit receipts without a Core requester command.
+
+The isolated Canva-to-delivery chain injected two faults on one approved Telegram task: `recordDriveRef` failed after the provider step, then `notify.published` enqueue failed after the receipt and completion work inside the transaction. After each failure, PostgreSQL showed a publishing task, pending publication with `ARCHIVE_UNCONFIRMED`, zero Drive references, and zero requester commands. A third press completed the task and publication with one Drive reference and one requester command. The focused chain passed **1 file / 2 tests**; the affected Core publication suite and chain passed **2 files / 8 tests**. The source suite excluding the unsealed release-gate test passed **419 files / 3,158 tests** with **4 files / 48 tests skipped**. TypeScript including tests, lint, blueprint **759 / 0 / 0**, and the committable-file security scan passed. Exact-tree sealing is a separate gate.
+
+This is a local PostgreSQL fault drill with simulated provider effects. It does not establish that Google still holds exactly one file after a real timeout, that a Telegram command was delivered to the requester, or that a permanent Drive conflict can be resolved by staff. The Core `markComplete` repository helper still relies on the caller's publication lock and does not independently enforce a task expected-state check; an adversarial concurrent state change needs its own drill. R09 remains **in progress**; production flags remain off.
+
+## Twelfth pass — cancellation can win the publication race
+
+The eleventh-pass limit was concrete: `PublicationRepository.markComplete` could read a task's version, then set `complete` using only its ID and tenant. A cancellation after provider upload but before receipt commit was overwritten. The controlled red-before test cancelled the task during `recordDriveRef` and the route still returned HTTP **200**. Completion now locks the named publication and task in a consistent order, checks that the publication belongs to the task, permits only a publishing task or an already completed task within a workflow finish, and updates the expected state and version together. A repeated completion of an already complete publication returns without another version or event. Core's own completion now records `completed_at` without replacing a workflow's earlier completion time.
+
+The green cancellation drill returned HTTP **503**. PostgreSQL retained `cancelled`, a pending publication with `ARCHIVE_UNCONFIRMED`, zero Drive references and zero requester commands; another publish press was refused. The publication-state endpoint keeps the task status `CANCELLED` and instructs staff to inspect the reserved Drive identity under retention policy rather than retry requester delivery. The internal PostgreSQL audit now raises `ARCHIVE_OUTCOME_UNCONFIRMED` for a cancelled task with that marker. The focused Core/workflow/audit suites passed **5 files / 40 tests**. The source suite excluding the unsealed release-gate test passed **419 files / 3,159 tests**, with **4 files / 48 tests skipped**. TypeScript including tests passed. Lint, blueprint validation and exact-tree sealing are separate gates.
+
+This is a deterministic local cancellation race, not a live Google or Telegram observation. Staff still lack a completed evidence-backed action for deciding whether a conflicted Drive file should remain or be removed; automatic retry after cancellation is deliberately refused. Requester receipt, live Drive/Sheet reconciliation, clean-host recovery and the broader creative-quality gates remain open. R09 is **in progress** and production flags remain off.
+
+## Thirteenth pass — reject false publisher success before recording receipts
+
+Core's legacy delivery trusted a successful publisher answer if it claimed `complete` and did not explicitly contain an unverified file. Four red-before cases returned HTTP **200** despite an empty Drive receipt, changed Drive checksum, missing Sheet row identity, or `emulated: true`. Core now validates the answer against the exact approved artifact set and package hash before recording any Drive/Sheet receipt or making a requester command visible. It requires one verified receipt per approved artifact, distinct Drive file IDs, matching artifact hashes, MIME types and byte sizes, and the configured task, spreadsheet, package hash, observed Sheet hash and positive row identity for a claimed completion. A Drive-only result cannot claim a synced Sheet row. Invalid answers return HTTP **409**, leave the task publishing and the publication pending with `ARCHIVE_UNCONFIRMED`, store no Drive reference and queue zero requester commands. A synthetic publisher fixture that omitted publication and configured destination identity was corrected rather than weakening the guard. Seven local false-success variants now exercise the boundary. The affected six-file integration suite passed **45 tests**; the final negative-control rerun passed **1 file / 14 tests**. Before that final assertion was added, the broad source suite excluding the unsealed release gate passed **419 files / 3,166 tests**, with **4 files / 48 tests skipped**. Workspace TypeScript, lint, the committable-file security scan and blueprint validation **759 / 0 / 0** passed. The exact-tree sealed run remains a separate gate.
+
+This is a check on the result returned to Core, not an independent query to Google or a cryptographic attestation by the provider. Real Drive byte/permission readback, real Sheet row identity, actual Telegram acceptance, staffed repair for a permanent identity conflict, clean-host restore and human design-quality gates remain open. R09 is **in progress** and both production flags remain off.
+
+## Fourteenth pass — preserve Sheet row identity and observed evidence
+
+The Google Sheets publisher already read the row back after a write, but its cached-row preflight accepted an empty task cell as safe to overwrite. A controlled local test inserted a blank row before a moved task: the old code wrote to cached row **3** instead of finding the task at row **4**. The publisher now treats any nonmatching identity, including blank or missing, as a reason to search by immutable task ID again. The same test verifies the blank row stays untouched and the intended task's new package hash reaches row 4.
+
+The publisher also set `observedHash` to the requested package hash and `completedAt` even when a Sheet write failed. The red-before test saw a `drive_complete` receipt with a fabricated observed hash; the fixed receipt leaves both fields absent until a matching readback. A later row retry records the actual read hash. A separate fake-HTTP test changed the remote Sheet hash after an earlier completion: `reconcile` previously left `state: complete` despite clearing `synced`. It now returns `drive_complete`, records the changed observed hash, and clears completion time; loss of the Google token similarly leaves Sheet status unconfirmed rather than replaying stale success. The focused affected suite passed **3 files / 33 tests** after rebuilding the integrations package. The broad source suite excluding the unsealed release gate passed **419 files / 3,166 tests**, with **4 files / 48 tests skipped**. Workspace TypeScript, lint and the committable-file security scan passed; exact-tree sealing is separate. This does not prove live Google Sheet consistency, an operator repair action, or an end-to-end requester receipt. R09 remains **in progress**; flags off.
+
+## Fifteenth pass — distinguish requester-send reconciliation from Sheet retry
+
+ADR-045 addresses a misleading operator path. A request-owned Telegram send marked `REQUESTER_SEND_UNCONFIRMED` stayed as ordinary `PUBLISHING` in task detail and queue, while publication-state called it generic `publish_reconciliation`. The Desk used that generic label for “Retry Sheet Sync.” The red-before contract and rendered Desk tests found an unknown requester-send status and ordinary `PUBLISHING`; the isolated lifecycle test confirmed the uncertain task was absent from a dedicated Needs Action queue.
+
+The shared status contract now maps that publication marker to `REQUESTER_SEND_RECONCILIATION` while retaining database `publishing` and request `delivering`. The paged queue and detail read the latest durable publication marker; Sheet-only and archive-only recovery keep their distinct statuses. Publication-state reports `requester_send_reconciliation` and instructs staff to inspect the Telegram chat and send records. The Desk shows “Check Telegram Delivery,” disables Deliver, and makes no publish call. Core also returns HTTP 409 for a repeated legacy workflow Deliver press in this state. No mark was released, no receipt inferred, and no new send occurred.
+
+The focused contract, Desk and isolated PostgreSQL suite passed **3 files / 43 tests** after package rebuild; the rendered Desk suite passed **1 file / 22 tests**. The first broad source run found two older workflow assertions of the generic state; after they were corrected, the workflow and rendered Desk suites passed **2 files / 36 tests**. The final broad source suite excluding only the unsealed release-gate test passed **419 files / 3,171 tests**, with **4 files / 48 tests skipped**. Workspace TypeScript including tests and lint passed. An earlier broad rerun stalled without a summary and was interrupted; it is not counted as evidence. Exact-tree sealing is separate.
+
+The status gives staff a truthful next step but does not yet provide a staffed, evidence-bound action to settle an uncertain send or safely start a new attempt. Live Telegram requester confirmation, permanent Drive conflict repair, clean-host restore and production cutover remain open. R09 remains **in progress**; production flags remain off.
+
+## Sixteenth pass — expose exact local Telegram marks to staff
+
+The fifteenth pass told staff to check send records but did not offer those records in the Desk. A red-before isolated PostgreSQL test received HTTP **404** from the missing endpoint. The new office-only read checks the tenant, current request owner, task, approval and publication marker. It derives each file and notice send key from the approved package, then reads only those exact keys from the durable Telegram mark ledger. It returns the latest local outcome, attempted-send count and mark time; the Desk shows the file names, requester chat ID, and a plain warning that no requester receipt exists. An unauthorized role receives 403, a different task receives 404, and no route mutates or releases a send mark. The read fails closed for a malformed package or mark.
+
+The first implementation rejected a valid package because its UUID validator missed one group; the synthetic fixture exposed the exact stored shape, and the validator was corrected. The first rendered Desk test found a duplicate React key; after the fix, the Core lifecycle, route-inventory and rendered Desk suite passed **3 files / 56 tests**. A focused authorization rerun passed **1 file / 1 test** with ten tests excluded by its name filter. The broad source suite excluding only the unsealed release-gate test passed **419 files / 3,171 tests**, with **4 files / 48 tests skipped**. TypeScript including tests passed. Lint and exact-tree seal are separate checks.
+
+Local send marks do not carry a Telegram message ID or prove delivery to a person. Staff can inspect the chat, but an audited confirm/replay procedure is still absent. Live Telegram and Google effects, permanent Drive repair, clean-host restore and canary admission remain open. R09 stays **in progress**, with production flags off.
+
+## Seventeenth pass — persist provider message IDs and refuse unrecorded success
+
+New critical Telegram sends now store the positive Bot API `message_id` in their append-only `sent` marks. Repeated reads of an already sent key return that recorded ID without sending again. The office evidence endpoint shows the ID beside the exact approved file or notice key; it still reports requester receipt as unavailable. A success response without a valid message ID, including a malformed plain-text fallback receipt or an answer for a different chat, is classified uncertain. If Telegram returns a valid ID but PostgreSQL cannot write the final `sent` mark after bounded retries, the sender returns uncertain and the request-owned workflow cannot treat that message as delivered. Historical sent marks without IDs remain readable without fabricated IDs.
+
+The sender and bridge negative controls failed before the change: three invalid sender responses were marked sent, three invalid fallback receipts were accepted, and a post-send database outage still returned sent. The Core evidence test also failed to expose a stored ID. After implementation, the focused sender, bridge, Core and rendered Desk suite passed **5 files / 80 tests**. The broad source suite excluding only the unsealed release-gate test passed **419 files / 3,179 tests**, with **4 files / 48 tests skipped**. TypeScript including tests, lint, security scan and blueprint validation **761 / 0 / 0** passed. Exact-tree release sealing is a separate gate for this pass.
+
+This is local PostgreSQL and fake Bot API evidence. A Telegram message ID proves only that the adapter received a matching API response; it does not prove the requester saw or opened the message. Staff still have no audited settlement/replay action. Live provider effects, permanent Drive conflict repair, clean-host restore and canary admission remain open; production flags remain off. R09 stays **in progress**.
+
+## Eighteenth pass — audited staff-visible settlement
+
+ADR-046 defines a narrow human settlement for a request-owned uncertain Telegram send. An office administrator must inspect the exact requester chat and provide a positive observed message ID for every approved file and the delivery notice. Core checks the tenant, current request revision, immutable chat, approval, publication, exact send keys, local Bot API ID agreement for recorded `sent` marks, and matching Drive and Sheet receipts. The request revision, task/publication completion, user-attributed event with package hash and observed IDs, and idempotency receipt commit in one PostgreSQL transaction. No mark is released and no Telegram API call occurs. The Desk shows the evidence and requires explicit attestation; other office roles may inspect but cannot confirm. The publication-state answer preserves `staff_visible` provenance rather than implying a requester read receipt.
+
+The Core test first failed with HTTP **404** for the absent action. In isolated PostgreSQL it now refuses an unauthorized reviewer, wrong chat, changed local sent ID, incomplete item list and changed Sheet receipt. Two concurrent identical actions return one logical revision; a changed replay is refused and the four original send marks remain unchanged. The focused Core, route-inventory and rendered Desk suite passed **3 files / 57 tests**. The broad source suite excluding only the unsealed release-gate test passed **419 files / 3,180 tests**, with **4 files / 48 tests skipped**. TypeScript including tests, lint, security scan and blueprint validation **763 / 0 / 0** passed. Exact-tree release sealing remains a separate gate for this pass.
+
+The entered IDs are staff attestation of visible chat messages, not a machine-verified Telegram history query or proof the requester read them. A staff member who cannot find every item must leave the case open. This action does not solve safe resend when an item is absent, live provider verification, permanent Drive conflict repair, clean-host restore or canary admission. R09 remains **in progress** and both production flags stay off.
+
+## Nineteenth pass — stop blind Telegram replay after ambiguous server responses
+
+The lifecycle TelegramSender marked a direct `TELEGRAM_REJECTED_502` response as failed and threw for Restate to retry. TelegramBridge also returned `TELEGRAM_REJECTED_502`/`TELEGRAM_DOCUMENT_REJECTED_503` for provider 5xx, and a captioned photo retried its upload after any failure, including 5xx. An HTTP 200 body without a definite Bot API result returned a synthetic rejection code ending in 200, which could also lead to retry. These paths could create a second external message after the first was accepted.
+
+Red-before tests reproduced four such failures across text, document, fallback and sender classification; the photo tests separately showed a second upload after 5xx and acceptance of a wrong-chat message ID. A later negative control also caught HTTP 200 bodies without a definite Bot API result. The bridge now classifies 5xx and malformed successful responses as `TELEGRAM_DELIVERY_UNCERTAIN` for text, document and photo. A plain-text or plain-caption fallback is allowed only after a definite parse-entity rejection; its ambiguous result also stays uncertain. TelegramSender treats any 5xx code defensively as uncertain even if an older adapter returns one. Definite 429 and pre-connection failures remain in their existing bounded retry paths. The focused sender/bridge suite passed **4 files / 57 tests**. The broad source suite excluding only the unsealed release-gate test passed **419 files / 3,184 tests**, with **4 files / 48 tests skipped**. TypeScript including tests, lint, security scan and blueprint validation **763 / 0 / 0** passed. Exact-tree release sealing is a separate gate for this pass.
+
+The negative controls use fake HTTP and isolated PostgreSQL; they prove local no-retry behavior, not live Telegram acceptance or requester reading. An inconclusive message still needs staff investigation, and the staff-visible settlement cannot be used unless every item is found in the exact chat. R09 remains **in progress**; production flags stay off.
+
+## Twentieth pass — hold unrecorded legacy outbox sends
+
+The legacy outbox still counted a Telegram `success: true` response as delivered without checking a positive message ID, and returned `sent` even if PostgreSQL rejected its final mark. It stored no provider ID in its new `sent` marks. A custom/older sender returning raw `TELEGRAM_REJECTED_502` was marked failed and scheduled for replay. This matters while old tasks remain pinned to the legacy executor during cutover.
+
+Four isolated PostgreSQL controls failed before repair: malformed success completed a message, a valid provider ID was omitted from its mark, a lost sent-mark write could leave the command leased as if it had succeeded, and a raw 502 scheduled retry. A fifth approved-file control was added after the fix. The outbox now requires a positive ID, writes it with the `sent` mark, retries only that local write for a bounded period, and holds an unrecorded accepted effect uncertain. A raw 5xx and malformed file success also stay uncertain. A later requeue sees the existing attempted/uncertain mark and does not repeat the send. The affected worker suites passed **6 files / 40 tests** before the final fifth control, and the new focused receipt suite passed **1 file / 5 tests**. The broad source suite excluding only the unsealed release-gate test passed **420 files / 3,189 tests**, with **4 files / 48 tests skipped**. TypeScript including tests, lint, security scan and blueprint validation **763 / 0 / 0** passed. Exact-tree release-manifest sealing is a separate gate for this pass.
+
+These controls use a fake sender and isolated PostgreSQL. A Bot API message ID is local provider acknowledgement, not proof of requester reading. Old sent marks remain non-replayable but have no backfilled ID. Live Telegram acceptance, safe resend for a genuinely missing item, permanent Drive conflict repair, clean-host restore and canary admission remain open. R09 stays **in progress**; flags off.
+
+## Twenty-first pass — finish the delivery invocation after an owned report
+
+The extended `R1.S3.REVISION_PHOTO` disposable-stack drill first reached request revision 8 (`delivered`) and child task `complete`, yet Restate left `Delivery.run` backing off with journal error 570. The worker had nested a Restate `RequestLifecycle.deliveryFinished` RPC inside `ctx.run('report')`; the journal could not replay that command sequence. The request-owned report now calls the private object directly. The object performs its own durable, expected-revision Core projection; legacy Core reporting keeps its `ctx.run` retry step. A static module import removes an asynchronous loader from this replay path.
+
+The focused delivery/Desk tests passed **2 files / 22 tests** after the repair. The broad source suite excluding the unsealed release-gate file passed **425 files / 3,294 tests**, with **4 files / 52 tests skipped**. TypeScript, lint and the security scan passed. A clean Core SIGKILL and second-key replay then passed **10/10** Docker invariants, including one revision-8 delivery, no unmatched model calls, zero ready outbox commands and no active invocation other than a future lifecycle reminder. The earlier database-complete/Restate-retry run remains a failed control, not passing evidence. This is a fake-provider recovery result; live Google and Telegram receipts, requester receipt, permanent conflict repair, clean-host restore and production canary admission remain open. R09 stays **in progress** with production flags off.
+
+## 2026-09-27 — Stable Google Sheet row identity (ADR-105), partial
+
+Exact DNA tab propagation, metadata-bound writes, atomic row creation, duplicate
+checks and complete seven-column readback are implemented. Four original-adapter
+regressions and one Core tab regression reproduced before correction. Final affected
+checks: 440 passed / 39 files; includes actual publisher SIGKILL after accepted row
+creation and a fresh process recovering one row. Source build, 509 strict roots,
+lint and security pass. Full suite/release seal and deployed/live qualification
+were not repeated for this prerequisite. See R09_SHEET_IDENTITY_PROOF.json and
+output/acceptance/2026-09-27-sheet-row-identity/STATUS.md for retained failures.
+
+Next: persist immutable publication destinations/expected row/metadata evidence,
+then schedule durable external Drive/Sheets observations and scoped staff resolution.
+Legacy unbound rows require supervised migration; no unsafe automatic adoption.
+The receipt-ID-only reconcile API is still process-local. Wider reporting columns,
+live/human/independent-host admission remain open; whole-app goal active.

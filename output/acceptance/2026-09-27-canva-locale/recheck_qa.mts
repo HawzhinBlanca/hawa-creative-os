@@ -1,0 +1,21 @@
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { checkCanvaPptx } from '../../../packages/qa/src/canva-pptx-check.ts';
+const root=fileURLToPath(new URL('../../../',import.meta.url)),out=fileURLToPath(new URL('.',import.meta.url));
+const digest=(b:Buffer|string)=>createHash('sha256').update(b).digest('hex');
+const fixture=JSON.parse(readFileSync(out+'fixtures.json','utf8'));
+const sourceHashes=Object.fromEntries(['packages/qa/src/canva-pptx-check.ts','apps/core/src/core-helpers.ts','apps/core/src/services/canva-connect-service.ts'].map(p=>[p,digest(readFileSync(root+p))]));
+const file='rechecked-'+digest(JSON.stringify(sourceHashes)).slice(0,12)+'.json';
+const groups=fixture.groups.map((g:any)=>{
+ const bytes=readFileSync(out+g.id+'-canva.pptx'),copy=g.cases.map((c:any)=>c.text);
+ const options={allowedFontsByScript:{latin:['Noto Sans Arabic','Cairo','Verdana'],arabic:['Noto Sans Arabic','Cairo']}};
+ const sourcePlan=g.layout||g.manifest.plan;
+ const directionsByIndex=[...sourcePlan.text].sort((a:any,b:any)=>a.copyIndex-b.copyIndex).map((t:any)=>t.rtl===true?'rtl':t.rtl===false?'ltr':null);
+ return {id:g.id,sha256:digest(bytes),check:checkCanvaPptx(bytes,copy,options),againstRequestedDirection:checkCanvaPptx(bytes,copy,{...options,directionsByIndex})};
+});
+const result={sourceHashes,groups,fullReleasePass:false};
+const encoded=JSON.stringify(result,null,2)+'\n';
+if(existsSync(out+file)&&readFileSync(out+file,'utf8')!==encoded)throw new Error('Conflicting retained recheck');
+writeFileSync(out+file,encoded);
+console.log(JSON.stringify({file,groups:groups.map((g:any)=>({id:g.id,rtlObjects:g.check.rtlTextObjectCount,rtlMetadataPass:g.check.rtlMetadataPass,requiresHuman:g.check.rtlVisualReviewRequired,requestedDirectionPass:g.againstRequestedDirection.rtlPass}))}));

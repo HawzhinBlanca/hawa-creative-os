@@ -4,6 +4,7 @@ import { createDb, sql, withRlsContext } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
 import { CanvaConnectService } from '../src/services/canva-connect-service.js';
+import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
@@ -44,17 +45,18 @@ describe.skipIf(!url)('re-driving a task whose Canva design already exists', () 
     });
 
     const exportIds: Record<string, string> = {};
+    const checked = await checkedCanvaExportFixture('x');
     const canva = {
       startExport: vi.fn(async (s: { tenantId: string; actorId: string }, task: string, _key: string, format: 'png' | 'pptx', version: number) => {
         const op = randomUUID();
         const id = randomUUID();
         const bytes = format === 'png'
           ? Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(randomUUID())])
-          : Buffer.from(`PPTX_${randomUUID()}`);
-        const check = format === 'pptx' ? { copyPass: true, fontPass: true, rtlPass: true, status: 'passed' } : null;
+          : checked.bytes;
+        const check = format === 'pptx' ? checked.contentCheck : null;
         await withRlsContext(db, operator, async (trx) => {
           await sql`INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
-            VALUES (${op}::uuid, ${tenantId}::uuid, ${task}::uuid, ${kaae}::uuid, ${s.actorId}, ${'req_' + randomUUID().slice(0, 8)}, 'h', 'export', 'retrieved', ${designId}, ${version}, ${JSON.stringify({ format })}::jsonb, now(), now())`.execute(trx);
+            VALUES (${op}::uuid, ${tenantId}::uuid, ${task}::uuid, ${kaae}::uuid, ${s.actorId}, ${'req_' + randomUUID().slice(0, 8)}, 'h', 'export', 'retrieved', ${designId}, ${version}, ${JSON.stringify({ format, designUpdatedAt: 200 })}::jsonb, now(), now())`.execute(trx);
           await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
             VALUES (${id}::uuid, ${tenantId}::uuid, ${task}::uuid, ${kaae}::uuid, ${op}::uuid, ${format}, ${createHash('sha256').update(bytes).digest('hex')}, ${bytes},
               ${check === null ? null : JSON.stringify(check)}::jsonb, now())`.execute(trx);
@@ -95,7 +97,7 @@ describe.skipIf(!url)('re-driving a task whose Canva design already exists', () 
     const approve = await app.request(`/tasks/${taskId}/revisions/${detail.latestRevisionId}/decisions`, {
       method: 'POST',
       headers: { ...headers, Authorization: 'Bearer test_art_director_bearer' },
-      body: JSON.stringify({ decision: 'approved', pinnedExportIds: [exportIds.png] }),
+      body: JSON.stringify({ decision: 'approved', pinnedExportIds: [exportIds.png, exportIds.pptx] }),
     });
     expect(approve.status).toBe(201);
   });

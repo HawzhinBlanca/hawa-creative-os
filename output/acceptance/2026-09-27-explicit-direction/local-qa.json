@@ -1,0 +1,208 @@
+{
+  "checkVersion": 6,
+  "sourceTextObjects": [
+    {
+      "id": "ppt/slides/slide1.xml#2",
+      "type": "text",
+      "text": "مرحبا NOVA بالعالم\nالسعر الخاص: ٢٥٬٠٠٠ دينار",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "2"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#3",
+      "type": "text",
+      "text": "سڵاو NOVA جیهان\nنرخی تایبەت: ٢٥٬٠٠٠ دینار",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "3"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#4",
+      "type": "text",
+      "text": "MEET NOVA AT\nWorkshop 2026",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "4"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#5",
+      "type": "text",
+      "text": "NOVA ONE — بۆ هەنگاوی داهاتوو\nکاتژمێر 8:30 PM",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "5"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#6",
+      "type": "text",
+      "text": "NOVA — سڵاو جیهان\nکاتژمێر 8:30 PM",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "6"
+      }
+    },
+    {
+      "id": "ppt/slides/slide1.xml#7",
+      "type": "text",
+      "text": "سڵاو جیهان\nNOVA at 8:30 PM",
+      "source": {
+        "format": "pptx",
+        "part": "ppt/slides/slide1.xml",
+        "shapeId": "7"
+      }
+    }
+  ],
+  "source": "local_transfer_pptx",
+  "canvaDesignId": null,
+  "documentKind": "unspecified",
+  "copyPass": true,
+  "fontPass": true,
+  "rtlPass": true,
+  "rtlNote": "Paragraph direction metadata is present; rendered reading direction and isolation must be verified visually.",
+  "rtlMetadataPass": null,
+  "rtlVisualReviewRequired": true,
+  "paragraphDirections": [
+    {
+      "textObjectIndex": 0,
+      "paragraphIndex": 0,
+      "observed": "rtl",
+      "expected": "rtl",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 0,
+      "paragraphIndex": 1,
+      "observed": "rtl",
+      "expected": "rtl",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 1,
+      "paragraphIndex": 0,
+      "observed": "rtl",
+      "expected": "rtl",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 1,
+      "paragraphIndex": 1,
+      "observed": "rtl",
+      "expected": "rtl",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 2,
+      "paragraphIndex": 0,
+      "observed": "absent",
+      "expected": "ltr",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 2,
+      "paragraphIndex": 1,
+      "observed": "absent",
+      "expected": "ltr",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 3,
+      "paragraphIndex": 0,
+      "observed": "absent",
+      "expected": "ltr",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 3,
+      "paragraphIndex": 1,
+      "observed": "absent",
+      "expected": "ltr",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 4,
+      "paragraphIndex": 0,
+      "observed": "absent",
+      "expected": "ltr",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 4,
+      "paragraphIndex": 1,
+      "observed": "absent",
+      "expected": "ltr",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 5,
+      "paragraphIndex": 0,
+      "observed": "absent",
+      "expected": "ltr",
+      "expectationSource": "imported_plan"
+    },
+    {
+      "textObjectIndex": 5,
+      "paragraphIndex": 1,
+      "observed": "absent",
+      "expected": "ltr",
+      "expectationSource": "imported_plan"
+    }
+  ],
+  "directionViolations": [],
+  "directionsByIndex": [
+    "rtl",
+    "rtl",
+    "ltr",
+    "ltr",
+    "ltr",
+    "ltr"
+  ],
+  "requiredFont": "Verdana",
+  "scriptFonts": null,
+  "fontsByIndex": [
+    "Noto Sans Arabic",
+    "Cairo",
+    "Verdana",
+    "Noto Sans Arabic",
+    "Cairo",
+    "Noto Sans Arabic"
+  ],
+  "allowedFontsByScript": null,
+  "admittedFonts": [
+    "Cinzel",
+    "Playfair Display",
+    "Montserrat",
+    "Lora",
+    "Bodoni Moda",
+    "Cairo",
+    "Plus Jakarta Sans",
+    "Vazirmatn",
+    "Inter",
+    "Verdana",
+    "Noto Sans Arabic"
+  ],
+  "arabicTextObjectCount": 5,
+  "rtlTextObjectCount": 2,
+  "observedFonts": [
+    "Noto Sans Arabic",
+    "Cairo",
+    "Verdana"
+  ],
+  "textObjectCount": 6,
+  "expectedTextObjectCount": 6,
+  "offendingObjects": [],
+  "comparisonPolicy": "exact words and punctuation; layout whitespace folded",
+  "fullReleasePass": false,
+  "logoVerification": "not_qualified",
+  "layoutVerification": "visual_review_required",
+  "printQualified": false
+}

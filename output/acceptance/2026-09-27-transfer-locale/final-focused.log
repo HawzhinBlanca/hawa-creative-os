@@ -1,0 +1,8 @@
+[test databases] per-file clones of hawa_tpl_test_ee09c001ddce1e56 and hawa_tpl_repair_ee09c001ddce1e56 (21 ms)
+{"level":"warn","time":"2026-09-27T03:41:09.775Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-27T03:41:09.782Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-27T03:41:11.994Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-27T03:41:12.000Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-27T03:41:12.828Z","service":"core","msg":"[LayoutsStage] Candidate 1 repeats an earlier validated composition; dropping it"}
+{"level":"warn","time":"2026-09-27T03:41:12.834Z","service":"core","msg":"[LayoutsStage] Candidate 2 repeats an earlier validated composition; dropping it"}
+JSON report written to /Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-transfer-locale/final-focused.json

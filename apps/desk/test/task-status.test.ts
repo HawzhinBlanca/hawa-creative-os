@@ -35,7 +35,7 @@ describe('the vocabulary these tests load', () => {
 describe('the label and next step of every status Core reports', () => {
   it('gives each its own view; only RECEIVED reads as a new request to design', () => {
     const statuses = coreStatuses();
-    expect(statuses.length).toBe(21);
+    expect(statuses.length).toBe(23);
     for (const status of statuses) {
       const view = taskStatusView(status);
       expect(view.known, status).toBe(true);
@@ -52,14 +52,14 @@ describe('the label and next step of every status Core reports', () => {
     for (const state of TASK_DB_STATES.filter((s) => s !== 'received')) {
       const view = taskStatusView(toApiTaskStatus(state));
       expect(view.pill, state).not.toBe('RECEIVED');
-      expect(view.group === 'needs_action' && view.primaryButton === 'edit' && /saved/.test(view.message), state).toBe(false);
+      expect(view.message, state).not.toBe(taskStatusView('RECEIVED').message);
     }
   });
 
   it('offers approval where a person may approve, never after a change is asked or once closed, and never for a status it does not know', () => {
     const ready = { hasRevision: true, qaPassed: true, busy: false };
     for (const status of APPROVABLE_TASK_STATUSES) expect(approveButtonState(status, ready), status).toBe('enabled');
-    for (const status of ['REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'COMPLETE', 'REJECTED', 'CANCELLED']) expect(approveButtonState(status, ready), status).toBe('disabled');
+    for (const status of ['REVISION_REQUESTED', 'APPROVED', 'PUBLISHING', 'ARCHIVE_RECONCILIATION', 'PUBLISH_RECONCILIATION', 'REQUESTER_SEND_RECONCILIATION', 'COMPLETE', 'REJECTED', 'CANCELLED']) expect(approveButtonState(status, ready), status).toBe('disabled');
     for (const unknown of ['ON_HOLD', 'IN_PROGRESS', 'CHANGES_REQUESTED', 'awaiting_approval', '', undefined, null]) {
       expect(taskStatusView(unknown).canApprove, String(unknown)).toBe(false);
       expect(taskStatusView(unknown).primaryButton, String(unknown)).toBe('none');
@@ -97,6 +97,12 @@ describe('the queue filters, built from the same groups', () => {
     expect(where('OPERATOR_REQUIRED')).toEqual(['needs_action']);
     expect(where('AWAITING_APPROVAL')).toEqual(['needs_action', 'review']);
     expect(where('REVISION_REQUESTED')).toEqual(['needs_action']);
+    expect(where('ARCHIVE_RECONCILIATION')).toEqual(['needs_action']);
+    expect(where('REQUESTER_SEND_RECONCILIATION')).toEqual(['needs_action']);
+    expect(taskStatusView('REQUESTER_SEND_RECONCILIATION')).toMatchObject({
+      primaryButton: 'none', canApprove: false, known: true,
+    });
+    expect(taskStatusView('REQUESTER_SEND_RECONCILIATION').message).toMatch(/Telegram/);
     for (const s of ['PROMOTION_PENDING', 'ROUTING', 'BRIEFING', 'PLANNING', 'ASSET_GENERATION', 'COMPOSING', 'QA', 'REPAIRING']) expect(where(s), s).toEqual(['in_progress']);
     expect(where('COMPLETE')).toEqual(['complete']);
     for (const s of ['PAUSED', 'CANCELLED', 'REJECTED', 'PUBLISHING']) expect(where(s), s).toEqual([]);
@@ -189,22 +195,22 @@ describe('the session, as the API client ends it', () => {
     apiClient.auth.setUnauthorizedHint(null);
   });
 
-  it('Sign Out revokes the session it ends, and signs the tab out even when Core does not answer', async () => {
+  it('keeps the session when Core cannot confirm revocation, so a retry is possible', async () => {
     await signIn('hawa_sess_b');
     const fetchSpy = vi.fn(async (_url: string, _init?: RequestInit) => {
       throw new TypeError('fetch failed');
     });
     vi.stubGlobal('fetch', fetchSpy);
-    await apiClient.auth.logout();
+    await expect(apiClient.auth.logout()).rejects.toMatchObject({ status: 0 });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe('/v1/auth/session');
     expect(init?.method).toBe('DELETE');
     expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer hawa_sess_b');
-    // The next request goes without the ended token.
+    // A failed server revoke cannot be represented as a completed sign-out.
     vi.stubGlobal('fetch', vi.fn(async () => json({ items: [], total: 0 }, 200)));
     await apiClient.tasks.list({ limit: 1 });
     const headers = (vi.mocked(fetch).mock.calls[0][1]?.headers || {}) as Record<string, string>;
-    expect(headers.Authorization).toBeUndefined();
+    expect(headers.Authorization).toBe('Bearer hawa_sess_b');
   });
 });

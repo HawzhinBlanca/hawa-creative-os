@@ -1,0 +1,3 @@
+[Ratchet:any] Scanned production source code: found 977 'any' occurrences (ceiling: 1053).
+✅ RATCHET PASSED: 'any' count 977 is within ceiling 1053.
+✅ EGRESS LINT PASSED: No new direct provider references outside 9 existing exceptions. Existing calls still need policy migration.

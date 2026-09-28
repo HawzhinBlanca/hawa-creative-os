@@ -37,12 +37,16 @@ export interface SentRecord {
   fault: TelegramFaultKind | null;
   /** Whether Telegram would have shown it to the chat. */
   delivered: boolean;
+  /** Identity visible in the fake chat, including when its API response is lost. */
+  messageId: number | null;
 }
 
 export interface FakeFile {
   file_id: string;
   size: number;
   mime: string;
+  /** Explicit synthetic fixture bytes for actual parser/codec integration checks. */
+  contentBase64?: string;
   /** Wait before the download answers, as a large file on a slow line would. */
   delayMs: number;
 }
@@ -57,6 +61,7 @@ const SEND_METHODS = new Set(['sendMessage', 'sendPhoto', 'sendDocument', 'sendM
 
 /** Bytes that read as the start of a JPEG, then zeros: enough for Core's type sniffing. */
 function fakeFileBytes(file: FakeFile): Buffer {
+  if (file.contentBase64 !== undefined) return Buffer.from(file.contentBase64, 'base64');
   const bytes = Buffer.alloc(Math.max(16, file.size));
   if (file.mime === 'application/pdf') bytes.write('%PDF-1.4\n', 0, 'latin1');
   else if (file.mime === 'image/png') Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes);
@@ -76,7 +81,8 @@ export class FakeTelegram {
   private files = new Map<string, FakeFile>();
   readonly sent: SentRecord[] = [];
   readonly polls: PollRecord[] = [];
-  readonly calls: Array<{ method: string; at: string }> = [];
+  /** Every Bot API call as it arrives, before a fault or delay answers it (`chat` once its fields are read). */
+  readonly calls: Array<{ method: string; at: string; chat?: string | null }> = [];
 
   reset(): void {
     this.updates = [];
@@ -108,7 +114,10 @@ export class FakeTelegram {
   }
 
   addFile(file: Partial<FakeFile> & { file_id: string }): void {
-    this.files.set(file.file_id, { size: 1024, mime: 'image/jpeg', delayMs: 0, ...file });
+    const bytes = file.contentBase64 === undefined ? null : Buffer.from(file.contentBase64, 'base64');
+    if (bytes && (bytes.length > 20 * 1024 * 1024 || bytes.toString('base64') !== file.contentBase64))
+      throw new Error('Fixture bytes must be canonical base64 within 20 MiB');
+    this.files.set(file.file_id, { size: 1024, mime: 'image/jpeg', delayMs: 0, ...file, ...(bytes ? { size: bytes.length } : {}) });
   }
 
   /** Updates Telegram still holds: those at or above the last offset the bot confirmed. */
@@ -175,6 +184,7 @@ export class FakeTelegram {
       at: new Date().toISOString(),
       fault,
       delivered,
+      messageId: null,
     };
     this.sent.push(record);
     return record;
@@ -186,9 +196,11 @@ export class FakeTelegram {
     const m = /^\/bot[^/]+\/([A-Za-z]+)$/.exec(path);
     if (!m) return sendJson(res, 404, { ok: false, error_code: 404, description: 'Not Found' });
     const method = m[1];
-    this.calls.push({ method, at: new Date().toISOString() });
+    const call: { method: string; at: string; chat?: string | null } = { method, at: new Date().toISOString() };
+    this.calls.push(call);
     const { fields, file: upload } = await this.params(req, query);
     const chat = fields.chat_id !== undefined ? String(fields.chat_id) : null;
+    call.chat = chat;
     const fault = this.takeFault(method, chat);
 
     if (fault?.kind === 'delay') await sleep(fault.delayMs ?? 1000);
@@ -222,18 +234,20 @@ export class FakeTelegram {
     }
 
     if (!SEND_METHODS.has(method)) return sendJson(res, 400, { ok: false, error_code: 400, description: `Bad Request: method ${method} is not faked` });
-    this.record(method, fields, upload, fault?.kind === 'drop-after-processing' ? 'drop-after-processing' : null, true);
+    const record = this.record(method, fields, upload, fault?.kind === 'drop-after-processing' ? 'drop-after-processing' : null, true);
+    record.messageId = ++this.messageSeq;
     // The message reached the chat, and the answer is lost: the sender cannot know it arrived.
     if (fault?.kind === 'drop-after-processing') return dropConnection(res);
     const chatId = /^-?\d+$/.test(chat || '') ? Number(chat) : chat;
     sendJson(res, 200, {
       ok: true,
-      result: { message_id: ++this.messageSeq, date: Math.floor(Date.now() / 1000), chat: { id: chatId, type: 'private' }, text: fields.text },
+      result: { message_id: record.messageId, date: Math.floor(Date.now() / 1000), chat: { id: chatId, type: 'private' }, text: fields.text },
     });
   }
 
   private async download(res: ServerResponse, filePath: string): Promise<void> {
     const id = filePath.replace(/^documents\//, '');
+    this.calls.push({ method: `download:${id}`, at: new Date().toISOString() });
     const f = this.files.get(id);
     if (!f) return sendJson(res, 404, { ok: false, error_code: 404, description: 'Not Found' });
     if (f.delayMs > 0) await sleep(f.delayMs);

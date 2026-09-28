@@ -1,3 +1,5 @@
+import { taskGenerationBlocker } from '@hawa/contracts';
+import { assertTaskGenerationAllowed } from './task-generation-guard.js';
 /**
  * Re-driving a task whose automatic design failed, and the sweep that re-drives every such task.
  * Moved unchanged from app.ts (architecture programme 1.3, SPLIT_PLAN.md G6): the controls routes
@@ -13,7 +15,6 @@ import { log } from '../logging.js';
 import { CanvaConnectService } from './canva-connect-service.js';
 import { CanvaDesignPlanner } from './canva-design-planner.js';
 import { composeCanvaStatusMessage } from './canva-status-message.js';
-import { decideForLifecycle, officeActionIdOf, readTaskLifecycle, type DecisionAnswer } from './office-decisions.js';
 
 export type RedriveDeps = Pick<
   CoreContext,
@@ -37,65 +38,11 @@ export function createRedrive(deps: RedriveDeps) {
     broadcastEvent: broadcast, broadcastTransition, probeModelProvider,
   } = deps;
 
-  /**
-   * The re-drive of a lifecycle round (slice 2.4). A round with a Canva design already is not designed
-   * again: when the request is with the office (stage manual) the design's exports and checks are made
-   * again and the draft is offered to the lifecycle as captured (`draftCaptured`); otherwise the round
-   * is designed again (`redrive`, a new DesignRun). The state machine refuses either in another stage.
-   */
-  async function redriveThroughLifecycle(
-    taskData: { id: string; client_id: string | null; title: string | null; payload?: { exactCopy?: unknown; sourceChannelId?: string } | null },
-    lifecycle: NonNullable<Awaited<ReturnType<typeof readTaskLifecycle>>>,
-    actorId: string,
-    role: string,
-    sourceChannelId: string | undefined,
-    actionHeader: string | undefined
-  ): Promise<{ ok: boolean; taskId: string; status: string; actionId: string; executor: 'restate'; lifecycle: typeof lifecycle; lifecycleAnswer: DecisionAnswer; code?: string; recheck?: unknown }> {
-    const tenantId = DEFAULT_TENANT_ID;
-    const taskId = String(taskData.id);
-    const { actionId } = officeActionIdOf(actionHeader);
-    const binding = await withRlsContext(db!, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) =>
-      (await sql<{ canva_design_id: string; version: string; edit_url: string | null }>`SELECT canva_design_id, version::text, edit_url FROM hawa.canva_bindings
-        WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND status = 'bound' ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]);
-    const kind = binding ? 'draftCaptured' : 'redrive';
-    let recheck: unknown;
-    if (kind === 'redrive' && !taskData.client_id) {
-      return {
-        ok: false, taskId, status: 'CLIENT_REQUIRED', code: 'CLIENT_REQUIRED', actionId, executor: 'restate', lifecycle,
-        lifecycleAnswer: { status: 422, title: 'CLIENT_REQUIRED', detail: 'Task has no client assigned', code: 'CLIENT_REQUIRED' },
-      };
-    }
-    // The exports are Canva's work, not the lifecycle's: made only when the lifecycle can take the capture.
-    if (binding && lifecycle.stage === 'manual' && canvaConnectService && revisionRepo) {
-      const { recheckBoundDraft } = await import('./canva-task-outcome.js');
-      const copy = Array.isArray(taskData.payload?.exactCopy) && (taskData.payload!.exactCopy as unknown[]).every((c) => typeof c === 'string') ? taskData.payload!.exactCopy as string[] : undefined;
-      recheck = await recheckBoundDraft(db!, { canva: canvaConnectService, revisionRepo, evaluateQc: evaluateCanvaExportQc }, {
-        tenantId, taskId, actorId, designId: binding.canva_design_id, bindingVersion: Number(binding.version),
-        ...(binding.edit_url ? { canvaUrl: binding.edit_url } : {}), ...(copy ? { fallbackCopy: copy } : {}), exportsOnly: true,
-      }).then((r) => r.exports).catch((err: unknown) => {
-        log.error(`[redrive] Task ${taskId}: the bound Canva draft's exports could not be made again:`, err);
-        return { error: String((err as Error)?.message || err).slice(0, 300) };
-      });
-    }
-    const { answer, forwarded } = await decideForLifecycle(db!, tenantId, lifecycle, { actionId, actor: { userId: actorId, role }, kind, taskId });
-    const accepted = forwarded.kind === 'answered' && forwarded.result.accepted ? forwarded.result : null;
-    // A /redo in the chat that changed nothing is answered there; an accepted one is announced by the lifecycle.
-    if (!accepted && sourceChannelId && sourceChannelId !== 'tg_default') {
-      await telegramBridge?.dispatchOutboundMessage(sourceChannelId, { text: `⚠️ Task <code>${taskId}</code> was not re-driven: ${answer.detail.replace(/[<>&]/g, '')}`, parse_mode: 'HTML' }).catch(() => undefined);
-    }
-    return {
-      ok: Boolean(accepted), taskId, status: kind === 'redrive' ? 'LIFECYCLE_REDRIVE' : 'LIFECYCLE_CAPTURE', actionId, executor: 'restate',
-      lifecycle: accepted ? { ...lifecycle, rev: accepted.rev, stage: accepted.stage } : lifecycle, lifecycleAnswer: answer,
-      ...(answer.status === 200 ? {} : { code: answer.code }), ...(recheck ? { recheck } : {}),
-    };
-  }
-
   // --- Re-drive Failed Tasks & Automated Recovery Sweep ---
   async function redriveTask(
     taskId: string,
     sourceChannelId?: string,
-    actor: { id: string; role: string; type?: string } = { id: PRIMARY_OPERATOR_USER_ID, role: 'operator', type: 'user' },
-    options: { actionHeader?: string } = {}
+    actor: { id: string; role: string; type?: string } = { id: PRIMARY_OPERATOR_USER_ID, role: 'operator', type: 'user' }
   ) {
     if (!db) throw new Error('Database required for task redrive');
     const tenantId = DEFAULT_TENANT_ID;
@@ -106,7 +53,7 @@ export function createRedrive(deps: RedriveDeps) {
     // 1. Fetch task details from DB
     const taskData = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
       const row = await sql<any>`
-        SELECT t.id, t.tenant_id, t.client_id, t.title, t.description, t.state,
+        SELECT t.id, t.tenant_id, t.client_id, t.title, t.description, t.state, t.request_id,
                (SELECT o.payload FROM hawa.outbox_commands o WHERE o.aggregate_id = t.id AND o.command_type = 'task.created' ORDER BY o.created_at DESC LIMIT 1) as payload
         FROM hawa.tasks t
         WHERE t.id = ${taskId}::uuid`.execute(trx);
@@ -117,10 +64,13 @@ export function createRedrive(deps: RedriveDeps) {
       return { ok: false, code: 'TASK_NOT_FOUND', message: `Task ${taskId} not found` };
     }
 
-    // A round of a request the lifecycle owns (slice 2.4): designing it again, or recording the draft
-    // the office made in Canva, is RequestLifecycle's decision. Nothing is queued or recorded here.
-    const lifecycle = await readTaskLifecycle(db, tenantId, taskId);
-    if (lifecycle?.owner === 'restate') return redriveThroughLifecycle(taskData, lifecycle, actorId, actor.role, sourceChannelId, options.actionHeader);
+    if (taskData.request_id) {
+      return { ok: false, code: 'LIFECYCLE_OWNED',
+        message: 'This request is managed by RequestLifecycle; use its office redrive action' };
+    }
+
+    const generationBlocker = taskGenerationBlocker(taskData.state);
+    if (generationBlocker) return { ok: false, code: 'TASK_GENERATION_BLOCKED', message: generationBlocker };
 
     if (!taskData.client_id) {
       if (sourceChannelId && sourceChannelId !== 'tg_default') {
@@ -217,6 +167,8 @@ export function createRedrive(deps: RedriveDeps) {
     if (runsPipelineV3(String(taskData.payload?.sourceChannelId || channelId)) || taskData.payload?.designStudio === true) {
       if (!outboxRepo) throw new Error('Durable outbox required for a studio re-drive');
       const queued = await withRlsContext(db, { tenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => {
+        const currentTask = (await sql<{state:string}>`SELECT state FROM hawa.tasks WHERE tenant_id=${tenantId}::uuid AND id=${taskId}::uuid FOR UPDATE`.execute(trx)).rows[0];
+        assertTaskGenerationAllowed(currentTask?.state);
         // `stale`: not live by the Desk's own rule (LIVE_RUN), 30 minutes without progress.
         const unfinishedRun = (await sql<any>`SELECT id, status, updated_at <= now() - interval '30 minutes' AS stale FROM hawa.design_studio_runs
           WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid
@@ -321,9 +273,13 @@ export function createRedrive(deps: RedriveDeps) {
       const currentTask = await taskRepo?.findById(taskId, tenantId, trx);
       if (revisionRepo && !currentTask?.current_design_revision_id) {
         const revisionId = crypto.randomUUID();
-        const exportRow = (await sql<any>`SELECT sha256, format, content, content_check FROM hawa.canva_export_bytes
-          WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND format = 'pptx'
-          ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0];
+        const exportRow = (await sql<any>`SELECT b.id, b.sha256, b.format, b.content, b.content_check,
+            o.metadata->>'designUpdatedAt' AS capture_version FROM hawa.canva_export_bytes b
+          JOIN hawa.canva_remote_operations o ON o.id = b.operation_id AND o.tenant_id = b.tenant_id AND o.status = 'retrieved'
+          JOIN hawa.canva_bindings g ON g.tenant_id = b.tenant_id AND g.task_id = b.task_id AND g.status = 'bound'
+            AND g.canva_design_id = o.design_id AND g.version = o.binding_version
+          WHERE b.tenant_id = ${tenantId}::uuid AND b.task_id = ${taskId}::uuid AND b.format = 'pptx'
+          ORDER BY b.created_at DESC LIMIT 1`.execute(trx)).rows[0];
         const planRow = (await sql<any>`SELECT result->'manifest' AS manifest FROM hawa.canva_design_plans
           WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND status NOT IN ('failed','abandoned')
           ORDER BY created_at DESC LIMIT 1`.execute(trx)).rows[0]?.manifest;
@@ -369,6 +325,10 @@ export function createRedrive(deps: RedriveDeps) {
         const profileId = await redriveOutcome.resolveQcProfileId(trx, tenantId);
 
         const qcEval = evaluateCanvaExportQc(exportRow, planRow?.copy || taskData.exactCopy);
+        if (exportRow) {
+          qcEval.qaReport.exportArtifactId = exportRow.id;
+          qcEval.qaReport.captureVersion = exportRow.capture_version;
+        }
         await trx.insertInto('qc_runs').values({
           tenant_id: tenantId as any,
           task_id: taskId as any,
@@ -431,6 +391,7 @@ export function createRedrive(deps: RedriveDeps) {
         WHERE p.tenant_id = ${tenantId}::uuid
           AND p.status IN ('failed', 'uncertain')
           AND b.id IS NULL
+          AND t.request_id IS NULL
           AND t.client_id IS NOT NULL
           AND t.title NOT LIKE '[TEST]%'
           AND (

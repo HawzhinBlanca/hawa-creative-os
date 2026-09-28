@@ -1,3 +1,4 @@
+import { KAAE_TEST_LOGO } from './fixtures/kaae-render-options.js';
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { unzipSync, strFromU8 } from 'fflate';
@@ -12,6 +13,7 @@ import {
   layoutDefectCount,
   checkCandidateSetDegeneracy,
   logoClearZone,
+  NEUTRAL_STYLE_SPEC,
   type StyleSpec,
   type StudioLayoutV2,
 } from '../src/index.js';
@@ -62,9 +64,11 @@ const prepared = (lang: 'ckb' | 'en', k: number) => {
 describe('a style spec read from the reference is enforced on every candidate', () => {
   for (const lang of ['ckb', 'en'] as const) {
     for (const k of [0, 1, 2]) {
-      it(`${lang} candidate ${k}: passes QA and looks like the reference`, () => {
+      it(`${lang} candidate ${k}: preserves reference style and measures actual mixed-font fallback`, () => {
         const { layout, qa } = prepared(lang, k);
-        expect(qa.passed).toBe(true);
+        expect(qa.passed, qa.messages.join('; ')).toBe(true);
+        expect(qa.defectCodes).toEqual([]);
+        if (lang === 'ckb') expect(qa.textMeasurements.some((m) => m.status === 'measured' && m.method === 'pango-wrap-v1')).toBe(true);
         const W = layout.width;
         const m = layout.grid.margin;
         const title = layout.text.find((t) => t.role === 'title')!;
@@ -107,7 +111,7 @@ describe('a style spec read from the reference is enforced on every candidate', 
 
   it('draws the edition line in gold in the preview and in the Canva deck', async () => {
     const { layout, copy, blocks } = prepared('en', 0);
-    const { svg } = renderLayoutV2ToSvg(layout, { copyText: copy.text });
+    const { svg } = renderLayoutV2ToSvg(layout, { logoDataUri: KAAE_TEST_LOGO, copyText: copy.text });
     expect(svg).toMatch(/<tspan[^>]*fill="#F7B500"[^>]*>EDITION 2\.0<\/tspan>/);
     const deck = await encodeStudioTransferV2(layout, blocks, undefined);
     const xml = strFromU8(unzipSync(deck.bytes, { filter: (f) => f.name === 'ppt/slides/slide1.xml' })['ppt/slides/slide1.xml']);
@@ -136,7 +140,7 @@ describe('a style spec read from the reference is enforced on every candidate', 
   });
 
   it('leaves a layout alone when the spec decides nothing', () => {
-    const neutral = Object.fromEntries(Object.keys(fixture.spec).map((k) => [k, k === 'accentLastTitleLine' ? false : 'as_generated'])) as StyleSpec;
+    const neutral: StyleSpec = { ...NEUTRAL_STYLE_SPEC };
     const blocks = fixture.copy.ckb;
     const copy = { text: Object.fromEntries(blocks.map((b, i) => [i, b])) };
     const canvas = { width: 1080, height: 1350, logoAspect: 1, palette: reference.palette, ornament: resolveOrnamentSettings({}) };

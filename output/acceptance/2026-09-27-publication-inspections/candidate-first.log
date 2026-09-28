@@ -1,0 +1,43 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_7cc7f808220741fc and hawa_tpl_repair_7cc7f808220741fc (32 ms)
+stdout | packages/testkit/chaos/chaos.test.ts > chaos suite (hawa-chaos compose project)
+[chaos] R1.S3.SOURCES ERROR 0 s — full-app PDF source to voice revision and simulated approved delivery
+    error: Core, worker and Desk image labels match the candidate checkout: build 76e1e5928c980ffc5e00b4921c3cba173783a3c3; changed source files=0
+[chaos] total 61 s, peak memory 724 MiB ({"hawa-chaos-nginx-1":8,"hawa-chaos-desk-1":7,"hawa-chaos-docling-1":11,"hawa-chaos-core-1":65,"hawa-chaos-worker-blue-1":54,"hawa-chaos-postgres-1":41,"hawa-chaos-restate-1":487,"hawa-chaos-fakes-1":51})
+
+stdout | packages/testkit/chaos/chaos.test.ts > chaos suite (hawa-chaos compose project)
+[chaos] HAWA_CHAOS_KEEP=1: the hawa-chaos project is still running; take it down with `npx tsx packages/testkit/chaos/run.ts --down`.
+
+ ❯ packages/testkit/chaos/chaos.test.ts (44 tests | 1 failed | 43 skipped) 61346ms
+     × R1.S3.SOURCES: full-app PDF source to voice revision and simulated approved delivery 2031ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/testkit/chaos/chaos.test.ts > chaos suite (hawa-chaos compose project) > R1.S3.SOURCES: full-app PDF source to voice revision and simulated approved delivery
+AssertionError: expected 'Core, worker and Desk image labels ma…' to be undefined
+
+- Expected:
+undefined
+
++ Received:
+"Core, worker and Desk image labels match the candidate checkout: build 76e1e5928c980ffc5e00b4921c3cba173783a3c3; changed source files=0"
+
+ ❯ packages/testkit/chaos/chaos.test.ts:112:26
+    110|       sampleMemory();
+    111|     }
+    112|     expect(report.error).toBeUndefined();
+       |                          ^
+    113|     const failed = report.invariants.filter((i) => !i.ok);
+    114|     expect(failed, failed.map((f) => `${f.name}: ${f.detail}`).join(';…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 43 skipped (44)
+   Start at  22:26:03
+   Duration  62.44s (transform 634ms, setup 53ms, import 886ms, tests 61.35s, environment 0ms)
+
+Results: packages/testkit/chaos/.run/last-run.json

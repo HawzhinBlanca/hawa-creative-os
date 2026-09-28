@@ -42,13 +42,13 @@ export interface SloSummary {
   totalProbes: number;
   successfulProbes: number;
   failedProbes: number;
-  successRate: number;
-  errorBudgetRemaining: number;
-  p50DurationMs: number;
-  p95DurationMs: number;
-  p99DurationMs: number;
+  successRate: number | null;
+  errorBudgetRemaining: number | null;
+  p50DurationMs: number | null;
+  p95DurationMs: number | null;
+  p99DurationMs: number | null;
   targetP99Ms: number;
-  sloCompliant: boolean;
+  sloCompliant: boolean | null;
   circuitBreakers: Array<{
     name: string;
     state: string;
@@ -372,13 +372,13 @@ export class SyntheticTrafficDaemon {
         totalProbes: 0,
         successfulProbes: 0,
         failedProbes: 0,
-        successRate: 100,
-        errorBudgetRemaining: 100,
-        p50DurationMs: 0,
-        p95DurationMs: 0,
-        p99DurationMs: 0,
+        successRate: null,
+        errorBudgetRemaining: null,
+        p50DurationMs: null,
+        p95DurationMs: null,
+        p99DurationMs: null,
         targetP99Ms: this.targetP99Ms,
-        sloCompliant: true,
+        sloCompliant: null,
         circuitBreakers: this.getCircuitBreakers(),
       };
     }
@@ -386,7 +386,7 @@ export class SyntheticTrafficDaemon {
     const successes = this.probeHistory.filter((p) => p.success).length;
     const failures = total - successes;
     const successRate = Number(((successes / total) * 100).toFixed(2));
-    const errorBudgetRemaining = Math.max(0, Number((100 - (failures / total) * 1000).toFixed(1)));
+    const errorBudgetRemaining = Math.max(0, Number((100 * (1 - (failures / total) / 0.01)).toFixed(1)));
 
     const durations = this.probeHistory.map((p) => p.totalDurationMs).sort((a, b) => a - b);
     const p50DurationMs = durations[Math.floor(durations.length * 0.50)] || 0;

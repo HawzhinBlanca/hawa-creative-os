@@ -1,16 +1,23 @@
+import type { ExemplarRetrievalEvidence } from '@hawa/creative';
 import type { StudioLayoutV2 } from '@hawa/creative';
-import type { LayoutMetrics } from '@hawa/creative';
+import type { LayoutMetrics, TextMeasurement } from '@hawa/creative';
 import type { OpenAiStudioClient } from '@hawa/creative';
 import type { OpenAiImageProvider } from '@hawa/creative';
-import type { ExemplarRetrievalIndex } from '@hawa/creative';
 import type { DesignStudioRepository } from '@hawa/db';
+import type { UnconsumedStudioAttempt } from '@hawa/domain';
 
-export class StudioBudgetExhaustedError extends Error {
-  readonly code = 'BUDGET_EXHAUSTED';
-  constructor(message = 'BUDGET_EXHAUSTED') {
-    super(message);
-    this.name = 'StudioBudgetExhaustedError';
-  }
+export { StudioBudgetExhaustedError } from '@hawa/domain';
+
+/** Stop every fallback when task authority ends or a paid call requires reconciliation. */
+export function isModelCallHoldError(err: unknown): boolean {
+  return !!err && typeof err === 'object' &&
+    ('isUncertain' in err && err.isUncertain === true ||
+      'code' in err && (err.code === 'MODEL_CALL_ADMISSION_CONFLICT' ||
+        err.code === 'MODEL_STAGE_REPLAY_UNSAFE' || err.code === 'STUDIO_VISUAL_INPUTS_UNSAFE' || err.code === 'BRIEF_CONTRACT_CHANGED' || err.code === 'STUDIO_RUN_STATUS_CHANGED' || err.code === 'NATIVE_REVISION_HANDOFF_REQUIRED' ||
+        err.code === 'MODEL_CALL_FINALIZATION_CONFLICT' || err.code === 'MODEL_CALL_ACCOUNTING_FAILED' ||
+        err.code === 'TASK_GENERATION_BLOCKED' ||
+        err.code === 'STUDIO_BUDGET_INVALID' || err.code === 'STUDIO_BUDGET_UNQUOTABLE' ||
+        err.code === 'STUDIO_BUDGET_RESERVATION_EXCEEDED' || err.code === 'STUDIO_BUDGET_HISTORY_INCOMPLETE'));
 }
 
 export interface CreativeBriefRole {
@@ -120,6 +127,10 @@ export interface HardQAResult {
   passed: boolean;
   defectCodes: string[];
   metrics: LayoutMetrics;
+  textMeasurements: TextMeasurement[];
+  messages: string[];
+  /** Where art regions and photo crops landed in the final layout (ADR-123); absent before it. */
+  placement?: import('@hawa/creative').LayoutPlacements;
 }
 
 export interface ParityResult {
@@ -130,11 +141,18 @@ export interface ParityResult {
   copyVisibleIdentical: boolean;
 }
 
-export type CopyBlock = { text: string; script: 'latin' | 'arabic' | 'mixed' };
+export type CopyBlock = {
+  text: string;
+  script: 'latin' | 'arabic' | 'mixed';
+  /** Language from an explicitly labelled saved copy field, bound to its original text. */
+  locale?: string;
+  localeCopySha256?: string;
+};
 
 export interface ReferencePack {
   palette: string[];
   referenceFonts?: { latin?: string; arabic?: string };
+  admittedDisplayFonts?: { latin: string[]; arabic: string[] };
   exemplars?: Array<{ path: string; label: string; sha256?: string }>;
   [key: string]: unknown;
 }
@@ -152,9 +170,9 @@ export interface StageContext {
   copyBlocks: CopyBlock[];
   referencePack: ReferencePack;
   promotedRules: string;
-  /** Who the client is: its client pack's profile (ADR-038). Shared prompts name no client. */
+  /** Who the client is: its client pack's profile (ADR-127). Shared prompts name no client. */
   clientProfile?: string;
-  /** The client's playbook (ADR-038): a video thumbnail also answers to the thumbnail rules. */
+  /** The client's playbook (ADR-127): a video thumbnail also answers to the thumbnail rules. */
   playbook?: 'institutional-announcement' | 'video-thumbnail';
   /** The office's standing rules for this client, numbered, as the models read them; '' when none. */
   clientRules?: string;
@@ -163,13 +181,18 @@ export interface StageContext {
   logoAspect?: number;
   logo?: { bytes: Buffer; sha256: string; mimeType: 'image/png' | 'image/jpeg' };
   exemplars?: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }>;
-  /** The client's own exemplar set to retrieve from (ADR-038); absent when it has none yet. */
-  exemplarIndex?: ExemplarRetrievalIndex;
+  /** Current exemplar admission policy identity; not sent to models as prompt content. */
+  exemplarPolicySha256?: string;
+  exemplarRetrieval?: ExemplarRetrievalEvidence & { loadedIds: string[]; unavailableIds: string[] };
   client: OpenAiStudioClient;
   artProvider?: OpenAiImageProvider;
   ledger?: DesignStudioRepository;
+  /** ADR-122: retained results of the interrupted stage that this resume has not read. */
+  unconsumedRetainedCalls?: () => UnconsumedStudioAttempt[];
   /** This run executes the v3 pipeline. Fixed at run creation; see isPipelineV3Run. */
   pipelineV3?: boolean;
+  /** Brief decision applied to optional artwork; required client photos remain content. */
+  imageryStrategy?: CreativeBrief['imageryStrategy'];
   /** The palette colour the client asked for as the background, applied to every layout in code. */
   requestedBackground?: string;
   /** An image the requester attached (data: URL), whatever it shows. The brief says what it is. */
@@ -179,6 +202,8 @@ export interface StageContext {
    * by photoIndex. Content, not style: every one is placed once, or the layout is refused.
    */
   photos?: ContentPhoto[];
+  /** Hash-verified conditioning pixels retained before the first layout call. */
+  visualInputs?: import('@hawa/creative').LayoutVisualInput[];
   /**
    * The people in each photo cut out of its background (ADR-032), by photoIndex; present only for a
    * cut-out that passed its checks. Set when the request, the reference or the design being changed
@@ -195,11 +220,15 @@ export interface StageContext {
   ornament?: import('@hawa/creative').OrnamentSettings;
   /** The brief's style spec, applied to every layout in preparation. */
   style?: import('@hawa/creative').StyleSpec;
+  /** The run's recorded executable brief contract (ADR-125); set before the first layout call. */
+  briefContract?: import('@hawa/domain').ExecutableBriefContract;
 }
 
 export type ImageRole = 'content_photo' | 'style_reference' | 'logo' | 'unrelated';
 
 export interface ContentPhoto {
+  /** Subject/crop meaning from the same brief that classified this image as content. */
+  notes?: string;
   dataUrl: string;
   bytes: Buffer;
   mimeType: 'image/png' | 'image/jpeg' | 'image/webp';

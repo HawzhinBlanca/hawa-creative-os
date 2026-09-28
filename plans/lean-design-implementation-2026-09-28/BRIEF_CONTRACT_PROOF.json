@@ -1,0 +1,456 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "7b8de71ed015616c5a315cf67da07af31c77019a",
+  "branch": "codex/research-grade-design-system (worktree branch worktree-wf_82dde19f-6dc-3)",
+  "status": "POLICY_AND_BRIEF_CONTRACT_LOCALLY_QUALIFIED_AFTER_FIX_ROUND_HUMAN_NATIVE_AND_RELEASE_NOT_EVALUATED",
+  "adr": "125",
+  "migration": null,
+  "requirements": [
+    "FR-013",
+    "FR-014",
+    "FR-015",
+    "FR-036",
+    "FR-038",
+    "NFR-024"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/125_executable_brief_contract.md",
+      "sha256": "1884c15232359f525e9074b47dda8f3837d3744e3207c4d307f5b6d4d2852d7b"
+    },
+    {
+      "path": "packages/creative/src/studio/negative-space-policy.ts",
+      "sha256": "ec49216dab2231f9ddef62c44c2d1564b888c8b42fc35a418ffd70aafaecbfaa"
+    },
+    {
+      "path": "packages/creative/src/studio/design-metrics.ts",
+      "sha256": "bb06ffbc6183a2cbc4973d4b7b4b1a3651579ef58da9b949c97deb356e3aba55"
+    },
+    {
+      "path": "packages/creative/src/studio/layout-generator-v3.ts",
+      "sha256": "ff1e822e244d945769c8b18a95d0f98300ec5d692e30ed980ebea5be63795981"
+    },
+    {
+      "path": "packages/creative/src/studio/copy-feasibility.ts",
+      "sha256": "18a93d05757fd602045eceaa9190f18315d3ab58fd4261ea055ec4635ae235b2"
+    },
+    {
+      "path": "packages/creative/src/studio/validate-layout-v2.ts",
+      "sha256": "aeaef9893f60442a589ef3d5f7c3e205eefc2c9532db305fd6e5790f88b4f5ab"
+    },
+    {
+      "path": "packages/creative/src/studio/house-rules.ts",
+      "sha256": "bb8bd21e68cc79a4deb72395a9d3c60b1302661a85647e83ca39362c32015bac"
+    },
+    {
+      "path": "packages/creative/src/studio/hard-qa.ts",
+      "sha256": "70481d13043c81ad4648a5b8c148545817c2802b968bc6db0ec028042585358a"
+    },
+    {
+      "path": "packages/creative/src/studio/pipeline-v3.ts",
+      "sha256": "5b00a082714ef83701662431a69c85dd87ed9c419d49efce1b1d43422d7496bf"
+    },
+    {
+      "path": "packages/creative/src/index.ts",
+      "sha256": "15f331cc504450b0a1201b7ed08dd8db05c14809ada3b8ae875ad67fba10dcfc"
+    },
+    {
+      "path": "packages/domain/src/brief-contract.ts",
+      "sha256": "4ceacee593d80be567a6f58c664b8f8d641b16c1fc4ec574ab4cb0249eb24026"
+    },
+    {
+      "path": "packages/domain/src/index.ts",
+      "sha256": "b111c468aa00847b99409f8bf75eda13c8c6bd9cff19a14ebcb34c63dc319bb0"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/brief-contract.ts",
+      "sha256": "062b8389e82a309f0a9a36726d2d8254809f7be627b0305380fac378ae0d06e5"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "17af2fb4f51c7e1900742fcde78dfcbee3f63d246eff5159ede945984edb54fa"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/layouts.stage.ts",
+      "sha256": "5f1968b915bcda5d388e30b3ab048d4e85453e12639f5f5027e298c15be7e5a2"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/types.ts",
+      "sha256": "aba6d0c15ede54c57cf95f7fe897fcc103ba4394f614b63d6239df66b1384694"
+    },
+    {
+      "path": "packages/creative/test/negative-space-policy.test.ts",
+      "sha256": "bd2227e79f301d23acadc582056f92ebd2f20fdabb858ec495b2e5a95b3b2c02"
+    },
+    {
+      "path": "packages/creative/test/copy-feasibility.test.ts",
+      "sha256": "457c24d47964c331a16536f8f463176e9fdd190dd79eaf35cca4b35a25321a65"
+    },
+    {
+      "path": "packages/domain/test/brief-contract.test.ts",
+      "sha256": "1e4f285310565a692b224314afcf5f02a1958d7bfccf9f407fb72ad7cd0bd931"
+    },
+    {
+      "path": "apps/core/test/studio-brief-contract.test.ts",
+      "sha256": "5d3d3c2811d4ad8f5c50866ee621a6a1c776b79503de232931b2ea1cc6d46e81"
+    },
+    {
+      "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
+      "sha256": "4ac4d23d4ce75246c3d804e02ac2eb4259173a425fed995380d7f3140720c9fd"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "883164b8b37b61f9bf86181bebd8a587702dba7b4b395a3463c64d6d32136506"
+    },
+    {
+      "path": "packages/creative/src/studio/art-generator-v3.ts",
+      "sha256": "e1ad8438a0b33729836a5f9f871d941c898b66fc23c24e505624e66d547ef1c3"
+    },
+    {
+      "path": "packages/creative/src/studio/refinement-engine-v3.ts",
+      "sha256": "c15ec940f9a8f60a0082d122750cc1adb08e5e683bc84783c9fe82794a59e9f4"
+    },
+    {
+      "path": "packages/db/src/repositories/design-studio.repository.ts",
+      "sha256": "68e2ff7dc7fa2e1615d47cf0525b74302c9cb9b96380825b9611062d5dfad4bd"
+    },
+    {
+      "path": "apps/core/test/studio-brief-contract-resume.test.ts",
+      "sha256": "4e0c2bc775615e3fdd8074145e7b888e4586509f30b7587c5925b44a05fddb23"
+    },
+    {
+      "path": "apps/core/test/directed-revision.test.ts",
+      "sha256": "ab897e8beeb800de39103bfa545c46f0352cd9bd040cea4305233a67458fd97e"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-initial-red.json",
+      "sha256": "838face86f41420f05df6d6ec7e18f17ef0d37f84dcfe9ffdf53e40b805e55bc"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-core-red.json",
+      "sha256": "f996ea1062a5466a4732a5df57f6ed9908fda592e1f47a14b1f76857918edd90"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-packages-affected.json",
+      "sha256": "ea28021e4bc3639b06cfea6501c69bda59d133b63edc9cf47909f9c7f9c3164d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-core-affected.json",
+      "sha256": "a9bcf4418afd20058cf249197be48c3a07a4571b389125cc76589d01ac27bbab"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-studio-ledger-base.log",
+      "sha256": "1d60d7a895da621f82b09b3994006e24b4effd5128f4e1b4a731d18e9c1311b5"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-final-focused.json",
+      "sha256": "07d16ea72cb203f689992b977d972f17918cbcbcf588210d5a58eb5fc7351898"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-typecheck.log",
+      "sha256": "77da6118d84d8f20f8b2e9d0895d11c2258a401189a5095e2f37cb5c8f7d1f15"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-lint.log",
+      "sha256": "58f0e5ef018f0075e06683b72868b12482eeb04c8c0983c1ee802519324eb488"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-security.log",
+      "sha256": "2b39e1f515b6dd26453f4e15df6cde0ffc674c9f69b46aba41bdffe56168d483"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-prompt-sizes.log",
+      "sha256": "a3f85bcd4e38abf4f25f023f237570c037d249c7bbbd32de761e556104d9cfbc"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-screen-timing.log",
+      "sha256": "970ee2ea52748e092dba74d593556985fd3b0d1cdec05eccbeb10032177c08ba"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-full-suite.txt",
+      "sha256": "575fec537639e7d4dc42fabeb10ebd6e1424923968de675b9266febc1e4e8a93"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-full-suite-failures-on-base.json",
+      "sha256": "16a079c6379eb28e23cb14716914538a9aaf4dae8d80b146136ce823f22adf07"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-resume-red.log",
+      "sha256": "fa735127568c9938ffd3d938ef4be70848ea894c8da154815c497f169874a844"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-resume-red.json",
+      "sha256": "bab47d74654d2d19bab859918b5e3b2db215d1ea8c4d352d46b6fa5dbc88e1a4"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-resume-on-base.log",
+      "sha256": "35b045bec9b22ee07701af1dde31c87d10f1aea972b459ea4cba6d8151252b32"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-initial-red.log",
+      "sha256": "6f451a31b4d617c031c10faebc1c2eb876f2f2e67fe0fa81e14913335c08ce25"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-initial-red.json",
+      "sha256": "24793a0054f6227dfb71198b70ea6f5ecba167f680b73e41e1e45d406a3d5b12"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-reviewer-repro.log",
+      "sha256": "3b5e0125a17591c4816ae7090dfe2714552c61bf28f4a4f80a716856cda4aeb5"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-core-affected.log",
+      "sha256": "4437130098a3487c6b44cae0f972a72af9ca6852c60f3b95448faf7d44f70023"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-core-affected.json",
+      "sha256": "0c57dcc94d4d55945d71357479348fed209ece8ad07fa100663eb4d3b48e90ff"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-packages-affected.log",
+      "sha256": "96047be9e1f5d7ed86f8d2864e31af5588571267b5d181f91a6f40e3a7e5c168"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-packages-affected.json",
+      "sha256": "717e9a80860355381e3e286764dd5b718904bf01843bc010836e18b0673ca87e"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-final-focused.log",
+      "sha256": "d83d5d475559e26fb8f19a8852960e58019a4eab736f0dee36276d3d3eb619a1"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-final-focused.json",
+      "sha256": "eb899c0c76db0b2431629b81ce9de373317f9b5ea0ff19c62b11427fcfcacf0c"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-typecheck.log",
+      "sha256": "8d483c5c6646d540228f900872f41a15090a99e3b7c548b7102617c3eb8dbfa6"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-lint.log",
+      "sha256": "462c5cf7020f32a61c894289cfdc7804dd2219710180750ecc435be8872d7332"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-security.log",
+      "sha256": "af41242f880cc4d95ba2fb4645ac8b51ce4faab8b65e0033ca5c6fef287cac27"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-prompt-sizes.log",
+      "sha256": "6e4d1c7eb126f2793582d7887e72501b0cd43736d18ed7ae16b68801261548f3"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-brief-contract-fix-full-suite.txt",
+      "sha256": "47c30cc994b90718d0e2b81a45837d6550eb2d9ea6180cdaa86f6d9bfd51fb25"
+    }
+  ],
+  "acceptance": {
+    "new_files": 4,
+    "new_tests_passed": 21,
+    "new_tests_failed": 0,
+    "new_tests_skipped": 0,
+    "affected_package_files": 32,
+    "affected_package_passed": 377,
+    "affected_package_failed": 0,
+    "affected_core_worker_files": 26,
+    "affected_core_worker_passed": 241,
+    "affected_core_worker_failed": 2,
+    "affected_core_worker_failures": "apps/core/test/studio-ledger.test.ts: two cases stop at db.transaction is not a function before any stage; the same two fail with the base service and types sources restored",
+    "environment": "Isolated PostgreSQL per test file; hawa_app runtime-role connection in one Core case; synthetic transport that throws on any provider request; real fonts and measurement helper",
+    "prior_attempts": [
+      "Initial red: all four new files failed. Three modules were missing; the Core file failed because its fixture used an unseeded client (fixture corrected to the seeded client other Studio tests use)",
+      "Core red after fixture correction: 0/3 passed; unbreakable copy reached the layout provider boundary and no contract was recorded",
+      "First policy run: digest pin test failed by design until the digest of version 2026-09-28.1 was recorded",
+      "First domain run: 8/9; the integrity test built its reordered copy with a JSON.stringify key filter that dropped nested keys (test mistake, replaced by a deep key reversal)",
+      "First Core build: PipelineV3Copy scripts are optional; the screen now uses the pipeline's own script detection"
+    ],
+    "measurements": {
+      "layout_system_prompt_chars": 9246,
+      "negative_space_statement_chars_before_after": [
+        357,
+        1004
+      ],
+      "contract_prompt_chars_three_blocks_logo_photo": 1135,
+      "feasibility_screen_eight_bilingual_blocks_ms": {
+        "first": 418.2,
+        "warm_median": 114.4,
+        "warm_max": 161.2,
+        "samples": 12,
+        "scope": "local synthetic timing, not end-to-end latency"
+      }
+    },
+    "full_suite": {
+      "command": "HAWA_TEST_WORKERS=2 pnpm test (default reporter; the JSON reporter flags were not applied through the script)",
+      "files": {
+        "failed": 8,
+        "passed": 521,
+        "skipped": 7,
+        "total": 536
+      },
+      "tests": {
+        "failed": 9,
+        "passed": 4468,
+        "skipped": 60,
+        "total": 4537
+      },
+      "failures_reproduced_on_base_source": true,
+      "base_reproduction": "8 files / 78 tests with the 13 modified files at 7b8de71e and the new sources removed: the same 9 failed, 69 passed",
+      "failed_cases": [
+        "apps/core/test/canva-planner-accounting.test.ts: migration list lacks 064",
+        "apps/core/test/startup-schema-check.test.ts: expected last upgrade 060, build carries 064",
+        "packages/db/test/schema-upgrade.test.ts: recorded migration list lacks 063/064",
+        "packages/db/test/blob-gc.test.ts: reference view coverage expects 5 columns, finds 7",
+        "apps/core/test/route-inventory.test.ts: 13 routes not in fixtures/route-inventory.txt",
+        "apps/core/test/hawa-work-desk-cv17.test.ts: apps/desk/dist not built in this worktree",
+        "packages/testkit/test/r11-release-gate.test.ts: release manifest verification",
+        "apps/core/test/studio-ledger.test.ts (2): db.transaction is not a function with a stub database"
+      ]
+    },
+    "fix_round": {
+      "base_commit": "1f2c8c4618814a45bd29bd30909433e839180276",
+      "findings_addressed": [
+        "BLOCKING: an afresh-designed revision interrupted after the contract write held for good; contract labelled inherited copy source_copy",
+        "MINOR 1: environment-dependent evidence in the contract digest; no re-admission",
+        "MINOR 2: in-flight laying_out runs with retained layout calls hold with MODEL_STAGE_REPLAY_UNSAFE after deploy (documented; not changed)",
+        "MINOR 3: copy-less callers score declared boxes while the generator is told measured lines",
+        "MINOR 4: successful directed revisions recorded no policy identity on the run",
+        "MINOR 5: blind contract write before the paid call",
+        "MINOR 6: generator statement did not say the gap spans use declared text-box heights"
+      ],
+      "confirmed_on_1f2c8c46": {
+        "inherited_copy_resume": "BRIEF_CONTRACT_CHANGED on the second resume; contract authority source_copy for inherited copy; directedFailed persisted",
+        "no_inherited_copy_resume": "MODEL_STAGE_REPLAY_UNSAFE on the second resume (the reviewer's inferred half, now executed on real PostgreSQL with retained calls)",
+        "evidence": "output/acceptance/2026-09-28-brief-contract-fix-initial-red.log"
+      },
+      "observed_on_base_7b8de71e": "Both resume cases failed the run with 'duplicate key value violates unique constraint design_studio_candidates_run_id_ordinal_key': the replayed fall-through inserted the afresh slots again. The reviewer's in-memory repository does not enforce that constraint, which is why it reached the layout call there",
+      "reachability": "Directed revisions are held by ADR-113 (NATIVE_REVISION_HANDOFF_REQUIRED) before any stage on every resume today; the resume test bypasses only that admission, as the stage-level directed fixtures do",
+      "new_or_changed_test_files": 5,
+      "initial_red": {
+        "tests": 51,
+        "passed": 43,
+        "failed": 8,
+        "failed_cases": [
+          "resume with inherited copy",
+          "resume without inherited copy",
+          "re-admission after policy/measurement change",
+          "conditional contract write",
+          "policy span semantics and version 2026-09-28.2",
+          "art gate measure with copy",
+          "domain identity digest",
+          "directed revision stages.policies"
+        ],
+        "passed_before_fix_as_guard": "holds an intact contract whose authorities differ (the previous full-digest check already held it; kept to show re-admission does not loosen identity)"
+      },
+      "after_fix": {
+        "tests": 51,
+        "passed": 51,
+        "failed": 0,
+        "skipped": 0
+      },
+      "affected_core_worker": {
+        "files": 48,
+        "passed": 530,
+        "failed": 2,
+        "failures": "apps/core/test/studio-ledger.test.ts: the same two cases that stop at db.transaction is not a function, reproduced on base in the first round"
+      },
+      "affected_packages": {
+        "files": 37,
+        "passed": 434,
+        "failed": 0
+      },
+      "reviewer_repro": "The reviewer's in-memory repro now logs 'persisted directedFailed: false contract authority: run_effective_copy' and two layout calls with the inherited copy; its last assertion (code REACHED_LAYOUTS) still fails because the generic error becomes a failed status, as the reviewer noted for every commit",
+      "prior_attempts": [
+        "First policy test run after the bump: digest pin failed by design until the 2026-09-28.2 digest was recorded",
+        "First resume test run failed on NATIVE_REVISION_HANDOFF_REQUIRED (ADR-113 admission); the fixture now bypasses only that admission",
+        "First base run stopped on a test TypeError reading an absent contract; optional chaining let the base resume outcome be recorded",
+        "First typecheck: the span test set logo undefined (logo is required); the logo now sits inside the first text span"
+      ],
+      "measurements": {
+        "negative_space_statement_chars_before_after": [
+          1004,
+          1145
+        ],
+        "layout_system_prompt_chars_before_after": [
+          9246,
+          9387
+        ],
+        "policy": {
+          "version": "2026-09-28.2",
+          "sha256": "c9d2cbc0c0d68d02468f360e38c72331b7d3707b30c855cb1c592c0f84f8eb69"
+        }
+      },
+      "full_suite": {
+        "command": "HAWA_TEST_WORKERS=2 pnpm test (default reporter)",
+        "files": {
+          "failed": 8,
+          "passed": 522,
+          "skipped": 7,
+          "total": 537
+        },
+        "tests": {
+          "failed": 9,
+          "passed": 4477,
+          "skipped": 60,
+          "total": 4546
+        },
+        "failures_same_as_first_round": true,
+        "note": "The 9 failed cases are the same 9 recorded in acceptance.full_suite.failed_cases, which reproduced with the base sources restored; they were not reproduced on base again in this round"
+      }
+    }
+  },
+  "checks": {
+    "build": "passed",
+    "source_types": "passed",
+    "script_types": "passed",
+    "strict_test_roots": 538,
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with 9 existing exceptions",
+    "security": "0 secrets; 53 justified allowlist hits"
+  },
+  "proof_scope": [
+    "one versioned negative-space policy scores QA and renders the v3 generator statement",
+    "policy digest pinned to its version; passing interval derived from the score and swept",
+    "probe values reproduced; no accept or reject decision changed",
+    "every negative-space result records policy id, version, digest and measure",
+    "contract layers with one authority per fact; model proposals refused outside proposal layers",
+    "model readingOrder recorded as a proposal; source-copy order protected",
+    "relationship vocabulary and renderer element IDs independent of model role labels",
+    "non-blocking disagreements recorded with their resolution",
+    "unbreakable copy at the admitted minimum in every admitted face stops before layout with only authorized choices",
+    "unmeasurable faces produce unknown, never a conflict",
+    "contract recorded on the run before the layout boundary through a runtime-role connection",
+    "intact recorded contract reused; changed contract holds before any provider",
+    "validator admitted-face set shared with the screen",
+    "contract copy authority taken from the copy the run lays out; inherited copy after a failed directed edit recorded as run-effective and kept for later stages",
+    "mid-stage contract write leaves out directedFailed; a resumed afresh revision replays its retained edit and layout calls with no transport, same copy and same contract (real PostgreSQL, synthetic transport)",
+    "afresh candidate slots reserved once across resumes",
+    "identity digest separates run authorities from policy and measurement evidence; same identity re-admitted and recorded, different identity held",
+    "contract write conditional on laying_out; a run moved by another process is not overwritten and no layout call is made",
+    "every run reaching laying_out records stages.policies, successful directed revisions included",
+    "policy 2026-09-28.2 states the gap and bottom-void span semantics; the generator statement says text spans use the declared box",
+    "art gate scores measured lines when the copy is supplied"
+  ],
+  "not_executed": [
+    "paid model or image calls; quality effect of the unified statement or the contract prompt",
+    "equal-budget human comparison",
+    "aggregate area capacity, hierarchy feasibility or client-rule enforcement screens",
+    "edit contracts for directed or native amendments",
+    "clarification route for unknowns",
+    "directed resume on a production path: ADR-113 holds directed revisions before any stage; the test bypasses that admission",
+    "operator re-admission of a contract whose identity changed (none exists; such a run needs review)",
+    "check of production runs sitting in laying_out with retained layout calls at deploy time",
+    "native Canva operations",
+    "deployment, production migration or full release gate",
+    "OS process-kill drill"
+  ],
+  "next": [
+    "before deploy: confirm through the Core API that no Studio run sits in laying_out with a retained layout call, or accept that such runs hold with MODEL_STAGE_REPLAY_UNSAFE (no repeat charge)",
+    "aggregate copy capacity screen using per-token advances",
+    "edit contract (target, change, protected properties, relations, allowed reflow) for native amendments",
+    "align the generator margin statement with the validator from one definition",
+    "decide whether photographs and artwork belong in the negative-space measure; re-derive the band from the exemplars under a new version",
+    "equal-budget comparison of the contract prompt against the previous prompt"
+  ]
+}

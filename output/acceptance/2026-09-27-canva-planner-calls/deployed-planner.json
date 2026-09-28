@@ -1,0 +1,127 @@
+{
+  "completed": true,
+  "checkedAt": "2026-09-27T13:20:02.253Z",
+  "buildCommit": "6c1f8b5528b39a3880bf50b424ad7caa3f6f8f8e",
+  "checks": [
+    {
+      "name": "exact candidate is deployed",
+      "passed": true
+    },
+    {
+      "name": "migration056 is installed",
+      "passed": true
+    },
+    {
+      "name": "deployed planner retains an actual fake reply with missing usage",
+      "passed": true
+    },
+    {
+      "name": "one actual synthetic model request was received",
+      "passed": true
+    },
+    {
+      "name": "resume preserves the accounting hold",
+      "passed": true
+    },
+    {
+      "name": "strict typed layout survived the provider response",
+      "passed": true
+    },
+    {
+      "name": "uncertain planner cost is held and named correction is available",
+      "passed": true
+    },
+    {
+      "name": "shared administrator key cannot attest",
+      "passed": true
+    },
+    {
+      "name": "stale snapshot is refused",
+      "passed": true
+    },
+    {
+      "name": "cookie mutation still refuses a different browser port",
+      "passed": true
+    },
+    {
+      "name": "browser displays original uncertain outcome and unknown cost",
+      "passed": true
+    },
+    {
+      "name": "browser explains retained-layout recovery",
+      "passed": true
+    },
+    {
+      "name": "named browser mutation succeeds with cookie CSRF",
+      "passed": true
+    },
+    {
+      "name": "browser shows attributed cost history",
+      "passed": true
+    },
+    {
+      "name": "browser has no execution errors",
+      "passed": true
+    },
+    {
+      "name": "credentials stay out of localStorage",
+      "passed": true
+    },
+    {
+      "name": "browser reload preserves history",
+      "passed": true
+    },
+    {
+      "name": "browser closes call detail",
+      "passed": true
+    },
+    {
+      "name": "cost evidence releases the unused reservation",
+      "passed": true
+    },
+    {
+      "name": "original call remains byte-for-byte unchanged",
+      "passed": true
+    },
+    {
+      "name": "browser dispatched an identifiable saved action",
+      "passed": true
+    },
+    {
+      "name": "fresh Core reconstructs and imports the retained layout",
+      "passed": true
+    },
+    {
+      "name": "recovery saves a real editable source hash",
+      "passed": true
+    },
+    {
+      "name": "another resume reuses the same plan",
+      "passed": true
+    },
+    {
+      "name": "recovery retains exactly one Canva import operation",
+      "passed": true
+    },
+    {
+      "name": "source hash is unchanged after repeat resume",
+      "passed": true
+    },
+    {
+      "name": "same action replays after actual Core restart",
+      "passed": true
+    },
+    {
+      "name": "restart leaves one accounting revision",
+      "passed": true
+    },
+    {
+      "name": "accounting and replay send zero fake model requests",
+      "passed": true
+    }
+  ],
+  "revokedSyntheticAdministrator": true,
+  "scope": "Disposable hawa-chaos synthetic source/provider/staff only",
+  "realProviderCalls": false,
+  "productionChanged": false
+}

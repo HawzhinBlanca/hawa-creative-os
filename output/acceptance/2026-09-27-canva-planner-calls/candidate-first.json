@@ -1,0 +1,437 @@
+{
+  "finishedAt": "2026-09-27T13:06:57.011Z",
+  "telegramPoller": "worker",
+  "deployment": {
+    "commit": "bedbb50e8e8ae7bfea08bad0338e42d4f908126a",
+    "sourceChanges": {},
+    "containers": {
+      "postgres": {
+        "imageId": "sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+        "buildCommit": "",
+        "networks": [
+          "hawa-chaos_chaos",
+          "hawa-chaos_chaos-edge"
+        ],
+        "createdAt": "2026-09-27T13:05:59.911603219Z"
+      },
+      "restate": {
+        "imageId": "sha256:5cef318c0fb6ae2763316ea628b395bb36d2ee0be7690897acd54a11c353a1c9",
+        "buildCommit": "d5425f5bfae4024f4d26bab447bc8e6c6db08bfa",
+        "networks": [
+          "hawa-chaos_chaos",
+          "hawa-chaos_chaos-edge"
+        ],
+        "createdAt": "2026-09-27T13:05:59.905871553Z"
+      },
+      "core": {
+        "imageId": "sha256:7ba376af5283d72501fc9f5d4032bdcd466bd677943c69e41469ebdd3726622c",
+        "buildCommit": "bedbb50e8e8ae7bfea08bad0338e42d4f908126a",
+        "networks": [
+          "hawa-chaos_chaos",
+          "hawa-chaos_parser"
+        ],
+        "createdAt": "2026-09-27T13:06:03.509089054Z"
+      },
+      "worker-blue": {
+        "imageId": "sha256:196dd943a50e264c739ccfa5338ba560c89bb88450edd376c961e84050a99cd0",
+        "buildCommit": "bedbb50e8e8ae7bfea08bad0338e42d4f908126a",
+        "networks": [
+          "hawa-chaos_chaos"
+        ],
+        "createdAt": "2026-09-27T13:06:03.311583554Z"
+      },
+      "fakes": {
+        "imageId": "sha256:956d34709da679f5b7c9d498031cd1a85483a149751b16396ef59d7f32048ef7",
+        "buildCommit": "",
+        "networks": [
+          "hawa-chaos_chaos",
+          "hawa-chaos_chaos-edge"
+        ],
+        "createdAt": "2026-09-27T13:05:59.906363386Z"
+      },
+      "docling": {
+        "imageId": "sha256:b6c77ce32e5fb7bc8773c0833c7d66ad2c0745e96ce107602bce84343c8a4b1a",
+        "buildCommit": "",
+        "networks": [
+          "hawa-chaos_parser"
+        ],
+        "createdAt": "2026-09-27T13:06:09.956206918Z"
+      },
+      "desk": {
+        "imageId": "sha256:6e44c032a43b6e6bad9c6a39e9617bf73f933a3b02407c79c5c6db74ef5bc869",
+        "buildCommit": "bedbb50e8e8ae7bfea08bad0338e42d4f908126a",
+        "networks": [
+          "hawa-chaos_chaos"
+        ],
+        "createdAt": "2026-09-27T13:06:09.95667571Z"
+      },
+      "nginx": {
+        "imageId": "sha256:b947b2630c97622793113555e13332eec85bdc7a0ac6ab697159af78942bb856",
+        "buildCommit": "",
+        "networks": [
+          "hawa-chaos_chaos",
+          "hawa-chaos_chaos-edge"
+        ],
+        "createdAt": "2026-09-27T13:06:10.081778793Z"
+      }
+    },
+    "networks": [
+      "hawa-chaos_chaos|true",
+      "hawa-chaos_parser|true"
+    ],
+    "externalAdapters": "synthetic fakes",
+    "parser": "real pinned offline Docling",
+    "productionChanged": false
+  },
+  "totalMs": 92200,
+  "memoryMeasurement": "start/end and scenario samples; not a continuous peak measurement",
+  "peakMemoryMiB": {
+    "hawa-chaos-nginx-1": 8,
+    "hawa-chaos-desk-1": 7,
+    "hawa-chaos-docling-1": 52,
+    "hawa-chaos-core-1": 75,
+    "hawa-chaos-worker-blue-1": 68,
+    "hawa-chaos-postgres-1": 69,
+    "hawa-chaos-fakes-1": 79,
+    "hawa-chaos-restate-1": 347
+  },
+  "peakTotalMiB": 704,
+  "uncoveredModelCalls": [
+    "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent ",
+    "gemini unmatched:/v1beta/models/gemini-3.8-flash:generateContent "
+  ],
+  "scenarios": [
+    {
+      "name": "R1.S3.SOURCES",
+      "what": "full-app PDF source to voice revision and simulated approved delivery",
+      "ms": 28862,
+      "invariants": [
+        {
+          "name": "every candidate container was created after this rehearsal started",
+          "ok": true,
+          "detail": "rehearsal started 2026-09-27T13:05:25.038Z"
+        },
+        {
+          "name": "Core, worker and Desk image labels match the candidate checkout",
+          "ok": true,
+          "detail": "build bedbb50e8e8ae7bfea08bad0338e42d4f908126a; changed source files=0"
+        },
+        {
+          "name": "core image excludes private test-run files",
+          "ok": true,
+          "detail": "privateRunDirectory=false"
+        },
+        {
+          "name": "worker-blue image excludes private test-run files",
+          "ok": true,
+          "detail": "privateRunDirectory=false"
+        },
+        {
+          "name": "provider callers and the real parser have only internal networks",
+          "ok": true,
+          "detail": "hawa-chaos_chaos|true, hawa-chaos_parser|true"
+        },
+        {
+          "name": "production Desk HTML is served through production nginx",
+          "ok": true,
+          "detail": "HTTP 200"
+        },
+        {
+          "name": "the built Desk entry asset is present",
+          "ok": true,
+          "detail": "HTTP 200"
+        },
+        {
+          "name": "Desk session is persisted by the running Core",
+          "ok": true,
+          "detail": "HTTP 201; durable=true"
+        },
+        {
+          "name": "PDF source review creates no premature task",
+          "ok": true,
+          "detail": "source 90514360504"
+        },
+        {
+          "name": "application/pdf original crosses nginx byte-identically",
+          "ok": true,
+          "detail": "HTTP 200; SHA-256 adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617"
+        },
+        {
+          "name": "real local parser preserves both PDF pages and numeric copy",
+          "ok": true,
+          "detail": "HTTP 200; source adb37ecccecb0812770ecb01076992c4cb8550b13c4cd53de9e6349b54d04617"
+        },
+        {
+          "name": "duplicate source confirmation produces one task through Restate",
+          "ok": true,
+          "detail": "replay HTTP 202"
+        },
+        {
+          "name": "review wait survives Restate and worker process restart",
+          "ok": true,
+          "detail": "request 4c92762c-6f92-4337-a1ef-2d73a6d17d09; rev 2"
+        },
+        {
+          "name": "audio/ogg original crosses nginx byte-identically",
+          "ok": true,
+          "detail": "HTTP 200; SHA-256 e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2"
+        },
+        {
+          "name": "unapproved voice model remains manual with honest timing and billing",
+          "ok": true,
+          "detail": "{\"clientId\":\"c1000000-0000-4000-8000-000000000002\",\"updateId\":90514360506,\"sourceSha256\":\"e253ebb24fb8c021fba0970701b89641f9ebdcd078374f3d2863ec8b9fa1eff2\",\"audio\":{\"version\":\"ogg-opus-v1\",\"channels\":1,\"mediaType\":\"audio/ogg\",\"sampleRate\":48000,\"encodedSamples\":48960,\"durationSeconds\":1},\"state\":\"manual\",\"message\":\"Client privacy does not authorize cloud transcription. The original is retained for manual copy review; no audio was sent to a model.\",\"transcript\":null,\"estimatedUsd\":null,\"actualUsd\":null}"
+        },
+        {
+          "name": "voice source does not create a child before exact-copy review",
+          "ok": true,
+          "detail": "voice source 90514360506"
+        },
+        {
+          "name": "revised simulated Canva export passes configured QA",
+          "ok": true,
+          "detail": "QC passed"
+        },
+        {
+          "name": "PDF new request and voice revision reach one logical simulated delivery",
+          "ok": true,
+          "detail": "{\"tasks\":[{\"id\":\"4b5d602f-6a33-4ab3-9dc8-5e20140dc3b2\",\"state\":\"revision_requested\",\"version\":\"4\"},{\"id\":\"f47595bf-b751-4a4e-a650-f064c18edbd0\",\"state\":\"complete\",\"version\":\"8\"}],\"delivered\":{\"request_id\":\"4c92762c-6f92-4337-a1ef-2d73a6d17d09\",\"current_task_id\":\"f47595bf-b751-4a4e-a650-f064c18edbd0\",\"rev\":\"8\",\"stage\":\"delivered\"}}"
+        },
+        {
+          "name": "retained confirmations preserve exact source copy",
+          "ok": true,
+          "detail": "two immutable confirmations"
+        },
+        {
+          "name": "the two source originals were downloaded once each",
+          "ok": true,
+          "detail": "[\"candidate-pdf-9300001\",\"candidate-voice-9300001\"]"
+        },
+        {
+          "name": "manual-only voice caused no paid transcription attempt",
+          "ok": true,
+          "detail": "attempts=0"
+        },
+        {
+          "name": "bilingual Desk intake replay returns one task",
+          "ok": true,
+          "detail": "task ce966d0b-1191-4768-9cba-d57cd410ddd7"
+        },
+        {
+          "name": "saved bilingual Desk copy imports through the explicit generation action",
+          "ok": true,
+          "detail": "status=retrieved; replay=retrieved"
+        },
+        {
+          "name": "the saved plan preserves both exact copy blocks and separate instructions",
+          "ok": true,
+          "detail": "plans=1; source=70e7556ae506350159c4fd95ae1884cffcf2ab8dda5d5d55016f0d6ce0f940ca"
+        },
+        {
+          "name": "Desk capture records a review from retained PNG and checked live text",
+          "ok": true,
+          "detail": "Preview and checked source recorded for human review. Copy and font checks passed; inspect the design before approving."
+        },
+        {
+          "name": "capture replay preserves one revision without inventing native editability",
+          "ok": true,
+          "detail": "revisions=1"
+        },
+        {
+          "name": "manual review reaches one simulated approval and completed archive publication",
+          "ok": true,
+          "detail": "{\"approvals\":\"1\",\"publications\":\"1\"}"
+        },
+        {
+          "name": "cancel commits terminal state and replays the same durable receipt",
+          "ok": true,
+          "detail": "task fda6f804-c66d-400d-ac3c-a08da8f26d89"
+        },
+        {
+          "name": "cancelled task refuses deployed studio admission",
+          "ok": true,
+          "detail": "HTTP 409"
+        },
+        {
+          "name": "cancelled task refuses deployed generate admission",
+          "ok": true,
+          "detail": "HTTP 409"
+        },
+        {
+          "name": "cancelled task refuses deployed design admission",
+          "ok": true,
+          "detail": "HTTP 409"
+        },
+        {
+          "name": "closed-task refusals admit no run, plan or remote operation",
+          "ok": true,
+          "detail": "{\"runs\":\"0\",\"plans\":\"0\",\"operations\":\"0\"}"
+        },
+        {
+          "name": "synthetic blank client remains usable in the Desk directory",
+          "ok": true,
+          "detail": "client c906b95f-4b60-45eb-8015-4e39eb73191a"
+        },
+        {
+          "name": "blank design is created through the deployed Canva adapter",
+          "ok": true,
+          "detail": "task 782fee73-f4e1-4382-a9b7-65ecbc67c967; design DAchaosmuju0qm7000016"
+        },
+        {
+          "name": "blank design reaches checked review using DNA and no invented imported source",
+          "ok": true,
+          "detail": "Preview and checked source recorded for human review. Copy and font checks passed; inspect the design before approving."
+        },
+        {
+          "name": "blank capture completes simulated publication with one explicit manual edit and no import",
+          "ok": true,
+          "detail": "task 782fee73-f4e1-4382-a9b7-65ecbc67c967"
+        },
+        {
+          "name": "evaluation uncertainty produces a stopped saved report",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "uncertain receipt keeps its original unknown cost",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "unsettled evaluation blocks fresh actions",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "shared administrator credentials cannot settle",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "named session reads settlement capability",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "unknown final cost cannot close the hold",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "changed ledger snapshot refuses settlement",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "named settlement records its actor and separate reported cost",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "fresh Core replays one identical settlement",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "closure preserves original stopped report and uncertain receipt",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "old run action returns closure without a model call",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "changed settlement intent conflicts",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "explicit fresh evaluation admits a separate provider request",
+          "ok": true,
+          "detail": "Two synthetic provider calls total; no call on settlement/replay"
+        },
+        {
+          "name": "one immutable settlement survives restart",
+          "ok": true,
+          "detail": "Synthetic provider and staff evidence"
+        },
+        {
+          "name": "deployed Studio recovery creates a manual fixture task",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "deployed Studio admits a run without transport",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "deployed abandoned run cannot bypass unresolved spend",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "deployed original Studio cost remains unknown",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "shared keys cannot settle Studio calls",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "named Studio recovery authority is current",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "Studio refuses unknown attested cost",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "Studio refuses changed evidence snapshots",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "Studio stores named settlement with separate cost",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "Studio settlement replays through fresh Core",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "Studio settlement preserves original uncertainty and stopped run",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "explicit new Studio action admits after settlement",
+          "ok": true,
+          "detail": "Synthetic Studio ledger and named administrator evidence"
+        },
+        {
+          "name": "Studio settlement and replay make zero model requests",
+          "ok": true,
+          "detail": "Ledger admissions are synthetic; no model transport was requested by the recovery proof."
+        }
+      ],
+      "events": [
+        "PDF 90514360504 → request 4c92762c-6f92-4337-a1ef-2d73a6d17d09 → task 4b5d602f-6a33-4ab3-9dc8-5e20140dc3b2",
+        "Restate and worker SIGKILL/restart at the PDF review waitpoint",
+        "voice 90514360506 → reviewed revision task f47595bf-b751-4a4e-a650-f064c18edbd0",
+        "Desk bilingual request ce966d0b-1191-4768-9cba-d57cd410ddd7 → saved plan e88bafdc-ff0a-4f6c-ad0c-afafc5f5a20f → simulated Canva import → captured review → simulated approval/publication",
+        "Synthetic cancelled task fda6f804-c66d-400d-ac3c-a08da8f26d89: all three deployed generation entry points refused",
+        "Blank design 782fee73-f4e1-4382-a9b7-65ecbc67c967 → explicit simulated manual edit → DNA-checked review → simulated approval/publication; real native editing remains unverified",
+        "Held fixture evaluation → synthetic named settlement → Core restart → identical receipt → explicitly new evaluation. No live provider or human evidence.",
+        "Studio 64d26ec9-3cc6-4146-b74e-97842e41bfc1: synthetic unresolved admission → abandoned run → named settlement → Core restart → identical receipt → explicit new run. No live provider/human evidence."
+      ]
+    }
+  ]
+}

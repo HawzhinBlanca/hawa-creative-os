@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "requirements": [
+    "FR-059",
+    "FR-060",
+    "FR-065",
+    "FR-067",
+    "FR-079",
+    "NFR-001"
+  ],
+  "adr": "adrs/084_durable_evaluation_calls.md",
+  "migration": "047_durable_evaluation_calls",
+  "status": "DURABLE_FIXTURE_REPLAY_PROCESS_KILLS_AND_PACKAGED_CANDIDATE_VERIFIED",
+  "captureBaseCommit": "410e6bf94a3a813d5e325dfee94e730b0c49d607",
+  "captureSourceTreeClean": false,
+  "sourceHashes": {
+    "packages/db/migrations/047_durable_evaluation_calls.sql": "3171cbc8708bcfca2052b0ce85e3108f361726603918a2d608077c285a61b83a",
+    "db/schema.sql": "d230c2c3a471622505a1edf489f340d382ea187a30c3ff600f6c66498a4e46fe",
+    "apps/core/src/services/durable-evaluations.ts": "43ef801c29cb27fca45451371ef967b3eda16a3011c72cbede1a4d9c8e7ea7fb",
+    "apps/core/src/routes/evals.routes.ts": "8563bcf8dfbf293503879e7e736a0613fb3e96f1e704062623d02774e7fde0e1",
+    "apps/core/src/app.ts": "b98381023e232ea0755433ffcf2ccb62c029f97c597f42433389704fce3fb448",
+    "apps/core/src/core-context.ts": "b1eef06dc4b20dc7705f9346d054a8fdbdc8be26c4dd75cf5721e62f7813a570",
+    "apps/core/src/core-helpers.ts": "a65436145715233f670bcd5da5358ac8fedd60acd4886229832f6b28e8e12ad1",
+    "packages/evals/src/fixture-replay.ts": "a7e504c0018f855daa6183bbff720dba1e6983f950c45ddaec52c2daf7343c4a",
+    "packages/evals/src/index.ts": "9f5fbd6f234d4811d0bac9ec716d05dc225be17f05a23448434b6a446baec7c0",
+    "apps/desk/src/services/evaluation-action.ts": "b40b7dcbb28db59a344fe37069b697e2b9b801fae5db1b35b5d79569d0ec9b92",
+    "apps/desk/src/api/client.ts": "2dc616b91c157e0561f332bb7c2f0da200ad6d0e76a011d921515541a199df4e",
+    "apps/desk/src/screens/EvalScreen.tsx": "a4a4a33e22246cecf232e77cdf592b159086ade4bf69b54ecadca1183eaaa624",
+    "api/openapi.yaml": "dd464f7b68faf3c159c554cfc4f19b1ce894819635a5c08ea7a5e2612223c5ab",
+    "apps/core/test/durable-evaluations.test.ts": "0c658d4222e298d8e4d9cb75c3dfe52879857f9aa96541064ba60c2de7cfc7e6",
+    "apps/core/test/evaluation-kill-recovery.test.ts": "20fc82099c67f53157c585881ee2a3e2d87fe217023ecd54b8806e9261ad86e9",
+    "apps/core/test/fixtures/evaluation-kill-child.ts": "f4ca80c7f3c971f98e01c7957b404ffb15055b424a1c3e83fc626d06e66b741c",
+    "packages/evals/test/fixture-replay.test.ts": "684fbb201f25b60fbc5b6510a67ffa40a6fbc47e4ff595e50ce9170446fe6ecc",
+    "apps/desk/test/evaluation-action.test.ts": "417c8766b3b2deff8efae32233e7525ffce072c1ea82f3b50feedae1ca04ea06",
+    "apps/desk/test/desk-auth.test.ts": "07e8ccf808de4d75aec4a4e6d88ee5ae4a5d7255e328346d0c33df358808e030",
+    "infra/docker/Dockerfile.core": "32d55b63d9092303d523dbe5181e3791b052a21c4b0b8e5ea77da580a268b897",
+    "db/rls.sql": "5ef9cad37bf1876e44823f03823e8a2ccc9aa1f736c3260d1250ed90ae1c1eda",
+    "apps/core/test/startup-schema-check.test.ts": "f650d0575f05ceca1293c5d1dc841e330698cf7a928bca1151d71aa4feb7d812",
+    "packages/db/test/schema-upgrade.test.ts": "51ae492eee803ef03c3eff923fbabf09fe1b6ffe0e1ca6cbe0b043366babf1df",
+    "packages/db/test/db.test.ts": "26981607df4b6210e04a8ffbb7b29f3769762f6238f4f63a1ab2b29c8652b617",
+    "packages/db/test/backup-restore.test.ts": "bb14c348771729fdbcb88126fcd166e5e0c5614cc64088ddb47ad50ab0b206c7",
+    "packages/testkit/test/app-decomposition.test.ts": "e797f6ad57dfa52dc0e2c8165025de6e60833a3b4208506052c92313b4b05154"
+  },
+  "verification": {
+    "testRuns": {
+      "first-tests": {
+        "files": 5,
+        "passed": 55,
+        "failed": 0,
+        "skipped": 0,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/first-tests.json"
+      },
+      "kill-tests": {
+        "files": 2,
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/kill-tests.json"
+      },
+      "final-tests": {
+        "files": 23,
+        "passed": 181,
+        "failed": 0,
+        "skipped": 0,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/final-tests.json"
+      },
+      "current-tests": {
+        "files": 4,
+        "passed": 14,
+        "failed": 0,
+        "skipped": 0,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/current-tests.json"
+      },
+      "full-tests": {
+        "files": 470,
+        "passed": 3739,
+        "failed": 6,
+        "skipped": 59,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/full-tests.json"
+      },
+      "qualification-followup": {
+        "files": 8,
+        "passed": 33,
+        "failed": 0,
+        "skipped": 0,
+        "receipt": "output/acceptance/2026-09-27-durable-evaluations/qualification-followup.json"
+      }
+    },
+    "typesLintDeskBuild": "output/acceptance/2026-09-27-durable-evaluations/types-lint-desk-build.log",
+    "processKill": {
+      "boundaries": [
+        "after provider reads request, before response",
+        "after first reply is committed, before the next admission"
+      ],
+      "actualSigkills": 2,
+      "providerRequestsPerScenario": 1,
+      "unknownOutcomeReplayProviderCalls": 0,
+      "recordedOutcomeReplay": "Saved first call is reused; later never-admitted calls proceed.",
+      "runtimeRls": true,
+      "provider": "localhost synthetic HTTP endpoint"
+    },
+    "fullRegression": "Final full suite passes 3745 tests with 59 skipped; first six failures and their correction retained.",
+    "candidateDeployment": "Final81ea4c3 candidate passes36 workflow invariants and14 evaluation controls across one Core restart and exactly one synthetic provider call. Runtime source changes empty; image identities match. Production unchanged.",
+    "developmentCorrections": [
+      "Initial typecheck found two missing required safeAction fields; corrected before final typecheck.",
+      "Recovery now reads existing call evidence before mutable provider resolution, including when that provider is subsequently unavailable.",
+      "Provider/model display uses observed receipt facts; a pending call stays unknown.",
+      "Replay identity also binds the fixed visual image hash.",
+      "The initial negative image probe used the wrong fake-ledger URL; corrected to /__fakes/models/ledger before measuring zero provider calls. No runtime change was needed for that probe."
+    ],
+    "finalFullRegression": {
+      "sourceCommit": "34d10d5ca1ed331c661c5a801b5aeba969e2b6e1",
+      "files": 470,
+      "passed": 3745,
+      "failed": 0,
+      "skipped": 59,
+      "receipt": "output/acceptance/2026-09-27-durable-evaluations/full-tests-final.json",
+      "scope": "All runtime logic. A subsequent CSS-only correction pins the evaluation panel beside its sidebar; Desk build passes separately."
+    },
+    "finalCandidate": {
+      "sourceCommit": "81ea4c3a51e40d62ed88f13e901102a4772fba06",
+      "workflowInvariants": 36,
+      "checks": 14,
+      "allPassed": true,
+      "providerCalls": 1,
+      "coreRestarts": 1,
+      "receipt": "output/acceptance/2026-09-27-durable-evaluations/candidate-evaluation.json",
+      "scope": "Final packaged Core, Desk and worker, including the CSS-only receipt layout correction; external providers/identities are synthetic."
+    },
+    "uiLayoutFollowup": {
+      "change": "Pin evaluation panel to grid column2/row1 so the full-width call receipt section cannot push it into the narrow sidebar column.",
+      "verification": "output/acceptance/2026-09-27-durable-evaluations/desk-layout-build.log"
+    }
+  },
+  "limits": [
+    "No live provider acceptance/billing reconciliation or operator settlement API",
+    "Fixture diagnostics only; admissionEligible remains false",
+    "No general client prompt or response persistence authorization",
+    "No production change, real approval or message",
+    "Independent-host recovery, human visual quality and real end-to-end pilot remain open"
+  ],
+  "artifacts": {
+    "output/acceptance/2026-09-27-durable-evaluations/build.log": {
+      "bytes": 6,
+      "sha256": "5ac71a99decf5b92dbfe798066cbe8ea317395f8f764f5a8879fd3511ca99454"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-check-final-before-layout.log": {
+      "bytes": 157,
+      "sha256": "c5fe748a4859dc038f1866533aeb1d4e9be90573474e914231c1f7856f7aa74b"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-check-final.log": {
+      "bytes": 157,
+      "sha256": "8678b2ce85b6506364e2396cb7894726e6c0bb3b285d6b32c693cbd3933a2079"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-evaluation-before-layout.json": {
+      "bytes": 2167,
+      "sha256": "ab75bcf4cb1e13833bf80ab73215ac1605e0a33271f63ccc0329ed4e09a007b0"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-evaluation.json": {
+      "bytes": 2167,
+      "sha256": "f53332fdef5c971ac3fde40dc2e786a0baf950c07b362f85dac8a621fc855f39"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-first-check.log": {
+      "bytes": 664,
+      "sha256": "e2502f08c32d53c05c12db8aaf62759c2f54bf62ab0a9e3e8a75b30da36a5042"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-first-rehearsal.json": {
+      "bytes": 11968,
+      "sha256": "f97446e755ac8a402610ecebe8ce2f1ab2c1aa75467183addd94fe3e118a3757"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-rehearsal-before-layout.json": {
+      "bytes": 11965,
+      "sha256": "a85c6844631378969b4a7576faa338a79d7e2be9b73b49128293958fc4b23097"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/candidate-rehearsal.json": {
+      "bytes": 11966,
+      "sha256": "ff4783a6b63303bdb1e74a170046bce1ccbc42d80b3561dc668a99f47d857984"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/check-candidate.mts": {
+      "bytes": 5038,
+      "sha256": "09295ff4cf277e79fda3f720f89465bbff670eb8cc28cc4b7a360a84434b6257"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/check-image-negative.mts": {
+      "bytes": 1974,
+      "sha256": "fd632b6534bb26063186d25d52333451ce4e5c5cd2edd1fee1eb81b1ac4aec27"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/current-tests.json": {
+      "bytes": 5958,
+      "sha256": "a2820e9537ba35f3e1bee53feb1850f8ebe4b87e11924b47d46ed8274aa00495"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/current-tests.log": {
+      "bytes": 228,
+      "sha256": "b122d0bb513b7250acc0b983badb0d4d750173ee98ed7cfa600d8079031f223d"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/desk-layout-build.log": {
+      "bytes": 745,
+      "sha256": "5de6cb8b8c43534d94a4c0008c34f05a8dcc3924bc517d79b389c410dc38fd2a"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/final-tests.json": {
+      "bytes": 72914,
+      "sha256": "73d25060f7b3d7817ae68ea7293f031e15fb9fc7c37042fbffc56cc81fd2d8ef"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/final-tests.log": {
+      "bytes": 1193,
+      "sha256": "986a545e23a58f43af55833f69938428fb57c11129e2d0614b077562e101435d"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/first-tests.json": {
+      "bytes": 20574,
+      "sha256": "80f3479354d56ad990da3f3efd5ffc5916c5a4cb0f9f14b8372dd6bb1f54d61f"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/first-tests.log": {
+      "bytes": 1193,
+      "sha256": "83de7c31a993a37ee06c606dcf3a840fab58974546447f5471a9c9046feb01df"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/full-tests-final.json": {
+      "bytes": 1562303,
+      "sha256": "619ec126aa9fda957633504292785005f41436fd17cfeb39f9d5e236f903efe8"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/full-tests-final.log": {
+      "bytes": 132061,
+      "sha256": "f1fb5bbba5ad201b98e3e660002e1ae51a86f08202280b439ade2aa4815cd17d"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/full-tests.json": {
+      "bytes": 1566754,
+      "sha256": "6502fa52b4bf491ac250a31e66f1d0478d15b75b38fc8c85666c5e52a6bfd5e1"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/full-tests.log": {
+      "bytes": 131980,
+      "sha256": "7a4938236a198c61c9db522305f3bca87bf575b6b33f5bacee743f52f04717fe"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/image-negative.json": {
+      "bytes": 599,
+      "sha256": "33b6c597fb0a8dd41863728ffccc32a48af1d6c1ba6e3ce414b50cbf98e53a28"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/kill-tests.json": {
+      "bytes": 1713,
+      "sha256": "39772c73b3a79db79e408b3956b98d323ed71da96d7a85d2adabe8c586b04e54"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/kill-tests.log": {
+      "bytes": 225,
+      "sha256": "dc725ca63dfe32704827b785195191253ed42007e80cdfb8152ad53c5edabbbe"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/qualification-followup.json": {
+      "bytes": 14112,
+      "sha256": "32ffcaf336c1d48485960ab0ee37b3ab13d98d93391f584abb9161027bc712c7"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/qualification-followup.log": {
+      "bytes": 1204,
+      "sha256": "d3a96a4468c280642fac1b261ba28a48f52749be481792b9512c233cf52e81ec"
+    },
+    "output/acceptance/2026-09-27-durable-evaluations/types-lint-desk-build.log": {
+      "bytes": 1177,
+      "sha256": "5548afe53969f9b76c053daf5ccd814f7412afc68d04c470efe7decbe7d884ea"
+    }
+  }
+}

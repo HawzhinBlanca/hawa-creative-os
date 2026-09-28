@@ -1,5 +1,10 @@
 # Findings ledger — 2026-09-27, baseline `59150ca`
 
+> **History only (2026-09-28, ADR-127).** A ledger of `studio-v2` at `59150ca`, kept as history on
+> `codex/research-grade-design-system`, the mainline since the owner's decision of 2026-09-28, where
+> studio-v2's RequestLifecycle (wave 7) was superseded by the mainline's own. Items are not
+> re-verified against the mainline.
+
 This ledger re-verifies every item in `output/audits/2026-09-21-engineering-rank-audit/FINDINGS.md` against `59150ca`, and adds new findings.
 
 **Status values:** FIXED · PARTIAL (partially fixed) · OPEN · N/D (cannot determine).

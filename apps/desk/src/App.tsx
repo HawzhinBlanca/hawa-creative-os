@@ -1,5 +1,6 @@
+import { deskReviewTarget } from '@hawa/contracts/desk-navigation';
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sidebar, type ScreenId } from './components/Sidebar.js';
 import { Header } from './components/Header.js';
 import { WorkScreen } from './screens/WorkScreen.js';
@@ -18,6 +19,7 @@ import { submitManualTask, getPendingManualDraft } from './services/manualTaskIn
 import { useI18n } from './services/i18n.js';
 import { SignIn } from './components/SignIn.js';
 import { useSessionState, useSessionUser } from './DeskProviders.js';
+import { readClientDirectory } from './services/clientDirectory.js';
 import { queryKeys } from './services/queryClient.js';
 
 export const App: React.FC = () => {
@@ -42,8 +44,14 @@ export const App: React.FC = () => {
     return 'work';
   };
 
+  const [linkedReview, setLinkedReview] = useState(() => deskReviewTarget(window.location.hash));
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(getInitialScreen);
   const [appToast, setAppToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!appToast) return;
+    const timer = window.setTimeout(() => setAppToast(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [appToast]);
   const [showTour, setShowTour] = useState<boolean>(false);
   const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
 
@@ -90,12 +98,15 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const handleLocationChange = () => {
+      const target = deskReviewTarget(window.location.hash);
+      setLinkedReview(target);
+      if (target) { setCurrentScreen('work'); return; }
       const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0];
       if (hash === 'adapters') {
         setCurrentScreen('settings');
         return;
       }
-      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval', 'comparison'];
+      const validScreens: ScreenId[] = ['work', 'clients', 'inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval', 'comparison'];
       if (validScreens.includes(hash as ScreenId)) {
         setCurrentScreen(hash as ScreenId);
       }
@@ -103,7 +114,7 @@ export const App: React.FC = () => {
 
     const handleCustomNav = (e: any) => {
       const targetScreen = e.detail;
-      const validScreens: ScreenId[] = ['inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval', 'comparison'];
+      const validScreens: ScreenId[] = ['work', 'clients', 'inbox', 'review', 'dna', 'library', 'settings', 'ops', 'eval', 'comparison'];
       if (targetScreen && validScreens.includes(targetScreen as ScreenId)) {
         window.location.hash = `#/${targetScreen}`;
         setCurrentScreen(targetScreen as ScreenId);
@@ -122,6 +133,7 @@ export const App: React.FC = () => {
 
   const handleNavigate = (screen: ScreenId) => {
     window.location.hash = `#/${screen}`;
+    setLinkedReview(undefined);
     setCurrentScreen(screen);
   };
 
@@ -134,14 +146,16 @@ export const App: React.FC = () => {
   const [taskReferenceAssets, setTaskReferenceAssets] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
-  const [selectedClientId, setSelectedClientId] = useState('c1000000-0000-4000-8000-000000000002');
+  const [selectedClientId, setSelectedClientId] = useState('');
   const taskTitleInputRef = useRef<HTMLInputElement>(null);
 
-  const availableClients = [
-    { id: 'c1000000-0000-4000-8000-000000000002', name: 'KAAE (Kurdistan Accrediting Association for Education)' },
-    { id: 'c1000000-0000-4000-8000-000000000003', name: 'Drustee Evidence-First Health' },
-    { id: 'c1000000-0000-4000-8000-000000000004', name: 'FastPay Mobile Wallet' },
-  ];
+  const [pendingManualRetry, setPendingManualRetry] = useState(false);
+  const clientDirectory = useQuery({ queryKey: ['client-directory'], queryFn: readClientDirectory,
+    enabled: showNewTaskModal && sessionState.status === 'signed_in', staleTime: 0 });
+  const availableClients = clientDirectory.data || [];
+  const clientAvailable = availableClients.some(client => client.clientId === selectedClientId);
+  const canSaveRequest = Boolean(taskTitle.trim()) && !isSubmitting &&
+    (pendingManualRetry || (clientDirectory.isSuccess && !clientDirectory.isFetching && clientAvailable));
 
   const modalRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
@@ -198,6 +212,7 @@ export const App: React.FC = () => {
   // Restore draft when opening modal
   const handleOpenModal = () => {
     const pendingDraft = getPendingManualDraft();
+    setPendingManualRetry(Boolean(pendingDraft));
     const existingDraft = pendingDraft || draftStore.getActiveDraft();
     if (existingDraft && (pendingDraft || (!taskTitle && !taskCopyEn))) {
       setTaskTitle(existingDraft.title || '');
@@ -225,7 +240,7 @@ export const App: React.FC = () => {
   const handleCopyEnChange = setTaskCopyEn;
 
   const handleCreateTask = async () => {
-    if (!taskTitle.trim() || isSubmitting) return;
+    if (!canSaveRequest) return;
     setIsSubmitting(true);
     setTaskSubmissionError(null);
     try {
@@ -240,9 +255,12 @@ export const App: React.FC = () => {
       setTaskCopyCkb('');
       setTaskDesignInstructions('');
       setTaskReferenceAssets('');
-      setAppToast('Request saved. Create or link a Canva design to edit it. Automatic design composition is not connected.');
+      setSelectedClientId('');
+      setPendingManualRetry(false);
+      setAppToast('Request saved.');
       handleNavigate('review');
     } catch (error) {
+      setPendingManualRetry(Boolean(getPendingManualDraft()));
       setTaskSubmissionError(error instanceof Error ? error.message : 'Request could not be confirmed. Your draft is retained; retry without changing it.');
     } finally {
       setIsSubmitting(false);
@@ -264,7 +282,8 @@ export const App: React.FC = () => {
           {sessionState.status === 'signed_out' && <SignIn reason={sessionState.reason} />}
           {sessionState.status === 'signed_in' && (currentScreen === 'work' || currentScreen === 'inbox' || currentScreen === 'review') && (
             <WorkScreen
-              initialTaskId={selectedTask?.id}
+              initialTaskId={linkedReview?.taskId || selectedTask?.id}
+              reviewRevisionId={linkedReview?.revisionId}
               onNavigateToClients={() => handleNavigate('clients')}
               onNavigateToSettings={() => handleNavigate('settings')}
               onNewTask={handleOpenModal}
@@ -341,14 +360,23 @@ export const App: React.FC = () => {
                 id="modal-client-select"
                 style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--panel)', color: 'var(--text)' }}
                 value={selectedClientId}
+                disabled={pendingManualRetry || clientDirectory.isFetching}
                 onChange={(e) => setSelectedClientId(e.target.value)}
               >
+                <option value="">Choose a client</option>
+                {selectedClientId && !clientAvailable && <option value={selectedClientId} disabled>Saved client unavailable</option>}
                 {availableClients.map((client) => (
-                  <option key={client.id} value={client.id}>
+                  <option key={client.clientId} value={client.clientId}>
                     {client.name}
                   </option>
                 ))}
               </select>
+              {clientDirectory.isFetching && <p role="status">Reading the client list…</p>}
+              {clientDirectory.isError && <p role="alert">Client list unavailable: {clientDirectory.error.message}
+                {' '}<button className="btn" onClick={() => void clientDirectory.refetch()}>Retry client list</button></p>}
+              {clientDirectory.isSuccess && availableClients.length === 0 && <p>No active clients are available. Ask an office administrator to configure client access and brand DNA.</p>}
+              {selectedClientId && clientDirectory.isSuccess && !clientAvailable && <p role="alert">The saved client is unavailable. Your draft retains its original client.</p>}
+              {pendingManualRetry && <p role="status">An earlier save is unconfirmed. Retry the unchanged request to recover its result.</p>}
             </div>
 
             <div style={{ margin: '14px 0' }}>
@@ -438,13 +466,13 @@ export const App: React.FC = () => {
               </small>
             </div>
 
-            <p style={{ color: 'var(--muted)', fontSize: 13 }}>Save your instructions and exact copy, then create or link a Canva design for manual editing. Automatic composition is not connected.</p>
+            <p style={{ color: 'var(--muted)', fontSize: 13 }}>Save your instructions and exact copy, then use the task’s design controls to generate a draft or create or link a Canva design.</p>
             {taskSubmissionError && <p role="alert" style={{ color: '#f87171' }}>{taskSubmissionError}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
               <button className="btn" disabled={isSubmitting} onClick={() => setShowNewTaskModal(false)}>
                 {t.modal.cancel}
               </button>
-              <button className="btn primary" disabled={isSubmitting} onClick={handleCreateTask}>
+              <button className="btn primary" disabled={!canSaveRequest} onClick={handleCreateTask}>
                 {isSubmitting ? 'Saving request…' : 'Save request'}
               </button>
             </div>
@@ -472,7 +500,8 @@ export const App: React.FC = () => {
             gap: 10,
           }}
         >
-          <span>{appToast}</span>
+          <span role="status">{appToast}</span>
+          <button type="button" className="btn" aria-label="Dismiss notification" onClick={() => setAppToast(null)}>×</button>
         </div>
       )}
 
@@ -488,7 +517,7 @@ export const App: React.FC = () => {
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
         onNavigate={(screen) => handleNavigate(screen)}
-        activeClientId={selectedTask?.clientId || 'client-drustee'}
+        activeClientId={selectedTask?.clientId}
         onAction={(actionId) => {
           if (actionId === 'tour') {
             setShowTour(true);

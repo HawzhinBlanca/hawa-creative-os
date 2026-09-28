@@ -136,33 +136,6 @@ BEGIN
   END LOOP;
 END $$;
 
--- The request lifecycle (ADR-034): a request, and each projection of it, follows its root task as the
--- task-scoped tables above follow theirs. Migration 023 replaces these with the hoisted form of
--- migration 016 (ADR-033), whose helper member_client_ids does not exist yet when this file runs.
-ALTER TABLE requests ENABLE ROW LEVEL SECURITY; ALTER TABLE requests FORCE ROW LEVEL SECURITY;
-CREATE POLICY requests_task_select ON requests FOR SELECT USING (
-  tenant_id=current_tenant_id() AND EXISTS (SELECT 1 FROM tasks tx WHERE tx.id=requests.root_task_id)
-);
-CREATE POLICY requests_task_write ON requests FOR ALL USING (
-  tenant_id=current_tenant_id() AND EXISTS (
-    SELECT 1 FROM tasks tx WHERE tx.id=requests.root_task_id AND (tx.client_id IS NULL OR can_write_client(tx.tenant_id,tx.client_id))
-  )
-) WITH CHECK (
-  tenant_id=current_tenant_id() AND EXISTS (
-    SELECT 1 FROM tasks tx WHERE tx.id=requests.root_task_id AND (tx.client_id IS NULL OR can_write_client(tx.tenant_id,tx.client_id))
-  )
-);
-ALTER TABLE lifecycle_projections ENABLE ROW LEVEL SECURITY; ALTER TABLE lifecycle_projections FORCE ROW LEVEL SECURITY;
-CREATE POLICY lifecycle_projections_task_select ON lifecycle_projections FOR SELECT USING (
-  tenant_id=current_tenant_id() AND EXISTS (SELECT 1 FROM requests r WHERE r.request_id=lifecycle_projections.request_id)
-);
-CREATE POLICY lifecycle_projections_task_write ON lifecycle_projections FOR INSERT WITH CHECK (
-  tenant_id=current_tenant_id() AND EXISTS (
-    SELECT 1 FROM requests r JOIN tasks tx ON tx.id=r.root_task_id
-    WHERE r.request_id=lifecycle_projections.request_id AND (tx.client_id IS NULL OR can_write_client(tx.tenant_id,tx.client_id))
-  )
-);
-
 -- Tables without tenant_id or with indirect scopes get explicit policies/grants.
 -- Membership tables intentionally are not FORCE RLS: SECURITY DEFINER helper
 -- functions owned by the migration owner must read them without recursive policies.
@@ -189,6 +162,15 @@ CREATE POLICY rule_evidence_write ON rule_evidence FOR ALL USING (
   EXISTS (SELECT 1 FROM client_rules r WHERE r.id=rule_evidence.rule_id AND can_write_client(r.tenant_id,r.client_id))
 ) WITH CHECK (
   EXISTS (SELECT 1 FROM client_rules r WHERE r.id=rule_evidence.rule_id AND can_write_client(r.tenant_id,r.client_id))
+);
+
+ALTER TABLE drive_upload_reservations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE drive_upload_reservations FORCE ROW LEVEL SECURITY;
+CREATE POLICY drive_upload_reservations_operator_select ON drive_upload_reservations FOR SELECT USING (
+  tenant_id=current_tenant_id() AND (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[]))
+);
+CREATE POLICY drive_upload_reservations_operator_insert ON drive_upload_reservations FOR INSERT WITH CHECK (
+  tenant_id=current_tenant_id() AND (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[]))
 );
 
 ALTER TABLE drive_refs ENABLE ROW LEVEL SECURITY; ALTER TABLE drive_refs FORCE ROW LEVEL SECURITY;
@@ -261,4 +243,32 @@ CREATE POLICY users_same_tenant_select ON users FOR SELECT USING (
 ALTER TABLE model_roles ENABLE ROW LEVEL SECURITY; ALTER TABLE model_roles FORCE ROW LEVEL SECURITY;
 CREATE POLICY model_roles_read ON model_roles FOR SELECT USING (current_tenant_id() IS NOT NULL);
 
+-- ADR-084: fixture evaluation receipts are scoped from initial bootstrap too.
+ALTER TABLE eval_model_calls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE eval_model_calls FORCE ROW LEVEL SECURITY;
+CREATE POLICY eval_model_calls_scope ON eval_model_calls FOR ALL
+USING (tenant_id=current_tenant_id() AND
+  (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[])))
+WITH CHECK (tenant_id=current_tenant_id() AND
+  (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[])));
+
+-- ADR-085: named evidence that closes a held fixture run.
+ALTER TABLE eval_run_settlements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE eval_run_settlements FORCE ROW LEVEL SECURITY;
+CREATE POLICY eval_run_settlements_read ON eval_run_settlements FOR SELECT USING
+  (tenant_id=current_tenant_id() AND
+   (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator']::membership_role[])));
+CREATE POLICY eval_run_settlements_insert ON eval_run_settlements FOR INSERT WITH CHECK
+  (tenant_id=current_tenant_id() AND actor_user_id=current_user_id() AND
+   (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator']::membership_role[])));
+
+-- ADR-087: named Studio settlement evidence.
+ALTER TABLE studio_run_settlements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE studio_run_settlements FORCE ROW LEVEL SECURITY;
+CREATE POLICY studio_settlements_read ON studio_run_settlements FOR SELECT USING
+  (tenant_id=current_tenant_id() AND
+   (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator','operator','designer']::membership_role[])));
+CREATE POLICY studio_settlements_insert ON studio_run_settlements FOR INSERT WITH CHECK
+  (tenant_id=current_tenant_id() AND actor_user_id=current_user_id() AND
+   (SELECT has_tenant_role(current_tenant_id(),ARRAY['administrator']::membership_role[])));
 COMMIT;

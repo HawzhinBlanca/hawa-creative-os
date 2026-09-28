@@ -1,0 +1,80 @@
+
+ RUN  v4.1.11 /Users/hawzhin/Hawdesign
+
+[test databases] per-file clones of hawa_tpl_test_7cc7f808220741fc and hawa_tpl_repair_7cc7f808220741fc (25 ms)
+··----
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/db/test/blob-nginx.test.ts > the /_blobs/ location in nginx:1.27-alpine-slim
+Error: nginx did not answer: 2026/09/27 19:36:06 [error] 30#30: recv() failed (111: Connection refused) while resolving, resolver: 127.0.0.11:53
+2026/09/27 19:36:06 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:07 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:07 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:07 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:07 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:07 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:07 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:07 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:07 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:07 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:08 [error] 30#30: host.docker.internal could not be resolved (110: Operation timed out)
+2026/09/27 19:36:08 [error] 30#30: host.docker.internal could not be resolved (110: Operation timed out)
+2026/09/27 19:36:09 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:09 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:09 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:09 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:09 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:09 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:09 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:09 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:09 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:10 [error] 30#30: recv() failed (111: Connection refused) while resolving, resolver: 127.0.0.11:53
+2026/09/27 19:36:11 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:11 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:11 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:11 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:11 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:11 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:11 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:11 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:11 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:11 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+2026/09/27 19:36:12 [error] 30#30: *2 no live upstreams while connecting to upstream, client: 172.17.0.1, server: _, request: "GET / HTTP/1.1", upstream: "http://desk_pwa/", host: "127.0.0.1:59677"
+
+ ❯ packages/db/test/blob-nginx.test.ts:109:11
+    107|       await new Promise((resolve) => setTimeout(resolve, 100));
+    108|     }
+    109|     throw new Error(`nginx did not answer: ${docker(['logs', container…
+       |           ^
+    110|   }, 90_000);
+    111|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 passed | 4 skipped (6)
+   Start at  22:36:06
+   Duration  6.00s (transform 30ms, setup 51ms, import 131ms, tests 5.66s, environment 0ms)
+

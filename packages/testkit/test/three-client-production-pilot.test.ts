@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import type { StudioOperation } from '@hawa/contracts';
+import { assert, describe, it, expect } from 'vitest';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { createAppWithClientFixtures } from '../../../apps/core/test/fixtures/app-with-client-fixtures.js';
@@ -109,7 +111,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
           objective: `${client.name} Multi-Format Production Execution`,
           rawRequestText: client.prompts[0],
         });
-        expect(briefRes.ok).toBe(true);
+        expect(briefRes.ok).toBe(true); assert(briefRes.ok);
         if (!briefRes.ok) continue;
 
         const plan = director.createDesignPlan(briefRes.value, [client.primaryColor], format);
@@ -118,7 +120,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
         expect(ops.length).toBeGreaterThanOrEqual(3);
 
         // Verify canvas size invariants
-        const bgOp = ops.find((o) => o.op === 'addVector' && o.nodeId === 'node_bg');
+        const bgOp = ops.find((o): o is Extract<StudioOperation, {op: 'addVector'}> => o.op === 'addVector' && o.nodeId === 'node_bg');
         expect(bgOp).toBeDefined();
         const expectedDims = CANONICAL_FORMATS[format];
         expect(bgOp?.width).toBe(expectedDims.width);
@@ -145,8 +147,8 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
     const qaEngine = new DeterministicQAEngine();
     const ctx = {
       tenantId: '00000000-0000-4000-a000-000000000001',
-      operatorId: 'op_pilot_qa',
-      roles: ['operator', 'designer'],
+      actor: { type: 'user' as const, id: 'op_pilot_qa' },
+      deadline: new Date(Date.now() + 60000).toISOString(),
       correlationId: 'corr_pilot_qa',
       idempotencyKey: 'idem_pilot_qa',
     };
@@ -169,7 +171,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
           targetWidth: 1080,
           targetHeight: 1350,
         });
-        expect(briefRes.ok).toBe(true);
+        expect(briefRes.ok).toBe(true); assert(briefRes.ok);
         if (!briefRes.ok) continue;
 
         const primaryLogo = dna.assets?.find((a: any) => a.role === 'logo_primary');
@@ -178,7 +180,9 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
         const qaRes = await qaEngine.run(ctx, {
           taskId: `t-qa-${client.shortCode}`,
           designRevisionId: `rev_${client.shortCode}_001`,
-          brief: briefRes.value,
+          document: { documentId: `doc_${client.shortCode}`, sourceRevision: 1, studio: 'canva', studioVersion: '1', schemaVersion: '1', sourceSha256: createHash('sha256').update(prompt).digest('hex') },
+          sourceHash: createHash('sha256').update(prompt).digest('hex'), renders: [],
+          brief: { ...briefRes.value },
           clientDna: dna,
           profile: { name: 'strict', version: '1.0', rules: {} },
           repairCycle: 0,
@@ -225,7 +229,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
           } as any,
         });
 
-        expect(qaRes.ok).toBe(true);
+        expect(qaRes.ok).toBe(true); assert(qaRes.ok);
         if (qaRes.ok) {
           expect(qaRes.value.status).not.toBe('failed');
           expect(qaRes.value.criticalPass).toBe(true);
@@ -295,7 +299,7 @@ describe('Milestone 8: Three-Client Production Qualification Pilot (KAAE, Druste
           rawRequestText: prompt,
         });
 
-        expect(briefRes.ok).toBe(true);
+        expect(briefRes.ok).toBe(true); assert(briefRes.ok);
         const plan = director.createDesignPlan(briefRes.value, [client.primaryColor], format);
         const ops = director.generateStudioOperations(briefRes.value, plan, client.logoSha256, format);
 

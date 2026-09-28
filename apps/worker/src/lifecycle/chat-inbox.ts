@@ -4,18 +4,8 @@
  *
  * The poller (telegram-poller.ts) sends every update here, keyed by its chat, with idempotency key
  * `tg-<update_id>`. Restate runs one update at a time per chat, in order, and chats side by side, so a
- * long download in one chat no longer holds the others. In slice 2.1 the handler only hands the update
- * to Core's existing intake (POST /v1/internal/telegram/intake, mode `legacy`) and, when intake keeps
- * failing, dead-letters it. The request lifecycle (2.3) routes decisions from here later.
- *
- * Slice 2.3 routes decisions from here (PHASE2_DESIGN.md 2.2): for a chat on HAWA_LIFECYCLE_CHATS
- * (read once, in the journaled `mode` step) intake runs in mode `lifecycle` and answers what a new
- * request is instead of saving it; ChatInbox opens a RequestLifecycle for each. In either mode an
- * answer, a requester's button or a change aimed at a request the lifecycle owns comes back as a
- * decision and is routed to that request, so a chat taken off the flag still finishes its lifecycle
- * requests there. Every route is a one-way send, keyed by the update: nothing here waits for the
- * lifecycle or for Telegram. A lifecycle chat's "new request or a change?" question and its answered
- * albums are this object's state (`chat`), handed to intake with each update, not Core's memory.
+ * long download in one chat no longer holds the others. The handler passes the stored per-chat mode to
+ * Core intake and sends lifecycle decisions under a stable key; repeated failures park the update.
  *
  * The rules are those of Core's polled-update-dispatch.ts, with the attempt count held in Restate's
  * journal instead of a Postgres row:
@@ -33,18 +23,10 @@
  * the length of one intake call.
  */
 import * as restate from '@restatedev/restate-sdk';
-import {
-  lifecycleOwnsChat,
-  type AnswerEvent,
-  type ChatIntakeState,
-  type IntakeDecision,
-  type OpenEvent,
-  type OutboundMessage,
-  type RequesterDecisionEvent,
-} from '@hawa/contracts';
-import { routedSendsOf } from '@hawa/domain';
+import type { OutboundMessage } from '@hawa/contracts';
 import { withInvocationLogContext, log } from '../logging.js';
-import { chatKey, type TelegramUpdateLike } from './telegram-poller.js';
+import type { TelegramUpdateLike } from './telegram-poller.js';
+import type { OpenAutomaticEvent, OpenManualEvent, RequesterDecisionEvent } from './request-lifecycle.js';
 import { TelegramSenderApi } from './telegram-sender.js';
 
 /** Fields are only ever added, and only as optional (PHASE2_DESIGN.md section 4). */
@@ -57,120 +39,94 @@ export interface HandleUpdateInput {
 
 export type IntakeMode = 'legacy' | 'lifecycle';
 
-/** What Core's intake answered, as journaled. `decision` and `chat` only from a Core with slice 2.3. */
+/** The request stages in which a requester's reply is kept as a late change (finding 13). */
+export type LateChangeStage = 'in_review' | 'approved' | 'delivering' | 'delivered';
+
+/** What Core's intake answered, as journaled. */
 export type IntakeAnswer =
-  | { kind: 'done'; intakeStatus: number; duplicate?: boolean; decision?: IntakeDecision; chat?: ChatIntakeState }
+  | { kind: 'done'; intakeStatus: number; duplicate?: boolean;
+      /** When mode=lifecycle and Core routed the update as a requester revision. */
+      lifecycleAction?: 'open-request' | 'new-brief-required' | 'requester-revision' | 'requester-answer' |
+        'request-choice-required' | 'revision-blocked' | 'park-update' | 'album-message' | 'source-message' |
+        'late-change';
+      albumMessage?: string; albumNoticeKey?: string;
+      sourceMessage?: string; sourceNoticeKey?: string;
+      draft?: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'];
+      requestId?: string; newTaskId?: string; round?: number; directive?: string;
+      priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
+      code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
+        'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING' | 'LIFECYCLE_MEDIA_NOT_ADMITTED' | 'LATE_REQUESTER_CHANGE';
+      reason?: string;
+      /** late-change: the stage the request was in, and Core's alert for the office chat (if any). */
+      requestStage?: LateChangeStage; officeAlert?: { chatId: string; text: string }; }
   | { kind: 'retry'; reason: string };
 
 /** The Core calls ChatInbox makes (core-client.ts). A thrown error means "wait and try again". */
 export interface ChatInboxCore {
-  /** `chat`: the chat's state, sent in lifecycle mode only. */
-  intake(update: TelegramUpdateLike, mode: IntakeMode, chat?: ChatIntakeState): Promise<IntakeAnswer>;
+  intake(update: TelegramUpdateLike, mode: IntakeMode, requestId?: string): Promise<IntakeAnswer>;
   park(update: TelegramUpdateLike, reason: string): Promise<void>;
 }
 
-/** Where ChatInbox routes a decision: one-way sends, each keyed so a replay sends nothing twice. */
-export interface InboxRoutes {
-  open(requestId: string, event: OpenEvent, idempotencyKey: string): void;
-  answer(requestId: string, event: AnswerEvent, idempotencyKey: string): void;
-  requesterDecision(requestId: string, event: RequesterDecisionEvent, idempotencyKey: string): void;
-  /** A message to its chat's TelegramSender, keyed by its own key. */
-  send(message: OutboundMessage): void;
+/** Context the setMode handler uses; tests pass a minimal stub. */
+export interface SetModeContext {
+  get<T>(name: string): Promise<T | null>;
+  set(name: string, value: unknown): void;
 }
 
 /** The parts of Restate's ObjectContext the handler uses; tests pass a small journal. */
 export interface InboxContext {
+  get<T>(name: string): Promise<T | null>;
   run<T>(name: string, action: () => Promise<T>): Promise<T>;
   sleep(ms: number): Promise<void>;
   set(name: string, value: unknown): void;
   now(): Promise<number>;
-  /** State read (slice 2.3); absent in a context that keeps none. */
-  get?<T>(name: string): Promise<T | null>;
-  /** Slice 2.3: where decisions go. */
-  routes?: InboxRoutes;
+  /**
+   * Fire-and-forget a requester decision to RequestLifecycle via Restate's objectSendClient.
+   * Only available in the real VO context; tests may stub this as a no-op.
+   */
+  sendLifecycleDecision(requestId: string, event: RequesterDecisionEvent & { newTaskId: string }): Promise<void> | void;
+  sendLifecycleOpen(requestId: string, event: OpenManualEvent | OpenAutomaticEvent): Promise<void> | void;
+  sendNotice(message: OutboundMessage): void;
 }
 
 export interface ChatInboxView {
   v: 1;
   lastUpdateId: number;
-  lastOutcome: 'handled' | 'parked' | 'routed';
+  lastOutcome: 'handled' | 'parked';
   lastIntakeStatus?: number;
   at: number;
-}
-
-/** The chat's own state (slice 2.3), key `chat`: what intake reads with each update of a lifecycle chat. */
-export interface ChatInboxState extends ChatIntakeState {
-  v: 1;
+  /** Set once when the first RequestLifecycle-owned request opens for this chat. Never reverts. */
+  mode?: IntakeMode;
+  /** Historical request hint; Core selects the actual target from current request state. */
+  requestId?: string;
 }
 
 export interface HandleUpdateResult {
-  outcome: 'handled' | 'parked' | 'routed';
+  outcome: 'handled' | 'parked';
   intakeStatus?: number;
   attempts: number;
-  /** For a routed decision: what it was. */
-  decision?: IntakeDecision['kind'];
-}
-
-export interface HandleUpdateOptions {
-  /** Whether a chat is on HAWA_LIFECYCLE_CHATS; tests pass their own. */
-  lifecycleChat?: (chat: string) => boolean;
-}
-
-export const CHAT_STATE_KEY = 'chat';
-/** Albums are answered once; one older than this is forgotten (Telegram sends an album within seconds). */
-export const ALBUM_MEMORY_MS = 15 * 60_000;
-
-/** Only a real chat (a Telegram id) can hold lifecycle requests: Core opens one for a numeric chat only. */
-const isChatId = (chat: string) => /^-?\d{1,20}$/.test(chat);
-
-/** The chat's state as kept, with albums older than ALBUM_MEMORY_MS forgotten. */
-export function prunedChatState(raw: unknown, now: number): ChatInboxState {
-  const s = raw && typeof raw === 'object' ? (raw as ChatInboxState) : ({} as ChatInboxState);
-  const albums = Object.entries(s.albumsAcked ?? {}).filter(([, at]) => Number.isFinite(at) && now - Number(at) < ALBUM_MEMORY_MS);
-  return {
-    v: 1,
-    ...(s.pendingClarification ? { pendingClarification: s.pendingClarification } : {}),
-    ...(albums.length ? { albumsAcked: Object.fromEntries(albums) } : {}),
-  };
-}
-
-/**
- * Routes one decision, in order: the requests it opens or the events it hands to a request, then the
- * messages it carries (routedSendsOf in @hawa/domain, which Core also uses when it routes an update
- * itself). Keys are the update's (`tg:<chat>:<update>`) or the request's open key, so a replayed
- * invocation (or a second one for the same update) routes nothing twice.
- */
-export function routeDecision(routes: InboxRoutes, chat: string, update: TelegramUpdateLike, decision: IntakeDecision): void {
-  for (const send of routedSendsOf(chat, update, decision)) {
-    if (send.service === 'TelegramSender') routes.send(send.payload);
-    else if (send.handler === 'open') routes.open(send.key, send.payload, send.idempotencyKey);
-    else if (send.handler === 'answer') routes.answer(send.key, send.payload, send.idempotencyKey);
-    else routes.requesterDecision(send.key, send.payload, send.idempotencyKey);
-  }
 }
 
 export const INTAKE_ATTEMPTS = 5;
 /** Waits between retryable answers: 2, 4, 8 and 16 s, the backoff Core's poller used. */
 const retryDelayMs = (k: number) => 2000 * 2 ** k;
 
-export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, core: ChatInboxCore, options: HandleUpdateOptions = {}): Promise<HandleUpdateResult> {
+export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, core: ChatInboxCore): Promise<HandleUpdateResult> {
   const update = input.update;
-  const chat = chatKey(update);
-  // The one read of the per-chat flag, journaled so that a replay on the other colour agrees with it
-  // even if the flag changed in between. After a request is open, only its owner decides (Core reads
-  // tasks.request_id), so this decides new requests only.
-  const lifecycleChat = options.lifecycleChat ?? ((c: string) => lifecycleOwnsChat(c, process.env));
-  const mode = await ctx.run<IntakeMode>('mode', async () => (isChatId(chat) && lifecycleChat(chat) ? 'lifecycle' : 'legacy'));
-  // A lifecycle chat's state goes to intake with the update (its question, its albums).
-  let chatState: ChatInboxState | undefined;
-  if (mode === 'lifecycle' && ctx.get) chatState = prunedChatState(await ctx.get<ChatInboxState>(CHAT_STATE_KEY), await ctx.now());
+  // Read state directly through Restate's context. A ctx.get inside ctx.run records a nested
+  // journal operation that is skipped when the completed run replays after a crash.
+  // The first flagged update arrives in legacy mode. Core can return open-request for that update;
+  // the resulting request then sets lifecycle mode for later chat updates.
+  const view = await ctx.get<ChatInboxView>('inbox');
+  const mode: IntakeMode = view?.mode === 'lifecycle' ? 'lifecycle' : 'legacy';
+  const lifecycleRequestId = view?.mode === 'lifecycle' ? view.requestId : undefined;
 
   const reasons: string[] = [];
   let done: Extract<IntakeAnswer, { kind: 'done' }> | null = null;
   for (let k = 0; k < INTAKE_ATTEMPTS && !done; k++) {
     // Lines are written inside the step, so a replay of the journal does not write them again.
     const answer = await ctx.run(`intake-${k}`, async () => {
-      const a = mode === 'lifecycle' ? await core.intake(update, mode, stripVersion(chatState)) : await core.intake(update, mode);
+      const a = await core.intake(update, mode, lifecycleRequestId);
       if (a.kind === 'retry') log.warn(`[chat-inbox] update ${update.update_id} attempt ${k + 1}/${INTAKE_ATTEMPTS} failed: ${a.reason}`);
       else if (a.intakeStatus >= 400) log.warn(`[chat-inbox] update ${update.update_id} refused by intake with HTTP ${a.intakeStatus}`);
       return a;
@@ -185,77 +141,150 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
 
   const at = await ctx.now();
   if (done) {
-    // The chat's state after the update, as intake left it (lifecycle mode only).
-    const decision = done.decision;
-    // Clarify sets the waiting question; every other answer clears it (PHASE2_DESIGN.md 2.2 step 3),
-    // whatever state intake sent back: the requester moved on, and a later "new" or "revise" must not
-    // reach back to words sent before.
-    if (mode === 'lifecycle' && done.chat) {
-      const { pendingClarification, ...rest } = done.chat;
-      ctx.set(CHAT_STATE_KEY, prunedChatState({ ...rest, ...(decision?.kind === 'clarify' && pendingClarification ? { pendingClarification } : {}), v: 1 }, at));
+    if (done.lifecycleAction === 'source-message') {
+      if (!done.chatId || !done.sourceMessage || !done.sourceNoticeKey) throw new Error('Core returned an incomplete source notice');
+      ctx.sendNotice({ v: 1, key: `chatinbox:${done.sourceNoticeKey}`, chatId: done.chatId,
+        kind: 'text', class: 'critical', text: done.sourceMessage });
     }
-    if (decision && decision.kind === 'park') {
-      await parkUpdate(ctx, core, update, decision.reason);
-      ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at } satisfies ChatInboxView);
-      return { outcome: 'parked', attempts: reasons.length + 1 };
+    if (done.lifecycleAction === 'album-message') {
+      if (!done.chatId || !done.albumMessage || !done.albumNoticeKey) throw new Error('Core returned an incomplete album notice');
+      ctx.sendNotice({ v: 1, key: `chatinbox:${done.albumNoticeKey}`, chatId: done.chatId,
+        kind: 'text', class: 'critical', text: done.albumMessage });
     }
-    if (decision) {
-      if (!ctx.routes) throw new Error('ChatInbox cannot route a decision: this context has no routes');
-      routeDecision(ctx.routes, chat, update, decision);
-      ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'routed', lastIntakeStatus: done.intakeStatus, at } satisfies ChatInboxView);
-      return { outcome: 'routed', intakeStatus: done.intakeStatus, attempts: reasons.length + 1, decision: decision.kind };
+    if (done.lifecycleAction === 'park-update') {
+      if (done.code !== 'LIFECYCLE_MEDIA_NOT_ADMITTED' || !done.reason) {
+        throw new Error('Core returned an invalid lifecycle media hold');
+      }
+      await ctx.run('park', () => core.park(update, done.reason!));
+      ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at,
+        ...(mode === 'lifecycle' ? { mode, requestId: lifecycleRequestId } : {}),
+      } satisfies ChatInboxView);
+      return { outcome: 'parked', intakeStatus: done.intakeStatus, attempts: reasons.length + 1 };
     }
-    ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'handled', lastIntakeStatus: done.intakeStatus, at } satisfies ChatInboxView);
+    if (done.lifecycleAction === 'open-request') {
+      if (!done.requestId || !done.chatId || !done.draft) throw new Error('Core returned an incomplete lifecycle open');
+      const event = { v: 1 as const, eventId: `open:${done.requestId}`, requestId: done.requestId,
+        tenantId: '00000000-0000-4000-a000-000000000001', chatId: done.chatId,
+        draft: done.draft } as OpenManualEvent | OpenAutomaticEvent;
+      await ctx.sendLifecycleOpen(done.requestId, event);
+    }
+    // In lifecycle mode, if Core recognised the update as a requester revision decision, fire the
+    // lifecycle handler so RequestLifecycle can advance its state machine. Idempotency key:
+    // chatinbox:revision:<update_id> — stable, unique per update, replay-safe.
+    if ((done.lifecycleAction === 'requester-revision' || done.lifecycleAction === 'requester-answer') &&
+        done.requestId && done.newTaskId && done.round !== undefined && done.directive && done.priorTaskId) {
+      const lcEvent: RequesterDecisionEvent & { newTaskId: string } = {
+        v: 1,
+        eventId: `chatinbox:revision:${update.update_id}`,
+        requestId: done.requestId,
+        round: done.round,
+        directive: done.directive,
+        priorTaskId: done.priorTaskId,
+        newTaskId: done.newTaskId,
+        ...(done.questionId ? { questionId: done.questionId } : {}),
+        ...(done.rawText !== undefined ? { rawText: done.rawText as string } : {}),
+      };
+      // Keep the Restate context alive until the send is durably recorded. A failed import or send
+      // retries this handler from its journaled Core answer under the same event key.
+      await ctx.sendLifecycleDecision(done.requestId, lcEvent);
+      if (done.lifecycleAction === 'requester-answer' && done.chatId) {
+        ctx.sendNotice({ v: 1, key: `chatinbox:answer-accepted:${update.update_id}`,
+          chatId: done.chatId, kind: 'text', class: 'critical',
+          text: 'Your answer is saved. I am continuing the same design with that detail.',
+        });
+      }
+    }
+    if (done.lifecycleAction === 'request-choice-required' && done.chatId &&
+        (done.code === 'AMBIGUOUS_REQUEST' || done.code === 'STALE_REQUEST_REPLY')) {
+      ctx.sendNotice({ v: 1, key: `chatinbox:request-choice:${update.update_id}`,
+        chatId: done.chatId, kind: 'text', class: 'critical',
+        text: done.code === 'STALE_REQUEST_REPLY'
+          ? 'That design is no longer waiting for changes. Please reply to the current revision notice for the design you mean.'
+          : 'More than one design is waiting for your changes. Please reply directly to the revision notice for the design you mean.',
+      });
+    }
+    if (done.lifecycleAction === 'late-change') {
+      // The requester replied after the design reached the office. Core kept the words; the office
+      // hears them quoted, and the requester is told plainly that they changed nothing by themselves.
+      if (done.code !== 'LATE_REQUESTER_CHANGE' || !done.chatId || !done.requestId || !done.requestStage) {
+        throw new Error('Core returned an incomplete late change');
+      }
+      if (done.officeAlert) {
+        ctx.sendNotice({ v: 1, key: `notify.office:late-change:${done.requestId}:${update.update_id}`,
+          chatId: done.officeAlert.chatId, kind: 'text', class: 'critical', text: done.officeAlert.text });
+      }
+      const when = done.requestStage === 'delivered' ? 'after this design was delivered'
+        : 'after this design went to the office';
+      ctx.sendNotice({ v: 1, key: `chatinbox:late-change:${update.update_id}`,
+        chatId: done.chatId, kind: 'text', class: 'critical',
+        text: `Your message arrived ${when}, so it was not applied to the design. ` +
+          (done.officeAlert ? 'The office has been told and has your words.' : 'Your words were saved for the office.'),
+      });
+    }
+    if (done.lifecycleAction === 'new-brief-required' && done.chatId) {
+      ctx.sendNotice({ v: 1, key: `chatinbox:new-brief-required:${update.update_id}`,
+        chatId: done.chatId, kind: 'text', class: 'critical',
+        text: 'Please send /new followed by the full design brief and the exact words to place on it.',
+      });
+    }
+    if (done.lifecycleAction === 'revision-blocked' && done.chatId &&
+        (done.code === 'DAILY_CAP_REACHED' || done.code === 'PARENT_BRIEF_MISSING' ||
+          done.code === 'QUESTION_MISSING')) {
+      ctx.sendNotice({ v: 1, key: `chatinbox:revision-blocked:${update.update_id}`,
+        chatId: done.chatId, kind: 'text', class: 'critical',
+        text: done.code === 'DAILY_CAP_REACHED'
+          ? 'The automatic design limit has been reached. No revision started. Please send this change again after the daily limit resets, or ask the office for help.'
+          : done.code === 'QUESTION_MISSING'
+            ? 'I could not safely recover the question for this design, so no answer was applied. Please ask the office to check this request.'
+            : 'I could not safely find the original design brief, so no revision started. Please ask the office to check this request.',
+      });
+    }
+    ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'handled',
+      lastIntakeStatus: done.intakeStatus, at,
+      ...(mode === 'lifecycle' || done.lifecycleAction === 'open-request'
+        ? { mode: 'lifecycle' as const, requestId: done.requestId ?? lifecycleRequestId } : {}),
+    } satisfies ChatInboxView);
     return { outcome: 'handled', intakeStatus: done.intakeStatus, attempts: reasons.length + 1 };
   }
 
   const reason = `${reasons[reasons.length - 1]} after ${INTAKE_ATTEMPTS} attempts`;
-  await parkUpdate(ctx, core, update, reason);
-  ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at } satisfies ChatInboxView);
-  return { outcome: 'parked', attempts: INTAKE_ATTEMPTS };
-}
-
-/** Core stores the dead letter (id and kind only), alerts the office and tells the sender, once. */
-async function parkUpdate(ctx: InboxContext, core: ChatInboxCore, update: TelegramUpdateLike, reason: string): Promise<void> {
+  // Core stores the dead letter (id and kind only), alerts the office and tells the sender, once.
   await ctx.run('park', async () => {
     await core.park(update, reason);
     log.error(`[chat-inbox] update ${update.update_id} parked for an operator: ${reason}`);
     return true;
   });
-}
-
-/** The state as intake reads it (without this object's own version field). */
-function stripVersion(s: ChatInboxState | undefined): ChatIntakeState {
-  if (!s) return {};
-  const { v: _v, ...rest } = s;
-  void _v;
-  return rest;
+  ctx.set('inbox', { v: 1, lastUpdateId: update.update_id, lastOutcome: 'parked', at,
+    ...(mode === 'lifecycle' ? { mode, requestId: lifecycleRequestId } : {}),
+  } satisfies ChatInboxView);
+  return { outcome: 'parked', attempts: INTAKE_ATTEMPTS };
 }
 
 /** Steps that throw (a wait) back off from 2 s to a 30 s ceiling, without a limit of their own. */
 const WAIT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30_000 };
 
-/** RequestLifecycle's handlers ChatInbox sends to, named here (not imported: RequestLifecycle is the older module). */
-type LifecycleInbound = {
-  open: (ctx: restate.ObjectContext, e: OpenEvent) => Promise<unknown>;
-  answer: (ctx: restate.ObjectContext, e: AnswerEvent) => Promise<unknown>;
-  requesterDecision: (ctx: restate.ObjectContext, e: RequesterDecisionEvent) => Promise<unknown>;
-};
-const RequestLifecycleInbound: restate.VirtualObjectDefinition<'RequestLifecycle', LifecycleInbound> = { name: 'RequestLifecycle' };
-
 function inboxContext(ctx: restate.ObjectContext): InboxContext {
+  // Lazy import to break the potential circular reference at module-load time.
+  // RequestLifecycleApi is used only at runtime when sendLifecycleDecision is called.
   return {
+    get: (name) => ctx.get(name),
     run: (name, action) => ctx.run(name, action, WAIT_RETRY),
     sleep: (ms) => ctx.sleep(ms),
     set: (name, value) => ctx.set(name, value),
     now: () => ctx.date.now(),
-    get: <T>(name: string) => ctx.get<T>(name) as Promise<T | null>,
-    routes: {
-      open: (requestId, event, key) => { ctx.objectSendClient(RequestLifecycleInbound, requestId).open(event, restate.rpc.sendOpts({ idempotencyKey: key })); },
-      answer: (requestId, event, key) => { ctx.objectSendClient(RequestLifecycleInbound, requestId).answer(event, restate.rpc.sendOpts({ idempotencyKey: key })); },
-      requesterDecision: (requestId, event, key) => { ctx.objectSendClient(RequestLifecycleInbound, requestId).requesterDecision(event, restate.rpc.sendOpts({ idempotencyKey: key })); },
-      send: (m) => { ctx.objectSendClient(TelegramSenderApi, String(m.chatId)).send(m, restate.rpc.sendOpts({ idempotencyKey: m.key })); },
+    sendLifecycleDecision: async (requestId, event) => {
+      // Dynamic import avoids the circular dep at module level; the API object is a stable singleton.
+      const { RequestLifecycleApi } = await import('./request-lifecycle.js');
+      ctx.objectSendClient(RequestLifecycleApi, requestId)
+        .requesterDecision(event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
     },
+    sendLifecycleOpen: async (requestId, event) => {
+      const { RequestLifecycleApi } = await import('./request-lifecycle.js');
+      ctx.objectSendClient(RequestLifecycleApi, requestId)
+        .open(event, restate.rpc.sendOpts({ idempotencyKey: event.eventId }));
+    },
+    sendNotice: (message) => ctx.objectSendClient(TelegramSenderApi, message.chatId)
+      .send(message, restate.rpc.sendOpts({ idempotencyKey: message.key })),
   };
 }
 
@@ -263,6 +292,36 @@ function inboxContext(ctx: restate.ObjectContext): InboxContext {
 let coreClient: ChatInboxCore | null = null;
 export function useChatInboxCore(core: ChatInboxCore): void {
   coreClient = core;
+}
+
+/**
+ * Mark a chat as lifecycle-mode: future updates from this chat are routed through RequestLifecycle
+ * instead of legacy intake. Idempotent — once set, the mode cannot revert.
+ *
+ * Called by RequestLifecycle.open (via objectSendClient) when it claims a chat's first request.
+ * The handler is exclusive so it serializes with handleUpdate in Restate's queue.
+ */
+export async function setMode(
+  ctx: SetModeContext,
+  requestId: string,
+): Promise<{ mode: IntakeMode; requestId: string }> {
+  const prior = await ctx.get<ChatInboxView>('inbox');
+  if (prior?.mode === 'lifecycle') {
+    return { mode: 'lifecycle', requestId };
+  }
+  // Preserve all existing fields, add or upgrade the mode. Also store requestId so lifecycle
+  // intake can look up the request without a DB query on the critical path.
+  const next: ChatInboxView = {
+    v: 1,
+    lastUpdateId: prior?.lastUpdateId ?? 0,
+    lastOutcome: prior?.lastOutcome ?? 'handled',
+    ...(prior?.lastIntakeStatus !== undefined ? { lastIntakeStatus: prior.lastIntakeStatus } : {}),
+    at: prior?.at ?? Date.now(),
+    mode: 'lifecycle',
+    requestId,
+  };
+  ctx.set('inbox', next);
+  return { mode: 'lifecycle', requestId };
 }
 
 export const chatInbox = restate.object({
@@ -277,12 +336,20 @@ export const chatInbox = restate.object({
           return handleUpdate(inboxContext(ctx), input, coreClient);
         })
     ),
+    /**
+     * RequestLifecycle.open calls this (exclusive, so it serializes with handleUpdate) to upgrade
+     * a chat from legacy to lifecycle mode. Idempotent: calling it twice on the same chat is safe.
+     */
+    setMode: restate.handlers.object.exclusive(
+      { idempotencyRetention: { days: 7 } },
+      async (ctx: restate.ObjectContext, requestId: string): Promise<{ mode: IntakeMode; requestId: string }> =>
+        setMode(
+          { get: (name) => ctx.get(name), set: (name, value) => ctx.set(name, value) },
+          typeof requestId === 'string' ? requestId : '',
+        )
+    ),
     get: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ChatInboxView | null> =>
       (await ctx.get<ChatInboxView>('inbox')) ?? null
-    ),
-    /** The chat's own state (slice 2.3): its waiting question and answered albums. */
-    getChat: restate.handlers.object.shared(async (ctx: restate.ObjectSharedContext): Promise<ChatInboxState | null> =>
-      (await ctx.get<ChatInboxState>(CHAT_STATE_KEY)) ?? null
     ),
   },
   options: {

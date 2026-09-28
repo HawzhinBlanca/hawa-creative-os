@@ -78,6 +78,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
         decision: 'approved',
         role: 'art_director',
         displayName: 'Hero Art Director',
+        pinnedExportIds: [exports.add(task.taskId)],
       }),
     });
     expect(approveRes.status).toBe(201);
@@ -128,6 +129,7 @@ describe('Gate F: Human Review Integrity & Post-Approval Invalidation Engine (FR
       body: JSON.stringify({
         decision: 'approved',
         role: 'art_director',
+        pinnedExportIds: [exports.add(task.taskId)],
       }),
     });
 

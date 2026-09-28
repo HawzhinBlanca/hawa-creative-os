@@ -24,14 +24,13 @@
   ],
   "defaultFormat": "youtube-thumbnail",
   "playbook": "video-thumbnail",
-  "reference": null,
   "exemplars": null,
   "onboarding": {
     "missing": [
       "logo",
       "palette",
       "fonts",
-      "reference-pack",
+      "client-dna",
       "exemplars",
       "telegram-chats",
       "language",

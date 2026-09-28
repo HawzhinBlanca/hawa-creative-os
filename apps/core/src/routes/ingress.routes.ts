@@ -5,7 +5,7 @@ import { isValidUuid } from '../core-helpers.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { taskFromRows } from '../services/task-reader.js';
-import { refreshKillSwitches, setKillSwitch } from '../services/channel-kill-switches.js';
+import { compareAndSetKillSwitch, KillSwitchRevisionConflict, mayChangeKillSwitch, refreshKillSwitches, setKillSwitch } from '../services/channel-kill-switches.js';
 
 export function registerIngressRoutes(ctx: RouteContext) {
   const { registerRoute, unifiedIngress, channelKillSwitches, problem } = ctx;
@@ -35,18 +35,40 @@ export function registerIngressRoutes(ctx: RouteContext) {
       return problem(c, 400, 'Invalid Channel', 'Supported channels are telegram and waha');
     }
     const body = await c.req.json().catch(() => ({}));
+    const expectedChangeTag = body?.expectedChangeTag;
+    if (expectedChangeTag !== undefined &&
+        (typeof expectedChangeTag !== 'string' || !isValidUuid(expectedChangeTag) || typeof body.enabled !== 'boolean')) {
+      return problem(c, 400, 'Invalid Switch Revision', 'A conditional toggle needs a valid expectedChangeTag and boolean enabled');
+    }
     const enabled = body.enabled !== undefined ? Boolean(body.enabled) : channelKillSwitches[channel];
     // Answered only once Postgres has it, so the switch the office sees thrown survives a restart.
     try {
-      await setKillSwitch(channelKillSwitches, channel, !enabled, ctx.verifyRequestAuth(c).actorId);
+      const auth = ctx.verifyRequestAuth(c);
+      if (!auth.authenticated || !auth.actorId) return problem(c, 401, 'Unauthorized', 'Authentication required for the intake switch');
+      if (!mayChangeKillSwitch(channel, auth.role)) {
+        return problem(c, 403, 'Forbidden', channel === 'waha'
+          ? 'Administrator role required for the WhatsApp switch'
+          : 'Only office operators may change the intake switch');
+      }
+      const changeTag = expectedChangeTag === undefined
+        ? await setKillSwitch(channelKillSwitches, channel, !enabled, auth.actorId)
+        : ctx.db
+          ? await compareAndSetKillSwitch(ctx.db, channelKillSwitches, channel, !enabled, expectedChangeTag, auth.actorId)
+          : undefined;
+      if (expectedChangeTag !== undefined && !changeTag) {
+        return problem(c, 503, 'Switch Store Unavailable', 'A conditional toggle requires the persisted switch store');
+      }
+      // POST /waha/kill-switch also sets the environment's WhatsApp switch, which the webhook and
+      // /waha/health read; follow it here, or a release through this toggle left WhatsApp refused.
+      if (channel === 'waha') process.env.WAHA_KILL_SWITCH = enabled ? 'false' : 'true';
+      return c.json({ channel, enabled, killSwitchActive: channelKillSwitches[channel], changeTag }, 200);
     } catch (err: unknown) {
+      if (err instanceof KillSwitchRevisionConflict) {
+        return problem(c, 409, 'Switch Changed', 'The channel switch changed after this action read it; inspect its current state');
+      }
       log.error(`[core:kill_switch] the ${channel} kill switch could not be saved:`, err instanceof Error ? err.message : err);
-      return problem(c, 503, 'Kill switch not saved', `The ${channel} kill switch could not be saved to the database; it is unchanged. Try again.`);
+      return problem(c, 503, 'Switch State Unconfirmed', `The ${channel} switch write or readback did not complete; inspect its persisted state before retrying.`);
     }
-    // POST /waha/kill-switch also sets the environment's WhatsApp switch, which the webhook and
-    // /waha/health read; follow it here, or a release through this toggle left WhatsApp refused.
-    if (channel === 'waha') process.env.WAHA_KILL_SWITCH = enabled ? 'false' : 'true';
-    return c.json({ channel, enabled, killSwitchActive: channelKillSwitches[channel] }, 200);
   });
 
   // Moved from createApp (architecture programme 1.3, G8): unified ingress and promotion.

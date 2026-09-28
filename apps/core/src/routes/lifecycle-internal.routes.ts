@@ -3,15 +3,10 @@
  * PHASE2_DESIGN.md section 2.8). Slice 2.1 adds the two calls the worker's ChatInbox makes:
  *
  *   POST /v1/internal/telegram/intake  {v, update, mode: 'legacy'}  → {v, kind: 'handled', intakeStatus, …}
- *     (slice 2.3 adds mode 'lifecycle', the chat's state, and `routesDecisions` from a ChatInbox that
- *     routes; the answer may then be {v, kind: 'decision', decision, chat?})
  *   POST /v1/internal/telegram/park    {v, update, reason, notifySender?} → {v, parked, alreadyParked}
  *
- * Intake is a thin wrapper around today's Telegram intake (routes/telegram-webhook.routes.ts): the
- * update goes to POST /api/webhooks/telegram in this process, with the webhook secret added here, and
- * the answer comes back as `intakeStatus`. So the worker's poller changes who asks Telegram and in
- * what order chats are served, and nothing about what intake does with an update; the same update
- * twice is one task, as it always was (intake's inbox row `<chat>:<update_id>`).
+ * Legacy mode wraps today's Telegram intake. Lifecycle mode first checks request ownership and
+ * a committed revision receipt before deciding whether the update belongs to a waiting request.
  *
  * Only the worker calls these, with HAWA_WORKER_TOKEN: a `service` principal that app.ts's
  * verifyRequestAuth accepts on /v1/internal/* and nowhere else, and those routes accept nothing else.
@@ -20,80 +15,131 @@
  * DATABASE_UNAVAILABLE, INTAKE_PAUSED (the office's kill switch) and NOT_CONFIGURED. A dead letter
  * made while the database is down or intake is switched off would help nobody: the update waits.
  */
+import { createHash } from 'node:crypto';
 import type { Context } from 'hono';
 import { chaosPoint } from '@hawa/observability';
 import { sql, withRlsContext } from '@hawa/db';
-import { SYSTEM_AUTOMATION_USER_ID, type ChatIntakeState, type IntakeAnswerBody, type IntakeDecision, type PendingClarification } from '@hawa/contracts';
+import { SYSTEM_AUTOMATION_USER_ID, lifecycleOwnsChat, parseBlobRef, parseLifecycleAlbumRef, parseLifecycleSourceRef, type DeliveryOutcome } from '@hawa/contracts';
+import { createLifecycleSourceIntake } from '../services/lifecycle-source-intake.js';
+import { assertSourceIdentity, SourceConflict } from '../services/lifecycle-source-store.js';
+import { chooseWaitingChatRequest, parseCompleteRevisionRequest, parseOfficeApprovalProof, parseRejectionCategory } from '@hawa/domain';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
+import { createChatCampaignIntake } from '../services/chat-campaign-intake.js';
+import { blobStoreFor } from '../services/blob-store-context.js';
+import { lifecyclePhotoInput, retainLifecyclePhoto } from '../services/lifecycle-photo.js';
+import { AlbumConflict, albumMessage, isAlbumConfirmation, hasAlbum, readAlbumPart, partReply, assertAlbumSource,
+  confirmAlbum, normalizedAlbumUpdate, retainAlbumPart, type AlbumSnapshot } from '../services/lifecycle-album.js';
+import { classifyWithHeuristics } from '../services/telegram-classifier.js';
+import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
+import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
+  readRevisionPhotoDecision, recordRevisionPhotoDecision,
+  readRoutingRefusal, recordRoutingRefusal,
+  revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests,
+  type LateRequesterChange } from '../services/lifecycle-chat-target.js';
 import { PARKED_UPDATE_NOTICE, parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
-import { readDecisionRecord, runWithDecideSession, writeDecisionRecord, type IntakeDecideSession, type IntakeMode } from '../services/telegram-intake/decide-mode.js';
-import { routeForCaller } from '../services/telegram-intake/lifecycle-forward.js';
+import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
+import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
+import type { ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
+import { parseNativeReviewSubmission } from '@hawa/domain';
+import { projectLifecycleNativeReview } from '../services/lifecycle-native-review.js';
+import { CanvaFlowError } from '../services/canva-flow-error.js';
 
 /** /v1/internal/*, under any of the prefixes registerRoute mounts routes at. */
 export function isInternalPath(path: string): boolean {
   return /^\/(?:api\/)?(?:v1\/)?internal(?:\/|$)/.test(path);
 }
 
-/** Keys the worker token must differ from: one of them would turn it into a second use of that key. */
-const OTHER_KEYS = ['HAWA_API_KEY', 'HAWA_BEARER_TOKEN', 'HAWA_DESK_SECRET', 'HAWA_ADMIN_KEY', 'HAWA_REVIEWER_KEY', 'HAWA_ART_DIRECTOR_KEY', 'TELEGRAM_WEBHOOK_SECRET'] as const;
-const MIN_TOKEN_LENGTH = 16;
-let warnedAbout = '';
-
-/**
- * HAWA_WORKER_TOKEN when it can be used: set, at least 16 characters, and equal to no other key Core
- * accepts. A worker token that is also the operator's key would make the operator a service and the
- * worker an operator; it is refused (and said once in the log), so /v1/internal/* stays closed.
- */
-export function serviceTokenOf(env: Record<string, string | undefined> = process.env): string | null {
-  const token = env.HAWA_WORKER_TOKEN?.trim();
-  if (!token) return null;
-  let fault = '';
-  if (token.length < MIN_TOKEN_LENGTH) fault = `is shorter than ${MIN_TOKEN_LENGTH} characters`;
-  const clash = OTHER_KEYS.find((k) => env[k]?.trim() === token);
-  if (clash) fault = `is the same as ${clash}`;
-  if (!fault) return token;
-  if (warnedAbout !== fault) {
-    warnedAbout = fault;
-    log.error(`[core:internal] HAWA_WORKER_TOKEN ${fault}; /v1/internal/* refuses every caller until it is a key of its own`);
-  }
-  return null;
-}
+// The worker credential rules live in services/worker-credential.ts (ADR-129: services sign with it too).
+export { acceptedServiceTokensOf, serviceTokenOf, workerSigningSecretOf } from '../services/worker-credential.js';
 
 interface UpdateLike { update_id: number; [kind: string]: unknown }
 
 /** The chat an update came from, for the chaos suite's point (the dead letter's own reading). */
 const chatOf = (u: UpdateLike): string => parkedUpdateChat(u) ?? '';
 
-/**
- * The chat state ChatInbox sent, as far as intake reads it: a clarification with its words and when it
- * was asked, and the albums answered. Anything else is dropped rather than trusted.
- */
-export function readChatState(raw: unknown): ChatIntakeState {
-  if (!raw || typeof raw !== 'object') return {};
-  const r = raw as Record<string, unknown>;
-  const out: ChatIntakeState = {};
-  const p = r.pendingClarification as Partial<PendingClarification> | undefined;
-  if (p && typeof p === 'object' && typeof p.rawText === 'string' && p.rawText.trim() && Number.isFinite(p.askedAt)) {
-    out.pendingClarification = {
-      rawText: p.rawText.slice(0, 20000), askedAt: Number(p.askedAt), updateId: Number.isSafeInteger(p.updateId) ? Number(p.updateId) : 0,
-      ...(typeof p.taskId === 'string' && /^[0-9a-f-]{36}$/i.test(p.taskId) ? { taskId: p.taskId } : {}),
-    };
-  }
-  if (r.albumsAcked && typeof r.albumsAcked === 'object') {
-    const albums = Object.entries(r.albumsAcked as Record<string, unknown>).filter(([k, v]) => k.length <= 64 && Number.isFinite(v)).slice(-100);
-    if (albums.length) out.albumsAcked = Object.fromEntries(albums.map(([k, v]) => [k, Number(v)]));
-  }
-  return out;
-}
-
 const isUpdate = (u: unknown): u is UpdateLike =>
   Boolean(u) && typeof u === 'object' && Number.isSafeInteger((u as UpdateLike).update_id) && (u as UpdateLike).update_id > 0;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The answer for a requester's words that reached a request after its design went to the office
+ * (finding 13 of the Phase 4 review). The same stored change always gives the same answer.
+ */
+function lateChangeAnswer(chatId: string, late: LateRequesterChange): Record<string, unknown> {
+  const office = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
+  const officeAlert = lateChangeOfficeAlert(late, chatId, office);
+  return { code: 'LATE_REQUESTER_CHANGE', lifecycleAction: 'late-change', chatId,
+    requestId: late.requestId, requestStage: late.requestStage, ...(officeAlert ? { officeAlert } : {}) };
+}
+
+function requestIdForUpdate(chatId: string, updateId: number): string {
+  const bytes = Buffer.from(createHash('sha256').update(`telegram-new-brief:${chatId}:${updateId}`).digest().subarray(0, 16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function openDraft(value: unknown, requestId: string): ChatIntake | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const d = value as Record<string, unknown>;
+  if (d.platform !== 'telegram' || d.sourceEventId !== `lc-${requestId}-r0` ||
+      typeof d.sourceChannelId !== 'string' || !/^-?\d{1,20}$/.test(d.sourceChannelId) ||
+      typeof d.rawText !== 'string' || !d.rawText.trim() || d.rawText.length > 100_000 ||
+      typeof d.title !== 'string' || !d.title.trim() || d.title.length > 500 ||
+      typeof d.designInstructions !== 'string' || d.designInstructions.length > 100_000 ||
+      !Array.isArray(d.exactCopy) || d.exactCopy.length > 500 || JSON.stringify(d.exactCopy).length > 100_000 ||
+      !(d.clientId === null || (typeof d.clientId === 'string' && UUID.test(d.clientId))) ||
+      (d.autoGenerate !== undefined && typeof d.autoGenerate !== 'boolean') ||
+      (d.isInstructionOnly !== undefined && typeof d.isInstructionOnly !== 'boolean')) return null;
+  const variant = d.variant;
+  if (variant !== undefined && (!variant || typeof variant !== 'object' ||
+      !Number.isInteger((variant as any).width) || !Number.isInteger((variant as any).height) ||
+      (variant as any).width < 640 || (variant as any).width > 2400 ||
+      (variant as any).height < 640 || (variant as any).height > 2400)) return null;
+  if (d.designStudio !== undefined && typeof d.designStudio !== 'boolean') return null;
+  const options = d.studioOptions;
+  if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options) ||
+      JSON.stringify(options).length > 2000 ||
+      (Object.keys(options).some((key) => !['tier', 'imagery', 'previews', 'holdForSelection'].includes(key))) ||
+      ((options as any).tier !== undefined && !['fast', 'quality'].includes((options as any).tier)) ||
+      ((options as any).imagery !== undefined && !['none', 'abstract', 'photographic'].includes((options as any).imagery)) ||
+      ((options as any).previews !== undefined && (!Number.isInteger((options as any).previews) || (options as any).previews < 1 || (options as any).previews > 4)) ||
+      ((options as any).holdForSelection !== undefined && typeof (options as any).holdForSelection !== 'boolean'))) return null;
+  const image = d.lifecycleImage;
+  const source = d.lifecycleSource === undefined ? undefined : parseLifecycleSourceRef(d.lifecycleSource);
+  if (d.lifecycleSource !== undefined && (!source || image || d.lifecycleAlbum)) return null;
+  const album = d.lifecycleAlbum === undefined ? undefined : parseLifecycleAlbumRef(d.lifecycleAlbum);
+  if ((d.lifecycleAlbum !== undefined && !album) || (image && album)) return null;
+  const imageRef = image === undefined ? undefined : parseBlobRef(image);
+  if (image !== undefined && (!imageRef || !Number.isSafeInteger((image as any).updateId) ||
+      (image as any).updateId <= 0 ||
+      !['image/png', 'image/jpeg', 'image/webp'].includes(imageRef.mediaType) ||
+      imageRef.size > 20 * 1024 * 1024)) return null;
+  // Select the contract explicitly. A worker payload cannot choose the database principal, tenant,
+  // outbox owner or a second source through spare JSON fields.
+  return {
+    platform: 'telegram', sourceEventId: d.sourceEventId as string, sourceChannelId: d.sourceChannelId as string,
+    rawText: d.rawText as string, title: d.title as string,
+    designInstructions: d.designInstructions as string, exactCopy: d.exactCopy as unknown[],
+    clientId: d.clientId as string | null,
+    ...(d.autoGenerate !== undefined ? { autoGenerate: d.autoGenerate as boolean } : {}),
+    ...(d.isInstructionOnly !== undefined ? { isInstructionOnly: d.isInstructionOnly as boolean } : {}),
+    ...(variant ? { variant: variant as { width: number; height: number } } : {}),
+    ...(d.designStudio !== undefined ? { designStudio: d.designStudio as boolean } : {}),
+    ...(options ? { studioOptions: options as ChatIntake['studioOptions'] } : {}),
+    ...(imageRef ? { lifecycleImage: { ...imageRef, updateId: (image as { updateId: number }).updateId } } : {}),
+    ...(album ? { lifecycleAlbum: album } : {}),
+    ...(source ? { lifecycleSource: source } : {}),
+  };
+}
 
 export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
   const { app, db, problem, verifyRequestAuth, channelKillSwitches } = ctx;
+  const sourceIntake = createLifecycleSourceIntake(ctx);
 
   // Registered on /v1/internal/* only (not under every prefix, as registerRoute does): one address,
   // which nginx does not need to serve, for one caller.
@@ -103,6 +149,17 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       if (!auth.authenticated || auth.role !== 'service') return problem(c, 401, 'Authentication Required', 'This route takes the worker\'s credential only');
       return handler(c);
     });
+
+  internal('/lifecycle/:requestId/native-review',async c=>{
+    const event=parseNativeReviewSubmission(await c.req.json().catch(()=>null));
+    if (!event || event.requestId !== c.req.param('requestId')) return problem(c,422,'Invalid Native Review');
+    if (!db) return problem(c,503,'Database Required');
+    try { return c.json(await projectLifecycleNativeReview(db,DEFAULT_TENANT_ID,event)); }
+    catch(error) {
+      if (error instanceof CanvaFlowError) return problem(c,error.status,error.code,error.message);
+      return problem(c,503,'Native Review Unavailable','Retry the identical submission.');
+    }
+  });
 
   const readBody = async (c: Context): Promise<Record<string, unknown> | null> => {
     try {
@@ -115,28 +172,17 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
 
   internal('/telegram/intake', async (c) => {
     const body = await readBody(c);
-    const update = body?.update;
-    if (!isUpdate(update)) return problem(c, 400, 'Invalid update', 'The body must carry a Telegram update with a positive update_id');
-    // 'legacy': today's intake, except that an update aimed at a request the lifecycle owns is
-    // answered as a decision to route. 'lifecycle' (slice 2.3): new requests are decided, not saved.
-    const mode = body?.mode ?? 'legacy';
-    if (mode !== 'legacy' && mode !== 'lifecycle') return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
+    const incoming = body?.update;
+    if (!isUpdate(incoming)) return problem(c, 400, 'Invalid update', 'The body must carry a Telegram update with a positive update_id');
+    let preparedUpdate: UpdateLike = incoming;
+    // 2.3 adds the lifecycle's decide mode. Unknown modes are refused explicitly.
+    let mode = body?.mode ?? 'legacy';
+    if (mode !== 'legacy' && mode !== 'lifecycle') {
+      return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
+    }
 
     const handled = (intakeStatus: number, extra: Record<string, unknown> = {}) =>
       c.json({ v: 1, kind: 'handled', intakeStatus, ...extra }, 200);
-    const chat = chatOf(update);
-    // A ChatInbox from slice 2.3 part C on says it routes decisions (`routesDecisions`; mode
-    // 'lifecycle' is only ever asked by one). An older one reads a decision as "done" and routes
-    // nothing, so for it Core routes the decision itself, through Restate's ingress with the keys
-    // ChatInbox would use, and answers `handled` (review of 2.3C).
-    const callerRoutes = mode === 'lifecycle' || body?.routesDecisions === true;
-    const routedByCore = async (decision: IntakeDecision): Promise<Response> => {
-      const routed = await routeForCaller(ctx.telegramBridge, chat, update, decision);
-      if (routed.outcome === 'routed') return handled(200, { routedByCore: decision.kind });
-      // Retryable for the older client: counted, and parked (the office alerted) after its attempts.
-      if (routed.outcome === 'retry') return handled(503, { code: 'LIFECYCLE_UNREACHABLE' });
-      return handled(409, { code: 'LIFECYCLE_OWNED' });
-    };
 
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
     if (!secret) return handled(503, { code: 'NOT_CONFIGURED', detail: 'TELEGRAM_WEBHOOK_SECRET is not configured' });
@@ -144,50 +190,429 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // switch, as it waited in Telegram when Core polled. Asked here so the answer is not a retry.
     if (await intakeRefused(channelKillSwitches, 'telegram')) return handled(503, { code: 'INTAKE_PAUSED' });
 
-    // The same update decided before (the worker lost the answer, or was killed): the decision is
-    // answered from its record, and nothing is transcribed or classified again.
-    if (db && chat) {
-      const recorded = await readDecisionRecord(db, chat, update.update_id).catch((err: unknown) => {
-        log.warn(`[core:internal] could not read the decision record of update ${update.update_id}:`, err instanceof Error ? err.message : err);
-        return undefined;
-      });
-      if (recorded === undefined) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
-      if (recorded) {
-        if (!callerRoutes) return routedByCore(recorded.decision);
-        return c.json({ v: 1, kind: 'decision', intakeStatus: 200, decision: recorded.decision, replayed: true, ...(recorded.chat ? { chat: recorded.chat } : {}) } satisfies IntakeAnswerBody, 200);
+    if (db) {
+      try { await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+        trx => assertSourceIdentity(trx, DEFAULT_TENANT_ID, incoming)); }
+      catch (error) {
+        if (error instanceof SourceConflict) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        throw error;
       }
     }
 
-    // Today's intake, in this process, as the Core poller handed updates to it (app.ts), inside the
-    // decide session its stages read (services/telegram-intake/decide-mode.ts).
-    const session: IntakeDecideSession = { mode: mode as IntakeMode, chat: mode === 'lifecycle' ? readChatState(body?.chat) : {} };
-    const res = await runWithDecideSession(session, async () => app.request('/api/webhooks/telegram?generate=true', {
+    let admittedAlbum: AlbumSnapshot | undefined;
+    if (db) {
+      try {
+        await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+          (trx) => assertAlbumSource(trx, DEFAULT_TENANT_ID, preparedUpdate));
+      } catch (error) {
+        if (error instanceof AlbumConflict) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        throw error;
+      }
+    }
+    const albumPart = albumMessage(preparedUpdate);
+    if (albumPart || isAlbumConfirmation(preparedUpdate)) {
+      if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+      const tx = <T>(fn: (trx: import('@hawa/db').Kysely<import('@hawa/db').Database>) => Promise<T>) =>
+        withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, fn);
+      const source = preparedUpdate;
+      const chatId = chatOf(source);
+      const msg = source.message as Record<string, unknown>;
+      const senderId = String((msg.from as { id?: unknown } | undefined)?.id ?? '');
+      const senderAllowed = !ctx.isProduction || ctx.telegramIntakeUsers.includes('*') ||
+        process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*' || ctx.telegramIntakeUsers.includes(senderId);
+      const reply = (answer: { status: number; message: string; noticeKey: string }) =>
+        handled(answer.status, { lifecycleAction: 'album-message', chatId,
+          albumMessage: answer.message, albumNoticeKey: answer.noticeKey });
+      try {
+        if (albumPart) {
+          const priorPart = await tx((trx) => readAlbumPart(trx, DEFAULT_TENANT_ID, source));
+          if (priorPart) return reply(partReply(priorPart));
+          const priorRouting = await tx((trx) => readRoutingRefusal(trx, DEFAULT_TENANT_ID, source.update_id));
+          const owned = mode === 'lifecycle' || lifecycleOwnsChat(chatId) ||
+            await tx((trx) => hasAlbum(trx, DEFAULT_TENANT_ID, chatId, String(albumPart.media_group_id)));
+          if (owned && !priorRouting) {
+            if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+            const old = await createTelegramUpdateState(ctx).telegramUpdateHandled(chatId, String(source.update_id));
+            if (old) return handled(200, { duplicate: true, ...(old.taskId ? { taskIds: [old.taskId] } : {}) });
+            return reply(await retainAlbumPart(tx, DEFAULT_TENANT_ID, source, blobStoreFor(db, ctx.options?.blobStore),
+              (id) => ctx.telegramBridge?.downloadFile(id) ?? Promise.resolve(null)));
+          }
+        } else {
+          if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+          const confirmed = await tx((trx) => confirmAlbum(trx, DEFAULT_TENANT_ID, source));
+          if (confirmed.reply) return reply(confirmed.reply);
+          admittedAlbum = confirmed.snapshot;
+          if (!admittedAlbum) throw new Error('Album confirmation has no stored result');
+          preparedUpdate = normalizedAlbumUpdate(admittedAlbum);
+          mode = 'lifecycle';
+          await chaosPoint('core.intake.after-album-confirmation', { updateId: source.update_id, chat: chatId });
+        }
+      } catch (error) {
+        if (error instanceof AlbumConflict) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        if (error instanceof Error && error.message === 'ALBUM_STORE_UNAVAILABLE') return handled(503, { code: 'NOT_CONFIGURED' });
+        if (error instanceof Error && error.message === 'ALBUM_PHOTO_UNAVAILABLE') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
+        throw error;
+      }
+    }
+
+    const update = preparedUpdate;
+
+    // A decision must replay even if the flag changed after the first answer was lost.
+    const sourceChat = chatOf(update);
+    let priorRefusal: Awaited<ReturnType<typeof readRoutingRefusal>> = null;
+    let priorRevisionPhoto: Awaited<ReturnType<typeof readRevisionPhotoDecision>> = null;
+    if (db && sourceChat) {
+      try {
+        const prior = await withRlsContext(db,
+          { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+          async (trx) => ({
+            open: await readNewBriefDecision(trx, DEFAULT_TENANT_ID, update.update_id),
+            refusal: await readRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id),
+            revisionPhoto: await readRevisionPhotoDecision(trx, DEFAULT_TENANT_ID, update.update_id),
+          }));
+        priorRefusal = prior.refusal;
+        priorRevisionPhoto = prior.revisionPhoto;
+        // A valid photo can subsequently hit the daily cap or a missing parent brief.
+        // That refusal replays before the pending image decision; both carry this update hash.
+        if (prior.open && (priorRefusal || priorRevisionPhoto)) {
+          return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+        }
+        if (priorRevisionPhoto) {
+          const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+          if (priorRevisionPhoto.payloadHash !== hash || priorRevisionPhoto.chatId !== sourceChat) {
+            return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+          }
+        }
+        if (prior.open) {
+          const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+          if (prior.open.payloadHash !== hash || prior.open.chatId !== sourceChat) {
+            return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+          }
+          return handled(200, { duplicate: true, lifecycleAction: 'open-request',
+            requestId: prior.open.requestId, chatId: sourceChat, draft: prior.open.draft });
+        }
+      } catch (err) {
+        if ((err as { status?: number })?.status === 503) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+        throw err;
+      }
+    }
+
+    // A deliberate lifecycle refusal must not become a legacy task when the chat flag
+    // changes before Telegram repeats the same update ID.
+    if (priorRefusal) {
+      const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+      if (priorRefusal.payloadHash !== hash || priorRefusal.chatId !== sourceChat) {
+        return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+      }
+      if (priorRefusal.code === 'LIFECYCLE_MEDIA_NOT_ADMITTED') {
+        return handled(422, { code: priorRefusal.code, lifecycleAction: 'park-update',
+          chatId: sourceChat, reason: 'A lifecycle chat media update needs operator review; no task was started' });
+      }
+      if (priorRefusal.code === 'LATE_REQUESTER_CHANGE' && priorRefusal.late) {
+        return handled(409, lateChangeAnswer(sourceChat, priorRefusal.late));
+      }
+      return handled(409, { code: priorRefusal.code,
+        lifecycleAction: priorRefusal.code === 'AMBIGUOUS_REQUEST' ||
+          priorRefusal.code === 'STALE_REQUEST_REPLY' ? 'request-choice-required' : 'revision-blocked',
+        chatId: sourceChat });
+    }
+
+    const sourceAnswer = await sourceIntake(update, String(mode));
+    if (sourceAnswer) return handled(sourceAnswer.status, sourceAnswer.extra);
+
+    // --- lifecycle mode: bind a requester answer to one request, then replay it by update ID ---
+    if (mode === 'lifecycle' || lifecycleOwnsChat(chatOf(update)) || priorRevisionPhoto) {
+      // The chat's stored request ID is only a hint. A chat can contain more than one request.
+      if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+      {
+        // Extract the directive text from the Telegram update.
+        const msg = (update as Record<string, unknown>).message;
+        const cbq = (update as Record<string, unknown>).callback_query;
+        const chatId: string = chatOf(update);
+        const carrier = update.message ?? update.edited_message ?? update.channel_post;
+        const media = carrier && typeof carrier === 'object' ? carrier as Record<string, unknown> : null;
+        const photoInput = lifecyclePhotoInput(update);
+        const sender = media?.from as { id?: unknown } | undefined;
+        const senderId = String(sender?.id ?? '');
+        const isIntakeOpen = ctx.telegramIntakeUsers.includes('*') || process.env.TELEGRAM_INTAKE_ALLOWED_USERS === '*';
+        const senderAllowed = !ctx.isProduction || isIntakeOpen ||
+          (ctx.telegramIntakeUsers.length > 0 && ctx.telegramIntakeUsers.includes(senderId));
+        const holdMedia = async () => {
+          // Hold unsupported input as a whole; a caption cannot replace an unavailable file.
+          if (!senderAllowed) {
+            return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+          }
+          const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+          const stored = await withRlsContext(db,
+            { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+            (trx) => recordRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id,
+              { code: 'LIFECYCLE_MEDIA_NOT_ADMITTED', chatId, payloadHash }));
+          if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
+              stored.code !== 'LIFECYCLE_MEDIA_NOT_ADMITTED') {
+            return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+          }
+          return handled(422, { code: stored.code, lifecycleAction: 'park-update', chatId,
+            reason: 'A lifecycle chat media update needs operator review; no task was started' });
+        };
+        if (media && chatId && (media.photo || media.voice || media.audio || media.document ||
+            media.video || media.video_note || media.animation || media.live_photo || media.caption) && !photoInput) {
+          return holdMedia();
+        }
+        const rawText: string = (() => {
+          if (photoInput) return photoInput.directive;
+          if (cbq && typeof cbq === 'object') {
+            const d = (cbq as Record<string, unknown>).data;
+            return typeof d === 'string' ? d : '';
+          }
+          if (msg && typeof msg === 'object') {
+            const t = (msg as Record<string, unknown>).text ?? (msg as Record<string, unknown>).caption;
+            return typeof t === 'string' ? t : '';
+          }
+          return '';
+        })();
+        if (rawText.trim() && chatId) {
+          const payloadHash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
+          type RefusalCode = 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' |
+            'DAILY_CAP_REACHED' | 'PARENT_BRIEF_MISSING' | 'QUESTION_MISSING';
+          const actionFor = (code: RefusalCode) => code === 'AMBIGUOUS_REQUEST' ||
+            code === 'STALE_REQUEST_REPLY' ? 'request-choice-required' : 'revision-blocked';
+          const refuseWithReceipt = async (code: RefusalCode) => {
+            const stored = await withRlsContext(db,
+              { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+              (trx) => recordRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id,
+                { code, chatId, payloadHash }));
+            if (stored.payloadHash !== payloadHash || stored.chatId !== chatId || stored.code !== code) {
+              return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+            }
+            return handled(409, { code, lifecycleAction: actionFor(code), chatId });
+          };
+          try {
+            const TENANT = DEFAULT_TENANT_ID;
+            const directive = rawText.trim();
+            // The Core poller may have committed this update before the chat flag or worker
+            // poller changed. Its old receipt wins; reopening it under Restate would duplicate
+            // a task even though this update ID is the same.
+            const oldIntake = await createTelegramUpdateState(ctx)
+              .telegramUpdateHandled(chatId, String(update.update_id));
+            if (oldIntake) {
+              return handled(200, { duplicate: true,
+                ...(oldIntake.taskId ? { taskIds: [oldIntake.taskId] } : {}) });
+            }
+            // A lost answer from Core must replay before reading today's stage. The original
+            // projection already moved manual → designing; falling through would create a legacy task.
+            const receipts = await withRlsContext(db,
+              { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+              (trx) => revisionIntakeReceipts(trx, TENANT, chatId, update.update_id));
+            if (receipts.length > 1) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+            if (receipts.length === 1) {
+              const result = receipts[0].result as Record<string, unknown>;
+              if (result?.requestId !== receipts[0].request_id || result.directive !== directive ||
+                  result.sourceUpdateHash !== payloadHash ||
+                  typeof result.newTaskId !== 'string' || typeof result.priorTaskId !== 'string' ||
+                  typeof result.round !== 'number') return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+              return handled(200, { duplicate: true,
+                lifecycleAction: typeof result.questionId === 'string' ? 'requester-answer' : 'requester-revision',
+                requestId: result.requestId, newTaskId: result.newTaskId, round: result.round,
+                directive: result.directive, priorTaskId: result.priorTaskId, rawText: directive, chatId,
+                ...(typeof result.questionId === 'string' ? { questionId: result.questionId } : {}) });
+            }
+
+            const replied = msg && typeof msg === 'object' ? (msg as Record<string, unknown>).reply_to_message : null;
+            const messageId = replied && typeof replied === 'object'
+              ? (replied as Record<string, unknown>).message_id : null;
+            const replyMessageId = Number.isSafeInteger(messageId) && Number(messageId) > 0 ? String(messageId) : null;
+            const newCommand = /^\/new(?:@\w+)?(?:\s+|$)/i.exec(directive);
+            const newBriefText = newCommand ? directive.slice(newCommand[0].length).trim() : directive;
+            if (newCommand && !newBriefText) {
+              return handled(422, { code: 'NEW_BRIEF_EMPTY', lifecycleAction: 'new-brief-required', chatId });
+            }
+            const { waiting, links } = await withRlsContext(db,
+              { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' }, async (trx) => ({
+                waiting: await waitingLifecycleRequests(trx, TENANT, chatId),
+                links: replyMessageId ? await linkedLifecycleReplies(trx, TENANT, chatId, replyMessageId) : [],
+              }));
+            // A reply to a request whose design already went to the office (in review, approved,
+            // delivering or delivered) cannot change that design, and it was a stale reply that kept
+            // nothing. Its words are kept, the office is alerted, and Deliver waits for someone to
+            // acknowledge them (finding 13 of the Phase 4 review).
+            if (replyMessageId && !newCommand && !priorRevisionPhoto &&
+                (mode === 'lifecycle' || lifecycleOwnsChat(chatId)) &&
+                !links.some((link) => waiting.some((request) =>
+                  request.request_id === link.requestId && Number(request.rev) === link.rev))) {
+              const targets = await withRlsContext(db,
+                { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                (trx) => lateChangeTargets(trx, TENANT, chatId, replyMessageId));
+              if (targets.length === 1) {
+                const text = photoInput
+                  ? `${photoInput.captionless ? '(no words)' : directive}\n[The requester also sent a photo. It is in the Telegram chat and was not kept.]`
+                  : directive;
+                const late: LateRequesterChange = { ...targets[0], text };
+                const stored = await withRlsContext(db,
+                  { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                  (trx) => recordRoutingRefusal(trx, DEFAULT_TENANT_ID, update.update_id,
+                    { code: 'LATE_REQUESTER_CHANGE', chatId, payloadHash, late }));
+                if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
+                    stored.code !== 'LATE_REQUESTER_CHANGE' || !stored.late) {
+                  return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+                }
+                return handled(409, lateChangeAnswer(chatId, stored.late));
+              }
+            }
+            if (replyMessageId && (mode === 'lifecycle' || lifecycleOwnsChat(chatId) || priorRevisionPhoto) &&
+                (links.length === 0 || newCommand)) return refuseWithReceipt('STALE_REQUEST_REPLY');
+            if (links.length > 1) return refuseWithReceipt('AMBIGUOUS_REQUEST');
+            // An explicit new brief may coexist with a waiting request. A reply to a lifecycle
+            // notice always remains bound to that notice, including a stale reply.
+            const mayOpen = (lifecycleOwnsChat(chatId) || Boolean(admittedAlbum)) && Boolean(msg) && !replyMessageId &&
+              (Boolean(newCommand) || waiting.length === 0);
+            if (mayOpen) {
+              const classification = classifyWithHeuristics(newBriefText, false, false);
+              if (classification.kind !== 'new_brief') {
+                if (newCommand) return handled(422, { code: 'NEW_BRIEF_EMPTY',
+                  lifecycleAction: 'new-brief-required', chatId });
+                // Questions, greetings and lasting preferences retain the legacy handler's
+                // established response; a chat flag does not turn them into design tasks.
+              } else {
+                const sender = (msg as Record<string, { id?: unknown; first_name?: unknown }>).from;
+                if (!senderAllowed) {
+                  return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+                }
+                if (newBriefText.length > 100_000) return handled(413, { code: 'BRIEF_TOO_LONG' });
+                // A newly flagged chat with historical Core tasks needs an explicit command; an
+                // ordinary message could be a change to an older design.
+                const hasLegacyTask = await withRlsContext(db,
+                  { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                  async (trx) =>
+                    (await sql<{ one: number }>`SELECT 1 AS one FROM hawa.outbox_commands o
+                      JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
+                      WHERE o.tenant_id = ${TENANT}::uuid AND o.command_type = 'task.created'
+                        AND o.payload->>'sourceChannelId' = ${chatId}
+                        AND t.delivery_executor_pin = 'core' LIMIT 1`.execute(trx)).rows.length > 0);
+                if (newCommand || !hasLegacyTask) {
+                  const requestId = requestIdForUpdate(chatId, update.update_id);
+                  const prepared = await createChatCampaignIntake(ctx).prepareChatCampaignDraft({
+                    platform: 'telegram', sourceEventId: `lc-${requestId}-r0`, sourceChannelId: chatId,
+                    senderName: typeof sender?.first_name === 'string' ? sender.first_name : 'Requester',
+                    rawText: newBriefText, rawJson: update,
+                    autoGenerate: !classification.isInstructionOnly,
+                    isInstructionOnly: classification.isInstructionOnly,
+                  });
+                  let lifecycleImage: ChatIntake['lifecycleImage'];
+                  if (photoInput) {
+                    if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
+                    const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
+                      (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
+                    if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
+                    if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
+                    if (photo.kind === 'unsupported') return holdMedia();
+                    lifecycleImage = { ...photo.ref, updateId: update.update_id };
+                  }
+                  const draft = openDraft({ ...prepared, ...(lifecycleImage ? { lifecycleImage } : {}),
+                    ...(admittedAlbum ? { lifecycleAlbum: admittedAlbum.ref } : {}) }, requestId);
+                  if (!draft) return handled(422, { code: 'INVALID_BRIEF' });
+                  const stored = await withRlsContext(db,
+                    { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                    (trx) => recordNewBriefDecision(trx, TENANT, update.update_id,
+                      { requestId, chatId, payloadHash, draft,
+                        ...((lifecycleImage || admittedAlbum) ? { sourceUpdate: update } : {}) }));
+                  if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
+                      stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+                  await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
+                  return handled(200, { duplicate: false, lifecycleAction: 'open-request',
+                    requestId, chatId, draft: stored.draft });
+                }
+              }
+            }
+            const choice = chooseWaitingChatRequest(waiting.map((r) =>
+              ({ requestId: r.request_id, rev: Number(r.rev) })), links[0]);
+            if (choice.kind === 'ambiguous' || choice.kind === 'stale_reply') {
+              return refuseWithReceipt(choice.kind === 'ambiguous' ? 'AMBIGUOUS_REQUEST' : 'STALE_REQUEST_REPLY');
+            }
+            const openRequest = choice.kind === 'target'
+              ? waiting.find((r) => r.request_id === choice.requestId) : undefined;
+            if (priorRevisionPhoto && priorRevisionPhoto.requestId !== openRequest?.request_id) {
+              return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+            }
+            if (openRequest) {
+              if (openRequest.stage === 'awaiting_answer' &&
+                  (!openRequest.question || !UUID.test(openRequest.question.id))) {
+                return refuseWithReceipt('QUESTION_MISSING');
+              }
+              const questionId = openRequest.stage === 'awaiting_answer'
+                ? openRequest.question!.id : undefined;
+              const requestId = openRequest.request_id;
+              const expectedRev = Number(openRequest.rev);
+              const nextRev = expectedRev + 1;
+              // Derive the round from the revision number: first office-revise lands at rev=3;
+              // subsequent revisions increment by 2 each time (office+requester), so round = (rev - 1) / 2.
+              const round = Math.max(1, Math.floor((expectedRev - 1) / 2));
+              if (round >= 1) {
+                let lifecycleImage = priorRevisionPhoto?.image;
+                if (photoInput && !lifecycleImage) {
+                  if (!senderAllowed) return handled(403, { code: 'SENDER_NOT_ALLOWED' });
+                  if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
+                  const photo = await retainLifecyclePhoto(blobStoreFor(db, ctx.options?.blobStore),
+                    (id) => ctx.telegramBridge!.downloadFile(id), photoInput.fileId);
+                  if (photo.kind === 'store_unavailable') return handled(503, { code: 'NOT_CONFIGURED' });
+                  if (photo.kind === 'download_unavailable') return handled(503, { code: 'PHOTO_UNAVAILABLE' });
+                  if (photo.kind === 'unsupported') return holdMedia();
+                  const stored = await withRlsContext(db,
+                    { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+                    (trx) => recordRevisionPhotoDecision(trx, TENANT, update.update_id,
+                      { requestId, chatId, payloadHash, image: photo.ref }));
+                  if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
+                      stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
+                  lifecycleImage = stored.image;
+                  await chaosPoint('core.intake.after-revision-photo-decision',
+                    { updateId: update.update_id, chat: chatId, requestId });
+                }
+                const sourceEventId = `lc-${requestId}-r${round}-u${update.update_id}`;
+                const key = `${requestId}:${nextRev}:requesterRevisionIntake:u${update.update_id}`;
+                const projected = await projectLifecycleRequesterRevisionWithIntake(db, {
+                  requestId, tenantId: TENANT, priorTaskId: openRequest.current_task_id,
+                  round, directive, sourceEventId, sourceChannelId: chatId,
+                  rawText: directive, sourceUpdateHash: payloadHash, sourceUpdate: update,
+                  ...(lifecycleImage ? { lifecycleImage } : {}),
+                  ...(admittedAlbum ? { lifecycleAlbum: admittedAlbum.ref } : {}),
+                  clientId: openRequest.client_id,
+                  ...(questionId ? { questionId } : {}),
+                  expectedRev, rev: nextRev, key,
+                });
+                await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
+                return handled(200, { duplicate: false,
+                  lifecycleAction: questionId ? 'requester-answer' : 'requester-revision',
+                  requestId, newTaskId: projected.newTaskId,
+                  round: projected.round, directive: projected.directive,
+                  priorTaskId: openRequest.current_task_id, rawText: directive, chatId,
+                  ...(questionId ? { questionId } : {}),
+                });
+              }
+            }
+            if (photoInput || admittedAlbum) return holdMedia();
+            // Not in manual stage or no open request → fall through to legacy intake.
+          } catch (err) {
+            if (err instanceof LifecycleProjectionConflict) {
+              log.warn(`[core:internal] lifecycle intake conflict for update ${update.update_id}: ${err.code} ${err.message}`);
+              if (err.code === 'DAILY_CAP_REACHED' || err.code === 'PARENT_BRIEF_MISSING') {
+                return refuseWithReceipt(err.code);
+              }
+              // Treat projection conflicts as a handled non-retryable result (409-like).
+              return handled(409, { code: err.code, detail: err.message });
+            }
+            if ((err as { status?: number })?.status === 503) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+            throw err; // unexpected; let Restate retry
+          }
+        }
+      }
+    }
+
+    // --- legacy mode (or lifecycle fallback to legacy when not in manual stage) ---
+    // Today's intake, in this process, as the Core poller handed updates to it (app.ts).
+    const res = await app.request('/api/webhooks/telegram?generate=true', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret, ...requestIdHeaders() },
       body: JSON.stringify(update),
-    }));
-    // "Clarify sets the waiting question; every other decision clears it" (PHASE2_DESIGN.md 2.2): a
-    // button, an answer or a command after the question means the requester moved on, and a later
-    // "new" or "revise" must not reach back to words sent an hour ago.
-    if (session.decision?.kind !== 'clarify') delete session.chat.pendingClarification;
-    const chatState = mode === 'lifecycle' ? { chat: session.chat } : {};
-    if (session.legacyBecause) log.info(`[core:internal] update ${update.update_id} of lifecycle chat ${chat} read on Core's own path: ${session.legacyBecause}`);
-
-    if (session.decision) {
-      // The decision is written before it is answered: paid transcription and classification are
-      // not made again for it (PHASE2_DESIGN.md section 5).
-      if (db && chat) {
-        try {
-          await writeDecisionRecord(db, chat, update.update_id, session.decision, mode === 'lifecycle' ? session.chat : undefined);
-        } catch (err) {
-          log.warn(`[core:internal] the decision for update ${update.update_id} could not be recorded; the update waits:`, err instanceof Error ? err.message : err);
-          return handled(503, { code: 'DATABASE_UNAVAILABLE' });
-        }
-      }
-      await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat, status: 200, decision: session.decision.kind });
-      if (!callerRoutes) return routedByCore(session.decision);
-      return c.json({ v: 1, kind: 'decision', intakeStatus: 200, decision: session.decision, ...chatState } satisfies IntakeAnswerBody, 200);
-    }
+    });
     const answer = (await res.json().catch(() => ({}))) as { duplicate?: boolean; title?: string; task?: { id?: string }; tasks?: Array<{ id?: string }> };
     if (res.status === 503 && answer.title === 'Database Unavailable') return handled(503, { code: 'DATABASE_UNAVAILABLE' });
     // The switch thrown between the check above and intake's own.
@@ -196,11 +621,9 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
 
     // Intake has decided and saved what it saves; the answer has not left yet (chaos suite point:
     // a Core killed here must not make the worker's retry a second task).
-    await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat, status: res.status });
+    await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatOf(update), status: res.status });
     const taskIds = [...(answer.tasks ?? []), ...(answer.task ? [answer.task] : [])].map((t) => t?.id).filter((id): id is string => typeof id === 'string');
-    // The chat's state goes back only when the update is done with; a retried one keeps the old.
-    const done = res.status < 500 && res.status !== 408 && res.status !== 429;
-    return handled(res.status, { duplicate: answer.duplicate === true, ...(taskIds.length ? { taskIds: [...new Set(taskIds)] } : {}), ...(done ? chatState : {}) });
+    return handled(res.status, { duplicate: answer.duplicate === true, ...(taskIds.length ? { taskIds: [...new Set(taskIds)] } : {}) });
   });
 
   internal('/telegram/park', async (c) => {
@@ -236,5 +659,303 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
       return problem(c, 503, 'Database Unavailable', 'The dead letter could not be stored; ask again');
     }
   });
-}
 
+  // RequestLifecycle's first projection. Only the worker credential can reach it; a flagged
+  // ChatInbox admission sends the owner an open event. One transaction pins task/outbox ownership.
+  internal('/lifecycle/:requestId/project', async (c) => {
+    const requestId = c.req.param('requestId') ?? '';
+    const body = await readBody(c);
+    const ops = body?.ops;
+    const first = Array.isArray(ops) && ops.length === 1 ? ops[0] as Record<string, unknown> : null;
+    const draft = first?.kind === 'createRequest' ? openDraft(first.draft, requestId) : null;
+    if (!UUID.test(requestId) || body?.v !== 1 || body.expectedRev !== 0 || body.rev !== 1 ||
+        body.key !== `${requestId}:1:open` || !draft) {
+      return problem(c, 400, 'Invalid lifecycle projection', 'Expected one versioned createRequest operation with a stable round-zero source');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleOpen(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID, expectedRev: 0, rev: 1,
+        key: body.key as string, draft,
+      }, blobStoreFor(db, ctx.options?.blobStore));
+      if (draft.lifecycleSource) await chaosPoint('core.source.after-projection', { requestId });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] lifecycle open ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The projection did not commit; retry with the same key');
+    }
+  });
+
+  internal('/lifecycle/:requestId/design-outcome', async (c) => {
+    const requestId = c.req.param('requestId') ?? '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const report = op?.report && typeof op.report === 'object' && !Array.isArray(op.report)
+      ? op.report as Record<string, unknown> : null;
+    const runId = op?.runId;
+    const taskId = op?.taskId;
+    const clean = (value: unknown) => typeof value === 'string' && /^[A-Z0-9_]{1,64}$/.test(value);
+    // Flexible rev: first round is expectedRev=1, rev=2; revision rounds are (1+2k)→(2+2k).
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    if (!UUID.test(requestId) || body?.v !== 1 ||
+        !Number.isInteger(expectedRev) || expectedRev < 1 || rev !== expectedRev + 1 ||
+        op?.kind !== 'recordOutcome' || typeof taskId !== 'string' || !UUID.test(taskId) ||
+        runId !== `dr-${taskId}` || body.key !== `${requestId}:${rev}:designFinished:${runId}` ||
+        !report || !clean(report.status) ||
+        (report.code !== undefined && !clean(report.code)) ||
+        (report.designId !== undefined && (typeof report.designId !== 'string' || !/^[A-Za-z0-9_-]{4,64}$/.test(report.designId))) ||
+        (report.detail !== undefined && (typeof report.detail !== 'string' || report.detail.length > 500)) ||
+        (report.runId !== undefined && (typeof report.runId !== 'string' || report.runId.length > 100)) ||
+        (report.notifyRequester !== undefined && typeof report.notifyRequester !== 'boolean')) {
+      return problem(c, 400, 'Invalid design outcome projection', 'Expected one versioned recordOutcome operation for the current design round');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleDesignOutcome(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID, taskId: taskId as string, runId: runId as string,
+        expectedRev, rev, key: body.key as string,
+        report: report as unknown as Parameters<typeof projectLifecycleDesignOutcome>[1]['report'],
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] lifecycle design outcome ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The projection did not commit; retry with the same key');
+    }
+  });
+
+  internal('/lifecycle/:requestId/question-sent', async (c) => {
+    const requestId = c.req.param('requestId') ?? '';
+    const body = await readBody(c);
+    const rev = body?.expectedRev;
+    const taskId = body?.taskId;
+    const questionId = body?.questionId;
+    const messageId = body?.messageId;
+    if (!UUID.test(requestId) || body?.v !== 1 || body.requestId !== requestId ||
+        !Number.isInteger(rev) || (rev as number) < 2 ||
+        typeof taskId !== 'string' || !UUID.test(taskId) ||
+        typeof questionId !== 'string' || !UUID.test(questionId) ||
+        body.messageKey !== `${requestId}:${rev}:design-outcome` ||
+        typeof messageId !== 'string' || !/^[1-9][0-9]*$/.test(messageId) ||
+        !Number.isSafeInteger(Number(messageId))) {
+      return problem(c, 400, 'Invalid question send confirmation', 'The confirmation must name the current question and Telegram message');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The question send confirmation requires a database');
+    try {
+      const result = await confirmLifecycleQuestionSent(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID, expectedRev: rev as number,
+        taskId, questionId, messageKey: body.messageKey as string, messageId,
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] question send confirmation ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Question Confirmation Unavailable', 'The confirmation did not commit; retry the same message');
+    }
+  });
+
+  // The versioned office transition records the decision, task transition, request revision
+  // and replay receipt in one transaction. Works across all revision rounds (expectedRev ≥ 2).
+  internal('/lifecycle/:requestId/office-decision', async (c) => {
+    const requestId = c.req.param('requestId') ?? '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const actor = op?.actor && typeof op.actor === 'object' && !Array.isArray(op.actor)
+      ? op.actor as Record<string, unknown> : null;
+    const actionId = op?.actionId;
+    const revisionRequest = op?.revisionRequest === undefined ? undefined : parseCompleteRevisionRequest(op.revisionRequest);
+    const approvalProof = op?.approvalProof === undefined ? undefined : parseOfficeApprovalProof(op.approvalProof);
+    const isApproval = op?.kind === 'recordOfficeApproval';
+    const isRejection = op?.kind === 'recordOfficeRejection';
+    // Flexible rev: first office decision is expectedRev=2, rev=3; later rounds follow the same +1 pattern.
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    if (!UUID.test(requestId) || body?.v !== 1 ||
+        !Number.isInteger(expectedRev) || expectedRev < 2 || rev !== expectedRev + 1 ||
+        (!isApproval && !isRejection && op?.kind !== 'recordOfficeRevision') || typeof op.taskId !== 'string' || !UUID.test(op.taskId) ||
+        typeof op.revisionId !== 'string' || !UUID.test(op.revisionId) ||
+        typeof actionId !== 'string' || !UUID.test(actionId) ||
+        body.key !== `${requestId}:${rev}:officeDecision:desk:${actionId}` ||
+        !actor || typeof actor.userId !== 'string' || !UUID.test(actor.userId) ||
+        typeof actor.role !== 'string' || actor.role.length > 60 ||
+        typeof op.reason !== 'string' || !op.reason.trim() || op.reason.length > 2000 ||
+        (op.revisionRequest !== undefined && (!revisionRequest || revisionRequest.comment !== op.reason.trim())) ||
+        (isApproval && (!approvalProof || revisionRequest || op.rejectionCategory !== undefined || !/^[a-f0-9]{64}$/.test(String(op.deskRequestFingerprint || '')))) ||
+        (isRejection && (!parseRejectionCategory(op.rejectionCategory) || revisionRequest || op.revisionRequest !== undefined)) ||
+        (!isApproval && (op.approvalProof !== undefined || op.deskRequestFingerprint !== undefined)) ||
+        (!isRejection && op.rejectionCategory !== undefined)) {
+      return problem(c, 400, 'Invalid office decision', 'Expected one versioned attributed review decision for the current draft');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleOfficeDecision(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID, taskId: op.taskId as string,
+        revisionId: op.revisionId as string, actionId: actionId as string,
+        actor: { userId: actor.userId as string, role: actor.role as string,
+          ...(actor.authMethod === 'google_oidc' ? { authMethod: 'google_oidc' as const,
+            sessionHash: actor.sessionHash as string } : {}) },
+        reason: (op.reason as string).trim(), expectedRev, rev, key: body.key as string,
+        ...(revisionRequest ? { revisionRequest } : {}),
+        ...(isRejection ? { decision: 'rejected', rejectionCategory: parseRejectionCategory(op.rejectionCategory)! } : {}),
+        ...(approvalProof ? { decision: 'approved', approvalProof,
+          deskRequestFingerprint: op.deskRequestFingerprint as string } : {}),
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] lifecycle office revision ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The office decision did not commit; retry with the same key');
+    }
+  });
+
+  internal('/lifecycle/:requestId/delivery-start', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const actor = op?.actor && typeof op.actor === 'object' && !Array.isArray(op.actor)
+      ? op.actor as Record<string, unknown> : null;
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    if (!UUID.test(requestId) || body?.v !== 1 || !Number.isInteger(expectedRev) || expectedRev < 3 ||
+        rev !== expectedRev + 1 || op?.kind !== 'startDelivery' ||
+        !UUID.test(String(op.taskId || '')) || !UUID.test(String(op.revisionId || '')) ||
+        !UUID.test(String(op.approvalId || '')) || !UUID.test(String(op.actionId || '')) ||
+        body.key !== `${requestId}:${rev}:officeDecision:desk:${op.actionId}` ||
+        !actor || !UUID.test(String(actor.userId || '')) || typeof actor.role !== 'string' ||
+        typeof op.reason !== 'string' || !op.reason.trim() || op.reason.length > 2000) {
+      return problem(c, 400, 'Invalid delivery start', 'Expected one versioned request-owned delivery action');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleDeliveryStart(db, ctx.deliverableStore, {
+        requestId, tenantId: DEFAULT_TENANT_ID, taskId: op.taskId as string,
+        revisionId: op.revisionId as string, approvalId: op.approvalId as string,
+        actionId: op.actionId as string,
+        actor: { userId: actor.userId as string, role: actor.role }, reason: op.reason.trim(),
+        expectedRev, rev, key: body.key as string,
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) return c.json({ status: 409, code: error.code,
+        detail: error.message }, 409);
+      log.error(`[core:internal] lifecycle delivery start ${requestId} failed:`, error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The delivery start did not commit; retry with the same key');
+    }
+  });
+
+  // Requester sends their revision directive after the office marks "revise": manual → designing.
+  // The worker must intake the new task first (lc-<requestId>-r<round> source event) and pass its id.
+  internal('/lifecycle/:requestId/requester-revision', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    const round = Number(op?.round);
+    if (!UUID.test(requestId) || body?.v !== 1 ||
+        !Number.isInteger(expectedRev) || expectedRev < 3 || rev !== expectedRev + 1 ||
+        op?.kind !== 'requesterRevision' ||
+        !UUID.test(String(op.priorTaskId || '')) || !UUID.test(String(op.newTaskId || '')) ||
+        !Number.isInteger(round) || round < 1 ||
+        typeof op.directive !== 'string' || !String(op.directive).trim() || String(op.directive).length > 5000 ||
+        body.key !== `${requestId}:${rev}:requesterRevision:r${round}`) {
+      return problem(c, 400, 'Invalid requester revision', 'Expected one versioned requesterRevision for a manual-stage request');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleRequesterRevision(db, {
+        requestId, tenantId: DEFAULT_TENANT_ID,
+        priorTaskId: op.priorTaskId as string, newTaskId: op.newTaskId as string,
+        round, directive: String(op.directive).trim(), expectedRev, rev, key: body.key as string,
+      });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) {
+        return c.json({ type: 'https://hawa.design/errors/409', title: 'Lifecycle Projection Conflict',
+          status: 409, detail: error.message, instance: c.req.url, code: error.code }, 409);
+      }
+      log.error(`[core:internal] lifecycle requester revision ${requestId} failed:`, error instanceof Error ? error.message : error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The requester revision did not commit; retry with the same key');
+    }
+  });
+
+  // The Telegram intake projection has already committed rev N+1 and claimed the child task.
+  // RequestLifecycle reads that exact receipt before starting DesignRun; it must not project again.
+  internal('/lifecycle/:requestId/requester-revision-intake', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const updateId = Number(body?.updateId);
+    const expectedRev = Number(body?.expectedRev);
+    const round = Number(body?.round);
+    const questionId = typeof body?.questionId === 'string' ? body.questionId : undefined;
+    if (!UUID.test(requestId) || body?.v !== 1 ||
+        !Number.isSafeInteger(updateId) || updateId <= 0 ||
+        !Number.isInteger(expectedRev) || expectedRev < (questionId ? 2 : 3) ||
+        !Number.isInteger(round) || round < 1 ||
+        (questionId !== undefined && !UUID.test(questionId)) ||
+        !UUID.test(String(body?.priorTaskId || '')) || !UUID.test(String(body?.newTaskId || '')) ||
+        typeof body?.directive !== 'string' || !body.directive.trim() || body.directive.length > 5000) {
+      return problem(c, 400, 'Invalid requester revision intake receipt',
+        'Expected a versioned Telegram update and the exact admitted revision task');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle receipt requires a database');
+    const result = await withRlsContext(db,
+      { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+      (trx) => verifiedRevisionIntake(trx, { tenantId: DEFAULT_TENANT_ID, requestId,
+        updateId, expectedRev, priorTaskId: body.priorTaskId as string,
+        newTaskId: body.newTaskId as string, round, directive: body.directive as string,
+        ...(questionId ? { questionId } : {}) }));
+    if (!result) return problem(c, 409, 'Requester revision receipt mismatch',
+      'The admitted update, request, revision and child task do not match');
+    return c.json({ v: 1, ...result }, 200);
+  });
+
+  internal('/lifecycle/:requestId/delivery-finished', async (c) => {
+    const requestId = c.req.param('requestId') || '';
+    const body = await readBody(c);
+    const op = Array.isArray(body?.ops) && body.ops.length === 1 ? body.ops[0] as Record<string, unknown> : null;
+    const outcome = op?.outcome as DeliveryOutcome | undefined;
+    const expectedRev = Number(body?.expectedRev);
+    const rev = Number(body?.rev);
+    if (!UUID.test(requestId) || body?.v !== 1 || !Number.isInteger(expectedRev) || expectedRev < 4 ||
+        rev !== expectedRev + 1 || op?.kind !== 'finishDelivery' ||
+        !UUID.test(String(op.taskId || '')) || !UUID.test(String(op.approvalId || '')) ||
+        typeof op.deliveryId !== 'string' || !Number.isInteger(op.run) || Number(op.run) < 1 ||
+        body.key !== `${requestId}:${rev}:deliveryFinished:${op.deliveryId}` ||
+        !outcome || !['delivered', 'chat_only', 'uncertain', 'failed'].includes(outcome.outcome) ||
+        !Array.isArray(outcome.uncertain) || outcome.uncertain.length > 50 ||
+        outcome.uncertain.some((item) => typeof item !== 'string' || item.length > 500) ||
+        typeof outcome.archived !== 'boolean' || typeof outcome.sheetsConfirmed !== 'boolean' ||
+        !Number.isInteger(outcome.filesSent) || outcome.filesSent < 0 ||
+        (outcome.reason !== undefined && (typeof outcome.reason !== 'string' || outcome.reason.length > 2000))) {
+      return problem(c, 400, 'Invalid delivery result', 'Expected one versioned workflow outcome');
+    }
+    if (!db) return problem(c, 503, 'Database Unavailable', 'The lifecycle projection requires a database');
+    try {
+      const result = await projectLifecycleDeliveryFinish(db, { requestId, tenantId: DEFAULT_TENANT_ID,
+        taskId: op.taskId as string, approvalId: op.approvalId as string,
+        deliveryId: op.deliveryId as string, run: op.run as number, outcome,
+        expectedRev, rev, key: body.key as string });
+      return c.json({ v: 1, ...result }, 200);
+    } catch (error) {
+      if (error instanceof LifecycleProjectionConflict) return c.json({ status: 409, code: error.code,
+        detail: error.message }, 409);
+      log.error(`[core:internal] lifecycle delivery result ${requestId} failed:`, error);
+      return problem(c, 503, 'Lifecycle Projection Unavailable', 'The delivery result did not commit; retry with the same key');
+    }
+  });
+}

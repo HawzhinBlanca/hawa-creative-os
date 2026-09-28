@@ -45,7 +45,7 @@ export const PANGO_FONTCONFIG_BACKEND = 'fc';
  * of DejaVu's.
  * Arabic-script families keep fontconfig's order: the "•" of a stored Kurdish footer, which Noto Sans
  * Arabic lacks, is drawn by the face it was before, and only what no face draws (☎ ✉) comes from
- * here. The faces carry no letters, digits or ordinary space, so text is still drawn by the
+ * here. The faces include inter-symbol spaces (ADR-118), but no letters or digits, so text is still drawn by the
  * requested face or, for a family that does not exist, by the same fallback face as before.
  */
 export const SYMBOL_FALLBACK_FAMILY = 'Hawa Symbols';
@@ -88,6 +88,24 @@ export function pinnedSystemFontFiles(): string[] {
   return out;
 }
 
+export interface FontFileIdentity { name: string; sha256: string }
+
+/** Actual bytes the pinned rasterizer can see; web subsets are deliberately excluded. */
+export function fontFileInventory(fontsDir: string = defaultFontsDir(), systemFiles: string[] = pinnedSystemFontFiles()): FontFileIdentity[] {
+  const files: FontFileIdentity[] = [];
+  const digest = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  const visit = (dir: string) => {
+    for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, item.name);
+      if (item.isDirectory()) visit(file);
+      else if (/\.(?:ttf|otf|ttc)$/i.test(item.name)) files.push({ name: `package/${path.relative(fontsDir,file).split(path.sep).join('/')}`, sha256: digest(file) });
+    }
+  };
+  visit(fontsDir);
+  for (const file of [...new Set(systemFiles)].sort()) files.push({ name: `system/${file}`, sha256: digest(file) });
+  return files.sort((a,b)=>a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+}
+
 const latinFamiliesMemo = new Map<string, string[]>();
 
 /**
@@ -97,7 +115,11 @@ const latinFamiliesMemo = new Map<string, string[]>();
  * The typographic family is what pango asks for ("Inter" at weight 500, not "Inter Medium").
  */
 export function symbolFirstFamilies(fontsDir: string = defaultFontsDir(), systemFiles: string[] = pinnedSystemFontFiles()): string[] {
-  const memoKey = JSON.stringify([path.resolve(fontsDir), systemFiles]);
+  return symbolFirstFamiliesForInventory(fontsDir, systemFiles, fontFileInventory(fontsDir, systemFiles));
+}
+
+function symbolFirstFamiliesForInventory(fontsDir: string, systemFiles: string[], inventory: FontFileIdentity[]): string[] {
+  const memoKey = JSON.stringify([path.resolve(fontsDir), inventory]);
   const memo = latinFamiliesMemo.get(memoKey);
   if (memo) return memo;
   const files = [
@@ -164,10 +186,12 @@ function generatedRoot(): string {
 export function pinnedFontconfigFile(
   fontsDir: string,
   systemFiles: string[] = pinnedSystemFontFiles(),
-  symbolFirst: string[] = symbolFirstFamilies(fontsDir, systemFiles)
+  symbolFirst?: string[]
 ): string {
   const dir = path.resolve(fontsDir);
-  const key = JSON.stringify({ v: GENERATED_CONFIG_VERSION, dir, systemFiles, symbolFirst });
+  const fonts = fontFileInventory(fontsDir, systemFiles);
+  const families = symbolFirst ?? symbolFirstFamiliesForInventory(fontsDir, systemFiles, fonts);
+  const key = JSON.stringify({ v: GENERATED_CONFIG_VERSION, dir, systemFiles, symbolFirst: families, fonts });
   const cached = generated.get(key);
   if (cached && fs.existsSync(cached)) return cached;
 
@@ -194,7 +218,7 @@ export function pinnedFontconfigFile(
           '  <!-- Web subsets carry the same family names with fewer glyphs; fontkit never measures them. -->',
           '  <selectfont><rejectfont><glob>*.woff2</glob><glob>*.woff</glob></rejectfont></selectfont>',
           '  <!-- A symbol a Latin face lacks comes from the symbol faces first (SYMBOL_FALLBACK_FAMILY). -->',
-          ...symbolFirst.flatMap((family) => [
+          ...families.flatMap((family) => [
             '  <match target="pattern">',
             `    <test name="family" compare="eq"><string>${xml(family)}</string></test>`,
             `    <edit name="family" mode="append_last" binding="strong"><string>${SYMBOL_FALLBACK_FAMILY}</string></edit>`,

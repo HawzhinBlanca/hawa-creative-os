@@ -13,6 +13,7 @@ export const BLOB_MEDIA_TYPES = {
   'image/webp': 'webp',
   'image/gif': 'gif',
   'application/pdf': 'pdf',
+  'audio/ogg': 'ogg',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
 } as const;
 
@@ -77,6 +78,9 @@ export function sniffBlobMediaType(bytes: Uint8Array): BlobMediaType | undefined
   if (b.length >= 12 && ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
   if (b.length >= 6 && (ascii(0, 6) === 'GIF87a' || ascii(0, 6) === 'GIF89a')) return 'image/gif';
   if (b.length >= 5 && ascii(0, 5) === '%PDF-') return 'application/pdf';
+  // Storage sniff only; source admission performs full bounded Ogg/Opus inspection.
+  if (b.length >= 47 && ascii(0, 4) === 'OggS' && b[4] === 0 && b[26] === 1 &&
+      ascii(28, 36) === 'OpusHead') return 'audio/ogg';
   if (b.length >= 4 && b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04) {
     return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
   }

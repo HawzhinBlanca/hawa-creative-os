@@ -8,7 +8,8 @@ import {
   type DominantColorSample,
   type PaletteVerificationResult,
 } from './color-science.js';
-import { renderMotifPng, type ProceduralMotifType } from './motifs.js';
+import { renderMotifPng, requireClientPalette, type ProceduralMotifType } from './motifs.js';
+import { OpenAiStudioClient, type OpenAiStructuredResponse } from './openai-studio-client.js';
 import {
   assertModelAllowed,
   assertImageModelAllowed,
@@ -32,6 +33,25 @@ export interface GenerateArtOptions {
   motifFallbackType?: ProceduralMotifType;
   /** Provider, model, size, quality and aspect. Defaults to the environment's (resolveImageSettings). */
   settings?: ImageSettings;
+  /** Core supplies these adapters to admit every paid request through its durable ledger. */
+  requestImage?: (settings: ImageSettings, prompt: string) => Promise<ProviderImage | null>;
+  visionClient?: Pick<OpenAiStudioClient, 'createStructuredCompletion'>;
+}
+
+/** Local accounting failure must not be converted into another paid attempt or a clean fallback. */
+export class StudioArtAccountingError extends Error {
+  readonly code = 'MODEL_CALL_ACCOUNTING_FAILED';
+  constructor(cause: unknown) {
+    super('The paid call could not be accounted for. Reconcile its saved evidence before continuing.', { cause });
+    this.name = 'StudioArtAccountingError';
+  }
+}
+
+export function isStudioArtHoldError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  if ('isUncertain' in error && error.isUncertain === true) return true;
+  return 'code' in error && typeof error.code === 'string' &&
+    /^(MODEL_CALL_|MODEL_STAGE_REPLAY_UNSAFE$|TASK_GENERATION_BLOCKED$|STUDIO_BUDGET_|BUDGET_EXHAUSTED$)/.test(error.code);
 }
 
 export interface ArtVerificationReport {
@@ -65,6 +85,7 @@ export interface ArtReceipt {
   requested?: { size: string; quality: string; aspectRatio: string };
   attempts: number;
   artFallback?: 'procedural';
+  fallbackReason?: 'vision_check_unavailable';
   verificationReport?: ArtVerificationReport;
 }
 
@@ -72,6 +93,18 @@ export interface GenerateArtResult {
   imageBuffer: Buffer;
   mimeType: string;
   receipt: ArtReceipt;
+}
+
+/** The image provider may have accepted a request even when its answer was lost. */
+export class ImageAcceptanceUnknownError extends Error {
+  readonly code = 'UNCERTAIN_ACCEPTANCE';
+  readonly isUncertain = true;
+  costUsd = 0;
+  constructor(provider: string, cause?: unknown) {
+    super(`${provider} image acceptance and billing are unknown; reconcile this attempt before another generation`);
+    this.name = 'ImageAcceptanceUnknownError';
+    this.cause = cause;
+  }
 }
 
 const SUPPORTED_ASPECTS = ['1:1', '3:4', '4:3', '9:16', '16:9', '4:5'] as const;
@@ -113,14 +146,12 @@ export function composeArtPrompt(
     aspect?: string;
   }
 ): string {
-  const paletteHexList = options.palette && options.palette.length > 0
-    ? options.palette.join(', ')
-    : 'the client has not given a palette: use a restrained, neutral range of tones';
+  const paletteHexList = requireClientPalette(options.palette).join(', ');
 
   const calmRegion = options.calmRegion || 'center and bottom region';
   const aspect = options.aspect || '4:5';
 
-  const p7Suffix = `Photographic or painterly still image, no text of any kind, no letters, numbers, typography, logos, emblems, seals, flags, coats of arms, no people, faces or hands. Palette limited to ${paletteHexList} with soft neutrals. Keep the region ${calmRegion} calm, dark and low-detail so text placed there stays legible. Aspect ${aspect}. Fine grain, no watermark-like marks, no borders.`;
+  const p7Suffix = `Create only the text-free visual art described above: no text of any kind, no letters, numbers, typography, logos, emblems, seals, flags, coats of arms, no people, faces or hands. Palette limited to ${paletteHexList}. Keep the region ${calmRegion} calm and low-detail so text placed there stays legible. Aspect ${aspect}. No watermark-like marks or borders.`;
 
   return `${conceptPrompt.trim()}\n\n${p7Suffix}`.trim();
 }
@@ -137,8 +168,10 @@ export async function runVisionCheck(
     anthropicApiKey?: string;
     model?: string;
     fetchFn?: typeof fetch;
+    client?: Pick<OpenAiStudioClient, 'createStructuredCompletion'>;
   }
-): Promise<{ passed: boolean; containsForbidden: boolean; what: string }> {
+): Promise<{ passed: boolean; containsForbidden: boolean; what: string;
+  receipt: OpenAiStructuredResponse<unknown>['receipt'] }> {
   const fetcher = options.fetchFn || fetch;
 
   if (options.anthropicApiKey) {
@@ -149,16 +182,18 @@ export async function runVisionCheck(
   assertModelAllowed(model);
 
   const apiKey = options.openaiApiKey || process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  if (!apiKey && !options.client) {
     throw new Error('OPENAI_API_KEY is required for art vision verification');
   }
 
   const base64Data = imageBuffer.toString('base64');
   const safeMime = mimeType === 'image/jpeg' ? 'image/jpeg' : 'image/png';
 
-  const payload = {
+  const client = options.client ?? new OpenAiStudioClient({ apiKey, fetcher, timeoutMs: 30_000 });
+  const result = await client.createStructuredCompletion<unknown>({
     model,
-    max_tokens: 300,
+    maxTokens: 300,
+    timeoutMs: 30_000,
     messages: [
       {
         role: 'system',
@@ -180,40 +215,21 @@ export async function runVisionCheck(
         ],
       },
     ],
-    response_format: { type: 'json_object' },
-  };
-
-  const res = await fetcher('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+    jsonSchema: {
+      name: 'ArtCompliance',
+      schema: { type: 'object', additionalProperties: false, required: ['containsForbidden', 'what'],
+        properties: { containsForbidden: { type: 'boolean' }, what: { type: 'string' } } },
     },
-    body: JSON.stringify(payload),
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`OpenAI vision check failed with HTTP ${res.status}: ${errText.substring(0, 200)}`);
+  const verdict = result.data;
+  if (!verdict || typeof verdict !== 'object' || Array.isArray(verdict) ||
+      !('containsForbidden' in verdict) || typeof verdict.containsForbidden !== 'boolean' ||
+      !('what' in verdict) || typeof verdict.what !== 'string' || !verdict.what.trim()) {
+    throw Object.assign(new Error('The art verifier returned an invalid verdict.'),
+      { code: 'ART_VERDICT_INVALID', costUsd: result.receipt.costUsd });
   }
-
-  const data = (await res.json()) as any;
-  const textContent = data.choices?.[0]?.message?.content || '{}';
-  const cleanJson = textContent.replace(/```json/g, '').replace(/```/g, '').trim();
-
-  try {
-    const parsed = JSON.parse(cleanJson);
-    const containsForbidden = Boolean(parsed.containsForbidden);
-    const what = String(parsed.what || (containsForbidden ? 'Forbidden content detected' : 'clean'));
-
-    return {
-      passed: !containsForbidden,
-      containsForbidden,
-      what,
-    };
-  } catch (err: any) {
-    throw new Error(`Failed to parse OpenAI vision response: ${cleanJson} (${err?.message})`);
-  }
+  return { passed: !verdict.containsForbidden, containsForbidden: verdict.containsForbidden,
+    what: verdict.what, receipt: result.receipt };
 }
 
 /**
@@ -253,13 +269,16 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
   let spentUsd = 0;
   let costSource: ArtReceipt['costSource'] = 'none';
   let attempts = 0;
+  let fallbackReason: ArtReceipt['fallbackReason'];
   const requested = { size: settings.size, quality: settings.quality, aspectRatio: settings.aspectRatio };
 
   if (imageKey) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       attempts = attempt;
       try {
-        const image = await requestImage(settings, fullPrompt, imageKey, fetcher);
+        const image = await (options.requestImage
+          ? options.requestImage(settings, fullPrompt)
+          : requestStudioArtImage(settings, fullPrompt, imageKey, fetcher));
         if (!image) continue;
         const { imageBuffer, mimeType, responseId, xRequestId } = image;
         // Billed the moment the provider returned it, whether or not the checks below keep it.
@@ -287,15 +306,23 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
         }
 
         // Vision check with the active tier's critique model
-        let visionCheck = { passed: true, containsForbidden: false, what: 'clean' };
+        let visionCheck: Awaited<ReturnType<typeof runVisionCheck>>;
         try {
           visionCheck = await runVisionCheck(imageBuffer, mimeType, {
             openaiApiKey: openaiKey,
             model: resolveModel('critique'),
             fetchFn: fetcher,
+            client: options.visionClient,
           });
+          spentUsd += visionCheck.receipt.costUsd;
         } catch (vErr: any) {
-          console.warn(`[StudioArt] Vision check error:`, vErr.message);
+          if (isStudioArtHoldError(vErr)) throw vErr;
+          spentUsd += Number(vErr?.costUsd) > 0 ? Number(vErr.costUsd) : 0;
+          console.warn(`[StudioArt] Vision check unavailable:`, vErr?.code || 'VERIFIER_FAILED');
+          // The image was already billed, but its pixels cannot be admitted without a verdict.
+          // A second image call would pay again while the verifier is still unavailable.
+          fallbackReason = 'vision_check_unavailable';
+          break;
         }
 
         if (!visionCheck.passed) {
@@ -317,8 +344,8 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
           receipt: {
             provider: settings.provider,
             model: settings.model,
-            responseId,
-            id: responseId,
+            responseId: responseId ?? undefined,
+            id: responseId ?? undefined,
             xRequestId,
             bytes: imageBuffer.length,
             sha256,
@@ -339,10 +366,19 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
           },
         };
       } catch (err: any) {
-        console.warn(`[StudioArt] Error during generation attempt ${attempt}:`, err?.message);
-        // A request that timed out or lost its answer may have been generated and billed: asking
-        // again could pay twice for one picture. The free procedural motif takes its place.
-        if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || err?.isUncertain || /timed?\s*out|aborted/i.test(String(err?.message || ''))) break;
+        console.warn(`[StudioArt] Generation attempt ${attempt} stopped:`, err?.code || 'ART_FAILED');
+        // A generated image can be billed even when no answer reached us. Preserve the known cost
+        // of earlier rejected images and leave the current attempt unresolved in Core's ledger.
+        if (err?.isUncertain) {
+          err.costUsd = spentUsd + (Number(err.costUsd) > 0 ? Number(err.costUsd) : 0);
+          throw err;
+        }
+        if (isStudioArtHoldError(err)) throw err;
+        if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || /timed?\s*out|aborted/i.test(String(err?.message || ''))) {
+          const uncertain = new ImageAcceptanceUnknownError(settings.provider, err);
+          uncertain.costUsd = spentUsd;
+          throw uncertain;
+        }
       }
     }
   }
@@ -375,6 +411,7 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
       requested,
       attempts,
       artFallback: 'procedural',
+      ...(fallbackReason ? { fallbackReason } : {}),
       verificationReport: {
         dominantColorsPassed: paletteCheck.passed,
         dominantColors: paletteCheck.dominantColors,
@@ -394,28 +431,41 @@ export async function generateArtImage(options: GenerateArtOptions): Promise<Gen
  */
 const IMAGE_REQUEST_TIMEOUT_MS = 120_000;
 
-interface ProviderImage {
+export interface ProviderImage {
   imageBuffer: Buffer;
   mimeType: string;
-  responseId: string;
+  responseId: string | null;
   xRequestId: string | null;
+  servedModel: string | null;
+  inputTokens: number;
+  outputTokens: number;
   costUsd: number;
   costSource: 'usage' | 'price_list' | 'estimate';
 }
 
 /** One image from the configured provider, or null when it returned none (logged). */
-async function requestImage(
+export async function requestStudioArtImage(
   settings: ImageSettings,
   prompt: string,
   key: string,
-  fetcher: typeof fetch
+  fetcher: typeof fetch,
+  beforeDispatch?: (body: string) => Promise<void>
 ): Promise<ProviderImage | null> {
   // One deadline for the whole request, body and download included; a timeout throws like every
   // other network failure, and the caller decides what to do with it.
   const signal = AbortSignal.timeout(IMAGE_REQUEST_TIMEOUT_MS);
+  const providerFetch = async (url: string, init: RequestInit): Promise<Response> => {
+    await beforeDispatch?.(String(init.body));
+    try { return await fetcher(url, init); }
+    catch (error) { throw new ImageAcceptanceUnknownError(settings.provider, error); }
+  };
+  const readImageResponse = async (res: Response): Promise<any> => {
+    try { return await res.json(); }
+    catch (error) { throw new ImageAcceptanceUnknownError(settings.provider, error); }
+  };
   if (settings.provider === 'google') {
     // Gemini's Interactions API (ai.google.dev/gemini-api/docs/image-generation, 2026-09-18).
-    const res = await fetcher('https://generativelanguage.googleapis.com/v1beta/interactions', {
+    const res = await providerFetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
@@ -431,54 +481,63 @@ async function requestImage(
       signal,
     });
     if (!res.ok) {
-      console.warn(`[StudioArt] Google image generation failed HTTP ${res.status}: ${(await res.text()).substring(0, 150)}`);
+      if (res.status >= 500) throw new ImageAcceptanceUnknownError(settings.provider);
+      console.warn(`[StudioArt] Google image generation failed HTTP ${res.status}`);
       return null;
     }
-    const data = (await res.json()) as any;
+    const data = await readImageResponse(res);
     const parts = [
       ...(data.steps || []).flatMap((step: any) => step?.content || []),
       ...(data.output_image ? [{ type: 'image', ...data.output_image }] : []),
     ];
     const image = parts.find((c: any) => c?.type === 'image' && typeof c.data === 'string');
     if (!image) {
-      console.warn('[StudioArt] Google returned no image data');
-      return null;
+      throw new ImageAcceptanceUnknownError(settings.provider);
     }
     const price = imagePricing(settings.model)?.perImage?.[settings.size];
     return {
       imageBuffer: Buffer.from(image.data, 'base64'),
       mimeType: image.mime_type || image.mimeType || 'image/png',
-      responseId: String(data.id || `google-img-${Date.now()}`),
+      responseId: typeof data.id === 'string' ? data.id : null,
       xRequestId: res.headers?.get?.('x-request-id') || null,
+      servedModel: typeof data.model === 'string' ? data.model : null,
+      inputTokens: data.usage?.total_input_tokens ?? 0,
+      outputTokens: data.usage?.total_output_tokens ?? 0,
       costUsd: typeof price === 'number' ? price : 0,
       costSource: 'price_list',
     };
   }
 
-  const res = await fetcher('https://api.openai.com/v1/images/generations', {
+  const res = await providerFetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({ model: settings.model, prompt, n: 1, size: settings.size, quality: settings.quality }),
     signal,
   });
   if (!res.ok) {
-    console.warn(`[StudioArt] OpenAI image generation failed HTTP ${res.status}: ${(await res.text()).substring(0, 150)}`);
+    if (res.status >= 500) throw new ImageAcceptanceUnknownError(settings.provider);
+    console.warn(`[StudioArt] OpenAI image generation failed HTTP ${res.status}`);
     return null;
   }
-  const data = (await res.json()) as any;
+  const data = await readImageResponse(res);
   let imageBuffer: Buffer;
   if (data.data?.[0]?.b64_json) imageBuffer = Buffer.from(data.data[0].b64_json, 'base64');
-  else if (data.data?.[0]?.url) imageBuffer = Buffer.from(await (await fetcher(data.data[0].url, { signal })).arrayBuffer());
+  else if (data.data?.[0]?.url) {
+    try { imageBuffer = Buffer.from(await (await fetcher(data.data[0].url, { signal })).arrayBuffer()); }
+    catch (error) { throw new ImageAcceptanceUnknownError(settings.provider, error); }
+  }
   else {
-    console.warn('[StudioArt] OpenAI returned no image data');
-    return null;
+    throw new ImageAcceptanceUnknownError(settings.provider);
   }
   const xRequestId = res.headers?.get?.('x-request-id') || null;
   return {
     imageBuffer,
     mimeType: 'image/png',
-    responseId: xRequestId || `openai-img-${data.created || Date.now()}`,
+    responseId: typeof data.id === 'string' ? data.id : null,
     xRequestId,
+    servedModel: typeof data.model === 'string' ? data.model : null,
+    inputTokens: data.usage?.input_tokens ?? 0,
+    outputTokens: data.usage?.output_tokens ?? 0,
     ...openAiImageCost(settings, data.usage),
   };
 }
@@ -486,8 +545,11 @@ async function requestImage(
 /** From the response's token counts when it reports them, else the operator's per-image estimate. */
 function openAiImageCost(settings: ImageSettings, usage: any): { costUsd: number; costSource: 'usage' | 'estimate' } {
   const rates = imagePricing(settings.model) || {};
-  if (usage && typeof usage.output_tokens === 'number') {
-    const details = usage.input_tokens_details || {};
+  const tokenCount = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+  const details = usage?.input_tokens_details || {};
+  if (usage && tokenCount(usage.output_tokens) && tokenCount(usage.input_tokens) &&
+      tokenCount(details.text_tokens ?? usage.input_tokens) && tokenCount(details.image_tokens ?? 0) &&
+      (details.text_tokens ?? usage.input_tokens) + (details.image_tokens ?? 0) === usage.input_tokens) {
     const textIn = typeof details.text_tokens === 'number' ? details.text_tokens : Number(usage.input_tokens || 0);
     const imageIn = Number(details.image_tokens || 0);
     const usd =

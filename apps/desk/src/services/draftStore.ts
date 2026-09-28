@@ -16,6 +16,7 @@ export interface ActiveDraft {
   clientId?: string;
   designInstructions?: string;
   referenceAssets?: string;
+  sourceDocument?: { id: string; sourceSha256: string; extractionSha256: string; confirmed: true };
   savedAt: string;
 }
 

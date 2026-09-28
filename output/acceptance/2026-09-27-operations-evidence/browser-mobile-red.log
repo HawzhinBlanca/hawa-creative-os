@@ -1,0 +1,14 @@
+Browser POST paths [ '/v1/auth/stream-ticket' ]
+/Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-operations-evidence/check-deployed.mts:11
+const check=(name:string,passed:boolean)=>{checks.push({name,passed});if(!passed)throw new Error(name);};
+                                                                                       ^
+
+
+Error: mobile metrics, both Operations panels and every failure field fit without hidden clipping
+    at check (/Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-operations-evidence/check-deployed.mts:11:88)
+    at <anonymous> (/Users/hawzhin/Hawdesign/output/acceptance/2026-09-27-operations-evidence/check-deployed.mts:90:3)
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at process.processImmediate (node:internal/timers:459:9)
+    at process.callbackTrampoline (node:internal/async_hooks:130:17)
+
+Node.js v22.13.1

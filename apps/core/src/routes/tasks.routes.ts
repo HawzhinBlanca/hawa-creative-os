@@ -1,12 +1,16 @@
+import { DocumentIntakeError, prepareDocumentIntake } from '../services/client-documents.js';
+import { chaosPoint } from '@hawa/observability';
+import { ManualIntakeScopeError, prepareManualIntake } from '../services/manual-intake-scope.js';
 import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
 import { log } from '../logging.js';
 import crypto from 'node:crypto';
-import { type UUID, isTaskApiStatus, isTaskDbState, isSha256Hex, parseBlobRef } from '@hawa/contracts';
+import { type UUID, isTaskApiStatus, isTaskDbState, isSha256Hex, parseBlobRef, publicationAwareTaskStatus } from '@hawa/contracts';
 import { withRlsContext, IdempotencyConflictError, toDbTaskState, toApiTaskStatus, listTaskPage, decodeTaskCursor, dbStatesForApiStatuses, TASK_PAGE_DEFAULT_LIMIT, TASK_PAGE_MAX_LIMIT, sql, type Database, type TaskState } from '@hawa/db';
 import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { blobStoreFor } from '../services/blob-store-context.js';
 import { blobResponse, IMMUTABLE_CACHE_CONTROL } from '../services/blob-response.js';
+import { canvaFontEvidence } from '../services/canva-font-evidence.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -74,7 +78,15 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     // `statuses` (comma-separated API statuses, as the Desk's filters send them) matches exactly the
     // tasks the list labels with one of them. `status` keeps its old mapping for existing callers.
     let states: TaskState[] | undefined;
-    if (statusList !== undefined) states = dbStatesForApiStatuses(String(statusList).split(','));
+    const requestedStatuses = statusList !== undefined ? String(statusList).split(',') : status ? [status] : [];
+    const publishingStatuses = statusList !== undefined || (status && isTaskApiStatus(status))
+      ? ([
+          ...(requestedStatuses.includes('PUBLISHING') ? ['ordinary' as const] : []),
+          ...(requestedStatuses.includes('ARCHIVE_RECONCILIATION') ? ['archive' as const] : []),
+          ...(requestedStatuses.includes('PUBLISH_RECONCILIATION') ? ['sheet' as const] : []),
+          ...(requestedStatuses.includes('REQUESTER_SEND_RECONCILIATION') ? ['requester_send' as const] : []),
+        ]) : undefined;
+    if (statusList !== undefined) states = dbStatesForApiStatuses(requestedStatuses);
     else if (status) {
       // One word of the vocabulary; an unknown one used to list the new requests ('received').
       if (!isTaskApiStatus(status) && !isTaskDbState(status)) {
@@ -88,7 +100,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
         const page = await withRlsContext(
           db,
           { tenantId, userId: auth.userId, role: auth.role },
-          (trx) => listTaskPage(trx, { tenantId, limit, cursor, offset, clientId: clientId || null, states, search })
+          (trx) => listTaskPage(trx, { tenantId, limit, cursor, offset, clientId: clientId || null,
+            states, publishingStatuses, search })
         );
 
         const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : String(value));
@@ -100,9 +113,10 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           const qaReport = t.qc_status ? {
             passed: t.qc_status === 'passed' && t.qc_critical_pass === true,
             bidiIsolation: report.bidiIsolation ?? null,
+            rtlVisualReviewRequired: report.rtlVisualReviewRequired === true,
             safeMargins: report.safeMargins ?? null,
             contrastCompliant: report.contrastCompliant ?? null,
-            fontCoverage: report.fontCoverage ?? null,
+            ...canvaFontEvidence(report),
             copyFidelity: report.copyFidelity ?? null,
             errors: report.errors || [],
           } : undefined;
@@ -137,7 +151,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             tenantId: t.tenant_id,
             clientId: t.client_id,
             projectId: t.project_id,
-            status: toApiTaskStatus(t.state || 'received'),
+            requestId: t.request_id || null,
+            status: publicationAwareTaskStatus(t.state, { errorClass: t.delivery_error_class }),
             state: t.state,
             priority: t.priority,
             title: t.title,
@@ -210,6 +225,24 @@ export function registerTasksRoutes(ctx: RouteContext): void {
       );
     }
 
+    const manualIntake = body.workflow === 'canva_manual';
+    const documentIntake = body.sourceDocument !== undefined;
+    if (documentIntake && (!db || !taskRepo)) return problem(c, 503, 'Durable Storage Unavailable', 'PDF requests require PostgreSQL and retained source evidence.');
+    if (documentIntake && (!manualIntake || !auth.userId || auth.role === 'service' || auth.role === 'adapter' ||
+        !c.req.header('Idempotency-Key') || c.req.header('Idempotency-Key')!.length > 256 ||
+        typeof body.title !== 'string' || !body.title.trim() || body.title.length > 200 ||
+        typeof body.copyEn !== 'string' || body.copyEn.length > 20000 ||
+        typeof body.copyCkb !== 'string' || body.copyCkb.length > 20000 ||
+        !(body.copyEn.trim() || body.copyCkb.trim()) ||
+        typeof body.designInstructions !== 'string' || body.designInstructions.length > 4000)) {
+      return problem(c, 422, 'Document Request Invalid', 'Use the reviewed PDF request form with exact copy and a stable request key.');
+    }
+    if (manualIntake && (!body.clientId || typeof body.clientId !== 'string')) {
+      return problem(c, 422, 'Client Selection Required', 'Choose a registered client before saving this request');
+    }
+    if (manualIntake && body.projectId && !UUID_PATTERN.test(body.projectId)) {
+      return problem(c, 422, 'Invalid Project Identifier', 'Choose a registered project in the selected client');
+    }
     if (taskRepo && db && body.clientId) {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(body.clientId)) {
@@ -243,12 +276,13 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             ? 4
             : 3;
 
-        let clientDnaVersion = body.clientDnaVersion;
+        let clientDnaVersion = manualIntake ? undefined : body.clientDnaVersion;
         const aggregateResult = await withRlsContext(
           db,
           { tenantId, userId, role: auth.role || 'operator' },
           async (trx) => {
-            clientDnaVersion ||= (await resolveClientDna(body.clientId, undefined, trx))?.version || 1;
+            if (documentIntake) await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`document-request:${tenantId}:${idempotencyKey}`},0))`.execute(trx);
+            if (!manualIntake) clientDnaVersion ||= (await resolveClientDna(body.clientId, undefined, trx))?.version || 1;
             return await taskRepo.createTaskAggregate(
               {
                 tenantId,
@@ -270,12 +304,20 @@ export function registerTasksRoutes(ctx: RouteContext): void {
                   clientDnaVersion,
                 },
                 enqueueOutbox: true,
+                ...(manualIntake ? { requestBody: body, prepareCreatePayload: async (lockedTrx: Parameters<typeof prepareManualIntake>[0]) => ({
+                  ...await prepareManualIntake(lockedTrx, { tenantId, clientId: body.clientId, projectId: body.projectId }),
+                  ...(documentIntake ? await prepareDocumentIntake(lockedTrx, blobStore, { tenantId,
+                    clientId: body.clientId, userId, source: body.sourceDocument }) : {}),
+                }) } : {}),
               },
               trx
             );
           }
         );
 
+        if (documentIntake && aggregateResult.created)
+          await chaosPoint('core.documents.after-task-commit', { clientId: body.clientId, taskId: aggregateResult.task.id });
+        if (manualIntake) clientDnaVersion = aggregateResult.payload.clientDnaVersion;
         const dbTask = aggregateResult.task;
         const normalizedTask = {
           id: dbTask.id,
@@ -309,6 +351,8 @@ export function registerTasksRoutes(ctx: RouteContext): void {
           return c.json(normalizedTask, 200);
         }
       } catch (err: any) {
+        if (err instanceof DocumentIntakeError) return problem(c, err.status, 'Document Request Refused', err.message);
+        if (err instanceof ManualIntakeScopeError) return problem(c, 403, 'Client Scope Unavailable', err.message);
         if (err instanceof IdempotencyConflictError) {
           return problem(
             c,
@@ -454,25 +498,24 @@ export function registerTasksRoutes(ctx: RouteContext): void {
               WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid AND event_type = 'task.published'
               ORDER BY aggregate_version DESC LIMIT 1`.execute(trx)).rows[0];
 
-            // The request the task belongs to (slice 2.4): the Desk sends its decisions on such a task to
-            // RequestLifecycle through the same routes; none for a task Core owns.
-            const lifecycleRow = (await sql<{ request_id: string; rev: string; stage: string; owner: string }>`
-              SELECT r.request_id::text, r.rev::text, r.stage, r.owner FROM hawa.tasks t
-              JOIN hawa.requests r ON r.request_id = t.request_id AND r.tenant_id = t.tenant_id
-              WHERE t.tenant_id = ${tenantId}::uuid AND t.id = ${taskId}::uuid`.execute(trx)).rows[0];
+            const publication = dbTask.state === 'publishing'
+              ? await trx.selectFrom('publications').select(['executor', 'error_class'])
+                .where('tenant_id', '=', tenantId).where('task_id', '=', taskId)
+                .orderBy('created_at', 'desc').executeTakeFirst()
+              : null;
 
-            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, lifecycleRow };
+            return { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, publication };
           }
         );
 
         if (queryRes && queryRes.dbTask) {
-          const { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, lifecycleRow } = queryRes;
+          const { dbTask, createdEv, revRow, exportRow, qcRow, approvalRow, canvaBindingRow, pubEvent, publication } = queryRes;
           const payload = createdEv?.data?.payload || createdEv?.data?.body || (createdEv?.data as any) || {};
 
           const headlineEn = payload.headlineEn || payload.body?.headlineEn || dbTask.title;
           const headlineCkb = payload.headlineCkb || payload.body?.headlineCkb || null;
-          const copyEn = payload.copyEn || payload.body?.copyEn || dbTask.description;
-          const copyCkb = payload.copyCkb || payload.body?.copyCkb || null;
+          const copyEn = payload.sourceDocument || payload.reviewedSource ? (payload.copyEn ?? '') : (payload.copyEn || payload.body?.copyEn || dbTask.description);
+          const copyCkb = payload.sourceDocument || payload.reviewedSource ? (payload.copyCkb ?? '') : (payload.copyCkb || payload.body?.copyCkb || null);
 
           const latestRevisionId = dbTask.current_design_revision_id || undefined;
 
@@ -508,10 +551,14 @@ export function registerTasksRoutes(ctx: RouteContext): void {
               passed: qcRow.status === 'passed' && qcRow.critical_pass === true,
               // Not measured is null, not a pass (see the task list).
               bidiIsolation: report?.bidiIsolation ?? null,
+              rtlVisualReviewRequired: report?.rtlVisualReviewRequired === true,
               safeMargins: report?.safeMargins ?? null,
               contrastCompliant: report?.contrastCompliant ?? null,
-              fontCoverage: report?.fontCoverage ?? null,
+              ...canvaFontEvidence(report),
               copyFidelity: report?.copyFidelity ?? null,
+              exportArtifactId: typeof report?.exportArtifactId === 'string' ? report.exportArtifactId : null,
+              exportSha256: typeof report?.exportSha256 === 'string' ? report.exportSha256 : null,
+              captureVersion: typeof report?.captureVersion === 'string' ? report.captureVersion : null,
               errors: report?.errors || [],
             };
           }
@@ -549,8 +596,9 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             id: dbTask.id,
             tenantId: dbTask.tenant_id,
             clientId: dbTask.client_id,
+            requestId: dbTask.request_id || null,
             projectId: dbTask.project_id,
-            status: toApiTaskStatus(dbTask.state || 'received'),
+            status: publicationAwareTaskStatus(dbTask.state, { errorClass: publication?.error_class }),
             state: dbTask.state,
             priority: dbTask.priority,
             title: dbTask.title,
@@ -564,6 +612,11 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             sourceChannelId: payload.sourceChannelId || 'hawa_desk',
             designInstructions: payload.designInstructions || payload.body?.designInstructions || '',
             referenceAssets: payload.referenceAssets || payload.body?.referenceAssets || '',
+            sourceDocument: payload.sourceDocument || (payload.reviewedSource?.kind === 'pdf' ? {
+              id: payload.reviewedSource.documentId, clientId: payload.reviewedSource.clientId,
+              sourceSha256: payload.reviewedSource.sourceSha256,
+            } : null),
+            reviewedSource: payload.reviewedSource || null,
             clientScopeLocked: Boolean(dbTask.client_id),
             clientDnaVersion:
               payload.clientDnaVersion ||
@@ -577,9 +630,6 @@ export function registerTasksRoutes(ctx: RouteContext): void {
             latestApproval,
             canvaBinding,
             deliveryReceipt,
-            lifecycle: lifecycleRow
-              ? { requestId: lifecycleRow.request_id, rev: Number(lifecycleRow.rev), stage: lifecycleRow.stage, owner: lifecycleRow.owner === 'restate' ? 'restate' : 'core' }
-              : null,
             createdAt: dbTask.created_at instanceof Date ? dbTask.created_at.toISOString() : (dbTask.created_at || new Date().toISOString()),
             updatedAt: dbTask.updated_at instanceof Date ? dbTask.updated_at.toISOString() : (dbTask.updated_at || new Date().toISOString()),
           };

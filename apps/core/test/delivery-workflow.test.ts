@@ -1,6 +1,7 @@
+import { syntheticUnchangedCanvaVersion } from './fixtures/synthetic-canva-version.js';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID, createHash } from 'node:crypto';
-import { createDb, OutboxRepository, sql, withRlsContext } from '@hawa/db';
+import { createDb, OutboxRepository, PublicationRepository, sql, withRlsContext } from '@hawa/db';
 import type { DeliveryInput, DeliveryOutcome, OutboundMessage, SendResult } from '@hawa/contracts';
 import { createAppWithClientFixtures } from './fixtures/app-with-client-fixtures.js';
 import { canvaDeliverableStore } from '../src/services/pinned-deliverables.js';
@@ -9,12 +10,13 @@ import { coreInternalFromEnv, runDelivery, type CoreInternal } from '../../worke
 import { handleSend, type TelegramSenderDeps } from '../../worker/src/lifecycle/telegram-sender.js';
 import { readStoredExportBytes, type TelegramSender as BridgeLike } from '../../worker/src/delivery-notification.js';
 import { OutboxConsumer } from '../../worker/src/outbox-consumer.js';
+import { checkedCanvaExportFixture } from '../../../packages/testkit/src/canva-export-fixture.js';
 
 const url = process.env.HAWA_ISOLATED_TEST_DB;
 
 /**
- * Slice 2.2 of the architecture programme (PHASE2_DESIGN.md section 3, ADR-034): a task whose chat is
- * on HAWA_LIFECYCLE_CHATS when Deliver is pressed is delivered by the Restate Delivery workflow, which
+ * Slice 2.2 of the architecture programme (PHASE2_DESIGN.md section 3, ADR-034/052): a task pinned
+ * to Restate at creation is delivered by the Delivery workflow, which
  * prepares through Core, sends the files and the notice through TelegramSender, and reports back.
  *
  * Restate is stood in for at its ingress (the one fetch Core makes to it): a start is recorded, a
@@ -55,12 +57,15 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     publish: vi.fn(async (_ctx: unknown, req: any) => ({
       ok: true,
       value: {
+        publicationId: randomUUID(), publicationKey: req.publicationKey,
+        driveFolderId: req.destination.productionRootFolderId,
         state: 'complete',
         driveFiles: req.files.map((f: any) => ({
           artifactId: f.artifactId, fileId: `drv_${f.artifactId.slice(0, 8)}`, name: f.filename, mimeType: f.mimeType,
-          expectedSha256: f.sha256, observedSize: f.byteSize, verified: true, folderId: 'kaae-folder',
+          expectedSha256: f.sha256, observedSize: f.byteSize, verified: true, folderId: req.destination.productionRootFolderId,
         })),
-        sheet: { spreadsheetId: 'kaae-sheet', sheetId: 0, rowNumber: 12, expectedHash: 'h', observedHash: 'h', synced: true },
+        sheet: { spreadsheetId: req.destination.spreadsheetId, sheetId: 0, rowKey: req.taskId,
+          rowNumber: 12, expectedHash: req.packageHash, observedHash: req.packageHash, synced: true },
       },
     })),
   });
@@ -72,7 +77,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
   const core = (publisher: Publisher = archivingPublisher()) => createAppWithClientFixtures({
     testAuth: { roleHeader: true },
     db,
-    deliverableStore: canvaDeliverableStore(new CanvaConnectService(db)),
+    deliverableStore: syntheticUnchangedCanvaVersion(canvaDeliverableStore(new CanvaConnectService(db))),
     publisher,
     telegramBridge: { dispatchOutboundMessage: vi.fn().mockResolvedValue({ success: true }), dispatchOutboundPhoto: vi.fn().mockResolvedValue({ success: true }) },
   } as any);
@@ -163,17 +168,17 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     destinationSaved = true;
   }
 
-  async function approvedTask(app: ReturnType<typeof core>) {
+  async function approvedTask(app: ReturnType<typeof core>, deliveryExecutorPin: 'core' | 'restate' = 'core') {
     await saveKaaeDestination(app);
     const taskId = randomUUID();
     const chat = String(60_000_000 + Math.floor(Math.random() * 9_000_000));
     const designId = `canva_slice22_${randomUUID().slice(0, 8)}`;
     const ids = { png: randomUUID(), pptx: randomUUID() };
     const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(randomUUID())]);
-    const deck = Buffer.from(`PPTX_${randomUUID()}`);
+    const { bytes: deck, contentCheck } = await checkedCanvaExportFixture('x');
     await withRlsContext(db, operator, async (trx) => {
-      await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, created_at, updated_at)
-        VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'Slice 2.2 delivery', 'x', 'received', 3, 1, now(), now())`.execute(trx);
+      await sql`INSERT INTO hawa.tasks (id, tenant_id, client_id, title, description, state, priority, version, delivery_executor_pin, created_at, updated_at)
+        VALUES (${taskId}::uuid, ${tenantId}::uuid, ${kaae}::uuid, 'Slice 2.2 delivery', 'x', 'received', 3, 1, ${deliveryExecutorPin}, now(), now())`.execute(trx);
       await sql`INSERT INTO hawa.task_events (id, tenant_id, task_id, aggregate_version, event_type, actor_type, actor_id, correlation_id, data, occurred_at)
         VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${taskId}::uuid, 1, 'task.created', 'user', ${operator.userId}, ${randomUUID()}::uuid,
           ${JSON.stringify({ payload: { sourcePlatform: 'telegram', sourceChannelId: chat, copyEn: 'x' } })}::jsonb, now())`.execute(trx);
@@ -182,10 +187,10 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
       for (const [format, bytes, id] of [['png', png, ids.png], ['pptx', deck, ids.pptx]] as const) {
         const op = randomUUID();
         await sql`INSERT INTO hawa.canva_remote_operations (id, tenant_id, task_id, client_id, actor_id, request_key, request_hash, kind, status, design_id, binding_version, metadata, created_at, updated_at)
-          VALUES (${op}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operator.userId}, ${'req_' + randomUUID().slice(0, 8)}, 'h', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format })}::jsonb, now(), now())`.execute(trx);
+          VALUES (${op}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${operator.userId}, ${'req_' + randomUUID().slice(0, 8)}, 'h', 'export', 'retrieved', ${designId}, 1, ${JSON.stringify({ format, designUpdatedAt: 200 })}::jsonb, now(), now())`.execute(trx);
         await sql`INSERT INTO hawa.canva_export_bytes (id, tenant_id, task_id, client_id, operation_id, format, sha256, content, content_check, created_at)
           VALUES (${id}::uuid, ${tenantId}::uuid, ${taskId}::uuid, ${kaae}::uuid, ${op}::uuid, ${format}, ${createHash('sha256').update(bytes).digest('hex')}, ${bytes},
-            ${JSON.stringify({ copyPass: true, fontPass: true, rtlPass: true, status: 'passed' })}::jsonb, now())`.execute(trx);
+            ${format === 'pptx' ? JSON.stringify(contentCheck) : null}::jsonb, now())`.execute(trx);
       }
     });
     expect((await app.request(`/tasks/${taskId}/notifications/canva-status`, {
@@ -224,12 +229,41 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect((await publishedCommands(taskId)).map((c) => c.state)).toEqual(['pending']);
   });
 
+  it('a task created before chat enrolment stays on Core before its first delivery', async () => {
+    const restateIngress = fakeRestate();
+    const app = core();
+    const { taskId, chat } = await approvedTask(app);
+    process.env.HAWA_LIFECYCLE_CHATS = chat;
+    const res = await deliver(app, taskId);
+    expect(res.status).toBe(202);
+    expect((await res.json()).status).toBe('COMPLETE');
+    expect(restateIngress.starts).toHaveLength(0);
+    expect((await publications(taskId)).map((p) => p.executor)).toEqual(['core']);
+  });
+
+  it('a task pinned to the workflow keeps it after the chat flag is removed, before first delivery', async () => {
+    const restateIngress = fakeRestate();
+    const app = core();
+    const { taskId } = await approvedTask(app, 'restate');
+    delete process.env.HAWA_LIFECYCLE_CHATS;
+    const direct = await app.request(`/tasks/${taskId}/publish-omnichannel`, {
+      method: 'POST', headers, body: JSON.stringify({}),
+    });
+    expect(direct.status).toBe(409);
+    expect((await direct.json()).detail).toMatch(/Delivery workflow/);
+    expect(await publications(taskId)).toHaveLength(0);
+    const res = await deliver(app, taskId);
+    expect(res.status).toBe(202);
+    expect((await res.json()).executor).toBe('restate');
+    expect(restateIngress.starts).toHaveLength(1);
+  });
+
   it('flagged: the workflow sends each file and the notice once, and Core completes the task on its report', async () => {
     const restateIngress = fakeRestate();
     const telegram = fakeTelegram();
     const publisher = archivingPublisher();
     const app = core(publisher);
-    const { taskId, chat, sha256 } = await approvedTask(app);
+    const { taskId, chat, sha256 } = await approvedTask(app, 'restate');
     process.env.HAWA_LIFECYCLE_CHATS = `123,${chat}`;
 
     const res = await deliver(app, taskId);
@@ -269,7 +303,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
   it('flagged: Deliver pressed again while the workflow runs starts nothing new', async () => {
     const restateIngress = fakeRestate();
     const app = core();
-    const { taskId, chat } = await approvedTask(app);
+    const { taskId, chat } = await approvedTask(app, 'restate');
     process.env.HAWA_LIFECYCLE_CHATS = chat;
     const first = await (await deliver(app, taskId)).json();
     const second = await deliver(app, taskId);
@@ -284,7 +318,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
   it('a Core restart while the workflow runs leaves the delivery to it, even once the chat is off the list', async () => {
     const restateIngress = fakeRestate();
     const before = core();
-    const { taskId, chat } = await approvedTask(before);
+    const { taskId, chat } = await approvedTask(before, 'restate');
     process.env.HAWA_LIFECYCLE_CHATS = chat;
     const first = await (await deliver(before, taskId)).json();
     delete process.env.HAWA_LIFECYCLE_CHATS;
@@ -303,7 +337,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     const restateIngress = fakeRestate();
     const telegram = fakeTelegram();
     const app = core(noDrivePublisher());
-    const { taskId, chat } = await approvedTask(app);
+    const { taskId, chat } = await approvedTask(app, 'restate');
     process.env.HAWA_LIFECYCLE_CHATS = chat;
     await deliver(app, taskId);
     const outcome = await worker(app, telegram)(restateIngress.starts[0]);
@@ -328,11 +362,11 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect(await taskState(taskId)).toBe('complete');
   });
 
-  it('a file Telegram may not have taken: sent once, the office alerted once, and the task still completes', async () => {
+  it('a file Telegram may not have taken: sent once, the office alerted once, and completion waits for resolution', async () => {
     const restateIngress = fakeRestate();
     const telegram = fakeTelegram((chatId, kind, filename) => (kind === 'document' && filename?.endsWith('.pptx') ? { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' } : { success: true }));
     const app = core();
-    const { taskId, chat } = await approvedTask(app);
+    const { taskId, chat } = await approvedTask(app, 'restate');
     process.env.HAWA_LIFECYCLE_CHATS = chat;
     await deliver(app, taskId);
     const run = worker(app, telegram);
@@ -344,14 +378,52 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     const alerts = telegram.received.filter((r) => r.chatId === OFFICE);
     expect(alerts).toHaveLength(1);
     expect(alerts[0].text).toContain(taskId);
-    expect(await taskState(taskId)).toBe('complete');
+    expect(await taskState(taskId)).toBe('publishing');
+    const publicationState = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
+    expect(publicationState).toMatchObject({ state: 'requester_send_reconciliation' });
+    expect(publicationState.actionableRecovery).toContain('inspect the Telegram chat');
+    const retry = await deliver(app, taskId);
+    expect(retry.status).toBe(409);
+    expect((await retry.json()).detail).toContain('previous Telegram send');
+    expect(restateIngress.starts).toHaveLength(1);
+    const stored = await withRlsContext(db, operator, async (trx) => {
+      const pub = await new PublicationRepository(db).findByTaskId(taskId, tenantId, trx);
+      return pub ? (await new PublicationRepository(db).getPublicationWithRefs(pub.id, tenantId, trx)) : null;
+    });
+    const file = stored?.driveRefs[0];
+    expect(file?.status).toBe('verified');
+    await expect(withRlsContext(db, operator, (trx) => new PublicationRepository(db).recordDriveRef({
+      tenantId, publicationId: String(stored?.publication.id), fileId: String(file?.file_id),
+      sharedDriveId: String(file?.shared_drive_id), folderId: String(file?.folder_id),
+      fileName: String(file?.file_name), mimeType: String(file?.mime_type),
+      expectedSha256: 'f'.repeat(64), observedSize: Number(file?.observed_size), status: 'verified',
+    }, trx))).rejects.toThrow(/conflicts with its stored publication receipt|DRIVE_EXPECTATION_CONFLICT/);
+  });
+
+  it('a refused Telegram file cannot complete an archived publication with a confirmed Sheet row', async () => {
+    const restateIngress = fakeRestate();
+    const telegram = fakeTelegram((_chatId, kind, filename) =>
+      kind === 'document' && filename?.endsWith('.pptx') ? { success: false, error: 'TELEGRAM_DOCUMENT_REJECTED_403' } : { success: true });
+    const app = core();
+    const { taskId, chat } = await approvedTask(app, 'restate');
+    process.env.HAWA_LIFECYCLE_CHATS = chat;
+    await deliver(app, taskId);
+    const outcome = await worker(app, telegram)(restateIngress.starts[0]);
+    expect(outcome).toMatchObject({ outcome: 'failed', archived: true, sheetsConfirmed: true, filesSent: 1 });
+    expect(await taskState(taskId)).toBe('publishing');
+    expect((await publications(taskId)).map((p) => [p.state, p.executor_finished_run])).toEqual([['drive_complete', 1]]);
+    const publicationState = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
+    expect(publicationState).toMatchObject({ state: 'requester_send_reconciliation' });
+    const retry = await deliver(app, taskId);
+    expect(retry.status).toBe(409);
+    expect(restateIngress.starts).toHaveLength(1);
   });
 
   it('a run whose report never reached Core is recorded from its output on the next press', async () => {
     const restateIngress = fakeRestate();
     const telegram = fakeTelegram();
     const app = core();
-    const { taskId, chat } = await approvedTask(app);
+    const { taskId, chat } = await approvedTask(app, 'restate');
     process.env.HAWA_LIFECYCLE_CHATS = chat;
     await deliver(app, taskId);
     // The report step gave up (Core away for the hour it waits): the worker's client ends it as terminal.
@@ -377,7 +449,8 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     expect((await first.json()).status).toBe('DELIVERED_TO_CHAT_ONLY');
     process.env.HAWA_LIFECYCLE_CHATS = chat;
     const again = await deliver(app, taskId);
-    expect((await again.json()).status).toBe('DELIVERED_TO_CHAT_ONLY');
+    expect(again.status).toBe(503);
+    expect((await again.json()).detail).toMatch(/archive may already exist/i);
     expect(restateIngress.starts).toEqual([]);
     expect((await publications(taskId)).map((p) => p.executor)).toEqual(['core']);
   });
@@ -386,7 +459,7 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
     const restateIngress = fakeRestate();
     const telegram = fakeTelegram();
     const app = core();
-    const { taskId, chat } = await approvedTask(app);
+    const { taskId, chat } = await approvedTask(app, 'restate');
     process.env.HAWA_LIFECYCLE_CHATS = chat;
     await deliver(app, taskId);
     const input = restateIngress.starts[0];
@@ -441,10 +514,47 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a flagged chat\'s task to the De
       expect((await res.json()).code).toBe('NOT_PUBLISHING');
     });
 
+    it('holds a credential failure when a prior workflow upload has a durable reservation', async () => {
+      const restateIngress = fakeRestate();
+      const app = core(noDrivePublisher());
+      const { taskId, chat } = await approvedTask(app, 'restate');
+      process.env.HAWA_LIFECYCLE_CHATS = chat;
+      expect((await deliver(app, taskId)).status).toBe(202);
+      const input = restateIngress.starts[0];
+      await withRlsContext(db, operator, async (trx) => {
+        const publication = (await sql<{ id: string; package_sha256: string }>`SELECT id, package_sha256
+          FROM hawa.publications WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid`.execute(trx)).rows[0];
+        await sql`INSERT INTO hawa.drive_upload_reservations
+          (tenant_id, publication_id, artifact_id, task_id, package_sha256, folder_id, file_name, mime_type, expected_sha256, drive_file_id)
+          VALUES (${tenantId}::uuid, ${publication.id}::uuid, ${randomUUID()}::uuid, ${taskId}::uuid,
+            ${publication.package_sha256}, 'kaae-folder', 'approved.png', 'image/png', ${'a'.repeat(64)}, ${`reserved_${randomUUID()}`})`.execute(trx);
+      });
+
+      const result = await prepare(app, taskId, input.approvalId, `Bearer ${workerToken}`);
+      expect(result.status).toBe(503);
+      expect(await result.json()).toMatchObject({ code: 'ARCHIVE_STATE_UNCERTAIN' });
+      expect(await taskState(taskId)).toBe('publishing');
+      expect(await publishedCommands(taskId)).toEqual([]);
+      expect((await (await app.request(`/tasks/${taskId}`, { headers })).json()).status).toBe('ARCHIVE_RECONCILIATION');
+      const state = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
+      expect(state).toMatchObject({ status: 'ARCHIVE_RECONCILIATION', state: 'archive_reconciliation' });
+
+      // A terminal prepare report must not turn a possible stored Drive file into "no archive".
+      const finished = await app.request(`/v1/internal/tasks/${taskId}/delivery-finished`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${workerToken}` },
+        body: JSON.stringify({ tenantId, deliveryId: input.deliveryId, approvalId: input.approvalId, run: 1,
+          outcome: { outcome: 'failed', uncertain: [], sheetsConfirmed: false, archived: false,
+            filesSent: 0, reason: 'PREPARE_FAILED: DRIVE_IDENTITY_CONFLICT' } }),
+      });
+      expect(await finished.json()).toMatchObject({ status: 'applied', taskState: 'publishing' });
+      expect((await (await app.request(`/tasks/${taskId}`, { headers })).json()).status).toBe('ARCHIVE_RECONCILIATION');
+      expect(await publishedCommands(taskId)).toEqual([]);
+    });
+
     it('record a report once: a second report of the same run changes nothing', async () => {
       const restateIngress = fakeRestate();
       const app = core();
-      const { taskId, chat } = await approvedTask(app);
+      const { taskId, chat } = await approvedTask(app, 'restate');
       process.env.HAWA_LIFECYCLE_CHATS = chat;
       await deliver(app, taskId);
       const input = restateIngress.starts[0];

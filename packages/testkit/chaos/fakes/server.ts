@@ -138,12 +138,18 @@ export async function startFakes(options: { httpPort?: number; httpsPort?: numbe
       case 'GET /telegram/sent':
         return sendJson(res, 200, { sent: telegram.sent });
       case 'GET /telegram/polls':
-        return sendJson(res, 200, { polls: telegram.polls, pending: telegram.pending().map((u) => u.update_id), calls: telegram.calls.length });
+        return sendJson(res, 200, { polls: telegram.polls, pending: telegram.pending().map((u) => u.update_id), calls: telegram.calls.length,
+          downloads: telegram.calls.filter((call) => call.method.startsWith('download:')).map((call) => call.method.slice('download:'.length)) });
+      case 'GET /telegram/calls':
+        return sendJson(res, 200, { calls: telegram.calls.filter((call) => !call.method.startsWith('download:') && call.method !== 'getUpdates') });
       case 'POST /canva/faults':
         canva.addFault(body);
         return sendJson(res, 200, { ok: true });
       case 'GET /canva/ledger':
         return sendJson(res, 200, { ledger: canva.ledger });
+      case 'POST /canva/manual-edit':
+        canva.editDesign(body.designId, Buffer.from(body.contentBase64, 'base64'));
+        return sendJson(res, 200, { ok: true });
       case 'GET /models/ledger':
         return sendJson(res, 200, { ledger: models.ledger, paid: models.paidCounts(), arrivals: models.arrivals });
       case 'POST /models/delays':

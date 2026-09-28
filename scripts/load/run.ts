@@ -180,6 +180,7 @@ async function main(): Promise<void> {
   const planMs = Number(arg('plan-ms', '0'));
   if (!Number.isInteger(planMs) || planMs < 0 || planMs > 80_000) throw new Error('--plan-ms takes 0 to 80000 (the planner aborts a model call at 90 s)');
   const planningSlots = arg('planning-slots', '');
+  if (planningSlots && !/^(?:[1-9]|1[0-6])$/.test(planningSlots)) throw new Error('--planning-slots takes a whole number from 1 to 16');
   // docker compose reads them from this process's environment (docker-compose.chaos.yml).
   process.env.CHAOS_TELEGRAM_POLLER = poller;
   process.env.HAWA_CANVA_PLANNING_SLOTS = planningSlots;

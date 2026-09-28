@@ -7,9 +7,9 @@ name: Hawa Creative OS — Continuous Assurance CI/CD
 
 on:
   push:
-    branches: [master, main, studio-v2]
+    branches: [master, main, studio-v2, codex/research-grade-design-system]
   pull_request:
-    branches: [master, main, studio-v2]
+    branches: [master, main, studio-v2, codex/research-grade-design-system]
   workflow_dispatch:
 
 concurrency:
@@ -88,7 +88,9 @@ jobs:
       - name: Install monorepo dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install render dependencies (rsvg, Verdana, ImageMagick)
+      # Also the Pango/Cairo headers `pnpm test` needs to compile the shared text-measurement helper
+      # (packages/creative/native, ADR-118); the runner's own Pango runtime draws the text.
+      - name: Install render dependencies (rsvg, Verdana, ImageMagick, Pango headers)
         run: bash scripts/ci/install_render_deps.sh
 
       - name: Gate C — Strict TypeScript build (builds every package's dist/)
@@ -137,6 +139,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # `pnpm build` starts with build:native, which compiles the Pango text-measurement helper.
+      - name: Install the native build dependencies (Pango headers)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends build-essential pkg-config libpango1.0-dev
 
       - name: Build the workspace packages (the eval runner imports their dist/)
         run: pnpm build

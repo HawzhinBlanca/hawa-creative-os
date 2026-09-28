@@ -42,7 +42,7 @@ export function createTelegramUpdateState({ db }: Pick<CoreContext, 'db'>) {
   }
 
   /** Records a side effect that leaves no task behind (a rule saved, a rule removed, a PDF read). */
-  async function markTelegramUpdateHandled(chat: string, updateId: string, kind: string, payload: unknown): Promise<void> {
+  async function markTelegramUpdateHandled(chat: string, updateId: string, kind: string, payload: unknown, strict = false): Promise<void> {
     if (!db || !chat || chat === 'tg_default' || !updateId) return;
     const record = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : { value: payload };
     try {
@@ -55,6 +55,7 @@ export function createTelegramUpdateState({ db }: Pick<CoreContext, 'db'>) {
       });
     } catch (err) {
       log.warn(`[TelegramIngress] Could not record update ${updateId} as handled (${kind}):`, err);
+      if (strict) throw err;
     }
   }
 

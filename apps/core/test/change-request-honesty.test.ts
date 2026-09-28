@@ -1,3 +1,5 @@
+import { useMemoryVisualInputs } from '../test-support/studio-visual-input-fixture.js';
+import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { NEUTRAL_STYLE_SPEC, type StudioLayoutV2 } from '@hawa/creative';
@@ -61,6 +63,7 @@ const harness = (opts: { parentLayout?: StudioLayoutV2; asks?: Ask[]; targets?: 
   const writes: any[] = [];
   const updated: any[] = [];
   const repo = {
+    getCallsForRun: async () => [],
     getRunById: async () => run,
     updateRunStatus: async (_id: string, _t: string, status: string, extra: any = {}) => {
       writes.push({ status, ...extra });
@@ -83,6 +86,9 @@ const harness = (opts: { parentLayout?: StudioLayoutV2; asks?: Ask[]; targets?: 
     };
   });
   const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+  useMemoryVisualInputs(service);
+  // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+  vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
   (service as any).repo = repo;
   (service as any).attachedImage = async () => undefined;
   (service as any).imagesForRun = async () => [];
@@ -92,7 +98,7 @@ const harness = (opts: { parentLayout?: StudioLayoutV2; asks?: Ask[]; targets?: 
     runId: r.id, tenantId: scope.tenantId, taskId: r.task_id, clientId: r.client_id, actorId: scope.actorId,
     width: 1080, height: 1350, tier: 'standard', instructions: 'x', copyBlocks: r.request.copyBlocks,
     referencePack: { palette: ['#0A1628', '#1E3A5F', '#F7B500', '#FFFFFF'] }, promotedRules: 'None',
-    latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 168 / 118, client: { completeJson }, pipelineV3: true,
+    latinFont: 'Verdana', arabicFont: 'Noto Sans Arabic', logoAspect: 168 / 118, client: { completeJson }, logo: KAAE_TEST_CLIENT_LOGO, pipelineV3: true,
     ...(opts.photos ? { photos: opts.photos } : {}),
   });
   return { service, run, writes, updated, completeJson, candidateId };
@@ -159,6 +165,9 @@ describe('a change keeps the photos of the design it changes', () => {
 
   it('finds the pictures of a change to a change back at the request that brought them', async () => {
     const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+    useMemoryVisualInputs(service);
+    // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
+    vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
     const own: Record<string, string[]> = { root: ['p1', 'p2', 'ref'], rev1: [], rev2: [] };
     const parentOf: Record<string, string | undefined> = { rev2: 'rev1', rev1: 'root', root: undefined };
     (service as any).requestImages = async (_s: unknown, id: string) => own[id] ?? [];

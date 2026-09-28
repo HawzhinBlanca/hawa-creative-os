@@ -17,6 +17,8 @@ export interface ModelInputPart {
   kind: 'text' | 'image' | 'document' | 'json';
   text?: string;
   storageKey?: string;
+  /** Inline base64 image bytes, with mimeType; used when no retained asset path is supplied. */
+  data?: string;
   mimeType?: string;
   json?: unknown;
   sha256?: SHA256;
@@ -35,11 +37,13 @@ export interface StructuredModelRequest<TSchema extends JsonObject = JsonObject>
   deploymentId?: UUID;
   inputs: ModelInputPart[];
   systemPromptVersion: string;
+  /** Trusted application JSON Schema; compiled before transport. Never supplied by models/uploads. */
   responseSchema: TSchema;
   tools?: ToolDefinition[];
   allowedToolNames?: string[];
   temperature?: number;
   reasoningProfile?: 'minimal' | 'low' | 'medium' | 'high' | 'maximum';
+  /** Combined generated-token cap (including reasoning); shared gateway default: 2,048. */
   maxOutputTokens?: number;
   budget: { maxCostUsd: number; maxLatencyMs: number; maxAttempts: number };
   egressPolicy: { mode: 'local_only' | 'approved_providers' | 'evaluated_external_allowed'; allowedProviders: string[] };
@@ -49,13 +53,28 @@ export interface StructuredModelRequest<TSchema extends JsonObject = JsonObject>
 export interface StructuredModelResponse<T> {
   deployment: ModelDeploymentRef;
   value: T;
+  /** Execution metadata is outside the validated answer; absent on historical receipts. */
+  provenance?: 'live_provider' | 'deterministic_fallback';
+  /** Digest of the exact frozen response schema; absent on historical receipts. */
+  responseSchemaSha256?: string;
   responseHash: SHA256;
   invocationId: UUID;
-  usage: { inputTokens?: number; outputTokens?: number; assetUnits?: number; estimatedCostUsd?: number };
+  usage: { inputTokens?: number; outputTokens?: number; assetUnits?: number; estimatedCostUsd?: number;
+    /** Missing provider usage must not release a durable spending reservation. */
+    costBasis?: 'usage' | 'unknown' | 'local' };
+  spending?: GatewaySpendingReservation & { providerRequestId: string | null; servedModelId: string | null };
   latencyMs: number;
   attempts: number;
   completedAt: ISODateTime;
   traceId?: string;
+}
+
+export interface GatewaySpendingReservation {
+  policy: string;
+  requestSha256: string;
+  usd: number;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export interface EmbeddingRequest {

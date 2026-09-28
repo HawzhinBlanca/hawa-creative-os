@@ -23,6 +23,11 @@ const MOTIF_TYPES: ProceduralMotifType[] = [
 ];
 
 describe('Design Studio v2: Procedural Motifs (generateMotifSvg & renderMotifPng)', () => {
+  it('refuses an absent or invalid client palette before generating a house-colored motif', () => {
+    expect(() => generateMotifSvg('thin-rules', { width: 320, height: 320, palette: [] })).toThrow(/MOTIF_PALETTE_REQUIRED/);
+    expect(() => generateMotifSvg('thin-rules', { width: 320, height: 320, palette: ['#123456', 'red'] })).toThrow(/MOTIF_PALETTE_INVALID/);
+  });
+
   for (const type of MOTIF_TYPES) {
     describe(`Motif: ${type}`, () => {
       it('is completely deterministic given a seed', () => {

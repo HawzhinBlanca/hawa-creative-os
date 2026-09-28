@@ -18,14 +18,10 @@
 #   blobs/index.tsv                       "<path>\t<pack>" for every packed file
 # Files never change, so a file is packed once; a pack goes when no kept manifest lists any of its files.
 #
-# With HAWA_RESTATE_BACKUP=on it first backs up Restate's volume (infra/backup/restate-nightly.sh):
-#   restate_<STAMP>.tar[.enc] (+ .sha256)  the volume, same cipher and retention as the dump
-#
 # Every location and the database can be pointed elsewhere, which the tests do (packages/db/test/
 # blob-backup.test.ts runs this whole script against a test database and temporary directories):
 #   HAWA_BACKUP_SNAPSHOT_DIR, HAWA_BACKUP_PG_CONTAINER, HAWA_BACKUP_DB, HAWA_BACKUP_NOTIFY_ENV,
-#   HAWA_BACKUP_MIN_BYTES, HAWA_BLOBS_DIR, HAWA_BLOB_GC_CMD (or HAWA_BLOB_GC=off),
-#   HAWA_RESTATE_BACKUP (off), HAWA_RESTATE_BACKUP_CMD (the Restate step, for packages/db/test/restate-backup-nightly.test.ts).
+#   HAWA_BACKUP_MIN_BYTES, HAWA_BLOBS_DIR, HAWA_BLOB_GC_CMD (or HAWA_BLOB_GC=off).
 set -Eeuo pipefail; umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"; cd "$ROOT"
 DIR="${HAWA_BACKUP_SNAPSHOT_DIR:-$ROOT/infra/backup/snapshots}"; mkdir -p "$DIR"; chmod 700 "$DIR"
@@ -52,11 +48,13 @@ notify() { # Telegram, operator chat; values read at call time, never logged
 # A dump that failed its own checks is renamed .failed: under its real name the watchdog took it for a
 # fresh backup and the retention below for one of the fourteen. Only the newest two are kept, to look
 # at. A failure after the checks (the archive copy) leaves the verified dump as it is.
-DUMP_VERIFIED=0
+DUMP_VERIFIED=0; DUMP_STARTED=0; LOCK_OWNED=0
 fail() {
   trap - ERR
-  if [[ "$DUMP_VERIFIED" == 0 && -e "$OUT" ]]; then mv -f "$OUT" "$OUT.failed" || true; rm -f "$OUT.sha256"; fi
-  { ls -1t "$DIR"/hawa_*.dump.failed 2>/dev/null || true; } | tail -n +3 | while read -r old; do rm -f "$old"; done
+  if [[ "$DUMP_STARTED" == 1 && "$DUMP_VERIFIED" == 0 && -e "$OUT" ]]; then mv -f "$OUT" "$OUT.failed" || true; rm -f "$OUT.sha256"; fi
+  if [[ "$LOCK_OWNED" == 1 ]]; then
+    { ls -1t "$DIR"/hawa_*.dump.failed 2>/dev/null || true; } | tail -n +3 | while read -r old; do rm -f "$old"; done
+  fi
   echo "$(date -u +%FT%TZ) FAIL ${STAMP}: $1" | tee -a "$LOG" >&2; notify "🔴 Hawa nightly backup FAILED (${STAMP}): $1"; exit 1
 }
 # Anything else that stops the script is a failure too, and says so, instead of ending in silence.
@@ -66,41 +64,53 @@ trap 'fail "stopped unexpectedly at line $LINENO"' ERR
 # that then carries on (a failed collector run was reported as a failed backup).
 # Scratch space for this run (reference lists, the pack being checked). Temporary copies never outlive
 # the run, whatever happens: the encrypted dump, and a pack still named .part.
-WORK="$(mktemp -d "$DIR/.work_${STAMP}.XXXXXX")"; PACK_PART=""
-trap 'rm -f "$OUT.enc" "$OUT.enc.sha256" "$OUT.enc.plain.sha256"; [[ -n "$PACK_PART" ]] && rm -f "$PACK_PART"; rm -rf "$WORK"' EXIT
-# Copies a run cut short left behind (two from 2026-09-20 held 520 MB); a run takes minutes.
-find "$DIR" -maxdepth 1 -name 'hawa_*.dump.enc*' -mmin +120 -delete 2>/dev/null || true
-find "$DIR" -maxdepth 1 -name '.work_*' -mmin +120 -exec rm -rf {} + 2>/dev/null || true
+WORK=""; PACK_PART=""; ARCHIVE_PART=""
+cleanup() {
+  if [[ "$DUMP_STARTED" == 1 ]]; then rm -f "$OUT.enc" "$OUT.enc.sha256" "$OUT.enc.plain.sha256"; fi
+  if [[ -n "$PACK_PART" ]]; then rm -f "$PACK_PART"; fi
+  if [[ -n "$ARCHIVE_PART" ]]; then rm -f "$ARCHIVE_PART"; fi
+  if [[ -n "$WORK" ]]; then rm -rf "$WORK"; fi
+}
+trap cleanup EXIT
 
 # The collector deletes a file once it has been unreferenced for GRACE_DAYS. The oldest dump the archive
 # keeps is ARCHIVE_KEEP nights old, and every file it references must still be packed or on disk when
 # it is restored: so the grace must be longer than the retention (15 days against 14 nightly copies).
 [[ "$ARCHIVE_KEEP" =~ ^[0-9]+$ && "$GRACE_DAYS" =~ ^[0-9]+$ ]] || fail "HAWA_BACKUP_ARCHIVE_KEEP and HAWA_BLOB_GRACE_DAYS must be whole numbers"
+(( ARCHIVE_KEEP >= 1 )) || fail "HAWA_BACKUP_ARCHIVE_KEEP must retain at least one archive"
 (( ARCHIVE_KEEP < GRACE_DAYS )) \
   || fail "HAWA_BACKUP_ARCHIVE_KEEP (${ARCHIVE_KEEP}) must be less than HAWA_BLOB_GRACE_DAYS (${GRACE_DAYS}): the oldest kept dump would reference files the collector may already have deleted"
-
-# The Restate volume (ADR-034, infra/backup/restate-nightly.sh), behind HAWA_RESTATE_BACKUP (off by
-# default; on once the lead has deployed it). It runs before the dump, so a restore of both finds
-# Postgres at or ahead of Restate: the request lifecycle reconciles a Postgres that is ahead (AHEAD),
-# never one that is behind. Its failure never stops the dump: the dump runs, and the night fails at
-# the end. The archive, cipher, retention and log are this job's; the stamp pairs the two files.
-RESTATE_RESULT="off"; RESTATE_S=0
-if [[ "${HAWA_RESTATE_BACKUP:-off}" == on ]]; then
-  RESTATE_START="$(date +%s)"
-  if (trap - ERR; HAWA_BACKUP_STAMP="$STAMP" HAWA_BACKUP_SNAPSHOT_DIR="$DIR" HAWA_BACKUP_ARCHIVE_DEST="$ARCHIVE_DEST" \
-      HAWA_BACKUP_ARCHIVE_KEEP="$ARCHIVE_KEEP" HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" HAWA_BACKUP_NOTIFY_ENV="$PROD" \
-      bash -c "${HAWA_RESTATE_BACKUP_CMD:-bash \"$ROOT/infra/backup/restate-nightly.sh\"}"); then
-    RESTATE_RESULT="ok"
-  else
-    RESTATE_RESULT="failed"
-  fi
-  RESTATE_S=$(( $(date +%s) - RESTATE_START ))
+[[ "$ARCHIVE_DEST" != gs://* ]] || fail "gs:// is not supported for complete database and file recovery; use a local archive and separately verify its off-host copy"
+if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]] || \
+   { [[ "$ARCHIVE_DEST" != gs://* ]] && compgen -G "$ARCHIVE_DEST/hawa_*.restate.json" >/dev/null; }; then
+  [[ -n "$ARCHIVE_KEYFILE" && -r "$ARCHIVE_KEYFILE" && -s "$ARCHIVE_KEYFILE" ]] \
+    || fail "paired recovery archive needs a readable nonempty key before any dump is copied"
 fi
+
+# Serialize publication, index updates, retention and collection with restores and
+# the existing Restate archive tools. The restarted shell inherits an actual locked
+# descriptor, checked against this directory; an environment marker alone is insufficient.
+if [[ -z "${HAWA_ARCHIVE_LOCK_FD:-}" ]]; then
+  python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode exclusive \
+    -- bash "$ROOT/infra/backup/nightly_backup.sh" "$@" && exit 0
+  exit 1
+fi
+python3 "$ROOT/infra/backup/archive_lock.py" --archive "$ARCHIVE_DEST" --mode exclusive --check \
+  || fail "nightly backup does not own this archive lock"
+LOCK_OWNED=1
+# Orphan cleanup is also a mutation: a contending command must not remove another
+# run's workspace before it has acquired the archive lock.
+find "$DIR" -maxdepth 1 -name 'hawa_*.dump.enc*' -mmin +120 -delete 2>/dev/null || true
+find "$DIR" -maxdepth 1 -name '.work_*' -mmin +120 -exec rm -rf {} + 2>/dev/null || true
+WORK="$(mktemp -d "$DIR/.work_${STAMP}.XXXXXX")"
+[[ ! -e "$OUT" && ! -L "$OUT" && ! -e "$OUT.enc" && ! -e "$OUT.sha256" ]] \
+  || fail "a local snapshot with this timestamp already exists; refusing overwrite"
 
 docker exec "$PG" pg_isready -U hawa_owner -d "$DB" >/dev/null 2>&1 || fail "postgres container not ready"
 # zstd with long-distance matching: the dump repeats the same images many times, so it is about an
 # eighth of the default compression's size (41 MB against 319 MB on 2026-09-23), and faster.
 DUMP_START="$(date +%s)"
+DUMP_STARTED=1
 docker exec "$PG" pg_dump -U hawa_owner -Fc --no-owner --compress=zstd:long "$DB" > "$OUT" || fail "pg_dump exited non-zero"
 DUMP_S=$(( $(date +%s) - DUMP_START ))
 SIZE="$(stat -f '%z' "$OUT" 2>/dev/null || stat -c '%s' "$OUT")"
@@ -162,9 +172,9 @@ fi
 
 # Retention: keep the 14 newest nightly dumps, and copy off-disk to archive destination.
 #
-# The archive copy is encrypted when HAWA_BACKUP_ARCHIVE_KEYFILE names a passphrase file, because
-# the destination is now somewhere off this machine (an iCloud Drive folder by default on the
-# owner's Mac), and a dump carries every client's copy, briefs and task history in clear text.
+# The archive copy is encrypted when HAWA_BACKUP_ARCHIVE_KEYFILE names a passphrase file.
+# This verifies local archive bytes only: a synchronized folder does not establish off-host durability.
+# A dump carries client copy, briefs and task history; keep its key separately from its archive.
 # Same cipher as the disaster-recovery drill, so one restore procedure covers both.
 # Losing the passphrase loses the archive: it belongs in the owner's password manager, not only here.
 ARCHIVE_SRC="$OUT"
@@ -185,24 +195,28 @@ if [[ -n "$ARCHIVE_KEYFILE" ]]; then
   ARCHIVE_SRC="$OUT.enc"
   ARCHIVE_SRC_SHA="$OUT.enc.sha256"
 fi
-if [[ "$ARCHIVE_DEST" == gs://* ]]; then
-  if command -v gsutil >/dev/null 2>&1; then
-    gsutil cp "$ARCHIVE_SRC" "$ARCHIVE_SRC_SHA" "$ARCHIVE_DEST/" 2>/dev/null || echo "WARNING: off-disk upload to $ARCHIVE_DEST failed" >&2
-  fi
-else
-  # A copy that did not arrive is a failure: the dump here is fine, but the off-machine copy is missing.
-  { mkdir -p "$ARCHIVE_DEST" && chmod 700 "$ARCHIVE_DEST" && cp "$ARCHIVE_SRC" "$ARCHIVE_SRC_SHA" "$ARCHIVE_DEST/"; } \
-    || fail "could not copy the dump to the archive (${ARCHIVE_DEST/#$HOME/~}); the dump here is verified"
-fi
-if [[ -n "$ARCHIVE_KEYFILE" ]]; then rm -f "$OUT.enc" "$OUT.enc.sha256"; fi
+# Publish the dump only after every required file pack is verified. A final dump name
+# is the recovery-set discovery marker; .part copies must never be selected by restore.
+mkdir -p "$ARCHIVE_DEST" && chmod 700 "$ARCHIVE_DEST" || fail "could not prepare the local archive"
+archive_publish() {
+  local source="$1" target="$2" expected actual
+  [[ ! -e "$target" && ! -L "$target" ]] || fail "an archive member with this timestamp already exists"
+  ARCHIVE_PART="$(mktemp "$ARCHIVE_DEST/.publish_${STAMP}.XXXXXX")" || fail "could not stage an archive member"
+  cat "$source" > "$ARCHIVE_PART" || fail "could not copy an archive member"
+  expected="$(trap - ERR; shasum -a 256 "$source" | cut -d' ' -f1)" || fail "could not checksum the archive source"
+  actual="$(trap - ERR; shasum -a 256 "$ARCHIVE_PART" | cut -d' ' -f1)" || fail "could not checksum the staged archive copy"
+  [[ "$expected" =~ ^[0-9a-f]{64}$ && "$actual" == "$expected" ]] \
+    || fail "archive copy checksum differs from its source"
+  # Same-directory rename publishes atomically under the exclusive archive lock.
+  mv "$ARCHIVE_PART" "$target" || fail "could not publish an archive member"
+  ARCHIVE_PART=""
+}
 
 # The file store's archive: the files this manifest lists that no earlier pack holds go into one new
 # pack, checked by unpacking it and hashing every file against its name before it takes its name.
 # The manifest is copied last: a manifest in the archive means every file it lists is packed.
 ARCHIVE_BLOBS="$ARCHIVE_DEST/blobs"; INDEX="$ARCHIVE_BLOBS/index.tsv"
-if [[ "$HAS_STORE" == t && "$ARCHIVE_DEST" == gs://* ]]; then
-  echo "WARNING: the file store is not archived to a gs:// destination; only the dump was uploaded" >&2
-elif [[ "$HAS_STORE" == t ]]; then
+if [[ "$HAS_STORE" == t ]]; then
   { mkdir -p "$ARCHIVE_BLOBS" && chmod 700 "$ARCHIVE_BLOBS" && touch "$INDEX"; } || fail "could not prepare ${ARCHIVE_BLOBS/#$HOME/~}"
   cut -f1 "$INDEX" | LC_ALL=C sort -u > "$WORK/packed"
   LC_ALL=C comm -23 "$WORK/manifest" "$WORK/packed" > "$WORK/new"
@@ -233,17 +247,47 @@ elif [[ "$HAS_STORE" == t ]]; then
     { cat "$INDEX"; awk -v p="$PACK" '{ print $0 "\t" p }' "$WORK/new"; } > "$INDEX.new" && mv -f "$INDEX.new" "$INDEX" \
       || fail "could not record the pack in the index"
   fi
-  cp "$WORK/manifest" "$ARCHIVE_DEST/hawa_${STAMP}.blobs" || fail "could not copy the file manifest to the archive"
+  HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" python3 "$ROOT/infra/backup/blob_archive.py" \
+    --archive "$ARCHIVE_DEST" --manifest "$WORK/manifest" > "$WORK/archive-verification.json" \
+    || fail "file archive verification failed; no new recovery set was published and garbage collection was skipped"
+  archive_publish "$WORK/manifest" "$ARCHIVE_DEST/hawa_${STAMP}.blobs"
 fi
+
+archive_publish "$ARCHIVE_SRC_SHA" "$ARCHIVE_DEST/$(basename "$ARCHIVE_SRC_SHA")"
+archive_publish "$ARCHIVE_SRC" "$ARCHIVE_DEST/$(basename "$ARCHIVE_SRC")"
+if [[ -n "$ARCHIVE_KEYFILE" ]]; then rm -f "$OUT.enc" "$OUT.enc.sha256"; fi
 
 { ls -1t "$DIR"/hawa_*.dump 2>/dev/null || true; } | tail -n +15 | while read -r old; do rm -f "$old" "$old.sha256" "$old.enc" "$old.enc.sha256" "${old%.dump}.blobs"; done
 # Pre-deploy dumps have their own retention (the newest ten, compressed). They were once copied,
 # unencrypted, into the archive destination, which is off this machine: never again.
 bash "$ROOT/infra/ops/disk_cleanup.sh" --backups >/dev/null 2>&1 || echo "WARNING: disk_cleanup.sh --backups did not finish" >&2
 
-# Prune archive destination after all new and moved files have arrived
+# R10: the Restate journal lives in a different volume from PostgreSQL and the file store. Opt in
+# only after its immutable helper image, key and isolated restore rehearsal are configured. A failed
+# Restate copy fails the night before any file-store garbage collection or OK receipt.
+RESTATE_STATUS="off"
+if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]]; then
+  HAWA_BACKUP_ARCHIVE_DEST="$ARCHIVE_DEST" HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" \
+    python3 "$ROOT/infra/backup/restate_nightly.py" --apply --pair-stamp "$STAMP" \
+    || fail "Restate volume backup failed; the database/file copy may be valid, but the night is incomplete"
+  RESTATE_STATUS="paired_archive"
+fi
+
+# Retire older database/file snapshots only after every opted-in member of this night's
+# recovery set has published. A failed Restate capture must preserve the older usable archive.
 if [[ -d "$ARCHIVE_DEST" && "$ARCHIVE_DEST" != gs://* ]]; then
-  for ext in dump enc sql; do
+  # Once this archive contains pairs, keep pruning by complete recovery set even if the opt-in
+  # switch is later turned off. Losing the key fails closed rather than discarding old paired dumps.
+  if [[ "${HAWA_RESTATE_BACKUP_ENABLED:-off}" == on ]] || compgen -G "$ARCHIVE_DEST/hawa_*.restate.json" >/dev/null; then
+    RESTATE_PRUNE="$(HAWA_BACKUP_ARCHIVE_DEST="$ARCHIVE_DEST" HAWA_BACKUP_ARCHIVE_KEYFILE="$ARCHIVE_KEYFILE" \
+      python3 "$ROOT/infra/backup/restate_retention.py" --apply --keep "$ARCHIVE_KEEP")" \
+      || fail "paired recovery-set retention did not finish; inspect the archive before retrying"
+    echo "$(date -u +%FT%TZ) RESTATE-RETENTION ${RESTATE_PRUNE}" >> "$LOG"
+    ARCHIVE_EXTS=(dump sql)
+  else
+    ARCHIVE_EXTS=(dump enc sql)
+  fi
+  for ext in "${ARCHIVE_EXTS[@]}"; do
     { ls -1t "$ARCHIVE_DEST"/hawa_*."$ext" 2>/dev/null || true; } | tail -n +$((ARCHIVE_KEEP + 1)) | while read -r old; do
       rm -f "$old" "$old.sha256"
     done
@@ -269,7 +313,7 @@ fi
 # destination the files are not archived at all, so nothing may be deleted: the disk copy is the only one.
 if [[ "$HAS_STORE" == t && "${HAWA_BLOB_GC:-on}" != off && "$ARCHIVE_DEST" == gs://* ]]; then
   GC_DELETED="skipped_unarchived"
-  echo "WARNING: the file store collector did not run: the files are not archived to ${ARCHIVE_DEST}" >&2
+  echo "WARNING: the file store collector did not run: the files are not archived locally to ${ARCHIVE_DEST} (off-host copy unverified)" >&2
 elif [[ "$HAS_STORE" == t && "${HAWA_BLOB_GC:-on}" != off ]]; then
   if [[ -n "${HAWA_BLOB_GC_CMD:-}" ]]; then
     GC_OUT="$(trap - ERR; bash -c "$HAWA_BLOB_GC_CMD --grace-days $GRACE_DAYS" 2>&1)" && GC_RC=0 || GC_RC=$?
@@ -287,12 +331,5 @@ elif [[ "$HAS_STORE" == t && "${HAWA_BLOB_GC:-on}" != off ]]; then
   fi
 fi
 
-echo "$(date -u +%FT%TZ) OK ${STAMP} bytes=${SIZE} tasks=${REST} events=${EVENTS} sha256=$(cat "$OUT.sha256" | cut -c1-16) dump_s=${DUMP_S} blobs=${BLOB_COUNT} blob_bytes=${BLOB_BYTES} new_blobs=${NEW_BLOBS} refs_without_row=${REFS_WITHOUT_ROW} gc_deleted=${GC_DELETED} restate=${RESTATE_RESULT} restate_s=${RESTATE_S}" >> "$LOG"
-echo "✓ backup ${OUT/$ROOT\//} (${SIZE} bytes), restore verified: tasks=${REST} events=${EVENTS}, files=${BLOB_COUNT} (${NEW_BLOBS} new), archived to ${ARCHIVE_DEST}"
-# The dump and the files are safe; a failed Restate backup still fails the night. Its own line above
-# says why, and it has already alerted the operator (loudly, if Restate or intake is not back).
-if [[ "$RESTATE_RESULT" == failed ]]; then
-  echo "$(date -u +%FT%TZ) FAIL ${STAMP}: the Restate backup failed (its RESTATE line above says why); the dump and the files are backed up" >> "$LOG"
-  echo "✗ the Restate backup failed; see ${LOG/#$HOME/~}" >&2
-  exit 1
-fi
+echo "$(date -u +%FT%TZ) OK ${STAMP} bytes=${SIZE} tasks=${REST} events=${EVENTS} sha256=$(cat "$OUT.sha256" | cut -c1-16) dump_s=${DUMP_S} blobs=${BLOB_COUNT} blob_bytes=${BLOB_BYTES} new_blobs=${NEW_BLOBS} refs_without_row=${REFS_WITHOUT_ROW} restate=${RESTATE_STATUS} gc_deleted=${GC_DELETED}" >> "$LOG"
+echo "✓ backup ${OUT/$ROOT\//} (${SIZE} bytes), restore verified: tasks=${REST} events=${EVENTS}, files=${BLOB_COUNT} (${NEW_BLOBS} new), archived locally to ${ARCHIVE_DEST} (off-host copy unverified)"

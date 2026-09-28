@@ -79,7 +79,7 @@ VALUES
   ('c1000000-0000-4000-8000-000000000002'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'kaae', 'Kurdistan Accrediting Association for Education', 'ckb', 'active'),
   ('c1000000-0000-4000-8000-000000000003'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'drustee', 'Drustee Brand', 'ckb', 'active'),
   ('c1000000-0000-4000-8000-000000000004'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'fastpay', 'FastPay FinTech', 'en', 'active'),
-  -- Clients being set up (ADR-038, packages/creative/assets/clients). Core inserts the same rows at
+  -- Clients being set up (ADR-127, packages/creative/assets/clients). Core inserts the same rows at
   -- start-up where they are missing; these make a fresh database match from the first request.
   ('c1000000-0000-4000-8000-000000000011'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'zar-podcast', 'ZAR Podcast', 'en', 'active'),
   ('c1000000-0000-4000-8000-000000000012'::uuid, '00000000-0000-4000-a000-000000000001'::uuid, 'halwest-news', 'Halwest News', 'en', 'active'),
