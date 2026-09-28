@@ -197,7 +197,8 @@ Separate commits on the same branch, after stage 1:
   restate block, `POST /v1/internal/tasks/:id/delivery-finished`, the prepare route's
   `requestId === taskId` branch and the worker's `reportTo: 'core'` branch. A non-lifecycle task can
   then only be delivered by Core; one pinned `restate` (none exists in production, and the gate
-  counts any open one) would be refused. Tests: `apps/core/test/delivery-workflow.test.ts` keeps
+  counts any open one) is refused. One test lost with it must be ported before 2b merges: the
+  workflow-mode prepare's hold on a durable Drive reservation (ADR-135 section 6). Tests: `apps/core/test/delivery-workflow.test.ts` keeps
   the Core-pinned cases and the refusal; `apps/worker/test/lifecycle-delivery.test.ts` runs its cases
   with `reportTo: 'lifecycle'`.
 

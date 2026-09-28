@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as restate from '@restatedev/restate-sdk';
-import type { DeliveryInput, OutboundMessage, PreparedDelivery, SendResult } from '@hawa/contracts';
+import type { DeliveryInput, DeliveryOutcome, OutboundMessage, PreparedDelivery, SendResult } from '@hawa/contracts';
 import { deliveryWorkflowId } from '@hawa/contracts';
 import { signLifecycleDeliveryClaim } from '@hawa/integrations';
 import { runDelivery, type CoreInternal, type DeliveryContext } from '../src/lifecycle/delivery.js';
@@ -9,19 +9,34 @@ import { runDelivery, type CoreInternal, type DeliveryContext } from '../src/lif
 /**
  * The Delivery workflow's body (architecture programme Phase 2, slice 2.2; PHASE2_DESIGN.md 2.5):
  * prepare through Core, each approved file and then the notice through the chat's TelegramSender,
- * then the report. The TelegramSender is scripted per message key here; its own behaviour is in
- * lifecycle-telegram-sender.test.ts.
+ * then the report to the request's RequestLifecycle owner. The TelegramSender is scripted per message
+ * key here; its own behaviour is in lifecycle-telegram-sender.test.ts. Since stage 2 of ADR-135 every
+ * run is request-owned and signed: the report to Core (reportTo 'core') is gone.
  */
 const tenantId = '00000000-0000-4000-a000-000000000001';
 const OFFICE = '9000001';
 
+const WORKER_TOKEN = ['delivery', 'unit', 'worker', 'token'].join('_');
+const priorToken = process.env.HAWA_WORKER_TOKEN;
+beforeAll(() => { process.env.HAWA_WORKER_TOKEN = WORKER_TOKEN; });
+afterAll(() => {
+  if (priorToken === undefined) delete process.env.HAWA_WORKER_TOKEN;
+  else process.env.HAWA_WORKER_TOKEN = priorToken;
+});
+
+/** A request-owned run with Core's signature over the claim, as RequestLifecycle starts one. */
+function signed(unsigned: DeliveryInput): DeliveryInput {
+  const { claimSignature: _old, ...claim } = unsigned;
+  return { ...claim, claimSignature: signLifecycleDeliveryClaim(WORKER_TOKEN, claim) };
+}
+
 function input(overrides: Partial<DeliveryInput> = {}): DeliveryInput {
   const taskId = randomUUID();
   const approvalId = randomUUID();
-  return {
-    v: 1, requestId: taskId, deliveryId: deliveryWorkflowId(taskId, approvalId), tenantId, taskId, approvalId, revisionId: randomUUID(),
-    chatId: '7200001', officeChatId: OFFICE, reportTo: 'core', run: 1, ...overrides,
-  };
+  return signed({
+    v: 1, requestId: randomUUID(), deliveryId: deliveryWorkflowId(taskId, approvalId), tenantId, taskId, approvalId, revisionId: randomUUID(),
+    chatId: '7200001', officeChatId: OFFICE, reportTo: 'lifecycle', requestRev: 4, run: 1, ...overrides,
+  });
 }
 
 function prepared(taskId: string, files: number, overrides: Partial<PreparedDelivery> = {}): PreparedDelivery {
@@ -42,9 +57,11 @@ function harness(options: { prepare: () => Promise<PreparedDelivery>; answer?: (
   const sends: OutboundMessage[] = [];
   const posts: Array<{ path: string; body: any }> = [];
   const steps: string[] = [];
+  const reports: Array<{ input: DeliveryInput; outcome: DeliveryOutcome }> = [];
   const ctx: DeliveryContext = {
     run: (name, action) => { steps.push(name); return action(); },
     send: async (m) => { sends.push(m); return options.answer ? options.answer(m) : { outcome: 'sent', messageId: String(sends.length) }; },
+    reportLifecycle: async (report, outcome) => { reports.push({ input: report, outcome }); },
   };
   const core: CoreInternal = {
     async post<T>(path: string, body: unknown): Promise<T> {
@@ -53,38 +70,43 @@ function harness(options: { prepare: () => Promise<PreparedDelivery>; answer?: (
       return { status: 'applied' } as unknown as T;
     },
   };
-  return { ctx, core, sends, posts, steps };
+  return { ctx, core, sends, posts, steps, reports };
 }
 
 describe('Delivery workflow', () => {
   it('refuses lifecycle reporting before any external effect without a private request owner', async () => {
-    const i = input({ reportTo: 'lifecycle' });
+    const i = input();
     const h = harness({ prepare: async () => prepared(i.taskId, 1) });
+    delete h.ctx.reportLifecycle;
     await expect(runDelivery(h.ctx, h.core, i)).rejects.toThrow(/LIFECYCLE_DELIVERY_NOT_AVAILABLE/);
     expect(h.posts).toEqual([]);
     expect(h.sends).toEqual([]);
     expect(h.steps).toEqual([]);
   });
 
-  it('keeps a signed request-owned outcome pending when its private owner refuses the report', async () => {
-    const prior = process.env.HAWA_WORKER_TOKEN;
-    process.env.HAWA_WORKER_TOKEN = ['request', 'owner', 'delivery', 'test'].join('_');
-    try {
-      const unsigned = input({ requestId: randomUUID(), reportTo: 'lifecycle', requestRev: 4 });
-      const i = { ...unsigned, claimSignature: signLifecycleDeliveryClaim(process.env.HAWA_WORKER_TOKEN, unsigned) };
-      const h = harness({ prepare: async () => prepared(i.taskId, 1) });
-      h.ctx.reportLifecycle = async () => { throw new restate.TerminalError('Core refused stale report', { errorCode: 409 }); };
-      await expect(runDelivery(h.ctx, h.core, i)).rejects.toThrow('Core refused stale report');
-      expect(h.steps).toEqual(['prepare']);
-      expect(h.posts).toHaveLength(1);
-      expect(h.sends.filter((m) => m.chatId === i.chatId)).toHaveLength(2);
-    } finally {
-      if (prior === undefined) delete process.env.HAWA_WORKER_TOKEN;
-      else process.env.HAWA_WORKER_TOKEN = prior;
-    }
+  it('refuses a run that would report to Core (removed by stage 2 of ADR-135) before any external effect', async () => {
+    const i = { ...input(), reportTo: 'core' as const };
+    const h = harness({ prepare: async () => prepared(i.taskId, 1) });
+    await expect(runDelivery(h.ctx, h.core, i)).rejects.toThrow(/INVALID_LIFECYCLE_DELIVERY_CLAIM|INVALID_DELIVERY_REPORT_TARGET/);
+    expect(h.posts).toEqual([]);
+    expect(h.sends).toEqual([]);
+    const { claimSignature: _unused, ...unsigned } = input();
+    const unsignedCore = { ...unsigned, reportTo: 'core' as const };
+    await expect(runDelivery(h.ctx, h.core, unsignedCore)).rejects.toThrow(/INVALID_DELIVERY_REPORT_TARGET/);
+    expect(h.sends).toEqual([]);
   });
 
-  it('sends each approved file once, then the notice with the count, then reports delivered to Core', async () => {
+  it('keeps a signed request-owned outcome pending when its private owner refuses the report', async () => {
+    const i = input();
+    const h = harness({ prepare: async () => prepared(i.taskId, 1) });
+    h.ctx.reportLifecycle = async () => { throw new restate.TerminalError('Core refused stale report', { errorCode: 409 }); };
+    await expect(runDelivery(h.ctx, h.core, i)).rejects.toThrow('Core refused stale report');
+    expect(h.steps).toEqual(['prepare']);
+    expect(h.posts).toHaveLength(1);
+    expect(h.sends.filter((m) => m.chatId === i.chatId)).toHaveLength(2);
+  });
+
+  it('sends each approved file once, then the notice with the count, then reports delivered to the request owner', async () => {
     const i = input();
     const h = harness({ prepare: async () => prepared(i.taskId, 2) });
     const outcome = await runDelivery(h.ctx, h.core, i);
@@ -96,12 +118,9 @@ describe('Delivery workflow', () => {
     expect(h.sends.every((s) => s.class === 'critical' && s.chatId === '7200001')).toBe(true);
     expect(h.sends[2].text).toContain('The 2 approved files are attached above.');
     expect(h.sends[2].text).toContain('Your approved design has been delivered.');
-    expect(h.steps).toEqual(['prepare', 'report']);
-    expect(h.posts[0].path).toBe(`/internal/lifecycle/${i.requestId}/deliveries/${i.approvalId}/prepare`);
-    expect(h.posts[1]).toEqual({
-      path: `/internal/tasks/${i.taskId}/delivery-finished`,
-      body: { tenantId, deliveryId: i.deliveryId, approvalId: i.approvalId, run: 1, outcome },
-    });
+    expect(h.steps).toEqual(['prepare']);
+    expect(h.posts.map((p) => p.path)).toEqual([`/internal/lifecycle/${i.requestId}/deliveries/${i.approvalId}/prepare`]);
+    expect(h.reports).toEqual([{ input: i, outcome }]);
   });
 
   it('a file Telegram may not have taken: the notice says so with the counts, and the outcome is uncertain', async () => {
@@ -142,18 +161,18 @@ describe('Delivery workflow', () => {
       const h = harness({ prepare: async () => prepared(i.taskId, 1, change) });
       const outcome = await runDelivery(h.ctx, h.core, i);
       expect(outcome).toMatchObject({ outcome: 'failed', archived: true, sheetsConfirmed: true, filesSent: 0 });
-      expect(h.posts.at(-1)?.body.outcome).toEqual(outcome);
+      expect(h.reports.at(-1)?.outcome).toEqual(outcome);
     }
   });
 
-  it('Core refuses the prepare step for good: nothing is sent to the requester, the office is told, and Core hears failed', async () => {
+  it('Core refuses the prepare step for good: nothing is sent to the requester, the office is told, and the owner hears failed', async () => {
     const i = input();
     const h = harness({ prepare: async () => { throw new restate.TerminalError('Core answered HTTP 409 NOT_PUBLISHING', { errorCode: 409 }); } });
     const outcome = await runDelivery(h.ctx, h.core, i);
     expect(outcome).toMatchObject({ outcome: 'failed', filesSent: 0, archived: false });
     expect(outcome.reason).toMatch(/^PREPARE_FAILED/);
     expect(h.sends.map((s) => s.chatId)).toEqual([OFFICE]);
-    expect(h.posts.at(-1)?.path).toBe(`/internal/tasks/${i.taskId}/delivery-finished`);
+    expect(h.reports.map((r) => r.outcome.outcome)).toEqual(['failed']);
   });
 
   it('a task Core has delivered already: nothing is sent and nobody is alerted', async () => {
@@ -186,13 +205,13 @@ describe('Delivery workflow', () => {
 
   it('a later run of the same publication (the archive retried) sends under the same keys as the first', async () => {
     const i = input();
-    const again = { ...i, deliveryId: deliveryWorkflowId(i.taskId, i.approvalId, 2), run: 2 };
+    const again = signed({ ...i, deliveryId: deliveryWorkflowId(i.taskId, i.approvalId, 2), run: 2 });
     const files = prepared(i.taskId, 1);
     const first = harness({ prepare: async () => files });
     const second = harness({ prepare: async () => files });
     await runDelivery(first.ctx, first.core, i);
     await runDelivery(second.ctx, second.core, again);
     expect(second.sends.map((s) => s.key)).toEqual(first.sends.map((s) => s.key));
-    expect(second.posts.at(-1)?.body).toMatchObject({ deliveryId: again.deliveryId, run: 2 });
+    expect(second.reports.at(-1)?.input).toMatchObject({ deliveryId: again.deliveryId, run: 2 });
   });
 });

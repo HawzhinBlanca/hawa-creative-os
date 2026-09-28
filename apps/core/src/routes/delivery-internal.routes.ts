@@ -1,4 +1,3 @@
-import type { DeliveryOutcome } from '@hawa/contracts';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { RouteContext } from './types.js';
@@ -14,9 +13,9 @@ import { log } from '../logging.js';
  *   Core's own delivery without the requester's messages and without completing the task: the Drive
  *   archive and the Sheets row (both idempotent through the publication key), then what the requester
  *   is sent. Asked again after a lost answer, it adopts the Drive files it already wrote.
- * - POST /v1/internal/tasks/:taskId/delivery-finished: the workflow's report, which moves the task
- *   (COMPLETE, PUBLISH_RECONCILIATION or back to APPROVED) once for legacy runs. Request-owned
- *   runs report to RequestLifecycle, which applies one versioned Core projection.
+ * The workflow reports to RequestLifecycle, which applies one versioned Core projection. The report
+ * to Core (POST /v1/internal/tasks/:taskId/delivery-finished, for tasks RequestLifecycle did not own)
+ * was removed by stage 2 of ADR-135.
  *
  * They are registered straight on the app, not through registerRoute, because they take one
  * credential only: the worker's own HAWA_WORKER_TOKEN, a service principal (PHASE2_DESIGN.md 1.2
@@ -26,7 +25,7 @@ import { log } from '../logging.js';
  */
 export function registerDeliveryInternalRoutes(ctx: RouteContext): void {
   const { app, problem, readCurrentTask, verifyRequestAuth } = ctx;
-  const { prepareWorkflowDelivery, finishWorkflowDelivery } = ctx.delivery;
+  const { prepareWorkflowDelivery } = ctx.delivery;
 
   // Only verifyRequestAuth decides (ADR-128). On /v1/internal/* it accepts HAWA_WORKER_TOKEN alone and
   // only through serviceTokenOf, which refuses a token shorter than 16 characters or equal to another
@@ -60,9 +59,10 @@ export function registerDeliveryInternalRoutes(ctx: RouteContext): void {
     const taskTenant = task?.tenantId && isValidUuid(task.tenantId) ? task.tenantId : DEFAULT_TENANT_ID;
     if (!task || taskTenant !== tenantId) return failed(c, 404, 'TASK_NOT_FOUND', `Task ${taskId} is not in tenant ${tenantId}`);
     const requestId = c.req.param('requestId') || '';
-    if (task.requestId ? requestId !== task.requestId || !Number.isInteger(body?.requestRev) ||
-        !Number.isInteger(body?.run) || typeof body?.deliveryId !== 'string'
-      : requestId !== taskId || body?.requestRev !== undefined) {
+    // Stage 2 of ADR-135: only a request RequestLifecycle owns is delivered by the workflow.
+    if (!task.requestId) return failed(c, 409, 'LEGACY_WORKFLOW_DELIVERY_RETIRED', 'The Delivery workflow delivers only requests RequestLifecycle owns');
+    if (requestId !== task.requestId || !Number.isInteger(body?.requestRev) ||
+        !Number.isInteger(body?.run) || typeof body?.deliveryId !== 'string') {
       return failed(c, 409, 'LIFECYCLE_DELIVERY_NOT_CURRENT', 'The workflow input does not match this task\'s owner');
     }
 
@@ -71,8 +71,7 @@ export function registerDeliveryInternalRoutes(ctx: RouteContext): void {
       approvalId,
       revisionId: typeof body?.revisionId === 'string' ? body.revisionId : undefined,
       policy: typeof body?.policy === 'string' ? body.policy : undefined,
-      ...(task.requestId ? { lifecycle: { requestId, requestRev: Number(body.requestRev),
-        deliveryId: String(body.deliveryId), run: Number(body.run) } } : {}),
+      lifecycle: { requestId, requestRev: Number(body.requestRev), deliveryId: String(body.deliveryId), run: Number(body.run) },
     });
     if (result?.ok && result.prepared) return c.json(result.prepared, 200);
     const status = Number(result?.status) || 500;
@@ -81,32 +80,5 @@ export function registerDeliveryInternalRoutes(ctx: RouteContext): void {
     const retryable = status >= 500 || code === 'PUBLICATION_IN_PROGRESS';
     log.warn(`[core:delivery-internal] prepare of task ${taskId} answered ${status} ${code}: ${result?.message || ''}`);
     return failed(c, retryable ? 503 : status, code, String(result?.message || code));
-  });
-
-  app.post('/v1/internal/tasks/:taskId/delivery-finished', async (c: Context) => {
-    if (!isWorker(c)) return refuse(c);
-    const taskId = c.req.param('taskId') || '';
-    const body = await c.req.json().catch(() => ({}));
-    const outcome = body?.outcome as DeliveryOutcome | undefined;
-    const run = Number(body?.run);
-    const outcomes = ['delivered', 'chat_only', 'uncertain', 'failed'];
-    if (!outcome || !outcomes.includes(String(outcome.outcome)) || !Number.isInteger(run) || run < 1 || typeof body?.deliveryId !== 'string') {
-      return failed(c, 422, 'INVALID_REPORT', 'A delivery report names its delivery, its run and an outcome');
-    }
-    const result = await finishWorkflowDelivery(taskId, String(body?.tenantId || ''), {
-      deliveryId: body.deliveryId,
-      approvalId: String(body?.approvalId || ''),
-      run,
-      outcome: {
-        outcome: outcome.outcome,
-        uncertain: Array.isArray(outcome.uncertain) ? outcome.uncertain.map(String).slice(0, 50) : [],
-        sheetsConfirmed: outcome.sheetsConfirmed === true,
-        archived: outcome.archived === true,
-        filesSent: Number(outcome.filesSent) || 0,
-        ...(outcome.reason ? { reason: String(outcome.reason).slice(0, 500) } : {}),
-      },
-    });
-    if (!result.ok) return failed(c, result.status, result.code, result.message);
-    return c.json({ status: result.status, taskState: result.taskState }, 200);
   });
 }

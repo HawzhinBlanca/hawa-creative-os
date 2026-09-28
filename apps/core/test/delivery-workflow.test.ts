@@ -242,7 +242,9 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
     expect((await publications(taskId)).map((p) => p.executor)).toEqual(['core']);
   });
 
-  it('a task pinned to the workflow keeps it before its first delivery', async () => {
+  // Stage 2 of ADR-135 removed the Delivery workflow for tasks RequestLifecycle does not own. One
+  // still pinned to it is refused by both publish routes, and nothing starts or is sent.
+  it('a task pinned to the workflow that RequestLifecycle does not own is refused, and nothing starts', async () => {
     const restateIngress = fakeRestate();
     const app = core();
     const { taskId } = await approvedTask(app, 'restate');
@@ -251,186 +253,13 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
     });
     expect(direct.status).toBe(409);
     expect((await direct.json()).detail).toMatch(/Delivery workflow/);
+    const res = await deliver(app, taskId);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ title: 'Delivery Workflow Retired' });
+    expect(restateIngress.starts).toHaveLength(0);
     expect(await publications(taskId)).toHaveLength(0);
-    const res = await deliver(app, taskId);
-    expect(res.status).toBe(202);
-    expect((await res.json()).executor).toBe('restate');
-    expect(restateIngress.starts).toHaveLength(1);
-  });
-
-  it('workflow-pinned: the workflow sends each file and the notice once, and Core completes the task on its report', async () => {
-    const restateIngress = fakeRestate();
-    const telegram = fakeTelegram();
-    const publisher = archivingPublisher();
-    const app = core(publisher);
-    const { taskId, chat, sha256 } = await approvedTask(app, 'restate');
-
-    const res = await deliver(app, taskId);
-    const body = await res.json();
-    expect(res.status).toBe(202);
-    expect(body).toMatchObject({ executor: 'restate', status: 'PUBLISHING', alreadyDelivering: false });
-    expect(await taskState(taskId)).toBe('publishing');
-    expect((await publications(taskId)).map((p) => [p.state, p.executor, p.executor_run, p.executor_finished_run])).toEqual([['pending', 'restate', 1, 0]]);
-    expect(restateIngress.starts).toHaveLength(1);
-    const input = restateIngress.starts[0];
-    expect(input).toMatchObject({ v: 1, taskId, tenantId, chatId: chat, officeChatId: OFFICE, reportTo: 'core', run: 1, requestId: taskId });
-    expect(input.deliveryId).toBe(body.deliveryId);
-    expect(input.deliveryId).toBe(`dl-${taskId}-${input.approvalId}`);
-    // Nothing for the outbox: the workflow sends the files itself.
-    expect(publisher.publish).not.toHaveBeenCalled();
-
-    const outcome = await worker(app, telegram)(input);
-    expect(outcome).toEqual({ outcome: 'delivered', uncertain: [], sheetsConfirmed: true, archived: true, filesSent: 2 });
-    expect(publisher.publish).toHaveBeenCalledTimes(1);
-    expect(telegram.received.map((r) => [r.chatId, r.kind, r.sha256 ?? null])).toEqual([
-      [chat, 'document', sha256.png], [chat, 'document', sha256.pptx], [chat, 'text', null],
-    ]);
-    expect(telegram.received[2].text).toContain('The 2 approved files are attached above.');
-    expect(await taskState(taskId)).toBe('complete');
-    expect((await publications(taskId)).map((p) => [p.state, p.executor, p.executor_run, p.executor_finished_run])).toEqual([['complete', 'restate', 1, 1]]);
     expect(await publishedCommands(taskId)).toEqual([]);
-
-    // Pressed again: the stored delivery, no new run. The same workflow replayed sends nothing again.
-    const again = await deliver(app, taskId);
-    expect(again.status).toBe(200);
-    expect((await again.json()).status).toBe('COMPLETE');
-    expect(restateIngress.starts).toHaveLength(1);
-    await worker(app, telegram)(input);
-    expect(telegram.received).toHaveLength(3);
-  });
-
-  it('workflow-pinned: Deliver pressed again while the workflow runs starts nothing new', async () => {
-    const restateIngress = fakeRestate();
-    const app = core();
-    const { taskId, chat } = await approvedTask(app, 'restate');
-    const first = await (await deliver(app, taskId)).json();
-    const second = await deliver(app, taskId);
-    expect(second.status).toBe(202);
-    const body = await second.json();
-    expect(body).toMatchObject({ executor: 'restate', deliveryId: first.deliveryId, alreadyDelivering: true });
-    // Asked for again under the same key (a start whose answer was lost is made good), and Restate said 409.
-    expect(restateIngress.starts.map((s) => s.deliveryId)).toEqual([first.deliveryId, first.deliveryId]);
-    expect((await publications(taskId)).map((p) => [p.executor_run, p.executor_finished_run])).toEqual([[1, 0]]);
-  });
-
-  it('a Core restart while the workflow runs leaves the delivery to it, even once the chat is off the list', async () => {
-    const restateIngress = fakeRestate();
-    const before = core();
-    const { taskId, chat } = await approvedTask(before, 'restate');
-    const first = await (await deliver(before, taskId)).json();
-    const publisher = archivingPublisher();
-    const after = core(publisher);
-    const res = await deliver(after, taskId);
-    expect(res.status).toBe(202);
-    expect(await res.json()).toMatchObject({ executor: 'restate', deliveryId: first.deliveryId, alreadyDelivering: true });
-    // reopenInterruptedDelivery did not take it back to approved, and Core's own delivery did not run.
-    expect(await taskState(taskId)).toBe('publishing');
-    expect(publisher.publish).not.toHaveBeenCalled();
-    expect(restateIngress.starts).toHaveLength(2);
-  });
-
-  it('Drive refused: the files still reach the requester once, the task goes back to approved, and a later run sends nothing twice', async () => {
-    const restateIngress = fakeRestate();
-    const telegram = fakeTelegram();
-    const app = core(noDrivePublisher());
-    const { taskId, chat } = await approvedTask(app, 'restate');
-    await deliver(app, taskId);
-    const outcome = await worker(app, telegram)(restateIngress.starts[0]);
-    expect(outcome).toMatchObject({ outcome: 'chat_only', archived: false, filesSent: 2 });
-    expect(telegram.received.filter((r) => r.chatId === chat).map((r) => r.kind)).toEqual(['document', 'document', 'text']);
-    expect(telegram.received.find((r) => r.kind === 'text')!.text).toContain('Office archive: not saved to Google Drive yet');
     expect(await taskState(taskId)).toBe('approved');
-    expect((await publications(taskId)).map((p) => [p.executor, p.executor_run, p.executor_finished_run])).toEqual([['restate', 1, 1]]);
-
-    // Core's own delivery refuses a publication the workflow owns (publish-omnichannel reaches it directly).
-    const direct = await app.request(`/tasks/${taskId}/publish-omnichannel`, { method: 'POST', headers, body: JSON.stringify({}) });
-    expect(direct.status).toBe(409);
-    expect((await direct.json()).detail).toMatch(/Delivery workflow/);
-
-    // Deliver again once Drive works: run 2 retries the archive, and the requester gets nothing twice.
-    const fixed = core(archivingPublisher());
-    const res = await (await deliver(fixed, taskId)).json();
-    expect(res.deliveryId).toMatch(/:archive:2$/);
-    const second = await worker(fixed, telegram)(restateIngress.starts[1]);
-    expect(second).toMatchObject({ outcome: 'delivered', archived: true, filesSent: 2 });
-    expect(telegram.received.filter((r) => r.chatId === chat)).toHaveLength(3);
-    expect(await taskState(taskId)).toBe('complete');
-  });
-
-  it('a file Telegram may not have taken: sent once, the office alerted once, and completion waits for resolution', async () => {
-    const restateIngress = fakeRestate();
-    const telegram = fakeTelegram((chatId, kind, filename) => (kind === 'document' && filename?.endsWith('.pptx') ? { success: false, error: 'TELEGRAM_DELIVERY_UNCERTAIN' } : { success: true }));
-    const app = core();
-    const { taskId, chat } = await approvedTask(app, 'restate');
-    await deliver(app, taskId);
-    const run = worker(app, telegram);
-    const outcome = await run(restateIngress.starts[0]);
-    expect(outcome).toMatchObject({ outcome: 'uncertain', filesSent: 1 });
-    await run(restateIngress.starts[0]);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(telegram.received.filter((r) => r.chatId === chat && r.kind === 'document')).toHaveLength(2);
-    const alerts = telegram.received.filter((r) => r.chatId === OFFICE);
-    expect(alerts).toHaveLength(1);
-    expect(alerts[0].text).toContain(taskId);
-    expect(await taskState(taskId)).toBe('publishing');
-    const publicationState = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
-    expect(publicationState).toMatchObject({ state: 'requester_send_reconciliation' });
-    expect(publicationState.actionableRecovery).toContain('inspect the Telegram chat');
-    const retry = await deliver(app, taskId);
-    expect(retry.status).toBe(409);
-    expect((await retry.json()).detail).toContain('previous Telegram send');
-    expect(restateIngress.starts).toHaveLength(1);
-    const stored = await withRlsContext(db, operator, async (trx) => {
-      const pub = await new PublicationRepository(db).findByTaskId(taskId, tenantId, trx);
-      return pub ? (await new PublicationRepository(db).getPublicationWithRefs(pub.id, tenantId, trx)) : null;
-    });
-    const file = stored?.driveRefs[0];
-    expect(file?.status).toBe('verified');
-    await expect(withRlsContext(db, operator, (trx) => new PublicationRepository(db).recordDriveRef({
-      tenantId, publicationId: String(stored?.publication.id), fileId: String(file?.file_id),
-      sharedDriveId: String(file?.shared_drive_id), folderId: String(file?.folder_id),
-      fileName: String(file?.file_name), mimeType: String(file?.mime_type),
-      expectedSha256: 'f'.repeat(64), observedSize: Number(file?.observed_size), status: 'verified',
-    }, trx))).rejects.toThrow(/conflicts with its stored publication receipt|DRIVE_EXPECTATION_CONFLICT/);
-  });
-
-  it('a refused Telegram file cannot complete an archived publication with a confirmed Sheet row', async () => {
-    const restateIngress = fakeRestate();
-    const telegram = fakeTelegram((_chatId, kind, filename) =>
-      kind === 'document' && filename?.endsWith('.pptx') ? { success: false, error: 'TELEGRAM_DOCUMENT_REJECTED_403' } : { success: true });
-    const app = core();
-    const { taskId, chat } = await approvedTask(app, 'restate');
-    await deliver(app, taskId);
-    const outcome = await worker(app, telegram)(restateIngress.starts[0]);
-    expect(outcome).toMatchObject({ outcome: 'failed', archived: true, sheetsConfirmed: true, filesSent: 1 });
-    expect(await taskState(taskId)).toBe('publishing');
-    expect((await publications(taskId)).map((p) => [p.state, p.executor_finished_run])).toEqual([['drive_complete', 1]]);
-    const publicationState = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
-    expect(publicationState).toMatchObject({ state: 'requester_send_reconciliation' });
-    const retry = await deliver(app, taskId);
-    expect(retry.status).toBe(409);
-    expect(restateIngress.starts).toHaveLength(1);
-  });
-
-  it('a run whose report never reached Core is recorded from its output on the next press', async () => {
-    const restateIngress = fakeRestate();
-    const telegram = fakeTelegram();
-    const app = core();
-    const { taskId, chat } = await approvedTask(app, 'restate');
-    await deliver(app, taskId);
-    // The report step gave up (Core away for the hour it waits): the worker's client ends it as terminal.
-    const coreGoneForTheReport = coreInternalFromEnv(((input: any, init: any) => String(input).endsWith('/delivery-finished')
-      ? Promise.resolve(new Response(JSON.stringify({ code: 'GONE' }), { status: 410 }))
-      : app.request(String(input), init)) as typeof fetch);
-    const input = restateIngress.starts[0];
-    const outcome = await worker(app, telegram, { core: coreGoneForTheReport })(input);
-    restateIngress.outputs.set(input.deliveryId, outcome);
-    expect(await taskState(taskId)).toBe('publishing');
-
-    const res = await deliver(app, taskId);
-    expect(await res.json()).toMatchObject({ deliveryId: input.deliveryId, recordedOutcome: 'delivered', status: 'DELIVERY_RECORDED' });
-    expect(await taskState(taskId)).toBe('complete');
-    expect((await publications(taskId)).map((p) => [p.state, p.executor_finished_run])).toEqual([['complete', 1]]);
   });
 
   it('a delivery Core\'s own path started stays Core\'s', async () => {
@@ -444,32 +273,6 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
     expect((await again.json()).detail).toMatch(/archive may already exist/i);
     expect(restateIngress.starts).toEqual([]);
     expect((await publications(taskId)).map((p) => p.executor)).toEqual(['core']);
-  });
-
-  it('the outbox dead-letters a notify.published for a publication the workflow owns, sending nothing', async () => {
-    const restateIngress = fakeRestate();
-    const telegram = fakeTelegram();
-    const app = core();
-    const { taskId, chat } = await approvedTask(app, 'restate');
-    await deliver(app, taskId);
-    const input = restateIngress.starts[0];
-    // An older Core (or a hand) wrote one anyway.
-    const repo = new OutboxRepository(db);
-    const idempotencyKey = `guard-${randomUUID()}`;
-    await withRlsContext(db, operator, (trx) => repo.enqueue({
-      tenantId, aggregateType: 'task', aggregateId: taskId, commandType: 'notify.published', idempotencyKey,
-      payload: { taskId, chatId: chat, title: 'x', publicationKey: `pub_key_${taskId}_${input.approvalId}`, files: [], driveFolderId: '', spreadsheetId: '', sheetsConfirmed: true },
-    }, trx));
-    const consumer = new OutboxConsumer(db, {
-      tenantId, userId: operator.userId, batchSize: 100, telegramBotToken: ['bot', 'token'].join('_'), officeAlertChatId: OFFICE,
-      telegramSender: () => telegram.bridge, readExportBytes: readStoredExportBytes,
-    });
-    await consumer.processBatch(100);
-    const command = (await publishedCommands(taskId))[0];
-    expect(command.state).toBe('failed');
-    expect(command.last_error).toContain('DELIVERY_OWNED_BY_WORKFLOW');
-    // Other tests' commands in this database were delivered as usual; this chat and the office got nothing.
-    expect(telegram.received.filter((r) => r.chatId === chat || r.chatId === OFFICE)).toEqual([]);
   });
 
   describe('the internal endpoints', () => {
@@ -486,80 +289,24 @@ describe.skipIf(!url)('slice 2.2: Deliver hands a workflow-pinned task to the De
       const approvalId = randomUUID();
       for (const authorization of [null, headers.Authorization, 'Bearer test_art_director_bearer', 'Bearer not-the-token']) {
         expect((await prepare(app, taskId, approvalId, authorization)).status).toBe(401);
-        const finished = await app.request(`/v1/internal/tasks/${taskId}/delivery-finished`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json', ...(authorization ? { Authorization: authorization } : {}) }, body: '{}',
-        });
-        expect(finished.status).toBe(401);
       }
       // With the worker's token: a task that is not there (or not in the tenant) is not found.
       expect((await prepare(app, taskId, approvalId, `Bearer ${workerToken}`)).status).toBe(404);
     });
 
-    it('refuse to prepare a task that is not being delivered by the workflow', async () => {
+    it('refuse to prepare a task RequestLifecycle does not own (stage 2 of ADR-135), whatever its pin', async () => {
       const app = core();
-      const { taskId } = await approvedTask(app);
-      const detail = await (await app.request(`/tasks/${taskId}`, { headers })).json();
-      const res = await prepare(app, taskId, detail.latestApproval?.decisionId || randomUUID(), `Bearer ${workerToken}`);
-      expect(res.status).toBe(409);
-      expect((await res.json()).code).toBe('NOT_PUBLISHING');
+      for (const pin of ['core', 'restate'] as const) {
+        const { taskId } = await approvedTask(app, pin);
+        const detail = await (await app.request(`/tasks/${taskId}`, { headers })).json();
+        const res = await prepare(app, taskId, detail.latestApproval?.decisionId || randomUUID(), `Bearer ${workerToken}`);
+        expect(res.status, pin).toBe(409);
+        expect((await res.json()).code).toBe('LEGACY_WORKFLOW_DELIVERY_RETIRED');
+      }
+      const route = await app.request(`/v1/internal/tasks/${randomUUID()}/delivery-finished`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${workerToken}` }, body: '{}' });
+      expect(route.status).toBe(404);
     });
 
-    it('holds a credential failure when a prior workflow upload has a durable reservation', async () => {
-      const restateIngress = fakeRestate();
-      const app = core(noDrivePublisher());
-      const { taskId, chat } = await approvedTask(app, 'restate');
-      expect((await deliver(app, taskId)).status).toBe(202);
-      const input = restateIngress.starts[0];
-      await withRlsContext(db, operator, async (trx) => {
-        const publication = (await sql<{ id: string; package_sha256: string }>`SELECT id, package_sha256
-          FROM hawa.publications WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid`.execute(trx)).rows[0];
-        await sql`INSERT INTO hawa.drive_upload_reservations
-          (tenant_id, publication_id, artifact_id, task_id, package_sha256, folder_id, file_name, mime_type, expected_sha256, drive_file_id)
-          VALUES (${tenantId}::uuid, ${publication.id}::uuid, ${randomUUID()}::uuid, ${taskId}::uuid,
-            ${publication.package_sha256}, 'kaae-folder', 'approved.png', 'image/png', ${'a'.repeat(64)}, ${`reserved_${randomUUID()}`})`.execute(trx);
-      });
-
-      const result = await prepare(app, taskId, input.approvalId, `Bearer ${workerToken}`);
-      expect(result.status).toBe(503);
-      expect(await result.json()).toMatchObject({ code: 'ARCHIVE_STATE_UNCERTAIN' });
-      expect(await taskState(taskId)).toBe('publishing');
-      expect(await publishedCommands(taskId)).toEqual([]);
-      expect((await (await app.request(`/tasks/${taskId}`, { headers })).json()).status).toBe('ARCHIVE_RECONCILIATION');
-      const state = await (await app.request(`/tasks/${taskId}/publication-state`, { headers })).json();
-      expect(state).toMatchObject({ status: 'ARCHIVE_RECONCILIATION', state: 'archive_reconciliation' });
-
-      // A terminal prepare report must not turn a possible stored Drive file into "no archive".
-      const finished = await app.request(`/v1/internal/tasks/${taskId}/delivery-finished`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${workerToken}` },
-        body: JSON.stringify({ tenantId, deliveryId: input.deliveryId, approvalId: input.approvalId, run: 1,
-          outcome: { outcome: 'failed', uncertain: [], sheetsConfirmed: false, archived: false,
-            filesSent: 0, reason: 'PREPARE_FAILED: DRIVE_IDENTITY_CONFLICT' } }),
-      });
-      expect(await finished.json()).toMatchObject({ status: 'applied', taskState: 'publishing' });
-      expect((await (await app.request(`/tasks/${taskId}`, { headers })).json()).status).toBe('ARCHIVE_RECONCILIATION');
-      expect(await publishedCommands(taskId)).toEqual([]);
-    });
-
-    it('record a report once: a second report of the same run changes nothing', async () => {
-      const restateIngress = fakeRestate();
-      const app = core();
-      const { taskId, chat } = await approvedTask(app, 'restate');
-      await deliver(app, taskId);
-      const input = restateIngress.starts[0];
-      const report = (outcome: DeliveryOutcome) => app.request(`/v1/internal/tasks/${taskId}/delivery-finished`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${workerToken}` },
-        body: JSON.stringify({ tenantId, deliveryId: input.deliveryId, approvalId: input.approvalId, run: 1, outcome }),
-      });
-      const failed: DeliveryOutcome = { outcome: 'failed', uncertain: [], sheetsConfirmed: false, archived: false, filesSent: 0, reason: 'PREPARE_FAILED' };
-      expect(await (await report(failed)).json()).toEqual({ status: 'applied', taskState: 'approved' });
-      expect(await (await report({ ...failed, outcome: 'delivered', archived: true, sheetsConfirmed: true })).json()).toEqual({ status: 'replayed', taskState: 'approved' });
-      expect(await taskState(taskId)).toBe('approved');
-      // A run that was never started is refused.
-      const unknown = await app.request(`/v1/internal/tasks/${taskId}/delivery-finished`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${workerToken}` },
-        body: JSON.stringify({ tenantId, deliveryId: `${input.deliveryId}:archive:5`, approvalId: input.approvalId, run: 5, outcome: failed }),
-      });
-      expect(unknown.status).toBe(409);
-    });
   });
 });

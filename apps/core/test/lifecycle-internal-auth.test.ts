@@ -11,7 +11,8 @@ import { createApp } from '../src/app.js';
 const WORKER = ['worker', 'token', 'fixture'].join('_');
 const INTAKE = '/v1/internal/telegram/intake';
 const DELIVERY = [
-  `/v1/internal/tasks/${randomUUID()}/delivery-finished`,
+  // The report to Core for legacy runs was removed by stage 2 of ADR-135; the request owner's report remains.
+  `/v1/internal/lifecycle/${randomUUID()}/delivery-finished`,
   `/v1/internal/lifecycle/${randomUUID()}/deliveries/${randomUUID()}/prepare`,
 ];
 
@@ -101,7 +102,8 @@ describe('HAWA_WORKER_TOKEN and /v1/internal/*', () => {
     const a = app();
     for (const path of DELIVERY) {
       const res = await call(a, path, { Authorization: `Bearer ${WORKER}` });
-      expect(res.status, path).toBe(422);
+      // Body validation: 422 from the prepare route, 400 from the request owner's report route.
+      expect([400, 422], path).toContain(res.status);
     }
     for (const token of [process.env.HAWA_BEARER_TOKEN!, process.env.HAWA_ADMIN_KEY!, process.env.HAWA_ART_DIRECTOR_KEY!]) {
       for (const path of DELIVERY) expect((await call(a, path, { Authorization: `Bearer ${token}` })).status, path).toBe(401);

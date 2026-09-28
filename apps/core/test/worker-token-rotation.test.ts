@@ -48,7 +48,7 @@ describe('HAWA_WORKER_TOKEN_PREVIOUS during a worker token rotation', () => {
   it('the delivery routes accept the previous token too', async () => {
     vi.stubEnv('HAWA_WORKER_TOKEN', CURRENT);
     vi.stubEnv('HAWA_WORKER_TOKEN_PREVIOUS', PREVIOUS);
-    const path = `/v1/internal/tasks/${randomUUID()}/delivery-finished`;
+    const path = `/v1/internal/lifecycle/${randomUUID()}/delivery-finished`;
     const body = JSON.stringify({ outcome: 'delivered' });
     expect((await post(app(), path, PREVIOUS, body)).status).not.toBe(401);
     expect((await post(app(), path, 'another_value_of_sixteen_plus', body)).status).toBe(401);

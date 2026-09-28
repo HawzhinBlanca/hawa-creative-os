@@ -38,13 +38,6 @@ import { acceptedWorkerSecrets } from './worker-secrets.js';
 
 /** A Core step's retry: from 2 s doubling to 30 s, for up to 10 minutes (as TaskWorkflow's steps). */
 export const PREPARE_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 30000, maxRetryDuration: 10 * 60 * 1000 };
-/**
- * The report waits an hour for Core, as the design run's outcome report does. Longer would keep the
- * run, and so its worker colour, from draining during a deploy. A report that gives up is not lost:
- * the workflow ends with the outcome as its output, and the next Deliver press reads it from Restate
- * and records it (startWorkflowDelivery in Core).
- */
-export const REPORT_RETRY = { initialRetryInterval: 2000, retryIntervalFactor: 2, maxRetryInterval: 60000, maxRetryDuration: 60 * 60 * 1000 };
 type StepRetry = { initialRetryInterval: number; retryIntervalFactor: number;
   maxRetryInterval: number; maxRetryDuration?: number };
 
@@ -106,7 +99,9 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
       throw new restate.TerminalError('INVALID_LIFECYCLE_DELIVERY_CLAIM', { errorCode: 401 });
     }
   }
-  if (input.reportTo !== 'core' && input.reportTo !== 'lifecycle') {
+  // Stage 2 of ADR-135: the run that reported to Core (reportTo 'core', a task RequestLifecycle did not
+  // own) is gone; none was running when it merged (GET /v1/operations/legacy-path, stage2Ready).
+  if (input.reportTo !== 'lifecycle') {
     throw new restate.TerminalError('INVALID_DELIVERY_REPORT_TARGET', { errorCode: 400 });
   }
   const run = Number.isInteger(input.run) && Number(input.run) > 0 ? Number(input.run) : 1;
@@ -194,27 +189,9 @@ export async function runDelivery(ctx: DeliveryContext, core: CoreInternal, inpu
     });
   }
 
-  try {
-    if (input.reportTo === 'lifecycle') {
-      // This is already a Restate object call. Nesting it inside ctx.run creates an extra journal
-      // command around the RPC and can strand a completed delivery on replay (Restate 570).
-      await ctx.reportLifecycle!(input, outcome);
-    } else {
-      await ctx.run('report', () => core.post(`/internal/tasks/${encodeURIComponent(input.taskId)}/delivery-finished`, {
-        tenantId: input.tenantId,
-        deliveryId: input.deliveryId,
-        approvalId: input.approvalId,
-        run,
-        outcome,
-      }), REPORT_RETRY);
-    }
-  } catch (err) {
-    if (!isTerminal(err)) throw err;
-    if (input.reportTo === 'lifecycle') throw err;
-    // The requester has what was sent; the task stays PUBLISHING until Deliver is pressed again, which
-    // reads this run's output and records it.
-    log.error(`[Delivery] ${input.deliveryId} ended ${outcome.outcome}, and Core did not take the report: ${messageOf(err)}`);
-  }
+  // This is already a Restate object call. Nesting it inside ctx.run creates an extra journal
+  // command around the RPC and can strand a completed delivery on replay (Restate 570).
+  await ctx.reportLifecycle!(input, outcome);
   return outcome;
 }
 

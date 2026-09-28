@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-29T12:08:28Z",
+  "generatedAt": "2026-09-29T12:08:54Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -744,8 +744,8 @@
     },
     {
       "path": "adrs/135_lifecycle_only_telegram_requests.md",
-      "sha256": "3d25b38d4628d669dcaa5b1c105741defa8ba688bf221e0daa32947db89a833b",
-      "bytes": 12941
+      "sha256": "87cc941bd58a0eabeb71474e5dd5d01c0c1170d897d2ef31badaa704b41d0bc8",
+      "bytes": 14250
     },
     {
       "path": "adrs/136_cutover_handoff_and_poller_rollback.md",
@@ -1044,8 +1044,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "c914a5f3a54b9509696ea7d3b9963c7b3eb1e7c697cb617508114a6fa82aae41",
-      "bytes": 39536
+      "sha256": "caa008c35fc62c5b4f1c0b855819afce0e482d77e88f5588ffb6a7f8adb3bbf4",
+      "bytes": 39843
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1289,8 +1289,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md",
-      "sha256": "d7f79be03ed9376ada399dd2c3a57061be29188d997d5ec77f736fdebf07ddf4",
-      "bytes": 22593
+      "sha256": "1f64bda9520afecf207d67c421117973641e0a8f1877244e83c79ae3fa8d706e",
+      "bytes": 22729
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT_PROOF.json",

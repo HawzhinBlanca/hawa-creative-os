@@ -65,7 +65,10 @@ export interface DeliveryInput {
   revisionId: string;
   chatId: string | null;
   officeChatId: string | null;
-  /** 'core' posts to Core; 'lifecycle' reports through the private request owner. */
+  /**
+   * Reports through the private request owner. 'core' (a report to Core for a task RequestLifecycle
+   * did not own) was removed by stage 2 of ADR-135; a journaled input carrying it is refused.
+   */
   reportTo: 'lifecycle' | 'core';
   /** Request revision that claimed a lifecycle-owned publication; absent for legacy runs. */
   requestRev?: number;
