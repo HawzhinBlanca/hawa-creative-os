@@ -194,8 +194,10 @@ one keyed `RequestLifecycle.open`, and the request object alone creates and owns
 Such a task is pinned to the Restate executor when it is created (`delivery_executor_pin = 'restate'`);
 every other Telegram task is pinned to `core`. The pin never changes afterwards (ADR-052; since then
 only a committed lifecycle open may claim Restate, `apps/core/src/services/chat-intake.ts`). A chat
-with earlier Core tasks needs an explicit `/new` for its first lifecycle request, because an ordinary
-message there could be a change to an older design. Media and PDF sources have their own admissions
+with a Core task from the last 48 hours needs an explicit `/new` for a lifecycle request, because an
+ordinary message there could be a change to that design (legacy intake reads unlinked messages against
+the chat's designs of the last 48 hours); older Core history no longer holds a chat back (ADR-136).
+Button presses and replies about a Core task stay with legacy intake in a lifecycle chat (ADR-136). Media and PDF sources have their own admissions
 (ADR-061, ADR-068, ADR-069, ADR-071).
 
 Once a chat's first lifecycle request opens, `ChatInbox` keeps that chat in lifecycle mode for good
@@ -226,13 +228,17 @@ them. Switching forward is the same with `worker`; the worker starts polling onc
 live for 30 s (`HAWA_POLLER_TAKEOVER_MS`), and its health then shows `"mode":"on"` with `handedOn`
 counting updates. Core's "Poll now" answers 409 while the worker polls.
 
-**On this branch, rolling the poller back to `core` also stops every enrolled chat from opening new
-lifecycle requests**, because nothing reaches `ChatInbox` any more. Requests already open keep their
-Restate ownership, but their requesters' replies now arrive through Core's own poller, which does not
-route to `RequestLifecycle` (no lifecycle routing in `apps/core/src/services/polled-update-dispatch.ts`
-or the legacy Telegram intake). How legacy intake treats such a reply has not been exercised for this
-runbook. Before rolling back with lifecycle requests open, finish them or take them over in the Desk.
-No drill of this rollback has been run on either branch.
+**Rolling the poller back to `core` stops new chats from opening lifecycle requests; it does not take
+open ones away from their owner** (ADR-136). Core's poller sends every update from a chat with a
+Restate-owned request to that chat's `ChatInbox` (key `tg-<update_id>`,
+`apps/core/src/services/polled-lifecycle-route.ts`), so replies keep reaching their requests, and
+Core-pinned tasks keep legacy intake and Core delivery. Restate and a registered worker colour must
+stay up for those chats; an update Restate does not take is retried and, after five failures,
+dead-lettered with the office alerted. Builds before ADR-136 gave such a reply to legacy intake, which
+queued it as a new Core task in the Desk while the request kept waiting (R10.K1 before the fix); on
+those builds roll back `HAWA_LIFECYCLE_CHATS` only.
+Drilled on the chaos stack (`R10.K1` full rollback and roll forward, `R10.K2` chat list only;
+`plans/lean-design-implementation-2026-09-28/R10_HANDOFF_ROLLBACK_PROOF.json`); not run on production.
 
 ### The worker token: rotating, and a half-done rotation
 
@@ -284,11 +290,14 @@ deploying again. What rolling back changes (ADR-052, ADR-059):
 
 studio-v2's drill of this section (a chat enrolled, delivered through its `Delivery` workflow with
 `scripts/load/deliver-one.ts`, then rolled back) exercised studio-v2's Deliver-time rule, which this
-branch does not have; that helper was not ported and the drill has **not** been run on this branch. The
-evidence here is the lifecycle intake, projection and delivery tests
-(`apps/core/test/lifecycle-internal-intake.test.ts`, `apps/core/test/delivery-workflow.test.ts`,
-`apps/core/test/chat-intake-flag-scoping.test.ts`) and the chaos suite's L2 scenarios. Run a chaos
-enrolment drill before enrolling a production chat.
+branch does not have; that helper was not ported. On this branch the chaos suite drills enrolment
+and rollback as deploys: `R10.H1` (every chat enrolled with Core requests in flight), `R10.K1` (poller
+and chats rolled back and forward) and `R10.K2` (the chat list alone rolled back with a request waiting
+for its requester): `npx tsx packages/testkit/chaos/run.ts --poller core --lifecycle-chats none --only
+R10.H1,R10.K1,R10.K2`. Other evidence: the lifecycle intake, projection and delivery tests
+(`apps/core/test/lifecycle-internal-intake.test.ts`, `apps/core/test/lifecycle-cutover-handoff.test.ts`,
+`apps/core/test/delivery-workflow.test.ts`, `apps/core/test/chat-intake-flag-scoping.test.ts`) and the
+chaos suite's L2 scenarios.
 
 ## Reading one request's logs
 

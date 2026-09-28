@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T18:05:09Z",
+  "generatedAt": "2026-09-28T21:04:26Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 505,
+  "fileCount": 507,
   "files": [
     {
       "path": ".dockerignore",
@@ -738,6 +738,11 @@
       "bytes": 4651
     },
     {
+      "path": "adrs/136_cutover_handoff_and_poller_rollback.md",
+      "sha256": "af0dd2e1f8c848b599e815fe3fb9de18015ca2c2004f983b52fa201a2ecdbadd",
+      "bytes": 6957
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1004,8 +1009,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "c6850c3eba3cad1033ab686611380e715e1850daa10ef4f79f67be8ae1ce5bb4",
-      "bytes": 33913
+      "sha256": "cdab02ad3da68abc95351ea6f9df944e393a2fbd89866fb0c430b9459857b865",
+      "bytes": 36151
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1261,6 +1266,11 @@
       "path": "plans/lean-design-implementation-2026-09-28/OPERATIONS_REVIEW_FIXES_PROOF.json",
       "sha256": "5b246602dc68b9473397c769f6df189bf388617ab04f194528b1f88ad9f6c054",
       "bytes": 17033
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/R10_HANDOFF_ROLLBACK_PROOF.json",
+      "sha256": "875c199e39093d9214fbef5d4c4407821a1a68950fc6aa0d5321da0bb4b2b1eb",
+      "bytes": 91556
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/RETAINED_RESULTS_PROOF.json",
@@ -1734,8 +1744,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "8f2860c619f9df9b64a5dc55fd7cd6c92d180c46878680584472d1b33c80c461",
-      "bytes": 470647
+      "sha256": "8f071bbf9b437fdee718385011128cdb43318665ecc6e5840a6d064c80c2ffe3",
+      "bytes": 472739
     },
     {
       "path": "plans/user-stories.csv",
@@ -1829,8 +1839,8 @@
     },
     {
       "path": "runbooks/20_architecture_operations.md",
-      "sha256": "f005e49abe705f4f195358d5e5d094eebef895e2542838a82bc945bed2b7c893",
-      "bytes": 39968
+      "sha256": "fd05006e55564a41e23de5f520cd59c45689c2273efe6ff2f2d44da4690d71d3",
+      "bytes": 40879
     },
     {
       "path": "runbooks/AVAILABILITY_MONITORING.md",

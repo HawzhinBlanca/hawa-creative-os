@@ -246,7 +246,18 @@ The design funnel is evaluated per automatic task. A successful draft in the sam
 
 Chat enrolment for the legacy Delivery workflow is sampled when a Telegram task is created and saved as its immutable `delivery_executor_pin`. Existing tasks migrate to `core`. A revision, question answer, reformat or reference task inherits the scoped predecessor's pin. Idempotent intake replay returns the original task and pin. The publish route and both effect claim paths use the stored choice; an already-started publication or queued send keeps its recorded executor. A lifecycle-owned projection records Restate ownership separately and refuses to claim a Core-pinned predecessor. Changing `HAWA_LIFECYCLE_CHATS` must never change an existing task's executor at Deliver.
 
-This local rule has database-backed tests. Full ChatInbox handoff of old requests, deployed canary rollback, Restate backup and clean-host restore remain R10 acceptance work.
+This local rule has database-backed tests. Restate backup and clean-host restore remain R10 acceptance work.
+
+### Handoff of old requests and rolling the cutover back (2026-09-28, ADR-136)
+
+Production put every chat on the lifecycle on 2026-09-28 (`HAWA_TELEGRAM_POLLER=worker`, `HAWA_LIFECYCLE_CHATS=*`) while requesters still had Core requests in flight. Those requests finish where they started:
+
+- In a chat the lifecycle serves, a button press, a reply whose quoted message names a Core-pinned task of the chat, a reply to a message the outbox sent for such a task, and any reply in a chat with Core history and no lifecycle request go to legacy intake before any lifecycle routing. A reply to a lifecycle message, `/new`, and a reply to an unknown message in a chat that has lifecycle requests keep the lifecycle's routing.
+- An ordinary new brief opens a lifecycle request unless the chat has a Core-pinned task created in the last 48 hours (legacy intake's own window for reading an unlinked message against a design); then it stays with legacy intake unchanged, and `/new` opens a lifecycle request at once.
+- When Core polls (a rollback of the poller), an update from a chat with any Restate-owned request goes to that chat's `ChatInbox` under the worker poller's key `tg-<update_id>`; other chats keep legacy intake. Restate not taking it is an intake failure (asked again, dead-lettered after five), never legacy intake.
+- Delivery pins are unchanged: a Core-pinned task is delivered by Core after the switch, a request-owned one by its request after a rollback.
+
+Acceptance on the chaos stack: `R10.H1` (five requests made while Core polled with no lifecycle chats, in five states, plus a control chat that repeats the same follow-ups under the old configuration; the switch deployed in `deploy.sh` order; every request continued from Telegram and the Desk) and `R10.K1` (lifecycle requests awaiting approval, mid-delivery and waiting for the requester; the poller and chats rolled back by a deploy; updates kept coming, including one while both pollers ran; then rolled forward). Evidence: `plans/lean-design-implementation-2026-09-28/R10_HANDOFF_ROLLBACK_PROOF.json`. Not covered: a lifecycle `awaiting_answer` question (the fixtures have no Studio clarification stage; the office revision notice at rev 3 is the waiting-for-the-requester state drilled), real Telegram, real Canva, and production.
 
 ## 11. Availability design
 

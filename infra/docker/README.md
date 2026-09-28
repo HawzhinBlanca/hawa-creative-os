@@ -130,6 +130,26 @@ nobody polls: set the token first.
   may both poll: Telegram refuses one of two concurrent `getUpdates` (409), both keep the offset in the
   same Postgres row, and an update both hand on is one `ChatInbox` invocation; Core's intake
   deduplicates what is already queued in Restate.
+- What a rollback does to requests in flight (ADR-136; drilled on the chaos stack as `R10.K1`, with
+  `HAWA_LIFECYCLE_CHATS` emptied in the same deploy). Nothing moves between owners. A Core-pinned task
+  stays with legacy intake and Core delivery. A lifecycle request stays with its request: the Desk
+  approves and delivers it as before, a delivery already running finishes on the colour it started on
+  (the drain waits for it), and its requester's replies keep reaching it, because Core's poller sends
+  every update from a chat with a lifecycle-owned request to that chat's `ChatInbox` (key
+  `tg-<update_id>`). So a rollback stops new chats from joining the lifecycle; it does not take the
+  lifecycle chats off Restate, and Restate and a registered worker colour must stay up for them.
+  **Builds before ADR-136 do not do this**: their Core poller gives such a reply to legacy intake, which
+  queues it as a new Core task in the Desk while the request keeps waiting for it. With such a build,
+  roll back only `HAWA_LIFECYCLE_CHATS` (empty) and keep `HAWA_TELEGRAM_POLLER=worker`: `ChatInbox`
+  keeps its chats' lifecycle mode, so waiting requests still get their replies, and new briefs go to
+  legacy intake.
+- Operator steps for a rollback: set `HAWA_TELEGRAM_POLLER=core` in `infra/docker/.env` and
+  `HAWA_LIFECYCLE_CHATS=` (empty) in `infra/docker/.env.production`; run `bash infra/docker/deploy.sh`
+  (pre-flight), then `--apply`. Check the output: `deleted=<old colour>` from the drain (a delivery in
+  flight keeps it `draining` until done; the next deploy finishes it), `/v1/health` naming poller `core`,
+  and the new colour's `/health` showing `telegramPoller` `off`. Then finish open lifecycle requests in
+  the Desk as usual; nothing has to be re-sent. Roll forward the same way with `worker` and `*`: Core
+  keeps polling until the new colour is registered.
 - With `worker` set, Core still probes getMe (finding 3), so step 8 fails on `telegramApi: unreachable`
   after the switch when Telegram does not answer Core. The switch stands: the new colour is registered
   and polls, and the exit note says so ("The <colour> worker is registered").

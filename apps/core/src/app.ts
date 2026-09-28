@@ -1,4 +1,5 @@
-import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
+import { createPolledUpdateHandler, parkTelegramUpdate, parkedUpdateChat } from './services/polled-update-dispatch.js';
+import { chatHasLifecycleRequest, handToChatInbox } from './services/polled-lifecycle-route.js';
 import { PostgresTelegramPollState, telegramBotKey } from './services/telegram-poll-state.js';
 import { hydrateClientDnaFromDb } from './services/client-dna-hydration.js';
 import { ensureClientPackRows } from './services/client-pack-rows.js';
@@ -1087,6 +1088,15 @@ export function createApp(options?: CreateAppOptions) {
       deliver: async (update) => {
         const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
         if (!secret) throw new Error('TELEGRAM_WEBHOOK_SECRET is not configured');
+        // A chat with a lifecycle-owned request stays with its ChatInbox after a rollback of the poller
+        // (ADR-136): legacy intake would revise that request's task outside its request.
+        const lifecycleChat = parkedUpdateChat(update);
+        if (db && lifecycleChat && await chatHasLifecycleRequest(db, DEFAULT_TENANT_ID, lifecycleChat)) {
+          const status = await handToChatInbox(update, lifecycleChat);
+          if (status >= 500) log.error(`[TelegramBridge] update ${update.update_id} of lifecycle chat ${lifecycleChat} could not be handed to its ChatInbox (HTTP ${status})`);
+          else log.info(`[TelegramBridge] update ${update.update_id} handed to the ChatInbox of lifecycle chat ${lifecycleChat}`);
+          return status;
+        }
         const res = await app.request('/api/webhooks/telegram?generate=true', {
           method: 'POST',
           // The update's own id (tg-<update_id>, set below) carries on into intake and what it writes.

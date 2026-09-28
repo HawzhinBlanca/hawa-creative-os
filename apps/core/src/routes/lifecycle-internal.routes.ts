@@ -33,7 +33,7 @@ import { classifyWithHeuristics } from '../services/telegram-classifier.js';
 import { createTelegramUpdateState } from '../services/telegram-intake/update-state.js';
 import { log, requestIdHeaders } from '../logging.js';
 import { intakeRefused } from '../services/channel-kill-switches.js';
-import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
+import { coreOwnedUpdate, lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readNewBriefDecision, recordNewBriefDecision,
   readRevisionPhotoDecision, recordRevisionPhotoDecision,
   readRoutingRefusal, recordRoutingRefusal,
   revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests,
@@ -320,8 +320,23 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     const sourceAnswer = await sourceIntake(update, String(mode));
     if (sourceAnswer) return handled(sourceAnswer.status, sourceAnswer.extra);
 
+    // A button press or a reply about a design Core still owns stays with legacy intake, whatever the
+    // chat's flag or ChatInbox mode (ADR-052, ADR-059, ADR-136): requests made before the cutover finish
+    // where they started.
+    let coreOwned: Awaited<ReturnType<typeof coreOwnedUpdate>> = null;
+    if ((mode === 'lifecycle' || lifecycleOwnsChat(chatOf(update))) && !priorRevisionPhoto && !admittedAlbum && db && chatOf(update)) {
+      try {
+        coreOwned = await withRlsContext(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
+          (trx) => coreOwnedUpdate(trx, DEFAULT_TENANT_ID, chatOf(update), update as Record<string, unknown>));
+      } catch (err) {
+        if ((err as { status?: number })?.status === 503) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
+        throw err;
+      }
+      if (coreOwned) log.info(`[core:internal] update ${update.update_id} acts on a Core-owned design (${coreOwned}); legacy intake takes it`);
+    }
+
     // --- lifecycle mode: bind a requester answer to one request, then replay it by update ID ---
-    if (mode === 'lifecycle' || lifecycleOwnsChat(chatOf(update)) || priorRevisionPhoto) {
+    if ((mode === 'lifecycle' || lifecycleOwnsChat(chatOf(update)) || priorRevisionPhoto) && !coreOwned) {
       // The chat's stored request ID is only a hint. A chat can contain more than one request.
       if (!db) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
       {
@@ -478,8 +493,11 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   return handled(403, { code: 'SENDER_NOT_ALLOWED' });
                 }
                 if (newBriefText.length > 100_000) return handled(413, { code: 'BRIEF_TOO_LONG' });
-                // A newly flagged chat with historical Core tasks needs an explicit command; an
-                // ordinary message could be a change to an older design.
+                // Next to a recent Core design an ordinary message could be a change to it: legacy
+                // intake reads an unlinked message against the chat's Core tasks of the last 48 hours
+                // (telegram-intake/replies.ts), so such a chat needs an explicit /new. Older Core
+                // history no longer holds the chat off the lifecycle (ADR-136): before, every chat with
+                // any Core task ever needed /new, and nothing told its requesters so.
                 const hasLegacyTask = await withRlsContext(db,
                   { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
                   async (trx) =>
@@ -487,7 +505,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                       JOIN hawa.tasks t ON t.id = o.aggregate_id AND t.tenant_id = o.tenant_id
                       WHERE o.tenant_id = ${TENANT}::uuid AND o.command_type = 'task.created'
                         AND o.payload->>'sourceChannelId' = ${chatId}
-                        AND t.delivery_executor_pin = 'core' LIMIT 1`.execute(trx)).rows.length > 0);
+                        AND t.delivery_executor_pin = 'core'
+                        AND t.created_at > now() - interval '48 hours' LIMIT 1`.execute(trx)).rows.length > 0);
                 if (newCommand || !hasLegacyTask) {
                   const requestId = requestIdForUpdate(chatId, update.update_id);
                   const prepared = await createChatCampaignIntake(ctx).prepareChatCampaignDraft({

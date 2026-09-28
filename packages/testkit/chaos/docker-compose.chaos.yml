@@ -29,7 +29,9 @@ x-app-environment: &app-environment
   # The chats whose requests Restate's lifecycle runs (Phase 2 slices; 2.2: the Delivery workflow).
   # The driver's flagged scenarios use these chats; every other chat takes the legacy path. With the
   # worker's poller the R1.S3 and L2 scenarios together use 16 of them (17 with --candidate).
-  HAWA_LIFECYCLE_CHATS: "9300001,9300002,9300003,9300004,9300005,9300006,9300007,9300008,9300009,9300010,9300011,9300012,9300013,9300014,9300015,9300016,9300017,9300018,9300019,9300020,9300021,9300022,9300023,9300024"
+  # run.ts --lifecycle-chats (CHAOS_LIFECYCLE_CHATS) replaces the list; set but empty enrols nobody, as
+  # production before 2026-09-28. The R10 cutover scenarios change it mid-run (driver/cutover.ts).
+  HAWA_LIFECYCLE_CHATS: "${CHAOS_LIFECYCLE_CHATS-9300001,9300002,9300003,9300004,9300005,9300006,9300007,9300008,9300009,9300010,9300011,9300012,9300013,9300014,9300015,9300016,9300017,9300018,9300019,9300020,9300021,9300022,9300023,9300024}"
   HAWA_BEARER_TOKEN: ${CHAOS_BEARER_TOKEN:?}
   HAWA_ART_DIRECTOR_KEY: ${CHAOS_REVIEWER_KEY:?}
   HAWA_ADMIN_KEY: ${CHAOS_ADMIN_KEY:?}
