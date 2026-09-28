@@ -227,6 +227,61 @@ describe('authenticated Desk to private lifecycle office decision', () => {
     expect((await (await desk.request(`/v1/tasks/${taskId}`)).json()).status).toBe('ARCHIVE_RECONCILIATION');
   });
 
+  // Ported from delivery-workflow.test.ts when stage 2b of ADR-135 removed the Delivery workflow for
+  // non-lifecycle tasks ("holds a credential failure when a prior workflow upload has a durable
+  // reservation"). Request-owned delivery shares the prepare's hold (omnichannel-delivery.ts
+  // failBeforeDrive): a Drive credential failure after an earlier attempt reserved an upload ID may
+  // leave a stored file, so the requester's files wait for reconciliation instead of going out as
+  // "not archived", and a failed report of the run does not turn it into "no archive".
+  it('holds a credential failure when an earlier Drive upload of this request is still reserved', async () => {
+    const { requestId, taskId, approval, store, start } = await approvedForDelivery();
+    const first = await projectLifecycleDeliveryStart(db, store, start);
+    await withRlsContext(db, scope, async (trx) => {
+      const publication = (await sql<{ id: string; package_sha256: string }>`SELECT id, package_sha256
+        FROM hawa.publications WHERE tenant_id = ${tenantId}::uuid AND task_id = ${taskId}::uuid`.execute(trx)).rows[0];
+      await sql`INSERT INTO hawa.drive_upload_reservations
+        (tenant_id, publication_id, artifact_id, task_id, package_sha256, folder_id, file_name, mime_type, expected_sha256, drive_file_id)
+        VALUES (${tenantId}::uuid, ${publication.id}::uuid, ${randomUUID()}::uuid, ${taskId}::uuid,
+          ${publication.package_sha256}, 'kaae-folder', 'approved.pptx',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation', ${'a'.repeat(64)}, ${`reserved_${randomUUID()}`})`.execute(trx);
+    });
+    const noDrive = { publish: vi.fn(async () => ({ ok: false, error: { code: 'CREDENTIALS_MISSING',
+      message: 'Google Workspace credentials not configured' } })) };
+    const internal = createAppWithClientFixtures({ db, deliverableStore: store, publisher: noDrive,
+      testAuth: { roleHeader: true } } as any);
+    await (internal as any).clientDnaHydrated;
+    const prepared = await internal.request(
+      `/v1/internal/lifecycle/${requestId}/deliveries/${approval.approvalId}/prepare`, {
+        method: 'POST', headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, tenantId, deliveryId: first.delivery.deliveryId, run: 1, requestRev: 4 }),
+      });
+    expect(prepared.status, await prepared.clone().text()).toBe(503);
+    expect(await prepared.json()).toMatchObject({ code: 'ARCHIVE_STATE_UNCERTAIN' });
+    const held = await withRlsContext(db, scope, async (trx) => ({
+      task: await trx.selectFrom('tasks').select('state').where('id', '=', taskId).executeTakeFirstOrThrow(),
+      publication: await trx.selectFrom('publications').select(['error_class', 'state'])
+        .where('tenant_id', '=', tenantId).where('task_id', '=', taskId).executeTakeFirstOrThrow(),
+      sends: await trx.selectFrom('outbox_commands').select('id').where('aggregate_id', '=', taskId)
+        .where('command_type', '=', 'notify.published').execute(),
+    }));
+    expect(held.task.state).toBe('publishing');
+    expect(held.publication.error_class).toBe('ARCHIVE_UNCONFIRMED');
+    expect(held.sends).toEqual([]);
+    const desk = createApp({ db, testAuth: { principal: { role: 'art_director', userId } } });
+    expect((await (await desk.request(`/v1/tasks/${taskId}`)).json()).status).toBe('ARCHIVE_RECONCILIATION');
+    expect(await (await desk.request(`/v1/tasks/${taskId}/publication-state`)).json())
+      .toMatchObject({ status: 'ARCHIVE_RECONCILIATION', state: 'archive_reconciliation' });
+
+    // A terminal report of the prepare failure must not turn a possibly stored Drive file into "no archive".
+    const finish = await projectLifecycleDeliveryFinish(db, { requestId, tenantId, taskId,
+      approvalId: approval.approvalId, deliveryId: first.delivery.deliveryId, run: 1,
+      outcome: { outcome: 'failed', uncertain: [], sheetsConfirmed: false, archived: false, filesSent: 0,
+        reason: 'PREPARE_FAILED: ARCHIVE_STATE_UNCERTAIN' },
+      expectedRev: 4, rev: 5, key: `${requestId}:5:deliveryFinished:${first.delivery.deliveryId}` });
+    expect(finish).toMatchObject({ stage: 'delivering', taskState: 'publishing' });
+    expect((await (await desk.request(`/v1/tasks/${taskId}`)).json()).status).toBe('ARCHIVE_RECONCILIATION');
+  });
+
   it('commits one Drive upload ID across concurrent database handles before either can upload', async () => {
     const { taskId, artifactId, approval, store, start } = await approvedForDelivery();
     await projectLifecycleDeliveryStart(db, store, start);
