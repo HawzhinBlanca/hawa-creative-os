@@ -1,3 +1,4 @@
+import { useMemoryVisualInputs } from '../test-support/studio-visual-input-fixture.js';
 import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
@@ -85,6 +86,7 @@ const harness = (opts: { parentLayout?: StudioLayoutV2; asks?: Ask[]; targets?: 
     };
   });
   const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+  useMemoryVisualInputs(service);
   // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
   vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
   (service as any).repo = repo;
@@ -163,6 +165,7 @@ describe('a change keeps the photos of the design it changes', () => {
 
   it('finds the pictures of a change to a change back at the request that brought them', async () => {
     const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+    useMemoryVisualInputs(service);
     // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
     vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
     const own: Record<string, string[]> = { root: ['p1', 'p2', 'ref'], rev1: [], rev2: [] };

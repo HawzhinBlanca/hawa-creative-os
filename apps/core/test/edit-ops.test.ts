@@ -1,3 +1,4 @@
+import { useMemoryVisualInputs } from '../test-support/studio-visual-input-fixture.js';
 import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
@@ -140,6 +141,7 @@ describe('a request covered by rules', () => {
       throw new Error(`no ${params.schemaName} call expected`);
     });
     const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+    useMemoryVisualInputs(service);
     // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
     vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
     Object.assign(service as any, {
@@ -189,6 +191,7 @@ describe('the rules, after the review', () => {
       return { data: opts.reply ? opts.reply(params) : { layout: structuredClone(opts.parent), changes: [] }, receipt: {} };
     });
     const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+    useMemoryVisualInputs(service);
     // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
     vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
     Object.assign(service as any, {

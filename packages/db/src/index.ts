@@ -18,3 +18,4 @@ export * from './session-lock.js';
 export * from './trace-context.js';
 export * from './blobs/index.js';
 export * from './telegram-poll-state.js';
+export * from './repositories/studio-visual-inputs.repository.js';

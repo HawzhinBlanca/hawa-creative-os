@@ -12,9 +12,15 @@ import { log } from '../../logging.js';
  * checks is kept too, with why, so it is not retried on every stage and the requester can be told.
  */
 
+const reportDigest = (report: unknown): string => createHash('sha256').update(JSON.stringify(report ?? {}, (_key, value) =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value)).digest('hex');
+
 /** What became of one photo's cut-out. */
 export interface CutoutOutcome {
   photoIndex: number;
+  /** Selected derivation identity; unknown legacy facts remain absent. Pixels are pinned separately. */
+  derivation?: { sourceSha256: string; model?: string; modelSha256?: string; reportSha256: string };
   passed: boolean;
   /** Plain words for the requester when it did not pass. */
   reason?: string;
@@ -52,6 +58,8 @@ interface ServiceReply {
 }
 
 interface StoredRow {
+  model?: string;
+  model_sha256?: string;
   passed: boolean;
   /** Null once the strip has moved it to the file store (png_sha256 names it then). */
   png: Buffer | null;
@@ -137,7 +145,7 @@ export class PhotoCutouts {
     for (let photoIndex = 0; photoIndex < photos.length; photoIndex++) {
       const photo = photos[photoIndex];
       const sourceSha256 = createHash('sha256').update(photo.bytes).digest('hex');
-      let row = await this.withStoredPngs(await this.stored(tx, sourceSha256));
+      let row = await this.withStoredPngs(await this.stored(tx, sourceSha256, tenantId));
       // Why the service would not cut this one photo (it could not read it, or failed on it).
       let refused: string | undefined;
       if (!row && options.compute && !unavailable) {
@@ -166,6 +174,8 @@ export class PhotoCutouts {
       outcomes.push({
         photoIndex,
         passed: row.passed,
+        derivation: { sourceSha256, ...(row.model ? { model: row.model } : {}), ...(row.model_sha256 ? { modelSha256: row.model_sha256 } : {}),
+          reportSha256: reportDigest(row.report) },
         ...(row.passed ? {} : { reason: reasonFor(failed), failed }),
         ...(typeof row.report?.people === 'number' ? { people: row.report.people } : {}),
         ...(typeof row.report?.faceHeight === 'number' ? { faceHeight: row.report.faceHeight } : {}),
@@ -230,11 +240,11 @@ export class PhotoCutouts {
     return out;
   }
 
-  private async stored(tx: Tx, sourceSha256: string): Promise<StoredRow | undefined> {
+  private async stored(tx: Tx, sourceSha256: string, tenantId: string): Promise<StoredRow | undefined> {
     return tx(async (db) =>
       (
-        await sql<StoredRow>`SELECT passed, png, png_sha256, width, height, shadow_png, shadow_sha256, shadow, report FROM hawa.photo_cutouts
-          WHERE source_sha256 = ${sourceSha256} ORDER BY created_at DESC LIMIT 1`.execute(db)
+        await sql<StoredRow>`SELECT model, model_sha256, passed, png, png_sha256, width, height, shadow_png, shadow_sha256, shadow, report FROM hawa.photo_cutouts
+          WHERE tenant_id = ${tenantId}::uuid AND source_sha256 = ${sourceSha256} ORDER BY created_at DESC LIMIT 1`.execute(db)
       ).rows[0]
     );
   }
@@ -300,6 +310,7 @@ export class PhotoCutouts {
       bbox: reply.bbox,
     };
     const row: StoredRow = {
+      model: reply.model, model_sha256: reply.modelSha256,
       passed: Boolean(reply.passed),
       png: Buffer.from(reply.png, 'base64'),
       width: reply.width,

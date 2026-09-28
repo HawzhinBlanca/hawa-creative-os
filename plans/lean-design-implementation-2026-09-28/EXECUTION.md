@@ -14,7 +14,7 @@ No package is complete merely because a smaller test passes.
 | --- | --- | --- | --- |
 | 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty slice locally qualified; native revision preservation open | ADR-108; CANVA_UNCERTAINTY_PROOF.json |
 | 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs locally qualified; authorized visual-order contract, multilingual retrieval and human comparison open | ADR-109; CREATIVE_HANDOFF_PROOF.json |
-| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility and retained serial results locally qualified; branch checkpoints, pinned derivations, reserved-region mapping and concurrency open | ADR-110/111; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json |
+| 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results and visual input pins locally qualified; branch checkpoints, font/runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json |
 | 4 | Amend/Adapt routing and actual Canva account capability qualification | Open | Official documentation is not account admission |
 | 5 | Relationship-led composition, calibrated selection, governed edit learning and equal-budget human comparisons | Open | Existing R04–R06/R13/R22–R25 study machinery must be reused |
 | 6 | Complete supervised native review/delivery, release qualification and independent recovery | Open | Prior qualification remains scoped to its own candidate |
@@ -144,3 +144,31 @@ concurrency. Persisted rebrief branches or interleaved failed attempts can cause
 safe hold. No paid calls, deployment, native qualification, full release suite or
 human-quality comparison occurred. Next: pin the actual asset and conditioning
 inputs so resumed work is stable and does not repeat derivation unnecessarily.
+
+
+## 2026-09-28 — Pinned visual basis checkpoint
+
+ADR-112/migration 062 retains the run's actual photos, reference, examples, V3
+conditioning thumbnails, cutout/shadow pixels, outcomes and crop focus before
+layout/edit work. A first committed manifest wins concurrent preparations; assets
+cannot be appended later. Subsequent stages load hash-verified bytes rather than
+retrieving examples, rereading incoming images or asking for newer cutouts. Current
+client/task authority and design/exemplar policy still apply. Negative outcomes
+remain stable. V2 avoids unused thumbnail work. Model/source/check-report identities
+are retained where known; unavailable historical identities are not invented.
+
+Local acceptance: 19 files / 180 tests passed, zero failures/skips, with fresh
+runtime-role layout and critique boundaries after a newer cutout was inserted,
+concurrent connections, failed persistence, scope, corruption/missing files and
+legacy holds. Stage-only edit fixtures now provide an in-memory visual repository;
+DB and production-wiring tests exercise the actual persistence implementation.
+Source/scripts and all 520 strict test roots pass. No paid/model/native quality,
+production deployment, full release or OS process-kill/restore claim. See
+VISUAL_INPUTS_PROOF.json for exact evidence and initial failures.
+
+The six-package goal remains active. Historical active runs past layout without
+pins require review before rollout. Font/renderer/cutout runtime identities,
+pre-layout stage pins, durable substep checkpoints, region/crop mapping and safe
+concurrency remain open. Next priority: current native Canva revision admission
+and preservation of manual edits, the remaining P0 item in the report. Then finish
+the remaining compute/retrieval improvements and integrated human/release gates.

@@ -11,7 +11,7 @@ export function isModelCallHoldError(err: unknown): boolean {
   return !!err && typeof err === 'object' &&
     ('isUncertain' in err && err.isUncertain === true ||
       'code' in err && (err.code === 'MODEL_CALL_ADMISSION_CONFLICT' ||
-        err.code === 'MODEL_STAGE_REPLAY_UNSAFE' ||
+        err.code === 'MODEL_STAGE_REPLAY_UNSAFE' || err.code === 'STUDIO_VISUAL_INPUTS_UNSAFE' ||
         err.code === 'MODEL_CALL_FINALIZATION_CONFLICT' || err.code === 'MODEL_CALL_ACCOUNTING_FAILED' ||
         err.code === 'TASK_GENERATION_BLOCKED' ||
         err.code === 'STUDIO_BUDGET_INVALID' || err.code === 'STUDIO_BUDGET_UNQUOTABLE' ||
@@ -171,6 +171,8 @@ export interface StageContext {
   logoAspect?: number;
   logo?: { bytes: Buffer; sha256: string; mimeType: 'image/png' | 'image/jpeg' };
   exemplars?: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }>;
+  /** Current exemplar admission policy identity; not sent to models as prompt content. */
+  exemplarPolicySha256?: string;
   client: OpenAiStudioClient;
   artProvider?: OpenAiImageProvider;
   ledger?: DesignStudioRepository;
@@ -187,6 +189,8 @@ export interface StageContext {
    * by photoIndex. Content, not style: every one is placed once, or the layout is refused.
    */
   photos?: ContentPhoto[];
+  /** Hash-verified conditioning pixels retained before the first layout call. */
+  visualInputs?: import('@hawa/creative').LayoutVisualInput[];
   /**
    * The people in each photo cut out of its background (ADR-032), by photoIndex; present only for a
    * cut-out that passed its checks. Set when the request, the reference or the design being changed

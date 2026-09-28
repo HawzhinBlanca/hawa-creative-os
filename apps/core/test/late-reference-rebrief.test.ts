@@ -1,3 +1,4 @@
+import { useMemoryVisualInputs } from '../test-support/studio-visual-input-fixture.js';
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { NEUTRAL_STYLE_SPEC } from '@hawa/creative';
@@ -90,6 +91,7 @@ const harness = (over: { status?: string; stages?: Record<string, unknown>; atta
 
   const contexts: any[] = [];
   const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+  useMemoryVisualInputs(service);
   // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
   vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
   (service as any).repo = repo;
@@ -164,19 +166,15 @@ describe('a reference photo that joins the request after the brief', () => {
     expect(contexts[1].style).toEqual(REFERENCE_SPEC);
   });
 
-  it('leaves a run whose layouts exist alone, and says so in the diagnostic', async () => {
+  it('holds an old composed run without a pinned visual basis instead of attaching a late reference', async () => {
     const { service, run, writes, completeJson } = harness({
       status: 'rendering',
       stages: { brief: blindBrief, concepts: [], layouts: { count: 3 } },
     });
-
-    await service.resume(scope, run.task_id, run.id);
-
+    await expect(service.resume(scope, run.task_id, run.id)).rejects.toMatchObject({ code: 'STUDIO_VISUAL_INPUTS_UNSAFE' });
     expect(completeJson).not.toHaveBeenCalled();
-    const noted = writes.find((w) => w.status === 'rendering');
-    expect(noted?.diagnostic).toContain('after its layouts were generated');
-    expect(noted?.stages.brief).toMatchObject({ referenceRebrief: 'too_late', referenceSeen: false });
-    expect(noted?.stages.brief.styleSpec).toEqual(NEUTRAL_STYLE_SPEC);
+    expect(writes).toEqual([]);
+    expect(run.status).toBe('rendering');
   });
 
   it('keeps the neutral spec and claims no reference when no image was ever attached', async () => {

@@ -1,3 +1,5 @@
+import { StudioVisualInputsRepository, StudioVisualInputsError } from '@hawa/db';
+import { captureVisualInputs, restoreVisualInputs } from './visual-inputs.js';
 import { reserveStudioText, reserveStudioImage, type OpenAiStructuredResponse } from '@hawa/creative';
 import { studioUsdMicros, type StudioCallReservation } from '@hawa/domain';
 import { TaskGenerationBlockedError } from '@hawa/db';
@@ -230,6 +232,7 @@ export interface StudioResumeResult {
 
 export class DesignStudioService {
   private repo: DesignStudioRepository;
+  private visualInputRepo: StudioVisualInputsRepository;
   private inFlightResumes = new Map<string, Promise<StudioResumeResult>>();
   /** People cut out of client photos (ADR-032); unconfigured without CUTOUT_URL, and then photos stay framed. */
   private cutouts: PhotoCutouts;
@@ -241,6 +244,7 @@ export class DesignStudioService {
   ) {
     this.blobs = blobStoreFor(db, options.blobStore);
     this.repo = new DesignStudioRepository(db, this.blobs);
+    this.visualInputRepo = new StudioVisualInputsRepository(db, this.blobs);
     this.cutouts = new PhotoCutouts({ blobStore: this.blobs });
   }
 
@@ -907,6 +911,7 @@ export class DesignStudioService {
     currentBudget: { maxUsd: number; maxCalls: number; spentUsd: number; calls: number },
     onSpendUpdate: (cost: number) => Promise<void>,
     replayCalls: StudioReplayCall[] = [],
+    skipExemplarRetrieval = false,
   ): Promise<StageContext> {
     const request = typeof run.request === 'string' ? JSON.parse(run.request) : run.request;
     const fetchFn = this.options.fetcher || fetch;
@@ -1105,6 +1110,7 @@ export class DesignStudioService {
     let promotedRules: string;
     let latinFont: string;
     let arabicFont: string;
+    let exemplarPolicySha256: string | undefined;
 
     if (packagedKaae) {
       // Read the way the qualification reads it (shared), so both design with the same rules.
@@ -1114,6 +1120,7 @@ export class DesignStudioService {
       latinFont = rules.latinFont;
       arabicFont = rules.arabicFont;
       promotedRules = rules.promotedRules;
+      exemplarPolicySha256 = hash(canonicalCallJson(JSON.parse(readFileSync(creativeAssetPath('kaae-exemplars.json'), 'utf8'))));
     } else {
       latinFont = reference.rules.typography.formalBody.latin;
       arabicFont = reference.rules.typography.formalBody.arabic;
@@ -1128,7 +1135,7 @@ export class DesignStudioService {
     }
 
     const exemplars: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }> = [];
-    if (packagedKaae) try {
+    if (packagedKaae && !skipExemplarRetrieval) try {
       const retrievalIndex = new ExemplarRetrievalIndex();
       const briefQuery = {
         text: [request.instructions, ...request.copyBlocks.map((b: CopyBlock) => b.text)].join('\n'),
@@ -1159,7 +1166,7 @@ export class DesignStudioService {
           `this design is being generated without exemplar conditioning.`
       );
     }
-    if (packagedKaae && !exemplars.length) {
+    if (packagedKaae && !skipExemplarRetrieval && !exemplars.length) {
       // In production this was silent: the layout model was conditioned on nothing and no one
       // could tell from the logs that the run had seen no exemplar at all.
       log.error(
@@ -1188,6 +1195,7 @@ export class DesignStudioService {
       logoAspect: request.logoAspect || 1.0,
       logo,
       exemplars,
+      exemplarPolicySha256,
       client: ledgerClient as any,
       artProvider: ledgerArtProvider as any,
       pipelineV3: isPipelineV3Run(run),
@@ -1294,13 +1302,22 @@ export class DesignStudioService {
       await this.repo.updateRunStatus(runId, s.tenantId, run.status, { budget });
     };
 
+    const pinnedVisualInputs = await this.visualInputRepo.get(s, runId).catch(() => {
+      throw new CanvaFlowError(409, 'STUDIO_VISUAL_INPUTS_UNSAFE', 'The saved visual basis cannot be read and verified. Restore its original storage before continuing.');
+    });
+    if (!pinnedVisualInputs && !['briefing', 'conceiving', 'laying_out'].includes(run.status)) {
+      throw new CanvaFlowError(409, 'STUDIO_VISUAL_INPUTS_UNSAFE', 'This historical run has no pinned visual basis. Review its existing result before requesting a new revision.');
+    }
+
     // Building the context reads the client's reference pack, and a missing pack now throws rather
     // than designing with defaults. Outside the try below that left the run in 'briefing' for the
     // worker to retry for ever, so it is marked failed here with the reason.
     let ctx: StageContext;
     try {
-      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate, replayCalls));
+      ctx = await this.withClientRules(s, await this.createStageContext(s, run, run.status, budget, onSpendUpdate, replayCalls, Boolean(pinnedVisualInputs)));
     } catch (err: any) {
+      if (pinnedVisualInputs) throw new CanvaFlowError(409, 'STUDIO_VISUAL_INPUTS_UNSAFE',
+        'The pinned design policy cannot currently be verified. Restore its original authorized inputs before continuing.');
       const diagnostic = `Stage context could not be built: ${err?.message || err}`;
       await this.repo.updateRunStatus(runId, s.tenantId, 'failed', { stages, budget, diagnostic });
       throw err;
@@ -1309,92 +1326,103 @@ export class DesignStudioService {
     // exception from them (the image re-brief's model call, a picture that would not decode) used
     // to leave the run at its stage for the worker to poll until it gave up on it as stuck.
     try {
-      // An image the requester attached reaches the brief, which says what it is; a style reference
-      // then reaches the layout generator, the critique and the judge. It was saved with every
-      // Telegram task but only the legacy planner ever read it.
-      // What each image is, the model decides by looking at it: the brief classifies every image the
-      // request carries (photo to place, design to follow, logo). "I attached the panelists pictures
-      // and a reference for the graphic" with three images is two photos and one reference; until
-      // 2026-09-22 every image was a reference, and then a keyword turned every image into a photo.
-      let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
-      if (run.status === 'briefing') await this.settleAlbum(s, run.task_id);
-      // Turned upright once, here, so the brief, the face detector, the cut-out, the preview and the deck
-      // all see a phone photo the right way up (the renderer ignores a JPEG's orientation tag).
-      const images = await Promise.all(
-        (await this.imagesForRun(s, run).catch(optionalImages)).map((url) => uprightPhotoDataUrl(url).catch(() => url))
-      );
-      const roles = briefSoFar?.imageRoles;
-      let classified = false;
-      if (
-        roles && roles.length > 0 && images.length > roles.length && run.status === 'conceiving' &&
-        !(briefSoFar as { imagesRebrief?: boolean } | undefined)?.imagesRebrief
-      ) {
-        // A picture joined the request after its brief was written and before any layout (the
-        // reference sent a few seconds after the album): the brief is written again, once, looking at
-        // every picture, so each is classified instead of guessed from the request's words.
-        ctx.requestImages = images;
-        ctx.attachedImage = undefined;
-        const reread = await runBriefStage(ctx);
-        const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
-        stages.brief = { ...reread, photosSent, imagesRebrief: true };
-        await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
-        briefSoFar = stages.brief as LateReferenceBrief;
-        ctx.requestImages = undefined;
-      }
-      const rolesNow = briefSoFar?.imageRoles;
-      if (rolesNow && images.length > 0 && rolesNow.length === images.length) {
-        classified = true;
-        ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => ({ ...contentPhotoFromDataUrl(images[r.index]), notes: r.notes }));
-        const ref = rolesNow.find((r) => r.role === 'style_reference');
-        ctx.attachedImage = ref ? images[ref.index] : undefined;
-        if (ref) ctx.reference = { dataUrl: images[ref.index], notes: ref.notes || briefSoFar?.referenceNotes || '' };
-      } else if (images.length > 1 && run.status === 'briefing') {
-        // The brief below looks at all of them.
-        ctx.requestImages = images;
-        ctx.attachedImage = undefined;
-      } else if (images.length > 1) {
-        // A brief written before images were classified, or images that arrived after it: the request's
-        // own words decide, as before.
-        if (asksForPictures(ctx.instructions)) ctx.photos = images.map((dataUrl) => contentPhotoFromDataUrl(dataUrl));
-        else ctx.attachedImage = images[images.length - 1];
-      } else {
-        // Upright and renderable like the run's other images: this one image went to the brief sideways.
-        const own = await this.attachedImage(s, run.task_id);
-        ctx.attachedImage = own ? await uprightPhotoDataUrl(own).catch(() => own) : undefined;
-      }
-      // A photo that arrived after the brief ran came without a caption, right after the request, so
-      // it was sent to be followed. Taken here because the re-read below sets referenceSeen true.
-      const joinedLate = briefSoFar?.referenceSeen === false || Boolean(briefSoFar?.referenceRebrief);
-      // At 'briefing' the brief has not been written yet and the stage below reads the image itself.
-      if (!classified && ctx.attachedImage && run.status !== 'briefing' && briefSoFar?.referenceSeen === false && !briefSoFar.referenceRebrief) {
-        briefSoFar = await this.rereadBriefWithLateReference(s, run, ctx, stages, budget, briefSoFar);
-      }
-      // Only the brief calling the photo the client's own logo stops the run from following it.
-      if (!classified && ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
-        ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
-      }
+      if (pinnedVisualInputs) restoreVisualInputs(ctx, stages, pinnedVisualInputs);
+      else {
+        // An image the requester attached reaches the brief, which says what it is; a style reference
+        // then reaches the layout generator, the critique and the judge. It was saved with every
+        // Telegram task but only the legacy planner ever read it.
+        // What each image is, the model decides by looking at it: the brief classifies every image the
+        // request carries (photo to place, design to follow, logo). "I attached the panelists pictures
+        // and a reference for the graphic" with three images is two photos and one reference; until
+        // 2026-09-22 every image was a reference, and then a keyword turned every image into a photo.
+        let briefSoFar = runStages(run).brief as LateReferenceBrief | undefined;
+        if (run.status === 'briefing') await this.settleAlbum(s, run.task_id);
+        // Turned upright once, here, so the brief, the face detector, the cut-out, the preview and the deck
+        // all see a phone photo the right way up (the renderer ignores a JPEG's orientation tag).
+        const images = await Promise.all(
+          (await this.imagesForRun(s, run).catch(optionalImages)).map((url) => uprightPhotoDataUrl(url).catch(() => url))
+        );
+        const roles = briefSoFar?.imageRoles;
+        let classified = false;
+        if (
+          roles && roles.length > 0 && images.length > roles.length && run.status === 'conceiving' &&
+          !(briefSoFar as { imagesRebrief?: boolean } | undefined)?.imagesRebrief
+        ) {
+          // A picture joined the request after its brief was written and before any layout (the
+          // reference sent a few seconds after the album): the brief is written again, once, looking at
+          // every picture, so each is classified instead of guessed from the request's words.
+          ctx.requestImages = images;
+          ctx.attachedImage = undefined;
+          const reread = await runBriefStage(ctx);
+          const photosSent = (reread.imageRoles || []).filter((r) => r.role === 'content_photo').length;
+          stages.brief = { ...reread, photosSent, imagesRebrief: true };
+          await this.repo.updateRunStatus(runId, s.tenantId, 'conceiving', { stages, budget });
+          briefSoFar = stages.brief as LateReferenceBrief;
+          ctx.requestImages = undefined;
+        }
+        const rolesNow = briefSoFar?.imageRoles;
+        if (rolesNow && images.length > 0 && rolesNow.length === images.length) {
+          classified = true;
+          ctx.photos = rolesNow.filter((r) => r.role === 'content_photo').map((r) => ({ ...contentPhotoFromDataUrl(images[r.index]), notes: r.notes }));
+          const ref = rolesNow.find((r) => r.role === 'style_reference');
+          ctx.attachedImage = ref ? images[ref.index] : undefined;
+          if (ref) ctx.reference = { dataUrl: images[ref.index], notes: ref.notes || briefSoFar?.referenceNotes || '' };
+        } else if (images.length > 1 && run.status === 'briefing') {
+          // The brief below looks at all of them.
+          ctx.requestImages = images;
+          ctx.attachedImage = undefined;
+        } else if (images.length > 1) {
+          // A brief written before images were classified, or images that arrived after it: the request's
+          // own words decide, as before.
+          if (asksForPictures(ctx.instructions)) ctx.photos = images.map((dataUrl) => contentPhotoFromDataUrl(dataUrl));
+          else ctx.attachedImage = images[images.length - 1];
+        } else {
+          // Upright and renderable like the run's other images: this one image went to the brief sideways.
+          const own = await this.attachedImage(s, run.task_id);
+          ctx.attachedImage = own ? await uprightPhotoDataUrl(own).catch(() => own) : undefined;
+        }
+        // A photo that arrived after the brief ran came without a caption, right after the request, so
+        // it was sent to be followed. Taken here because the re-read below sets referenceSeen true.
+        const joinedLate = briefSoFar?.referenceSeen === false || Boolean(briefSoFar?.referenceRebrief);
+        // At 'briefing' the brief has not been written yet and the stage below reads the image itself.
+        if (!classified && ctx.attachedImage && run.status !== 'briefing' && briefSoFar?.referenceSeen === false && !briefSoFar.referenceRebrief) {
+          briefSoFar = await this.rereadBriefWithLateReference(s, run, ctx, stages, budget, briefSoFar);
+        }
+        // Only the brief calling the photo the client's own logo stops the run from following it.
+        if (!classified && ctx.attachedImage && (briefSoFar?.referenceRole === 'style_reference' || (joinedLate && briefSoFar?.referenceRole !== 'logo'))) {
+          ctx.reference = { dataUrl: ctx.attachedImage, notes: briefSoFar?.referenceNotes || '' };
+        }
 
-      // People cut out of their photos (ADR-032), when the request, the brief's reading of the
-      // reference, or the design being changed calls for them. They are made once, at the layout
-      // stage, and read back from the store at every stage after it, so the design a run shows never
-      // changes under it. A photo whose cut-out failed its checks stays framed, and the note says why.
-      if (ctx.photos?.length && this.cutouts.configured && run.status !== 'briefing') {
-        if (stages.cutoutsWanted === undefined) stages.cutoutsWanted = await this.cutoutsWanted(s, run, ctx, stages);
-        if (stages.cutoutsWanted) {
-          const loaded = await this.cutouts.forPhotos((fn) => this.tx(s, fn), s.tenantId, ctx.photos, { compute: run.status === 'laying_out' });
-          ctx.photoCutouts = loaded.assets;
-          ctx.cutoutOutcomes = loaded.outcomes;
-          if (run.status === 'laying_out') stages.cutouts = loaded.outcomes;
+        // People cut out of their photos (ADR-032), when the request, the brief's reading of the
+        // reference, or the design being changed calls for them. They are made once, at the layout
+        // stage, and read back from the store at every stage after it, so the design a run shows never
+        // changes under it. A photo whose cut-out failed its checks stays framed, and the note says why.
+        if (ctx.photos?.length && this.cutouts.configured && run.status !== 'briefing') {
+          if (stages.cutoutsWanted === undefined) stages.cutoutsWanted = await this.cutoutsWanted(s, run, ctx, stages);
+          if (stages.cutoutsWanted) {
+            const loaded = await this.cutouts.forPhotos((fn) => this.tx(s, fn), s.tenantId, ctx.photos, { compute: run.status === 'laying_out' });
+            ctx.photoCutouts = loaded.assets;
+            ctx.cutoutOutcomes = loaded.outcomes;
+            if (run.status === 'laying_out') stages.cutouts = loaded.outcomes;
+          }
+          // Where the people are in each photo, so a framed photo is cropped around faces rather than
+          // from its centre (a tall portrait in a square box lost the heads). Found once, at the layout.
+          if (run.status === 'laying_out' && !Array.isArray(stages.photoFocus)) {
+            stages.photoFocus = (await this.cutouts.focusFor(ctx.photos)).map((f) => f ?? null);
+          }
+          // Each photo's own pixel size, so the requester can be told when one is shown much larger than
+          // it is and will look soft (plan 4.4); nothing invents the missing detail on a person's photo.
+          if (run.status === 'laying_out' && !Array.isArray(stages.photoSizes)) {
+            stages.photoSizes = ctx.photos.map((p) => (p.width && p.height ? { width: p.width, height: p.height } : null));
+          }
         }
-        // Where the people are in each photo, so a framed photo is cropped around faces rather than
-        // from its centre (a tall portrait in a square box lost the heads). Found once, at the layout.
-        if (run.status === 'laying_out' && !Array.isArray(stages.photoFocus)) {
-          stages.photoFocus = (await this.cutouts.focusFor(ctx.photos)).map((f) => f ?? null);
-        }
-        // Each photo's own pixel size, so the requester can be told when one is shown much larger than
-        // it is and will look soft (plan 4.4); nothing invents the missing detail on a person's photo.
-        if (run.status === 'laying_out' && !Array.isArray(stages.photoSizes)) {
-          stages.photoSizes = ctx.photos.map((p) => (p.width && p.height ? { width: p.width, height: p.height } : null));
+
+        if (run.status === 'laying_out') {
+          const proposed = await captureVisualInputs(ctx, stages);
+          let saved;
+          try { saved = await this.visualInputRepo.pin(s, runId, proposed); }
+          catch { throw new StudioVisualInputsError('Visual inputs could not be committed. No layout call is permitted until they are retained.'); }
+          restoreVisualInputs(ctx, stages, saved);
         }
       }
 
@@ -2184,6 +2212,7 @@ export class DesignStudioService {
         throw new CanvaFlowError(409, err.code, err.message);
       }
       if (isModelCallHoldError(err)) {
+        if (err.code === 'STUDIO_VISUAL_INPUTS_UNSAFE') throw new CanvaFlowError(409, err.code, err.message);
         if (err instanceof CanvaFlowError && err.code === 'MODEL_STAGE_REPLAY_UNSAFE') throw err;
         const code = ['MODEL_CALL_ADMISSION_CONFLICT', 'MODEL_CALL_FINALIZATION_CONFLICT', 'MODEL_CALL_ACCOUNTING_FAILED'].includes(err?.code)
           ? err.code : 'MODEL_CALL_UNCERTAIN';

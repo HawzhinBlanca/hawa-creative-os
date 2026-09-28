@@ -182,11 +182,12 @@ describe.skipIf(!url)('cut-outs are made once and kept (PostgreSQL, application 
     const cutouts = new PhotoCutouts({ url: 'http://cutout:8090', fetcher: fetcher as unknown as typeof fetch });
     const first = await cutouts.forPhotos(tx, tenantId, [photo]);
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(first.outcomes).toEqual([{ photoIndex: 0, passed: true, people: 1, faceHeight: 14 }]);
+    expect(first.outcomes).toMatchObject([{ photoIndex: 0, passed: true, people: 1, faceHeight: 14, derivation: { modelSha256: '1'.repeat(64) } }]);
     expect(first.assets[0]).toMatchObject({ width: 30, height: 60, shadowWidth: 40, shadowX: -5, shadowY: -4 });
     const again = await cutouts.forPhotos(tx, tenantId, [photo]);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(again.assets[0]?.png.equals(first.assets[0]!.png)).toBe(true);
+    expect(again.outcomes).toEqual(first.outcomes);
   });
 
   it('writes the cut-out and its shadow to the file store too, and reads them back from it (ADR-035)', async () => {

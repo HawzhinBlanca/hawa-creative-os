@@ -69,6 +69,14 @@ paid calls without reusable content remain held. Derivation pinning, branch-awar
 substep replay and concurrent execution remain separate qualification. See
 `runbooks/STUDIO_RECOVERY.md` and ADR-111 for the bounded recovery contract.
 
+ADR-112 pins one visual basis before layout: upright photos, references, selected
+examples, V3 conditioning thumbnails, cutout/shadow bytes and negative outcomes,
+plus focus/sizes and available derivation hashes. All later stages consume the same
+verified assets. Scope/task authority and current policy are checked again; no
+retrieval or photo/cutout processing is repeated on reuse. Concurrent preparations
+consume one committed winner. Old post-layout runs lacking a pinned basis hold for
+review. Font/runtime identity and branch-aware substep replay remain separate work.
+
 The ledger seals a call's run/stage/model/ordinal/digest at admission. Its first outcome, including `uncertain`, is the last mutation allowed; a second finalization is a conflict and holds the Studio pipeline. Reconciliation must append separately attributed evidence rather than rewrite the original call (ADR-051).
 
 Studio art admits each image attempt and each vision verification separately

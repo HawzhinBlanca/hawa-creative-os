@@ -15,7 +15,8 @@ export function candidateRenderOptions(
   };
 }
 
-export async function layoutVisualInputs(ctx: Pick<StageContext, 'clientId' | 'referencePack' | 'exemplars' | 'photos'>): Promise<LayoutVisualInput[]> {
+export async function layoutVisualInputs(ctx: Pick<StageContext, 'clientId' | 'referencePack' | 'exemplars' | 'photos' | 'visualInputs'>): Promise<LayoutVisualInput[]> {
+  if (ctx.visualInputs) return ctx.visualInputs;
   const selected = (ctx.exemplars ?? []).filter((e) => e.bytes).slice(0, 2);
   if (selected.length && ctx.referencePack.clientId !== ctx.clientId) throw new Error('LAYOUT_EXEMPLAR_SCOPE_MISMATCH');
   const inputs: LayoutVisualInput[] = [];

@@ -1,3 +1,4 @@
+import { useMemoryVisualInputs } from '../test-support/studio-visual-input-fixture.js';
 import { KAAE_TEST_CLIENT_LOGO } from './fixtures/kaae-logo.js';
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
@@ -80,6 +81,7 @@ const harness = (opts: { asks: unknown[]; clarified?: boolean; frustrated?: bool
     };
   });
   const service = new DesignStudioService({} as any, undefined, { apiKey: 'test-key' });
+  useMemoryVisualInputs(service);
   // Stage-only harness: task admission/RLS is covered by studio-run-guards and DB integration tests.
   vi.spyOn(service as any, 'assertTaskCanGenerate').mockResolvedValue(undefined);
   (service as any).repo = repo;

@@ -1,6 +1,6 @@
 # Recovering held Studio model calls
 
-Requirements FR-060/065/067/079 and NFR-001/014. ADRs 086–088 and 111.
+Requirements FR-060/065/067/079 and NFR-001/014. ADRs 086–088 and 111–112.
 
 ## Inspect and stop
 
@@ -136,3 +136,25 @@ Historical rows have no fabricated quote. ADRs 092/096 add shared daily limits f
 Studio, evaluations and retained voice. Other paid-path integration, named cost
 repair for completed estimated/unknown calls and live invoice reconciliation
 remain pending.
+
+
+## Pinned visual inputs
+
+Before layout or a directed edit, new work retains its chosen photos, style
+reference, examples, conditioning thumbnails and cutout/shadow bytes, including
+failed cutout outcomes. Later stages use those exact bytes. A newer cutout model
+result or a newly available service does not change a composed design. Images
+arriving after this boundary require a new revision; they are not silently added.
+
+`STUDIO_VISUAL_INPUTS_UNSAFE` holds when storage/integrity checks fail, current
+policy differs, or an old composed run has no retained visual basis. Restore the
+original verified files/configuration when that is the cause. For changed policy
+or missing historical evidence, review the existing design and use an explicitly
+requested new revision or native handoff. Do not fabricate a bundle from today's
+latest cutouts, erase the hold, or rewrite the recorded policy hash.
+
+Before deploying ADR-112, inventory active historical runs beyond `laying_out` and
+resolve their handoff. Finished/reviewable results remain available; this migration
+does not certify their historical source assets. The new tables and rooted blobs
+must be included in the normal database/file backup. A deployment and restore drill
+including these records is still required for release admission.
