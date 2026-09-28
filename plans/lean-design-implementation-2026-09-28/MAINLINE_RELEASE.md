@@ -57,3 +57,15 @@ gate log; nothing was sent (curl was stubbed). The log was redacted and the test
 After the deploy, Core's status is "degraded" only because Canva and the model provider are
 "unverified" (e981e59f: no scheduled paid probe runs while `HAWA_BILLING_PROBE_ENABLED` is off). The
 watchdog now pages only for named failures (96821a92); `watchdog.sh --status` reads healthy.
+
+## Second deploy: ADR-131 and studio-v2 history (2026-09-28 17:45 +03)
+
+studio-v2 gained two commits during the day (50b3a94a request_logs, 0a2acd0a ADR-131 planning slots),
+both ported onto the mainline (089b7bea; c2eb23a4, cebe5dbd). With every studio-v2 commit accounted
+for, its history was merged keeping the mainline tree (a7350009) and origin/studio-v2 fast-forwarded to
+the release `0bbbf81a`; codex/research-grade-design-system is the same commit. ADR-131 on the mainline:
+10 briefs at once, p50/p95 brief to first draft 8.1/9.4 s with instant plans and 65.4/97.4 s with 30 s
+plans (chaos load test; 2 slots on studio-v2 measured 11.2/35.4 s and 125.4/245.6 s). Full suite
+4,844 passed, only the release-manifest test failing before the manifest; release gate passed.
+Deployed with no invocation in flight: Restate routes to blue (`dp_13w77Jmt5o7Ko35otsdydyh`), green
+drained and stopped, blue `background: live`, `outboxActive: true`, Desk 200, watchdog healthy.
