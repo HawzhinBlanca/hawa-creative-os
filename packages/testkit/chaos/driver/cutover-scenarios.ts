@@ -213,10 +213,15 @@ async function followUp(chat: string, parent: string, act: () => Promise<number>
     answers: (await sentTo(chat)).filter((s) => s.seq > seq).map(gist) };
 }
 
-const sameAs = (label: string, after: FollowUp, control: FollowUp): InvariantResult => {
-  const shape = (f: FollowUp) => JSON.stringify({ newTasks: f.newTasks, children: f.children, answers: f.answers });
-  return { name: `${label}: answered as legacy intake answered the same action before the switch`, ok: shape(after) === shape(control),
-    detail: `after=${shape(after)} control=${shape(control)}` };
+/**
+ * The same kind of answer as the control: as many new tasks and revisions. Since ADR-135 a message
+ * the old intake read as a new brief opens a lifecycle request instead, whose acknowledgement is
+ * worded differently, so the words are compared only when neither made a new task.
+ */
+const sameKindAs = (label: string, after: FollowUp, control: FollowUp): InvariantResult => {
+  const shape = (f: FollowUp) => JSON.stringify({ newTasks: f.newTasks, children: f.children, ...(f.newTasks ? {} : { answers: f.answers }) });
+  return { name: `${label}: answered as the previous release answered the same action (a new request stays a new request)`,
+    ok: shape(after) === shape(control), detail: `after=${JSON.stringify(after)} control=${JSON.stringify(control)}` };
 };
 
 /** What a chat holds, for the report: its tasks and what the bot said. */
@@ -386,11 +391,15 @@ export async function handoffOfOldRequests(newChat: () => string, events: string
     const askedForNew = (await sentTo(chat.D)).some((s) => /Please send \/new followed by/i.test(s.fullText ?? s.text ?? ''));
     events.push(`D: photo reply ${JSON.stringify(photo)}; downloads ${downloads.length}; control ${JSON.stringify(controlPhoto)}`);
     return [
-      ...(windowThanks ? [sameAs('D thanks (sent during the deploy)', windowThanks, controlThanks)] : []),
+      ...(windowThanks ? [sameKindAs('D thanks (sent during the deploy)', windowThanks, controlThanks)] : []),
       { name: 'D photo reply: a change to a finished legacy design starts nothing and asks for /new (ADR-135)',
         ok: photo.newTasks === 0 && photo.children === 0 && askedForNew, detail: JSON.stringify({ photo, askedForNew }) },
       { name: 'D: the photo was downloaded at most once', ok: downloads.length <= 1, detail: `downloads=${downloads.length}` },
-      { name: 'D: no lifecycle request in the chat', ok: (await requestsOf(chat.D)).length === 0, detail: JSON.stringify(await requestsOf(chat.D)) },
+      // The previous release read the thanks as a new brief (the control made a task of it); this one
+      // opens a lifecycle request for it, and nothing else in D does.
+      { name: 'D: a lifecycle request only for a message the previous release also read as a new request',
+        ok: (await requestsOf(chat.D)).length === (windowThanks ? (windowThanks as FollowUp).newTasks : 0) &&
+          (await requestsOf(chat.D)).every((r) => r.owner === 'restate'), detail: JSON.stringify(await requestsOf(chat.D)) },
       ...(await updateChecks('D', chat.D, [photo.update, ...(windowUpdate ? [windowUpdate] : [])])),
       ...(await chatChecks('D', chat.D, ['/new required'])),
     ];
@@ -642,19 +651,22 @@ export async function rollbackToPreviousRelease(newChat: () => string, events: s
     ];
   });
 
-  // R again: the revision it took on the previous release is approved and delivered on this release.
-  await step('R finished after the roll forward', events, out, async () => {
-    const r = await waitUntil('R\'s revised draft in review', async () => { const [row] = await requestsOf(chat.R); return row?.stage === 'in_review' ? row : null; }, 300_000, 2000);
-    const approved = await approve(r.current_task_id);
-    const delivered = await deliver(r.current_task_id);
-    events.push(`R: approve HTTP ${approved.status}, deliver HTTP ${delivered.status}`);
-    await waitDelivered(chat.R, r.current_task_id, 300_000);
-    const pubs = await publicationsOf(r.current_task_id);
+  // N1, opened on the previous release, is approved and delivered on this one; R, whose requester
+  // revision went to native editing on the previous release (ADR-113/114), is left exactly as it was.
+  await step('N1 and R after the roll forward', events, out, async () => {
+    const [before] = await requestsOf(chat.R);
+    const [n1] = await tasksOfChat(chat.N1);
+    const approved = await approve(n1.id);
+    const delivered = await deliver(n1.id);
+    events.push(`N1: approve HTTP ${approved.status}, deliver HTTP ${delivered.status}`);
+    await waitDelivered(chat.N1, n1.id, 300_000);
+    const pubs = await publicationsOf(n1.id);
     const [after] = await requestsOf(chat.R);
     return [
-      { name: 'R: a request that crossed the rollback and the roll forward is delivered once', ok: after.stage === 'delivered' && pubs.length === 1 &&
-        pubs[0].executor === 'restate' && pubs[0].state === 'complete', detail: JSON.stringify({ stage: after.stage, pubs }) },
-      ...(await chatChecks('R after forward', chat.R)),
+      { name: 'N1: a request opened on the previous release is delivered once after the roll forward', ok: pubs.length === 1 &&
+        pubs[0].executor === 'restate' && pubs[0].state === 'complete', detail: JSON.stringify(pubs) },
+      { name: 'R: unchanged by the roll forward', ok: JSON.stringify(after) === JSON.stringify(before), detail: JSON.stringify({ before, after }) },
+      ...(await chatChecks('N1 after forward', chat.N1)),
     ];
   });
 

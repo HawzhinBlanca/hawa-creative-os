@@ -135,7 +135,9 @@ it, and those routes accept nothing else. Without it the worker does not start i
 - Rolling back to a release from before ADR-135 (for example `2bea4671`, which production ran on
   2026-09-29): those builds still read `HAWA_LIFECYCLE_CHATS`, so keep `HAWA_LIFECYCLE_CHATS=*` in
   `infra/docker/.env.production` and `HAWA_TELEGRAM_POLLER=worker` in `infra/docker/.env` while they run;
-  an empty list would send every new brief of an older chat to the old intake. Deploy the previous
+  an empty list would send every new brief of an older chat to the old intake. Leave `*` in place until
+  this release is proven: this release ignores the setting (Core logs one line saying so at start), and
+  a rollback needs it. Deploy the previous
   release's checkout with `deploy.sh` as any release; nothing moves between owners: requests in flight
   finish on the worker colour they started on (the drain waits for them), and the Desk approves and
   delivers the rest as before. Drilled on the chaos stack as `R10.K1` (ADR-135, ADR-136).
