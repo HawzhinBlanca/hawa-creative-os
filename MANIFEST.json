@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T10:58:26Z",
+  "generatedAt": "2026-09-28T13:27:20Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 501,
+  "fileCount": 502,
   "files": [
     {
       "path": ".dockerignore",
@@ -1213,6 +1213,11 @@
       "bytes": 10547
     },
     {
+      "path": "plans/lean-design-implementation-2026-09-28/MAINLINE_RELEASE.md",
+      "sha256": "7260dbf31bb5f7618ba744b52ce61f367e5a6758e08902d51ce02503ff950af9",
+      "bytes": 2967
+    },
+    {
       "path": "plans/lean-design-implementation-2026-09-28/NATIVE_COPY_OWNER_PROOF.json",
       "sha256": "9a1eeb09f243818e3807ed845ae7a53b6df1168b70e1da28dafef1f7919306d7",
       "bytes": 6040
@@ -1714,8 +1719,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "be4766a06ea7113e625df5f73e913a0f05d68e80f71905f70732c47e3fbc166d",
-      "bytes": 465731
+      "sha256": "baca866383856b29a1bfa6155bd0ab0f4c725b17b2ed820ec00b52e8208f0715",
+      "bytes": 467019
     },
     {
       "path": "plans/user-stories.csv",
@@ -1809,8 +1814,8 @@
     },
     {
       "path": "runbooks/20_architecture_operations.md",
-      "sha256": "f57175b524d739dcb9a6b8f8647a046eae0aeb8857785f2e1e64d69d25fddb71",
-      "bytes": 36703
+      "sha256": "d8ecefe148c5c174ae21a2176f8533f287a6efb59fd062569bd9c6a02f8b633f",
+      "bytes": 37426
     },
     {
       "path": "runbooks/AVAILABILITY_MONITORING.md",
@@ -2344,8 +2349,8 @@
     },
     {
       "path": "scripts/request_logs.ts",
-      "sha256": "8d4d0c436d626919f628567e4b579b2e59c5ae36aec3f94b635c3e90520b261c",
-      "bytes": 7773
+      "sha256": "767a6f1d83f608eee26b8e8c8aaccd589a7cc63ebbf25eff50b351b31182c2b3",
+      "bytes": 9620
     },
     {
       "path": "scripts/rerender_font_pinning.mjs",
