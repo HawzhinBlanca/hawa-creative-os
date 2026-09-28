@@ -1016,7 +1016,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                   taskId={selectedTask.id} status={selectedTask.status} version={selectedTask.version} role={sessionUser?.role}
                   refresh={() => readTaskAgain(selectedTask.id)} />}
                 <StudioPanel key={`studio-${selectedTask.id}`} taskId={selectedTask.id} taskStatus={selectedTask.status} hasCanvaBinding={Boolean(selectedTask.canvaBinding)} />
-                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} taskStatus={selectedTask.status} />
+                <CanvaTaskPanel key={selectedTask.id} taskId={selectedTask.id} taskStatus={selectedTask.status} revision={detailQuery.dataUpdatedAt} />
                 <p className="capture-availability" role="status">Retrieved exports require QA and human approval before delivery.</p>
                 {/* =================================================================== */}
                 {/* PRIMARY ACTION BAR (FR-078)                                         */}
