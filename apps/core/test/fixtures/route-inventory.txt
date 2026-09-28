@@ -411,14 +411,10 @@ GET /v1/waha/health
 GET /v1/webhooks/whatsapp/actions
 GET /waha/health
 GET /webhooks/whatsapp/actions
-POST /adapters/telegram/poll-now
 POST /adapters/telegram/webhook/delete
-POST /adapters/telegram/webhook/register
 POST /ai/comfy-background
 POST /ai/comfy-composite
-POST /api/adapters/telegram/poll-now
 POST /api/adapters/telegram/webhook/delete
-POST /api/adapters/telegram/webhook/register
 POST /api/ai/comfy-background
 POST /api/ai/comfy-composite
 POST /api/assets/sanitize-svg
@@ -518,9 +514,7 @@ POST /api/tasks/:taskId/route
 POST /api/tasks/:taskId/studio-recovery/:runId/settlement
 POST /api/tasks/:taskId/workflow/:action
 POST /api/tasks/sweep-failed
-POST /api/v1/adapters/telegram/poll-now
 POST /api/v1/adapters/telegram/webhook/delete
-POST /api/v1/adapters/telegram/webhook/register
 POST /api/v1/ai/comfy-background
 POST /api/v1/ai/comfy-composite
 POST /api/v1/assets/sanitize-svg
@@ -725,9 +719,7 @@ POST /tasks/:taskId/route
 POST /tasks/:taskId/studio-recovery/:runId/settlement
 POST /tasks/:taskId/workflow/:action
 POST /tasks/sweep-failed
-POST /v1/adapters/telegram/poll-now
 POST /v1/adapters/telegram/webhook/delete
-POST /v1/adapters/telegram/webhook/register
 POST /v1/ai/comfy-background
 POST /v1/ai/comfy-composite
 POST /v1/assets/sanitize-svg

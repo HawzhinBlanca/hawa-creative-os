@@ -15,7 +15,6 @@ import type { CreateAppOptions } from './core-helpers.js';
  */
 export function productionAppOptions(env: Record<string, string | undefined> = process.env): CreateAppOptions {
   return {
-    enableTelegramPolling: false,
     // The bot credential is probed (getMe, at most every five minutes) whichever process polls: with
     // HAWA_TELEGRAM_POLLER=worker a revoked token was otherwise invisible to /v1/health (ADR-129).
     skipTelegramProbe: false,

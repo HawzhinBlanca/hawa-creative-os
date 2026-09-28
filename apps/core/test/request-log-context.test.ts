@@ -143,19 +143,4 @@ describe.skipIf(!repairUrl)('a Telegram update', () => {
     expect(await traceIdsOf(chat)).toEqual([{ trace_id: 'req-webhook-1', request_id: 'req-webhook-1' }]);
   });
 
-  it('from the poller: handled under tg-<update_id>, which the task it creates records', async () => {
-    vi.stubEnv('TELEGRAM_BOT_TOKEN', ['424242', 'log_context_fixture_token'].join(':'));
-    capture = captureLogs();
-    const chat = 66000000 + Math.floor(Math.random() * 9000000);
-    const fake = bridge();
-    createApp({ db, telegramBridge: fake as any } as any);
-    expect(fake.useUpdateHandler).toHaveBeenCalledTimes(1);
-    const handle = fake.useUpdateHandler.mock.calls[0][0] as (update: unknown) => Promise<void>;
-    const updateId = 700000000 + Math.floor(Math.random() * 99999999);
-    await handle({ update_id: updateId, message: message(chat, 'KAAE study day\n---\nApril 8, 2027\nErbil') });
-    expect(await traceIdsOf(chat)).toEqual([{ trace_id: `tg-${updateId}`, request_id: `tg-${updateId}` }]);
-    const lines = capture.lines.filter((l) => l.requestId === `tg-${updateId}`);
-    expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) expect(line.chatId).toBe(String(chat));
-  });
 });

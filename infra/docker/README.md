@@ -100,8 +100,8 @@ their own), and every later deploy stops until the old `worker` is gone.
 The worker's live colour asks Telegram for updates (`apps/worker/src/lifecycle/telegram-poller.ts`), and
 since ADR-135 (2026-09-28) it is the only poller: `HAWA_TELEGRAM_POLLER` must be `worker`, the compose
 default is `worker`, and `deploy.sh` refuses any other value before it changes anything. Core no longer
-polls whatever the value says, "Poll now" and webhook registration answer 409, and Core logs a value
-other than `worker` at start. Core's poller only ever fed the old intake, so it cannot be a rollback: it
+polls whatever the value says (stage 2 of ADR-135 removed its poller, "Poll now" and webhook
+registration; before that they answered 409), and Core logs a value other than `worker` at start. Core's poller only ever fed the old intake, so it cannot be a rollback: it
 would start requests on the old path, which the owner ruled out ("put everything on the new path").
 
 The poller sends each update to its chat's `ChatInbox` in Restate (key `tg-<update_id>`, so the same
@@ -124,14 +124,12 @@ it, and those routes accept nothing else. Without it the worker does not start i
   a bad release is replaced by deploying the previous one. Both colours keep the offset in the same
   Postgres row, so the one that takes over carries on where the other stopped. There is no switch back
   to Core.
-- A stack that still ran Core's poller (`core`) is moved in one deploy: set `HAWA_TELEGRAM_POLLER=worker`
-  in `infra/docker/.env` (the compose interpolation file; a value in `.env.production` is overridden by
-  compose's `environment:` block). The deploy keeps Core's value until Restate has registered the new
-  worker colour (ADR-129); since Core no longer polls on this build, updates wait in Telegram for the
-  new colour, which loses nothing. Production has run `worker` since 2026-09-28.
+- `HAWA_TELEGRAM_POLLER=worker` lives in `infra/docker/.env` (the compose interpolation file; a value
+  in `.env.production` is overridden by compose's `environment:` block). Production has run `worker`
+  since 2026-09-28. Stage 2 of ADR-135 removed the step that held Core's value back until the new
+  worker colour was registered (ADR-129 finding 1): Core has no poller to hand over.
 - Core still probes getMe (finding 3), so step 8 fails on `telegramApi: unreachable` when Telegram does
-  not answer Core. The worker colour is registered and polls regardless, and the exit note says so
-  ("The <colour> worker is registered").
+  not answer Core. The worker colour is registered and polls regardless.
 - Rolling back to a release from before ADR-135 (for example `2bea4671`, which production ran on
   2026-09-29): those builds still read `HAWA_LIFECYCLE_CHATS`, so keep `HAWA_LIFECYCLE_CHATS=*` in
   `infra/docker/.env.production` and `HAWA_TELEGRAM_POLLER=worker` in `infra/docker/.env` while they run;

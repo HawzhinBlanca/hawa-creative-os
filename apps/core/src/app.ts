@@ -1,5 +1,3 @@
-import { createPolledUpdateHandler, parkTelegramUpdate } from './services/polled-update-dispatch.js';
-import { PostgresTelegramPollState, telegramBotKey } from './services/telegram-poll-state.js';
 import { hydrateClientDnaFromDb } from './services/client-dna-hydration.js';
 import { ensureClientPackRows } from './services/client-pack-rows.js';
 import { clientPacks } from './services/client-packs.js';
@@ -252,16 +250,8 @@ export function createApp(options?: CreateAppOptions) {
   // 1.3, G8; services/channel-kill-switches.ts). Without a database they are this app's alone.
   const channelKillSwitchStore = createChannelKillSwitchStore(db);
   const channelKillSwitches = channelKillSwitchStore.switches;
-  // The office's Telegram kill switch stops intake at the source: while it is on, the poller asks
-  // Telegram for nothing (the webhook route refuses with 503 below). It used to change only the
-  // health report, and messages kept being read and designs kept being started. Until Postgres has
-  // been read the poller waits too: it cannot know yet whether the office switched intake off. Polls
-  // queue behind the first read (for at most 10 s, so "poll now" answers while Postgres is down) and
-  // stay paused while it has not succeeded.
-  telegramBridge.pauseIntakeWhen?.(() => !channelKillSwitchStore.isLoaded() || channelKillSwitches.telegram);
-  telegramBridge.waitBeforePolling?.(
-    Promise.race([channelKillSwitchStore.loaded, new Promise<void>((resolve) => setTimeout(resolve, 10_000).unref?.())])
-  );
+  // The office's Telegram kill switch stops intake: the worker's poller reads its row in Postgres
+  // before every poll, and Core's intake routes refuse while it is on. Core has no poller (ADR-135).
 
   // Without a database, the office's tasks, their events and briefs, client DNA history and uploaded
   // assets live in these maps (development and the in-memory tests). With one, each holds nothing and
@@ -641,7 +631,8 @@ export function createApp(options?: CreateAppOptions) {
   const probeTelegram = async (): Promise<string> => {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) return 'unconfigured';
-    if (options?.skipTelegramProbe ?? !options?.enableTelegramPolling) return 'unverified';
+    // Probed only when asked (production does, entrypoint-options.ts); tests keep Telegram out.
+    if (options?.skipTelegramProbe ?? true) return 'unverified';
     if (Date.now() - telegramProbe.at < 300000) return telegramProbe.status;
     let status = 'unreachable';
     try {
@@ -1073,61 +1064,6 @@ export function createApp(options?: CreateAppOptions) {
     log.error('[core:internal] HAWA_WORKER_TOKEN is not usable here: the worker cannot hand updates to intake, and Core does not poll. Set HAWA_WORKER_TOKEN in .env.production (infra/docker/README.md).');
   }
   for (const retired of retiredTelegramSettings(process.env, { production: isProduction })) log.error(`[core] ${retired}`);
-
-  // Telegram intake by getUpdates. The handler is registered whenever a bot is configured, so the
-  // administrator's "poll now" hands updates to intake exactly as the background loop does (through
-  // the same retry and dead letter, under the same one-poll-at-a-time lock); the loop itself runs
-  // only in the live server.
-  if (process.env.TELEGRAM_BOT_TOKEN) {
-    const pollScope = { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID };
-    // The offset, and the count of attempts at a failing update, survive a restart in Postgres.
-    const pollState = db ? new PostgresTelegramPollState(db, pollScope, telegramBotKey(process.env.TELEGRAM_BOT_TOKEN)) : null;
-    if (pollState) telegramBridge.attachOffsetStorage?.(pollState);
-    // A failing update is retried, then dead-lettered with the office alerted and the sender told.
-    // It is never skipped: see polled-update-dispatch.ts.
-    const handlePolledUpdate = createPolledUpdateHandler<TelegramUpdate>({
-      deliver: async (update) => {
-        const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-        if (!secret) throw new Error('TELEGRAM_WEBHOOK_SECRET is not configured');
-        const res = await app.request('/api/webhooks/telegram?generate=true', {
-          method: 'POST',
-          // The update's own id (tg-<update_id>, set below) carries on into intake and what it writes.
-          headers: { 'Content-Type': 'application/json', 'x-telegram-bot-api-secret-token': secret, ...requestIdHeaders() },
-          body: JSON.stringify(update),
-        });
-        if (!res.ok) log.error(`[TelegramBridge] Ingress dispatch rejected (${res.status}):`, await res.text().catch(() => ''));
-        return res.status;
-      },
-      ...(pollState ? { recordFailure: (update: TelegramUpdate, reason: string) => pollState.recordFailure(update.update_id, reason) } : {}),
-      park: async (update, reason) => {
-        if (!db || !pollState) throw new Error('no database to park the update in');
-        const office = (process.env.TELEGRAM_ALLOWED_USERS || '').split(',').map((v) => v.trim()).find(Boolean);
-        await parkTelegramUpdate(db, pollScope, update, reason, {
-          officeChatId: office,
-          alongside: (trx) => pollState.advanceWithin(trx, update.update_id),
-        });
-      },
-      notifySender: async (update, text) => {
-        const chatId = update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
-        if (chatId === undefined || chatId === null) return;
-        const sent = await telegramBridge.dispatchOutboundMessage(chatId, { text });
-        if (!sent.success) throw new Error(sent.error || 'send failed');
-      },
-    });
-    // One log context per update, retries included: tg-<update_id> finds every attempt at it.
-    const handleUpdateInContext = (update: TelegramUpdate) =>
-      runWithLogContext(
-        { requestId: `tg-${update.update_id}`, chatId: String(update.message?.chat?.id ?? update.callback_query?.message?.chat?.id ?? '') },
-        () => handlePolledUpdate(update)
-      );
-    telegramBridge.useUpdateHandler?.(handleUpdateInContext);
-    // An update polled before client DNA has loaded would go through intake against the fixture
-    // offices, so the loop starts once the load is done. If it fails in production, index.ts stops
-    // the process, and there is nothing to poll for.
-    if (options?.enableTelegramPolling) {
-      clientDnaHydrated.then(() => telegramBridge.startPolling(handleUpdateInContext), () => {});
-    }
-  }
 
   // index.ts awaits clientDnaHydrated before it opens the port.
   return Object.assign(app, { clientDnaHydrated, guidelineReadings });

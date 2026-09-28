@@ -56,6 +56,10 @@ Red run first, against the unchanged `3f3d71ca` sources with the new tests: 13 o
 
 Details: `plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT_PROOF.json`. Not executed: a deploy, a live Telegram chat, the load test (`scripts/load/run.ts` now refuses `--poller core` and was not run).
 
+## 6. Stage 2 (merge only on `stage2Ready: true`)
+
+**2a — Core's poller removed.** Core's poll loop and update handler, the `enableTelegramPolling` option, `createPolledUpdateHandler` (the dead-letter helpers stay: the worker's `/park` uses them), "Poll now" and webhook registration with their Desk controls (webhook info and delete stay: delete clears a webhook set outside Hawa, which would stop the worker's getUpdates), and `deploy.sh`'s hold, release and exit note for Core's poller value (ADR-129 finding 1); step 7 starts with `HAWA_TELEGRAM_POLLER=worker` and the ADR-135 refusal stays. Tests of those pieces went with them; the worker poller's tests cover polling, offsets, the kill switch and dead letters. Left in place, with no production caller: the getUpdates machinery of `TelegramBridgeDaemon` in `@hawa/integrations` (entangled with its status and `processUpdate`, and covered by that package's own tests) and `PostgresTelegramPollState.recordFailure`; they can go in a follow-up with those tests.
+
 ## 7. Reconciled with ADR-136 on the mainline — 2026-09-29
 
 This ADR was written from `3f3d71ca`; ADR-136, deployed meanwhile, fixed the same cutover from the

@@ -12,9 +12,9 @@ describe('Core health when the worker polls Telegram', () => {
   afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
   it('production Core probes the bot credential whichever process polls', () => {
-    expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: 'worker' })).toMatchObject({ enableTelegramPolling: false, skipTelegramProbe: false });
-    // ADR-135: Core never polls, and still probes the credential.
-    expect(productionAppOptions({})).toMatchObject({ enableTelegramPolling: false, skipTelegramProbe: false });
+    // ADR-135: Core never polls (stage 2 removed the option), and still probes the credential.
+    expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: 'worker' })).toMatchObject({ skipTelegramProbe: false });
+    expect(productionAppOptions({})).toMatchObject({ skipTelegramProbe: false });
   });
 
   it('a revoked bot token shows as telegramApi "unauthorized", and health names the worker as the poller', async () => {
@@ -26,9 +26,9 @@ describe('Core health when the worker polls Telegram', () => {
       if (u.startsWith('https://api.telegram.org/') && u.endsWith('/getMe')) { getMe.push(u); return new Response('{"ok":false}', { status: 401 }); }
       throw new TypeError('fetch failed');
     });
-    const { enableTelegramPolling, skipTelegramProbe } = productionAppOptions(process.env);
+    const { skipTelegramProbe } = productionAppOptions(process.env);
     const bridge = { dispatchOutboundMessage: vi.fn(), downloadFile: vi.fn(), answerCallbackQuery: vi.fn(), handleCommand: vi.fn() };
-    const app = createApp({ telegramBridge: bridge as any, enableTelegramPolling, skipTelegramProbe, skipPaidModelProbe: true } as any);
+    const app = createApp({ telegramBridge: bridge as any, skipTelegramProbe, skipPaidModelProbe: true } as any);
     const res = await app.request('/v1/health');
     const body = await res.json();
     expect(getMe).toHaveLength(1);
@@ -41,7 +41,7 @@ describe('Core health when the worker polls Telegram', () => {
   it('health names the worker as the poller whatever HAWA_TELEGRAM_POLLER says', async () => {
     for (const value of ['', 'core']) {
       vi.stubEnv('HAWA_TELEGRAM_POLLER', value);
-      const app = createApp({ skipPaidModelProbe: true, skipTelegramProbe: true, enableTelegramPolling: false } as any);
+      const app = createApp({ skipPaidModelProbe: true, skipTelegramProbe: true } as any);
       expect((await (await app.request('/v1/health')).json()).telegramPoller, value).toBe('worker');
     }
   });

@@ -104,65 +104,15 @@ export function registerSystemRoutes(ctx: RouteContext) {
     }, 200);
   });
 
-  // Kept, not removed: the Desk's Settings screen has a "Poll now" button. It used to run its own
-  // getUpdates beside the background loop, from the same offset, and ignored intake's answer, so an
-  // update intake refused with a 5xx was skipped for good. It now takes the poller's turn (pollOnce is
-  // queued: one getUpdates at a time) and uses the poller's own handler, with its retries, dead letter
-  // and stored offset. With the kill switch on it refuses as the webhook does.
-  registerRoute('post', '/adapters/telegram/poll-now', async (c: any) => {
-    const denied = requireAdministrator(c); if (denied) return denied;
-    // The worker's poller is the bot's one getUpdates consumer (Phase 2.1; since ADR-135 always). A
-    // second one here would take updates from the same offset outside ChatInbox's per-chat order and
-    // hand them to the legacy intake; Telegram answers two consumers with 409 besides.
-    if (telegramPollerOf(process.env) === 'worker') {
-      return problem(c, 409, 'The worker polls Telegram', 'The worker asks Telegram for updates, and Core does not poll (ADR-135)');
-    }
-    if (!telegramBridge) {
-      return c.json({ ok: false, error: 'Telegram bridge not available' }, 503);
-    }
-    if (channelKillSwitches.telegram) {
-      return problem(c, 503, 'Service Unavailable', 'Telegram intake is disabled by the office kill switch');
-    }
-    if (!process.env.TELEGRAM_WEBHOOK_SECRET) {
-      return c.json({ ok: false, error: 'TELEGRAM_WEBHOOK_SECRET is not configured' }, 503);
-    }
-    if (!telegramBridge.hasUpdateHandler?.()) {
-      return c.json({ ok: false, error: 'Telegram intake is not set up in this process (no bot token)' }, 503);
-    }
-    const count = await telegramBridge.pollOnce();
-    return c.json({ ok: true, updatesProcessed: count, status: telegramBridge.getStatus() }, 200);
-  });
+  // "Poll now" (POST /adapters/telegram/poll-now) was removed with Core's poller by stage 2 of
+  // ADR-135: the worker's poller is the bot's only getUpdates consumer.
 
   // Telegram Webhook Management (Horizon 17 / Option 2)
   // Re-pointing the bot's update stream is an administrator-only action: anyone able to call it
   // could redirect every office brief and approval to their own server.
-  registerRoute('post', '/adapters/telegram/webhook/register', async (c: any) => {
-    const denied = requireAdministrator(c); if (denied) return denied;
-    // A registered webhook sends every update to the legacy intake and stops the worker's getUpdates
-    // (Telegram refuses getUpdates while a webhook is set). Since ADR-135 no setting may do that.
-    if (telegramPollerOf(process.env) === 'worker') {
-      return problem(c, 409, 'The worker polls Telegram', 'A webhook would bypass RequestLifecycle and stop the worker poller (ADR-135); nothing was registered');
-    }
-    if (!telegramBridge) {
-      return c.json({ ok: false, error: 'Telegram bridge not available' }, 503);
-    }
-    const body = await c.req.json().catch(() => ({}));
-    const url = body.url || process.env.TELEGRAM_WEBHOOK_URL;
-    if (!url) {
-      return problem(c, 400, 'Bad Request', 'Missing webhook URL');
-    }
-    const secret = body.secretToken || process.env.TELEGRAM_WEBHOOK_SECRET;
-    if (!secret) {
-      return problem(c, 400, 'Bad Request', 'TELEGRAM_WEBHOOK_SECRET is not configured');
-    }
-    const result = await telegramBridge.setWebhook(url, secret);
-    return c.json({
-      ok: result.ok,
-      description: result.description,
-      status: telegramBridge.getStatus(),
-    }, result.ok ? 200 : 502);
-  });
-
+  // Registration (POST /adapters/telegram/webhook/register) was removed by stage 2 of ADR-135: a
+  // webhook would send every update past RequestLifecycle and stop the worker's getUpdates. Delete
+  // stays, to clear a webhook set outside Hawa; info shows whether one is set.
   registerRoute('post', '/adapters/telegram/webhook/delete', async (c: any) => {
     const denied = requireAdministrator(c); if (denied) return denied;
     if (!telegramBridge) {

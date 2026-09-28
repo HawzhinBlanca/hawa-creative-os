@@ -154,7 +154,7 @@ describe('durable fixture evaluations under runtime RLS',()=>{
   });
   it('HTTP retries and fresh Core history reuse the action and expose only receipt evidence',async()=>{
     const {gateway,call}=newGateway(),actionId=randomUUID();
-    const options={db:runtime,evaluationGateway:gateway,testAuth:{principal:{role:'operator',userId:'00000000-0000-4000-b000-000000000001'}},skipPaidModelProbe:true,skipTelegramProbe:true,enableTelegramPolling:false};
+    const options={db:runtime,evaluationGateway:gateway,testAuth:{principal:{role:'operator',userId:'00000000-0000-4000-b000-000000000001'}},skipPaidModelProbe:true,skipTelegramProbe:true};
     const first=createApp(options);
     const request=()=>({method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':actionId},body:JSON.stringify({name:'HTTP saved run'})});
     const response=await first.request('/v1/evaluations/runs',request());expect(response.status).toBe(200);
@@ -173,14 +173,14 @@ describe('durable fixture evaluations under runtime RLS',()=>{
     await expect(new DurableEvaluationService(runtime,gateway).run(s,i)).rejects.toMatchObject({code:'EVALUATION_VERSION_CONFLICT'});expect(call).not.toHaveBeenCalled();
   });
   it('Core has no in-memory fallback when durable storage is unavailable',async()=>{
-    const {gateway,call}=newGateway();const app=createApp({evaluationGateway:gateway,testAuth:{principal:{role:'operator'}},skipPaidModelProbe:true,skipTelegramProbe:true,enableTelegramPolling:false});
+    const {gateway,call}=newGateway();const app=createApp({evaluationGateway:gateway,testAuth:{principal:{role:'operator'}},skipPaidModelProbe:true,skipTelegramProbe:true});
     const response=await app.request('/v1/evaluations/runs',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':randomUUID()},body:JSON.stringify({name:'Test'})});
     expect(response.status).toBe(503);expect(call).not.toHaveBeenCalled();
   });
 });
 
  it('serves source-bound actual corpus counts and refuses unknown dataset identities',async()=>{
-  const app=createApp({testAuth:{principal:{role:'operator'}},skipPaidModelProbe:true,skipTelegramProbe:true,enableTelegramPolling:false});
+  const app=createApp({testAuth:{principal:{role:'operator'}},skipPaidModelProbe:true,skipTelegramProbe:true});
   const catalog=await (await app.request('/v1/evaluations/datasets')).json();
   for (const definition of catalog) {
     const response=await app.request(`/v1/evaluations/datasets/${definition.id}/cases`);

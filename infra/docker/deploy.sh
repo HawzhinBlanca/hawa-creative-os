@@ -74,63 +74,12 @@ refuse_stuck_legacy() {
   echo "ERROR: the old single worker has ${stuck:-an unknown number of} paused or backing-off invocation(s) pinned to it. It would keep running its outbox, with no colour gate, until they finish, beside the new colour's. Resume or cancel them first (restate invocations list --status paused; the Restate UI), then deploy again. No worker was changed."
   exit 1
 }
-# Who asks Telegram for updates (Phase 2.1). Core and both worker colours read HAWA_TELEGRAM_POLLER from
-# compose. Step 7 used to recreate Core with a changed value before the worker colour that would take
-# over was built, started and registered, and any failure in between left nobody polling (ADR-129,
-# Phase 4 operations finding 1). A move to the worker (core -> worker) is therefore held: Core keeps
-# polling until the new colour is registered. A move back to Core is not held: Core polls from step 7,
-# because the new colour, created with core, never polls, and once Restate routes ChatInbox to it the
-# old colour stops too. Two pollers at once cost nothing: Telegram refuses one of two concurrent
-# getUpdates (409), and an update both hand on is one ChatInbox invocation. Nobody polling loses time.
-# Since ADR-135 only the worker polls: Core's poller fed only the legacy intake and no longer runs,
-# whatever the value (refuse_retired_poller). The hold and release below stay for the one deploy that
-# takes a stack still on core to worker; stage 2 of the retirement removes them.
-# The value as Core and the worker read it (apps/core/src/services/telegram-poller-owner.ts).
+# Who asks Telegram for updates: the live worker colour, which hands each update to its chat's
+# ChatInbox (Phase 2.1). Core has no poller since stage 2 of ADR-135, so Core's value is no longer held
+# back while a new colour registers (ADR-129 finding 1): there is nothing to hand over.
+# The value as the worker reads it (apps/worker/src/lifecycle/telegram-poller.ts).
 telegram_poller_of() {
   if [[ "$(tr -d '[:space:]' <<< "${1:-}" | tr '[:upper:]' '[:lower:]')" == worker ]]; then echo worker; else echo core; fi
-}
-# What the running Core container was created with; nothing when there is no Core container.
-running_core_poller() {
-  local env
-  env="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$CORE_CONTAINER" 2>/dev/null)" || return 0
-  telegram_poller_of "$(sed -n 's/^HAWA_TELEGRAM_POLLER=//p' <<< "$env" | tail -1)"
-}
-# The value Core runs with until the new colour is registered: $1 is the wanted value, $2 the running
-# one (nothing when no Core container exists). Core stops polling only when it already runs with worker.
-core_poller_hold() {
-  if [[ "$1" == worker && "${2:-}" == worker ]]; then echo worker; else echo core; fi
-}
-poller_owner_text() {
-  if [[ "$1" == worker ]]; then echo "the live worker colour polls Telegram, Core does not"; else echo "Core polls Telegram, the worker does not"; fi
-}
-# After the new colour is registered: Core takes the wanted value (a second recreate, only on a switch).
-release_core_poller() {
-  [[ "$CORE_POLLER_HOLD" != "$CORE_POLLER_WANTED" ]] || return 0
-  HAWA_TELEGRAM_POLLER="$CORE_POLLER_WANTED" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d --no-deps --no-build core >/dev/null
-  CORE_POLLER_HOLD="$CORE_POLLER_WANTED"
-  echo "✓ Core recreated with HAWA_TELEGRAM_POLLER=${CORE_POLLER_WANTED}: $(poller_owner_text "$CORE_POLLER_WANTED")"
-}
-# A deploy that stops after step 7 recreated Core says so, and who polls, whatever else it printed.
-# Only Core's own value is known here; a worker colour polls when it was created with worker and
-# Restate routes ChatInbox to it (its LiveColourGate), so the note says that rather than name one.
-CORE_RECREATED=0; IDLE_KEPT=0
-report_poller_on_exit() {
-  local rc=$?
-  [[ $rc != 0 && $CORE_RECREATED == 1 ]] || return 0
-  local note
-  if [[ "$CORE_POLLER_HOLD" == core ]]; then
-    note="Core polls Telegram (HAWA_TELEGRAM_POLLER=core)."
-    [[ "$CORE_POLLER_WANTED" == core ]] || note+=" The switch to worker waits for a registered worker colour; deploy again to apply it."
-    if [[ "$CORE_POLLER_WANTED" == worker && ${IDLE_KEPT:-0} == 1 ]]; then
-      note+=" The ${IDLE} colour was kept and was created with worker, so it also polls while Restate routes ChatInbox to it; Telegram refuses one of two concurrent polls (409) and no update is lost."
-    elif [[ "${CORE_POLLER_RUNNING:-}" == worker ]]; then
-      note+=" A worker colour created with worker also polls while Restate routes ChatInbox to it; Telegram refuses one of two concurrent polls (409) and no update is lost."
-    fi
-  else
-    note="Core does not poll (HAWA_TELEGRAM_POLLER=worker): the worker colour Restate routes ChatInbox to polls Telegram."
-  fi
-  [[ -z "${REGISTERED:-}" ]] || note+=" The ${IDLE} worker is registered: Restate sends new work to it."
-  echo "NOTE: Core was recreated by this deploy. ${note}"
 }
 # ADR-135: HAWA_TELEGRAM_POLLER must be worker. Core no longer polls, so with any other value the new
 # worker colours would not poll either and nobody would read client messages; a rollback to Core's
@@ -511,17 +460,7 @@ nginx_seen() { "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx sha256sum
   || { echo "ERROR: infra/docker/nginx.conf fails nginx -t; nothing was started with it"; exit 1; }
 VECTOR_WANT="$("${HAWA_SHA256[@]}" "${SCRIPT_DIR}/vector.yaml" | cut -d' ' -f1)"
 validate_vector_config
-# Core keeps the Telegram poller it runs with until 7b has registered the new worker colour.
-CORE_POLLER_WANTED="$(telegram_poller_of "$(compose_value HAWA_TELEGRAM_POLLER worker)")"
-CORE_POLLER_RUNNING="$(running_core_poller)"
-CORE_POLLER_HOLD="$(core_poller_hold "$CORE_POLLER_WANTED" "$CORE_POLLER_RUNNING")"
-[[ "$CORE_POLLER_HOLD" == "$CORE_POLLER_WANTED" ]] \
-  || echo "Telegram poller: ${CORE_POLLER_HOLD} -> ${CORE_POLLER_WANTED}; Core keeps ${CORE_POLLER_HOLD} until the new worker colour is registered"
-[[ "$CORE_POLLER_RUNNING" != worker || "$CORE_POLLER_WANTED" != core ]] \
-  || echo "Telegram poller: worker -> core; Core polls from now on, and the old worker colour stops once Restate routes ChatInbox to the new one"
-trap report_poller_on_exit EXIT
-CORE_RECREATED=1
-HAWA_TELEGRAM_POLLER="$CORE_POLLER_HOLD" "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
+HAWA_TELEGRAM_POLLER=worker "${COMPOSE[@]}" --env-file "$INTERP_FILE" up -d
 if [[ "$(nginx_seen)" == "$NGINX_WANT" ]]; then
   "${COMPOSE[@]}" --env-file "$INTERP_FILE" exec -T nginx nginx -s reload >/dev/null && echo "✓ nginx configuration reloaded"
 else
@@ -606,10 +545,7 @@ abandon_idle() {
     "${COMPOSE[@]}" --env-file "$INTERP_FILE" rm -sf "worker-${IDLE}" >/dev/null 2>&1 || true
     echo "ERROR: $1 Restate holds no deployment at the new ${IDLE} worker's address, so it was removed; what Restate routes to the live worker (${LIVE}) was not changed."
   else
-    IDLE_KEPT=1
     echo "ERROR: $1 Restate holds a deployment at the new ${IDLE} worker's address, or could not say ($(tr '\n' ' ' <<< "$held")), so it may already send work there: the ${IDLE} worker was NOT removed, and the ${LIVE} worker was not drained. Both keep running. Check where each service goes (GET /services on Restate's admin API) and finish by hand: infra/docker/README.md, 'A switch that did not complete'."
-    # The kept colour may already serve ChatInbox. Created with core it never polls, so Core must.
-    [[ "${CORE_POLLER_WANTED:-}" != core ]] || release_core_poller
   fi
   exit 1
 }
@@ -624,8 +560,6 @@ done
 # already routes to the worker (a rollback below the build that added one; ADR-129).
 REGISTERED="$(bluegreen register "$IDLE" --hosts "$(idle_hosts "$IDLE")")" || abandon_idle "Restate did not complete the switch to the new ${IDLE} worker (its reason is above)."
 echo "✓ restate sends new work to the ${IDLE} worker ($(sed -n 's/^deployment=//p' <<< "$REGISTERED"))"
-# Only now does Core take a changed HAWA_TELEGRAM_POLLER: the colour that takes over is registered.
-release_core_poller
 # Not a failure when it times out: new work already goes to the new colour.
 if DRAINS="$(bluegreen finish-drains --wait-seconds "${HAWA_DRAIN_TIMEOUT_SECONDS:-900}")"; then
   report_drains "$DRAINS"

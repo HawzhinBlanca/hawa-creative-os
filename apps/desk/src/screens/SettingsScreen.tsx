@@ -26,8 +26,6 @@ export const SettingsScreen: React.FC = () => {
   const [checkingWebhook, setCheckingWebhook] = useState(false);
   const [webhookResult, setWebhookResult] = useState<CheckResult | null>(null);
   const [telegramStatus, setTelegramStatus] = useState<Reading<TelegramAdapterStatus>>({ state: 'loading' });
-  const [pollingTelegram, setPollingTelegram] = useState(false);
-  const [pollResult, setPollResult] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<'admission' | 'proof' | 'credentials' | null>(null);
   const [providerStatus, setProviderStatus] = useState<Reading<ProviderStatusMap>>({ state: 'loading' });
   const [savingKeys, setSavingKeys] = useState(false);
@@ -39,7 +37,6 @@ export const SettingsScreen: React.FC = () => {
     telegramBotToken: '',
     wahaApiKey: '',
   });
-  const [webhookUrlInput, setWebhookUrlInput] = useState('https://preview-office.kaae.org/api/webhooks/telegram');
   const [registeringWebhook, setRegisteringWebhook] = useState(false);
   const [registerWebhookResult, setRegisterWebhookResult] = useState<string | null>(null);
 
@@ -79,20 +76,6 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
-  const handlePollNow = async () => {
-    setPollingTelegram(true);
-    setPollResult(null);
-    try {
-      const data = await apiClient.telegram.pollNow();
-      setPollResult(`✓ Telegram poll complete: processed ${data?.updatesProcessed ?? 0} update(s).`);
-      await fetchTelegramStatus();
-    } catch (err) {
-      setPollResult(`✗ Poll failed: ${reasonOf(err)}`);
-    } finally {
-      setPollingTelegram(false);
-    }
-  };
-
   // The webhook secret stays on the server. Core asks Telegram how delivery to our webhook is going
   // (getWebhookInfo) and relays the answer; the Desk never posts to the webhook itself.
   const handleCheckWebhook = async () => {
@@ -100,20 +83,6 @@ export const SettingsScreen: React.FC = () => {
     setWebhookResult(null);
     setWebhookResult(describeWebhookDelivery(await read(() => apiClient.telegram.webhookInfo())));
     setCheckingWebhook(false);
-  };
-
-  const handleRegisterWebhook = async () => {
-    setRegisteringWebhook(true);
-    setRegisterWebhookResult(null);
-    try {
-      await apiClient.telegram.registerWebhook(webhookUrlInput.trim());
-      setRegisterWebhookResult(`✓ Webhook registered with Telegram Bot API: ${webhookUrlInput}`);
-      await fetchTelegramStatus();
-    } catch (err) {
-      setRegisterWebhookResult(`✗ Failed: ${reasonOf(err)}`);
-    } finally {
-      setRegisteringWebhook(false);
-    }
   };
 
   const handleDeleteWebhook = async () => {
@@ -188,14 +157,6 @@ export const SettingsScreen: React.FC = () => {
                     >
                       {checkingWebhook ? 'Checking…' : 'Check webhook'}
                     </button>
-                    <button
-                      className="btn secondary"
-                      style={{ fontSize: 11 }}
-                      disabled={pollingTelegram}
-                      onClick={handlePollNow}
-                    >
-                      {pollingTelegram ? 'Polling…' : 'Poll now'}
-                    </button>
                   </div>
                 </td>
               </tr>
@@ -237,14 +198,7 @@ export const SettingsScreen: React.FC = () => {
             </div>
           )}
 
-          {pollResult && (
-            <div className="finding" style={{ borderColor: pollResult.startsWith('✓') ? '#1d733c' : '#dc2626', background: pollResult.startsWith('✓') ? '#ecfdf5' : '#fef2f2', marginTop: 8 }}>
-              <b style={{ color: pollResult.startsWith('✓') ? '#065f46' : '#991b1b' }}>Telegram Poll Result</b>
-              <p style={{ margin: '4px 0', fontSize: 12, color: pollResult.startsWith('✓') ? '#047857' : '#b91c1c' }}>{pollResult}</p>
-            </div>
-          )}
-
-          {/* Horizon 17 (Option 2): Public Tunnel & Instant Push Webhooks */}
+          {/* Horizon 17 (Option 2): the webhook's state; since ADR-135 the worker polls and none is registered */}
           <h3 style={{ marginTop: 24 }}>Telegram Webhook & Public Tunnel (Horizon 17)</h3>
           <div className="rule" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -259,25 +213,11 @@ export const SettingsScreen: React.FC = () => {
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <label htmlFor="telegram-webhook-url-input" className="sr-only">Telegram Webhook URL</label>
-              <input
-                id="telegram-webhook-url-input"
-                name="telegramWebhookUrl"
-                aria-label="Telegram Webhook URL"
-                type="text"
-                value={webhookUrlInput}
-                onChange={(e) => setWebhookUrlInput(e.target.value)}
-                placeholder="https://preview-office.kaae.org/api/webhooks/telegram"
-                style={{ flex: 1, padding: '7px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)' }}
-              />
-              <button
-                className="btn primary"
-                style={{ fontSize: 11, padding: '7px 12px' }}
-                disabled={registeringWebhook}
-                onClick={handleRegisterWebhook}
-              >
-                {registeringWebhook ? 'Registering…' : 'Set Webhook'}
-              </button>
+              <span style={{ flex: 1, fontSize: 12, color: 'var(--muted)' }}>
+                The worker polls Telegram and hands every update to RequestLifecycle (ADR-135), so no
+                webhook is registered from here. Delete clears one set outside Hawa, which would stop
+                the worker's poller.
+              </span>
               <button
                 className="btn secondary"
                 style={{ fontSize: 11, padding: '7px 12px' }}

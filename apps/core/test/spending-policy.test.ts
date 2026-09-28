@@ -112,7 +112,7 @@ it('enforces named HTTP cookie CSRF and refuses a shared administrator key',asyn
   vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_ID','test-client');vi.stubEnv('HAWA_GOOGLE_OIDC_CLIENT_SECRET','test-secret');
   vi.stubEnv('HAWA_GOOGLE_OIDC_REDIRECT_URI','https://desk.office.example/v1/auth/google/callback');vi.stubEnv('HAWA_GOOGLE_OIDC_HOSTED_DOMAINS','example.test');
   try{
-    const options={db,skipPaidModelProbe:true,skipTelegramProbe:true,enableTelegramPolling:false};
+    const options={db,skipPaidModelProbe:true,skipTelegramProbe:true};
     const path='/v1/spending/policy',headers={'Content-Type':'application/json','Idempotency-Key':action,Cookie:`hawa_session=${f.token}; hawa_csrf=${csrf}`,'x-hawa-csrf':csrf,Origin:'https://desk.office.example'};
     const request={method:'POST',headers,body:JSON.stringify(body)};
     const first=await createApp(options).request(path,request);expect(first.status,await first.clone().text()).toBe(200);

@@ -1228,22 +1228,17 @@ describe('the kill switch the worker\'s poller reads', () => {
 });
 
 describe('HAWA_TELEGRAM_POLLER', () => {
-  // ADR-135: the worker is the only poller; the variable can no longer hand polling back to Core.
-  it('names the worker whatever it says, and Core never polls', () => {
+  // ADR-135: the worker is the only poller; stage 2 removed Core's poller and "poll now".
+  it('names the worker whatever it says, and Core has no poller to start', async () => {
+    fakeTelegram();
     for (const value of [undefined, 'core', 'nonsense', ' Worker ']) {
       expect(telegramPollerOf({ HAWA_TELEGRAM_POLLER: value })).toBe('worker');
-      expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: value }).enableTelegramPolling).toBe(false);
+      expect(productionAppOptions({ HAWA_TELEGRAM_POLLER: value })).not.toHaveProperty('enableTelegramPolling');
     }
-  });
-
-  it('"poll now" is refused with 409 however the variable is set', async () => {
-    fakeTelegram();
-    for (const value of ['worker', 'core', '']) {
-      vi.stubEnv('HAWA_TELEGRAM_POLLER', value);
-      const app = createApp({ db } as any);
-      expect((await app.request('/v1/adapters/telegram/poll-now', { method: 'POST', headers: admin })).status, value).toBe(409);
-      expect((await app.request('/v1/adapters/telegram/status')).status).toBe(200);
-      expect(await (await app.request('/v1/adapters/telegram/status')).json()).toMatchObject({ poller: 'worker' });
-    }
+    vi.stubEnv('HAWA_TELEGRAM_POLLER', 'core');
+    const app = createApp({ db } as any);
+    expect((await app.request('/v1/adapters/telegram/poll-now', { method: 'POST', headers: admin })).status).toBe(404);
+    expect(await (await app.request('/v1/adapters/telegram/status')).json()).toMatchObject({ poller: 'worker' });
   });
 });
+

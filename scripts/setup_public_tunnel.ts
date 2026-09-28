@@ -28,28 +28,10 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('\n[2/4] Testing & Registering Telegram Webhook Push Ingress...');
-  console.log(`  Target Webhook URL: ${targetWebhookUrl}`);
-  try {
-    const regRes = await fetch(`${coreBaseUrl}/v1/adapters/telegram/webhook/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: targetWebhookUrl,
-        secretToken: webhookSecret,
-      }),
-    });
-    const regData = await regRes.json();
-    if (regRes.ok) {
-      console.log(`  ✓ Webhook Registration Response:`, regData.description || 'Success');
-      console.log(`  ✓ Webhook Active: ${regData.status?.webhookActive ? 'YES (⚡ Instant Push)' : 'NO'}`);
-      console.log(`  ✓ Active URL: ${regData.status?.webhookUrl || targetWebhookUrl}`);
-    } else {
-      console.warn(`  ⚠️ Webhook Registration Warning:`, regData.description || regData);
-    }
-  } catch (err: any) {
-    console.error(`  ✗ Failed to register webhook:`, err.message);
-  }
+  // Webhook registration was removed by stage 2 of ADR-135: the worker's poller is the only way
+  // updates reach Hawa, through RequestLifecycle, and a webhook would stop its getUpdates.
+  console.log('\n[2/4] Telegram: polled by the worker (ADR-135); no webhook is registered.');
+  console.log(`  (was: ${targetWebhookUrl}; the secret stays for Core's internal intake)`);
 
   console.log('\n[3/4] Checking Figma Cloud Agent Studio Bridge Status...');
   try {

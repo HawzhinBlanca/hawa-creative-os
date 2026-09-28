@@ -92,7 +92,6 @@ export interface CreateAppOptions {
   skipPaidModelProbe?: boolean;
   enableBillingProbeSchedule?: boolean;
   skipTelegramProbe?: boolean;
-  enableTelegramPolling?: boolean;
   /** Remind requesters about drafts they have not answered (services/draft-reminders.ts). */
   enableDraftReminders?: boolean;
   /** Settle Canva imports and exports nobody is following any more (sweepStrandedOperations). */
