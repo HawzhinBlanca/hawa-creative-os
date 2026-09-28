@@ -88,3 +88,13 @@ other side. Stage 1 was merged on top of it, keeping one implementation of each 
   cases were removed with the poller. Details and results:
   `plans/lean-design-implementation-2026-09-28/RECONCILIATION_PROOF.json`.
 - Section 3's bilingual gap is closed by ADR-139; the R1.K0 finding in section 5 by ADR-138.
+
+## 8. Stage 2 rebased onto the reconciled mainline — 2026-09-29
+
+The three stage 2 commits (`300d4d67`, `b74a5df3`, `dee299e6`) were rebased onto the reconciled stage 1
+(ADR-136 kept where section 7 says, ADR-138 and ADR-139 on top) as branch `legacy-retirement-stage2`,
+still not merged: it waits for `stage2Ready: true`. The case 2b named as lost is ported to the request-owned
+path: `lifecycle-office-desk-bridge.test.ts`, "holds a credential failure when an earlier Drive upload of
+this request is still reserved" (503 `ARCHIVE_STATE_UNCERTAIN`, the task held in `publishing` and shown as
+`ARCHIVE_RECONCILIATION`, no requester send, and a failed report of the run keeps it so). It fails when the
+reservation check in `omnichannel-delivery.ts` `failBeforeDrive` is removed.
