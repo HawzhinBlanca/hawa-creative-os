@@ -139,7 +139,7 @@ describe('P11 — Reference Library & Ingestion Manager', () => {
     expect(addRes.success).toBe(true);
 
     // Initial check: P02 retrieval does NOT retrieve pending
-    const indexBefore = new ExemplarRetrievalIndex();
+    const indexBefore = new ExemplarRetrievalIndex({ manifestPath: tmpManifest });
     const retrievedBefore = indexBefore.getConfirmedExemplars();
     expect(retrievedBefore.find(e => e.filename === 'kurdish_accreditation_diploma_2026.png')).toBeUndefined();
 
@@ -159,6 +159,7 @@ describe('P11 — Reference Library & Ingestion Manager', () => {
     expect(manifestAfter.totalExemplars).toBe(7);
     const confirmedList = manifestAfter.exemplars.filter(e => e.status !== 'pending' && e.status !== 'dropped');
     expect(confirmedList.length).toBe(7);
+    expect(indexBefore.retrieveTopExemplars({ text: 'diploma' }, 1).retrievedExemplars[0].filename).toBe('kurdish_accreditation_diploma_2026.png');
     expect(confirmedList[1].filename).toBe('kurdish_accreditation_diploma_2026.png');
   });
 });

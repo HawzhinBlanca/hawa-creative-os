@@ -172,13 +172,13 @@ export function formatKeyV3(width: number, height: number): string {
 
 let sharedRetrievalIndex: ExemplarRetrievalIndex | null = null;
 
-/** P02: the top owner-confirmed exemplars for a brief, by local embedding. Free. */
+/** P02: owner-confirmed exemplars selected by Unicode lexical evidence or explicit fallback. Free. */
 export function retrieveExemplarsV3(
   query: { text: string; width: number; height: number },
   index?: ExemplarRetrievalIndex
 ): ExemplarRetrievalMatch[] {
   const retrieval = (index || (sharedRetrievalIndex ??= new ExemplarRetrievalIndex())).retrieveTopExemplars(
-    { text: query.text, format: formatKeyV3(query.width, query.height), category: 'standards' },
+    { text: query.text, format: formatKeyV3(query.width, query.height) },
     3
   );
   return retrieval.retrievedExemplars;

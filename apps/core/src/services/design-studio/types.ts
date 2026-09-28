@@ -1,3 +1,4 @@
+import type { ExemplarRetrievalEvidence } from '@hawa/creative';
 import type { StudioLayoutV2 } from '@hawa/creative';
 import type { LayoutMetrics } from '@hawa/creative';
 import type { OpenAiStudioClient } from '@hawa/creative';
@@ -173,6 +174,7 @@ export interface StageContext {
   exemplars?: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }>;
   /** Current exemplar admission policy identity; not sent to models as prompt content. */
   exemplarPolicySha256?: string;
+  exemplarRetrieval?: ExemplarRetrievalEvidence & { loadedIds: string[]; unavailableIds: string[] };
   client: OpenAiStudioClient;
   artProvider?: OpenAiImageProvider;
   ledger?: DesignStudioRepository;

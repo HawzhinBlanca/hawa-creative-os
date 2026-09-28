@@ -169,3 +169,17 @@ Deleting source material triggers:
 - scheduled removal of embeddings/previews according to retention policy;
 - preservation of audit and artifact integrity where legally/operationally required;
 - regeneration of affected context packs only when needed.
+
+
+## 13. Current Studio exemplar baseline (ADR-115)
+
+The packaged approved-reference selector uses Unicode lexical BM25 with separate
+format/curator fallback. It is not the multimodal hybrid retrieval admission in
+section 5. It preserves original copy, filters approval and actual image availability/
+hashes before scoring, and records algorithm, manifest hash, matched terms, selected
+IDs and exclusions. That evidence is retained with visual inputs and normal run
+stage diagnostics. Existing pinned runs reuse their original selection under current
+policy checks. Client authorization remains ahead of packaged collection access.
+No disk vector cache or paid retrieval call is used. Missing bilingual metadata,
+missing native reference files, multilingual semantic ranking and human usefulness
+qualification remain explicit gaps. See [ADR-115](../adrs/115_unicode_exemplar_retrieval.md).

@@ -12,6 +12,7 @@ interface VisualManifest {
   clientId: string;
   policySha256: string;
   photos: Array<Omit<ContentPhoto, 'bytes' | 'dataUrl' | 'mimeType'> & ImageRef>;
+  exemplarRetrieval?: StageContext['exemplarRetrieval'];
   exemplars: Array<ImageRef & { path: string; label: string; sha256: string }>;
   reference?: ImageRef & { notes: string };
   attachedImage?: ImageRef;
@@ -42,6 +43,7 @@ export async function captureVisualInputs(ctx: StageContext, stages: Record<stri
     version: 1, runId: ctx.runId, clientId: ctx.clientId, policySha256: visualPolicySha256(ctx),
     photos: (ctx.photos ?? []).map((p, i) => ({ key: bytes(`photo/${i}`, p.bytes), mime: p.mimeType,
       ...(p.width ? { width: p.width } : {}), ...(p.height ? { height: p.height } : {}), ...(p.notes ? { notes: p.notes } : {}) })),
+    ...(ctx.exemplarRetrieval ? { exemplarRetrieval: ctx.exemplarRetrieval } : {}),
     exemplars: (ctx.exemplars ?? []).filter(e => e.bytes).map((e, i) => ({ key: bytes(`example/${i}`, e.bytes!), mime: e.mimeType || 'image/png', path: e.path, label: e.label, sha256: sha(e.bytes!) })),
     ...(ctx.reference ? { reference: { ...image('reference', ctx.reference.dataUrl), notes: ctx.reference.notes } } : {}),
     ...(ctx.attachedImage ? { attachedImage: image('attached', ctx.attachedImage) } : {}),
@@ -72,6 +74,7 @@ export function restoreVisualInputs(ctx: StageContext, stages: Record<string, un
   };
   const dataUrl = (ref: ImageRef) => `data:${ref.mime};base64,${get(ref.key).toString('base64')}`;
   ctx.photos = m.photos.map(({ key, mime, ...metadata }) => ({ ...metadata, bytes: get(key), dataUrl: dataUrl({ key, mime }), mimeType: mime as ContentPhoto['mimeType'] }));
+  ctx.exemplarRetrieval = m.exemplarRetrieval;
   ctx.exemplars = m.exemplars.map(({ key, mime, ...metadata }) => ({ ...metadata, bytes: get(key), mimeType: mime }));
   ctx.reference = m.reference ? { dataUrl: dataUrl(m.reference), notes: m.reference.notes } : undefined;
   ctx.attachedImage = m.attachedImage ? dataUrl(m.attachedImage) : undefined;

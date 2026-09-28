@@ -12,8 +12,8 @@ No package is complete merely because a smaller test passes.
 
 | Package | Scope | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty and native-revision admission/manual handoff locally qualified; lifecycle-owned recovery and actual native preservation open | ADR-108/113; CANVA_UNCERTAINTY_PROOF.json; NATIVE_REVISION_HANDOFF_PROOF.json |
-| 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs locally qualified; authorized visual-order contract, multilingual retrieval and human comparison open | ADR-109; CREATIVE_HANDOFF_PROOF.json |
+| 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty, reviewed-copy handoff and automatic linked-revision owner recovery locally qualified; actual native preservation and initial manual intake open | ADR-108/113/114; CANVA_UNCERTAINTY_PROOF.json; NATIVE_REVISION_HANDOFF_PROOF.json; LIFECYCLE_NATIVE_RECOVERY_PROOF.json |
+| 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs and Unicode lexical exemplar baseline locally qualified; authorized visual order, multilingual semantic retrieval and human comparison open | ADR-109/115; CREATIVE_HANDOFF_PROOF.json; UNICODE_RETRIEVAL_PROOF.json |
 | 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results and visual input pins locally qualified; branch checkpoints, font/runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json |
 | 4 | Amend/Adapt routing and actual Canva account capability qualification | Open | Official documentation is not account admission |
 | 5 | Relationship-led composition, calibrated selection, governed edit learning and equal-budget human comparisons | Open | Existing R04–R06/R13/R22–R25 study machinery must be reused |
@@ -236,3 +236,34 @@ one exact native amendment and finish intent/typography/multilingual retrieval,
 semantic dependency reuse, calibrated selection and human/release evidence.
 
 Final connected-source verification after the fix: **24 files / 220 tests passed, zero failures or skips**.
+
+
+## 2026-09-28 — Unicode exemplar selection and available-reference evidence
+
+ADR-115 replaces the fixed English vocabulary/obsolete disk cache with Unicode
+lexical ranking over confirmed metadata. Arabic/Kurdish search spelling and numeral
+variants preserve original copy. Actual text evidence outranks format; no-match
+format/curator selection is labelled explicitly, with no semantic embedding claim.
+The complete manifest hash refreshes approval/metadata changes on existing indexes.
+The qualification helper no longer supplies a fabricated standards category.
+
+Core uses the authorized client's same manifest snapshot for policy and selection,
+checks available image bytes against approved hashes before ranking, and retains
+algorithm, matched terms, selected IDs and exclusion reasons with the visual bundle
+and run diagnostics. Existing pinned runs recover their original selection without
+retrieval. Three of six curated images are absent from both package and recorded
+archive; they can no longer displace available verified references silently.
+
+Final connected qualification: 9 files / 74 tests passed, zero failed/skipped;
+526 strict test roots and source/scripts types pass. Includes real PostgreSQL/blob
+replay through a fresh application-role connection, hash mismatch, approval updates,
+non-KAAE client journey, and actual multilingual synthetic metadata. Local 400-query
+probe p95 is about 0.018 ms for the three available images using a retained manifest;
+this is not end-to-end design latency or an improvement comparison. No provider
+calls, new dependencies, migrations or deployment. See UNICODE_RETRIEVAL_PROOF.json.
+
+All six packages remain active. This baseline does not recover missing reference
+files, translate English-only metadata, qualify a multilingual semantic model, or
+establish human design quality. Next: complete the approved multilingual corpus and
+semantic comparison alongside authorized intent/typography and actual native edit
+qualification; retain the remaining compute, human and release gates.

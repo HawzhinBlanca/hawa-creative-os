@@ -31,7 +31,7 @@ import {
   NoEligibleCandidateError,
   eligibleCandidatesV3,
   type StudioLayoutV2,
-  ExemplarRetrievalIndex,
+  ExemplarRetrievalIndex, EXEMPLAR_RETRIEVAL_VERSION,
   studioReferenceFromRaw,
   creativeAssetPath,
   fontCoversText,
@@ -1113,6 +1113,8 @@ export class DesignStudioService {
     let latinFont: string;
     let arabicFont: string;
     let exemplarPolicySha256: string | undefined;
+    let exemplarManifest: unknown;
+    let exemplarRetrieval: StageContext['exemplarRetrieval'];
 
     if (packagedKaae) {
       // Read the way the qualification reads it (shared), so both design with the same rules.
@@ -1122,7 +1124,8 @@ export class DesignStudioService {
       latinFont = rules.latinFont;
       arabicFont = rules.arabicFont;
       promotedRules = rules.promotedRules;
-      exemplarPolicySha256 = hash(canonicalCallJson(JSON.parse(readFileSync(creativeAssetPath('kaae-exemplars.json'), 'utf8'))));
+      exemplarManifest = JSON.parse(readFileSync(creativeAssetPath('kaae-exemplars.json'), 'utf8'));
+      exemplarPolicySha256 = hash(canonicalCallJson(exemplarManifest));
     } else {
       latinFont = reference.rules.typography.formalBody.latin;
       arabicFont = reference.rules.typography.formalBody.arabic;
@@ -1138,31 +1141,37 @@ export class DesignStudioService {
 
     const exemplars: Array<{ path: string; label: string; sha256?: string; bytes?: Buffer; mimeType?: string }> = [];
     if (packagedKaae && !skipExemplarRetrieval) try {
-      const retrievalIndex = new ExemplarRetrievalIndex();
+      const retrievalIndex = new ExemplarRetrievalIndex({ manifest: exemplarManifest });
       const briefQuery = {
         text: [request.instructions, ...request.copyBlocks.map((b: CopyBlock) => b.text)].join('\n'),
         format: request.width === request.height ? '1:1' : request.width / request.height === 0.8 ? '4:5' : undefined,
       };
-      const retrieval = retrievalIndex.retrieveTopExemplars(briefQuery, 3);
-      for (const item of retrieval.retrievedExemplars) {
-        // The manifest still records the archive path the exemplar was curated from, which is
-        // outside the package and absent from the image; the copy in the package's own assets is
-        // the one that travels.
+      const available = new Map<string, { path: string; bytes: Buffer; sha256: string }>();
+      const unavailableIds: string[] = [], availabilityWarnings: string[] = [];
+      for (const item of retrievalIndex.getConfirmedExemplars()) {
         const archived = resolve(process.cwd(), item.path);
-        const imgPath =
-          creativeAssetPath(`exemplars/${item.filename}`, { optional: true }) ??
+        const imgPath = creativeAssetPath(`exemplars/${item.filename}`, { optional: true }) ??
           (existsSync(archived) ? archived : undefined);
-        if (imgPath) {
-          const bytes = readFileSync(imgPath);
-          exemplars.push({
-            path: imgPath,
-            label: `${item.filename}: ${item.descriptor}`,
-            bytes,
-            sha256: hash(bytes),
-          });
+        let bytes: Buffer | undefined;
+        if (imgPath) try { bytes = readFileSync(imgPath); } catch { /* Recorded below; never condition on unreadable bytes. */ }
+        if (!bytes || !item.sha256 || hash(bytes) !== item.sha256) {
+          unavailableIds.push(item.id);
+          availabilityWarnings.push(`${bytes ? 'EXEMPLAR_BYTES_UNVERIFIED' : 'EXEMPLAR_FILE_MISSING'}:${item.id}`);
+          continue;
         }
+        available.set(item.id, { path: imgPath!, bytes, sha256: item.sha256 });
+      }
+      const retrieval = retrievalIndex.retrieveTopExemplars(briefQuery, 3, [...available.keys()]);
+      exemplarRetrieval = { ...retrieval.evidence, loadedIds: retrieval.retrievedIds, unavailableIds,
+        warnings: [...retrieval.evidence.warnings, ...availabilityWarnings] };
+      for (const item of retrieval.retrievedExemplars) {
+        const verified = available.get(item.id)!;
+        exemplars.push({ ...verified, label: `${item.filename}: ${item.descriptor}` });
       }
     } catch (err: any) {
+      exemplarRetrieval = { algorithm: EXEMPLAR_RETRIEVAL_VERSION, manifestSha256: hash(JSON.stringify(exemplarManifest)),
+        mode: 'empty', queryTokenCount: 0, matchedTokenCount: 0, eligibleCount: 0, matches: [], loadedIds: [], unavailableIds: [],
+        warnings: ['EXEMPLAR_RETRIEVAL_FAILED: no verified selection was available.'] };
       log.error(
         `[design-studio] Exemplar images could not be loaded (${err?.message || err}); ` +
           `this design is being generated without exemplar conditioning.`
@@ -1198,6 +1207,7 @@ export class DesignStudioService {
       logo,
       exemplars,
       exemplarPolicySha256,
+      exemplarRetrieval,
       client: ledgerClient as any,
       artProvider: ledgerArtProvider as any,
       pipelineV3: isPipelineV3Run(run),
@@ -1430,6 +1440,10 @@ export class DesignStudioService {
           restoreVisualInputs(ctx, stages, saved);
         }
       }
+
+      // Included in the run's normal stage snapshot for operator diagnostics; the
+      // immutable visual bundle remains the authority after layout preparation.
+      if (ctx.exemplarRetrieval) stages.exemplarRetrieval = ctx.exemplarRetrieval;
 
       // The copy as this run changed it (a change of wording, or one an earlier round made): every
       // stage after the edit renders, checks and transfers these words, not the request's.

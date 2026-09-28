@@ -63,6 +63,10 @@ describe.skipIf(!url)('Studio uses one pinned visual basis',()=>{
     const original=boundary.layout.mock.calls[0][0] as StageContext;
     const saved=await inputs.get(scope,runId);
     expect(saved).not.toBeNull();expect(original.photoCutouts?.[0]?.png).toEqual(oldCut);
+    expect(original.exemplarRetrieval).toMatchObject({algorithm:'unicode-bm25-v1'});
+    expect(original.exemplarRetrieval?.loadedIds.length).toBe(original.exemplars?.length);
+    expect(original.exemplarRetrieval?.unavailableIds).toContain('AUK002_kurdi_jpg');
+    expect(saved?.manifest).toMatchObject({exemplarRetrieval:original.exemplarRetrieval});
     expect(original.cutoutOutcomes?.[0].derivation).toMatchObject({sourceSha256:hash(currentPhoto),model:'old-model'});
     expect(original.visualInputs).toHaveLength(Math.min(2,original.exemplars?.length ?? 0)+1);
     expect(original.visualInputs?.some(v=>v.kind==='approved_example')).toBe(true);
@@ -80,6 +84,7 @@ describe.skipIf(!url)('Studio uses one pinned visual basis',()=>{
       const recovered=boundary.layout.mock.calls[1][0] as StageContext;
       expect(recovered.photoCutouts).toEqual(original.photoCutouts);
       expect(recovered.photos).toEqual(original.photos);
+      expect(recovered.exemplarRetrieval).toEqual(original.exemplarRetrieval);
       expect(recovered.reference).toEqual(original.reference);
       expect(recovered.visualInputs).toEqual(original.visualInputs);
       expect(await layoutVisualInputs(recovered)).toBe(recovered.visualInputs);
@@ -96,6 +101,29 @@ describe.skipIf(!url)('Studio uses one pinned visual basis',()=>{
       expect(second.images).not.toHaveBeenCalled();expect(second.local).not.toHaveBeenCalled();expect(retrieval).not.toHaveBeenCalled();
       expect(await inputs.get(scope,runId)).toEqual(saved);
     }finally{await peer.destroy();}
+  });
+
+  it('excludes changed image hashes before selection and retains the reason',async()=>{
+    const get = ExemplarRetrievalIndex.prototype.getConfirmedExemplars;
+    vi.spyOn(ExemplarRetrievalIndex.prototype,'getConfirmedExemplars').mockImplementation(function(this:ExemplarRetrievalIndex){
+      return get.call(this).map(e=>({...e,sha256:'0'.repeat(64)}));
+    });
+    const f=service();await expect(f.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
+    expect(boundary.layout).toHaveBeenCalledTimes(1);
+    const context=boundary.layout.mock.calls[0][0] as StageContext;
+    expect(context.exemplars).toEqual([]);
+    expect(context.exemplarRetrieval).toMatchObject({mode:'empty',eligibleCount:0,loadedIds:[]});
+    expect(context.exemplarRetrieval?.warnings).toContain('EXEMPLAR_BYTES_UNVERIFIED:post1_accreditation_mandate');
+    expect((await inputs.get(scope,runId))?.manifest).toMatchObject({exemplarRetrieval:context.exemplarRetrieval});
+    expect(f.fetcher).not.toHaveBeenCalled();
+  });
+
+  it('retains explicit retrieval failure instead of an invented match',async()=>{
+    vi.spyOn(ExemplarRetrievalIndex.prototype,'retrieveTopExemplars').mockImplementation(()=>{throw new Error('Synthetic retrieval failure');});
+    const f=service();await expect(f.svc.resume(scope,taskId,runId)).rejects.toMatchObject({code:'STUDIO_VISUAL_INPUTS_UNSAFE'});
+    const context=boundary.layout.mock.calls[0][0] as StageContext;
+    expect(context.exemplarRetrieval).toMatchObject({mode:'empty',loadedIds:[],warnings:['EXEMPLAR_RETRIEVAL_FAILED: no verified selection was available.']});
+    expect((await inputs.get(scope,runId))?.manifest).toMatchObject({exemplarRetrieval:context.exemplarRetrieval});
   });
 
   it('refuses changed client policy before layout or a new model call',async()=>{

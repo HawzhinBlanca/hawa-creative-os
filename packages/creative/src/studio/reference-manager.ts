@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { ExemplarRetrievalIndex } from './exemplar-retrieval.js';
 
 export interface ImageDimensions {
   width: number;
@@ -390,12 +389,7 @@ export class ReferenceLibraryManager {
 
     this.saveManifest(manifest);
 
-    // Invalidate / rebuild vector cache so retrieval picks it up
-    try {
-      new ExemplarRetrievalIndex();
-    } catch {
-      // cache will reload on next call
-    }
+    // Retrieval refreshes from the complete manifest hash; no disk vector cache.
 
     return {
       success: true,
