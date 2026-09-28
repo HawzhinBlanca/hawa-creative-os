@@ -203,7 +203,12 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
       getRunById: async () => ({ id: runId, task_id: taskId, actor_id: s.actorId, status: 'laying_out' }),
       getCallsForRun: async () => [{ id: randomUUID(), stage: 'laying_out', status: 'uncertain' }],
     };
+    // Task-generation admission (e09438a4, 7765a9e3) now runs first and reads the task in a
+    // transaction this stub database cannot open; it is admitted here, and tested on its own.
+    const admissions: string[] = [];
+    (svc as any).assertTaskCanGenerate = async (_s: unknown, id: string) => { admissions.push(id); };
     await expect(svc.resume(s, taskId, runId)).rejects.toMatchObject({ code: 'MODEL_CALL_UNCERTAIN' });
+    expect(admissions[0]).toBe(taskId);
   });
 
   it('refuses to repay a completed call after a crash before the stage result was saved', async () => {
@@ -215,6 +220,11 @@ describe('HUNT: studio ledger records billed failures at $0', () => {
       getRunById: async () => ({ id: runId, task_id: taskId, actor_id: s.actorId, status: 'laying_out' }),
       getCallsForRun: async () => [{ id: randomUUID(), stage: 'art', status: 'ok', usd_estimate: '0.04' }],
     };
+    // Task-generation admission (e09438a4, 7765a9e3) now runs first and reads the task in a
+    // transaction this stub database cannot open; it is admitted here, and tested on its own.
+    const admissions: string[] = [];
+    (svc as any).assertTaskCanGenerate = async (_s: unknown, id: string) => { admissions.push(id); };
     await expect(svc.resume(s, taskId, runId)).rejects.toMatchObject({ code: 'MODEL_STAGE_REPLAY_UNSAFE' });
+    expect(admissions[0]).toBe(taskId);
   });
 });

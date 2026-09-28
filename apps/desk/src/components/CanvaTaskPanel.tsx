@@ -6,7 +6,7 @@ import {NativeRevisionHandoff} from './NativeRevisionHandoff.js';
 import {NativeReviewSubmit} from './NativeReviewSubmit.js';
 import {captureForReview} from '../services/canvaCapture.js';
 import type {CanvaAmendmentObservation} from '@hawa/contracts';
-import {canvaPanelPollMs} from '../services/canvaPanelPoll.js';
+import {canvaPanelPollMs,onCanvaPanelWake} from '../services/canvaPanelPoll.js';
 // `revision` changes when a live event names the task (the Work screen's detail query read it again).
 export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string;revision?:number}>=({taskId,taskStatus,revision})=>{
   const generationBlocker=taskGenerationBlocker(taskStatus);
@@ -29,6 +29,9 @@ export const CanvaTaskPanel:React.FC<{taskId:string;taskStatus:string;revision?:
   // observation stays an explicit action and never joins this poll (ADR-119).
   const pollMs=canvaPanelPollMs({busy,operations:state?.operations,plans,results});
   useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});},pollMs);return()=>clearInterval(timer);},[taskId,pollMs]);
+  // And at once when the office comes back to the tab: state that changes with no task event would
+  // otherwise wait for the next idle tick.
+  useEffect(()=>onCanvaPanelWake(()=>void refresh().catch(()=>{}),document,window),[taskId]);
   const seenRevision=useRef(revision);
   useEffect(()=>{if(seenRevision.current===revision)return;seenRevision.current=revision;void refresh().catch(()=>{});},[revision]);
   const evidence=canvaPreviewEvidence(state?.artifacts,state?.revisionHandoff ? state.revisionHandoff.confirmedEventId ?? null : undefined);

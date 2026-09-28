@@ -45,6 +45,28 @@ describe.skipIf(!url)('client packs in PostgreSQL', () => {
     expect(row).toEqual({ name: 'Renamed by the office', code: pack.code });
   });
 
+  // Review finding (2026-09-28): the tests above run as the database owner, so Core's start-up
+  // insert was never exercised as hawa_app under RLS, where a failure is only logged and requests
+  // routed to a new pack then fail to save on their client foreign key.
+  it('adds the row as the application role under RLS, as Core does at start-up', async () => {
+    const runtimeUrl = new URL(url || 'postgres://localhost/hawa_repair');
+    runtimeUrl.searchParams.set('options', '-c role=hawa_app');
+    const runtime = createDb(runtimeUrl.toString());
+    try {
+      const role = (await sql<{ r: string }>`SELECT current_user AS r`.execute(runtime)).rows[0].r;
+      expect(role).toBe('hawa_app');
+      const pack = synthetic();
+      expect(await ensureClientPackRows(runtime, tenantId, [pack])).toEqual({ inserted: [pack.code], conflicts: [] });
+      const row = (await sql<{ code: string; status: string }>`SELECT code, status FROM hawa.clients WHERE id = ${pack.id}::uuid`.execute(db)).rows[0];
+      expect(row).toEqual({ code: pack.code, status: 'active' });
+      // The conflict read runs under the same policy: a code held by another id is still seen.
+      const impostor = { ...pack, id: randomUUID() };
+      expect(await ensureClientPackRows(runtime, tenantId, [impostor])).toEqual({ inserted: [], conflicts: [`${pack.code} is row ${pack.id}, the pack says ${impostor.id}`] });
+    } finally {
+      await runtime.destroy();
+    }
+  });
+
   it('reports a code another row already holds, and leaves that row alone', async () => {
     const pack = synthetic();
     await ensureClientPackRows(db, tenantId, [pack]);

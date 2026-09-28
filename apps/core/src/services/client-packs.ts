@@ -49,6 +49,26 @@ export function clientExemplarManifestOf(clientId: string | null | undefined): s
   return pack ? clientExemplarManifestPath(pack) : undefined;
 }
 
+export class ClientExemplarsUnavailableError extends Error {
+  readonly code = 'CLIENT_EXEMPLARS_UNAVAILABLE';
+}
+
+/**
+ * The exemplar manifest a packaged-reference run (ADR-115: KAAE) is conditioned on. Unlike
+ * clientExemplarManifestOf it never answers "none": a pack set that did not load, or a pack that names
+ * no set, would otherwise design a new run on no exemplars without a word (before ADR-127 a missing
+ * manifest threw). Throws ClientExemplarsUnavailableError.
+ */
+export function packagedReferenceExemplarManifest(clientId: string, packs: ClientPack[] = clientPacks()): string {
+  const pack = findClientPack(clientId, packs);
+  if (!pack) {
+    throw new ClientExemplarsUnavailableError(`No client pack was loaded for ${clientId}; its confirmed exemplars cannot be read.`);
+  }
+  const path = clientExemplarManifestPath(pack);
+  if (!path) throw new ClientExemplarsUnavailableError(`The ${pack.code} pack names no confirmed exemplar set.`);
+  return path;
+}
+
 /** What an onboarding client still lacks, in words, for a refusal; undefined for any other client. */
 export function onboardingGapOf(clientId: string | null | undefined): string | undefined {
   const pack = clientPackOf(clientId);

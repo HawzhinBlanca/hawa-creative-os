@@ -47,7 +47,7 @@ describe('the prompts every client shares', () => {
   });
 
   it('keep KAAE itself in its own pack', () => {
-    expect(findClientPack('kaae')!.profile).toMatch(/Kurdistan Accrediting Agency for Education/);
+    expect(findClientPack('kaae')!.profile).toMatch(/Kurdistan Accrediting Association for Education/);
     for (const code of ['zar-podcast', 'halwest-news', 'kawa-ba-hawlery', 'erbil-edition']) {
       expect(findClientPack(code)!.profile).toContain('not set yet');
     }
@@ -62,6 +62,13 @@ describe('the prompts every client shares', () => {
       expect(codeOf(file), file).not.toMatch(KAAE_COLOURS);
     }
     expect(codeOf('pairwise-judge-v3.ts')).toContain('${options.clientProfile');
+  });
+
+  // Review finding (2026-09-28): the cached stable prefix of the cost architecture still carried
+  // KAAE's identity and palette, exported from the shared package, and this guard did not cover it.
+  it('have no KAAE identity or palette in the stable system prompt prefix', () => {
+    expect(codeOf('cost-architecture-v3.ts')).not.toMatch(KAAE_IDENTITY);
+    expect(codeOf('cost-architecture-v3.ts')).not.toMatch(KAAE_COLOURS);
   });
 });
 

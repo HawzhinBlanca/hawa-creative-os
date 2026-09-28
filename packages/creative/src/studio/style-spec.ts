@@ -377,9 +377,11 @@ export function applyStyleSpec(
       (s) => !(s.role === 'panel' && small(s) && (intersects(s, cta) || (ctaBefore && intersects(s, ctaBefore))))
     );
     layout.shapes.push(button);
-    // Contrast is checked on the button; navy on gold passes by a wide margin, but say so if not.
-    const on = calculateLuminanceContrastRatio(hexToLuminance(cta.color), hexToLuminance(gold));
-    if (on < 4.5) cta.color = hexToLuminance(gold) > 0.4 ? darkest : '#FFFFFF';
+    // Contrast is checked on the button, and checked again after the fallback: the client's darkest
+    // colour can be mid-tone (no longer KAAE's navy, ADR-127), and then only black or white is left.
+    const on = (colour: string) => calculateLuminanceContrastRatio(hexToLuminance(colour), hexToLuminance(gold));
+    if (on(cta.color) < 4.5) cta.color = hexToLuminance(gold) > 0.4 ? darkest : '#FFFFFF';
+    if (on(cta.color) < 4.5) cta.color = on('#000000') >= on('#FFFFFF') ? '#000000' : '#FFFFFF';
   }
 
   // Logo in the corner the client or the reference puts it.

@@ -47,7 +47,7 @@ import { PhotoCutouts, CUTOUT_WORDS, arrangeCutouts, alignFramedHeads, type Phot
 import { log } from '../../logging.js';
 import { blobStoreFor, putToStore, readPreferringStore } from '../blob-store-context.js';
 import { assertCurrentClientDesignReference, resolveClientDesignReference } from '../client-design-reference.js';
-import { clientExemplarManifestOf, clientPackOf } from '../client-packs.js';
+import { ClientExemplarsUnavailableError, clientPackOf, packagedReferenceExemplarManifest } from '../client-packs.js';
 
 /** The owner's ornament settings; an invalid one is reported and the defaults stand. */
 const ornamentSettings = (): OrnamentSettings => {
@@ -1134,9 +1134,16 @@ export class DesignStudioService {
       arabicFont = rules.arabicFont;
       promotedRules = rules.promotedRules;
       // The client's own confirmed set, as its pack names it (ADR-127): the same KAAE manifest file,
-      // so its policy hash is unchanged. A pack that names none conditions on none.
-      const exemplarManifestPath = clientExemplarManifestOf(run.client_id);
-      exemplarManifest = exemplarManifestPath ? JSON.parse(readFileSync(exemplarManifestPath, 'utf8')) : { exemplars: [] };
+      // so its policy hash is unchanged. No pack, or a pack naming no set, is refused rather than
+      // designed on no exemplars (as a missing manifest was refused before the packs).
+      let exemplarManifestPath: string;
+      try {
+        exemplarManifestPath = packagedReferenceExemplarManifest(run.client_id);
+      } catch (err) {
+        if (err instanceof ClientExemplarsUnavailableError) throw new CanvaFlowError(503, err.code, err.message);
+        throw err;
+      }
+      exemplarManifest = JSON.parse(readFileSync(exemplarManifestPath, 'utf8'));
       exemplarPolicySha256 = hash(canonicalCallJson(exemplarManifest));
     } else {
       latinFont = reference.rules.typography.formalBody.latin;

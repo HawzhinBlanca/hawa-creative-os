@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   loadClientPacks,
   parseClientPacks,
@@ -56,6 +57,15 @@ describe('the client packs that ship', () => {
     }
     expect(() => parseClientPacks([doc({ ...kaae, reference: { pack: 'kaae-reference.json', logo: 'logos/kaae-official-logo.png' } })]))
       .toThrow(/Unrecognized key/);
+  });
+
+  it('name KAAE in the profile the models see exactly as its English name and Client DNA do', () => {
+    // Review finding (2026-09-28): studio-v2's profile said "Agency"; the name is "Association".
+    const dna = JSON.parse(readFileSync(new URL('../../../config/clients/kaae.dna.json', import.meta.url), 'utf8')) as { identity: { officialName: string } };
+    const officialName = dna.identity.officialName;
+    expect(kaae.names.en).toBe(officialName);
+    expect(kaae.profile).toContain(kaae.names.en);
+    expect(kaae.profile).not.toMatch(/Agency/);
   });
 
   it('are found by id, code or the legacy client-<code> form', () => {
