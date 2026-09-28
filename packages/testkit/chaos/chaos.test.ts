@@ -1076,8 +1076,10 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
         scripts.filter((t) => /Kurdish copy only/.test(t.copy ?? '') && kurdish.test((t.copy ?? '').split(/_{3,}/)[1] ?? '')).length === 1,
         detail: JSON.stringify(scripts.map((t) => ({ id: t.id.slice(0, 8), en: /English copy only/.test(t.copy ?? ''), ckb: /Kurdish copy only/.test(t.copy ?? '') }))) },
       { name: 'each request delivered once by its Delivery workflow', ok: pubs.length === 2 && pubs.every((p) => p.state === 'complete' && p.executor === 'restate'), detail: JSON.stringify(pubs) },
-      { name: 'the requester has every approved file of both designs, each once', ok: docs.length === Number(pinned[0]?.n) && docs.length >= 2 &&
-        new Set(docs.map((d) => d.documentSha256)).size === docs.length, detail: `documents=${docs.length} pinned=${pinned[0]?.n}` },
+      // The fake Canva renders both designs as the same solid PNG, so files are counted, not told apart
+      // by hash: a file sent twice would make more documents than were pinned.
+      { name: 'the requester has every approved file of both designs, each once', ok: docs.length === Number(pinned[0]?.n) && docs.length >= 2,
+        detail: `documents=${docs.length} pinned=${pinned[0]?.n}` },
       { name: 'no paid call runs twice', ok: twice.length === 0, detail: twice.length ? JSON.stringify(twice) : `${ledger.length} paid calls` },
       ...(await onePlannerCallEach(tasks.map((t) => t.id))),
     ] };
