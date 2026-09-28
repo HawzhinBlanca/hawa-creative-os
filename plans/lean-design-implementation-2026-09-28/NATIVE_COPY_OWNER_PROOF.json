@@ -1,0 +1,161 @@
+{
+  "date": "2026-09-28",
+  "base_commit": "9498f4c0c161628e09e095e069c139c234df982c",
+  "branch": "codex/research-grade-design-system",
+  "status": "INTERNAL_OWNER_PREPARATION_LOCALLY_QUALIFIED_NATIVE_ROUTING_NOT_ADMITTED",
+  "adr": "121",
+  "migration": "064_native_copy_claims.sql",
+  "requirements": [
+    "FR-029",
+    "FR-032",
+    "FR-042",
+    "FR-060",
+    "NFR-001",
+    "NFR-020",
+    "NFR-024"
+  ],
+  "source_files": [
+    {
+      "path": "adrs/121_durable_native_copy_candidates.md",
+      "sha256": "910177dbb85a00bee75b29df6326f82388e43cfb5de02651efd180303a9ef044"
+    },
+    {
+      "path": "apps/core/src/services/canva-native-copy.ts",
+      "sha256": "1bd6acc8945c0d2419372f64b6298c3f036d1bdcba4a96dcd6253c4e21ce5192"
+    },
+    {
+      "path": "apps/core/src/services/canva-connect-service.ts",
+      "sha256": "f5a9d80b341388da9e89a9fa872955efc296bc9930afbb32b7316f4f389820cd"
+    },
+    {
+      "path": "apps/core/test/canva-native-copy.test.ts",
+      "sha256": "fbe561f29c25f12e0f59a3aed0d8aec70354955d57895f96d6cbb77067134213"
+    },
+    {
+      "path": "packages/integrations/src/canva-connect-client.ts",
+      "sha256": "eb59c564d1587b44689d0d1f2cdf08f7fa878ad268602b04c9699d6fe0a36566"
+    },
+    {
+      "path": "packages/integrations/test/canva-autofill-copy.test.ts",
+      "sha256": "50cca12fe3b00236d422d331807b4bfa28c0f75b7bf1eeae4672c6dee4254d5f"
+    },
+    {
+      "path": "packages/db/migrations/064_native_copy_claims.sql",
+      "sha256": "e577def97591c49cd10d1f0408a1ff6edc56c1e6a2fb6d201cc21447fefeca31"
+    },
+    {
+      "path": "docs/10_WORKFLOW_RELIABILITY.md",
+      "sha256": "70b6928736a7fa5f6aec89a1d6751b2a354a29b92e90f9f52f3de1e7d7e4392e"
+    },
+    {
+      "path": "docs/30_CURRENT_STUDIO_CONTRACT.md",
+      "sha256": "7ecc4ae7a68c939ffd3bf1bacd9f502e928b8216e90259a769e72025da27ddf6"
+    },
+    {
+      "path": "plans/lean-design-implementation-2026-09-28/EXECUTION.md",
+      "sha256": "bf67c629570534be0d25bdad7e90ce48b3573de00fe5933ead69501e7fd47576"
+    },
+    {
+      "path": "plans/traceability.csv",
+      "sha256": "ef086ccecbba1978e55149ed1d805d14424533595cecc874000d5bdfaaa6cb2f"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-owner-types-initial.log",
+      "sha256": "00479fc95eb1ceee0728f13f3394a9422698c4e2c96ea784875806d6717a0108"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-owner-initial.json",
+      "sha256": "aafa898847611084e6cc85d1bc44c97a4f10e97c37225e0f946b2b9843a2a60f"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-owner-focused.json",
+      "sha256": "a2db412aec164ff6ae1e6008017b000b99bf018f5299bfffbe9943e2950ae46d"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-contradiction-red.json",
+      "sha256": "0277c7fd18e671aa46f3567c67214b67713067ef6a2601de0c8f781ed0c1bda9"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-owner-final.json",
+      "sha256": "11722bd4b792547dc94792569fb74b8d3612975729d30ed740ecc50e368a499a"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-owner-source-types-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-owner-script-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-owner-test-types.log",
+      "sha256": "7bce888182c5acc84d192e07bf3582486fe7ceef5e03fefc1f5e7ba0c4a8f392"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-owner-any.log",
+      "sha256": "6fb44bfeee165198da579f53dd494bdadf3fc876cb0d00996c1f2bc5ee52dc07"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-owner-egress.log",
+      "sha256": "b6e716bda86ecb080e1fd6c96efaf64b06b2bbb78001c634eaf7a1137a63edf8"
+    },
+    {
+      "path": "output/acceptance/2026-09-28-native-copy-owner-security.log",
+      "sha256": "501ed1377327a1bcb14fb571503820393e2420f241cfb6ee3367bf13e74ce56d"
+    }
+  ],
+  "acceptance": {
+    "files": 7,
+    "passed": 95,
+    "failed": 0,
+    "skipped": 0,
+    "environment": "Isolated PostgreSQL; hawa_app runtime connections; synthetic Canva transport",
+    "owner_cases": 17,
+    "prior_attempts": [
+      "Initial source compilation failed on control-flow narrowing; typed throwing helper corrected",
+      "Initial owner run11 passed/2 test expectation failures; bigint and wrapper fixtures corrected",
+      "Focused connected run70 passed",
+      "Two red contradictory-result cases; existing response parser incorrectly accepted failed/in-progress jobs with created-design evidence; corrected"
+    ]
+  },
+  "checks": {
+    "source_types": "passed",
+    "script_types": "passed",
+    "strict_test_roots": 533,
+    "any_count": 954,
+    "any_ceiling": 1053,
+    "provider_egress": "passed with9 existing exceptions",
+    "security": "0 secrets"
+  },
+  "proof_scope": [
+    "durable claim before send",
+    "concurrent and identical replay",
+    "fresh-key uncertainty refusal",
+    "restricted fresh-service reconciliation",
+    "database receipt failure after remote acceptance",
+    "stale request/parent/native metadata refusal",
+    "tenant and actor isolation",
+    "immutable claim and acquired IDs",
+    "late failed read cannot demote completion",
+    "original pending job sweeper",
+    "no implicit binding, owner stage/version, approval or delivery transition"
+  ],
+  "not_executed": [
+    "live native creation/preservation/export/reopen",
+    "HTTP/Desk creation route",
+    "production routing",
+    "OS process-kill drill",
+    "full release gate",
+    "human design/language qualification",
+    "deployment",
+    "independent recovery"
+  ],
+  "next": [
+    "independent brief-bound judge challenger",
+    "native fixture commit only after required preview approval",
+    "actual native preservation and gated production routing",
+    "remaining six-package human/release/recovery gates"
+  ]
+}

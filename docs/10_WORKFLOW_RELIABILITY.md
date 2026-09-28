@@ -6,6 +6,14 @@ Every acknowledged request must be recoverable. Every expensive or external step
 
 ## 2. Restate model
 
+Native text-copy candidates (ADR-121) reuse the Canva operation ledger. The
+current manual revision owner delegates preparation under its request lock;
+the source comes from the recorded parent and immutable client scope. A claim
+precedes dispatch, acquired remote IDs cannot change, and uncertain or contradictory
+responses remain unresolved. Reconciliation may retain a previously admitted
+result after the request advances, but cannot create new work or advance review.
+Native preservation and production routing remain separately gated.
+
 Each task is a durable virtual object/workflow keyed by immutable `task_id`.
 
 Suggested services:

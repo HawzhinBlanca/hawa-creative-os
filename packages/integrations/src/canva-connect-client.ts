@@ -513,25 +513,7 @@ export class CanvaConnectClient {
    * 5xx cannot authorize a new POST. A successful job still needs native postcondition checks.
    */
   public async createTextAutofillCopy(input: CanvaTextAutofillCopyParams): Promise<CanvaTextAutofillCopyResponse> {
-    if (!input || typeof input.designId !== 'string' || !CANVA_IDENTIFIER.test(input.designId) ||
-        typeof input.title !== 'string' || input.title.length < 1 || input.title.length > 255 ||
-        !providerRecord(input.text) || !providerRecord(input.dataset)) {
-      throw new Error('Invalid Canva autofill input');
-    }
-    const entries = Object.entries(input.text);
-    if (entries.length < 1 || entries.length > 32) throw new Error('Invalid Canva autofill field count');
-    const data = Object.fromEntries(entries.map(([name, text]) => {
-      if (!name || name.length > 1024 || typeof text !== 'string' || text.length > 16384) {
-        throw new Error('Invalid Canva autofill text field');
-      }
-      if (!Object.hasOwn(input.dataset, name) || input.dataset[name]?.type !== 'text') {
-        throw new Error('Canva autofill field is not an observed text field');
-      }
-      return [name, { type: 'text', text }];
-    }));
-    const sourceId = input.designId;
-    const body = JSON.stringify({ type: 'create_from_design', design_id: sourceId, title: input.title, data });
-    if (Buffer.byteLength(body, 'utf8') > 128 * 1024) throw new Error('Invalid Canva autofill payload size');
+    const { body, sourceId } = prepareCanvaTextAutofillCopy(input);
     this.assertConfigured();
     const response = await this.createWithRetry(`${this.baseUrl}/autofills`, async () => ({
       method: 'POST', headers: { Authorization: await this.getAuthHeader(), 'Content-Type': 'application/json' }, body,
@@ -633,12 +615,37 @@ export class CanvaConnectClient {
   }
 }
 
+/** Pure preparation also lets durable callers reject invalid requests before claiming a send. */
+export function prepareCanvaTextAutofillCopy(input: CanvaTextAutofillCopyParams): { body: string; sourceId: string } {
+  if (!input || typeof input.designId !== 'string' || !CANVA_IDENTIFIER.test(input.designId) ||
+      typeof input.title !== 'string' || input.title.length < 1 || input.title.length > 255 ||
+      !providerRecord(input.text) || !providerRecord(input.dataset)) {
+    throw new Error('Invalid Canva autofill input');
+  }
+  const entries = Object.entries(input.text);
+  if (entries.length < 1 || entries.length > 32) throw new Error('Invalid Canva autofill field count');
+  const data = Object.fromEntries(entries.map(([name, text]) => {
+    if (!name || name.length > 1024 || typeof text !== 'string' || text.length > 16384) {
+      throw new Error('Invalid Canva autofill text field');
+    }
+    if (!Object.hasOwn(input.dataset, name) || input.dataset[name]?.type !== 'text') {
+      throw new Error('Canva autofill field is not an observed text field');
+    }
+    return [name, { type: 'text', text }];
+  }));
+  const sourceId = input.designId;
+  const body = JSON.stringify({ type: 'create_from_design', design_id: sourceId, title: input.title, data });
+  if (Buffer.byteLength(body, 'utf8') > 128 * 1024) throw new Error('Invalid Canva autofill payload size');
+  return { body, sourceId };
+}
+
 /** Whitelist native job evidence; provider prose and unrecognized properties are not retained. */
 function validateTextAutofillCopy(value: unknown, sourceId: string, expectedJobId?: string): CanvaTextAutofillCopyResponse {
   const job = providerRecord(value) ? value.job : undefined;
   if (!providerRecord(job) || typeof job.id !== 'string' || !CANVA_IDENTIFIER.test(job.id) ||
       (expectedJobId !== undefined && job.id !== expectedJobId)) throw new Error('Invalid Canva autofill job');
   const id = job.id;
+  if (job.status !== 'success' && Object.hasOwn(job, 'result')) throw new Error('Invalid Canva autofill contradictory result');
   if (job.status === 'in_progress') return { job: { id, status: 'in_progress' } };
   if (job.status === 'failed') {
     if (job.error === undefined) return { job: { id, status: 'failed' } };

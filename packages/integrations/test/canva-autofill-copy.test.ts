@@ -105,4 +105,10 @@ describe('native text autofill copies',()=>{
     expect(await client.getTextAutofillCopyJob('job_one',source)).toEqual({job:{id:'job_one',status:'success',result:{type:'create_design',design:design()}}});
     await expect(client.createTextAutofillCopy(request())).rejects.toThrow('Canva autofill copy failed (HTTP 403)');
   });
+  it.each(['failed','in_progress'] as const)('refuses contradictory %s status with a creation result',async status=>{
+    const fetcher=vi.fn<typeof fetch>().mockResolvedValue(Response.json({job:{id:'job_one',status,
+      result:{type:'create_design',design:design()},error:{code:'autofill_error'}}}));
+    await expect(new CanvaConnectClient({accessToken:'synthetic-token',customFetch:fetcher}).getTextAutofillCopyJob('job_one',source))
+      .rejects.toThrow('Invalid Canva autofill');
+  });
 });

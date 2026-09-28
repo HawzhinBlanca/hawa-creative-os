@@ -110,3 +110,17 @@ preservation. This qualification interface grants no Desk write or production
 revision authority. Current manual handoff and approval requirements remain in
 force until owner integration and native postconditions are qualified. See
 [ADR-120](../adrs/120_native_text_copy_qualification.md).
+
+## Durable copy candidates (ADR-121)
+
+Internal candidate preparation uses the current lifecycle-owned manual revision,
+its office actor and same-client parent binding. Task/handoff/native metadata and
+exact named text are pinned before the existing operation ledger commits its claim.
+Unknown results cannot authorize another copy; an acquired job is reconciled and
+its IDs are immutable. The existing sweeper recognizes pending native text copies.
+
+A retrieved candidate is explicitly unverified. Preparation never changes a
+binding, task version, request stage, review, approval or delivery. There is no
+HTTP/Desk creation route until native preservation admission. The current human
+handoff remains the review authority. Read/metadata stability does not establish
+atomicity against direct Canva edits. See [ADR-121](../adrs/121_durable_native_copy_candidates.md).

@@ -3,6 +3,7 @@ import { assertNativeRevisionAdmission, nativeRevisionHandoff, latestRevisionCop
 import { canRetryCanvaCreation } from '@hawa/domain';
 import { CanvaFlowError } from './canva-flow-error.js';
 import { inspectCanvaAmendment } from './canva-amendment-observation.js';
+import { CanvaNativeCopyService, type NativeTextCopyRequest } from './canva-native-copy.js';
 import { lockNativeRecovery, type NativeActorScope } from './lifecycle-native-scope.js';
 import { resolveManualExportPolicy, type ExportCheckPolicy } from './canva-export-policy.js';
 import { checkCanvaPptx } from '@hawa/qa';
@@ -267,6 +268,13 @@ export class CanvaConnectService {
   async amendmentObservation(s:Scope,taskId:string) {
     return inspectCanvaAmendment(this.db,s,taskId,()=>this.authorizedClient(s));
   }
+  /** Internal preparation surface. No HTTP creation route is admitted until native qualification. */
+  async createNativeTextCopyCandidate(s:Scope,taskId:string,key:string,input:NativeTextCopyRequest) {
+    return new CanvaNativeCopyService(this.db,scope=>this.authorizedClient(scope)).create(s,taskId,key,input);
+  }
+  async reconcileNativeTextCopy(s:Scope,taskId:string,id:string) {
+    return new CanvaNativeCopyService(this.db,scope=>this.authorizedClient(scope)).reconcile(s,taskId,id);
+  }
   async createDesign(s: Scope,taskId: string,key: string,width: number,height: number) {
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(key) || ![width,height].every(n => Number.isInteger(n) && n >= 40 && n <= 8000) || width*height > 25000000) fail(422,'CANVA_DESIGN_REQUEST_INVALID','Specify a stable request key and dimensions between 40 and 8000 pixels');
     const task = await this.tx(s,async db => (await sql<any>`SELECT client_id,title FROM hawa.tasks WHERE tenant_id=${s.tenantId}::uuid AND id=${taskId}::uuid`.execute(db)).rows[0]);
@@ -474,13 +482,13 @@ export class CanvaConnectService {
     const giveUpMinutes = options.giveUpMinutes ?? 24 * 60;
     const limit = options.limit ?? 20;
     const stranded = await this.tx(s, async db =>
-      (await sql<any>`SELECT id, task_id, remote_job_id, actor_id, kind, status, metadata->>'format' AS format,
+      (await sql<any>`SELECT id, task_id, remote_job_id, actor_id, kind, status, metadata->>'format' AS format,metadata->>'method' AS method,
           created_at < now() - (interval '1 minute' * ${giveUpMinutes}) AS expired
         FROM hawa.canva_remote_operations
         WHERE tenant_id = ${s.tenantId}::uuid
           AND metadata->>'reconciliationRequired' IS DISTINCT FROM 'true'
           AND ((status = 'submitted' AND created_at < now() - (interval '1 minute' * ${maxAgeMinutes})
-                AND ((kind = 'create' AND metadata->>'method' = 'pptx_import') OR kind = 'export'))
+                AND ((kind = 'create' AND metadata->>'method' IN ('pptx_import','native_text_copy')) OR kind = 'export'))
             OR (status IN ('creating', 'uncertain') AND (kind = 'export' OR design_id IS NULL) AND updated_at < now() - (interval '1 minute' * ${maxAgeMinutes})))
         ORDER BY created_at ASC
         LIMIT ${limit}`.execute(db)).rows
@@ -505,7 +513,9 @@ export class CanvaConnectService {
       try {
         const res: { status: string; designId?: string } = op.kind === 'export'
           ? await this.exportStatus(owner, op.task_id, op.id)
-          : await this.resumeImport(owner, op.task_id, op.id);
+          : op.method === 'native_text_copy'
+            ? await this.reconcileNativeTextCopy(owner,op.task_id,op.id).then(result=>({...result,designId:result.designId??undefined}))
+            : await this.resumeImport(owner, op.task_id, op.id);
         if (res.status === 'submitted' && op.expired) {
           if(op.kind==='create'){
             const held=await this.holdCanvaOperation(s,op,'import_polling_deadline');

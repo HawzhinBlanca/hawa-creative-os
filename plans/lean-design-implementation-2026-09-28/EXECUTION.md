@@ -15,7 +15,7 @@ No package is complete merely because a smaller test passes.
 | 1 | Preserve uncertain Canva effects, current native revision basis and unrelated manual edits | In progress: uncertainty, reviewed-copy handoff and automatic linked-revision owner recovery locally qualified; actual native preservation and initial manual intake open | ADR-108/113/114; CANVA_UNCERTAINTY_PROOF.json; NATIVE_REVISION_HANDOFF_PROOF.json; LIFECYCLE_NATIVE_RECOVERY_PROOF.json |
 | 2 | Complete brief handoff, full copy geometry, scoped visual references/photo meaning, faithful refinement assets | In progress: input/asset handoffs and Unicode lexical exemplar baseline locally qualified; authorized visual order, multilingual semantic retrieval and human comparison open | ADR-109/115; CREATIVE_HANDOFF_PROOF.json; UNICODE_RETRIEVAL_PROOF.json |
 | 3 | Free feasibility before art, eligible-only judging, retained typed responses, pinned derivations, safe bounded concurrency | In progress: pre-art/selection eligibility, retained serial results, visual input pins and font basis locally qualified; mandatory text evidence and shared fallback measurement locally qualified; native text qualification, branch checkpoints, renderer/cutout runtime pins, reserved-region mapping and concurrency open | ADR-110/111/112/116/117/118; COMPUTE_ELIGIBILITY_PROOF.json; RETAINED_RESULTS_PROOF.json; VISUAL_INPUTS_PROOF.json; FALLBACK_MEASUREMENT_PROOF.json |
-| 4 | Amend/Adapt routing and actual Canva account capability qualification | In progress: scoped observation and typed text-copy transport locally qualified; actual preservation, owner integration and routing open | ADR-119/120; NATIVE_OBSERVATION_PROOF.json; NATIVE_TEXT_COPY_TRANSPORT_PROOF.json; official documentation is not account admission |
+| 4 | Amend/Adapt routing and actual Canva account capability qualification | In progress: scoped observation, typed text-copy transport and internal owner-scoped durable candidate preparation locally qualified; actual preservation and production routing open | ADR-119/120/121; NATIVE_OBSERVATION_PROOF.json; NATIVE_TEXT_COPY_TRANSPORT_PROOF.json; NATIVE_COPY_OWNER_PROOF.json; official documentation is not account admission |
 | 5 | Relationship-led composition, calibrated selection, governed edit learning and equal-budget human comparisons | Open | Existing R04–R06/R13/R22–R25 study machinery must be reused |
 | 6 | Complete supervised native review/delivery, release qualification and independent recovery | Open | Prior qualification remains scoped to its own candidate |
 
@@ -408,3 +408,31 @@ operation ledger and routing, human review and full release/independent recovery
 remain open. No native mutation, paid call or deployment occurred in this checkpoint.
 The full six-package objective remains active. Independent next work can proceed
 on the owner operation contract and judge experiment while that approval is pending.
+
+## 2026-09-28 — Durable native-copy candidate ownership
+
+ADR-121/migration 064 uses the existing Canva ledger for an internal preparation
+operation authorized by the current lifecycle-owned manual revision. The source
+is its recorded same-client parent, with task/handoff/native metadata checks and
+exact named text. A durable claim precedes POST. Concurrent and identical replays
+retain one operation; fresh keys cannot bypass uncertainty. Acquired IDs and
+claim inputs are immutable. The original actor can reconcile through a fresh
+service, including after the request advances. The sweeper recognizes native
+copy jobs. Completion retains an unverified candidate and changes no binding,
+task/request version, review, approval or delivery.
+
+The recovery work exposed and fixed contradictory provider evidence: a failed
+or in-progress response containing a creation result is no longer accepted.
+Two red cases reproduce this; HTTP408/unclassified responses also stay uncertain.
+Initial owner-suite failures were test expectations for a bigint and wrapper.
+Final seven connected files:95 passed/0 failed/0 skipped. Restricted hawa_app
+connections, concurrent calls, fresh service and an injected receipt-write failure
+exercise actual PostgreSQL transactions; this is not a process-kill or live Canva
+trial. Source/scripts and533 strict test roots, any/egress/security checks pass.
+See NATIVE_COPY_OWNER_PROOF.json for exact source/log hashes and limitations.
+
+No HTTP/Desk creation route is admitted. Native preservation, the pending fixture
+preview approval, production routing, independent quality evaluation and all
+remaining six-package release/recovery requirements remain open. Next independent
+work is the brief-bound independent judge challenger; native qualification resumes
+only after the editing interface's explicit approval requirement is satisfied.
