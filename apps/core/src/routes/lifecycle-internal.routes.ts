@@ -47,7 +47,7 @@ import { FINISH_ONLY_HEADER, LEGACY_REQUEST_REFUSED } from '../services/legacy-t
 import { legacyOwnedUpdate, newestRecentRequestIsOpenLegacy } from '../services/legacy-telegram-routing.js';
 import { LifecycleProjectionConflict, confirmLifecycleQuestionSent, projectLifecycleDesignOutcome, projectLifecycleOfficeDecision, projectLifecycleOpen, projectLifecycleRequesterRevision, projectLifecycleRequesterRevisionWithIntake } from '../services/lifecycle-projection.js';
 import { projectLifecycleDeliveryFinish, projectLifecycleDeliveryStart } from '../services/lifecycle-delivery-projection.js';
-import type { ChatIntake } from '../services/chat-intake.js';
+import { splitBilingualRequest, type ChatIntake } from '../services/chat-intake.js';
 import type { RouteContext } from './types.js';
 import { parseNativeReviewSubmission } from '@hawa/domain';
 import { projectLifecycleNativeReview } from '../services/lifecycle-native-review.js';
@@ -83,6 +83,15 @@ function lateChangeAnswer(chatId: string, late: LateRequesterChange): Record<str
 
 function requestIdForUpdate(chatId: string, updateId: number): string {
   const bytes = Buffer.from(createHash('sha256').update(`telegram-new-brief:${chatId}:${updateId}`).digest().subarray(0, 16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/** The request a bilingual brief opens for its second language (ADR-139), as stable as the first's. */
+function languageRequestIdFor(chatId: string, updateId: number, lang: 'ckb'): string {
+  const bytes = Buffer.from(createHash('sha256').update(`telegram-new-brief:${chatId}:${updateId}:${lang}`).digest().subarray(0, 16));
   bytes[6] = (bytes[6] & 0x0f) | 0x50;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = bytes.toString('hex');
@@ -184,6 +193,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
     // ChatInbox sends `legacy` for a chat's first update and `lifecycle` after that. Since ADR-135
     // every chat is lifecycle-owned and both are handled alike; unknown modes are refused explicitly.
     const mode = body?.mode ?? 'legacy';
+    // The worker opens every request an answer names (ADR-139); an older worker opened only the first.
+    const acceptsLanguageSiblings = body?.languageSiblings === true;
     if (mode !== 'legacy' && mode !== 'lifecycle') {
       return problem(c, 400, 'Unknown intake mode', `This Core runs intake in mode "legacy" or "lifecycle", not "${String(mode)}"`);
     }
@@ -322,8 +333,15 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
           if (prior.open.payloadHash !== hash || prior.open.chatId !== sourceChat) {
             return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
           }
+          // A decision that opened one request per language cannot be replayed to a worker that
+          // would open only the first: the update is retried and, if that worker stays, parked for
+          // an operator rather than losing a language (ADR-139).
+          if (prior.open.siblings?.length && !acceptsLanguageSiblings) {
+            return handled(503, { code: 'LANGUAGE_SIBLINGS_UNSUPPORTED' });
+          }
           return handled(200, { duplicate: true, lifecycleAction: 'open-request',
-            requestId: prior.open.requestId, chatId: sourceChat, draft: prior.open.draft });
+            requestId: prior.open.requestId, chatId: sourceChat, draft: prior.open.draft,
+            ...(prior.open.siblings?.length ? { siblings: prior.open.siblings } : {}) });
         }
       } catch (err) {
         if ((err as { status?: number })?.status === 503) return handled(503, { code: 'DATABASE_UNAVAILABLE' });
@@ -540,13 +558,23 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                 // the old intake above (ADR-135); every other brief opens a lifecycle request.
                 {
                   const requestId = requestIdForUpdate(chatId, update.update_id);
-                  const prepared = await createChatCampaignIntake(ctx).prepareChatCampaignDraft({
-                    platform: 'telegram', sourceEventId: `lc-${requestId}-r0`, sourceChannelId: chatId,
+                  // English and Kurdish copy for one graphic per language opens one request per
+                  // language, as legacy intake made one task per language (ADR-139). Only for a worker
+                  // that opens every request of the answer: an older one would open the first alone.
+                  const bilingual = acceptsLanguageSiblings && !classification.isInstructionOnly
+                    ? splitBilingualRequest(newBriefText) : null;
+                  const parts: Array<{ requestId: string; text: string; lang?: 'en' | 'ckb' }> = bilingual
+                    ? [{ requestId, text: bilingual.en, lang: 'en' },
+                      { requestId: languageRequestIdFor(chatId, update.update_id, 'ckb'), text: bilingual.ckb, lang: 'ckb' }]
+                    : [{ requestId, text: newBriefText }];
+                  const prepare = (part: (typeof parts)[number]) => createChatCampaignIntake(ctx).prepareChatCampaignDraft({
+                    platform: 'telegram', sourceEventId: `lc-${part.requestId}-r0`, sourceChannelId: chatId,
                     senderName: typeof sender?.first_name === 'string' ? sender.first_name : 'Requester',
-                    rawText: newBriefText, rawJson: update,
+                    rawText: part.text, rawJson: part.lang ? { ...update, hawaLanguageGraphic: part.lang } : update,
                     autoGenerate: !classification.isInstructionOnly,
                     isInstructionOnly: classification.isInstructionOnly,
                   });
+                  const prepared = await prepare(parts[0]);
                   let lifecycleImage: ChatIntake['lifecycleImage'];
                   if (photoInput) {
                     if (!ctx.telegramBridge) return handled(503, { code: 'NOT_CONFIGURED' });
@@ -557,19 +585,27 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     if (photo.kind === 'unsupported') return holdMedia();
                     lifecycleImage = { ...photo.ref, updateId: update.update_id };
                   }
-                  const draft = openDraft({ ...prepared, ...(lifecycleImage ? { lifecycleImage } : {}),
-                    ...(admittedAlbum ? { lifecycleAlbum: admittedAlbum.ref } : {}) }, requestId);
+                  const media = { ...(lifecycleImage ? { lifecycleImage } : {}),
+                    ...(admittedAlbum ? { lifecycleAlbum: admittedAlbum.ref } : {}) };
+                  const draft = openDraft({ ...prepared, ...media }, requestId);
                   if (!draft) return handled(422, { code: 'INVALID_BRIEF' });
+                  const siblings: Array<{ requestId: string; draft: ChatIntake }> = [];
+                  for (const part of parts.slice(1)) {
+                    const sibling = openDraft({ ...(await prepare(part)), ...media }, part.requestId);
+                    if (!sibling) return handled(422, { code: 'INVALID_BRIEF' });
+                    siblings.push({ requestId: part.requestId, draft: sibling });
+                  }
                   const stored = await withRlsContext(db,
                     { tenantId: TENANT, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' },
                     (trx) => recordNewBriefDecision(trx, TENANT, update.update_id,
                       { requestId, chatId, payloadHash, draft,
-                        ...((lifecycleImage || admittedAlbum) ? { sourceUpdate: update } : {}) }));
+                        ...((lifecycleImage || admittedAlbum) ? { sourceUpdate: update } : {}),
+                        ...(siblings.length ? { siblings } : {}) }));
                   if (stored.payloadHash !== payloadHash || stored.chatId !== chatId ||
                       stored.requestId !== requestId) return handled(409, { code: 'IDEMPOTENCY_CONFLICT' });
                   await chaosPoint('core.intake.after-decision', { updateId: update.update_id, chat: chatId, status: 200 });
                   return handled(200, { duplicate: false, lifecycleAction: 'open-request',
-                    requestId, chatId, draft: stored.draft });
+                    requestId, chatId, draft: stored.draft, ...(stored.siblings?.length ? { siblings: stored.siblings } : {}) });
                 }
               }
             }

@@ -9,7 +9,7 @@ import { parseCompleteRevisionRequest, parseRejectionCategory, type OfficeApprov
 import { IdempotencyConflictError, OUTBOX_SEND_MARK_SOURCE, RevisionRepository, type Database, type Kysely, sql, withRlsContext } from '@hawa/db';
 import { escapeTelegramHtml } from '@hawa/integrations';
 import { persistChatIntake, type ChatIntake } from './chat-intake.js';
-import { linkedLifecycleReplies, readNewBriefDecision, readRevisionPhotoDecision } from './lifecycle-chat-target.js';
+import { decisionDraftFor, linkedLifecycleReplies, readNewBriefDecision, readRevisionPhotoDecision } from './lifecycle-chat-target.js';
 import { lifecyclePhotoInput } from './lifecycle-photo.js';
 import { verifyAlbumSnapshot } from './lifecycle-album.js';
 import { bridgeCanvaDraftRevision, closeAnsweredQuestion, outcomeHasDraft, transitionTaskForOutcome } from './canva-task-outcome.js';
@@ -260,8 +260,9 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
     }
     if (draft.lifecycleAlbum) {
       const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleAlbum.updateId);
-      if (draft.lifecycleImage || !decision || decision.requestId !== requestId ||
-          decision.chatId !== draft.sourceChannelId || canonical(decision.draft) !== canonical(draft))
+      const decided = decision && decisionDraftFor(decision, requestId);
+      if (draft.lifecycleImage || !decision || !decided ||
+          decision.chatId !== draft.sourceChannelId || canonical(decided) !== canonical(draft))
         throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The album is not bound to this new brief');
       await checkAlbum(trx, tenantId, draft.sourceChannelId, draft.lifecycleAlbum);
       admittedSource = decision.sourceUpdate;
@@ -269,8 +270,9 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
 
     if (draft.lifecycleImage) {
       const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleImage.updateId);
-      if (!decision || decision.requestId !== requestId ||
-          decision.chatId !== draft.sourceChannelId || canonical(decision.draft) !== canonical(draft)) {
+      const decided = decision && decisionDraftFor(decision, requestId);
+      if (!decision || !decided ||
+          decision.chatId !== draft.sourceChannelId || canonical(decided) !== canonical(draft)) {
         throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'The image is not bound to this Telegram decision');
       }
       const blob = (await sql<{ size: string; media_type: string }>`SELECT size, media_type

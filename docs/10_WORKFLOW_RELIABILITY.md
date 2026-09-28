@@ -267,6 +267,8 @@ Acceptance on the chaos stack: `R10.H1` (five requests made on the previous rele
 
 Every Telegram chat is owned by RequestLifecycle; `HAWA_LIFECYCLE_CHATS` no longer exists and no setting can send a new request down the old path. The old intake is reached only for a request it started (the updates listed in the section above) and for answers to questions and greetings, and only in its finish-only scope: it refuses to create a task that does not continue an open legacy request of the same chat, and ChatInbox asks the requester for `/new`. Existing tasks keep their stored pin (above). Core no longer polls Telegram; the worker is the only poller, and a broken worker poller is rolled back with the worker (previous colour or previous release). `GET /v1/operations/legacy-path` reports what is still on the old path; the code that finishes it is removed only when that report's `stage2Ready` is true (plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md).
 
+2026-09-29 (ADR-139): an English-and-Kurdish brief of the shape legacy intake split (English copy under a "text to add on each of the … graphics:" line, Kurdish copy below the divider) opens one lifecycle request per language, each with its own task, draft, review, approval and delivery. Both are recorded in the update's one new-brief decision and opened by ChatInbox under their own keys; Core splits only for a worker that says it opens every request of the answer, and never replays a two-language decision to one that does not.
+
 ## 11. Availability design
 
 The first office deployment can use one core server, but it must include:

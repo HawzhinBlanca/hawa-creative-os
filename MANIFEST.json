@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T22:04:34Z",
+  "generatedAt": "2026-09-28T22:16:53Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 516,
+  "fileCount": 517,
   "files": [
     {
       "path": ".dockerignore",
@@ -763,6 +763,11 @@
       "bytes": 5468
     },
     {
+      "path": "adrs/139_lifecycle_bilingual_split.md",
+      "sha256": "12f2dff682e776e9c1172a16379818b3017298a7017db0701ce29e99f0e0106a",
+      "bytes": 5115
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -1029,8 +1034,8 @@
     },
     {
       "path": "docs/10_WORKFLOW_RELIABILITY.md",
-      "sha256": "367a89d681a00e9cbbcdfb9eec63caf72fbad709715f47179d5f2aa4fd005a37",
-      "bytes": 38842
+      "sha256": "80fb5a2c0556c33c22dff012d659fd6562de310f546e1c46fe9c1871cdb2fe6a",
+      "bytes": 39379
     },
     {
       "path": "docs/11_QA_RTL_MULTILINGUAL.md",
@@ -1249,8 +1254,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT.md",
-      "sha256": "078efaca3e9191158778e06bbe2ad65745e2b97606562e981fb5d75644fc802f",
-      "bytes": 22521
+      "sha256": "d7f79be03ed9376ada399dd2c3a57061be29188d997d5ec77f736fdebf07ddf4",
+      "bytes": 22593
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT_PROOF.json",

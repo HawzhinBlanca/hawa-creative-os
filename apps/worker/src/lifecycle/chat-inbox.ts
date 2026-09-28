@@ -52,6 +52,8 @@ export type IntakeAnswer =
       albumMessage?: string; albumNoticeKey?: string;
       sourceMessage?: string; sourceNoticeKey?: string;
       draft?: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'];
+      /** open-request: the other requests the same update opens, one per language (ADR-139). */
+      siblings?: Array<{ requestId: string; draft: OpenManualEvent['draft'] | OpenAutomaticEvent['draft'] }>;
       requestId?: string; newTaskId?: string; round?: number; directive?: string;
       priorTaskId?: string; rawText?: string; chatId?: string; questionId?: string;
       code?: 'AMBIGUOUS_REQUEST' | 'STALE_REQUEST_REPLY' | 'DAILY_CAP_REACHED' |
@@ -165,10 +167,14 @@ export async function handleUpdate(ctx: InboxContext, input: HandleUpdateInput, 
     }
     if (done.lifecycleAction === 'open-request') {
       if (!done.requestId || !done.chatId || !done.draft) throw new Error('Core returned an incomplete lifecycle open');
-      const event = { v: 1 as const, eventId: `open:${done.requestId}`, requestId: done.requestId,
-        tenantId: '00000000-0000-4000-a000-000000000001', chatId: done.chatId,
-        draft: done.draft } as OpenManualEvent | OpenAutomaticEvent;
-      await ctx.sendLifecycleOpen(done.requestId, event);
+      // An English-and-Kurdish brief opens one request per language (ADR-139): each under its own
+      // stable open key, so a replay of this handler sends none of them twice.
+      for (const open of [{ requestId: done.requestId, draft: done.draft }, ...(done.siblings ?? [])]) {
+        const event = { v: 1 as const, eventId: `open:${open.requestId}`, requestId: open.requestId,
+          tenantId: '00000000-0000-4000-a000-000000000001', chatId: done.chatId,
+          draft: open.draft } as OpenManualEvent | OpenAutomaticEvent;
+        await ctx.sendLifecycleOpen(open.requestId, event);
+      }
     }
     // In lifecycle mode, if Core recognised the update as a requester revision decision, fire the
     // lifecycle handler so RequestLifecycle can advance its state machine. Idempotency key:

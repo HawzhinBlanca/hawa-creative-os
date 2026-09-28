@@ -26,6 +26,17 @@ export interface NewBriefDecision {
   draft: ChatIntake;
   /** Original image intake evidence stays in Core, outside the Restate draft contract. */
   sourceUpdate?: unknown;
+  /**
+   * The other requests the same update opens (ADR-139: an English-and-Kurdish brief opens one request
+   * per language). Each is opened, projected and replayed exactly as the first.
+   */
+  siblings?: Array<{ requestId: string; draft: ChatIntake }>;
+}
+
+/** The draft a new-brief decision recorded for this request: its first request's, or a sibling's. */
+export function decisionDraftFor(decision: NewBriefDecision, requestId: string): ChatIntake | null {
+  if (decision.requestId === requestId) return decision.draft;
+  return decision.siblings?.find((s) => s.requestId === requestId)?.draft ?? null;
 }
 
 export interface RevisionPhotoDecision {
@@ -74,11 +85,15 @@ export async function readNewBriefDecision(trx: Kysely<Database>, tenantId: stri
       AND source_account_id = 'lifecycle_chat_open' AND source_event_id = ${String(updateId)}
     LIMIT 1`.execute(trx)).rows[0];
   if (!row) return null;
-  const { requestId, chatId, draft } = row.payload;
+  const { requestId, chatId, draft, siblings } = row.payload;
   if (typeof requestId !== 'string' || typeof chatId !== 'string' ||
       !draft || typeof draft !== 'object') throw new Error('Invalid stored new-brief decision');
+  if (siblings !== undefined && (!Array.isArray(siblings) || siblings.some((s) => !s || typeof s !== 'object' ||
+      typeof (s as { requestId?: unknown }).requestId !== 'string' || !(s as { draft?: unknown }).draft ||
+      typeof (s as { draft?: unknown }).draft !== 'object'))) throw new Error('Invalid stored new-brief decision');
   return { requestId, chatId, payloadHash: row.payload_hash, draft: draft as ChatIntake,
-    ...(row.payload.sourceUpdate !== undefined ? { sourceUpdate: row.payload.sourceUpdate } : {}) };
+    ...(row.payload.sourceUpdate !== undefined ? { sourceUpdate: row.payload.sourceUpdate } : {}),
+    ...(Array.isArray(siblings) && siblings.length ? { siblings: siblings as NewBriefDecision['siblings'] } : {}) };
 }
 
 export async function recordNewBriefDecision(trx: Kysely<Database>, tenantId: string,
@@ -89,7 +104,8 @@ export async function recordNewBriefDecision(trx: Kysely<Database>, tenantId: st
       'lifecycle_new_brief_decision',
       ${JSON.stringify({ requestId: decision.requestId, chatId: decision.chatId,
         draft: decision.draft,
-        ...(decision.sourceUpdate !== undefined ? { sourceUpdate: decision.sourceUpdate } : {}) })}::jsonb, ${decision.payloadHash}, true)
+        ...(decision.sourceUpdate !== undefined ? { sourceUpdate: decision.sourceUpdate } : {}),
+        ...(decision.siblings?.length ? { siblings: decision.siblings } : {}) })}::jsonb, ${decision.payloadHash}, true)
     ON CONFLICT DO NOTHING`.execute(trx);
   const stored = await readNewBriefDecision(trx, tenantId, updateId);
   if (!stored) throw new Error('New-brief decision was not stored');

@@ -53,7 +53,8 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         res = await doFetch(`${base}/v1/internal/telegram/intake`, {
           method: 'POST',
           headers: headers(update),
-          body: JSON.stringify({ v: 1, update, mode, ...(requestId ? { requestId } : {}) }),
+          // languageSiblings: this worker opens every request an open-request answer names (ADR-139).
+          body: JSON.stringify({ v: 1, update, mode, ...(requestId ? { requestId } : {}), languageSiblings: true }),
           signal: AbortSignal.timeout(options.timeoutMs ?? 8 * 60_000),
         });
       } catch (err) {
@@ -64,7 +65,7 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
         intakeStatus?: number; code?: string; duplicate?: boolean; title?: string;
         lifecycleAction?: string; requestId?: string; newTaskId?: string;
         round?: number; directive?: string; priorTaskId?: string; rawText?: string;
-        chatId?: string; questionId?: string; draft?: unknown; reason?: string;
+        chatId?: string; questionId?: string; draft?: unknown; reason?: string; siblings?: unknown;
         albumMessage?: string; albumNoticeKey?: string;
         sourceMessage?: string; sourceNoticeKey?: string;
         requestStage?: string; officeAlert?: { chatId?: unknown; text?: unknown } | null;
@@ -89,16 +90,24 @@ export function createCoreClient(options: CoreClientOptions): ChatInboxCore {
               albumMessage: body.albumMessage, albumNoticeKey: body.albumNoticeKey };
           }
           if (body.lifecycleAction === 'open-request') {
-            const draft = body.draft as Record<string, unknown> | undefined;
-            if (!body.requestId || !body.chatId || !draft || draft.platform !== 'telegram' ||
-                draft.sourceEventId !== `lc-${body.requestId}-r0` ||
-                draft.sourceChannelId !== body.chatId ||
-                (draft.autoGenerate !== true && draft.autoGenerate !== false) ||
-                typeof draft.rawText !== 'string' || typeof draft.title !== 'string') {
+            const validDraft = (requestId: unknown, value: unknown): boolean => {
+              const draft = value as Record<string, unknown> | undefined;
+              return typeof requestId === 'string' && Boolean(requestId) && Boolean(draft) && draft!.platform === 'telegram' &&
+                draft!.sourceEventId === `lc-${requestId}-r0` && draft!.sourceChannelId === body.chatId &&
+                (draft!.autoGenerate === true || draft!.autoGenerate === false) &&
+                typeof draft!.rawText === 'string' && typeof draft!.title === 'string';
+            };
+            const siblings = body.siblings === undefined ? [] : body.siblings;
+            if (!body.chatId || !validDraft(body.requestId, body.draft) || !Array.isArray(siblings) || siblings.length > 1 ||
+                siblings.some((s) => !s || typeof s !== 'object' || s.requestId === body.requestId ||
+                  !validDraft((s as { requestId?: unknown }).requestId, (s as { draft?: unknown }).draft))) {
               throw new Error(`Core returned an invalid lifecycle open for update ${update.update_id}`);
             }
+            type Draft = Extract<IntakeAnswer, { kind: 'done' }>['draft'];
             return { ...base, lifecycleAction: 'open-request', requestId: body.requestId,
-              chatId: body.chatId, draft: draft as Extract<IntakeAnswer, { kind: 'done' }>['draft'] };
+              chatId: body.chatId, draft: body.draft as Draft,
+              ...(siblings.length ? { siblings: (siblings as Array<{ requestId: string; draft: unknown }>)
+                .map((s) => ({ requestId: s.requestId, draft: s.draft as NonNullable<Draft> })) } : {}) };
           }
           if (body.lifecycleAction === 'new-brief-required' && body.chatId) {
             return { ...base, lifecycleAction: 'new-brief-required', chatId: body.chatId };

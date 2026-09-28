@@ -103,6 +103,26 @@ describe('ChatInbox.handleUpdate', () => {
     expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId });
   });
 
+  it('opens one request per language for a bilingual brief, each under its own key, none twice after a crash (ADR-139)', async () => {
+    const ctx = new FakeContext();
+    ctx.failOpenOnce = true;
+    const [en, ckb] = ['43d3fca4-7ce2-5afe-9ae4-b9530874d618', '8a2f0c11-3b4d-5e6f-8a9b-0c1d2e3f4a5b'];
+    const draftOf = (requestId: string, rawText: string) => ({ platform: 'telegram', sourceEventId: `lc-${requestId}-r0`,
+      sourceChannelId: '555', rawText, title: 'KAAE standards', designInstructions: '', exactCopy: [{ text: rawText }],
+      clientId: 'c1000000-0000-4000-8000-000000000002', autoGenerate: true });
+    const c = core([async () => ({ kind: 'done', intakeStatus: 200, lifecycleAction: 'open-request', requestId: en, chatId: '555',
+      draft: draftOf(en, 'K-12 STANDARDS FRAMEWORK'), siblings: [{ requestId: ckb, draft: draftOf(ckb, 'چوارچێوەی ستانداردەکان') }] })]);
+    ctx.crashOnSet = 1;
+    expect(await untilSettled(ctx, () => handleUpdate(ctx, input, c))).toMatchObject({ outcome: 'handled' });
+    expect(c.intake).toHaveBeenCalledTimes(1);
+    // The first try's open of the English request was interrupted; the crash after both opens replays
+    // them under the same keys, which Restate deduplicates: each key names one request.
+    const keys = ctx.lifecycleOpens.map((o: any) => o.event.eventId);
+    expect(new Set(keys)).toEqual(new Set([`open:${en}`, `open:${ckb}`]));
+    expect(ctx.lifecycleOpens.filter((o: any) => o.requestId === ckb).every((o: any) => o.event.draft.rawText === 'چوارچێوەی ستانداردەکان')).toBe(true);
+    expect(ctx.state.get('inbox')).toMatchObject({ mode: 'lifecycle', requestId: en });
+  });
+
   it('hands the update to intake once and is done', async () => {
     const ctx = new FakeContext();
     const c = core([async () => ({ kind: 'done', intakeStatus: 201 })]);
@@ -199,7 +219,22 @@ describe('the Core client ChatInbox uses', () => {
     expect(calls[0].url).toBe('http://core:3001/v1/internal/telegram/intake');
     expect(calls[0].init.headers.Authorization).toBe(`Bearer ${token}`);
     expect(calls[0].init.headers['x-request-id']).toBe('tg-4242');
-    expect(JSON.parse(calls[0].init.body)).toEqual({ v: 1, update, mode: 'legacy' });
+    // languageSiblings: this worker opens every request an open-request answer names (ADR-139).
+    expect(JSON.parse(calls[0].init.body)).toEqual({ v: 1, update, mode: 'legacy', languageSiblings: true });
+  });
+
+  it('reads the sibling requests of a bilingual open, and refuses a malformed one (ADR-139)', async () => {
+    const [en, ckb] = ['43d3fca4-7ce2-5afe-9ae4-b9530874d618', '8a2f0c11-3b4d-5e6f-8a9b-0c1d2e3f4a5b'];
+    const draftOf = (requestId: string) => ({ platform: 'telegram', sourceEventId: `lc-${requestId}-r0`, sourceChannelId: '555',
+      rawText: 'copy', title: 'title', autoGenerate: true });
+    const answer = (siblings: unknown) => client(async () => Response.json({ v: 1, kind: 'handled', intakeStatus: 200,
+      lifecycleAction: 'open-request', requestId: en, chatId: '555', draft: draftOf(en), siblings })).intake(update, 'legacy');
+    await expect(answer([{ requestId: ckb, draft: draftOf(ckb) }])).resolves.toMatchObject({ lifecycleAction: 'open-request',
+      requestId: en, siblings: [{ requestId: ckb, draft: { sourceEventId: `lc-${ckb}-r0` } }] });
+    await expect(answer(undefined)).resolves.not.toHaveProperty('siblings');
+    await expect(answer([{ requestId: ckb, draft: draftOf(en) }])).rejects.toThrow('invalid lifecycle open');
+    await expect(answer([{ requestId: en, draft: draftOf(en) }])).rejects.toThrow('invalid lifecycle open');
+    await expect(answer('not a list')).rejects.toThrow('invalid lifecycle open');
   });
 
   it('classifies intake\'s answers: final, retryable, and waits', async () => {

@@ -48,6 +48,7 @@ test written before the fix (ADR-135, "Red run").
    an English-and-Kurdish brief (`splitBilingualRequest`, `telegram-webhook.routes.ts:234-256`); the
    lifecycle open (`lifecycle-internal.routes.ts:492-523`) makes one. Not fixed here (out of scope;
    see ADR-135 "Not done").
+   Fixed on the mainline on 2026-09-29 by ADR-139.
 
 ## 2. Production data (newest dump, no production SQL)
 
@@ -214,8 +215,8 @@ Not cleanly separable, therefore a written plan only:
   (3) delete the readers, the route's Telegram task creation (WhatsApp keeps `ingestChatCampaignTask`),
   and the ~30 Core test files that build legacy tasks through `/webhooks/telegram` (section 5), moving
   what they prove about copy extraction and client routing onto `prepareChatCampaignDraft`, which the
-  lifecycle open uses. The bilingual split (one graphic per language) must be ported to the lifecycle
-  open before step 3, or it is lost.
+  lifecycle open uses. The bilingual split (one graphic per language) was ported to the lifecycle
+  open on 2026-09-29 (ADR-139), so step 3 no longer loses it.
 - **2d, Core's requester sends for legacy tasks (b).** The `notify.published` enqueue in
   `deliverOmnichannel` (both sites), `coreQueuedFiles`, the worker's `notify.published` handler and
   `deliveredByWorkflow`, and the Telegram in-chat approve (`rq:ok`, `/approve`) publishing. Once no

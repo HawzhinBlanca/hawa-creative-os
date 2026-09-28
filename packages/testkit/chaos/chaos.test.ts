@@ -1023,6 +1023,60 @@ describe.skipIf(!enabled)('chaos suite (hawa-chaos compose project)', () => {
     };
   });
 
+  // ADR-139: English copy for one graphic and Kurdish copy for another, in one brief, open one request
+  // per language, as legacy intake made one task per language. Each is drafted, approved and
+  // delivered on its own, with no paid call made twice.
+  scenario('R1.BL', 'an English-and-Kurdish brief opens one request per language; each is drafted, approved and delivered', async (chat, events) => {
+    const text = [
+      'KAAE announcement for the standards framework, formal and clean. Reference R1.BL.',
+      '',
+      'Here is the text to add on each of the Kurdish and English graphics:',
+      '',
+      'K-12 STANDARDS FRAMEWORK (R1.BL)',
+      '',
+      'Now available at kaae.org.',
+      '_____',
+      'چوارچێوەی ستانداردەکانی پەروەردە (R1.BL)',
+      '',
+      'ئێستا لە kaae.org بەردەستە',
+    ].join('\n');
+    const ledgerSince = Math.max(0, ...((await fakes.modelLedger()).ledger as any[]).map((l) => l.seq));
+    await fakes.updates([textUpdate(chat, text)]);
+    const tasks = await waitUntil('two tasks, one per language', async () => { const t = await tasksOfChat(chat); return t.length >= 2 ? t : null; }, 120_000, 1000);
+    for (const task of tasks) {
+      await waitUntil(`the draft of ${task.id}`, async () => {
+        const outcome = await designOutcome(task.id);
+        if (outcome && outcome !== 'CANVA_DRAFT_READY_FOR_VISUAL_REVIEW') throw new Error(`task ${task.id}: design ended ${outcome}`);
+        const [r] = await query<{ stage: string }>(sql`SELECT stage FROM hawa.requests WHERE current_task_id = ${task.id}::uuid`);
+        return (await taskState(task.id)) === 'human_review' && r?.stage === 'in_review';
+      }, 240_000, 2000);
+      const approved = await approve(task.id);
+      const delivered = await deliver(task.id);
+      events.push(`task ${task.id}: approve HTTP ${approved.status}, deliver HTTP ${delivered.status}`);
+    }
+    await waitUntil('both deliveries', async () => (await Promise.all(tasks.map((t) => taskState(t.id)))).every((s) => s === 'complete'), 300_000, 2000);
+    const requests = await query<{ request_id: string; owner: string; stage: string }>(sql`SELECT request_id::text, owner, stage FROM hawa.requests WHERE chat_id = ${chat}`);
+    const scripts = await query<{ id: string; copy: string }>(sql`SELECT t.id::text, o.payload->>'rawRequestText' AS copy FROM hawa.tasks t
+      JOIN hawa.outbox_commands o ON o.aggregate_id = t.id AND o.command_type = 'task.created' WHERE o.payload->>'sourceChannelId' = ${chat}`);
+    const pubs = await query<{ task_id: string; state: string; executor: string }>(sql`SELECT task_id::text, state::text AS state, executor FROM hawa.publications
+      WHERE task_id = ANY(${tasks.map((t) => t.id)}::uuid[])`);
+    const docs = (await sentTo(chat)).filter((s) => s.method === 'sendDocument');
+    const ledger = ((await fakes.modelLedger()).ledger as any[]).filter((l) => l.seq > ledgerSince && l.status === 200 && l.route !== 'billing-probe');
+    const twice = [...ledger.reduce((m, l) => m.set(l.fingerprint, (m.get(l.fingerprint) || 0) + 1), new Map<string, number>())].filter(([, n]) => n > 1);
+    const kurdish = /[\u0600-\u06FF]/;
+    return { delivered: false, skipRequestChecks: true, extra: [
+      { name: 'two lifecycle requests, both delivered', ok: requests.length === 2 && requests.every((r) => r.owner === 'restate' && r.stage === 'delivered'), detail: JSON.stringify(requests) },
+      { name: 'one task per language: one English-only copy, one Kurdish copy', ok: scripts.length === 2 &&
+        scripts.filter((t) => /English copy only/.test(t.copy ?? '') && !kurdish.test((t.copy ?? '').split(/_{3,}/)[1] ?? '')).length === 1 &&
+        scripts.filter((t) => /Kurdish copy only/.test(t.copy ?? '') && kurdish.test((t.copy ?? '').split(/_{3,}/)[1] ?? '')).length === 1,
+        detail: JSON.stringify(scripts.map((t) => ({ id: t.id.slice(0, 8), en: /English copy only/.test(t.copy ?? ''), ckb: /Kurdish copy only/.test(t.copy ?? '') }))) },
+      { name: 'each request delivered once by its Delivery workflow', ok: pubs.length === 2 && pubs.every((p) => p.state === 'complete' && p.executor === 'restate'), detail: JSON.stringify(pubs) },
+      { name: 'the requester has both approved files, each once', ok: docs.length === 2 && new Set(docs.map((d) => d.documentSha256)).size === 2, detail: `documents=${docs.length}` },
+      { name: 'no paid call runs twice', ok: twice.length === 0, detail: twice.length ? JSON.stringify(twice) : `${ledger.length} paid calls` },
+      ...(await onePlannerCallEach(tasks.map((t) => t.id))),
+    ] };
+  }, 20 * 60_000);
+
   // R10 (driver/cutover-scenarios.ts): the requests made before the lifecycle cutover, and what rolling
   // back means since ADR-135 (the previous release, never Core's poller). Run alone, in this order:
   //   run.ts --only R10.H1,R10.K1,R10.K2
@@ -1095,6 +1149,13 @@ async function uncertainPlannerCall(chat: string, ledgerSince: number): Promise<
     { name: 'the office is told once', ok: alerts.length === 1, detail: `alerts=${alerts.length}` },
     { name: 'each message reaches the requester once', ok: dupes === 0, detail: `${shown.length} sends, ${dupes} duplicate(s)` },
   ];
+}
+
+/** Each task made one planner call, admitted once and completed (ADR-138, ADR-139). */
+async function onePlannerCallEach(taskIds: string[]): Promise<InvariantResult[]> {
+  const rows = await query<{ task_id: string; calls: number }>(sql`SELECT p.task_id::text, count(c.id)::int AS calls FROM hawa.canva_design_plans p
+    LEFT JOIN hawa.canva_planner_calls c ON c.id = p.id AND c.status = 'completed' WHERE p.task_id = ANY(${taskIds}::uuid[]) GROUP BY p.task_id`);
+  return [{ name: 'each task: one planner call, completed', ok: rows.length === taskIds.length && rows.every((r) => Number(r.calls) === 1), detail: JSON.stringify(rows) }];
 }
 
 /** ADR-138: the chat's design made one planner call, admitted once and completed, and its plan is planned. */
