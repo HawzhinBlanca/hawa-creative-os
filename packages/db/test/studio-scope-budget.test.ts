@@ -41,12 +41,15 @@ describe.skipIf(!url)('Studio daily scope admission in PostgreSQL', () => {
     return { tenantId, actorId, clientId, otherClient, scope, run, call, finish, daily };
   }
   // Owner-only historical fixture, isolated per-file database. Runtime cannot change admission time.
-  async function historical(id: string, missingQuote = false) {
+  // legacy: admitted before migration 051, so it has neither a quote nor a policy version.
+  async function historical(id: string, missingQuote = false, legacy = false) {
     await db.transaction().execute(async tx => {
       await sql`ALTER TABLE hawa.design_studio_calls DISABLE TRIGGER enforce_studio_scope_budget`.execute(tx);
       await sql`ALTER TABLE hawa.design_studio_calls DISABLE TRIGGER immutable_design_studio_call`.execute(tx);
       await sql`UPDATE hawa.design_studio_calls SET started_at=now()-interval '2 days',
-        reservation=CASE WHEN ${missingQuote} THEN NULL ELSE reservation END WHERE id=${id}::uuid`.execute(tx);
+        reservation=CASE WHEN ${missingQuote || legacy} THEN NULL ELSE reservation END,
+        spending_policy_version=CASE WHEN ${legacy} THEN NULL ELSE spending_policy_version END,
+        budget_role=CASE WHEN ${legacy} THEN NULL ELSE budget_role END WHERE id=${id}::uuid`.execute(tx);
       await sql`ALTER TABLE hawa.design_studio_calls ENABLE TRIGGER immutable_design_studio_call`.execute(tx);
       await sql`ALTER TABLE hawa.design_studio_calls ENABLE TRIGGER enforce_studio_scope_budget`.execute(tx);
     });
@@ -121,6 +124,33 @@ describe.skipIf(!url)('Studio daily scope admission in PostgreSQL', () => {
     const f = await fixture(), a = await f.run(), c = f.call(a, 0.4);
     await repo.recordCallStart(c); await historical(c.id, true);
     await expect(repo.recordCallStart(f.call(await f.run(), 0.01))).rejects.toMatchObject({ code: 'STUDIO_BUDGET_HISTORY_INCOMPLETE' });
+  });
+
+  // The migration freezes pre-admission records by id; tests stand in for it as the owner (ADR-133).
+  const freeze = (tenantId: string, id: string) => sql`INSERT INTO hawa.pre_admission_spending(tenant_id,kind,record_id,reason)
+    VALUES(${tenantId}::uuid,'studio_call',${id}::uuid,'Synthetic pre-admission call')`.execute(db);
+
+  it('lets a frozen pre-admission call stay in its own day instead of blocking the office', async () => {
+    const f = await fixture({ officeUsd: 0.5 }), a = await f.run(), c = f.call(a, 0.4, 'laying_out');
+    await repo.recordCallStart(c); await historical(c.id, true, true); await freeze(f.tenantId, c.id);
+    await expect(repo.recordCallStart(f.call(await f.run(f.otherClient), 0.45))).resolves.toMatchObject({ status: 'uncertain' });
+    expect((await f.daily(a)).scopes).toContainEqual(expect.objectContaining({ scope: 'office', historyIncomplete: false }));
+  });
+
+  it('still blocks an unquoted pre-admission call that the migration did not freeze', async () => {
+    const f = await fixture(), a = await f.run(), c = f.call(a, 0.4, 'laying_out');
+    await repo.recordCallStart(c); await historical(c.id, true, true);
+    await expect(repo.recordCallStart(f.call(await f.run(), 0.01))).rejects.toMatchObject({ code: 'STUDIO_BUDGET_HISTORY_INCOMPLETE' });
+  });
+
+  it('keeps the frozen list read-only for the runtime role', async () => {
+    const f = await fixture(), a = await f.run(), c = f.call(a, 0.4);
+    await repo.recordCallStart(c);
+    await expect(withRlsContext(db, f.scope, async tx => {
+      await sql`SET LOCAL ROLE hawa_app`.execute(tx);
+      await sql`INSERT INTO hawa.pre_admission_spending(tenant_id,kind,record_id,reason)
+        VALUES(${f.tenantId}::uuid,'studio_call',${c.id}::uuid,'Runtime must not write this')`.execute(tx);
+    })).rejects.toThrow(/permission denied/);
   });
 
   it('refuses a new task when a prior run records missing spend or call history', async () => {
