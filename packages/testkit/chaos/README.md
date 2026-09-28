@@ -271,7 +271,7 @@ due, the fake Telegram quiet for 5 s) and then checks the invariants that apply 
 | Name | What |
 |---|---|
 | R1.0 | happy path, no faults |
-| R1.K0 | Core killed while the requester's acknowledgement is sent (the `sendMessage` slowed to 4 s). Before ADR-135 Core's legacy intake sent it; now RequestLifecycle's TelegramSender does. Until 2026-09-28 this killed Core during the intake classifier's paid call, which intake no longer makes for an unscoped text (82b28988) |
+| R1.K0 | (flaky since ADR-135: the kill can land in the design's planning, which then ends `DESIGN_PLANNING`; see ADR-135 section 5) Core killed while the requester's acknowledgement is sent (the `sendMessage` slowed to 4 s). Before ADR-135 Core's legacy intake sent it; now RequestLifecycle's TelegramSender does. Until 2026-09-28 this killed Core during the intake classifier's paid call, which intake no longer makes for an unscoped text (82b28988) |
 | R1.K1 | worker killed after the design run's first step, `canva-verify-task-scope`. Before ADR-135: at `worker.outbox.after-claim` (task.created), which no request reaches now |
 | R1.K2 | Restate killed while the worker is held after `canva-verify-task-scope`. Before ADR-135: worker killed at `worker.dispatch.after-submit` (TaskWorkflow) |
 | R1.K3 | worker killed after `canva-create-draft` (planner and import done) |

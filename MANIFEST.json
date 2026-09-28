@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-09-28T19:53:50Z",
+  "generatedAt": "2026-09-28T21:21:47Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -734,8 +734,8 @@
     },
     {
       "path": "adrs/135_lifecycle_only_telegram_requests.md",
-      "sha256": "6e81354c249150c3b09497b4f82059da87911c3331ec1b266de7150558644098",
-      "bytes": 8307
+      "sha256": "1d773dff62d06e9dec602df112701b1ae24f6cd9daba7787babe2b8c5b2df5f2",
+      "bytes": 9956
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1224,8 +1224,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LEGACY_PATH_RETIREMENT_PROOF.json",
-      "sha256": "8933dce37dca15f7d49c53aed5f09c9f24a1e7b4a0599643f297005f891ceb13",
-      "bytes": 3510
+      "sha256": "392de3f6453e25b0ed7768931e580d3d7359a88febf25df3a0b701421764c7b9",
+      "bytes": 5651
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/LIFECYCLE_DESK_FIXES_PROOF.json",

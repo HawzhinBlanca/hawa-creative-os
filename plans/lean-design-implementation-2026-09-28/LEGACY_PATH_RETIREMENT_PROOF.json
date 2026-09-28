@@ -11,16 +11,43 @@
     "tasksPinnedRestate": 0,
     "lifecycleProjections": 0,
     "tasksPinnedCore": 1613,
-    "openLegacyTelegramTasks": { "total": 111, "chats": 15, "byState": { "received": 97, "human_review": 12, "paused": 1, "failed_operator": 1 }, "notUpdatedFor4Days": 110 },
+    "openLegacyTelegramTasks": {
+      "total": 111,
+      "chats": 15,
+      "byState": {
+        "received": 97,
+        "human_review": 12,
+        "paused": 1,
+        "failed_operator": 1
+      },
+      "notUpdatedFor4Days": 110
+    },
     "newestLegacyTelegramTaskCreatedAt": "2026-09-28T16:33:00Z",
-    "publications": { "total": 47, "executor": { "core": 47 }, "state": { "complete": 47 } },
+    "publications": {
+      "total": 47,
+      "executor": {
+        "core": 47
+      },
+      "state": {
+        "complete": 47
+      }
+    },
     "notifyPublishedCommands": 0,
-    "openTasksWithoutChat": { "total": 1455, "note": "Desk-shaped rows, mostly Pilot Task fixtures written to production before 2026-09-18; class (c), not part of the gate" }
+    "openTasksWithoutChat": {
+      "total": 1455,
+      "note": "Desk-shaped rows, mostly Pilot Task fixtures written to production before 2026-09-18; class (c), not part of the gate"
+    }
   },
   "redRun": {
     "source": "3f3d71ca sources with the three new test files",
-    "files": ["apps/core/test/lifecycle-only-telegram.test.ts", "apps/core/test/legacy-telegram-scope.test.ts", "apps/core/test/legacy-path-status.test.ts"],
-    "tests": 14, "failed": 13, "passed": 1,
+    "files": [
+      "apps/core/test/lifecycle-only-telegram.test.ts",
+      "apps/core/test/legacy-telegram-scope.test.ts",
+      "apps/core/test/legacy-path-status.test.ts"
+    ],
+    "tests": 14,
+    "failed": 13,
+    "passed": 1,
     "observed": [
       "plain brief in a chat with Core tasks became a Core task (HTTP 201), not open-request",
       "reply to an open legacy draft answered STALE_REQUEST_REPLY",
@@ -32,20 +59,97 @@
     ]
   },
   "afterImplementation": {
-    "newTests": { "files": 3, "tests": 14, "passed": 14 },
-    "affected": { "files": 25, "passedFiles": 23, "skippedFiles": 2, "tests": 323, "passed": 321, "skipped": 2, "note": "the 2 skipped files are opt-in Core-kill drills, run separately below" },
-    "optInDrills": { "command": "HAWA_SOURCE_RECOVERY=1 HAWA_VOICE_RECOVERY=1 vitest run lifecycle-source-recovery lifecycle-voice-recovery", "files": 2, "passed": 2 },
+    "newTests": {
+      "files": 3,
+      "tests": 14,
+      "passed": 14
+    },
+    "affected": {
+      "files": 25,
+      "passedFiles": 23,
+      "skippedFiles": 2,
+      "tests": 323,
+      "passed": 321,
+      "skipped": 2,
+      "note": "the 2 skipped files are opt-in Core-kill drills, run separately below"
+    },
+    "optInDrills": {
+      "command": "HAWA_SOURCE_RECOVERY=1 HAWA_VOICE_RECOVERY=1 vitest run lifecycle-source-recovery lifecycle-voice-recovery",
+      "files": 2,
+      "passed": 2
+    },
     "typecheck": "pnpm run typecheck: tsc -b, scripts, 580 strict test roots passed",
     "lint": "pnpm run lint passed (any ratchet 959/1053, egress lint)",
     "fullSuite": {
       "command": "HAWA_TEST_WORKERS=3 npx vitest run",
-      "files": { "failed": 2, "passed": 570, "skipped": 7 },
-      "tests": { "failed": 2, "passed": 4863, "skipped": 58 },
+      "files": {
+        "failed": 2,
+        "passed": 570,
+        "skipped": 7
+      },
+      "tests": {
+        "failed": 2,
+        "passed": 4863,
+        "skipped": 58
+      },
       "failures": [
-        { "test": "apps/core/test/voice-ingress-and-webhook.test.ts webhook lifecycle", "cause": "expected 200 from webhook registration, which ADR-135 refuses (409)", "resolution": "test updated to the new rule; file then 6/6 passed" },
-        { "test": "packages/testkit/test/r11-release-gate.test.ts 1", "cause": "RELEASE_MANIFEST.json declares the sealed hashes of apps/core/src/app.ts and a clean tree; any source change fails it until the release record is refreshed", "resolution": "not changed: the task forbids editing RELEASE_MANIFEST.json" }
+        {
+          "test": "apps/core/test/voice-ingress-and-webhook.test.ts webhook lifecycle",
+          "cause": "expected 200 from webhook registration, which ADR-135 refuses (409)",
+          "resolution": "test updated to the new rule; file then 6/6 passed"
+        },
+        {
+          "test": "packages/testkit/test/r11-release-gate.test.ts 1",
+          "cause": "RELEASE_MANIFEST.json declares the sealed hashes of apps/core/src/app.ts and a clean tree; any source change fails it until the release record is refreshed",
+          "resolution": "not changed: the task forbids editing RELEASE_MANIFEST.json"
+        }
       ]
     }
   },
-  "chaos": "recorded after the run (see ADR-135 section 5)"
+  "chaos": {
+    "lock": "hawa-chaos-lock taken with the stack.ts protocol from a wrapper (this branch has no acquireProject); released after each run",
+    "wholeSuite": {
+      "command": "npx tsx packages/testkit/chaos/run.ts --poller worker",
+      "commit": "9aedea64",
+      "finishedAt": "2026-09-28T21:08:31Z",
+      "scenarios": 41,
+      "passed": 39,
+      "failed": 2,
+      "totalSeconds": 1091,
+      "peakTotalMiB": 1365,
+      "failures": [
+        {
+          "scenario": "R1.K14",
+          "error": "timed out after 60000 ms waiting for the request to take the approval (second Deliver press through the Desk helper while the request was delivering)"
+        },
+        {
+          "scenario": "R1.S2.K5b",
+          "invariant": "an uncertain send has exactly one office alert",
+          "detail": "expected 1, office alerts naming the task 0"
+        }
+      ]
+    },
+    "corrections": "b3aceaaa",
+    "targetedReruns": [
+      {
+        "finishedAt": "2026-09-28T21:14:20Z",
+        "only": "R1.K14,R1.S2.K5b",
+        "result": {
+          "R1.K14": "ok",
+          "R1.S2.K5b": "FAIL: expected 0 alerts, 1 alert; marks [attempted, attempted, sent]"
+        }
+      },
+      {
+        "finishedAt": "2026-09-28T21:20:10Z",
+        "only": "R1.S2.K5b,R1.K14,R1.K0",
+        "result": {
+          "R1.K14": "ok",
+          "R1.S2.K5b": "ok",
+          "R1.K0": "ERROR: design run ended as DESIGN_PLANNING (Core kill overlapped planning)"
+        }
+      }
+    ],
+    "notCounted": "a run from a copy of the tree outside the repository hung in its setup hook for 30 minutes (hook timeout); no scenario ran",
+    "openFinding": "R1.K0 is flaky since ADR-135: a Core kill during the acknowledgement can land in the design planning, which then ends DESIGN_PLANNING after 30 resume polls"
+  }
 }
